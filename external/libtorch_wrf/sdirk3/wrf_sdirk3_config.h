@@ -484,6 +484,11 @@ struct SDIRK3Config {
     // Set via env WRF_SDIRK3_HEVI_SPLIT (validation) or namelist sdirk3_hevi_split (production).
     bool hevi_split = false;
 
+    // Split-explicit core (opt-in, default OFF = no behavior change). WIP differentiable
+    // RK3 + acoustic-substep integrator mirroring dyn_em; replaces the ARK324 implicit path
+    // when ON. Set via env WRF_SDIRK3_SPLIT_EXPLICIT or namelist sdirk3_split_explicit.
+    bool split_explicit = false;
+
     // v20.14r66: Mode3 Stage4 severe non-convergence abort toggle.
     // true (default): keep current safety behavior (stage4 severe -> abort).
     // false: skip severe_nonconv abort at stage>=4 in mode3 gate (catastrophic still aborts).

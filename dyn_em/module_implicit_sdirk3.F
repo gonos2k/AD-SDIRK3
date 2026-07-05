@@ -1677,6 +1677,9 @@ CONTAINS
       config_name = "hevi_split"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_hevi_split))
 
+      config_name = "split_explicit"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_split_explicit))
+
       config_name = "hopeless_relax"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_hopeless_relax))
 

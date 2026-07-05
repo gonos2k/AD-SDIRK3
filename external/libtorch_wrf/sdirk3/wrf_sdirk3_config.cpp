@@ -377,6 +377,8 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 stage_require_convergence = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_hevi_split" || key == "hevi_split") {
                 hevi_split = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_split_explicit" || key == "split_explicit") {
+                split_explicit = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_precond_phi_w_coupling_scale" || key == "precond_phi_w_coupling_scale") {
                 int parsed = std::atoi(value.c_str());
                 if (parsed == 0 && value != "0") {
@@ -1631,6 +1633,10 @@ void SDIRK3Config::load_from_env() {
         hevi_split = parse_bool_env(env_val);
         std::cerr << "[CONFIG ENV] hevi_split = " << (hevi_split ? "true" : "false") << std::endl;
     }
+    if ((env_val = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT"))) {
+        split_explicit = parse_bool_env(env_val);
+        std::cerr << "[CONFIG ENV] split_explicit = " << (split_explicit ? "true" : "false") << std::endl;
+    }
     // v20.14r27q: Φ→W GS damping coefficient
     if ((env_val = std::getenv("WRF_SDIRK3_PRECOND_GS_BETA"))) {
         precond_gs_beta = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
@@ -1828,6 +1834,9 @@ void SDIRK3Config::load_from_env() {
     std::cerr << "[CONFIG EFFECTIVE] hevi_split="
               << (hevi_split ? "ON (horizontal-acoustic explicit, vertical implicit)" : "off (full implicit)")
               << std::endl;
+    std::cerr << "[CONFIG EFFECTIVE] split_explicit="
+              << (split_explicit ? "ON (WIP RK3 + acoustic-substep core)" : "off (ARK324 implicit)")
+              << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] solver: gmres_restart=" << gmres_restart
               << ", max_krylov=" << max_krylov_iter
               << ", max_newton=" << max_newton_iter
@@ -1967,6 +1976,9 @@ bool SDIRK3Config::validate() const {
         self->mode3_retry_stage4_clip_abs = std::max(mode3_retry_stage4_clip_abs, 1.0f);
         self->mode3_retry_handoff_clip = mode3_retry_handoff_clip;
         self->mode3_retry_handoff_clip_abs = std::max(mode3_retry_handoff_clip_abs, 1.0f);
+        // Split-explicit core (opt-in bool, no range). Acknowledged here for completeness;
+        // it is inert unless effective_imex_split_mode()==3 (WIP scaffold, Inc 0).
+        self->split_explicit = split_explicit;
         self->jvp_auto_bench_calls = std::clamp(jvp_auto_bench_calls, 0, 20);
         self->jvp_auto_bench_warmup = std::clamp(jvp_auto_bench_warmup, 0, 50);
         self->gmres_warmstart_quality_gate = std::clamp(gmres_warmstart_quality_gate, 0.0f, 1.0f);
@@ -2472,6 +2484,7 @@ void SDIRK3Config::print() const {
               << ", stagnation_growth_floor = " << stagnation_growth_floor << std::endl;
     std::cout << "  stage_require_convergence = " << (stage_require_convergence ? "true" : "false") << std::endl;
     std::cout << "  hevi_split = " << (hevi_split ? "true" : "false") << std::endl;
+    std::cout << "  split_explicit = " << (split_explicit ? "true" : "false") << std::endl;
     std::cout << "  precond_phi_w_coupling_scale = " << precond_phi_w_coupling_scale
               << " (0=GS, 1=physics, 2=acoustic)" << std::endl;
     std::cout << "  precond_phi_feedback_relax = " << precond_phi_feedback_relax << std::endl;
@@ -3029,6 +3042,10 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
         g_sdirk3_config.hevi_split = (value != 0);
         std::cerr << "[CONFIG] hevi_split = "
                   << (g_sdirk3_config.hevi_split ? "true" : "false") << std::endl;
+    } else if (key == "split_explicit") {
+        g_sdirk3_config.split_explicit = (value != 0);
+        std::cerr << "[CONFIG] split_explicit = "
+                  << (g_sdirk3_config.split_explicit ? "true" : "false") << std::endl;
     } else if (key == "precond_phi_w_coupling_scale") {
         g_sdirk3_config.precond_phi_w_coupling_scale = std::max(0, std::min(2, value));
         std::cerr << "[CONFIG] precond_phi_w_coupling_scale = "
@@ -3780,6 +3797,10 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
         g_sdirk3_config.hevi_split = (value != 0);
         std::cerr << "[CONFIG] hevi_split = "
                   << (g_sdirk3_config.hevi_split ? "true" : "false") << std::endl;
+    } else if (key == "split_explicit") {
+        g_sdirk3_config.split_explicit = (value != 0);
+        std::cerr << "[CONFIG] split_explicit = "
+                  << (g_sdirk3_config.split_explicit ? "true" : "false") << std::endl;
     } else if (key == "precond_phi_feedback_fallback_gs") {
         g_sdirk3_config.precond_phi_feedback_fallback_gs = (value != 0);
         std::cerr << "[CONFIG] precond_phi_feedback_fallback_gs = "

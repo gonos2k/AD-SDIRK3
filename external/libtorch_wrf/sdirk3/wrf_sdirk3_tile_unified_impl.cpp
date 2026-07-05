@@ -6134,6 +6134,19 @@ vertical_coefficients:
             checkTensorHealth(U_new, "U_new");
 
         } else if (split_mode == 3) {
+            // [SPLIT-EXPLICIT Inc 0 scaffold] Opt-in differentiable RK3 + acoustic-substep core
+            // (mirrors dyn_em; see doc/sdirk3_split_explicit_rebuild_plan.md). Default OFF =>
+            // this branch is skipped and the ARK324 path below runs unchanged (byte-identical
+            // baseline). Inc1+ will implement the split-explicit integrator here; Inc 0 only
+            // confirms the fully-wired knob reaches the solver.
+            if (wrf::sdirk3::g_sdirk3_config.split_explicit) {
+                static std::atomic<bool> logged_se{false};
+                bool exp_se = false;
+                if (logged_se.compare_exchange_strong(exp_se, true)) {
+                    std::cerr << "[SPLIT-EXPLICIT] mode active (WIP scaffolding; ARK324 path "
+                                 "still runs — increments Inc1+ will replace it)" << std::endl;
+                }
+            }
             // ===== IMEX POST-SOLVE ARK324L2SA: Newton fast-only, 4-stage =====
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                 static std::atomic<bool> logged_mode3_banner{false};
