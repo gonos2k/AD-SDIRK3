@@ -5630,6 +5630,57 @@ vertical_coefficients:
             return k_slow;
         };
 
+        // [PHASE-0 DE-RISK, env WRF_SDIRK3_SLOWFLOW_PROBE] Wall-2 fix gate:
+        // does sub-cycling the explicit slow tendency with Wicker-Skamarock RK3 at
+        // h=dt/M keep the (measured bilinear) u-advection cascade bounded? Reuses
+        // compute_k_slow as the slow RHS. Logs the per-sub-step INTERNAL WS-RK3
+        // stage RHS norms ||k_slow(u)|| @L0/L1/L2 — the L1/L2 growth is exactly the
+        // over-extrapolation that blows up at large h. Positive control M=1 (h=dt)
+        // should reproduce the blow-up; M=ceil(dt/dt_stable) should stay O(1010).
+        // Pure stderr, default off; runs once (static guard), does NOT alter the run.
+        {
+            static const bool slowflow_probe =
+                (std::getenv("WRF_SDIRK3_SLOWFLOW_PROBE") != nullptr);
+            static bool slowflow_done = false;
+            if (slowflow_probe && !slowflow_done) {
+                slowflow_done = true;
+                torch::NoGradGuard no_grad;
+                const char* dts_env = std::getenv("WRF_SDIRK3_SLOWFLOW_DT_STABLE");
+                const float dt_stable = dts_env ? std::atof(dts_env) : 4.0f;
+                auto slow_rhs = [&](const torch::Tensor& V) -> torch::Tensor {
+                    torch::Tensor Vh = use_ad_halo ? ad_halo_exchange(V) : torch::Tensor();
+                    return compute_k_slow(V, Vh);
+                };
+                auto un = [&](const torch::Tensor& K) -> float {
+                    return std::get<0>(extractStateVariables(K)).norm().item<float>();
+                };
+                int M_list[2] = {1, std::max(1, (int)std::ceil((float)dt / dt_stable))};
+                for (int mi = 0; mi < 2; ++mi) {
+                    int M = M_list[mi];
+                    float h = (float)dt / (float)M;
+                    torch::Tensor U = U_n;
+                    std::cerr << "[SLOWFLOW] === M=" << M << " h=" << h
+                              << " (dt=" << dt << ", dt_stable=" << dt_stable << ") ===" << std::endl;
+                    for (int m = 0; m < M; ++m) {
+                        torch::Tensor L0 = slow_rhs(U);
+                        torch::Tensor U1 = U + (h / 3.0f) * L0;
+                        torch::Tensor L1 = slow_rhs(U1);
+                        torch::Tensor U2 = U + (h / 2.0f) * L1;
+                        torch::Tensor L2 = slow_rhs(U2);
+                        U = U + h * L2;
+                        if (m < 2 || m == M - 1) {
+                            std::cerr << "[SLOWFLOW] M=" << M << " sub=" << (m + 1)
+                                      << " |ks(u)|@L0=" << un(L0)
+                                      << " @L1=" << un(L1) << " @L2=" << un(L2)
+                                      << " |U-Un(u)|=" << un(U - U_n) << std::endl;
+                        }
+                    }
+                    std::cerr << "[SLOWFLOW] M=" << M << " FINAL |ks(u)|=" << un(slow_rhs(U))
+                              << " |U-Un(u)|=" << un(U - U_n) << std::endl;
+                }
+            }
+        }
+
         // ===== IMEX split verification diagnostic (debug_level >= 2, first 2 calls) =====
         // Uses static atomic guard — robust to 0/1-based tile IDs.
         static std::atomic<int> imex_split_check_count{0};
@@ -6690,6 +6741,44 @@ vertical_coefficients:
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_slow", k_slow[i]);
                 k_full[i] = k_fast[i] + k_slow[i];
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_full", k_full[i]);
+
+                // [DIAGNOSTIC, env WRF_SDIRK3_KSLOW_PROBE] Wall-2 per-component +
+                // amplitude-scaling isolation (measurement-only, default off).
+                // (1) per-field ||k_slow|| (u/v/w/ph/t/mu) => which field carries the
+                //     blow-up. (2) g(eps)=||k_slow(U_n+eps*(U_conv-U_n))|| => the
+                //     log-log slope reads the nonlinearity order. AD-clean:
+                //     k_slow[i]/k_full[i] untouched; U_ref_stage_ (mutated by the eps
+                //     sweep via compute_k_slow) is saved and restored.
+                {
+                    static const bool kslow_probe =
+                        (std::getenv("WRF_SDIRK3_KSLOW_PROBE") != nullptr);
+                    if (kslow_probe) {
+                        torch::NoGradGuard no_grad;
+                        auto comp = extractStateVariables(k_slow[i]);
+                        std::cerr << "[KSLOW COMP] stage=" << stage_id
+                                  << " |ks|=" << k_slow[i].norm().item<float>()
+                                  << " u=" << std::get<0>(comp).norm().item<float>()
+                                  << " v=" << std::get<1>(comp).norm().item<float>()
+                                  << " w=" << std::get<2>(comp).norm().item<float>()
+                                  << " ph=" << std::get<3>(comp).norm().item<float>()
+                                  << " t=" << std::get<4>(comp).norm().item<float>()
+                                  << " mu=" << std::get<5>(comp).norm().item<float>()
+                                  << " |Uconv-Un|=" << (U_conv - U_n).norm().item<float>()
+                                  << std::endl;
+                        torch::Tensor saved_ref = U_ref_stage_;
+                        torch::Tensor disp = U_conv - U_n;
+                        const float eps_list[4] = {0.25f, 0.5f, 1.0f, 2.0f};
+                        for (float eps : eps_list) {
+                            torch::Tensor U_scaled = U_n + eps * disp;
+                            torch::Tensor ks_eps = compute_k_slow(U_scaled, U_scaled);
+                            std::cerr << "[KSLOW GEPS] stage=" << stage_id
+                                      << " eps=" << eps
+                                      << " |ks(eps)|=" << ks_eps.norm().item<float>()
+                                      << std::endl;
+                        }
+                        U_ref_stage_ = saved_ref;
+                    }
+                }
             }
 
             if (ark_stage_aborted) {
