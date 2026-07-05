@@ -11,6 +11,9 @@
 # from `[SPLIT-EXPLICIT PREP]`, ASSERTS it is within tolerance of the dyn_em reference, prints
 # PASS/FAIL, and EXITS NON-ZERO on failure (so it cannot silently mask a regression).
 set -e
+# zsh aborts on an unmatched glob ("no matches found"); make `rm -f rsl.error.*` safe on a
+# clean rsl state (no files) by letting unmatched globs pass through literally (rm -f ignores them).
+unsetopt NOMATCH 2>/dev/null || true
 cd /Users/yhlee/SDIRK3/test/em_b_wave
 DYNEM_C2A_MEAN=44073.1
 TOL_PCT=5.0
