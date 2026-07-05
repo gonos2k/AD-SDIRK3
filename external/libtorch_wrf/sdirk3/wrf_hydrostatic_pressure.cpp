@@ -156,8 +156,12 @@ torch::Tensor compute_inverse_density_hydrostatic(
     float cp,                           // Specific heat at constant pressure
     float p1000mb)                      // Reference pressure (1000 mb)
 {
-    float cvpm = cv / cp;
-    
+    // BUGFIX 2026-07-06: WRF's cvpm is NEGATIVE (-cv/cp), share/module_model_constants.F:26.
+    // The previous `cv/cp` (positive exponent) made the inverse density ~5x too small
+    // (measured vs dyn_em: alt 0.4976 vs 2.4525) — an inverse-EOS sign error shared by
+    // computeUnifiedRHS. Formula matches WRF calc_p_rho_phi (module_big_step_utilities_em.F:1119).
+    float cvpm = -cv / cp;
+
     // WRF formula: al = (r_d/p1000mb)*(t+t0)*(((p+pb)/p1000mb)**cvpm) - alb
     // Note: theta_full = t + t0 (full potential temperature)
     auto pi = torch::pow(p_full / p1000mb, cvpm);

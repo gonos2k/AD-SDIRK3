@@ -6143,8 +6143,44 @@ vertical_coefficients:
                 static std::atomic<bool> logged_se{false};
                 bool exp_se = false;
                 if (logged_se.compare_exchange_strong(exp_se, true)) {
-                    std::cerr << "[SPLIT-EXPLICIT] mode active (WIP scaffolding; ARK324 path "
-                                 "still runs — increments Inc1+ will replace it)" << std::endl;
+                    std::cerr << "[SPLIT-EXPLICIT] mode active (WIP; ARK324 still runs — Inc 1 prep only)"
+                              << std::endl;
+                }
+                // [Inc 1] small_step_prep in libtorch: sound-speed stiffness c2a = (cp/cv)*(pb+p)/alt
+                // and column mass muts = mub + mu', 1-to-1 with dyn_em small_step_prep, reusing the
+                // ported hydrostatic helpers exactly as computeUnifiedRHS does (:13311-13376). Computed
+                // at the stage-start state U_n; validated vs dyn_em (parity dump). No state advance yet.
+                {
+                    static std::atomic<bool> dumped_prep{false};
+                    bool e2 = false;
+                    if (dumped_prep.compare_exchange_strong(e2, true)) {
+                        auto se_comp = extractStateVariables(U_n);
+                        const torch::Tensor& se_t = std::get<4>(se_comp);   // theta perturbation
+                        const torch::Tensor& se_mu = std::get<5>(se_comp);  // mu perturbation
+                        torch::Tensor mu_full_se = se_mu + mu_base_;        // muts = mub + mu'
+                        torch::Tensor t_full_se = se_t + th_base_;          // full potential temperature
+                        auto dev = t_full_se.device();
+                        auto dtp = t_full_se.scalar_type();
+                        auto rdnw_se = getRdnwTensor(dev, dtp, nz_);
+                        auto rdn_se = getRdnTensor(dev, dtp, nz_);
+                        torch::Tensor p_pert_se = wrf::sdirk3::compute_pressure_hydrostatic(
+                            t_full_se, mu_full_se, mu_base_, p_base_, mu_base_, c1h_, c2h_,
+                            rdnw_se, rdn_se, rd_, cv_, cp_, p0_, 100000.0f);
+                        torch::Tensor p_full_se = p_pert_se + p_base_;                 // (pb + p)
+                        torch::Tensor alb_se = rd_ * th_base_ / p_base_;
+                        torch::Tensor al_se = wrf::sdirk3::compute_inverse_density_hydrostatic(
+                            t_full_se, p_full_se, p_base_, th_base_, alb_se, rd_, cv_, cp_, 100000.0f);
+                        torch::Tensor alt_se = al_se + alb_se;                          // 1/rho
+                        torch::Tensor c2a_se = (cp_ / cv_) * p_full_se / alt_se;        // sound-speed stiffness
+                        torch::NoGradGuard ng;
+                        std::cerr << "[SPLIT-EXPLICIT PREP] c2a L2=" << c2a_se.norm().item<float>()
+                                  << " mean=" << c2a_se.mean().item<float>()
+                                  << " max=" << c2a_se.abs().max().item<float>()
+                                  << " | muts(mu_full) L2=" << mu_full_se.norm().item<float>()
+                                  << " mean=" << mu_full_se.mean().item<float>()
+                                  << " | p_full mean=" << p_full_se.mean().item<float>()
+                                  << " alt mean=" << alt_se.mean().item<float>() << std::endl;
+                    }
                 }
             }
             // ===== IMEX POST-SOLVE ARK324L2SA: Newton fast-only, 4-stage =====
