@@ -5647,7 +5647,17 @@ vertical_coefficients:
                 torch::NoGradGuard no_grad;
                 const char* dts_env = std::getenv("WRF_SDIRK3_SLOWFLOW_DT_STABLE");
                 const float dt_stable = dts_env ? std::atof(dts_env) : 4.0f;
+                // SLOWFLOW_MODE: 0 = ExplicitOnly (slow channel only, PGF absent);
+                //                1 = Full (advection + PGF together) — tests whether
+                //                    keeping the balanced pair together + small h is
+                //                    stable (WRF-native acoustic-substep regime).
+                const char* mode_env = std::getenv("WRF_SDIRK3_SLOWFLOW_MODE");
+                const int sf_mode = mode_env ? std::atoi(mode_env) : 0;
                 auto slow_rhs = [&](const torch::Tensor& V) -> torch::Tensor {
+                    if (sf_mode == 1) {
+                        U_ref_stage_ = V.detach().clone();  // w_ref consistency
+                        return computeUnifiedRHS(V, RhsMode::Full);
+                    }
                     torch::Tensor Vh = use_ad_halo ? ad_halo_exchange(V) : torch::Tensor();
                     return compute_k_slow(V, Vh);
                 };
