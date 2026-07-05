@@ -1,0 +1,64 @@
+911a
+       std::cerr << "=== CHECKPOINT: After rdn_ populated, before grid_info_->rdn creation ===" << std::endl;
+.
+914a
+       std::cerr << "=== CHECKPOINT B1: grid_info_=" << (void*)grid_info_ << " rdn_.empty()=" << rdn_.empty() << std::endl;
+.
+916a
+           std::cerr << "=== CHECKPOINT B2: After tensor_options, before from_blob ===" << std::endl;
+.
+919a
+           std::cerr << "=== CHECKPOINT B3: After from_blob+clone ===" << std::endl;
+.
+921a
+       std::cerr << "=== CHECKPOINT B4: After grid_info_->rdn creation block ===" << std::endl;
+.
+
+CONFIRMED: gfortran BIND(C) parameter limit
+=============================================
+
+Date: 2025-10-11 16:49 KST
+Test: em_b_wave with simplified boundary arrays (C_NULL_PTR)
+
+Evidence:
+---------
+1. Clean C++ library rebuild ✓
+2. Full WRF recompile ✓
+3. Simplified 48 boundary array parameters to C_NULL_PTR ✓
+4. Still have 127 total parameters
+
+Result: FAILED
+---------
+First integer after cqu_ptr:
+  its = 1 (expecting 1)         ✓ correct
+  ite = 1881279328 (expecting 41)  ✗ CORRUPTED
+
+Parameter corruption pattern:
+  nx = 81, ny = 0, nz = 41     (wrong)
+  its/ite = 1/1881279328        (ite is garbage)
+  jts/jte = 1/1871243664        (jte is garbage)
+  ims/ime = 1/42                (wrong)
+  jms/jme = 0/82                (wrong)
+
+Root Cause:
+-----------
+gfortran BIND(C) with VALUE attribute cannot reliably pass 127 parameters.
+The corruption occurs around parameter #79-127 (the integer parameters after
+the 48 boundary pointers + 3 float pointers).
+
+Solution Required:
+------------------
+Reduce parameter count by packaging related parameters into structs:
+1. Index bounds struct: its,ite,jts,jte,kts,kte,ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme
+2. Dimension struct: nx,ny,nz,nx_u,ny_v,nz_w,rk_step
+3. Scalar params struct: dt,rdx,rdy,kdamp,khdif,kvdif
+4. Boundary config struct: spec_bdy_width,spec_zone,relax_zone,dtbc
+
+This will reduce from 127 parameters to ~70 parameters, which should work.
+
+Next Steps:
+-----------
+1. Define C structs for parameter groups in wrf_sdirk3_interface_zerocopy.h
+2. Update C++ function signature to accept struct pointers (C_PTR in Fortran)
+3. Update Fortran interface to pass structs using C_LOC
+4. Rebuild and test

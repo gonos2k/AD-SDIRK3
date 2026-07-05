@@ -1,0 +1,52 @@
+# Registry entries for SDIRK-3 time integration scheme
+# These entries should be added to Registry.EM_COMMON
+
+# Configuration options for SDIRK-3
+rconfig   integer time_integration_scheme   namelist,dynamics  1  0        rh   "time_integration_scheme"  "0=RK3, 1=SDIRK3"
+rconfig   logical use_implicit_scheme       namelist,dynamics  1  .false.  rh   "use_implicit_scheme"      "use implicit time integration"
+rconfig   logical implicit_acoustic         namelist,dynamics  1  .true.   rh   "implicit_acoustic"        "implicit acoustic terms"
+rconfig   integer acoustic_ad_mode          namelist,dynamics  1  0        rh   "acoustic_ad_mode"         "0=off, 1=basic, 2=optimized"
+rconfig   real    implicit_theta           namelist,dynamics  1  0.6      rh   "implicit_theta"           "implicitness parameter"
+rconfig   integer implicit_linear_solver    namelist,dynamics  1  2        rh   "implicit_linear_solver"   "1=GMRES, 2=BiCGSTAB"
+rconfig   integer implicit_max_newton_iter  namelist,dynamics  1  10       rh   "implicit_max_newton_iter" "max Newton iterations"
+rconfig   real    implicit_newton_tol      namelist,dynamics  1  1.0e-6   rh   "implicit_newton_tol"      "Newton tolerance"
+
+# SDIRK-3 specific configuration
+rconfig   real    sdirk3_gamma             namelist,dynamics  1  0.435866521508459  rh  "sdirk3_gamma"  "SDIRK-3 gamma coefficient"
+rconfig   integer sdirk3_max_stages        namelist,dynamics  1  3        rh   "sdirk3_max_stages"        "number of SDIRK-3 stages"
+rconfig   logical sdirk3_use_autograd      namelist,dynamics  1  .true.   rh   "sdirk3_use_autograd"      "use automatic differentiation"
+rconfig   logical sdirk3_use_cpu_opt       namelist,dynamics  1  .true.   rh   "sdirk3_use_cpu_opt"       "use CPU optimizations"
+
+# State variables for SDIRK-3 stages
+# k1, k2, k3 are the stage derivatives
+state    real    k1_u         ikjb  dyn_em  1  X   ruh       "K1_U"          "SDIRK-3 k1 for U"           "m s-2"
+state    real    k1_v         ikjb  dyn_em  1  Y   rvh       "K1_V"          "SDIRK-3 k1 for V"           "m s-2"
+state    real    k1_w         ikjb  dyn_em  1  Z   rwh       "K1_W"          "SDIRK-3 k1 for W"           "m s-2"
+state    real    k1_t         ikjb  dyn_em  1  -   -         "K1_T"          "SDIRK-3 k1 for theta"       "K s-1"
+state    real    k1_ph        ikjb  dyn_em  1  Z   -         "K1_PH"         "SDIRK-3 k1 for phi"         "m2 s-3"
+state    real    k1_mu        ijb   dyn_em  1  -   -         "K1_MU"         "SDIRK-3 k1 for mu"          "Pa s-1"
+
+state    real    k2_u         ikjb  dyn_em  1  X   ruh       "K2_U"          "SDIRK-3 k2 for U"           "m s-2"
+state    real    k2_v         ikjb  dyn_em  1  Y   rvh       "K2_V"          "SDIRK-3 k2 for V"           "m s-2"
+state    real    k2_w         ikjb  dyn_em  1  Z   rwh       "K2_W"          "SDIRK-3 k2 for W"           "m s-2"
+state    real    k2_t         ikjb  dyn_em  1  -   -         "K2_T"          "SDIRK-3 k2 for theta"       "K s-1"
+state    real    k2_ph        ikjb  dyn_em  1  Z   -         "K2_PH"         "SDIRK-3 k2 for phi"         "m2 s-3"
+state    real    k2_mu        ijb   dyn_em  1  -   -         "K2_MU"         "SDIRK-3 k2 for mu"          "Pa s-1"
+
+state    real    k3_u         ikjb  dyn_em  1  X   ruh       "K3_U"          "SDIRK-3 k3 for U"           "m s-2"
+state    real    k3_v         ikjb  dyn_em  1  Y   rvh       "K3_V"          "SDIRK-3 k3 for V"           "m s-2"
+state    real    k3_w         ikjb  dyn_em  1  Z   rwh       "K3_W"          "SDIRK-3 k3 for W"           "m s-2"
+state    real    k3_t         ikjb  dyn_em  1  -   -         "K3_T"          "SDIRK-3 k3 for theta"       "K s-1"
+state    real    k3_ph        ikjb  dyn_em  1  Z   -         "K3_PH"         "SDIRK-3 k3 for phi"         "m2 s-3"
+state    real    k3_mu        ijb   dyn_em  1  -   -         "K3_MU"         "SDIRK-3 k3 for mu"          "Pa s-1"
+
+# State at beginning of timestep for SDIRK-3
+state    real    u_n          ikjb  dyn_em  1  X   ruh       "U_N"           "U at timestep n"            "m s-1"
+state    real    v_n          ikjb  dyn_em  1  Y   rvh       "V_N"           "V at timestep n"            "m s-1"
+state    real    w_n          ikjb  dyn_em  1  Z   rwh       "W_N"           "W at timestep n"            "m s-1"
+state    real    t_n          ikjb  dyn_em  1  -   -         "T_N"           "theta at timestep n"        "K"
+state    real    ph_n         ikjb  dyn_em  1  Z   -         "PH_N"          "phi at timestep n"          "m2 s-2"
+state    real    mu_n         ijb   dyn_em  1  -   -         "MU_N"          "mu at timestep n"           "Pa"
+
+# Jacobian storage for Newton-Krylov solver (optional)
+state    real    jac_cache    ikjb  dyn_em  1  -   -         "JAC_CACHE"     "Jacobian cache"             "-"

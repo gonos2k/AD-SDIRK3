@@ -1,0 +1,23 @@
+# SDIRK3 Implicit Time Integration Configuration
+# Add this to Registry.EM_COMMON or include separately
+
+# Include SDIRK3 optimization options
+include Registry.EM_SDIRK3_OPTIMIZATIONS
+
+# SDIRK3 solver options
+# Note: time_integration_scheme is already defined in Registry.EM_COMMON
+# Core SDIRK3 runtime options are defined in Registry.EM_COMMON
+rconfig   logical sdirk3_save_trajectory   namelist,dynamics      1         .false. rh    "sdirk3_save_trajectory"   "save for 4DVAR"            ""
+rconfig   integer sdirk3_checkpoint_interval namelist,dynamics    1         10      rh    "sdirk3_checkpoint_interval" "checkpoint interval"     ""
+rconfig   logical sdirk3_obs_aware_4dvar      namelist,dynamics   1         .false. rh    "sdirk3_obs_aware_4dvar"   "enable observation-aware 4DVAR terminal forcing" ""
+rconfig   integer sdirk3_obs_source_mode      namelist,dynamics   1         0       rh    "sdirk3_obs_source_mode"   "0=off,1=FDDA,2=WRFDA-compatible payload" ""
+rconfig   integer sdirk3_obs_window_sync_mode namelist,dynamics   1         0       rh    "sdirk3_obs_window_sync_mode" "0=off,1=strict endpoint sync,2=relaxed sync" ""
+
+# Package definition for SDIRK3
+# Note: sdirk3_time_integration package is already defined in Registry.EM_COMMON
+# package   sdirk3_solver  time_integration_scheme==6            -             state:u,v,w,t,ph,mu,p
+
+# SDIRK3 state variables (if needed for solver workspace)
+state    real    sdirk3_k1         ikjb     dyn_em      1         -      r     "SDIRK3_K1"    "SDIRK3 stage 1"  ""
+state    real    sdirk3_k2         ikjb     dyn_em      1         -      r     "SDIRK3_K2"    "SDIRK3 stage 2"  ""
+state    real    sdirk3_k3         ikjb     dyn_em      1         -      r     "SDIRK3_K3"    "SDIRK3 stage 3"  ""

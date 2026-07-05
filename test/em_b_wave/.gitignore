@@ -1,0 +1,24 @@
+# Runtime artifacts from repeated SDIRK3/IMEX experiments
+rsl.error.*
+rsl.out.*
+*.rsl.error.*
+*.rsl.out.*
+*_rsl.error.*
+*_rsl.out.*
+wrfout_*
+wrfrst_*
+fort.*
+outfile*
+
+# Stage timing / benchmark dumps
+*.dat
+*.csv
+*_timestep_time*.txt
+*_timing_steps.txt
+*_gmres_fail_per_step.txt
+time_compare_*.txt
+timing_compare_*.txt
+
+# Large experiment output folders
+consistency_*/
+wp2_compare_*/

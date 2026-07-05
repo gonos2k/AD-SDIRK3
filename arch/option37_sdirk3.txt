@@ -1,0 +1,51 @@
+###########################################################
+#ARCH    Linux x86_64 ppc64le i486 i586 i686, gfortran compiler with gcc, SDIRK-3 LibTorch # serial smpar dmpar dm+sm
+#
+DESCRIPTION     =       GNU ($SFC/$SCC): SDIRK-3 LibTorch Scheme
+DMPARALLEL      =       # 1
+OMPCPP          =       # -D_OPENMP
+OMP             =       # -fopenmp
+OMPCC           =       # -fopenmp
+SFC             =       gfortran
+SCC             =       gcc
+CCOMP           =       g++
+DM_FC           =       mpif90 -f90=$(SFC)
+DM_CC           =       mpicc -cc=$(SCC)
+FC              =       CONFIGURE_FC
+CC              =       CONFIGURE_CC
+LD              =       $(FC)
+RWORDSIZE       =       CONFIGURE_RWORDSIZE
+PROMOTION       =       #-fdefault-real-8
+ARCH_LOCAL      =       -DNONSTANDARD_SYSTEM_SUBR -DUSE_SDIRK3 CONFIGURE_D_CTSM
+CFLAGS_LOCAL    =       -w -O3 -c -DUSE_SDIRK3 -std=c++17
+LDFLAGS_LOCAL   =       -L$(WRF_SRC_ROOT_DIR)/external/libtorch_wrf/install/lib -Wl,-rpath,$(WRF_SRC_ROOT_DIR)/external/libtorch_wrf/install/lib -lsdirk3_libtorch
+CPLUSPLUSLIB    =       -lstdc++
+ESMF_LDFLAG     =       $(CPLUSPLUSLIB)
+FCOPTIM         =       -O2 -ftree-vectorize -funroll-loops
+FCREDUCEDOPT	=       $(FCOPTIM)
+FCNOOPT		=       -O0
+FCDEBUG         =       # -g $(FCNOOPT) # -fbacktrace -ggdb -fcheck=bounds,do,mem,pointer -ffpe-trap=invalid,zero,overflow
+FORMAT_FIXED    =       -ffixed-form
+FORMAT_FREE     =       -ffree-form -ffree-line-length-none
+FCSUFFIX        =
+FCCOMPAT        =
+BYTESWAPIO      =       -fconvert=big-endian -frecord-marker=4
+FCBASEOPTS_NO_G =       -w $(FORMAT_FREE) $(BYTESWAPIO) $(FCCOMPAT)
+FCBASEOPTS      =       $(FCBASEOPTS_NO_G) $(FCDEBUG)
+MODULE_SRCH_FLAG =     -I$(WRF_SRC_ROOT_DIR)/external/libtorch_wrf/install/include
+TRADFLAG        =      CONFIGURE_TRADFLAG
+CPP             =      /lib/cpp CONFIGURE_CPPFLAGS -I$(WRF_SRC_ROOT_DIR)/external/libtorch_wrf/install/include -DUSE_SDIRK3
+AR              =      ar
+ARFLAGS         =      ru
+M4              =      m4 -B 14000
+RANLIB          =      ranlib
+RLFLAGS		=	
+CC_TOOLS        =      $(SCC)
+
+# SDIRK-3 Configuration
+SDIRK3_BASE     =      $(WRF_SRC_ROOT_DIR)
+SDIRK3_LIB_PATH =      $(SDIRK3_BASE)/external/libtorch_wrf/install/lib
+SDIRK3_INC_PATH =      $(SDIRK3_BASE)/external/libtorch_wrf/install/include
+SDIRK3_CPPFLAGS =      -I$(SDIRK3_INC_PATH) -DUSE_SDIRK3
+SDIRK3_LDFLAGS  =      -L$(SDIRK3_LIB_PATH) -Wl,-rpath,$(SDIRK3_LIB_PATH)
+SDIRK3_LIBS     =      -lsdirk3_libtorch

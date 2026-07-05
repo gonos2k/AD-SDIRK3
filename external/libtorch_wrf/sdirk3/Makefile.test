@@ -1,0 +1,45 @@
+# Makefile for testing tensor validation refactoring
+# Usage: make -f Makefile.test
+
+CXX = g++
+CXXFLAGS = -std=c++17 -Wall -Wextra -I. -I$(LIBTORCH_ROOT)/include -I$(LIBTORCH_ROOT)/include/torch/csrc/api/include
+LDFLAGS = -L$(LIBTORCH_ROOT)/lib -ltorch -lc10 -Wl,-rpath,$(LIBTORCH_ROOT)/lib
+
+# Debug build by default
+DEBUG ?= 1
+
+ifeq ($(DEBUG),1)
+    CXXFLAGS += -g -O0 -DDEBUG
+else
+    CXXFLAGS += -O3 -DNDEBUG
+endif
+
+# Check if LIBTORCH_ROOT is set
+ifndef LIBTORCH_ROOT
+    $(error LIBTORCH_ROOT is not set. Please set it to your LibTorch installation path)
+endif
+
+# Test program
+TARGET = test_tensor_validation
+SOURCES = test_tensor_validation.cpp
+
+# Build rules
+all: $(TARGET)
+
+$(TARGET): $(SOURCES)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
+run: $(TARGET)
+	./$(TARGET)
+
+clean:
+	rm -f $(TARGET)
+
+# Debug vs Release builds
+debug:
+	$(MAKE) -f Makefile.test DEBUG=1
+
+release:
+	$(MAKE) -f Makefile.test DEBUG=0
+
+.PHONY: all run clean debug release

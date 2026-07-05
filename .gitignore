@@ -1,0 +1,130 @@
+# Source-only upload policy
+# 1) Ignore everything by default, then whitelist source paths.
+*
+
+# Keep this file
+!.gitignore
+
+# Top-level build/config essentials
+!CMakeLists.txt
+!Makefile
+!configure
+!configure_new
+!configure.wrf
+!compile
+!compile_new
+!clean
+!README
+!LICENSE.txt
+
+# Standalone source file
+!wrf_sdirk3_nonhydrostatic_implementation.cpp
+
+# Source directories
+!Registry/
+!Registry/**
+!arch/
+!arch/**
+!chem/
+!chem/**
+!cmake/
+!cmake/**
+!confcheck/
+!confcheck/**
+!dyn_em/
+!dyn_em/**
+!external/
+!external/**
+!frame/
+!frame/**
+!hydro/
+!hydro/**
+!inc/
+!inc/**
+!main/
+!main/**
+!phys/
+!phys/**
+!share/
+!share/**
+!test/
+!test/**
+!tools/
+!tools/**
+!var/
+!var/**
+!wrftladj/
+!wrftladj/**
+
+# Build/runtime artifacts (apply even inside whitelisted dirs)
+*.o
+*.obj
+*.mod
+*.MOD
+*.a
+*.a.*
+*.so
+*.so.*
+*.dylib
+*.dylib.*
+*.exe
+*.exe*
+*.out
+*.log
+*.nc
+*.tar
+*.tar.*
+*.tgz
+*.grb
+*.gif
+*.bak
+*.bak_*
+*.backup
+*.backup_*
+
+# Runtime outputs
+rsl.error.*
+rsl.out.*
+wrfout_*
+wrfrst_*
+wrfradiation_*
+namelist.output
+core
+
+# Generated dirs
+install/
+build/
+build_*/
+logs/
+archive/
+Jobs/
+run/
+doc/
+docs/
+
+# Test/runtime data files (non-source)
+test/**/wrfinput_*
+test/**/wrfbdy_*
+test/**/wrflowinp_*
+test/**/wrfndi_*
+test/**/input_*
+test/**/met_em.*
+test/**/geo_em.*
+test/**/FILE:*
+test/**/PFILE:*
+**/RRTM_DATA
+
+# Known prebuilt/binary helper files without extensions
+external/io_grib1/grib1_util/dump
+external/io_int/diffwrf
+external/io_int/test_io_idx
+external/io_netcdf/diffwrf
+external/libtorch_wrf/sdirk3/test_*
+external/libtorch_wrf/sdirk3/tests/test_*
+!external/libtorch_wrf/sdirk3/tests/test_wrms_gate_metric.cpp
+tools/fseeko_test
+tools/registry
+
+# OS/editor noise
+.DS_Store
+*.swp

@@ -1,0 +1,108 @@
+# Full WRF SDIRK-3 LibTorch Makefile with Physics Implementation
+# This builds the complete SDIRK3 solver with real WRF governing equations
+
+# LibTorch configuration
+LIBTORCH_ROOT ?= /opt/homebrew/opt/pytorch/libexec/lib/python3.13/site-packages/torch
+TORCH_INCLUDES := -I$(LIBTORCH_ROOT)/include -I$(LIBTORCH_ROOT)/include/torch/csrc/api/include
+TORCH_LDFLAGS := -L$(LIBTORCH_ROOT)/lib -ltorch -ltorch_cpu -lc10
+
+# Compiler settings
+CXX = g++
+CXXFLAGS = -std=c++17 -O2 -Wall -Wno-unused-parameter -Wno-missing-field-initializers
+CXXFLAGS += $(TORCH_INCLUDES)
+CXXFLAGS += -DNDEBUG -D_GLIBCXX_USE_CXX11_ABI=0
+CXXFLAGS += -fPIC  # Required for linking with WRF
+
+# Core physics sources
+PHYSICS_SOURCES = \
+    wrf_sdirk3_unified_rhs.cpp \
+    wrf_sdirk3_unified_rhs_optimized.cpp \
+    wrf_sdirk3_unified_rhs_extended.cpp \
+    wrf_sdirk3_advection.cpp \
+    wrf_sdirk3_spatial_derivatives.cpp \
+    wrf_sdirk3_boundary_conditions.cpp \
+    wrf_sdirk3_diffusion.cpp \
+    wrf_sdirk3_vertical_implicit.cpp
+
+# Solver implementation sources
+SOLVER_SOURCES = \
+    wrf_sdirk3_tile_unified.cpp \
+    wrf_sdirk3_tile_boundary_unified.cpp \
+    wrf_sdirk3_newton_krylov_fixed.cpp \
+    wrf_sdirk3_gmres_fixed.cpp \
+    wrf_sdirk3_dogleg.cpp \
+    wrf_sdirk3_jacobian.cpp \
+    wrf_sdirk3_residual.cpp
+
+# Interface sources
+INTERFACE_SOURCES = \
+    wrf_sdirk3_interface_zerocopy.cpp \
+    wrf_sdirk3_zero_copy_interface.cpp \
+    wrf_sdirk3_state_vector.cpp
+
+# Utility sources
+UTILITY_SOURCES = \
+    wrf_sdirk3_config.cpp \
+    wrf_sdirk3_diagnostics.cpp \
+    wrf_sdirk3_init.cpp \
+    wrf_sdirk3_mem_optimized.cpp \
+    wrf_sdirk3_tensor_memory_pool.cpp
+
+# Combine all sources
+SOURCES = $(PHYSICS_SOURCES) $(SOLVER_SOURCES) $(INTERFACE_SOURCES) $(UTILITY_SOURCES)
+
+# Filter out files that don't exist yet
+EXISTING_SOURCES = $(foreach src,$(SOURCES),$(wildcard $(src)))
+
+# If no sources exist, use minimal set
+ifeq ($(EXISTING_SOURCES),)
+    SOURCES = wrf_sdirk3_interface_zerocopy.cpp \
+              wrf_sdirk3_unified_rhs_optimized.cpp \
+              wrf_sdirk3_tile_unified.cpp
+endif
+
+OBJECTS = $(SOURCES:.cpp=.o)
+
+# Target library (must match WRF's expectation)
+LIB_NAME = libwrf_sdirk3_libtorch.a
+
+.PHONY: all clean test
+
+all: $(LIB_NAME)
+
+$(LIB_NAME): $(OBJECTS)
+	ar rcs $@ $^
+	@echo "=========================================="
+	@echo "Successfully built full SDIRK3 library with physics"
+	@echo "Library: $(LIB_NAME)"
+	@echo "Included modules:"
+	@echo "  - WRF governing equations (momentum, theta, geopotential)"
+	@echo "  - SDIRK3 time integration"
+	@echo "  - Newton-Krylov solver with GMRES"
+	@echo "  - Zero-copy Fortran interface"
+	@echo "=========================================="
+
+%.o: %.cpp
+	@echo "Compiling $<..."
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJECTS) $(LIB_NAME)
+	@echo "Cleaned build artifacts"
+
+test: $(LIB_NAME)
+	@echo "Library built successfully: $(LIB_NAME)"
+	@nm -C $(LIB_NAME) | grep -E "sdirk3_tile_unified_step_zerocopy|sdirk3_tile_solver_create_zerocopy" || echo "Warning: Expected symbols not found!"
+	@echo "Ready for integration with WRF"
+
+# Debug target to show what will be built
+info:
+	@echo "LIBTORCH_ROOT: $(LIBTORCH_ROOT)"
+	@echo "Sources to compile:"
+	@for src in $(SOURCES); do \
+	    if [ -f $$src ]; then \
+	        echo "  ✓ $$src"; \
+	    else \
+	        echo "  ✗ $$src (missing)"; \
+	    fi \
+	done

@@ -1,0 +1,42 @@
+# Build artifacts
+*.o
+*.a
+*.so
+*.tmp
+
+# Log files
+*.log
+
+# IDE files
+.vscode/
+.idea/
+
+# Temporary files
+*~
+*.swp
+*.swo
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Backup files and archives (prevent old convention files from confusing grep/builds)
+# 2025-12-25: Narrowed patterns - *.h.* was too broad (catches template headers)
+# Specific backup file extensions only
+*.orig
+*.bak
+
+# Archive directories containing old backup files
+archive/
+archive_backup_files_*/
+backup_*/
+
+# Backup files with specific naming conventions used in this project
+# Pattern: file.cpp.suffix or file.h.suffix (e.g., .fix_h2_paren, .select_backup)
+# Only match within sdirk3 directory (via being in this .gitignore)
+*.[ch]pp.fix_*
+*.[ch]pp.backup*
+*.[ch]pp.select_*
+*.[ch]pp.h1h2_*
+*.h.fix_*
+*.h.backup*

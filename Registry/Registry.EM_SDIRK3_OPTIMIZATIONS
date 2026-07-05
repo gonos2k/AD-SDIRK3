@@ -1,0 +1,213 @@
+# SDIRK-3 Advanced Optimization Options
+# Author: WRF SDIRK-3 Development Team  
+# Date: 2025-01-20
+# Description: Advanced optimization options for SDIRK3 solver performance and accuracy tuning
+
+# ================================================================================
+# JVP (Jacobian-Vector Product) Optimization Options
+# ================================================================================
+
+# JVP Method Selection
+# Core method/tolerance options are defined in Registry.EM_COMMON
+
+# JVP Performance Options
+rconfig   logical sdirk3_jvp_checkpointing     namelist,dynamics  1  .false.  rh   "sdirk3_jvp_checkpointing"  "Enable JVP checkpointing for memory"   ""
+rconfig   integer sdirk3_jvp_checkpoint_segments namelist,dynamics  1  4      rh   "sdirk3_jvp_checkpoint_segments" "Number of checkpoint segments"   ""
+rconfig   logical sdirk3_jvp_graph_caching     namelist,dynamics  1  .true.   rh   "sdirk3_jvp_graph_caching"  "Cache computation graph for JVP"   ""
+rconfig   logical sdirk3_jvp_batched           namelist,dynamics  1  .true.   rh   "sdirk3_jvp_batched"        "Use batched JVP for multiple vectors"   ""
+rconfig   integer sdirk3_jvp_batch_size        namelist,dynamics  1  8        rh   "sdirk3_jvp_batch_size"     "Maximum batch size for JVP"   ""
+rconfig   logical sdirk3_jvp_mixed_precision   namelist,dynamics  1  .false.  rh   "sdirk3_jvp_mixed_precision" "Use FP16 compute with FP32 accumulate"   ""
+
+# ================================================================================
+# Selective Implicit/Explicit Treatment Options
+# ================================================================================
+
+# Physics Term Treatment Control
+rconfig   logical sdirk3_implicit_acoustic     namelist,dynamics  1  .true.   rh   "sdirk3_implicit_acoustic"  "Treat acoustic waves implicitly"   ""
+rconfig   logical sdirk3_implicit_gravity      namelist,dynamics  1  .true.   rh   "sdirk3_implicit_gravity"   "Treat gravity waves implicitly"   ""
+rconfig   logical sdirk3_implicit_rayleigh     namelist,dynamics  1  .true.   rh   "sdirk3_implicit_rayleigh"  "Treat Rayleigh damping implicitly"   ""
+rconfig   logical sdirk3_implicit_wdamp        namelist,dynamics  1  .true.   rh   "sdirk3_implicit_wdamp"     "Treat W-damping implicitly"   ""
+rconfig   logical sdirk3_implicit_vdiff        namelist,dynamics  1  .true.   rh   "sdirk3_implicit_vdiff"     "Treat vertical diffusion implicitly"   ""
+rconfig   logical sdirk3_implicit_hdiff        namelist,dynamics  1  .false.  rh   "sdirk3_implicit_hdiff"     "Treat horizontal diffusion implicitly"   ""
+rconfig   logical sdirk3_implicit_divergence   namelist,dynamics  1  .true.   rh   "sdirk3_implicit_divergence" "Treat divergence damping implicitly"   ""
+
+# ================================================================================
+# Enhanced Preconditioner Options
+# ================================================================================
+
+# Preconditioner Configuration
+rconfig   logical sdirk3_precond_diagonal_only namelist,dynamics  1  .false.  rh   "sdirk3_precond_diagonal_only" "Use only diagonal preconditioner"   ""
+rconfig   logical sdirk3_precond_block_jacobi  namelist,dynamics  1  .true.   rh   "sdirk3_precond_block_jacobi"  "Use block Jacobi preconditioner"   ""
+rconfig   integer sdirk3_precond_block_size    namelist,dynamics  1  4        rh   "sdirk3_precond_block_size"    "Block size for block Jacobi"   ""
+rconfig   logical sdirk3_precond_ilu           namelist,dynamics  1  .false.  rh   "sdirk3_precond_ilu"           "Use ILU preconditioner"   ""
+rconfig   integer sdirk3_precond_ilu_level     namelist,dynamics  1  0        rh   "sdirk3_precond_ilu_level"     "ILU fill level"   ""
+rconfig   logical sdirk3_precond_multigrid     namelist,dynamics  1  .false.  rh   "sdirk3_precond_multigrid"     "Use multigrid preconditioner"   ""
+rconfig   integer sdirk3_precond_mg_levels     namelist,dynamics  1  3        rh   "sdirk3_precond_mg_levels"     "Number of multigrid levels"   ""
+
+# ================================================================================
+# Newton-Krylov Advanced Options
+# ================================================================================
+
+# Adaptive Tolerance (Eisenstat-Walker)
+rconfig   logical sdirk3_nk_adaptive_tol       namelist,dynamics  1  .true.   rh   "sdirk3_nk_adaptive_tol"    "Use Eisenstat-Walker adaptive tol"   ""
+rconfig   real    sdirk3_nk_forcing_eta_max    namelist,dynamics  1  0.9      rh   "sdirk3_nk_forcing_eta_max" "Maximum forcing term"   ""
+rconfig   real    sdirk3_nk_forcing_eta_min    namelist,dynamics  1  1.0e-4   rh   "sdirk3_nk_forcing_eta_min" "Minimum forcing term"   ""
+rconfig   real    sdirk3_nk_forcing_gamma      namelist,dynamics  1  0.9      rh   "sdirk3_nk_forcing_gamma"   "EW gamma parameter"   ""
+rconfig   real    sdirk3_nk_forcing_alpha      namelist,dynamics  1  1.5      rh   "sdirk3_nk_forcing_alpha"   "EW alpha parameter"   ""
+
+# Globalization Strategy
+rconfig   logical sdirk3_nk_line_search        namelist,dynamics  1  .false.  rh   "sdirk3_nk_line_search"     "Use line search for Newton (default false for production)"   ""
+rconfig   logical sdirk3_nk_trust_region       namelist,dynamics  1  .false.  rh   "sdirk3_nk_trust_region"    "Use trust region method"   ""
+rconfig   real    sdirk3_nk_trust_radius       namelist,dynamics  1  1.0      rh   "sdirk3_nk_trust_radius"    "Initial trust region radius"   ""
+
+# v20.14 r49: Stage-aware GMRES budget and JVP auto-bench
+rconfig   integer sdirk3_stage2_gmres_restart          namelist,dynamics  1  0        rh   "sdirk3_stage2_gmres_restart"          "Stage>=2 GMRES restart override (0=off)"   ""
+rconfig   integer sdirk3_stage2_max_krylov_restarts    namelist,dynamics  1  0        rh   "sdirk3_stage2_max_krylov_restarts"    "Stage>=2 max Krylov restarts override (0=off)"   ""
+rconfig   real    sdirk3_stage2_krylov_tol             namelist,dynamics  1  0.0      rh   "sdirk3_stage2_krylov_tol"             "Stage>=2 Krylov tolerance override (0=off)"   ""
+rconfig   real    sdirk3_stage2_ew_eta_min             namelist,dynamics  1  0.0      rh   "sdirk3_stage2_ew_eta_min"             "Stage>=2 EW eta_min override (0=off)"   ""
+rconfig   real    sdirk3_stage2_ew_eta_max             namelist,dynamics  1  0.0      rh   "sdirk3_stage2_ew_eta_max"             "Stage>=2 EW eta_max override (0=off)"   ""
+rconfig   integer sdirk3_stage3_gmres_restart          namelist,dynamics  1  0        rh   "sdirk3_stage3_gmres_restart"          "Stage>=3 GMRES restart override (0=off)"   ""
+rconfig   integer sdirk3_stage3_max_krylov_restarts    namelist,dynamics  1  0        rh   "sdirk3_stage3_max_krylov_restarts"    "Stage>=3 max Krylov restarts override (0=off)"   ""
+rconfig   real    sdirk3_stage3_krylov_tol             namelist,dynamics  1  0.0      rh   "sdirk3_stage3_krylov_tol"             "Stage>=3 Krylov tolerance override (0=off)"   ""
+rconfig   real    sdirk3_stage3_ew_eta_min             namelist,dynamics  1  0.0      rh   "sdirk3_stage3_ew_eta_min"             "Stage>=3 EW eta_min override (0=off)"   ""
+rconfig   real    sdirk3_stage3_ew_eta_max             namelist,dynamics  1  0.0      rh   "sdirk3_stage3_ew_eta_max"             "Stage>=3 EW eta_max override (0=off)"   ""
+rconfig   integer sdirk3_imex_split_mode               namelist,dynamics  1  0        rh   "sdirk3_imex_split_mode"               "IMEX split mode: 0=baseline,1=frozen,2=post-SDIRK3,3=post-ARK324"   ""
+rconfig   logical sdirk3_imex_slow_in_tangent          namelist,dynamics  1  .false.  rh   "sdirk3_imex_slow_in_tangent"          "Include slow term in tangent-linear operator"   ""
+rconfig   logical sdirk3_imex_phys_in_tangent          namelist,dynamics  1  .false.  rh   "sdirk3_imex_phys_in_tangent"          "Include physics term in tangent-linear operator"   ""
+rconfig   logical sdirk3_stage1_explicit               namelist,dynamics  1  .false.  rh   "sdirk3_stage1_explicit"               "Use explicit stage-1 bypass in IMEX path"   ""
+rconfig   logical sdirk3_stage3_warmstart              namelist,dynamics  1  .false.  rh   "sdirk3_stage3_warmstart"              "Enable stage-3 warmstart predictor cache"   ""
+rconfig   integer sdirk3_stage_fail_action             namelist,dynamics  1  0        rh   "sdirk3_stage_fail_action"             "Stage failure action: 0=continue,1=abort,2=retry-once-then-abort"   ""
+rconfig   integer sdirk3_gate_metric_mode              namelist,dynamics  1  0        rh   "sdirk3_gate_metric_mode"              "Gate metric mode: 0=wrms_growth,1=scaled_abs,2=legacy_rel"   ""
+rconfig   real    sdirk3_stage3_gate_rel_threshold    namelist,dynamics  1  0.0      rh   "sdirk3_stage3_gate_rel_threshold"     "Stage-3 gate threshold override (0=use global stage gate)"   ""
+rconfig   logical sdirk3_stagnation_gate_enable        namelist,dynamics  1  .false.  rh   "sdirk3_stagnation_gate_enable"        "Stagnation gate (opt-in): fail-closed when stage converged=0 and wrms_growth>floor"   ""
+rconfig   real    sdirk3_stagnation_growth_floor       namelist,dynamics  1  0.9      rh   "sdirk3_stagnation_growth_floor"       "Stagnation WRMS-growth floor (0-10); growth above this with converged=0 = stagnation"   ""
+rconfig   logical sdirk3_stage_require_convergence     namelist,dynamics  1  .false.  rh   "sdirk3_stage_require_convergence"     "Honest non-convergence fail-close (opt-in, default off): when .true., converged=0 stage in retry-less paths (split=0/mode-2) = fail-closed"   ""
+rconfig   logical sdirk3_hevi_split                    namelist,dynamics  1  .false.  rh   "sdirk3_hevi_split"                    "HEVI split (opt-in, default off): when .true. (split_mode>=2), horizontal-acoustic (U/V-PGF, horiz mass-div, geopotential horiz adv) is explicit, only vertical-acoustic implicit"   ""
+rconfig   logical sdirk3_hopeless_relax                namelist,dynamics  1  .false.  rh   "sdirk3_hopeless_relax"                "Relax hopeless budget cap (default off)"   ""
+rconfig   logical sdirk3_precond_ratio_guard_warn_only namelist,dynamics  1  .false.  rh   "sdirk3_precond_ratio_guard_warn_only" "Precond ratio guard warn-only (no identity lock)"   ""
+rconfig   logical sdirk3_retain_graph_for_adjoint      namelist,dynamics  1  .false.  rh   "sdirk3_retain_graph_for_adjoint"      "Retain autograd graph for adjoint (debug/short window only)"   ""
+rconfig   logical sdirk3_enable_ad_halo_exchange       namelist,dynamics  1  .false.  rh   "sdirk3_enable_ad_halo_exchange"       "Enable AD-aware halo exchange in DA mode"   ""
+rconfig   logical sdirk3_stage_boundary_sync           namelist,dynamics  1  .false.  rh   "sdirk3_stage_boundary_sync"           "Allow C++ stage halo sync even when WRF halo priority is on"   ""
+rconfig   integer sdirk3_jvp_auto_bench_calls          namelist,dynamics  1  0        rh   "sdirk3_jvp_auto_bench_calls"          "JVP auto-bench calls per method (0=off)"   ""
+rconfig   logical sdirk3_jvp_auto_bench_quality_gate   namelist,dynamics  1  .false.  rh   "sdirk3_jvp_auto_bench_quality_gate"   "Enable eps-vs-half-eps quality gate in JVP auto-bench"   ""
+rconfig   integer sdirk3_jvp_auto_bench_warmup         namelist,dynamics  1  0        rh   "sdirk3_jvp_auto_bench_warmup"         "JVP auto-bench warmup calls per method"   ""
+rconfig   integer sdirk3_jvp_auto_bench_seed           namelist,dynamics  1  0        rh   "sdirk3_jvp_auto_bench_seed"           "Deterministic seed for JVP auto-bench probe vector"   ""
+rconfig   logical sdirk3_jvp_auto_bench_lock_reset_stage1 namelist,dynamics  1  .false.  rh   "sdirk3_jvp_auto_bench_lock_reset_stage1" "Reset JVP auto-bench lock at each stage-1 entry (default off)"   ""
+rconfig   logical sdirk3_solver_telemetry              namelist,dynamics  1  .false.  rh   "sdirk3_solver_telemetry"              "Enable per-Newton solver telemetry line"   ""
+rconfig   logical sdirk3_progress_invariant_enable     namelist,dynamics  1  .false.  rh   "sdirk3_progress_invariant_enable"     "Enable progress invariant tracking (default off)"   ""
+rconfig   real    sdirk3_progress_invariant_min_ratio  namelist,dynamics  1  0.0      rh   "sdirk3_progress_invariant_min_ratio"  "Low-progress threshold A=||dU||/(||dt*k1||+eps), <=0 off"   ""
+rconfig   integer sdirk3_progress_invariant_streak_limit namelist,dynamics 1  0        rh   "sdirk3_progress_invariant_streak_limit" "Consecutive low-progress steps to flag (0=off)"   ""
+rconfig   logical sdirk3_variable_pc_event_log         namelist,dynamics  1  .false.  rh   "sdirk3_variable_pc_event_log"         "Log variable-preconditioner events during GMRES"   ""
+rconfig   logical sdirk3_gmres_warmstart               namelist,dynamics  1  .false.  rh   "sdirk3_gmres_warmstart"               "Enable stage-local GMRES x0 warm-start cache"   ""
+rconfig   real    sdirk3_gmres_warmstart_quality_gate  namelist,dynamics  1  0.6      rh   "sdirk3_gmres_warmstart_quality_gate"  "Warm-start allowed only if previous GMRES rel_error <= gate"   ""
+rconfig   logical sdirk3_inn_warmstart_enable          namelist,dynamics  1  .false.  rh   "sdirk3_inn_warmstart_enable"          "Enable INN-assisted GMRES x0 correction (default off)"   ""
+rconfig   logical sdirk3_inn_residual_gate_enable      namelist,dynamics  1  .false.  rh   "sdirk3_inn_residual_gate_enable"      "Enable residual non-degradation gate for INN x0"   ""
+rconfig   real    sdirk3_inn_q_min                     namelist,dynamics  1  0.0      rh   "sdirk3_inn_q_min"                     "Minimum INN quality q=(rb-ri)/rb required for acceptance"   ""
+rconfig   real    sdirk3_inn_gate_rel_tol              namelist,dynamics  1  1.0e-6   rh   "sdirk3_inn_gate_rel_tol"              "Relative non-degrade tolerance for INN residual gate (0=strict)"   ""
+rconfig   real    sdirk3_inn_gate_q_noise              namelist,dynamics  1  5.0e-7   rh   "sdirk3_inn_gate_q_noise"              "Noise floor for q when inn_q_min<=0 in INN residual gate"   ""
+rconfig   real    sdirk3_inn_beta_max                  namelist,dynamics  1  0.25     rh   "sdirk3_inn_beta_max"                  "Max INN correction blend ratio [0,1]"   ""
+rconfig   logical sdirk3_inn_ood_guard_enable          namelist,dynamics  1  .false.  rh   "sdirk3_inn_ood_guard_enable"          "Enable OOD guard for INN x0 proposal size"   ""
+rconfig   logical sdirk3_inn_tol_ramp_enable           namelist,dynamics  1  .false.  rh   "sdirk3_inn_tol_ramp_enable"           "Enable INN quality-linked Krylov tol ramp (stage>=2)"   ""
+rconfig   real    sdirk3_inn_tol_ramp_gamma            namelist,dynamics  1  1.0      rh   "sdirk3_inn_tol_ramp_gamma"            "Tol multiplier gamma in (0,1], smaller is stricter"   ""
+rconfig   logical sdirk3_rhs_bc_parity                 namelist,dynamics  1  .false.  rh   "sdirk3_rhs_bc_parity"                 "Enable extra RHS boundary parity guards (default off)"   ""
+rconfig   logical sdirk3_mass_pgf_bc_guard             namelist,dynamics  1  .false.  rh   "sdirk3_mass_pgf_bc_guard"             "Enable mass/PGF boundary guard corrections (default off)"   ""
+
+# v20.14 r49: Preconditioner smoothing and block-aware trust acceptance
+rconfig   real    sdirk3_precond_horizontal_smooth_alpha namelist,dynamics 1  0.0      rh   "sdirk3_precond_horizontal_smooth_alpha" "Horizontal smoothing alpha (0=off)"   ""
+rconfig   integer sdirk3_precond_horizontal_smooth_iters namelist,dynamics 1  1        rh   "sdirk3_precond_horizontal_smooth_iters" "Horizontal smoothing iterations"   ""
+rconfig   real    sdirk3_precond_vertical_smooth_alpha   namelist,dynamics 1  0.0      rh   "sdirk3_precond_vertical_smooth_alpha"   "Vertical smoothing alpha (0=off)"   ""
+rconfig   logical sdirk3_precond_smooth_boundary_guard   namelist,dynamics 1  .false.  rh   "sdirk3_precond_smooth_boundary_guard"   "Skip non-periodic boundary columns in UV vertical smoothing (default off)"   ""
+rconfig   real    sdirk3_trust_region_block_aware_thresh namelist,dynamics 1  0.0      rh   "sdirk3_trust_region_block_aware_thresh" "Block-aware trust reject threshold (0=off)"   ""
+rconfig   logical sdirk3_trust_fallback_relax            namelist,dynamics 1  .false.  rh   "sdirk3_trust_fallback_relax"            "Enable relaxed acceptance in GMRES-total-failure fallback (default off)"   ""
+rconfig   real    sdirk3_trust_fallback_ratio            namelist,dynamics 1  0.98     rh   "sdirk3_trust_fallback_ratio"            "Fallback acceptance ratio cap when relax is on (default 0.98)"   ""
+rconfig   real    sdirk3_direct_u_solve_thresh           namelist,dynamics 1  0.0      rh   "sdirk3_direct_u_solve_thresh"           "Direct U solve threshold (0=off)"   ""
+
+# ================================================================================
+# Memory Optimization Options
+# ================================================================================
+
+# Memory Management
+rconfig   logical sdirk3_memory_pool           namelist,dynamics  1  .true.   rh   "sdirk3_memory_pool"        "Use memory pool for tensors"   ""
+rconfig   integer sdirk3_memory_pool_size_mb   namelist,dynamics  1  1024     rh   "sdirk3_memory_pool_size_mb" "Memory pool size in MB"   ""
+rconfig   logical sdirk3_tensor_checkpointing  namelist,dynamics  1  .false.  rh   "sdirk3_tensor_checkpointing" "Checkpoint intermediate tensors"   ""
+rconfig   logical sdirk3_gradient_checkpointing namelist,dynamics  1  .false.  rh   "sdirk3_gradient_checkpointing" "Checkpoint gradients for AD"   ""
+
+# ================================================================================
+# Physics Parameter Overrides (from WRF namelist)
+# ================================================================================
+
+# Damping and Diffusion Parameters
+rconfig   real    sdirk3_kdamp                 namelist,dynamics  1  0.2      rh   "sdirk3_kdamp"              "Divergence damping coefficient"   ""
+rconfig   real    sdirk3_khdif                 namelist,dynamics  1  500.0    rh   "sdirk3_khdif"              "Horizontal diffusivity (m2/s)"   ""
+rconfig   real    sdirk3_kvdif                 namelist,dynamics  1  100.0    rh   "sdirk3_kvdif"              "Vertical diffusivity (m2/s)"   ""
+rconfig   real    sdirk3_w_damp_alpha          namelist,dynamics  1  0.3      rh   "sdirk3_w_damp_alpha"       "W-damping coefficient"   ""
+rconfig   real    sdirk3_w_crit_cfl            namelist,dynamics  1  1.0      rh   "sdirk3_w_crit_cfl"         "Critical CFL for W-damping"   ""
+
+# ================================================================================
+# Advanced Debugging and Monitoring
+# ================================================================================
+
+# Validation and Checking
+rconfig   integer sdirk3_validation_level      namelist,dynamics  1  1        rh   "sdirk3_validation_level"   "Validation: 0=OFF, 1=CRITICAL, 2=STANDARD, 3=PARANOID"   ""
+rconfig   logical sdirk3_check_staggered       namelist,dynamics  1  .false.  rh   "sdirk3_check_staggered"    "Check staggered grid consistency"   ""
+rconfig   logical sdirk3_collect_stats         namelist,dynamics  1  .false.  rh   "sdirk3_collect_stats"      "Collect detailed validation stats"   ""
+
+# Conservation Monitoring
+rconfig   real    sdirk3_conserv_tol_mass      namelist,dynamics  1  1.0e-8   rh   "sdirk3_conserv_tol_mass"   "Mass conservation tolerance"   ""
+rconfig   real    sdirk3_conserv_tol_energy    namelist,dynamics  1  1.0e-6   rh   "sdirk3_conserv_tol_energy" "Energy conservation tolerance"   ""
+rconfig   real    sdirk3_conserv_tol_momentum  namelist,dynamics  1  1.0e-7   rh   "sdirk3_conserv_tol_momentum" "Momentum conservation tolerance"   ""
+
+# Performance Benchmarking
+rconfig   logical sdirk3_enable_benchmarking   namelist,dynamics  1  .false.  rh   "sdirk3_enable_benchmarking" "Enable performance profiling"   ""
+rconfig   integer sdirk3_benchmark_warmup      namelist,dynamics  1  5        rh   "sdirk3_benchmark_warmup"   "Warmup iterations for benchmarks"   ""
+rconfig   integer sdirk3_benchmark_measure     namelist,dynamics  1  20       rh   "sdirk3_benchmark_measure"  "Measurement iterations"   ""
+
+# ================================================================================
+# State Variables for Optimization Features
+# ================================================================================
+# COMMENTED OUT: State variables associated with logical options cause compilation errors
+# The Registry generates incorrect package-related code for these state variables
+# even when package definitions are commented out
+
+# # JVP cache state
+# state    real    jvp_cache_data    ikj    misc      1    -    rh   "JVP_CACHE"     "Cached JVP data"
+# state    real    jvp_graph_nodes   ikj    misc      1    -    rh   "JVP_GRAPH"     "JVP computation graph"
+
+# # Preconditioner state
+# state    real    precond_diagonal  ikj    misc      1    -    rh   "PRECOND_DIAG"  "Preconditioner diagonal"
+# state    real    precond_blocks    ikj    misc      1    -    rh   "PRECOND_BLK"   "Preconditioner blocks"
+
+# # Newton-Krylov state
+# state    real    nk_krylov_basis   ikj    misc      1    -    rh   "NK_KRYLOV"     "Krylov subspace basis"
+# state    real    nk_trust_state    ikj    misc      1    -    rh   "NK_TRUST"      "Trust region state"
+
+# # Memory pool state
+# state    real    memory_pool_data  ikj    misc      1    -    rh   "MEM_POOL"      "Memory pool data"
+
+# ================================================================================
+# Package Definitions for Features
+# ================================================================================
+# COMMENTED OUT: Package definitions with logical variables cause compilation errors
+# Registry cannot compare logical variables with integers using ==1
+# For logical variables, use just the variable name or .NOT.variable_name
+
+# # JVP optimization packages
+# package   sdirk3_jvp_checkpointing sdirk3_jvp_checkpointing     -    state:jvp_cache_data
+# package   sdirk3_jvp_graph_cache   sdirk3_jvp_graph_caching      -    state:jvp_graph_nodes
+
+# # Preconditioner packages
+# package   sdirk3_block_precond     sdirk3_precond_block_jacobi   -    state:precond_blocks
+# package   sdirk3_multigrid_precond sdirk3_precond_multigrid      -    state:precond_diagonal,precond_blocks
+
+# # Newton-Krylov packages
+# package   sdirk3_nk_adaptive       sdirk3_nk_adaptive_tol        -    state:nk_krylov_basis
+# package   sdirk3_nk_trust          sdirk3_nk_trust_region        -    state:nk_trust_state
+
+# # Memory optimization packages
+# package   sdirk3_memory_opt        sdirk3_memory_pool            -    state:memory_pool_data
+
+# ================================================================================
+# Include this file in main Registry
+# ================================================================================
+# Add to Registry.EM or Registry.EM_COMMON:
+# include Registry.EM_SDIRK3_OPTIMIZATIONS

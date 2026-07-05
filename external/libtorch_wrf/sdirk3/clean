@@ -1,0 +1,4 @@
+#!/bin/bash
+# Dummy clean script to prevent actual cleaning
+echo "Skipping clean for SDIRK3 library"
+exit 0

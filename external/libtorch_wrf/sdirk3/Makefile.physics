@@ -1,0 +1,80 @@
+# WRF SDIRK-3 LibTorch Makefile with Real Physics Implementation
+# Builds the complete SDIRK3 solver with actual WRF governing equations
+
+# LibTorch configuration
+LIBTORCH_ROOT ?= /opt/homebrew/opt/pytorch/libexec/lib/python3.13/site-packages/torch
+TORCH_INCLUDES := -I$(LIBTORCH_ROOT)/include -I$(LIBTORCH_ROOT)/include/torch/csrc/api/include
+TORCH_LDFLAGS := -L$(LIBTORCH_ROOT)/lib -ltorch -ltorch_cpu -lc10
+
+# Compiler settings
+CXX = g++
+CXXFLAGS = -std=c++17 -O2 -Wall -Wno-unused-parameter -Wno-missing-field-initializers
+CXXFLAGS += $(TORCH_INCLUDES)
+CXXFLAGS += -DNDEBUG -D_GLIBCXX_USE_CXX11_ABI=0
+CXXFLAGS += -fPIC  # Required for linking with WRF
+
+# Core source files with JVP/AD support
+SOURCES = \
+    wrf_sdirk3_interface_zerocopy.cpp \
+    wrf_sdirk3_zero_copy_interface.cpp \
+    wrf_sdirk3_tile_unified.cpp \
+    wrf_sdirk3_tile_unified_impl.cpp \
+    wrf_sdirk3_unified_rhs.cpp \
+    wrf_sdirk3_unified_rhs_extended.cpp \
+    wrf_sdirk3_unified_rhs_acoustic_gravity_impl.cpp \
+    wrf_sdirk3_acoustic_gravity_coupling.cpp \
+    wrf_sdirk3_spatial_derivatives.cpp \
+    wrf_sdirk3_gmres_fixed.cpp \
+    wrf_sdirk3_newton_krylov_fixed.cpp \
+    wrf_sdirk3_state_vector.cpp \
+    wrf_sdirk3_jvp_autograd.cpp \
+    wrf_sdirk3_unified_preconditioner.cpp \
+    wrf_sdirk3_physics_kslab_base.cpp \
+    wrf_sdirk3_wsm6_kslab.cpp \
+    wrf_sdirk3_full_physics.cpp \
+    wrf_sdirk3_config.cpp \
+    wrf_sdirk3_newton_solver.cpp \
+    wrf_sdirk3_halo_exchange.cpp \
+    wrf_sdirk3_ad_halo_exchange.cpp \
+    wrf_hydrostatic_pressure.cpp \
+    wrf_sdirk3_base_state_zerocopy.cpp \
+    wrf_tile_boundary_optimizer.cpp
+
+OBJECTS = $(SOURCES:.cpp=.o)
+
+# Target library (must match WRF's expectation)
+LIB_NAME = libwrf_sdirk3_libtorch.a
+
+.PHONY: all clean test verify
+
+all: $(LIB_NAME)
+
+$(LIB_NAME): $(OBJECTS)
+	ar rcs $@ $^
+	@echo "=========================================="
+	@echo "✓ Successfully built SDIRK3 library with real physics"
+	@echo "Library: $(LIB_NAME)"
+	@echo "=========================================="
+
+%.o: %.cpp
+	@echo "[CXX] $<"
+	@$(CXX) $(CXXFLAGS) -c $< -o $@
+
+clean:
+	rm -f $(OBJECTS) $(LIB_NAME)
+	@echo "Cleaned build artifacts"
+
+# Verify the library has correct symbols
+verify: $(LIB_NAME)
+	@echo "Verifying library symbols..."
+	@echo "Looking for Fortran interface functions:"
+	@nm -C $(LIB_NAME) | grep -E "sdirk3_tile_unified_step_zerocopy" && echo "  ✓ Found step function" || echo "  ✗ Missing step function"
+	@nm -C $(LIB_NAME) | grep -E "sdirk3_tile_solver_create_zerocopy" && echo "  ✓ Found create function" || echo "  ✗ Missing create function"
+	@nm -C $(LIB_NAME) | grep -E "sdirk3_tile_solver_destroy_zerocopy" && echo "  ✓ Found destroy function" || echo "  ✗ Missing destroy function"
+	@echo "Looking for physics implementations:"
+	@nm -C $(LIB_NAME) | grep -E "UnifiedRHS" | head -3 && echo "  ✓ Found RHS physics" || echo "  ✗ Missing RHS physics"
+
+# Quick test compilation
+test: $(LIB_NAME)
+	@echo "Library ready for WRF integration"
+	@ls -lh $(LIB_NAME)

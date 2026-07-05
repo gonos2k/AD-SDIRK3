@@ -1,0 +1,244 @@
+# WRF SDIRK-3 LibTorch Makefile with K-Slab Support
+# Supports both x86_64 (AVX2) and Apple M1 (ARM NEON)
+# 
+# 파일명: Makefile.kslab
+# 목적: K-Slab optimization과 cross-platform SIMD 지원
+
+# Detect architecture
+UNAME_M := $(shell uname -m)
+UNAME_S := $(shell uname -s)
+
+# LibTorch configuration (from configure.wrf)
+LIBTORCH_ROOT ?= /opt/homebrew/opt/pytorch/libexec/lib/python3.13/site-packages/torch
+TORCH_INCLUDES := -I$(LIBTORCH_ROOT)/include -I$(LIBTORCH_ROOT)/include/torch/csrc/api/include
+TORCH_LDFLAGS := -L$(LIBTORCH_ROOT)/lib -ltorch -ltorch_cpu -lc10
+
+# Base compiler settings
+CXX = g++
+CXXFLAGS_BASE = -std=c++17 -O3 -Wall -Wextra
+CXXFLAGS_BASE += -Wno-unused-parameter -Wno-missing-field-initializers
+CXXFLAGS_BASE += $(TORCH_INCLUDES)
+
+# Architecture-specific flags
+ifeq ($(UNAME_M),arm64)
+    # Apple M1/M2/M3 (ARM64)
+    $(info Detected Apple Silicon (ARM64) - using NEON SIMD)
+    ARCH_FLAGS = -march=armv8-a+simd -mtune=native
+    ARCH_DEFINES = -DSDIRK3_ARM_ARCH
+else ifeq ($(UNAME_M),x86_64)
+    # Intel/AMD x86_64
+    $(info Detected x86_64 - using AVX2 SIMD)
+    ARCH_FLAGS = -march=native -mavx2 -mfma
+    ARCH_DEFINES = -DSDIRK3_X86_ARCH
+else
+    # Unknown architecture - fallback to scalar
+    $(info Unknown architecture $(UNAME_M) - using scalar operations)
+    ARCH_FLAGS = 
+    ARCH_DEFINES = -DSDIRK3_NO_SIMD
+endif
+
+# Platform-specific adjustments
+ifeq ($(UNAME_S),Darwin)
+    # macOS specific
+    CXX = clang++
+    CXXFLAGS_BASE += -stdlib=libc++
+    # OpenMP support on macOS
+    OPENMP_FLAGS = -Xpreprocessor -fopenmp
+    OPENMP_LIBS = -lomp
+else
+    # Linux
+    OPENMP_FLAGS = -fopenmp
+    OPENMP_LIBS = -fopenmp
+endif
+
+# Final flags
+CXXFLAGS = $(CXXFLAGS_BASE) $(ARCH_FLAGS) $(ARCH_DEFINES) $(OPENMP_FLAGS)
+LDFLAGS = $(TORCH_LDFLAGS) $(OPENMP_LIBS)
+
+# MPI support (optional)
+ifdef USE_MPI
+    CXX = mpic++
+    CXXFLAGS += -DDMPARALLEL
+endif
+
+# Original WRF sources
+WRF_SOURCES = \
+    wrf_sdirk3_solver.cpp \
+    wrf_sdirk3_newton_solver.cpp \
+    wrf_sdirk3_stability_analysis.cpp \
+    wrf_sdirk3_tile_interface.cpp \
+    wrf_sdirk3_tile_unified.cpp \
+    wrf_sdirk3_tile_unified_impl.cpp \
+    wrf_sdirk3_tile_unified_interface.cpp \
+    wrf_sdirk3_unified_solver.cpp \
+    wrf_sdirk3_globals.cpp \
+    wrf_sdirk3_interface.cpp \
+    wrf_sdirk3_interface_zerocopy.cpp \
+    wrf_sdirk3_zerocopy.cpp \
+    wrf_sdirk3_halo_exchange.cpp \
+    wrf_sdirk3_ad_halo_exchange.cpp \
+    wrf_zero_copy_view.cpp \
+    wrf_hybrid_interface.cpp \
+    wrf_physics_jvp_cache.cpp \
+    wrf_tile_boundary_optimizer.cpp \
+    wrf_sdirk3_config.cpp \
+    wrf_sdirk3_unified_rhs.cpp \
+    wrf_sdirk3_unified_state_vector.cpp \
+    wrf_sdirk3_unified_preconditioner.cpp \
+    wrf_sdirk3_spatial_derivatives.cpp \
+    wrf_sdirk3_jvp_autograd.cpp \
+    wrf_sdirk3_newton_krylov_solver.cpp \
+    wrf_sdirk3_preconditioner_advanced.cpp \
+    wrf_sdirk3_jvp_optimized.cpp \
+    wrf_sdirk3_validation.cpp \
+    wrf_hydrostatic_pressure.cpp \
+    wrf_sdirk3_unified_rhs_extended.cpp \
+    wrf_sdirk3_base_state_zerocopy.cpp \
+    wrf_sdirk3_terrain_slope.cpp \
+    wrf_sdirk3_divergence_damping.cpp \
+    wrf_sdirk3_compressible_heating.cpp
+
+# K-Slab sources (new)
+KSLAB_SOURCES = \
+    wrf_sdirk3_physics_kslab_base.cpp \
+    wrf_sdirk3_wsm6_kslab.cpp
+
+# All headers (including new k-slab headers)
+WRF_HEADERS = \
+    wrf_sdirk3_interface.h \
+    wrf_sdirk3_coefficients.h \
+    wrf_sdirk3_newton_solver.h \
+    wrf_sdirk3_stability_analysis.h \
+    wrf_sdirk3_preconditioner.h \
+    wrf_sdirk3_preconditioner_advanced.h \
+    wrf_sdirk3_preconditioner_utils.h \
+    wrf_specialized_preconditioners.h \
+    wrf_sdirk3_tile_unified.h \
+    wrf_sdirk3_tile_unified_interface.h \
+    wrf_adaptive_control.h \
+    wrf_sdirk3_halo_exchange.h \
+    wrf_sdirk3_jvp_optimized.h \
+    wrf_zero_copy_view.h \
+    wrf_physics_constraints.h \
+    wrf_hybrid_interface.h \
+    wrf_physics_jvp_cache.h \
+    wrf_tile_boundary_optimizer.h \
+    wrf_sdirk3_unified_rhs.h \
+    wrf_sdirk3_unified_state_vector.h \
+    wrf_sdirk3_unified_preconditioner.h \
+    wrf_memory_layout.h \
+    wrf_sdirk3_jvp_autograd.h \
+    wrf_sdirk3_newton_krylov_solver.h \
+    wrf_sdirk3_spatial_derivatives.h \
+    wrf_sdirk3_unified_rhs_extended.h \
+    wrf_sdirk3_terrain_slope.h \
+    wrf_sdirk3_divergence_damping.h \
+    wrf_sdirk3_types.h \
+    wrf_sdirk3_config.h \
+    wrf_sdirk3_globals.h \
+    wrf_sdirk3_compressible_heating.h \
+    wrf_sdirk3_advanced_kslab.h \
+    wrf_sdirk3_kslab_operations.h \
+    wrf_sdirk3_kslab_vectorized.h \
+    wrf_sdirk3_physics_kslab_base.h \
+    wrf_sdirk3_wsm6_kslab.h \
+    wrf_sdirk3_microphysics_vectorized.h \
+    wrf_sdirk3_simd_portable.h
+
+# Object files
+WRF_OBJECTS = $(WRF_SOURCES:.cpp=.o)
+KSLAB_OBJECTS = $(KSLAB_SOURCES:.cpp=.o)
+ALL_OBJECTS = $(WRF_OBJECTS) $(KSLAB_OBJECTS)
+
+# Test executables
+TEST_SOURCES = \
+    wrf_sdirk3_kslab_example.cpp \
+    wrf_sdirk3_wsm6_example.cpp
+
+TEST_EXECUTABLES = $(TEST_SOURCES:.cpp=)
+
+# Target library
+LIB_NAME = libwrf_sdirk3_libtorch.a
+
+.PHONY: all clean install test info
+
+all: info $(LIB_NAME)
+
+# Print build configuration
+info:
+	@echo "====================================="
+	@echo "WRF SDIRK3 K-Slab Build Configuration"
+	@echo "====================================="
+	@echo "Architecture: $(UNAME_M)"
+	@echo "Platform:     $(UNAME_S)"
+	@echo "Compiler:     $(CXX)"
+	@echo "SIMD Type:    $(if $(findstring arm64,$(UNAME_M)),ARM NEON,$(if $(findstring x86_64,$(UNAME_M)),x86 AVX2,scalar))"
+	@echo "====================================="
+
+# Build static library
+$(LIB_NAME): $(ALL_OBJECTS)
+	ar rcs $@ $^
+	@echo "Successfully built static library $@ with k-slab support"
+
+# Compile rules
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Test executables
+test: $(TEST_EXECUTABLES)
+	@echo "Test executables built successfully"
+
+# Build test executables
+wrf_sdirk3_kslab_example: wrf_sdirk3_kslab_example.o $(ALL_OBJECTS)
+	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $@
+
+wrf_sdirk3_wsm6_example: wrf_sdirk3_wsm6_example.o $(ALL_OBJECTS)
+	$(CXX) $(CXXFLAGS) $^ $(LDFLAGS) -o $@
+
+# Clean build artifacts
+clean:
+	rm -f $(ALL_OBJECTS) $(LIB_NAME) $(TEST_EXECUTABLES) *.o
+	rm -f *.so *.a *.mod
+
+# Force rebuild - remove all generated files
+realclean:
+	rm -f $(ALL_OBJECTS) $(LIB_NAME) $(TEST_EXECUTABLES)
+	rm -f *.o *.so *.a *.mod
+	rm -f *.d *.bak *~ core
+	rm -rf .deps
+	@echo "All build artifacts removed"
+
+# Install (for WRF integration)
+install: $(LIB_NAME)
+	@echo "Library ready for WRF integration: $(LIB_NAME)"
+	@echo "Include headers: $(WRF_HEADERS)"
+	@echo "SIMD support: $(if $(findstring arm64,$(UNAME_M)),ARM NEON,$(if $(findstring x86_64,$(UNAME_M)),x86 AVX2,scalar))"
+
+# Run tests
+run-tests: test
+	@echo "Running k-slab example..."
+	./wrf_sdirk3_kslab_example
+	@echo ""
+	@echo "Running WSM6 k-slab test..."
+	./wrf_sdirk3_wsm6_example
+
+# Architecture test
+arch-test:
+	@echo "Testing SIMD capabilities..."
+	@echo "#include \"wrf_sdirk3_simd_portable.h\"" > test_simd.cpp
+	@echo "#include <iostream>" >> test_simd.cpp
+	@echo "int main() {" >> test_simd.cpp
+	@echo "    std::cout << \"SIMD Type: \" << WRF_SDIRK3::SIMD::get_simd_type() << std::endl;" >> test_simd.cpp
+	@echo "    std::cout << \"Vector Width: \" << WRF_SDIRK3::SIMD::get_vector_width() << \" floats\" << std::endl;" >> test_simd.cpp
+	@echo "    return 0;" >> test_simd.cpp
+	@echo "}" >> test_simd.cpp
+	$(CXX) $(CXXFLAGS) test_simd.cpp -o test_simd
+	./test_simd
+	@rm -f test_simd test_simd.cpp
+
+# Dependency generation (optional)
+DEPDIR := .deps
+DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.d
+
+$(DEPDIR):
+	@mkdir -p $@

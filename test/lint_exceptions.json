@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0",
+  "_comment": "LibTorch pattern checker exception configuration",
+  "_updated": "2025-12-31 Batch41",
+  "_doc": "Patterns listed here are excluded from lint checks to reduce false positives",
+  "_schema_doc": "schema_version must match EXPECTED_SCHEMA_VERSION in check_libtorch_patterns.sh",
+
+  "check_1_select_assignment": {
+    "description": "Exclude valid in-place methods from select()= check",
+    "exclude_patterns": ["copy_", "fill_", "zero_"]
+  },
+
+  "check_2_slice_assignment": {
+    "description": "Exclude valid in-place methods from slice()= check",
+    "exclude_patterns": ["copy_", "fill_", "zero_"]
+  },
+
+  "check_5_from_blob": {
+    "description": "Files with enforced CPU wrappers (safe from_blob usage)",
+    "exclude_files": [
+      "torch_cpu.h",
+      "_autograd_utils.h",
+      "_zero_copy"
+    ],
+    "exclude_patterns": [
+      "make_cpu_from_blob_opts",
+      ".device(",
+      "kCPU"
+    ]
+  },
+
+  "check_7_bracket_assignment": {
+    "description": "Exclude valid operators and non-tensor patterns",
+    "exclude_patterns": ["index_put_", "fill_", "copy_", "zero_"],
+    "exclude_operators": ["==", "!=", ">=", "<=", "+=", "-=", "*=", "/="],
+    "exclude_comments": ["FIX", "@", "no-op"]
+  },
+
+  "check_8_index_assignment": {
+    "description": "Exclude valid index_put_ usage",
+    "exclude_patterns": ["index_put_"],
+    "exclude_comments": ["FIX"]
+  },
+
+  "global_exclusions": {
+    "description": "Patterns excluded from all checks",
+    "comment_markers": ["//", "/*", "*/"],
+    "annotation_markers": ["@brief", "@param", "@return"]
+  }
+}

@@ -1,0 +1,62 @@
+# SDIRK3 Advanced Features Registry Configuration
+# Add to Registry.EM_COMMON
+
+################################################################################
+# SDIRK3 Configuration Options
+################################################################################
+
+# Main control
+rconfig   integer time_step_scheme    namelist,dynamics  1    0         rh   "time_step_scheme"    "0=RK3, 1=SDIRK3"           ""
+
+# Solver parameters
+rconfig   integer sdirk3_niter        namelist,dynamics  1    5         rh   "sdirk3_niter"        "max Newton iterations"      ""
+rconfig   real    sdirk3_tol          namelist,dynamics  1    1.e-5     rh   "sdirk3_tol"          "Newton tolerance"           ""
+rconfig   integer sdirk3_gmres        namelist,dynamics  1    30        rh   "sdirk3_gmres"        "GMRES restart"              ""
+rconfig   integer sdirk3_precond      namelist,dynamics  1    3         rh   "sdirk3_precond"      "0=none,1=jac,2=blk,3=uni"   ""
+
+# Advanced features
+rconfig   logical sdirk3_hybrid       namelist,dynamics  1    .true.    rh   "sdirk3_hybrid"       "hybrid memory mode"         ""
+rconfig   logical sdirk3_jvp_cache    namelist,dynamics  1    .true.    rh   "sdirk3_jvp_cache"    "cache JVP graphs"           ""
+rconfig   logical sdirk3_tile_opt     namelist,dynamics  1    .true.    rh   "sdirk3_tile_opt"     "tile boundary opt"          ""
+rconfig   logical sdirk3_4dvar        namelist,dynamics  1    .false.   rh   "sdirk3_4dvar"        "save for 4D-Var"            ""
+
+# Performance
+rconfig   logical sdirk3_stats        namelist,dynamics  1    .false.   rh   "sdirk3_stats"        "print statistics"           ""
+rconfig   integer sdirk3_stat_freq    namelist,dynamics  1    100       rh   "sdirk3_stat_freq"    "stats frequency"            ""
+
+################################################################################
+# State Variables
+################################################################################
+
+# SDIRK3 stages (use WRF standard naming)
+state    real    k1_u          ikjb     dyn_em      1         X      r     "k1_u"          "SDIRK3 k1 U"           "m s-2"
+state    real    k1_v          ikjb     dyn_em      1         Y      r     "k1_v"          "SDIRK3 k1 V"           "m s-2"
+state    real    k1_w          ikjb     dyn_em      1         Z      r     "k1_w"          "SDIRK3 k1 W"           "m s-2"
+state    real    k1_t          ikjb     dyn_em      1         -      r     "k1_t"          "SDIRK3 k1 theta"       "K s-1"
+state    real    k1_ph         ikjb     dyn_em      1         Z      r     "k1_ph"         "SDIRK3 k1 phi"         "m2 s-3"
+state    real    k1_mu         ijb      dyn_em      1         -      r     "k1_mu"         "SDIRK3 k1 mu"          "Pa s-1"
+
+state    real    k2_u          ikjb     dyn_em      1         X      r     "k2_u"          "SDIRK3 k2 U"           "m s-2"
+state    real    k2_v          ikjb     dyn_em      1         Y      r     "k2_v"          "SDIRK3 k2 V"           "m s-2"
+state    real    k2_w          ikjb     dyn_em      1         Z      r     "k2_w"          "SDIRK3 k2 W"           "m s-2"
+state    real    k2_t          ikjb     dyn_em      1         -      r     "k2_t"          "SDIRK3 k2 theta"       "K s-1"
+state    real    k2_ph         ikjb     dyn_em      1         Z      r     "k2_ph"         "SDIRK3 k2 phi"         "m2 s-3"
+state    real    k2_mu         ijb      dyn_em      1         -      r     "k2_mu"         "SDIRK3 k2 mu"          "Pa s-1"
+
+state    real    k3_u          ikjb     dyn_em      1         X      r     "k3_u"          "SDIRK3 k3 U"           "m s-2"
+state    real    k3_v          ikjb     dyn_em      1         Y      r     "k3_v"          "SDIRK3 k3 V"           "m s-2"
+state    real    k3_w          ikjb     dyn_em      1         Z      r     "k3_w"          "SDIRK3 k3 W"           "m s-2"
+state    real    k3_t          ikjb     dyn_em      1         -      r     "k3_t"          "SDIRK3 k3 theta"       "K s-1"
+state    real    k3_ph         ikjb     dyn_em      1         Z      r     "k3_ph"         "SDIRK3 k3 phi"         "m2 s-3"
+state    real    k3_mu         ijb      dyn_em      1         -      r     "k3_mu"         "SDIRK3 k3 mu"          "Pa s-1"
+
+# Saved state
+state    real    u_save        ikjb     dyn_em      1         X      r     "u_save"        "U at step n"           "m s-1"
+state    real    v_save        ikjb     dyn_em      1         Y      r     "v_save"        "V at step n"           "m s-1"
+state    real    w_save        ikjb     dyn_em      1         Z      r     "w_save"        "W at step n"           "m s-1"
+state    real    t_save        ikjb     dyn_em      1         -      r     "t_save"        "theta at step n"       "K"
+state    real    ph_save       ikjb     dyn_em      1         Z      r     "ph_save"       "phi at step n"         "m2 s-2"
+state    real    mu_save       ijb      dyn_em      1         -      r     "mu_save"       "mu at step n"          "Pa"
+
+# Package
+package   sdirk3   time_step_scheme==1            -    state:u,v,w,t,ph,mu,p,al

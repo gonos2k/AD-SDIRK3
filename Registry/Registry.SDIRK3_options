@@ -1,0 +1,32 @@
+# Registry entries for SDIRK3 solver configuration
+# Add these entries to Registry.EM_COMMON or your main Registry file
+
+# SDIRK3 Newton-Krylov solver parameters
+rconfig   integer   sdirk3_max_newton_iter   namelist,dynamics   1        4        irh    "sdirk3_max_newton_iter"   "Maximum Newton iterations for SDIRK3"   ""
+rconfig   real      sdirk3_newton_tol        namelist,dynamics   1        1.e-6    irh    "sdirk3_newton_tol"        "Newton solver tolerance for SDIRK3"     ""
+rconfig   real      sdirk3_newton_rtol       namelist,dynamics   1        1.e-10   irh    "sdirk3_newton_rtol"       "Newton relative tolerance for SDIRK3"   ""
+
+# SDIRK3 GMRES parameters
+rconfig   integer   sdirk3_gmres_restart     namelist,dynamics   1        30       irh    "sdirk3_gmres_restart"     "GMRES restart parameter for SDIRK3"    ""
+rconfig   integer   sdirk3_max_krylov_iter   namelist,dynamics   1        100      irh    "sdirk3_max_krylov_iter"   "Maximum Krylov iterations for SDIRK3"  ""
+rconfig   real      sdirk3_krylov_tol        namelist,dynamics   1        1.e-3    irh    "sdirk3_krylov_tol"        "Krylov solver tolerance for SDIRK3"    ""
+
+# SDIRK3 Preconditioner
+rconfig   integer   sdirk3_precond_type      namelist,dynamics   1        0        irh    "sdirk3_precond_type"      "Preconditioner type: 0=None, 1=Jacobi, 2=Block, 3=Multigrid" ""
+
+# SDIRK3 Adaptive timestep control
+rconfig   logical   sdirk3_adaptive_timestep namelist,dynamics   1        .false.  irh    "sdirk3_adaptive_timestep" "Enable adaptive timestep for SDIRK3"    ""
+rconfig   real      sdirk3_safety_factor     namelist,dynamics   1        0.9      irh    "sdirk3_safety_factor"     "Safety factor for adaptive timestep"    ""
+rconfig   real      sdirk3_error_tol         namelist,dynamics   1        1.e-4    irh    "sdirk3_error_tol"         "Error tolerance for adaptive timestep"  ""
+rconfig   real      sdirk3_dt_min_factor     namelist,dynamics   1        0.1      irh    "sdirk3_dt_min_factor"     "Minimum timestep factor"                ""
+rconfig   real      sdirk3_dt_max_factor     namelist,dynamics   1        2.0      irh    "sdirk3_dt_max_factor"     "Maximum timestep factor"                ""
+
+# SDIRK3 Performance options
+rconfig   integer   sdirk3_n_threads         namelist,dynamics   1        1        irh    "sdirk3_n_threads"         "LibTorch threads per tile"              ""
+rconfig   logical   sdirk3_use_autograd      namelist,dynamics   1        .true.   irh    "sdirk3_use_autograd"      "Use automatic differentiation"          ""
+rconfig   logical   sdirk3_use_jvp_cache     namelist,dynamics   1        .true.   irh    "sdirk3_use_jvp_cache"     "Cache Jacobian-vector products"         ""
+
+# SDIRK3 Debug options
+rconfig   integer   sdirk3_debug_level       namelist,dynamics   1        0        irh    "sdirk3_debug_level"       "Debug level: 0=off, 1=basic, 2=verbose" ""
+rconfig   logical   sdirk3_check_nan         namelist,dynamics   1        .false.  irh    "sdirk3_check_nan"         "Check for NaN values"                   ""
+rconfig   logical   sdirk3_check_conservation namelist,dynamics   1        .false.  irh    "sdirk3_check_conservation" "Check conservation properties"         ""

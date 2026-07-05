@@ -1,0 +1,379 @@
+--- /Users/yhlee/dWRF/ORG/WRFV4.7.0/dyn_em/solve_em.F	2025-05-02 07:31:43
++++ /Users/yhlee/dWRF/dyn_em/solve_em.F	2025-06-30 18:28:18
+@@ -78,6 +78,10 @@
+    USE module_llxy, ONLY : proj_cassini
+    USE module_avgflx_em, ONLY : zero_avgflx, upd_avgflx
+    USE module_cpl, ONLY : coupler_on, cpl_settime, cpl_store_input
++#ifdef USE_SDIRK3
++   USE module_implicit_sdirk3
++   USE module_sdirk3_integrate
++#endif
+ 
+ #if (WRF_CMAQ == 1)
+    use twoway_data_module
+@@ -98,7 +102,7 @@
+ 
+    ! Local data
+ 
+-   INTEGER                         :: k_start , k_end, its, ite, jts, jte
++   INTEGER                         :: k_start , k_end, its, ite, jts, jte, kts
+    INTEGER                         :: ids , ide , jds , jde , kds , kde , &
+                                       ims , ime , jms , jme , kms , kme , &
+                                       ips , ipe , jps , jpe , kps , kpe
+@@ -293,6 +297,18 @@
+                              ipsx, ipex, jpsx, jpex, kpsx, kpex,    &
+                              imsy, imey, jmsy, jmey, kmsy, kmey,    &
+                              ipsy, ipey, jpsy, jpey, kpsy, kpey )
++                             
++   ! Debug output for dimensions (only first few timesteps)
++   IF (grid%itimestep <= 3) THEN
++      WRITE(wrf_err_message,*) 'solve_em: Domain dimensions (d,m,p):'
++      CALL wrf_debug(0, wrf_err_message)
++      WRITE(wrf_err_message,*) '  i: ', ids, ide, '/', ims, ime, '/', ips, ipe
++      CALL wrf_debug(0, wrf_err_message)
++      WRITE(wrf_err_message,*) '  j: ', jds, jde, '/', jms, jme, '/', jps, jpe
++      CALL wrf_debug(0, wrf_err_message)
++      WRITE(wrf_err_message,*) '  k: ', kds, kde, '/', kms, kme, '/', kps, kpe
++      CALL wrf_debug(0, wrf_err_message)
++   END IF
+  
+    CALL get_ijk_from_subgrid (  grid ,                   &
+                              sids, side, sjds, sjde, skds, skde,    &
+@@ -300,6 +316,8 @@
+                              sips, sipe, sjps, sjpe, skps, skpe    )
+    k_start         = kps
+    k_end           = kpe
++   kts             = kps  
++   kte             = kpe
+ 
+    num_3d_m        = num_moist
+    num_3d_c        = num_chem
+@@ -310,6 +328,20 @@
+        num_3d_m    = P_QV
+        num_3d_s    = PARAM_FIRST_SCALAR - 1
+    endif
++
++#ifdef USE_SDIRK3
++   ! Initialize SDIRK-3 tile solvers if using SDIRK-3 time integration
++   ! Note: Initialize on first call regardless of itimestep value
++   ! Temporarily get rk_order for initialization check
++   IF (config_flags%time_integration_scheme == 1 .AND. config_flags%rk_ord == 3) THEN
++      WRITE(wrf_err_message,'(A,I0,A,I0)') 'SDIRK3 DEBUG: time_integration_scheme=', &
++           config_flags%time_integration_scheme, ', rk_ord=', config_flags%rk_ord
++      CALL wrf_message(wrf_err_message)
++      ! The init routine will check internally if already initialized
++      CALL wrf_message('SDIRK3 DEBUG: Calling init_implicit_sdirk3')
++      CALL init_implicit_sdirk3(grid, config_flags)
++   END IF
++#endif
+ 
+    f_flux = config_flags%do_avgflx_cugd .EQ. 1
+ 
+@@ -317,6 +349,7 @@
+ !  See: https://www2.mmm.ucar.edu/wrf/WG2/topics/settiles
+    CALL set_tiles ( ZONE_SOLVE_EM, grid , ids , ide , jds , jde , ips , ipe , jps , jpe )
+ !   CALL set_tiles (  grid , ids , ide , jds , jde , ips , ipe , jps , jpe )
++
+ 
+ !  Max values of CFL for adaptive time step scheme
+ 
+@@ -574,12 +607,93 @@
+ !</pre>
+ !</DESCRIPTION>
+ !**********************************************************************
++
++#ifdef USE_SDIRK3
++   ! Check if using SDIRK3 unified implicit time integration
++   IF (config_flags%time_integration_scheme == 1) THEN
++      
++      CALL wrf_message('Using SDIRK3 implicit time integration')
++      
++      ! Initialize SDIRK3 on first timestep
++      IF (grid%itimestep == 1) THEN
++         CALL sdirk3_timestep_init(grid, config_flags)
++      END IF
++      
++      ! Perform SDIRK3 time integration instead of RK loop
++      ! Loop over tiles for SDIRK3 integration
++      !$OMP PARALLEL DO   &
++      !$OMP PRIVATE ( ij )
++      tile_loop_sdirk3: DO ij = 1, grid%num_tiles
++         
++         ! Debug output
++         WRITE(wrf_err_message,*) 'solve_em calling sdirk3_timestep_tile: tile=', ij
++         CALL wrf_debug(0, wrf_err_message)
++         WRITE(wrf_err_message,*) 'Tile bounds: i_start=', grid%i_start(ij), &
++                                  ', i_end=', grid%i_end(ij), &
++                                  ', j_start=', grid%j_start(ij), &
++                                  ', j_end=', grid%j_end(ij)
++         CALL wrf_debug(0, wrf_err_message)
++         WRITE(wrf_err_message,*) 'Vertical: kts=', kts, ', kte=', kte
++         CALL wrf_debug(0, wrf_err_message)
++         WRITE(wrf_err_message,*) 'Memory: ims=', ims, ', ime=', ime, &
++                                  ', jms=', jms, ', jme=', jme, &
++                                  ', kms=', kms, ', kme=', kme
++         CALL wrf_debug(0, wrf_err_message)
++         WRITE(wrf_err_message,*) 'dt=', grid%dt
++         CALL wrf_debug(0, wrf_err_message)
++         
++         ! Additional dimension info
++         WRITE(wrf_err_message,*) 'SDIRK3: Grid dimensions: nx=', ide-ids+1, &
++                                  ', ny=', jde-jds+1, ', nz=', kde-kds+1
++         CALL wrf_debug(0, wrf_err_message)
++         WRITE(wrf_err_message,*) 'SDIRK3: Memory dimensions: nx=', ime-ims+1, &
++                                  ', ny=', jme-jms+1, ', nz=', kme-kms+1
++         CALL wrf_debug(0, wrf_err_message)
++         WRITE(wrf_err_message,*) 'SDIRK3: Tile dimensions: nx=', grid%i_end(ij)-grid%i_start(ij)+1, &
++                                  ', ny=', grid%j_end(ij)-grid%j_start(ij)+1, ', nz=', kte-kts+1
++         CALL wrf_debug(0, wrf_err_message)
++         
++         CALL sdirk3_timestep_tile(grid, config_flags, &
++                                  grid%i_start(ij), grid%i_end(ij), &
++                                  grid%j_start(ij), grid%j_end(ij), &
++                                  kts, kte, &
++                                  ims, ime, jms, jme, kms, kme, &
++                                  ips, ipe, jps, jpe, kps, kpe, &
++                                  grid%dt, ij)
++         
++      END DO tile_loop_sdirk3
++      !$OMP END PARALLEL DO
++      
++      ! Finalize timestep and print statistics
++      CALL sdirk3_timestep_finalize(grid, config_flags)
++      
++      ! Skip the RK loop entirely
++      CALL wrf_message('SDIRK3 timestep complete, skipping RK loop')
++      GOTO 3000
++      
++   END IF
++#endif
+ 
+    Runge_Kutta_loop:  DO rk_step = 1, rk_order
+ 
+    !  Set the step size and number of small timesteps for
+    !  each part of the timestep
+ 
++     ! Debug output for RK3 dimensions
++     IF (grid%itimestep <= 3) THEN
++       WRITE(wrf_err_message,*) 'RK3: rk_step=', rk_step, ', rk_order=', rk_order
++       CALL wrf_debug(0, wrf_err_message)
++       WRITE(wrf_err_message,*) 'RK3: Grid dimensions: nx=', ide-ids+1, &
++                                ', ny=', jde-jds+1, ', nz=', kde-kds+1
++       CALL wrf_debug(0, wrf_err_message)
++       WRITE(wrf_err_message,*) 'RK3: Memory dimensions: nx=', ime-ims+1, &
++                                ', ny=', jme-jms+1, ', nz=', kme-kms+1
++       CALL wrf_debug(0, wrf_err_message)
++       WRITE(wrf_err_message,*) 'RK3: Tile dimensions: nx=', ite-its+1, &
++                                ', ny=', jte-jts+1, ', nz=', kte-kts+1
++       CALL wrf_debug(0, wrf_err_message)
++     END IF
++
+      dtm = grid%dt
+      IF ( rk_order == 1 ) THEN   
+ 
+@@ -804,37 +918,39 @@
+ 
+        IF (coupler_on) CALL cpl_settime( curr_secs2 )
+ 
+-       CALL first_rk_step_part1 (    grid, config_flags         &
+-                             , moist , moist_tend               &
+-                             , chem  , chem_tend                &
+-                             , tracer, tracer_tend              &
+-                             , scalar , scalar_tend             &
+-                             , fdda3d, fdda2d                   &
+-                             , aerod                            &
+-                             , ru_tendf, rv_tendf               &
+-                             , rw_tendf, t_tendf                &
+-                             , ph_tendf, mu_tendf               &
+-                             , tke_tend                         &
+-                             , config_flags%use_adaptive_time_step &
+-                             , curr_secs, curr_mins2            &
+-                             , psim , psih , gz1oz0             &
+-                             , chklowq                          &
+-                             , cu_act_flag , hol , th_phy       &
+-                             , pi_phy , p_phy , grid%t_phy      &
+-                             , dz8w , p8w , t8w                 &
+-                             , ids, ide, jds, jde, kds, kde     &
+-                             , ims, ime, jms, jme, kms, kme     &
+-                             , ips, ipe, jps, jpe, kps, kpe     &
+-                             , imsx, imex, jmsx, jmex, kmsx, kmex    &
+-                             , ipsx, ipex, jpsx, jpex, kpsx, kpex    &
+-                             , imsy, imey, jmsy, jmey, kmsy, kmey    &
+-                             , ipsy, ipey, jpsy, jpey, kpsy, kpey    &
+-                             , k_start , k_end                  &
+-                             , f_flux=f_flux                    &
+-                             , aerocu=aerocu                    &
+-                             , restart_flag=restart_flag        &
+-                             , feedback_is_ready=feedback_is_ready    &
+-                            )
++! SDIRK3 is handled before RK loop, so this is only for explicit schemes
++          CALL first_rk_step_part1 (    grid, config_flags         &
++                                , moist , moist_tend               &
++                                , chem  , chem_tend                &
++                                , tracer, tracer_tend              &
++                                , scalar , scalar_tend             &
++                                , fdda3d, fdda2d                   &
++                                , aerod                            &
++                                , ru_tendf, rv_tendf               &
++                                , rw_tendf, t_tendf                &
++                                , ph_tendf, mu_tendf               &
++                                , tke_tend                         &
++                                , config_flags%use_adaptive_time_step &
++                                , curr_secs, curr_mins2            &
++                                , psim , psih , gz1oz0             &
++                                , chklowq                          &
++                                , cu_act_flag , hol , th_phy       &
++                                , pi_phy , p_phy , grid%t_phy      &
++                                , dz8w , p8w , t8w                 &
++                                , ids, ide, jds, jde, kds, kde     &
++                                , ims, ime, jms, jme, kms, kme     &
++                                , ips, ipe, jps, jpe, kps, kpe     &
++                                , imsx, imex, jmsx, jmex, kmsx, kmex    &
++                                , ipsx, ipex, jpsx, jpex, kpsx, kpex    &
++                                , imsy, imey, jmsy, jmey, kmsy, kmey    &
++                                , ipsy, ipey, jpsy, jpey, kpsy, kpey    &
++                                , k_start , k_end                  &
++                                , f_flux=f_flux                    &
++                                , aerocu=aerocu                    &
++                                , restart_flag=restart_flag        &
++                                , feedback_is_ready=feedback_is_ready    &
++                               )
++! End of first_rk_step_part1
+ 
+ #ifdef DM_PARALLEL
+        IF ( config_flags%bl_pbl_physics == MYNNPBLSCHEME ) THEN
+@@ -910,6 +1026,41 @@
+      END DO
+      !$OMP END PARALLEL DO
+ BENCH_END(rk_tend_tim)
++
++#ifdef USE_SDIRK3
++     ! If using SDIRK3, now that we have physics tendencies, call the implicit solver
++     IF (config_flags%time_integration_scheme == 1 .AND. rk_order == 3 .AND. rk_step == 1) THEN
++        
++        CALL wrf_message('SDIRK3: Physics tendencies computed, now calling implicit solver')
++        
++        ! The tendencies are now available in grid%ru_tend, grid%rv_tend, etc.
++        ! These include physics and slow dynamics from rk_tendency
++        
++        ! Main SDIRK3 timestep - replaces rest of RK loop and all acoustic substeps
++        CALL wrf_message('SDIRK3: Calling sdirk3_timestep_tile for unified implicit integration')
++        
++        ! Call SDIRK3 for each tile
++        !$OMP PARALLEL DO   &
++        !$OMP PRIVATE ( ij )
++        DO ij = 1, grid%num_tiles
++           CALL sdirk3_timestep_tile(grid, config_flags, &
++                                    grid%i_start(ij), grid%i_end(ij), &
++                                    grid%j_start(ij), grid%j_end(ij), &
++                                    k_start, k_end, &
++                                    ims, ime, jms, jme, kms, kme, &
++                                    ips, ipe, jps, jpe, kps, kpe, &
++                                    grid%dt, ij)
++        END DO
++        !$OMP END PARALLEL DO
++        
++        CALL wrf_message('SDIRK3: sdirk3_timestep_tile completed')
++        
++        ! Skip the rest of the RK loop and acoustic substeps
++        CALL wrf_message('SDIRK3: Jumping to label 3000')
++        GOTO 3000
++        
++     END IF
++#endif
+ 
+      IF (config_flags%use_adaptive_time_step) THEN
+        DO ij = 1 , grid%num_tiles
+@@ -1085,6 +1236,14 @@
+     ! predictor because we may have changed the small timestep -> grid%dts.
+ 
+        CALL wrf_debug ( 200 , ' call small_step_prep ' )
++       
++       ! Debug output for RK3 dimensions
++       IF (grid%itimestep <= 3 .AND. config_flags%time_integration_scheme == 0) THEN
++          WRITE(wrf_err_message,*) 'RK3 small_step_prep: tile=', ij, ' nx=', &
++                grid%i_end(ij)-grid%i_start(ij)+1, ' ny=', &
++                grid%j_end(ij)-grid%j_start(ij)+1, ' nz=', k_end-k_start+1
++          CALL wrf_debug(0, wrf_err_message)
++       END IF
+ 
+        CALL small_step_prep( grid%u_1,grid%u_2,grid%v_1,grid%v_2,grid%w_1,grid%w_2,   &
+                              grid%t_1,grid%t_2,grid%ph_1,grid%ph_2,                   &
+@@ -1263,8 +1422,18 @@
+      END DO
+      !$OMP END PARALLEL DO
+ BENCH_END(set_phys_bc2_tim)
+-     small_steps : DO iteration = 1 , number_of_small_timesteps
+ 
++#ifdef USE_SDIRK3
++     IF (config_flags%time_integration_scheme == 1 .AND. rk_order == 3) THEN
++        ! SDIRK-3 unified: No acoustic substeps needed
++        ! The unified solver handles all dynamics implicitly
++        ! Skip the entire acoustic step loop since advance_implicit_unified
++        ! already computed the full timestep solution
++     ELSE
++#endif
++        ! Original explicit small step loop
++        small_steps : DO iteration = 1 , number_of_small_timesteps
++
+        ! Boundary condition time (or communication time).  
+ #ifdef DM_PARALLEL
+ #      include "PERIOD_BDY_EM_B.inc"
+@@ -1276,6 +1445,14 @@
+        DO ij = 1 , grid%num_tiles
+ 
+ BENCH_START(advance_uv_tim)
++         ! Debug output for acoustic step dimensions
++         IF (grid%itimestep <= 3 .AND. iteration <= 2 .AND. config_flags%time_integration_scheme == 0) THEN
++            WRITE(wrf_err_message,*) 'RK3 advance_uv: step=', iteration, ' tile=', ij, &
++                  ' dims(', grid%i_start(ij), '-', grid%i_end(ij), ',', &
++                  grid%j_start(ij), '-', grid%j_end(ij), ',', k_start, '-', k_end, ')'
++            CALL wrf_debug(0, wrf_err_message)
++         END IF
++         
+          CALL advance_uv ( grid%u_2, grid%ru_tend, grid%v_2, grid%rv_tend,        &
+                            grid%p, grid%pb,                                       &
+                            grid%ph_2, grid%php, grid%alt,  grid%al,               &
+@@ -1717,6 +1894,9 @@
+ BENCH_END(phys_bc_tim)
+ 
+      END DO small_steps
++#ifdef USE_SDIRK3
++     END IF
++#endif
+ 
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE ( ij )
+@@ -3457,6 +3637,11 @@
+ !**********************************************************
+ 
+    END DO Runge_Kutta_loop
++
++#ifdef USE_SDIRK3
++3000 CONTINUE  ! SDIRK3 jump label - unified implicit integration completed
++#endif
++
+ !  grid%dmudt=grid%mu_2 - grid%mu_1
+ 
+ #if ( WRFPLUS != 1 )
+@@ -5000,6 +5185,20 @@
+    firstime = .false.
+ #endif
+ 
++#ifdef USE_SDIRK3
++   ! Finalize SDIRK-3 solvers if this is the last timestep
++   IF (config_flags%time_integration_scheme == 1 .AND. rk_order == 3) THEN
++      IF (grid%itimestep == grid%run_days*86400/grid%dt + &
++          grid%run_hours*3600/grid%dt + &
++          grid%run_minutes*60/grid%dt + &
++          grid%run_seconds/grid%dt) THEN
++         CALL finalize_implicit_sdirk3()
++         WRITE(wrf_err_message,'(A)') 'SDIRK-3: Implicit solvers finalized'
++         CALL wrf_message(wrf_err_message)
++      END IF
++   END IF
++#endif
++
+    RETURN
+ 
+ END SUBROUTINE solve_em

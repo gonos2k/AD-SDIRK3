@@ -1,0 +1,36 @@
+SDIRK-3 LibTorch Interface for WRF
+===================================
+
+This directory contains the minimal SDIRK-3 stub implementation for WRF integration.
+
+Directory Structure:
+--------------------
+libtorch_wrf/
+├── Makefile          # Main makefile for building the library
+├── lib/             
+│   └── libsdirk3_libtorch.a  # Static library for WRF linking
+└── sdirk3/
+    ├── Makefile              # Subdirectory makefile
+    ├── sdirk3_c_interface.h  # C interface header
+    └── sdirk3_stub.cpp       # Stub implementation
+
+Building:
+---------
+make        # Build the library
+make clean  # Clean build artifacts
+
+The library is automatically built during WRF compilation when using
+configure option 37 (Darwin GNU/OpenMPI with SDIRK-3 LibTorch).
+
+Integration:
+------------
+The library provides C-callable functions required by module_implicit_sdirk3.F:
+- sdirk3_tile_solver_create
+- sdirk3_tile_solver_destroy  
+- sdirk3_tile_acoustic_step
+- sdirk3_tile_rk_tendency
+
+Note:
+-----
+This is a stub implementation. The actual SDIRK-3 mathematical implementation
+has been developed and tested separately.

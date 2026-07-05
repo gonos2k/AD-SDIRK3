@@ -1,0 +1,457 @@
+--- /Users/yhlee/WRF/WRFV4.7.0/org/WRFV4.7.0/dyn_em/solve_em.F	2025-06-01 20:59:08
++++ solve_em.F	2025-06-20 22:22:46
+@@ -61,6 +61,10 @@
+    USE module_physics_addtendc
+    USE module_diffusion_em
+    USE module_polarfft
++   ! Implicit scheme modules
++#ifdef USE_SDIRK3
++   USE module_sdirk3_tile_interface
++#endif
+    USE module_microphysics_driver
+    USE module_microphysics_zero_out
+ !   USE module_lightning_driver, ONLY : lightning_driver
+@@ -202,6 +206,14 @@
+    REAL(8)                                    :: real_time_r8
+    LOGICAL                                    :: adapt_step_flag
+    LOGICAL                                    :: fill_w_flag
++   
++   ! Acoustic AD variables
++   ! TYPE(cfl_info)                             :: cfl
++   REAL                                       :: dt_new
++
++   ! Implicit solver variables
++   ! TYPE(wrf_implicit_solver_type), SAVE       :: wrf_implicit_solver
++   LOGICAL, SAVE                              :: wrf_implicit_initialized = .FALSE.
+ 
+ ! variables for flux-averaging code 20091223
+    CHARACTER*256                              :: message, message2, message3
+@@ -304,6 +316,17 @@
+    num_3d_m        = num_moist
+    num_3d_c        = num_chem
+    num_3d_s        = num_scalar
++
++#ifdef USE_SDIRK3
++   ! Initialize SDIRK-3 tile solvers if using SDIRK-3 time integration
++   IF (config_flags%time_integration_scheme == 1 .AND. dynamics_option == 3) THEN
++      IF (grid%itimestep == 0) THEN
++         CALL sdirk3_tile_init(grid, config_flags)
++         WRITE(wrf_err_message,'(A)') 'SDIRK-3: Tile solvers initialized'
++         CALL wrf_message(wrf_err_message)
++      END IF
++   END IF
++#endif
+ 
+ !  backward integration needs to advect only QV
+    if (grid%dfi_stage .EQ. DFI_BCK) then
+@@ -574,7 +597,16 @@
+ !</pre>
+ !</DESCRIPTION>
+ !**********************************************************************
++
++   ! Initialize LibTorch acoustic AD system if enabled
++   IF (config_flags%acoustic_ad_mode > 0) THEN
++      ! CALL libtorch_acoustic_interface_init(config_flags%acoustic_ad_mode)
++      WRITE(wrf_err_message,'(A,I2)') 'LibTorch acoustic AD initialized with mode: ', &
++                                      config_flags%acoustic_ad_mode
++      CALL wrf_debug(100, wrf_err_message)
++   END IF
+ 
++   ! Branch based on time integration scheme  
+    Runge_Kutta_loop:  DO rk_step = 1, rk_order
+ 
+    !  Set the step size and number of small timesteps for
+@@ -598,20 +630,29 @@
+          number_of_small_timesteps = num_sound_steps
+        ENDIF
+ 
+-     ELSE IF ( rk_order == 3 ) THEN ! third order Runge-Kutta
++     ELSE IF ( rk_order == 3 ) THEN ! third order Runge-Kutta or SDIRK-3
+ 
+-       IF ( rk_step == 1) THEN
+-         dt_rk = grid%dt/3.
+-         dts_rk = dt_rk
+-         number_of_small_timesteps = 1
+-       ELSE IF (rk_step == 2) THEN
+-         dt_rk  = 0.5*grid%dt
+-         dts_rk = dts
+-         number_of_small_timesteps = num_sound_steps/2
+-       ELSE
++       IF (config_flags%time_integration_scheme == 1) THEN
++         ! SDIRK-3 time stepping
+          dt_rk = grid%dt
+          dts_rk = dts
+          number_of_small_timesteps = num_sound_steps
++         CALL wrf_debug(200, 'SDIRK-3: Using implicit time stepping')
++       ELSE
++         ! Traditional RK3
++         IF ( rk_step == 1) THEN
++           dt_rk = grid%dt/3.
++           dts_rk = dt_rk
++           number_of_small_timesteps = 1
++         ELSE IF (rk_step == 2) THEN
++           dt_rk  = 0.5*grid%dt
++           dts_rk = dts
++           number_of_small_timesteps = num_sound_steps/2
++         ELSE
++           dt_rk = grid%dt
++           dts_rk = dts
++           number_of_small_timesteps = num_sound_steps
++         ENDIF
+        ENDIF
+ 
+      ELSE
+@@ -804,6 +845,16 @@
+ 
+        IF (coupler_on) CALL cpl_settime( curr_secs2 )
+ 
++#ifdef USE_SDIRK3
++       IF (config_flags%time_integration_scheme == 1 .AND. rk_order == 3) THEN
++          ! Use SDIRK-3 RK tendency computation
++          CALL sdirk3_tile_solve_rk_stage(grid, config_flags, rk_step, &
++                                          ru_tendf, rv_tendf, rw_tendf, &
++                                          t_tendf, ph_tendf, mu_tendf, &
++                                          ids, ide, jds, jde, kds, kde, &
++                                          ims, ime, jms, jme, kms, kme)
++       ELSE
++#endif
+        CALL first_rk_step_part1 (    grid, config_flags         &
+                              , moist , moist_tend               &
+                              , chem  , chem_tend                &
+@@ -835,6 +886,9 @@
+                              , restart_flag=restart_flag        &
+                              , feedback_is_ready=feedback_is_ready    &
+                             )
++#ifdef USE_SDIRK3
++       END IF
++#endif
+ 
+ #ifdef DM_PARALLEL
+        IF ( config_flags%bl_pbl_physics == MYNNPBLSCHEME ) THEN
+@@ -842,6 +896,11 @@
+        ENDIF
+ #endif
+ 
++#ifdef USE_SDIRK3
++       ! Note: first_rk_step_part2 handles physics tendencies
++       ! which are still needed for SDIRK-3, so it's called 
++       ! regardless of time integration scheme
++#endif
+        CALL first_rk_step_part2 (    grid, config_flags         &
+                              , moist , moist_old , moist_tend   &
+                              , chem  , chem_tend                &
+@@ -1263,8 +1322,167 @@
+      END DO
+      !$OMP END PARALLEL DO
+ BENCH_END(set_phys_bc2_tim)
+-     small_steps : DO iteration = 1 , number_of_small_timesteps
++
++     ! Initialize implicit solver if using implicit scheme
++     IF (config_flags%use_implicit_scheme .AND. .NOT. wrf_implicit_initialized) THEN
++        ! CALL wrf_implicit_solver_init(wrf_implicit_solver, grid, config_flags)
++        wrf_implicit_initialized = .TRUE.
++        CALL wrf_message('Implicit solver initialized in solve_em')
++     END IF
+ 
++     ! Use implicit scheme or explicit small steps
++     IF (config_flags%use_implicit_scheme .AND. config_flags%implicit_acoustic) THEN
++        ! Single implicit acoustic step instead of multiple small steps
++        CALL wrf_debug(0, 'About to call wrf_implicit_acoustic_step')
++        ! CALL wrf_implicit_acoustic_step(wrf_implicit_solver, grid, &
++        !                            grid%ru_tend, grid%rv_tend, rw_tend, &
++        !                            ph_tend, mu_tend, &
++        !                            dt_rk, config_flags &
++! #ifdef DM_PARALLEL
++        !                            , local_communicator &
++! #endif
++        !                            )
++     ELSE IF (config_flags%time_integration_scheme == 1) THEN
++        ! SDIRK-3: Replace RK3 with SDIRK-3 stages
++        CALL wrf_debug(200, 'SDIRK-3: Using RK-integrated implicit solver')
++        
++        ! Call SDIRK-3 step that integrates with WRF's RK structure
++        CALL sdirk3_rk_step(grid, config_flags, &
++                          rk_step, dt_rk, number_of_small_timesteps, &
++                          ru_tendf, rv_tendf, rw_tendf, &
++                          t_tendf, ph_tendf, mu_tendf, &
++                          moist_tend, chem_tend, scalar_tend, &
++                          tracer_tend, tke_tend, &
++                          curr_secs, adapt_step_flag, &
++                          ids, ide, jds, jde, kds, kde, &
++                          ims, ime, jms, jme, kms, kme, &
++                          ips, ipe, jps, jpe, kps, kpe, &
++                          imsx, imex, jmsx, jmex, kmsx, kmex, &
++                          ipsx, ipex, jpsx, jpex, kpsx, kpex, &
++                          imsy, imey, jmsy, jmey, kmsy, kmey, &
++                          ipsy, ipey, jpsy, jpey, kpsy, kpey)
++        
++#ifdef USE_SDIRK3
++     ELSE IF (config_flags%time_integration_scheme == 1 .AND. rk_order == 3) THEN
++        ! SDIRK-3 acoustic step integration
++        small_steps_sdirk3 : DO iteration = 1 , number_of_small_timesteps
++           
++           !$OMP PARALLEL DO   &
++           !$OMP PRIVATE ( ij )
++           DO ij = 1 , grid%num_tiles
++              ! Call SDIRK-3 acoustic step solver
++              CALL sdirk3_tile_advance_acoustic(grid, config_flags, &
++                                               iteration, rk_step, &
++                                               grid%ru_tend, grid%rv_tend, grid%rw_tend, &
++                                               grid%ph_tend, grid%al_tend, grid%mu_tend, &
++                                               ids, ide, jds, jde, kds, kde, &
++                                               ims, ime, jms, jme, kms, kme)
++           END DO
++           !$OMP END PARALLEL DO
++           
++           ! Boundary conditions and halos
++#ifdef DM_PARALLEL
++#      include "PERIOD_BDY_EM_B.inc"
++#endif
++           
++           ! Set physical boundary conditions
++           !$OMP PARALLEL DO   &
++           !$OMP PRIVATE ( ij )
++           DO ij = 1 , grid%num_tiles
++              CALL set_physical_bc3d( grid%u_2, 'u', config_flags,   &
++                                    ids, ide, jds, jde, kds, kde,     &
++                                    ims, ime, jms, jme, kms, kme,     &
++                                    ips, ipe, jps, jpe, kps, kpe,     &
++                                    grid%i_start(ij), grid%i_end(ij), &
++                                    grid%j_start(ij), grid%j_end(ij), &
++                                    k_start, k_end )
++              
++              CALL set_physical_bc3d( grid%v_2, 'v', config_flags,   &
++                                    ids, ide, jds, jde, kds, kde,     &
++                                    ims, ime, jms, jme, kms, kme,     &
++                                    ips, ipe, jps, jpe, kps, kpe,     &
++                                    grid%i_start(ij), grid%i_end(ij), &
++                                    grid%j_start(ij), grid%j_end(ij), &
++                                    k_start, k_end )
++              
++              CALL set_physical_bc3d( grid%w_2, 'w', config_flags,   &
++                                    ids, ide, jds, jde, kds, kde,     &
++                                    ims, ime, jms, jme, kms, kme,     &
++                                    ips, ipe, jps, jpe, kps, kpe,     &
++                                    grid%i_start(ij), grid%i_end(ij), &
++                                    grid%j_start(ij), grid%j_end(ij), &
++                                    k_start, k_end )
++              
++              CALL set_physical_bc3d( grid%ph_2, 'w', config_flags,  &
++                                    ids, ide, jds, jde, kds, kde,     &
++                                    ims, ime, jms, jme, kms, kme,     &
++                                    ips, ipe, jps, jpe, kps, kpe,     &
++                                    grid%i_start(ij), grid%i_end(ij), &
++                                    grid%j_start(ij), grid%j_end(ij), &
++                                    k_start, k_end )
++              
++              CALL set_physical_bc2d( grid%mu_2, 't', config_flags,  &
++                                    ids, ide, jds, jde,               &
++                                    ims, ime, jms, jme,               &
++                                    ips, ipe, jps, jpe,               &
++                                    grid%i_start(ij), grid%i_end(ij), &
++                                    grid%j_start(ij), grid%j_end(ij) )
++           END DO
++           !$OMP END PARALLEL DO
++           
++           ! Polar filter if needed
++           IF (config_flags%polar) THEN
++              CALL pxft ( grid=grid                                              &
++                    ,lineno=__LINE__                                             &
++                    ,flag_uv            = 1                                      &
++                    ,flag_rurv          = 0                                      &
++                    ,flag_wph           = 1                                      &
++                    ,flag_ww            = 0                                      &
++                    ,flag_t             = 0                                      &
++                    ,flag_mu            = 1                                      &
++                    ,flag_mut           = 0                                      &
++                    ,flag_moist         = 0                                      &
++                    ,flag_chem          = 0                                      &
++                    ,flag_tracer        = 0                                      &
++                    ,flag_scalar        = 0                                      &
++                    ,actual_distance_average  = .FALSE.                          &
++                    ,pos_def            = .FALSE.                                &
++                    ,swap_pole_with_next_j = .FALSE.                             &
++                    ,moist=moist,chem=chem,tracer=tracer,scalar=scalar           &
++                    ,fft_filter_lat = config_flags%fft_filter_lat                &
++                    ,dclat = dclat                                               &
++                    ,ids=ids,ide=ide,jds=jds,jde=jde,kds=kds,kde=kde             &
++                    ,ims=ims,ime=ime,jms=jms,jme=jme,kms=kms,kme=kme             &
++                    ,ips=ips,ipe=ipe,jps=jps,jpe=jpe,kps=kps,kpe=kpe             &
++                    ,imsx=imsx,imex=imex,jmsx=jmsx,jmex=jmex,kmsx=kmsx,kmex=kmex &
++                    ,ipsx=ipsx,ipex=ipex,jpsx=jmsx,jpex=jpex,kpsx=kpsx,kpex=kpex )
++           END IF
++           
++        END DO small_steps_sdirk3
++#endif
++     ELSE
++        ! Original explicit small step loop
++        small_steps : DO iteration = 1 , number_of_small_timesteps
++
++       ! AD forward pass - save state before acoustic step
++       IF (config_flags%acoustic_ad_mode > 0 .AND. iteration == 1) THEN
++          !$OMP PARALLEL DO   &
++          !$OMP PRIVATE ( ij )
++          DO ij = 1 , grid%num_tiles
++             ! LibTorch acoustic forward pass with automatic differentiation
++             ! CALL libtorch_acoustic_advance_uv_c( &
++             !         grid%u_2, grid%v_2, grid%ph_2, &
++             !         ru_tendf, rv_tendf, &
++             !         ims, ime, kms, kme, jms, jme, &
++             !         grid%i_start(ij), grid%i_end(ij), &
++             !         k_start, k_end, &
++             !         grid%j_start(ij), grid%j_end(ij), &
++             !         dt_rk, grid%rdx, grid%rdy, &
++             !         config_flags%acoustic_ad_mode)
++          END DO
++          !$OMP END PARALLEL DO
++       END IF
++
+        ! Boundary condition time (or communication time).  
+ #ifdef DM_PARALLEL
+ #      include "PERIOD_BDY_EM_B.inc"
+@@ -1717,6 +1935,45 @@
+ BENCH_END(phys_bc_tim)
+ 
+      END DO small_steps
++     END IF
++     
++  ! implicit vs explicit scheme
++
++     ! AD backward pass - compute gradients after acoustic steps
++     IF (config_flags%acoustic_ad_mode > 0) THEN
++        !$OMP PARALLEL DO   &
++        !$OMP PRIVATE ( ij )
++        DO ij = 1 , grid%num_tiles
++           ! LibTorch compute gradients
++           ! CALL libtorch_acoustic_compute_gradients_c( &
++           !         grid%u_2, grid%v_2, grid%ph_2, &
++           !         grid%acoustic_grad_u, &
++           !         grid%acoustic_grad_v, &
++           !         grid%acoustic_grad_p, &
++           !         ims, ime, kms, kme, jms, jme, &
++           !         grid%i_start(ij), grid%i_end(ij), &
++           !         k_start, k_end, &
++           !         grid%j_start(ij), grid%j_end(ij))
++        END DO
++        !$OMP END PARALLEL DO
++        
++        ! Update adaptive timestep based on LibTorch optimization
++        IF (config_flags%use_adaptive_time_step .AND. config_flags%acoustic_ad_mode > 1) THEN
++           ! dt_new = libtorch_acoustic_optimize_timestep_c( &
++           !          grid%u_2, grid%v_2, grid%ph_2, &
++           !          ims, ime, kms, kme, jms, jme, &
++           !          its, ite, k_start, k_end, jts, jte, &
++           !          grid%dt, grid%rdx, grid%rdy)
++           
++           IF (dt_new > 0.0 .AND. ABS(dt_new - grid%dt) > 0.01 * grid%dt) THEN
++              WRITE(wrf_err_message,'(A,F8.4,A,F8.4)') &
++                    'LibTorch optimized timestep from ', grid%dt, ' to ', dt_new
++              CALL wrf_debug(100, wrf_err_message)
++              grid%dt = dt_new
++              dts = grid%dt/float(num_sound_steps)
++           END IF
++        END IF
++     END IF
+ 
+      !$OMP PARALLEL DO   &
+      !$OMP PRIVATE ( ij )
+@@ -3449,6 +3706,78 @@
+ 
+      ENDIF rk_step_1_check
+ 
++#ifdef USE_SDIRK3
++     ! Store SDIRK-3 stage derivatives  
++     IF (config_flags%time_integration_scheme == 1 .AND. rk_order == 3) THEN
++        SELECT CASE(rk_step)
++           CASE(1)
++              ! Store k1 = f(y_n + gamma*dt*k1)
++              !$OMP PARALLEL DO   &
++              !$OMP PRIVATE ( ij, i, j, k )
++              DO ij = 1 , grid%num_tiles
++                 DO j = grid%j_start(ij), grid%j_end(ij)
++                    DO k = k_start, k_end
++                       DO i = grid%i_start(ij), grid%i_end(ij)
++                          grid%k1_u(i,k,j) = ru_tendf(i,k,j)
++                          grid%k1_v(i,k,j) = rv_tendf(i,k,j)
++                          grid%k1_w(i,k,j) = rw_tendf(i,k,j)
++                          grid%k1_t(i,k,j) = t_tendf(i,k,j)
++                          grid%k1_ph(i,k,j) = ph_tendf(i,k,j)
++                       END DO
++                    END DO
++                    DO i = grid%i_start(ij), grid%i_end(ij)
++                       grid%k1_mu(i,j) = mu_tendf(i,j)
++                    END DO
++                 END DO
++              END DO
++              !$OMP END PARALLEL DO
++              
++           CASE(2)
++              ! Store k2 = f(y_n + a21*dt*k1 + gamma*dt*k2)
++              !$OMP PARALLEL DO   &
++              !$OMP PRIVATE ( ij, i, j, k )
++              DO ij = 1 , grid%num_tiles
++                 DO j = grid%j_start(ij), grid%j_end(ij)
++                    DO k = k_start, k_end
++                       DO i = grid%i_start(ij), grid%i_end(ij)
++                          grid%k2_u(i,k,j) = ru_tendf(i,k,j)
++                          grid%k2_v(i,k,j) = rv_tendf(i,k,j)
++                          grid%k2_w(i,k,j) = rw_tendf(i,k,j)
++                          grid%k2_t(i,k,j) = t_tendf(i,k,j)
++                          grid%k2_ph(i,k,j) = ph_tendf(i,k,j)
++                       END DO
++                    END DO
++                    DO i = grid%i_start(ij), grid%i_end(ij)
++                       grid%k2_mu(i,j) = mu_tendf(i,j)
++                    END DO
++                 END DO
++              END DO
++              !$OMP END PARALLEL DO
++              
++           CASE(3)
++              ! Store k3 = f(y_n + a31*dt*k1 + a32*dt*k2 + gamma*dt*k3)
++              !$OMP PARALLEL DO   &
++              !$OMP PRIVATE ( ij, i, j, k )
++              DO ij = 1 , grid%num_tiles
++                 DO j = grid%j_start(ij), grid%j_end(ij)
++                    DO k = k_start, k_end
++                       DO i = grid%i_start(ij), grid%i_end(ij)
++                          grid%k3_u(i,k,j) = ru_tendf(i,k,j)
++                          grid%k3_v(i,k,j) = rv_tendf(i,k,j)
++                          grid%k3_w(i,k,j) = rw_tendf(i,k,j)
++                          grid%k3_t(i,k,j) = t_tendf(i,k,j)
++                          grid%k3_ph(i,k,j) = ph_tendf(i,k,j)
++                       END DO
++                    END DO
++                    DO i = grid%i_start(ij), grid%i_end(ij)
++                       grid%k3_mu(i,j) = mu_tendf(i,j)
++                    END DO
++                 END DO
++              END DO
++              !$OMP END PARALLEL DO
++        END SELECT
++     END IF
++#endif
+ 
+ !**********************************************************
+ !
+@@ -5000,6 +5329,20 @@
+    firstime = .false.
+ #endif
+ 
++#ifdef USE_SDIRK3
++   ! Finalize SDIRK-3 solvers if this is the last timestep
++   IF (config_flags%time_integration_scheme == 1 .AND. rk_order == 3) THEN
++      IF (grid%itimestep == grid%run_days*86400/grid%dt + &
++          grid%run_hours*3600/grid%dt + &
++          grid%run_minutes*60/grid%dt + &
++          grid%run_seconds/grid%dt) THEN
++         CALL sdirk3_tile_finalize()
++         WRITE(wrf_err_message,'(A)') 'SDIRK-3: Tile solvers finalized'
++         CALL wrf_message(wrf_err_message)
++      END IF
++   END IF
++#endif
++
+    RETURN
+ 
+ END SUBROUTINE solve_em

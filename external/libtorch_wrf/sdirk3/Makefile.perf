@@ -1,0 +1,66 @@
+# Makefile for WRF-SDIRK3 Performance Optimization Tests
+# 
+# This builds and runs the performance optimization demonstrations
+# from the WRF-SDIRK3 design document.
+
+# LibTorch configuration
+LIBTORCH_ROOT ?= /opt/homebrew/opt/pytorch/libexec/lib/python3.13/site-packages/torch
+TORCH_INCLUDES := -I$(LIBTORCH_ROOT)/include -I$(LIBTORCH_ROOT)/include/torch/csrc/api/include
+TORCH_LDFLAGS := -L$(LIBTORCH_ROOT)/lib -ltorch -ltorch_cpu -lc10
+
+# Compiler settings
+CXX = g++
+CXXFLAGS = -std=c++17 -O3 -march=native -Wall -Wextra
+CXXFLAGS += $(TORCH_INCLUDES)
+CXXFLAGS += -I.  # Include current directory for headers
+
+# Linker flags
+LDFLAGS = $(TORCH_LDFLAGS)
+LDFLAGS += -Wl,-rpath,$(LIBTORCH_ROOT)/lib  # Runtime library path
+
+# Test program
+TEST_PROG = test_performance_optimizations
+TEST_SRC = test_performance_optimizations.cpp
+
+# Phony targets
+.PHONY: all test clean run benchmark
+
+# Default target
+all: $(TEST_PROG)
+
+# Build test program
+$(TEST_PROG): $(TEST_SRC)
+	$(CXX) $(CXXFLAGS) $< -o $@ $(LDFLAGS)
+	@echo "Successfully built $(TEST_PROG)"
+
+# Run tests
+test: $(TEST_PROG)
+	./$(TEST_PROG)
+
+# Run with timing
+benchmark: $(TEST_PROG)
+	@echo "Running performance benchmarks..."
+	@echo "This may take a few minutes for large grids."
+	time ./$(TEST_PROG)
+
+# Clean
+clean:
+	rm -f $(TEST_PROG)
+	rm -f *.o
+
+# Help
+help:
+	@echo "WRF-SDIRK3 Performance Optimization Tests"
+	@echo ""
+	@echo "Targets:"
+	@echo "  make          - Build test program"
+	@echo "  make test     - Build and run tests"
+	@echo "  make benchmark - Run with timing information"
+	@echo "  make clean    - Remove build artifacts"
+	@echo ""
+	@echo "These tests demonstrate:"
+	@echo "  - Vectorized horizontal advection (>80% FLOPS efficiency)"
+	@echo "  - Cache-blocked vertical mixing (>70% cache miss reduction)"
+	@echo "  - Numerical accuracy preservation"
+	@echo ""
+	@echo "Based on design document: (20250805)WRF-SDIRK3-design.md"

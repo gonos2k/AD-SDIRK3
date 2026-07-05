@@ -1,0 +1,7 @@
+# WRF Timing Analysis Summary
+# Scheme, dt(s), Timesteps, Avg_Time_per_Step(s), Total_Time(s), Relative_Efficiency(%)
+Explicit, 6, 300, 0.0190, 5.70, 100.0
+Implicit, 12, 150, 0.0197, 2.96, 51.8
+Implicit, 18, 100, 0.0313, 3.13, 54.9
+Implicit, 24, 75, 0.0399, 2.99, 52.5
+Implicit, 30, 60, 0.0451, 2.71, 47.5

@@ -1,0 +1,57 @@
+# Registry entries for SDIRK-3 time integration scheme
+# Add these entries to Registry.EM_COMMON
+
+# Time integration scheme selection
+rconfig   integer time_integration_scheme   namelist,dynamics  1  0        rh   "time_integration_scheme"  "Time integration: 0=RK3, 1=SDIRK3"  ""
+
+# Acoustic automatic differentiation mode
+rconfig   integer acoustic_ad_mode          namelist,dynamics  1  0        rh   "acoustic_ad_mode"         "Acoustic AD: 0=off, 1=basic, 2=optimized"  ""
+
+# SDIRK-3 Newton solver parameters
+rconfig   integer sdirk3_max_newton_iter    namelist,dynamics  1  10       rh   "sdirk3_max_newton_iter"   "Maximum Newton iterations"             ""
+rconfig   real    sdirk3_newton_tol         namelist,dynamics  1  1.0e-6   rh   "sdirk3_newton_tol"        "Newton solver tolerance"               ""
+rconfig   real    sdirk3_newton_tol_relax   namelist,dynamics  1  10.0     rh   "sdirk3_newton_tol_relax"  "Newton tolerance relaxation factor"    ""
+rconfig   logical sdirk3_use_adaptive_tol   namelist,dynamics  1  .false.  rh   "sdirk3_use_adaptive_tol"  "Use adaptive Newton tolerance"         ""
+
+# SDIRK-3 GMRES parameters
+rconfig   integer sdirk3_gmres_restart      namelist,dynamics  1  30       rh   "sdirk3_gmres_restart"     "GMRES restart parameter"               ""
+rconfig   integer sdirk3_max_gmres_iter     namelist,dynamics  1  100      rh   "sdirk3_max_gmres_iter"    "Maximum GMRES iterations"              ""
+rconfig   real    sdirk3_gmres_tol          namelist,dynamics  1  1.0e-9   rh   "sdirk3_gmres_tol"         "GMRES tolerance"                       ""
+
+# SDIRK-3 preconditioner options
+rconfig   integer sdirk3_precond_type       namelist,dynamics  1  1        rh   "sdirk3_precond_type"      "Preconditioner: 0=none, 1=diag, 2=block"  ""
+rconfig   logical sdirk3_reuse_jacobian     namelist,dynamics  1  .true.   rh   "sdirk3_reuse_jacobian"    "Reuse Jacobian across Newton iterations"   ""
+
+# SDIRK-3 performance options  
+rconfig   logical sdirk3_cache_graphs       namelist,dynamics  1  .true.   rh   "sdirk3_cache_graphs"      "Cache computational graphs"            ""
+rconfig   integer sdirk3_graph_opt_level    namelist,dynamics  1  2        rh   "sdirk3_graph_opt_level"   "Graph optimization level (0-3)"        ""
+
+# SDIRK-3 debugging options
+rconfig   integer sdirk3_verbose            namelist,dynamics  1  0        rh   "sdirk3_verbose"           "Verbosity level (0-3)"                 ""
+rconfig   logical sdirk3_check_conservation namelist,dynamics  1  .false.  rh   "sdirk3_check_conservation" "Check mass/energy conservation"       ""
+rconfig   integer sdirk3_print_frequency    namelist,dynamics  1  100      rh   "sdirk3_print_frequency"   "Print diagnostics every N timesteps"   ""
+
+# State variables for SDIRK-3 stage derivatives
+state    real    k1_u         ikjb  dyn_em  1  X   ruh       "K1_U"          "SDIRK-3 k1 for U"           "m s-2"
+state    real    k1_v         ikjb  dyn_em  1  Y   rvh       "K1_V"          "SDIRK-3 k1 for V"           "m s-2"
+state    real    k1_w         ikjb  dyn_em  1  Z   rwh       "K1_W"          "SDIRK-3 k1 for W"           "m s-2"
+state    real    k1_t         ikjb  dyn_em  1  -   -         "K1_T"          "SDIRK-3 k1 for theta"       "K s-1"
+state    real    k1_ph        ikjb  dyn_em  1  Z   -         "K1_PH"         "SDIRK-3 k1 for phi"         "m2 s-3"
+state    real    k1_mu        ijb   dyn_em  1  -   -         "K1_MU"         "SDIRK-3 k1 for mu"          "Pa s-1"
+
+state    real    k2_u         ikjb  dyn_em  1  X   ruh       "K2_U"          "SDIRK-3 k2 for U"           "m s-2"
+state    real    k2_v         ikjb  dyn_em  1  Y   rvh       "K2_V"          "SDIRK-3 k2 for V"           "m s-2"
+state    real    k2_w         ikjb  dyn_em  1  Z   rwh       "K2_W"          "SDIRK-3 k2 for W"           "m s-2"
+state    real    k2_t         ikjb  dyn_em  1  -   -         "K2_T"          "SDIRK-3 k2 for theta"       "K s-1"
+state    real    k2_ph        ikjb  dyn_em  1  Z   -         "K2_PH"         "SDIRK-3 k2 for phi"         "m2 s-3"
+state    real    k2_mu        ijb   dyn_em  1  -   -         "K2_MU"         "SDIRK-3 k2 for mu"          "Pa s-1"
+
+state    real    k3_u         ikjb  dyn_em  1  X   ruh       "K3_U"          "SDIRK-3 k3 for U"           "m s-2"
+state    real    k3_v         ikjb  dyn_em  1  Y   rvh       "K3_V"          "SDIRK-3 k3 for V"           "m s-2"
+state    real    k3_w         ikjb  dyn_em  1  Z   rwh       "K3_W"          "SDIRK-3 k3 for W"           "m s-2"
+state    real    k3_t         ikjb  dyn_em  1  -   -         "K3_T"          "SDIRK-3 k3 for theta"       "K s-1"
+state    real    k3_ph        ikjb  dyn_em  1  Z   -         "K3_PH"         "SDIRK-3 k3 for phi"         "m2 s-3"
+state    real    k3_mu        ijb   dyn_em  1  -   -         "K3_MU"         "SDIRK-3 k3 for mu"          "Pa s-1"
+
+# Package definition for SDIRK-3  
+package   sdirk3_time_integration  time_integration_scheme==1

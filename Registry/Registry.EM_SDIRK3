@@ -1,0 +1,59 @@
+# SDIRK-3 Time Integration Scheme Configuration
+# Author: WRF SDIRK-3 Development Team
+# Date: 2025-06-20
+
+# Main SDIRK-3 control
+rconfig   logical use_sdirk3_scheme        namelist,dynamics  1  .false.  rh   "use_sdirk3_scheme"       "Use SDIRK-3 time integration"   ""
+rconfig   integer sdirk3_integration_opt   namelist,dynamics  1  1        rh   "sdirk3_integration_opt"  "SDIRK-3 integration option: 1=basic, 2=optimized"   ""
+
+# Newton-Krylov solver parameters
+rconfig   integer sdirk3_max_newton_iter   namelist,dynamics  1  10       rh   "sdirk3_max_newton_iter"  "Maximum Newton iterations per stage"   ""
+rconfig   real    sdirk3_newton_tol        namelist,dynamics  1  1.0e-6   rh   "sdirk3_newton_tol"       "Newton convergence tolerance"   ""
+rconfig   logical sdirk3_adaptive_newton   namelist,dynamics  1  .true.   rh   "sdirk3_adaptive_newton"  "Use adaptive Newton tolerance"   ""
+
+# GMRES solver parameters
+rconfig   integer sdirk3_gmres_restart     namelist,dynamics  1  30       rh   "sdirk3_gmres_restart"    "GMRES restart parameter"   ""
+rconfig   integer sdirk3_max_gmres_iter    namelist,dynamics  1  100      rh   "sdirk3_max_gmres_iter"   "Maximum GMRES iterations"   ""
+rconfig   real    sdirk3_gmres_tol         namelist,dynamics  1  1.0e-7   rh   "sdirk3_gmres_tol"        "GMRES convergence tolerance"   ""
+
+# Preconditioner options
+rconfig   integer sdirk3_precond_type      namelist,dynamics  1  2        rh   "sdirk3_precond_type"     "Preconditioner: 0=none, 2=unified block-Jacobi"   ""
+rconfig   logical sdirk3_use_mg_precond    namelist,dynamics  1  .false.  rh   "sdirk3_use_mg_precond"   "Use multigrid in preconditioner"   ""
+rconfig   integer sdirk3_mg_levels         namelist,dynamics  1  3        rh   "sdirk3_mg_levels"        "Number of multigrid levels"   ""
+
+# Automatic differentiation options
+rconfig   integer sdirk3_ad_mode           namelist,dynamics  1  1        rh   "sdirk3_ad_mode"          "AD mode: 0=FD, 1=autograd, 2=complex-step"   ""
+rconfig   logical sdirk3_cache_jacobian    namelist,dynamics  1  .true.   rh   "sdirk3_cache_jacobian"   "Cache Jacobian between Newton iterations"   ""
+rconfig   logical sdirk3_reuse_graph       namelist,dynamics  1  .true.   rh   "sdirk3_reuse_graph"      "Reuse computational graph"   ""
+
+# Time stepping control
+rconfig   logical sdirk3_adaptive_dt       namelist,dynamics  1  .false.  rh   "sdirk3_adaptive_dt"      "Use adaptive time stepping"   ""
+rconfig   real    sdirk3_dt_safety         namelist,dynamics  1  0.9      rh   "sdirk3_dt_safety"        "Safety factor for adaptive dt"   ""
+rconfig   real    sdirk3_dt_max_increase   namelist,dynamics  1  1.5      rh   "sdirk3_dt_max_increase"  "Maximum dt increase factor"   ""
+rconfig   real    sdirk3_dt_min_decrease   namelist,dynamics  1  0.5      rh   "sdirk3_dt_min_decrease"  "Minimum dt decrease factor"   ""
+rconfig   real    sdirk3_error_tol         namelist,dynamics  1  1.0e-4   rh   "sdirk3_error_tol"        "Error tolerance for adaptive dt"   ""
+
+# Conservation and stability
+rconfig   logical sdirk3_monitor_conserv   namelist,dynamics  1  .true.   rh   "sdirk3_monitor_conserv"  "Monitor conservation properties"   ""
+rconfig   real    sdirk3_conserv_tol       namelist,dynamics  1  1.0e-8   rh   "sdirk3_conserv_tol"      "Conservation tolerance"   ""
+rconfig   logical sdirk3_fix_conservation  namelist,dynamics  1  .false.  rh   "sdirk3_fix_conservation" "Apply conservation fixes"   ""
+
+# Error handling and recovery
+rconfig   integer sdirk3_max_retries       namelist,dynamics  1  3        rh   "sdirk3_max_retries"      "Maximum retry attempts on failure"   ""
+rconfig   logical sdirk3_use_checkpoint    namelist,dynamics  1  .true.   rh   "sdirk3_use_checkpoint"   "Enable checkpointing for recovery"   ""
+rconfig   integer sdirk3_checkpoint_freq   namelist,dynamics  1  5        rh   "sdirk3_checkpoint_freq"  "Checkpoint frequency (Newton iters)"   ""
+
+# Performance tuning
+rconfig   integer sdirk3_num_threads       namelist,dynamics  1  0        rh   "sdirk3_num_threads"      "Number of threads (0=auto)"   ""
+rconfig   logical sdirk3_use_simd          namelist,dynamics  1  .true.   rh   "sdirk3_use_simd"         "Enable SIMD optimizations"   ""
+rconfig   integer sdirk3_cache_block_size  namelist,dynamics  1  32       rh   "sdirk3_cache_block_size" "Cache blocking size"   ""
+
+# Debugging and output
+rconfig   logical sdirk3_verbose           namelist,dynamics  1  .false.  rh   "sdirk3_verbose"          "Verbose output"   ""
+rconfig   logical sdirk3_debug_mode        namelist,dynamics  1  .false.  rh   "sdirk3_debug_mode"       "Enable debug checks"   ""
+rconfig   logical sdirk3_write_stats       namelist,dynamics  1  .false.  rh   "sdirk3_write_stats"      "Write solver statistics"   ""
+rconfig   integer sdirk3_stats_freq        namelist,dynamics  1  100      rh   "sdirk3_stats_freq"       "Statistics output frequency"   ""
+
+# State packages for SDIRK-3 solver
+package   sdirk3_basic    use_sdirk3_scheme==.true.                    -             state:sdirk3_solver_init,sdirk3_stats
+package   sdirk3_adaptive use_sdirk3_scheme==.true.&&sdirk3_adaptive_dt==.true. -  state:sdirk3_error_est,sdirk3_dt_history
