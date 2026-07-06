@@ -40,19 +40,37 @@ The ONE implicit op: `calc_coef_w` (:570-652) tridiagonal `a/alpha/gamma` + `adv
   reverse-mode VJP for the adjoint (checkpoint the sub-step loop if the tape is too deep).
 - `.item()` only inside `NoGradGuard`; `index_put_` for assignment; keep `(j,k,i)` layout + zero-copy contract.
 
-## Incremental roadmap (each: build → validate vs dyn_em → byte-identical when off)
+## Incremental roadmap — STATUS as of 2026-07-07 (see sdirk3_split_explicit_validation_2026-07-06.md)
 
-- **Inc 0 — scaffolding:** opt-in knob `sdirk3_split_explicit` (default off, fully wired). RK3 stage + acoustic
-  substep-count/`dts` machinery (mirror solve_em.F:465-853). Gate: off ⇒ byte-identical baseline.
-- **Inc 1 — coupling + prep:** `couple_momentum` + `small_step_prep` (perturbation split, `c2a`, `muts`) in
-  libtorch. Validate coupled state + `c2a` vs dyn_em.
-- **Inc 2 — vertical implicit w–φ:** reuse verified `calc_coef_w` coeffs; differentiable Thomas (`advance_w`
-  solve). Validate w,φ update vs dyn_em (offline M⁻¹@A=I already PASS).
-- **Inc 3 — advance_uv:** frozen `ru_tend` + acoustic PGF perturbation `dpxy` + `emdiv`. Validate u,v vs dyn_em.
-- **Inc 4 — advance_mu_t + calc_p_rho:** mu′, θ″, ω (`ww`), EOS `al/p` + `smdiv`. Validate vs dyn_em.
-- **Inc 5 — full acoustic loop:** assemble +`sumflux`+`small_step_finish`; validate one RK stage vs dyn_em.
+- **Inc 0 ✅ DONE (`f0ce105`)** — opt-in knob `sdirk3_split_explicit`, byte-identical baseline verified.
+- **Inc 1 ✅ DONE (`be7927a`)** — libtorch `c2a` = (cp/cv)(pb+p)/alt, 0.8% vs dyn_em. **Surfaced + fixed a real
+  shared-RHS bug:** `compute_inverse_density_hydrostatic` used `cvpm=+cv/cp`; WRF is `−cv/cp` (alt was ~5× wrong).
+- **Inc 2 ✅ DONE (`42786ef`)** — `calc_coef_w` a/α/γ; cof exact, γ 1.5% (indexing proven; a/α residual = c2a input
+  parity). **dts_rk is PER RK STAGE** (stage 1 = dt/3, not dt/N).
+- **Inc 2b ✅ DONE (`eb24b11`→`07df325`)** — differentiable Thomas solve; M⁻¹@A=I rel_err 6.3e-6 AND backward proven
+  (out-of-place slabs+stack, detached-band isolation). This solve **IS** `advance_w`'s operational solve (:1433-1443).
+- **Discretizations ✅ validated offline** (`upgf`/`divergence`/`vpgf_operator_match.py`, all O(Δ²) floor).
+- **Assembly stability ⚠️ partial** (`acoustic_amplification_match.py`): vertical w–φ coupling STRUCTURE stable
+  (von-Neumann |λ|=0.998) for constant AND variable c2a(z); implicit A load-bearing. NOT yet: buoyancy + horizontal.
+- **Inc 3/4 — mapped precisely, NOT yet ported.** `advance_uv` u-PGF discretization validated offline. `advance_w`
+  RHS (vert-PGF + buoyancy + frozen rw_tend + ph update) + `advance_mu_t` (mass/θ, emits muave/ww/muts/t_ave) +
+  `calc_p_rho` mapped. **CORRECTION: `calc_p_rho` ≠ Inc 1 EOS** — acoustic `al'` from the geopotential gradient
+  (:522-523), `p'` from the temporally-linearized EOS (:527-528). Two field families: full-state c2a vs accumulating
+  small-step perturbations.
+- **Inc 5 — full acoustic loop (THE remaining implementation). PRECISE SPEC:**
+  1. Port `small_step_prep` (module_small_step_em.F:16-290): couple RK-stage state → perturbations
+     (`u_2←((c1h·muus+c2h)u_1−(c1h·muu+c2h)u_2)/msfuy`, etc.; `ph_2←ph_1−ph_2`), compute `c2a`[Inc 1]/muts/muus/muvs,
+     and SAVE slow refs `*_save`. At rk_step 1, `u_1=u_2` ⇒ perturbations start ~0.
+  2. Substep loop ×N (solve_em.F:1525-1869): `advance_uv` → `advance_mu_t` → `advance_w` (RHS off-centered
+     (1+εsm)·rhs+(1−εsm)·ph, rhs built with old-w half :1318/:1368, then Thomas[Inc 2b], then ph new-w half :1462)
+     → `sumflux` → `calc_p_rho`. **Port LINE-BY-LINE (semi-implicit off-centering is unforgiving; a hand-rebuild
+     blew up ×1e5).** Reuse the validated `calc_coef_w`+Thomas.
+  3. `small_step_finish` (:295-434): perturbations → full (uncouple + add `*_save` back).
+  4. **VALIDATE:** dump dyn_em's w/ph/u/v/θ/mu after ONE substep from a matched acoustic state (`[PARITY substep]`),
+     compare the libtorch assembled substep. THIS is what retires the buoyancy + horizontal (full-scheme) risk.
 - **Inc 6 — RK3 outer + frozen forcing:** full split-explicit step; validate a full timestep ≈ stock RK3.
 - **Inc 7 — AD:** JVP-vs-FD (cos≈1) through the forward; reverse-mode adjoint + Taylor test (checkpoint if needed).
+  Note the Inc-2b lesson: in-place recurrences break backward — keep the loop out-of-place (slabs+stack).
 
 ## Home & reuse
 
