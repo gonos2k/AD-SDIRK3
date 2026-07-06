@@ -6258,56 +6258,60 @@ vertical_coefficients:
                             }
 
                             // [Inc 2b] differentiable Thomas SOLVE (advance_w :1433-1443) +
-                            // M^-1 @ A_ac @ v == v self-consistency (biv_operator_match.py passed
-                            // this offline at 4.6e-14). System is full levels kf=1..nz_ (WRF k=2..kde).
-                            // Both operators are OUT-OF-PLACE (per-level slabs + torch::stack): no grad-tracked
-                            // tensor is mutated in-place, so backward through the sequential recurrence is safe.
-                            auto apply_A = [&](const torch::Tensor& v) -> torch::Tensor {
-                                // (A v)[kf] = a[kf] v[kf-1] + b[kf] v[kf] + c[kf] v[kf+1]
+                            // M^-1 @ A_ac @ v == v self-consistency (biv_operator_match.py passed offline at
+                            // 4.6e-14). System is full levels kf=1..nz_ (WRF k=2..kde). Operators take the
+                            // bands as PARAMETERS and are OUT-OF-PLACE (per-level slabs + torch::stack): no
+                            // grad-tracked tensor mutated, so backward through the recurrence is safe.
+                            auto apply_A = [&](const torch::Tensor& v, const torch::Tensor& A,
+                                               const torch::Tensor& B, const torch::Tensor& C) -> torch::Tensor {
                                 std::vector<torch::Tensor> av(nzw);
                                 av[0] = torch::zeros({ny_, nx_}, opts2);            // boundary row
                                 for (int kf = 1; kf <= nz_; ++kf) {
-                                    auto term = b_band.index({SL, kf, SL}) * v.index({SL, kf, SL})
-                                              + a_band.index({SL, kf, SL}) * v.index({SL, kf-1, SL});
+                                    auto term = B.index({SL, kf, SL}) * v.index({SL, kf, SL})
+                                              + A.index({SL, kf, SL}) * v.index({SL, kf-1, SL});
                                     if (kf + 1 <= nz_)   // c[kde]=0; top has no super-diagonal neighbor
-                                        term = term + c_band.index({SL, kf, SL}) * v.index({SL, kf+1, SL});
+                                        term = term + C.index({SL, kf, SL}) * v.index({SL, kf+1, SL});
                                     av[kf] = term;
                                 }
                                 return torch::stack(av, 1);                         // {ny, nzw, nx}
                             };
-                            auto thomas_solve = [&](const torch::Tensor& rhs) -> torch::Tensor {
+                            auto thomas_solve = [&](const torch::Tensor& rhs, const torch::Tensor& A,
+                                                    const torch::Tensor& Al, const torch::Tensor& G) -> torch::Tensor {
                                 std::vector<torch::Tensor> w(nzw);
                                 for (int kf = 0; kf < nzw; ++kf) w[kf] = rhs.index({SL, kf, SL});
                                 for (int kf = 1; kf <= nz_; ++kf)          // forward elim (a[1]=a(2)=0)
-                                    w[kf] = (w[kf] - a_band.index({SL, kf, SL}) * w[kf-1])
-                                            * alpha.index({SL, kf, SL});
+                                    w[kf] = (w[kf] - A.index({SL, kf, SL}) * w[kf-1]) * Al.index({SL, kf, SL});
                                 for (int kf = nz_ - 1; kf >= 1; --kf)      // back subst (gamma[kde]=0)
-                                    w[kf] = w[kf] - gamma.index({SL, kf, SL}) * w[kf+1];
+                                    w[kf] = w[kf] - G.index({SL, kf, SL}) * w[kf+1];
                                 return torch::stack(w, 1);                 // {ny, nzw, nx}
                             };
+                            // Run the validation on DETACHED bands so this diagnostic never entangles the live
+                            // AD graph (no c2a/U_n .grad() pollution, no shared-buffer free on backward()).
+                            torch::Tensor ad = a_band.detach(), bd = b_band.detach(), cd = c_band.detach(),
+                                          ald = alpha.detach(), gd = gamma.detach();
                             torch::Tensor vtest = torch::zeros({ny_, nzw, nx_}, opts2);
                             for (int kf = 1; kf <= nz_; ++kf)              // deterministic level-ramp (no RNG)
                                 vtest.index_put_({SL, kf, SL}, torch::full({ny_, nx_}, static_cast<float>(kf), opts2));
-                            auto rec = thomas_solve(apply_A(vtest));   // grad-enabled: the actual differentiable solve
-                            auto sysl = torch::indexing::Slice(1, nz_ + 1);
-                            auto rel_err_t = (rec.index({SL, sysl, SL}) - vtest.index({SL, sysl, SL})).norm()
-                                             / vtest.index({SL, sysl, SL}).norm();
                             { torch::NoGradGuard ng;
-                            float rel_err = rel_err_t.item<float>();
+                            auto rec = thomas_solve(apply_A(vtest, ad, bd, cd), ad, ald, gd);
+                            auto sysl = torch::indexing::Slice(1, nz_ + 1);
+                            float rel_err = ((rec.index({SL, sysl, SL}) - vtest.index({SL, sysl, SL})).norm()
+                                             / vtest.index({SL, sysl, SL}).norm()).item<float>();
                             std::cerr << "[SPLIT-EXPLICIT THOMAS] M^-1 @ A_ac @ v == v : rel_err="
                                       << rel_err << (rel_err < 1e-4f ? "  PASS" : "  FAIL") << std::endl;
                             }
-                            // [Inc 2b] autograd BACKWARD smoke test: prove the out-of-place Thomas/apply_A
-                            // survive backprop (refutes any in-place-recurrence failure). d||M^-1 A vg||^2 / d vg.
+                            // Autograd BACKWARD smoke test, FULLY ISOLATED: bands detached => backward flows
+                            // ONLY through the local leaf vg, never into c2a/U_n. Proves the out-of-place
+                            // recurrence differentiates (refutes any in-place-recurrence backward failure).
                             {
                                 torch::Tensor vg = vtest.detach().clone().set_requires_grad(true);
-                                torch::Tensor loss = thomas_solve(apply_A(vg)).pow(2).sum();
+                                torch::Tensor loss = thomas_solve(apply_A(vg, ad, bd, cd), ad, ald, gd).pow(2).sum();
                                 loss.backward();
                                 torch::NoGradGuard ng;
                                 bool defined = vg.grad().defined();
                                 bool finite  = defined && vg.grad().isfinite().all().item<bool>();
                                 bool nonzero = defined && vg.grad().abs().sum().item<float>() > 0.0f;
-                                std::cerr << "[SPLIT-EXPLICIT THOMAS-AD] backward: grad_defined=" << defined
+                                std::cerr << "[SPLIT-EXPLICIT THOMAS-AD] backward (isolated): grad_defined=" << defined
                                           << " grad_L2=" << (defined ? vg.grad().norm().item<float>() : 0.0f)
                                           << ((defined && finite && nonzero) ? "  PASS" : "  FAIL") << std::endl;
                             }
