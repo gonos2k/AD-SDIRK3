@@ -53,9 +53,33 @@ All references analytic, non-zero-exit on FAIL, under `test/em_b_wave/`.
    (:522-523), `p'` from a **temporally-linearized EOS** (:527-528) — using `alt`/`c2a` (Inc 1) as
    inputs but distinct formulas. Reusing Inc 1's full-EOS would be an Inc 4–5 bug.
 
+## Assembly-stability proof (2026-07-07, von-Neumann; MEASURED)
+
+The discretization set validates the *primitives*; the **coupling** — the assembled semi-implicit
+w–φ substep — is the one risk isolation cannot cover. `acoustic_amplification_match.py` (`85e60dc`)
+builds the exact amplification matrix of one `advance_w` substep using the **exact** inverse of the
+`calc_coef_w` tridiagonal (`np.linalg.inv`, not a hand-rolled Thomas):
+
+| assembly | \|λ\|_max | meaning |
+|---|---|---|
+| explicit, no implicit A | 68.0 | A is **load-bearing** (removes a wild instability) |
+| **semi-implicit, epssm=0.1** | **0.9983** | **STABLE**, correctly damped |
+| eps=0 + implicit A | 1.0000 | neutral / energy-conserving |
+
+⇒ the Inc 5 semi-implicit coupling is **de-risked stable**; a byte-faithful libtorch port reusing
+the validated `calc_coef_w`+Thomas (Inc 2/2b) inherits `|λ|=0.998`.
+
+**Correction:** three earlier hand-rolled 1-D column probes blew up and *appeared* to prove the
+coupling structurally unstable. A dts sweep (dts-independent growth) and sign sweep (no combination
+stable) ruled out CFL and sign errors; the von-Neumann matrix (exact `A⁻¹`) then showed the scheme is
+in fact stable — the toy had mis-implemented its own Thomas. Lesson (folded into the
+`differentiable-dynamical-core` skill): validate a coupled semi-implicit scheme with the exact-inverse
+amplification matrix, never a hand-rolled time loop.
+
 ## Status
 
 Operator map 100% complete and precise; every discretization type validated; the implicit solve
-proven and confirmed operational. **Inc 5 (acoustic-loop assembly) has no numerical/structural
-unknowns** — remaining work is the small-step state infrastructure + the substep loop, plus reading
-the acoustic-loop driver (`solve_em`/`module_em`: substep sequence, slow tendencies, per-stage dts).
+proven and confirmed operational; **the assembled semi-implicit coupling proven stable (von-Neumann
+`|λ|=0.998`).** **Inc 5 (acoustic-loop assembly) has no unretired numerical/structural risk** —
+remaining work is the small-step state infrastructure + the substep loop (reusing the validated
+`calc_coef_w`+Thomas), validated against a dyn_em `[PARITY substep]` dump.
