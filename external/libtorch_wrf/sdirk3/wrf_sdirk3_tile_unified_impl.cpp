@@ -6172,7 +6172,10 @@ vertical_coefficients:
                             t_full_se, p_full_se, p_base_, th_base_, alb_se, rd_, cv_, cp_, 100000.0f);
                         torch::Tensor alt_se = al_se + alb_se;                          // 1/rho
                         torch::Tensor c2a_se = (cp_ / cv_) * p_full_se / alt_se;        // sound-speed stiffness
-                        torch::NoGradGuard ng;
+                        // NOTE: the compute path (c2a, calc_coef_w, Thomas below) stays GRAD-ENABLED so it
+                        // is genuinely differentiable when U_n requires grad (Inc 7). Only the .item()
+                        // diagnostic dumps are wrapped in NoGradGuard, per the project graph-safety rule.
+                        { torch::NoGradGuard ng;
                         std::cerr << "[SPLIT-EXPLICIT PREP] c2a L2=" << c2a_se.norm().item<float>()
                                   << " mean=" << c2a_se.mean().item<float>()
                                   << " max=" << c2a_se.abs().max().item<float>()
@@ -6180,6 +6183,7 @@ vertical_coefficients:
                                   << " mean=" << mu_full_se.mean().item<float>()
                                   << " | p_full mean=" << p_full_se.mean().item<float>()
                                   << " alt mean=" << alt_se.mean().item<float>() << std::endl;
+                        }
 
                         // [Inc 2] calc_coef_w: vertical acoustic tridiagonal a/alpha/gamma,
                         // 1-to-1 with dyn_em module_small_step_em.F:624-649 and the VERIFIED numpy
@@ -6244,12 +6248,14 @@ vertical_coefficients:
                                 put(b_band, kde-1, bdiag);
                                 put(alpha, kde-1, 1.0f / (bdiag - a_k * g_km1));
                             }
+                            { torch::NoGradGuard ng;
                             std::cerr << "[SPLIT-EXPLICIT COEFW] cof=" << cof << " dts=" << dts
                                       << " a L2=" << a_band.norm().item<float>()
                                       << " alpha L2=" << alpha.norm().item<float>()
                                       << " gamma L2=" << gamma.norm().item<float>()
                                       << " a_max=" << a_band.abs().max().item<float>()
                                       << " alpha_mean=" << alpha.mean().item<float>() << std::endl;
+                            }
 
                             // [Inc 2b] differentiable Thomas SOLVE (advance_w :1433-1443) +
                             // M^-1 @ A_ac @ v == v self-consistency (biv_operator_match.py passed
@@ -6280,12 +6286,15 @@ vertical_coefficients:
                             torch::Tensor vtest = torch::zeros({ny_, nzw, nx_}, opts2);
                             for (int kf = 1; kf <= nz_; ++kf)              // deterministic level-ramp (no RNG)
                                 vtest.index_put_({SL, kf, SL}, torch::full({ny_, nx_}, static_cast<float>(kf), opts2));
-                            auto rec = thomas_solve(apply_A(vtest));
+                            auto rec = thomas_solve(apply_A(vtest));   // grad-enabled: the actual differentiable solve
                             auto sysl = torch::indexing::Slice(1, nz_ + 1);
-                            auto rel_err = ((rec.index({SL, sysl, SL}) - vtest.index({SL, sysl, SL})).norm()
-                                            / vtest.index({SL, sysl, SL}).norm()).item<float>();
+                            auto rel_err_t = (rec.index({SL, sysl, SL}) - vtest.index({SL, sysl, SL})).norm()
+                                             / vtest.index({SL, sysl, SL}).norm();
+                            { torch::NoGradGuard ng;
+                            float rel_err = rel_err_t.item<float>();
                             std::cerr << "[SPLIT-EXPLICIT THOMAS] M^-1 @ A_ac @ v == v : rel_err="
                                       << rel_err << (rel_err < 1e-4f ? "  PASS" : "  FAIL") << std::endl;
+                            }
                         }
                     }
                 }
