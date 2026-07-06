@@ -6260,28 +6260,30 @@ vertical_coefficients:
                             // [Inc 2b] differentiable Thomas SOLVE (advance_w :1433-1443) +
                             // M^-1 @ A_ac @ v == v self-consistency (biv_operator_match.py passed
                             // this offline at 4.6e-14). System is full levels kf=1..nz_ (WRF k=2..kde).
+                            // Both operators are OUT-OF-PLACE (per-level slabs + torch::stack): no grad-tracked
+                            // tensor is mutated in-place, so backward through the sequential recurrence is safe.
                             auto apply_A = [&](const torch::Tensor& v) -> torch::Tensor {
                                 // (A v)[kf] = a[kf] v[kf-1] + b[kf] v[kf] + c[kf] v[kf+1]
-                                torch::Tensor av = torch::zeros_like(v);
+                                std::vector<torch::Tensor> av(nzw);
+                                av[0] = torch::zeros({ny_, nx_}, opts2);            // boundary row
                                 for (int kf = 1; kf <= nz_; ++kf) {
                                     auto term = b_band.index({SL, kf, SL}) * v.index({SL, kf, SL})
                                               + a_band.index({SL, kf, SL}) * v.index({SL, kf-1, SL});
                                     if (kf + 1 <= nz_)   // c[kde]=0; top has no super-diagonal neighbor
                                         term = term + c_band.index({SL, kf, SL}) * v.index({SL, kf+1, SL});
-                                    av.index_put_({SL, kf, SL}, term);
+                                    av[kf] = term;
                                 }
-                                return av;
+                                return torch::stack(av, 1);                         // {ny, nzw, nx}
                             };
                             auto thomas_solve = [&](const torch::Tensor& rhs) -> torch::Tensor {
-                                torch::Tensor w = rhs.clone();
+                                std::vector<torch::Tensor> w(nzw);
+                                for (int kf = 0; kf < nzw; ++kf) w[kf] = rhs.index({SL, kf, SL});
                                 for (int kf = 1; kf <= nz_; ++kf)          // forward elim (a[1]=a(2)=0)
-                                    w.index_put_({SL, kf, SL},
-                                        (w.index({SL, kf, SL}) - a_band.index({SL, kf, SL}) * w.index({SL, kf-1, SL}))
-                                        * alpha.index({SL, kf, SL}));
+                                    w[kf] = (w[kf] - a_band.index({SL, kf, SL}) * w[kf-1])
+                                            * alpha.index({SL, kf, SL});
                                 for (int kf = nz_ - 1; kf >= 1; --kf)      // back subst (gamma[kde]=0)
-                                    w.index_put_({SL, kf, SL},
-                                        w.index({SL, kf, SL}) - gamma.index({SL, kf, SL}) * w.index({SL, kf+1, SL}));
-                                return w;
+                                    w[kf] = w[kf] - gamma.index({SL, kf, SL}) * w[kf+1];
+                                return torch::stack(w, 1);                 // {ny, nzw, nx}
                             };
                             torch::Tensor vtest = torch::zeros({ny_, nzw, nx_}, opts2);
                             for (int kf = 1; kf <= nz_; ++kf)              // deterministic level-ramp (no RNG)
@@ -6294,6 +6296,20 @@ vertical_coefficients:
                             float rel_err = rel_err_t.item<float>();
                             std::cerr << "[SPLIT-EXPLICIT THOMAS] M^-1 @ A_ac @ v == v : rel_err="
                                       << rel_err << (rel_err < 1e-4f ? "  PASS" : "  FAIL") << std::endl;
+                            }
+                            // [Inc 2b] autograd BACKWARD smoke test: prove the out-of-place Thomas/apply_A
+                            // survive backprop (refutes any in-place-recurrence failure). d||M^-1 A vg||^2 / d vg.
+                            {
+                                torch::Tensor vg = vtest.detach().clone().set_requires_grad(true);
+                                torch::Tensor loss = thomas_solve(apply_A(vg)).pow(2).sum();
+                                loss.backward();
+                                torch::NoGradGuard ng;
+                                bool defined = vg.grad().defined();
+                                bool finite  = defined && vg.grad().isfinite().all().item<bool>();
+                                bool nonzero = defined && vg.grad().abs().sum().item<float>() > 0.0f;
+                                std::cerr << "[SPLIT-EXPLICIT THOMAS-AD] backward: grad_defined=" << defined
+                                          << " grad_L2=" << (defined ? vg.grad().norm().item<float>() : 0.0f)
+                                          << ((defined && finite && nonzero) ? "  PASS" : "  FAIL") << std::endl;
                             }
                         }
                     }
