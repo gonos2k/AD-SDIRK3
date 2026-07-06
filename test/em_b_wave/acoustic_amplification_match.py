@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """
 Inc 5 ASSEMBLY-STABILITY proof (von-Neumann). Where upgf/divergence/vpgf_operator_match.py
-validate the acoustic solver's discretization PRIMITIVES, this validates the assembled
-semi-implicit w-phi COUPLING is stable — the one risk isolation testing cannot cover.
+validate the acoustic solver's discretization PRIMITIVES, this validates the CORE VERTICAL
+w-phi coupling STRUCTURE is stable and the implicit A is load-bearing.
+
+SCOPE (do NOT overclaim): this is a SIMPLIFIED model — 1-D vertical column, CONSTANT metrics/c2a,
+pure w-phi mode with t'=0 (buoyancy term dropped), NO horizontal coupling, NO calc_p_rho feedback.
+It proves the vertical coupling STRUCTURE + A's load-bearing role. It does NOT prove the FULL scheme
+with variable stratification c2a(z), the buoyancy term, and 3-D horizontal coupling — that requires
+validating the assembled substep against a dyn_em [PARITY substep] dump in Inc 5.
 
 Method: build the exact amplification matrix M (state [w; ph], size 2*nzw) of one acoustic
 substep of advance_w's scheme, using the EXACT inverse of the calc_coef_w tridiagonal A

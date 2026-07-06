@@ -56,18 +56,24 @@ All references analytic, non-zero-exit on FAIL, under `test/em_b_wave/`.
 ## Assembly-stability proof (2026-07-07, von-Neumann; MEASURED)
 
 The discretization set validates the *primitives*; the **coupling** — the assembled semi-implicit
-w–φ substep — is the one risk isolation cannot cover. `acoustic_amplification_match.py` (`85e60dc`)
+w–φ substep — is a risk isolation cannot cover. `acoustic_amplification_match.py` (`85e60dc`)
 builds the exact amplification matrix of one `advance_w` substep using the **exact** inverse of the
 `calc_coef_w` tridiagonal (`np.linalg.inv`, not a hand-rolled Thomas):
 
 | assembly | \|λ\|_max | meaning |
 |---|---|---|
 | explicit, no implicit A | 68.0 | A is **load-bearing** (removes a wild instability) |
-| **semi-implicit, epssm=0.1** | **0.9983** | **STABLE**, correctly damped |
+| **semi-implicit, epssm=0.1** | **0.9983** | STABLE, correctly damped |
 | eps=0 + implicit A | 1.0000 | neutral / energy-conserving |
 
-⇒ the Inc 5 semi-implicit coupling is **de-risked stable**; a byte-faithful libtorch port reusing
-the validated `calc_coef_w`+Thomas (Inc 2/2b) inherits `|λ|=0.998`.
+**SCOPE (do not overclaim).** This is a **simplified model**: 1-D vertical column, **constant**
+metrics/`c2a`, pure w–φ mode with `t'=0` (buoyancy term dropped), no horizontal coupling
+(`advance_uv`/`advance_mu_t` horizontal divergence), no `calc_p_rho` feedback. What it **proves**:
+the core vertical w–φ coupling *structure* is stable and the implicit A is load-bearing. What it does
+**not** prove: stability of the **full** scheme with variable stratification (`c2a(z)`), the buoyancy
+term, and the 3-D horizontal coupling. ⇒ the vertical-coupling *structure* is de-risked; **full-scheme
+stability still requires the Inc 5 assembled-substep-vs-dyn_em check.** A byte-faithful port inherits
+this stable *structure*, not a guaranteed `|λ|=0.998` for the real variable-metric case.
 
 **Correction:** three earlier hand-rolled 1-D column probes blew up and *appeared* to prove the
 coupling structurally unstable. A dts sweep (dts-independent growth) and sign sweep (no combination
@@ -78,8 +84,10 @@ amplification matrix, never a hand-rolled time loop.
 
 ## Status
 
-Operator map 100% complete and precise; every discretization type validated; the implicit solve
-proven and confirmed operational; **the assembled semi-implicit coupling proven stable (von-Neumann
-`|λ|=0.998`).** **Inc 5 (acoustic-loop assembly) has no unretired numerical/structural risk** —
-remaining work is the small-step state infrastructure + the substep loop (reusing the validated
-`calc_coef_w`+Thomas), validated against a dyn_em `[PARITY substep]` dump.
+Operator map 100% complete and precise; every discretization *primitive* validated; the implicit
+solve proven and confirmed operational; the **core vertical w–φ coupling structure** proven stable in
+a simplified constant-metric model (von-Neumann `|λ|=0.998`, implicit A load-bearing). **Remaining
+Inc 5 risk (not yet retired):** full-scheme stability with variable stratification, the buoyancy
+term, and 3-D horizontal coupling — to be confirmed by validating the *assembled substep* against a
+dyn_em `[PARITY substep]` dump. Inc 5 work: small-step state infrastructure + the substep loop
+(reusing the validated `calc_coef_w`+Thomas), then that assembled-vs-dyn_em check.
