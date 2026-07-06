@@ -16,6 +16,7 @@ u-PGF, hydrostatic 3 terms, em_b_wave (msfux/msfuy=1, cqu=1), at u-point i (betw
      + (al(i,k)+al(i-1,k))*(pb(i,k)-pb(i-1,k)) ]              # alpha' * dpb/dx
 with muu(i) = 0.5*(mu(i-1)+mu(i)).
 """
+import sys
 import numpy as np
 
 # --- grid (em_b_wave-like: periodic x, uniform) ---
@@ -79,3 +80,4 @@ print(f"#   dpxy L2={np.linalg.norm(dpxy):.4f}  max={np.abs(dpxy).max():.4f}")
 print(f"#   worst rel-err vs analytic gradient (non-zero pts): {worst:.3e}")
 ok = worst < 3.0 * expect + 1e-3
 print(f"# u-PGF discretization == analytic dp/dx : {'PASS' if ok else 'FAIL'}")
+sys.exit(0 if ok else 1)   # non-zero exit on FAIL so a regression can't pass silently
