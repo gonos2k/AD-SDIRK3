@@ -6180,6 +6180,72 @@ vertical_coefficients:
                                   << " mean=" << mu_full_se.mean().item<float>()
                                   << " | p_full mean=" << p_full_se.mean().item<float>()
                                   << " alt mean=" << alt_se.mean().item<float>() << std::endl;
+
+                        // [Inc 2] calc_coef_w: vertical acoustic tridiagonal a/alpha/gamma,
+                        // 1-to-1 with dyn_em module_small_step_em.F:624-649 and the VERIFIED numpy
+                        // port test/em_b_wave/biv_operator_match.py (matched WRF to 3.7e-6). Uses the
+                        // correct state-dependent c2a (Inc 1). cqw=1 (dry em_b_wave). WRF 1-based level
+                        // k -> libtorch index k-1 for ALL fields (c2a mass, c1f/c2f full, rdn/rdnw, c1h/c2h).
+                        {
+                            const float g_acc = 9.81f;
+                            const float epssm = 0.1f;                 // em_b_wave namelist
+                            // dts_rk is PER RK STAGE (solve_em.F:839-853): stage 1 = dt/3 (single big
+                            // acoustic step), stages 2/3 = dt/num_sound_steps (=dt/4). dyn_em's FIRST
+                            // calc_coef_w is stage 1, so validate with dt/3. (The per-stage dts wiring
+                            // comes with the acoustic loop, Inc 5-6.)
+                            const float dts = static_cast<float>(dt) / 3.0f;
+                            const float cof = std::pow(0.5f * dts * g_acc * (1.0f + epssm), 2.0f);
+                            const int   nzw = nz_w_;                  // full levels (= nz_+1)
+                            const int   kde = nzw;                    // WRF 1-based top full-level index
+                            auto rdn_t  = getRdnTensor(dev, dtp, nz_);
+                            auto rdnw_t = getRdnwTensor(dev, dtp, nz_);
+                            auto opts2  = torch::TensorOptions().dtype(dtp).device(dev);
+                            torch::Tensor a_band = torch::zeros({ny_, nzw, nx_}, opts2);
+                            torch::Tensor alpha  = torch::zeros({ny_, nzw, nx_}, opts2);
+                            torch::Tensor gamma  = torch::zeros({ny_, nzw, nx_}, opts2);
+                            using TI = torch::indexing::TensorIndex;
+                            auto SL = torch::indexing::Slice();
+                            auto put = [&](torch::Tensor& T, int kf, const torch::Tensor& v) {
+                                T.index_put_({SL, kf, SL}, v);
+                            };
+                            auto mh = [&](int k) { return c1h_[k-1]*mu_full_se + c2h_[k-1]; }; // {ny,nx}
+                            auto mf = [&](int k) { return c1f_[k-1]*mu_full_se + c2f_[k-1]; }; // {ny,nx}
+                            auto c2a_k = [&](int k) { return c2a_se.index({SL, k-1, SL}); };   // mass level k
+                            // a-band: a(2)=0 (default); interior a(kk) kk=3..kde-1 (k=kk-1); top a(kde)
+                            for (int kk = 3; kk <= kde-1; ++kk) {
+                                int k = kk-1;
+                                put(a_band, kk-1,
+                                    -cof * rdn_t[kk-1] * rdnw_t[kk-2] * c2a_k(kk-1) / (mh(k)*mf(k)));
+                            }
+                            put(a_band, kde-1,
+                                -2.0f*cof*rdnw_t[kde-2]*rdnw_t[kde-2]*c2a_k(kde-1) / (mh(kde-1)*mf(kde-1)));
+                            // interior b,c,alpha,gamma k=2..kde-1 (gamma(1)=0 default)
+                            for (int k = 2; k <= kde-1; ++k) {
+                                auto bdiag = 1.0f + cof * rdn_t[k-1] * (
+                                        rdnw_t[k-1]*c2a_k(k)  /(mh(k)  *mf(k)) +
+                                        rdnw_t[k-2]*c2a_k(k-1)/(mh(k-1)*mf(k)) );
+                                auto cup   = -cof * rdn_t[k-1] * rdnw_t[k-1] * c2a_k(k) / (mh(k)*mf(k+1));
+                                auto a_k   = a_band.index({SL, k-1, SL});
+                                auto g_km1 = gamma.index({SL, k-2, SL});
+                                auto al_k  = 1.0f / (bdiag - a_k * g_km1);
+                                put(alpha, k-1, al_k);
+                                put(gamma, k-1, cup * al_k);
+                            }
+                            // top k=kde: c=0, gamma(kde)=0 (default)
+                            {
+                                auto bdiag = 1.0f + 2.0f*cof*rdnw_t[kde-2]*rdnw_t[kde-2]
+                                                 *c2a_k(kde-1)/(mh(kde-1)*mf(kde));
+                                auto a_k   = a_band.index({SL, kde-1, SL});
+                                auto g_km1 = gamma.index({SL, kde-2, SL});
+                                put(alpha, kde-1, 1.0f / (bdiag - a_k * g_km1));
+                            }
+                            std::cerr << "[SPLIT-EXPLICIT COEFW] cof=" << cof << " dts=" << dts
+                                      << " a L2=" << a_band.norm().item<float>()
+                                      << " alpha L2=" << alpha.norm().item<float>()
+                                      << " gamma L2=" << gamma.norm().item<float>()
+                                      << " a_max=" << a_band.abs().max().item<float>()
+                                      << " alpha_mean=" << alpha.mean().item<float>() << std::endl;
+                        }
                     }
                 }
             }
