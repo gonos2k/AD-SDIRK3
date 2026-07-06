@@ -6201,6 +6201,8 @@ vertical_coefficients:
                             auto rdnw_t = getRdnwTensor(dev, dtp, nz_);
                             auto opts2  = torch::TensorOptions().dtype(dtp).device(dev);
                             torch::Tensor a_band = torch::zeros({ny_, nzw, nx_}, opts2);
+                            torch::Tensor b_band = torch::zeros({ny_, nzw, nx_}, opts2);
+                            torch::Tensor c_band = torch::zeros({ny_, nzw, nx_}, opts2);
                             torch::Tensor alpha  = torch::zeros({ny_, nzw, nx_}, opts2);
                             torch::Tensor gamma  = torch::zeros({ny_, nzw, nx_}, opts2);
                             using TI = torch::indexing::TensorIndex;
@@ -6228,6 +6230,8 @@ vertical_coefficients:
                                 auto a_k   = a_band.index({SL, k-1, SL});
                                 auto g_km1 = gamma.index({SL, k-2, SL});
                                 auto al_k  = 1.0f / (bdiag - a_k * g_km1);
+                                put(b_band, k-1, bdiag);
+                                put(c_band, k-1, cup);
                                 put(alpha, k-1, al_k);
                                 put(gamma, k-1, cup * al_k);
                             }
@@ -6237,6 +6241,7 @@ vertical_coefficients:
                                                  *c2a_k(kde-1)/(mh(kde-1)*mf(kde));
                                 auto a_k   = a_band.index({SL, kde-1, SL});
                                 auto g_km1 = gamma.index({SL, kde-2, SL});
+                                put(b_band, kde-1, bdiag);
                                 put(alpha, kde-1, 1.0f / (bdiag - a_k * g_km1));
                             }
                             std::cerr << "[SPLIT-EXPLICIT COEFW] cof=" << cof << " dts=" << dts
@@ -6245,6 +6250,42 @@ vertical_coefficients:
                                       << " gamma L2=" << gamma.norm().item<float>()
                                       << " a_max=" << a_band.abs().max().item<float>()
                                       << " alpha_mean=" << alpha.mean().item<float>() << std::endl;
+
+                            // [Inc 2b] differentiable Thomas SOLVE (advance_w :1433-1443) +
+                            // M^-1 @ A_ac @ v == v self-consistency (biv_operator_match.py passed
+                            // this offline at 4.6e-14). System is full levels kf=1..nz_ (WRF k=2..kde).
+                            auto apply_A = [&](const torch::Tensor& v) -> torch::Tensor {
+                                // (A v)[kf] = a[kf] v[kf-1] + b[kf] v[kf] + c[kf] v[kf+1]
+                                torch::Tensor av = torch::zeros_like(v);
+                                for (int kf = 1; kf <= nz_; ++kf) {
+                                    auto term = b_band.index({SL, kf, SL}) * v.index({SL, kf, SL})
+                                              + a_band.index({SL, kf, SL}) * v.index({SL, kf-1, SL});
+                                    if (kf + 1 <= nz_)   // c[kde]=0; top has no super-diagonal neighbor
+                                        term = term + c_band.index({SL, kf, SL}) * v.index({SL, kf+1, SL});
+                                    av.index_put_({SL, kf, SL}, term);
+                                }
+                                return av;
+                            };
+                            auto thomas_solve = [&](const torch::Tensor& rhs) -> torch::Tensor {
+                                torch::Tensor w = rhs.clone();
+                                for (int kf = 1; kf <= nz_; ++kf)          // forward elim (a[1]=a(2)=0)
+                                    w.index_put_({SL, kf, SL},
+                                        (w.index({SL, kf, SL}) - a_band.index({SL, kf, SL}) * w.index({SL, kf-1, SL}))
+                                        * alpha.index({SL, kf, SL}));
+                                for (int kf = nz_ - 1; kf >= 1; --kf)      // back subst (gamma[kde]=0)
+                                    w.index_put_({SL, kf, SL},
+                                        w.index({SL, kf, SL}) - gamma.index({SL, kf, SL}) * w.index({SL, kf+1, SL}));
+                                return w;
+                            };
+                            torch::Tensor vtest = torch::zeros({ny_, nzw, nx_}, opts2);
+                            for (int kf = 1; kf <= nz_; ++kf)              // deterministic level-ramp (no RNG)
+                                vtest.index_put_({SL, kf, SL}, torch::full({ny_, nx_}, static_cast<float>(kf), opts2));
+                            auto rec = thomas_solve(apply_A(vtest));
+                            auto sysl = torch::indexing::Slice(1, nz_ + 1);
+                            auto rel_err = ((rec.index({SL, sysl, SL}) - vtest.index({SL, sysl, SL})).norm()
+                                            / vtest.index({SL, sysl, SL}).norm()).item<float>();
+                            std::cerr << "[SPLIT-EXPLICIT THOMAS] M^-1 @ A_ac @ v == v : rel_err="
+                                      << rel_err << (rel_err < 1e-4f ? "  PASS" : "  FAIL") << std::endl;
                         }
                     }
                 }
