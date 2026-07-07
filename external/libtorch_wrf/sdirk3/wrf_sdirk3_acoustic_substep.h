@@ -64,7 +64,14 @@ struct Const {
     torch::Tensor ph_tend;             // {ny,nz_w,nx} frozen geopotential tendency (advance_w rhs :1318)
 };
 
-// --- wiring helpers (Inc 6): staggered column-mass averages (module_small_step_em.F:200-207) ---
+// --- wiring helpers (Inc 6) ---
+// RK3 acoustic schedule (solve_em.F:841-853): per stage returns (dts, number_of_small_timesteps).
+// Invariant dts*n_sub == the stage fraction of dt (stage1=dt/3, stage2=dt/2, stage3=dt). Stage 1 is a
+// single acoustic step of dt/3; stages 2/3 sub-cycle at dts=dt/num_sound_steps. num_sound_steps even, >=4.
+struct AcousticSchedule { float dts; int n_sub; };
+AcousticSchedule acoustic_schedule(int rk_step, float dt, int num_sound_steps);
+
+// staggered column-mass averages (module_small_step_em.F:200-207) ---
 // u-point mass = 0.5*(mu[i]+mu[i-1]) over x; v-point mass = 0.5*(mu[j]+mu[j-1]) over y. Column mass
 // mu is {ny,nx}; returns {ny,nx+1} / {ny+1,nx}. Edges use PERIODIC wrap (em_b_wave x-channel); a
 // non-periodic y-boundary must overwrite the edge rows via the halo at the call site.

@@ -276,6 +276,13 @@ State calc_p_rho(const State& s, const Const& c, int step) {
 // 1-BASED: every loop substep applies divergence damping (calc_p_rho step>=1). The pressure INIT
 // (calc_p_rho with step=0, which sets pm1 and does NOT damp) is a SEPARATE pre-loop call the caller
 // must run once before the first substep (solve_em.F:1352) — it is NOT part of advance_substep.
+AcousticSchedule acoustic_schedule(int rk_step, float dt, int num_sound_steps) {
+    float dts = dt / static_cast<float>(num_sound_steps);       // base acoustic timestep
+    if (rk_step == 1) return {dt / 3.0f, 1};                    // single big step of dt/3
+    if (rk_step == 2) return {dts, num_sound_steps / 2};        // dts * N/2 = dt/2
+    return {dts, num_sound_steps};                              // rk_step 3: dts * N = dt
+}
+
 torch::Tensor mass_to_upoint(const torch::Tensor& mu) {
     using torch::indexing::Slice;
     const int nx = mu.size(1);

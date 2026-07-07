@@ -167,6 +167,17 @@ static bool roundtrip_check() {
     return ok;
 }
 
+// RK3 acoustic schedule: dts*n_sub must equal the stage fraction of dt (dt/3, dt/2, dt).
+static bool schedule_check() {
+    const float dt = 12.0f; const int N = 4;
+    auto s1 = acoustic_schedule(1, dt, N), s2 = acoustic_schedule(2, dt, N), s3 = acoustic_schedule(3, dt, N);
+    bool ok = s1.n_sub == 1 && std::abs(s1.dts * s1.n_sub - dt / 3.0f) < 1e-4f
+           && s2.n_sub == 2 && std::abs(s2.dts * s2.n_sub - dt / 2.0f) < 1e-4f
+           && s3.n_sub == 4 && std::abs(s3.dts * s3.n_sub - dt)        < 1e-4f;
+    std::cout << "# acoustic_schedule dts*N == stage-fraction (dt/3,dt/2,dt) : " << (ok ? "PASS" : "FAIL") << "\n";
+    return ok;
+}
+
 // mass_to_u/vpoint staggered 0.5-averages (periodic), vs a hand-computed example.
 static bool mass_avg_check() {
     auto o = torch::TensorOptions().dtype(torch::kFloat32);
@@ -191,6 +202,7 @@ int main() {
     bool prep_ok  = prep_chain_check();
     bool rt_ok    = roundtrip_check();
     bool mass_ok  = mass_avg_check();
+    bool sched_ok = schedule_check();
     const int nz = 40, nzw = nz + 1, ny = 1, nx = 1;
     const float g = 9.81f, eps = 0.1f, deta = 1.0f / nz, mut = 9.0e4f, c2a0 = 1.16e6f;
     const float dts = 1.0f;   // match the von-Neumann reference (resolved limit); |lambda| is dts-normalized
@@ -292,7 +304,7 @@ int main() {
     // (not merely <=1 — a stable-but-wrong scheme with |lambda|=0.5 must NOT pass).
     bool coeffs_ok = mia_relerr < 1e-4f;
     bool lambda_ok = std::isfinite(lam) && std::abs(lam - lam_ref) < 1e-3f;
-    bool ok = smoke_ok && grad_ok && prep_ok && rt_ok && mass_ok && coeffs_ok && lambda_ok;
+    bool ok = smoke_ok && grad_ok && prep_ok && rt_ok && mass_ok && sched_ok && coeffs_ok && lambda_ok;
     std::cout << "# advance_w matches numpy scheme  coeffs=" << (coeffs_ok ? "ok" : "BAD")
               << "  |lambda|-match=" << (lambda_ok ? "ok" : "BAD")
               << "  : " << (ok ? "PASS" : "FAIL") << "\n";
