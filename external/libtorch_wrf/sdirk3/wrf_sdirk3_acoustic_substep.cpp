@@ -99,7 +99,31 @@ State advance_mu_t(const State& s, const Const& c) {
     }
     ww[nzw - 1] = torch::zeros({ny, nx}, s.w.options());   // top BC ww(kde)=0
     o.ww = torch::stack(ww, 1) - c.ww_1;                   // subtract large-timestep ww (:1119)
-    // TODO(Inc 5c-theta): t_ave=t; t+=msfty*dts*ft; wdtn=ww*(fnm*t_1+fnp*t_1[k-1]); theta advection (:1141-1173).
+
+    // --- THETA update (:1138-1173, msf=1) ---
+    // frozen theta tendency; then vertical + horizontal(x) flux advection.
+    torch::Tensor t_new = s.t + dts * c.ft;
+    // vertical theta flux wdtn(k) = ww(k)*(fnm(k)*t_1(k)+fnp(k)*t_1(k-1)); wdtn(0)=wdtn(top)=0.  (:1148-1154)
+    std::vector<torch::Tensor> wdtn(nzw);
+    wdtn[0]       = torch::zeros({ny, nx}, s.w.options());
+    wdtn[nzw - 1] = torch::zeros({ny, nx}, s.w.options());
+    for (int kf = 1; kf <= nzw - 2; ++kf) {
+        auto tv = c.fnm[kf] * c.t_1.index({SL(), kf, SL()}) + c.fnp[kf] * c.t_1.index({SL(), kf - 1, SL()});
+        wdtn[kf] = o.ww.index({SL(), kf, SL()}) * tv;
+    }
+    auto wdtn_t = torch::stack(wdtn, 1);                    // {ny,nz_w,nx}
+    // vertical advection rdnw(k)*(wdtn(k+1)-wdtn(k)) at mass level k  (:1171)
+    auto vert = c.rdnw.view({1, nz, 1}) * (wdtn_t.index({SL(), Slice(1, nz + 1), SL()}) - wdtn_t.index({SL(), Slice(0, nz), SL()}));
+    t_new = t_new - dts * vert;
+    // horizontal x theta-flux at INTERIOR mass points 1..nx-2 (boundary via halo = cross-cutting TODO,
+    // same deferral as advance_uv PGF): Fx(iu)=u(iu)*(t_1(iu)+t_1(iu-1)); 0.5*rdx*(Fx(i+1)-Fx(i)).  (:1168-1170)
+    auto Fx = s.u.index({SL(), SL(), Slice(1, nx)})
+              * (c.t_1.index({SL(), SL(), Slice(1, nx)}) + c.t_1.index({SL(), SL(), Slice(0, nx - 1)})); // {ny,nz,nx-1}
+    auto divx = 0.5f * c.rdx * (Fx.index({SL(), SL(), Slice(1, None)}) - Fx.index({SL(), SL(), Slice(None, -1)})); // {ny,nz,nx-2}
+    auto t_i = t_new.index({SL(), SL(), Slice(1, nx - 1)}) - dts * divx;
+    t_new.index_put_({SL(), SL(), Slice(1, nx - 1)}, t_i);
+    o.t = t_new;
+    // TODO(Inc 5c): y theta-flux (v/t_1, :1165-1167) + horizontal boundary halo (shared with advance_uv).
     return o;
 }
 
