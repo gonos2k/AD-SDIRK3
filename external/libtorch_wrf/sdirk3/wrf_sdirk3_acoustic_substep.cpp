@@ -54,10 +54,9 @@ State advance_uv(const State& s, const Const& c) {
     // (c1h*muu+c2h) at interior u-points 1..nx-1: slice muu to nx-1 (valid whether muu is nx or nx+1 wide)
     auto muu_int = c.muu.index({SL(), Slice(1, nx)});         // {ny, nx-1}
     auto coef = c.c1h.view({1, nz, 1}) * muu_int.unsqueeze(1) + c.c2h.view({1, nz, 1}); // {ny,nz,nx-1}
-    // Two dominant hydrostatic terms: geopotential gradient + alpha_full*d(p'). (Inc 3 validated the
-    // discretization.) TODO(Inc 5): al'*d(pb) base-pressure term (needs pb in Const), the
-    // non-hydrostatic 4th term (php/dpn), and divergence damping (emdiv).
-    auto dpxy = 0.5f * c.rdx * coef * (D_ph + si(c.alt) * di(s.p));  // {ny,nz,nx-1}
+    // Three hydrostatic terms (:828-831): geopotential gradient + alt*d(p') + al'*d(pb).
+    // TODO(Inc 5): the non-hydrostatic 4th term (php/dpn) and divergence damping (emdiv).
+    auto dpxy = 0.5f * c.rdx * coef * (D_ph + si(c.alt) * di(s.p) + si(s.al) * di(c.pb));  // {ny,nz,nx-1}
     // subtract from interior u-points 1..nx-1 (indices 1..nx-1 == Slice(1,nx), exactly nx-1 columns);
     // boundary u-points (0 and, if staggered, nx) are set by the caller / periodic halo.
     auto u_int = u_new.index({SL(), SL(), Slice(1, nx)}) - c.dts * dpxy;   // cqu=1
@@ -71,11 +70,11 @@ State advance_uv(const State& s, const Const& c) {
     auto D_ph_v = dj(ph_kp1_v) + dj(ph_k_v);                  // {ny-1,nz,nx}
     auto muv_int = c.muv.index({Slice(1, ny), SL()});         // {ny-1,nx}
     auto coef_v = c.c1h.view({1, nz, 1}) * muv_int.unsqueeze(1) + c.c2h.view({1, nz, 1});
-    auto dpxy_v = 0.5f * c.rdy * coef_v * (D_ph_v + sj(c.alt) * dj(s.p));  // {ny-1,nz,nx}
+    auto dpxy_v = 0.5f * c.rdy * coef_v * (D_ph_v + sj(c.alt) * dj(s.p) + sj(s.al) * dj(c.pb)); // {ny-1,nz,nx}
     auto v_int = v_new.index({Slice(1, ny), SL(), SL()}) - c.dts * dpxy_v; // cqv=1
     v_new.index_put_({Slice(1, ny), SL(), SL()}, v_int);
     o.v = v_new;
-    // TODO(Inc 5): al'*d(pb) base-pressure term (both u & v), non-hydro 4th term (php/dpn), div damping.
+    // TODO(Inc 5): non-hydrostatic 4th term (php/dpn) and divergence damping (emdiv), both u & v.
     return o;
 }
 

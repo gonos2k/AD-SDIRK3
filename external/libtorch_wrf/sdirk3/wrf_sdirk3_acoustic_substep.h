@@ -43,6 +43,7 @@ struct Const {
     // thermodynamic / factorization
     torch::Tensor c2a;                 // sound-speed stiffness {ny, nz, nx}  (full stage state)
     torch::Tensor alt;                 // full inverse density  {ny, nz, nx}
+    torch::Tensor pb;                  // base-state pressure   {ny, nz, nx}  (advance_uv al'*d(pb) term)
     torch::Tensor a, alpha, gamma;     // calc_coef_w Thomas factors {ny, nz_w, nx}
     // masses
     torch::Tensor mut, muts;           // {ny, nx}  full column mass (base, base+mu')
