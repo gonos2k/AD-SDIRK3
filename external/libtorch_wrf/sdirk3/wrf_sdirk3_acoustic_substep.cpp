@@ -172,8 +172,8 @@ State advance_w(const State& s, const Const& c) {
     auto mf_full_ts = c.c1f.view({1, nzw, 1}) * muts2 + c.c2f.view({1, nzw, 1});
     auto mh = c.c1h.view({1, nz, 1}) * mut2 + c.c2h.view({1, nz, 1});      // {ny,nz,nx}
     const float eps = c.epssm, g = c.g, dts = c.dts;
-    // rhs = ph + dts*0.5*g*(1-eps)*w / mf_full   (old-w half of the phi eqn; +ph_tend/ww = TODO)
-    torch::Tensor rhs = s.ph + (dts * 0.5f * g * (1.0f - eps)) * s.w / mf_full;
+    // rhs = ph + dts*(ph_tend + 0.5*g*(1-eps)*w) / mf_full   (:1318/:1368; ww*d(phi) advection = TODO, needs php)
+    torch::Tensor rhs = s.ph + dts * (c.ph_tend + (0.5f * g * (1.0f - eps)) * s.w) / mf_full;
     rhs.index_put_({SL(), 0, SL()}, torch::zeros_like(rhs.index({SL(), 0, SL()})));
     // t_2ave (:1314-1317): running time-avg of coupled theta, normalized by full mass*temperature.
     // Uses advance_mu_t's muave/muts (per-substep, in State) + reference t_1, t0.

@@ -60,6 +60,7 @@ struct Const {
     float emdiv = 0, smdiv = 0, t0 = 300.0f;   // t0 = base reference potential temperature (calc_p_rho)
     // frozen slow tendencies
     torch::Tensor ru_tend, rv_tend, rw_tend, ft, mu_tend;
+    torch::Tensor ph_tend;             // {ny,nz_w,nx} frozen geopotential tendency (advance_w rhs :1318)
 };
 
 // One acoustic sub-step (LOOP BODY): advance_uv -> advance_mu_t -> advance_w -> calc_p_rho.

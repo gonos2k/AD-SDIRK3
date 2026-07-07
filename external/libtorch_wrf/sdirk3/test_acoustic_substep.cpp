@@ -53,6 +53,7 @@ int main() {
     c.c1h = c1h; c.c2h = c2h; c.c1f = c1f; c.c2f = c2f; c.rdn = rdn; c.rdnw = rdnw;
     c.dts = dts; c.g = g; c.epssm = eps; c.t0 = 300.0f;
     c.rw_tend = torch::zeros({ny, nzw, nx}, opt);
+    c.ph_tend = torch::zeros({ny, nzw, nx}, opt);   // advance_w rhs now reads ph_tend
     c.t_1 = torch::zeros({ny, nz, nx}, opt);
 
     // --- initial state: ph' = sin(pi*eta), everything else 0 (pure w-phi mode) ---
