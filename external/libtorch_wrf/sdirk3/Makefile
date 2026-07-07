@@ -66,6 +66,7 @@ SOURCES = \
     wrf_sdirk3_newton_solver.cpp \
     wrf_sdirk3_jvp_autograd.cpp \
     wrf_hydrostatic_pressure.cpp \
+    wrf_sdirk3_acoustic_substep.cpp \
     wrf_sdirk3_base_state_zerocopy.cpp \
     wrf_tile_boundary_optimizer.cpp \
     wrf_sdirk3_config.cpp \
