@@ -69,7 +69,7 @@ struct Const {
 // divergence damping. The pressure INIT (calc_p_rho step=0: sets pm1, no damping) is a SEPARATE
 // pre-loop call the caller runs once before the first substep (solve_em.F:1352), NOT this function.
 // Functional style (returns a new State) so it stays autograd-safe (no in-place grad-tensor mutation).
-State advance_substep(const State& s, const Const& c, int small_step);
+State advance_substep(const State& s, const Const& c, int small_step);  // 1-based loop body
 
 // Individual operators (exposed for term-by-term validation vs dyn_em).
 State advance_uv   (const State& s, const Const& c);                 // module_small_step_em.F:654

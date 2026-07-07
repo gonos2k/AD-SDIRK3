@@ -14,7 +14,47 @@
 #include <cmath>
 using namespace wrf::sdirk3::acoustic;
 
+// Full-substep SMOKE test: construct a small 2-D state with EVERY State/Const field populated,
+// run the chained advance_substep, and confirm it executes and stays finite. Catches integration
+// bugs (undefined tensors, cross-operator state threading, shape mismatches) end-to-end. Does NOT
+// check correctness (that needs dyn_em [PARITY substep]) — only that the assembly runs.
+static bool full_substep_smoke() {
+    const int ny = 4, nx = 4, nz = 10, nzw = nz + 1, nyv = ny + 1, nxu = nx + 1;
+    auto o = torch::TensorOptions().dtype(torch::kFloat32);
+    const float mut = 9.0e4f, dts = 5.0f;
+    auto M3 = [&](int a, int b, int cc, float v) { return torch::full({a, b, cc}, v, o); };
+    auto M2 = [&](int a, int b, float v) { return torch::full({a, b}, v, o); };
+    State s;
+    s.u = M3(ny, nz, nxu, 0.1f); s.v = M3(nyv, nz, nx, 0.1f); s.w = M3(ny, nzw, nx, 0.0f);
+    s.ph = M3(ny, nzw, nx, 0.0f); s.t = M3(ny, nz, nx, 0.0f); s.mu = M2(ny, nx, 0.0f);
+    s.p = M3(ny, nz, nx, 0.0f); s.al = M3(ny, nz, nx, 0.0f); s.ww = M3(ny, nzw, nx, 0.0f);
+    s.pm1 = M3(ny, nz, nx, 0.0f); s.t_2ave = M3(ny, nz, nx, 0.0f);
+    s.muave = M2(ny, nx, 0.0f); s.muts = M2(ny, nx, mut); s.mudf = M2(ny, nx, 0.0f);
+    Const c;
+    c.c2a = M3(ny, nz, nx, 1.16e6f); c.alt = M3(ny, nz, nx, 2.5f); c.pb = M3(ny, nz, nx, 5.0e4f);
+    c.a = M3(ny, nzw, nx, -0.1f); c.alpha = M3(ny, nzw, nx, 0.9f); c.gamma = M3(ny, nzw, nx, -0.1f);
+    c.mut = M2(ny, nx, mut); c.muts = M2(ny, nx, mut); c.muu = M2(ny, nxu, mut); c.muv = M2(nyv, nx, mut);
+    c.rdn = torch::full({nz}, 40.0f, o); c.rdnw = torch::full({nz}, 40.0f, o); c.dnw = torch::full({nz}, -0.025f, o);
+    c.c1h = torch::ones({nz}, o); c.c2h = torch::zeros({nz}, o);
+    c.c1f = torch::ones({nzw}, o); c.c2f = torch::zeros({nzw}, o);
+    c.fnm = torch::full({nzw}, 0.5f, o); c.fnp = torch::full({nzw}, 0.5f, o);
+    c.rdx = 1e-5f; c.rdy = 1e-5f; c.dts = dts; c.g = 9.81f; c.epssm = 0.1f; c.t0 = 300.0f;
+    c.emdiv = 0.01f; c.smdiv = 0.1f;
+    c.ru_tend = M3(ny, nz, nxu, 0.0f); c.rv_tend = M3(nyv, nz, nx, 0.0f); c.rw_tend = M3(ny, nzw, nx, 0.0f);
+    c.ft = M3(ny, nz, nx, 0.0f); c.mu_tend = M2(ny, nx, 0.0f); c.ph_tend = M3(ny, nzw, nx, 0.0f);
+    c.u_1 = M3(ny, nz, nxu, 0.05f); c.v_1 = M3(nyv, nz, nx, 0.05f);
+    c.t_1 = M3(ny, nz, nx, 5.0f); c.ww_1 = M3(ny, nzw, nx, 0.0f);
+    State out = advance_substep(s, c, 1);
+    bool fin = out.u.isfinite().all().item<bool>() && out.v.isfinite().all().item<bool>()
+            && out.w.isfinite().all().item<bool>() && out.ph.isfinite().all().item<bool>()
+            && out.t.isfinite().all().item<bool>() && out.p.isfinite().all().item<bool>()
+            && out.mu.isfinite().all().item<bool>() && out.ww.isfinite().all().item<bool>();
+    std::cout << "# full advance_substep (2-D, all fields) runs + finite : " << (fin ? "PASS" : "FAIL") << "\n";
+    return fin;
+}
+
 int main() {
+    bool smoke_ok = full_substep_smoke();
     const int nz = 40, nzw = nz + 1, ny = 1, nx = 1;
     const float g = 9.81f, eps = 0.1f, deta = 1.0f / nz, mut = 9.0e4f, c2a0 = 1.16e6f;
     const float dts = 1.0f;   // match the von-Neumann reference (resolved limit); |lambda| is dts-normalized
@@ -116,7 +156,7 @@ int main() {
     // (not merely <=1 — a stable-but-wrong scheme with |lambda|=0.5 must NOT pass).
     bool coeffs_ok = mia_relerr < 1e-4f;
     bool lambda_ok = std::isfinite(lam) && std::abs(lam - lam_ref) < 1e-3f;
-    bool ok = coeffs_ok && lambda_ok;
+    bool ok = smoke_ok && coeffs_ok && lambda_ok;
     std::cout << "# advance_w matches numpy scheme  coeffs=" << (coeffs_ok ? "ok" : "BAD")
               << "  |lambda|-match=" << (lambda_ok ? "ok" : "BAD")
               << "  : " << (ok ? "PASS" : "FAIL") << "\n";
