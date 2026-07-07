@@ -30,6 +30,10 @@ struct State {
     torch::Tensor al;   // al' inverse-density perturbation (calc_p_rho)   {ny, nz, nx}
     torch::Tensor ww;   // omega (vertical mass flux) {ny, nz_w, nx}
     torch::Tensor pm1;  // previous-substep p' for divergence damping {ny, nz, nx}
+    // time-averaged intermediates produced by advance_mu_t, consumed by advance_w's buoyancy/RHS
+    torch::Tensor t_2ave;  // time-avg coupled theta {ny, nz, nx}  (advance_mu_t / advance_w :1314-1317)
+    torch::Tensor muave;   // time-avg mass perturbation {ny, nx}   (advance_mu_t :1107)
+    torch::Tensor muts;    // full column mass mut+mu' {ny, nx}     (advance_mu_t :1106; ph update denom)
 };
 
 // Fixed-per-RK-stage coefficients + metrics + FROZEN slow tendencies. c2a and a/alpha/gamma come

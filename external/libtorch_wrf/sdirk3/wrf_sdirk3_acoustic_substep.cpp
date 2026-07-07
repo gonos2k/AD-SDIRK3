@@ -66,10 +66,68 @@ State advance_mu_t(const State& s, const Const& /*c*/) {
     return s;   // stub
 }
 
-// TODO (Inc 5, next): assemble RHS (off-centered vert-PGF :1318/:1409 + buoyancy) then Thomas
-// solve (Inc 2b calc_coef_w a/alpha/gamma) then ph update (:1462).
-State advance_w(const State& s, const Const& /*c*/) {
-    return s;   // stub
+// advance_w (module_small_step_em.F:1178-1469). em_b_wave: msf=1, cqw=1, flat terrain (w[0]=0).
+// The von-Neumann-validated CORE: off-centered vertical-PGF RHS + Thomas solve (Inc 2b factors) +
+// ph update. TODO(Inc 5): ph_tend + ww advection in rhs (:1336), the buoyancy/thermal term
+// (c2a*alt*t_2ave, needs advance_mu_t's t_2ave/muave), and Rayleigh damping.
+// Vertical indexing mirrors the validated calc_coef_w: full-level libtorch index kf; mass fields
+// c2a[kf]/rdnw[kf], mh[kf]=c1h[kf]*mut+c2h[kf]; rhs/ph on full levels (nz_w=nz+1).
+State advance_w(const State& s, const Const& c) {
+    State o = s;
+    const int nz  = s.p.size(1);          // mass levels
+    const int nzw = s.w.size(1);          // full levels = nz+1
+    const int kde = nzw - 1;              // top full index (0-based)
+    auto mut2 = c.mut.unsqueeze(1);       // {ny,1,nx} broadcast over levels
+    auto muts2 = c.muts.unsqueeze(1);
+    // mf_full(k) = c1f(k)*mut + c2f(k)  {ny,nz_w,nx};  mh(k)=c1h(k)*mut+c2h(k) {ny,nz,nx}
+    auto mf_full = c.c1f.view({1, nzw, 1}) * mut2 + c.c2f.view({1, nzw, 1});
+    auto mf_full_ts = c.c1f.view({1, nzw, 1}) * muts2 + c.c2f.view({1, nzw, 1});
+    auto mh = c.c1h.view({1, nz, 1}) * mut2 + c.c2h.view({1, nz, 1});      // {ny,nz,nx}
+    const float eps = c.epssm, g = c.g, dts = c.dts;
+    // rhs = ph + dts*0.5*g*(1-eps)*w / mf_full   (old-w half of the phi eqn; +ph_tend/ww = TODO)
+    torch::Tensor rhs = s.ph + (dts * 0.5f * g * (1.0f - eps)) * s.w / mf_full;
+    rhs.index_put_({SL(), 0, SL()}, torch::zeros_like(rhs.index({SL(), 0, SL()})));
+    // w RHS (write-once index_put_): interior full levels kf=1..kde-1, then top kf=kde.
+    torch::Tensor w_rhs = s.w.clone();
+    for (int kf = 1; kf <= kde - 1; ++kf) {
+        auto c2a_k  = c.c2a.index({SL(), kf,   SL()});
+        auto c2a_km = c.c2a.index({SL(), kf-1, SL()});
+        auto rdnw_k = c.rdnw[kf];   auto rdnw_km = c.rdnw[kf-1];   auto rdn_k = c.rdn[kf];
+        auto mh_k   = mh.index({SL(), kf,   SL()});
+        auto mh_km  = mh.index({SL(), kf-1, SL()});
+        auto rhs_kp = rhs.index({SL(), kf+1, SL()}); auto rhs_k = rhs.index({SL(), kf, SL()}); auto rhs_km = rhs.index({SL(), kf-1, SL()});
+        auto ph_kp  = s.ph.index({SL(), kf+1, SL()}); auto ph_k = s.ph.index({SL(), kf, SL()}); auto ph_km = s.ph.index({SL(), kf-1, SL()});
+        auto up = c2a_k  * rdnw_k  / mh_k  * ((1.0f+eps)*(rhs_kp-rhs_k) + (1.0f-eps)*(ph_kp-ph_k));
+        auto lo = c2a_km * rdnw_km / mh_km * ((1.0f+eps)*(rhs_k-rhs_km) + (1.0f-eps)*(ph_k-ph_km));
+        auto val = s.w.index({SL(), kf, SL()}) + 0.5f*dts*g*rdn_k*(up - lo);
+        w_rhs.index_put_({SL(), kf, SL()}, val);
+    }
+    // top kf=kde (WRF :1421-1429): -0.5*dts*g/mh(kde-1)*rdnw(kde-1)^2*2*c2a(kde-1)*(off-centered grad)
+    {
+        auto c2a_km = c.c2a.index({SL(), kde-1, SL()});
+        auto mh_km  = mh.index({SL(), kde-1, SL()});
+        auto rdnw_km = c.rdnw[kde-1];
+        auto rhs_k = rhs.index({SL(), kde, SL()}); auto rhs_km = rhs.index({SL(), kde-1, SL()});
+        auto ph_k  = s.ph.index({SL(), kde, SL()}); auto ph_km = s.ph.index({SL(), kde-1, SL()});
+        auto grad = (1.0f+eps)*(rhs_k-rhs_km) + (1.0f-eps)*(ph_k-ph_km);
+        auto val = s.w.index({SL(), kde, SL()})
+                   - 0.5f*dts*g/mh_km*rdnw_km*rdnw_km*2.0f*c2a_km*grad;
+        w_rhs.index_put_({SL(), kde, SL()}, val);
+    }
+    w_rhs.index_put_({SL(), 0, SL()}, torch::zeros_like(w_rhs.index({SL(), 0, SL()})));  // bottom BC
+    // Thomas solve — OUT-OF-PLACE (Inc 2b lesson: in-place recurrence breaks backward).
+    std::vector<torch::Tensor> w(nzw);
+    for (int kf = 0; kf < nzw; ++kf) w[kf] = w_rhs.index({SL(), kf, SL()});
+    for (int kf = 1; kf <= kde; ++kf)
+        w[kf] = (w[kf] - c.a.index({SL(), kf, SL()}) * w[kf-1]) * c.alpha.index({SL(), kf, SL()});
+    for (int kf = kde - 1; kf >= 1; --kf)
+        w[kf] = w[kf] - c.gamma.index({SL(), kf, SL()}) * w[kf+1];
+    w[0] = torch::zeros_like(w[0]);
+    torch::Tensor w_sol = torch::stack(w, 1);           // {ny,nz_w,nx}
+    o.w = w_sol;
+    // ph update (:1462): ph(k) = rhs(k) + 0.5*dts*g*(1+eps)*w(k)/(c1f*muts+c2f)
+    o.ph = rhs + (0.5f * dts * g * (1.0f + eps)) * w_sol / mf_full_ts;
+    return o;
 }
 
 // TODO (Inc 5, next): al' from geopotential gradient (:522-523), p' from linearized EOS (:527-528),
