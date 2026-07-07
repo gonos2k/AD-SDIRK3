@@ -115,3 +115,30 @@ Sources in the God file (`wrf_sdirk3_tile_unified_impl.cpp`, split_explicit bran
 
 Loop per stage: `prep → calc_p_rho(step=0) [pressure init] → for n=1..N advance_substep(·,n) → finish`.
 Then combine stages (RK3). **VALIDATE via dyn_em `[PARITY substep]`** (matched inputs, one-substep compare).
+
+## Inc 6 driver-structure finding (2026-07-07 reconnaissance)
+
+The existing solver is SDIRK3 = matrix-free Newton–Krylov PER STAGE; its `U_ref_stage_` member is the
+per-stage **linearization point** (mutated each stage, sometimes `= U_n`), NOT a fixed time-n state.
+The split-explicit RK3 (Wicker–Skamarock) needs a DIFFERENT control structure: a time-n state `U_time_n`
+held CONSTANT across all 3 stages + a working stage state advanced by the acoustic loop. So Inc 6 is a
+**new driver path GATED on `split_explicit`** (not a tweak to the Newton loop):
+
+```
+U_time_n = U_n (clone, held fixed)            // u_1 source for every stage
+U_stage  = U_n
+for s in 1..3 (RK3 fractional steps dt/3, dt/2, dt):
+    R_slow = slow_rhs(U_stage)                // frozen forcing for this stage (existing RHS infra)
+    prep   = small_step_prep( u_1<-U_time_n, u_2<-U_stage, masses, metrics )   // TWO states (Codex fix)
+    S,Saves= prep;  S = calc_p_rho(S, C, 0)   // pressure init
+    N = num_sound_steps for this stage        // stage 1: 1 big step (dt/3); 2/3: dt/num_sound
+    for n in 1..N: S = advance_substep(S, C_with_R_slow, n)
+    U_stage = pack( small_step_finish(S, Saves, prep_in, s, 3, N, dts, h_diabatic) )
+U_out = U_stage
+```
+
+This path REPLACES the ARK324 fall-through only when `split_explicit` is on (baseline byte-identical when
+off — the hard-constraint). Sub-tasks: (a) slow_rhs → the six frozen tendencies (reuse computeUnifiedRHS
+slow terms); (b) mass averages muus/muvs/muu/muv from mub+μ'; (c) php from base state; (d) pack/unpack
+State↔U_n via StateLayout; (e) per-stage dts/N schedule. VALIDATE incrementally: first ONE stage vs dyn_em
+`[PARITY substep]` (matched inputs), then a full step ≈ stock RK3 (Inc 6 exit criterion).
