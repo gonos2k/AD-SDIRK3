@@ -56,7 +56,7 @@ struct Const {
     torch::Tensor t_1;                 // reference theta {ny,nz,nx}
     torch::Tensor ww_1;               // large-timestep omega {ny,nz_w,nx}
     float rdx = 0, rdy = 0, dts = 0, g = 9.81f, epssm = 0.1f, cf1 = 0, cf2 = 0, cf3 = 0;
-    float emdiv = 0, smdiv = 0;
+    float emdiv = 0, smdiv = 0, t0 = 300.0f;   // t0 = base reference potential temperature (calc_p_rho)
     // frozen slow tendencies
     torch::Tensor ru_tend, rv_tend, rw_tend, ft, mu_tend;
 };

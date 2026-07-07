@@ -197,10 +197,31 @@ State advance_w(const State& s, const Const& c) {
     return o;
 }
 
-// TODO (Inc 5, next): al' from geopotential gradient (:522-523), p' from linearized EOS (:527-528),
-// divergence damping (smdiv, step>0).
-State calc_p_rho(const State& s, const Const& /*c*/, int /*step*/) {
-    return s;   // stub
+// calc_p_rho (module_small_step_em.F:438-568, non-hydrostatic). Diagnoses the acoustic PERTURBATIONS
+// al' (from the geopotential gradient) and p' (temporally-linearized EOS) — NOT the Inc 1 full-state
+// EOS (uses alt/c2a as inputs but distinct formulas). Then divergence damping.
+//   al'(k) = -1/mh * ( alt*(c1h*mu') + rdnw(k)*(ph(k+1)-ph(k)) )                         (:522-523)
+//   p'(k)  = c2a * ( alt*(t' - (c1h*mu')*t_1) / (mh*(t0+t_1)) - al' )                    (:527-528)
+//   div damping: step==0 -> pm1=p'; else p' += smdiv*(p'-pm1'), pm1'=old p'             (:549-567)
+State calc_p_rho(const State& s, const Const& c, int step) {
+    State o = s;
+    const int nz = s.p.size(1);
+    auto mut2   = c.mut.unsqueeze(1);                                     // {ny,1,nx}
+    auto mh     = c.c1h.view({1, nz, 1}) * mut2 + c.c2h.view({1, nz, 1}); // {ny,nz,nx}
+    auto c1h_mu = c.c1h.view({1, nz, 1}) * s.mu.unsqueeze(1);             // {ny,nz,nx} = c1h*mu'
+    // al' from the vertical geopotential-perturbation gradient
+    auto dph = s.ph.index({SL(), Slice(1, nz + 1), SL()}) - s.ph.index({SL(), Slice(0, nz), SL()}); // {ny,nz,nx}
+    auto al  = -1.0f / mh * (c.alt * c1h_mu + c.rdnw.view({1, nz, 1}) * dph);
+    o.al = al;
+    // p' from the temporally-linearized EOS (t' = coupled theta perturbation = s.t)
+    auto p = c.c2a * (c.alt * (s.t - c1h_mu * c.t_1) / (mh * (c.t0 + c.t_1)) - al);
+    // divergence damping (forward-weighted pressure filter)
+    if (step == 0) {
+        o.p = p;  o.pm1 = p;
+    } else {
+        o.p = p + c.smdiv * (p - s.pm1);  o.pm1 = p;
+    }
+    return o;
 }
 
 State advance_substep(const State& s, const Const& c, int step) {
