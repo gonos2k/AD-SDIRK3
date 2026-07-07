@@ -294,8 +294,11 @@ torch::Tensor mass_to_vpoint(const torch::Tensor& mu) {
     using torch::indexing::Slice;
     const int ny = mu.size(0);
     auto interior = 0.5f * (mu.index({Slice(0, ny - 1), Slice()}) + mu.index({Slice(1, ny), Slice()})); // {ny-1,nx}
-    auto edge = 0.5f * (mu.index({Slice(ny - 1, ny), Slice()}) + mu.index({Slice(0, 1), Slice()}));      // periodic
-    return torch::cat({edge, interior, edge}, 0);   // {ny+1, nx}
+    // y is SYMMETRIC (em_b_wave free-slip walls): ghost mass reflects (mut(-1)=mut(0)), so the boundary
+    // v-point mass = the edge interior column mass, NOT a periodic wrap.
+    auto bot = mu.index({Slice(0, 1), Slice()});          // muv[0]  = mut[0]
+    auto top = mu.index({Slice(ny - 1, ny), Slice()});    // muv[ny] = mut[ny-1]
+    return torch::cat({bot, interior, top}, 0);   // {ny+1, nx}
 }
 
 State small_step_prep(const PrepInput& in, Saves& saves) {

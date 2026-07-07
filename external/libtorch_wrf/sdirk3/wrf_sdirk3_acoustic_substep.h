@@ -73,10 +73,12 @@ AcousticSchedule acoustic_schedule(int rk_step, float dt, int num_sound_steps);
 
 // staggered column-mass averages (module_small_step_em.F:200-207) ---
 // u-point mass = 0.5*(mu[i]+mu[i-1]) over x; v-point mass = 0.5*(mu[j]+mu[j-1]) over y. Column mass
-// mu is {ny,nx}; returns {ny,nx+1} / {ny+1,nx}. Edges use PERIODIC wrap (em_b_wave x-channel); a
-// non-periodic y-boundary must overwrite the edge rows via the halo at the call site.
-torch::Tensor mass_to_upoint(const torch::Tensor& mu_col);   // {ny,nx} -> {ny,nx+1}
-torch::Tensor mass_to_vpoint(const torch::Tensor& mu_col);   // {ny,nx} -> {ny+1,nx}
+// mu is {ny,nx}; returns {ny,nx+1} / {ny+1,nx}. em_b_wave BOUNDARY CONDITIONS DIFFER PER AXIS:
+//   - x is PERIODIC (channel) -> mass_to_upoint wraps the i-edges: muu[0]=muu[nx]=0.5*(mu[nx-1]+mu[0]).
+//   - y is SYMMETRIC (free-slip walls) -> mass_to_vpoint reflects: muv[0]=mu[0], muv[ny]=mu[ny-1].
+// A case with different BCs (e.g. y-periodic) must overwrite the edge rows/cols via the halo at the call site.
+torch::Tensor mass_to_upoint(const torch::Tensor& mu_col);   // {ny,nx} -> {ny,nx+1}  (x-periodic)
+torch::Tensor mass_to_vpoint(const torch::Tensor& mu_col);   // {ny,nx} -> {ny+1,nx}  (y-symmetric wall)
 
 // --- small_step_prep entry coupling (module_small_step_em.F:238-279) ---
 // The two RK-stage states (uncoupled full fields) + masses + metrics. u_2/v_2/w_2/t_2/ph_2 are the

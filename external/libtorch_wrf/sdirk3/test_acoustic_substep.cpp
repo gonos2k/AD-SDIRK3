@@ -185,8 +185,8 @@ static bool mass_avg_check() {
     auto um = mass_to_upoint(mu);                                        // {1,5}: [edge,1.5,2.5,3.5,edge]
     auto um_exp = torch::tensor({{2.5f, 1.5f, 2.5f, 3.5f, 2.5f}}, o);    // edge=0.5*(4+1)=2.5 periodic
     auto muv = torch::tensor({{1.0f}, {2.0f}, {3.0f}}, o);              // {3,1}
-    auto vm = mass_to_vpoint(muv);                                       // {4,1}: [2,1.5,2.5,2]
-    auto vm_exp = torch::tensor({{2.0f}, {1.5f}, {2.5f}, {2.0f}}, o);
+    auto vm = mass_to_vpoint(muv);                                       // {4,1}: y-SYMMETRIC walls
+    auto vm_exp = torch::tensor({{1.0f}, {1.5f}, {2.5f}, {3.0f}}, o);    // edges reflect: [mu0, 1.5, 2.5, mu2]
     float eu = (um - um_exp).abs().max().item<float>();
     float ev = (vm - vm_exp).abs().max().item<float>();
     bool shapes = um.size(1) == 5 && vm.size(0) == 4;
