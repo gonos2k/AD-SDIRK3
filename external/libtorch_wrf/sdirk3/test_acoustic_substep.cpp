@@ -69,6 +69,7 @@ int main() {
     s.t_2ave = torch::zeros({ny, nz, nx}, opt);
 
     // --- ISOLATION CHECK: do the hand-derived a/alpha/gamma factorize A? (M^-1 @ A @ v == v) ---
+    float mia_relerr = 1.0f;   // captured for the final PASS gate (not just printed)
     {
         std::vector<float> v(nzw, 0), Av(nzw, 0), w(nzw, 0);
         for (int kf = 1; kf <= kde; ++kf) v[kf] = static_cast<float>(kf);   // ramp, v[0]=0
@@ -81,7 +82,8 @@ int main() {
         for (int kf = kde - 1; kf >= 1; --kf) w[kf] = w[kf] - gav[kf] * w[kf + 1];
         float err = 0, vn = 0;
         for (int kf = 1; kf <= kde; ++kf) { err += std::pow(w[kf] - v[kf], 2); vn += v[kf] * v[kf]; }
-        std::cout << "# a/alpha/gamma factorize A?  M^-1@A@v==v rel_err=" << std::sqrt(err / vn) << "\n";
+        mia_relerr = std::sqrt(err / vn);
+        std::cout << "# a/alpha/gamma factorize A?  M^-1@A@v==v rel_err=" << mia_relerr << "\n";
     }
 
     // --- CORRECT metric: von-Neumann amplification |lambda| of ONE advance_w substep (energy
@@ -106,9 +108,16 @@ int main() {
     }
     auto eig = torch::linalg_eigvals(M);      // complex eigenvalues of the (non-symmetric) amp matrix
     float lam = torch::abs(eig).max().item<float>();
+    const float lam_ref = 0.998315f;   // numpy acoustic_amplification_match.py reference
     std::cout << "# libtorch advance_w amplification |lambda|_max=" << lam
-              << "  (numpy von-Neumann ref: 0.998)\n";
-    bool ok = std::isfinite(lam) && lam <= 1.0f + 1e-3f;
-    std::cout << "# libtorch advance_w matches numpy scheme (|lambda|<=1) : " << (ok ? "PASS" : "FAIL") << "\n";
+              << "  (numpy von-Neumann ref: " << lam_ref << ")\n";
+    // PASS gate asserts BOTH: (1) coefficients factorize A, and (2) |lambda| MATCHES the reference
+    // (not merely <=1 — a stable-but-wrong scheme with |lambda|=0.5 must NOT pass).
+    bool coeffs_ok = mia_relerr < 1e-4f;
+    bool lambda_ok = std::isfinite(lam) && std::abs(lam - lam_ref) < 1e-3f;
+    bool ok = coeffs_ok && lambda_ok;
+    std::cout << "# advance_w matches numpy scheme  coeffs=" << (coeffs_ok ? "ok" : "BAD")
+              << "  |lambda|-match=" << (lambda_ok ? "ok" : "BAD")
+              << "  : " << (ok ? "PASS" : "FAIL") << "\n";
     return ok ? 0 : 1;
 }
