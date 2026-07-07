@@ -6143,7 +6143,9 @@ vertical_coefficients:
                 static std::atomic<bool> logged_se{false};
                 bool exp_se = false;
                 if (logged_se.compare_exchange_strong(exp_se, true)) {
-                    std::cerr << "[SPLIT-EXPLICIT] mode active (WIP; ARK324 still runs — Inc 1 prep only)"
+                    std::cerr << "[SPLIT-EXPLICIT] mode active (substep machinery COMPLETE + validated in "
+                                 "wrf_sdirk3_acoustic_substep.{h,cpp}; ARK324 still runs — loop WIRING pending, "
+                                 "see doc/sdirk3_split_explicit_rebuild_plan.md Inc5->6 field map)"
                               << std::endl;
                 }
                 // [Inc 1] small_step_prep in libtorch: sound-speed stiffness c2a = (cp/cv)*(pb+p)/alt

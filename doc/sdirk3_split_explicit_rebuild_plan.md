@@ -78,3 +78,32 @@ Lives in the existing libtorch tile solver (`external/libtorch_wrf/sdirk3/`), re
 `StateLayout`, and the RHS infrastructure for the slow tendency. The acoustic kernels are new libtorch tensor
 ops mirroring `module_small_step_em.F`. Validation harness = the parity-dump pattern
 (`doc/sdirk3_walls_measurement_2026-07-05.md`).
+
+## Inc 5 STATUS (2026-07-07): substep machinery COMPLETE + validated
+
+`small_step_prep` + `advance_substep` (uv→mu_t→w→calc_p_rho) + `small_step_finish` all implemented in
+`wrf_sdirk3_acoustic_substep.{h,cpp}` and validated by `test_acoustic_substep.cpp` at SIX levels:
+assembly-iterates-x3 (all fields finite), **differentiable** (VJP==FD rel 3e-7), prep→substep consumable,
+**prep↔finish invertible** (u,v,w,ph,mu rel=0 — true inverses, mu coupled like ph = mu_1−mu_2), coeffs
+M⁻¹A 7.7e-7, advance_w |λ|=0.998315. Operators feature-complete except two `php`-blocked terms
+(non-hydro 4th, ww advection) that wire at integration. **Only the WIRING remains.**
+
+## Inc 5→6 WIRING field map (U_n + base state → PrepInput / Const)
+
+The acoustic loop is called ONCE PER RK STAGE inside the split-explicit RK3 (Inc 6). The stage boundary
+supplies the two states the coupling needs:
+- **`u_1/v_1/w_1/t_1/ph_1/mu_1`** = the **time-n** step-start state (fixed across all 3 RK stages).
+- **`u_2/v_2/w_2/t_2/ph_2/mu_2`** = the **current RK-stage predictor** (time-n + the RK increment so far).
+  At rk_step 1, predictor == time-n ⇒ `u_1==u_2` ⇒ perturbations start ~0 (validated property).
+
+Sources in the God file (`wrf_sdirk3_tile_unified_impl.cpp`, split_explicit branch ~:6142):
+- perturbation prognostics ← `extractStateVariables(U_stage)` (u,v,w, get<4>=θ', get<5>=μ'); full = pert+base.
+- `c2a/alt/pb` ← the Inc-1 hydrostatic helpers already in-branch (:6166-6174); `a/alpha/gamma` ← Inc-2 calc_coef_w (:6188+).
+- masses: `muts=mub+μ'`; `muus/muvs/muu/muv` = 0.5 mass-averages (module_small_step_em.F:198-207); `mut=mub`.
+- metrics `c1h_/c2h_/c1f_/c2f_`, `rdn/rdnw` via existing getters; `fnm/fnp` from the vertical grid; `msf*=1` (em_b_wave idealized).
+- **frozen slow tendencies** `ru_tend/rv_tend/rw_tend/ft/mu_tend/ph_tend` ← the RK slow-forcing (the existing RHS
+  infra computes these; they are HELD CONSTANT across the N substeps — solve_em freezes them per stage).
+- `php` (base geopotential) — wires HERE from the base state, unblocking non-hydro 4th + ww advection.
+
+Loop per stage: `prep → calc_p_rho(step=0) [pressure init] → for n=1..N advance_substep(·,n) → finish`.
+Then combine stages (RK3). **VALIDATE via dyn_em `[PARITY substep]`** (matched inputs, one-substep compare).
