@@ -75,7 +75,11 @@ State advance_uv(const State& s, const Const& c) {
     auto muv_int = c.muv.index({Slice(1, ny), SL()});         // {ny-1,nx}
     auto coef_v = c.c1h.view({1, nz, 1}) * muv_int.unsqueeze(1) + c.c2h.view({1, nz, 1});
     auto dpxy_v = 0.5f * c.rdy * coef_v * (D_ph_v + sj(c.alt) * dj(s.p) + sj(s.al) * dj(c.pb)); // {ny-1,nz,nx}
-    auto v_int = v_new.index({Slice(1, ny), SL(), SL()}) - c.dts * dpxy_v; // cqv=1
+    // v divergence damping (:880), symmetric to u: mudf_yv = -emdiv*dy*(mudf(j)-mudf(j-1)) (msf=1)
+    float dy = c.rdy > 0.0f ? 1.0f / c.rdy : 0.0f;
+    auto mudf_yv = (-c.emdiv * dy) * (s.mudf.index({Slice(1, ny), SL()}) - s.mudf.index({Slice(0, ny - 1), SL()})); // {ny-1,nx}
+    auto v_int = v_new.index({Slice(1, ny), SL(), SL()}) - c.dts * dpxy_v
+                 + c.c1h.view({1, nz, 1}) * mudf_yv.unsqueeze(1);  // cqv=1
     v_new.index_put_({Slice(1, ny), SL(), SL()}, v_int);
     o.v = v_new;
     // TODO(Inc 5): non-hydrostatic 4th term (php/dpn) and divergence damping (emdiv), both u & v.
@@ -248,7 +252,9 @@ State advance_w(const State& s, const Const& c) {
 State calc_p_rho(const State& s, const Const& c, int step) {
     State o = s;
     const int nz = s.p.size(1);
-    auto mut2   = c.mut.unsqueeze(1);                                     // {ny,1,nx}
+    // WRF passes grid%muts (per-substep UPDATED full mass) as calc_p_rho's 'mut' arg (solve_em.F:1352),
+    // NOT the base mut. Use s.muts (from advance_mu_t this substep), not c.mut, or the density is stale.
+    auto mut2   = s.muts.unsqueeze(1);                                    // {ny,1,nx}
     auto mh     = c.c1h.view({1, nz, 1}) * mut2 + c.c2h.view({1, nz, 1}); // {ny,nz,nx}
     auto c1h_mu = c.c1h.view({1, nz, 1}) * s.mu.unsqueeze(1);             // {ny,nz,nx} = c1h*mu'
     // al' from the vertical geopotential-perturbation gradient
