@@ -61,16 +61,17 @@ struct Const {
     torch::Tensor ru_tend, rv_tend, rw_tend, ft, mu_tend;
 };
 
-// One acoustic sub-step: advance_uv -> advance_mu_t -> advance_w -> calc_p_rho, in place on `s`.
-// Mirrors solve_em.F:1525-1869 for a single small step. `step` is the substep index (0 => init
-// pm1 in calc_p_rho; >0 => divergence damping). Returns the updated State (functional style so it
-// stays autograd-safe; no in-place mutation of grad-tracked tensors).
-State advance_substep(const State& s, const Const& c, int step);
+// One acoustic sub-step (LOOP BODY): advance_uv -> advance_mu_t -> advance_w -> calc_p_rho.
+// Mirrors solve_em.F:1525-1869. `small_step` is 1-BASED (1..N) — every loop substep applies
+// divergence damping. The pressure INIT (calc_p_rho step=0: sets pm1, no damping) is a SEPARATE
+// pre-loop call the caller runs once before the first substep (solve_em.F:1352), NOT this function.
+// Functional style (returns a new State) so it stays autograd-safe (no in-place grad-tensor mutation).
+State advance_substep(const State& s, const Const& c, int small_step);
 
 // Individual operators (exposed for term-by-term validation vs dyn_em).
 State advance_uv   (const State& s, const Const& c);                 // module_small_step_em.F:654
 State advance_mu_t (const State& s, const Const& c);                 // :969
 State advance_w    (const State& s, const Const& c);                 // :1178  (uses Thomas, Inc 2b)
-State calc_p_rho   (const State& s, const Const& c, int step);       // :438
+State calc_p_rho   (const State& s, const Const& c, int step);       // :438  (step=0 => pre-loop init; >0 => damp)
 
 }}} // namespace wrf::sdirk3::acoustic

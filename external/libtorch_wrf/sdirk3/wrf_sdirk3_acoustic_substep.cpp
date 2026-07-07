@@ -237,11 +237,18 @@ State calc_p_rho(const State& s, const Const& c, int step) {
     return o;
 }
 
-State advance_substep(const State& s, const Const& c, int step) {
+// advance_substep is the LOOP BODY for small_step = 1..N (solve_em.F:1525-1869). `small_step` is
+// 1-BASED: every loop substep applies divergence damping (calc_p_rho step>=1). The pressure INIT
+// (calc_p_rho with step=0, which sets pm1 and does NOT damp) is a SEPARATE pre-loop call the caller
+// must run once before the first substep (solve_em.F:1352) — it is NOT part of advance_substep.
+State advance_substep(const State& s, const Const& c, int small_step) {
+    TORCH_CHECK(small_step >= 1,
+        "advance_substep: small_step must be 1-based (>=1); the step=0 pressure init is a separate "
+        "pre-loop calc_p_rho call, not the loop body.");
     State x = advance_uv(s, c);
     x = advance_mu_t(x, c);
     x = advance_w(x, c);
-    x = calc_p_rho(x, c, step);
+    x = calc_p_rho(x, c, small_step);   // small_step>=1 => divergence damping
     return x;
 }
 
