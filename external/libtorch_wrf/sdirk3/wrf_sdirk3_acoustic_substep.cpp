@@ -139,8 +139,15 @@ State advance_mu_t(const State& s, const Const& c) {
     auto divx = 0.5f * c.rdx * (Fx.index({SL(), SL(), Slice(1, None)}) - Fx.index({SL(), SL(), Slice(None, -1)})); // {ny,nz,nx-2}
     auto t_i = t_new.index({SL(), SL(), Slice(1, nx - 1)}) - dts * divx;
     t_new.index_put_({SL(), SL(), Slice(1, nx - 1)}, t_i);
+    // horizontal y theta-flux (:1165-1167), symmetric: Fy(jv)=v(jv)*(t_1(jv)+t_1(jv-1)); 0.5*rdy*(Fy(j+1)-Fy(j)).
+    // divy is independent of t_new, so subtracting after divx is additive (WRF applies both to the same t).
+    auto Fy = s.v.index({Slice(1, ny), SL(), SL()})
+              * (c.t_1.index({Slice(1, ny), SL(), SL()}) + c.t_1.index({Slice(0, ny - 1), SL(), SL()})); // {ny-1,nz,nx}
+    auto divy = 0.5f * c.rdy * (Fy.index({Slice(1, None), SL(), SL()}) - Fy.index({Slice(None, -1), SL(), SL()})); // {ny-2,nz,nx}
+    auto t_iy = t_new.index({Slice(1, ny - 1), SL(), SL()}) - dts * divy;
+    t_new.index_put_({Slice(1, ny - 1), SL(), SL()}, t_iy);
     o.t = t_new;
-    // TODO(Inc 5c): y theta-flux (v/t_1, :1165-1167) + horizontal boundary halo (shared with advance_uv).
+    // TODO(Inc 5): horizontal boundary halo (shared cross-cutting concern with advance_uv PGF).
     return o;
 }
 
