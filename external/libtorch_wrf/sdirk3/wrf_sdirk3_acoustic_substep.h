@@ -34,6 +34,7 @@ struct State {
     torch::Tensor t_2ave;  // time-avg coupled theta {ny, nz, nx}  (advance_mu_t / advance_w :1314-1317)
     torch::Tensor muave;   // time-avg mass perturbation {ny, nx}   (advance_mu_t :1107)
     torch::Tensor muts;    // full column mass mut+mu' {ny, nx}     (advance_mu_t :1106; ph update denom)
+    torch::Tensor mudf;    // mass divergence-damping field {ny, nx} (advance_mu_t :1105; advance_uv div damp)
 };
 
 // Fixed-per-RK-stage coefficients + metrics + FROZEN slow tendencies. c2a and a/alpha/gamma come

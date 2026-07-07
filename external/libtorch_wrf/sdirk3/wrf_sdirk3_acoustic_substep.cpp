@@ -57,9 +57,13 @@ State advance_uv(const State& s, const Const& c) {
     // Three hydrostatic terms (:828-831): geopotential gradient + alt*d(p') + al'*d(pb).
     // TODO(Inc 5): the non-hydrostatic 4th term (php/dpn) and divergence damping (emdiv).
     auto dpxy = 0.5f * c.rdx * coef * (D_ph + si(c.alt) * di(s.p) + si(s.al) * di(c.pb));  // {ny,nz,nx-1}
-    // subtract from interior u-points 1..nx-1 (indices 1..nx-1 == Slice(1,nx), exactly nx-1 columns);
-    // boundary u-points (0 and, if staggered, nx) are set by the caller / periodic halo.
-    auto u_int = u_new.index({SL(), SL(), Slice(1, nx)}) - c.dts * dpxy;   // cqu=1
+    // divergence damping (:809/:868): + c1h(k)*mudf_xy, mudf_xy=-emdiv*dx*(mudf(i)-mudf(i-1)) (msf=1).
+    // Uses s.mudf from the PREVIOUS substep (advance_uv precedes advance_mu_t in the loop).
+    float dx = c.rdx > 0.0f ? 1.0f / c.rdx : 0.0f;
+    auto mudf_xy = (-c.emdiv * dx) * (s.mudf.index({SL(), Slice(1, nx)}) - s.mudf.index({SL(), Slice(0, nx - 1)})); // {ny,nx-1}
+    // subtract PGF + add div damping at interior u-points 1..nx-1 (Slice(1,nx), nx-1 columns).
+    auto u_int = u_new.index({SL(), SL(), Slice(1, nx)}) - c.dts * dpxy
+                 + c.c1h.view({1, nz, 1}) * mudf_xy.unsqueeze(1);   // cqu=1
     u_new.index_put_({SL(), SL(), Slice(1, nx)}, u_int);
     o.u = u_new;
     // --- v --- symmetric hydrostatic PGF in y (v-point j uses mass j-1,j; j-difference along ny).
@@ -104,6 +108,7 @@ State advance_mu_t(const State& s, const Const& c) {
     auto mu_old = s.mu;
     auto mu_new = s.mu + dts * (DMDT + c.mu_tend);
     o.mu   = mu_new;
+    o.mudf = DMDT + c.mu_tend;                        // :1105 (divergence-damping filter source)
     o.muts = c.mut + mu_new;
     o.muave = 0.5f * ((1.0f + eps) * mu_new + (1.0f - eps) * mu_old);
     // ww vertical integral (out-of-place cumulative): ww[kf] = ww[kf-1] - dnw[kf-1]*(c1h*DMDT + dvdxi[kf-1] + c1h*mu_tend)
