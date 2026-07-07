@@ -90,14 +90,22 @@ M⁻¹A 7.7e-7, advance_w |λ|=0.998315. Operators feature-complete except two `
 
 ## Inc 5→6 WIRING field map (U_n + base state → PrepInput / Const)
 
-The acoustic loop is called ONCE PER RK STAGE inside the split-explicit RK3 (Inc 6). The stage boundary
-supplies the two states the coupling needs:
-- **`u_1/v_1/w_1/t_1/ph_1/mu_1`** = the **time-n** step-start state (fixed across all 3 RK stages).
-- **`u_2/v_2/w_2/t_2/ph_2/mu_2`** = the **current RK-stage predictor** (time-n + the RK increment so far).
-  At rk_step 1, predictor == time-n ⇒ `u_1==u_2` ⇒ perturbations start ~0 (validated property).
+The acoustic loop is called ONCE PER RK STAGE inside the split-explicit RK3 (Inc 6). The coupling needs
+TWO DISTINCT states — do NOT read both from one tensor (that is the classic miswire):
+- **`u_1/v_1/w_1/t_1/ph_1/mu_1`** ← the **time-n** step-start state `U_time_n`, held FIXED by the RK3
+  driver across all 3 stages (a SEPARATE tensor, NOT the current stage state).
+- **`u_2/v_2/w_2/t_2/ph_2/mu_2`** ← the **current RK-stage predictor** `U_stage` (time-n + RK increment so far).
+  At rk_step 1, `U_stage==U_time_n` ⇒ `u_1==u_2` ⇒ perturbations start ~0 (validated property).
+
+**Saves threading (the miswire to avoid):** `small_step_prep` snapshots the predictor into `Saves`
+(`u_save=u_2`, …, `mu_save=mu_2`) and `small_step_finish` adds them back. These `Saves` MUST be the
+PREDICTOR values captured at prep time and threaded UNCHANGED into finish — the wiring passes the `Saves`
+object through, and must NOT re-extract `u_2/…` from the loop-mutated `U_stage` (which by then holds the
+perturbation, then the reconstructed field). prep already returns `Saves`; the wiring just carries it.
 
 Sources in the God file (`wrf_sdirk3_tile_unified_impl.cpp`, split_explicit branch ~:6142):
-- perturbation prognostics ← `extractStateVariables(U_stage)` (u,v,w, get<4>=θ', get<5>=μ'); full = pert+base.
+- `u_2/…` prognostics ← `extractStateVariables(U_stage)` (u,v,w, get<4>=θ', get<5>=μ'); full = pert+base.
+- `u_1/…` prognostics ← `extractStateVariables(U_time_n)` (the driver's held time-n copy) — the SECOND state.
 - `c2a/alt/pb` ← the Inc-1 hydrostatic helpers already in-branch (:6166-6174); `a/alpha/gamma` ← Inc-2 calc_coef_w (:6188+).
 - masses: `muts=mub+μ'`; `muus/muvs/muu/muv` = 0.5 mass-averages (module_small_step_em.F:198-207); `mut=mub`.
 - metrics `c1h_/c2h_/c1f_/c2f_`, `rdn/rdnw` via existing getters; `fnm/fnp` from the vertical grid; `msf*=1` (em_b_wave idealized).
