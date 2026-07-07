@@ -44,12 +44,20 @@ static bool full_substep_smoke() {
     c.ft = M3(ny, nz, nx, 0.0f); c.mu_tend = M2(ny, nx, 0.0f); c.ph_tend = M3(ny, nzw, nx, 0.0f);
     c.u_1 = M3(ny, nz, nxu, 0.05f); c.v_1 = M3(nyv, nz, nx, 0.05f);
     c.t_1 = M3(ny, nz, nx, 5.0f); c.ww_1 = M3(ny, nzw, nx, 0.0f);
-    State out = advance_substep(s, c, 1);
-    bool fin = out.u.isfinite().all().item<bool>() && out.v.isfinite().all().item<bool>()
-            && out.w.isfinite().all().item<bool>() && out.ph.isfinite().all().item<bool>()
-            && out.t.isfinite().all().item<bool>() && out.p.isfinite().all().item<bool>()
-            && out.mu.isfinite().all().item<bool>() && out.ww.isfinite().all().item<bool>();
-    std::cout << "# full advance_substep (2-D, all fields) runs + finite : " << (fin ? "PASS" : "FAIL") << "\n";
+    // Iterate MULTIPLE substeps (output feeds the next input) so an incompletely-populated output
+    // State — any field left undefined by advance_substep — crashes/NaNs on the following substep.
+    auto all_finite = [](const State& st) {
+        auto f = [](const torch::Tensor& t){ return t.defined() && t.isfinite().all().item<bool>(); };
+        return f(st.u) && f(st.v) && f(st.w) && f(st.ph) && f(st.t) && f(st.mu) && f(st.p)
+            && f(st.al) && f(st.ww) && f(st.pm1) && f(st.t_2ave) && f(st.muave) && f(st.muts) && f(st.mudf);
+    };
+    State st = s;
+    bool fin = true;
+    for (int n = 1; n <= 3 && fin; ++n) {
+        st = advance_substep(st, c, n);          // n>=1 loop body; would throw if a field is undefined
+        fin = fin && all_finite(st);             // every State field must survive to feed substep n+1
+    }
+    std::cout << "# full advance_substep x3 (2-D, all fields threaded) runs + finite : " << (fin ? "PASS" : "FAIL") << "\n";
     return fin;
 }
 
