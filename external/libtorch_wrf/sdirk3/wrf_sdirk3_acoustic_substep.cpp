@@ -61,9 +61,46 @@ State advance_uv(const State& s, const Const& c) {
     return o;
 }
 
-// TODO (Inc 5, next): mass continuity + theta (dvdxi flux divergence, DMDT, ww, muave, wdtn).
-State advance_mu_t(const State& s, const Const& /*c*/) {
-    return s;   // stub
+// advance_mu_t (module_small_step_em.F:969-1175). em_b_wave: msf=1. MASS CONTINUITY core here
+// (produces mu'/muave/muts/ww for advance_w); THETA update (t/t_2ave) is the immediate next TODO.
+//   dvdxi = rdx*d_i(uflux) + rdy*d_j(vflux),  uflux = u' + (c1h*muu+c2h)*u_1  (:1094-1098)
+//   DMDT  = sum_k dnw(k)*dvdxi(k)                                              (:1099)
+//   mu'  += dts*(DMDT+mu_tend); muts=mut+mu'; muave=.5((1+eps)mu'+(1-eps)mu'_old)  (:1104-1107)
+//   ww(kk)= ww(kk-1) - dnw(kk-1)*(c1h*DMDT + dvdxi(kk-1) + c1h*mu_tend); ww-=ww_1  (:1112,:1119)
+State advance_mu_t(const State& s, const Const& c) {
+    State o = s;
+    const int nz = s.p.size(1), nx = s.p.size(2), ny = s.p.size(0);
+    const int nzw = s.w.size(1);
+    const float dts = c.dts, eps = c.epssm;
+    // coupled fluxes at u-/v-points (msf=1): uflux = u' + (c1h*muu+c2h)*u_1
+    auto muu3 = c.muu.unsqueeze(1);                    // {ny,1,nx_u}
+    auto uflux = s.u + (c.c1h.view({1, nz, 1}) * muu3 + c.c2h.view({1, nz, 1})) * c.u_1;   // {ny,nz,nx_u}
+    auto muv3 = c.muv.unsqueeze(1);                    // {ny_v,1,nx}
+    auto vflux = s.v + (c.c1h.view({1, nz, 1}) * muv3 + c.c2h.view({1, nz, 1})) * c.v_1;   // {ny_v,nz,nx}
+    // horizontal divergence at mass points: rdx*(uflux[i+1]-uflux[i]) + rdy*(vflux[j+1]-vflux[j])
+    auto div_x = c.rdx * (uflux.index({SL(), SL(), Slice(1, None)}) - uflux.index({SL(), SL(), Slice(None, -1)}));
+    auto div_y = c.rdy * (vflux.index({Slice(1, None), SL(), SL()}) - vflux.index({Slice(None, -1), SL(), SL()}));
+    auto dvdxi = div_x + div_y;                        // {ny,nz,nx}
+    // column-integrated mass tendency DMDT = sum_k dnw(k)*dvdxi(k)  {ny,nx}
+    auto DMDT = (c.dnw.view({1, nz, 1}) * dvdxi).sum(1);   // {ny,nx}
+    // mu' update + muave + muts
+    auto mu_old = s.mu;
+    auto mu_new = s.mu + dts * (DMDT + c.mu_tend);
+    o.mu   = mu_new;
+    o.muts = c.mut + mu_new;
+    o.muave = 0.5f * ((1.0f + eps) * mu_new + (1.0f - eps) * mu_old);
+    // ww vertical integral (out-of-place cumulative): ww[kf] = ww[kf-1] - dnw[kf-1]*(c1h*DMDT + dvdxi[kf-1] + c1h*mu_tend)
+    std::vector<torch::Tensor> ww(nzw);
+    ww[0] = torch::zeros({ny, nx}, s.w.options());
+    for (int kf = 1; kf <= nzw - 1; ++kf) {
+        auto c1h_km = c.c1h[kf - 1];
+        auto term = c1h_km * DMDT + dvdxi.index({SL(), kf - 1, SL()}) + c1h_km * c.mu_tend;
+        ww[kf] = ww[kf - 1] - c.dnw[kf - 1] * term;
+    }
+    ww[nzw - 1] = torch::zeros({ny, nx}, s.w.options());   // top BC ww(kde)=0
+    o.ww = torch::stack(ww, 1) - c.ww_1;                   // subtract large-timestep ww (:1119)
+    // TODO(Inc 5c-theta): t_ave=t; t+=msfty*dts*ft; wdtn=ww*(fnm*t_1+fnp*t_1[k-1]); theta advection (:1141-1173).
+    return o;
 }
 
 // advance_w (module_small_step_em.F:1178-1469). em_b_wave: msf=1, cqw=1, flat terrain (w[0]=0).

@@ -48,9 +48,13 @@ struct Const {
     torch::Tensor mut, muts;           // {ny, nx}  full column mass (base, base+mu')
     torch::Tensor muu, muv;            // {ny, nx}  u/v-point masses
     // metrics (per-level 1-D)
-    torch::Tensor rdn, rdnw;           // {nz}
+    torch::Tensor rdn, rdnw, dnw;      // {nz}  (dnw = full-level thickness for column integrals)
     torch::Tensor c1h, c2h, c1f, c2f;  // {nz} / {nz_w}
     torch::Tensor fnm, fnp;            // {nz} vertical interpolation weights
+    // reference (large-timestep) fields for the mass/theta fluxes (advance_mu_t)
+    torch::Tensor u_1, v_1;            // uncoupled reference velocities {ny,nz,nx_u/v}
+    torch::Tensor t_1;                 // reference theta {ny,nz,nx}
+    torch::Tensor ww_1;               // large-timestep omega {ny,nz_w,nx}
     float rdx = 0, rdy = 0, dts = 0, g = 9.81f, epssm = 0.1f, cf1 = 0, cf2 = 0, cf3 = 0;
     float emdiv = 0, smdiv = 0;
     // frozen slow tendencies
