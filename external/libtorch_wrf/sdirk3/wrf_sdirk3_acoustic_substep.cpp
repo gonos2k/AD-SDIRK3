@@ -24,6 +24,13 @@ inline torch::Tensor di(const torch::Tensor& X) {
 inline torch::Tensor si(const torch::Tensor& X) {
     return X.index({SL(), SL(), Slice(1, None)}) + X.index({SL(), SL(), Slice(None, -1)});
 }
+// mass-field j-difference / j-sum along ny (dim 0) -> {ny-1, ...} at interior v-points
+inline torch::Tensor dj(const torch::Tensor& X) {
+    return X.index({Slice(1, None), SL(), SL()}) - X.index({Slice(None, -1), SL(), SL()});
+}
+inline torch::Tensor sj(const torch::Tensor& X) {
+    return X.index({Slice(1, None), SL(), SL()}) + X.index({Slice(None, -1), SL(), SL()});
+}
 } // namespace
 
 // advance_uv (module_small_step_em.F:654-871 for u; :873+ for v). em_b_wave: msfux/msfuy=1, cqu=1.
@@ -56,8 +63,19 @@ State advance_uv(const State& s, const Const& c) {
     auto u_int = u_new.index({SL(), SL(), Slice(1, nx)}) - c.dts * dpxy;   // cqu=1
     u_new.index_put_({SL(), SL(), Slice(1, nx)}, u_int);
     o.u = u_new;
-    // --- v --- (frozen tendency only for now; symmetric PGF in y = TODO)
-    o.v = s.v + c.dts * c.rv_tend;
+    // --- v --- symmetric hydrostatic PGF in y (v-point j uses mass j-1,j; j-difference along ny).
+    const int ny = s.p.size(0);
+    torch::Tensor v_new = s.v + c.dts * c.rv_tend;
+    auto ph_k_v   = s.ph.index({SL(), Slice(0, nz),   SL()});
+    auto ph_kp1_v = s.ph.index({SL(), Slice(1, nz+1), SL()});
+    auto D_ph_v = dj(ph_kp1_v) + dj(ph_k_v);                  // {ny-1,nz,nx}
+    auto muv_int = c.muv.index({Slice(1, ny), SL()});         // {ny-1,nx}
+    auto coef_v = c.c1h.view({1, nz, 1}) * muv_int.unsqueeze(1) + c.c2h.view({1, nz, 1});
+    auto dpxy_v = 0.5f * c.rdy * coef_v * (D_ph_v + sj(c.alt) * dj(s.p));  // {ny-1,nz,nx}
+    auto v_int = v_new.index({Slice(1, ny), SL(), SL()}) - c.dts * dpxy_v; // cqv=1
+    v_new.index_put_({Slice(1, ny), SL(), SL()}, v_int);
+    o.v = v_new;
+    // TODO(Inc 5): al'*d(pb) base-pressure term (both u & v), non-hydro 4th term (php/dpn), div damping.
     return o;
 }
 
