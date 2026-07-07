@@ -296,8 +296,8 @@ State small_step_prep(const PrepInput& in, Saves& saves) {
     s.ph = in.ph_1 - in.ph_2;                       // geopotential perturbation
     saves.ww = in.ww;
     s.ww = in.ww;
-    s.mu   = in.mu_2;                               // column-mass perturbation (already uncoupled)
-    saves.mu = in.mu_2;                             // slow-ref mu (added back by small_step_finish)
+    saves.mu = in.mu_2;                             // slow-ref mu (added back by small_step_finish, :213)
+    s.mu   = in.mu_1 - in.mu_2;                      // mu COUPLED like ph (:214): mu' = mu_1 - mu_2 (~0 @ rk1)
     s.muts = in.muts;
     // diagnostics zero-init; caller runs calc_p_rho(step=0) to fill p/al/pm1 before the loop.
     s.p = torch::zeros_like(in.t_2); s.al = torch::zeros_like(in.t_2); s.pm1 = torch::zeros_like(in.t_2);

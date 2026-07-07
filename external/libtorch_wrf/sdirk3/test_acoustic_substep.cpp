@@ -108,7 +108,7 @@ static bool prep_chain_check() {
     in.w_1 = M3(ny, nzw, nx, 0.0f); in.w_2 = M3(ny, nzw, nx, 0.0f);
     in.t_1 = M3(ny, nz, nx, 300.0f); in.t_2 = M3(ny, nz, nx, 300.0f);
     in.ph_1 = M3(ny, nzw, nx, 0.0f); in.ph_2 = M3(ny, nzw, nx, 0.0f);
-    in.ww = M3(ny, nzw, nx, 0.0f); in.mu_2 = M2(ny, nx, 0.0f);
+    in.ww = M3(ny, nzw, nx, 0.0f); in.mu_1 = M2(ny, nx, 0.0f); in.mu_2 = M2(ny, nx, 0.0f);
     in.muus = M2(ny, nxu, mut); in.muu = M2(ny, nxu, mut);
     in.muvs = M2(nyv, nx, mut); in.muv = M2(nyv, nx, mut);
     in.muts = M2(ny, nx, mut); in.mut = M2(ny, nx, mut);
@@ -146,7 +146,7 @@ static bool roundtrip_check() {
     in.w_1 = M3(ny, nzw, nx, 0.1f); in.w_2 = M3(ny, nzw, nx, 0.05f);
     in.t_1 = M3(ny, nz, nx, 300.0f); in.t_2 = M3(ny, nz, nx, 295.0f);
     in.ph_1 = M3(ny, nzw, nx, 50.0f); in.ph_2 = M3(ny, nzw, nx, 30.0f);
-    in.ww = M3(ny, nzw, nx, 0.0f); in.mu_2 = M2(ny, nx, 0.0f);
+    in.ww = M3(ny, nzw, nx, 0.0f); in.mu_1 = M2(ny, nx, 100.0f); in.mu_2 = M2(ny, nx, 60.0f);  // mu_1 != mu_2
     in.muus = M2(ny, nxu, 9.1e4f); in.muu = M2(ny, nxu, 9.0e4f);       // muus != muu
     in.muvs = M2(nyv, nx, 9.1e4f); in.muv = M2(nyv, nx, 9.0e4f);
     in.muts = M2(ny, nx, 9.1e4f); in.mut = M2(ny, nx, 9.0e4f);
@@ -159,10 +159,11 @@ static bool roundtrip_check() {
                                          /*n_small*/4, /*dts*/5.0f, torch::zeros_like(in.t_2));
     auto rel = [](const torch::Tensor& a, const torch::Tensor& b) {
         return (a - b).abs().max().item<float>() / (b.abs().max().item<float>() + 1e-6f); };
-    float ru = rel(fin.u, in.u_1), rv = rel(fin.v, in.v_1), rw = rel(fin.w, in.w_1), rp = rel(fin.ph, in.ph_1);
-    bool ok = ru < 1e-4f && rv < 1e-4f && rw < 1e-4f && rp < 1e-4f;
-    std::cout << "# prep<->finish invertible: finish(prep(x))==ref  rel(u,v,w,ph)=(" << ru << "," << rv
-              << "," << rw << "," << rp << ") : " << (ok ? "PASS" : "FAIL") << "\n";
+    float ru = rel(fin.u, in.u_1), rv = rel(fin.v, in.v_1), rw = rel(fin.w, in.w_1),
+          rp = rel(fin.ph, in.ph_1), rm = rel(fin.mu, in.mu_1);   // mu now coupled -> must recover mu_1
+    bool ok = ru < 1e-4f && rv < 1e-4f && rw < 1e-4f && rp < 1e-4f && rm < 1e-4f;
+    std::cout << "# prep<->finish invertible: finish(prep(x))==ref  rel(u,v,w,ph,mu)=(" << ru << "," << rv
+              << "," << rw << "," << rp << "," << rm << ") : " << (ok ? "PASS" : "FAIL") << "\n";
     return ok;
 }
 

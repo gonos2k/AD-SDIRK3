@@ -69,7 +69,7 @@ struct Const {
 // CURRENT stage estimate; u_1/... are the step-start (time n). msf* are map-scale factors (=1 for the
 // idealized em_b_wave). Produces the coupled acoustic PERTURBATION State + the slow-ref Saves.
 struct PrepInput {
-    torch::Tensor u_1, u_2, v_1, v_2, w_1, w_2, t_1, t_2, ph_1, ph_2, ww, mu_2;
+    torch::Tensor u_1, u_2, v_1, v_2, w_1, w_2, t_1, t_2, ph_1, ph_2, ww, mu_1, mu_2;
     torch::Tensor muus, muu, muvs, muv, muts, mut;   // updated/base masses {ny,nx*}
     torch::Tensor c1h, c2h, c1f, c2f;                // {nz}/{nz_w}
     torch::Tensor msfuy, msfvx_inv, msfty;           // map factors {ny,nx*} (=1 idealized)
