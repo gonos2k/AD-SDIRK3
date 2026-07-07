@@ -117,8 +117,9 @@ State advance_w(const State& s, const Const& c) {
     const int nz  = s.p.size(1);          // mass levels
     const int nzw = s.w.size(1);          // full levels = nz+1
     const int kde = nzw - 1;              // top full index (0-based)
-    auto mut2 = c.mut.unsqueeze(1);       // {ny,1,nx} broadcast over levels
-    auto muts2 = c.muts.unsqueeze(1);
+    auto mut2 = c.mut.unsqueeze(1);       // {ny,1,nx}  base column mass (fixed; rhs denom :1368)
+    // ph-update denom (:1462) uses the muts UPDATED by advance_mu_t this substep -> s.muts, not c.muts.
+    auto muts2 = s.muts.unsqueeze(1);
     // mf_full(k) = c1f(k)*mut + c2f(k)  {ny,nz_w,nx};  mh(k)=c1h(k)*mut+c2h(k) {ny,nz,nx}
     auto mf_full = c.c1f.view({1, nzw, 1}) * mut2 + c.c2f.view({1, nzw, 1});
     auto mf_full_ts = c.c1f.view({1, nzw, 1}) * muts2 + c.c2f.view({1, nzw, 1});
