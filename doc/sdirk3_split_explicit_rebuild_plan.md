@@ -142,3 +142,18 @@ off — the hard-constraint). Sub-tasks: (a) slow_rhs → the six frozen tendenc
 slow terms); (b) mass averages muus/muvs/muu/muv from mub+μ'; (c) php from base state; (d) pack/unpack
 State↔U_n via StateLayout; (e) per-stage dts/N schedule. VALIDATE incrementally: first ONE stage vs dyn_em
 `[PARITY substep]` (matched inputs), then a full step ≈ stock RK3 (Inc 6 exit criterion).
+
+## Inc 6 sub-task status (2026-07-08)
+
+- (b) mass averages — DONE+tested (`mass_to_u/vpoint`, 66bff9b; y-symmetric BC fix 20d292e).
+- (e) schedule — DONE+tested (`acoustic_schedule`, e490046).
+- (c) php-wire — INFRA READY: `ph_base` exists (wrf_sdirk3_types.h:211, {ny,nz+1,nx} w-staggered).
+- (d) State↔U_n adapter — INFRA READY: `packState`(:7921)/`unpackState`(:7913) already invert the state
+  layout; the adapter is a thin wrapper (unpack→perturbations+base; pack FinishOutput u/v/w/ph/t/mu back).
+- (a) slow_rhs → 6 frozen tendencies — NOT done. THE remaining delicate piece: separate the SLOW forcing
+  (advection/Coriolis/physics) from the FAST acoustic terms (PGF/divergence/buoyancy, which the substep owns).
+  The God file already has the IMEX slow/fast split (RhsMode / effective_imex_split_mode) to reuse.
+- Driver assembly — the gated RK3 loop tying (a)-(e) together, validated by dyn_em [PARITY substep].
+
+The standalone components are all built+validated; the remainder is God-file-coupled integration (slow_rhs
+extraction + adapter + gated driver), which is the culminating unit and needs the dyn_em parity gate.
