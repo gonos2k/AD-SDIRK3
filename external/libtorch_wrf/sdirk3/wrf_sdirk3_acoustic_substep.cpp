@@ -35,22 +35,26 @@ inline torch::Tensor si(const torch::Tensor& X) {
 State advance_uv(const State& s, const Const& c) {
     State o = s;                                        // copy handles (functional, autograd-safe)
     const int nz = s.p.size(1);
+    const int nx = s.p.size(2);                         // MASS-point count in x
     // --- u ---
-    // frozen slow tendency
+    // frozen slow tendency (u & ru_tend both on u-points; shapes match)
     torch::Tensor u_new = s.u + c.dts * c.ru_tend;
-    // hydrostatic PGF at interior u-points (mass i-1,i). ph on full levels: use ph(k)+ph(k+1).
+    // hydrostatic PGF at the nx-1 INTERIOR u-points (u-point i, i=1..nx-1, uses mass i-1,i).
+    // All operands below are {ny, nz, nx-1}; ph on full levels uses ph(k)+ph(k+1).
     auto ph_k   = s.ph.index({SL(), Slice(0, nz),   SL()});   // {ny,nz,nx}
     auto ph_kp1 = s.ph.index({SL(), Slice(1, nz+1), SL()});   // {ny,nz,nx}
     auto D_ph = di(ph_kp1) + di(ph_k);                        // {ny,nz,nx-1}
-    // (c1h*muu+c2h) at interior u-points; muu supplied at u-points -> take the [1:] slice, broadcast per level
-    auto coef = c.c1h.view({1, nz, 1}) * c.muu.index({SL(), Slice(1, None)}).unsqueeze(1) + c.c2h.view({1, nz, 1});
-    // Two dominant hydrostatic terms: geopotential gradient + alpha'*d(p'). (Inc 3 validated the
-    // discretization.) TODO(Inc 5): the al'*d(pb) base-pressure term (needs pb in Const), the
+    // (c1h*muu+c2h) at interior u-points 1..nx-1: slice muu to nx-1 (valid whether muu is nx or nx+1 wide)
+    auto muu_int = c.muu.index({SL(), Slice(1, nx)});         // {ny, nx-1}
+    auto coef = c.c1h.view({1, nz, 1}) * muu_int.unsqueeze(1) + c.c2h.view({1, nz, 1}); // {ny,nz,nx-1}
+    // Two dominant hydrostatic terms: geopotential gradient + alpha_full*d(p'). (Inc 3 validated the
+    // discretization.) TODO(Inc 5): al'*d(pb) base-pressure term (needs pb in Const), the
     // non-hydrostatic 4th term (php/dpn), and divergence damping (emdiv).
-    auto dpxy = 0.5f * c.rdx * coef * (D_ph + si(c.alt) * di(s.p));
-    // apply to interior u-points [1 .. nx-1]; boundaries (0, nx) handled by caller / periodic halo.
-    auto u_int = u_new.index({SL(), SL(), Slice(1, None)}) - c.dts * dpxy;   // cqu=1
-    u_new.index_put_({SL(), SL(), Slice(1, None)}, u_int);
+    auto dpxy = 0.5f * c.rdx * coef * (D_ph + si(c.alt) * di(s.p));  // {ny,nz,nx-1}
+    // subtract from interior u-points 1..nx-1 (indices 1..nx-1 == Slice(1,nx), exactly nx-1 columns);
+    // boundary u-points (0 and, if staggered, nx) are set by the caller / periodic halo.
+    auto u_int = u_new.index({SL(), SL(), Slice(1, nx)}) - c.dts * dpxy;   // cqu=1
+    u_new.index_put_({SL(), SL(), Slice(1, nx)}, u_int);
     o.u = u_new;
     // --- v --- (frozen tendency only for now; symmetric PGF in y = TODO)
     o.v = s.v + c.dts * c.rv_tend;
