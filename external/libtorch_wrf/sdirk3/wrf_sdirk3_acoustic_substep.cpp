@@ -67,9 +67,12 @@ State advance_mu_t(const State& s, const Const& /*c*/) {
 }
 
 // advance_w (module_small_step_em.F:1178-1469). em_b_wave: msf=1, cqw=1, flat terrain (w[0]=0).
-// The von-Neumann-validated CORE: off-centered vertical-PGF RHS + Thomas solve (Inc 2b factors) +
-// ph update. TODO(Inc 5): ph_tend + ww advection in rhs (:1336), the buoyancy/thermal term
-// (c2a*alt*t_2ave, needs advance_mu_t's t_2ave/muave), and Rayleigh damping.
+// The von-Neumann-validated CORE: frozen rw_tend + off-centered vertical-PGF RHS + Thomas solve
+// (Inc 2b factors) + ph update.
+// !!! INCOMPLETE — MUST NOT be integrated as correct until these REQUIRED terms are added (they
+// depend on advance_mu_t's outputs, which do not exist yet): ph_tend + ww*d(phi) advection in rhs
+// (:1318/:1336), and the buoyancy/thermal term dts*g*(rdn*(c2a*alt*t_2ave diff) - c1f*muave)
+// (:1414-1417). Rayleigh damping (:1445) also TODO. Inc 5f wiring is gated until these land.
 // Vertical indexing mirrors the validated calc_coef_w: full-level libtorch index kf; mass fields
 // c2a[kf]/rdnw[kf], mh[kf]=c1h[kf]*mut+c2h[kf]; rhs/ph on full levels (nz_w=nz+1).
 State advance_w(const State& s, const Const& c) {
@@ -99,7 +102,9 @@ State advance_w(const State& s, const Const& c) {
         auto ph_kp  = s.ph.index({SL(), kf+1, SL()}); auto ph_k = s.ph.index({SL(), kf, SL()}); auto ph_km = s.ph.index({SL(), kf-1, SL()});
         auto up = c2a_k  * rdnw_k  / mh_k  * ((1.0f+eps)*(rhs_kp-rhs_k) + (1.0f-eps)*(ph_kp-ph_k));
         auto lo = c2a_km * rdnw_km / mh_km * ((1.0f+eps)*(rhs_k-rhs_km) + (1.0f-eps)*(ph_k-ph_km));
-        auto val = s.w.index({SL(), kf, SL()}) + 0.5f*dts*g*rdn_k*(up - lo);
+        // + dts*rw_tend (frozen slow w-tendency, :1405) — REQUIRED, mirrors ru_tend in advance_uv.
+        auto val = s.w.index({SL(), kf, SL()}) + dts * c.rw_tend.index({SL(), kf, SL()})
+                   + 0.5f*dts*g*rdn_k*(up - lo);
         w_rhs.index_put_({SL(), kf, SL()}, val);
     }
     // top kf=kde (WRF :1421-1429): -0.5*dts*g/mh(kde-1)*rdnw(kde-1)^2*2*c2a(kde-1)*(off-centered grad)
@@ -110,7 +115,7 @@ State advance_w(const State& s, const Const& c) {
         auto rhs_k = rhs.index({SL(), kde, SL()}); auto rhs_km = rhs.index({SL(), kde-1, SL()});
         auto ph_k  = s.ph.index({SL(), kde, SL()}); auto ph_km = s.ph.index({SL(), kde-1, SL()});
         auto grad = (1.0f+eps)*(rhs_k-rhs_km) + (1.0f-eps)*(ph_k-ph_km);
-        auto val = s.w.index({SL(), kde, SL()})
+        auto val = s.w.index({SL(), kde, SL()}) + dts * c.rw_tend.index({SL(), kde, SL()})
                    - 0.5f*dts*g/mh_km*rdnw_km*rdnw_km*2.0f*c2a_km*grad;
         w_rhs.index_put_({SL(), kde, SL()}, val);
     }
