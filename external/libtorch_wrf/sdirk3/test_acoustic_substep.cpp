@@ -14,23 +14,18 @@
 #include <cmath>
 using namespace wrf::sdirk3::acoustic;
 
-// Full-substep SMOKE test: construct a small 2-D state with EVERY State/Const field populated,
-// run the chained advance_substep, and confirm it executes and stays finite. Catches integration
-// bugs (undefined tensors, cross-operator state threading, shape mismatches) end-to-end. Does NOT
-// check correctness (that needs dyn_em [PARITY substep]) — only that the assembly runs.
-static bool full_substep_smoke() {
+// Build a small 2-D case with EVERY State/Const field populated (shared by the smoke + grad tests).
+static void make_2d_case(State& s, Const& c) {
     const int ny = 4, nx = 4, nz = 10, nzw = nz + 1, nyv = ny + 1, nxu = nx + 1;
     auto o = torch::TensorOptions().dtype(torch::kFloat32);
     const float mut = 9.0e4f, dts = 5.0f;
     auto M3 = [&](int a, int b, int cc, float v) { return torch::full({a, b, cc}, v, o); };
     auto M2 = [&](int a, int b, float v) { return torch::full({a, b}, v, o); };
-    State s;
     s.u = M3(ny, nz, nxu, 0.1f); s.v = M3(nyv, nz, nx, 0.1f); s.w = M3(ny, nzw, nx, 0.0f);
     s.ph = M3(ny, nzw, nx, 0.0f); s.t = M3(ny, nz, nx, 0.0f); s.mu = M2(ny, nx, 0.0f);
     s.p = M3(ny, nz, nx, 0.0f); s.al = M3(ny, nz, nx, 0.0f); s.ww = M3(ny, nzw, nx, 0.0f);
     s.pm1 = M3(ny, nz, nx, 0.0f); s.t_2ave = M3(ny, nz, nx, 0.0f);
     s.muave = M2(ny, nx, 0.0f); s.muts = M2(ny, nx, mut); s.mudf = M2(ny, nx, 0.0f);
-    Const c;
     c.c2a = M3(ny, nz, nx, 1.16e6f); c.alt = M3(ny, nz, nx, 2.5f); c.pb = M3(ny, nz, nx, 5.0e4f);
     c.a = M3(ny, nzw, nx, -0.1f); c.alpha = M3(ny, nzw, nx, 0.9f); c.gamma = M3(ny, nzw, nx, -0.1f);
     c.mut = M2(ny, nx, mut); c.muts = M2(ny, nx, mut); c.muu = M2(ny, nxu, mut); c.muv = M2(nyv, nx, mut);
@@ -44,8 +39,14 @@ static bool full_substep_smoke() {
     c.ft = M3(ny, nz, nx, 0.0f); c.mu_tend = M2(ny, nx, 0.0f); c.ph_tend = M3(ny, nzw, nx, 0.0f);
     c.u_1 = M3(ny, nz, nxu, 0.05f); c.v_1 = M3(nyv, nz, nx, 0.05f);
     c.t_1 = M3(ny, nz, nx, 5.0f); c.ww_1 = M3(ny, nzw, nx, 0.0f);
-    // Iterate MULTIPLE substeps (output feeds the next input) so an incompletely-populated output
-    // State — any field left undefined by advance_substep — crashes/NaNs on the following substep.
+}
+
+// Full-substep SMOKE test: iterate the chained advance_substep MULTIPLE times (output feeds the next
+// input) so an incompletely-populated output State — any field left undefined — crashes/NaNs on the
+// following substep. Checks all 14 State fields defined+finite each pass. Catches integration bugs
+// (undefined tensors, cross-operator threading, shapes); does NOT check correctness (needs dyn_em).
+static bool full_substep_smoke() {
+    State s; Const c; make_2d_case(s, c);
     auto all_finite = [](const State& st) {
         auto f = [](const torch::Tensor& t){ return t.defined() && t.isfinite().all().item<bool>(); };
         return f(st.u) && f(st.v) && f(st.w) && f(st.ph) && f(st.t) && f(st.mu) && f(st.p)
@@ -53,16 +54,48 @@ static bool full_substep_smoke() {
     };
     State st = s;
     bool fin = true;
-    for (int n = 1; n <= 3 && fin; ++n) {
-        st = advance_substep(st, c, n);          // n>=1 loop body; would throw if a field is undefined
-        fin = fin && all_finite(st);             // every State field must survive to feed substep n+1
-    }
+    for (int n = 1; n <= 3 && fin; ++n) { st = advance_substep(st, c, n); fin = fin && all_finite(st); }
     std::cout << "# full advance_substep x3 (2-D, all fields threaded) runs + finite : " << (fin ? "PASS" : "FAIL") << "\n";
     return fin;
 }
 
+// DIFFERENTIABILITY test — the whole reason for the libtorch rebuild. grad-enabled != differentiable,
+// so PROVE it with backward(), and verify the gradient is CORRECT against a central finite difference
+// (skill: "verify the JVP/VJP once against FD"). Reverse-mode VJP d(loss)/d(ph) through the full
+// advance_substep, contracted with a direction v, must match FD (loss(ph+ev)-loss(ph-ev))/2e.
+static bool grad_check() {
+    auto o = torch::TensorOptions().dtype(torch::kFloat32);
+    State s0; Const c; make_2d_case(s0, c);
+    auto v = torch::sin(torch::arange(s0.ph.numel(), o)).reshape(s0.ph.sizes());  // deterministic direction
+    auto loss_of = [&](const torch::Tensor& phv, bool grad) -> torch::Tensor {
+        State s = s0; s.ph = grad ? phv.clone().set_requires_grad(true) : phv;
+        State out = advance_substep(s, c, 1);
+        return out.w.sum() + out.ph.sum() + out.p.sum();     // scalar loss touching several outputs
+    };
+    // analytic reverse-mode VJP contracted with v
+    State s = s0; s.ph = s0.ph.clone().set_requires_grad(true);
+    State out = advance_substep(s, c, 1);
+    (out.w.sum() + out.ph.sum() + out.p.sum()).backward();
+    bool has_grad = s.ph.grad().defined();
+    float analytic = has_grad ? (s.ph.grad() * v).sum().item<float>() : 0.0f;
+    // central finite difference of the same directional derivative
+    float e = 1e-1f, fd;
+    { torch::NoGradGuard ng;
+      float lp = (loss_of(s0.ph + e * v, false)).item<float>();
+      float lm = (loss_of(s0.ph - e * v, false)).item<float>();
+      fd = (lp - lm) / (2.0f * e); }
+    float rel = std::abs(analytic - fd) / (std::abs(fd) + 1e-6f);
+    bool ok = has_grad && std::isfinite(analytic) && std::isfinite(fd)
+              && std::abs(fd) > 1e-3f            // non-trivial gradient (graph really flows through ph)
+              && rel < 1e-2f;                    // VJP matches FD
+    std::cout << "# advance_substep differentiable: VJP=" << analytic << " FD=" << fd
+              << " rel=" << rel << " grad=" << (has_grad ? "yes" : "NO") << " : " << (ok ? "PASS" : "FAIL") << "\n";
+    return ok;
+}
+
 int main() {
     bool smoke_ok = full_substep_smoke();
+    bool grad_ok  = grad_check();
     const int nz = 40, nzw = nz + 1, ny = 1, nx = 1;
     const float g = 9.81f, eps = 0.1f, deta = 1.0f / nz, mut = 9.0e4f, c2a0 = 1.16e6f;
     const float dts = 1.0f;   // match the von-Neumann reference (resolved limit); |lambda| is dts-normalized
@@ -164,7 +197,7 @@ int main() {
     // (not merely <=1 — a stable-but-wrong scheme with |lambda|=0.5 must NOT pass).
     bool coeffs_ok = mia_relerr < 1e-4f;
     bool lambda_ok = std::isfinite(lam) && std::abs(lam - lam_ref) < 1e-3f;
-    bool ok = smoke_ok && coeffs_ok && lambda_ok;
+    bool ok = smoke_ok && grad_ok && coeffs_ok && lambda_ok;
     std::cout << "# advance_w matches numpy scheme  coeffs=" << (coeffs_ok ? "ok" : "BAD")
               << "  |lambda|-match=" << (lambda_ok ? "ok" : "BAD")
               << "  : " << (ok ? "PASS" : "FAIL") << "\n";
