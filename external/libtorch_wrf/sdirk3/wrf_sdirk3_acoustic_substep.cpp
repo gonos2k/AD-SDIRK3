@@ -276,6 +276,21 @@ State calc_p_rho(const State& s, const Const& c, int step) {
 // 1-BASED: every loop substep applies divergence damping (calc_p_rho step>=1). The pressure INIT
 // (calc_p_rho with step=0, which sets pm1 and does NOT damp) is a SEPARATE pre-loop call the caller
 // must run once before the first substep (solve_em.F:1352) — it is NOT part of advance_substep.
+torch::Tensor mass_to_upoint(const torch::Tensor& mu) {
+    using torch::indexing::Slice;
+    const int nx = mu.size(1);
+    auto interior = 0.5f * (mu.index({Slice(), Slice(0, nx - 1)}) + mu.index({Slice(), Slice(1, nx)})); // {ny,nx-1}
+    auto edge = 0.5f * (mu.index({Slice(), Slice(nx - 1, nx)}) + mu.index({Slice(), Slice(0, 1)}));      // periodic
+    return torch::cat({edge, interior, edge}, 1);   // {ny, nx+1}
+}
+torch::Tensor mass_to_vpoint(const torch::Tensor& mu) {
+    using torch::indexing::Slice;
+    const int ny = mu.size(0);
+    auto interior = 0.5f * (mu.index({Slice(0, ny - 1), Slice()}) + mu.index({Slice(1, ny), Slice()})); // {ny-1,nx}
+    auto edge = 0.5f * (mu.index({Slice(ny - 1, ny), Slice()}) + mu.index({Slice(0, 1), Slice()}));      // periodic
+    return torch::cat({edge, interior, edge}, 0);   // {ny+1, nx}
+}
+
 State small_step_prep(const PrepInput& in, Saves& saves) {
     // coef(c1,c2,mass) = c1(k)*mass + c2(k), broadcast to {ny, nlev, nx*}. Couple each field as
     // (coef_updated * X_1 - coef_base * X_2) [/ or * msf], mirroring module_small_step_em.F:238-279.

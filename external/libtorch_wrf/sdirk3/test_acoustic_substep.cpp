@@ -167,11 +167,30 @@ static bool roundtrip_check() {
     return ok;
 }
 
+// mass_to_u/vpoint staggered 0.5-averages (periodic), vs a hand-computed example.
+static bool mass_avg_check() {
+    auto o = torch::TensorOptions().dtype(torch::kFloat32);
+    auto mu = torch::tensor({{1.0f, 2.0f, 3.0f, 4.0f}}, o);              // {1,4}
+    auto um = mass_to_upoint(mu);                                        // {1,5}: [edge,1.5,2.5,3.5,edge]
+    auto um_exp = torch::tensor({{2.5f, 1.5f, 2.5f, 3.5f, 2.5f}}, o);    // edge=0.5*(4+1)=2.5 periodic
+    auto muv = torch::tensor({{1.0f}, {2.0f}, {3.0f}}, o);              // {3,1}
+    auto vm = mass_to_vpoint(muv);                                       // {4,1}: [2,1.5,2.5,2]
+    auto vm_exp = torch::tensor({{2.0f}, {1.5f}, {2.5f}, {2.0f}}, o);
+    float eu = (um - um_exp).abs().max().item<float>();
+    float ev = (vm - vm_exp).abs().max().item<float>();
+    bool shapes = um.size(1) == 5 && vm.size(0) == 4;
+    bool ok = shapes && eu < 1e-6f && ev < 1e-6f;
+    std::cout << "# mass_to_u/vpoint staggered averages: err(u,v)=(" << eu << "," << ev
+              << ") shapes=" << (shapes ? "ok" : "BAD") << " : " << (ok ? "PASS" : "FAIL") << "\n";
+    return ok;
+}
+
 int main() {
     bool smoke_ok = full_substep_smoke();
     bool grad_ok  = grad_check();
     bool prep_ok  = prep_chain_check();
     bool rt_ok    = roundtrip_check();
+    bool mass_ok  = mass_avg_check();
     const int nz = 40, nzw = nz + 1, ny = 1, nx = 1;
     const float g = 9.81f, eps = 0.1f, deta = 1.0f / nz, mut = 9.0e4f, c2a0 = 1.16e6f;
     const float dts = 1.0f;   // match the von-Neumann reference (resolved limit); |lambda| is dts-normalized
@@ -273,7 +292,7 @@ int main() {
     // (not merely <=1 — a stable-but-wrong scheme with |lambda|=0.5 must NOT pass).
     bool coeffs_ok = mia_relerr < 1e-4f;
     bool lambda_ok = std::isfinite(lam) && std::abs(lam - lam_ref) < 1e-3f;
-    bool ok = smoke_ok && grad_ok && prep_ok && rt_ok && coeffs_ok && lambda_ok;
+    bool ok = smoke_ok && grad_ok && prep_ok && rt_ok && mass_ok && coeffs_ok && lambda_ok;
     std::cout << "# advance_w matches numpy scheme  coeffs=" << (coeffs_ok ? "ok" : "BAD")
               << "  |lambda|-match=" << (lambda_ok ? "ok" : "BAD")
               << "  : " << (ok ? "PASS" : "FAIL") << "\n";

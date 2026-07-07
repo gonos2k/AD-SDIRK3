@@ -64,6 +64,13 @@ struct Const {
     torch::Tensor ph_tend;             // {ny,nz_w,nx} frozen geopotential tendency (advance_w rhs :1318)
 };
 
+// --- wiring helpers (Inc 6): staggered column-mass averages (module_small_step_em.F:200-207) ---
+// u-point mass = 0.5*(mu[i]+mu[i-1]) over x; v-point mass = 0.5*(mu[j]+mu[j-1]) over y. Column mass
+// mu is {ny,nx}; returns {ny,nx+1} / {ny+1,nx}. Edges use PERIODIC wrap (em_b_wave x-channel); a
+// non-periodic y-boundary must overwrite the edge rows via the halo at the call site.
+torch::Tensor mass_to_upoint(const torch::Tensor& mu_col);   // {ny,nx} -> {ny,nx+1}
+torch::Tensor mass_to_vpoint(const torch::Tensor& mu_col);   // {ny,nx} -> {ny+1,nx}
+
 // --- small_step_prep entry coupling (module_small_step_em.F:238-279) ---
 // The two RK-stage states (uncoupled full fields) + masses + metrics. u_2/v_2/w_2/t_2/ph_2 are the
 // CURRENT stage estimate; u_1/... are the step-start (time n). msf* are map-scale factors (=1 for the
