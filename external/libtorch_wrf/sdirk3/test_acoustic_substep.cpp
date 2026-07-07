@@ -132,10 +132,45 @@ static bool prep_chain_check() {
     return ok;
 }
 
+// prep<->finish INVERTIBILITY: finish(prep(x), no substeps) must recover the reference fields
+// (u_1/v_1/w_1/ph_1), even with u_1!=u_2 and muus!=muu (non-trivial coupling). Proves the entry and
+// exit couplings are true inverses — a wiring correctness guard independent of the loop dynamics.
+static bool roundtrip_check() {
+    const int ny = 4, nx = 4, nz = 10, nzw = nz + 1, nyv = ny + 1, nxu = nx + 1;
+    auto o = torch::TensorOptions().dtype(torch::kFloat32);
+    auto M3 = [&](int a, int b, int cc, float v) { return torch::full({a, b, cc}, v, o); };
+    auto M2 = [&](int a, int b, float v) { return torch::full({a, b}, v, o); };
+    PrepInput in;
+    in.u_1 = M3(ny, nz, nxu, 0.2f); in.u_2 = M3(ny, nz, nxu, 0.15f);   // u_1 != u_2
+    in.v_1 = M3(nyv, nz, nx, 0.2f); in.v_2 = M3(nyv, nz, nx, 0.15f);
+    in.w_1 = M3(ny, nzw, nx, 0.1f); in.w_2 = M3(ny, nzw, nx, 0.05f);
+    in.t_1 = M3(ny, nz, nx, 300.0f); in.t_2 = M3(ny, nz, nx, 295.0f);
+    in.ph_1 = M3(ny, nzw, nx, 50.0f); in.ph_2 = M3(ny, nzw, nx, 30.0f);
+    in.ww = M3(ny, nzw, nx, 0.0f); in.mu_2 = M2(ny, nx, 0.0f);
+    in.muus = M2(ny, nxu, 9.1e4f); in.muu = M2(ny, nxu, 9.0e4f);       // muus != muu
+    in.muvs = M2(nyv, nx, 9.1e4f); in.muv = M2(nyv, nx, 9.0e4f);
+    in.muts = M2(ny, nx, 9.1e4f); in.mut = M2(ny, nx, 9.0e4f);
+    in.c1h = torch::ones({nz}, o); in.c2h = torch::zeros({nz}, o);
+    in.c1f = torch::ones({nzw}, o); in.c2f = torch::zeros({nzw}, o);
+    in.msfuy = M2(ny, nxu, 1.0f); in.msfvx_inv = M2(nyv, nx, 1.0f); in.msfty = M2(ny, nx, 1.0f);
+    Saves saves;
+    State prepped = small_step_prep(in, saves);
+    FinishOutput fin = small_step_finish(prepped, saves, in, /*rk_step*/1, /*rk_order*/3,
+                                         /*n_small*/4, /*dts*/5.0f, torch::zeros_like(in.t_2));
+    auto rel = [](const torch::Tensor& a, const torch::Tensor& b) {
+        return (a - b).abs().max().item<float>() / (b.abs().max().item<float>() + 1e-6f); };
+    float ru = rel(fin.u, in.u_1), rv = rel(fin.v, in.v_1), rw = rel(fin.w, in.w_1), rp = rel(fin.ph, in.ph_1);
+    bool ok = ru < 1e-4f && rv < 1e-4f && rw < 1e-4f && rp < 1e-4f;
+    std::cout << "# prep<->finish invertible: finish(prep(x))==ref  rel(u,v,w,ph)=(" << ru << "," << rv
+              << "," << rw << "," << rp << ") : " << (ok ? "PASS" : "FAIL") << "\n";
+    return ok;
+}
+
 int main() {
     bool smoke_ok = full_substep_smoke();
     bool grad_ok  = grad_check();
     bool prep_ok  = prep_chain_check();
+    bool rt_ok    = roundtrip_check();
     const int nz = 40, nzw = nz + 1, ny = 1, nx = 1;
     const float g = 9.81f, eps = 0.1f, deta = 1.0f / nz, mut = 9.0e4f, c2a0 = 1.16e6f;
     const float dts = 1.0f;   // match the von-Neumann reference (resolved limit); |lambda| is dts-normalized
@@ -237,7 +272,7 @@ int main() {
     // (not merely <=1 — a stable-but-wrong scheme with |lambda|=0.5 must NOT pass).
     bool coeffs_ok = mia_relerr < 1e-4f;
     bool lambda_ok = std::isfinite(lam) && std::abs(lam - lam_ref) < 1e-3f;
-    bool ok = smoke_ok && grad_ok && prep_ok && coeffs_ok && lambda_ok;
+    bool ok = smoke_ok && grad_ok && prep_ok && rt_ok && coeffs_ok && lambda_ok;
     std::cout << "# advance_w matches numpy scheme  coeffs=" << (coeffs_ok ? "ok" : "BAD")
               << "  |lambda|-match=" << (lambda_ok ? "ok" : "BAD")
               << "  : " << (ok ? "PASS" : "FAIL") << "\n";

@@ -297,11 +297,37 @@ State small_step_prep(const PrepInput& in, Saves& saves) {
     saves.ww = in.ww;
     s.ww = in.ww;
     s.mu   = in.mu_2;                               // column-mass perturbation (already uncoupled)
+    saves.mu = in.mu_2;                             // slow-ref mu (added back by small_step_finish)
     s.muts = in.muts;
     // diagnostics zero-init; caller runs calc_p_rho(step=0) to fill p/al/pm1 before the loop.
     s.p = torch::zeros_like(in.t_2); s.al = torch::zeros_like(in.t_2); s.pm1 = torch::zeros_like(in.t_2);
     s.t_2ave = torch::zeros_like(in.t_2); s.muave = torch::zeros_like(in.mu_2); s.mudf = torch::zeros_like(in.mu_2);
     return s;
+}
+
+FinishOutput small_step_finish(const State& s, const Saves& saves, const PrepInput& in,
+                               int rk_step, int rk_order, int n_small, float dts,
+                               const torch::Tensor& h_diabatic) {
+    // Inverse of small_step_prep (:379-432): full = (msf*pert + save*coef_base)/coef_updated.
+    auto coef = [](const torch::Tensor& c1, const torch::Tensor& c2, const torch::Tensor& mass) {
+        int nl = c1.size(0);
+        return c1.view({1, nl, 1}) * mass.unsqueeze(1) + c2.view({1, nl, 1});
+    };
+    FinishOutput f;
+    f.u = (in.msfuy.unsqueeze(1) * s.u + saves.u * coef(in.c1h, in.c2h, in.muu)) / coef(in.c1h, in.c2h, in.muus);
+    auto msfvx = torch::reciprocal(in.msfvx_inv);   // prep used *msfvx_inv; finish uses *msfvx = 1/msfvx_inv
+    f.v = (msfvx.unsqueeze(1) * s.v + saves.v * coef(in.c1h, in.c2h, in.muv)) / coef(in.c1h, in.c2h, in.muvs);
+    f.w = (in.msfty.unsqueeze(1) * s.w + saves.w * coef(in.c1f, in.c2f, in.mut)) / coef(in.c1f, in.c2f, in.muts);
+    f.ph = s.ph + saves.ph;
+    f.ww = s.ww + saves.ww;                         // saves.ww stands in for ww_1 (large-timestep omega)
+    auto ct_base = coef(in.c1h, in.c2h, in.mut), ct_up = coef(in.c1h, in.c2h, in.muts);
+    if (rk_step < rk_order) {
+        f.t = (s.t + saves.t * ct_base) / ct_up;
+    } else {
+        f.t = (s.t - (dts * n_small) * ct_base * h_diabatic + saves.t * ct_base) / ct_up;
+    }
+    f.mu = s.mu + saves.mu;
+    return f;
 }
 
 State advance_substep(const State& s, const Const& c, int small_step) {

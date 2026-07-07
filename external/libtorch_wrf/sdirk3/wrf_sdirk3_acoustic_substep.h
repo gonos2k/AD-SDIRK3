@@ -74,13 +74,22 @@ struct PrepInput {
     torch::Tensor c1h, c2h, c1f, c2f;                // {nz}/{nz_w}
     torch::Tensor msfuy, msfvx_inv, msfty;           // map factors {ny,nx*} (=1 idealized)
 };
-struct Saves { torch::Tensor u, v, w, t, ph, ww; };  // slow references, for small_step_finish
+struct Saves { torch::Tensor u, v, w, t, ph, ww, mu; };  // slow references, for small_step_finish
+struct FinishOutput { torch::Tensor u, v, w, ph, t, mu, ww; };  // full UNCOUPLED fields (new time)
 
 // Couples the RK-stage state into acoustic perturbations and saves the slow refs. Perturbations start
 // ~0 at rk_step 1 (u_1==u_2, muus==muu). Returned State has u/v/w/ph/t/mu/ww set + muts + diagnostics
 // (p/al/pm1/t_2ave/muave/mudf) zero-init'd; the caller runs calc_p_rho(step=0) to fill p/al/pm1 before
 // the substep loop (solve_em.F:1352).
 State small_step_prep(const PrepInput& in, Saves& saves);
+
+// Reconstructs the full UNCOUPLED prognostic fields from the final perturbation State
+// (module_small_step_em.F:379-432) — the inverse of small_step_prep. On the last RK stage
+// (rk_step==rk_order) theta gets the h_diabatic term; otherwise the simple decouple. Invertibility:
+// finish(prep(x), no substeps) recovers the reference (u_1/v_1/w_1/ph_1). Reuses `in`'s masses/metrics.
+FinishOutput small_step_finish(const State& s, const Saves& saves, const PrepInput& in,
+                               int rk_step, int rk_order, int n_small, float dts,
+                               const torch::Tensor& h_diabatic);
 
 // One acoustic sub-step (LOOP BODY): advance_uv -> advance_mu_t -> advance_w -> calc_p_rho.
 // Mirrors solve_em.F:1525-1869. `small_step` is 1-BASED (1..N) — every loop substep applies
