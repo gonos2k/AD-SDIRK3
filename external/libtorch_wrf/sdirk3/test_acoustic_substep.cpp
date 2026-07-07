@@ -93,9 +93,49 @@ static bool grad_check() {
     return ok;
 }
 
+// small_step_prep ENTRY test: the coupling (module_small_step_em.F:238-279) must produce a State that
+// (a) is finite with all fields defined, (b) has perturbations ~0 when u_1==u_2 & muus==muu (the rk_step-1
+// property — the acoustic loop starts from ~zero perturbations), and (c) is consumable by advance_substep.
+static bool prep_chain_check() {
+    const int ny = 4, nx = 4, nz = 10, nzw = nz + 1, nyv = ny + 1, nxu = nx + 1;
+    auto o = torch::TensorOptions().dtype(torch::kFloat32);
+    const float mut = 9.0e4f;
+    auto M3 = [&](int a, int b, int cc, float v) { return torch::full({a, b, cc}, v, o); };
+    auto M2 = [&](int a, int b, float v) { return torch::full({a, b}, v, o); };
+    PrepInput in;
+    in.u_1 = M3(ny, nz, nxu, 0.1f); in.u_2 = M3(ny, nz, nxu, 0.1f);   // u_1==u_2 => u' ~ 0
+    in.v_1 = M3(nyv, nz, nx, 0.1f); in.v_2 = M3(nyv, nz, nx, 0.1f);
+    in.w_1 = M3(ny, nzw, nx, 0.0f); in.w_2 = M3(ny, nzw, nx, 0.0f);
+    in.t_1 = M3(ny, nz, nx, 300.0f); in.t_2 = M3(ny, nz, nx, 300.0f);
+    in.ph_1 = M3(ny, nzw, nx, 0.0f); in.ph_2 = M3(ny, nzw, nx, 0.0f);
+    in.ww = M3(ny, nzw, nx, 0.0f); in.mu_2 = M2(ny, nx, 0.0f);
+    in.muus = M2(ny, nxu, mut); in.muu = M2(ny, nxu, mut);
+    in.muvs = M2(nyv, nx, mut); in.muv = M2(nyv, nx, mut);
+    in.muts = M2(ny, nx, mut); in.mut = M2(ny, nx, mut);
+    in.c1h = torch::ones({nz}, o); in.c2h = torch::zeros({nz}, o);
+    in.c1f = torch::ones({nzw}, o); in.c2f = torch::zeros({nzw}, o);
+    in.msfuy = M2(ny, nxu, 1.0f); in.msfvx_inv = M2(nyv, nx, 1.0f); in.msfty = M2(ny, nx, 1.0f);
+    Saves saves;
+    State prepped = small_step_prep(in, saves);
+    auto f = [](const torch::Tensor& t) { return t.defined() && t.isfinite().all().item<bool>(); };
+    bool prep_ok = f(prepped.u) && f(prepped.v) && f(prepped.w) && f(prepped.ph) && f(prepped.t)
+                && f(prepped.mu) && f(prepped.p) && f(prepped.al) && f(prepped.ww) && f(prepped.pm1)
+                && f(prepped.t_2ave) && f(prepped.muave) && f(prepped.muts) && f(prepped.mudf);
+    bool pert_zero = prepped.u.abs().max().item<float>() < 1e-3f
+                  && prepped.ph.abs().max().item<float>() < 1e-3f;
+    State dummy; Const c; make_2d_case(dummy, c);         // Const (coeffs/tendencies) for the loop body
+    State out = advance_substep(prepped, c, 1);
+    bool consume_ok = f(out.w) && f(out.ph) && f(out.u);
+    bool ok = prep_ok && pert_zero && consume_ok;
+    std::cout << "# small_step_prep -> advance_substep (finite + pert~0 @ u_1==u_2 + consumable) : "
+              << (ok ? "PASS" : "FAIL") << "\n";
+    return ok;
+}
+
 int main() {
     bool smoke_ok = full_substep_smoke();
     bool grad_ok  = grad_check();
+    bool prep_ok  = prep_chain_check();
     const int nz = 40, nzw = nz + 1, ny = 1, nx = 1;
     const float g = 9.81f, eps = 0.1f, deta = 1.0f / nz, mut = 9.0e4f, c2a0 = 1.16e6f;
     const float dts = 1.0f;   // match the von-Neumann reference (resolved limit); |lambda| is dts-normalized
@@ -197,7 +237,7 @@ int main() {
     // (not merely <=1 — a stable-but-wrong scheme with |lambda|=0.5 must NOT pass).
     bool coeffs_ok = mia_relerr < 1e-4f;
     bool lambda_ok = std::isfinite(lam) && std::abs(lam - lam_ref) < 1e-3f;
-    bool ok = smoke_ok && grad_ok && coeffs_ok && lambda_ok;
+    bool ok = smoke_ok && grad_ok && prep_ok && coeffs_ok && lambda_ok;
     std::cout << "# advance_w matches numpy scheme  coeffs=" << (coeffs_ok ? "ok" : "BAD")
               << "  |lambda|-match=" << (lambda_ok ? "ok" : "BAD")
               << "  : " << (ok ? "PASS" : "FAIL") << "\n";

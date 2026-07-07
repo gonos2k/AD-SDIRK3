@@ -64,6 +64,24 @@ struct Const {
     torch::Tensor ph_tend;             // {ny,nz_w,nx} frozen geopotential tendency (advance_w rhs :1318)
 };
 
+// --- small_step_prep entry coupling (module_small_step_em.F:238-279) ---
+// The two RK-stage states (uncoupled full fields) + masses + metrics. u_2/v_2/w_2/t_2/ph_2 are the
+// CURRENT stage estimate; u_1/... are the step-start (time n). msf* are map-scale factors (=1 for the
+// idealized em_b_wave). Produces the coupled acoustic PERTURBATION State + the slow-ref Saves.
+struct PrepInput {
+    torch::Tensor u_1, u_2, v_1, v_2, w_1, w_2, t_1, t_2, ph_1, ph_2, ww, mu_2;
+    torch::Tensor muus, muu, muvs, muv, muts, mut;   // updated/base masses {ny,nx*}
+    torch::Tensor c1h, c2h, c1f, c2f;                // {nz}/{nz_w}
+    torch::Tensor msfuy, msfvx_inv, msfty;           // map factors {ny,nx*} (=1 idealized)
+};
+struct Saves { torch::Tensor u, v, w, t, ph, ww; };  // slow references, for small_step_finish
+
+// Couples the RK-stage state into acoustic perturbations and saves the slow refs. Perturbations start
+// ~0 at rk_step 1 (u_1==u_2, muus==muu). Returned State has u/v/w/ph/t/mu/ww set + muts + diagnostics
+// (p/al/pm1/t_2ave/muave/mudf) zero-init'd; the caller runs calc_p_rho(step=0) to fill p/al/pm1 before
+// the substep loop (solve_em.F:1352).
+State small_step_prep(const PrepInput& in, Saves& saves);
+
 // One acoustic sub-step (LOOP BODY): advance_uv -> advance_mu_t -> advance_w -> calc_p_rho.
 // Mirrors solve_em.F:1525-1869. `small_step` is 1-BASED (1..N) — every loop substep applies
 // divergence damping. The pressure INIT (calc_p_rho step=0: sets pm1, no damping) is a SEPARATE

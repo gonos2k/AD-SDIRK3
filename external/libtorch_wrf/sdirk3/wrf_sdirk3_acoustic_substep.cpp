@@ -276,6 +276,34 @@ State calc_p_rho(const State& s, const Const& c, int step) {
 // 1-BASED: every loop substep applies divergence damping (calc_p_rho step>=1). The pressure INIT
 // (calc_p_rho with step=0, which sets pm1 and does NOT damp) is a SEPARATE pre-loop call the caller
 // must run once before the first substep (solve_em.F:1352) — it is NOT part of advance_substep.
+State small_step_prep(const PrepInput& in, Saves& saves) {
+    // coef(c1,c2,mass) = c1(k)*mass + c2(k), broadcast to {ny, nlev, nx*}. Couple each field as
+    // (coef_updated * X_1 - coef_base * X_2) [/ or * msf], mirroring module_small_step_em.F:238-279.
+    auto coef = [](const torch::Tensor& c1, const torch::Tensor& c2, const torch::Tensor& mass) {
+        int nl = c1.size(0);
+        return c1.view({1, nl, 1}) * mass.unsqueeze(1) + c2.view({1, nl, 1});
+    };
+    State s;
+    saves.u  = in.u_2;
+    s.u  = (coef(in.c1h, in.c2h, in.muus) * in.u_1 - coef(in.c1h, in.c2h, in.muu) * in.u_2) / in.msfuy.unsqueeze(1);
+    saves.v  = in.v_2;                              // note: v uses *msfvx_inv (a multiply), not a divide
+    s.v  = (coef(in.c1h, in.c2h, in.muvs) * in.v_1 - coef(in.c1h, in.c2h, in.muv) * in.v_2) * in.msfvx_inv.unsqueeze(1);
+    saves.t  = in.t_2;
+    s.t  = coef(in.c1h, in.c2h, in.muts) * in.t_1 - coef(in.c1h, in.c2h, in.mut) * in.t_2;   // theta: no msf
+    saves.w  = in.w_2;
+    s.w  = (coef(in.c1f, in.c2f, in.muts) * in.w_1 - coef(in.c1f, in.c2f, in.mut) * in.w_2) / in.msfty.unsqueeze(1);
+    saves.ph = in.ph_2;
+    s.ph = in.ph_1 - in.ph_2;                       // geopotential perturbation
+    saves.ww = in.ww;
+    s.ww = in.ww;
+    s.mu   = in.mu_2;                               // column-mass perturbation (already uncoupled)
+    s.muts = in.muts;
+    // diagnostics zero-init; caller runs calc_p_rho(step=0) to fill p/al/pm1 before the loop.
+    s.p = torch::zeros_like(in.t_2); s.al = torch::zeros_like(in.t_2); s.pm1 = torch::zeros_like(in.t_2);
+    s.t_2ave = torch::zeros_like(in.t_2); s.muave = torch::zeros_like(in.mu_2); s.mudf = torch::zeros_like(in.mu_2);
+    return s;
+}
+
 State advance_substep(const State& s, const Const& c, int small_step) {
     TORCH_CHECK(small_step >= 1,
         "advance_substep: small_step must be 1-based (>=1); the step=0 pressure init is a separate "
