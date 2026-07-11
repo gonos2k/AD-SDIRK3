@@ -1293,7 +1293,7 @@ BENCH_END(relax_bdy_dry_tim)
 
      ! [PARITY sub] TEMP (2026-07-10, revert after parity campaign): frozen coupled tendencies
      ! after rk_tendency + rk_addtend_dry, for comparison with [SPLIT-EXPLICIT KCOUPLED].
-     IF (grid%itimestep <= 1) THEN
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
         WRITE(0,'(A,I2,6(A,E14.6))') '[PARITY sub] tendencies rk=', rk_step, &
            ' ru=', MAXVAL(ABS(grid%ru_tend(ips:ipe,kps:kpe-1,jps:jpe))), &
            ' rv=', MAXVAL(ABS(grid%rv_tend(ips:ipe,kps:kpe-1,jps:jpe))), &
@@ -1564,7 +1564,7 @@ BENCH_END(advance_uv_tim)
        !$OMP END PARALLEL DO
 
      ! [PARITY sub] TEMP: coupled deviations after advance_uv (stage-1 substep)
-     IF (grid%itimestep <= 1) THEN
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
         WRITE(0,'(A,I2,2(A,E14.6))') '[PARITY sub] after_uv rk=', rk_step, &
            ' u=', MAXVAL(ABS(grid%u_2(ips:ipe,kps:kpe-1,jps:jpe))), &
            ' v=', MAXVAL(ABS(grid%v_2(ips:ipe,kps:kpe-1,jps:jpe)))
@@ -1683,7 +1683,7 @@ BENCH_END(advance_mu_t_tim)
        !$OMP END PARALLEL DO
 
      ! [PARITY sub] TEMP: coupled deviations after advance_mu_t (stage-1 substep)
-     IF (grid%itimestep <= 1) THEN
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
         WRITE(0,'(A,I2,3(A,E14.6))') '[PARITY sub] after_mu_t rk=', rk_step, &
            ' mu=', MAXVAL(ABS(grid%mu_2(ips:ipe,jps:jpe))), &
            ' t=', MAXVAL(ABS(grid%t_2(ips:ipe,kps:kpe-1,jps:jpe))), &
@@ -1805,7 +1805,7 @@ BENCH_END(advance_w_tim)
 !-----------------------------------------------------------
 
      ! [PARITY sub] TEMP: coupled deviations after advance_w (stage-1 substep)
-     IF (grid%itimestep <= 1) THEN
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
         WRITE(0,'(A,I2,2(A,E14.6))') '[PARITY sub] after_w rk=', rk_step, &
            ' w=', MAXVAL(ABS(grid%w_2(ips:ipe,kps:kpe,jps:jpe))), &
            ' ph=', MAXVAL(ABS(grid%ph_2(ips:ipe,kps:kpe,jps:jpe)))
@@ -1925,7 +1925,7 @@ BENCH_END(cald_p_rho_tim)
        !$OMP END PARALLEL DO
 
      ! [PARITY sub] TEMP: acoustic p'/al' after calc_p_rho (stage-1 substep)
-     IF (grid%itimestep <= 1) THEN
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
         WRITE(0,'(A,I2,2(A,E14.6))') '[PARITY sub] after_prho rk=', rk_step, &
            ' p=', MAXVAL(ABS(grid%p(ips:ipe,kps:kpe-1,jps:jpe))), &
            ' al=', MAXVAL(ABS(grid%al(ips:ipe,kps:kpe-1,jps:jpe)))
@@ -2100,7 +2100,7 @@ BENCH_END(small_step_finish_tim)
      ! [PARITY stage] TEMP INSTRUMENTATION (2026-07-10, revert after use): per-RK-stage field
      ! maxima after small_step_finish, to compare the stock split-explicit stage states against
      ! the libtorch split-explicit port ([SPLIT-EXPLICIT COMPONENTS] after_finish).
-     IF (grid%itimestep <= 2) THEN
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 2) THEN
         WRITE(0,'(A,I2,A,I6,6(A,E14.6))') '[PARITY stage] rk_step=', rk_step,        &
            ' it=', grid%itimestep,                                                    &
            ' u=', MAXVAL(ABS(grid%u_2(ips:ipe,kps:kpe-1,jps:jpe))),                   &

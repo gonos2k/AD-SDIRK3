@@ -727,7 +727,7 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
                                        its, ite, jts, jte, kts, kte   )
 
    ! [PARITY rw] TEMP: rw_tend decomposition points
-   IF (rk_step == 1) THEN
+   IF (config_flags%sdirk3_debug_level >= 2 .AND. rk_step == 1) THEN
       WRITE(0,'(A,E14.6)') '[PARITY rw] before_pg_buoy max=', &
          MAXVAL(ABS(rw_tend(its:MIN(ite,ide-1),kts:kte,jts:MIN(jte,jde-1))))
       WRITE(0,'(A,E14.6,A,8E14.6)') '[PARITY rw] p max=', &
@@ -745,7 +745,7 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
                         its, ite, jts, jte, kts, kte   )
    ENDIF
 
-   IF (rk_step == 1) THEN
+   IF (config_flags%sdirk3_debug_level >= 2 .AND. rk_step == 1) THEN
       WRITE(0,'(A,E14.6)') '[PARITY rw] after_pg_buoy max=', &
          MAXVAL(ABS(rw_tend(its:MIN(ite,ide-1),kts:kte,jts:MIN(jte,jde-1))))
    END IF
@@ -786,7 +786,7 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
    END IF
 
    ! [PARITY rw] TEMP (2026-07-11, revert after parity campaign): rw_tend before/after curvature
-   IF (rk_step == 1) THEN
+   IF (config_flags%sdirk3_debug_level >= 2 .AND. rk_step == 1) THEN
       WRITE(0,'(A,E14.6)') '[PARITY rw] before_curvature max=', &
          MAXVAL(ABS(rw_tend(its:MIN(ite,ide-1),kts:kte,jts:MIN(jte,jde-1))))
    END IF
@@ -801,7 +801,7 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
                      ims, ime, jms, jme, kms, kme,   &
                      its, ite, jts, jte, kts, kte   )
 
-   IF (rk_step == 1) THEN
+   IF (config_flags%sdirk3_debug_level >= 2 .AND. rk_step == 1) THEN
       WRITE(0,'(A,E14.6)') '[PARITY rw] after_curvature max=', &
          MAXVAL(ABS(rw_tend(its:MIN(ite,ide-1),kts:kte,jts:MIN(jte,jde-1))))
    END IF

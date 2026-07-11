@@ -6521,7 +6521,7 @@ vertical_coefficients:
                                                 int stage,
                                                 const torch::Tensor& U_cur,
                                                 const torch::Tensor& U_ref) {
-                    if (wrf::sdirk3::g_sdirk3_config.debug_level < 1) {
+                    if (wrf::sdirk3::g_sdirk3_config.debug_level < 2) {
                         return;
                     }
                     torch::NoGradGuard ng;
@@ -6557,7 +6557,7 @@ vertical_coefficients:
                                                           const torch::Tensor& phs,
                                                           const torch::Tensor& ts,
                                                           const torch::Tensor& mus) {
-                    if (wrf::sdirk3::g_sdirk3_config.debug_level < 1) {
+                    if (wrf::sdirk3::g_sdirk3_config.debug_level < 2) {
                         return;
                     }
                     torch::NoGradGuard ng;
@@ -6616,7 +6616,7 @@ vertical_coefficients:
                 // One-shot IMEX decomposition at the step-entry state: does the fast channel carry
                 // the ABSOLUTE acoustic terms (V-PGF must be ~f*u*mu at the balanced IC), or does it
                 // vanish (perturbation-form about U_ref == U -> WRF's rk_tendency content missing)?
-                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                     static std::atomic<bool> logged_imex_decomp{false};
                     bool expected_decomp = false;
                     if (logged_imex_decomp.compare_exchange_strong(expected_decomp, true)) {
@@ -6803,7 +6803,7 @@ vertical_coefficients:
                     // (physics or split imbalance), or top-layer (damping layer).
                     // First-N gated: heavy CPU syncs + ~10KB/stage of log — parity-diagnosis only.
                     static std::atomic<int> ktend_prof_count{0};
-                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 &&
+                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 &&
                         ktend_prof_count.fetch_add(1) < 6) {
                         torch::NoGradGuard ng;
                         auto prof = [&](const torch::Tensor& field, std::vector<int64_t> dims,
@@ -6895,7 +6895,7 @@ vertical_coefficients:
                     auto [dpx_st, dpy_st] = acoustic::horizontal_pgf(
                         ph_2, p_pgf, al_pgf, alt_pgf, pb, ph_2 + phb_d, mu_2, muu, muv,
                         c1h_d, c2h_d, fnm_d, fnp_d, rdnw_d, rdx, rdy, cf1_, cf2_, cf3_);
-                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                         torch::NoGradGuard ng;
                         auto mm = [](const torch::Tensor& t) {
                             auto c = t.detach().to(torch::kCPU);
@@ -7027,7 +7027,7 @@ vertical_coefficients:
                     // the Fortran [PARITY subk] dump (max-only comparisons are level-shift-blind).
                     {
                         static std::atomic<int> kcoupledk_count{0};
-                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 && se_rk == 1 &&
+                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 && se_rk == 1 &&
                             kcoupledk_count.fetch_add(1) < 1) {
                             torch::NoGradGuard ng;
                             auto perk = [&](const torch::Tensor& x, const char* nm) {
@@ -7098,7 +7098,7 @@ vertical_coefficients:
                     S = acoustic::calc_p_rho(S, C, 0);
                     for (int small_step = 1; small_step <= sched.n_sub; ++small_step) {
                         static std::atomic<int> substep_log_count{0};
-                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 &&
+                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 &&
                             substep_log_count.fetch_add(1) < 8) {
                             // Per-operator localization (first substeps): same operators, same
                             // order as advance_substep — just logged between calls.
@@ -21543,7 +21543,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_x(const torch::Tensor& f, c
         if (g_export_coupled_slow && config_flags_periodic_x_ &&
             advect_order >= 5 && nx >= 8) {
             static std::atomic<int> fcov_probe{0};
-            if (fcov_probe.fetch_add(1) < 1) {
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 && fcov_probe.fetch_add(1) < 1) {
                 std::cerr << "[SPLIT-EXPLICIT ADV] full-coverage periodic x branch ACTIVE (nx="
                           << nx << ", nx_u=" << nx_u_actual << ")" << std::endl;
             }
