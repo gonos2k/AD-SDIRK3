@@ -125,6 +125,16 @@ target_link_libraries(test_wrms_gate_metric "${TORCH_LIBRARIES}")
 set_property(TARGET test_wrms_gate_metric PROPERTY CXX_STANDARD 17)
 add_test(NAME WRMS_Gate_Metric COMMAND test_wrms_gate_metric)
 
+# Split-explicit acoustic-substep validation harness (2026-07-12, external review):
+# 10 gates — operator smoke/invertibility, |lambda|=0.998315 von-Neumann match,
+# prep<->finish roundtrip, and the AD TRIPLE (forward-dual JVP == reverse VJP == FD,
+# double-backward HVP) through the stage operators and the full substep chain.
+add_executable(test_acoustic_substep test_acoustic_substep.cpp wrf_sdirk3_acoustic_substep.cpp)
+target_include_directories(test_acoustic_substep PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_acoustic_substep "${TORCH_LIBRARIES}")
+set_property(TARGET test_acoustic_substep PROPERTY CXX_STANDARD 17)
+add_test(NAME Acoustic_Substep_AD COMMAND test_acoustic_substep)
+
 # =========================================================================
 # OPT Pass33+: Test Output Verbosity Control
 # =========================================================================

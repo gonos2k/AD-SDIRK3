@@ -6245,6 +6245,29 @@ vertical_coefficients:
                                  "legacy one-shot Thomas diagnostic disabled, see live Inc6 loop below)"
                               << std::endl;
                 }
+                // SUPPORTED-CONFIG GUARD (2026-07-12, external review #6): the split core is
+                // validated ONLY for single-tile/single-rank, periodic-x, symmetric-y, dry
+                // em_b_wave-class domains. The true-dim adapter treats the tile as a whole
+                // periodic/wall domain and the acoustic loop has no halo exchange, so any
+                // sub-domain tile or other BC combination would silently produce fake
+                // seams/walls — FAIL FAST instead.
+                {
+                    const bool tile_is_domain = grid_info_ &&
+                        grid_info_->its == grid_info_->ids && grid_info_->jts == grid_info_->jds &&
+                        grid_info_->ite >= grid_info_->ide - 1 && grid_info_->jte >= grid_info_->jde - 1;
+                    if (!config_flags_periodic_x_ || config_flags_periodic_y_ || !tile_is_domain) {
+                        std::cerr << "[SPLIT-EXPLICIT] FATAL: unsupported configuration ("
+                                  << "periodic_x=" << config_flags_periodic_x_
+                                  << ", periodic_y=" << config_flags_periodic_y_
+                                  << ", tile_is_domain=" << tile_is_domain
+                                  << ") — the split-explicit core currently requires "
+                                     "single-tile/single-rank, periodic-x, symmetric-y (dry "
+                                     "em_b_wave-class). Disable sdirk3_split_explicit or run "
+                                     "the supported configuration." << std::endl;
+                        throw std::runtime_error(
+                            "sdirk3 split_explicit: unsupported configuration (see log)");
+                    }
+                }
                 // [Inc 1] small_step_prep in libtorch: sound-speed stiffness c2a = (cp/cv)*(pb+p)/alt
                 // and column mass muts = mub + mu', 1-to-1 with dyn_em small_step_prep, reusing the
                 // ported hydrostatic helpers exactly as computeUnifiedRHS does (:13311-13376). Computed

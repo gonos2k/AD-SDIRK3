@@ -884,8 +884,15 @@ CONTAINS
       ! No need to call get_ijk_from_grid
 
       ! Process each tile with Zero-Copy approach
+      ! P0 FIX (2026-07-12, external review #4): bounds/dims/scalars/bdy_cfg and the
+      ! step_outcome_* locals were SHARED — every tile thread overwrote the same TARGET
+      ! structs whose ADDRESSES are handed to C++ (wrong bounds/strides and cross-tile
+      ! outcome misreads under num_tiles > 1). All per-tile call state is now PRIVATE.
       !$OMP PARALLEL DO PRIVATE(ij,its,ite,jts,jte,kts,kte,nx,ny,nz, &
-      !$OMP                     nx_u,ny_v,nz_w,i_endu,j_endv,i,j,nzeros,message)
+      !$OMP                     nx_u,ny_v,nz_w,i_endu,j_endv,i,j,nzeros,message, &
+      !$OMP                     bounds,dims,scalars,bdy_cfg, &
+      !$OMP                     step_outcome_rc,step_outcome_code, &
+      !$OMP                     step_final_update_aborted,step_progress_ratio_valid)
       DO ij = 1, grid%num_tiles
          
          ! Get tile bounds
