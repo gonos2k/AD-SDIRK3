@@ -1253,6 +1253,12 @@ private:
 
     // Reference state for advection (to avoid Newton iteration feedback)
     torch::Tensor U_ref_stage_;  // State at beginning of SDIRK stage for advection terms
+    // SPLIT-EXPLICIT D2 (2026-07-11): WRF's vertical-advection flux OMEGA (mu*eta_dot from the
+    // calc_ww_cp recurrence) for the evaluation state, in PACKED memory dims {ny,nz_w,nx}. Set
+    // by the split driver around each coupled K_exp call; when defined (and the coupled-export
+    // flag is on) computeUnifiedRHS uses it as rom instead of the legacy mu*w form. Undefined
+    // on the baseline path => byte-identical baseline.
+    torch::Tensor split_omega_ww_;
     torch::Tensor k1_prev_;     // Latest stage-1 k1 cache (timestep n)
     torch::Tensor k1_prev2_;    // One-step older stage-1 k1 cache (timestep n-1)
     int prev_effective_split_mode_ = -1;  // Track mode changes to invalidate k1_prev_
