@@ -489,6 +489,17 @@ struct SDIRK3Config {
     // when ON. Set via env WRF_SDIRK3_SPLIT_EXPLICIT or namelist sdirk3_split_explicit.
     bool split_explicit = false;
 
+    // Split-explicit acoustic-loop parameters: pass-throughs of EXISTING WRF namelist values
+    // (time_step_sound, epssm, smdiv, emdiv, top_lid) — no new Registry entries. Consumed ONLY
+    // when split_explicit is ON; defaults match the em_b_wave namelist, so unset = current
+    // behavior. Set via Fortran set_config (module_implicit_sdirk3) or env
+    // WRF_SDIRK3_SPLIT_EXPLICIT_{TIME_STEP_SOUND,EPSSM,SMDIV,EMDIV,TOP_LID}.
+    int split_explicit_time_step_sound = 4;  // WRF time_step_sound (0=auto -> consumer falls back to 4)
+    float split_explicit_epssm = 0.1f;       // WRF epssm: acoustic vertical off-centering
+    float split_explicit_smdiv = 0.1f;       // WRF smdiv: 3D divergence damping
+    float split_explicit_emdiv = 0.01f;      // WRF emdiv: external-mode filter
+    bool split_explicit_top_lid = false;     // WRF config_flags%top_lid (rigid upper lid)
+
     // v20.14r66: Mode3 Stage4 severe non-convergence abort toggle.
     // true (default): keep current safety behavior (stage4 severe -> abort).
     // false: skip severe_nonconv abort at stage>=4 in mode3 gate (catastrophic still aborts).

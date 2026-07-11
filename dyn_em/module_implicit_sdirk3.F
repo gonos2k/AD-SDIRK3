@@ -1680,6 +1680,24 @@ CONTAINS
       config_name = "split_explicit"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_split_explicit))
 
+      ! Split-explicit acoustic-loop parameters: pass-throughs of EXISTING WRF namelist values
+      ! (no new Registry entries). Consumed by the C++ split-explicit branch only when
+      ! sdirk3_split_explicit is ON; C++ defaults match em_b_wave so unset = no behavior change.
+      config_name = "split_explicit_time_step_sound"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_int(config_name, MAX(0, config_flags%time_step_sound))
+
+      config_name = "split_explicit_epssm"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_float(config_name, MAX(0.0, config_flags%epssm))
+
+      config_name = "split_explicit_smdiv"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_float(config_name, MAX(0.0, config_flags%smdiv))
+
+      config_name = "split_explicit_emdiv"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_float(config_name, MAX(0.0, config_flags%emdiv))
+
+      config_name = "split_explicit_top_lid"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%top_lid))
+
       config_name = "hopeless_relax"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_hopeless_relax))
 
