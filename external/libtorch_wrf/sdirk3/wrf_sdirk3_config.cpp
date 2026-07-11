@@ -1967,31 +1967,6 @@ void SDIRK3Config::normalize_adaptive_thresholds() {
 bool SDIRK3Config::validate() const {
     bool valid = true;
 
-    // SPLIT-EXPLICIT guards (2026-07-12, external review #6/#7):
-    if (split_explicit) {
-        // top_lid=true is only wired into calc_coef_w; horizontal_pgf's lid dpn branch is
-        // not ported — a half-lid would silently mix boundary conditions. Reject until ported.
-        if (split_explicit_top_lid) {
-            std::cerr << "SDIRK3 Config Error: split_explicit_top_lid=true is not yet supported "
-                         "(horizontal_pgf lid branch not ported; calc_coef_w-only lid would mix "
-                         "top boundary conditions)" << std::endl;
-            valid = false;
-        }
-        // WRF requires an EVEN number of sound steps >= 4; 0 means WRF's auto formula, which
-        // the split path does NOT implement (it would silently fix N=4 regardless of dt/dx).
-        const int nss = split_explicit_time_step_sound;
-        if (nss == 0) {
-            std::cerr << "SDIRK3 Config Error: split_explicit time_step_sound=0 (WRF auto) is "
-                         "not implemented on the split path — set an explicit even value >= 4"
-                      << std::endl;
-            valid = false;
-        } else if (nss < 4 || (nss % 2) != 0) {
-            std::cerr << "SDIRK3 Config Error: split_explicit time_step_sound must be an even "
-                         "integer >= 4 (got " << nss << ")" << std::endl;
-            valid = false;
-        }
-    }
-
     if (max_newton_iter < 1 || max_newton_iter > 100) {
         std::cerr << "SDIRK3 Config Error: max_newton_iter must be between 1 and 100" << std::endl;
         valid = false;

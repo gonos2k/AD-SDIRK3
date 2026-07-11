@@ -6255,11 +6255,25 @@ vertical_coefficients:
                     const bool tile_is_domain = grid_info_ &&
                         grid_info_->its == grid_info_->ids && grid_info_->jts == grid_info_->jds &&
                         grid_info_->ite >= grid_info_->ide - 1 && grid_info_->jte >= grid_info_->jde - 1;
-                    if (!config_flags_periodic_x_ || config_flags_periodic_y_ || !tile_is_domain) {
+                    // Config-value guards run HERE (not in validate()): validate() executes at
+                    // config-load time, BEFORE the Fortran set_config pass-through delivers the
+                    // actual namelist values, and its failure mode is a silent full reset —
+                    // this guard sees the final effective runtime values and fails fast.
+                    const int se_nss = wrf::sdirk3::g_sdirk3_config.split_explicit_time_step_sound;
+                    const bool se_nss_ok = (se_nss >= 4) && (se_nss % 2 == 0);
+                    const bool se_lid = wrf::sdirk3::g_sdirk3_config.split_explicit_top_lid;
+                    if (!config_flags_periodic_x_ || config_flags_periodic_y_ || !tile_is_domain ||
+                        !se_nss_ok || se_lid) {
                         std::cerr << "[SPLIT-EXPLICIT] FATAL: unsupported configuration ("
                                   << "periodic_x=" << config_flags_periodic_x_
                                   << ", periodic_y=" << config_flags_periodic_y_
                                   << ", tile_is_domain=" << tile_is_domain
+                                  << ", time_step_sound=" << se_nss
+                                  << (se_nss_ok ? "" : " [must be an explicit even value >= 4; "
+                                                       "WRF's auto formula for 0 is not implemented]")
+                                  << ", top_lid=" << se_lid
+                                  << (se_lid ? " [horizontal_pgf lid branch not ported — a "
+                                               "calc_coef_w-only lid mixes top BCs]" : "")
                                   << ") — the split-explicit core currently requires "
                                      "single-tile/single-rank, periodic-x, symmetric-y (dry "
                                      "em_b_wave-class). Disable sdirk3_split_explicit or run "
