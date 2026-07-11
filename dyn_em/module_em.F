@@ -726,6 +726,16 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
                                        ims, ime, jms, jme, kms, kme,   &
                                        its, ite, jts, jte, kts, kte   )
 
+   ! [PARITY rw] TEMP: rw_tend decomposition points
+   IF (rk_step == 1) THEN
+      WRITE(0,'(A,E14.6)') '[PARITY rw] before_pg_buoy max=', &
+         MAXVAL(ABS(rw_tend(its:MIN(ite,ide-1),kts:kte,jts:MIN(jte,jde-1))))
+      WRITE(0,'(A,E14.6,A,8E14.6)') '[PARITY rw] p max=', &
+         MAXVAL(ABS(p(its:MIN(ite,ide-1),kts:kte,jts:MIN(jte,jde-1)))), &
+         ' p(1,1:8,1)=', p(its,kts:kts+7,jts)
+      WRITE(0,'(A,E14.6)') '[PARITY rw] cqw max=', &
+         MAXVAL(ABS(cqw(its:MIN(ite,ide-1),kts:kte,jts:MIN(jte,jde-1))))
+   END IF
    IF (non_hydrostatic) THEN
         CALL pg_buoy_w( rw_tend, p, cqw, mu, mub,       &
                         c1f,c2f,                        &
@@ -734,6 +744,11 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
                         ims, ime, jms, jme, kms, kme,   &
                         its, ite, jts, jte, kts, kte   )
    ENDIF
+
+   IF (rk_step == 1) THEN
+      WRITE(0,'(A,E14.6)') '[PARITY rw] after_pg_buoy max=', &
+         MAXVAL(ABS(rw_tend(its:MIN(ite,ide-1),kts:kte,jts:MIN(jte,jde-1))))
+   END IF
 
    CALL w_damp   ( rw_tend, max_vert_cfl,             &
                     max_horiz_cfl,                    &
@@ -770,6 +785,12 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
 
    END IF
 
+   ! [PARITY rw] TEMP (2026-07-11, revert after parity campaign): rw_tend before/after curvature
+   IF (rk_step == 1) THEN
+      WRITE(0,'(A,E14.6)') '[PARITY rw] before_curvature max=', &
+         MAXVAL(ABS(rw_tend(its:MIN(ite,ide-1),kts:kte,jts:MIN(jte,jde-1))))
+   END IF
+
    CALL curvature ( ru, rv, rw, u, v, w,            &
                      ru_tend,  rv_tend,  rw_tend,    &
                      config_flags,                   &
@@ -779,6 +800,11 @@ SUBROUTINE rk_tendency ( config_flags, rk_step,                           &
                      ids, ide, jds, jde, kds, kde,   &
                      ims, ime, jms, jme, kms, kme,   &
                      its, ite, jts, jte, kts, kte   )
+
+   IF (rk_step == 1) THEN
+      WRITE(0,'(A,E14.6)') '[PARITY rw] after_curvature max=', &
+         MAXVAL(ABS(rw_tend(its:MIN(ite,ide-1),kts:kte,jts:MIN(jte,jde-1))))
+   END IF
 
 ! Damping option added for Held-Suarez test (also uses lw option HELDSUAREZ)
 
