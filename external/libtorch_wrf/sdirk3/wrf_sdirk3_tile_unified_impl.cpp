@@ -28016,7 +28016,44 @@ boundary_tensors_done:
     auto i_offset_tile = its - ims;  // Offset in i-direction
     auto j_offset_tile = jts - jms;  // Offset in j-direction
     auto k_offset_tile = kts - kms;  // Offset in k-direction
-    
+
+    // MSF PREFLIGHT (external review round 3d): null + staggered-extent invariants
+    // checked BEFORE any pointer arithmetic, raw scan (msf_raw_stats), or
+    // from_blob view. The v2 ABI check only enforces ite<=ime / jte<=jme; the
+    // U/V views additionally read one staggered column/row, so a patch with
+    // ite==ime or jte==jme would pass the ABI check yet read past the backing
+    // allocation here. Every invariant below holds for any correct WRF halo
+    // patch — a violation means a broken caller, so FAIL FAST.
+    {
+        const bool msf_ptrs_ok =
+            config.msftx_ptr && config.msfty_ptr && config.msfux_ptr &&
+            config.msfuy_ptr && config.msfvx_ptr && config.msfvy_ptr;
+        const int pf_nx_u = safe_config.nx_u;
+        const int pf_ny_v = safe_config.ny_v;
+        const bool stagger_ok =
+            (pf_nx_u == safe_config.nx + 1) && (pf_ny_v == safe_config.ny + 1);
+        const bool extents_ok =
+            i_offset_tile >= 0 && j_offset_tile >= 0 &&
+            i_offset_tile + pf_nx_u <= mem_nx &&          // U columns (staggered)
+            j_offset_tile + safe_config.ny <= mem_ny &&   // U/mass rows
+            i_offset_tile + safe_config.nx <= mem_nx &&   // mass/V columns
+            j_offset_tile + pf_ny_v <= mem_ny;            // V rows (staggered)
+        if (!msf_ptrs_ok || !stagger_ok || !extents_ok) {
+            std::cerr << "[SDIRK3] FATAL: map-factor preflight failed ("
+                      << "ptrs_ok=" << msf_ptrs_ok
+                      << ", nx=" << safe_config.nx << ", nx_u=" << pf_nx_u
+                      << ", ny=" << safe_config.ny << ", ny_v=" << pf_ny_v
+                      << ", i_offset=" << i_offset_tile << ", j_offset=" << j_offset_tile
+                      << ", mem_nx=" << mem_nx << ", mem_ny=" << mem_ny
+                      << ") — staggered extents must fit the (ims:ime,jms:jme) "
+                         "allocation and all six msf pointers must be wired."
+                      << std::endl;
+            throw std::runtime_error(
+                "sdirk3: map-factor preflight failed (null pointer or staggered "
+                "extent exceeds patch allocation) — refusing to build msf views");
+        }
+    }
+
     // Create tensors for map scale factors at mass points
     // For idealized cases, map scale factors may not be initialized in halo regions
     // Therefore, create tensors directly from tile bounds
@@ -28157,9 +28194,12 @@ boundary_tensors_done:
             auto msfux_accessor = msfux_tile.accessor<float, 2>();
             auto msfuy_accessor = msfuy_tile.accessor<float, 2>();
             
-            // Bound from the tile-origin pointer: rows j=0..ny-1 at Fortran stride
-            // mem_nx, columns i=0..nx_u_tile-1 (staggered index lives WITHIN mem_nx).
-            const size_t u_copy_max = static_cast<size_t>(config.ny - 1) * mem_nx + nx_u_tile;
+            // Real backing-allocation bound from the tile-origin pointer (review
+            // round 3d: the previous bound was derived from the loop extents and
+            // therefore tautologically unreachable). Elements available from the
+            // tile origin to the end of the (ims:ime, jms:jme) allocation:
+            const size_t u_copy_max =
+                static_cast<size_t>(mem_ny - j_offset_tile) * mem_nx - i_offset_tile;
             for (int j = 0; j < config.ny; ++j) {
                 for (int i = 0; i < nx_u_tile; ++i) {
                     // Validate indices before access

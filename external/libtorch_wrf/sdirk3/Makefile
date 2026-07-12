@@ -105,11 +105,23 @@ UNIFIED_HEADER_DEPS = \
 
 $(UNIFIED_HEADER_DEPS): $(UNIFIED_HEADER)
 
+# Review round 3d: the raw map-factor safety predicate lives in an inline
+# header consumed by the impl. Without a dependency, a header-only fix would
+# leave the production archive on the OLD inline predicate while CTest passes
+# on the new one. Explicit dep covers builds before .d files exist; -MMD -MP
+# below keeps every future header edit tracked automatically.
+wrf_sdirk3_tile_unified_impl.o: wrf_sdirk3_msf_raw_stats.h
+
+# Compiler-generated header dependencies (-MMD writes %.d alongside %.o;
+# -MP adds phony targets so deleted headers don't break the build).
+DEPFILES = $(OBJECTS:.o=.d)
+-include $(DEPFILES)
+
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 clean:
-	rm -f $(OBJECTS) $(LIB_NAME)
+	rm -f $(OBJECTS) $(DEPFILES) $(LIB_NAME)
 
 test: $(LIB_NAME)
 	@echo "Library built successfully: $(LIB_NAME)"

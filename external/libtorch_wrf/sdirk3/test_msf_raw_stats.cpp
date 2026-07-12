@@ -129,6 +129,18 @@ int main() {
                "stride canary: off-by-one stride (old bug) hits sentinel and fails");
     }
 
+    // --- Origin canaries (round 3d): the production call-site's OLD origins
+    // drifted off the tile — old U origin base+1 (from its-(ims-1)) reads one
+    // column right; old V origin base+mem_nx (from jts-(jms-1)) reads one row
+    // down. Both must pick up the sentinel halo and fail. ---
+    {
+        auto p = make_patch(mem_ny, mem_nx, 7.0f, j0, i0, ny, nx, 1.0f);
+        expect(!msf_raw_stats(tile_base(p) + 1, ny, nx, mem_nx).genuine_unit(kTol),
+               "origin canary: old U origin (base+1) hits sentinel and fails");
+        expect(!msf_raw_stats(tile_base(p) + mem_nx, ny, nx, mem_nx).genuine_unit(kTol),
+               "origin canary: old V origin (base+mem_nx) hits sentinel and fails");
+    }
+
     // --- Degenerate wiring ---
     {
         expect(!msf_raw_stats(nullptr, ny, nx, mem_nx).genuine_unit(kTol),
