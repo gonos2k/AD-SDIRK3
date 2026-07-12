@@ -469,6 +469,28 @@ extern "C" void sdirk3_tile_unified_step_zerocopy_v2(
     config.nx = dims.nx; config.ny = dims.ny; config.nz = dims.nz;
     config.nx_u = dims.nx_u; config.ny_v = dims.ny_v; config.nz_w = dims.nz_w;
 
+    // TEST-ONLY fault injection (review round 3g negative regression): with
+    // WRF_SDIRK3_TEST_STAGGER_MISMATCH_AT=N (default: unset = off, zero
+    // behavior change), the N-th and later v2 calls pass nx_u=nx — simulating
+    // a caller whose per-call extents disagree with the solver's initialized
+    // geometry. The per-call geometry validation in advanceZeroCopy must
+    // REJECT it (throw), proving mismatches are re-checked on EVERY call and
+    // never approved via cached members.
+    {
+        static std::atomic<int> v2_call_counter{0};
+        const int call_no = ++v2_call_counter;
+        const char* inj_env = std::getenv("WRF_SDIRK3_TEST_STAGGER_MISMATCH_AT");
+        if (inj_env && *inj_env) {
+            const int inj_at = std::atoi(inj_env);
+            if (inj_at > 0 && call_no >= inj_at) {
+                std::cerr << "[SDIRK3 TEST] injecting stagger mismatch nx_u=nx at v2 call "
+                          << call_no << " (WRF_SDIRK3_TEST_STAGGER_MISMATCH_AT="
+                          << inj_at << ")" << std::endl;
+                config.nx_u = config.nx;
+            }
+        }
+    }
+
     // Set WRF indices in the solver
     solver.setWRFIndices(bounds.its, bounds.ite, bounds.jts, bounds.jte, bounds.kts, bounds.kte,
                         bounds.ids, bounds.ide, bounds.jds, bounds.jde, bounds.kds, bounds.kde,

@@ -464,6 +464,30 @@ else
   /bin/rm -f $ZAP >& /dev/null
   make $arglist A2DCASE="$A2DCASE" WRF_SRC_ROOT_DIR="$WRF_SRC_ROOT_DIR"
 
+  # NONZERO BUILD CONTRACT (external review round 3g): the root make runs with
+  # -i (errors ignored, stock WRF) and this script used to exit 0
+  # unconditionally, so a failed sub-compile with a pre-existing object or
+  # archive produced a stale binary reported as success. Contract for em_*
+  # targets: main/wrf.exe must exist and NO tracked dynamics source (sdirk3
+  # C++/headers excluding standalone tests and generated artifacts, dyn_em .F)
+  # may be newer than it — a newer source means the binary cannot contain it.
+  set em_target = 0
+  foreach a ( $arglist )
+    if ( "$a" =~ em_* || "$a" == wrf ) set em_target = 1
+  end
+  if ( $em_target == 1 ) then
+    if ( ! -e main/wrf.exe ) then
+      echo "compile: FAILED (nonzero contract) - main/wrf.exe was not produced"
+      exit 1
+    endif
+    set stale_srcs = `find external/libtorch_wrf/sdirk3 dyn_em \( -name '*.cpp' -o -name '*.h' -o -name '*.F' \) ! -name 'test_*' ! -path '*graphify-out*' -newer main/wrf.exe`
+    if ( "$stale_srcs" != "" ) then
+      echo "compile: FAILED (nonzero contract) - sources newer than main/wrf.exe (stale binary):"
+      echo "  $stale_srcs"
+      exit 1
+    endif
+  endif
+
 endif
 
 exit 0

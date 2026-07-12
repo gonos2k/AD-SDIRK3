@@ -27169,37 +27169,51 @@ boundary_tensors_done:
         nz_w_ = config.nz + 1;  // Emergency fallback
     }
     
-    // Create sanitized config values for use throughout this function
-    // This prevents crashes from corrupted member variables
-    auto safe_config = config;  // Copy the config
-    
-    // CRITICAL FIX: Sanitize ALL dimensions, not just staggered ones
-    // The base dimensions can also be corrupted from Fortran-C++ ABI issues
-    
-    // Sanitize base dimensions using member variables
-    if (config.nx <= 0 || config.nx > 1000) {
-        safe_config.nx = nx_;
-    } else {
-        safe_config.nx = config.nx;
+    // PER-CALL GEOMETRY VALIDATION (external review round 3g — replaces the old
+    // "sanitize by substituting init-time members" block). Substitution LAUNDERED
+    // the per-call ABI values through cached members: a caller passing extents
+    // that differ from init (e.g. nx_u==nx while the member says nx+1) was
+    // silently "repaired" to the member value, so every downstream check —
+    // including the split stagger guard — validated a ghost. The reviewer's
+    // counterexample: init nx_u=101, call nx_u=100 => old code approved
+    // full_stagger=1. Correct posture: VALIDATE the actually-passed values and
+    // REJECT on violation; use ONE call-local validated geometry afterwards.
+    auto safe_config = config;  // dims below are the caller's values, verbatim
+    {
+        const bool dims_positive =
+            config.nx > 0 && config.ny > 0 && config.nz > 0 &&
+            config.nx_u > 0 && config.ny_v > 0 && config.nz_w > 0;
+        // Staggered extent can only be the base extent or base+1 (WRF stagger).
+        const bool stagger_sane =
+            config.nx_u >= config.nx && config.nx_u <= config.nx + 1 &&
+            config.ny_v >= config.ny && config.ny_v <= config.ny + 1 &&
+            config.nz_w >= config.nz && config.nz_w <= config.nz + 1;
+        // The solver's tensors are sized from the INIT geometry; a mid-run
+        // geometry change is unsupported for every path. Enforce equality with
+        // the initialized members (when they are initialized) instead of
+        // silently substituting them.
+        const bool members_initialized = (nx_ > 0 && ny_ > 0 && nz_ > 0);
+        const bool matches_init = !members_initialized ||
+            (config.nx == nx_ && config.ny == ny_ && config.nz == nz_ &&
+             config.nx_u == nx_u_ && config.ny_v == ny_v_ && config.nz_w == nz_w_);
+        if (!dims_positive || !stagger_sane || !matches_init) {
+            std::cerr << "[SDIRK3] FATAL: per-call geometry validation failed ("
+                      << "call nx/ny/nz=" << config.nx << "/" << config.ny << "/" << config.nz
+                      << ", nx_u/ny_v/nz_w=" << config.nx_u << "/" << config.ny_v << "/" << config.nz_w
+                      << "; init nx/ny/nz=" << nx_ << "/" << ny_ << "/" << nz_
+                      << ", nx_u/ny_v/nz_w=" << nx_u_ << "/" << ny_v_ << "/" << nz_w_
+                      << "; positive=" << dims_positive
+                      << ", stagger_sane=" << stagger_sane
+                      << ", matches_init=" << matches_init
+                      << ") — the caller's per-call extents are rejected, never "
+                         "silently replaced by cached members." << std::endl;
+            throw std::runtime_error(
+                "sdirk3: per-call geometry validation failed (dimension "
+                "invalid, stagger shape impossible, or extents differ from the "
+                "solver's initialized geometry)");
+        }
     }
-    
-    if (config.ny <= 0 || config.ny > 1000) {
-        safe_config.ny = ny_;
-    } else {
-        safe_config.ny = config.ny;
-    }
-    
-    if (config.nz <= 0 || config.nz > 1000) {
-        safe_config.nz = nz_;
-    } else {
-        safe_config.nz = config.nz;
-    }
-    
-    // Sanitize staggered dimensions
-    safe_config.nx_u = nx_u_;  // Use sanitized values
-    safe_config.ny_v = ny_v_;
-    safe_config.nz_w = nz_w_;
-    
+
     
     auto options = make_cpu_from_blob_opts();  // FIX Batch24 Issue 5
     
@@ -28121,11 +28135,10 @@ boundary_tensors_done:
     
     // Add debug right after mass-point map scale factor extraction
     
-    // Apply sanity check for nx_u_ EARLY to use throughout this section
-    int nx_u_checked = nx_u_;
-    if (nx_u_checked <= 0 || nx_u_checked > 1000) {
-        nx_u_checked = config.nx + 1;  // Fallback to expected staggered dimension
-    }
+    // Round 3g: ONE call-local validated geometry — the entry validation above
+    // already rejected any invalid/mismatched per-call extents, so read them
+    // directly (no member fallback, which would reintroduce the laundering).
+    int nx_u_checked = safe_config.nx_u;
     
     // Create tensors for map scale factors at u-points
     // For idealized cases, create directly from tile bounds
@@ -28145,16 +28158,13 @@ boundary_tensors_done:
     
     // Check pointer alignment for ARM64 and LibTorch requirements
     
-    // Add sanity check for corrupted values FIRST before any usage
-    int nx_u_safe = nx_u_;
-    if (nx_u_safe <= 0 || nx_u_safe > 1000) {
-        nx_u_safe = config.nx + 1;  // Fallback to expected staggered dimension
-    }
+    // Round 3g: validated per-call extent (entry validation rejected bad values).
+    int nx_u_safe = safe_config.nx_u;
     
     // DEBUG: Check raw WRF data before tensor creation
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
         // Checking debug removed
-        for (int j = 0; j < std::min(3, config.ny); ++j) {
+        for (int j = 0; j < std::min(3, safe_config.ny); ++j) {
             for (int i = 0; i < std::min(10, nx_u_safe); ++i) {
                 [[maybe_unused]] float val = msfuy_tile_ptr[j * mem_nx + i];
             }
@@ -28166,7 +28176,7 @@ boundary_tensors_done:
 
         // Check if there are zeros in the raw data
         int zero_count = 0;
-        for (int j = 0; j < config.ny; ++j) {
+        for (int j = 0; j < safe_config.ny; ++j) {
             for (int i = 0; i < nx_u_safe; ++i) {
                 if (msfuy_tile_ptr[j * mem_nx + i] == 0.0f) {
                     zero_count++;
@@ -28188,9 +28198,9 @@ boundary_tensors_done:
     // test_msf_raw_stats.cpp.
     {
         const auto ux_stats = wrf::sdirk3::msf_raw_stats(
-            msfux_tile_ptr, config.ny, nx_u_tile, mem_nx);
+            msfux_tile_ptr, safe_config.ny, nx_u_tile, mem_nx);
         const auto uy_stats = wrf::sdirk3::msf_raw_stats(
-            msfuy_tile_ptr, config.ny, nx_u_tile, mem_nx);
+            msfuy_tile_ptr, safe_config.ny, nx_u_tile, mem_nx);
         msf_raw_u_checked_ = true;
         msf_raw_u_unit_ = ux_stats.genuine_unit(1e-6f) && uy_stats.genuine_unit(1e-6f);
     }
@@ -28204,9 +28214,9 @@ boundary_tensors_done:
         
         // Create aligned tensors and copy data
         try {
-            msfux_tile = torch::empty({config.ny, nx_u_tile}, options);
+            msfux_tile = torch::empty({safe_config.ny, nx_u_tile}, options);
             
-            msfuy_tile = torch::empty({config.ny, nx_u_tile}, options);
+            msfuy_tile = torch::empty({safe_config.ny, nx_u_tile}, options);
             
             // Copy with proper striding
             // FIX Round193: accessor() is CPU-only, verify tensor is on CPU and correct dtype
@@ -28223,7 +28233,7 @@ boundary_tensors_done:
             // tile origin to the end of the (ims:ime, jms:jme) allocation:
             const size_t u_copy_max =
                 static_cast<size_t>(mem_ny - j_offset_tile) * mem_nx - i_offset_tile;
-            for (int j = 0; j < config.ny; ++j) {
+            for (int j = 0; j < safe_config.ny; ++j) {
                 for (int i = 0; i < nx_u_tile; ++i) {
                     // Validate indices before access
                     size_t idx = static_cast<size_t>(j) * mem_nx + i;
@@ -28245,13 +28255,13 @@ boundary_tensors_done:
         // row stride mem_nx (shared memory bounds — see layout-fix comment above).
         msfux_tile = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
             msfux_tile_ptr,
-            {config.ny, nx_u_tile},  // Shape: [j, i] for C++ indexing
+            {safe_config.ny, nx_u_tile},  // Shape: [j, i] for C++ indexing
             {mem_nx, 1},               // Strides: j-stride=mem_nx, i-stride=1
             options
         );
         msfuy_tile = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
             msfuy_tile_ptr,
-            {config.ny, nx_u_tile},  // Shape: [j, i] for C++ indexing
+            {safe_config.ny, nx_u_tile},  // Shape: [j, i] for C++ indexing
             {mem_nx, 1},               // Strides: j-stride=mem_nx, i-stride=1
             options
         );
@@ -28289,7 +28299,7 @@ boundary_tensors_done:
         float default_msfuy = 1.0f;
         bool found_nonzero = false;
         
-        for (int j = 0; j < config.ny && !found_nonzero; ++j) {
+        for (int j = 0; j < safe_config.ny && !found_nonzero; ++j) {
             for (int i = 1; i < nx_u_safe_for_bc - 1; ++i) {
                 if (msfux_accessor[j][i] != 0.0f && msfuy_accessor[j][i] != 0.0f) {
                     default_msfux = msfux_accessor[j][i];
@@ -28305,7 +28315,7 @@ boundary_tensors_done:
         // tensor creation, via wrf::sdirk3::msf_raw_stats above (review round 3c);
         // this loop is purely the legacy zero-repair for downstream numerics.
         [[maybe_unused]] int zeros_fixed = 0;
-        for (int j = 0; j < config.ny; ++j) {
+        for (int j = 0; j < safe_config.ny; ++j) {
             for (int i = 0; i < nx_u_safe_for_bc; ++i) {
                 if (msfux_accessor[j][i] == 0.0f) {
                     msfux_accessor[j][i] = default_msfux;
@@ -28402,13 +28412,13 @@ boundary_tensors_done:
 
     auto msfvx_tile = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
         msfvx_tile_ptr,
-        {safe_config.ny_v, config.nx},  // Shape: [j, i], V-staggered j extent
+        {safe_config.ny_v, safe_config.nx},  // Shape: [j, i], V-staggered j extent
         {mem_nx, 1},                     // True Fortran row stride
         options
     );
     auto msfvy_tile = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
         msfvy_tile_ptr,
-        {safe_config.ny_v, config.nx},
+        {safe_config.ny_v, safe_config.nx},
         {mem_nx, 1},
         options
     );
@@ -28426,33 +28436,33 @@ boundary_tensors_done:
         auto msfvx_accessor = msfvx_tile.accessor<float, 2>();
         auto msfvy_accessor = msfvy_tile.accessor<float, 2>();
 
-        if (jts_ == jds_ && safe_config.ny_v > config.ny) {
+        if (jts_ == jds_ && safe_config.ny_v > safe_config.ny) {
             // At bottom boundary
-            for (int i = 0; i < config.nx; ++i) {
-                if (msfvx_accessor[0][i] == 0.0f && config.ny > 0) {
-                    msfvx_accessor[0][i] = msfvx_accessor[config.ny-1][i];
+            for (int i = 0; i < safe_config.nx; ++i) {
+                if (msfvx_accessor[0][i] == 0.0f && safe_config.ny > 0) {
+                    msfvx_accessor[0][i] = msfvx_accessor[safe_config.ny-1][i];
                 }
-                if (msfvy_accessor[0][i] == 0.0f && config.ny > 0) {
-                    msfvy_accessor[0][i] = msfvy_accessor[config.ny-1][i];
+                if (msfvy_accessor[0][i] == 0.0f && safe_config.ny > 0) {
+                    msfvy_accessor[0][i] = msfvy_accessor[safe_config.ny-1][i];
                 }
             }
         }
         
-        if (jte_ == jde_ && config.ny_v > config.ny) {
+        if (jte_ == jde_ && safe_config.ny_v > safe_config.ny) {
             // At top boundary
-            for (int i = 0; i < config.nx; ++i) {
-                if (msfvx_accessor[config.ny_v-1][i] == 0.0f && config.ny_v > 1) {
-                    msfvx_accessor[config.ny_v-1][i] = msfvx_accessor[1][i];
+            for (int i = 0; i < safe_config.nx; ++i) {
+                if (msfvx_accessor[safe_config.ny_v-1][i] == 0.0f && safe_config.ny_v > 1) {
+                    msfvx_accessor[safe_config.ny_v-1][i] = msfvx_accessor[1][i];
                 }
-                if (msfvy_accessor[config.ny_v-1][i] == 0.0f && config.ny_v > 1) {
-                    msfvy_accessor[config.ny_v-1][i] = msfvy_accessor[1][i];
+                if (msfvy_accessor[safe_config.ny_v-1][i] == 0.0f && safe_config.ny_v > 1) {
+                    msfvy_accessor[safe_config.ny_v-1][i] = msfvy_accessor[1][i];
                 }
             }
         }
         
         // Fix any remaining zeros by setting to 1.0 (no map transformation)
-        for (int j = 0; j < config.ny_v; ++j) {
-            for (int i = 0; i < config.nx; ++i) {
+        for (int j = 0; j < safe_config.ny_v; ++j) {
+            for (int i = 0; i < safe_config.nx; ++i) {
                 if (msfvx_accessor[j][i] == 0.0f) {
                     msfvx_accessor[j][i] = 1.0f;
                 }
