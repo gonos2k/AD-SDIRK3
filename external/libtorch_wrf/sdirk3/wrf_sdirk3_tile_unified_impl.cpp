@@ -6295,7 +6295,10 @@ vertical_coefficients:
                     // nx_u==nx / ny_v==ny in general WRF tiling), so the universal msf
                     // preflight only checks allocation fit — the shape assumption is
                     // enforced HERE, where the split path actually relies on it.
-                    const bool se_stagger_ok = (nx_u_ == nx_ + 1) && (ny_v_ == ny_ + 1);
+                    // Round 3f: consume the flag evaluated PER CALL in the msf preflight
+                    // from the ACTUAL ABI-passed extents (safe_config), not init-time
+                    // members which can go stale vs what the caller passes on this call.
+                    const bool se_stagger_ok = split_stagger_ok_;
                     bool se_msf_unit = true;
                     {
                         torch::NoGradGuard ng;
@@ -28052,6 +28055,12 @@ boundary_tensors_done:
             j_offset_tile + safe_config.ny <= mem_ny &&   // U/mass rows
             i_offset_tile + safe_config.nx <= mem_nx &&   // mass/V columns
             j_offset_tile + pf_ny_v <= mem_ny;            // V rows (actual extent)
+        // Round 3f: record the +1 stagger shape from the ACTUAL per-call extents
+        // for the split guard (init-time members can go stale vs what the caller
+        // passes on this call). Universal preflight itself does NOT require it —
+        // see the round-3e note above.
+        split_stagger_ok_ =
+            (pf_nx_u == safe_config.nx + 1) && (pf_ny_v == safe_config.ny + 1);
         if (!msf_ptrs_ok || !extents_ok) {
             std::cerr << "[SDIRK3] FATAL: map-factor preflight failed ("
                       << "ptrs_ok=" << msf_ptrs_ok

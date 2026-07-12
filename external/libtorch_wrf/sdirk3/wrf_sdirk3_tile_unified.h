@@ -2056,6 +2056,12 @@ private:
     //                        wrf_sdirk3_msf_raw_stats.h / test_msf_raw_stats.cpp.
     bool msf_raw_u_checked_ = false;
     bool msf_raw_u_unit_ = false;
+    // Round 3f: whole-domain +1 stagger shape (nx_u==nx+1 && ny_v==ny+1),
+    // evaluated PER CALL in the msf preflight from the ACTUAL ABI-passed
+    // extents (safe_config) — not from init-time members, which can go stale
+    // relative to what the caller passes. Consumed by the split-explicit
+    // supported-config guard. Fail-closed default.
+    bool split_stagger_ok_ = false;
 
     // Raw (global-domain) BC flags from Fortran namelist/config.
     // These are projected to process-local flags by refreshProcessAwareBoundaryFlags_().
