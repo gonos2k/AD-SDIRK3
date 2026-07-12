@@ -442,7 +442,8 @@ CONTAINS
       CALL sdirk3_mpi_safety_init()
 
       ! Initialize solvers for each tile
-      !$OMP PARALLEL DO PRIVATE(ij,its,ite,jts,jte,kts,kte,nx,ny,nz,nx_u,ny_v,nz_w,tile_id,dx,dy) &
+      !$OMP PARALLEL DO PRIVATE(ij,its,ite,jts,jte,kts,kte,nx,ny,nz,nx_u,ny_v,nz_w,tile_id,dx,dy, &
+      !$OMP                     message) &
       !$OMP SHARED(ims,ime,jms,jme,kms,kme)
       DO ij = 1, grid%num_tiles
          
@@ -892,7 +893,8 @@ CONTAINS
       !$OMP                     nx_u,ny_v,nz_w,i_endu,j_endv,i,j,nzeros,message, &
       !$OMP                     bounds,dims,scalars,bdy_cfg, &
       !$OMP                     step_outcome_rc,step_outcome_code, &
-      !$OMP                     step_final_update_aborted,step_progress_ratio_valid)
+      !$OMP                     step_final_update_aborted,step_progress_ratio_valid, &
+      !$OMP                     step_progress_ratio)
       DO ij = 1, grid%num_tiles
          
          ! Get tile bounds

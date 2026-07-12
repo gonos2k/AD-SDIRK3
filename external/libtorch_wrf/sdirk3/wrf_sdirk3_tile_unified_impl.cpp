@@ -6262,7 +6262,31 @@ vertical_coefficients:
                     const int se_nss = wrf::sdirk3::g_sdirk3_config.split_explicit_time_step_sound;
                     const bool se_nss_ok = (se_nss >= 4) && (se_nss % 2 == 0);
                     const bool se_lid = wrf::sdirk3::g_sdirk3_config.split_explicit_top_lid;
+                    // Review round 2: the guard must check the FULL declared envelope, not a
+                    // subset — y must actually be symmetric walls (not open/specified/nested),
+                    // map factors must be unit (the acoustic module and Omega builder drop msf;
+                    // checked directly on the wired tensors, stronger than a map_proj flag),
+                    // and the not-yet-implemented split adjoint/trajectory options must not be
+                    // silently accepted (runAdjointReplay would hand back an identity/stale
+                    // adjoint — fail instead until Inc 7 lands the composite VJP).
+                    const bool se_y_ok = config_flags_symmetric_ys_ && config_flags_symmetric_ye_ &&
+                                         !config_flags_open_ys_ && !config_flags_specified_ &&
+                                         !config_flags_nested_;
+                    bool se_msf_unit = true;
+                    {
+                        torch::NoGradGuard ng;
+                        auto unit1 = [](const torch::Tensor& m) {
+                            return !m.defined() || m.numel() == 0 ||
+                                   (m.detach() - 1.0f).abs().max().item<float>() < 1e-6f;
+                        };
+                        se_msf_unit = unit1(msftx_) && unit1(msfty_) && unit1(msfux_) &&
+                                      unit1(msfuy_) && unit1(msfvx_) && unit1(msfvy_);
+                    }
+                    const bool se_adjoint_requested =
+                        wrf::sdirk3::g_sdirk3_config.save_trajectory ||
+                        wrf::sdirk3::g_sdirk3_config.obs_aware_4dvar;
                     if (!config_flags_periodic_x_ || config_flags_periodic_y_ || !tile_is_domain ||
+                        !se_y_ok || !se_msf_unit || se_adjoint_requested ||
                         !se_nss_ok || se_lid) {
                         std::cerr << "[SPLIT-EXPLICIT] FATAL: unsupported configuration ("
                                   << "periodic_x=" << config_flags_periodic_x_
@@ -6274,6 +6298,12 @@ vertical_coefficients:
                                   << ", top_lid=" << se_lid
                                   << (se_lid ? " [horizontal_pgf lid branch not ported — a "
                                                "calc_coef_w-only lid mixes top BCs]" : "")
+                                  << ", symmetric_y=" << se_y_ok
+                                  << ", unit_msf=" << se_msf_unit
+                                  << ", adjoint/trajectory_requested=" << se_adjoint_requested
+                                  << (se_adjoint_requested ? " [split composite VJP not "
+                                       "implemented until Inc 7 — a silent identity/stale "
+                                       "adjoint would be returned]" : "")
                                   << ") — the split-explicit core currently requires "
                                      "single-tile/single-rank, periodic-x, symmetric-y (dry "
                                      "em_b_wave-class). Disable sdirk3_split_explicit or run "

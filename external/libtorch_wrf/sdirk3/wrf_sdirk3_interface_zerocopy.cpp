@@ -584,12 +584,12 @@ void* sdirk3_tile_solver_create_zerocopy(
     // v20.14: Ensure env var overrides are loaded (once per process).
     // wrf_sdirk3_load_config_from_namelist() is never called from Fortran,
     // so load_from_env() was never reached. Call it here on first solver creation.
+    // P0 FIX (2026-07-12, external review): solver creation runs under an OpenMP tile loop —
+    // an unsynchronized `static bool` here let multiple threads race load_from_env() against
+    // concurrent reads of the global config. std::call_once serializes the one-time load.
     {
-        static bool env_loaded = false;
-        if (!env_loaded) {
-            wrf::sdirk3::g_sdirk3_config.load_from_env();
-            env_loaded = true;
-        }
+        static std::once_flag env_once;
+        std::call_once(env_once, [] { wrf::sdirk3::g_sdirk3_config.load_from_env(); });
     }
 
     // FIX Round150: Gate solver creation debug output with debug_level >= 2

@@ -494,7 +494,7 @@ struct SDIRK3Config {
     // when split_explicit is ON; defaults match the em_b_wave namelist, so unset = current
     // behavior. Set via Fortran set_config (module_implicit_sdirk3) or env
     // WRF_SDIRK3_SPLIT_EXPLICIT_{TIME_STEP_SOUND,EPSSM,SMDIV,EMDIV,TOP_LID}.
-    int split_explicit_time_step_sound = 4;  // WRF time_step_sound (0=auto -> consumer falls back to 4)
+    int split_explicit_time_step_sound = 4;  // WRF time_step_sound; split guard REQUIRES explicit even >= 4 (WRF's 0=auto formula not implemented)
     float split_explicit_epssm = 0.1f;       // WRF epssm: acoustic vertical off-centering
     float split_explicit_smdiv = 0.1f;       // WRF smdiv: 3D divergence damping
     float split_explicit_emdiv = 0.01f;      // WRF emdiv: external-mode filter
