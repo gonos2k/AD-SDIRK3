@@ -6275,8 +6275,12 @@ vertical_coefficients:
                     bool se_msf_unit = true;
                     {
                         torch::NoGradGuard ng;
+                        // FAIL-CLOSED (stop-gate round 3): an undefined/empty msf tensor means
+                        // the map factors were NEVER WIRED to this solver — that is "unverified",
+                        // not "unit". Treating it as safe would let a non-unit-map run whose msf
+                        // pointers were dropped pass the guard.
                         auto unit1 = [](const torch::Tensor& m) {
-                            return !m.defined() || m.numel() == 0 ||
+                            return m.defined() && m.numel() > 0 &&
                                    (m.detach() - 1.0f).abs().max().item<float>() < 1e-6f;
                         };
                         se_msf_unit = unit1(msftx_) && unit1(msfty_) && unit1(msfux_) &&
