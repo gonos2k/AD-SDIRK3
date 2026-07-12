@@ -9,8 +9,15 @@ TORCH_LDFLAGS := -L$(LIBTORCH_ROOT)/lib -ltorch -ltorch_cpu -lc10
 # Compiler settings (use Homebrew clang to match WRF link)
 CXX = /opt/homebrew/opt/llvm/bin/clang++
 CXXFLAGS = -std=c++17 -O2 -Wall -Wno-unused-parameter -Wno-missing-field-initializers
-CXXFLAGS += $(TORCH_INCLUDES)
-CXXFLAGS += -DNDEBUG
+# Review round 3j: configure.wrf passes CXXFLAGS=... as a COMMAND-LINE variable,
+# which overrides plain += additions. Structural requirements (Torch includes,
+# ABI macro below) must survive that override => use `override`. The former
+# `CXXFLAGS += -DNDEBUG` line is deliberately DROPPED, not overridden: the
+# configured build has never actually carried -DNDEBUG (the command-line
+# override voided it), and silently enabling it now would strip assert()
+# semantics from the validated production library — a behavior change this
+# build-hygiene fix must not smuggle in.
+override CXXFLAGS += $(TORCH_INCLUDES)
 
 # =========================================================================
 # OPT Pass33+: ABI Macro Enforcement (explicit opt-in required)
@@ -38,7 +45,7 @@ ifndef LIBTORCH_ABI
     $(warning ========================================)
     LIBTORCH_ABI := 0
 endif
-CXXFLAGS += -D_GLIBCXX_USE_CXX11_ABI=$(LIBTORCH_ABI)
+override CXXFLAGS += -D_GLIBCXX_USE_CXX11_ABI=$(LIBTORCH_ABI)
 
 # Surface ABI value in build output for visibility
 $(info [SDIRK3] Building with _GLIBCXX_USE_CXX11_ABI=$(LIBTORCH_ABI))

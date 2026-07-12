@@ -442,6 +442,18 @@ public:
     // Set staggered grid dimensions
     void setStaggeredDimensions(int nx_u, int ny_v, int nz_w);
 
+    // SINGLE geometry contract (external review round 3j): validate the
+    // caller's per-call dimensions against the solver's initialized geometry.
+    // int64 arithmetic (no signed-overflow UB), all six required positive and
+    // sane, stagger shape base <= staggered <= base+1, and STRICT equality
+    // with the init geometry — no "uninitialized => allow" escape (the
+    // constructor and setStaggeredDimensions guarantee valid init values or
+    // throw). Called from the v2 ABI entry BEFORE setWRFIndices/any state
+    // change, and again from advanceZeroCopy (defense in depth). Throws
+    // std::runtime_error on violation.
+    void validateCallGeometry(long long nx, long long ny, long long nz,
+                              long long nx_u, long long ny_v, long long nz_w) const;
+
     /**
      * FIX 2025-01-11 Round79/Round81: SINGLE ENTRY POINT for all cache invalidation
      *

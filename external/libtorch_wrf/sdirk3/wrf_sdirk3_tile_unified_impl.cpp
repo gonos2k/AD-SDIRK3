@@ -3077,13 +3077,24 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     int tile_id) 
     : wrf::sdirk3::TileSDIRK3Solver(nx, ny, nz, dx, dy, 0.0, tile_id) {
     
+    // Round 3j: validate the base dimensions BEFORE any +1 arithmetic — the
+    // old code computed nx+1 first and range-checked the RESULT, which is
+    // signed-overflow UB for nx near INT_MAX. Reject invalid inputs here so
+    // the init geometry every later validateCallGeometry() compares against
+    // is well-formed from birth.
+    if (nx <= 0 || nx > 10000 || ny <= 0 || ny > 10000 || nz <= 0 || nz > 10000) {
+        std::cerr << "CRITICAL ERROR: invalid base dimensions in constructor: "
+                  << "nx=" << nx << ", ny=" << ny << ", nz=" << nz << std::endl;
+        throw std::runtime_error("Invalid base dimensions in constructor");
+    }
+
     // Initialize staggered dimensions to default values
     // CRITICAL: These must be set correctly to prevent memory corruption
     // These will be overridden by setStaggeredDimensions if called
-    nx_u_ = nx + 1;  // U is staggered in x
-    ny_v_ = ny + 1;  // V is staggered in y  
+    nx_u_ = nx + 1;  // U is staggered in x (safe: nx validated <= 10000 above)
+    ny_v_ = ny + 1;  // V is staggered in y
     nz_w_ = nz + 1;  // W is staggered in z
-    
+
     // Validate initialization to catch corruption early
     if (nx_u_ <= 0 || nx_u_ > 10000 || ny_v_ <= 0 || ny_v_ > 10000 || nz_w_ <= 0 || nz_w_ > 10000) {
         std::cerr << "CRITICAL ERROR: Staggered dimensions corrupted in constructor!" << std::endl;
@@ -27151,74 +27162,19 @@ boundary_tensors_done:
         ; // OPT 2025-01-25: Label for spec_bdy_width==0 skip optimization
     }
 
-    // Round 3h: member corruption is FAIL-CLOSED. The old "emergency fallback"
-    // repaired a corrupted member FROM the caller's config right before the
-    // per-call validation below — so with a corrupted init geometry the
-    // matches_init check compared the caller's values against a copy of
-    // themselves (laundered again) and passed. A corrupted member means the
-    // solver's initialized geometry is unknown: no comparison against it can
-    // be trusted, and the tensors sized from it are suspect. Reject.
-    if (nx_u_ <= 0 || nx_u_ > 10000 ||
-        ny_v_ <= 0 || ny_v_ > 10000 ||
-        nz_w_ <= 0 || nz_w_ > 10000) {
-        std::cerr << "[SDIRK3] FATAL: initialized staggered geometry corrupted ("
-                  << "nx_u_=" << nx_u_ << " (0x" << std::hex << nx_u_ << std::dec << ")"
-                  << ", ny_v_=" << ny_v_ << " (0x" << std::hex << ny_v_ << std::dec << ")"
-                  << ", nz_w_=" << nz_w_ << " (0x" << std::hex << nz_w_ << std::dec << ")"
-                  << ") — refusing to repair members from the caller's values; "
-                     "the per-call validation would compare the caller against "
-                     "itself." << std::endl;
-        throw std::runtime_error(
-            "sdirk3: initialized staggered geometry corrupted (nx_u_/ny_v_/nz_w_) "
-            "— fail-closed, no emergency fallback");
-    }
-    
-    // PER-CALL GEOMETRY VALIDATION (external review round 3g — replaces the old
-    // "sanitize by substituting init-time members" block). Substitution LAUNDERED
-    // the per-call ABI values through cached members: a caller passing extents
-    // that differ from init (e.g. nx_u==nx while the member says nx+1) was
-    // silently "repaired" to the member value, so every downstream check —
-    // including the split stagger guard — validated a ghost. The reviewer's
-    // counterexample: init nx_u=101, call nx_u=100 => old code approved
-    // full_stagger=1. Correct posture: VALIDATE the actually-passed values and
-    // REJECT on violation; use ONE call-local validated geometry afterwards.
-    auto safe_config = config;  // dims below are the caller's values, verbatim
-    {
-        const bool dims_positive =
-            config.nx > 0 && config.ny > 0 && config.nz > 0 &&
-            config.nx_u > 0 && config.ny_v > 0 && config.nz_w > 0;
-        // Staggered extent can only be the base extent or base+1 (WRF stagger).
-        const bool stagger_sane =
-            config.nx_u >= config.nx && config.nx_u <= config.nx + 1 &&
-            config.ny_v >= config.ny && config.ny_v <= config.ny + 1 &&
-            config.nz_w >= config.nz && config.nz_w <= config.nz + 1;
-        // The solver's tensors are sized from the INIT geometry; a mid-run
-        // geometry change is unsupported for every path. Enforce equality with
-        // the initialized members (when they are initialized) instead of
-        // silently substituting them.
-        const bool members_initialized = (nx_ > 0 && ny_ > 0 && nz_ > 0);
-        const bool matches_init = !members_initialized ||
-            (config.nx == nx_ && config.ny == ny_ && config.nz == nz_ &&
-             config.nx_u == nx_u_ && config.ny_v == ny_v_ && config.nz_w == nz_w_);
-        if (!dims_positive || !stagger_sane || !matches_init) {
-            std::cerr << "[SDIRK3] FATAL: per-call geometry validation failed ("
-                      << "call nx/ny/nz=" << config.nx << "/" << config.ny << "/" << config.nz
-                      << ", nx_u/ny_v/nz_w=" << config.nx_u << "/" << config.ny_v << "/" << config.nz_w
-                      << "; init nx/ny/nz=" << nx_ << "/" << ny_ << "/" << nz_
-                      << ", nx_u/ny_v/nz_w=" << nx_u_ << "/" << ny_v_ << "/" << nz_w_
-                      << "; positive=" << dims_positive
-                      << ", stagger_sane=" << stagger_sane
-                      << ", matches_init=" << matches_init
-                      << ") — the caller's per-call extents are rejected, never "
-                         "silently replaced by cached members." << std::endl;
-            throw std::runtime_error(
-                "sdirk3: per-call geometry validation failed (dimension "
-                "invalid, stagger shape impossible, or extents differ from the "
-                "solver's initialized geometry)");
-        }
-    }
+    // PER-CALL GEOMETRY VALIDATION (review rounds 3g/3h/3j — ONE contract).
+    // validateCallGeometry() is the single implementation: int64 arithmetic
+    // (no overflow UB), all six call dims positive/sane, stagger shape, init
+    // geometry itself valid (subsumes the old staggered-member corruption
+    // check; NO "uninitialized => allow" escape — a zero/negative base member
+    // previously disabled the equality check), and strict equality with init.
+    // The v2 ABI entry calls the same method BEFORE setWRFIndices; this call
+    // is defense in depth for any other entry path.
+    validateCallGeometry(config.nx, config.ny, config.nz,
+                         config.nx_u, config.ny_v, config.nz_w);
+    auto safe_config = config;  // validated caller values, verbatim
 
-    
+
     auto options = make_cpu_from_blob_opts();  // FIX Batch24 Issue 5
     
     // 1. Get all bounds from the config struct with validation
@@ -36728,6 +36684,54 @@ void TileSDIRK3UnifiedSolver::setVerticalInterpolationCoefficients(const float* 
         // Fallback: linear extrapolation (cfn=1.0, cfn1=0.0 means use top level only)
         cfn_ = 1.0f;
         cfn1_ = 0.0f;
+    }
+}
+
+void TileSDIRK3UnifiedSolver::validateCallGeometry(
+    long long nx, long long ny, long long nz,
+    long long nx_u, long long ny_v, long long nz_w) const {
+    // SINGLE geometry contract (review round 3j). All arithmetic in 64-bit —
+    // the old int expressions (config.nx + 1 etc.) were computed BEFORE the
+    // range check and overflowed (UB) near INT_MAX.
+    constexpr long long kMaxDim = 100000;
+    const bool call_sane =
+        nx > 0 && nx <= kMaxDim && ny > 0 && ny <= kMaxDim && nz > 0 && nz <= kMaxDim &&
+        nx_u > 0 && nx_u <= kMaxDim && ny_v > 0 && ny_v <= kMaxDim && nz_w > 0 && nz_w <= kMaxDim;
+    const bool call_stagger_ok = call_sane &&
+        nx_u >= nx && nx_u <= nx + 1 &&
+        ny_v >= ny && ny_v <= ny + 1 &&
+        nz_w >= nz && nz_w <= nz + 1;
+    // Init geometry must itself be valid — NO "uninitialized => allow" escape
+    // (review round 3j: a zero/negative base member previously DISABLED the
+    // equality check entirely). Constructor + setStaggeredDimensions guarantee
+    // these for any legitimately created solver; anything else is corruption
+    // or a bypassed factory, both fail-closed.
+    const long long i_nx = nx_, i_ny = ny_, i_nz = nz_;
+    const long long i_nx_u = nx_u_, i_ny_v = ny_v_, i_nz_w = nz_w_;
+    const bool init_sane =
+        i_nx > 0 && i_nx <= kMaxDim && i_ny > 0 && i_ny <= kMaxDim &&
+        i_nz > 0 && i_nz <= kMaxDim &&
+        i_nx_u > 0 && i_nx_u <= kMaxDim && i_ny_v > 0 && i_ny_v <= kMaxDim &&
+        i_nz_w > 0 && i_nz_w <= kMaxDim;
+    const bool matches_init = init_sane &&
+        nx == i_nx && ny == i_ny && nz == i_nz &&
+        nx_u == i_nx_u && ny_v == i_ny_v && nz_w == i_nz_w;
+    if (!call_sane || !call_stagger_ok || !init_sane || !matches_init) {
+        std::cerr << "[SDIRK3] FATAL: per-call geometry validation failed ("
+                  << "call nx/ny/nz=" << nx << "/" << ny << "/" << nz
+                  << ", nx_u/ny_v/nz_w=" << nx_u << "/" << ny_v << "/" << nz_w
+                  << "; init nx/ny/nz=" << i_nx << "/" << i_ny << "/" << i_nz
+                  << ", nx_u/ny_v/nz_w=" << i_nx_u << "/" << i_ny_v << "/" << i_nz_w
+                  << "; call_sane=" << call_sane
+                  << ", stagger_sane=" << call_stagger_ok
+                  << ", init_sane=" << init_sane
+                  << ", matches_init=" << matches_init
+                  << ") — the caller's per-call extents are rejected, never "
+                     "silently replaced by cached members." << std::endl;
+        throw std::runtime_error(
+            "sdirk3: per-call geometry validation failed (dimension invalid, "
+            "stagger shape impossible, init geometry invalid, or extents "
+            "differ from the solver's initialized geometry)");
     }
 }
 

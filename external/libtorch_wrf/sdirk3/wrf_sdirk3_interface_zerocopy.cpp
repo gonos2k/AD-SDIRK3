@@ -491,6 +491,13 @@ extern "C" void sdirk3_tile_unified_step_zerocopy_v2(
         }
     }
 
+    // SINGLE geometry contract at the ABI boundary (review round 3j): validate
+    // the caller's per-call dimensions BEFORE setWRFIndices or any other state
+    // change on the solver. Same implementation advanceZeroCopy re-runs as
+    // defense in depth. Throws (fail-closed) on violation.
+    solver.validateCallGeometry(config.nx, config.ny, config.nz,
+                                config.nx_u, config.ny_v, config.nz_w);
+
     // Set WRF indices in the solver
     solver.setWRFIndices(bounds.its, bounds.ite, bounds.jts, bounds.jte, bounds.kts, bounds.kte,
                         bounds.ids, bounds.ide, bounds.jds, bounds.jde, bounds.kds, bounds.kde,
@@ -693,6 +700,19 @@ void* sdirk3_tile_solver_create_zerocopy(
         }
 
         // Set the staggered dimensions after construction
+        // TEST-ONLY fault injection (review round 3j): with
+        // WRF_SDIRK3_TEST_INVALID_STAGGER_INIT=1 (default unset = off), pass an
+        // invalid staggered dimension at creation — setStaggeredDimensions must
+        // REJECT (throw -> caught below -> null handle -> Fortran fatal),
+        // proving the init-time guessed-fallback laundering is gone.
+        {
+            const char* inv_env = std::getenv("WRF_SDIRK3_TEST_INVALID_STAGGER_INIT");
+            if (inv_env && *inv_env && *inv_env != '0') {
+                std::cerr << "[SDIRK3 TEST] injecting INVALID staggered init dims (nx_u=-1)"
+                          << std::endl;
+                solver->setStaggeredDimensions(-1, ny_v, nz_w);
+            }
+        }
         solver->setStaggeredDimensions(nx_u, ny_v, nz_w);
 
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {

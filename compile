@@ -497,6 +497,28 @@ else
       echo "  $stale_srcs"
       exit 1
     endif
+    # Round 3j: close the stale-relink hole — if a sdirk3 sub-compile failed
+    # (sub-make now stops before ar; see configure.wrf sdirk3_libtorch) the
+    # ARCHIVE stays older than the edited source, but a relink triggered by
+    # OTHER objects can still make wrf.exe newest-of-all. Check the archive
+    # layer directly: no sdirk3 source may be newer than the archive, and the
+    # archive may not be newer than the exe (missed relink).
+    set sdirk3_lib = external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a
+    if ( ! -e $sdirk3_lib ) then
+      echo "compile: FAILED (nonzero contract) - $sdirk3_lib missing"
+      exit 1
+    endif
+    set stale_lib_srcs = `find external/libtorch_wrf/sdirk3 \( -name '*.cpp' -o -name '*.h' \) ! -name 'test_*' ! -path '*graphify-out*' -newer $sdirk3_lib`
+    if ( "$stale_lib_srcs" != "" ) then
+      echo "compile: FAILED (nonzero contract) - sources newer than $sdirk3_lib (sub-compile failed?):"
+      echo "  $stale_lib_srcs"
+      exit 1
+    endif
+    set lib_newer = `find $sdirk3_lib -newer main/wrf.exe`
+    if ( "$lib_newer" != "" ) then
+      echo "compile: FAILED (nonzero contract) - $sdirk3_lib newer than main/wrf.exe (relink missed)"
+      exit 1
+    endif
   endif
 
 endif
