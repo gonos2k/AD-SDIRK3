@@ -6289,6 +6289,13 @@ vertical_coefficients:
                                          !config_flags_open_ys_ && !config_flags_open_ye_ &&
                                          !config_flags_specified_ && !config_flags_nested_;
                     const bool se_x_ok = !config_flags_open_xs_ && !config_flags_open_xe_;
+                    // Round 3e: the split adapter treats the tile as the WHOLE domain with
+                    // full +1 staggering (nx_u==nx+1, ny_v==ny+1). That equality is NOT a
+                    // universal invariant (an interior or non-edge tile legitimately has
+                    // nx_u==nx / ny_v==ny in general WRF tiling), so the universal msf
+                    // preflight only checks allocation fit — the shape assumption is
+                    // enforced HERE, where the split path actually relies on it.
+                    const bool se_stagger_ok = (nx_u_ == nx_ + 1) && (ny_v_ == ny_ + 1);
                     bool se_msf_unit = true;
                     {
                         torch::NoGradGuard ng;
@@ -6333,8 +6340,8 @@ vertical_coefficients:
                         wrf::sdirk3::g_sdirk3_config.obs_aware_4dvar ||
                         wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint;
                     if (!config_flags_periodic_x_ || config_flags_periodic_y_ || !tile_is_domain ||
-                        !se_y_ok || !se_x_ok || !se_msf_unit || se_adjoint_requested ||
-                        !se_nss_ok || se_lid) {
+                        !se_y_ok || !se_x_ok || !se_stagger_ok || !se_msf_unit ||
+                        se_adjoint_requested || !se_nss_ok || se_lid) {
                         std::cerr << "[SPLIT-EXPLICIT] FATAL: unsupported configuration ("
                                   << "periodic_x=" << config_flags_periodic_x_
                                   << ", periodic_y=" << config_flags_periodic_y_
@@ -6347,6 +6354,9 @@ vertical_coefficients:
                                                "calc_coef_w-only lid mixes top BCs]" : "")
                                   << ", symmetric_y=" << se_y_ok
                                   << ", closed_x=" << se_x_ok
+                                  << ", full_stagger=" << se_stagger_ok
+                                  << (se_stagger_ok ? "" : " [split adapter requires whole-domain "
+                                       "+1 staggering: nx_u==nx+1 && ny_v==ny+1]")
                                   << ", unit_msf=" << se_msf_unit
                                   << ((!msf_raw_u_checked_ || !msf_raw_u_unit_)
                                         ? " [raw U-staggered map factors are not genuine "
@@ -28017,39 +28027,43 @@ boundary_tensors_done:
     auto j_offset_tile = jts - jms;  // Offset in j-direction
     auto k_offset_tile = kts - kms;  // Offset in k-direction
 
-    // MSF PREFLIGHT (external review round 3d): null + staggered-extent invariants
-    // checked BEFORE any pointer arithmetic, raw scan (msf_raw_stats), or
-    // from_blob view. The v2 ABI check only enforces ite<=ime / jte<=jme; the
-    // U/V views additionally read one staggered column/row, so a patch with
-    // ite==ime or jte==jme would pass the ABI check yet read past the backing
-    // allocation here. Every invariant below holds for any correct WRF halo
-    // patch — a violation means a broken caller, so FAIL FAST.
+    // MSF PREFLIGHT (external review rounds 3d/3e): null + allocation-fit
+    // invariants checked BEFORE any pointer arithmetic, raw scan
+    // (msf_raw_stats), or from_blob view. The v2 ABI check only enforces
+    // ite<=ime / jte<=jme; the U/V views read up to nx_u/ny_v entries, so a
+    // caller whose staggered extents exceed the patch would pass the ABI check
+    // yet read past the backing allocation here. These bounds use the ACTUAL
+    // per-tile extents — round 3e: the strict +1 stagger-shape equality
+    // (nx_u==nx+1, ny_v==ny+1) is NOT a universal invariant (a valid interior
+    // or non-periodic boundary tile has nx_u==nx / ny_v==ny) and is enforced
+    // only in the split-explicit supported-config guard, whose adapter assumes
+    // the whole-domain +1 staggering. Every bound below holds for any correct
+    // WRF halo patch — a violation means a broken caller, so FAIL FAST.
     {
         const bool msf_ptrs_ok =
             config.msftx_ptr && config.msfty_ptr && config.msfux_ptr &&
             config.msfuy_ptr && config.msfvx_ptr && config.msfvy_ptr;
         const int pf_nx_u = safe_config.nx_u;
         const int pf_ny_v = safe_config.ny_v;
-        const bool stagger_ok =
-            (pf_nx_u == safe_config.nx + 1) && (pf_ny_v == safe_config.ny + 1);
         const bool extents_ok =
             i_offset_tile >= 0 && j_offset_tile >= 0 &&
-            i_offset_tile + pf_nx_u <= mem_nx &&          // U columns (staggered)
+            pf_nx_u >= safe_config.nx && pf_ny_v >= safe_config.ny &&
+            i_offset_tile + pf_nx_u <= mem_nx &&          // U columns (actual extent)
             j_offset_tile + safe_config.ny <= mem_ny &&   // U/mass rows
             i_offset_tile + safe_config.nx <= mem_nx &&   // mass/V columns
-            j_offset_tile + pf_ny_v <= mem_ny;            // V rows (staggered)
-        if (!msf_ptrs_ok || !stagger_ok || !extents_ok) {
+            j_offset_tile + pf_ny_v <= mem_ny;            // V rows (actual extent)
+        if (!msf_ptrs_ok || !extents_ok) {
             std::cerr << "[SDIRK3] FATAL: map-factor preflight failed ("
                       << "ptrs_ok=" << msf_ptrs_ok
                       << ", nx=" << safe_config.nx << ", nx_u=" << pf_nx_u
                       << ", ny=" << safe_config.ny << ", ny_v=" << pf_ny_v
                       << ", i_offset=" << i_offset_tile << ", j_offset=" << j_offset_tile
                       << ", mem_nx=" << mem_nx << ", mem_ny=" << mem_ny
-                      << ") — staggered extents must fit the (ims:ime,jms:jme) "
+                      << ") — U/V extents must fit the (ims:ime,jms:jme) "
                          "allocation and all six msf pointers must be wired."
                       << std::endl;
             throw std::runtime_error(
-                "sdirk3: map-factor preflight failed (null pointer or staggered "
+                "sdirk3: map-factor preflight failed (null pointer or U/V "
                 "extent exceeds patch allocation) — refusing to build msf views");
         }
     }
