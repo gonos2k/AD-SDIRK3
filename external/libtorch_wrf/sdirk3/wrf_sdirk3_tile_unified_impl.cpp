@@ -27151,22 +27151,26 @@ boundary_tensors_done:
         ; // OPT 2025-01-25: Label for spec_bdy_width==0 skip optimization
     }
 
-    // Sanity check - member variables should already be correct from setStaggeredDimensions
-    // Only use fallback if they're still corrupted (which shouldn't happen with the fix)
-    if (nx_u_ <= 0 || nx_u_ > 10000) {
-        std::cerr << "[SDIRK3] WARNING: nx_u_ corrupted: " << nx_u_
-                  << " (hex: 0x" << std::hex << nx_u_ << std::dec << ")" << std::endl;
-        nx_u_ = config.nx + 1;  // Emergency fallback
-    }
-    if (ny_v_ <= 0 || ny_v_ > 10000) {
-        std::cerr << "[SDIRK3] WARNING: ny_v_ corrupted: " << ny_v_
-                  << " (hex: 0x" << std::hex << ny_v_ << std::dec << ")" << std::endl;
-        ny_v_ = config.ny + 1;  // Emergency fallback
-    }
-    if (nz_w_ <= 0 || nz_w_ > 10000) {
-        std::cerr << "[SDIRK3] WARNING: nz_w_ corrupted: " << nz_w_
-                  << " (hex: 0x" << std::hex << nz_w_ << std::dec << ")" << std::endl;
-        nz_w_ = config.nz + 1;  // Emergency fallback
+    // Round 3h: member corruption is FAIL-CLOSED. The old "emergency fallback"
+    // repaired a corrupted member FROM the caller's config right before the
+    // per-call validation below — so with a corrupted init geometry the
+    // matches_init check compared the caller's values against a copy of
+    // themselves (laundered again) and passed. A corrupted member means the
+    // solver's initialized geometry is unknown: no comparison against it can
+    // be trusted, and the tensors sized from it are suspect. Reject.
+    if (nx_u_ <= 0 || nx_u_ > 10000 ||
+        ny_v_ <= 0 || ny_v_ > 10000 ||
+        nz_w_ <= 0 || nz_w_ > 10000) {
+        std::cerr << "[SDIRK3] FATAL: initialized staggered geometry corrupted ("
+                  << "nx_u_=" << nx_u_ << " (0x" << std::hex << nx_u_ << std::dec << ")"
+                  << ", ny_v_=" << ny_v_ << " (0x" << std::hex << ny_v_ << std::dec << ")"
+                  << ", nz_w_=" << nz_w_ << " (0x" << std::hex << nz_w_ << std::dec << ")"
+                  << ") — refusing to repair members from the caller's values; "
+                     "the per-call validation would compare the caller against "
+                     "itself." << std::endl;
+        throw std::runtime_error(
+            "sdirk3: initialized staggered geometry corrupted (nx_u_/ny_v_/nz_w_) "
+            "— fail-closed, no emergency fallback");
     }
     
     // PER-CALL GEOMETRY VALIDATION (external review round 3g — replaces the old
