@@ -894,6 +894,13 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
             static_cast<size_t>(expected_size) * sizeof(float));
 
         const size_t replayed = unified_solver->getSavedTrajectoryCount();
+        if (replayed == 0) {
+            // Review round 3: 0 checkpoints replayed must be an ERROR at this ABI
+            // boundary too (runAdjointReplay already throws on empty checkpoints;
+            // this keeps the C contract explicit even across binary skew).
+            std::cerr << "SDIRK3 4DVAR replay ERROR: 0 checkpoints replayed" << std::endl;
+            return -1;
+        }
         if (replayed > static_cast<size_t>(std::numeric_limits<int>::max())) {
             return std::numeric_limits<int>::max();
         }

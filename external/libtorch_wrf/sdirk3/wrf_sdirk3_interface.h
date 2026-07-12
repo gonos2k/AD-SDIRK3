@@ -1133,7 +1133,12 @@ int sdirk3_tile_solver_get_state_vector_size_zerocopy(void* solver_ptr);
  * @param gmres_restart      GMRES restart size for transpose solves
  * @param gmres_max_iter     GMRES max iterations for transpose solves
  * @param gmres_tol          GMRES relative tolerance for transpose solves
- * @return Number of replayed checkpoints on success, -1 on error
+ * @return Number of replayed checkpoints (> 0) on success, -1 on error.
+ *         ERRORS (fail-closed, review round 3): no checkpoints recorded (an
+ *         identity adjoint is never returned as success), and any run where the
+ *         split-explicit forward path was active or configured (its composite
+ *         VJP is not implemented until Inc 7 — the implicit-transpose replay
+ *         would produce a stale/wrong adjoint).
  */
 int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
     void* solver_ptr,

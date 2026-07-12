@@ -2106,8 +2106,11 @@ CONTAINS
          C_LOC(lambda_terminal(1)), c_lambda_size, C_LOC(lambda_initial(1)), &
          c_dt, c_gamma, c_restart, c_max_iter, c_tol)
 
+      ! Review round 3: 0 replayed checkpoints is an identity adjoint, not a
+      ! success — treat <= 0 as error (ierr stays 1). The C wrapper also
+      ! returns -1 for 0; this covers binary skew.
       checkpoints_used = INT(c_used)
-      IF (checkpoints_used < 0) RETURN
+      IF (checkpoints_used <= 0) RETURN
 
       ierr = 0
 

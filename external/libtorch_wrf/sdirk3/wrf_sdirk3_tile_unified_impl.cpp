@@ -5374,6 +5374,17 @@ vertical_coefficients:
         if (split_mode == 0 && wrf::sdirk3::g_sdirk3_config.imex_enabled) {
             split_mode = 1;  // backward compat: imex_enabled maps to frozen mode
         }
+        // FAIL-CLOSE invariant (external review round 3): the split-explicit branch lives
+        // inside split_mode==3, so split_explicit=1 with any other effective mode would be
+        // SILENTLY inert (the knob accepted, the feature and its supported-config guard both
+        // bypassed). Reject instead. (solveImplicitStage shares this mapping; one check at
+        // the stage-loop entry covers the run.)
+        if (wrf::sdirk3::g_sdirk3_config.split_explicit && split_mode != 3) {
+            throw std::runtime_error(
+                "sdirk3 split_explicit=1 requires effective imex_split_mode==3 (ARK324); "
+                "effective mode " + std::to_string(split_mode) +
+                " would silently ignore the split-explicit knob");
+        }
         const bool solver_telemetry_on = wrf::sdirk3::g_sdirk3_config.solver_telemetry;
         int stage_gate_fail_events = 0;
         int stage_gate_retry_events = 0;
@@ -6269,28 +6280,59 @@ vertical_coefficients:
                     // and the not-yet-implemented split adjoint/trajectory options must not be
                     // silently accepted (runAdjointReplay would hand back an identity/stale
                     // adjoint — fail instead until Inc 7 lands the composite VJP).
+                    // Review round 3: the envelope claim was "¬open" but only open_ys was
+                    // checked — cover ALL four open edges (x edges too: the full-coverage
+                    // periodic-x advection assumes wrap, an open x edge would be treated
+                    // as periodic).
                     const bool se_y_ok = config_flags_symmetric_ys_ && config_flags_symmetric_ye_ &&
-                                         !config_flags_open_ys_ && !config_flags_specified_ &&
-                                         !config_flags_nested_;
+                                         !config_flags_open_ys_ && !config_flags_open_ye_ &&
+                                         !config_flags_specified_ && !config_flags_nested_;
+                    const bool se_x_ok = !config_flags_open_xs_ && !config_flags_open_xe_;
                     bool se_msf_unit = true;
                     {
                         torch::NoGradGuard ng;
-                        // FAIL-CLOSED (stop-gate round 3): an undefined/empty msf tensor means
-                        // the map factors were NEVER WIRED to this solver — that is "unverified",
-                        // not "unit". Treating it as safe would let a non-unit-map run whose msf
-                        // pointers were dropped pass the guard.
-                        auto unit1 = [](const torch::Tensor& m) {
-                            return m.defined() && m.numel() > 0 &&
-                                   (m.detach() - 1.0f).abs().max().item<float>() < 1e-6f;
+                        // Stop-gate round 3 (revised): every map factor must be checked on
+                        // its RAW Fortran values, never on a post-repair/post-sanitize copy —
+                        // else a never-wired all-zero field gets fabricated to 1.0 and passes.
+                        // Two repair paths mutate these tensors:
+                        //   (1) the periodic-x zero-repair rewrites the msfux/msfuy MEMBER
+                        //       (and its *_cpu_ view) — so for U we use the flags captured
+                        //       from the RAW values DURING that pass (msf_raw_u_unit_).
+                        //   (2) sanitize_msf() in computeUnifiedRHS zero/NaN/Inf->1.0 repairs
+                        //       ALL SIX MEMBERS in place — but only the members msf*_, NOT the
+                        //       zero-copy views msf*_cpu_ (from_blob of the Fortran arrays,
+                        //       re-linked raw every step). So for the mass/V factors we check
+                        //       the RAW msf*_cpu_ views, not the (sanitized) members.
+                        // "Genuine unit-map" = at least one nonzero raw entry AND every
+                        // nonzero raw entry ~1.0. This passes a real unit-map with benign
+                        // staggered/halo zeros (em_b_wave) but rejects a real map projection
+                        // (nonzero != 1) and a never-wired all-zero field.
+                        auto raw_genuine_unit = [](const torch::Tensor& m) {
+                            if (!m.defined() || m.numel() == 0) return false;  // never wired
+                            auto md = m.detach();
+                            // Any NaN/Inf in a raw map factor is never benign — fail closed.
+                            if (!torch::isfinite(md).all().item<bool>()) return false;
+                            auto nonzero = md.abs() > 0.0f;                    // benign (finite) zeros ignored
+                            if (nonzero.sum().item<int64_t>() == 0) return false;  // all zero => unwired
+                            auto dev = (md - 1.0f).abs();
+                            // max deviation over NONZERO entries only
+                            auto masked = torch::where(nonzero, dev, torch::zeros_like(dev));
+                            return masked.max().item<float>() < 1e-6f;
                         };
-                        se_msf_unit = unit1(msftx_) && unit1(msfty_) && unit1(msfux_) &&
-                                      unit1(msfuy_) && unit1(msfvx_) && unit1(msfvy_);
+                        // Mass- and V-point factors: check the RAW zero-copy views (msf*_cpu_),
+                        // which sanitize_msf never touches.
+                        se_msf_unit = raw_genuine_unit(msftx_cpu_) && raw_genuine_unit(msfty_cpu_) &&
+                                      raw_genuine_unit(msfvx_cpu_) && raw_genuine_unit(msfvy_cpu_);
+                        // U-staggered factors: msfux/msfuy AND their *_cpu_ views are repaired,
+                        // so use the flags captured from the RAW values during the repair pass.
+                        se_msf_unit = se_msf_unit && msf_raw_u_checked_ && msf_raw_u_unit_;
                     }
                     const bool se_adjoint_requested =
                         wrf::sdirk3::g_sdirk3_config.save_trajectory ||
-                        wrf::sdirk3::g_sdirk3_config.obs_aware_4dvar;
+                        wrf::sdirk3::g_sdirk3_config.obs_aware_4dvar ||
+                        wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint;
                     if (!config_flags_periodic_x_ || config_flags_periodic_y_ || !tile_is_domain ||
-                        !se_y_ok || !se_msf_unit || se_adjoint_requested ||
+                        !se_y_ok || !se_x_ok || !se_msf_unit || se_adjoint_requested ||
                         !se_nss_ok || se_lid) {
                         std::cerr << "[SPLIT-EXPLICIT] FATAL: unsupported configuration ("
                                   << "periodic_x=" << config_flags_periodic_x_
@@ -6303,7 +6345,12 @@ vertical_coefficients:
                                   << (se_lid ? " [horizontal_pgf lid branch not ported — a "
                                                "calc_coef_w-only lid mixes top BCs]" : "")
                                   << ", symmetric_y=" << se_y_ok
+                                  << ", closed_x=" << se_x_ok
                                   << ", unit_msf=" << se_msf_unit
+                                  << ((!msf_raw_u_checked_ || !msf_raw_u_unit_)
+                                        ? " [raw U-staggered map factors are not genuine "
+                                          "unit-map (real projection or never wired); the "
+                                          "split acoustic/Omega path drops msf]" : "")
                                   << ", adjoint/trajectory_requested=" << se_adjoint_requested
                                   << (se_adjoint_requested ? " [split composite VJP not "
                                        "implemented until Inc 7 — a silent identity/stale "
@@ -6316,6 +6363,10 @@ vertical_coefficients:
                             "sdirk3 split_explicit: unsupported configuration (see log)");
                     }
                 }
+                // Review round 3: mark that a split-explicit forward is executing so the
+                // public replay API (runAdjointReplay) can refuse — the implicit-transpose
+                // replay does not know the split forward map (composite VJP = Inc 7).
+                split_forward_ran_ = true;
                 // [Inc 1] small_step_prep in libtorch: sound-speed stiffness c2a = (cp/cv)*(pb+p)/alt
                 // and column mass muts = mub + mu', 1-to-1 with dyn_em small_step_prep, reusing the
                 // ported hydrostatic helpers exactly as computeUnifiedRHS does (:13311-13376). Computed
@@ -6492,11 +6543,11 @@ vertical_coefficients:
                 namespace acoustic = wrf::sdirk3::acoustic;
                 // Acoustic-loop parameters from config (namelist pass-throughs via
                 // module_implicit_sdirk3 set_config; env WRF_SDIRK3_SPLIT_EXPLICIT_* overrides).
-                // time_step_sound=0 means WRF "auto"; mirror WRF's dt-based default of 4/step here.
+                // The supported-config guard above already rejected any value that is not an
+                // explicit even integer >= 4 (WRF's 0=auto formula is NOT implemented), so
+                // read the value directly — no fallback.
                 const int num_sound_steps =
-                    (wrf::sdirk3::g_sdirk3_config.split_explicit_time_step_sound > 0)
-                        ? wrf::sdirk3::g_sdirk3_config.split_explicit_time_step_sound
-                        : 4;
+                    wrf::sdirk3::g_sdirk3_config.split_explicit_time_step_sound;
                 const float g_acc = 9.81f;              // WRF module_model_constants g (physical constant)
                 const float epssm = wrf::sdirk3::g_sdirk3_config.split_explicit_epssm;
                 const float emdiv = wrf::sdirk3::g_sdirk3_config.split_explicit_emdiv;
@@ -28158,21 +28209,48 @@ boundary_tensors_done:
             }
         }
         
-        // Second pass: fix all zeros
+        // Second pass: fix all zeros — and (review round 3) capture the RAW unit-ness
+        // of msfux/msfuy BEFORE repair, so the split guard can verify the actual Fortran
+        // wiring rather than the post-repair member tensors. A genuine unit-map field
+        // (e.g. em_b_wave: interior all 1.0, only staggered/halo columns zero) must PASS;
+        // a real map projection (nonzero != 1.0) or a never-wired all-zero array must FAIL.
         [[maybe_unused]] int zeros_fixed = 0;
+        bool any_raw_nonzero = false;
+        bool any_raw_nonfinite = false;
+        float max_raw_nonzero_dev = 0.0f;
         for (int j = 0; j < config.ny; ++j) {
             for (int i = 0; i < nx_u_safe_for_bc; ++i) {
-                if (msfux_accessor[j][i] == 0.0f) {
+                const float raw_ux = msfux_accessor[j][i];   // read raw BEFORE repair
+                const float raw_uy = msfuy_accessor[j][i];
+                // A NaN/Inf raw entry is never benign — std::max(a,NaN) silently returns a,
+                // so track non-finite explicitly and fail closed below.
+                if (!std::isfinite(raw_ux) || !std::isfinite(raw_uy)) any_raw_nonfinite = true;
+                if (std::isfinite(raw_ux) && raw_ux != 0.0f) {
+                    any_raw_nonzero = true;
+                    max_raw_nonzero_dev = std::max(max_raw_nonzero_dev, std::abs(raw_ux - 1.0f));
+                }
+                if (std::isfinite(raw_uy) && raw_uy != 0.0f) {
+                    any_raw_nonzero = true;
+                    max_raw_nonzero_dev = std::max(max_raw_nonzero_dev, std::abs(raw_uy - 1.0f));
+                }
+                if (raw_ux == 0.0f) {
                     msfux_accessor[j][i] = default_msfux;
                     zeros_fixed++;
                 }
-                if (msfuy_accessor[j][i] == 0.0f) {
+                if (raw_uy == 0.0f) {
                     msfuy_accessor[j][i] = default_msfuy;
                     zeros_fixed++;
                 }
             }
         }
-        
+        // A field is "genuine unit-map" iff at least one raw entry was nonzero, every
+        // nonzero raw entry was ~1.0, and NO entry was non-finite. All-zero (never wired)
+        // => not unit; any deviating nonzero (real projection) => not unit; any NaN/Inf =>
+        // not unit. Fail-closed by default (see header init).
+        msf_raw_u_checked_ = true;
+        msf_raw_u_unit_ = any_raw_nonzero && !any_raw_nonfinite &&
+                          (max_raw_nonzero_dev < 1e-6f);
+
         // FIX Round188: Removed empty debug block (zeros_fixed logging)
         // If diagnostic output is needed here, restore with:
         // if (g_sdirk3_config.debug_level >= 2 && zeros_fixed > 0) {
@@ -36698,6 +36776,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
 
     TORCH_CHECK(lambda_terminal.defined(), "runAdjointReplay: lambda_terminal must be defined");
 
+    // STOP-GATE (external review round 3): this PUBLIC entry point must not bypass the
+    // split-explicit adjoint fail-close. The replay below is an ImplicitOnly transpose —
+    // it knows nothing about the split-explicit forward map (its composite VJP lands in
+    // Inc 7). Replaying after (or under a config requesting) a split forward would
+    // silently return a stale/wrong adjoint.
+    TORCH_CHECK(!split_forward_ran_ && !wrf::sdirk3::g_sdirk3_config.split_explicit,
+                "runAdjointReplay: split-explicit forward has no composite VJP yet (Inc 7); "
+                "the implicit-transpose replay would produce a stale/wrong adjoint — refusing");
+
     const int64_t state_size = getStateVectorSize();
     auto lambda = lambda_terminal.reshape({-1}).detach().clone();
     TORCH_CHECK(lambda.numel() == state_size,
@@ -36705,9 +36792,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                 ", expected ", state_size, ")");
 
     auto checkpoints = getSavedTrajectory();
-    if (checkpoints.empty()) {
-        return lambda;
-    }
+    // STOP-GATE (external review round 3): empty checkpoints means no forward was
+    // recorded — returning lambda unchanged would be a silent IDENTITY adjoint that
+    // callers cannot distinguish from a real one. Fail instead.
+    TORCH_CHECK(!checkpoints.empty(),
+                "runAdjointReplay: no checkpoints recorded (run a forward with "
+                "save_trajectory enabled first) — refusing to return an identity adjoint");
 
     const float dt_prev = dt_stage_;
     dt_stage_ = dt;

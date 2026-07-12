@@ -2035,6 +2035,25 @@ private:
     bool config_flags_polar_ = false;      // Polar filtering flag (v20.14r21)
     bool mix_full_fields_ = true;          // Mix full fields (true) or perturbation from base state (false)
 
+    // STOP-GATE (external review round 3):
+    // split_forward_ran_: set when the split-explicit branch executes a forward step.
+    // runAdjointReplay() checks it and refuses — the implicit-transpose replay has no
+    // knowledge of the split forward map (composite VJP lands in Inc 7), so replaying
+    // implicit checkpoints after a split forward would return a stale/wrong adjoint.
+    bool split_forward_ran_ = false;
+    // Raw U-staggered map-factor verification (external review round 3):
+    // the periodic-x preprocessing repairs raw zero msfux/msfuy entries to a fallback
+    // value, so the split guard cannot trust the (repaired) member tensors. These flags
+    // capture the RAW state during that preprocessing, BEFORE any repair:
+    //   msf_raw_u_checked_ : the preprocessing pass actually ran (saw the raw array)
+    //   msf_raw_u_unit_    : every NONZERO raw msfux/msfuy entry was ~1.0 AND at least
+    //                        one nonzero entry existed (a genuine unit-map field with
+    //                        benign staggered/halo zeros, e.g. em_b_wave). Cleared if any
+    //                        nonzero raw entry deviates from 1.0 (a real map projection)
+    //                        or the whole array was zero (never wired).
+    bool msf_raw_u_checked_ = false;
+    bool msf_raw_u_unit_ = false;
+
     // Raw (global-domain) BC flags from Fortran namelist/config.
     // These are projected to process-local flags by refreshProcessAwareBoundaryFlags_().
     bool raw_flags_periodic_x_ = false;

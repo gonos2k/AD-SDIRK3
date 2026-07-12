@@ -1870,7 +1870,10 @@ void SDIRK3Config::load_from_env() {
     if (split_explicit) {
         std::cerr << "[CONFIG EFFECTIVE] split_explicit acoustic: time_step_sound="
                   << split_explicit_time_step_sound
-                  << (split_explicit_time_step_sound <= 0 ? " (auto->4)" : "")
+                  << (split_explicit_time_step_sound <= 0
+                          ? " (UNSUPPORTED: runtime guard requires explicit even >= 4; "
+                            "WRF's 0=auto formula is not implemented)"
+                          : "")
                   << ", epssm=" << split_explicit_epssm
                   << ", smdiv=" << split_explicit_smdiv
                   << ", emdiv=" << split_explicit_emdiv
@@ -3119,7 +3122,9 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
         g_sdirk3_config.split_explicit_time_step_sound = std::max(0, std::min(1000, value));
         std::cerr << "[CONFIG] split_explicit_time_step_sound = "
                   << g_sdirk3_config.split_explicit_time_step_sound
-                  << (g_sdirk3_config.split_explicit_time_step_sound <= 0 ? " (auto->4)" : "") << std::endl;
+                  << (g_sdirk3_config.split_explicit_time_step_sound <= 0
+                          ? " (UNSUPPORTED: runtime guard requires explicit even >= 4)"
+                          : "") << std::endl;
     } else if (key == "precond_phi_w_coupling_scale") {
         g_sdirk3_config.precond_phi_w_coupling_scale = std::max(0, std::min(2, value));
         std::cerr << "[CONFIG] precond_phi_w_coupling_scale = "
