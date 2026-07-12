@@ -36732,22 +36732,35 @@ void TileSDIRK3UnifiedSolver::setVerticalInterpolationCoefficients(const float* 
 }
 
 void TileSDIRK3UnifiedSolver::setStaggeredDimensions(int nx_u, int ny_v, int nz_w) {
-    // Validate inputs to prevent corruption
-    if (nx_u <= 0 || nx_u > 10000 || ny_v <= 0 || ny_v > 10000 || nz_w <= 0 || nz_w > 10000) {
-        std::cerr << "[SDIRK3] Invalid staggered dimensions: "
-                  << "nx_u=" << nx_u << ", ny_v=" << ny_v << ", nz_w=" << nz_w << std::endl;
-        // Use reasonable defaults based on base dimensions
-        nx_u_ = nx_ + 1;
-        ny_v_ = ny_ + 1;
-        nz_w_ = nz_ + 1;
-        std::cerr << "[SDIRK3] Using fallback: nx_u_=" << nx_u_
-                  << ", ny_v_=" << ny_v_ << ", nz_w_=" << nz_w_ << std::endl;
-    } else {
-        // Set the staggered dimensions explicitly
-        nx_u_ = nx_u;
-        ny_v_ = ny_v;
-        nz_w_ = nz_w;
+    // Round 3i: INIT-time geometry laundering removed. The old fallback replaced
+    // invalid caller dims with nx_+1 GUESSES — every later per-call matches_init
+    // check then validated against the guess, not against anything the caller
+    // ever declared. Also enforce the stagger-shape invariant here (base <=
+    // staggered <= base+1) so the latched init geometry is well-formed from the
+    // start. Fail-closed: reject, never repair.
+    const bool in_range =
+        nx_u > 0 && nx_u <= 10000 && ny_v > 0 && ny_v <= 10000 &&
+        nz_w > 0 && nz_w <= 10000;
+    const bool shape_ok =
+        nx_u >= nx_ && nx_u <= nx_ + 1 &&
+        ny_v >= ny_ && ny_v <= ny_ + 1 &&
+        nz_w >= nz_ && nz_w <= nz_ + 1;
+    if (!in_range || !shape_ok) {
+        std::cerr << "[SDIRK3] FATAL: setStaggeredDimensions rejected ("
+                  << "nx_u=" << nx_u << ", ny_v=" << ny_v << ", nz_w=" << nz_w
+                  << " vs base nx/ny/nz=" << nx_ << "/" << ny_ << "/" << nz_
+                  << ", in_range=" << in_range << ", shape_ok=" << shape_ok
+                  << ") — refusing to substitute guessed defaults; the init "
+                     "geometry is what every later per-call validation compares "
+                     "against." << std::endl;
+        throw std::runtime_error(
+            "sdirk3: setStaggeredDimensions rejected invalid staggered "
+            "dimensions — fail-closed, no guessed fallback");
     }
+    // Set the staggered dimensions explicitly
+    nx_u_ = nx_u;
+    ny_v_ = ny_v;
+    nz_w_ = nz_w;
     
     // Update grid_info_ staggered dimensions too
     if (grid_info_) {
