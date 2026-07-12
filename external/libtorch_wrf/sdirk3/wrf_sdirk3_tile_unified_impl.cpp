@@ -28215,7 +28215,12 @@ boundary_tensors_done:
         // (e.g. em_b_wave: interior all 1.0, only staggered/halo columns zero) must PASS;
         // a real map projection (nonzero != 1.0) or a never-wired all-zero array must FAIL.
         [[maybe_unused]] int zeros_fixed = 0;
-        bool any_raw_nonzero = false;
+        // Track nonzero-ness PER ARRAY (stop-gate round 3b): a joint flag would let a
+        // fully-wired msfux mask an all-zero (never wired) msfuy — the zeros are skipped
+        // as "benign" so no deviation would flag it either. Each array must independently
+        // show at least one nonzero entry.
+        bool any_raw_nonzero_ux = false;
+        bool any_raw_nonzero_uy = false;
         bool any_raw_nonfinite = false;
         float max_raw_nonzero_dev = 0.0f;
         for (int j = 0; j < config.ny; ++j) {
@@ -28226,11 +28231,11 @@ boundary_tensors_done:
                 // so track non-finite explicitly and fail closed below.
                 if (!std::isfinite(raw_ux) || !std::isfinite(raw_uy)) any_raw_nonfinite = true;
                 if (std::isfinite(raw_ux) && raw_ux != 0.0f) {
-                    any_raw_nonzero = true;
+                    any_raw_nonzero_ux = true;
                     max_raw_nonzero_dev = std::max(max_raw_nonzero_dev, std::abs(raw_ux - 1.0f));
                 }
                 if (std::isfinite(raw_uy) && raw_uy != 0.0f) {
-                    any_raw_nonzero = true;
+                    any_raw_nonzero_uy = true;
                     max_raw_nonzero_dev = std::max(max_raw_nonzero_dev, std::abs(raw_uy - 1.0f));
                 }
                 if (raw_ux == 0.0f) {
@@ -28243,12 +28248,13 @@ boundary_tensors_done:
                 }
             }
         }
-        // A field is "genuine unit-map" iff at least one raw entry was nonzero, every
-        // nonzero raw entry was ~1.0, and NO entry was non-finite. All-zero (never wired)
-        // => not unit; any deviating nonzero (real projection) => not unit; any NaN/Inf =>
-        // not unit. Fail-closed by default (see header init).
+        // "Genuine unit-map" iff EACH array (msfux AND msfuy) has at least one nonzero
+        // raw entry, every nonzero raw entry across both was ~1.0, and NO entry was
+        // non-finite. All-zero in either array (never wired) => not unit; any deviating
+        // nonzero (real projection) => not unit; any NaN/Inf => not unit. Fail-closed by
+        // default (see header init).
         msf_raw_u_checked_ = true;
-        msf_raw_u_unit_ = any_raw_nonzero && !any_raw_nonfinite &&
+        msf_raw_u_unit_ = any_raw_nonzero_ux && any_raw_nonzero_uy && !any_raw_nonfinite &&
                           (max_raw_nonzero_dev < 1e-6f);
 
         // FIX Round188: Removed empty debug block (zeros_fixed logging)
