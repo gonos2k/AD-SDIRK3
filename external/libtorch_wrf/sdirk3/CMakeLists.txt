@@ -135,6 +135,15 @@ target_link_libraries(test_acoustic_substep "${TORCH_LIBRARIES}")
 set_property(TARGET test_acoustic_substep PROPERTY CXX_STANDARD 17)
 add_test(NAME Acoustic_Substep_AD COMMAND test_acoustic_substep)
 
+# Raw map-factor verification regression matrix (external review round 3c):
+# per-array TT/TF/FT/FF existence, NaN/Inf/non-unit fail-closed, first/last-row
+# coverage, and the stride canary that reproduces the old mem_nx+1 layout bug.
+# Torch-free — compiles/runs in seconds.
+add_executable(test_msf_raw_stats test_msf_raw_stats.cpp)
+target_include_directories(test_msf_raw_stats PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+set_property(TARGET test_msf_raw_stats PROPERTY CXX_STANDARD 17)
+add_test(NAME MSF_Raw_Stats_Matrix COMMAND test_msf_raw_stats)
+
 # =========================================================================
 # OPT Pass33+: Test Output Verbosity Control
 # =========================================================================

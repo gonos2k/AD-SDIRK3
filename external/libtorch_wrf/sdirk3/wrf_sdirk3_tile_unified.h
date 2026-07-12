@@ -2041,16 +2041,19 @@ private:
     // knowledge of the split forward map (composite VJP lands in Inc 7), so replaying
     // implicit checkpoints after a split forward would return a stale/wrong adjoint.
     bool split_forward_ran_ = false;
-    // Raw U-staggered map-factor verification (external review round 3):
+    // Raw U-staggered map-factor verification (external review rounds 3/3b/3c):
     // the periodic-x preprocessing repairs raw zero msfux/msfuy entries to a fallback
     // value, so the split guard cannot trust the (repaired) member tensors. These flags
-    // capture the RAW state during that preprocessing, BEFORE any repair:
-    //   msf_raw_u_checked_ : the preprocessing pass actually ran (saw the raw array)
-    //   msf_raw_u_unit_    : every NONZERO raw msfux/msfuy entry was ~1.0 AND at least
-    //                        one nonzero entry existed (a genuine unit-map field with
-    //                        benign staggered/halo zeros, e.g. em_b_wave). Cleared if any
-    //                        nonzero raw entry deviates from 1.0 (a real map projection)
-    //                        or the whole array was zero (never wired).
+    // capture the RAW state from the Fortran memory (true (ims:ime,jms:jme) layout:
+    // tile offset its-ims/jts-jms, row stride mem_nx) BEFORE any repair or copy:
+    //   msf_raw_u_checked_ : the raw scan actually ran (saw the raw arrays)
+    //   msf_raw_u_unit_    : EACH array INDEPENDENTLY (msfux AND msfuy — never a joint
+    //                        accumulator, which would let a wired array mask a
+    //                        never-wired all-zero sibling) satisfied: at least one
+    //                        nonzero entry, all entries finite, and every nonzero
+    //                        entry ~1.0 (genuine unit-map with benign staggered/halo
+    //                        zeros, e.g. em_b_wave). Predicate + regression matrix:
+    //                        wrf_sdirk3_msf_raw_stats.h / test_msf_raw_stats.cpp.
     bool msf_raw_u_checked_ = false;
     bool msf_raw_u_unit_ = false;
 

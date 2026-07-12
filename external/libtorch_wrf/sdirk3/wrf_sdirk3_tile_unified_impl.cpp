@@ -90,6 +90,7 @@
 #include "wrf_sdirk3_halo_exchange.h"  // For exchange_halo_3d_u/v/w/mass, halo_exchange_init
 #include "wrf_sdirk3_mpi_safety.h"  // Step-2 telemetry: halo freshness event counters
 #include "wrf_sdirk3_unified_rhs_extended.h"
+#include "wrf_sdirk3_msf_raw_stats.h"  // raw map-factor verification (review round 3c)
 #include "wrf_sdirk3_tensor_validation.h"
 #include "wrf_sdirk3_profiler.h"
 #include "wrf_sdirk3_autograd_utils.h"
@@ -28005,7 +28006,10 @@ boundary_tensors_done:
     // Calculate strides for 2D arrays in Fortran column-major layout
     // For array(ims:ime, jms:jme), stride in i is 1, stride in j is (ime-ims+1)
     std::vector<int64_t> map_strides_mass = {mem_nx, 1};  // [j_stride, i_stride]
-    std::vector<int64_t> map_strides_u = {mem_nx_u, 1};   // For u-staggered
+    // NOTE (review round 3c): there is ONE true row stride for every 2-D field,
+    // mem_nx — WRF's staggered fields share the same (ims:ime, jms:jme) memory
+    // bounds. The old unused map_strides_u = {mem_nx+1, 1} was a wrong-layout
+    // landmine and has been removed.
     std::vector<int64_t> map_strides_v = {mem_nx, 1};     // For v-staggered (nx not staggered)
     
     // Extract tile data from patch (accounting for halo offset)
@@ -28067,12 +28071,17 @@ boundary_tensors_done:
     // For idealized cases, create directly from tile bounds
     // FIX Round153: Removed orphan flush from hot path
 
-    // U-staggered arrays in WRF have dimensions (ims-1:ime, jms:jme)
-    // So we need to adjust the i-offset by 1 for U-staggered variables
-    auto i_offset_tile_u = its - (ims - 1);  // Correct offset for U-staggered arrays
-    
-    float* msfux_tile_ptr = config.msfux_ptr + j_offset_tile * mem_nx_u + i_offset_tile_u;
-    float* msfuy_tile_ptr = config.msfuy_ptr + j_offset_tile * mem_nx_u + i_offset_tile_u;
+    // LAYOUT FIX (external review round 3c): WRF allocates EVERY field — staggered or
+    // not — with the SAME memory bounds (ims:ime, jms:jme); U-staggered fields simply
+    // use one more i-index WITHIN those bounds. The previous view fabricated an
+    // (ims-1:ime) allocation: offset its-(ims-1) shifted every read one column right,
+    // and row stride mem_nx+1 slipped one extra element per row (diagonal skew, OOB
+    // risk on the last rows). Same defect class as the u/w/ph state views fixed
+    // 2026-07-10 ("one TRUE stride set"). Inert for em_b_wave (all-1.0 field) but
+    // wrong for any real map projection — and it made the raw unit-msf guard verify
+    // the wrong index region.
+    float* msfux_tile_ptr = config.msfux_ptr + j_offset_tile * mem_nx + i_offset_tile;
+    float* msfuy_tile_ptr = config.msfuy_ptr + j_offset_tile * mem_nx + i_offset_tile;
     
     // Check pointer alignment for ARM64 and LibTorch requirements
     
@@ -28087,19 +28096,19 @@ boundary_tensors_done:
         // Checking debug removed
         for (int j = 0; j < std::min(3, config.ny); ++j) {
             for (int i = 0; i < std::min(10, nx_u_safe); ++i) {
-                [[maybe_unused]] float val = msfuy_tile_ptr[j * mem_nx_u + i];
+                [[maybe_unused]] float val = msfuy_tile_ptr[j * mem_nx + i];
             }
             // Also check last few values in the row
             for (int i = std::max(0, nx_u_safe - 3); i < nx_u_safe; ++i) {
-                [[maybe_unused]] float val = msfuy_tile_ptr[j * mem_nx_u + i];
+                [[maybe_unused]] float val = msfuy_tile_ptr[j * mem_nx + i];
             }
         }
-        
+
         // Check if there are zeros in the raw data
         int zero_count = 0;
         for (int j = 0; j < config.ny; ++j) {
             for (int i = 0; i < nx_u_safe; ++i) {
-                if (msfuy_tile_ptr[j * mem_nx_u + i] == 0.0f) {
+                if (msfuy_tile_ptr[j * mem_nx + i] == 0.0f) {
                     zero_count++;
                     if (zero_count <= 5) {
                     }
@@ -28107,9 +28116,24 @@ boundary_tensors_done:
             }
         }
     }
-    
+
     // Use sanitized value for tensor creation
     int nx_u_tile = nx_u_safe;
+
+    // RAW unit-map verification (review rounds 3/3b/3c) — from the raw Fortran
+    // memory with the CORRECT layout, per array, BEFORE any repair or tensor copy
+    // can rewrite values (the periodic-x repair below writes into these tensors —
+    // in the from_blob branch that is WRF's own memory). See
+    // wrf_sdirk3_msf_raw_stats.h for the contract; regression matrix in
+    // test_msf_raw_stats.cpp.
+    {
+        const auto ux_stats = wrf::sdirk3::msf_raw_stats(
+            msfux_tile_ptr, config.ny, nx_u_tile, mem_nx);
+        const auto uy_stats = wrf::sdirk3::msf_raw_stats(
+            msfuy_tile_ptr, config.ny, nx_u_tile, mem_nx);
+        msf_raw_u_checked_ = true;
+        msf_raw_u_unit_ = ux_stats.genuine_unit(1e-6f) && uy_stats.genuine_unit(1e-6f);
+    }
     
     // Check alignment and create tensors accordingly
     torch::Tensor msfux_tile, msfuy_tile;
@@ -28133,13 +28157,16 @@ boundary_tensors_done:
             auto msfux_accessor = msfux_tile.accessor<float, 2>();
             auto msfuy_accessor = msfuy_tile.accessor<float, 2>();
             
+            // Bound from the tile-origin pointer: rows j=0..ny-1 at Fortran stride
+            // mem_nx, columns i=0..nx_u_tile-1 (staggered index lives WITHIN mem_nx).
+            const size_t u_copy_max = static_cast<size_t>(config.ny - 1) * mem_nx + nx_u_tile;
             for (int j = 0; j < config.ny; ++j) {
                 for (int i = 0; i < nx_u_tile; ++i) {
                     // Validate indices before access
-                    size_t idx = j * mem_nx_u + i;
-                    if (idx >= mem_nx_u * config.ny) {
+                    size_t idx = static_cast<size_t>(j) * mem_nx + i;
+                    if (idx >= u_copy_max) {
                         std::cerr << "[SDIRK3] U map scale factor index error: j=" << j << ", i=" << i
-                                  << ", idx=" << idx << ", max=" << (mem_nx_u * config.ny) << std::endl;
+                                  << ", idx=" << idx << ", max=" << u_copy_max << std::endl;
                         throw std::runtime_error("Index out of bounds in map scale factor copy");
                     }
                     msfux_accessor[j][i] = msfux_tile_ptr[idx];
@@ -28151,17 +28178,18 @@ boundary_tensors_done:
         }
     } else {
         // For Fortran 2D arrays: msfux(i,j) where i varies fastest
-        // To get C++ tensor[j][i], we interpret as [ny][nx_u] with proper strides
+        // To get C++ tensor[j][i], we interpret as [ny][nx_u] with the TRUE Fortran
+        // row stride mem_nx (shared memory bounds — see layout-fix comment above).
         msfux_tile = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
             msfux_tile_ptr,
             {config.ny, nx_u_tile},  // Shape: [j, i] for C++ indexing
-            {mem_nx_u, 1},             // Strides: j-stride=mem_nx_u, i-stride=1
+            {mem_nx, 1},               // Strides: j-stride=mem_nx, i-stride=1
             options
         );
         msfuy_tile = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
             msfuy_tile_ptr,
             {config.ny, nx_u_tile},  // Shape: [j, i] for C++ indexing
-            {mem_nx_u, 1},             // Strides: j-stride=mem_nx_u, i-stride=1
+            {mem_nx, 1},               // Strides: j-stride=mem_nx, i-stride=1
             options
         );
     }
@@ -28209,53 +28237,23 @@ boundary_tensors_done:
             }
         }
         
-        // Second pass: fix all zeros — and (review round 3) capture the RAW unit-ness
-        // of msfux/msfuy BEFORE repair, so the split guard can verify the actual Fortran
-        // wiring rather than the post-repair member tensors. A genuine unit-map field
-        // (e.g. em_b_wave: interior all 1.0, only staggered/halo columns zero) must PASS;
-        // a real map projection (nonzero != 1.0) or a never-wired all-zero array must FAIL.
+        // Second pass: fix all zeros. The RAW unit-map verification no longer lives
+        // here — it runs on the raw Fortran memory (correct layout, per array) BEFORE
+        // tensor creation, via wrf::sdirk3::msf_raw_stats above (review round 3c);
+        // this loop is purely the legacy zero-repair for downstream numerics.
         [[maybe_unused]] int zeros_fixed = 0;
-        // Track nonzero-ness PER ARRAY (stop-gate round 3b): a joint flag would let a
-        // fully-wired msfux mask an all-zero (never wired) msfuy — the zeros are skipped
-        // as "benign" so no deviation would flag it either. Each array must independently
-        // show at least one nonzero entry.
-        bool any_raw_nonzero_ux = false;
-        bool any_raw_nonzero_uy = false;
-        bool any_raw_nonfinite = false;
-        float max_raw_nonzero_dev = 0.0f;
         for (int j = 0; j < config.ny; ++j) {
             for (int i = 0; i < nx_u_safe_for_bc; ++i) {
-                const float raw_ux = msfux_accessor[j][i];   // read raw BEFORE repair
-                const float raw_uy = msfuy_accessor[j][i];
-                // A NaN/Inf raw entry is never benign — std::max(a,NaN) silently returns a,
-                // so track non-finite explicitly and fail closed below.
-                if (!std::isfinite(raw_ux) || !std::isfinite(raw_uy)) any_raw_nonfinite = true;
-                if (std::isfinite(raw_ux) && raw_ux != 0.0f) {
-                    any_raw_nonzero_ux = true;
-                    max_raw_nonzero_dev = std::max(max_raw_nonzero_dev, std::abs(raw_ux - 1.0f));
-                }
-                if (std::isfinite(raw_uy) && raw_uy != 0.0f) {
-                    any_raw_nonzero_uy = true;
-                    max_raw_nonzero_dev = std::max(max_raw_nonzero_dev, std::abs(raw_uy - 1.0f));
-                }
-                if (raw_ux == 0.0f) {
+                if (msfux_accessor[j][i] == 0.0f) {
                     msfux_accessor[j][i] = default_msfux;
                     zeros_fixed++;
                 }
-                if (raw_uy == 0.0f) {
+                if (msfuy_accessor[j][i] == 0.0f) {
                     msfuy_accessor[j][i] = default_msfuy;
                     zeros_fixed++;
                 }
             }
         }
-        // "Genuine unit-map" iff EACH array (msfux AND msfuy) has at least one nonzero
-        // raw entry, every nonzero raw entry across both was ~1.0, and NO entry was
-        // non-finite. All-zero in either array (never wired) => not unit; any deviating
-        // nonzero (real projection) => not unit; any NaN/Inf => not unit. Fail-closed by
-        // default (see header init).
-        msf_raw_u_checked_ = true;
-        msf_raw_u_unit_ = any_raw_nonzero_ux && any_raw_nonzero_uy && !any_raw_nonfinite &&
-                          (max_raw_nonzero_dev < 1e-6f);
 
         // FIX Round188: Removed empty debug block (zeros_fixed logging)
         // If diagnostic output is needed here, restore with:
@@ -28328,83 +28326,29 @@ boundary_tensors_done:
         }
     }
     
-    // Create tensors for map scale factors at v-points
-    // For idealized cases, create directly from tile bounds
-    // V-staggered arrays in WRF have dimensions (ims:ime, jms-1:jme)
-    // So we need to adjust the j-offset by 1 for V-staggered variables
-    auto j_offset_tile_v = jts - (jms - 1);  // Correct offset for V-staggered arrays
-    float* msfvx_tile_ptr = config.msfvx_ptr + j_offset_tile_v * mem_nx + i_offset_tile;
-    float* msfvy_tile_ptr = config.msfvy_ptr + j_offset_tile_v * mem_nx + i_offset_tile;
-    
-    
-    // CRITICAL FIX: For V-staggered map scale factors, we need to create tensors that match
-    // the actual memory layout. The V field extends to ny_v (82) in j-direction.
-    // We need to be careful about the tensor dimensions to avoid out-of-bounds access.
-    
-    // Calculate the actual bounds for V-staggered map scale factors
-    // V-staggered extends one extra point in j-direction (ny_v = ny + 1)
-    // The V field successfully creates a tensor with shape [91, 64, 51] and then trims to [82, 64, 41]
-    // We should do the same for map scale factors
-    
-    // Recalculate the same bounds used for V field extraction
-    // V-staggered has ny_v points in j direction (82), nx points in i direction (41)
-    int j_end_v_msf = j_offset_tile_v + safe_config.ny_v + 2*halo_width;  // 82 points plus halos
-    int i_end_v_msf = i_offset_tile + safe_config.nx + 2*halo_width;         // 41 points plus halos
-    j_end_v_msf = std::min(mem_ny, j_end_v_msf);  // Don't exceed memory bounds
-    i_end_v_msf = std::min(mem_nx, i_end_v_msf);  // Don't exceed memory bounds
-    
-    // This should give us the same dimensions as V field
-    int ny_v_with_halos = j_end_v_msf - j_offset_tile_v;  // Should be 91
-    int nx_with_halos = i_end_v_msf - i_offset_tile;     // Should be 51
+    // Create tensors for map scale factors at v-points.
+    // LAYOUT FIX (external review round 3c): same defect class as the U view above —
+    // the previous code fabricated a (jms-1:jme) allocation (offset jts-(jms-1)
+    // shifted every read one ROW down) and then re-derived the region through a
+    // with-halos + trim dance whose trim start depended on how much halo happened
+    // to fit. WRF allocates V-staggered fields with the SAME (ims:ime, jms:jme)
+    // bounds; the V field simply uses one more j-index WITHIN them. One direct
+    // view: tile origin offset (jts-jms, its-ims), true row stride mem_nx.
+    float* msfvx_tile_ptr = config.msfvx_ptr + j_offset_tile * mem_nx + i_offset_tile;
+    float* msfvy_tile_ptr = config.msfvy_ptr + j_offset_tile * mem_nx + i_offset_tile;
 
-    std::cerr << "[SDIRK3] ny_v_with_halos=" << ny_v_with_halos
-              << ", nx_with_halos=" << nx_with_halos << std::endl;
-
-
-    // Create tensors that include halos
-    auto msfvx_tile_with_halos = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
+    auto msfvx_tile = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
         msfvx_tile_ptr,
-        {ny_v_with_halos, nx_with_halos},  // Full size including halos
-        {mem_nx, 1},                        // Strides account for memory layout
+        {safe_config.ny_v, config.nx},  // Shape: [j, i], V-staggered j extent
+        {mem_nx, 1},                     // True Fortran row stride
         options
     );
-    auto msfvy_tile_with_halos = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
+    auto msfvy_tile = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
         msfvy_tile_ptr,
-        {ny_v_with_halos, nx_with_halos},  // Full size including halos
-        {mem_nx, 1},                        // Strides account for memory layout
+        {safe_config.ny_v, config.nx},
+        {mem_nx, 1},
         options
     );
-    
-    // Trim to core dimensions (remove halos)
-    // Calculate how much we can actually trim based on available space
-    // If we have 86 points and need 82, we can only trim 4 points total
-    int available_j = ny_v_with_halos;  // 86
-    int needed_j = safe_config.ny_v;    // 82
-    int available_i = nx_with_halos;    // 46  
-    int needed_i = safe_config.nx;           // 41
-    
-    // Calculate trim amounts - can't trim more than what's available
-    int j_trim_start = std::min(halo_width, (available_j - needed_j) / 2);
-    int i_trim_start = std::min(halo_width, (available_i - needed_i) / 2);
-    
-    // Ensure we don't exceed bounds
-    if (j_trim_start + needed_j > available_j) {
-        j_trim_start = available_j - needed_j;
-    }
-    if (i_trim_start + needed_i > available_i) {
-        i_trim_start = available_i - needed_i;
-    }
-
-    std::cerr << "[SDIRK3] V-msf trim: j[" << j_trim_start << ":" << j_trim_start + needed_j << "], i["
-              << i_trim_start << ":" << i_trim_start + needed_i << "]" << std::endl;
-
-    // Extract core region
-    // CRITICAL FIX: slice(dim, start, end) expects end index, not count!
-    // For V-staggered: need ny_v (82) points in j, nx (41) points in i
-    auto msfvx_tile = msfvx_tile_with_halos.slice(0, j_trim_start, j_trim_start + needed_j)  // j: extract 82 points
-                                           .slice(1, i_trim_start, i_trim_start + needed_i);  // i: extract 41 points
-    auto msfvy_tile = msfvy_tile_with_halos.slice(0, j_trim_start, j_trim_start + needed_j)  // j: extract 82 points
-                                           .slice(1, i_trim_start, i_trim_start + needed_i);  // i: extract 41 points
     
     // Apply WRF-consistent periodic boundary conditions for V-staggered map scale factors
     if (periodic_y) {
