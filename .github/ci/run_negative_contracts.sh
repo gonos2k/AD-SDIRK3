@@ -74,58 +74,78 @@ expect_fail "cmake-semicolon-line" "not a .cpp|nonexistent|duplicate" "$WORK/cma
   cmake_configure "$SRC" "$WORK/b-semi"
 
 # ---------- archive exact-set: stale member injected as a REAL object ----------
+# The positive builds below are SETUP, not the contract under test: if one
+# fails, report it as a distinct FAIL and skip that case's checks — under
+# `set -e` a bare subshell failure would kill the whole matrix with no
+# diagnostic (observed: first Linux run died here on an unrelated compile
+# error, exit 2, zero FAIL lines).
 fresh_copy
-( cd "$SRC" \
+if ( cd "$SRC" \
   && make -j 2 "${MAKE_ARGS[@]}" > "$WORK/pos-build.log" 2>&1 \
   && printf 'namespace { int neg_stale_anchor = 0; }\nint* neg_stale() { return &::neg_stale_anchor; }\n' > stale_member.cpp \
   && "${CXX:-g++}" -std=c++17 -c stale_member.cpp -o stale_member.o \
   && ar r libwrf_sdirk3_libtorch.a stale_member.o \
   && ar t libwrf_sdirk3_libtorch.a | grep -q '^stale_member.o$' \
   && sleep 1.2 && touch wrf_sdirk3_globals.cpp \
-  && make -j 2 "${MAKE_ARGS[@]}" > "$WORK/stale-rebuild.log" 2>&1 )
-if ar t "$SRC/libwrf_sdirk3_libtorch.a" | grep -q '^stale_member.o$'; then
-  echo "FAIL [stale-member]: injected member survived the rebuild"; fail=1
+  && make -j 2 "${MAKE_ARGS[@]}" > "$WORK/stale-rebuild.log" 2>&1 ); then
+  if ar t "$SRC/libwrf_sdirk3_libtorch.a" | grep -q '^stale_member.o$'; then
+    echo "FAIL [stale-member]: injected member survived the rebuild"; fail=1
+  else
+    echo "PASS [stale-member]: atomic reconstruction dropped the injected member"
+  fi
+  ( cd "$SRC" && make check-core-archive "${MAKE_ARGS[@]}" > "$WORK/stale-check.log" 2>&1 ) \
+    && echo "PASS [stale-member-check]" || { echo "FAIL [stale-member-check]"; fail=1; }
 else
-  echo "PASS [stale-member]: atomic reconstruction dropped the injected member"
+  echo "FAIL [stale-member]: setup/positive build failed (see pos-build.log / stale-rebuild.log)"
+  tail -5 "$WORK/pos-build.log" 2>/dev/null || true
+  fail=1
 fi
-( cd "$SRC" && make check-core-archive "${MAKE_ARGS[@]}" > "$WORK/stale-check.log" 2>&1 ) \
-  && echo "PASS [stale-member-check]" || { echo "FAIL [stale-member-check]"; fail=1; }
 
 # ---------- source removal without clean ----------
 fresh_copy
-( cd "$SRC" \
+if ( cd "$SRC" \
   && printf 'namespace { int neg_tmp_anchor = 0; }\nint* neg_tmp() { return &::neg_tmp_anchor; }\n' > wrf_sdirk3_neg_tmp.cpp \
   && printf 'wrf_sdirk3_neg_tmp.cpp\n' >> $M \
   && make -j 2 "${MAKE_ARGS[@]}" > "$WORK/tmp-add.log" 2>&1 \
   && ar t libwrf_sdirk3_libtorch.a | grep -q neg_tmp \
   && sleep 1.2 \
   && grep -v neg_tmp $M > $M.new && mv $M.new $M \
-  && make -j 2 "${MAKE_ARGS[@]}" > "$WORK/tmp-del.log" 2>&1 )
-if ar t "$SRC/libwrf_sdirk3_libtorch.a" | grep -q neg_tmp; then
-  echo "FAIL [removed-source]: retired member survived dirty rebuild"; fail=1
+  && make -j 2 "${MAKE_ARGS[@]}" > "$WORK/tmp-del.log" 2>&1 ); then
+  if ar t "$SRC/libwrf_sdirk3_libtorch.a" | grep -q neg_tmp; then
+    echo "FAIL [removed-source]: retired member survived dirty rebuild"; fail=1
+  else
+    echo "PASS [removed-source]: retired member gone without clean"
+  fi
 else
-  echo "PASS [removed-source]: retired member gone without clean"
+  echo "FAIL [removed-source]: setup/positive build failed (see tmp-add.log / tmp-del.log)"
+  tail -5 "$WORK/tmp-add.log" 2>/dev/null || true
+  fail=1
 fi
 
 # ---------- compile-fail atomicity ----------
 fresh_copy
-( cd "$SRC" && make -j 2 "${MAKE_ARGS[@]}" > "$WORK/atom-pos.log" 2>&1 )
-sha_before="$(shasum -a 256 "$SRC/libwrf_sdirk3_libtorch.a" 2>/dev/null || sha256sum "$SRC/libwrf_sdirk3_libtorch.a")"
-( cd "$SRC" && sleep 1.2 && printf '\n#error pr6 deliberate\n' >> wrf_sdirk3_globals.cpp )
-expect_fail "compile-fail-make" "pr6 deliberate" "$WORK/atom-make.log" -- \
-  make -C "$SRC" -j 2 all "${MAKE_ARGS[@]}"
-sha_after="$(shasum -a 256 "$SRC/libwrf_sdirk3_libtorch.a" 2>/dev/null || sha256sum "$SRC/libwrf_sdirk3_libtorch.a")"
-if [ "${sha_before%% *}" != "${sha_after%% *}" ]; then
-  echo "FAIL [atomicity]: archive changed after failed build"; fail=1
+if ( cd "$SRC" && make -j 2 "${MAKE_ARGS[@]}" > "$WORK/atom-pos.log" 2>&1 ); then
+  sha_before="$(shasum -a 256 "$SRC/libwrf_sdirk3_libtorch.a" 2>/dev/null || sha256sum "$SRC/libwrf_sdirk3_libtorch.a")"
+  ( cd "$SRC" && sleep 1.2 && printf '\n#error pr6 deliberate\n' >> wrf_sdirk3_globals.cpp )
+  expect_fail "compile-fail-make" "pr6 deliberate" "$WORK/atom-make.log" -- \
+    make -C "$SRC" -j 2 all "${MAKE_ARGS[@]}"
+  sha_after="$(shasum -a 256 "$SRC/libwrf_sdirk3_libtorch.a" 2>/dev/null || sha256sum "$SRC/libwrf_sdirk3_libtorch.a")"
+  if [ "${sha_before%% *}" != "${sha_after%% *}" ]; then
+    echo "FAIL [atomicity]: archive changed after failed build"; fail=1
+  else
+    echo "PASS [atomicity]: archive SHA-256 unchanged after failed build"
+  fi
+  [ -e "$SRC/libwrf_sdirk3_libtorch.a.tmp" ] \
+    && { echo "FAIL [atomicity-tmp]: .tmp residue"; fail=1; } \
+    || echo "PASS [atomicity-tmp]: no .tmp residue"
+  cmake_configure "$SRC" "$WORK/b-atom" > "$WORK/atom-cmake-cfg.log" 2>&1 || true   # configure may pass; the BUILD must fail
+  expect_fail "compile-fail-cmake" "pr6 deliberate" "$WORK/atom-cmake.log" -- \
+    cmake --build "$WORK/b-atom" --parallel 2
 else
-  echo "PASS [atomicity]: archive SHA-256 unchanged after failed build"
+  echo "FAIL [atomicity]: setup/positive build failed (see atom-pos.log)"
+  tail -5 "$WORK/atom-pos.log" 2>/dev/null || true
+  fail=1
 fi
-[ -e "$SRC/libwrf_sdirk3_libtorch.a.tmp" ] \
-  && { echo "FAIL [atomicity-tmp]: .tmp residue"; fail=1; } \
-  || echo "PASS [atomicity-tmp]: no .tmp residue"
-cmake_configure "$SRC" "$WORK/b-atom" || true   # configure may pass; the BUILD must fail
-expect_fail "compile-fail-cmake" "pr6 deliberate" "$WORK/atom-cmake.log" -- \
-  cmake --build "$WORK/b-atom" --parallel 2
 
 if [ "$fail" -eq 0 ]; then echo "ALL negative build contracts PASSED"; else echo "NEGATIVE CONTRACT FAILURES"; fi
 exit "$fail"
