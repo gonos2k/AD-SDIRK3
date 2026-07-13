@@ -736,7 +736,7 @@ struct SDIRK3Config {
     //   [x] wrf_sdirk3_tile_unified_impl.cpp - standard/heavy counters (entry diag at >=2)
     //   [x] wrf_sdirk3_unified_preconditioner.cpp - standard/heavy counters
     //   [x] wrf_sdirk3_newton_krylov_solver.cpp - standard only (no heavy sampling)
-    //   [x] wrf_sdirk3_jvp_autograd.cpp - standard only (JVPContext::prepare())
+    //   [x] wrf_sdirk3_jvp_autograd.cpp - standard only (legacy JVPContext removed)
     //
     // NOT applicable (control-flow essential .item() or already optimized):
     //   [-] wrf_sdirk3_full_physics.cpp - .item() for return values, batched D2H

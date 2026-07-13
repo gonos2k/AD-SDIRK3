@@ -22,18 +22,13 @@ namespace sdirk3 {
  *   batch_size == 1:
  *     - Forward-AD (dual) is optimal: O(n) memory, O(F) compute
  *     - Reverse-AD: O(n) memory for graph + O(n) for gradients, O(F + backward) compute
- *     - Recommendation: Use compute_jvp_dual() or FD for single JVPs
+ *     - Recommendation: Use compute_jvp_forward_diff() or FD for single JVPs
  *
  *   batch_size > 1:
- *     - Reverse-AD with graph reuse: Build graph once, reuse for all batch elements
- *     - Compute: O(F) + batch_size × O(backward)
- *     - Memory: O(graph) + O(n) per JVP result
- *     - Recommendation: Use compute_jvp_batch_optimized() for GMRES Krylov vectors
- *
- *   batch_size > 16:
- *     - Chunked reverse-AD: Process in chunks of 16 to bound peak memory
- *     - Trade-off: More F evaluations vs bounded memory
- *     - Recommendation: compute_jvp_batch_optimized() handles this automatically
+ *     - (Historical note: batched "JVP" helpers using reverse-AD graph reuse
+ *       were removed — grad_outputs-based batching computes J^T v per element,
+ *       not J*v, and never had a production caller. Batch JVPs, if ever needed,
+ *       must be built on the forward-mode fwad router, one direction per dual.)
  *
  * FD epsilon sensitivity:
  *   - FP32 optimal eps: ~1e-4 (smaller causes cancellation error)
@@ -125,7 +120,7 @@ namespace sdirk3 {
  *        comparison safe — threads race on the shared generator. For
  *        concurrent use, F itself must draw from an explicit per-thread
  *        at::Generator passed to the random ops.
- *        auto jvp1 = compute_jvp_dual(F_fixed, u, v);          // true JVP
+ *        auto jvp1 = compute_jvp_forward_diff(F_fixed, u, v);          // true JVP
  *        auto jvp2 = compute_jvp_finite_diff(F_fixed, u, v);   // same fixed noise
  *     2. Use deterministic mode for testing (fixes ALGORITHM nondeterminism,
  *        e.g. atomics ordering — it does NOT freeze random OPS like dropout;
@@ -139,7 +134,7 @@ namespace sdirk3 {
  *   - Mismatch causes precision differences (FP16 vs FP32 intermediate results)
  *   - Use scoped autocast around entire JVP computation:
  *       torch::autocast::set_autocast_enabled(torch::kCUDA, true);
- *       auto jvp = compute_jvp_dual(F, u, v);  // true JVP; F sees autocast
+ *       auto jvp = compute_jvp_forward_diff(F, u, v);  // true JVP; F sees autocast
  *       torch::autocast::set_autocast_enabled(torch::kCUDA, false);
  *   - Or disable autocast for JVP validation (recommended for accuracy testing)
  *   - v_batch dtype normalization: In autocast scope, v_batch may have different
@@ -163,7 +158,7 @@ namespace sdirk3 {
  *   3. Disable autocast for JVP validation (for accuracy testing):
  *      torch::NoGradGuard to disable autocast temporarily
  *
- *   Implementation in compute_jvp_batch_optimized:
+ *   Implementation note (historical, applies to any batched backward):
  *   - v_batch dtype/device validated with warnings (not errors for flexibility)
  *   - Explicit .to(x.dtype()) normalization before grad() call
  *   - Test 12 (AMP Consistency) verifies behavior under autocast
@@ -171,8 +166,8 @@ namespace sdirk3 {
  *   Relative tolerance for AMP JVP comparison: ~1e-3 (due to FP16 precision)
  *   If tighter tolerance needed, disable autocast for the JVP computation.
  *
- * F() Purity Requirements for Graph Reuse:
- *   JVPContext and batch JVP assume F is a PURE FUNCTION:
+ * F() Purity Requirements (any graph-reuse or multi-evaluation helper):
+ *   The AD/FD helpers assume F is a PURE FUNCTION:
  *   ✅ F depends only on input tensor values
  *   ✅ F produces deterministic output for same input
  *   ❌ F must NOT use global state (counters, caches modified between calls)
@@ -212,9 +207,9 @@ namespace sdirk3 {
  * Thread Safety (Concurrency):
  *   JVP functions are NOT thread-safe for shared state:
  *   ❌ Do NOT share x_var/y tensors across threads
- *   ❌ Do NOT share JVPContext across threads
+ *   ❌ Do NOT share cached autograd graphs across threads
  *   ❌ Do NOT call compute_jvp on same cached graph from multiple threads
- *   ✅ Each thread should have its own JVPContext instance
+ *   ✅ Each thread must own its graph/context state
  *   ✅ Each thread should build its own graph (x_var, y = F(x_var))
  *   Rationale: autograd::grad modifies graph state (retain_graph side effects).
  *
@@ -265,8 +260,6 @@ namespace sdirk3 {
  *   □ x.device() == v.device() (or all v_batch[i].device())
  *   □ F() creates intermediate tensors on x.device()
  *   □ No default device assumptions in F()
- *   □ JVPContext was prepared with same device as current call
- *   Enforcement: compute_jvp_batch_optimized has runtime device checks.
  *   Multi-GPU test: Include 2+ GPU smoke test in CI if hardware available.
  *
  * POLICY: Device Guard for Multi-GPU JVP
@@ -420,9 +413,12 @@ torch::Tensor compute_vjp_autograd(
     int halo_width = 0
 );
 
-// Alternative JVP computation using dual numbers (finite difference)
+// True JVP via forward finite difference. RENAMED from compute_jvp_dual
+// (full-repo review follow-up): despite the old name the implementation was
+// never dual-number AD — it is (F(u + eps*v) - F(u)) / eps. The authoritative
+// production JVP is the forward-mode fwad router (wrf_sdirk3_jvp_fwad_or_fd.h).
 // halo_width: Zero perturbations in halo regions to prevent artificial gradients
-torch::Tensor compute_jvp_dual(
+torch::Tensor compute_jvp_forward_diff(
     const std::function<torch::Tensor(const torch::Tensor&)>& F,
     const torch::Tensor& u,
     const torch::Tensor& v,
@@ -430,12 +426,6 @@ torch::Tensor compute_jvp_dual(
     int halo_width = 0
 );
 
-// Batched JVP computation for multiple vectors
-torch::Tensor compute_jvp_batch(
-    const std::function<torch::Tensor(const torch::Tensor&)>& F,
-    const torch::Tensor& u,
-    const torch::Tensor& V  // V has shape [batch, ...]
-);
 
 // Solve linear system (I - dt*gamma*J)*x = b using JVP
 torch::Tensor solve_linear_system_jvp(
@@ -477,68 +467,9 @@ bool get_use_finite_diff_jvp();
 void test_jvp_implementation();
 #endif // SDIRK3_ENABLE_DEMO_CODE
 
-/**
- * JVPContext: Graph reuse optimization for GMRES
- *
- * Problem: Building computation graph for 1.08M variables takes ~15 sec,
- *          plus ~570 sec for backward pass = ~10 min per JVP call.
- *          With 30 GMRES iters × 50 Newton iters = ~10 days per timestep.
- *
- * Solution: Build graph ONCE per Newton iteration, reuse for all GMRES iters.
- *          Each subsequent JVP only needs backward pass through existing graph.
- *
- * Usage:
- *   JVPContext ctx;
- *   ctx.prepare(compute_rhs, Y);  // Build graph once
- *   for (GMRES iterations) {
- *       auto Jv = ctx.compute_jvp(v);  // Fast: reuse graph
- *   }
- *   ctx.release();  // Free graph memory
- */
-class JVPContext {
-public:
-    JVPContext() = default;
-    ~JVPContext() { release(); }
+// (JVPContext removed — see the legacy-API removal note in the .cpp:
+//  its compute_jvp returned J^T v, and it had no callers.)
 
-    // OPT Pass33+: Explicit non-copyable/non-movable
-    // Reason: std::atomic diagnostic sampling counter (prepare_diag_call_counter_)
-    JVPContext(const JVPContext&) = delete;
-    JVPContext& operator=(const JVPContext&) = delete;
-    JVPContext(JVPContext&&) = delete;
-    JVPContext& operator=(JVPContext&&) = delete;
-
-    // Prepare computation graph (call once per Newton iteration)
-    // Returns true if successful, false if graph build failed
-    bool prepare(
-        const std::function<torch::Tensor(const torch::Tensor&)>& F,
-        const torch::Tensor& u,
-        int halo_width = 0);
-
-    // Compute JVP using prepared graph (call for each GMRES direction vector)
-    // Much faster than compute_vjp_autograd as graph is already built
-    // retain_graph_for_next: true if more JVP calls expected
-    torch::Tensor compute_jvp(const torch::Tensor& v, bool retain_graph_for_next = true);
-
-    // Release graph memory (call after GMRES completes)
-    void release();
-
-    // Check if context is prepared
-    bool is_prepared() const { return is_prepared_; }
-
-    // Get the last F(u) evaluation (useful for debugging)
-    const torch::Tensor& get_F_u() const { return F_u_; }
-
-private:
-    torch::Tensor u_var_;      // Input with requires_grad=true
-    torch::Tensor F_u_;        // F(u_var_), the computed output
-    int halo_width_ = 0;
-    bool is_prepared_ = false;
-
-    // OPT Pass33+: Diagnostic sampling counter for prepare() verbose output
-    // Reduces D2H overhead when debug_level >= 1
-    // Pattern: (period == 0) || ((counter % period) == 0) || (counter == 1)
-    mutable std::atomic<uint64_t> prepare_diag_call_counter_{0};
-};
 
 // Fast finite difference JVP (no autograd overhead)
 torch::Tensor compute_jvp_finite_diff(

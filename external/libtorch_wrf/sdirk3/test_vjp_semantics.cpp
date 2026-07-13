@@ -21,7 +21,7 @@
 //                                                    default-FD dispatch ever
 //                                                    came back — regression pin)
 //   3. compute_jvp_finite_diff(F, u, v) == A v     (true JVP)
-//   4. compute_jvp_dual(F, u, v)        == A v     (true JVP, dual numbers)
+//   4. compute_jvp_forward_diff(F, u, v)        == A v     (true JVP, forward diff)
 //   5. set_use_finite_diff_jvp(true) must NOT flip compute_vjp_autograd back
 //      to returning A v (the toggle is inert for the VJP — the exact round-2
 //      failure mode, pinned).
@@ -88,7 +88,7 @@ int main() {
 
     using wrf::sdirk3::compute_vjp_autograd;
     using wrf::sdirk3::compute_jvp_finite_diff;
-    using wrf::sdirk3::compute_jvp_dual;
+    using wrf::sdirk3::compute_jvp_forward_diff;
     using wrf::sdirk3::set_use_finite_diff_jvp;
 
     // 1+2: the VJP is J^T v and is NOT J v.
@@ -108,10 +108,10 @@ int main() {
         expect_close(jvp, Av, "compute_jvp_finite_diff == A v (true JVP)");
     }
 
-    // 4: "dual" JVP is J v (its implementation is also FD-based; same epsilon note).
+    // 4: forward-diff JVP is J v (renamed from the misleading "dual"; same epsilon note).
     {
-        auto jvp = compute_jvp_dual(F, u, v, /*epsilon=*/1e-2f);
-        expect_close(jvp, Av, "compute_jvp_dual == A v (true JVP)");
+        auto jvp = compute_jvp_forward_diff(F, u, v, /*epsilon=*/1e-2f);
+        expect_close(jvp, Av, "compute_jvp_forward_diff == A v (true JVP, renamed)");
     }
 
     // 5: the legacy FD toggle must NOT flip the VJP back into a JVP — the
