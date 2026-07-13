@@ -987,7 +987,7 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
  *   - Do NOT call during GPU kernel execution or while tensors are being accessed
  *   - Safe to call between timesteps or at simulation boundaries
  *
- * Fortran binding: sdirk3_tile_solver_reset_state (module_implicit_sdirk3_zerocopy.F)
+ * Fortran binding: none since the dormant bridge was removed (C ABI retained)
  */
 void sdirk3_tile_solver_reset_state(void* solver_ptr)
 {
@@ -1059,7 +1059,7 @@ void sdirk3_tile_solver_reset_state(void* solver_ptr)
  *   2. External integrations with solver pooling/recycling
  *   3. Debug scenarios requiring complete cache purge
  *
- * Fortran binding: sdirk3_tile_solver_reset_full (module_implicit_sdirk3_zerocopy.F)
+ * Fortran binding: sdirk3_tile_solver_reset_full (module_implicit_sdirk3.F)
  */
 void sdirk3_tile_solver_reset_full(void* solver_ptr)
 {
@@ -1149,7 +1149,7 @@ void sdirk3_tile_solver_reset_full(void* solver_ptr)
  * Failure to follow up may cause stale TLS cache issues in worker threads.
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * Fortran binding: sdirk3_tile_solver_reset_full_parallel (module_implicit_sdirk3_zerocopy.F)
+ * Fortran binding: none since the dormant bridge was removed (C ABI retained)
  */
 void sdirk3_tile_solver_reset_full_parallel(void* solver_ptr)
 {

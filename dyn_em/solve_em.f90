@@ -84,7 +84,6 @@ nba_mij,nba_rij,sbmradar,chem &
    USE module_avgflx_em, ONLY : zero_avgflx, upd_avgflx
    USE module_cpl, ONLY : coupler_on, cpl_settime, cpl_store_input
    USE module_implicit_sdirk3  
-   USE module_implicit_sdirk3_zerocopy  
 
    USE module_firebrand_spotting, ONLY : firebrand_spotting_em_driver
 
@@ -979,7 +978,7 @@ CALL PERIOD_BDY_EM_D_sub ( grid, &
      IF ( rk_order == 1 ) THEN   
 
        write(wrf_err_message,*)' leapfrog removed, error exit for dynamics_option = ',dynamics_option
-       CALL wrf_error_fatal3("<stdin>",982,&
+       CALL wrf_error_fatal3("<stdin>",981,&
 wrf_err_message )
 
      ELSE IF ( rk_order == 2 ) THEN   
@@ -1013,7 +1012,7 @@ wrf_err_message )
      ELSE
 
        write(wrf_err_message,*)' unknown solver, error exit for dynamics_option = ',dynamics_option
-       CALL wrf_error_fatal3("<stdin>",1016,&
+       CALL wrf_error_fatal3("<stdin>",1015,&
 wrf_err_message )
 
      END IF
@@ -1483,6 +1482,24 @@ CALL HALO_EM_SCALAR_E_5_sub ( grid, &
      !$OMP END PARALLEL DO
 
 
+     
+     
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
+        WRITE(0,'(A,I2,6(A,E14.6))') '[PARITY sub] tendencies rk=', rk_step, &
+           ' ru=', MAXVAL(ABS(grid%ru_tend(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' rv=', MAXVAL(ABS(grid%rv_tend(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' rw=', MAXVAL(ABS(rw_tend(ips:ipe,kps:kpe,jps:jpe))), &
+           ' ph=', MAXVAL(ABS(ph_tend(ips:ipe,kps:kpe,jps:jpe))), &
+           ' t=', MAXVAL(ABS(t_tend(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' mu=', MAXVAL(ABS(mu_tend(ips:ipe,jps:jpe)))
+        
+        
+        WRITE(0,'(A)') '[PARITY subk] rw per-k:'
+        WRITE(0,'(8E14.6)') (MAXVAL(ABS(rw_tend(ips:ipe,k,jps:jpe))), k=kps,kpe)
+        WRITE(0,'(A)') '[PARITY subk] ph per-k:'
+        WRITE(0,'(8E14.6)') (MAXVAL(ABS(ph_tend(ips:ipe,k,jps:jpe))), k=kps,kpe)
+     END IF
+
 
 
 
@@ -1771,6 +1788,13 @@ CALL PERIOD_BDY_EM_B_sub ( grid, &
        END DO
        !$OMP END PARALLEL DO
 
+     
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
+        WRITE(0,'(A,I2,2(A,E14.6))') '[PARITY sub] after_uv rk=', rk_step, &
+           ' u=', MAXVAL(ABS(grid%u_2(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' v=', MAXVAL(ABS(grid%v_2(ips:ipe,kps:kpe-1,jps:jpe)))
+     END IF
+
 
 
 
@@ -1778,7 +1802,7 @@ CALL PERIOD_BDY_EM_B_sub ( grid, &
        IF (config_flags%polar) THEN
 
          CALL pxft ( grid=grid                                              &
-               ,lineno=1555                                             &
+               ,lineno=1579                                             &
                ,flag_uv            = 1                                      &
                ,flag_rurv          = 0                                      &
                ,flag_wph           = 0                                      &
@@ -1893,6 +1917,14 @@ CALL HALO_EM_C_sub ( grid, &
        ENDDO
        !$OMP END PARALLEL DO
 
+     
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
+        WRITE(0,'(A,I2,3(A,E14.6))') '[PARITY sub] after_mu_t rk=', rk_step, &
+           ' mu=', MAXVAL(ABS(grid%mu_2(ips:ipe,jps:jpe))), &
+           ' t=', MAXVAL(ABS(grid%t_2(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' ww=', MAXVAL(ABS(grid%ww(ips:ipe,kps:kpe,jps:jpe)))
+     END IF
+
 
 
 
@@ -1900,7 +1932,7 @@ CALL HALO_EM_C_sub ( grid, &
        IF ( (config_flags%polar) ) THEN
 
          CALL pxft ( grid=grid                                               &
-                ,lineno=1667                                             &
+                ,lineno=1699                                             &
                 ,flag_uv            = 0                                      &
                 ,flag_rurv          = 0                                      &
                 ,flag_wph           = 0                                      &
@@ -2007,10 +2039,17 @@ CALL HALO_EM_C_sub ( grid, &
 
 
 
+     
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
+        WRITE(0,'(A,I2,2(A,E14.6))') '[PARITY sub] after_w rk=', rk_step, &
+           ' w=', MAXVAL(ABS(grid%w_2(ips:ipe,kps:kpe,jps:jpe))), &
+           ' ph=', MAXVAL(ABS(grid%ph_2(ips:ipe,kps:kpe,jps:jpe)))
+     END IF
+
        IF ( (config_flags%polar) .AND. (config_flags%non_hydrostatic) ) THEN
 
          CALL pxft ( grid=grid                                               &
-                ,lineno=1777                                             &
+                ,lineno=1816                                             &
                 ,flag_uv            = 0                                      &
                 ,flag_rurv          = 0                                      &
                 ,flag_wph           = 1                                      &
@@ -2119,6 +2158,13 @@ CALL HALO_EM_C_sub ( grid, &
 
        ENDDO
        !$OMP END PARALLEL DO
+
+
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
+        WRITE(0,'(A,I2,2(A,E14.6))') '[PARITY sub] after_prho rk=', rk_step, &
+           ' p=', MAXVAL(ABS(grid%p(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' al=', MAXVAL(ABS(grid%al(ips:ipe,kps:kpe-1,jps:jpe)))
+     END IF
 
 
 
@@ -2309,6 +2355,20 @@ CALL PERIOD_BDY_EM_B3_sub ( grid, &
      END DO
      !$OMP END PARALLEL DO
 
+     
+     
+     
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 2) THEN
+        WRITE(0,'(A,I2,A,I6,6(A,E14.6))') '[PARITY stage] rk_step=', rk_step,        &
+           ' it=', grid%itimestep,                                                    &
+           ' u=', MAXVAL(ABS(grid%u_2(ips:ipe,kps:kpe-1,jps:jpe))),                   &
+           ' v=', MAXVAL(ABS(grid%v_2(ips:ipe,kps:kpe-1,jps:jpe))),                   &
+           ' w=', MAXVAL(ABS(grid%w_2(ips:ipe,kps:kpe,jps:jpe))),                     &
+           ' ph=', MAXVAL(ABS(grid%ph_2(ips:ipe,kps:kpe,jps:jpe))),                   &
+           ' t=', MAXVAL(ABS(grid%t_2(ips:ipe,kps:kpe-1,jps:jpe))),                   &
+           ' mu=', MAXVAL(ABS(grid%mu_2(ips:ipe,jps:jpe)))
+     END IF
+
 
 
 
@@ -2316,7 +2376,7 @@ CALL PERIOD_BDY_EM_B3_sub ( grid, &
      IF (config_flags%polar) THEN
 
        CALL pxft ( grid=grid                                                   &
-                  ,lineno=2060                                             &
+                  ,lineno=2120                                             &
                   ,flag_uv            = 1                                      &
                   ,flag_rurv          = 1                                      &
                   ,flag_wph           = 1                                      &
@@ -2412,7 +2472,7 @@ CALL HALO_EM_MOIST_OLD_E_7_sub ( grid, &
 
          ELSE
            WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-           CALL wrf_error_fatal3("<stdin>",2415,&
+           CALL wrf_error_fatal3("<stdin>",2475,&
 TRIM(wrf_err_message))
          ENDIF
        ENDIF
@@ -2515,7 +2575,7 @@ CALL HALO_EM_SCALAR_OLD_E_7_sub ( grid, &
 
          ELSE
            WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-           CALL wrf_error_fatal3("<stdin>",2518,&
+           CALL wrf_error_fatal3("<stdin>",2578,&
 TRIM(wrf_err_message))
          ENDIF
   endif
@@ -2617,7 +2677,7 @@ CALL HALO_EM_CHEM_OLD_E_7_sub ( grid, &
 
            ELSE
              WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-             CALL wrf_error_fatal3("<stdin>",2620,&
+             CALL wrf_error_fatal3("<stdin>",2680,&
 TRIM(wrf_err_message))
            ENDIF
          ENDIF
@@ -2719,7 +2779,7 @@ CALL HALO_EM_TRACER_OLD_E_7_sub ( grid, &
 
            ELSE
              WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-             CALL wrf_error_fatal3("<stdin>",2722,&
+             CALL wrf_error_fatal3("<stdin>",2782,&
 TRIM(wrf_err_message))
            ENDIF
          ENDIF
@@ -2816,7 +2876,7 @@ CALL HALO_EM_TKE_OLD_E_7_sub ( grid, &
 
            ELSE
              WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-             CALL wrf_error_fatal3("<stdin>",2819,&
+             CALL wrf_error_fatal3("<stdin>",2879,&
 TRIM(wrf_err_message))
            ENDIF
          ENDIF
@@ -3112,7 +3172,7 @@ CALL HALO_EM_TKE_ADVECT_5_sub ( grid, &
 
          ELSE
           WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-          CALL wrf_error_fatal3("<stdin>",3115,&
+          CALL wrf_error_fatal3("<stdin>",3175,&
 TRIM(wrf_err_message))
          ENDIF
          !$OMP PARALLEL DO   &
@@ -3558,7 +3618,7 @@ TRIM(wrf_err_message))
                     ,ips=ips,ipe=ipe,jps=jps,jpe=jpe,kps=kps,kpe=kpe          )
              END IF
              CALL pxft ( grid=grid                                               &
-                    ,lineno=3251                                             &
+                    ,lineno=3311                                             &
                     ,flag_uv            = 0                                      &
                     ,flag_rurv          = 0                                      &
                     ,flag_wph           = 0                                      &
@@ -3604,7 +3664,7 @@ TRIM(wrf_err_message))
                     ,ips=ips,ipe=ipe,jps=jps,jpe=jpe,kps=kps,kpe=kpe           )
              END IF
              CALL pxft ( grid=grid                                               &
-                    ,lineno=3297                                             &
+                    ,lineno=3357                                             &
                     ,flag_uv            = 0                                      &
                     ,flag_rurv          = 0                                      &
                     ,flag_wph           = 0                                      &
@@ -3649,7 +3709,7 @@ TRIM(wrf_err_message))
                     ,ips=ips,ipe=ipe,jps=jps,jpe=jpe,kps=kps,kpe=kpe           )
              END IF
              CALL pxft ( grid=grid                                               &
-                    ,lineno=3342                                             &
+                    ,lineno=3402                                             &
                     ,flag_uv            = 0                                      &
                     ,flag_rurv          = 0                                      &
                     ,flag_wph           = 0                                      &
@@ -3695,7 +3755,7 @@ TRIM(wrf_err_message))
                   ,ips=ips,ipe=ipe,jps=jps,jpe=jpe,kps=kps,kpe=kpe          )
              END IF
              CALL pxft ( grid=grid                                             &
-                  ,lineno=3388                                             &
+                  ,lineno=3448                                             &
                   ,flag_uv            = 0                                      &
                   ,flag_rurv          = 0                                      &
                   ,flag_wph           = 0                                      &
@@ -3821,7 +3881,7 @@ CALL HALO_EM_D2_5_sub ( grid, &
        ELSE 
          WRITE(wrf_err_message,*)'solve_em: invalid h_mom_adv_order or h_sca_adv_order = ', &
                config_flags%h_mom_adv_order, config_flags%h_sca_adv_order
-         CALL wrf_error_fatal3("<stdin>",3824,&
+         CALL wrf_error_fatal3("<stdin>",3884,&
 TRIM(wrf_err_message))
        ENDIF
 
@@ -4098,7 +4158,7 @@ CALL HALO_EM_TKE_5_sub ( grid, &
          ENDIF
        ELSE
          WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-         CALL wrf_error_fatal3("<stdin>",4101,&
+         CALL wrf_error_fatal3("<stdin>",4161,&
 TRIM(wrf_err_message))
        ENDIF
 
@@ -4173,7 +4233,7 @@ CALL HALO_EM_MOIST_E_5_sub ( grid, &
            END IF
          ELSE
            WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-           CALL wrf_error_fatal3("<stdin>",4176,&
+           CALL wrf_error_fatal3("<stdin>",4236,&
 TRIM(wrf_err_message))
          ENDIF
        ENDIF
@@ -4248,7 +4308,7 @@ CALL HALO_EM_CHEM_E_5_sub ( grid, &
            ENDIF
          ELSE
            WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-           CALL wrf_error_fatal3("<stdin>",4251,&
+           CALL wrf_error_fatal3("<stdin>",4311,&
 TRIM(wrf_err_message))
          ENDIF
        ENDIF
@@ -4323,7 +4383,7 @@ CALL HALO_EM_TRACER_E_5_sub ( grid, &
            ENDIF
          ELSE
            WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-           CALL wrf_error_fatal3("<stdin>",4326,&
+           CALL wrf_error_fatal3("<stdin>",4386,&
 TRIM(wrf_err_message))
          ENDIF
        ENDIF
@@ -4398,7 +4458,7 @@ CALL HALO_EM_SCALAR_E_5_sub ( grid, &
            ENDIF
          ELSE
            WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-           CALL wrf_error_fatal3("<stdin>",4401,&
+           CALL wrf_error_fatal3("<stdin>",4461,&
 TRIM(wrf_err_message))
          ENDIF
        ENDIF
@@ -5171,7 +5231,7 @@ CALL PERIOD_EM_THETAM_sub ( grid, &
          END IF
  
          CALL pxft ( grid=grid                                                 &
-                  ,lineno=4394                                             &
+                  ,lineno=4454                                             &
                   ,flag_uv            = 0                                      &
                   ,flag_rurv          = 0                                      &
                   ,flag_wph           = 0                                      &
@@ -5307,7 +5367,7 @@ CALL PERIOD_EM_HYDRO_UV_sub ( grid, &
          END IF
 
          CALL pxft ( grid=grid                                                 &
-                  ,lineno=4507                                             &
+                  ,lineno=4567                                             &
                   ,flag_uv            = 0                                      &
                   ,flag_rurv          = 0                                      &
                   ,flag_wph           = 0                                      &
@@ -5353,7 +5413,7 @@ CALL PERIOD_EM_HYDRO_UV_sub ( grid, &
          END IF
 
          CALL pxft ( grid=grid                                                 &
-                  ,lineno=4553                                             &
+                  ,lineno=4613                                             &
                   ,flag_uv            = 0                                      &
                   ,flag_rurv          = 0                                      &
                   ,flag_wph           = 0                                      &
@@ -5400,7 +5460,7 @@ CALL PERIOD_EM_HYDRO_UV_sub ( grid, &
          END IF
 
          CALL pxft ( grid=grid                                                 &
-                  ,lineno=4600                                             &
+                  ,lineno=4660                                             &
                   ,flag_uv            = 0                                      &
                   ,flag_rurv          = 0                                      &
                   ,flag_wph           = 0                                      &
@@ -5536,7 +5596,7 @@ CALL HALO_EM_D3_5_sub ( grid, &
    ELSE 
       WRITE(wrf_err_message,*)'solve_em: invalid h_mom_adv_order or h_sca_adv_order = ', &
                config_flags%h_mom_adv_order, config_flags%h_sca_adv_order
-      CALL wrf_error_fatal3("<stdin>",5539,&
+      CALL wrf_error_fatal3("<stdin>",5599,&
 TRIM(wrf_err_message))
    ENDIF
 
@@ -5974,7 +6034,7 @@ CALL HALO_EM_E_5_sub ( grid, &
    ELSE
      WRITE(wrf_err_message,*)'solve_em: invalid h_mom_adv_order or h_sca_adv_order = ', &
                config_flags%h_mom_adv_order, config_flags%h_sca_adv_order
-     CALL wrf_error_fatal3("<stdin>",5977,&
+     CALL wrf_error_fatal3("<stdin>",6037,&
 TRIM(wrf_err_message))
    ENDIF
 
@@ -6017,7 +6077,7 @@ CALL HALO_EM_MOIST_E_5_sub ( grid, &
 
      ELSE
        WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-       CALL wrf_error_fatal3("<stdin>",6020,&
+       CALL wrf_error_fatal3("<stdin>",6080,&
 TRIM(wrf_err_message))
      ENDIF
    ENDIF
@@ -6060,7 +6120,7 @@ CALL HALO_EM_CHEM_E_5_sub ( grid, &
 
      ELSE
        WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-       CALL wrf_error_fatal3("<stdin>",6063,&
+       CALL wrf_error_fatal3("<stdin>",6123,&
 TRIM(wrf_err_message))
      ENDIF
    ENDIF
@@ -6103,7 +6163,7 @@ CALL HALO_EM_TRACER_E_5_sub ( grid, &
 
      ELSE
        WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-       CALL wrf_error_fatal3("<stdin>",6106,&
+       CALL wrf_error_fatal3("<stdin>",6166,&
 TRIM(wrf_err_message))
      ENDIF
    ENDIF
@@ -6146,7 +6206,7 @@ CALL HALO_EM_SCALAR_E_5_sub ( grid, &
 
      ELSE
        WRITE(wrf_err_message,*)'solve_em: invalid h_sca_adv_order = ',config_flags%h_sca_adv_order
-       CALL wrf_error_fatal3("<stdin>",6149,&
+       CALL wrf_error_fatal3("<stdin>",6209,&
 TRIM(wrf_err_message))
      ENDIF
    ENDIF

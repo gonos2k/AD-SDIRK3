@@ -930,7 +930,7 @@ struct SDIRK3Config {
     // │ 3. DEPRECATED API DOCUMENTATION LOCATIONS                              │
     // ├────────────────────────────────────────────────────────────────────────┤
     // │ Canonical:  wrf_sdirk3_interface.h (lines 199-365)                     │
-    // │ Fortran:    module_implicit_sdirk3_zerocopy.F (uses v2 APIs only)      │
+    // │ Fortran:    module_implicit_sdirk3.F (sole bridge; uses v2 APIs only)  │
     // │ README:     SDIRK3_OPTIMIZATION_OPTIONS.md (namelist reference)        │
     // │                                                                        │
     // │ SYNC CHECK: All three files should agree that:                         │

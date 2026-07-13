@@ -26213,7 +26213,7 @@ void TileSDIRK3UnifiedSolver::setWRFIndices(
     kms_ = kms; kme_ = kme;
     
     // Update staggered dimensions based on boundary conditions
-    // Following WRF's logic from module_implicit_sdirk3_zerocopy.F
+    // Following WRF's logic from module_implicit_sdirk3.F (sole Fortran bridge)
     // They were already correctly set by setStaggeredDimensions() based on WRF's actual grid
     // The boundary condition logic here was incorrect for single-tile cases
     // KEEPING THESE LINES COMMENTED FOR DOCUMENTATION:

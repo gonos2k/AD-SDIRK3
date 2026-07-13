@@ -514,7 +514,7 @@ public:
      *   1. Add cache invalidation call to this function OR to invalidateVerticalMetricCaches()
      *   2. Update this inventory documentation
      *   3. Update wrf_sdirk3_interface.h sdirk3_tile_solver_reset_full() docs
-     *   4. Update module_implicit_sdirk3_zerocopy.F Fortran binding docs
+     *   4. Update module_implicit_sdirk3.F (sole bridge) Fortran binding docs
      * ═══════════════════════════════════════════════════════════════════════════
      *
      * DESIGN DECISION (FIX Round82): Full invalidation vs "light invalidate" path

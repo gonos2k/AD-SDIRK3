@@ -62,7 +62,7 @@ struct SDIRK3_BoundaryConfig {
 // ABI EQUIVALENCE (FIX Round65):
 //   - C++ impl:   SDIRK3_ScalarParams_FP64   (this file, alignas(8))
 //   - C API:      SDIRK3_ScalarParams_FP64_C (wrf_sdirk3_interface.h, for extern "C")
-//   - Fortran:    SDIRK3_ScalarParams_FP64   (module_implicit_sdirk3_zerocopy.F, BIND(C))
+//   - Fortran:    SDIRK3_ScalarParams_FP64   (no Fortran binding since the dormant bridge was removed; C ABI type retained)
 //   All three MUST have identical layout: 4 × double (32 bytes total, 8-byte aligned).
 //   Modification to any requires updating all three and re-verifying static_asserts.
 //

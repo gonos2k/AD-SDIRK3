@@ -63,7 +63,7 @@
  * FIX Round146: DOC AUTHORITY HIERARCHY
  *   - TLS counters/reset impl: wrf_sdirk3_tile_unified.h (tls_debug namespace)
  *   - TLS API declarations: this file (wrf_sdirk3_interface.h)
- *   - Fortran bindings: module_implicit_sdirk3_zerocopy.F (synced summary)
+ *   - Fortran bindings: module_implicit_sdirk3.F (sole bridge; synced summary)
  *
  * These macros control TLS cache validation for solver_unique_id consistency.
  * Used in wrf_sdirk3_interface_zerocopy.cpp, affect sdirk3_tile_solver_reset_tls_parallel().
@@ -219,7 +219,7 @@ extern "C" {
 //   - etc. (see ZEROCOPY API DECLARATIONS section below)
 //
 // FORTRAN COMPATIBILITY:
-//   module_implicit_sdirk3_zerocopy.F does NOT reference any deprecated APIs.
+//   module_implicit_sdirk3.F (sole bridge) does NOT reference any deprecated APIs.
 //   All Fortran BIND(C) declarations use zerocopy v2 interface only.
 //
 // EXPORT/VISIBILITY:
@@ -384,7 +384,7 @@ void wrf_sdirk3_destroy_tile_solver(void* solver);
 // │ 6. sdirk3_reset_tls_debug_tracking()      │ TLS debug (C API, per-thread)       │
 // │ 7. sdirk3_clear_tls_solver_cache()        │ TLS lookup+debug (delayed,per-thrd) │
 // └───────────────────────────────────────────┴─────────────────────────────────────┘
-// FIX Round138/Round149: THREAD SCOPE WARNING (synced with module_implicit_sdirk3_zerocopy.F)
+// FIX Round138/Round149: THREAD SCOPE WARNING (synced with module_implicit_sdirk3.F)
 //   APIs #1, #6, #7 affect CALLING THREAD ONLY (per-thread TLS).
 //   For all-thread reset, use #4 (reset_full_parallel) or #5 (reset_tls_parallel).
 // FIX Round138: MULTI-SOLVER NOTE for API #7
@@ -395,7 +395,7 @@ void wrf_sdirk3_destroy_tile_solver(void* solver);
 //   - TABLE (above): Quick reference - use for API selection
 //   - BODY (below): Full documentation with usage patterns and warnings
 //   - config.cpp: Policy table for uint64 config keys
-//   - module_implicit_sdirk3_zerocopy.F: Fortran-specific usage notes
+//   - module_implicit_sdirk3.F: Fortran-specific usage notes
 //
 // Four reset APIs in order of increasing scope/overhead:
 //
@@ -568,7 +568,7 @@ void wrf_sdirk3_destroy_tile_solver(void* solver);
  * are created once and used for the entire simulation. Only call if reusing
  * solver instances across distinct simulation runs.
  *
- * Fortran binding: sdirk3_tile_solver_reset_state (see module_implicit_sdirk3_zerocopy.F)
+ * Fortran binding: none since the dormant bridge was removed (C ABI retained)
  */
 void sdirk3_tile_solver_reset_state(void* solver_ptr);
 
@@ -619,7 +619,7 @@ void sdirk3_tile_solver_reset_state(void* solver_ptr);
  * Note: Prefer sdirk3_tile_solver_reset_state() for production use.
  * Use this full reset only when grid geometry changes or for testing/debugging.
  *
- * Fortran binding: sdirk3_tile_solver_reset_full (see module_implicit_sdirk3_zerocopy.F)
+ * Fortran binding: sdirk3_tile_solver_reset_full (module_implicit_sdirk3.F)
  */
 void sdirk3_tile_solver_reset_full(void* solver_ptr);
 
@@ -657,7 +657,7 @@ void sdirk3_tile_solver_reset_full(void* solver_ptr);
  *   serial fallback that calls global + TLS invalidation sequentially.
  *   Functionally equivalent to reset_full() but with separated code paths.
  *
- * Fortran binding: sdirk3_tile_solver_reset_full_parallel (module_implicit_sdirk3_zerocopy.F)
+ * Fortran binding: none since the dormant bridge was removed (C ABI retained)
  */
 void sdirk3_tile_solver_reset_full_parallel(void* solver_ptr);
 
@@ -675,7 +675,7 @@ void sdirk3_tile_solver_reset_full_parallel(void* solver_ptr);
  * IMPORTANT: This function should be called by ALL threads in a parallel region
  * to ensure consistent TLS state. Use #pragma omp barrier before/after if needed.
  *
- * Fortran binding: sdirk3_tile_solver_reset_tls_parallel (module_implicit_sdirk3_zerocopy.F)
+ * Fortran binding: none since the dormant bridge was removed (C ABI retained)
  */
 void sdirk3_tile_solver_reset_tls_parallel(void* solver_ptr);
 
@@ -1021,7 +1021,7 @@ void sdirk3_tile_set_mpi_process_info(void* solver_ptr,
  * ABI EQUIVALENCE (FIX Round65):
  *   - C API:      SDIRK3_ScalarParams_FP64_C (this file, for extern "C" callers)
  *   - C++ impl:   SDIRK3_ScalarParams_FP64   (wrf_sdirk3_interface_params.h, alignas(8))
- *   - Fortran:    SDIRK3_ScalarParams_FP64   (module_implicit_sdirk3_zerocopy.F, BIND(C))
+ *   - Fortran:    SDIRK3_ScalarParams_FP64   (no Fortran binding since the dormant bridge was removed; C ABI type retained)
  *   All three MUST have identical layout: 4 × double (32 bytes total, 8-byte aligned).
  *   Modification to any requires updating all three and re-verifying static_asserts.
  */
@@ -1052,7 +1052,7 @@ void sdirk3_set_fp64_scalars(void* solver_ptr, const SDIRK3_ScalarParams_FP64_C*
 // OPT Pass33+: ZEROCOPY API DECLARATIONS
 // ═══════════════════════════════════════════════════════════════════════════
 // These APIs provide the recommended zero-copy interface for WRF integration.
-// Struct definitions: wrf_sdirk3_interface_params.h (C++), module_implicit_sdirk3_zerocopy.F (Fortran)
+// Struct definitions: wrf_sdirk3_interface_params.h (C++), module_implicit_sdirk3.F (Fortran, sole bridge)
 //
 // Usage pattern:
 //   1. sdirk3_tile_solver_create_zerocopy() - Create solver

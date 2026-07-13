@@ -345,7 +345,7 @@ rg "nc_|netcdf|pnetcdf|PIO" -g"*.cpp" -g"*.h" --no-ignore
 ```
 
 **Check 2: File Handle Passing via BIND(C)** ✅
-- `module_implicit_sdirk3_zerocopy.F` interface inspected
+- ~~`module_implicit_sdirk3_zerocopy.F`~~ interface inspected (module later REMOVED — dormant duplicate bridge; sole bridge is module_implicit_sdirk3.F)
 - Only data pointers passed: u_ptr, v_ptr, w_ptr, ph_ptr, etc.
 - NO file handles: ncid, fid, unit_, io_form not in interface
 
@@ -377,7 +377,7 @@ SDIRK3 runs BETWEEN flag setting and actual I/O → No conflict
 rg "nc_|netcdf|pnetcdf|PIO" -g"*.cpp" -g"*.h" external/libtorch_wrf/sdirk3/
 
 # Verify no file handles in BIND(C)
-grep -E "ncid|fid|unit_|io_form" dyn_em/module_implicit_sdirk3_zerocopy.F
+grep -E "ncid|fid|unit_|io_form" dyn_em/module_implicit_sdirk3.F  # (zerocopy bridge removed; sole bridge)
 
 # Check C++ file I/O (should only find config loading)
 rg "fopen|fwrite|ofstream|ifstream" -g"*.cpp" external/libtorch_wrf/sdirk3/
@@ -527,7 +527,7 @@ Full `wrf_array_version` implementation deferred as non-critical enhancement.
   - Added `wrf_sdirk3_mark_workers_started` INTERFACE declaration
   - Added call to `sdirk3_notify_halo_fresh()` after HALO_EM_D2_5.inc
   - Added call to `wrf_sdirk3_mark_workers_started()` at end of init
-- `dyn_em/module_implicit_sdirk3_zerocopy.F`:
+- ~~`dyn_em/module_implicit_sdirk3_zerocopy.F`~~ (module later REMOVED):
   - Added module-level INTERFACE for `sdirk3_notify_halo_fresh`
   - Added call to `sdirk3_notify_halo_fresh()` after HALO_EM_D2_5.inc
 
