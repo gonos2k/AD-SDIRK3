@@ -4,3 +4,5 @@
 self-hosted-runner:
   labels:
     - sdirk3-wrf
+
+# canary-clean: no-op comment to exercise the full gate
