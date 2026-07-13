@@ -1,0 +1,8 @@
+# PR 6: keep SHA-pinned actions current — Dependabot proposes verified upstream
+# releases while preserving full-commit-SHA pins.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

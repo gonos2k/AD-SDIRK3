@@ -1,0 +1,176 @@
+name: WRF SDIRK3 Integration
+
+# Self-hosted full-WRF integration (full-repo review PR 6, commit 3).
+# NEVER runs on pull_request events: the runner is a persistent machine and
+# untrusted PR code must not reach it. Trusted-branch pushes, nightly
+# schedule, and manual dispatch only. Not a required PR check.
+
+on:
+  push:
+    branches: [main, ad-main]
+    paths:
+      - 'external/libtorch_wrf/**'
+      - 'dyn_em/**'
+      - 'Registry/**'
+      - 'arch/**'
+      - 'compile'
+      - 'configure'
+      - '.github/workflows/wrf-integration.yml'
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wrf-sdirk3-integration
+  cancel-in-progress: false
+
+jobs:
+  wrf-em-b-wave:
+    name: WRF em_b_wave build + fault-injection regression
+    runs-on: [self-hosted, sdirk3-wrf]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+          clean: true
+
+      - name: clean workspace (pre)
+        run: |
+          set -euo pipefail
+          git clean -xdf --exclude='rsl.*' >/dev/null || true
+          git status --short | head -5 || true
+
+      # FAIL-CLOSED preflight: an unprovisioned runner must go RED, never green.
+      # Required env on the runner: WRF_SDIRK3_CONFIGURE_OPTION (machine choice).
+      - name: preflight (fail-closed if toolchain absent)
+        run: |
+          set -euo pipefail
+          missing=0
+          command -v gfortran >/dev/null 2>&1 || { echo "missing: gfortran"; missing=1; }
+          command -v mpif90   >/dev/null 2>&1 || { echo "missing: mpif90"; missing=1; }
+          command -v otool    >/dev/null 2>&1 || { echo "missing: otool (link verifier)"; missing=1; }
+          if [ -z "${WRF_SDIRK3_CONFIGURE_OPTION:-}" ]; then
+            echo "missing: WRF_SDIRK3_CONFIGURE_OPTION"; missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "FAIL: integration environment not provisioned on this runner."
+            exit 1
+          fi
+
+      - name: toolchain fingerprint
+        run: |
+          set -euo pipefail
+          echo "git SHA: $(git rev-parse HEAD)"
+          uname -a
+          gfortran --version | head -1
+          mpif90 --version | head -1 || true
+          cc --version | head -1
+          cmake --version | head -1 || true
+          python3 --version
+          python3 -c "import torch; print('torch', torch.__version__)" 2>/dev/null || echo "torch: n/a in runner python"
+
+      - name: build WRF em_b_wave
+        run: |
+          set -euo pipefail
+          printf '%s\n1\n' "${WRF_SDIRK3_CONFIGURE_OPTION}" | ./configure
+          ./compile -j 4 em_b_wave
+          test -x main/wrf.exe
+          test -x main/ideal.exe
+
+      - name: production core archive exact-set
+        run: |
+          set -euo pipefail
+          sh external/libtorch_wrf/sdirk3/tests/check_core_archive.sh \
+             external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a \
+             external/libtorch_wrf/sdirk3/wrf_sdirk3_core_sources.txt
+
+      # Verify the SOLE consumed libtorch from the linked binary (what the
+      # binary CONSUMES, not a declared path that might be ignored).
+      - name: verify linked libtorch
+        run: |
+          set -euo pipefail
+          echo "== otool -L main/wrf.exe (torch libs) =="
+          if ! otool -L main/wrf.exe | grep -Ei 'libtorch|libc10'; then
+            echo "FAIL: main/wrf.exe does not link any libtorch library"
+            exit 1
+          fi
+          echo "== rpaths referencing torch =="
+          otool -l main/wrf.exe | awk '/LC_RPATH/{f=1} f&&/path /{print $2; f=0}' \
+            | grep -i torch || echo "(no torch rpath entry; resolved by absolute install-name)"
+
+      - name: fault-injection negatives + positive control + stage-norm golden
+        working-directory: test/em_b_wave
+        run: |
+          set -uo pipefail
+          # Shorten to 2 steps in the ephemeral checkout only.
+          python3 - <<'PY'
+          import re, pathlib
+          p = pathlib.Path("namelist.input"); s = p.read_text()
+          s = re.sub(r'(run_days\s*=\s*)\d+', r'\g<1>0', s, count=1)
+          s = re.sub(r'(run_seconds\s*=\s*)\d+', r'\g<1>1200', s, count=1)
+          p.write_text(s)
+          PY
+          ./ideal.exe >/dev/null 2>&1 || { echo "FAIL: ideal.exe"; exit 1; }
+
+          check_reject() {
+            label="$1"; marker="$2"; shift 2
+            rm -f rsl.error.0000
+            env WRF_SDIRK3_SPLIT_EXPLICIT=1 "$@" ./wrf.exe >/dev/null 2>&1
+            rc=$?
+            if [ "$rc" -eq 0 ]; then
+              echo "FAIL [$label]: wrf.exe exited 0; expected nonzero abort"; return 1
+            fi
+            if ! grep -q "$marker" rsl.error.0000 2>/dev/null; then
+              echo "FAIL [$label]: rejection marker not found: $marker"; return 1
+            fi
+            echo "PASS [$label]: nonzero abort + marker '$marker'"
+          }
+
+          rc=0
+          check_reject "stagger-mismatch-at-2" "per-call geometry validation failed" \
+            WRF_SDIRK3_TEST_STAGGER_MISMATCH_AT=2 || rc=1
+          check_reject "invalid-stagger-init" "setStaggeredDimensions rejected" \
+            WRF_SDIRK3_TEST_INVALID_STAGGER_INIT=1 || rc=1
+
+          # Positive control: the uninjected split run must SUCCEED, so a
+          # blanket-abort cannot masquerade as the negatives passing.
+          rm -f rsl.error.0000
+          env WRF_SDIRK3_SPLIT_EXPLICIT=1 ./wrf.exe >/dev/null 2>&1
+          if ! grep -q "SUCCESS COMPLETE" rsl.error.0000 2>/dev/null; then
+            echo "FAIL [positive-control]: split run did not reach SUCCESS COMPLETE"; rc=1
+          else
+            echo "PASS [positive-control]"
+          fi
+
+          # Stage-norm golden: exact textual comparison against the tracked
+          # baseline. NEVER auto-updated — an intentional numerics change must
+          # update the baseline in its own PR with evidence.
+          grep "SPLIT-EXPLICIT RK. stage" rsl.error.0000 | head -6 > /tmp/stage_norms_actual.txt
+          if ! diff ci_expected_stage_norms.txt /tmp/stage_norms_actual.txt; then
+            echo "FAIL [stage-norm-golden]: norms differ from the tracked baseline"; rc=1
+          else
+            echo "PASS [stage-norm-golden]: all six stage norms bit-identical"
+          fi
+          exit $rc
+
+      - name: logs artifact (always)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: wrf-integration-logs
+          if-no-files-found: ignore
+          path: |
+            test/em_b_wave/rsl.error.0000
+            test/em_b_wave/rsl.out.0000
+            /tmp/stage_norms_actual.txt
+            compile.log
+
+      - name: clean workspace (post)
+        if: ${{ always() }}
+        run: |
+          git clean -xdf >/dev/null 2>&1 || true
+          echo "workspace cleaned"
