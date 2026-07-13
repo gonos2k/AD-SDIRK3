@@ -98,14 +98,28 @@ namespace sdirk3 {
  *   The randomness must be pinned INSIDE F, per evaluation:
  *   Solutions:
  *     1. Pin the RNG inside F so EVERY evaluation replays the same draws
- *        (within each helper call and across helpers). NOTE: the C++ API has
- *        no torch::get_rng_state/set_rng_state (those are Python names — the
- *        previous revision of this example used them and did not compile);
- *        reseeding per evaluation is the portable libtorch C++ pattern:
+ *        (within each helper call and across helpers), AND restore the global
+ *        generator afterwards so the wrapper does not clobber the caller's
+ *        random stream (a bare manual_seed inside F would leave the process
+ *        RNG permanently reseeded — Codex round-6). The libtorch C++ API has
+ *        no torch::get_rng_state/set_rng_state (Python names; an earlier
+ *        revision used them and did not compile) — use the generator handle:
  *        auto F_fixed = [&F](const torch::Tensor& x) {
- *            torch::manual_seed(0);   // identical draws on every evaluation
- *            return F(x);
+ *            // at::Generator is a shared handle; the copy refers to the SAME
+ *            // global CPU generator but is non-const (set_state needs that).
+ *            auto gen = at::globalContext().defaultGenerator(at::kCPU);
+ *            auto saved = gen.get_state();   // caller's stream
+ *            torch::manual_seed(0);          // identical draws per evaluation
+ *            auto out = F(x);
+ *            gen.set_state(saved);           // wrapper is transparent
+ *            return out;
  *        };
+ *        CONCURRENCY: this pattern manipulates the GLOBAL generator and is
+ *        single-threaded-validation ONLY. If F uses global-RNG ops
+ *        (rand_like etc.), no outer wrapper can make concurrent JVP/FD
+ *        comparison safe — threads race on the shared generator. For
+ *        concurrent use, F itself must draw from an explicit per-thread
+ *        at::Generator passed to the random ops.
  *        auto jvp1 = compute_jvp_dual(F_fixed, u, v);          // true JVP
  *        auto jvp2 = compute_jvp_finite_diff(F_fixed, u, v);   // same fixed noise
  *     2. Use deterministic mode for testing (fixes ALGORITHM nondeterminism,
