@@ -1,0 +1,11 @@
+name: canary prt
+on:
+  pull_request_target:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  x:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo hi
