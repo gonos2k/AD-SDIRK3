@@ -61,7 +61,7 @@ int main() {
             return rhs_func.forward(x);
         };
         
-        torch::Tensor jvp = compute_jvp_autograd(F_wrapper, U, v);
+        torch::Tensor jvp = compute_vjp_autograd(F_wrapper, U, v);
         
         std::cout << "  JVP shape: " << jvp.sizes() << std::endl;
         std::cout << "  JVP norm: " << jvp.norm().item<float>() << std::endl;

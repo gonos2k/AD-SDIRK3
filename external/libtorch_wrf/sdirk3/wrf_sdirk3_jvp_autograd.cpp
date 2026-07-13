@@ -1,3 +1,4 @@
+#include <atomic>
 #include "wrf_sdirk3_jvp_autograd.h"
 #include "wrf_sdirk3_config.h"
 #include <torch/torch.h>
@@ -10,8 +11,11 @@ namespace wrf {
 namespace sdirk3 {
 
 // Global flag to control JVP method for performance
-static bool g_use_finite_diff_jvp = true;  // Default to fast finite differences
-static int g_jvp_call_count = 0;
+// Full-repo review P1-3: these were unsynchronized process-globals — a data
+// race once multiple tiles/OpenMP threads call the helpers. Atomics (relaxed
+// semantics are fine: a method toggle and a diagnostics counter).
+static std::atomic<bool> g_use_finite_diff_jvp{true};  // Default to fast finite differences
+static std::atomic<int> g_jvp_call_count{0};
 
 // Enable/disable finite difference JVP
 void set_use_finite_diff_jvp(bool use_fd) {
@@ -86,7 +90,7 @@ torch::Tensor compute_jvp_finite_diff(
 
 // JVP computation using PyTorch's autograd engine
 // Computes J(u)*v where J is the Jacobian of F at u
-torch::Tensor compute_jvp_autograd(
+torch::Tensor compute_vjp_autograd(
     const std::function<torch::Tensor(const torch::Tensor&)>& F,
     const torch::Tensor& u,
     const torch::Tensor& v,
@@ -139,7 +143,7 @@ torch::Tensor compute_jvp_autograd(
     auto grad_result = torch::autograd::grad(
         {F_u},           // outputs
         {u_var},         // inputs
-        {v},             // grad_outputs (the vector v in Jv)
+        {v},             // grad_outputs => this computes J^T v (VJP), NOT Jv
         /*retain_graph=*/false,  // Don't retain graph to prevent memory leak
         /*create_graph=*/false,  // Not needed for first-order Newton-Krylov
         /*allow_unused=*/true    // FIX 2025-01-25: Changed to true for consistency
@@ -345,7 +349,7 @@ torch::Tensor JVPContext::compute_jvp(const torch::Tensor& v, bool retain_graph_
 
     // Compute JVP using existing graph
     // This is much faster than rebuilding the graph
-    // NOTE 2025-01-25: allow_unused=true - see note in compute_jvp_autograd()
+    // NOTE 2025-01-25: allow_unused=true - see note in compute_vjp_autograd()
     auto grad_result = torch::autograd::grad(
         {F_u_},          // outputs (already computed)
         {u_var_},        // inputs
@@ -366,7 +370,7 @@ torch::Tensor JVPContext::compute_jvp(const torch::Tensor& v, bool retain_graph_
     if (!grad_result.empty() && grad_result[0].defined()) {
         return grad_result[0];
     } else {
-        // Undefined → zeros (see note in compute_jvp_autograd)
+        // Undefined → zeros (see note in compute_vjp_autograd)
         // FIX 2025-01-25: Use requires_grad(false) to prevent graph pollution
         return torch::zeros(v.sizes(), v.options().requires_grad(false));
     }

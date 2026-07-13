@@ -57,7 +57,7 @@ namespace sdirk3 {
  *
  *   If F() uses default device internally:
  *     c10::cuda::CUDAGuard guard(u.device());  // Force device context
- *     auto jvp = compute_jvp_autograd(F, u, v);
+ *     auto jvp = compute_vjp_autograd(F, u, v);
  *
  *   Device mismatch symptoms:
  *   - "Expected all tensors to be on the same device"
@@ -92,7 +92,7 @@ namespace sdirk3 {
  *   Solutions:
  *     1. Save/restore RNG state around JVP calls:
  *        auto rng_state = torch::get_rng_state();
- *        auto jvp1 = compute_jvp_autograd(F, u, v);
+ *        auto jvp1 = compute_vjp_autograd(F, u, v);
  *        torch::set_rng_state(rng_state);
  *        auto jvp2 = compute_jvp_fd(F, u, v);  // Now uses same random values
  *     2. Use deterministic mode for testing:
@@ -105,7 +105,7 @@ namespace sdirk3 {
  *   - Mismatch causes precision differences (FP16 vs FP32 intermediate results)
  *   - Use scoped autocast around entire JVP computation:
  *       torch::autocast::set_autocast_enabled(torch::kCUDA, true);
- *       auto jvp = compute_jvp_autograd(F, u, v);  // F sees autocast
+ *       auto jvp = compute_vjp_autograd(F, u, v);  // F sees autocast
  *       torch::autocast::set_autocast_enabled(torch::kCUDA, false);
  *   - Or disable autocast for JVP validation (recommended for accuracy testing)
  *   - v_batch dtype normalization: In autocast scope, v_batch may have different
@@ -371,10 +371,15 @@ namespace sdirk3 {
  * ═══════════════════════════════════════════════════════════════════════
  */
 
-// Compute Jacobian-Vector Product (JVP) using PyTorch's autograd
-// J(u)*v where J is the Jacobian of F at u
+// Compute the VECTOR-JACOBIAN product (VJP), J(u)^T * v, via reverse-mode
+// autograd (grad_outputs = v). RENAMED from compute_jvp_autograd (full-repo
+// review P1-3): the old name and docs claimed J*v, but torch::autograd::grad
+// with grad_outputs=v is mathematically J^T v — identical only for SYMMETRIC
+// Jacobians, silently wrong for WRF's nonsymmetric operators. No production
+// caller ever used it (the Newton/GMRES matvec uses the true forward-mode
+// JVP, compute_jvp_fwad_or_fd); the rename prevents future misuse.
 // halo_width: Zero perturbations in halo regions to prevent artificial gradients
-torch::Tensor compute_jvp_autograd(
+torch::Tensor compute_vjp_autograd(
     const std::function<torch::Tensor(const torch::Tensor&)>& F,
     const torch::Tensor& u,
     const torch::Tensor& v,
@@ -473,7 +478,7 @@ public:
         int halo_width = 0);
 
     // Compute JVP using prepared graph (call for each GMRES direction vector)
-    // Much faster than compute_jvp_autograd as graph is already built
+    // Much faster than compute_vjp_autograd as graph is already built
     // retain_graph_for_next: true if more JVP calls expected
     torch::Tensor compute_jvp(const torch::Tensor& v, bool retain_graph_for_next = true);
 

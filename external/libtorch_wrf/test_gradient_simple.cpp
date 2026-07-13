@@ -88,7 +88,7 @@ int main() {
         };
         std::function<torch::Tensor(const torch::Tensor&)> F_wrapper(F_lambda);
         
-        torch::Tensor jvp = compute_jvp_autograd(F_wrapper, U, v);
+        torch::Tensor jvp = compute_vjp_autograd(F_wrapper, U, v);
         std::cout << "✅ JVP shape: " << jvp.sizes() << std::endl;
         std::cout << "   JVP norm: " << jvp.norm().item<float>() << std::endl;
         std::cout << "   JVP has NaN: " << torch::any(torch::isnan(jvp)).item<bool>() << std::endl;
