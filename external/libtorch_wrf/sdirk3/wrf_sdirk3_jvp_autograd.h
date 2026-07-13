@@ -108,11 +108,16 @@ namespace sdirk3 {
  *            // at::Generator is a shared handle; the copy refers to the SAME
  *            // global CPU generator but is non-const (set_state needs that).
  *            auto gen = at::globalContext().defaultGenerator(at::kCPU);
- *            auto saved = gen.get_state();   // caller's stream
+ *            // RAII: restore the caller's stream on BOTH normal and exception
+ *            // paths — a trailing set_state after F(x) is skipped if F throws,
+ *            // leaving the process RNG reseeded (Codex round-7).
+ *            struct RngRestore {
+ *                at::Generator gen;
+ *                at::Tensor saved;
+ *                ~RngRestore() { gen.set_state(saved); }
+ *            } guard{gen, gen.get_state()};
  *            torch::manual_seed(0);          // identical draws per evaluation
- *            auto out = F(x);
- *            gen.set_state(saved);           // wrapper is transparent
- *            return out;
+ *            return F(x);                    // guard restores on return OR throw
  *        };
  *        CONCURRENCY: this pattern manipulates the GLOBAL generator and is
  *        single-threaded-validation ONLY. If F uses global-RNG ops
