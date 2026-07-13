@@ -1,0 +1,243 @@
+name: SDIRK3 CI
+
+# Mandatory hosted core gate (full-repo review PR 6). Runs on EVERY PR and
+# protected-branch push with NO path filters — a path-skipped required check
+# leaves the merge pending, and a filtered gate is a gate someone can walk
+# around. The heavyweight WRF integration lives in wrf-integration.yml
+# (persistent-runner tier, never on PR events).
+
+on:
+  pull_request:
+    branches: [main, ad-main]
+  push:
+    branches: [main, ad-main]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sdirk3-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast-contracts:
+    name: fast-contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: workflow supply-chain policy (SHA pins, event rules, permissions)
+        run: bash .github/ci/check_action_pins.sh
+
+      - name: shell script syntax
+        run: |
+          set -euo pipefail
+          for f in .github/ci/*.sh; do bash -n "$f"; done
+          echo "bash -n clean"
+
+      - name: shellcheck
+        run: |
+          set -euo pipefail
+          shellcheck --version | head -2
+          shellcheck -S warning .github/ci/*.sh
+
+      - name: actionlint (pinned binary, checksum-verified)
+        run: |
+          set -euo pipefail
+          url="https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz"
+          sha="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+          curl -sSL -o /tmp/actionlint.tar.gz "$url"
+          echo "$sha  /tmp/actionlint.tar.gz" | sha256sum -c -
+          tar -C /tmp -xzf /tmp/actionlint.tar.gz actionlint
+          /tmp/actionlint -version
+          /tmp/actionlint
+
+      - name: from_blob ratchet (actual == head baseline, never above base branch)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/ci/check_ratchets.sh "$BASE_SHA"
+
+      - name: core manifest static contract
+        run: |
+          set -euo pipefail
+          # parse-time validation only — no torch needed for this target
+          make -C external/libtorch_wrf/sdirk3 check-core-manifest LIBTORCH_ABI=0
+
+      - name: torch-free contract matrices (-Werror)
+        working-directory: external/libtorch_wrf/sdirk3
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          c++ -std=c++17 -Wall -Wextra -Werror test_geometry_contract.cpp -o "$work/tg"
+          "$work/tg"
+          c++ -std=c++17 -Wall -Wextra -Werror test_msf_raw_stats.cpp -o "$work/tm"
+          "$work/tm"
+
+      - name: torch-free contract matrices (ASan+UBSan)
+        working-directory: external/libtorch_wrf/sdirk3
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            test_geometry_contract.cpp -o "$work/tg_san"
+          "$work/tg_san"
+          c++ -std=c++17 -O1 -g -Wall -Wextra -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            test_msf_raw_stats.cpp -o "$work/tm_san"
+          "$work/tm_san"
+
+  core-linux:
+    name: core-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: .github/ci/requirements-core.txt
+
+      - name: install pinned CPU torch + fingerprint
+        run: bash .github/ci/setup_torch_env.sh
+
+      - name: install ninja
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+
+      - name: production Make archive (21 TU) + exact-set contracts
+        run: |
+          set -euo pipefail
+          cd external/libtorch_wrf/sdirk3
+          make clean CXX=g++ LIBTORCH_ROOT="$TORCH_ROOT" LIBTORCH_ABI="$TORCH_ABI"
+          make -j 2 CXX=g++ LIBTORCH_ROOT="$TORCH_ROOT" LIBTORCH_ABI="$TORCH_ABI"
+          make CXX=g++ LIBTORCH_ROOT="$TORCH_ROOT" LIBTORCH_ABI="$TORCH_ABI" \
+               check-core-manifest check-core-archive
+
+      - name: CMake real core (configure + marker assertions)
+        run: |
+          set -euo pipefail
+          cmake -S external/libtorch_wrf/sdirk3 -B build/sdirk3-core -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX" \
+                -DWRF_SDIRK3_ABI_STRICT=AUTO \
+                -DSDIRK3_QUIET_TESTS=ON \
+                -DUSE_FAST_POW_0875=OFF \
+                | tee configure.log
+          # exit 0 alone does not prove AUTO-strict actually engaged:
+          grep -q "ABI Header Mode: STRICT" configure.log
+          grep -q "Fast pow(x,0.875): DISABLED" configure.log
+          grep -q "SDIRK3 core manifest: 21 production sources" configure.log
+
+      - name: build core + tests
+        run: cmake --build build/sdirk3-core --parallel 2
+
+      - name: lint_all
+        run: cmake --build build/sdirk3-core --target lint_all --parallel 2
+
+      - name: CTest inventory (exact set, then run)
+        run: |
+          set -euo pipefail
+          ctest --test-dir build/sdirk3-core -N \
+            | sed -n 's/^  Test #[0-9]*: //p' | sort > /tmp/ctest_actual.txt
+          sort .github/ci/expected_ctest_names.txt > /tmp/ctest_expected.txt
+          diff /tmp/ctest_expected.txt /tmp/ctest_actual.txt \
+            || { echo "FAIL: CTest inventory drift (a silently deregistered test is a missing gate)"; exit 1; }
+          echo "inventory OK ($(wc -l < /tmp/ctest_actual.txt | tr -d ' ') tests)"
+          ctest --test-dir build/sdirk3-core --output-on-failure --no-tests=error
+
+      - name: install contract (exact manifest, header byte-parity, no stub)
+        run: |
+          set -euo pipefail
+          install_root="$RUNNER_TEMP/sdirk3-install"
+          cmake --install build/sdirk3-core --prefix "$install_root"
+          ( cd "$install_root" && find . -type f | sed 's|^\./||' | sort ) > /tmp/install_actual.txt
+          sort .github/ci/expected_install_manifest.txt > /tmp/install_expected.txt
+          diff /tmp/install_expected.txt /tmp/install_actual.txt \
+            || { echo "FAIL: install manifest drift"; exit 1; }
+          test -s "$install_root/lib/libwrf_sdirk3_libtorch.a"
+          sh external/libtorch_wrf/sdirk3/tests/check_core_archive.sh \
+             "$install_root/lib/libwrf_sdirk3_libtorch.a" \
+             external/libtorch_wrf/sdirk3/wrf_sdirk3_core_sources.txt
+          while read -r hdr; do
+            case "$hdr" in include/*)
+              cmp "$install_root/$hdr" "external/libtorch_wrf/sdirk3/$(basename "$hdr")" \
+                || { echo "FAIL: installed header differs from source: $hdr"; exit 1; } ;;
+            esac
+          done < .github/ci/expected_install_manifest.txt
+          echo "install contract OK"
+
+      - name: failure artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: core-linux-diagnostics
+          if-no-files-found: ignore
+          path: |
+            configure.log
+            build/sdirk3-core/CMakeCache.txt
+            build/sdirk3-core/CMakeFiles/CMakeOutput.log
+            build/sdirk3-core/Testing/Temporary/
+            /tmp/ctest_actual.txt
+            /tmp/ctest_expected.txt
+            /tmp/install_actual.txt
+            /tmp/install_expected.txt
+
+  build-contract-negatives:
+    name: build-contract-negatives
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: .github/ci/requirements-core.txt
+
+      - name: install pinned CPU torch
+        run: bash .github/ci/setup_torch_env.sh
+
+      - name: negative build contracts (marker-asserted)
+        run: bash .github/ci/run_negative_contracts.sh
+
+      - name: failure artifacts
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: negative-contract-logs
+          if-no-files-found: ignore
+          path: ${{ runner.temp }}/sdirk3-neg/*.log
+
+  required:
+    name: required
+    if: ${{ always() }}
+    needs: [fast-contracts, core-linux, build-contract-negatives]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: verify all mandatory jobs
+        env:
+          FAST: ${{ needs.fast-contracts.result }}
+          CORE: ${{ needs.core-linux.result }}
+          NEGATIVE: ${{ needs.build-contract-negatives.result }}
+        run: |
+          set -euo pipefail
+          printf 'fast-contracts=%s\n' "$FAST"
+          printf 'core-linux=%s\n' "$CORE"
+          printf 'build-contract-negatives=%s\n' "$NEGATIVE"
+          test "$FAST" = success
+          test "$CORE" = success
+          test "$NEGATIVE" = success
