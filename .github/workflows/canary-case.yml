@@ -1,0 +1,11 @@
+name: canary case
+on:
+  pull_request:
+    branches: [never-matches-anything]
+permissions:
+  contents: read
+jobs:
+  x:
+    runs-on: [Self-Hosted, sdirk3-wrf]
+    steps:
+      - uses: ./local
