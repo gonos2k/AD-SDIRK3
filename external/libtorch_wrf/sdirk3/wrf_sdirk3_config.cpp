@@ -379,6 +379,16 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 hevi_split = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_split_explicit" || key == "split_explicit") {
                 split_explicit = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_split_explicit_time_step_sound" || key == "split_explicit_time_step_sound") {
+                split_explicit_time_step_sound = std::clamp(std::atoi(value.c_str()), 0, 1000);
+            } else if (key == "sdirk3_split_explicit_epssm" || key == "split_explicit_epssm") {
+                split_explicit_epssm = std::clamp(std::stof(value), 0.0f, 1.0f);
+            } else if (key == "sdirk3_split_explicit_smdiv" || key == "split_explicit_smdiv") {
+                split_explicit_smdiv = std::clamp(std::stof(value), 0.0f, 1.0f);
+            } else if (key == "sdirk3_split_explicit_emdiv" || key == "split_explicit_emdiv") {
+                split_explicit_emdiv = std::clamp(std::stof(value), 0.0f, 1.0f);
+            } else if (key == "sdirk3_split_explicit_top_lid" || key == "split_explicit_top_lid") {
+                split_explicit_top_lid = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_precond_phi_w_coupling_scale" || key == "precond_phi_w_coupling_scale") {
                 int parsed = std::atoi(value.c_str());
                 if (parsed == 0 && value != "0") {
@@ -1637,6 +1647,26 @@ void SDIRK3Config::load_from_env() {
         split_explicit = parse_bool_env(env_val);
         std::cerr << "[CONFIG ENV] split_explicit = " << (split_explicit ? "true" : "false") << std::endl;
     }
+    if ((env_val = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_TIME_STEP_SOUND"))) {
+        split_explicit_time_step_sound = std::clamp(std::atoi(env_val), 0, 1000);
+        std::cerr << "[CONFIG ENV] split_explicit_time_step_sound = " << split_explicit_time_step_sound << std::endl;
+    }
+    if ((env_val = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_EPSSM"))) {
+        split_explicit_epssm = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
+        std::cerr << "[CONFIG ENV] split_explicit_epssm = " << split_explicit_epssm << std::endl;
+    }
+    if ((env_val = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_SMDIV"))) {
+        split_explicit_smdiv = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
+        std::cerr << "[CONFIG ENV] split_explicit_smdiv = " << split_explicit_smdiv << std::endl;
+    }
+    if ((env_val = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_EMDIV"))) {
+        split_explicit_emdiv = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
+        std::cerr << "[CONFIG ENV] split_explicit_emdiv = " << split_explicit_emdiv << std::endl;
+    }
+    if ((env_val = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_TOP_LID"))) {
+        split_explicit_top_lid = parse_bool_env(env_val);
+        std::cerr << "[CONFIG ENV] split_explicit_top_lid = " << (split_explicit_top_lid ? "true" : "false") << std::endl;
+    }
     // v20.14r27q: Φ→W GS damping coefficient
     if ((env_val = std::getenv("WRF_SDIRK3_PRECOND_GS_BETA"))) {
         precond_gs_beta = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
@@ -1837,6 +1867,18 @@ void SDIRK3Config::load_from_env() {
     std::cerr << "[CONFIG EFFECTIVE] split_explicit="
               << (split_explicit ? "ON (WIP RK3 + acoustic-substep core)" : "off (ARK324 implicit)")
               << std::endl;
+    if (split_explicit) {
+        std::cerr << "[CONFIG EFFECTIVE] split_explicit acoustic: time_step_sound="
+                  << split_explicit_time_step_sound
+                  << (split_explicit_time_step_sound <= 0
+                          ? " (UNSUPPORTED: runtime guard requires explicit even >= 4; "
+                            "WRF's 0=auto formula is not implemented)"
+                          : "")
+                  << ", epssm=" << split_explicit_epssm
+                  << ", smdiv=" << split_explicit_smdiv
+                  << ", emdiv=" << split_explicit_emdiv
+                  << ", top_lid=" << (split_explicit_top_lid ? "on" : "off") << std::endl;
+    }
     std::cerr << "[CONFIG EFFECTIVE] solver: gmres_restart=" << gmres_restart
               << ", max_krylov=" << max_krylov_iter
               << ", max_newton=" << max_newton_iter
@@ -1927,7 +1969,7 @@ void SDIRK3Config::normalize_adaptive_thresholds() {
 
 bool SDIRK3Config::validate() const {
     bool valid = true;
-    
+
     if (max_newton_iter < 1 || max_newton_iter > 100) {
         std::cerr << "SDIRK3 Config Error: max_newton_iter must be between 1 and 100" << std::endl;
         valid = false;
@@ -1979,6 +2021,11 @@ bool SDIRK3Config::validate() const {
         // Split-explicit core (opt-in bool, no range). Acknowledged here for completeness;
         // it is inert unless effective_imex_split_mode()==3 (WIP scaffold, Inc 0).
         self->split_explicit = split_explicit;
+        self->split_explicit_time_step_sound = std::clamp(split_explicit_time_step_sound, 0, 1000);
+        self->split_explicit_epssm = std::clamp(split_explicit_epssm, 0.0f, 1.0f);
+        self->split_explicit_smdiv = std::clamp(split_explicit_smdiv, 0.0f, 1.0f);
+        self->split_explicit_emdiv = std::clamp(split_explicit_emdiv, 0.0f, 1.0f);
+        self->split_explicit_top_lid = split_explicit_top_lid;
         self->jvp_auto_bench_calls = std::clamp(jvp_auto_bench_calls, 0, 20);
         self->jvp_auto_bench_warmup = std::clamp(jvp_auto_bench_warmup, 0, 50);
         self->gmres_warmstart_quality_gate = std::clamp(gmres_warmstart_quality_gate, 0.0f, 1.0f);
@@ -2271,6 +2318,26 @@ bool SDIRK3Config::validate() const {
                   << stage_gate_rel_threshold << ")" << std::endl;
         valid = false;
     }
+    if (split_explicit_time_step_sound < 0 || split_explicit_time_step_sound > 1000) {
+        std::cerr << "SDIRK3 Config Error: split_explicit_time_step_sound must be in [0, 1000] (got "
+                  << split_explicit_time_step_sound << ")" << std::endl;
+        valid = false;
+    }
+    if (split_explicit_epssm < 0.0f || split_explicit_epssm > 1.0f) {
+        std::cerr << "SDIRK3 Config Error: split_explicit_epssm must be in [0, 1] (got "
+                  << split_explicit_epssm << ")" << std::endl;
+        valid = false;
+    }
+    if (split_explicit_smdiv < 0.0f || split_explicit_smdiv > 1.0f) {
+        std::cerr << "SDIRK3 Config Error: split_explicit_smdiv must be in [0, 1] (got "
+                  << split_explicit_smdiv << ")" << std::endl;
+        valid = false;
+    }
+    if (split_explicit_emdiv < 0.0f || split_explicit_emdiv > 1.0f) {
+        std::cerr << "SDIRK3 Config Error: split_explicit_emdiv must be in [0, 1] (got "
+                  << split_explicit_emdiv << ")" << std::endl;
+        valid = false;
+    }
     if (stage3_gate_rel_threshold < 0.0f || stage3_gate_rel_threshold > 1e6f) {
         std::cerr << "SDIRK3 Config Error: stage3_gate_rel_threshold must be in [0, 1e6] (got "
                   << stage3_gate_rel_threshold << ")" << std::endl;
@@ -2485,6 +2552,11 @@ void SDIRK3Config::print() const {
     std::cout << "  stage_require_convergence = " << (stage_require_convergence ? "true" : "false") << std::endl;
     std::cout << "  hevi_split = " << (hevi_split ? "true" : "false") << std::endl;
     std::cout << "  split_explicit = " << (split_explicit ? "true" : "false") << std::endl;
+    std::cout << "  split_explicit acoustic: time_step_sound = " << split_explicit_time_step_sound
+              << ", epssm = " << split_explicit_epssm
+              << ", smdiv = " << split_explicit_smdiv
+              << ", emdiv = " << split_explicit_emdiv
+              << ", top_lid = " << (split_explicit_top_lid ? "true" : "false") << std::endl;
     std::cout << "  precond_phi_w_coupling_scale = " << precond_phi_w_coupling_scale
               << " (0=GS, 1=physics, 2=acoustic)" << std::endl;
     std::cout << "  precond_phi_feedback_relax = " << precond_phi_feedback_relax << std::endl;
@@ -3046,6 +3118,13 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
         g_sdirk3_config.split_explicit = (value != 0);
         std::cerr << "[CONFIG] split_explicit = "
                   << (g_sdirk3_config.split_explicit ? "true" : "false") << std::endl;
+    } else if (key == "split_explicit_time_step_sound") {
+        g_sdirk3_config.split_explicit_time_step_sound = std::max(0, std::min(1000, value));
+        std::cerr << "[CONFIG] split_explicit_time_step_sound = "
+                  << g_sdirk3_config.split_explicit_time_step_sound
+                  << (g_sdirk3_config.split_explicit_time_step_sound <= 0
+                          ? " (UNSUPPORTED: runtime guard requires explicit even >= 4)"
+                          : "") << std::endl;
     } else if (key == "precond_phi_w_coupling_scale") {
         g_sdirk3_config.precond_phi_w_coupling_scale = std::max(0, std::min(2, value));
         std::cerr << "[CONFIG] precond_phi_w_coupling_scale = "
@@ -3395,6 +3474,15 @@ void wrf_sdirk3_set_config_float(const char* name, float value) {
         g_sdirk3_config.stage3_gate_rel_threshold = std::max(0.0f, value);
         std::cerr << "[CONFIG] stage3_gate_rel_threshold = " << g_sdirk3_config.stage3_gate_rel_threshold
                   << " (0=use stage_gate_rel_threshold)" << std::endl;
+    } else if (key == "split_explicit_epssm") {
+        g_sdirk3_config.split_explicit_epssm = std::clamp(value, 0.0f, 1.0f);
+        std::cerr << "[CONFIG] split_explicit_epssm = " << g_sdirk3_config.split_explicit_epssm << std::endl;
+    } else if (key == "split_explicit_smdiv") {
+        g_sdirk3_config.split_explicit_smdiv = std::clamp(value, 0.0f, 1.0f);
+        std::cerr << "[CONFIG] split_explicit_smdiv = " << g_sdirk3_config.split_explicit_smdiv << std::endl;
+    } else if (key == "split_explicit_emdiv") {
+        g_sdirk3_config.split_explicit_emdiv = std::clamp(value, 0.0f, 1.0f);
+        std::cerr << "[CONFIG] split_explicit_emdiv = " << g_sdirk3_config.split_explicit_emdiv << std::endl;
     } else if (key == "stage_damp_rel_threshold") {
         g_sdirk3_config.stage_damp_rel_threshold = std::max(1.0f, value);
         std::cerr << "[CONFIG] stage_damp_rel_threshold = " << g_sdirk3_config.stage_damp_rel_threshold << std::endl;
@@ -3801,6 +3889,10 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
         g_sdirk3_config.split_explicit = (value != 0);
         std::cerr << "[CONFIG] split_explicit = "
                   << (g_sdirk3_config.split_explicit ? "true" : "false") << std::endl;
+    } else if (key == "split_explicit_top_lid") {
+        g_sdirk3_config.split_explicit_top_lid = (value != 0);
+        std::cerr << "[CONFIG] split_explicit_top_lid = "
+                  << (g_sdirk3_config.split_explicit_top_lid ? "true" : "false") << std::endl;
     } else if (key == "precond_phi_feedback_fallback_gs") {
         g_sdirk3_config.precond_phi_feedback_fallback_gs = (value != 0);
         std::cerr << "[CONFIG] precond_phi_feedback_fallback_gs = "

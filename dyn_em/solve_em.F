@@ -1291,6 +1291,24 @@ BENCH_START(relax_bdy_dry_tim)
      !$OMP END PARALLEL DO
 BENCH_END(relax_bdy_dry_tim)
 
+     ! [PARITY sub] TEMP (2026-07-10, revert after parity campaign): frozen coupled tendencies
+     ! after rk_tendency + rk_addtend_dry, for comparison with [SPLIT-EXPLICIT KCOUPLED].
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
+        WRITE(0,'(A,I2,6(A,E14.6))') '[PARITY sub] tendencies rk=', rk_step, &
+           ' ru=', MAXVAL(ABS(grid%ru_tend(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' rv=', MAXVAL(ABS(grid%rv_tend(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' rw=', MAXVAL(ABS(rw_tend(ips:ipe,kps:kpe,jps:jpe))), &
+           ' ph=', MAXVAL(ABS(ph_tend(ips:ipe,kps:kpe,jps:jpe))), &
+           ' t=', MAXVAL(ABS(t_tend(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' mu=', MAXVAL(ABS(mu_tend(ips:ipe,jps:jpe)))
+        ! [PARITY subk] TEMP (2026-07-11): per-LEVEL profiles of the two frozen forcings that
+        ! drive advance_w — max-only comparisons are level-shift-blind (proven twice).
+        WRITE(0,'(A)') '[PARITY subk] rw per-k:'
+        WRITE(0,'(8E14.6)') (MAXVAL(ABS(rw_tend(ips:ipe,k,jps:jpe))), k=kps,kpe)
+        WRITE(0,'(A)') '[PARITY subk] ph per-k:'
+        WRITE(0,'(8E14.6)') (MAXVAL(ABS(ph_tend(ips:ipe,k,jps:jpe))), k=kps,kpe)
+     END IF
+
 !<DESCRIPTION>
 !<pre>
 ! (3) Small (acoustic,sound) steps.
@@ -1545,6 +1563,13 @@ BENCH_END(advance_uv_tim)
        END DO
        !$OMP END PARALLEL DO
 
+     ! [PARITY sub] TEMP: coupled deviations after advance_uv (stage-1 substep)
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
+        WRITE(0,'(A,I2,2(A,E14.6))') '[PARITY sub] after_uv rk=', rk_step, &
+           ' u=', MAXVAL(ABS(grid%u_2(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' v=', MAXVAL(ABS(grid%v_2(ips:ipe,kps:kpe-1,jps:jpe)))
+     END IF
+
 !-----------------------------------------------------------
 !  acoustic integration polar filter for smallstep u, v
 !-----------------------------------------------------------
@@ -1656,6 +1681,14 @@ BENCH_START(advance_mu_t_tim)
 BENCH_END(advance_mu_t_tim)
        ENDDO
        !$OMP END PARALLEL DO
+
+     ! [PARITY sub] TEMP: coupled deviations after advance_mu_t (stage-1 substep)
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
+        WRITE(0,'(A,I2,3(A,E14.6))') '[PARITY sub] after_mu_t rk=', rk_step, &
+           ' mu=', MAXVAL(ABS(grid%mu_2(ips:ipe,jps:jpe))), &
+           ' t=', MAXVAL(ABS(grid%t_2(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' ww=', MAXVAL(ABS(grid%ww(ips:ipe,kps:kpe,jps:jpe)))
+     END IF
 
 !-----------------------------------------------------------
 !  acoustic integration polar filter for smallstep mu, t
@@ -1771,6 +1804,13 @@ BENCH_END(advance_w_tim)
 !  acoustic integration polar filter for smallstep w, geopotential
 !-----------------------------------------------------------
 
+     ! [PARITY sub] TEMP: coupled deviations after advance_w (stage-1 substep)
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
+        WRITE(0,'(A,I2,2(A,E14.6))') '[PARITY sub] after_w rk=', rk_step, &
+           ' w=', MAXVAL(ABS(grid%w_2(ips:ipe,kps:kpe,jps:jpe))), &
+           ' ph=', MAXVAL(ABS(grid%ph_2(ips:ipe,kps:kpe,jps:jpe)))
+     END IF
+
        IF ( (config_flags%polar) .AND. (config_flags%non_hydrostatic) ) THEN
 
          CALL pxft ( grid=grid                                               &
@@ -1883,6 +1923,13 @@ BENCH_END(cald_p_rho_tim)
 
        ENDDO
        !$OMP END PARALLEL DO
+
+     ! [PARITY sub] TEMP: acoustic p'/al' after calc_p_rho (stage-1 substep)
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 1) THEN
+        WRITE(0,'(A,I2,2(A,E14.6))') '[PARITY sub] after_prho rk=', rk_step, &
+           ' p=', MAXVAL(ABS(grid%p(ips:ipe,kps:kpe-1,jps:jpe))), &
+           ' al=', MAXVAL(ABS(grid%al(ips:ipe,kps:kpe-1,jps:jpe)))
+     END IF
 
 #ifdef DM_PARALLEL
 !
@@ -2050,8 +2097,22 @@ BENCH_END(small_step_finish_tim)
      END DO
      !$OMP END PARALLEL DO
 
+     ! [PARITY stage] TEMP INSTRUMENTATION (2026-07-10, revert after use): per-RK-stage field
+     ! maxima after small_step_finish, to compare the stock split-explicit stage states against
+     ! the libtorch split-explicit port ([SPLIT-EXPLICIT COMPONENTS] after_finish).
+     IF (config_flags%sdirk3_debug_level >= 2 .AND. grid%itimestep <= 2) THEN
+        WRITE(0,'(A,I2,A,I6,6(A,E14.6))') '[PARITY stage] rk_step=', rk_step,        &
+           ' it=', grid%itimestep,                                                    &
+           ' u=', MAXVAL(ABS(grid%u_2(ips:ipe,kps:kpe-1,jps:jpe))),                   &
+           ' v=', MAXVAL(ABS(grid%v_2(ips:ipe,kps:kpe-1,jps:jpe))),                   &
+           ' w=', MAXVAL(ABS(grid%w_2(ips:ipe,kps:kpe,jps:jpe))),                     &
+           ' ph=', MAXVAL(ABS(grid%ph_2(ips:ipe,kps:kpe,jps:jpe))),                   &
+           ' t=', MAXVAL(ABS(grid%t_2(ips:ipe,kps:kpe-1,jps:jpe))),                   &
+           ' mu=', MAXVAL(ABS(grid%mu_2(ips:ipe,jps:jpe)))
+     END IF
+
 !-----------------------------------------------------------
-!  polar filter for full dynamics variables and time-averaged mass fluxes 
+!  polar filter for full dynamics variables and time-averaged mass fluxes
 !-----------------------------------------------------------
 
      IF (config_flags%polar) THEN

@@ -55,6 +55,8 @@
 !var/**
 !wrftladj/
 !wrftladj/**
+!.github/
+!.github/**
 
 # Build/runtime artifacts (apply even inside whitelisted dirs)
 *.o
@@ -122,6 +124,10 @@ external/io_netcdf/diffwrf
 external/libtorch_wrf/sdirk3/test_*
 external/libtorch_wrf/sdirk3/tests/test_*
 !external/libtorch_wrf/sdirk3/tests/test_wrms_gate_metric.cpp
+# Torch-free contract test SOURCES are tracked (the extensionless binaries the
+# broad test_* rule above targets stay ignored). CI compiles these standalone.
+!external/libtorch_wrf/sdirk3/test_msf_raw_stats.cpp
+!external/libtorch_wrf/sdirk3/test_geometry_contract.cpp
 tools/fseeko_test
 tools/registry
 

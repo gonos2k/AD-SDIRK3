@@ -39,6 +39,10 @@ static void make_2d_case(State& s, Const& c) {
     c.ft = M3(ny, nz, nx, 0.0f); c.mu_tend = M2(ny, nx, 0.0f); c.ph_tend = M3(ny, nzw, nx, 0.0f);
     c.u_1 = M3(ny, nz, nxu, 0.05f); c.v_1 = M3(nyv, nz, nx, 0.05f);
     c.t_1 = M3(ny, nz, nx, 5.0f); c.ww_1 = M3(ny, nzw, nx, 0.0f);
+    // save + base geopotential (this session's non-hydro 4th PGF / ww*d(phi) advection wiring):
+    // ph_1 = zero perturbation save; phb = monotone base profile so vertical d(phb) is nonzero.
+    c.ph_1 = M3(ny, nzw, nx, 0.0f);
+    c.phb  = (torch::arange(nzw, o) * 100.0f).reshape({1, nzw, 1}).expand({ny, nzw, nx}).clone();
 }
 
 // Full-substep SMOKE test: iterate the chained advance_substep MULTIPLE times (output feeds the next
@@ -196,6 +200,201 @@ static bool mass_avg_check() {
     return ok;
 }
 
+// ============== AD TRIPLE (JVP / VJP / HVP) through the NEW stage operators ==============
+// The rebuild exists to give the dynamics all three AD primitives on the dynamic graph:
+// JVP (TLM / matvec), VJP (4D-Var gradient), HVP (incremental Gauss-Newton outer loop).
+// Prove each with numbers — "grad-enabled" is not "differentiable" — on the composite of the
+// split-explicit stage operators (diag_p_al -> horizontal_pgf, curvature_w_stage, rhs_ph_stage),
+// in float64 so the FD referee is crisp:
+//   VJP: backward(); <dL/dx, v> must match central FD of L.
+//   JVP: forward-mode dual (_make_dual/_unpack_dual, the repo's jvp_fwad pattern); the tangent
+//        of L is the SAME directional derivative — JVP==VJP is analytic-vs-analytic (~1e-12).
+//   HVP: double-backward grad(<grad L, v>); <v,Hv> must match central FD of <grad L, v>.
+static bool stage_ops_ad_triple() {
+    const int ny = 6, nz = 10, nx = 8, nzw = nz + 1, nyv = ny + 1, nxu = nx + 1;
+    auto o = torch::TensorOptions().dtype(torch::kFloat64);
+    // sigma-like metrics, hydrostatic-ish base (al_full ~ 0.8)
+    auto phb  = (torch::arange(nzw, o) * 1800.0).reshape({1, nzw, 1}).expand({ny, nzw, nx}).clone();
+    auto pb   = torch::full({ny, nz, nx}, 5.0e4, o);
+    auto mub  = torch::full({ny, nx}, 9.0e4, o), muts = mub.clone(), mut = mub.clone();
+    auto muu  = torch::full({ny, nxu}, 9.0e4, o), muv = torch::full({nyv, nx}, 9.0e4, o);
+    auto c1h  = torch::ones({nz}, o),  c2h = torch::zeros({nz}, o);
+    auto c1f  = torch::ones({nzw}, o), c2f = torch::zeros({nzw}, o);
+    auto fnm  = torch::full({nzw}, 0.5, o), fnp = torch::full({nzw}, 0.5, o);
+    auto rdnw = torch::full({nz}, 40.0, o);
+    auto msfuy = torch::ones({ny, nxu}, o), msfvx_inv = torch::ones({nyv, nx}, o);
+    auto msftx = torch::ones({ny, nx}, o),  msfty = torch::ones({ny, nx}, o);
+    // structured deterministic fields (nonzero u/v so curvature's quadratic term is live;
+    // nonzero ww so rhs_ph's wdwn vertical-advection path is on the graph too)
+    auto pat = [&](std::vector<int64_t> sh, double amp, double off) {
+        int64_t n = 1; for (auto d : sh) n *= d;
+        return (off + amp * torch::sin(0.7 * torch::arange(n, o))).reshape(sh);
+    };
+    auto ww  = pat({ny, nzw, nx}, 0.5, 0.0), wcn = pat({ny, nzw, nx}, 0.2, 0.0);
+    auto ph0 = pat({ny, nzw, nx}, 5.0, 0.0), u0 = pat({ny, nz, nxu}, 2.0, 10.0);
+    auto v0  = pat({nyv, nz, nx}, 1.0, 5.0), th0 = pat({ny, nz, nx}, 0.5, 0.0);
+    auto mu0 = pat({ny, nx}, 50.0, 0.0);
+    auto dir = [&](const torch::Tensor& x, double phase) {   // unit directions, distinct phases
+        auto d = torch::cos(phase + 0.3 * torch::arange(x.numel(), o)).reshape(x.sizes());
+        return d / d.norm();
+    };
+    auto dph = dir(ph0, 0.1), du = dir(u0, 0.5), dv = dir(v0, 0.9), dth = dir(th0, 1.3), dmu = dir(mu0, 1.7);
+    const float p0 = 1e5f, rd = 287.04f, cpovcv = 1.4f, T0 = 300.0f, rdx = 1e-4f, rdy = 1e-4f;
+    const float cf1 = 2.0f, cf2 = -1.0f, cf3 = 0.0f, cfn = 1.5f, cfn1 = -0.5f, grav = 9.81f;
+    const float rr = 1.0f / 6370000.0f;
+    auto L = [&](const torch::Tensor& ph, const torch::Tensor& u, const torch::Tensor& v,
+                 const torch::Tensor& th, const torch::Tensor& mu) {
+        auto [p_p, al_p, al_f] = diag_p_al(ph, phb, th, pb, muts, mub, c1h, c2h, rdnw, p0, rd, cpovcv, T0);
+        auto [dpx, dpy] = horizontal_pgf(ph, p_p, al_p, al_f, pb, ph + phb, mu, muu, muv,
+                                         c1h, c2h, fnm, fnp, rdnw, rdx, rdy, cf1, cf2, cf3);
+        auto cw  = curvature_w_stage(u, v, muu, muv, msfuy, msfvx_inv, msftx, msfty, c1h, c2h, fnm, fnp, rr);
+        auto pht = rhs_ph_stage(ph, phb, u, v, ww, wcn, mut, muu, muv, msfty,
+                                c1f, c2f, fnm, fnp, rdnw, cfn, cfn1, rdx, rdy, grav);
+        return dpx.pow(2).mean() + dpy.pow(2).mean() + cw.pow(2).mean() + pht.pow(2).mean();
+    };
+    // --- VJP (reverse mode) ---
+    auto phL = ph0.clone().set_requires_grad(true), uL = u0.clone().set_requires_grad(true),
+         vL = v0.clone().set_requires_grad(true), thL = th0.clone().set_requires_grad(true),
+         muL = mu0.clone().set_requires_grad(true);
+    L(phL, uL, vL, thL, muL).backward();
+    bool gdef = phL.grad().defined() && uL.grad().defined() && vL.grad().defined()
+             && thL.grad().defined() && muL.grad().defined();
+    double vjp = 0.0;
+    if (gdef) { torch::NoGradGuard ng;
+        vjp = ((phL.grad() * dph).sum() + (uL.grad() * du).sum() + (vL.grad() * dv).sum()
+             + (thL.grad() * dth).sum() + (muL.grad() * dmu).sum()).item<double>(); }
+    // --- JVP (forward-mode dual) ---
+    double jvp = 0.0; bool jvp_ran = true;
+    try {
+        auto lvl = torch::autograd::forward_ad::enter_dual_level();
+        auto mk = [&](const torch::Tensor& x, const torch::Tensor& d) {
+            return torch::_make_dual(x, d, static_cast<int64_t>(lvl)); };
+        auto lossd = L(mk(ph0, dph), mk(u0, du), mk(v0, dv), mk(th0, dth), mk(mu0, dmu));
+        auto parts = torch::_unpack_dual(lossd, static_cast<int64_t>(lvl));
+        { torch::NoGradGuard ng;
+          jvp = std::get<1>(parts).defined() ? std::get<1>(parts).item<double>() : 0.0; }
+        torch::autograd::forward_ad::exit_dual_level(lvl);
+    } catch (const std::exception& ex) {
+        std::cout << "#   forward-mode JVP threw: " << ex.what() << "\n"; jvp_ran = false;
+    }
+    // --- FD referee for the same directional derivative ---
+    const double e = 1e-4; double fd;
+    { torch::NoGradGuard ng;
+      auto lp = L(ph0 + e * dph, u0 + e * du, v0 + e * dv, th0 + e * dth, mu0 + e * dmu);
+      auto lm = L(ph0 - e * dph, u0 - e * du, v0 - e * dv, th0 - e * dth, mu0 - e * dmu);
+      fd = (lp - lm).item<double>() / (2.0 * e); }
+    // --- HVP (double-backward) + its own FD referee d/ds <grad L(x+s v), v> ---
+    auto gdot_at = [&](double s) {  // <grad L(x + s*v), v> via a fresh reverse pass
+        auto a = (ph0 + s * dph).clone().set_requires_grad(true);
+        auto b = (u0 + s * du).clone().set_requires_grad(true);
+        auto c = (v0 + s * dv).clone().set_requires_grad(true);
+        auto d = (th0 + s * dth).clone().set_requires_grad(true);
+        auto f = (mu0 + s * dmu).clone().set_requires_grad(true);
+        auto gg = torch::autograd::grad({L(a, b, c, d, f)}, {a, b, c, d, f}, {},
+                                        /*retain_graph=*/s == 0.0, /*create_graph=*/s == 0.0);
+        if (s == 0.0) {  // at the base point, also produce Hv by differentiating the contraction
+            auto gdotv = (gg[0] * dph).sum() + (gg[1] * du).sum() + (gg[2] * dv).sum()
+                       + (gg[3] * dth).sum() + (gg[4] * dmu).sum();
+            auto hv = torch::autograd::grad({gdotv}, {a, b, c, d, f});
+            torch::NoGradGuard ng;
+            bool hfin = true; double vHv = 0.0;
+            for (int i = 0; i < 5; ++i) {
+                hfin = hfin && hv[i].defined() && hv[i].isfinite().all().item<bool>();
+                const torch::Tensor* dd[5] = {&dph, &du, &dv, &dth, &dmu};
+                if (hv[i].defined()) vHv += (hv[i] * *dd[i]).sum().item<double>();
+            }
+            return std::pair<double, bool>{vHv, hfin};
+        }
+        torch::NoGradGuard ng;
+        double r = ((gg[0] * dph).sum() + (gg[1] * du).sum() + (gg[2] * dv).sum()
+                  + (gg[3] * dth).sum() + (gg[4] * dmu).sum()).item<double>();
+        return std::pair<double, bool>{r, true};
+    };
+    double vHv = 0.0; bool hfin = false, hvp_ran = true; double fd_h = 0.0;
+    try {
+        auto base = gdot_at(0.0); vHv = base.first; hfin = base.second;
+        fd_h = (gdot_at(e).first - gdot_at(-e).first) / (2.0 * e);
+    } catch (const std::exception& ex) {
+        std::cout << "#   HVP double-backward threw: " << ex.what() << "\n"; hvp_ran = false;
+    }
+    auto rel = [](double a, double b) { return std::abs(a - b) / (std::abs(b) + 1e-30); };
+    bool ok = gdef && jvp_ran && hvp_ran && hfin
+           && std::isfinite(vjp) && std::isfinite(jvp) && std::isfinite(fd) && std::isfinite(vHv)
+           && std::abs(fd) > 1e-8 && std::abs(fd_h) > 1e-8      // non-trivial derivatives
+           && rel(jvp, vjp) < 1e-10                             // analytic == analytic
+           && rel(vjp, fd) < 1e-5 && rel(jvp, fd) < 1e-5        // both match the FD referee
+           && rel(vHv, fd_h) < 1e-4;                            // curvature matches FD of gradient
+    std::cout << "# stage-ops AD TRIPLE (f64): JVP=" << jvp << " VJP=" << vjp << " FD=" << fd
+              << " rel(J,V)=" << rel(jvp, vjp) << " rel(V,FD)=" << rel(vjp, fd)
+              << " | HVP vHv=" << vHv << " FDh=" << fd_h << " rel=" << rel(vHv, fd_h)
+              << " : " << (ok ? "PASS" : "FAIL") << "\n";
+    return ok;
+}
+
+// Full-chain AD TRIPLE through advance_substep — the same three primitives through the ENTIRE
+// acoustic operator chain (uv PGF -> mu/t column -> the implicit vertical Thomas solve in
+// advance_w -> calc_p_rho), float32, direction on ph'. JVP-vs-VJP is analytic-vs-analytic;
+// FD referees are float32-limited. HVP here proves double-backward survives the out-of-place
+// stacked Thomas recurrence — the op most likely to break create_graph=true.
+static bool substep_ad_triple() {
+    auto o = torch::TensorOptions().dtype(torch::kFloat32);
+    State s0; Const c; make_2d_case(s0, c);
+    auto v = torch::sin(torch::arange(s0.ph.numel(), o)).reshape(s0.ph.sizes());
+    v = v / v.norm();
+    auto Lof = [&](const torch::Tensor& phv) {
+        State s = s0; s.ph = phv;
+        State out = advance_substep(s, c, 1);
+        // linear + quadratic: make_2d_case's zero-perturbation base is a FIXED POINT of the
+        // substep (outputs == 0), so a pure sum-of-squares has an exactly-zero first derivative
+        // there. The linear term gives JVP/VJP a nonzero target; the quadratic keeps H nonzero.
+        return out.w.sum() + out.ph.sum() + out.p.sum()
+             + 0.5 * (out.w.pow(2).sum() + out.ph.pow(2).sum() + out.p.pow(2).sum());
+    };
+    // VJP + HVP via one create_graph reverse pass
+    auto ph = s0.ph.clone().set_requires_grad(true);
+    auto g = torch::autograd::grad({Lof(ph)}, {ph}, {}, true, true);
+    double vjp; { torch::NoGradGuard ng; vjp = (g[0] * v).sum().item<double>(); }
+    bool hvp_ran = true; torch::Tensor hv;
+    try { hv = torch::autograd::grad({(g[0] * v).sum()}, {ph})[0]; }
+    catch (const std::exception& ex) {
+        std::cout << "#   substep double-backward threw: " << ex.what() << "\n"; hvp_ran = false; }
+    bool hdef; double vHv = 0.0, hnorm = 0.0;
+    { torch::NoGradGuard ng;
+      hdef = hvp_ran && hv.defined() && hv.isfinite().all().item<bool>();
+      if (hdef) { vHv = (hv * v).sum().item<double>(); hnorm = hv.norm().item<double>(); } }
+    // JVP (forward dual through the whole substep)
+    double jvp = 0.0; bool jvp_ran = true;
+    try {
+        auto lvl = torch::autograd::forward_ad::enter_dual_level();
+        auto lossd = Lof(torch::_make_dual(s0.ph, v, static_cast<int64_t>(lvl)));
+        auto parts = torch::_unpack_dual(lossd, static_cast<int64_t>(lvl));
+        { torch::NoGradGuard ng;
+          jvp = std::get<1>(parts).defined() ? std::get<1>(parts).item<double>() : 0.0; }
+        torch::autograd::forward_ad::exit_dual_level(lvl);
+    } catch (const std::exception& ex) {
+        std::cout << "#   substep forward-mode JVP threw: " << ex.what() << "\n"; jvp_ran = false;
+    }
+    // FD referees (float32: loose but independent)
+    const float e = 1e-1f; double fd, fd_h;
+    { torch::NoGradGuard ng;
+      fd = (Lof(s0.ph + e * v) - Lof(s0.ph - e * v)).item<double>() / (2.0 * e); }
+    auto gdot_at = [&](float s) {
+        auto p2 = (s0.ph + s * v).clone().set_requires_grad(true);
+        auto g2 = torch::autograd::grad({Lof(p2)}, {p2});
+        torch::NoGradGuard ng; return (g2[0] * v).sum().item<double>(); };
+    fd_h = (gdot_at(e) - gdot_at(-e)) / (2.0 * e);
+    auto rel = [](double a, double b) { return std::abs(a - b) / (std::abs(b) + 1e-30); };
+    bool ok = jvp_ran && hdef && std::isfinite(vjp) && std::isfinite(jvp) && std::isfinite(vHv)
+           && std::abs(fd) > 1e-6 && hnorm > 0.0
+           && rel(jvp, vjp) < 1e-3                              // two analytic mechanisms agree
+           && rel(vjp, fd) < 1e-2 && rel(vHv, fd_h) < 5e-2;     // float32 FD referees
+    std::cout << "# advance_substep AD TRIPLE (f32): JVP=" << jvp << " VJP=" << vjp << " FD=" << fd
+              << " rel(J,V)=" << rel(jvp, vjp) << " | HVP vHv=" << vHv << " FDh=" << fd_h
+              << " rel=" << rel(vHv, fd_h) << " |Hv|=" << hnorm
+              << " : " << (ok ? "PASS" : "FAIL") << "\n";
+    return ok;
+}
+
 int main() {
     bool smoke_ok = full_substep_smoke();
     bool grad_ok  = grad_check();
@@ -203,6 +402,8 @@ int main() {
     bool rt_ok    = roundtrip_check();
     bool mass_ok  = mass_avg_check();
     bool sched_ok = schedule_check();
+    bool ad3_ok   = stage_ops_ad_triple();
+    bool sub3_ok  = substep_ad_triple();
     const int nz = 40, nzw = nz + 1, ny = 1, nx = 1;
     const float g = 9.81f, eps = 0.1f, deta = 1.0f / nz, mut = 9.0e4f, c2a0 = 1.16e6f;
     const float dts = 1.0f;   // match the von-Neumann reference (resolved limit); |lambda| is dts-normalized
@@ -238,11 +439,17 @@ int main() {
     c.c2a = c2a; c.alt = torch::full({ny, nz, nx}, 2.5f, opt);
     c.a = a; c.alpha = alpha; c.gamma = gamma;
     c.mut = torch::full({ny, nx}, mut, opt);
+    c.muts = torch::full({ny, nx}, mut, opt);
+    c.fnm = torch::full({nzw}, 0.5f, opt); c.fnp = torch::full({nzw}, 0.5f, opt);
     c.c1h = c1h; c.c2h = c2h; c.c1f = c1f; c.c2f = c2f; c.rdn = rdn; c.rdnw = rdnw;
     c.dts = dts; c.g = g; c.epssm = eps; c.t0 = 300.0f;
     c.rw_tend = torch::zeros({ny, nzw, nx}, opt);
     c.ph_tend = torch::zeros({ny, nzw, nx}, opt);   // advance_w rhs now reads ph_tend
     c.t_1 = torch::zeros({ny, nz, nx}, opt);
+    // ZERO save/base geopotential => dphf==0 => the ww*d(phi) advection term is inert, keeping
+    // this a pure w-phi mode so the numpy von-Neumann reference |lambda|=0.998315 stays valid.
+    c.ph_1 = torch::zeros({ny, nzw, nx}, opt);
+    c.phb  = torch::zeros({ny, nzw, nx}, opt);
 
     // --- initial state: ph' = sin(pi*eta), everything else 0 (pure w-phi mode) ---
     State s;
@@ -256,6 +463,8 @@ int main() {
     s.muave = torch::zeros({ny, nx}, opt);
     s.muts  = torch::full({ny, nx}, mut, opt);
     s.t_2ave = torch::zeros({ny, nz, nx}, opt);
+    s.t_ave  = torch::zeros({ny, nz, nx}, opt);   // advance_w's (1-epssm) old-theta arm: zero here
+    s.ww     = torch::zeros({ny, nzw, nx}, opt);  // ww==0 keeps the ww*d(phi) advection inert
 
     // --- ISOLATION CHECK: do the hand-derived a/alpha/gamma factorize A? (M^-1 @ A @ v == v) ---
     float mia_relerr = 1.0f;   // captured for the final PASS gate (not just printed)
@@ -304,7 +513,8 @@ int main() {
     // (not merely <=1 — a stable-but-wrong scheme with |lambda|=0.5 must NOT pass).
     bool coeffs_ok = mia_relerr < 1e-4f;
     bool lambda_ok = std::isfinite(lam) && std::abs(lam - lam_ref) < 1e-3f;
-    bool ok = smoke_ok && grad_ok && prep_ok && rt_ok && mass_ok && sched_ok && coeffs_ok && lambda_ok;
+    bool ok = smoke_ok && grad_ok && prep_ok && rt_ok && mass_ok && sched_ok
+           && ad3_ok && sub3_ok && coeffs_ok && lambda_ok;
     std::cout << "# advance_w matches numpy scheme  coeffs=" << (coeffs_ok ? "ok" : "BAD")
               << "  |lambda|-match=" << (lambda_ok ? "ok" : "BAD")
               << "  : " << (ok ? "PASS" : "FAIL") << "\n";

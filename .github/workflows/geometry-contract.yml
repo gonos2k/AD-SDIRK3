@@ -1,0 +1,175 @@
+name: geometry-contract
+
+# Standing regression line for the SDIRK3 fail-close contracts that were the
+# hardest to close in the stop-gate campaign (geometry rounds 3g-3j, msf raw
+# rounds 3c/3b). These jobs run the TORCH-FREE unit matrices — the exact shared
+# predicates production wraps (wrf_sdirk3_geometry_contract.h /
+# wrf_sdirk3_msf_raw_stats.h) — so the one-time approval at 8dc65c5 becomes a
+# continuous gate. No libtorch, no full WRF build: seconds on a stock runner.
+#
+# The full-WRF runtime fault-injection (WRF_SDIRK3_TEST_STAGGER_MISMATCH_AT /
+# WRF_SDIRK3_TEST_INVALID_STAGGER_INIT, macOS + libtorch, ~minutes to build) is
+# intentionally NOT run here — it is the separate opt-in job below, gated to
+# manual dispatch / a self-hosted runner, so PRs stay fast and platforms
+# without that environment are marked UNVERIFIED rather than laundered green.
+
+on:
+  push:
+    branches: [ ad-main, main ]
+    paths:
+      - 'external/libtorch_wrf/sdirk3/wrf_sdirk3_geometry_contract.h'
+      - 'external/libtorch_wrf/sdirk3/wrf_sdirk3_msf_raw_stats.h'
+      - 'external/libtorch_wrf/sdirk3/test_geometry_contract.cpp'
+      - 'external/libtorch_wrf/sdirk3/test_msf_raw_stats.cpp'
+      - '.github/workflows/geometry-contract.yml'
+  pull_request:
+    paths:
+      - 'external/libtorch_wrf/sdirk3/wrf_sdirk3_geometry_contract.h'
+      - 'external/libtorch_wrf/sdirk3/wrf_sdirk3_msf_raw_stats.h'
+      - 'external/libtorch_wrf/sdirk3/test_geometry_contract.cpp'
+      - 'external/libtorch_wrf/sdirk3/test_msf_raw_stats.cpp'
+      - '.github/workflows/geometry-contract.yml'
+  workflow_dispatch: {}
+
+jobs:
+  # Fast PR gate: torch-free contract matrices. Each test runs in its own
+  # temp working directory (mktemp -d) so no stale binary or prior log can be
+  # reused between runs.
+  contract-matrices:
+    name: torch-free contract matrices
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: external/libtorch_wrf/sdirk3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: geometry contract matrix
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          c++ -std=c++17 -Wall -Wextra -Werror \
+            test_geometry_contract.cpp -o "$work/test_geometry_contract"
+          "$work/test_geometry_contract"
+
+      - name: raw map-factor matrix
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          c++ -std=c++17 -Wall -Wextra -Werror \
+            test_msf_raw_stats.cpp -o "$work/test_msf_raw_stats"
+          "$work/test_msf_raw_stats"
+
+  # Opt-in ONLY: the full WRF + libtorch build and the runtime geometry/stagger
+  # fault-injection negatives. It genuinely REQUIRES the WRF toolchain
+  # (gfortran/mpif90/netcdf), a libtorch install, and the machine-specific
+  # configure option — so it targets a SELF-HOSTED runner carrying the
+  # 'sdirk3-wrf' label. On infrastructure without that runner the job stays
+  # pending (never a green check); on it, the job does REAL work and fails RED
+  # if the environment is incomplete or any negative does not fire. It never
+  # exits 0 without having built WRF and verified the injections — the previous
+  # echo-only placeholder that implicitly succeeded is removed.
+  wrf-runtime-fault-injection:
+    name: WRF runtime fault-injection (opt-in, self-hosted)
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: [self-hosted, sdirk3-wrf]
+    steps:
+      - uses: actions/checkout@v4
+
+      # FAIL-CLOSED preflight: an unprovisioned runner must go RED, never green.
+      # SINGLE source of truth for libtorch is the configure option — the
+      # arch/option{N} it selects sets BOTH the compile -I and the link -L/rpath
+      # for torch in the generated configure.wrf. A separate LIBTORCH_ROOT was
+      # removed: it only redirected the compile includes, not the final link, so
+      # the "validated" path was not the sole consumed path. The ACTUAL consumed
+      # libtorch is verified post-build from the linked binary (otool) below.
+      # Required env (set on the self-hosted runner):
+      #   WRF_SDIRK3_CONFIGURE_OPTION = machine-specific configure choice (e.g. 37)
+      - name: preflight (fail-closed if toolchain absent)
+        run: |
+          set -euo pipefail
+          missing=0
+          command -v gfortran >/dev/null 2>&1 || { echo "missing: gfortran"; missing=1; }
+          command -v mpif90   >/dev/null 2>&1 || { echo "missing: mpif90"; missing=1; }
+          command -v otool    >/dev/null 2>&1 || { echo "missing: otool (link verifier)"; missing=1; }
+          if [ -z "${WRF_SDIRK3_CONFIGURE_OPTION:-}" ]; then
+            echo "missing: WRF_SDIRK3_CONFIGURE_OPTION (machine-specific configure choice)"; missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "FAIL: runtime fault-injection environment not provisioned on this runner."
+            echo "This job must not report success without building WRF and running the"
+            echo "negatives. Provision a self-hosted 'sdirk3-wrf' runner or do not dispatch it."
+            exit 1
+          fi
+
+      - name: build WRF em_b_wave
+        run: |
+          set -euo pipefail
+          printf '%s\n1\n' "${WRF_SDIRK3_CONFIGURE_OPTION}" | ./configure
+          ./compile -j 4 em_b_wave
+          test -x main/wrf.exe
+          test -x main/ideal.exe
+
+      # Verify the SOLE consumed libtorch: the built binary must actually link a
+      # libtorch library, and its resolved rpath is surfaced. This checks what
+      # the binary CONSUMES (not a separately-declared path that might be
+      # ignored) — a build that somehow produced a torch-less wrf.exe fails RED.
+      - name: verify linked libtorch
+        run: |
+          set -euo pipefail
+          echo "== otool -L main/wrf.exe (torch libs) =="
+          if ! otool -L main/wrf.exe | grep -Ei 'libtorch|libc10'; then
+            echo "FAIL: main/wrf.exe does not link any libtorch library"
+            exit 1
+          fi
+          echo "== rpaths referencing torch =="
+          otool -l main/wrf.exe | awk '/LC_RPATH/{f=1} f&&/path /{print $2; f=0}' \
+            | grep -i torch || echo "(no torch rpath entry; libtorch may be resolved by absolute install-name)"
+
+      - name: fault-injection negatives must fire
+        working-directory: test/em_b_wave
+        run: |
+          set -uo pipefail
+          # Shorten the run to 2 steps (ephemeral CI checkout only; the tracked
+          # namelist is untouched) so the positive control below is seconds, not
+          # a 5-day integration. Portable edit (no BSD/GNU sed divergence).
+          python3 - <<'PY'
+          import re, pathlib
+          p = pathlib.Path("namelist.input"); s = p.read_text()
+          s = re.sub(r'(run_days\s*=\s*)\d+', r'\g<1>0', s, count=1)
+          s = re.sub(r'(run_seconds\s*=\s*)\d+', r'\g<1>1200', s, count=1)
+          p.write_text(s)
+          PY
+          ./ideal.exe >/dev/null 2>&1 || { echo "FAIL: ideal.exe"; exit 1; }
+
+          # Each negative MUST: exit nonzero AND emit its geometry-rejection marker.
+          check_reject() {
+            label="$1"; marker="$2"; shift 2
+            rm -f rsl.error.0000
+            env WRF_SDIRK3_SPLIT_EXPLICIT=1 "$@" ./wrf.exe >/dev/null 2>&1
+            rc=$?
+            if [ "$rc" -eq 0 ]; then
+              echo "FAIL [$label]: wrf.exe exited 0; expected nonzero abort"; return 1
+            fi
+            if ! grep -q "$marker" rsl.error.0000 2>/dev/null; then
+              echo "FAIL [$label]: rejection marker not found: $marker"; return 1
+            fi
+            echo "PASS [$label]: nonzero abort + marker '$marker'"
+          }
+
+          rc=0
+          check_reject "stagger-mismatch-at-2" "per-call geometry validation failed" \
+            WRF_SDIRK3_TEST_STAGGER_MISMATCH_AT=2 || rc=1
+          check_reject "invalid-stagger-init" "setStaggeredDimensions rejected" \
+            WRF_SDIRK3_TEST_INVALID_STAGGER_INIT=1 || rc=1
+
+          # A positive control: without injection the split run must SUCCEED, so a
+          # blanket "everything aborts" cannot masquerade as the negatives passing.
+          rm -f rsl.error.0000
+          env WRF_SDIRK3_SPLIT_EXPLICIT=1 ./wrf.exe >/dev/null 2>&1
+          if ! grep -q "SUCCESS COMPLETE" rsl.error.0000 2>/dev/null; then
+            echo "FAIL [positive-control]: baseline split run did not reach SUCCESS COMPLETE"; rc=1
+          else
+            echo "PASS [positive-control]: baseline split run SUCCESS COMPLETE"
+          fi
+          exit $rc

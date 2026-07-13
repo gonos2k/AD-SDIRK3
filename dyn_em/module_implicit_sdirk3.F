@@ -442,7 +442,8 @@ CONTAINS
       CALL sdirk3_mpi_safety_init()
 
       ! Initialize solvers for each tile
-      !$OMP PARALLEL DO PRIVATE(ij,its,ite,jts,jte,kts,kte,nx,ny,nz,nx_u,ny_v,nz_w,tile_id,dx,dy) &
+      !$OMP PARALLEL DO PRIVATE(ij,its,ite,jts,jte,kts,kte,nx,ny,nz,nx_u,ny_v,nz_w,tile_id,dx,dy, &
+      !$OMP                     message) &
       !$OMP SHARED(ims,ime,jms,jme,kms,kme)
       DO ij = 1, grid%num_tiles
          
@@ -884,8 +885,16 @@ CONTAINS
       ! No need to call get_ijk_from_grid
 
       ! Process each tile with Zero-Copy approach
+      ! P0 FIX (2026-07-12, external review #4): bounds/dims/scalars/bdy_cfg and the
+      ! step_outcome_* locals were SHARED — every tile thread overwrote the same TARGET
+      ! structs whose ADDRESSES are handed to C++ (wrong bounds/strides and cross-tile
+      ! outcome misreads under num_tiles > 1). All per-tile call state is now PRIVATE.
       !$OMP PARALLEL DO PRIVATE(ij,its,ite,jts,jte,kts,kte,nx,ny,nz, &
-      !$OMP                     nx_u,ny_v,nz_w,i_endu,j_endv,i,j,nzeros,message)
+      !$OMP                     nx_u,ny_v,nz_w,i_endu,j_endv,i,j,nzeros,message, &
+      !$OMP                     bounds,dims,scalars,bdy_cfg, &
+      !$OMP                     step_outcome_rc,step_outcome_code, &
+      !$OMP                     step_final_update_aborted,step_progress_ratio_valid, &
+      !$OMP                     step_progress_ratio)
       DO ij = 1, grid%num_tiles
          
          ! Get tile bounds
@@ -1680,6 +1689,24 @@ CONTAINS
       config_name = "split_explicit"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_split_explicit))
 
+      ! Split-explicit acoustic-loop parameters: pass-throughs of EXISTING WRF namelist values
+      ! (no new Registry entries). Consumed by the C++ split-explicit branch only when
+      ! sdirk3_split_explicit is ON; C++ defaults match em_b_wave so unset = no behavior change.
+      config_name = "split_explicit_time_step_sound"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_int(config_name, MAX(0, config_flags%time_step_sound))
+
+      config_name = "split_explicit_epssm"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_float(config_name, MAX(0.0, config_flags%epssm))
+
+      config_name = "split_explicit_smdiv"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_float(config_name, MAX(0.0, config_flags%smdiv))
+
+      config_name = "split_explicit_emdiv"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_float(config_name, MAX(0.0, config_flags%emdiv))
+
+      config_name = "split_explicit_top_lid"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%top_lid))
+
       config_name = "hopeless_relax"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_hopeless_relax))
 
@@ -2079,8 +2106,11 @@ CONTAINS
          C_LOC(lambda_terminal(1)), c_lambda_size, C_LOC(lambda_initial(1)), &
          c_dt, c_gamma, c_restart, c_max_iter, c_tol)
 
+      ! Review round 3: 0 replayed checkpoints is an identity adjoint, not a
+      ! success — treat <= 0 as error (ierr stays 1). The C wrapper also
+      ! returns -1 for 0; this covers binary skew.
       checkpoints_used = INT(c_used)
-      IF (checkpoints_used < 0) RETURN
+      IF (checkpoints_used <= 0) RETURN
 
       ierr = 0
 

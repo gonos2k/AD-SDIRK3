@@ -469,6 +469,35 @@ extern "C" void sdirk3_tile_unified_step_zerocopy_v2(
     config.nx = dims.nx; config.ny = dims.ny; config.nz = dims.nz;
     config.nx_u = dims.nx_u; config.ny_v = dims.ny_v; config.nz_w = dims.nz_w;
 
+    // TEST-ONLY fault injection (review round 3g negative regression): with
+    // WRF_SDIRK3_TEST_STAGGER_MISMATCH_AT=N (default: unset = off, zero
+    // behavior change), the N-th and later v2 calls pass nx_u=nx — simulating
+    // a caller whose per-call extents disagree with the solver's initialized
+    // geometry. The per-call geometry validation in advanceZeroCopy must
+    // REJECT it (throw), proving mismatches are re-checked on EVERY call and
+    // never approved via cached members.
+    {
+        static std::atomic<int> v2_call_counter{0};
+        const int call_no = ++v2_call_counter;
+        const char* inj_env = std::getenv("WRF_SDIRK3_TEST_STAGGER_MISMATCH_AT");
+        if (inj_env && *inj_env) {
+            const int inj_at = std::atoi(inj_env);
+            if (inj_at > 0 && call_no >= inj_at) {
+                std::cerr << "[SDIRK3 TEST] injecting stagger mismatch nx_u=nx at v2 call "
+                          << call_no << " (WRF_SDIRK3_TEST_STAGGER_MISMATCH_AT="
+                          << inj_at << ")" << std::endl;
+                config.nx_u = config.nx;
+            }
+        }
+    }
+
+    // SINGLE geometry contract at the ABI boundary (review round 3j): validate
+    // the caller's per-call dimensions BEFORE setWRFIndices or any other state
+    // change on the solver. Same implementation advanceZeroCopy re-runs as
+    // defense in depth. Throws (fail-closed) on violation.
+    solver.validateCallGeometry(config.nx, config.ny, config.nz,
+                                config.nx_u, config.ny_v, config.nz_w);
+
     // Set WRF indices in the solver
     solver.setWRFIndices(bounds.its, bounds.ite, bounds.jts, bounds.jte, bounds.kts, bounds.kte,
                         bounds.ids, bounds.ide, bounds.jds, bounds.jde, bounds.kds, bounds.kde,
@@ -584,12 +613,12 @@ void* sdirk3_tile_solver_create_zerocopy(
     // v20.14: Ensure env var overrides are loaded (once per process).
     // wrf_sdirk3_load_config_from_namelist() is never called from Fortran,
     // so load_from_env() was never reached. Call it here on first solver creation.
+    // P0 FIX (2026-07-12, external review): solver creation runs under an OpenMP tile loop —
+    // an unsynchronized `static bool` here let multiple threads race load_from_env() against
+    // concurrent reads of the global config. std::call_once serializes the one-time load.
     {
-        static bool env_loaded = false;
-        if (!env_loaded) {
-            wrf::sdirk3::g_sdirk3_config.load_from_env();
-            env_loaded = true;
-        }
+        static std::once_flag env_once;
+        std::call_once(env_once, [] { wrf::sdirk3::g_sdirk3_config.load_from_env(); });
     }
 
     // FIX Round150: Gate solver creation debug output with debug_level >= 2
@@ -671,6 +700,19 @@ void* sdirk3_tile_solver_create_zerocopy(
         }
 
         // Set the staggered dimensions after construction
+        // TEST-ONLY fault injection (review round 3j): with
+        // WRF_SDIRK3_TEST_INVALID_STAGGER_INIT=1 (default unset = off), pass an
+        // invalid staggered dimension at creation — setStaggeredDimensions must
+        // REJECT (throw -> caught below -> null handle -> Fortran fatal),
+        // proving the init-time guessed-fallback laundering is gone.
+        {
+            const char* inv_env = std::getenv("WRF_SDIRK3_TEST_INVALID_STAGGER_INIT");
+            if (inv_env && *inv_env && *inv_env != '0') {
+                std::cerr << "[SDIRK3 TEST] injecting INVALID staggered init dims (nx_u=-1)"
+                          << std::endl;
+                solver->setStaggeredDimensions(-1, ny_v, nz_w);
+            }
+        }
         solver->setStaggeredDimensions(nx_u, ny_v, nz_w);
 
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -894,6 +936,13 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
             static_cast<size_t>(expected_size) * sizeof(float));
 
         const size_t replayed = unified_solver->getSavedTrajectoryCount();
+        if (replayed == 0) {
+            // Review round 3: 0 checkpoints replayed must be an ERROR at this ABI
+            // boundary too (runAdjointReplay already throws on empty checkpoints;
+            // this keeps the C contract explicit even across binary skew).
+            std::cerr << "SDIRK3 4DVAR replay ERROR: 0 checkpoints replayed" << std::endl;
+            return -1;
+        }
         if (replayed > static_cast<size_t>(std::numeric_limits<int>::max())) {
             return std::numeric_limits<int>::max();
         }

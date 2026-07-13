@@ -15,6 +15,7 @@
 #include "wrf_sdirk3_config.h"  // FIX Round157: For g_sdirk3_config debug_level
 #include <memory>
 #include <iostream>
+#include <cstdlib>  // std::abort (fail-close stub)
 #include <unordered_map>
 #include <mutex>
 
@@ -50,100 +51,27 @@ void sdirk3_tile_unified_step(
     int nx, int ny, int nz,
     int nx_u, int ny_v, int nz_w  // Staggered dimensions
 ) {
-    // FIX Round157: Gate entry debug output with debug_level >= 2
-    // FIX Round159: Apply log_solver_pointer policy for pointer masking
-    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        std::cout << "\n=== ENTERED sdirk3_tile_unified_step (NON-ZEROCOPY) from Fortran ===" << std::endl;
-        if (wrf::sdirk3::g_sdirk3_config.log_solver_pointer) {
-            std::cout << "  solver_ptr=" << solver_ptr << ", stage=" << stage << ", dt=" << dt << std::endl;
-        } else {
-            std::cout << "  solver_ptr=<masked>, stage=" << stage << ", dt=" << dt << std::endl;
-        }
-        std::cout << "  nx=" << nx << " ny=" << ny << " nz=" << nz << std::endl;
-    }
-    
-    using namespace wrf::sdirk3;
-    
-    if (!solver_ptr) {
-        // FIX Round157: Error output always needed for diagnostics
-        std::cerr << "ERROR: sdirk3_tile_unified_step called with null solver" << std::endl;
-        return;
-    }
-
-    std::lock_guard<std::mutex> lock(g_solver_mutex);
-    auto it = g_tile_solvers.find(solver_ptr);
-    if (it == g_tile_solvers.end()) {
-        // FIX Round159: Apply log_solver_pointer policy for pointer masking
-        if (wrf::sdirk3::g_sdirk3_config.log_solver_pointer) {
-            std::cerr << "ERROR: Solver " << solver_ptr << " not found in tile solver map" << std::endl;
-        } else {
-            std::cerr << "ERROR: Solver <masked> not found in tile solver map" << std::endl;
-        }
-        // FIX Round157: Gate verbose debug output with debug_level >= 2
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-            std::cerr << "Map size: " << g_tile_solvers.size() << std::endl;
-            std::cerr << "Current keys in map:" << std::endl;
-            for (const auto& pair : g_tile_solvers) {
-                if (wrf::sdirk3::g_sdirk3_config.log_solver_pointer) {
-                    std::cerr << "  Key: " << pair.first << std::endl;
-                } else {
-                    std::cerr << "  Key: <masked>" << std::endl;
-                }
-            }
-        }
-        return;
-    }
-    
-    auto& solver = it->second;
-
-    // FIX Round157: Gate log output with debug_level >= 2
-    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        std::cout << "SDIRK3 Unified Step: stage=" << stage << ", dt=" << dt
-                  << " (NO acoustic substeps!)" << std::endl;
-        std::cout << "Tile: nx=" << nx << ", ny=" << ny << ", nz=" << nz
-                  << ", nx_u=" << nx_u << ", ny_v=" << ny_v << ", nz_w=" << nz_w << std::endl;
-    }
-    
-    try {
-        // Call the solver's unifiedStep method with staggered dimensions
-        auto* unified_solver = dynamic_cast<TileSDIRK3UnifiedSolver*>(solver);
-        if (!unified_solver) {
-            std::cerr << "ERROR: Failed to cast to TileSDIRK3UnifiedSolver" << std::endl;
-            return;
-        }
-
-        // FIX Round157: Gate debug output with debug_level >= 2
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-            std::cout << "DEBUG: About to call unified_solver->unifiedStep from NON-ZEROCOPY path" << std::endl;
-        }
-        
-        unified_solver->unifiedStep(
-            u_2, v_2, w_2, ph_2, al, mu_2,
-            ru_tend, rv_tend, rw_tend, ph_tend, al_tend, mu_tend,
-            rdx, rdy, rdnw, rdn,
-            msftx, msfty, msfux, msfuy, msfvx, msfvy,  // Map factors
-            c1f, c2f, c1h, c2h,  // Vertical coordinate coefficients
-            nullptr, nullptr,  // fnm, fnp - vertical interpolation weights (not used in non-zerocopy path)
-            stage, dt,
-            nx, ny, nz, nx_u, ny_v, nz_w  // Pass staggered dimensions
-        );
-
-        // FIX Round157: Gate debug output with debug_level >= 2
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-            std::cout << "DEBUG: Returned from unified_solver->unifiedStep" << std::endl;
-        }
-        
-    } catch (const std::exception& e) {
-        std::cerr << "ERROR in sdirk3_tile_unified_step: " << e.what() << std::endl;
-        // Zero out tendencies on error (with correct staggered sizes)
-        // FIX Round160: Cast to size_t before multiplication to prevent int overflow
-        std::fill_n(ru_tend, static_cast<size_t>(nx_u)*ny*nz, 0.0);      // U-staggered
-        std::fill_n(rv_tend, static_cast<size_t>(nx)*ny_v*nz, 0.0);      // V-staggered
-        std::fill_n(rw_tend, static_cast<size_t>(nx)*ny*nz_w, 0.0);      // W-staggered
-        std::fill_n(ph_tend, static_cast<size_t>(nx)*ny*nz_w, 0.0);      // W-staggered (same as W)
-        std::fill_n(al_tend, static_cast<size_t>(nx)*ny*nz, 0.0);        // Mass points
-        std::fill_n(mu_tend, static_cast<size_t>(nx)*ny, 0.0);           // 2D mass points
-    }
+    // FAIL-CLOSE STUB (external review round 3j): this legacy NON-ZEROCOPY
+    // entry bypassed every geometry/msf/split guard added on the zerocopy-v2
+    // path — it passed caller dimensions UNVALIDATED into unifiedStep, and on
+    // exception computed std::fill_n lengths from those same unvalidated
+    // values (a negative dimension converts to a huge size_t: OOB write). No
+    // in-tree caller exists (module_implicit_sdirk3.F: "OLD interface removed
+    // - Use sdirk3_tile_unified_step_zerocopy_v2 instead"), so the honest
+    // posture is an explicit refusal, not a partially-guarded compute path.
+    // A future caller must port to the v2 zerocopy ABI, which carries the
+    // validated-geometry contract.
+    (void)solver_ptr; (void)u_2; (void)v_2; (void)w_2; (void)ph_2; (void)al;
+    (void)mu_2; (void)ru_tend; (void)rv_tend; (void)rw_tend; (void)ph_tend;
+    (void)al_tend; (void)mu_tend; (void)rdx; (void)rdy; (void)rdnw; (void)rdn;
+    (void)msftx; (void)msfty; (void)msfux; (void)msfuy; (void)msfvx; (void)msfvy;
+    (void)c1f; (void)c2f; (void)c1h; (void)c2h; (void)stage; (void)dt;
+    (void)nx; (void)ny; (void)nz; (void)nx_u; (void)ny_v; (void)nz_w;
+    std::cerr << "[SDIRK3] FATAL: sdirk3_tile_unified_step (non-zerocopy) is "
+                 "fail-closed — it bypasses the validated-geometry/msf/split "
+                 "guards of the v2 zerocopy path. Port the caller to "
+                 "sdirk3_tile_unified_step_zerocopy_v2." << std::endl;
+    std::abort();
 }
 
 } // extern "C"

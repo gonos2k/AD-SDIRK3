@@ -125,6 +125,37 @@ target_link_libraries(test_wrms_gate_metric "${TORCH_LIBRARIES}")
 set_property(TARGET test_wrms_gate_metric PROPERTY CXX_STANDARD 17)
 add_test(NAME WRMS_Gate_Metric COMMAND test_wrms_gate_metric)
 
+# Split-explicit acoustic-substep validation harness (2026-07-12, external review):
+# 10 gates — operator smoke/invertibility, |lambda|=0.998315 von-Neumann match,
+# prep<->finish roundtrip, and the AD TRIPLE (forward-dual JVP == reverse VJP == FD,
+# double-backward HVP) through the stage operators and the full substep chain.
+add_executable(test_acoustic_substep test_acoustic_substep.cpp wrf_sdirk3_acoustic_substep.cpp)
+target_include_directories(test_acoustic_substep PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_acoustic_substep "${TORCH_LIBRARIES}")
+set_property(TARGET test_acoustic_substep PROPERTY CXX_STANDARD 17)
+add_test(NAME Acoustic_Substep_AD COMMAND test_acoustic_substep)
+
+# Raw map-factor verification regression matrix (external review round 3c):
+# per-array TT/TF/FT/FF existence, NaN/Inf/non-unit fail-closed, first/last-row
+# coverage, and the stride canary that reproduces the old mem_nx+1 layout bug.
+# Torch-free — compiles/runs in seconds.
+add_executable(test_msf_raw_stats test_msf_raw_stats.cpp)
+target_include_directories(test_msf_raw_stats PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+set_property(TARGET test_msf_raw_stats PROPERTY CXX_STANDARD 17)
+add_test(NAME MSF_Raw_Stats_Matrix COMMAND test_msf_raw_stats)
+
+# Per-call geometry contract regression matrix (geometry-CI increment): the
+# hardest fail-close of the stop-gate campaign (rounds 3g-3j), promoted from
+# manual runtime fault-injection to a standing CI gate. Exercises the SHARED
+# predicate (wrf_sdirk3_geometry_contract.h) that validateCallGeometry wraps:
+# base/stagger 0-negative, base-1, base+2, init/call mismatch (incl. the
+# round-3f counterexample), init_sane (no "uninitialized => allow" escape), and
+# INT_MAX/LLONG_MAX-adjacent rejection with no overflow UB. Torch-free.
+add_executable(test_geometry_contract test_geometry_contract.cpp)
+target_include_directories(test_geometry_contract PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+set_property(TARGET test_geometry_contract PROPERTY CXX_STANDARD 17)
+add_test(NAME Geometry_Contract_Matrix COMMAND test_geometry_contract)
+
 # =========================================================================
 # OPT Pass33+: Test Output Verbosity Control
 # =========================================================================

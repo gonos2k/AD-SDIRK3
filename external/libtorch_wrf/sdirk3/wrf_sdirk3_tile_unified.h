@@ -442,6 +442,18 @@ public:
     // Set staggered grid dimensions
     void setStaggeredDimensions(int nx_u, int ny_v, int nz_w);
 
+    // SINGLE geometry contract (external review round 3j): validate the
+    // caller's per-call dimensions against the solver's initialized geometry.
+    // int64 arithmetic (no signed-overflow UB), all six required positive and
+    // sane, stagger shape base <= staggered <= base+1, and STRICT equality
+    // with the init geometry — no "uninitialized => allow" escape (the
+    // constructor and setStaggeredDimensions guarantee valid init values or
+    // throw). Called from the v2 ABI entry BEFORE setWRFIndices/any state
+    // change, and again from advanceZeroCopy (defense in depth). Throws
+    // std::runtime_error on violation.
+    void validateCallGeometry(long long nx, long long ny, long long nz,
+                              long long nx_u, long long ny_v, long long nz_w) const;
+
     /**
      * FIX 2025-01-11 Round79/Round81: SINGLE ENTRY POINT for all cache invalidation
      *
@@ -1253,6 +1265,12 @@ private:
 
     // Reference state for advection (to avoid Newton iteration feedback)
     torch::Tensor U_ref_stage_;  // State at beginning of SDIRK stage for advection terms
+    // SPLIT-EXPLICIT D2 (2026-07-11): WRF's vertical-advection flux OMEGA (mu*eta_dot from the
+    // calc_ww_cp recurrence) for the evaluation state, in PACKED memory dims {ny,nz_w,nx}. Set
+    // by the split driver around each coupled K_exp call; when defined (and the coupled-export
+    // flag is on) computeUnifiedRHS uses it as rom instead of the legacy mu*w form. Undefined
+    // on the baseline path => byte-identical baseline.
+    torch::Tensor split_omega_ww_;
     torch::Tensor k1_prev_;     // Latest stage-1 k1 cache (timestep n)
     torch::Tensor k1_prev2_;    // One-step older stage-1 k1 cache (timestep n-1)
     int prev_effective_split_mode_ = -1;  // Track mode changes to invalidate k1_prev_
@@ -2028,6 +2046,34 @@ private:
     bool config_flags_nested_ = false;     // Nested domain boundary conditions
     bool config_flags_polar_ = false;      // Polar filtering flag (v20.14r21)
     bool mix_full_fields_ = true;          // Mix full fields (true) or perturbation from base state (false)
+
+    // STOP-GATE (external review round 3):
+    // split_forward_ran_: set when the split-explicit branch executes a forward step.
+    // runAdjointReplay() checks it and refuses — the implicit-transpose replay has no
+    // knowledge of the split forward map (composite VJP lands in Inc 7), so replaying
+    // implicit checkpoints after a split forward would return a stale/wrong adjoint.
+    bool split_forward_ran_ = false;
+    // Raw U-staggered map-factor verification (external review rounds 3/3b/3c):
+    // the periodic-x preprocessing repairs raw zero msfux/msfuy entries to a fallback
+    // value, so the split guard cannot trust the (repaired) member tensors. These flags
+    // capture the RAW state from the Fortran memory (true (ims:ime,jms:jme) layout:
+    // tile offset its-ims/jts-jms, row stride mem_nx) BEFORE any repair or copy:
+    //   msf_raw_u_checked_ : the raw scan actually ran (saw the raw arrays)
+    //   msf_raw_u_unit_    : EACH array INDEPENDENTLY (msfux AND msfuy — never a joint
+    //                        accumulator, which would let a wired array mask a
+    //                        never-wired all-zero sibling) satisfied: at least one
+    //                        nonzero entry, all entries finite, and every nonzero
+    //                        entry ~1.0 (genuine unit-map with benign staggered/halo
+    //                        zeros, e.g. em_b_wave). Predicate + regression matrix:
+    //                        wrf_sdirk3_msf_raw_stats.h / test_msf_raw_stats.cpp.
+    bool msf_raw_u_checked_ = false;
+    bool msf_raw_u_unit_ = false;
+    // Round 3f: whole-domain +1 stagger shape (nx_u==nx+1 && ny_v==ny+1),
+    // evaluated PER CALL in the msf preflight from the ACTUAL ABI-passed
+    // extents (safe_config) — not from init-time members, which can go stale
+    // relative to what the caller passes. Consumed by the split-explicit
+    // supported-config guard. Fail-closed default.
+    bool split_stagger_ok_ = false;
 
     // Raw (global-domain) BC flags from Fortran namelist/config.
     // These are projected to process-local flags by refreshProcessAwareBoundaryFlags_().

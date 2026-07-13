@@ -3712,11 +3712,12 @@ rconfig   integer dynamics_option         namelist,dynamics  1  2        rh   "d
 # Duplicate entry removed
 
 # SDIRK-3 specific parameters
-rconfig   integer   sdirk3_max_newton_iter   namelist,dynamics  1    4      rh    "sdirk3_max_newton_iter"   "Maximum Newton iterations per stage"  ""
-rconfig   real      sdirk3_newton_tol        namelist,dynamics  1    1.e-6  rh    "sdirk3_newton_tol"        "Newton convergence tolerance"         ""
+# NOTE (2026-07-12): duplicated keys removed from this block — the FIRST definitions
+# (~line 2940, defaults 10/1e-6/.false./0.5/2.0/0.9/1e-4) are what the registry
+# generator emits (verified against inc/namelist_defaults.inc); this block keeps only
+# the keys unique to it (newton_rtol, tol_relax, gmres/krylov, precond, reuse_jacobian).
 rconfig   real      sdirk3_newton_rtol       namelist,dynamics  1    1.e-10 rh    "sdirk3_newton_rtol"       "Newton relative tolerance"            ""
 rconfig   real      sdirk3_newton_tol_relax  namelist,dynamics  1    1.e-5  rh    "sdirk3_newton_tol_relax"  "Relaxed Newton tolerance"            ""
-rconfig   logical   sdirk3_use_adaptive_tol  namelist,dynamics  1    .true. rh    "sdirk3_use_adaptive_tol"  "Use adaptive Newton tolerance"       ""
 
 # GMRES parameters
 rconfig   integer   sdirk3_gmres_restart     namelist,dynamics  1    30     rh    "sdirk3_gmres_restart"     "GMRES restart parameter"             ""
@@ -3731,11 +3732,6 @@ rconfig   real      sdirk3_precond_mu_coupling_damping namelist,dynamics  1    0
 rconfig   logical   sdirk3_reuse_jacobian    namelist,dynamics  1    .true. rh    "sdirk3_reuse_jacobian"    "Reuse Jacobian between stages"      ""
 
 # Adaptive timestep control
-rconfig   logical   sdirk3_adaptive_timestep namelist,dynamics  1    .false. rh   "sdirk3_adaptive_timestep" "Enable adaptive timestep"            ""
-rconfig   real      sdirk3_safety_factor     namelist,dynamics  1    0.9     rh   "sdirk3_safety_factor"     "Safety factor for adaptive timestep" ""
-rconfig   real      sdirk3_error_tol         namelist,dynamics  1    1.e-4   rh   "sdirk3_error_tol"         "Error tolerance for adaptive step"   ""
-rconfig   real      sdirk3_dt_min_factor     namelist,dynamics  1    0.1     rh   "sdirk3_dt_min_factor"     "Minimum timestep factor"             ""
-rconfig   real      sdirk3_dt_max_factor     namelist,dynamics  1    2.0     rh   "sdirk3_dt_max_factor"     "Maximum timestep factor"             ""
 
 # Performance options
 rconfig   integer   sdirk3_n_threads         namelist,dynamics  1    1      rh    "sdirk3_n_threads"         "LibTorch threads per tile"           ""

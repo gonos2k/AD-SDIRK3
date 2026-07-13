@@ -463,6 +463,73 @@ else
 
   /bin/rm -f $ZAP >& /dev/null
   make $arglist A2DCASE="$A2DCASE" WRF_SRC_ROOT_DIR="$WRF_SRC_ROOT_DIR"
+  set make_status = $status
+
+  # NONZERO BUILD CONTRACT (external review rounds 3g/3h): the root make runs
+  # with -i (errors ignored, stock WRF) and this script used to exit 0
+  # unconditionally, so a failed sub-compile with a pre-existing object or
+  # archive produced a stale binary reported as success. Two layers:
+  # (1) preserve make's own exit status — -i masks most sub-errors, but any
+  #     failure make DOES report (broken makefile, missing target, non-ignored
+  #     error) must propagate instead of being swallowed;
+  # (2) for em_* targets: main/wrf.exe must exist and NO tracked dynamics
+  #     source (sdirk3 C++/headers excluding standalone tests and generated
+  #     artifacts, dyn_em .F) may be newer than it — a newer source means the
+  #     binary cannot contain it. (Failures OUTSIDE this tracked set that -i
+  #     swallowed are still not fully covered — that would require dropping
+  #     the stock -i, a separate decision.)
+  if ( $make_status != 0 ) then
+    echo "compile: FAILED (nonzero contract) - make exited with status $make_status"
+    exit $make_status
+  endif
+  set em_target = 0
+  foreach a ( $arglist )
+    if ( "$a" =~ em_* || "$a" == wrf ) set em_target = 1
+  end
+  if ( $em_target == 1 ) then
+    if ( ! -e main/wrf.exe ) then
+      echo "compile: FAILED (nonzero contract) - main/wrf.exe was not produced"
+      exit 1
+    endif
+    # Stale-exe hygiene hardening (post-approval 2차): when a nonzero-contract
+    # condition below holds, a stale relink may already have produced a
+    # fresh-mtime wrf.exe that would fool a NAIVE mtime check on a later run.
+    # Remove that executable before exiting so no failed build can leave a
+    # runnable-looking binary behind. Only failure paths remove it; a clean
+    # build never reaches these branches, so a successful exe is never touched.
+    set stale_srcs = `find external/libtorch_wrf/sdirk3 dyn_em \( -name '*.cpp' -o -name '*.h' -o -name '*.F' \) ! -name 'test_*' ! -path '*graphify-out*' -newer main/wrf.exe`
+    if ( "$stale_srcs" != "" ) then
+      echo "compile: FAILED (nonzero contract) - sources newer than main/wrf.exe (stale binary):"
+      echo "  $stale_srcs"
+      /bin/rm -f main/wrf.exe
+      exit 1
+    endif
+    # Round 3j: close the stale-relink hole — if a sdirk3 sub-compile failed
+    # (sub-make now stops before ar; see configure.wrf sdirk3_libtorch) the
+    # ARCHIVE stays older than the edited source, but a relink triggered by
+    # OTHER objects can still make wrf.exe newest-of-all. Check the archive
+    # layer directly: no sdirk3 source may be newer than the archive, and the
+    # archive may not be newer than the exe (missed relink).
+    set sdirk3_lib = external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a
+    if ( ! -e $sdirk3_lib ) then
+      echo "compile: FAILED (nonzero contract) - $sdirk3_lib missing"
+      /bin/rm -f main/wrf.exe
+      exit 1
+    endif
+    set stale_lib_srcs = `find external/libtorch_wrf/sdirk3 \( -name '*.cpp' -o -name '*.h' \) ! -name 'test_*' ! -path '*graphify-out*' -newer $sdirk3_lib`
+    if ( "$stale_lib_srcs" != "" ) then
+      echo "compile: FAILED (nonzero contract) - sources newer than $sdirk3_lib (sub-compile failed?):"
+      echo "  $stale_lib_srcs"
+      /bin/rm -f main/wrf.exe
+      exit 1
+    endif
+    set lib_newer = `find $sdirk3_lib -newer main/wrf.exe`
+    if ( "$lib_newer" != "" ) then
+      echo "compile: FAILED (nonzero contract) - $sdirk3_lib newer than main/wrf.exe (relink missed)"
+      /bin/rm -f main/wrf.exe
+      exit 1
+    endif
+  endif
 
 endif
 

@@ -426,10 +426,16 @@ setfeenv.o : setfeenv.c
 	$(CC) -o $@ -c $(CFLAGS) $*.c
 
 
-# SDIRK3 LibTorch library
+# SDIRK3 LibTorch library.
+# Review round 3j: clear MAKEFLAGS/MFLAGS for the sub-make — the root make runs
+# with -i (ignore errors) and propagates it via the environment, so a failed
+# sub-compile would previously CONTINUE to ar and refresh the archive with a
+# stale object (mtime newer than the failed source => the compile script's
+# freshness gate passes falsely). Without -i the sub-make stops before ar, the
+# archive stays older than the edited source, and the gate catches it.
 sdirk3_libtorch:
 	( cd $(WRF_SRC_ROOT_DIR)/external/libtorch_wrf/sdirk3 ; \
-	  make FC="$(SFC)" CC="$(SCC)" CXX="$(CXX)" \
+	  env MAKEFLAGS= MFLAGS= make FC="$(SFC)" CC="$(SCC)" CXX="$(CXX)" \
 	  FCFLAGS="$(FCFLAGS)" CFLAGS="$(CFLAGS)" \
 	  CXXFLAGS="$(CXXFLAGS)" \
 	  AR="$(AR)" ARFLAGS="$(ARFLAGS)" RANLIB="$(RANLIB)" )

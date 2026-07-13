@@ -33,56 +33,317 @@ inline torch::Tensor sj(const torch::Tensor& X) {
 }
 } // namespace
 
-// advance_uv (module_small_step_em.F:654-871 for u; :873+ for v). em_b_wave: msfux/msfuy=1, cqu=1.
+// phi-consistent p'/al diagnostics — see header. GEOMETRIC (hypso-1) form, kept DELIBERATELY:
+// the hypso-2 in-model variant was measured to inject float32 diagnosis noise (p' is a small
+// difference of large EOS terms; alpha rel-eps 1e-4 -> p' +-14 Pa) that does NOT reproduce WRF's
+// own noise (bit-order differs), and it degraded the previously-EXACT ru/rv PGF parity. The
+// smooth geometric alpha gives EXACT horizontal-PGF parity (measured ru 33.3752/33.3729,
+// rv 82.0871 == dyn_em) because the vertical-profile component of any alpha error cancels in
+// horizontal differences.
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> diag_p_al(
+    const torch::Tensor& ph, const torch::Tensor& phb, const torch::Tensor& t,
+    const torch::Tensor& pb, const torch::Tensor& muts, const torch::Tensor& mub,
+    const torch::Tensor& c1h, const torch::Tensor& c2h, const torch::Tensor& rdnw,
+    float p0, float rd, float cpovcv, float t0) {
+    const int nz = t.size(1);
+    auto dk = [&](const torch::Tensor& X) {   // full-level difference X(k+1)-X(k) -> mass levels
+        return X.index({SL(), Slice(1, nz + 1), SL()}) - X.index({SL(), Slice(0, nz), SL()});
+    };
+    auto mh  = c1h.view({1, nz, 1}) * muts.unsqueeze(1) + c2h.view({1, nz, 1});
+    auto mhb = c1h.view({1, nz, 1}) * mub.unsqueeze(1)  + c2h.view({1, nz, 1});
+    // module metrics are |rdnw| (WRF's are negative): al = +|rdnw|*dphi/mh.
+    auto al_full = rdnw.view({1, nz, 1}) * (dk(ph) + dk(phb)) / mh;
+    auto alb     = rdnw.view({1, nz, 1}) * dk(phb) / mhb;
+    auto eos = (rd * (t0 + t)) / (p0 * al_full);
+    auto p_pert = p0 * torch::pow(eos.clamp_min(1e-20f), cpovcv) - pb;   // EOS guard, WRF :1069
+    return {p_pert, al_full - alb, al_full};
+}
+
+// WRF calc_p_rho_phi hypsometric_opt=2 (module_big_step_utilities_em.F:1033-1052 — the WRF
+// DEFAULT, and what em_b_wave runs): al = dphi_full / (phm * LOG(pfd/pfu)) with the dry
+// hydrostatic column pressures pf = c3*MUTS + c4 + ptop (hybrid off: c3f=znw, c3h=znu, c4=0).
+// This is the p whose DISCRETE vertical balance pg_buoy_w measures: WRF's residual at the
+// balanced IC is ~22 coupled, hypso-1's geometric alpha leaves ~120 (MEASURED 2026-07-11).
+// Used ONLY for pg_buoy_w's p; the horizontal PGF keeps hypso-1 (EXACT ru/rv parity — the
+// vertical-profile alpha error cancels in horizontal differences, see diag_p_al note).
+torch::Tensor diag_p_hypso2(
+    const torch::Tensor& ph, const torch::Tensor& phb, const torch::Tensor& t,
+    const torch::Tensor& pb, const torch::Tensor& muts,
+    const torch::Tensor& znw, const torch::Tensor& znu, const torch::Tensor& ptop,
+    float p0, float rd, float cpovcv, float t0) {
+    const int nz = t.size(1);
+    auto dk = [&](const torch::Tensor& X) {   // full-level difference X(k+1)-X(k) -> mass levels
+        return X.index({SL(), Slice(1, nz + 1), SL()}) - X.index({SL(), Slice(0, nz), SL()});
+    };
+    auto muts3 = muts.unsqueeze(1);                                          // {ny,1,nx}
+    auto ptop3 = ptop.unsqueeze(1);                                          // {ny,1,nx}
+    auto pfu = znw.slice(0, 1, nz + 1).view({1, nz, 1}) * muts3 + ptop3;     // pf @ full k+1
+    auto pfd = znw.slice(0, 0, nz).view({1, nz, 1}) * muts3 + ptop3;         // pf @ full k
+    auto phm = znu.view({1, nz, 1}) * muts3 + ptop3;                         // p  @ mass k
+    auto al_full = dk(ph + phb) / (phm * torch::log(pfd / pfu));             // dphi>0, pfd>pfu
+    auto eos = (rd * (t0 + t)) / (p0 * al_full);
+    return p0 * torch::pow(eos.clamp_min(1e-20f), cpovcv) - pb;              // p' (EOS, WRF :1069)
+}
+
+// WRF pg_buoy_w — see header. WRF rdn/rdnw are NEGATIVE; module metrics are |.| (negate odd uses).
+torch::Tensor pg_buoy_w_stage(
+    const torch::Tensor& p, const torch::Tensor& mu, const torch::Tensor& msfty,
+    const torch::Tensor& c1f, const torch::Tensor& rdn, const torch::Tensor& rdnw, float g) {
+    const int ny = p.size(0), nz = p.size(1), nx = p.size(2);
+    const int nzw = nz + 1;
+    auto msf_inv = torch::reciprocal(msfty).unsqueeze(1);                       // {ny,1,nx}
+    auto mu3 = mu.unsqueeze(1);                                                 // {ny,1,nx}
+    // interior full levels kf=1..nz-1: g/msf * ( -|rdn(kf)|*(p(kf)-p(kf-1)) - c1f(kf)*mu' )
+    auto dp = p.index({SL(), Slice(1, nz), SL()}) - p.index({SL(), Slice(0, nz - 1), SL()});
+    auto rdn_i = rdn.slice(0, 1, nz).view({1, nz - 1, 1});
+    auto c1f_i = c1f.slice(0, 1, nz).view({1, nz - 1, 1});
+    auto interior = g * msf_inv * (-rdn_i * dp - c1f_i * mu3);
+    // top kf=nz: g/msf * ( +2*|rdnw(nz-1)|*p(nz-1) - c1f(nz)*mu' )   [2*rdnw_wrf*(-p), rdnw<0]
+    auto top = g * msf_inv * (2.0f * rdnw[nz - 1] * p.index({SL(), Slice(nz - 1, nz), SL()})
+                              - c1f[nzw - 1] * mu3);
+    auto zero_lvl = torch::zeros({ny, 1, nx}, p.options());
+    return torch::cat({zero_lvl, interior, top}, 1);                            // {ny,nz_w,nx}
+}
+
+// WRF curvature, w row — see header.
+torch::Tensor curvature_w_stage(
+    const torch::Tensor& u, const torch::Tensor& v,
+    const torch::Tensor& muu, const torch::Tensor& muv,
+    const torch::Tensor& msfuy, const torch::Tensor& msfvx_inv,
+    const torch::Tensor& msftx, const torch::Tensor& msfty,
+    const torch::Tensor& c1h, const torch::Tensor& c2h,
+    const torch::Tensor& fnm, const torch::Tensor& fnp, float reradius) {
+    const int ny = msftx.size(0), nx = msftx.size(1);
+    const int nz = u.size(1), nzw = nz + 1;
+    // coupled momenta on their native grids (couple_momentum): ru = (c1h*muu+c2h)*u/msfuy
+    auto mh_u = c1h.view({1, nz, 1}) * muu.unsqueeze(1) + c2h.view({1, nz, 1});
+    auto mh_v = c1h.view({1, nz, 1}) * muv.unsqueeze(1) + c2h.view({1, nz, 1});
+    auto ru = mh_u * u / msfuy.unsqueeze(1);                                    // {ny,nz,nx_u}
+    auto rv = mh_v * v * msfvx_inv.unsqueeze(1);                                // {ny_v,nz,nx}
+    // horizontal pair-sums to mass points: (X(i)+X(i+1)) / (X(j)+X(j+1))
+    auto pair_u = [&](const torch::Tensor& X) {
+        return X.index({SL(), SL(), Slice(0, nx)}) + X.index({SL(), SL(), Slice(1, nx + 1)});
+    };
+    auto pair_v = [&](const torch::Tensor& X) {
+        return X.index({Slice(0, ny), SL(), SL()}) + X.index({Slice(1, ny + 1), SL(), SL()});
+    };
+    // vertical interpolation to full levels kf=1..nz-1: 0.5*(fnm(kf)*S(kf) + fnp(kf)*S(kf-1))
+    auto to_w = [&](const torch::Tensor& S) {
+        auto fnm_i = fnm.slice(0, 1, nz).view({1, nz - 1, 1});
+        auto fnp_i = fnp.slice(0, 1, nz).view({1, nz - 1, 1});
+        return 0.5f * (fnm_i * S.index({SL(), Slice(1, nz), SL()})
+                     + fnp_i * S.index({SL(), Slice(0, nz - 1), SL()}));        // {ny,nz-1,nx}
+    };
+    auto term = reradius * (to_w(pair_u(ru)) * to_w(pair_u(u))
+                            + (msftx / msfty).unsqueeze(1)
+                              * to_w(pair_v(rv)) * to_w(pair_v(v)));            // {ny,nz-1,nx}
+    auto zero_lvl = torch::zeros({ny, 1, nx}, u.options());
+    return torch::cat({zero_lvl, term, zero_lvl}, 1);                           // {ny,nz_w,nx}
+}
+
+// WRF rhs_ph — see header.
+torch::Tensor rhs_ph_stage(
+    const torch::Tensor& ph, const torch::Tensor& phb,
+    const torch::Tensor& u, const torch::Tensor& v,
+    const torch::Tensor& ww, const torch::Tensor& w,
+    const torch::Tensor& mut, const torch::Tensor& muu, const torch::Tensor& muv,
+    const torch::Tensor& msfty,
+    const torch::Tensor& c1f, const torch::Tensor& c2f,
+    const torch::Tensor& fnm, const torch::Tensor& fnp, const torch::Tensor& rdnw,
+    float cfn, float cfn1, float rdx, float rdy, float g) {
+    const int ny = mut.size(0), nx = mut.size(1);
+    const int nz = u.size(1), nzw = nz + 1;
+    auto msf_inv = torch::reciprocal(msfty).unsqueeze(1);                       // {ny,1,nx}
+    auto phf = ph + phb;                                                        // {ny,nz_w,nx}
+    torch::Tensor pht = torch::zeros({ny, nzw, nx}, ph.options());
+
+    // --- vertical advection (phi_adv_z default ELSE branch :1481-1497):
+    //     wdwn0[m] (m=0..nz-1) == WRF wdwn(m+2): .5*(ww(m+2)+ww(m+1))*rdnw(m+1)*dphf   [1-based]
+    // AUDIT FIX (2026-07-11): row kf (WRF k=kf+1) takes fnm(k)*wdwn(k+1)+fnp(k)*wdwn(k)
+    //   == fnm0[kf]*wdwn0[kf] + fnp0[kf]*wdwn0[kf-1], rows kf=1..nz-1 (WRF k=2..kte-1, kte==kde).
+    //   Previous code paired wdwn0[kf+1]/wdwn0[kf] (one level high) and dropped row nz-1 —
+    //   the same array/pairing advance_w (:443) already had right.
+    {
+        auto dphf = phf.index({SL(), Slice(1, nz + 1), SL()}) - phf.index({SL(), Slice(0, nz), SL()});
+        auto ww_avg = 0.5f * (ww.index({SL(), Slice(1, nz + 1), SL()}) + ww.index({SL(), Slice(0, nz), SL()}));
+        auto wdwn = ww_avg * (-rdnw.view({1, nz, 1})) * dphf;   // wdwn0[m] == WRF wdwn(m+2), {ny,nz,nx}
+        auto wd_k   = wdwn.index({SL(), Slice(1, nz), SL()});                   // wdwn0[kf]   = WRF wdwn(k+1)
+        auto wd_km1 = wdwn.index({SL(), Slice(0, nz - 1), SL()});               // wdwn0[kf-1] = WRF wdwn(k)
+        auto fnm_i = fnm.slice(0, 1, nz).view({1, nz - 1, 1});
+        auto fnp_i = fnp.slice(0, 1, nz).view({1, nz - 1, 1});
+        pht.index_put_({SL(), Slice(1, nz), SL()}, -(fnm_i * wd_k + fnp_i * wd_km1));
+    }
+    // --- mu g w (:1500-1516): ph_t(kf=1..nz) += (c1f*mut+c2f)*g*w/msfty
+    // AUDIT FIX (2026-07-11): WRF resets ph_tend(kde)=0 then adds k=2..kte with kte==kde, so the
+    // TOP full level kf=nz receives the term (previous Slice(1,nz) dropped it).
+    {
+        auto c1f_i = c1f.slice(0, 1, nzw).view({1, nz, 1});
+        auto c2f_i = c2f.slice(0, 1, nzw).view({1, nz, 1});
+        auto term = (c1f_i * mut.unsqueeze(1) + c2f_i) * g
+                    * w.index({SL(), Slice(1, nzw), SL()}) * msf_inv;
+        pht.index_put_({SL(), Slice(1, nzw), SL()},
+                       pht.index({SL(), Slice(1, nzw), SL()}) + term);
+    }
+
+    // --- horizontal advection (6th-order centered, :1774-1819; em_b_wave: no open/specified,
+    //     so the full range applies; msfvy/msfux == 1 idealized) ---
+    // ghost-extended phf: x periodic (3 cols each side), y symmetric about the walls
+    // (module_bc.F: ys ghost(-m)=row(m-1); ye ghost(nyt-1+m)=row(nyt-m)).
+    auto phf_x = torch::cat({phf.index({SL(), SL(), Slice(nx - 3, nx)}), phf,
+                             phf.index({SL(), SL(), Slice(0, 3)})}, 2);          // {ny,nzw,nx+6}
+    auto phf_y = torch::cat({phf.index({Slice(0, 3), SL(), SL()}).flip(0), phf,
+                             phf.index({Slice(ny - 3, ny), SL(), SL()}).flip(0)}, 0); // {ny+6,nzw,nx}
+    auto stencil6 = [&](const torch::Tensor& Fe, int dim) {
+        // (1/60)*(45*(F(+1)-F(-1)) - 9*(F(+2)-F(-2)) + (F(+3)-F(-3))) at the true points;
+        // Fe is the +-3 ghost-extended field along `dim`.
+        auto n = (dim == 2) ? nx : ny;
+        auto sl = [&](int off) {
+            return (dim == 2) ? Fe.index({SL(), SL(), Slice(3 + off, 3 + off + n)})
+                              : Fe.index({Slice(3 + off, 3 + off + n), SL(), SL()});
+        };
+        return (1.0f / 60.0f) * (45.0f * (sl(1) - sl(-1)) - 9.0f * (sl(2) - sl(-2)) + (sl(3) - sl(-3)));
+    };
+    auto d6x = stencil6(phf_x, 2);                                              // {ny,nzw,nx}
+    auto d6y = stencil6(phf_y, 0);                                              // {ny,nzw,nx}
+
+    // velocity factor at full level kf: interior kf=1..nz-1 (WRF k=2..kte-1) uses the pair
+    // vel(kf)+vel(kf-1); TOP kf=nz (WRF k=kte==kde) uses 2*(cfn*vel(nz-1)+cfn1*vel(nz-2)) —
+    // the 2x folds WRF's 0.5 top prefactor into the shared 0.25 (:1791 vs :1807).
+    // AUDIT FIX (2026-07-11): previous code placed the top form at kf=nz-1 and zeroed kf=nz
+    // (one level low, and the cfn pair was vel(nz-2)/vel(nz-3)).
+    auto vfac = [&](const torch::Tensor& vel) {                                  // {*,nz,*} -> {*,nz_w,*}
+        auto inter = vel.index({SL(), Slice(1, nz), SL()}) + vel.index({SL(), Slice(0, nz - 1), SL()});
+        auto lvl0 = torch::zeros_like(vel.index({SL(), Slice(0, 1), SL()}));
+        auto top = 2.0f * (cfn * vel.index({SL(), Slice(nz - 1, nz), SL()})
+                           + cfn1 * vel.index({SL(), Slice(nz - 2, nz - 1), SL()}));
+        // levels: 0 (unused, zero), 1..nz-1 interior pairs, nz top form
+        return torch::cat({lvl0, inter, top}, 1);
+    };
+    // x: mass col i multiplied by u-point factors i and i+1 (muuf = c1f*muu+c2f at u-points)
+    {
+        auto uf = vfac(u);                                                       // {ny,nz_w,nx_u}
+        auto muu3 = muu.unsqueeze(1);                                            // {ny,1,nx_u}
+        auto mf_u = c1f.view({1, nzw, 1}) * muu3 + c2f.view({1, nzw, 1});        // {ny,nz_w,nx_u}
+        auto flux_u = mf_u * uf;                                                 // {ny,nz_w,nx_u}
+        auto fac_x = flux_u.index({SL(), SL(), Slice(1, nx + 1)})
+                   + flux_u.index({SL(), SL(), Slice(0, nx)});                   // {ny,nz_w,nx}
+        pht = pht - (0.25f * rdx) * msf_inv * fac_x * d6x;
+    }
+    // y: mass row j multiplied by v-point factors j and j+1
+    {
+        auto vf = vfac(v);                                                       // {ny_v,nz_w,nx}
+        auto muv3 = muv.unsqueeze(1);
+        auto mf_v = c1f.view({1, nzw, 1}) * muv3 + c2f.view({1, nzw, 1});
+        auto flux_v = mf_v * vf;                                                 // {ny_v,nz_w,nx}
+        auto fac_y = flux_v.index({Slice(1, ny + 1), SL(), SL()})
+                   + flux_v.index({Slice(0, ny), SL(), SL()});                   // {ny,nz_w,nx}
+        pht = pht - (0.25f * rdy) * msf_inv * fac_y * d6y;
+    }
+    // Level 0: WRF loops start at k=2 (0-based 1) -> zero it explicitly.
+    // AUDIT FIX (2026-07-11): do NOT zero the top level kf=nz — WRF's :1504 reset happens BEFORE
+    // the mu-g-w add (:1507-1510, k up to kte==kde) and the horizontal top row (:1807 k=kte), so
+    // the final ph_tend(kde) = mu-g-w + horizontal-top-row content (previous code wiped it).
+    pht.index_put_({SL(), 0, SL()}, torch::zeros({ny, nx}, ph.options()));
+    return pht;
+}
+
+// Coupled 4-term horizontal PGF — see header. Mirrors WRF's formula exactly:
+//   dpx = 0.5*rdx*(c1h*muu+c2h)*[ d_i(ph(k+1))+d_i(ph(k)) + (alt+alt_im1)*d_i(p) + (al+al_im1)*d_i(pb) ]
+//       + rdx*d_i(php)*( rdnw*(dpn(k+1)-dpn(k)) - 0.5*c1h*(mu+mu_im1) )      [non-hydro 4th term]
+// (module_big_step_utilities_em.F:2385-2396 / module_small_step_em.F:828-865; v symmetric in y).
+// dpn = p at full levels (surface cf1/cf2/cf3, interior fnm/fnp, top 0 lid-off); php = mass-level
+// average of the full geopotential phf (calc_php, module_big_step_utilities_em.F:1265).
+std::pair<torch::Tensor, torch::Tensor> horizontal_pgf(
+    const torch::Tensor& ph, const torch::Tensor& p, const torch::Tensor& al,
+    const torch::Tensor& alt, const torch::Tensor& pb, const torch::Tensor& phf,
+    const torch::Tensor& mu, const torch::Tensor& muu, const torch::Tensor& muv,
+    const torch::Tensor& c1h, const torch::Tensor& c2h,
+    const torch::Tensor& fnm, const torch::Tensor& fnp, const torch::Tensor& rdnw,
+    float rdx, float rdy, float cf1, float cf2, float cf3) {
+    const int ny = p.size(0), nz = p.size(1), nx = p.size(2);
+    const int nzw = ph.size(1), kde = nzw - 1;
+    // wrapped x-difference/sum at u-points 0..nx-1: X[i] - X[i-1 mod nx] (periodic ghost)
+    auto wrap_d = [](const torch::Tensor& X) { return X - torch::roll(X, 1, 2); };
+    auto wrap_s = [](const torch::Tensor& X) { return X + torch::roll(X, 1, 2); };
+    // dpn assembly shared by the u (wrapped) and v (j-diff) branches; psum = (p+p_neighbor).
+    auto dpn_diff = [&](const torch::Tensor& psum) {
+        std::vector<torch::Tensor> dpn(nzw);
+        dpn[0] = 0.5f * (cf1 * psum.index({SL(), 0, SL()})
+                       + cf2 * psum.index({SL(), 1, SL()})
+                       + cf3 * psum.index({SL(), 2, SL()}));
+        dpn[kde] = torch::zeros_like(dpn[0]);              // top_lid off; lid branch not ported
+        for (int kf = 1; kf <= kde - 1; ++kf) {
+            dpn[kf] = 0.5f * (fnm[kf] * psum.index({SL(), kf,     SL()})
+                            + fnp[kf] * psum.index({SL(), kf - 1, SL()}));
+        }
+        auto dpn_t = torch::stack(dpn, 1);                 // {*,nz_w,nx}
+        return dpn_t.index({SL(), Slice(1, nz + 1), SL()}) - dpn_t.index({SL(), Slice(0, nz), SL()});
+    };
+    auto php = 0.5f * (phf.index({SL(), Slice(0, nz), SL()}) + phf.index({SL(), Slice(1, nz + 1), SL()}));
+    auto ph_k   = ph.index({SL(), Slice(0, nz),     SL()});
+    auto ph_kp1 = ph.index({SL(), Slice(1, nz + 1), SL()});
+    // --- u: all u-points 0..nx-1 (periodic wrap), then alias the seam column u[nx]=u[0] ---
+    auto muu_u = muu.index({SL(), Slice(0, nx)});
+    auto coef_u = c1h.view({1, nz, 1}) * muu_u.unsqueeze(1) + c2h.view({1, nz, 1});
+    auto dpx = 0.5f * rdx * coef_u
+               * (wrap_d(ph_kp1) + wrap_d(ph_k) + wrap_s(alt) * wrap_d(p) + wrap_s(al) * wrap_d(pb));
+    // WRF's rdnw is NEGATIVE; the module receives positive |rdnw| -> negate the odd-power use.
+    dpx = dpx + rdx * wrap_d(php)
+          * (-rdnw.view({1, nz, 1}) * dpn_diff(wrap_s(p))
+             - 0.5f * c1h.view({1, nz, 1}) * wrap_s(mu.unsqueeze(1)));
+    dpx = torch::cat({dpx, dpx.index({SL(), SL(), Slice(0, 1)})}, 2);        // {ny,nz,nx+1}
+    // --- v: interior v rows 1..ny-1 only (symmetric walls excluded, :790-797); wall rows ZERO ---
+    auto muv_int = muv.index({Slice(1, ny), SL()});
+    auto coef_v = c1h.view({1, nz, 1}) * muv_int.unsqueeze(1) + c2h.view({1, nz, 1});
+    auto dpy_int = 0.5f * rdy * coef_v
+                   * (dj(ph_kp1) + dj(ph_k) + sj(alt) * dj(p) + sj(al) * dj(pb));
+    dpy_int = dpy_int + rdy * dj(php)
+              * (-rdnw.view({1, nz, 1}) * dpn_diff(sj(p))
+                 - 0.5f * c1h.view({1, nz, 1}) * sj(mu.unsqueeze(1)));
+    auto zero_row = torch::zeros({1, nz, nx}, p.options());
+    auto dpy = torch::cat({zero_row, dpy_int, zero_row}, 0);                 // {ny+1,nz,nx}
+    return {dpx, dpy};
+}
+
+// advance_uv (module_small_step_em.F:654-871 for u; :873-946 for v). em_b_wave: msf*=1, cqu=cqv=1
+// (dry: qv==0), periodic x, SYMMETRIC y walls.
 //   u += dts*ru_tend                                                             (:805)
-//   dpxy = 0.5*rdx*(c1h*muu+c2h)*[ (ph(k+1)+ph(k) i-diff) + (alt+alt_im1)*di(p) + (al+al_im1)*di(pb=0 here) ]  (:828-831)
-//   u -= dts*cqu*dpxy                                                            (:868, div-damping term TODO)
-// NOTE (Inc 5 partial): pb i-difference term (base pressure) is dropped here (perturbation p only,
-// base pb gradient is part of the slow PGF already frozen in ru_tend); non-hydro 4th term = TODO.
+//   u -= dts*cqu*dpxy + c1h*mudf_xy   (dpxy = shared horizontal_pgf on the DEVIATIONS, :828-865)
+// PERIODIC X (WRF: i_endu=ite, ghosts via PERIOD_BDY_EM_B3 + set_physical_bc even on 1 rank):
+// BOTH seam u columns are advanced every substep; the seam invariant u[nx]==u[0] is enforced.
 State advance_uv(const State& s, const Const& c) {
+    TORCH_CHECK(c.ph_1.defined() && c.phb.defined(),
+                "advance_uv: Const.ph_1/phb (save + base geopotential) must be wired for the "
+                "non-hydrostatic 4th PGF term (module_small_step_em.F:834-865)");
     State o = s;                                        // copy handles (functional, autograd-safe)
     const int nz = s.p.size(1);
     const int nx = s.p.size(2);                         // MASS-point count in x
-    // --- u ---
-    // frozen slow tendency (u & ru_tend both on u-points; shapes match)
-    torch::Tensor u_new = s.u + c.dts * c.ru_tend;
-    // hydrostatic PGF at the nx-1 INTERIOR u-points (u-point i, i=1..nx-1, uses mass i-1,i).
-    // All operands below are {ny, nz, nx-1}; ph on full levels uses ph(k)+ph(k+1).
-    auto ph_k   = s.ph.index({SL(), Slice(0, nz),   SL()});   // {ny,nz,nx}
-    auto ph_kp1 = s.ph.index({SL(), Slice(1, nz+1), SL()});   // {ny,nz,nx}
-    auto D_ph = di(ph_kp1) + di(ph_k);                        // {ny,nz,nx-1}
-    // (c1h*muu+c2h) at interior u-points 1..nx-1: slice muu to nx-1 (valid whether muu is nx or nx+1 wide)
-    auto muu_int = c.muu.index({SL(), Slice(1, nx)});         // {ny, nx-1}
-    auto coef = c.c1h.view({1, nz, 1}) * muu_int.unsqueeze(1) + c.c2h.view({1, nz, 1}); // {ny,nz,nx-1}
-    // Three hydrostatic terms (:828-831): geopotential gradient + alt*d(p') + al'*d(pb).
-    // TODO(Inc 5): the non-hydrostatic 4th term (php/dpn) and divergence damping (emdiv).
-    auto dpxy = 0.5f * c.rdx * coef * (D_ph + si(c.alt) * di(s.p) + si(s.al) * di(c.pb));  // {ny,nz,nx-1}
-    // divergence damping (:809/:868): + c1h(k)*mudf_xy, mudf_xy=-emdiv*dx*(mudf(i)-mudf(i-1)) (msf=1).
-    // Uses s.mudf from the PREVIOUS substep (advance_uv precedes advance_mu_t in the loop).
-    float dx = c.rdx > 0.0f ? 1.0f / c.rdx : 0.0f;
-    auto mudf_xy = (-c.emdiv * dx) * (s.mudf.index({SL(), Slice(1, nx)}) - s.mudf.index({SL(), Slice(0, nx - 1)})); // {ny,nx-1}
-    // subtract PGF + add div damping at interior u-points 1..nx-1 (Slice(1,nx), nx-1 columns).
-    auto u_int = u_new.index({SL(), SL(), Slice(1, nx)}) - c.dts * dpxy
-                 + c.c1h.view({1, nz, 1}) * mudf_xy.unsqueeze(1);   // cqu=1
-    u_new.index_put_({SL(), SL(), Slice(1, nx)}, u_int);
-    o.u = u_new;
-    // --- v --- symmetric hydrostatic PGF in y (v-point j uses mass j-1,j; j-difference along ny).
     const int ny = s.p.size(0);
-    torch::Tensor v_new = s.v + c.dts * c.rv_tend;
-    auto ph_k_v   = s.ph.index({SL(), Slice(0, nz),   SL()});
-    auto ph_kp1_v = s.ph.index({SL(), Slice(1, nz+1), SL()});
-    auto D_ph_v = dj(ph_kp1_v) + dj(ph_k_v);                  // {ny-1,nz,nx}
-    auto muv_int = c.muv.index({Slice(1, ny), SL()});         // {ny-1,nx}
-    auto coef_v = c.c1h.view({1, nz, 1}) * muv_int.unsqueeze(1) + c.c2h.view({1, nz, 1});
-    auto dpxy_v = 0.5f * c.rdy * coef_v * (D_ph_v + sj(c.alt) * dj(s.p) + sj(s.al) * dj(c.pb)); // {ny-1,nz,nx}
-    // v divergence damping (:880), symmetric to u: mudf_yv = -emdiv*dy*(mudf(j)-mudf(j-1)) (msf=1)
+    auto [dpx, dpy] = horizontal_pgf(s.ph, s.p, s.al, c.alt, c.pb, c.ph_1 + c.phb,
+                                     s.mu, c.muu, c.muv, c.c1h, c.c2h, c.fnm, c.fnp,
+                                     c.rdnw, c.rdx, c.rdy, c.cf1, c.cf2, c.cf3);
+    // --- u: frozen tendency at ALL u-points (:805) - PGF + divergence damping (:809/:868),
+    // mudf seam-wrapped (mudf(-1)=mudf(nx-1)); s.mudf is from the PREVIOUS substep.
+    torch::Tensor u_new = s.u + c.dts * c.ru_tend;
+    float dx = c.rdx > 0.0f ? 1.0f / c.rdx : 0.0f;
+    auto mudf_xy = (-c.emdiv * dx) * (s.mudf - torch::roll(s.mudf, 1, 1));   // {ny,nx} @ u 0..nx-1
+    auto u_upd = u_new.index({SL(), SL(), Slice(0, nx)})
+                 - c.dts * dpx.index({SL(), SL(), Slice(0, nx)})
+                 + c.c1h.view({1, nz, 1}) * mudf_xy.unsqueeze(1);   // cqu=1
+    // WRF seam invariant u(ide)==u(ids) (PERIOD comm): alias the last u column from column 0. This
+    // also makes any residual seam inconsistency in ru_tend non-accumulating.
+    o.u = torch::cat({u_upd, u_upd.index({SL(), SL(), Slice(0, 1)})}, 2);   // {ny,nz,nx+1}
+    // --- v: SYMMETRIC y walls (:790-797) — WRF advances ONLY interior v rows j=1..ny-1; the wall
+    // rows get NEITHER the tendency NOR the PGF; they stay frozen at their prep values.
+    torch::Tensor v_new = s.v.clone();
     float dy = c.rdy > 0.0f ? 1.0f / c.rdy : 0.0f;
     auto mudf_yv = (-c.emdiv * dy) * (s.mudf.index({Slice(1, ny), SL()}) - s.mudf.index({Slice(0, ny - 1), SL()})); // {ny-1,nx}
-    auto v_int = v_new.index({Slice(1, ny), SL(), SL()}) - c.dts * dpxy_v
-                 + c.c1h.view({1, nz, 1}) * mudf_yv.unsqueeze(1);  // cqv=1
-    v_new.index_put_({Slice(1, ny), SL(), SL()}, v_int);
+    v_new.index_put_({Slice(1, ny), SL(), SL()},
+                     s.v.index({Slice(1, ny), SL(), SL()})
+                     + c.dts * c.rv_tend.index({Slice(1, ny), SL(), SL()})
+                     - c.dts * dpy.index({Slice(1, ny), SL(), SL()})
+                     + c.c1h.view({1, nz, 1}) * mudf_yv.unsqueeze(1));  // cqv=1
     o.v = v_new;
-    // TODO(Inc 5): non-hydrostatic 4th term (php/dpn) and divergence damping (emdiv), both u & v.
     return o;
 }
 
@@ -127,7 +388,10 @@ State advance_mu_t(const State& s, const Const& c) {
     o.ww = torch::stack(ww, 1) - c.ww_1;                   // subtract large-timestep ww (:1119)
 
     // --- THETA update (:1138-1173, msf=1) ---
-    // frozen theta tendency; then vertical + horizontal(x) flux advection.
+    // Save the RAW coupled theta'' BEFORE the update (:1141): this is the (1-epssm) old-time arm
+    // that advance_w's t_2ave off-centering reads THIS substep (WRF shares one t_2save array).
+    o.t_ave = s.t;
+    // frozen theta tendency; then vertical + horizontal flux advection.
     torch::Tensor t_new = s.t + dts * c.ft;
     // vertical theta flux wdtn(k) = ww(k)*(fnm(k)*t_1(k)+fnp(k)*t_1(k-1)); wdtn(0)=wdtn(top)=0.  (:1148-1154)
     std::vector<torch::Tensor> wdtn(nzw);
@@ -139,36 +403,47 @@ State advance_mu_t(const State& s, const Const& c) {
     }
     auto wdtn_t = torch::stack(wdtn, 1);                    // {ny,nz_w,nx}
     // vertical advection rdnw(k)*(wdtn(k+1)-wdtn(k)) at mass level k  (:1171)
-    auto vert = c.rdnw.view({1, nz, 1}) * (wdtn_t.index({SL(), Slice(1, nz + 1), SL()}) - wdtn_t.index({SL(), Slice(0, nz), SL()}));
+    // WRF rdnw is NEGATIVE; module metrics are |rdnw| -> negate this odd-power use (:1171).
+    auto vert = -c.rdnw.view({1, nz, 1}) * (wdtn_t.index({SL(), Slice(1, nz + 1), SL()}) - wdtn_t.index({SL(), Slice(0, nz), SL()}));
     t_new = t_new - dts * vert;
-    // horizontal x theta-flux at INTERIOR mass points 1..nx-2 (boundary via halo = cross-cutting TODO,
-    // same deferral as advance_uv PGF): Fx(iu)=u(iu)*(t_1(iu)+t_1(iu-1)); 0.5*rdx*(Fx(i+1)-Fx(i)).  (:1168-1170)
-    auto Fx = s.u.index({SL(), SL(), Slice(1, nx)})
-              * (c.t_1.index({SL(), SL(), Slice(1, nx)}) + c.t_1.index({SL(), SL(), Slice(0, nx - 1)})); // {ny,nz,nx-1}
-    auto divx = 0.5f * c.rdx * (Fx.index({SL(), SL(), Slice(1, None)}) - Fx.index({SL(), SL(), Slice(None, -1)})); // {ny,nz,nx-2}
-    auto t_i = t_new.index({SL(), SL(), Slice(1, nx - 1)}) - dts * divx;
-    t_new.index_put_({SL(), SL(), Slice(1, nx - 1)}, t_i);
-    // horizontal y theta-flux (:1165-1167), symmetric: Fy(jv)=v(jv)*(t_1(jv)+t_1(jv-1)); 0.5*rdy*(Fy(j+1)-Fy(j)).
-    // divy is independent of t_new, so subtracting after divx is additive (WRF applies both to the same t).
-    auto Fy = s.v.index({Slice(1, ny), SL(), SL()})
-              * (c.t_1.index({Slice(1, ny), SL(), SL()}) + c.t_1.index({Slice(0, ny - 1), SL(), SL()})); // {ny-1,nz,nx}
-    auto divy = 0.5f * c.rdy * (Fy.index({Slice(1, None), SL(), SL()}) - Fy.index({Slice(None, -1), SL(), SL()})); // {ny-2,nz,nx}
-    auto t_iy = t_new.index({Slice(1, ny - 1), SL(), SL()}) - dts * divy;
-    t_new.index_put_({Slice(1, ny - 1), SL(), SL()}, t_iy);
+    // horizontal x theta-flux at ALL mass columns (WRF :1048-1049 i_start=its, i_end=ide-1; periodic
+    // ghosts t_1(-1)=t_1(nx-1) via PERIOD_BDY_EM_B): Fx(iu)=u(iu)*(t_1(iu)+t_1(iu-1)) at u-points
+    // 0..nx-1 with the wrapped t_1 pair; Fx at u-point nx equals Fx[0] (u seam alias + same wrap pair).
+    auto Fx = s.u.index({SL(), SL(), Slice(0, nx)})
+              * (c.t_1 + torch::roll(c.t_1, 1, 2));                          // {ny,nz,nx}
+    auto divx = 0.5f * c.rdx * (torch::roll(Fx, -1, 2) - Fx);                // Fx(i+1)-Fx(i), Fx(nx)=Fx(0)
+    t_new = t_new - dts * divx;
+    // horizontal y theta-flux at ALL mass rows (WRF :1050-1051 j_start=jts, j_end=jde-1 — no symmetric
+    // exclusion for theta): Fy(jv)=v(jv)*(t_1(jv)+t_1(jv-1)) at v-points 0..ny. Wall fluxes use the
+    // symmetric ghost t_1(-1)=t_1(1) at the bottom; the top ghost is multiplied by wall v (frozen ~0
+    // deviation), so its value is inert — use t_1(ny-1) doubled for definiteness (matches WRF, whose
+    // symmetric_ye BC never writes the t_1(jde) ghost either).
+    auto Fy_int = s.v.index({Slice(1, ny), SL(), SL()})
+                  * (c.t_1.index({Slice(1, ny), SL(), SL()}) + c.t_1.index({Slice(0, ny - 1), SL(), SL()})); // {ny-1,nz,nx}
+    auto Fy_bot = s.v.index({Slice(0, 1), SL(), SL()})
+                  * (c.t_1.index({Slice(0, 1), SL(), SL()}) + c.t_1.index({Slice(1, 2), SL(), SL()}));       // {1,nz,nx}
+    auto Fy_top = s.v.index({Slice(ny, ny + 1), SL(), SL()})
+                  * (2.0f * c.t_1.index({Slice(ny - 1, ny), SL(), SL()}));                                   // {1,nz,nx}
+    auto Fy = torch::cat({Fy_bot, Fy_int, Fy_top}, 0);                       // {ny+1,nz,nx} @ v-points 0..ny
+    auto divy = 0.5f * c.rdy * (Fy.index({Slice(1, ny + 1), SL(), SL()}) - Fy.index({Slice(0, ny), SL(), SL()})); // {ny,nz,nx}
+    t_new = t_new - dts * divy;
     o.t = t_new;
-    // TODO(Inc 5): horizontal boundary halo (shared cross-cutting concern with advance_uv PGF).
     return o;
 }
 
-// advance_w (module_small_step_em.F:1178-1469). em_b_wave: msf=1, cqw=1, flat terrain (w[0]=0).
-// Frozen rw_tend + t_2ave + off-centered vertical-PGF RHS + buoyancy/thermal term + Thomas solve
-// (Inc 2b factors) + ph update.
-// REMAINING before integration (Inc 5f): the phi-equation forcing added to rhs — ph_tend and the
-// ww*d(phi) vertical advection (:1318/:1336) — and Rayleigh damping (:1445). The dominant coupling
-// (vert-PGF + buoyancy + solve) is present; these are additive corrections.
+// advance_w (module_small_step_em.F:1178-1469). em_b_wave: msf=1, cqw=1, flat terrain (w[0]=0),
+// damp_opt=0 (the :1445 damp_opt==3 branch is inert and not ported).
+// Frozen rw_tend + t_2ave + ww*d(phi) advection + off-centered vertical-PGF RHS + buoyancy/thermal
+// term + Thomas solve (Inc 2b factors) + ph update.
 // Vertical indexing mirrors the validated calc_coef_w: full-level libtorch index kf; mass fields
 // c2a[kf]/rdnw[kf], mh[kf]=c1h[kf]*mut+c2h[kf]; rhs/ph on full levels (nz_w=nz+1).
 State advance_w(const State& s, const Const& c) {
+    TORCH_CHECK(c.ph_1.defined() && c.phb.defined(),
+                "advance_w: Const.ph_1/phb (save + base geopotential) must be wired for the "
+                "ww*d(phi) advection term (module_small_step_em.F:1340-1356)");
+    TORCH_CHECK(s.t_ave.defined(),
+                "advance_w: State.t_ave (advance_mu_t pre-update coupled theta) must be set — "
+                "it is the (1-epssm) old-time arm of t_2ave (module_small_step_em.F:1141/:1314)");
     State o = s;
     const int nz  = s.p.size(1);          // mass levels
     const int nzw = s.w.size(1);          // full levels = nz+1
@@ -181,13 +456,36 @@ State advance_w(const State& s, const Const& c) {
     auto mf_full_ts = c.c1f.view({1, nzw, 1}) * muts2 + c.c2f.view({1, nzw, 1});
     auto mh = c.c1h.view({1, nz, 1}) * mut2 + c.c2h.view({1, nz, 1});      // {ny,nz,nx}
     const float eps = c.epssm, g = c.g, dts = c.dts;
-    // rhs = ph + dts*(ph_tend + 0.5*g*(1-eps)*w) / mf_full   (:1318/:1368; ww*d(phi) advection = TODO, needs php)
-    torch::Tensor rhs = s.ph + dts * (c.ph_tend + (0.5f * g * (1.0f - eps)) * s.w) / mf_full;
+    // rhs pass 1 (:1318): rhs_acc = dts*(ph_tend + 0.5*g*(1-eps)*w) on full levels.
+    torch::Tensor rhs_acc = dts * (c.ph_tend + (0.5f * g * (1.0f - eps)) * s.w);
+    // ww*d(phi)/dnu advection (:1340-1356, phi_adv_z default ELSE branch): destaggered omega times
+    // the FULL reference geopotential gradient (save + base), restaggered with fnm/fnp.
+    //   wdwn(K) = 0.5*(ww(K)+ww(K-1))*rdnw(K-1)*(phf(K)-phf(K-1))       [1-based K=2..kde]
+    //   rhs(K) -= dts*(fnm(K)*wdwn(K+1) + fnp(K)*wdwn(K))               [1-based K=2..k_end]
+    {
+        auto phf  = c.ph_1 + c.phb;                                             // {ny,nz_w,nx}
+        auto dphf = phf.index({SL(), Slice(1, nz + 1), SL()}) - phf.index({SL(), Slice(0, nz), SL()}); // {ny,nz,nx}
+        auto ww_avg = 0.5f * (s.ww.index({SL(), Slice(1, nz + 1), SL()})
+                            + s.ww.index({SL(), Slice(0, nz), SL()}));          // {ny,nz,nx}
+        // wdwn_body[m] == wdwn at 0-based full level m+1 (m = 0..nz-1)
+        auto wdwn_body = ww_avg * (-c.rdnw.view({1, nz, 1})) * dphf;   // WRF rdnw<0; ours |rdnw|
+        // 0-based kf=1..nz-1: adv[kf] = dts*(fnm[kf]*wdwn0[kf+1] + fnp[kf]*wdwn0[kf])
+        auto wd_kp1 = wdwn_body.index({SL(), Slice(1, nz), SL()});              // wdwn0[kf+1]
+        auto wd_k   = wdwn_body.index({SL(), Slice(0, nz - 1), SL()});          // wdwn0[kf]
+        auto fnm_i = c.fnm.slice(0, 1, nz).view({1, nz - 1, 1});
+        auto fnp_i = c.fnp.slice(0, 1, nz).view({1, nz - 1, 1});
+        auto adv = dts * (fnm_i * wd_kp1 + fnp_i * wd_k);                       // {ny,nz-1,nx} @ kf=1..nz-1
+        auto zero_lvl = torch::zeros_like(rhs_acc.index({SL(), Slice(0, 1), SL()}));
+        rhs_acc = rhs_acc - torch::cat({zero_lvl, adv, zero_lvl}, 1);           // kf=0 and kf=kde untouched
+    }
+    // rhs pass 2 (:1366-1368): rhs = ph + msfty*rhs_acc/(c1f*mut+c2f)  (msfty=1 idealized).
+    torch::Tensor rhs = s.ph + rhs_acc / mf_full;
     rhs.index_put_({SL(), 0, SL()}, torch::zeros_like(rhs.index({SL(), 0, SL()})));
-    // t_2ave (:1314-1317): running time-avg of coupled theta, normalized by full mass*temperature.
-    // Uses advance_mu_t's muave/muts (per-substep, in State) + reference t_1, t0.
+    // t_2ave (:1314-1317): off-centered average of the CURRENT coupled theta'' (s.t) and the RAW
+    // pre-update coupled theta'' saved by advance_mu_t THIS substep (s.t_ave, WRF's shared t_2save
+    // array — NOT the previous substep's normalized output), then normalized by full mass*temperature.
     auto mh_ts = c.c1h.view({1, nz, 1}) * s.muts.unsqueeze(1) + c.c2h.view({1, nz, 1});   // c1h*muts+c2h
-    auto t2ave = 0.5f * ((1.0f + eps) * s.t + (1.0f - eps) * s.t_2ave);
+    auto t2ave = 0.5f * ((1.0f + eps) * s.t + (1.0f - eps) * s.t_ave);
     t2ave = (t2ave + c.c1h.view({1, nz, 1}) * s.muave.unsqueeze(1) * c.t0) / (mh_ts * (c.t0 + c.t_1));
     o.t_2ave = t2ave;
     // w RHS (write-once index_put_): interior full levels kf=1..kde-1, then top kf=kde.
@@ -195,7 +493,10 @@ State advance_w(const State& s, const Const& c) {
     for (int kf = 1; kf <= kde - 1; ++kf) {
         auto c2a_k  = c.c2a.index({SL(), kf,   SL()});
         auto c2a_km = c.c2a.index({SL(), kf-1, SL()});
-        auto rdnw_k = c.rdnw[kf];   auto rdnw_km = c.rdnw[kf-1];   auto rdn_k = c.rdn[kf];
+        // WRF-signed metrics (WRF rdn/rdnw < 0; module stores |.|): the up/lo * rdn products are
+        // sign-invariant (even), but the buoyancy's lone rdn (:1414) is odd — use WRF signs so
+        // every formula below is verbatim module_small_step_em.F.
+        auto rdnw_k = -c.rdnw[kf];  auto rdnw_km = -c.rdnw[kf-1];  auto rdn_k = -c.rdn[kf];
         auto mh_k   = mh.index({SL(), kf,   SL()});
         auto mh_km  = mh.index({SL(), kf-1, SL()});
         auto rhs_kp = rhs.index({SL(), kf+1, SL()}); auto rhs_k = rhs.index({SL(), kf, SL()}); auto rhs_km = rhs.index({SL(), kf-1, SL()});
@@ -215,7 +516,7 @@ State advance_w(const State& s, const Const& c) {
     {
         auto c2a_km = c.c2a.index({SL(), kde-1, SL()});
         auto mh_km  = mh.index({SL(), kde-1, SL()});
-        auto rdnw_km = c.rdnw[kde-1];
+        auto rdnw_km = -c.rdnw[kde-1];   // WRF-signed (see interior loop comment)
         auto rhs_k = rhs.index({SL(), kde, SL()}); auto rhs_km = rhs.index({SL(), kde-1, SL()});
         auto ph_k  = s.ph.index({SL(), kde, SL()}); auto ph_km = s.ph.index({SL(), kde-1, SL()});
         auto grad = (1.0f+eps)*(rhs_k-rhs_km) + (1.0f-eps)*(ph_k-ph_km);
@@ -259,7 +560,7 @@ State calc_p_rho(const State& s, const Const& c, int step) {
     auto c1h_mu = c.c1h.view({1, nz, 1}) * s.mu.unsqueeze(1);             // {ny,nz,nx} = c1h*mu'
     // al' from the vertical geopotential-perturbation gradient
     auto dph = s.ph.index({SL(), Slice(1, nz + 1), SL()}) - s.ph.index({SL(), Slice(0, nz), SL()}); // {ny,nz,nx}
-    auto al  = -1.0f / mh * (c.alt * c1h_mu + c.rdnw.view({1, nz, 1}) * dph);
+    auto al  = -1.0f / mh * (c.alt * c1h_mu + (-c.rdnw.view({1, nz, 1})) * dph);   // WRF rdnw<0; ours |rdnw|
     o.al = al;
     // p' from the temporally-linearized EOS (t' = coupled theta perturbation = s.t)
     auto p = c.c2a * (c.alt * (s.t - c1h_mu * c.t_1) / (mh * (c.t0 + c.t_1)) - al);
@@ -301,6 +602,60 @@ torch::Tensor mass_to_vpoint(const torch::Tensor& mu) {
     return torch::cat({bot, interior, top}, 0);   // {ny+1, nx}
 }
 
+CoefW calc_coef_w(const torch::Tensor& c2a, const torch::Tensor& mu_full,
+                  const torch::Tensor& cqw,
+                  const torch::Tensor& c1h, const torch::Tensor& c2h,
+                  const torch::Tensor& c1f, const torch::Tensor& c2f,
+                  const torch::Tensor& rdn, const torch::Tensor& rdnw,
+                  float dts, float g, float epssm, bool top_lid) {
+    const int ny = c2a.size(0), nz = c2a.size(1), nx = c2a.size(2), nzw = nz + 1;
+    auto opts = c2a.options();
+    auto a = torch::zeros({ny, nzw, nx}, opts);
+    auto b = torch::zeros({ny, nzw, nx}, opts);
+    auto c = torch::zeros({ny, nzw, nx}, opts);
+    auto alpha = torch::zeros({ny, nzw, nx}, opts);
+    auto gamma = torch::zeros({ny, nzw, nx}, opts);
+    const float cof = std::pow(0.5f * dts * g * (1.0f + epssm), 2.0f);
+
+    auto put = [&](torch::Tensor& T, int kf, const torch::Tensor& v) { T.index_put_({SL(), kf, SL()}, v); };
+    auto mh = [&](int k) { return c1h[k-1] * mu_full + c2h[k-1]; };  // WRF 1-based mass level
+    auto mf = [&](int k) { return c1f[k-1] * mu_full + c2f[k-1]; };  // WRF 1-based full level
+    auto c2a_k = [&](int k) { return c2a.index({SL(), k-1, SL()}); };
+    auto cqw_k = [&](int k) { return cqw.index({SL(), k-1, SL()}); };
+    const float lid_flag = top_lid ? 0.0f : 1.0f;
+
+    // a-band: a(2)=0 from the bottom boundary; interior kk=3..kde-1 and top kk=kde.
+    const int kde = nzw;
+    for (int kk = 3; kk <= kde - 1; ++kk) {
+        const int k = kk - 1;
+        put(a, kk - 1, -cqw_k(kk) * cof * rdn[kk - 1] * rdnw[kk - 2] * c2a_k(kk - 1) / (mh(k) * mf(k)));
+    }
+    put(a, kde - 1,
+        -2.0f * cof * rdnw[kde - 2] * rdnw[kde - 2] * c2a_k(kde - 1) * lid_flag
+        / (mh(kde - 1) * mf(kde - 1)));
+
+    // Thomas factors over full-level rows k=2..kde, stored 0-based at kf=k-1.
+    for (int k = 2; k <= kde - 1; ++k) {
+        auto bdiag = 1.0f + cqw_k(k) * cof * rdn[k - 1] * (
+            rdnw[k - 1] * c2a_k(k)     / (mh(k)     * mf(k)) +
+            rdnw[k - 2] * c2a_k(k - 1) / (mh(k - 1) * mf(k)));
+        auto cup = -cqw_k(k) * cof * rdn[k - 1] * rdnw[k - 1] * c2a_k(k) / (mh(k) * mf(k + 1));
+        auto al = 1.0f / (bdiag - a.index({SL(), k - 1, SL()}) * gamma.index({SL(), k - 2, SL()}));
+        put(b, k - 1, bdiag);
+        put(c, k - 1, cup);
+        put(alpha, k - 1, al);
+        put(gamma, k - 1, cup * al);
+    }
+    {
+        auto bdiag = 1.0f + 2.0f * cof * rdnw[kde - 2] * rdnw[kde - 2]
+                              * c2a_k(kde - 1) / (mh(kde - 1) * mf(kde));
+        auto al = 1.0f / (bdiag - a.index({SL(), kde - 1, SL()}) * gamma.index({SL(), kde - 2, SL()}));
+        put(b, kde - 1, bdiag);
+        put(alpha, kde - 1, al);
+    }
+    return {a, alpha, gamma};
+}
+
 State small_step_prep(const PrepInput& in, Saves& saves) {
     // coef(c1,c2,mass) = c1(k)*mass + c2(k), broadcast to {ny, nlev, nx*}. Couple each field as
     // (coef_updated * X_1 - coef_base * X_2) [/ or * msf], mirroring module_small_step_em.F:238-279.
@@ -327,6 +682,7 @@ State small_step_prep(const PrepInput& in, Saves& saves) {
     // diagnostics zero-init; caller runs calc_p_rho(step=0) to fill p/al/pm1 before the loop.
     s.p = torch::zeros_like(in.t_2); s.al = torch::zeros_like(in.t_2); s.pm1 = torch::zeros_like(in.t_2);
     s.t_2ave = torch::zeros_like(in.t_2); s.muave = torch::zeros_like(in.mu_2); s.mudf = torch::zeros_like(in.mu_2);
+    s.t_ave = s.t;   // advance_mu_t re-saves this every substep before advance_w consumes it (:1141)
     return s;
 }
 

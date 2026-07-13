@@ -69,7 +69,24 @@ The ONE implicit op: `calc_coef_w` (:570-652) tridiagonal `a/alpha/gamma` + `adv
   4. **VALIDATE:** dump dyn_em's w/ph/u/v/θ/mu after ONE substep from a matched acoustic state (`[PARITY substep]`),
      compare the libtorch assembled substep. THIS is what retires the buoyancy + horizontal (full-scheme) risk.
 - **Inc 6 — RK3 outer + frozen forcing:** full split-explicit step; validate a full timestep ≈ stock RK3.
-- **Inc 7 — AD:** JVP-vs-FD (cos≈1) through the forward; reverse-mode adjoint + Taylor test (checkpoint if needed).
+- **Inc 7 — AD contract (2026-07-12, per external review):** the object under test is the FULL-STEP map
+  Φ_dt : U_n → U_{n+1} as the production split driver computes it — 3 RK stages × N acoustic substeps,
+  INCLUDING the frozen slow-RHS evaluations, the state-dependent coefficient chain (make_thermo/diag_p_al →
+  calc_coef_w), Omega construction, prep/finish couplings, and the strip/pad + seam handling. Component-level
+  AD (the existing Acoustic_Substep_AD gates) does NOT discharge this contract. Required gates, all with
+  NONZERO arbitrary vectors (not the trivial zero terminal seed):
+  1. JVP: forward-mode (or FD-verified) J·v through Φ_dt; Taylor remainder slope sweep must show O(h²).
+  2. Adjoint consistency: ⟨J v, λ⟩ = ⟨v, Jᵀ λ⟩ dot-product test for random (v, λ) pairs, float64 reference.
+  3. Checkpointing: the forward must store the exact per-stage/per-substep states the adjoint replays
+     (contents and ORDER documented next to the implementation); replay(Φ) must reproduce the forward
+     bit-identically before its transpose is trusted.
+  4. HVP: distinguish exact double-backward HVP from Gauss–Newton HVP; test whichever the 4D-Var outer
+     loop consumes (symmetry check ⟨H v, w⟩ = ⟨v, H w⟩ for the exact one).
+  5. Long-horizon stock parity as an automated gate (pointwise/fieldwise comparison with tolerances and a
+     nonzero exit), not manual campaign evidence.
+  Until Inc 7 lands, split_explicit && (save_trajectory || obs_aware_4dvar) FAILS FAST at the runtime guard —
+  runAdjointReplay's current ImplicitOnly-transpose path is NOT the composite VJP and must not be reachable
+  from the split forward.
   Note the Inc-2b lesson: in-place recurrences break backward — keep the loop out-of-place (slabs+stack).
 
 ## Home & reuse

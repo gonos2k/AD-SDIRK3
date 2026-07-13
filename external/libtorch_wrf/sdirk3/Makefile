@@ -9,8 +9,15 @@ TORCH_LDFLAGS := -L$(LIBTORCH_ROOT)/lib -ltorch -ltorch_cpu -lc10
 # Compiler settings (use Homebrew clang to match WRF link)
 CXX = /opt/homebrew/opt/llvm/bin/clang++
 CXXFLAGS = -std=c++17 -O2 -Wall -Wno-unused-parameter -Wno-missing-field-initializers
-CXXFLAGS += $(TORCH_INCLUDES)
-CXXFLAGS += -DNDEBUG
+# Review round 3j: configure.wrf passes CXXFLAGS=... as a COMMAND-LINE variable,
+# which overrides plain += additions. Structural requirements (Torch includes,
+# ABI macro below) must survive that override => use `override`. The former
+# `CXXFLAGS += -DNDEBUG` line is deliberately DROPPED, not overridden: the
+# configured build has never actually carried -DNDEBUG (the command-line
+# override voided it), and silently enabling it now would strip assert()
+# semantics from the validated production library — a behavior change this
+# build-hygiene fix must not smuggle in.
+override CXXFLAGS += $(TORCH_INCLUDES)
 
 # =========================================================================
 # OPT Pass33+: ABI Macro Enforcement (explicit opt-in required)
@@ -38,7 +45,7 @@ ifndef LIBTORCH_ABI
     $(warning ========================================)
     LIBTORCH_ABI := 0
 endif
-CXXFLAGS += -D_GLIBCXX_USE_CXX11_ABI=$(LIBTORCH_ABI)
+override CXXFLAGS += -D_GLIBCXX_USE_CXX11_ABI=$(LIBTORCH_ABI)
 
 # Surface ABI value in build output for visibility
 $(info [SDIRK3] Building with _GLIBCXX_USE_CXX11_ABI=$(LIBTORCH_ABI))
@@ -105,11 +112,23 @@ UNIFIED_HEADER_DEPS = \
 
 $(UNIFIED_HEADER_DEPS): $(UNIFIED_HEADER)
 
+# Review round 3d: the raw map-factor safety predicate lives in an inline
+# header consumed by the impl. Without a dependency, a header-only fix would
+# leave the production archive on the OLD inline predicate while CTest passes
+# on the new one. Explicit dep covers builds before .d files exist; -MMD -MP
+# below keeps every future header edit tracked automatically.
+wrf_sdirk3_tile_unified_impl.o: wrf_sdirk3_msf_raw_stats.h wrf_sdirk3_geometry_contract.h
+
+# Compiler-generated header dependencies (-MMD writes %.d alongside %.o;
+# -MP adds phony targets so deleted headers don't break the build).
+DEPFILES = $(OBJECTS:.o=.d)
+-include $(DEPFILES)
+
 %.o: %.cpp
-	$(CXX) $(CXXFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 clean:
-	rm -f $(OBJECTS) $(LIB_NAME)
+	rm -f $(OBJECTS) $(DEPFILES) $(LIB_NAME)
 
 test: $(LIB_NAME)
 	@echo "Library built successfully: $(LIB_NAME)"
