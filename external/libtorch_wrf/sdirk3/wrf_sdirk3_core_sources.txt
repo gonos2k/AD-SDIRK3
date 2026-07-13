@@ -1,7 +1,7 @@
-# SDIRK3 production core — THE authoritative source manifest (full-repo review
-# PR 5). Both the production Makefile and CMake read this file; neither carries
-# its own copy of the list. One source per line; blank lines and standalone
-# '#' comments only (no inline comments). Paths are relative to this directory;
+# SDIRK3 production core - THE authoritative source manifest (full-repo review
+# PR 5). Both the production Makefile and CMake read this file. neither carries
+# its own copy of the list. One source per line. blank lines and standalone
+# '#' comments only (no inline comments). Paths are relative to this directory.
 # absolute paths, '..', and test/backup/legacy/archive directories are rejected
 # by both build systems' fail-close manifest validation.
 
