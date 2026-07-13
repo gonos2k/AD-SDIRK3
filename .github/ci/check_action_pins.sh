@@ -12,9 +12,12 @@ fail=0
 for wf in .github/workflows/*.yml .github/workflows/*.yaml; do
   [ -e "$wf" ] || continue
   echo "── $wf"
-  if grep -nE '^\s*uses:\s' "$wf" | grep -v 'uses: \./' | grep -vE '@[0-9a-f]{40}( |$|#)' | grep -q .; then
+  # NOTE: real workflow steps write `- uses:`; a previous `^\s*uses:` regex
+  # matched NOTHING anywhere and the rule silently checked nothing (found by
+  # canary PR: a tag-pinned @v6 sailed through). Dash-tolerant, POSIX classes.
+  if grep -nE '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]' "$wf" | grep -v 'uses: \./' | grep -vE '@[0-9a-f]{40}([[:space:]]|$|#)' | grep -q .; then
     echo "FAIL: external action not pinned to a 40-hex commit SHA:"
-    grep -nE '^\s*uses:\s' "$wf" | grep -v 'uses: \./' | grep -vE '@[0-9a-f]{40}( |$|#)'
+    grep -nE '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]' "$wf" | grep -v 'uses: \./' | grep -vE '@[0-9a-f]{40}([[:space:]]|$|#)'
     fail=1
   fi
   if grep -qn 'pull_request_target' "$wf"; then
