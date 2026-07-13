@@ -35,20 +35,24 @@ except ImportError:  # fail CLOSED, never skip
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
-# GitHub-hosted runner labels (ubuntu-latest, windows-2025, macos-15-xlarge,
-# ubuntu-24.04-arm, ubuntu-slim, ...). Anything NOT matching is treated as a
-# persistent-runner target: runner labels are CASE-INSENSITIVE ('Self-Hosted'
-# routes exactly like 'self-hosted'), and a custom label alone ('sdirk3-wrf')
-# targets the persistent runner without the self-hosted label ever appearing —
-# so a blocklist on the literal string 'self-hosted' is bypassable two ways.
-# Whitelist the hosted families and fail closed on everything else, including
-# expressions (${{ ... }}) and runner-group mappings we cannot resolve
-# statically.
-HOSTED_LABEL_RE = re.compile(r"^(ubuntu|windows|macos)-[a-z0-9.\-]+$", re.IGNORECASE)
+# EXACT allowlist of the GitHub-hosted labels this repo's workflows may use.
+# Anything else is treated as a persistent-runner target, fail closed:
+#  - runner labels are CASE-INSENSITIVE ('Self-Hosted' routes like
+#    'self-hosted'), so string blocklists are case-bypassable;
+#  - a custom label alone ('sdirk3-wrf') targets a persistent runner without
+#    the word self-hosted ever appearing;
+#  - custom labels are ARBITRARY strings, so a family pattern (ubuntu-*) is
+#    bypassable by a prefixed custom label ('ubuntu-sdirk3-wrf') — hence
+#    exact matching against a minimal set, extended only by a reviewed diff.
+# Residual risk no static check can resolve: registering a self-hosted runner
+# whose label shadows an allowlisted name ('ubuntu-24.04'). That is runner-
+# registration governance (distinct labels / runner groups), not lintable
+# from the workflow text.
+HOSTED_LABELS = {"ubuntu-24.04"}
 
 
 def nonhosted_runner_refs(doc):
-    """Every runs-on reference not recognizably GitHub-hosted (fail closed)."""
+    """Every runs-on reference not exactly an allowlisted hosted label."""
     runs_on = []
     collect(doc, "runs-on", runs_on)
     bad = []
@@ -58,7 +62,7 @@ def nonhosted_runner_refs(doc):
             continue
         for e in (r if isinstance(r, list) else [r]):
             s = str(e).strip()
-            if "${{" in s or not HOSTED_LABEL_RE.match(s):
+            if "${{" in s or s.lower() not in HOSTED_LABELS:
                 bad.append(s)
     return bad
 
@@ -166,6 +170,10 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: ./ok
+  e:
+    runs-on: ubuntu-24.04-forged
+    steps:
+      - uses: ./ok
 """
 GOOD_FIXTURE = """
 name: good
@@ -197,6 +205,7 @@ def self_test():
         "Self-Hosted",                     # case-changed label must still be caught
         "sdirk3-custom-only",              # custom label alone targets the runner
         "matrix.runner",                   # expression runs-on: fail closed
+        "ubuntu-24.04-forged",             # hosted-PREFIXED custom label must fire
         "must not trigger on pull_request_target",
     ]
     missing = [e for e in expected_hits if not any(e in f for f in bad)]
