@@ -462,6 +462,16 @@ else
   endif
 
   /bin/rm -f $ZAP >& /dev/null
+  # RETIRED-ARTIFACT PURGE (PR 1, dormant SDIRK3 Fortran bridge removal): a
+  # dirty incremental checkout can still carry the retired module's .o/.mod
+  # and its member inside main/libwrflib.a (WRF's ar updates accumulate — the
+  # member does NOT disappear just because the source and Makefile entry did).
+  # Remove them BEFORE make so no link can resurrect the dormant bridge; the
+  # post-build contract below re-verifies and fail-closes if removal failed.
+  find dyn_em -maxdepth 1 \( -iname 'module_implicit_sdirk3_zerocopy.o' -o -iname 'module_implicit_sdirk3_zerocopy.mod' \) -delete >& /dev/null
+  if ( -e main/libwrflib.a ) then
+    ar d main/libwrflib.a module_implicit_sdirk3_zerocopy.o >& /dev/null
+  endif
   make $arglist A2DCASE="$A2DCASE" WRF_SRC_ROOT_DIR="$WRF_SRC_ROOT_DIR"
   set make_status = $status
 
@@ -526,6 +536,15 @@ else
     set lib_newer = `find $sdirk3_lib -newer main/wrf.exe`
     if ( "$lib_newer" != "" ) then
       echo "compile: FAILED (nonzero contract) - $sdirk3_lib newer than main/wrf.exe (relink missed)"
+      /bin/rm -f main/wrf.exe
+      exit 1
+    endif
+    # RETIRED-MEMBER CONTRACT (PR 1): the dormant SDIRK3 Fortran bridge was
+    # deleted; its object must never survive in the final archive. The purge
+    # above removes it pre-make — if it is STILL here, something re-created it
+    # (a resurrected manifest, a stray build path): never report success.
+    if ( `ar t main/libwrflib.a |& grep -Fxc 'module_implicit_sdirk3_zerocopy.o'` != 0 ) then
+      echo "compile: FAILED (nonzero contract) - retired SDIRK3 Fortran bridge member remains in main/libwrflib.a"
       /bin/rm -f main/wrf.exe
       exit 1
     endif
