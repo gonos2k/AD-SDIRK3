@@ -157,6 +157,30 @@ set_target_properties(wrf_sdirk3_lib PROPERTIES OUTPUT_NAME wrf_sdirk3_libtorch)
 add_library(wrf_sdirk3::core ALIAS wrf_sdirk3_lib)
 install(TARGETS wrf_sdirk3_lib DESTINATION lib)
 
+# Public-header install preserved from the pre-PR5 CMake (Codex: the stub
+# removal must not REGRESS the install contract; a full header-install
+# redesign is explicitly out of PR 5 scope). Same existence-checked list,
+# same include/wrf_sdirk3 destination as before.
+set(WRF_SDIRK3_INSTALL_HEADER_CANDIDATES
+    wrf_sdirk3_state_vector.h
+    wrf_sdirk3_zero_copy_interface.h
+    wrf_sdirk3_gmres_fixed.h
+    wrf_sdirk3_newton_krylov_fixed.h
+    wrf_sdirk3_jvp_router.h
+    wrf_sdirk3_vertical_preconditioner.h
+    wrf_sdirk3_jacobian_transpose.h
+    wrf_sdirk3_solver.h
+    wrf_sdirk3_test_suite.h)
+set(WRF_SDIRK3_INSTALL_HEADERS "")
+foreach(_hdr IN LISTS WRF_SDIRK3_INSTALL_HEADER_CANDIDATES)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${_hdr}")
+        list(APPEND WRF_SDIRK3_INSTALL_HEADERS "${_hdr}")
+    endif()
+endforeach()
+if(WRF_SDIRK3_INSTALL_HEADERS)
+    install(FILES ${WRF_SDIRK3_INSTALL_HEADERS} DESTINATION include/wrf_sdirk3)
+endif()
+
 # Optional legacy demo (NOT part of the core manifest).
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/wrf_sdirk3_main.cpp")
     add_executable(wrf_sdirk3 wrf_sdirk3_main.cpp)
