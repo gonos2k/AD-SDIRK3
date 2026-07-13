@@ -1,0 +1,11 @@
+name: canary prefix
+on:
+  pull_request:
+    branches: [never-matches]
+permissions:
+  contents: read
+jobs:
+  x:
+    runs-on: ubuntu-sdirk3-wrf
+    steps:
+      - uses: ./local
