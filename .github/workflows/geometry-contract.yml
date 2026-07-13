@@ -77,20 +77,23 @@ jobs:
       - uses: actions/checkout@v4
 
       # FAIL-CLOSED preflight: an unprovisioned runner must go RED, never green.
+      # SINGLE source of truth for libtorch is the configure option — the
+      # arch/option{N} it selects sets BOTH the compile -I and the link -L/rpath
+      # for torch in the generated configure.wrf. A separate LIBTORCH_ROOT was
+      # removed: it only redirected the compile includes, not the final link, so
+      # the "validated" path was not the sole consumed path. The ACTUAL consumed
+      # libtorch is verified post-build from the linked binary (otool) below.
       # Required env (set on the self-hosted runner):
       #   WRF_SDIRK3_CONFIGURE_OPTION = machine-specific configure choice (e.g. 37)
-      #   WRF_SDIRK3_LIBTORCH_ROOT    = path to the libtorch install
       - name: preflight (fail-closed if toolchain absent)
         run: |
           set -euo pipefail
           missing=0
           command -v gfortran >/dev/null 2>&1 || { echo "missing: gfortran"; missing=1; }
           command -v mpif90   >/dev/null 2>&1 || { echo "missing: mpif90"; missing=1; }
+          command -v otool    >/dev/null 2>&1 || { echo "missing: otool (link verifier)"; missing=1; }
           if [ -z "${WRF_SDIRK3_CONFIGURE_OPTION:-}" ]; then
             echo "missing: WRF_SDIRK3_CONFIGURE_OPTION (machine-specific configure choice)"; missing=1
-          fi
-          if [ -z "${WRF_SDIRK3_LIBTORCH_ROOT:-}" ] || [ ! -d "${WRF_SDIRK3_LIBTORCH_ROOT:-/nonexistent}" ]; then
-            echo "missing: WRF_SDIRK3_LIBTORCH_ROOT is not a directory"; missing=1
           fi
           if [ "$missing" -ne 0 ]; then
             echo "FAIL: runtime fault-injection environment not provisioned on this runner."
@@ -102,21 +105,26 @@ jobs:
       - name: build WRF em_b_wave
         run: |
           set -euo pipefail
-          # Consume the validated libtorch path (else the preflight check is a
-          # false assurance): the sdirk3 sub-Makefile derives TORCH_INCLUDES /
-          # TORCH_LDFLAGS from LIBTORCH_ROOT (`?=`, so env wins) and appends them
-          # via `override CXXFLAGS +=`, so this genuinely redirects the compile
-          # to the configured install. The self-hosted runner's configure option
-          # must reference the SAME libtorch — a mismatch fails the build/link or
-          # crashes the run below (fail-closed either way), never a silent pass.
-          export LIBTORCH_ROOT="${WRF_SDIRK3_LIBTORCH_ROOT}"
-          echo "using LIBTORCH_ROOT=$LIBTORCH_ROOT"
-          test -e "$LIBTORCH_ROOT/include/torch/torch.h" || {
-            echo "FAIL: $LIBTORCH_ROOT is not a libtorch install (no include/torch/torch.h)"; exit 1; }
           printf '%s\n1\n' "${WRF_SDIRK3_CONFIGURE_OPTION}" | ./configure
           ./compile -j 4 em_b_wave
           test -x main/wrf.exe
           test -x main/ideal.exe
+
+      # Verify the SOLE consumed libtorch: the built binary must actually link a
+      # libtorch library, and its resolved rpath is surfaced. This checks what
+      # the binary CONSUMES (not a separately-declared path that might be
+      # ignored) — a build that somehow produced a torch-less wrf.exe fails RED.
+      - name: verify linked libtorch
+        run: |
+          set -euo pipefail
+          echo "== otool -L main/wrf.exe (torch libs) =="
+          if ! otool -L main/wrf.exe | grep -Ei 'libtorch|libc10'; then
+            echo "FAIL: main/wrf.exe does not link any libtorch library"
+            exit 1
+          fi
+          echo "== rpaths referencing torch =="
+          otool -l main/wrf.exe | awk '/LC_RPATH/{f=1} f&&/path /{print $2; f=0}' \
+            | grep -i torch || echo "(no torch rpath entry; libtorch may be resolved by absolute install-name)"
 
       - name: fault-injection negatives must fire
         working-directory: test/em_b_wave
