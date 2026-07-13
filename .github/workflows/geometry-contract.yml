@@ -60,28 +60,97 @@ jobs:
             test_msf_raw_stats.cpp -o "$work/test_msf_raw_stats"
           "$work/test_msf_raw_stats"
 
-  # Opt-in ONLY: the full macOS + libtorch WRF build and the runtime
-  # geometry/stagger fault-injection negatives. Never runs on PR automatically
-  # (environment cost); dispatch manually or wire a self-hosted runner. Left as
-  # an explicit, documented job so the coverage gap is visible, not implied.
+  # Opt-in ONLY: the full WRF + libtorch build and the runtime geometry/stagger
+  # fault-injection negatives. It genuinely REQUIRES the WRF toolchain
+  # (gfortran/mpif90/netcdf), a libtorch install, and the machine-specific
+  # configure option — so it targets a SELF-HOSTED runner carrying the
+  # 'sdirk3-wrf' label. On infrastructure without that runner the job stays
+  # pending (never a green check); on it, the job does REAL work and fails RED
+  # if the environment is incomplete or any negative does not fire. It never
+  # exits 0 without having built WRF and verified the injections — the previous
+  # echo-only placeholder that implicitly succeeded is removed.
   wrf-runtime-fault-injection:
-    name: WRF runtime fault-injection (opt-in)
+    name: WRF runtime fault-injection (opt-in, self-hosted)
     if: ${{ github.event_name == 'workflow_dispatch' }}
-    runs-on: macos-14
+    runs-on: [self-hosted, sdirk3-wrf]
     steps:
       - uses: actions/checkout@v4
-      - name: status
+
+      # FAIL-CLOSED preflight: an unprovisioned runner must go RED, never green.
+      # Required env (set on the self-hosted runner):
+      #   WRF_SDIRK3_CONFIGURE_OPTION = machine-specific configure choice (e.g. 37)
+      #   WRF_SDIRK3_LIBTORCH_ROOT    = path to the libtorch install
+      - name: preflight (fail-closed if toolchain absent)
         run: |
-          echo "This job builds WRF em_b_wave and runs the geometry/stagger"
-          echo "fault-injection negatives:"
-          echo "  WRF_SDIRK3_TEST_STAGGER_MISMATCH_AT=2  (per-call mismatch on call 2)"
-          echo "  WRF_SDIRK3_TEST_INVALID_STAGGER_INIT=1 (init-time invalid stagger)"
-          echo "Expected: each aborts nonzero AND emits its fault-injection marker"
-          echo "AND the geometry rejection marker (per-call geometry validation failed"
-          echo "/ setStaggeredDimensions rejected)."
-          echo ""
-          echo "It requires a libtorch install + the printf '37\\n1\\n' | ./configure"
-          echo "toolchain and is intentionally left as a manual/self-hosted step."
-          echo "UNVERIFIED on runners without that environment — not reported as pass."
-          # Deliberately no 'exit 0' masking of an unimplemented build here:
-          # this job is a documented placeholder gated to workflow_dispatch.
+          set -euo pipefail
+          missing=0
+          command -v gfortran >/dev/null 2>&1 || { echo "missing: gfortran"; missing=1; }
+          command -v mpif90   >/dev/null 2>&1 || { echo "missing: mpif90"; missing=1; }
+          if [ -z "${WRF_SDIRK3_CONFIGURE_OPTION:-}" ]; then
+            echo "missing: WRF_SDIRK3_CONFIGURE_OPTION (machine-specific configure choice)"; missing=1
+          fi
+          if [ -z "${WRF_SDIRK3_LIBTORCH_ROOT:-}" ] || [ ! -d "${WRF_SDIRK3_LIBTORCH_ROOT:-/nonexistent}" ]; then
+            echo "missing: WRF_SDIRK3_LIBTORCH_ROOT is not a directory"; missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo "FAIL: runtime fault-injection environment not provisioned on this runner."
+            echo "This job must not report success without building WRF and running the"
+            echo "negatives. Provision a self-hosted 'sdirk3-wrf' runner or do not dispatch it."
+            exit 1
+          fi
+
+      - name: build WRF em_b_wave
+        run: |
+          set -euo pipefail
+          printf '%s\n1\n' "${WRF_SDIRK3_CONFIGURE_OPTION}" | ./configure
+          ./compile -j 4 em_b_wave
+          test -x main/wrf.exe
+          test -x main/ideal.exe
+
+      - name: fault-injection negatives must fire
+        working-directory: test/em_b_wave
+        run: |
+          set -uo pipefail
+          # Shorten the run to 2 steps (ephemeral CI checkout only; the tracked
+          # namelist is untouched) so the positive control below is seconds, not
+          # a 5-day integration. Portable edit (no BSD/GNU sed divergence).
+          python3 - <<'PY'
+          import re, pathlib
+          p = pathlib.Path("namelist.input"); s = p.read_text()
+          s = re.sub(r'(run_days\s*=\s*)\d+', r'\g<1>0', s, count=1)
+          s = re.sub(r'(run_seconds\s*=\s*)\d+', r'\g<1>1200', s, count=1)
+          p.write_text(s)
+          PY
+          ./ideal.exe >/dev/null 2>&1 || { echo "FAIL: ideal.exe"; exit 1; }
+
+          # Each negative MUST: exit nonzero AND emit its geometry-rejection marker.
+          check_reject() {
+            label="$1"; marker="$2"; shift 2
+            rm -f rsl.error.0000
+            env WRF_SDIRK3_SPLIT_EXPLICIT=1 "$@" ./wrf.exe >/dev/null 2>&1
+            rc=$?
+            if [ "$rc" -eq 0 ]; then
+              echo "FAIL [$label]: wrf.exe exited 0; expected nonzero abort"; return 1
+            fi
+            if ! grep -q "$marker" rsl.error.0000 2>/dev/null; then
+              echo "FAIL [$label]: rejection marker not found: $marker"; return 1
+            fi
+            echo "PASS [$label]: nonzero abort + marker '$marker'"
+          }
+
+          rc=0
+          check_reject "stagger-mismatch-at-2" "per-call geometry validation failed" \
+            WRF_SDIRK3_TEST_STAGGER_MISMATCH_AT=2 || rc=1
+          check_reject "invalid-stagger-init" "setStaggeredDimensions rejected" \
+            WRF_SDIRK3_TEST_INVALID_STAGGER_INIT=1 || rc=1
+
+          # A positive control: without injection the split run must SUCCEED, so a
+          # blanket "everything aborts" cannot masquerade as the negatives passing.
+          rm -f rsl.error.0000
+          env WRF_SDIRK3_SPLIT_EXPLICIT=1 ./wrf.exe >/dev/null 2>&1
+          if ! grep -q "SUCCESS COMPLETE" rsl.error.0000 2>/dev/null; then
+            echo "FAIL [positive-control]: baseline split run did not reach SUCCESS COMPLETE"; rc=1
+          else
+            echo "PASS [positive-control]: baseline split run SUCCESS COMPLETE"
+          fi
+          exit $rc
