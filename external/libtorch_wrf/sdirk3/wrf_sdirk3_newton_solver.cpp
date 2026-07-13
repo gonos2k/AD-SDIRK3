@@ -1380,6 +1380,1142 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             gmres_msg, r_true_out};
 }
 
+// ============================================================================
+// FGMRES (flexible GMRES) — full-repo review P1-1 remediation.
+//
+// WHY THIS EXISTS: the production preconditioner wrapper is NOT a fixed linear
+// operator within one solve — the amplification ratio guard can LOCK it to
+// identity mid-solve, warn_only mode selects per-input, and defect refinement
+// can toggle after its first call. Standard right-preconditioned GMRES applies
+// M^{-1} per Arnoldi vector but reconstructs corrections as M^{-1}(sum y_i V_i),
+// which equals sum y_i M_i^{-1} V_i ONLY for a fixed linear M. With a variable
+// M_j the Hessenberg problem Arnoldi solved and the correction actually applied
+// describe different operators. FGMRES stores Z_j = M_j^{-1} V_j as actually
+// used and reconstructs from Z, restoring A Z_j = sum_i H_ij V_i exactly.
+//
+// This is a minimal-change clone of solve_gmres above (deliberately NOT a
+// shared template yet — correctness first, per the review directive), with
+// exactly these deltas: Z basis stored per Arnoldi step; trial and final
+// corrections reconstructed from Z (ZERO M_inv calls outside the Arnoldi
+// loop); Z memory telemetry; per-cycle Z lifetime. Routing: the production
+// forward Newton-Krylov call uses solve_fgmres whenever M_inv is non-null;
+// unpreconditioned and adjoint(operator-folded) paths keep solve_gmres.
+// variable_pc_event remains TELEMETRY ONLY — with FGMRES a preconditioner
+// change no longer breaks the Krylov math, so no basis is discarded.
+// ============================================================================
+WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
+    const std::function<torch::Tensor(const torch::Tensor&)>& A,
+    const torch::Tensor& b,
+    const torch::Tensor& x0,
+    int stage_id,
+    float ru_share_hint,
+    int restart,
+    float tol,
+    int max_iter,
+    const std::function<torch::Tensor(const torch::Tensor&)>& M_inv,
+    const StateLayout* layout,
+    const torch::Tensor* halo_mask,
+    bool periodic_x,
+    bool periodic_y) {
+    
+    torch::Tensor x = x0.clone();
+
+    // P0 FIX: Compute initial residual
+    // If x0 is zero, skip A(x0) computation since J*0 = 0
+    // This prevents calling JVP with v=0 which triggers the guard
+    // FIX (2025-12-05): Gate NoGradGuard on !use_autograd to preserve graph in AD mode
+    torch::Tensor r_true;  // Unpreconditioned residual for convergence check
+    {
+        // Use guarded_item for the norm check to support autograd mode
+        float x_norm = guarded_item<float>(x.norm());
+        if (x_norm < 1e-14f) {
+            // x0 is zero, so r = b - J*0 = b
+            r_true = b.clone();
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 3 && !wrf::sdirk3::g_sdirk3_config.use_autograd) {
+                std::cerr << "[GMRES DEBUG] x0 is zero (norm=" << x_norm << "), skipping A(x0) computation" << std::endl;
+                std::cerr << "  Initial residual r = b (no JVP call)" << std::endl;
+            }
+        } else {
+            // x0 is non-zero, compute r = b - A(x)
+            // In autograd mode, A(x) preserves graph; in FD mode, it doesn't matter
+            r_true = b - A(x);
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 3 && !wrf::sdirk3::g_sdirk3_config.use_autograd) {
+                std::cerr << "[GMRES DEBUG] x0 is non-zero (norm=" << x_norm << "), computed r = b - A(x0)" << std::endl;
+            }
+        }
+    }
+
+    // RIGHT-PRECONDITIONING: Use unpreconditioned residual for Arnoldi basis
+    // Left-preconditioning minimizes ||M^{-1}(b-Ax)|| which is wrong when M changes norms dramatically.
+    // Right-preconditioning minimizes ||b - A*M^{-1}*z|| = ||b - Ax|| (the TRUE residual).
+    // FIX 2026-01-27: Changed from left to right preconditioning.
+    torch::Tensor r_precond = r_true.clone();
+    // NOTE: Do NOT apply M_inv here for right-preconditioning.
+    // The initial residual r stays unpreconditioned.
+
+    // CRITICAL FIX 2026-01-28: Zero halo regions in residual to prevent boundary artifacts
+    // This ensures GMRES vectors don't contain halo contributions.
+    // Uses helper function that handles partial periodicity correctly:
+    // - For em_b_wave (periodic_x=true, periodic_y=false), only y-halos are zeroed.
+    // v20.14r21: periodic_x/y now come from function parameters (instance state),
+    // not global config. Callers pass options_.periodic_x/y.
+    int halo_width = wrf::sdirk3::g_sdirk3_config.halo_width;
+    zero_halo_regions(r_precond, halo_width, periodic_x, periodic_y);
+
+    // CRITICAL FIX 2026-01-28: Also zero halos in r_true for CONSISTENT norm calculation!
+    // Previous bug: Convergence used r_true with halos, GMRES used halo-zeroed r_precond.
+    // This caused GMRES to fail eliminating residual components that were only in halos.
+    auto r_true_inner = r_true.clone();
+    zero_halo_regions(r_true_inner, halo_width, periodic_x, periodic_y);
+
+    // FIX 2026-01-29: Compute ||b|| using halo-zeroed b for consistency with r_true_inner.
+    // Previously bnorm used the full b (including halos), making the relative error
+    // artificially smaller and causing GMRES to stop too early.
+    auto b_inner = b.clone();
+    zero_halo_regions(b_inner, halo_width, periodic_x, periodic_y);
+
+    // v20.14 r50: GMRES block-scaling (left-preconditioning with D⁻¹).
+    // D[block] = ||r0[block]||₂. After scaling, each block contributes exactly 1 to ||D⁻¹r0||².
+    // This prevents phi/theta O(10⁴) from masking u O(1-10) in GMRES's L2 minimization.
+    // GMRES now solves: min ||D⁻¹(b - AM⁻¹z)|| — same solution x, different search path.
+    torch::Tensor D_inv;  // per-element scaling vector, empty if disabled
+    bool block_scaled = false;
+    // v20.14 r50-fix: Block-scaling requires AUTOGRAD JVP. With FD JVP, D_inv amplifies
+    // directional noise (D_inv can reach ~800 for small-residual blocks like w/mu),
+    // causing ||x||→0. Only enable when forward-mode AD provides exact JVP.
+    if (wrf::sdirk3::g_sdirk3_config.gmres_block_scale &&
+        wrf::sdirk3::g_sdirk3_config.use_autograd &&
+        layout && layout->is_valid() && layout->total_size == r_true_inner.numel()) {
+        torch::NoGradGuard no_grad;
+        D_inv = torch::ones_like(r_true_inner);
+        auto r_cpu = r_true_inner.detach().to(torch::kCPU).contiguous();
+        bool all_blocks_ok = true;
+        for (const auto& blk : layout->blocks) {
+            if (blk.start + blk.size > r_cpu.numel()) { all_blocks_ok = false; break; }
+            float blk_norm = r_cpu.slice(0, blk.start, blk.start + blk.size)
+                .norm().item<float>();
+            if (blk_norm < 1e-20f) {
+                // Block residual is essentially zero — don't scale (leave D_inv = 1)
+                continue;
+            }
+            float scale = 1.0f / blk_norm;
+            D_inv.slice(0, blk.start, blk.start + blk.size).fill_(scale);
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                std::cerr << "[GMRES BLOCK-SCALE] " << blk.name
+                          << ": ||r0||=" << blk_norm << " → D_inv=" << scale << "\n";
+            }
+        }
+        if (all_blocks_ok) {
+            block_scaled = true;
+            // Scale the initial residual and RHS
+            r_precond = r_precond * D_inv;
+            b_inner = b_inner * D_inv;
+        }
+    }
+
+    // v20.14 r50: Save unscaled bnorm for final return to Newton (trust-region needs it).
+    // bnorm_safe uses D⁻¹-scaled b when block_scaled=true (for GMRES internal convergence).
+    // bnorm_unscaled always uses the original b (for final rel_error report).
+    auto bnorm_unscaled_tensor = safe_tensor_norm(b_inner);  // before scaling!
+    if (block_scaled) {
+        // b_inner was already scaled above — recompute unscaled from original b
+        auto b_orig = b.clone();
+        zero_halo_regions(b_orig, halo_width, periodic_x, periodic_y);
+        bnorm_unscaled_tensor = safe_tensor_norm(b_orig);
+    }
+    auto bnorm_unscaled = torch::clamp(bnorm_unscaled_tensor, BNORM_MIN_THRESHOLD);
+
+    auto bnorm_tensor = safe_tensor_norm(b_inner);
+    auto bnorm_safe = torch::clamp(bnorm_tensor, BNORM_MIN_THRESHOLD);
+
+    auto error_tensor = block_scaled
+        ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
+        : safe_tensor_norm(r_true_inner) / bnorm_safe;
+
+    // NUMERICAL STABILITY: Detect NaN in residual error immediately
+    if (guarded_item<bool>(torch::isnan(error_tensor).any())) {
+        std::cerr << "[GMRES ERROR] NaN detected in initial error_tensor" << std::endl;
+        std::cerr << "  ||r_true|| = " << guarded_item<float>(r_true.norm()) << std::endl;
+        std::cerr << "  ||b|| = " << guarded_item<float>(bnorm_safe) << std::endl;
+        throw std::runtime_error("GMRES initial residual error contains NaN");
+    }
+
+    auto converged = error_tensor < tol;
+    // GRADIENT FIX: Use guarded_item for control flow check
+    if (guarded_item<bool>(converged.all())) {
+        float error_val = guarded_item<float>(error_tensor);
+        float r_true_norm = guarded_item<float>(safe_tensor_norm(r_true_inner));
+        std::cerr << "[GMRES] Initial residual already converged: error = " << error_val << " < tol = " << tol << std::endl;
+        // v20.14r24: final_residual = ||r_true_inner|| (absolute), rel_error = error_val (relative).
+        // r_true = RAW (not halo-zeroed), consistent with normal exit (line ~1127) and NaN paths.
+        // Callers must apply halo zeroing to r_true before per-block analysis.
+        return {x, true, 0, r_true_norm, error_val, "Initial residual already converged",
+                r_true.detach().clone()};
+    }
+    
+    // GMRES FAILURE DETECTION: Track NaN/Inf occurrences in apply_jacobian
+    int nan_failure_count = 0;
+    const int max_nan_failures = wrf::sdirk3::g_sdirk3_config.nk_gmres_max_nan_retries;
+
+    // FIX (2025-12-04): Track actual iterations for diagnostics
+    int actual_restarts = 0;
+    int total_arnoldi_iters = 0;
+    bool terminated_by_restart_stag_threshold = false;
+    bool terminated_by_arnoldi_stagnation = false;
+    bool terminated_by_internal_convergence = false;
+
+    for (int iter = 0; iter < max_iter; ++iter) {
+        actual_restarts = iter + 1;  // Track current restart number
+        // TIMING INSTRUMENTATION: Start GMRES iteration timer
+        auto gmres_iter_start = std::chrono::high_resolution_clock::now();
+        const bool log_gmres_v0_debug = (wrf::sdirk3::g_sdirk3_config.debug_level >= 3 &&
+                                         iter == 0 &&
+                                         !wrf::sdirk3::g_sdirk3_config.use_autograd);
+
+        // PERFORMANCE FIX: Move GMRES V0 diagnostics to debug_level >= 3 (HOT PATH)
+        // This was causing 2 .item() syncs per GMRES call at debug_level >= 1
+        // FIX (2025-12-05): Also gate on !use_autograd to preserve graph in AD mode
+        if (log_gmres_v0_debug) {
+            torch::NoGradGuard no_grad;  // Diagnostic logging only - safe in FD mode
+            // FIX 2025-12-27: Use guarded_item to ensure CPU transfer before .item()
+            float r_true_norm = guarded_item<float>(r_true.norm());
+            float r_precond_norm = guarded_item<float>(r_precond.norm());
+            std::cerr << "[GMRES V0 DEBUG] Initial vector generation:" << std::endl;
+            std::cerr << "  Unpreconditioned residual ||r_true||: " << r_true_norm << std::endl;
+            std::cerr << "  Preconditioned residual ||r_precond||: " << r_precond_norm << std::endl;
+            std::cerr << "  Preconditioner effect: " << (r_true_norm > 1e-12 ? r_precond_norm / r_true_norm : 0.0f) << "x" << std::endl;
+            std::cerr << "  r_precond shape: [" << r_precond.sizes() << "]" << std::endl;
+            std::cerr << "  r_precond.dim(): " << r_precond.dim() << std::endl;
+            std::cerr << "  r_precond is_contiguous: " << r_precond.is_contiguous() << std::endl;
+
+            // Check if r was affected by halo zeroing
+            if (r_precond.dim() == 3) {
+                std::cerr << "  r_precond is 3D tensor - halo zeroing may have been applied" << std::endl;
+            } else if (r_precond.dim() == 1) {
+                std::cerr << "  r_precond is 1D flattened tensor - halo zeroing should NOT apply" << std::endl;
+            }
+
+            if (r_precond_norm < 1e-12f) {
+                std::cerr << "  ERROR: Preconditioned residual has near-zero norm!" << std::endl;
+                std::cerr << "  This will cause v_0 = r_precond / r_precond.norm() to be zero or NaN" << std::endl;
+            }
+        }
+
+        // Arnoldi process (use preconditioned residual)
+        std::vector<torch::Tensor> V;
+        // FGMRES: store the PRECONDITIONED basis Z[j] = M_j^{-1} V[j] exactly as
+        // applied when building each Arnoldi column. The whole point of FGMRES is
+        // that trial/final corrections are reconstructed from Z — NEVER by
+        // re-applying M_inv to an aggregate of V — so a preconditioner that varies
+        // across Arnoldi steps (ratio-guard identity lock, warn_only per-vector
+        // mapping, defect-refinement toggling) stays mathematically consistent:
+        // A Z_j = sum_i H_ij V_i holds with the Z_j actually used.
+        // Memory: one restart cycle of Z is held at a time (declared per cycle,
+        // destroyed at cycle end); M_inv == nullptr allocates no Z (V used directly).
+        std::vector<torch::Tensor> Z;
+        if (M_inv) {
+            Z.reserve(restart);
+            if (iter == 0 && wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                const long long z_bytes = static_cast<long long>(restart) *
+                    static_cast<long long>(x.numel()) *
+                    static_cast<long long>(x.element_size());
+                std::cerr << "[FGMRES] Z-basis memory budget: restart=" << restart
+                          << " x numel=" << x.numel()
+                          << " => ~" << (z_bytes / (1024.0 * 1024.0)) << " MiB per cycle\n";
+            }
+        }
+
+        // NUMERICAL STABILITY: Check r_precond for NaN/Inf before normalization
+        if (guarded_item<bool>(torch::isnan(r_precond).any()) ||
+            guarded_item<bool>(torch::isinf(r_precond).any())) {
+            std::cerr << "[GMRES ERROR] Preconditioned residual r_precond contains NaN/Inf" << std::endl;
+            std::cerr << "  ||r_true|| = " << guarded_item<float>(r_true.norm()) << std::endl;
+            std::cerr << "  ||r_precond|| = " << guarded_item<float>(r_precond.norm()) << std::endl;
+            throw std::runtime_error("GMRES: Preconditioner produced NaN/Inf in residual");
+        }
+
+        // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
+        auto r_norm_tensor = safe_tensor_norm(r_precond);
+
+        // NUMERICAL STABILITY: Guard against tiny/zero norm before division
+        if (guarded_item<bool>(r_norm_tensor < 1e-12f)) {
+            std::cerr << "[GMRES ERROR] Preconditioned residual norm too small for V[0] normalization" << std::endl;
+            std::cerr << "  ||r_precond|| = " << guarded_item<float>(r_norm_tensor) << " < 1e-12" << std::endl;
+            std::cerr << "  ||r_true|| = " << guarded_item<float>(r_true.norm()) << std::endl;
+            std::cerr << "  ||b|| = " << guarded_item<float>(b.norm()) << std::endl;
+            throw std::runtime_error("GMRES: Cannot normalize V[0] - residual norm too small");
+        }
+
+        V.push_back(r_precond / r_norm_tensor);
+
+        // PERFORMANCE FIX: Move V0 validation diagnostics to debug_level >= 3 (HOT PATH)
+        // This was causing 2 .item() syncs per GMRES call at debug_level >= 1
+        // FIX (2025-12-05): Also gate on !use_autograd to preserve graph in AD mode
+        if (log_gmres_v0_debug) {
+            torch::NoGradGuard no_grad;  // Safe in FD mode
+            // FIX 2025-12-27: Add .to(kCPU) before .item<float>() to avoid GPU sync
+            float r_norm_val = r_norm_tensor.to(torch::kCPU).item<float>();
+            float v0_norm = V[0].norm().to(torch::kCPU).item<float>();
+            std::cerr << "  r.norm() before V[0] creation: " << r_norm_val << std::endl;
+            std::cerr << "  After normalization v_0 norm: " << v0_norm << std::endl;
+            std::cerr << "  v_0 shape: [" << V[0].sizes() << "]" << std::endl;
+            std::cerr << "  Ratio r.norm()/V[0].norm() = " << (v0_norm > 1e-12 ? r_norm_val / v0_norm : 0.0f) << std::endl;
+
+            if (v0_norm < 1e-12f) {
+                std::cerr << "  FATAL: v_0 has zero norm after normalization!" << std::endl;
+                std::cerr << "  This indicates r / r.norm() produced zero/NaN" << std::endl;
+            } else if (std::abs(v0_norm - 1.0f) > 0.01f) {
+                std::cerr << "  WARNING: v_0 norm = " << v0_norm << " (expected 1.0)" << std::endl;
+                std::cerr << "  Possible halo zeroing corrupted V[0]" << std::endl;
+            } else {
+                std::cerr << "  v_0 normalized correctly (norm ≈ 1.0)" << std::endl;
+            }
+        }
+        
+        // Hessenberg matrix and Givens rotation data
+        // Phase 3A: Force H and s to CPU — avoids ~5000 tiny GPU kernel launches
+        // for Hessenberg updates, Givens rotations, and back-substitution.
+        // PyTorch auto-handles CPU↔GPU transfers for mixed-device scalar ops.
+        auto cpu_opts = torch::TensorOptions().dtype(x.dtype());
+        torch::Tensor H = torch::zeros({restart + 1, restart}, cpu_opts);
+        torch::Tensor s = torch::zeros({restart + 1}, cpu_opts);
+        // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
+        s[0] = safe_tensor_norm(r_precond).cpu();
+        
+        // PERFORMANCE: Store Givens rotation coefficients as tensors to avoid .item() syncs
+        // Previously extracted as float causing 2 CPU-GPU syncs per Arnoldi vector
+        std::vector<torch::Tensor> cs(restart);
+        std::vector<torch::Tensor> sn(restart);
+
+        // DEVICE-AWARE: Pre-create constants on correct device to avoid CPU-GPU sync in loop
+        // Using x.options() ensures these live on same device as state vectors (CPU/CUDA/MPS)
+        const auto eps_safe = torch::full({}, 1e-8f, x.options());
+        const auto one_tensor = torch::full({}, 1.0f, x.options());
+        const auto zero_tensor = torch::full({}, 0.0f, x.options());
+
+        // Track breakdown for numerical stability handling
+        bool breakdown_occurred = false;
+        // FIX 2026-01-31: Save converged residual from j-loop to skip redundant JVP at line 915
+        torch::Tensor saved_r_true_converged;
+
+        // v20.14r48: Arnoldi-level stagnation tracking for early termination.
+        // If true_err improves by less than (1 - stag_ratio) for stag_window consecutive
+        // checks, break the Arnoldi loop early (don't waste remaining budget).
+        //
+        // PERFORMANCE FIX (2026-02-19):
+        // Stage-specific budget overrides set an upper bound on work, not a requirement
+        // to exhaust all Arnoldi vectors. Keep stagnation early-exit enabled even when
+        // stage2/stage3 budgets are active, so stagnating solves stop before burning JVPs.
+            float prev_true_err = 1.0f;
+            int stag_count = 0;
+            auto& cfg_local = wrf::sdirk3::g_sdirk3_config;
+            const bool aggressive_budget_stag_gate =
+                (stage_id >= 2 &&
+                 ru_share_hint > 0.98f &&
+                 cfg_local.stage2_gmres_restart > 0 &&
+                 cfg_local.stage2_max_krylov_restarts == 1);
+            int stag_window = aggressive_budget_stag_gate
+                                ? 1
+                                : cfg_local.gmres_arnoldi_stag_window;
+            float stag_ratio = cfg_local.gmres_arnoldi_stag_ratio;
+
+        int j;
+        for (j = 0; j < restart; ++j) {
+            // RIGHT-PRECONDITIONING: w = A(M^{-1}(V[j]))
+            // Apply preconditioner FIRST, then operator A.
+            // This builds Krylov space for A*M^{-1} and minimizes ||b - A*M^{-1}*z||.
+            // FIX 2026-01-27: Changed from left (w=M^{-1}(A(V[j]))) to right preconditioning.
+            auto jvp_start = std::chrono::high_resolution_clock::now();
+            torch::Tensor v_precond = V[j];
+            if (M_inv) {
+                v_precond = M_inv(V[j]);
+                // FGMRES: keep the EXACT preconditioned vector used for this
+                // Arnoldi column (not a recomputation — M may differ next call).
+                Z.push_back(v_precond);
+            }
+            torch::Tensor w = A(v_precond);
+            auto jvp_end = std::chrono::high_resolution_clock::now();
+            auto jvp_duration = std::chrono::duration_cast<std::chrono::milliseconds>(jvp_end - jvp_start).count();
+
+            // NUMERICAL STABILITY: Check for NaN/Inf immediately after Jacobian application
+            if (guarded_item<bool>(torch::isnan(w).any()) || guarded_item<bool>(torch::isinf(w).any())) {
+                nan_failure_count++;
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                    std::cerr << "[GMRES ERROR] NaN/Inf in Arnoldi vector after A(V[" << j << "])" << std::endl;
+                    std::cerr << "  iter=" << iter << " j=" << j
+                              << " ||V[j]||=" << guarded_item<float>(V[j].norm()) << std::endl;
+                    std::cerr << "  NaN failure count: " << nan_failure_count << "/" << max_nan_failures << std::endl;
+                }
+
+                if (nan_failure_count > max_nan_failures) {
+                    // GMRES FAILURE RECOVERY: After max retries, return failure status for trust-region fallback
+                    std::cerr << "[GMRES FAILURE] Exceeded max NaN retries (" << max_nan_failures
+                              << "), returning failure status to trigger trust-region fallback" << std::endl;
+                    // v20.14r25: Use halo-zeroed norm for final_residual (contract: all paths consistent).
+                    auto r_true_nan = r_true.clone();
+                    zero_halo_regions(r_true_nan, halo_width, periodic_x, periodic_y);
+                    float r_norm = guarded_item<float>(safe_tensor_norm(r_true_nan));
+                    // v20.14r37: Include current restart's j (same fix as early-breakdown path).
+                    // r_true returned RAW (caller applies halo zeroing for per-block analysis).
+                    return {torch::zeros_like(x0), false, total_arnoldi_iters + j, r_norm, 1.0f,
+                            "NaN failures exceeded max retries",
+                            r_true.detach().clone()};
+                } else {
+                    // Continue GMRES loop, hope next iteration succeeds
+                    // OPT Pass34: Gate retry message + use \n (avoids flush in hot path)
+                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                        std::cerr << "[GMRES] Continuing after NaN (retry " << nan_failure_count << ")\n";
+                    }
+                    break;  // Break Arnoldi loop, restart GMRES iteration
+                }
+            }
+
+            // v20.14r27o: JVP timing is hot-path overhead — raise to debug_level >= 2
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 && iter == 0 && j < 5) {
+                std::cerr << "[GMRES TIMING] Arnoldi j=" << j << ": JVP took " << jvp_duration << " ms" << std::endl;
+            }
+
+            // DIAGNOSTIC: Check raw JVP output before preconditioner (first few vectors)
+            // PERFORMANCE: .item() causes CPU-GPU sync, only enable at debug_level >= 2
+            // FIX (2025-12-05): Also gate on !use_autograd to preserve graph in AD mode
+            // OPT Pass32: Batch 2 norms into single D2H transfer
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 && iter == 0 && j < 5 &&
+                !wrf::sdirk3::g_sdirk3_config.use_autograd) {
+                torch::NoGradGuard no_grad;
+                auto norms_cpu = torch::stack({w.norm(), V[j].norm()}).to(torch::kCPU);
+                float w_raw_norm = norms_cpu[0].item<float>();
+                float vj_norm = norms_cpu[1].item<float>();
+                std::cerr << "[ARNOLDI] j=" << j << " After w = A(V[" << j << "]) (raw JVP):" << std::endl;
+                std::cerr << "  ||w_raw|| = " << w_raw_norm << std::endl;
+                std::cerr << "  ||V[" << j << "]|| = " << vj_norm << std::endl;
+
+                // Check if ||w|| is already tiny before preconditioning
+                if (w_raw_norm < 1e-6f) {
+                    std::cerr << "  WARNING: ||A(V[" << j << "])|| = " << w_raw_norm
+                              << " is very small BEFORE preconditioner!" << std::endl;
+                    std::cerr << "  This suggests Jacobian column space is nearly 1D or rank-deficient" << std::endl;
+                }
+            }
+
+            // RIGHT-PRECONDITIONING: M_inv was applied BEFORE A (above).
+            // No post-A preconditioning needed.
+            // FIX 2026-01-27: Removed left-preconditioning w = M_inv(w).
+
+            // CRITICAL FIX 2026-01-28: Zero halo regions in new Arnoldi vector
+            // This maintains halo boundary consistency throughout GMRES.
+            // Uses helper function that handles partial periodicity correctly:
+            // - For em_b_wave (periodic_x=true, periodic_y=false), only y-halos are zeroed.
+            zero_halo_regions(w, halo_width, periodic_x, periodic_y);
+
+            // v20.14 r50: Apply block-scaling D⁻¹ to Arnoldi vector.
+            // GMRES now builds Krylov space for D⁻¹AM⁻¹ instead of AM⁻¹.
+            if (block_scaled) {
+                w = w * D_inv;
+            }
+
+            // Modified Gram-Schmidt orthogonalization with DGK reorthogonalization
+            // v20.14 r49-fix: Daniel-Gragg-Kaufman criterion — if ||w_after|| < 0.7*||w_before||,
+            // orthogonality is lost and a second MGS pass is needed.
+            // PERFORMANCE DIAGNOSTIC: Measure orthogonalization overhead to identify sync points
+            auto gramschmidt_start = std::chrono::high_resolution_clock::now();
+
+            // Save pre-MGS norm for DGK criterion
+            torch::Tensor w_norm_before_mgs = safe_tensor_norm(w);
+
+            for (int i = 0; i <= j; ++i) {
+                auto dot_start = std::chrono::high_resolution_clock::now();
+                H[i][j] = torch::dot(w.flatten(), V[i].flatten());
+                auto dot_end = std::chrono::high_resolution_clock::now();
+
+                w = w - H[i][j] * V[i];
+                auto subtract_end = std::chrono::high_resolution_clock::now();
+
+                // v20.14r27o: GS timing is hot-path (fires per Arnoldi × per basis vector)
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 && iter == 0 && j < 5) {
+                    auto dot_ms = std::chrono::duration_cast<std::chrono::milliseconds>(dot_end - dot_start).count();
+                    auto subtract_ms = std::chrono::duration_cast<std::chrono::milliseconds>(subtract_end - dot_end).count();
+                    std::cerr << "[GMRES TIMING] Gram-Schmidt j=" << j << " i=" << i
+                              << ": dot=" << dot_ms << "ms, subtract=" << subtract_ms << "ms" << std::endl;
+                }
+            }
+
+            // v20.14 r49-fix: DGK reorthogonalization criterion
+            // If ||w_after|| < 0.7 * ||w_before||, run second MGS pass to restore orthogonality.
+            // This addresses GMRES stagnation when cond(A) > ~3000 (common for S2 ru-dominated).
+            {
+                torch::Tensor w_norm_after_mgs = safe_tensor_norm(w);
+                auto needs_reorth = w_norm_after_mgs < (0.7f * w_norm_before_mgs);
+                if (guarded_item<bool>(needs_reorth)) {
+                    for (int i = 0; i <= j; ++i) {
+                        auto h_corr = torch::dot(w.flatten(), V[i].flatten());
+                        H[i][j] = H[i][j] + h_corr;
+                        w = w - h_corr * V[i];
+                    }
+                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 && j < 3) {
+                        torch::NoGradGuard no_grad;
+                        float nb = w_norm_before_mgs.to(torch::kCPU).item<float>();
+                        float na = w_norm_after_mgs.to(torch::kCPU).item<float>();
+                        float nr = safe_tensor_norm(w).to(torch::kCPU).item<float>();
+                        std::cerr << "[GMRES REORTH] j=" << j
+                                  << " before=" << nb << " after1=" << na
+                                  << " after2=" << nr << " ratio=" << (na/nb) << "\n";
+                    }
+                }
+            }
+
+            auto gramschmidt_end = std::chrono::high_resolution_clock::now();
+            auto gramschmidt_total_ms = std::chrono::duration_cast<std::chrono::milliseconds>(gramschmidt_end - gramschmidt_start).count();
+
+            // v20.14r27o: GS total timing — raise to debug_level >= 2
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 && iter == 0) {
+                std::cerr << "[GMRES TIMING] Gram-Schmidt j=" << j << " TOTAL: " << gramschmidt_total_ms << " ms" << std::endl;
+            }
+
+            // DIAGNOSTIC: Check orthogonalization result
+            // PERFORMANCE: .item() sync - only at debug_level >= 2
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 && iter == 0 && j == 0) {
+                torch::NoGradGuard no_grad;
+                // FIX 2025-12-27: Add .to(kCPU) before .item<float>() to avoid GPU sync
+                float h_00 = H[0][0].to(torch::kCPU).item<float>();
+                float w_ortho_norm = w.norm().to(torch::kCPU).item<float>();
+                std::cerr << "[ARNOLDI] After Gram-Schmidt orthogonalization:" << std::endl;
+                std::cerr << "  H[0][0] = " << h_00 << std::endl;
+                std::cerr << "  ||w - H[0][0]*V[0]|| = " << w_ortho_norm << std::endl;
+                std::cerr << "  This will become H[1][0]" << std::endl;
+            }
+
+            // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
+            H[j + 1][j] = safe_tensor_norm(w);
+
+            // DIAGNOSTIC: Check breakdown condition
+            // PERFORMANCE: .item() sync - only at debug_level >= 2
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 && iter == 0 && j == 0) {
+                torch::NoGradGuard no_grad;
+                // FIX 2025-12-27: Add .to(kCPU) before .item<float>() to avoid GPU sync
+                float h_10 = H[1][0].to(torch::kCPU).item<float>();
+                std::cerr << "[ARNOLDI] Breakdown check:" << std::endl;
+                std::cerr << "  H[1][0] = " << h_10 << std::endl;
+                std::cerr << "  Breakdown threshold: 1e-6" << std::endl;
+                std::cerr << "  Will breakdown: " << (h_10 < 1e-6f ? "YES" : "NO") << std::endl;
+            }
+
+            // AUTOGRAD FIX: Use tensor comparison for breakdown detection
+            // RELAXED THRESHOLD: Further relaxed to 1e-10 to handle ill-conditioned systems without preconditioner
+            // GRADIENT FIX: Use guarded_item to prevent gradient break
+            auto breakdown_check_start = std::chrono::high_resolution_clock::now();
+            auto h_small = torch::abs(H[j + 1][j]) < 1e-10f;
+            bool is_breakdown = guarded_item<bool>(h_small.all());
+            auto breakdown_check_end = std::chrono::high_resolution_clock::now();
+            auto breakdown_check_ms = std::chrono::duration_cast<std::chrono::milliseconds>(breakdown_check_end - breakdown_check_start).count();
+
+            // v20.14r27o: Breakdown timing — raise to debug_level >= 2
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 && iter == 0 && j < 5) {
+                std::cerr << "[GMRES TIMING] Breakdown check j=" << j << ": " << breakdown_check_ms << " ms" << std::endl;
+            }
+
+            if (is_breakdown) {
+                breakdown_occurred = true;  // Track for numerical stability handling
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                    torch::NoGradGuard no_grad;
+                    std::cerr << "[ARNOLDI] BREAKDOWN at j=" << j
+                              << ", H[" << (j+1) << "][" << j << "] = "
+                              << guarded_item<float>(H[j + 1][j]) << std::endl;
+                    // FIX 2026-01-29: Breakdown means Krylov subspace is exhausted.
+                    // If j==0, no useful direction was found — this is NOT convergence.
+                    // If j>0, we have a partial solution that may still be useful,
+                    // but we should NOT report this as "converged" to the Newton solver,
+                    // as it can cause trust-region to accept bad steps → stagnation.
+                    std::cerr << "[ARNOLDI] Breakdown at j=" << j
+                              << " — extracting best available solution" << std::endl;
+                }
+                j++;
+                break;  // Exit Arnoldi loop with current best solution (NOT marked converged)
+            }
+            
+            V.push_back(w / H[j + 1][j]);
+            
+            // AUTOGRAD FIX: Apply Givens rotations using tensor operations
+            for (int i = 0; i < j; ++i) {
+                auto h_i_j = H[i][j].clone();
+                auto h_ip1_j = H[i + 1][j].clone();
+                H[i][j] = cs[i] * h_i_j + sn[i] * h_ip1_j;
+                H[i + 1][j] = -sn[i] * h_i_j + cs[i] * h_ip1_j;
+            }
+            
+            // Compute new Givens rotation using tensor operations
+            auto h_j_tensor = H[j][j];
+            auto h_jp1_tensor = H[j + 1][j];
+            auto r_givens_tensor = torch::sqrt(h_j_tensor * h_j_tensor + h_jp1_tensor * h_jp1_tensor);
+            // AUTOGRAD FIX: Keep r_givens as tensor to preserve gradient flow
+            // DEVICE-AWARE: Use pre-created eps_safe constant on correct device
+            auto r_givens_safe = torch::where(r_givens_tensor > 1e-8f, r_givens_tensor, eps_safe);
+
+            // PERFORMANCE FIX: Keep cs/sn as tensors to avoid .item() syncs (was causing 12 syncs per iteration!)
+            // DEVICE-AWARE: Use pre-created constants on correct device (no CPU-GPU sync)
+            auto safe_mask = (r_givens_tensor > 1e-8f);
+            cs[j] = torch::where(safe_mask, h_j_tensor / r_givens_safe, one_tensor);
+            sn[j] = torch::where(safe_mask, h_jp1_tensor / r_givens_safe, zero_tensor);
+            
+            // Apply new Givens rotation
+            H[j][j] = r_givens_tensor;
+            H[j + 1][j] = 0.0f;
+            
+            // AUTOGRAD FIX: Apply to RHS vector using tensor operations
+            auto s_j = s[j].clone();
+            auto s_jp1 = s[j + 1].clone();
+            s[j] = cs[j] * s_j + sn[j] * s_jp1;
+            s[j + 1] = -sn[j] * s_j + cs[j] * s_jp1;
+
+            // v20.14r48: PERFORMANCE — Periodic true residual check (replaces hess_est-based).
+            // Old: hess_est < 3*tol triggers expensive A(x_trial) check → JVP/Arnoldi ~1.6.
+            // New: periodic sampling (j >= start_j && j % period == 0, always check last j).
+            // Expected: JVP/Arnoldi ratio → ~1.1, ~30% linear solve time reduction.
+            bool gmres_converged = false;
+
+            // Cheap convergence estimate from Givens rotation (no JVP needed)
+            // GR v9 G1: Gate behind debug_level to avoid GPU sync in production
+            float hess_estimate = -1.0f;  // sentinel for non-debug path
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                hess_estimate = guarded_item<float>(torch::abs(s[j + 1]) / bnorm_safe);
+            }
+
+            // Periodic true residual check: j >= start_j && j % period == 0, or last j.
+            // v20.14r52: In stage>=2 ru-dominant solves, periodic true residual probes
+            // are usually low-value but expensive (extra A(x_trial) ≈ extra JVP work).
+            // Keep mandatory check at last Arnoldi index; skip intermediate probes for
+            // ru-dominant stage>=2 to reduce wasted compute.
+            int start_j = wrf::sdirk3::g_sdirk3_config.gmres_true_residual_start_j;
+            int period = wrf::sdirk3::g_sdirk3_config.gmres_true_residual_period;
+            // v20.14r54: When stage-aware GMRES budget is explicitly enabled for stage>=2,
+            // avoid extra periodic true-residual probes and keep only the mandatory
+            // last-Arnoldi true-residual check. This is a default-off behavior because
+            // it activates only when stage2_gmres_restart>0 is configured.
+            if (stage_id >= 2 &&
+                wrf::sdirk3::g_sdirk3_config.stage2_gmres_restart > 0) {
+                start_j = std::max(start_j, restart - 1);
+            }
+            bool skip_periodic_true_check = (stage_id >= 2 && ru_share_hint > 0.9f);
+            // For stage-budgeted ru-dominant solves, force one mid-budget probe.
+            // If true residual barely improves, Arnoldi stagnation can terminate early
+            // without consuming the full restart budget.
+            const bool mid_budget_probe =
+                aggressive_budget_stag_gate && (j == std::max(2, restart / 2));
+            bool near_convergence = (j == restart - 1) ||
+                                    mid_budget_probe ||
+                                    (!skip_periodic_true_check &&
+                                     j >= start_j && (j - start_j) % period == 0);
+
+            if (near_convergence) {
+                // Solve H*y_trial = s for the current Krylov subspace [0...j]
+                torch::Tensor y_trial = torch::zeros({j + 1}, x.options());
+                for (int i = j; i >= 0; --i) {
+                    y_trial[i] = s[i];
+                    for (int k = i + 1; k <= j; ++k) {
+                        y_trial[i] = y_trial[i] - H[i][k] * y_trial[k];
+                    }
+                    auto h_diag_abs = torch::abs(H[i][i]);
+                    y_trial[i] = torch::where(h_diag_abs > 1e-10f,
+                                             y_trial[i] / H[i][i],
+                                             torch::zeros_like(y_trial[i]));
+                }
+
+                // FGMRES: x_trial = x + sum_i y_trial[i] * Z[i] — reconstruct from
+                // the STORED preconditioned basis; re-applying M_inv to an aggregate
+                // of V is exactly the variable-preconditioner inconsistency this
+                // routine exists to remove. (M_inv == nullptr => Z empty, use V.)
+                torch::Tensor correction = torch::zeros_like(x);
+                const std::vector<torch::Tensor>& basis_trial = M_inv ? Z : V;
+                for (int i = 0; i <= j; ++i) {
+                    correction = correction + y_trial[i] * basis_trial[i];
+                }
+                torch::Tensor x_trial = x + correction;
+
+                // Compute TRUE unpreconditioned residual: r_true_trial = b - A(x_trial)
+                torch::Tensor r_true_trial = b - A(x_trial);
+
+                // v20.14r27i: Use unified helper (halo-zeroed for 3D, raw for 1D packed)
+                // v20.14 r50: When block-scaled, measure convergence in D⁻¹-norm.
+                // bnorm_safe was already computed from D⁻¹*b, so error_true is in scaled space.
+                torch::Tensor r_for_norm = block_scaled
+                    ? (r_true_trial * D_inv) : r_true_trial;
+                auto r_true_norm = gmres_residual_norm(r_for_norm, halo_width, periodic_x, periodic_y);
+                auto error_true = r_true_norm / bnorm_safe;
+                gmres_converged = guarded_item<bool>((error_true < tol).all());
+
+                // Budgeted ru-dominant stage guard:
+                // If a forced mid-budget probe is still far from tolerance, terminate
+                // this restart early instead of burning the remaining Arnoldi budget.
+                bool budget_probe_hopeless = false;
+                if (mid_budget_probe && aggressive_budget_stag_gate && !gmres_converged) {
+                    float err_mid = guarded_item<float>(error_true);
+                    const float hopeless_floor = std::max(0.9f, 2.0f * tol);
+                    if (err_mid > hopeless_floor) {
+                        budget_probe_hopeless = true;
+                        saved_r_true_converged = r_true_trial;
+                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                            std::cerr << "[GMRES] Budget probe early-exit: true_err=" << err_mid
+                                      << " > " << hopeless_floor
+                                      << " (stage=" << stage_id
+                                      << ", ru_share=" << ru_share_hint << ")\n";
+                        }
+                    }
+                }
+
+                // FIX 2026-01-31: Save r_true_trial to avoid redundant A(x) JVP after j-loop.
+                // When j == restart-1: y_trial == y (same H,s system), so x_trial == x_updated
+                // and r_true_trial == b - A(x_updated). Saves 1 JVP per non-convergent restart.
+                if (gmres_converged || j == restart - 1) {
+                    saved_r_true_converged = r_true_trial;
+                }
+
+                // v20.14r48: Arnoldi stagnation tracking.
+                // Track true_err improvement across consecutive checks.
+                bool arnoldi_stagnated = false;
+                if (!gmres_converged) {
+                    float err_val_stag = guarded_item<float>(error_true);
+                    float ratio = (prev_true_err > 1e-30f) ? err_val_stag / prev_true_err : 0.0f;
+                    if (ratio > stag_ratio) {
+                        stag_count++;
+                    } else {
+                        stag_count = 0;  // reset on improvement
+                    }
+                    prev_true_err = err_val_stag;
+                    if (stag_count >= stag_window) {
+                        arnoldi_stagnated = true;
+                        saved_r_true_converged = r_true_trial;  // save for reuse
+                    }
+                }
+
+                // v20.14r48: Hot-loop log — use '\n' not std::endl, no flush()
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                    torch::NoGradGuard no_grad;
+                    float err_val = error_true.to(torch::kCPU).item<float>();
+                    std::cerr << "[GMRES] restart=" << (iter + 1) << " j=" << j
+                              << ": hess_est=" << std::fixed << std::setprecision(4) << hess_estimate
+                              << ", true_err=" << err_val
+                              << (gmres_converged ? " CONVERGED" : "")
+                              << (arnoldi_stagnated ? " STAGNATED" : "")
+                              << std::defaultfloat << '\n';
+                }
+
+                // v20.14r48: Early termination on Arnoldi stagnation.
+                if (arnoldi_stagnated) {
+                    terminated_by_arnoldi_stagnation = true;
+                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                        std::cerr << "[GMRES] Arnoldi stagnation at j=" << j
+                                  << " (" << stag_count << " consecutive, ratio>"
+                                  << stag_ratio << ") — early exit\n";
+                    }
+                    j++;  // advance past current to match convergence exit convention
+                    break;
+                }
+
+                if (budget_probe_hopeless) {
+                    terminated_by_arnoldi_stagnation = true;
+                    j++;  // keep convention with other early exits
+                    break;
+                }
+
+                // v20.11: Per-block true residual at end of each restart
+                if (layout && layout->is_valid() &&
+                    layout->total_size == r_true_trial.numel() &&
+                    (j == restart - 1 || gmres_converged) &&
+                    wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                    torch::NoGradGuard no_grad;
+                    // v20.14r15: Apply halo zeroing for consistency with GMRES true_err
+                    auto r_halo = r_true_trial.detach();
+                    if (halo_mask && halo_mask->numel() == r_halo.numel()) {
+                        r_halo = r_halo * halo_mask->to(r_halo.dtype()).to(r_halo.device());
+                    }
+                    auto r_cpu = r_halo.to(torch::kCPU).contiguous();
+                    float bnorm_val = bnorm_safe.to(torch::kCPU).item<float>();
+                    std::ostringstream bss;
+                    // v20.14r27k: Label clarified — values are r_block/||b|| (linear relative error per block).
+                    bss << "[GMRES BLOCK r/b] restart=" << (iter + 1) << " j=" << j;
+                    for (const auto& blk : layout->blocks) {
+                        if (blk.start + blk.size <= r_cpu.numel()) {
+                            float r_n = r_cpu.slice(0, blk.start, blk.start + blk.size)
+                                .norm().item<float>();
+                            float frac = (bnorm_val > 0) ? (r_n / bnorm_val) : 0.0f;
+                            bss << " " << blk.name << "=" << std::fixed
+                                << std::setprecision(4) << frac;
+                        }
+                    }
+                    std::cerr << bss.str() << std::defaultfloat << '\n';
+                }
+            }
+
+            if (gmres_converged) {
+                j++;
+                break;
+            }
+        }
+
+        // DIAGNOSTIC: Check H matrix conditioning (expensive - debug only)
+        // OPT Pass33+: Use configurable heavy sample period (0=every iteration)
+        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 3 &&
+            (wrf::sdirk3::g_sdirk3_config.debug_heavy_sample_period == 0 ||
+             (iter + 1) % wrf::sdirk3::g_sdirk3_config.debug_heavy_sample_period == 0 || iter == 0)) {
+            torch::NoGradGuard no_grad;
+            float h_min = 1e20f, h_max = 0.0f;
+            for (int i = 0; i < j; ++i) {
+                // FIX 2025-12-27: Add .to(kCPU) before .item<float>() to avoid GPU sync
+                float h_ii = std::abs(H[i][i].to(torch::kCPU).item<float>());
+                h_min = std::min(h_min, h_ii);
+                h_max = std::max(h_max, h_ii);
+            }
+            float condition_est = (h_min > 1e-14f) ? (h_max / h_min) : 1e20f;
+            std::cerr << "[GMRES H-DIAG] Restart " << (iter + 1)
+                      << ": min|H[i][i]| = " << h_min
+                      << ", max|H[i][i]| = " << h_max
+                      << ", cond ~ " << condition_est << std::endl;
+        }
+
+        // NUMERICAL STABILITY: If breakdown occurred very early, skip update
+        // When j <= 2, the Krylov subspace is too small for reliable solution
+        // CRITICAL FIX 2026-01-28: Return success ONLY if residual actually converged!
+        // Previous bug: Always returned success=true, allowing Newton to accept unconverged solution.
+        if (breakdown_occurred && j <= 2) {
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                std::cerr << "[GMRES] Early breakdown with j=" << j
+                          << ", checking if residual converged..." << std::endl;
+            }
+            // Return x as-is — x hasn't been updated in this restart cycle.
+            // FIX 2026-01-31: Reuse r_true instead of recomputing b - A(x) (saves 1 JVP).
+            // r_true was computed at cycle start and x hasn't changed (update is after j-loop).
+            auto r_final = r_true;
+            // FIX 2026-01-28: Apply halo zeroing consistently for error calculation
+            auto r_final_inner = r_final.clone();
+            zero_halo_regions(r_final_inner, halo_width, periodic_x, periodic_y);
+
+            // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
+            // v20.14 r50: Use unscaled bnorm for return value (trust-region compatibility)
+            auto error_final = safe_tensor_norm(r_final_inner) / bnorm_unscaled;
+            float r_norm = guarded_item<float>(safe_tensor_norm(r_final_inner));
+            float error_val = guarded_item<float>(error_final);
+
+            // CRITICAL FIX 2026-01-28: Only report success if actually converged
+            bool actually_converged = (error_val < tol);
+
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                std::cerr << "[GMRES] Returning solution: ||x|| = "
+                          << guarded_item<float>(x.norm())
+                          << ", ||r_true|| = " << r_norm
+                          << ", error = " << error_val
+                          << ", converged = " << (actually_converged ? "YES" : "NO") << std::endl;
+            }
+            // v20.14r37: Include current restart's j in the total count.
+            // total_arnoldi_iters only accumulates at end of restart (line ~1065),
+            // so early return here would under-count by j Arnoldi vectors.
+            return {x, actually_converged, total_arnoldi_iters + j, r_norm, error_val,
+                    actually_converged ? "Early breakdown, already converged"
+                                       : "Early breakdown, NOT converged",
+                    r_final.detach().clone()};
+        }
+
+        // Solve least squares problem with diagonal check
+        torch::Tensor y = torch::zeros({j}, x.options());
+        bool singular_detected = false;
+        for (int i = j - 1; i >= 0; --i) {
+            y[i] = s[i];
+            for (int k = i + 1; k < j; ++k) {
+                y[i] = y[i] - H[i][k] * y[k];
+            }
+
+            // GR v8 F4: Sign-preserving regularized division (preserves direction info)
+            auto h_diag_abs = torch::abs(H[i][i]);
+            auto h_safe = torch::where(h_diag_abs > 1e-10f,
+                                       H[i][i],
+                                       torch::copysign(torch::tensor(1e-10f, H[i][i].options()), H[i][i]));
+            y[i] = y[i] / h_safe;
+
+            // DIAGNOSTIC: Check for singularity (gated to avoid .item() sync in production)
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 3) {
+                torch::NoGradGuard no_grad;
+                // FIX 2025-12-27: Add .to(kCPU) before .item<float>() to avoid GPU sync
+                float h_diag_val = h_diag_abs.to(torch::kCPU).item<float>();
+                if (h_diag_val < 1e-10f) {
+                    ERROR_PRINT("WARNING: GMRES H matrix nearly singular at diagonal " << i
+                              << ", |H[" << i << "][" << i << "]| = " << h_diag_val);
+                    singular_detected = true;
+                }
+            }
+        }
+        
+        if (singular_detected) {
+            ERROR_PRINT("ERROR: GMRES detected singular/ill-conditioned system!");
+            ERROR_PRINT("  This typically means:");
+            ERROR_PRINT("  - The Jacobian (I + dt*gamma*dF/dU) is nearly singular");
+            ERROR_PRINT("  - The timestep dt=" << dt << ", gamma=" << gamma);
+            ERROR_PRINT("  - dt*gamma=" << dt*gamma << " (affects Jacobian conditioning)");
+            ERROR_PRINT("  - If dt*gamma*eigenvalue ≈ -1, the system becomes singular");
+            ERROR_PRINT("  - The system may have reached a bifurcation point");
+
+            // Additional diagnostics (avoid .item() to preserve autodiff)
+            ERROR_PRINT("\nDEBUG: H matrix diagonals (as tensors):");
+            for (int idx = 0; idx < j && idx < 10; ++idx) {
+                ERROR_PRINT("  H[" << idx << "][" << idx << "] = " << H[idx][idx]);
+            }
+        }
+
+        // PERFORMANCE FIX: Move least-squares diagnostics to debug_level >= 3 (HOT PATH)
+        // This was causing 2+ .item() syncs per GMRES iteration at debug_level >= 1
+        // OPT Pass32: Batch y.norm() and y.abs().max() into single D2H transfer
+        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 3 && iter == 0) {
+            torch::NoGradGuard no_grad;
+            auto y_stats_cpu = torch::stack({y.norm(), y.abs().max()}).to(torch::kCPU);
+            float y_norm = y_stats_cpu[0].item<float>();
+            float y_max = y_stats_cpu[1].item<float>();
+            std::cerr << "[GMRES LS] Least-squares solution y:" << std::endl;
+            std::cerr << "  j (Krylov dimension): " << j << std::endl;
+            std::cerr << "  ||y|| = " << y_norm << std::endl;
+            std::cerr << "  max|y| = " << y_max << std::endl;
+
+            // Check H matrix diagonal for breakdown
+            std::cerr << "[GMRES LS] H matrix diagonals:" << std::endl;
+            for (int idx = 0; idx < j && idx < 5; ++idx) {
+                // FIX 2025-12-27: Add .to(kCPU) before .item<float>() to avoid GPU sync
+                // LINT:DIAG_OK - NoGradGuard is at line 838, diagnostic block
+                float h_diag = H[idx][idx].to(torch::kCPU).item<float>();
+                std::cerr << "  H[" << idx << "][" << idx << "] = " << h_diag << std::endl;
+                if (std::abs(h_diag) < 1e-8) {
+                    std::cerr << "    WARNING: Near-singular diagonal!" << std::endl;
+                }
+            }
+
+            if (y_norm < 1e-12f) {
+                std::cerr << "  WARNING: y has zero norm - x will not be updated!" << std::endl;
+            }
+        }
+
+        // NUMERICAL STABILITY: Check y for NaN/Inf before update
+        if (guarded_item<bool>(torch::isnan(y).any()) || guarded_item<bool>(torch::isinf(y).any())) {
+            std::cerr << "[GMRES ERROR] NaN/Inf detected in y (backsolve result) before update" << std::endl;
+            std::cerr << "  j=" << j << " (Krylov dimension)" << std::endl;
+            std::cerr << "  ||y|| = " << guarded_item<float>(y.norm()) << std::endl;
+
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                torch::NoGradGuard no_grad;
+                std::cerr << "[GMRES DEBUG] H matrix diagonals:" << std::endl;
+                for (int idx = 0; idx < j && idx < 5; ++idx) {
+                    std::cerr << "  H[" << idx << "][" << idx << "] = "
+                              << guarded_item<float>(H[idx][idx]) << std::endl;
+                }
+            }
+
+            throw std::runtime_error("GMRES backsolve produced NaN/Inf in solution vector y");
+        }
+
+        // FGMRES: x = x + sum_i y[i] * Z[i] — the final correction likewise comes
+        // ONLY from the stored preconditioned basis. Zero M_inv calls outside the
+        // Arnoldi loop, by construction. (M_inv == nullptr => Z empty, use V.)
+        {
+            torch::Tensor z_update = torch::zeros_like(x);
+            const std::vector<torch::Tensor>& basis_final = M_inv ? Z : V;
+            for (int i = 0; i < j; ++i) {
+                z_update = z_update + y[i] * basis_final[i];
+            }
+            x = x + z_update;
+        }
+
+        // CRITICAL FIX: Compute new residual IMMEDIATELY after solution update
+        // The convergence check must use the FRESH residual r_true = b - A(x_new),
+        // not the stale residual from before the update!
+        // FIX 2026-01-31: Skip redundant JVP when converged inside j-loop.
+        // saved_r_true_converged == b - A(x_trial) where x_trial == x after update
+        // (same H, s, y values used in both paths), saving 1 JVP per Newton iter.
+        if (saved_r_true_converged.defined()) {
+            r_true = saved_r_true_converged;
+            saved_r_true_converged.reset();  // Clear for next restart
+        } else {
+            r_true = b - A(x);
+        }
+        // RIGHT-PRECONDITIONING: r_precond = r_true (no preconditioning of residual)
+        // FIX 2026-01-27: Removed M_inv application to residual for right preconditioning.
+        r_precond = r_true.clone();
+
+        // CRITICAL FIX 2026-01-28: Apply halo zeroing CONSISTENTLY after restart!
+        // Previous bug: Halo zeroing only applied to initial residual, not after restart.
+        // This caused halos to leak into Krylov basis and GMRES couldn't eliminate them.
+        zero_halo_regions(r_precond, halo_width, periodic_x, periodic_y);
+
+        // v20.14 r50: Apply block scaling to new residual for next restart
+        if (block_scaled) {
+            r_precond = r_precond * D_inv;
+        }
+
+        // CRITICAL FIX 2026-01-28: Use halo-zeroed residual for error calculation too
+        auto r_true_inner = r_true.clone();
+        zero_halo_regions(r_true_inner, halo_width, periodic_x, periodic_y);
+
+        // Now compute error_tensor from FRESH residual (halo-zeroed for consistency)
+        // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
+        // v20.14 r50: Use scaled norm for internal convergence check
+        error_tensor = block_scaled
+            ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
+            : safe_tensor_norm(r_true_inner) / bnorm_safe;
+
+        // NUMERICAL STABILITY: Detect NaN in residual error after update
+        if (guarded_item<bool>(torch::isnan(error_tensor).any())) {
+            std::cerr << "[GMRES ERROR] NaN detected in error_tensor after iteration " << iter << std::endl;
+            std::cerr << "  ||r_true|| = " << guarded_item<float>(r_true.norm()) << std::endl;
+            std::cerr << "  ||b|| = " << guarded_item<float>(bnorm_safe) << std::endl;
+            std::cerr << "  ||x|| = " << guarded_item<float>(x.norm()) << std::endl;
+            throw std::runtime_error("GMRES residual error contains NaN after update");
+        }
+
+        // PERFORMANCE FIX: Move update diagnostics to debug_level >= 3 (HOT PATH)
+        // This was causing 1 .item() sync per GMRES iteration at debug_level >= 1
+        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 3 && iter == 0) {
+            torch::NoGradGuard no_grad;
+            // FIX 2025-12-27: Add .to(kCPU) before .item<float>() to avoid GPU sync
+            float x_norm_after = x.norm().to(torch::kCPU).item<float>();
+            std::cerr << "[GMRES UPDATE] After x = x + sum(y[i]*V[i]):" << std::endl;
+            std::cerr << "  ||x|| after update = " << x_norm_after << std::endl;
+            if (x_norm_after < 1e-12f) {
+                std::cerr << "  FATAL: x is still zero after GMRES update!" << std::endl;
+                std::cerr << "  Either y=0 or V vectors are corrupted" << std::endl;
+            }
+        }
+
+        // TIMING INSTRUMENTATION: Report GMRES iteration timing
+        auto gmres_iter_end = std::chrono::high_resolution_clock::now();
+        auto gmres_iter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(gmres_iter_end - gmres_iter_start).count();
+
+        // OPT Pass33: Gate timing log with debug_level + sampling (was: if(true))
+        // OPT Pass33+: Use configurable sample period (0=every iteration)
+        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 &&
+            (wrf::sdirk3::g_sdirk3_config.debug_sample_period == 0 ||
+             (iter + 1) % wrf::sdirk3::g_sdirk3_config.debug_sample_period == 0 || iter == 0)) {
+            torch::NoGradGuard no_grad;
+            // FIX 2025-12-27: Add .to(kCPU) before .item<float>() to avoid GPU sync
+            float error_val = error_tensor.to(torch::kCPU).item<float>();
+            std::cerr << "[GMRES TIMING] Iteration " << iter << " took " << gmres_iter_duration << " ms"
+                      << " (j=" << j << " Arnoldi vectors, error=" << error_val << ")" << std::endl;
+        }
+
+        // FIX (2025-12-04): Track actual Arnoldi iterations for accurate diagnostics
+        total_arnoldi_iters += j;
+
+        // DIAGNOSTIC: Print GMRES progress (gated for performance)
+        // OPT Pass33+: Use configurable sample period (0=every iteration)
+        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 &&
+            (wrf::sdirk3::g_sdirk3_config.debug_sample_period == 0 ||
+             (iter + 1) % wrf::sdirk3::g_sdirk3_config.debug_sample_period == 0)) {
+            torch::NoGradGuard no_grad;
+            // FIX 2025-12-27: Add .to(kCPU) before .item<float>() to avoid GPU sync
+            float error_val = error_tensor.to(torch::kCPU).item<float>();
+            std::cerr << "[GMRES] Restart cycle " << (iter + 1)
+                      << ": error = " << error_val
+                      << ", Krylov dim used = " << j << std::endl;
+        }
+
+        // Convergence check now uses FRESH error_tensor computed from new residual.
+        // Stage budget overrides are treated as upper bounds only; they do not alter
+        // the convergence metric or suppress early stagnation/convergence exits.
+        torch::Tensor error_for_stop = error_tensor;
+        // GRADIENT FIX: Use guarded_item to prevent gradient break
+        if (guarded_item<bool>((error_for_stop < tol).all())) {
+            terminated_by_internal_convergence = true;
+            break;
+        }
+
+        // v20.9: Configurable stagnation detection.  Default threshold = 1.0 (disabled).
+        // Previous hard-coded 0.95 was too aggressive — after 1 restart with < 5% reduction
+        // it would skip all 19 remaining restarts, creating "search starvation".
+        // With threshold = 1.0, all restarts always run.  Set gmres_stagnation_threshold
+        // < 1.0 (e.g. 0.95) to re-enable early exit for well-conditioned problems.
+        {
+            float stag_thresh = wrf::sdirk3::g_sdirk3_config.gmres_stagnation_threshold;
+            if (stag_thresh < 1.0f) {
+                float err_val = guarded_item<float>(error_tensor);
+                if (err_val > stag_thresh && iter < max_iter - 1) {
+                    terminated_by_restart_stag_threshold = true;
+                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                        std::cerr << "[GMRES] Early termination: rel_error=" << err_val
+                                  << " > " << stag_thresh << " after restart " << (iter + 1)
+                                  << ", skipping " << (max_iter - iter - 1)
+                                  << " remaining restarts (saves "
+                                  << (max_iter - iter - 1) * restart
+                                  << " JVP calls)" << std::endl;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // DIAGNOSTIC: GMRES completion
+    // OPT Pass33: Batch 4 D2H into single torch::stack() + gate printing
+    float x_norm, r_true_final, r_precond_final, rel_error_final;
+    // FIX (2025-12-04): Report total Arnoldi iterations (not restart count)
+    int final_iterations = total_arnoldi_iters;
+    {
+        torch::NoGradGuard no_grad;
+
+        // v20.14r27i: Halo-zeroed residual for final error (consistent with internal check).
+        // For 1D packed state, zero_halo_regions is no-op (dim < 3) → raw basis.
+        // Both internal (gmres_residual_norm) and final paths use the same semantics.
+        auto r_true_inner_final = r_true.clone();
+        zero_halo_regions(r_true_inner_final, halo_width, periodic_x, periodic_y);
+
+        // OPT Pass33: Batch norms into single D2H transfer
+        // v20.14 r50: Use bnorm_unscaled for final rel_error (trust-region compatibility).
+        // GMRES internal convergence used bnorm_safe (D⁻¹-scaled when block_scaled).
+        auto stats_cpu = torch::stack({
+            x.norm(), r_true_inner_final.norm(), r_precond.norm(), bnorm_unscaled
+        }).to(torch::kCPU);
+        x_norm = stats_cpu[0].item<float>();
+        r_true_final = stats_cpu[1].item<float>();  // Halo-zeroed, UNSCALED residual
+        r_precond_final = stats_cpu[2].item<float>();
+        float bnorm_val = stats_cpu[3].item<float>();  // UNSCALED ||b||
+        // CRITICAL (2025-11-28): Compute relative error for trust region predicted formula
+        // v20.14 r50: Always report UNSCALED rel_error to Newton/trust-region.
+        rel_error_final = (bnorm_val > BNORM_MIN_THRESHOLD) ? (r_true_final / bnorm_val) : 1.0f;
+        // Always print GMRES completion summary (single line)
+        bool gmres_converged = (rel_error_final < tol);
+        std::cerr << "[FGMRES] " << (gmres_converged ? "CONVERGED" : "NOT CONVERGED")
+                  << std::fixed << std::setprecision(4)
+                  << ": ||x||=" << x_norm
+                  << ", ||r_true||=" << r_true_final
+                  << ", ||b||=" << bnorm_val
+                  << ", rel_error=" << rel_error_final
+                  << ", tol=" << tol
+                  << ", restarts=" << actual_restarts
+                  << ", arnoldi=" << total_arnoldi_iters
+                  << (block_scaled ? " (block-scaled)" : "")
+                  << std::defaultfloat << std::endl;
+    }
+
+    bool gmres_converged = (rel_error_final < tol);
+    // Return contract (v20.14r25, all paths unified):
+    //   final_residual = ||r_true|| halo-zeroed (absolute norm)
+    //   rel_error      = ||r_true||/||b|| halo-zeroed (relative)
+    //   r_true         = RAW residual b-A(x) — callers apply halo zeroing for per-block analysis
+    torch::Tensor r_true_out = r_true.detach().clone();
+    // v20.14r27g: Accurate termination message
+    std::string gmres_msg;
+    if (gmres_converged) {
+        gmres_msg = "FGMRES converged";
+    } else if (terminated_by_restart_stag_threshold) {
+        gmres_msg = "FGMRES stagnation-threshold early exit (restart "
+                  + std::to_string(actual_restarts) + "/" + std::to_string(max_iter) + ")";
+    } else if (terminated_by_arnoldi_stagnation) {
+        gmres_msg = "FGMRES Arnoldi stagnation early exit (restart "
+                  + std::to_string(actual_restarts) + "/" + std::to_string(max_iter) + ")";
+    } else if (terminated_by_internal_convergence) {
+        gmres_msg = "FGMRES internal-stop criterion met before max restarts";
+    } else if (total_arnoldi_iters < max_iter * restart) {
+        gmres_msg = "FGMRES early exit before max restarts (restart "
+                  + std::to_string(actual_restarts) + "/" + std::to_string(max_iter) + ")";
+    } else {
+        gmres_msg = "FGMRES max iterations reached (" + std::to_string(total_arnoldi_iters) + " Arnoldi)";
+    }
+    return {x, gmres_converged, final_iterations, r_true_final, rel_error_final,
+            gmres_msg, r_true_out};
+}
+
+
 } // namespace krylov_methods
 
 // Newton-Krylov solver implementation
@@ -4574,21 +5710,41 @@ public:
                     }
                 }
 
-                auto gmres_result = krylov_methods::solve_gmres(
-                    gmres_op,
-                    gmres_rhs,
-                    gmres_x0,
-                    stage,
-                    ru_share,
-                    effective_restart,
-                    krylov_tol_adaptive,
-                    effective_max_restarts,
-                    gmres_M_inv,  // Use preconditioner (unscaled for right-preconditioning)
-                    layout_initialized_ ? &cached_layout_ : nullptr,  // v20.11: per-block diagnostics
-                    halo_mask_initialized_ ? &halo_mask_ : nullptr,  // v20.14r15: halo-zeroed block diag
-                    options_.periodic_x,   // v20.14r21: instance state (no global config)
-                    options_.periodic_y
-                );
+                // FGMRES ROUTING (full-repo review P1-1, mandatory — not a knob):
+                // any right-preconditioned solve MUST use FGMRES, because the
+                // production preconditioner wrapper can change mid-solve (ratio-guard
+                // identity lock / warn_only / defect toggling) and standard GMRES's
+                // M_inv(sum yV) reconstruction is then inconsistent with the Arnoldi
+                // Hessenberg. Unpreconditioned solves keep solve_gmres bit-for-bit.
+                auto gmres_result = gmres_M_inv
+                    ? krylov_methods::solve_fgmres(
+                          gmres_op,
+                          gmres_rhs,
+                          gmres_x0,
+                          stage,
+                          ru_share,
+                          effective_restart,
+                          krylov_tol_adaptive,
+                          effective_max_restarts,
+                          gmres_M_inv,  // stored per-step as Z (scaled space, see below)
+                          layout_initialized_ ? &cached_layout_ : nullptr,
+                          halo_mask_initialized_ ? &halo_mask_ : nullptr,
+                          options_.periodic_x,
+                          options_.periodic_y)
+                    : krylov_methods::solve_gmres(
+                          gmres_op,
+                          gmres_rhs,
+                          gmres_x0,
+                          stage,
+                          ru_share,
+                          effective_restart,
+                          krylov_tol_adaptive,
+                          effective_max_restarts,
+                          gmres_M_inv,  // null: unpreconditioned path unchanged
+                          layout_initialized_ ? &cached_layout_ : nullptr,
+                          halo_mask_initialized_ ? &halo_mask_ : nullptr,
+                          options_.periodic_x,
+                          options_.periodic_y);
                 variable_pc_event_this_newton = *variable_pc_event;
 
                 // Unscale solution: dK = S · dK_tilde

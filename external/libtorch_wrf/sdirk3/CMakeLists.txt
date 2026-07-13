@@ -168,6 +168,22 @@ target_link_libraries(test_vjp_semantics "${TORCH_LIBRARIES}")
 set_property(TARGET test_vjp_semantics PROPERTY CXX_STANDARD 17)
 add_test(NAME VJP_Semantics COMMAND test_vjp_semantics)
 
+# FGMRES contract matrix (full-repo review P1-1): variable-PC correctness with
+# the single-cycle negative control (standard GMRES's aggregate-M_inv
+# reconstruction measured at true rel residual ~7e+0 vs FGMRES ~3e-6),
+# fixed-PC equivalence, unpreconditioned bitwise regression, M_inv apply-count
+# (exactly once per Arnoldi vector), multi-restart + warm start. Links the
+# REAL production krylov solvers. Requires libtorch.
+add_executable(test_fgmres_contract test_fgmres_contract.cpp
+               wrf_sdirk3_newton_solver.cpp wrf_sdirk3_config.cpp
+               wrf_sdirk3_jvp_autograd.cpp wrf_sdirk3_unified_preconditioner.cpp
+               wrf_sdirk3_cache_utils.cpp wrf_sdirk3_globals.cpp
+               wrf_sdirk3_boundary_ad.cpp wrf_sdirk3_rayleigh_damping_ad.cpp)
+target_include_directories(test_fgmres_contract PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_fgmres_contract "${TORCH_LIBRARIES}")
+set_property(TARGET test_fgmres_contract PROPERTY CXX_STANDARD 17)
+add_test(NAME FGMRES_Contract COMMAND test_fgmres_contract)
+
 # =========================================================================
 # OPT Pass33+: Test Output Verbosity Control
 # =========================================================================

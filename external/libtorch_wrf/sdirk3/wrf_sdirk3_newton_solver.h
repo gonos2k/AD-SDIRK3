@@ -319,6 +319,30 @@ namespace krylov_methods {
         bool periodic_x = false,
         bool periodic_y = false
     );
+
+    // FGMRES (flexible GMRES): stores the per-step preconditioned basis
+    // Z[j] = M_j^{-1} V[j] and reconstructs all corrections from Z, so a
+    // preconditioner that VARIES across Arnoldi steps (ratio-guard identity
+    // lock, warn_only, defect-refinement toggling) stays mathematically
+    // consistent. MANDATORY for every production right-preconditioned
+    // (M_inv != nullptr) forward Newton-Krylov solve; solve_gmres remains for
+    // unpreconditioned and operator-folded (adjoint) paths. Same signature
+    // and GMRESResult contract as solve_gmres.
+    WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
+        const std::function<torch::Tensor(const torch::Tensor&)>& A,
+        const torch::Tensor& b,
+        const torch::Tensor& x0,
+        int stage_id,
+        float ru_share_hint,
+        int restart,
+        float tol,
+        int max_iter,
+        const std::function<torch::Tensor(const torch::Tensor&)>& M_inv = nullptr,
+        const StateLayout* layout = nullptr,
+        const torch::Tensor* halo_mask = nullptr,
+        bool periodic_x = false,
+        bool periodic_y = false
+    );
     
     /**
      * BiCGSTAB (Biconjugate Gradient Stabilized)

@@ -1,3 +1,11 @@
+> **[2026-07-13 PRE-FGMRES 주석]** 이 문서의 모든 GMRES 수렴/정체 측정과
+> "전처리기 계열 효과 없음/dead" 결론은 **pre-FGMRES 구현에서 측정**된 것이다.
+> 당시 GMRES는 가변 전처리기(ratio-guard identity lock 등) 하에서 Arnoldi
+> Hessenberg와 불일치하는 correction을 적용했다(전수 리뷰 P1-1; 단일-사이클
+> 재현에서 true rel residual 7.4e+0 vs FGMRES 3.0e-6). FGMRES 전환
+> (solve_fgmres) 이후 Stage-3 진단 캠페인을 재실행하기 전까지, 본 문서의
+> 전처리기 관련 결론은 재검증 대기 상태로 취급할 것.
+
 # SDIRK3 HEVI + Preconditioner Investigation — Findings (2026-06-21)
 
 **Goal:** make the WRF-SDIRK3 differentiable implicit IMEX solve (mode 3 / ARK324) converge at the
