@@ -10,6 +10,7 @@
  * This file provides BOTH versions for cross-platform compatibility.
  */
 
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_mpi_safety.h"
 
 extern "C" {

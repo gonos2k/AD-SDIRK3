@@ -1,6 +1,7 @@
 #ifndef WRF_SDIRK3_CONFIG_H
 #define WRF_SDIRK3_CONFIG_H
 
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include <string>
 
 namespace wrf {

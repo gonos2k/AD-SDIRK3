@@ -6,6 +6,7 @@
  * Backward: BC_y^T → BC_x^T → MPI^T (all reversed)
  */
 
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_ad_halo_exchange.h"
 #include "wrf_sdirk3_halo_exchange.h"
 #include "wrf_sdirk3_config.h"

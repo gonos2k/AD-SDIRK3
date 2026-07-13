@@ -6,6 +6,7 @@
  * without the overhead of data copying and temporary memory allocation
  */
 
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_interface.h"
 #include "wrf_sdirk3_interface_params.h"
 #include "wrf_sdirk3_tile_unified.h"

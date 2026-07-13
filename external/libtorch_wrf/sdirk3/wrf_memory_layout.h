@@ -1,6 +1,7 @@
 #ifndef WRF_MEMORY_LAYOUT_H
 #define WRF_MEMORY_LAYOUT_H
 
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_torch_wrapper.h"
 
 using torch::indexing::Slice;

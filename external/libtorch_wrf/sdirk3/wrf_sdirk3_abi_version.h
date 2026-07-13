@@ -23,6 +23,7 @@
 
 #ifndef WRF_SDIRK3_ABI_VERSION_H
 #define WRF_SDIRK3_ABI_VERSION_H
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SINGLE SOURCE OF TRUTH - Update version HERE only
