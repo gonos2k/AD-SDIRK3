@@ -223,6 +223,34 @@ target_link_libraries(test_fgmres_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME FGMRES_Contract COMMAND test_fgmres_contract)
 
 # =========================================================================
+# PR 5 commit 3: full-object link closure + archive/manifest contracts
+# =========================================================================
+# Linking the static core pulls only referenced members. This target places
+# EVERY production object directly in one executable link, proving
+# simultaneous closure (no duplicate definitions, no unresolved externals,
+# no cross-TU ABI drift). No --allow-multiple-definition, no exclusions.
+add_executable(test_core_link_smoke
+    tests/test_core_link_smoke.cpp
+    $<TARGET_OBJECTS:wrf_sdirk3_core_objects>)
+target_link_libraries(test_core_link_smoke PRIVATE wrf_sdirk3_build_config)
+add_test(NAME Core_Full_Object_Link COMMAND test_core_link_smoke)
+
+# EXACT member-set equality of the CMake archive vs the manifest (normalizes
+# foo.cpp.o/foo.o/foo.obj; any wrf_sdirk3_cmake_stub* member fails outright).
+add_test(NAME Core_Archive_Manifest
+         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_core_archive.sh
+                 $<TARGET_FILE:wrf_sdirk3_lib>
+                 ${WRF_SDIRK3_CORE_MANIFEST})
+
+# Make/CMake archive MEMBERSHIP parity (not byte identity). FAILS if the
+# production Make archive has not been built — never skip-laundered.
+add_test(NAME Core_Archive_MakeParity
+         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_core_archive.sh
+                 $<TARGET_FILE:wrf_sdirk3_lib>
+                 ${WRF_SDIRK3_CORE_MANIFEST}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/libwrf_sdirk3_libtorch.a)
+
+# =========================================================================
 # OPT Pass33+: Test Output Verbosity Control
 # =========================================================================
 # SDIRK3_QUIET_TESTS: Suppress verbose test output (✅/❌ details)
