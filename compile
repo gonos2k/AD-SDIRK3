@@ -491,10 +491,17 @@ else
       echo "compile: FAILED (nonzero contract) - main/wrf.exe was not produced"
       exit 1
     endif
+    # Stale-exe hygiene hardening (post-approval 2차): when a nonzero-contract
+    # condition below holds, a stale relink may already have produced a
+    # fresh-mtime wrf.exe that would fool a NAIVE mtime check on a later run.
+    # Remove that executable before exiting so no failed build can leave a
+    # runnable-looking binary behind. Only failure paths remove it; a clean
+    # build never reaches these branches, so a successful exe is never touched.
     set stale_srcs = `find external/libtorch_wrf/sdirk3 dyn_em \( -name '*.cpp' -o -name '*.h' -o -name '*.F' \) ! -name 'test_*' ! -path '*graphify-out*' -newer main/wrf.exe`
     if ( "$stale_srcs" != "" ) then
       echo "compile: FAILED (nonzero contract) - sources newer than main/wrf.exe (stale binary):"
       echo "  $stale_srcs"
+      /bin/rm -f main/wrf.exe
       exit 1
     endif
     # Round 3j: close the stale-relink hole — if a sdirk3 sub-compile failed
@@ -506,17 +513,20 @@ else
     set sdirk3_lib = external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a
     if ( ! -e $sdirk3_lib ) then
       echo "compile: FAILED (nonzero contract) - $sdirk3_lib missing"
+      /bin/rm -f main/wrf.exe
       exit 1
     endif
     set stale_lib_srcs = `find external/libtorch_wrf/sdirk3 \( -name '*.cpp' -o -name '*.h' \) ! -name 'test_*' ! -path '*graphify-out*' -newer $sdirk3_lib`
     if ( "$stale_lib_srcs" != "" ) then
       echo "compile: FAILED (nonzero contract) - sources newer than $sdirk3_lib (sub-compile failed?):"
       echo "  $stale_lib_srcs"
+      /bin/rm -f main/wrf.exe
       exit 1
     endif
     set lib_newer = `find $sdirk3_lib -newer main/wrf.exe`
     if ( "$lib_newer" != "" ) then
       echo "compile: FAILED (nonzero contract) - $sdirk3_lib newer than main/wrf.exe (relink missed)"
+      /bin/rm -f main/wrf.exe
       exit 1
     endif
   endif
