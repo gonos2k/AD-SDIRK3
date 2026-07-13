@@ -35,6 +35,33 @@ except ImportError:  # fail CLOSED, never skip
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
+# GitHub-hosted runner labels (ubuntu-latest, windows-2025, macos-15-xlarge,
+# ubuntu-24.04-arm, ubuntu-slim, ...). Anything NOT matching is treated as a
+# persistent-runner target: runner labels are CASE-INSENSITIVE ('Self-Hosted'
+# routes exactly like 'self-hosted'), and a custom label alone ('sdirk3-wrf')
+# targets the persistent runner without the self-hosted label ever appearing —
+# so a blocklist on the literal string 'self-hosted' is bypassable two ways.
+# Whitelist the hosted families and fail closed on everything else, including
+# expressions (${{ ... }}) and runner-group mappings we cannot resolve
+# statically.
+HOSTED_LABEL_RE = re.compile(r"^(ubuntu|windows|macos)-[a-z0-9.\-]+$", re.IGNORECASE)
+
+
+def nonhosted_runner_refs(doc):
+    """Every runs-on reference not recognizably GitHub-hosted (fail closed)."""
+    runs_on = []
+    collect(doc, "runs-on", runs_on)
+    bad = []
+    for r in runs_on:
+        if isinstance(r, dict):  # runner-group form: not statically resolvable
+            bad.append(str(r))
+            continue
+        for e in (r if isinstance(r, list) else [r]):
+            s = str(e).strip()
+            if "${{" in s or not HOSTED_LABEL_RE.match(s):
+                bad.append(s)
+    return bad
+
 
 def collect(node, key, out):
     """All values of `key` in any mapping, at any depth, any YAML style."""
@@ -102,18 +129,14 @@ def check_doc(doc, label):
         if err:
             fails.append(f"{label}: {err}")
 
-    runs_on = []
-    collect(doc, "runs-on", runs_on)
-    labels = []
-    for r in runs_on:
-        if isinstance(r, list):
-            labels += [str(x) for x in r]
-        else:
-            labels.append(str(r))
-    if any("self-hosted" in l for l in labels):
+    nonhosted = nonhosted_runner_refs(doc)
+    if nonhosted:
         for bad in ("pull_request", "pull_request_target"):
             if bad in trigs:
-                fails.append(f"{label}: self-hosted workflow must not trigger on {bad}")
+                fails.append(
+                    f"{label}: non-GitHub-hosted runner target(s) {nonhosted} "
+                    f"must not trigger on {bad} (labels are case-insensitive "
+                    f"and custom labels route to persistent runners)")
     return fails
 
 
@@ -125,7 +148,7 @@ on:
     branches: [main]
 jobs:
   a:
-    runs-on: [self-hosted, forged]
+    runs-on: [Self-Hosted, forged]
     steps:
       - uses: actions/checkout@v6   # @0123456789abcdef0123456789abcdef01234567
       - { uses: evil/flow-style@v1 }
@@ -135,6 +158,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: evil/comment-forge@v2  # uses: ./not-really-local
+  c:
+    runs-on: sdirk3-custom-only
+    steps:
+      - uses: ./ok
+  d:
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: ./ok
 """
 GOOD_FIXTURE = """
 name: good
@@ -163,7 +194,10 @@ def self_test():
         "'evil/no-ref'",
         "docker action not pinned",
         "'evil/comment-forge@v2'",         # 'uses: ./' inside a comment is not local
-        "self-hosted workflow must not trigger on pull_request_target",
+        "Self-Hosted",                     # case-changed label must still be caught
+        "sdirk3-custom-only",              # custom label alone targets the runner
+        "matrix.runner",                   # expression runs-on: fail closed
+        "must not trigger on pull_request_target",
     ]
     missing = [e for e in expected_hits if not any(e in f for f in bad)]
     good = check_doc(yaml.safe_load(GOOD_FIXTURE), "selftest-good")
