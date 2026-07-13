@@ -128,6 +128,7 @@ external/libtorch_wrf/sdirk3/tests/test_*
 # broad test_* rule above targets stay ignored). CI compiles these standalone.
 !external/libtorch_wrf/sdirk3/test_msf_raw_stats.cpp
 !external/libtorch_wrf/sdirk3/test_geometry_contract.cpp
+!external/libtorch_wrf/sdirk3/test_vjp_semantics.cpp
 tools/fseeko_test
 tools/registry
 

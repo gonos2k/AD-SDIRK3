@@ -156,6 +156,18 @@ target_include_directories(test_geometry_contract PRIVATE ${CMAKE_CURRENT_SOURCE
 set_property(TARGET test_geometry_contract PROPERTY CXX_STANDARD 17)
 add_test(NAME Geometry_Contract_Matrix COMMAND test_geometry_contract)
 
+# AD-helper semantics proof on a NONSYMMETRIC matrix (full-repo review
+# acceptance test #1): compute_vjp_autograd must be J^T v ALWAYS (including
+# with the legacy FD toggle ON — the round-2 regression pin), and the FD/dual
+# helpers must be J v. Links the REAL production translation units, not a
+# reimplementation. Requires libtorch.
+add_executable(test_vjp_semantics test_vjp_semantics.cpp
+               wrf_sdirk3_jvp_autograd.cpp wrf_sdirk3_config.cpp)
+target_include_directories(test_vjp_semantics PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(test_vjp_semantics "${TORCH_LIBRARIES}")
+set_property(TARGET test_vjp_semantics PROPERTY CXX_STANDARD 17)
+add_test(NAME VJP_Semantics COMMAND test_vjp_semantics)
+
 # =========================================================================
 # OPT Pass33+: Test Output Verbosity Control
 # =========================================================================

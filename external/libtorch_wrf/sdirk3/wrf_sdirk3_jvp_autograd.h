@@ -57,7 +57,8 @@ namespace sdirk3 {
  *
  *   If F() uses default device internally:
  *     c10::cuda::CUDAGuard guard(u.device());  // Force device context
- *     auto jvp = compute_vjp_autograd(F, u, v);
+ *     auto jvp = compute_jvp_finite_diff(F, u, v);   // true JVP (J*v)
+ *     // (compute_vjp_autograd returns J^T v — reverse mode, NOT a JVP)
  *
  *   Device mismatch symptoms:
  *   - "Expected all tensors to be on the same device"
@@ -92,7 +93,7 @@ namespace sdirk3 {
  *   Solutions:
  *     1. Save/restore RNG state around JVP calls:
  *        auto rng_state = torch::get_rng_state();
- *        auto jvp1 = compute_vjp_autograd(F, u, v);
+ *        auto jvp1 = compute_jvp_dual(F, u, v);        // true JVP
  *        torch::set_rng_state(rng_state);
  *        auto jvp2 = compute_jvp_fd(F, u, v);  // Now uses same random values
  *     2. Use deterministic mode for testing:
@@ -105,7 +106,7 @@ namespace sdirk3 {
  *   - Mismatch causes precision differences (FP16 vs FP32 intermediate results)
  *   - Use scoped autocast around entire JVP computation:
  *       torch::autocast::set_autocast_enabled(torch::kCUDA, true);
- *       auto jvp = compute_vjp_autograd(F, u, v);  // F sees autocast
+ *       auto jvp = compute_jvp_dual(F, u, v);  // true JVP; F sees autocast
  *       torch::autocast::set_autocast_enabled(torch::kCUDA, false);
  *   - Or disable autocast for JVP validation (recommended for accuracy testing)
  *   - v_batch dtype normalization: In autocast scope, v_batch may have different
@@ -432,6 +433,9 @@ private:
 };
 
 // JVP method control
+// NOTE: inert for compute_vjp_autograd (always reverse-mode since the Codex
+// round-2 fix); kept because sdirk3/tests exercise the setter. Production JVP
+// method selection lives in the fwad router.
 void set_use_finite_diff_jvp(bool use_fd);
 bool get_use_finite_diff_jvp();
 
