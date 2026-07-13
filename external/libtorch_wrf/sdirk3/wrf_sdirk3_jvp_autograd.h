@@ -95,7 +95,7 @@ namespace sdirk3 {
  *        auto rng_state = torch::get_rng_state();
  *        auto jvp1 = compute_jvp_dual(F, u, v);        // true JVP
  *        torch::set_rng_state(rng_state);
- *        auto jvp2 = compute_jvp_fd(F, u, v);  // Now uses same random values
+ *        auto jvp2 = compute_jvp_finite_diff(F, u, v);  // Now uses same random values
  *     2. Use deterministic mode for testing:
  *        at::globalContext().setDeterministicAlgorithms(true, false);
  *     3. Disable randomness in F during validation (e.g., dropout.eval())
