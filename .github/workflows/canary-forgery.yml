@@ -1,0 +1,10 @@
+name: canary forgery
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  x:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6 # @0123456789abcdef0123456789abcdef01234567
+      - { uses: evil/flow@v1 }
