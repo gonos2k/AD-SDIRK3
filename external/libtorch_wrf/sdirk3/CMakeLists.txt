@@ -391,6 +391,48 @@ if(Torch_FOUND)
     # _GLIBCXX_USE_CXX11_ABI is a FAILURE (never silently assume 0); on Apple
     # (libc++) the macro is genuinely N/A and the check passes with an explicit
     # N/A statement. The detected value is printed either way.
+    #
+    # PR 6: torch >= 2.6 wheels use the cxx11 ABI as the DEFAULT and TorchConfig
+    # no longer puts the macro into TORCH_CXX_FLAGS at all, so "read it from
+    # TORCH_CXX_FLAGS" alone fails closed on every modern wheel. The ABI truth
+    # still exists (torch._C._GLIBCXX_USE_CXX11_ABI); the caller may pass it as
+    # -DWRF_SDIRK3_TORCH_ABI=<0|1>. Resolution (still fail-closed):
+    #   TORCH_CXX_FLAGS carries exactly one value -> use it; if the explicit
+    #     var is ALSO set and disagrees, FATAL (a conflict is never guessed).
+    #   TORCH_CXX_FLAGS silent + explicit var set -> use the var AND inject the
+    #     macro into the build config, so the value is EFFECTIVE in every TU,
+    #     not merely asserted by a lint.
+    #   Neither -> the lint fails, exactly as before. With the var unset the
+    #   behavior is identical to PR 5.
+    set(WRF_SDIRK3_TORCH_ABI "" CACHE STRING
+        "Explicit _GLIBCXX_USE_CXX11_ABI (0/1) of the installed torch; consulted only when TORCH_CXX_FLAGS omits the macro")
+    if(NOT "${WRF_SDIRK3_TORCH_ABI}" STREQUAL "" AND NOT WRF_SDIRK3_TORCH_ABI MATCHES "^[01]$")
+        message(FATAL_ERROR "WRF_SDIRK3_TORCH_ABI must be 0 or 1, got '${WRF_SDIRK3_TORCH_ABI}'")
+    endif()
+    string(REGEX MATCHALL "_GLIBCXX_USE_CXX11_ABI=[01]" _abi_flags "${TORCH_CXX_FLAGS}")
+    list(REMOVE_DUPLICATES _abi_flags)
+    list(LENGTH _abi_flags _abi_n)
+    if(_abi_n GREATER 1)
+        message(FATAL_ERROR "conflicting _GLIBCXX_USE_CXX11_ABI values in TORCH_CXX_FLAGS: ${_abi_flags}")
+    endif()
+    set(_abi_resolved "")
+    if(_abi_n EQUAL 1)
+        string(REGEX REPLACE ".*=([01])$" "\\1" _abi_resolved "${_abi_flags}")
+        set(_abi_source "TORCH_CXX_FLAGS")
+        if(NOT "${WRF_SDIRK3_TORCH_ABI}" STREQUAL "" AND NOT WRF_SDIRK3_TORCH_ABI STREQUAL _abi_resolved)
+            message(FATAL_ERROR "ABI conflict: TORCH_CXX_FLAGS says _GLIBCXX_USE_CXX11_ABI=${_abi_resolved} but WRF_SDIRK3_TORCH_ABI=${WRF_SDIRK3_TORCH_ABI}")
+        endif()
+    elseif(NOT "${WRF_SDIRK3_TORCH_ABI}" STREQUAL "")
+        set(_abi_resolved "${WRF_SDIRK3_TORCH_ABI}")
+        set(_abi_source "WRF_SDIRK3_TORCH_ABI (runtime-derived)")
+        if(NOT APPLE)
+            target_compile_definitions(wrf_sdirk3_build_config
+                INTERFACE "_GLIBCXX_USE_CXX11_ABI=${_abi_resolved}")
+        endif()
+    endif()
+    if(NOT APPLE AND NOT _abi_resolved STREQUAL "")
+        message(STATUS "  SDIRK3 torch ABI: _GLIBCXX_USE_CXX11_ABI=${_abi_resolved} (source: ${_abi_source})")
+    endif()
     if(APPLE)
         add_custom_target(lint_abi_macro
             COMMAND ${CMAKE_COMMAND} -E echo "LibTorch ABI check: N/A on Apple libc++ - _GLIBCXX_USE_CXX11_ABI is a libstdc++ macro"
@@ -398,9 +440,16 @@ if(Torch_FOUND)
             COMMENT "LibTorch ABI compatibility (Apple: N/A)"
             VERBATIM
         )
+    elseif(_abi_resolved STREQUAL "")
+        add_custom_target(lint_abi_macro
+            COMMAND ${CMAKE_COMMAND} -E echo "FAIL: _GLIBCXX_USE_CXX11_ABI unavailable from TORCH_CXX_FLAGS and WRF_SDIRK3_TORCH_ABI not provided - refusing to assume a value on a libstdc++ platform"
+            COMMAND ${CMAKE_COMMAND} -E false
+            COMMENT "LibTorch ABI compatibility (libstdc++: fail-closed)"
+            VERBATIM
+        )
     else()
         add_custom_target(lint_abi_macro
-            COMMAND bash -c "n=$(printf '%s' '${TORCH_CXX_FLAGS}' | grep -oE '_GLIBCXX_USE_CXX11_ABI=[01]' | sort -u | wc -l | tr -d ' '); if [ \"$n\" = 1 ]; then printf '%s' '${TORCH_CXX_FLAGS}' | grep -oE '_GLIBCXX_USE_CXX11_ABI=[01]' | head -1 | sed 's/^/OK: LibTorch ABI: /'; elif [ \"$n\" = 0 ]; then echo 'FAIL: _GLIBCXX_USE_CXX11_ABI missing from TORCH_CXX_FLAGS on a libstdc++ platform - refusing to assume a value'; exit 1; else echo 'FAIL: multiple conflicting _GLIBCXX_USE_CXX11_ABI values'; exit 1; fi"
+            COMMAND ${CMAKE_COMMAND} -E echo "OK: LibTorch ABI: _GLIBCXX_USE_CXX11_ABI=${_abi_resolved} (source: ${_abi_source})"
             COMMENT "LibTorch ABI compatibility (libstdc++: fail-closed)"
             VERBATIM
         )

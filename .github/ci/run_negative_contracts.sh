@@ -35,7 +35,8 @@ fresh_copy() {
 MAKE_ARGS=(CXX="${CXX:-g++}" LIBTORCH_ROOT="$TORCH_ROOT" LIBTORCH_ABI="$TORCH_ABI")
 cmake_configure() {  # $1 = source dir, $2 = build dir (output captured by caller)
   cmake -S "$1" -B "$2" -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX"
+        -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX" \
+        -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI"
 }
 
 M=wrf_sdirk3_core_sources.txt

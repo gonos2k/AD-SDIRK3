@@ -130,6 +130,7 @@ jobs:
                 -DCMAKE_BUILD_TYPE=Release \
                 -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX" \
                 -DWRF_SDIRK3_ABI_STRICT=AUTO \
+                -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI" \
                 -DSDIRK3_QUIET_TESTS=ON \
                 -DUSE_FAST_POW_0875=OFF \
                 | tee configure.log
@@ -137,6 +138,9 @@ jobs:
           grep -q "ABI Header Mode: STRICT" configure.log
           grep -q "Fast pow(x,0.875): DISABLED" configure.log
           grep -q "SDIRK3 core manifest: 21 production sources" configure.log
+          # torch>=2.6 wheels omit the GLIBCXX macro from TORCH_CXX_FLAGS; the
+          # runtime-derived value must have been resolved, not assumed:
+          grep -q "SDIRK3 torch ABI: _GLIBCXX_USE_CXX11_ABI=$TORCH_ABI" configure.log
 
       - name: build core + tests
         run: cmake --build build/sdirk3-core --parallel 2
