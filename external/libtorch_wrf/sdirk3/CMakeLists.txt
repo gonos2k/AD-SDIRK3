@@ -144,6 +144,18 @@ target_include_directories(test_msf_raw_stats PRIVATE ${CMAKE_CURRENT_SOURCE_DIR
 set_property(TARGET test_msf_raw_stats PROPERTY CXX_STANDARD 17)
 add_test(NAME MSF_Raw_Stats_Matrix COMMAND test_msf_raw_stats)
 
+# Per-call geometry contract regression matrix (geometry-CI increment): the
+# hardest fail-close of the stop-gate campaign (rounds 3g-3j), promoted from
+# manual runtime fault-injection to a standing CI gate. Exercises the SHARED
+# predicate (wrf_sdirk3_geometry_contract.h) that validateCallGeometry wraps:
+# base/stagger 0-negative, base-1, base+2, init/call mismatch (incl. the
+# round-3f counterexample), init_sane (no "uninitialized => allow" escape), and
+# INT_MAX/LLONG_MAX-adjacent rejection with no overflow UB. Torch-free.
+add_executable(test_geometry_contract test_geometry_contract.cpp)
+target_include_directories(test_geometry_contract PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+set_property(TARGET test_geometry_contract PROPERTY CXX_STANDARD 17)
+add_test(NAME Geometry_Contract_Matrix COMMAND test_geometry_contract)
+
 # =========================================================================
 # OPT Pass33+: Test Output Verbosity Control
 # =========================================================================

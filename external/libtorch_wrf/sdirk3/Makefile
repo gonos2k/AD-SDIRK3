@@ -117,7 +117,7 @@ $(UNIFIED_HEADER_DEPS): $(UNIFIED_HEADER)
 # leave the production archive on the OLD inline predicate while CTest passes
 # on the new one. Explicit dep covers builds before .d files exist; -MMD -MP
 # below keeps every future header edit tracked automatically.
-wrf_sdirk3_tile_unified_impl.o: wrf_sdirk3_msf_raw_stats.h
+wrf_sdirk3_tile_unified_impl.o: wrf_sdirk3_msf_raw_stats.h wrf_sdirk3_geometry_contract.h
 
 # Compiler-generated header dependencies (-MMD writes %.d alongside %.o;
 # -MP adds phony targets so deleted headers don't break the build).

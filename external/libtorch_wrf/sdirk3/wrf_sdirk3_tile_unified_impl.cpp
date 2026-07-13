@@ -91,6 +91,7 @@
 #include "wrf_sdirk3_mpi_safety.h"  // Step-2 telemetry: halo freshness event counters
 #include "wrf_sdirk3_unified_rhs_extended.h"
 #include "wrf_sdirk3_msf_raw_stats.h"  // raw map-factor verification (review round 3c)
+#include "wrf_sdirk3_geometry_contract.h"  // shared per-call geometry predicate (geometry-CI increment)
 #include "wrf_sdirk3_tensor_validation.h"
 #include "wrf_sdirk3_profiler.h"
 #include "wrf_sdirk3_autograd_utils.h"
@@ -36690,42 +36691,27 @@ void TileSDIRK3UnifiedSolver::setVerticalInterpolationCoefficients(const float* 
 void TileSDIRK3UnifiedSolver::validateCallGeometry(
     long long nx, long long ny, long long nz,
     long long nx_u, long long ny_v, long long nz_w) const {
-    // SINGLE geometry contract (review round 3j). All arithmetic in 64-bit —
-    // the old int expressions (config.nx + 1 etc.) were computed BEFORE the
-    // range check and overflowed (UB) near INT_MAX.
-    constexpr long long kMaxDim = 100000;
-    const bool call_sane =
-        nx > 0 && nx <= kMaxDim && ny > 0 && ny <= kMaxDim && nz > 0 && nz <= kMaxDim &&
-        nx_u > 0 && nx_u <= kMaxDim && ny_v > 0 && ny_v <= kMaxDim && nz_w > 0 && nz_w <= kMaxDim;
-    const bool call_stagger_ok = call_sane &&
-        nx_u >= nx && nx_u <= nx + 1 &&
-        ny_v >= ny && ny_v <= ny + 1 &&
-        nz_w >= nz && nz_w <= nz + 1;
-    // Init geometry must itself be valid — NO "uninitialized => allow" escape
-    // (review round 3j: a zero/negative base member previously DISABLED the
-    // equality check entirely). Constructor + setStaggeredDimensions guarantee
-    // these for any legitimately created solver; anything else is corruption
-    // or a bypassed factory, both fail-closed.
+    // SINGLE geometry contract (review round 3j; predicate extracted to the
+    // shared, torch-free wrf_sdirk3_geometry_contract.h in the geometry-CI
+    // increment so production and test_geometry_contract.cpp exercise the
+    // EXACT same logic). This is the log + throw wrapper; the pure predicate
+    // does all arithmetic in 64-bit (no INT_MAX overflow UB) and rejects the
+    // "uninitialized init => allow" escape.
     const long long i_nx = nx_, i_ny = ny_, i_nz = nz_;
     const long long i_nx_u = nx_u_, i_ny_v = ny_v_, i_nz_w = nz_w_;
-    const bool init_sane =
-        i_nx > 0 && i_nx <= kMaxDim && i_ny > 0 && i_ny <= kMaxDim &&
-        i_nz > 0 && i_nz <= kMaxDim &&
-        i_nx_u > 0 && i_nx_u <= kMaxDim && i_ny_v > 0 && i_ny_v <= kMaxDim &&
-        i_nz_w > 0 && i_nz_w <= kMaxDim;
-    const bool matches_init = init_sane &&
-        nx == i_nx && ny == i_ny && nz == i_nz &&
-        nx_u == i_nx_u && ny_v == i_ny_v && nz_w == i_nz_w;
-    if (!call_sane || !call_stagger_ok || !init_sane || !matches_init) {
+    const wrf::sdirk3::GeometryCheck chk = wrf::sdirk3::check_call_geometry(
+        nx, ny, nz, nx_u, ny_v, nz_w,
+        i_nx, i_ny, i_nz, i_nx_u, i_ny_v, i_nz_w);
+    if (!chk.ok()) {
         std::cerr << "[SDIRK3] FATAL: per-call geometry validation failed ("
                   << "call nx/ny/nz=" << nx << "/" << ny << "/" << nz
                   << ", nx_u/ny_v/nz_w=" << nx_u << "/" << ny_v << "/" << nz_w
                   << "; init nx/ny/nz=" << i_nx << "/" << i_ny << "/" << i_nz
                   << ", nx_u/ny_v/nz_w=" << i_nx_u << "/" << i_ny_v << "/" << i_nz_w
-                  << "; call_sane=" << call_sane
-                  << ", stagger_sane=" << call_stagger_ok
-                  << ", init_sane=" << init_sane
-                  << ", matches_init=" << matches_init
+                  << "; call_sane=" << chk.call_sane
+                  << ", stagger_sane=" << chk.call_stagger_ok
+                  << ", init_sane=" << chk.init_sane
+                  << ", matches_init=" << chk.matches_init
                   << ") — the caller's per-call extents are rejected, never "
                      "silently replaced by cached members." << std::endl;
         throw std::runtime_error(
