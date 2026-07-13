@@ -1,3 +1,4 @@
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_config.h"
 #include "wrf_config_flags.h"  // For set_ad_strict_mode()
 #include "wrf_sdirk3_metric_utils.h"  // FIX 2025-12-29: For setMovingNestMode()

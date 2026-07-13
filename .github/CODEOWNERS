@@ -1,0 +1,4 @@
+# CI and workflow supply-chain surfaces require owner review.
+# (Effective only once repository settings require code-owner reviews.)
+/.github/workflows/ @gonos2k
+/.github/ci/        @gonos2k

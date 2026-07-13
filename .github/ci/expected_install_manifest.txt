@@ -1,0 +1,4 @@
+include/wrf_sdirk3/wrf_sdirk3_gmres_fixed.h
+include/wrf_sdirk3/wrf_sdirk3_state_vector.h
+include/wrf_sdirk3/wrf_sdirk3_zero_copy_interface.h
+lib/libwrf_sdirk3_libtorch.a

@@ -26,6 +26,7 @@
  * - When moving_nest=true, periodic full-verify via getVerifyPeriod() catches unannounced changes.
  */
 
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_types.h"
 #include "wrf_sdirk3_rayleigh_damping_ad.h"
 #include "wrf_sdirk3_boundary_ad.h"

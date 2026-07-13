@@ -82,6 +82,7 @@
 // they have been reviewed for const-correctness safety.
 // =========================================================================
 
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
@@ -12326,8 +12327,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // flux_w[:, 1:nz_, :] - flux_w[:, 0:nz_-1, :] for all k at once
                 auto flux_diff = flux_w.slice(1, 1, nz_int + 1) - flux_w.slice(1, 0, nz_int);
                 // rdzw as [1, nz_int, 1] for broadcast
-                auto rdzw_t = torch::from_blob(const_cast<float*>(rdzw_ptr), {nz_int},
-                    torch::TensorOptions().dtype(torch::kFloat32)).clone().to(flux_diff.device());
+                auto rdzw_t = torch::from_blob(const_cast<float*>(rdzw_ptr), {nz_int},  // LINT_EXCEPTION: CPU opts explicit below
+                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)).clone().to(flux_diff.device());
                 auto rdzw_3d = rdzw_t.reshape({1, nz_int, 1});
                 auto adv_interior = -flux_diff * rdzw_3d;  // [ny, nz_int, nx_u]
                 // Append zero top boundary
@@ -26213,7 +26214,7 @@ void TileSDIRK3UnifiedSolver::setWRFIndices(
     kms_ = kms; kme_ = kme;
     
     // Update staggered dimensions based on boundary conditions
-    // Following WRF's logic from module_implicit_sdirk3_zerocopy.F
+    // Following WRF's logic from module_implicit_sdirk3.F (sole Fortran bridge)
     // They were already correctly set by setStaggeredDimensions() based on WRF's actual grid
     // The boundary condition logic here was incorrect for single-tile cases
     // KEEPING THESE LINES COMMENTED FOR DOCUMENTATION:

@@ -12,6 +12,7 @@
 #ifndef WRF_SDIRK3_UNIFIED_RHS_OPTIMIZED_H
 #define WRF_SDIRK3_UNIFIED_RHS_OPTIMIZED_H
 
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_unified_rhs.h"
 #include "wrf_sdirk3_memory_pool.h"
 #include "wrf_sdirk3_tensor_cache.h"

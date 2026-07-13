@@ -6,6 +6,7 @@
  * without the overhead of data copying and temporary memory allocation
  */
 
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_interface.h"
 #include "wrf_sdirk3_interface_params.h"
 #include "wrf_sdirk3_tile_unified.h"
@@ -916,7 +917,7 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
 
     try {
         auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
-        auto lambda_terminal_tensor = torch::from_blob(
+        auto lambda_terminal_tensor = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
             const_cast<float*>(lambda_terminal),
             {expected_size},
             opts).clone();
@@ -987,7 +988,7 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
  *   - Do NOT call during GPU kernel execution or while tensors are being accessed
  *   - Safe to call between timesteps or at simulation boundaries
  *
- * Fortran binding: sdirk3_tile_solver_reset_state (module_implicit_sdirk3_zerocopy.F)
+ * Fortran binding: none since the dormant bridge was removed (C ABI retained)
  */
 void sdirk3_tile_solver_reset_state(void* solver_ptr)
 {
@@ -1059,7 +1060,7 @@ void sdirk3_tile_solver_reset_state(void* solver_ptr)
  *   2. External integrations with solver pooling/recycling
  *   3. Debug scenarios requiring complete cache purge
  *
- * Fortran binding: sdirk3_tile_solver_reset_full (module_implicit_sdirk3_zerocopy.F)
+ * Fortran binding: sdirk3_tile_solver_reset_full (module_implicit_sdirk3.F)
  */
 void sdirk3_tile_solver_reset_full(void* solver_ptr)
 {
@@ -1149,7 +1150,7 @@ void sdirk3_tile_solver_reset_full(void* solver_ptr)
  * Failure to follow up may cause stale TLS cache issues in worker threads.
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * Fortran binding: sdirk3_tile_solver_reset_full_parallel (module_implicit_sdirk3_zerocopy.F)
+ * Fortran binding: none since the dormant bridge was removed (C ABI retained)
  */
 void sdirk3_tile_solver_reset_full_parallel(void* solver_ptr)
 {

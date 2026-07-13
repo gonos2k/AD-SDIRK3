@@ -1,0 +1,5 @@
+# Pinned CPU Torch for the hosted SDIRK3 core gate (PR 6).
+# This is the exact torch.__version__ of the environment that validated PR 5
+# (macOS homebrew pytorch 2.10.0); the Linux CPU wheel of the same version.
+# Update ONLY together with a green core-linux run on the new pin.
+torch==2.10.0

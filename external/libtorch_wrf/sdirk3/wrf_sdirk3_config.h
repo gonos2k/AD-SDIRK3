@@ -1,6 +1,7 @@
 #ifndef WRF_SDIRK3_CONFIG_H
 #define WRF_SDIRK3_CONFIG_H
 
+#include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include <string>
 
 namespace wrf {
@@ -736,7 +737,7 @@ struct SDIRK3Config {
     //   [x] wrf_sdirk3_tile_unified_impl.cpp - standard/heavy counters (entry diag at >=2)
     //   [x] wrf_sdirk3_unified_preconditioner.cpp - standard/heavy counters
     //   [x] wrf_sdirk3_newton_krylov_solver.cpp - standard only (no heavy sampling)
-    //   [x] wrf_sdirk3_jvp_autograd.cpp - standard only (JVPContext::prepare())
+    //   [x] wrf_sdirk3_jvp_autograd.cpp - standard only (legacy JVPContext removed)
     //
     // NOT applicable (control-flow essential .item() or already optimized):
     //   [-] wrf_sdirk3_full_physics.cpp - .item() for return values, batched D2H
@@ -930,7 +931,7 @@ struct SDIRK3Config {
     // │ 3. DEPRECATED API DOCUMENTATION LOCATIONS                              │
     // ├────────────────────────────────────────────────────────────────────────┤
     // │ Canonical:  wrf_sdirk3_interface.h (lines 199-365)                     │
-    // │ Fortran:    module_implicit_sdirk3_zerocopy.F (uses v2 APIs only)      │
+    // │ Fortran:    module_implicit_sdirk3.F (sole bridge; uses v2 APIs only)  │
     // │ README:     SDIRK3_OPTIMIZATION_OPTIONS.md (namelist reference)        │
     // │                                                                        │
     // │ SYNC CHECK: All three files should agree that:                         │

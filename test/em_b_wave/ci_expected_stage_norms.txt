@@ -1,0 +1,6 @@
+[SPLIT-EXPLICIT RK] stage=1 dts=200 n_sub=1 |U_stage-U_n|=547.111
+[SPLIT-EXPLICIT RK] stage=2 dts=150 n_sub=2 |U_stage-U_n|=460.425
+[SPLIT-EXPLICIT RK] stage=3 dts=150 n_sub=4 |U_stage-U_n|=987.442
+[SPLIT-EXPLICIT RK] stage=1 dts=200 n_sub=1 |U_stage-U_n|=462.032
+[SPLIT-EXPLICIT RK] stage=2 dts=150 n_sub=2 |U_stage-U_n|=650.723
+[SPLIT-EXPLICIT RK] stage=3 dts=150 n_sub=4 |U_stage-U_n|=1430.96

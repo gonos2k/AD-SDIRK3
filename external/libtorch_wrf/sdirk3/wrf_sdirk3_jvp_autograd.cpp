@@ -1,3 +1,4 @@
+#include <atomic>
 #include "wrf_sdirk3_jvp_autograd.h"
 #include "wrf_sdirk3_config.h"
 #include <torch/torch.h>
@@ -10,10 +11,17 @@ namespace wrf {
 namespace sdirk3 {
 
 // Global flag to control JVP method for performance
-static bool g_use_finite_diff_jvp = true;  // Default to fast finite differences
-static int g_jvp_call_count = 0;
+// Full-repo review P1-3: these were unsynchronized process-globals — a data
+// race once multiple tiles/OpenMP threads call the helpers. Atomics (relaxed
+// semantics are fine: a method toggle and a diagnostics counter).
+static std::atomic<bool> g_use_finite_diff_jvp{true};  // Default to fast finite differences
+static std::atomic<int> g_jvp_call_count{0};
 
 // Enable/disable finite difference JVP
+// NOTE (Codex round-2): this toggle no longer affects compute_vjp_autograd —
+// the FD dispatch that made a "VJP" return J*v was removed. Kept because
+// tests/test_gradient_flow.cpp exercises the setter; production JVP method
+// selection lives in the fwad router, not here.
 void set_use_finite_diff_jvp(bool use_fd) {
     g_use_finite_diff_jvp = use_fd;
     // FIX Round160: Gate log with debug_level >= 1
@@ -28,7 +36,7 @@ bool get_use_finite_diff_jvp() {
 }
 
 // Fast finite difference JVP (no autograd overhead)
-// Uses central difference for O(ε²) accuracy. See compute_jvp_dual for
+// Uses central difference for O(ε²) accuracy. See compute_jvp_forward_diff for
 // epsilon scaling guidelines. For central diff, optimal eps ≈ cbrt(eps_machine):
 //   FP32: eps ≈ 5e-3 (default 1e-5 is conservative)
 //   FP64: eps ≈ 6e-6
@@ -85,8 +93,14 @@ torch::Tensor compute_jvp_finite_diff(
 }
 
 // JVP computation using PyTorch's autograd engine
-// Computes J(u)*v where J is the Jacobian of F at u
-torch::Tensor compute_jvp_autograd(
+// Computes J(u)^T * v (reverse-mode VJP) — ALWAYS. Codex round-2 on the
+// rename: the old body first dispatched on g_use_finite_diff_jvp (default
+// true) to compute_jvp_finite_diff, i.e. the "VJP" function returned the
+// FORWARD product J*v by default and J^T v only with the toggle off — one
+// name, two different mathematical objects. The FD dispatch is removed: a
+// caller who wants a JVP uses compute_jvp_finite_diff/compute_jvp_forward_diff (or
+// the production fwad router); this function is now coherently reverse-mode.
+torch::Tensor compute_vjp_autograd(
     const std::function<torch::Tensor(const torch::Tensor&)>& F,
     const torch::Tensor& u,
     const torch::Tensor& v,
@@ -95,13 +109,7 @@ torch::Tensor compute_jvp_autograd(
     // Track performance
     // FIX Round160: Gate periodic log with debug_level >= 2
     if (++g_jvp_call_count % 100 == 0 && wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        std::cout << "[JVP] Call count: " << g_jvp_call_count
-                  << ", method: " << (g_use_finite_diff_jvp ? "FD" : "AD") << std::endl;
-    }
-    
-    // Use finite differences for speed if enabled
-    if (g_use_finite_diff_jvp) {
-        return compute_jvp_finite_diff(F, u, v, 1e-5f, halo_width);
+        std::cout << "[VJP] Call count: " << g_jvp_call_count << " (reverse-mode)" << std::endl;
     }
 
     // OPT 2025-01-25: Enable anomaly detection for debugging in-place op issues
@@ -139,7 +147,7 @@ torch::Tensor compute_jvp_autograd(
     auto grad_result = torch::autograd::grad(
         {F_u},           // outputs
         {u_var},         // inputs
-        {v},             // grad_outputs (the vector v in Jv)
+        {v},             // grad_outputs => this computes J^T v (VJP), NOT Jv
         /*retain_graph=*/false,  // Don't retain graph to prevent memory leak
         /*create_graph=*/false,  // Not needed for first-order Newton-Krylov
         /*allow_unused=*/true    // FIX 2025-01-25: Changed to true for consistency
@@ -175,7 +183,7 @@ torch::Tensor compute_jvp_autograd(
 //
 // See tests/test_jvp_fixes_validation.cpp for empirical convergence tests.
 //
-torch::Tensor compute_jvp_dual(
+torch::Tensor compute_jvp_forward_diff(
     const std::function<torch::Tensor(const torch::Tensor&)>& F,
     const torch::Tensor& u,
     const torch::Tensor& v,
@@ -218,172 +226,16 @@ torch::Tensor compute_jvp_dual(
     
     return (F_u_pert - F_u) / epsilon;
 }
+// LEGACY VJP-MISLABELED APIs REMOVED (full-repo review follow-up):
+// compute_jvp_batch and JVPContext::compute_jvp both used
+// torch::autograd::grad(..., grad_outputs=v) — i.e. they returned J^T v
+// (VJPs) while their names and docs claimed J*v. Neither had any
+// production caller (the Newton/GMRES matvec uses the forward-mode fwad
+// router). Deleted rather than renamed: an unused, misnamed batched VJP
+// and a graph-reuse context whose cached-graph reuse assumptions were
+// documented but never exercised are exactly the kind of dormant API the
+// review flagged for future silent misuse.
 
-// Batched JVP computation for multiple vectors
-torch::Tensor compute_jvp_batch(
-    const std::function<torch::Tensor(const torch::Tensor&)>& F,
-    const torch::Tensor& u,
-    const torch::Tensor& V) {  // V has shape [batch, ...]
-    
-    int batch_size = V.size(0);
-    std::vector<torch::Tensor> jvps;
-    jvps.reserve(batch_size);
-
-    // Enable gradient computation
-    // FIX 2025-01-25: Use detach().clone() by default to ensure fresh leaf tensor
-    torch::Tensor u_var = g_sdirk3_config.ad_strict_mode
-        ? u.clone().requires_grad_(true)
-        : u.detach().clone().requires_grad_(true);
-    torch::Tensor F_u = F(u_var);
-    
-    // Compute JVP for each vector in the batch
-    for (int i = 0; i < batch_size; ++i) {
-        auto v_i = V[i];
-        // Only retain graph for all but the last iteration
-        bool retain = (i < batch_size - 1);
-        auto jvp_i = torch::autograd::grad(
-            {F_u},
-            {u_var},
-            {v_i},
-            /*retain_graph=*/retain,  // Only retain for intermediate iterations
-            /*create_graph=*/false     // Not needed for first-order Newton-Krylov
-        )[0];
-        jvps.push_back(jvp_i);
-    }
-    
-    return torch::stack(jvps);
-}
-
-
-// ============================================================================
-// JVPContext Implementation - Graph Reuse Optimization
-// ============================================================================
-
-bool JVPContext::prepare(
-    const std::function<torch::Tensor(const torch::Tensor&)>& F,
-    const torch::Tensor& u,
-    int halo_width) {
-
-    // Release any existing graph
-    release();
-
-    halo_width_ = halo_width;
-
-    auto start_time = std::chrono::high_resolution_clock::now();
-
-    try {
-        // Create input tensor with gradient tracking
-        // FIX 2025-01-25: Use detach().clone() by default for fresh leaf tensor
-        u_var_ = g_sdirk3_config.ad_strict_mode
-            ? u.clone().requires_grad_(true)
-            : u.detach().clone().requires_grad_(true);
-
-        // Evaluate F(u) - this builds the computation graph
-        // This is the expensive part (~15 seconds for 1.08M variables)
-        F_u_ = F(u_var_);
-
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-
-        // OPT Pass33+: Diagnostic sampling for prepare() verbose output
-        // Reduces D2H overhead from .item<float>() calls
-        const int current_debug_level = g_sdirk3_config.debug_level;
-        bool do_diag_sample = false;
-        if (current_debug_level >= 1) {
-            const uint64_t diag_counter = prepare_diag_call_counter_.fetch_add(1, std::memory_order_relaxed) + 1;
-            const int diag_period = g_sdirk3_config.debug_sample_period;
-            do_diag_sample = (diag_period == 0) || ((diag_counter % diag_period) == 0) || (diag_counter == 1);
-
-            // OPT Pass34: Gate timing output + use \n (fires per Newton iteration)
-            std::cerr << "[JVPContext] Graph prepared in " << duration << " ms\n";
-
-            // OPT Pass33+: Gate .item<float>() diagnostic with sampling
-            // FIX 2025-12-27: Add .to(kCPU) before .item<float>()
-            // FIX Round192: Wrap .item() in NoGradGuard to prevent AD graph pollution
-            if (do_diag_sample) {
-                torch::NoGradGuard no_grad;
-                std::cerr << "[JVPContext] F_u shape: " << F_u_.sizes() << ", norm: " << F_u_.norm().to(torch::kCPU).item<float>() << std::endl;
-            }
-        }
-
-        is_prepared_ = true;
-        return true;
-
-    } catch (const std::exception& e) {
-        std::cerr << "[JVPContext] ERROR: Failed to prepare graph: " << e.what() << std::endl;
-        release();
-        return false;
-    }
-}
-
-torch::Tensor JVPContext::compute_jvp(const torch::Tensor& v, bool retain_graph_for_next) {
-    if (!is_prepared_) {
-        throw std::runtime_error("[JVPContext] Graph not prepared. Call prepare() first.");
-    }
-
-    auto start_time = std::chrono::high_resolution_clock::now();
-
-    // Apply halo masking to direction vector
-    torch::Tensor v_safe = v;
-    if (halo_width_ > 0 && v.dim() >= 3) {
-        v_safe = v.clone();
-        auto sizes = v_safe.sizes();
-        if (sizes.size() == 3) {
-            int nj = sizes[0];
-            int ni = sizes[2];
-
-            if (nj > 2 * halo_width_) {
-                v_safe.slice(0, 0, halo_width_).zero_();
-                v_safe.slice(0, nj - halo_width_, nj).zero_();
-            }
-            if (ni > 2 * halo_width_) {
-                v_safe.slice(2, 0, halo_width_).zero_();
-                v_safe.slice(2, ni - halo_width_, ni).zero_();
-            }
-        }
-    }
-
-    // Compute JVP using existing graph
-    // This is much faster than rebuilding the graph
-    // NOTE 2025-01-25: allow_unused=true - see note in compute_jvp_autograd()
-    auto grad_result = torch::autograd::grad(
-        {F_u_},          // outputs (already computed)
-        {u_var_},        // inputs
-        {v_safe},        // grad_outputs (direction vector)
-        /*retain_graph=*/retain_graph_for_next,  // Keep graph for next JVP
-        /*create_graph=*/false,                  // Not needed for Newton-Krylov
-        /*allow_unused=*/true                    // FIX 2025-01-25: Changed for consistency
-    );
-
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-
-    if (g_sdirk3_config.debug_level >= 2) {
-        std::cerr << "[JVPContext] JVP computed in " << duration << " ms (retain="
-                  << retain_graph_for_next << ")" << std::endl;
-    }
-
-    if (!grad_result.empty() && grad_result[0].defined()) {
-        return grad_result[0];
-    } else {
-        // Undefined → zeros (see note in compute_jvp_autograd)
-        // FIX 2025-01-25: Use requires_grad(false) to prevent graph pollution
-        return torch::zeros(v.sizes(), v.options().requires_grad(false));
-    }
-}
-
-void JVPContext::release() {
-    if (is_prepared_) {
-        // Clear tensors to release graph memory
-        u_var_ = torch::Tensor();
-        F_u_ = torch::Tensor();
-        is_prepared_ = false;
-
-        if (g_sdirk3_config.debug_level >= 2) {
-            std::cerr << "[JVPContext] Graph released" << std::endl;
-        }
-    }
-}
 
 } // namespace sdirk3
 } // namespace wrf

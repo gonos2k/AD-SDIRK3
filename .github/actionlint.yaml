@@ -1,0 +1,6 @@
+# actionlint configuration (PR 6). The runner-label rule only knows GitHub's
+# hosted labels; custom self-hosted labels must be declared or actionlint
+# fails the workflow that uses them.
+self-hosted-runner:
+  labels:
+    - sdirk3-wrf

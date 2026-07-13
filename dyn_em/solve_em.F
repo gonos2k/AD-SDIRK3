@@ -79,8 +79,7 @@ SUBROUTINE solve_em ( grid , config_flags  &
    USE module_avgflx_em, ONLY : zero_avgflx, upd_avgflx
    USE module_cpl, ONLY : coupler_on, cpl_settime, cpl_store_input
 #ifdef USE_SDIRK3
-   USE module_implicit_sdirk3  ! For init/finalize/set_base_state functions
-   USE module_implicit_sdirk3_zerocopy  ! For advance_implicit_zerocopy
+   USE module_implicit_sdirk3  ! Sole SDIRK3 Fortran bridge; advance_implicit is zero-copy (v2 C ABI)
 #endif
 
 #if (WRF_CMAQ == 1)

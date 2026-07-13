@@ -68,6 +68,24 @@ torch::Tensor solve_transpose_linear_system_gmres(
         nullptr,
         false,
         false);
+    // ADJOINT FAIL-CLOSE (full-repo review P1-2): the forward solver fail-closes
+    // on non-convergence, but this transpose solve previously returned gmres.x
+    // UNCONDITIONALLY — a stalled/broken-down adjoint solve produced a
+    // partially-converged lambda the caller could not distinguish from a real
+    // gradient, silently corrupting any 4D-Var descent direction built on it.
+    // A wrong gradient is strictly worse than no gradient: refuse instead. The
+    // throw propagates through runAdjointReplay (catch/restore/rethrow) -> the
+    // C wrapper (-1) -> Fortran (ierr stays 1), the already-verified error chain.
+    if (!gmres.success || !(gmres.rel_error <= gmres_tolerance)) {
+        throw std::runtime_error(
+            std::string("sdirk3 adjoint transpose solve did not converge (") +
+            "success=" + (gmres.success ? "true" : "false") +
+            ", rel_error=" + std::to_string(gmres.rel_error) +
+            ", tol=" + std::to_string(gmres_tolerance) +
+            ", iterations=" + std::to_string(gmres.iterations) +
+            ", msg=" + gmres.message +
+            ") — refusing to return a partially-converged adjoint");
+    }
     return gmres.x;
 }
 

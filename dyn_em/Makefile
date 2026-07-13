@@ -28,7 +28,6 @@ MODULES =                 		\
 	  module_stoch.o			\
 	  module_after_all_rk_steps.o	\
 	  module_implicit_sdirk3.o	\
-	  module_implicit_sdirk3_zerocopy.o	\
 	  $(CASE_MODULE)
 
 # possible CASE_MODULE settings
