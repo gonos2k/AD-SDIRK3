@@ -18,6 +18,10 @@ static std::atomic<bool> g_use_finite_diff_jvp{true};  // Default to fast finite
 static std::atomic<int> g_jvp_call_count{0};
 
 // Enable/disable finite difference JVP
+// NOTE (Codex round-2): this toggle no longer affects compute_vjp_autograd —
+// the FD dispatch that made a "VJP" return J*v was removed. Kept because
+// tests/test_gradient_flow.cpp exercises the setter; production JVP method
+// selection lives in the fwad router, not here.
 void set_use_finite_diff_jvp(bool use_fd) {
     g_use_finite_diff_jvp = use_fd;
     // FIX Round160: Gate log with debug_level >= 1
@@ -89,7 +93,13 @@ torch::Tensor compute_jvp_finite_diff(
 }
 
 // JVP computation using PyTorch's autograd engine
-// Computes J(u)*v where J is the Jacobian of F at u
+// Computes J(u)^T * v (reverse-mode VJP) — ALWAYS. Codex round-2 on the
+// rename: the old body first dispatched on g_use_finite_diff_jvp (default
+// true) to compute_jvp_finite_diff, i.e. the "VJP" function returned the
+// FORWARD product J*v by default and J^T v only with the toggle off — one
+// name, two different mathematical objects. The FD dispatch is removed: a
+// caller who wants a JVP uses compute_jvp_finite_diff/compute_jvp_dual (or
+// the production fwad router); this function is now coherently reverse-mode.
 torch::Tensor compute_vjp_autograd(
     const std::function<torch::Tensor(const torch::Tensor&)>& F,
     const torch::Tensor& u,
@@ -99,13 +109,7 @@ torch::Tensor compute_vjp_autograd(
     // Track performance
     // FIX Round160: Gate periodic log with debug_level >= 2
     if (++g_jvp_call_count % 100 == 0 && wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        std::cout << "[JVP] Call count: " << g_jvp_call_count
-                  << ", method: " << (g_use_finite_diff_jvp ? "FD" : "AD") << std::endl;
-    }
-    
-    // Use finite differences for speed if enabled
-    if (g_use_finite_diff_jvp) {
-        return compute_jvp_finite_diff(F, u, v, 1e-5f, halo_width);
+        std::cout << "[VJP] Call count: " << g_jvp_call_count << " (reverse-mode)" << std::endl;
     }
 
     // OPT 2025-01-25: Enable anomaly detection for debugging in-place op issues

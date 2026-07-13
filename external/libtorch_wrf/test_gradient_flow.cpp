@@ -61,7 +61,7 @@ int main() {
             return rhs_func.forward(x);
         };
         
-        torch::Tensor jvp = compute_vjp_autograd(F_wrapper, U, v);
+        torch::Tensor jvp = compute_jvp_finite_diff(F_wrapper, U, v)  /* true JVP (Codex round-2: was routed through the misnamed helper) */;
         
         std::cout << "  JVP shape: " << jvp.sizes() << std::endl;
         std::cout << "  JVP norm: " << jvp.norm().item<float>() << std::endl;
