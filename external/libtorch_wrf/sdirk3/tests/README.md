@@ -96,7 +96,7 @@ F() runs with gradients enabled.
 4. **Autocast normalization**: v_batch normalized to x.dtype() under AMP
 
 **Fixed files**:
-- `wrf_sdirk3_jvp_optimized.cpp`: 4x detach().clone(), 2x zeros fallback
+- ~~`wrf_sdirk3_jvp_optimized.cpp`~~: (removed — the file was deleted in the legacy JVP-API cleanup; its compute_jvp_batch_optimized was declared but never defined nor called)
 - `wrf_sdirk3_jvp_autograd.cpp`: 4x detach().clone() (ad_strict_mode conditional)
 - `jvp_bridge.cpp`: zeros_like safety fix
 - `wrf_sdirk3_jvp_autograd.h`: Comprehensive DEBUG CHECKLIST added
