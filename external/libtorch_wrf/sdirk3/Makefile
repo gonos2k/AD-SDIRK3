@@ -63,41 +63,69 @@ $(info [SDIRK3] Building with _GLIBCXX_USE_CXX11_ABI=$(LIBTORCH_ABI))
 #   - wrf_sdirk3_boundary_ad.cpp: Contains invalidateDzMinCache, invalidateLatCpuCache
 #   - wrf_sdirk3_rayleigh_damping_ad.cpp: Contains invalidateZ1DCache
 #   - wrf_sdirk3_mpi_safety_impl.cpp: Fortran-compatible extern C symbols (with trailing underscore)
-SOURCES = \
-    wrf_sdirk3_globals.cpp \
-    wrf_sdirk3_tile_unified_interface.cpp \
-    wrf_sdirk3_interface_zerocopy.cpp \
-    wrf_sdirk3_zero_copy_interface.cpp \
-    wrf_sdirk3_tile_unified.cpp \
-    wrf_sdirk3_tile_unified_impl.cpp \
-    wrf_sdirk3_newton_solver.cpp \
-    wrf_sdirk3_jvp_autograd.cpp \
-    wrf_hydrostatic_pressure.cpp \
-    wrf_sdirk3_acoustic_substep.cpp \
-    wrf_sdirk3_base_state_zerocopy.cpp \
-    wrf_tile_boundary_optimizer.cpp \
-    wrf_sdirk3_config.cpp \
-    wrf_sdirk3_unified_preconditioner.cpp \
-    wrf_sdirk3_unified_rhs_extended.cpp \
-    wrf_sdirk3_cache_utils.cpp \
-    wrf_sdirk3_boundary_ad.cpp \
-    wrf_sdirk3_rayleigh_damping_ad.cpp \
-    wrf_sdirk3_mpi_safety_impl.cpp \
-    wrf_sdirk3_halo_exchange.cpp \
-    wrf_sdirk3_ad_halo_exchange.cpp
+# THE authoritative core source list lives in wrf_sdirk3_core_sources.txt
+# (full-repo review PR 5): both this Makefile and CMake read it; neither owns
+# a copy. Fail-close manifest validation below runs at parse time — before any
+# compilation — and rejects a missing/empty manifest, duplicates, nonexistent
+# sources, non-.cpp entries, absolute or parent paths, and test/backup/legacy/
+# archive directories (a manifest pointing into a dormant directory is exactly
+# the Makefile.kslab-class hazard this replaces).
+CORE_SOURCE_MANIFEST := wrf_sdirk3_core_sources.txt
+
+ifeq ($(wildcard $(CORE_SOURCE_MANIFEST)),)
+$(error SDIRK3 core source manifest '$(CORE_SOURCE_MANIFEST)' is missing)
+endif
+
+SOURCES := $(shell awk 'NF && $$1 !~ /^\#/ { print $$1 }' $(CORE_SOURCE_MANIFEST))
+
+ifeq ($(strip $(SOURCES)),)
+$(error SDIRK3 core source manifest is empty)
+endif
+
+CORE_DUPS := $(shell printf '%s\n' $(SOURCES) | sort | uniq -d)
+ifneq ($(strip $(CORE_DUPS)),)
+$(error duplicate sources in core manifest: $(CORE_DUPS))
+endif
+
+CORE_NONCPP := $(filter-out %.cpp,$(SOURCES))
+ifneq ($(strip $(CORE_NONCPP)),)
+$(error non-.cpp entries in core manifest: $(CORE_NONCPP))
+endif
+
+CORE_BADPATH := $(shell printf '%s\n' $(SOURCES) | grep -E '^/|\.\.|(^|/)(test|tests|legacy|archive)/|(^|/)backup[^/]*/' || true)
+ifneq ($(strip $(CORE_BADPATH)),)
+$(error forbidden paths in core manifest (absolute, .., or test/backup/legacy/archive dirs): $(CORE_BADPATH))
+endif
+
+CORE_MISSING := $(foreach s,$(SOURCES),$(if $(wildcard $(s)),,$(s)))
+ifneq ($(strip $(CORE_MISSING)),)
+$(error core manifest lists nonexistent sources: $(CORE_MISSING))
+endif
 
 OBJECTS = $(SOURCES:.cpp=.o)
 
 # Target library (must match WRF's expectation)
 LIB_NAME = libwrf_sdirk3_libtorch.a
 
-.PHONY: all clean
+.PHONY: all clean check-core-manifest check-core-archive
 
 all: $(LIB_NAME)
 
-$(LIB_NAME): $(OBJECTS)
-	ar rcs $@ $^
-	@echo "Successfully built minimal library $@"
+AR      ?= ar
+RANLIB  ?= ranlib
+
+# Atomic exact-set reconstruction (PR 5): the old `ar rcs $@ $^` UPDATED an
+# existing archive, so a source removed from the manifest left its member
+# behind forever. Build into a temp archive and rename — a failed build never
+# clobbers the previous good archive, and the member set is exactly $(OBJECTS).
+$(LIB_NAME): $(CORE_SOURCE_MANIFEST) $(OBJECTS)
+	@set -e; \
+	tmp="$@.tmp"; \
+	rm -f "$$tmp"; \
+	$(AR) rcs "$$tmp" $(OBJECTS); \
+	$(RANLIB) "$$tmp"; \
+	mv -f "$$tmp" "$@"
+	@echo "Successfully built production SDIRK3 core $@"
 
 # Header dependency: all .cpp files that include wrf_sdirk3_tile_unified.h
 # must recompile when the header changes (class layout affects ABI).
@@ -128,7 +156,29 @@ DEPFILES = $(OBJECTS:.o=.d)
 	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
 
 clean:
-	rm -f $(OBJECTS) $(DEPFILES) $(LIB_NAME)
+	rm -f $(OBJECTS) $(DEPFILES) $(LIB_NAME) $(LIB_NAME).tmp
+
+# Manifest validation is parse-time (above); this target exists so callers can
+# assert it explicitly and get a positive confirmation line.
+check-core-manifest:
+	@echo "check-core-manifest OK: $(words $(SOURCES)) sources, no duplicates, all present"
+
+# EXACT member-set equality between the built archive and the manifest:
+# missing member, extra member, duplicate member, or a retired old-source
+# member all FAIL. "Expected members are present" alone is NOT the contract.
+check-core-archive: $(LIB_NAME)
+	@set -e; \
+	printf '%s\n' $(SOURCES) | sed 's/\.cpp$$//' | sort > $(LIB_NAME).expected; \
+	ar t $(LIB_NAME) | grep -v '^__\.SYMDEF' | sed -e 's/\.cpp\.o$$//' -e 's/\.obj$$//' -e 's/\.o$$//' | sort > $(LIB_NAME).actual; \
+	dups=$$(uniq -d < $(LIB_NAME).actual); \
+	if [ -n "$$dups" ]; then echo "check-core-archive FAIL: duplicate members:"; echo "$$dups"; rm -f $(LIB_NAME).expected $(LIB_NAME).actual; exit 1; fi; \
+	if ! cmp -s $(LIB_NAME).expected $(LIB_NAME).actual; then \
+	  echo "check-core-archive FAIL: archive/manifest member sets differ:"; \
+	  diff $(LIB_NAME).expected $(LIB_NAME).actual || true; \
+	  rm -f $(LIB_NAME).expected $(LIB_NAME).actual; exit 1; \
+	fi; \
+	rm -f $(LIB_NAME).expected $(LIB_NAME).actual; \
+	echo "check-core-archive OK: exact member-set equality ($(words $(SOURCES)) members)"
 
 test: $(LIB_NAME)
 	@echo "Library built successfully: $(LIB_NAME)"

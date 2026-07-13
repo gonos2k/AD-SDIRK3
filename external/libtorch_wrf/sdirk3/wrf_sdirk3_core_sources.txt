@@ -1,0 +1,28 @@
+# SDIRK3 production core — THE authoritative source manifest (full-repo review
+# PR 5). Both the production Makefile and CMake read this file; neither carries
+# its own copy of the list. One source per line; blank lines and standalone
+# '#' comments only (no inline comments). Paths are relative to this directory;
+# absolute paths, '..', and test/backup/legacy/archive directories are rejected
+# by both build systems' fail-close manifest validation.
+
+wrf_sdirk3_globals.cpp
+wrf_sdirk3_tile_unified_interface.cpp
+wrf_sdirk3_interface_zerocopy.cpp
+wrf_sdirk3_zero_copy_interface.cpp
+wrf_sdirk3_tile_unified.cpp
+wrf_sdirk3_tile_unified_impl.cpp
+wrf_sdirk3_newton_solver.cpp
+wrf_sdirk3_jvp_autograd.cpp
+wrf_hydrostatic_pressure.cpp
+wrf_sdirk3_acoustic_substep.cpp
+wrf_sdirk3_base_state_zerocopy.cpp
+wrf_tile_boundary_optimizer.cpp
+wrf_sdirk3_config.cpp
+wrf_sdirk3_unified_preconditioner.cpp
+wrf_sdirk3_unified_rhs_extended.cpp
+wrf_sdirk3_cache_utils.cpp
+wrf_sdirk3_boundary_ad.cpp
+wrf_sdirk3_rayleigh_damping_ad.cpp
+wrf_sdirk3_mpi_safety_impl.cpp
+wrf_sdirk3_halo_exchange.cpp
+wrf_sdirk3_ad_halo_exchange.cpp
