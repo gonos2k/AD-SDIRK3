@@ -102,6 +102,17 @@ jobs:
       - name: build WRF em_b_wave
         run: |
           set -euo pipefail
+          # Consume the validated libtorch path (else the preflight check is a
+          # false assurance): the sdirk3 sub-Makefile derives TORCH_INCLUDES /
+          # TORCH_LDFLAGS from LIBTORCH_ROOT (`?=`, so env wins) and appends them
+          # via `override CXXFLAGS +=`, so this genuinely redirects the compile
+          # to the configured install. The self-hosted runner's configure option
+          # must reference the SAME libtorch — a mismatch fails the build/link or
+          # crashes the run below (fail-closed either way), never a silent pass.
+          export LIBTORCH_ROOT="${WRF_SDIRK3_LIBTORCH_ROOT}"
+          echo "using LIBTORCH_ROOT=$LIBTORCH_ROOT"
+          test -e "$LIBTORCH_ROOT/include/torch/torch.h" || {
+            echo "FAIL: $LIBTORCH_ROOT is not a libtorch install (no include/torch/torch.h)"; exit 1; }
           printf '%s\n1\n' "${WRF_SDIRK3_CONFIGURE_OPTION}" | ./configure
           ./compile -j 4 em_b_wave
           test -x main/wrf.exe
