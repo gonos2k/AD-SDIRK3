@@ -693,16 +693,16 @@ void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
         // Unpack E/W recv buffers → tensor ghost regions
         if (has_east_exchange) {
             int64_t i_recv_east_start = ni - impl.halo_width_x;
-            auto recv_east_t = torch::from_blob(recv_buffer_east.data(),
+            auto recv_east_t = torch::from_blob(recv_buffer_east.data(),  // LINT_EXCEPTION: CPU opts explicit below
                 {nj, nk, static_cast<int64_t>(impl.halo_width_x)},
-                torch::TensorOptions().dtype(torch::kFloat32));
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
             tensor.slice(2, i_recv_east_start,
                          i_recv_east_start + impl.halo_width_x).copy_(recv_east_t);
         }
         if (has_west_exchange) {
-            auto recv_west_t = torch::from_blob(recv_buffer_west.data(),
+            auto recv_west_t = torch::from_blob(recv_buffer_west.data(),  // LINT_EXCEPTION: CPU opts explicit below
                 {nj, nk, static_cast<int64_t>(impl.halo_width_x)},
-                torch::TensorOptions().dtype(torch::kFloat32));
+                torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
             tensor.slice(2, 0, static_cast<int64_t>(impl.halo_width_x)).copy_(recv_west_t);
         }
     }

@@ -916,7 +916,7 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
 
     try {
         auto opts = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
-        auto lambda_terminal_tensor = torch::from_blob(
+        auto lambda_terminal_tensor = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
             const_cast<float*>(lambda_terminal),
             {expected_size},
             opts).clone();

@@ -299,13 +299,13 @@ void adjoint_mpi_exchange_3d(torch::Tensor& grad_field) {
 
         // Accumulate E/W received grads into interior edges
         if (nbrs.neighbor_east >= 0) {
-            auto recv_t = torch::from_blob(recv_from_east.data(),
-                {nj, nk, halo_x}, torch::TensorOptions().dtype(torch::kFloat32));
+            auto recv_t = torch::from_blob(recv_from_east.data(),  // LINT_EXCEPTION: CPU opts explicit below
+                {nj, nk, halo_x}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
             grad_field.slice(2, i_edge_east, i_edge_east + halo_x).add_(recv_t);
         }
         if (nbrs.neighbor_west >= 0) {
-            auto recv_t = torch::from_blob(recv_from_west.data(),
-                {nj, nk, halo_x}, torch::TensorOptions().dtype(torch::kFloat32));
+            auto recv_t = torch::from_blob(recv_from_west.data(),  // LINT_EXCEPTION: CPU opts explicit below
+                {nj, nk, halo_x}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
             grad_field.slice(2, i_edge_west, i_edge_west + halo_x).add_(recv_t);
         }
 
@@ -343,13 +343,13 @@ void adjoint_mpi_exchange_3d(torch::Tensor& grad_field) {
 
         // Accumulate N/S received grads into interior edges
         if (nbrs.neighbor_north >= 0) {
-            auto recv_t = torch::from_blob(recv_from_north.data(),
-                {halo_y, nk, ni}, torch::TensorOptions().dtype(torch::kFloat32));
+            auto recv_t = torch::from_blob(recv_from_north.data(),  // LINT_EXCEPTION: CPU opts explicit below
+                {halo_y, nk, ni}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
             grad_field.slice(0, j_edge_north, j_edge_north + halo_y).add_(recv_t);
         }
         if (nbrs.neighbor_south >= 0) {
-            auto recv_t = torch::from_blob(recv_from_south.data(),
-                {halo_y, nk, ni}, torch::TensorOptions().dtype(torch::kFloat32));
+            auto recv_t = torch::from_blob(recv_from_south.data(),  // LINT_EXCEPTION: CPU opts explicit below
+                {halo_y, nk, ni}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
             grad_field.slice(0, j_edge_south, j_edge_south + halo_y).add_(recv_t);
         }
 

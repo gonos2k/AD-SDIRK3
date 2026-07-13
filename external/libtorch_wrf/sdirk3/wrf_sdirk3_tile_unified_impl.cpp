@@ -12326,8 +12326,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // flux_w[:, 1:nz_, :] - flux_w[:, 0:nz_-1, :] for all k at once
                 auto flux_diff = flux_w.slice(1, 1, nz_int + 1) - flux_w.slice(1, 0, nz_int);
                 // rdzw as [1, nz_int, 1] for broadcast
-                auto rdzw_t = torch::from_blob(const_cast<float*>(rdzw_ptr), {nz_int},
-                    torch::TensorOptions().dtype(torch::kFloat32)).clone().to(flux_diff.device());
+                auto rdzw_t = torch::from_blob(const_cast<float*>(rdzw_ptr), {nz_int},  // LINT_EXCEPTION: CPU opts explicit below
+                    torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU)).clone().to(flux_diff.device());
                 auto rdzw_3d = rdzw_t.reshape({1, nz_int, 1});
                 auto adv_interior = -flux_diff * rdzw_3d;  // [ny, nz_int, nx_u]
                 // Append zero top boundary
