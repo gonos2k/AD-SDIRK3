@@ -90,13 +90,27 @@ namespace sdirk3 {
  * RNG Handling for JVP/FD Comparison:
  *   If F() contains random operations (dropout, randn, etc.), JVP vs FD comparison
  *   will be unstable because each F() evaluation sees different random values.
+ *   NOTE (Codex round-5): restoring RNG state BETWEEN the two helper calls is
+ *   NOT sufficient — both helpers are FD-based and evaluate F MULTIPLE times
+ *   within a single call (F(u + eps*v) and F(u)); those inner evaluations
+ *   would each draw fresh random numbers, so the difference quotient already
+ *   compares two different random functions regardless of the outer state.
+ *   The randomness must be pinned INSIDE F, per evaluation:
  *   Solutions:
- *     1. Save/restore RNG state around JVP calls:
- *        auto rng_state = torch::get_rng_state();
- *        auto jvp1 = compute_jvp_dual(F, u, v);        // true JVP
- *        torch::set_rng_state(rng_state);
- *        auto jvp2 = compute_jvp_finite_diff(F, u, v);  // Now uses same random values
- *     2. Use deterministic mode for testing:
+ *     1. Pin the RNG inside F so EVERY evaluation replays the same draws
+ *        (within each helper call and across helpers). NOTE: the C++ API has
+ *        no torch::get_rng_state/set_rng_state (those are Python names — the
+ *        previous revision of this example used them and did not compile);
+ *        reseeding per evaluation is the portable libtorch C++ pattern:
+ *        auto F_fixed = [&F](const torch::Tensor& x) {
+ *            torch::manual_seed(0);   // identical draws on every evaluation
+ *            return F(x);
+ *        };
+ *        auto jvp1 = compute_jvp_dual(F_fixed, u, v);          // true JVP
+ *        auto jvp2 = compute_jvp_finite_diff(F_fixed, u, v);   // same fixed noise
+ *     2. Use deterministic mode for testing (fixes ALGORITHM nondeterminism,
+ *        e.g. atomics ordering — it does NOT freeze random OPS like dropout;
+ *        combine with 1 or 3 when F draws random numbers):
  *        at::globalContext().setDeterministicAlgorithms(true, false);
  *     3. Disable randomness in F during validation (e.g., dropout.eval())
  *
