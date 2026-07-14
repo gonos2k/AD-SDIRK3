@@ -63,7 +63,9 @@ void sdirk3_set_timestep_i4_(int* timestep) {
 }
 
 void sdirk3_mpi_safety_init_(void) {
-    wrf::sdirk3::mpi_safety::initializeMPISafety();
+    // Same contract as the BIND(C) spelling: an underscore-ABI caller must
+    // establish the baseline too, or every later MPIExchangeScope fails.
+    sdirk3_mpi_safety_init();
 }
 
 } // extern "C"
