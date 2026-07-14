@@ -69,6 +69,21 @@ namespace sdirk3 {
 // Returns MPI neighbor ranks from the initialized halo exchange module.
 // -1 = no neighbor (physical boundary in Cartesian grid).
 // Must be called after halo_exchange_init().
+// Direction-disambiguating message tags (PR 7A). The previous scheme
+// (Isend tag=dest_rank, Irecv tag=my_rank) collides when the SAME peer is
+// both neighbors — 2 ranks with periodic wrap in the decomposed direction —
+// and the east/west (or north/south) messages cross over (measured:
+// 2x1 periodic_x delivered the peer's WEST edge into the west ghost).
+// A message is tagged by its direction of travel; that is unambiguous for
+// any peer multiplicity. The adjoint reuses the tag of the forward message
+// it reverses.
+enum HaloMsgTag {
+    HALO_TAG_NORTHWARD = 71,
+    HALO_TAG_SOUTHWARD = 72,
+    HALO_TAG_EASTWARD  = 73,
+    HALO_TAG_WESTWARD  = 74,
+};
+
 struct HaloNeighborInfo {
     int neighbor_north, neighbor_south, neighbor_east, neighbor_west;
 };

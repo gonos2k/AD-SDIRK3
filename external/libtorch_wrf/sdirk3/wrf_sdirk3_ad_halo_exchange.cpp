@@ -285,15 +285,15 @@ void adjoint_mpi_exchange_3d(torch::Tensor& grad_field) {
         MPI_Request req_ew[4]; int nreq_ew = 0;
         if (nbrs.neighbor_east >= 0) {
             AD_MPI_CHECK(MPI_Irecv(recv_from_east.data(), ew_int, MPI_FLOAT,
-                     nbrs.neighbor_east, my_rank, comm, &req_ew[nreq_ew++]));
+                     nbrs.neighbor_east, HALO_TAG_EASTWARD, comm, &req_ew[nreq_ew++]));
             AD_MPI_CHECK(MPI_Isend(send_ghost_east.data(), ew_int, MPI_FLOAT,
-                     nbrs.neighbor_east, nbrs.neighbor_east, comm, &req_ew[nreq_ew++]));
+                     nbrs.neighbor_east, HALO_TAG_WESTWARD, comm, &req_ew[nreq_ew++]));
         }
         if (nbrs.neighbor_west >= 0) {
             AD_MPI_CHECK(MPI_Irecv(recv_from_west.data(), ew_int, MPI_FLOAT,
-                     nbrs.neighbor_west, my_rank, comm, &req_ew[nreq_ew++]));
+                     nbrs.neighbor_west, HALO_TAG_WESTWARD, comm, &req_ew[nreq_ew++]));
             AD_MPI_CHECK(MPI_Isend(send_ghost_west.data(), ew_int, MPI_FLOAT,
-                     nbrs.neighbor_west, nbrs.neighbor_west, comm, &req_ew[nreq_ew++]));
+                     nbrs.neighbor_west, HALO_TAG_EASTWARD, comm, &req_ew[nreq_ew++]));
         }
         if (nreq_ew > 0)
             AD_MPI_CHECK(MPI_Waitall(nreq_ew, req_ew, MPI_STATUSES_IGNORE));
@@ -310,9 +310,14 @@ void adjoint_mpi_exchange_3d(torch::Tensor& grad_field) {
             grad_field.slice(2, i_edge_west, i_edge_west + halo_x).add_(recv_t);
         }
 
-        // Zero E/W ghost regions
-        grad_field.slice(2, i_ghost_east, i_ghost_east + halo_x).zero_();
-        grad_field.slice(2, i_ghost_west, i_ghost_west + halo_x).zero_();
+        // Zero E/W ghost regions — ONLY where a neighbor exists (PR 7A).
+        // The forward leaves a boundary rank's neighborless ghost untouched
+        // (identity), so its adjoint must too; unconditional zeroing broke
+        // the global dot-product identity (measured rel err 0.11-0.35).
+        if (nbrs.neighbor_east >= 0)
+            grad_field.slice(2, i_ghost_east, i_ghost_east + halo_x).zero_();
+        if (nbrs.neighbor_west >= 0)
+            grad_field.slice(2, i_ghost_west, i_ghost_west + halo_x).zero_();
     }
 
     // ---- Phase 2: N/S adjoint SECOND (reverse of forward N/S first) ----
@@ -328,16 +333,16 @@ void adjoint_mpi_exchange_3d(torch::Tensor& grad_field) {
         if (nbrs.neighbor_north >= 0) {
             float* ghost_north_ptr = data + j_ghost_north * nk * ni;
             AD_MPI_CHECK(MPI_Irecv(recv_from_north.data(), halo_ns_int, MPI_FLOAT,
-                     nbrs.neighbor_north, my_rank, comm, &req_ns[nreq_ns++]));
+                     nbrs.neighbor_north, HALO_TAG_NORTHWARD, comm, &req_ns[nreq_ns++]));
             AD_MPI_CHECK(MPI_Isend(ghost_north_ptr, halo_ns_int, MPI_FLOAT,
-                     nbrs.neighbor_north, nbrs.neighbor_north, comm, &req_ns[nreq_ns++]));
+                     nbrs.neighbor_north, HALO_TAG_SOUTHWARD, comm, &req_ns[nreq_ns++]));
         }
         if (nbrs.neighbor_south >= 0) {
             float* ghost_south_ptr = data + j_ghost_south * nk * ni;
             AD_MPI_CHECK(MPI_Irecv(recv_from_south.data(), halo_ns_int, MPI_FLOAT,
-                     nbrs.neighbor_south, my_rank, comm, &req_ns[nreq_ns++]));
+                     nbrs.neighbor_south, HALO_TAG_SOUTHWARD, comm, &req_ns[nreq_ns++]));
             AD_MPI_CHECK(MPI_Isend(ghost_south_ptr, halo_ns_int, MPI_FLOAT,
-                     nbrs.neighbor_south, nbrs.neighbor_south, comm, &req_ns[nreq_ns++]));
+                     nbrs.neighbor_south, HALO_TAG_NORTHWARD, comm, &req_ns[nreq_ns++]));
         }
         if (nreq_ns > 0)
             AD_MPI_CHECK(MPI_Waitall(nreq_ns, req_ns, MPI_STATUSES_IGNORE));
@@ -354,9 +359,11 @@ void adjoint_mpi_exchange_3d(torch::Tensor& grad_field) {
             grad_field.slice(0, j_edge_south, j_edge_south + halo_y).add_(recv_t);
         }
 
-        // Zero N/S ghost regions
-        grad_field.slice(0, j_ghost_north, j_ghost_north + halo_y).zero_();
-        grad_field.slice(0, j_ghost_south, j_ghost_south + halo_y).zero_();
+        // Zero N/S ghost regions — ONLY where a neighbor exists (PR 7A, as above).
+        if (nbrs.neighbor_north >= 0)
+            grad_field.slice(0, j_ghost_north, j_ghost_north + halo_y).zero_();
+        if (nbrs.neighbor_south >= 0)
+            grad_field.slice(0, j_ghost_south, j_ghost_south + halo_y).zero_();
     }
 
 #else
