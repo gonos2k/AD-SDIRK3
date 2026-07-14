@@ -1059,6 +1059,9 @@ void sdirk3_halo_exchange(float* state_array, int nx, int ny, int nz, int num_va
                          int ids, int ide, int jds, int jde, int kds, int kde,
                          int ims, int ime, int jms, int jme, int kms, int kme,
                          int ips, int ipe, int jps, int jpe, int kps, int kpe) {
+  // PR 7B: exceptions (incl. the always-on MPI check) must never cross the
+  // extern "C" boundary into Fortran. Fail loudly and stop instead.
+  try {
     
     if (!g_halo_impl) {
         std::cerr << "Error: halo exchange not initialized" << std::endl;
@@ -1123,6 +1126,11 @@ void sdirk3_halo_exchange(float* state_array, int nx, int ny, int nz, int num_va
             }
         }
     }
+  } catch (const std::exception& e) {
+      std::cerr << "SDIRK3_MPI_CALL_FAILED: sdirk3_halo_exchange: "
+                << e.what() << std::endl;
+      std::abort();
+  }
 }
 
 void sdirk3_halo_init(int ids, int ide, int jds, int jde, int kds, int kde,

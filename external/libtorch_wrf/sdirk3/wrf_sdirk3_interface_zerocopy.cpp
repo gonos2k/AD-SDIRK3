@@ -155,9 +155,17 @@ void set_solver_step_outcome_if_present(void* solver_ptr,
 extern "C" void sdirk3_set_mpi_comm(int fortran_comm,
                                      int periodic_x, int periodic_y) {
 #if defined(DMPARALLEL) || defined(DM_PARALLEL)
-    wrf::sdirk3::set_wrf_communicator(
-        static_cast<MPI_Fint>(fortran_comm),
-        periodic_x != 0, periodic_y != 0);
+    // PR 7B: the MPI check throws; a C++ exception must NEVER cross this
+    // extern "C" boundary into Fortran (UB). Fail loudly and stop instead.
+    try {
+        wrf::sdirk3::set_wrf_communicator(
+            static_cast<MPI_Fint>(fortran_comm),
+            periodic_x != 0, periodic_y != 0);
+    } catch (const std::exception& e) {
+        std::cerr << "SDIRK3_MPI_CALL_FAILED: sdirk3_set_mpi_comm: "
+                  << e.what() << std::endl;
+        std::abort();
+    }
 #else
     (void)fortran_comm; (void)periodic_x; (void)periodic_y;
 #endif
