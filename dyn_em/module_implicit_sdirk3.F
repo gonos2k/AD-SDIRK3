@@ -360,6 +360,31 @@ MODULE module_implicit_sdirk3
          INTEGER(C_INT), VALUE :: periodic_x
          INTEGER(C_INT), VALUE :: periodic_y
       END FUNCTION sdirk3_set_mpi_comm_checked
+
+      ! PR 7B (3b-2): rank-level checked halo preparation — THE sole geometry
+      ! authority (C ABI in wrf_sdirk3_halo_c_api.h). 1=success (identical
+      ! re-prepare is a complete no-op), 0=failure with a stable marker.
+      INTEGER(C_INT) FUNCTION sdirk3_halo_prepare_checked( &
+            ids, ide, jds, jde, kds, kde, &
+            ims, ime, jms, jme, kms, kme, &
+            ips, ipe, jps, jpe, kps, kpe, &
+            nprocx, nprocy, mypx, mypy, halo_width) &
+            BIND(C, name="sdirk3_halo_prepare_checked")
+         USE, INTRINSIC :: ISO_C_BINDING
+         INTEGER(C_INT), VALUE :: ids, ide, jds, jde, kds, kde
+         INTEGER(C_INT), VALUE :: ims, ime, jms, jme, kms, kme
+         INTEGER(C_INT), VALUE :: ips, ipe, jps, jpe, kps, kpe
+         INTEGER(C_INT), VALUE :: nprocx, nprocy, mypx, mypy
+         INTEGER(C_INT), VALUE :: halo_width
+      END FUNCTION sdirk3_halo_prepare_checked
+
+      ! PR 7B: explicit rank-halo lifecycle teardown (owned communicator
+      ! freed exactly once; fingerprint invalidated; Policy A configuration
+      ! lifetime ends). Failures stop with a coordinated abort (void ABI).
+      SUBROUTINE sdirk3_halo_finalize() &
+         BIND(C, name="sdirk3_halo_finalize")
+         USE, INTRINSIC :: ISO_C_BINDING
+      END SUBROUTINE sdirk3_halo_finalize
    END INTERFACE
    
    ! Module state with improved solver management
@@ -828,6 +853,12 @@ CONTAINS
       INTEGER :: sdirk3_nprocx, sdirk3_nprocy
       INTEGER :: sdirk3_mypx, sdirk3_mypy
       INTEGER(C_INT) :: mpi_comm_status
+      INTEGER(C_INT) :: halo_prepare_status
+      INTEGER(C_INT) :: measured_halo_width
+      INTEGER :: r_ids, r_ide, r_jds, r_jde, r_kds, r_kde
+      INTEGER :: r_ims, r_ime, r_jms, r_jme, r_kms, r_kme
+      INTEGER :: r_ips, r_ipe, r_jps, r_jpe, r_kps, r_kpe
+      INTEGER(C_INT64_T) :: west_halo, east_halo, south_halo, north_halo
       CHARACTER(LEN=256) :: message
       INTEGER(C_INT) :: step_outcome_rc
       INTEGER(C_INT) :: step_outcome_code
@@ -852,6 +883,32 @@ CONTAINS
       ! tile process info or solver step; a failed validation is fatal too.
       ! Runs before the OpenMP tile loop on the main thread.
 #ifdef DM_PARALLEL
+      ! PR 7B (7C guard): every internal SDIRK stage executes inside ONE
+      ! tile-worker C++ call, so multi-rank stage-halo correctness is NOT
+      ! established. Refuse BEFORE any communicator or halo state mutation —
+      ! all ranks exit on the same condition with the same marker.
+      IF (ntasks_x * ntasks_y > 1) THEN
+         WRITE(message, '(A,I0,A,I0,A,I0,A,I0,A,I0,A,I0)') &
+            "SDIRK3_MPI_STAGE_HALO_UNSUPPORTED: decomposition ", &
+            ntasks_x, " x ", ntasks_y, ", mytask (", mytask_x, ",", &
+            mytask_y, "), rk_step=", rk_step, ", num_tiles=", grid%num_tiles
+         CALL wrf_error_fatal(TRIM(message))
+      END IF
+
+      ! PR 7B (review P1-2): the opt-in AD halo path with multiple tiles is
+      ! UNSUPPORTED (rank halo geometry equivalence unproven). Refuse on the
+      ! MAIN THREAD before any communicator or halo mutation — a worker-side
+      ! throw after other tiles already mutated solver state is a defense
+      ! line, not a rejection point. The C++ guard remains defense-in-depth.
+      IF (config_flags%sdirk3_enable_ad_halo_exchange .AND. &
+          grid%num_tiles > 1) THEN
+         WRITE(message, '(A,I0,A,I0,A,I0)') &
+            "SDIRK3_MPI_MULTI_TILE_UNSUPPORTED: enable_ad_halo_exchange=" // &
+            "true, num_tiles=", grid%num_tiles, ", rk_step=", rk_step, &
+            ", itimestep=", grid%itimestep
+         CALL wrf_error_fatal(TRIM(message))
+      END IF
+
       IF (ntasks_x * ntasks_y > 1) THEN
          IF (local_communicator == MPI_UNDEFINED .OR. &
              local_communicator == MPI_COMM_NULL) THEN
@@ -897,6 +954,63 @@ CONTAINS
       END IF
 #endif
 
+      ! PR 7B (3b-2): rank-level halo preparation on the MAIN thread, before
+      ! any tile process-info or the OpenMP loop. Authoritative rank bounds
+      ! come from get_ijk_from_grid (the subroutine arguments carry the same
+      ! domain/memory dims — verified below, never silently overwritten); the
+      ! halo width is MEASURED from the actual four memory margins, never
+      ! hard-coded (C++ re-validates it against the algorithmic width).
+      CALL get_ijk_from_grid(grid, &
+                            r_ids, r_ide, r_jds, r_jde, r_kds, r_kde, &
+                            r_ims, r_ime, r_jms, r_jme, r_kms, r_kme, &
+                            r_ips, r_ipe, r_jps, r_jpe, r_kps, r_kpe)
+      IF (r_ids /= ids .OR. r_ide /= ide .OR. r_jds /= jds .OR. &
+          r_jde /= jde .OR. r_kds /= kds .OR. r_kde /= kde .OR. &
+          r_ims /= ims .OR. r_ime /= ime .OR. r_jms /= jms .OR. &
+          r_jme /= jme .OR. r_kms /= kms .OR. r_kme /= kme) THEN
+         CALL wrf_error_fatal( &
+            "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: get_ijk_from_grid " // &
+            "disagrees with the subroutine domain/memory arguments")
+      END IF
+
+      west_halo  = INT(r_ips, C_INT64_T) - INT(r_ims, C_INT64_T)
+      east_halo  = INT(r_ime, C_INT64_T) - INT(r_ipe, C_INT64_T)
+      south_halo = INT(r_jps, C_INT64_T) - INT(r_jms, C_INT64_T)
+      north_halo = INT(r_jme, C_INT64_T) - INT(r_jpe, C_INT64_T)
+      IF (west_halo <= 0_C_INT64_T .OR. east_halo /= west_halo .OR. &
+          south_halo /= west_halo .OR. north_halo /= west_halo) THEN
+         WRITE(message, '(A,4(I0,1X))') &
+            "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: west/east/south/north=", &
+            west_halo, east_halo, south_halo, north_halo
+         CALL wrf_error_fatal(TRIM(message))
+      END IF
+      IF (west_halo > INT(HUGE(0_C_INT), C_INT64_T)) THEN
+         CALL wrf_error_fatal( &
+            "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: halo width exceeds C_INT")
+      END IF
+      measured_halo_width = INT(west_halo, C_INT)
+
+      halo_prepare_status = sdirk3_halo_prepare_checked( &
+         INT(r_ids, C_INT), INT(r_ide, C_INT), &
+         INT(r_jds, C_INT), INT(r_jde, C_INT), &
+         INT(r_kds, C_INT), INT(r_kde, C_INT), &
+         INT(r_ims, C_INT), INT(r_ime, C_INT), &
+         INT(r_jms, C_INT), INT(r_jme, C_INT), &
+         INT(r_kms, C_INT), INT(r_kme, C_INT), &
+         INT(r_ips, C_INT), INT(r_ipe, C_INT), &
+         INT(r_jps, C_INT), INT(r_jpe, C_INT), &
+         INT(r_kps, C_INT), INT(r_kpe, C_INT), &
+         INT(sdirk3_nprocx, C_INT), INT(sdirk3_nprocy, C_INT), &
+         INT(sdirk3_mypx, C_INT), INT(sdirk3_mypy, C_INT), &
+         measured_halo_width)
+      IF (halo_prepare_status /= 1_C_INT) THEN
+         WRITE(message, '(A,4(I0,1X),A,I0)') &
+            "SDIRK3_MPI_HALO_PREPARE_FAILED: margins W/E/S/N=", &
+            west_halo, east_halo, south_halo, north_halo, &
+            ", num_tiles=", grid%num_tiles
+         CALL wrf_error_fatal(TRIM(message))
+      END IF
+
       DO ij = 1, grid%num_tiles
          IF (C_ASSOCIATED(tile_solvers(ij))) THEN
             CALL sdirk3_tile_set_mpi_process_info(tile_solvers(ij), &
@@ -905,8 +1019,8 @@ CONTAINS
          END IF
       END DO
 
-      ! Domain dimensions are already passed as parameters
-      ! No need to call get_ijk_from_grid
+      ! Rank-level halo preparation above already fetched and cross-checked
+      ! the authoritative rank bounds via get_ijk_from_grid.
 
       ! Process each tile with Zero-Copy approach
       ! P0 FIX (2026-07-12, external review #4): bounds/dims/scalars/bdy_cfg and the
@@ -1213,11 +1327,21 @@ CONTAINS
             END IF
          END DO
          
+         ! PR 7B (review P1-1): the rank halo lifecycle now creates an owned
+         ! communicator, a geometry fingerprint and a published state — end
+         ! them EXACTLY ONCE here, on the main thread, after every tile
+         ! solver is destroyed. Without this a re-init stayed bound to the
+         ! previous fingerprint/communicator.
+         CALL sdirk3_halo_finalize()
+
          IF (ALLOCATED(tile_solvers)) DEALLOCATE(tile_solvers)
          IF (ALLOCATED(solver_valid)) DEALLOCATE(solver_valid)
          IF (ALLOCATED(solver_states)) DEALLOCATE(solver_states)
          
          sdirk3_initialized = .FALSE.
+         ! PR 7B (review P1-1): without this reset a re-created solver set
+         ! never receives its base state again.
+         base_state_initialized = .FALSE.
          num_tiles_initialized = 0
 
          ! v20.14r27n: Reset config freeze so re-initialization can set config again

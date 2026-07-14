@@ -24193,18 +24193,15 @@ void TileSDIRK3UnifiedSolver::performHaloExchange(torch::Tensor& U_stage) {
     // setWRFIndices() is only called once during solver creation, so re-init
     // must happen here when set_wrf_communicator() bumps the epoch.
     checkAndInvalidateOnEpochChange();
-    if (!halo_exchange_initialized_) {
-        const int halo_width = wrf::sdirk3::g_sdirk3_config.halo_width;
-        wrf::sdirk3::halo_exchange_init(
-            ids_, ide_, jds_, jde_, kds_, kde_,
-            ims_, ime_, jms_, jme_, kms_, kme_,
-            its_, ite_, jts_, jte_, kts_, kte_,
-            nprocx_, nprocy_, mypx_, mypy_,
-            halo_width
-        );
+    // PR 7B: tile workers never run lifecycle MPI, and this site passed
+    // TILE bounds as the rank PATCH bounds. Rank-level preparation
+    // (sdirk3_halo_prepare_checked, Fortran main thread) is the sole
+    // authority; here we only SYNC solver-local caches to a published state.
+    if (!halo_exchange_initialized_ &&
+        wrf::sdirk3::halo_exchange_is_initialized()) {
         syncHaloStateAfterInit();
     }
-    // If still not initialized after re-init attempt, skip exchange
+    // If not prepared, skip exchange
     if (!halo_exchange_initialized_) {
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
             std::cerr << "[STAGE HALO] Skipped: halo exchange init failed" << std::endl;
@@ -26306,21 +26303,13 @@ void TileSDIRK3UnifiedSolver::setWRFIndices(
         }
     }
 
-    // Initialize the halo exchange system (only once per tile).
-    // This creates g_halo_impl so that halo_exchange_3d_tensor() performs
-    // actual MPI communication instead of returning early.
-    // For single-tile (nprocx*nprocy==1), MPI sends are no-ops but
-    // g_halo_impl still exists for dimension validation.
-    // v10: Check epoch first — comm may have changed since last init
+    // PR 7B: this site initialized the PROCESS-GLOBAL halo from a tile
+    // worker "using tile bounds as patch bounds" (its own comment admitted
+    // the defect). Rank-level preparation is the sole authority now; only
+    // solver-local caches are synced here.
     checkAndInvalidateOnEpochChange();
-    if (!halo_exchange_initialized_) {
-        wrf::sdirk3::halo_exchange_init(
-            ids_, ide_, jds_, jde_, kds_, kde_,
-            ims_, ime_, jms_, jme_, kms_, kme_,
-            its_, ite_, jts_, jte_, kts_, kte_,  // Using tile bounds as patch bounds
-            nprocx_, nprocy_, mypx_, mypy_,
-            halo_width
-        );
+    if (!halo_exchange_initialized_ &&
+        wrf::sdirk3::halo_exchange_is_initialized()) {
         syncHaloStateAfterInit();
     }
 }
