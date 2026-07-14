@@ -5572,12 +5572,18 @@ vertical_coefficients:
         // and sync solver-local caches. No init, no warning-fallback.
         checkAndInvalidateOnEpochChange();
         if (ad_halo_viable) {
-            TORCH_CHECK(wrf::sdirk3::halo_exchange_is_initialized(),
-                "SDIRK3_MPI_HALO_NOT_PREPARED: rank-level halo preparation "
-                "must complete before entering the tile solver");
-            if (!halo_exchange_initialized_) {
-                syncHaloStateAfterInit();  // solver-local caches only
-            }
+            // Review §8 (Codex): this path is multi-tile BY CONSTRUCTION
+            // (ad_halo_requested includes is_multi_tile), and multi-tile
+            // rank-halo geometry equivalence is UNPROVEN — the deleted lazy
+            // init took the FIRST tile's bounds as the rank geometry, which
+            // is exactly the defect. Until tile/patch equivalence is proven,
+            // the configuration is refused with the designed stable marker
+            // (an incidental NOT_PREPARED abort here would misattribute the
+            // cause). The opt-in knob default keeps production unaffected.
+            TORCH_CHECK(false,
+                "SDIRK3_MPI_MULTI_TILE_UNSUPPORTED: the AD halo path "
+                "requires multi-tile geometry equivalence that is not yet "
+                "proven; rank-level preparation covers num_tiles=1 only");
         }
 
         // Finding #57: neighbor_cache_valid_ defense
