@@ -103,12 +103,10 @@ bool halo_exchange_is_initialized();
 // state is initialized but does NOT require exchange (PR 7B review P1).
 bool halo_exchange_requires_exchange() noexcept;
 
-// Initialize halo exchange system
-void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
-                       int ims, int ime, int jms, int jme, int kms, int kme,
-                       int ips, int ipe, int jps, int jpe, int kps, int kpe,
-                       int nprocx, int nprocy, int mypx, int mypy,
-                       int halo_width);
+// PR 7B (P1): raw halo_exchange_init is NO LONGER PUBLIC — the sole
+// initialization authority is the checked prepare (C ABI
+// sdirk3_halo_prepare_checked), whose Lifecycle scope and geometry
+// fingerprint cannot be bypassed.
 
 // Finalize halo exchange system
 void halo_exchange_finalize();

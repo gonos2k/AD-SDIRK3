@@ -29,10 +29,15 @@
 #include "wrf_sdirk3_halo_exchange.h"
 #include "wrf_sdirk3_ad_halo_exchange.h"
 #include "wrf_sdirk3_mpi_safety.h"
+#include "wrf_sdirk3_config.h"
 
 // The REAL production init entry points (both linkage spellings).
 extern "C" void sdirk3_mpi_safety_init(void);
 extern "C" void sdirk3_mpi_safety_init_(void);
+// The sole geometry authority (raw halo_exchange_init is no longer public).
+extern "C" int sdirk3_halo_prepare_checked(
+    int, int, int, int, int, int, int, int, int, int, int, int,
+    int, int, int, int, int, int, int, int, int, int, int);
 
 using namespace wrf::sdirk3;
 
@@ -114,10 +119,15 @@ Geom setup_case(const Case& c, MPI_Comm cart) {
     g.nk = g.kde - g.kds + 1;
 
     set_wrf_communicator(MPI_Comm_c2f(cart), c.periodic_x, c.periodic_y);
-    halo_exchange_init(g.ids, g.ide, g.jds, g.jde, g.kds, g.kde,
-                       g.ims, g.ime, g.jms, g.jme, g.kds, g.kde,
-                       g.ips, g.ipe, g.jps, g.jpe, g.kds, g.kde,
-                       c.nprocx, c.nprocy, g.mypx, g.mypy, c.halo_w);
+    // through the sole checked authority; the configured width is the
+    // contract the prepare validates against
+    wrf::sdirk3::g_sdirk3_config.halo_width = c.halo_w;
+    int st = sdirk3_halo_prepare_checked(
+        g.ids, g.ide, g.jds, g.jde, g.kds, g.kde,
+        g.ims, g.ime, g.jms, g.jme, g.kds, g.kde,
+        g.ips, g.ipe, g.jps, g.jpe, g.kds, g.kde,
+        c.nprocx, c.nprocy, g.mypx, g.mypy, c.halo_w);
+    TORCH_CHECK(st == 1, "setup_case: halo prepare failed");
     return g;
 }
 
