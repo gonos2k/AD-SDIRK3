@@ -33,7 +33,11 @@ jobs:
           fetch-depth: 0
 
       - name: workflow supply-chain policy (SHA pins, event rules, permissions)
-        run: bash .github/ci/check_action_pins.sh
+        run: |
+          set -euo pipefail
+          # structural checker needs a YAML parser; pinned, never floating
+          python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet 'pyyaml==6.0.2'
+          bash .github/ci/check_action_pins.sh
 
       - name: shell script syntax
         run: |
