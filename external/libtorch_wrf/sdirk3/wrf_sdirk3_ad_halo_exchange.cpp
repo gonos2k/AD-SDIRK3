@@ -226,14 +226,17 @@ void adjoint_mpi_exchange_3d(torch::Tensor& grad_field) {
     //
     // Tags match the forward exactly (roles reversed: ghost↔edge).
 
-    // PR 7B (P1): this is a PUBLIC primitive — it must carry its own
-    // FieldPrimitive scope, and the scope comes BEFORE the initialized
-    // check (is_initialized() reads the global unique_ptr, which races
-    // lifecycle publish/reset without the scope). Alone it is the outer
-    // scope; under the AD AdjointBatch it nests legally.
+    // PR 7B (review): is_initialized() now reads a race-free atomic, so the
+    // historical uninitialized NO-OP stays a pre-scope fast path; the scope
+    // then guards every actual global read (and the state is re-validated
+    // by the checked accessors below).
+    if (!halo_exchange_is_initialized()) return;
+
+    // PUBLIC primitive: carries its own FieldPrimitive scope — alone it is
+    // the outer scope; under the AD AdjointBatch it nests legally.
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::FieldPrimitive, "adjoint_mpi_exchange_3d");
-    if (!halo_exchange_is_initialized()) return;
+    if (!halo_exchange_is_initialized()) return;  // finalized in between
 
     MPI_Comm comm = halo_exchange_get_comm();
     int my_rank = halo_exchange_get_rank();

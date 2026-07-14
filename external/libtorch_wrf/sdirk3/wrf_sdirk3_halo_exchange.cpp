@@ -15,6 +15,7 @@
 #include <iostream>
 #include <limits>   // FIX Round169: For std::numeric_limits
 #include <memory>   // OPT Pass34: For std::unique_ptr
+#include <atomic>   // PR 7B: g_halo_ready pre-check
 #include <cstdlib>  // OPT Pass34: For std::atexit
 
 #ifdef DMPARALLEL
@@ -161,6 +162,12 @@ struct HaloExchangeImpl {
 //   - Explicit finalize() still recommended before MPI_Finalize for clean shutdown
 // ═══════════════════════════════════════════════════════════════════════════
 static std::unique_ptr<HaloExchangeImpl> g_halo_impl = nullptr;
+// PR 7B (review): race-free existence pre-check. The unique_ptr itself may
+// only be read under an MPIExchangeScope; this atomic preserves the
+// historical serial/uninitialized NO-OP without touching the pointer.
+// It is a fast pre-check, not a lifetime lock — re-check g_halo_impl
+// under the scope.
+static std::atomic<bool> g_halo_ready{false};
 
 // Epoch counter: incremented on every comm change or finalize event.
 static uint64_t g_halo_exchange_epoch = 0;
@@ -205,6 +212,7 @@ static void halo_exchange_atexit_cleanup() {
     // guaranteed on the EXPLICIT finalize/re-init paths only. This atexit
     // safety net deliberately performs no MPI calls; at process exit the OS
     // reclaims the resource.
+    g_halo_ready.store(false, std::memory_order_release);
     g_halo_impl.reset();
 }
 
@@ -428,6 +436,7 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
     comm_rollback.c = nullptr;  // both communicators accounted for: disarm
 #endif
     g_halo_impl = std::move(candidate);
+    g_halo_ready.store(true, std::memory_order_release);
 
     // FIX Round170: Gate initialization output to avoid hot-path spam
     // v11: Use file-scope g_halo_init_logged (reset by set_wrf_communicator on comm change)
@@ -459,6 +468,7 @@ static void halo_exchange_finalize_impl() {
 #ifdef DMPARALLEL
     int mpi_finalized = 0;
     if (MPI_Finalized(&mpi_finalized) == MPI_SUCCESS && mpi_finalized) {
+        g_halo_ready.store(false, std::memory_order_release);
         g_halo_impl.reset();
         ++g_halo_exchange_epoch;
         return;
@@ -470,6 +480,7 @@ static void halo_exchange_finalize_impl() {
     // lifecycle — after an explicit finalize a new configuration is legal.
     g_wrf_comm_set = false;
 #endif
+    g_halo_ready.store(false, std::memory_order_release);
     g_halo_impl.reset();
     ++g_halo_exchange_epoch;
 }
@@ -527,7 +538,9 @@ HaloWidthInfo halo_exchange_get_widths() {
 }
 
 bool halo_exchange_is_initialized() {
-    return g_halo_impl != nullptr;
+    // PR 7B (review): callers may be unscoped — read the race-free atomic,
+    // never the unique_ptr. True only for a fully-validated published state.
+    return g_halo_ready.load(std::memory_order_acquire);
 }
 
 uint64_t halo_exchange_get_epoch() { return g_halo_exchange_epoch; }
@@ -651,15 +664,17 @@ void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
     torch::NoGradGuard no_grad;
 
 #ifdef DMPARALLEL
-    // PR 7B (P1): the scope comes BEFORE the first g_halo_impl read — a
-    // lifecycle thread may be publishing/resetting the unique_ptr, and an
-    // unsynchronized read (even one that only checks for null) is a data
-    // race. A wrong-thread caller is rejected by the scope without ever
-    // touching global halo state.
+    // PR 7B (review): historical serial/uninitialized NO-OP preserved via the
+    // race-free atomic pre-check — the unique_ptr itself is only read under
+    // the scope (an unsynchronized pointer read races lifecycle
+    // publish/reset), and it is RE-CHECKED there.
+    if (!g_halo_ready.load(std::memory_order_acquire)) {
+        return;
+    }
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::FieldPrimitive, "halo_exchange_3d_tensor");
     if (!g_halo_impl) {
-        return;  // serial / not initialized: nothing to exchange
+        return;  // finalized between pre-check and scope
     }
     auto& impl = *g_halo_impl;
 
@@ -871,13 +886,16 @@ void halo_exchange_multiple(std::vector<torch::Tensor>& tensors, bool force_full
     if (tensors.empty()) {
         return;
     }
+    if (!g_halo_ready.load(std::memory_order_acquire)) {
+        return;  // historical serial/uninitialized no-op (race-free pre-check)
+    }
 
     // PR 7B (3b-2): the whole pack -> NS -> EW -> unpack sequence is ONE
     // logical exchange; nothing may interleave between fields.
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::ForwardBatch, "halo_exchange_multiple");
     if (!g_halo_impl) {
-        return;  // serial / not initialized: nothing to exchange
+        return;  // finalized between pre-check and scope
     }
 
     // FIX Round170: Add NoGradGuard to prevent AD graph pollution

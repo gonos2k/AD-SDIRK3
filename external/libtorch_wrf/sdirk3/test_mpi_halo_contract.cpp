@@ -372,30 +372,6 @@ int main(int argc, char** argv) {
         MPI_Comm cart;
         MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, 0, &cart);
 
-        // STANDING (review P1): while the MAIN thread holds a Lifecycle
-        // scope, a worker's exchange attempt must die at the scope with a
-        // stable marker BEFORE any global halo-state read.
-        static bool lifecycle_worker_neg_done = false;
-        if (!lifecycle_worker_neg_done) {
-            lifecycle_worker_neg_done = true;
-            mpi_safety::MPIExchangeScope held(
-                mpi_safety::MPIExchangeKind::Lifecycle, "held for negative");
-            bool ok = false;
-            std::thread w([&] {
-                auto t = torch::zeros({4, 2, 4}, torch::kFloat32);
-                try { halo_exchange_3d_tensor(t); }
-                catch (const std::exception& e) {
-                    ok = std::strstr(e.what(),
-                        "SDIRK3_MPI_THREAD_CONTRACT_VIOLATION") != nullptr ||
-                         std::strstr(e.what(),
-                        "SDIRK3_MPI_CONCURRENT_EXCHANGE_UNSUPPORTED") != nullptr;
-                }
-            });
-            w.join();
-            if (!ok) fail("lifecycle-held", "worker exchange not rejected");
-            ++g_checks;
-        }
-
         // STANDING (review, POLICY A): the steady-state repeated setter call
         // (identical communicator + flags) is a no-op; a DIFFERENT (congruent
         // duplicate) communicator while configured must fail closed with the
@@ -405,6 +381,33 @@ int main(int argc, char** argv) {
             policyA_done = true;
             Case c{px, py, false, false, 1, 0};
             setup_case(c, cart);
+
+            // STANDING (review P1): with halo INITIALIZED and the main
+            // thread HOLDING a Lifecycle scope, a worker's exchange attempt
+            // must die at the scope with a stable marker before any global
+            // halo-state pointer read (the atomic pre-check passes here, so
+            // the rejection is genuinely the scope's).
+            {
+                mpi_safety::MPIExchangeScope held(
+                    mpi_safety::MPIExchangeKind::Lifecycle, "held for negative");
+                bool ok = false;
+                std::thread w([&] {
+                    auto t = torch::zeros({4, 2, 4}, torch::kFloat32);
+                    try { halo_exchange_3d_tensor(t); }
+                    catch (const std::exception& e) {
+                        ok = std::strstr(e.what(),
+                            "SDIRK3_MPI_THREAD_CONTRACT_VIOLATION") != nullptr ||
+                             std::strstr(e.what(),
+                            "SDIRK3_MPI_CONCURRENT_EXCHANGE_UNSUPPORTED") != nullptr;
+                    }
+                });
+                w.join();
+                if (!ok) fail("lifecycle-held", "worker exchange not rejected");
+                ++g_checks;
+            }
+
+            // Serial/uninitialized NO-OP is standing too: after finalize a
+            // bare exchange call must return quietly (historical contract).
             try {
                 set_wrf_communicator(MPI_Comm_c2f(cart), false, false);
                 ++g_checks;  // identical repeat: quiet no-op
@@ -424,6 +427,14 @@ int main(int argc, char** argv) {
             }
             MPI_Comm_free(&dup);
             halo_exchange_finalize();
+            auto noop = torch::zeros({4, 2, 4}, torch::kFloat32);
+            auto before = noop.clone();
+            halo_exchange_3d_tensor(noop);  // uninitialized: silent no-op
+            std::vector<torch::Tensor> batch{noop};
+            halo_exchange_multiple(batch);  // uninitialized: silent no-op
+            if (!torch::equal(noop, before))
+                fail("noop", "uninitialized exchange modified the tensor");
+            ++g_checks;
         }
 
         for (bool per_x : {false, true})
