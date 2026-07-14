@@ -8,6 +8,7 @@
 
 #include "wrf_sdirk3_halo_exchange.h"
 #include "wrf_sdirk3_mpi_safety.h"  // PR 7B: shared always-on MPI check
+#include "wrf_sdirk3_config.h"      // PR 7B: configured halo width authority
 #include "wrf_sdirk3_common_macros.h"  // OPT Pass34: For SDIRK3_MPI_CHECK
 #include <torch/torch.h>
 #include <vector>
@@ -15,6 +16,7 @@
 #include <iostream>
 #include <limits>   // FIX Round169: For std::numeric_limits
 #include <memory>   // OPT Pass34: For std::unique_ptr
+#include <array>    // PR 7B: prepare fingerprint
 #include <atomic>   // PR 7B: g_halo_ready pre-check
 #include <cstdlib>  // OPT Pass34: For std::atexit
 
@@ -200,11 +202,10 @@ static_assert(sizeof(MPI_Fint) == sizeof(int),
 // explicit finalize first. C++ owns this state: a Fortran SAVE flag cannot
 // know that the C++ side was finalized or torn down by a failure.
 struct HaloPrepareFingerprint {
-    int v[21];
-    bool operator==(const HaloPrepareFingerprint& o) const {
-        for (int i = 0; i < 21; ++i) if (v[i] != o.v[i]) return false;
-        return true;
-    }
+    // ALL 23 ABI inputs (P1-2): mypx/mypy included — same bounds with a
+    // different declared coordinate is a reconfiguration, never a no-op.
+    std::array<int, 23> v;
+    bool operator==(const HaloPrepareFingerprint& o) const { return v == o.v; }
 };
 static HaloPrepareFingerprint g_prepare_fp{};
 static bool g_prepare_fp_valid = false;
@@ -551,17 +552,78 @@ static void set_wrf_communicator_impl(MPI_Fint fortran_comm, bool periodic_x, bo
 // Lifecycle scope; bodies live in the _impl functions so internal
 // cross-calls (set_wrf_communicator -> finalize) never nest two Lifecycle
 // scopes. Reconfiguration during an active exchange fails closed here.
-void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
-                       int ims, int ime, int jms, int jme, int kms, int kme,
-                       int ips, int ipe, int jps, int jpe, int kps, int kpe,
-                       int nprocx, int nprocy, int mypx, int mypy,
-                       int halo_width) {
-    mpi_safety::MPIExchangeScope scope(
-        mpi_safety::MPIExchangeKind::Lifecycle, "halo_exchange_init");
+// PR 7B (P1): the WHOLE prepare — geometry validation, fingerprint read/
+// write, and initialization — is ONE Lifecycle operation. An identical
+// re-prepare still passes the baseline/single-flight checks (a worker
+// calling prepare is rejected at the scope, never fast-pathed around it),
+// and the non-atomic fingerprint state is only ever touched under the lock.
+static void halo_prepare_impl(const HaloPrepareFingerprint& fp,
+                              int ids, int ide, int jds, int jde, int kds, int kde,
+                              int ims, int ime, int jms, int jme, int kms, int kme,
+                              int ips, int ipe, int jps, int jpe, int kps, int kpe,
+                              int nprocx, int nprocy, int mypx, int mypy,
+                              int halo_width) {
+    // Geometry contract (P1-3): int64 arithmetic (no signed-overflow UB on
+    // hostile ABI input), bound ordering, EXACT fixed-width margins on all
+    // four sides (>= admitted asymmetric/extra margins that the single
+    // per-axis width state cannot represent), and a sane process grid.
+    TORCH_CHECK(halo_width > 0,
+        "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: halo_width=", halo_width);
+    TORCH_CHECK(halo_width == g_sdirk3_config.halo_width,
+        "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: caller halo_width=",
+        halo_width, " differs from configured halo_width=",
+        g_sdirk3_config.halo_width);
+    TORCH_CHECK(ims <= ips && ips <= ipe && ipe <= ime &&
+                jms <= jps && jps <= jpe && jpe <= jme &&
+                kms <= kps && kps <= kpe && kpe <= kme,
+        "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: invalid bound ordering");
+    const int64_t w = halo_width;
+    const int64_t west  = int64_t{ips} - int64_t{ims};
+    const int64_t east  = int64_t{ime} - int64_t{ipe};
+    const int64_t south = int64_t{jps} - int64_t{jms};
+    const int64_t north = int64_t{jme} - int64_t{jpe};
+    TORCH_CHECK(west == w && east == w && south == w && north == w,
+        "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: fixed-width halo required; "
+        "west/east/south/north=", west, "/", east, "/", south, "/", north,
+        ", configured=", w);
+    TORCH_CHECK(nprocx > 0 && nprocy > 0 &&
+                mypx >= 0 && mypx < nprocx && mypy >= 0 && mypy < nprocy,
+        "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: invalid process grid/"
+        "coordinate (", mypx, ",", mypy, ") in ", nprocx, "x", nprocy);
+
+    if (g_prepare_fp_valid && g_halo_ready.load(std::memory_order_acquire)) {
+        TORCH_CHECK(fp == g_prepare_fp,
+            "SDIRK3_MPI_HALO_RECONFIGURATION_UNSUPPORTED: geometry changed "
+            "while prepared; call sdirk3_halo_finalize() first");
+        return;  // identical fingerprint: complete no-op
+    }
     halo_exchange_init_impl(ids, ide, jds, jde, kds, kde,
                             ims, ime, jms, jme, kms, kme,
                             ips, ipe, jps, jpe, kps, kpe,
                             nprocx, nprocy, mypx, mypy, halo_width);
+    g_prepare_fp = fp;
+    g_prepare_fp_valid = true;
+}
+
+extern "C" int sdirk3_halo_prepare_checked(
+    int, int, int, int, int, int, int, int, int, int, int, int,
+    int, int, int, int, int, int, int, int, int, int, int) noexcept;
+
+static void halo_prepare(int ids, int ide, int jds, int jde, int kds, int kde,
+                         int ims, int ime, int jms, int jme, int kms, int kme,
+                         int ips, int ipe, int jps, int jpe, int kps, int kpe,
+                         int nprocx, int nprocy, int mypx, int mypy,
+                         int halo_width) {
+    mpi_safety::MPIExchangeScope scope(
+        mpi_safety::MPIExchangeKind::Lifecycle, "halo_prepare");
+    HaloPrepareFingerprint fp{{{ids, ide, jds, jde, kds, kde,
+                                ims, ime, jms, jme, kms, kme,
+                                ips, ipe, jps, jpe, kps, kpe,
+                                nprocx, nprocy, mypx, mypy, halo_width}}};
+    halo_prepare_impl(fp, ids, ide, jds, jde, kds, kde,
+                      ims, ime, jms, jme, kms, kme,
+                      ips, ipe, jps, jpe, kps, kpe,
+                      nprocx, nprocy, mypx, mypy, halo_width);
 }
 
 void halo_exchange_finalize() {
@@ -1394,18 +1456,17 @@ void sdirk3_halo_init(int ids, int ide, int jds, int jde, int kds, int kde,
                      int ips, int ipe, int jps, int jpe, int kps, int kpe,
                      int nprocx, int nprocy, int mypx, int mypy,
                      int halo_width) {
-  // halo_exchange_init reaches the throwing MPI check (Comm_rank/size,
-  // Topo_test, Cart_get/shift/rank) and TORCH_CHECK; nothing may unwind
-  // through this C ABI.
-  try {
-    halo_exchange_init(ids, ide, jds, jde, kds, kde,
-                      ims, ime, jms, jme, kms, kme,
-                      ips, ipe, jps, jpe, kps, kpe,
-                      nprocx, nprocy, mypx, mypy, halo_width);
-  } catch (const std::exception& e) {
-      wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_halo_init", e.what());
-  } catch (...) {
-      wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_halo_init", nullptr);
+  // PR 7B (P1): the legacy void ABI routes through the CHECKED prepare —
+  // a raw init that bypassed the fingerprint authority could publish
+  // geometry B while the fingerprint still said A, making the next
+  // prepare(A) a wrong no-op. Failure = coordinated stop (void ABI).
+  if (sdirk3_halo_prepare_checked(ids, ide, jds, jde, kds, kde,
+                                  ims, ime, jms, jme, kms, kme,
+                                  ips, ipe, jps, jpe, kps, kpe,
+                                  nprocx, nprocy, mypx, mypy,
+                                  halo_width) != 1) {
+      wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+          "sdirk3_halo_init", "checked halo preparation returned 0");
   }
 }
 
@@ -1414,39 +1475,12 @@ int sdirk3_halo_prepare_checked(
     int ims, int ime, int jms, int jme, int kms, int kme,
     int ips, int ipe, int jps, int jpe, int kps, int kpe,
     int nprocx, int nprocy, int mypx, int mypy,
-    int halo_width) {
+    int halo_width) noexcept {
   try {
-    // Geometry contract (review §5): the halo width must be explicit and
-    // the rank MEMORY layout must actually carry it on every side. An
-    // asymmetric memory halo is rejected, never silently truncated.
-    TORCH_CHECK(halo_width > 0,
-        "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: halo_width=", halo_width);
-    TORCH_CHECK(ips - ims >= halo_width && ime - ipe >= halo_width &&
-                jps - jms >= halo_width && jme - jpe >= halo_width,
-        "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: memory halo smaller than "
-        "halo_width=", halo_width, " (i: ", ips - ims, "/", ime - ipe,
-        ", j: ", jps - jms, "/", jme - jpe, ")");
-
-    HaloPrepareFingerprint fp{{ids, ide, jds, jde, kds, kde,
-                               ims, ime, jms, jme, kms, kme,
-                               ips, ipe, jps, jpe, kps, kpe,
-                               nprocx, nprocy, halo_width}};
-    // mypx/mypy differ per rank by design and are validated against the
-    // communicator inside init; the fingerprint pins the rank-local values
-    // too via the patch/memory bounds they imply.
-    if (g_prepare_fp_valid && halo_exchange_is_initialized()) {
-        TORCH_CHECK(fp == g_prepare_fp,
-            "SDIRK3_MPI_HALO_RECONFIGURATION_UNSUPPORTED: geometry changed "
-            "while prepared; call sdirk3_halo_finalize() first");
-        return 1;  // identical fingerprint: complete no-op
-    }
-
-    halo_exchange_init(ids, ide, jds, jde, kds, kde,
-                       ims, ime, jms, jme, kms, kme,
-                       ips, ipe, jps, jpe, kps, kpe,
-                       nprocx, nprocy, mypx, mypy, halo_width);
-    g_prepare_fp = fp;
-    g_prepare_fp_valid = true;
+    halo_prepare(ids, ide, jds, jde, kds, kde,
+                 ims, ime, jms, jme, kms, kme,
+                 ips, ipe, jps, jpe, kps, kpe,
+                 nprocx, nprocy, mypx, mypy, halo_width);
     return 1;
   } catch (const std::exception& e) {
     std::cerr << "SDIRK3_MPI_HALO_PREPARE_FAILED: " << e.what() << std::endl;
