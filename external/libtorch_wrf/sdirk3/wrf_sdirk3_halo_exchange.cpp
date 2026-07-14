@@ -412,10 +412,13 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
     // the fully-built candidate. This is the only line that mutates global
     // state; every failure above leaves the prior valid state untouched.
 #ifdef DMPARALLEL
-    comm_rollback.c = nullptr;  // candidate survives: disarm the rollback
+    // Free the PREVIOUS owned communicator FIRST — free_owned_comm can throw
+    // (always-on MPI check), and until it succeeds the rollback must stay
+    // armed so the candidate's fresh duplicate cannot leak on unwind.
     if (g_halo_impl) {
         free_owned_comm(*g_halo_impl);
     }
+    comm_rollback.c = nullptr;  // both communicators accounted for: disarm
 #endif
     g_halo_impl = std::move(candidate);
 
