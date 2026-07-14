@@ -158,7 +158,7 @@ jobs:
         run: |
           set -euo pipefail
           ctest --test-dir build/sdirk3-core -N \
-            | sed -n 's/^  Test #[0-9]*: //p' | sort > /tmp/ctest_actual.txt
+            | sed -n 's/^ *Test *#[0-9]*: //p' | sort > /tmp/ctest_actual.txt
           sort .github/ci/expected_ctest_names.txt > /tmp/ctest_expected.txt
           diff /tmp/ctest_expected.txt /tmp/ctest_actual.txt \
             || { echo "FAIL: CTest inventory drift (a silently deregistered test is a missing gate)"; exit 1; }
