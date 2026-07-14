@@ -282,10 +282,14 @@ add_test(NAME Core_Archive_MakeParity
 # fails the inventory diff instead of silently skipping the tests.
 find_package(MPI COMPONENTS CXX QUIET)
 if(MPI_CXX_FOUND)
+    # P1 (review): the safety impl must ALSO be a fresh -DDMPARALLEL object —
+    # linking the MPI-free core copy would test an MPIExchangeScope whose
+    # MPI baseline path (MPI_Initialized/Query_thread) was compiled out.
     add_executable(test_mpi_halo_contract
         test_mpi_halo_contract.cpp
         wrf_sdirk3_halo_exchange.cpp
-        wrf_sdirk3_ad_halo_exchange.cpp)
+        wrf_sdirk3_ad_halo_exchange.cpp
+        wrf_sdirk3_mpi_safety_impl.cpp)
     target_compile_definitions(test_mpi_halo_contract PRIVATE DMPARALLEL)
     target_link_libraries(test_mpi_halo_contract PRIVATE
         wrf_sdirk3::core wrf_sdirk3_build_config MPI::MPI_CXX)

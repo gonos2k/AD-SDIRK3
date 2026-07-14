@@ -634,6 +634,44 @@ inline void check(int rc, const char* expression, const char* file, int line) {
 } // namespace sdirk3
 } // namespace wrf
 
+namespace wrf { namespace sdirk3 { namespace mpi_safety {
+
+// PR 7B (3b-2): single-flight guard for every MPI exchange AND lifecycle
+// operation. One program-global state (defined in wrf_sdirk3_mpi_safety_impl
+// .cpp — forward and adjoint share it). Allowed nesting is ONLY
+// ForwardBatch->FieldPrimitive and AdjointBatch->FieldPrimitive on the SAME
+// thread; every other re-entry (Lifecycle->Lifecycle, Lifecycle<->exchange,
+// FieldPrimitive->FieldPrimitive, any other-thread entry) fails closed
+// immediately — never blocks (SDIRK3_MPI_CONCURRENT_EXCHANGE_UNSUPPORTED).
+// A thread other than the recorded MPI baseline thread is rejected BEFORE
+// any MPI call (SDIRK3_MPI_THREAD_CONTRACT_VIOLATION); MPI_THREAD_MULTIPLE
+// does not relax this — production is single-flight by contract.
+enum class MPIExchangeKind { FieldPrimitive, ForwardBatch, AdjointBatch, Lifecycle };
+
+// The baseline thread is ESTABLISHED by an authoritative event —
+// sdirk3_mpi_safety_init on the Fortran main thread (before OpenMP) or a
+// test harness main — never inferred from whoever enters a scope first
+// (the tile-worker lazy init would otherwise canonize a worker thread and
+// the real main thread would be rejected). Entering any scope before the
+// baseline is established fails closed. No-throw: a second call from a
+// DIFFERENT thread is a coordinated stop, not an exception.
+void establish_mpi_baseline_thread(const char* who) noexcept;
+
+// Recorded MPI_Query_thread result (-1 until establishment ran with MPI
+// active). Lets standing tests assert the MPI-enabled baseline path really
+// executed instead of trusting a log line.
+int mpi_baseline_thread_level() noexcept;
+
+class MPIExchangeScope {
+public:
+    MPIExchangeScope(MPIExchangeKind kind, const char* operation);
+    ~MPIExchangeScope() noexcept;
+    MPIExchangeScope(const MPIExchangeScope&) = delete;
+    MPIExchangeScope& operator=(const MPIExchangeScope&) = delete;
+};
+
+}}}  // namespace wrf::sdirk3::mpi_safety
+
 #ifdef DMPARALLEL
 #define SDIRK3_MPI_SAFETY_CHECK(call) \
     ::wrf::sdirk3::mpi_safety::check((call), #call, __FILE__, __LINE__)

@@ -21,11 +21,18 @@
 #include <torch/torch.h>
 #include <algorithm>
 #include <cstdarg>
+#include <cstring>
+#include <thread>
 #include <cstdio>
 #include <vector>
 
 #include "wrf_sdirk3_halo_exchange.h"
 #include "wrf_sdirk3_ad_halo_exchange.h"
+#include "wrf_sdirk3_mpi_safety.h"
+
+// The REAL production init entry points (both linkage spellings).
+extern "C" void sdirk3_mpi_safety_init(void);
+extern "C" void sdirk3_mpi_safety_init_(void);
 
 using namespace wrf::sdirk3;
 
@@ -202,7 +209,32 @@ void run_adjoint_case(const Case& c, MPI_Comm cart, const char* label) {
     auto Hx = x.clone();
     halo_exchange_3d_tensor(Hx);
     auto Hty = y.clone();
-    adjoint_mpi_exchange_3d(Hty);
+    adjoint_mpi_exchange_3d(Hty);  // direct primitive on the baseline thread
+
+    // STANDING (P1 review): a DIRECT raw-adjoint call from a worker thread
+    // must be rejected with the thread marker BEFORE any MPI call.
+    static bool worker_neg_done = false;
+    if (!worker_neg_done) {
+        worker_neg_done = true;
+        bool worker_ok = false;
+        std::string worker_msg;
+        std::thread w([&] {
+            auto g2 = y.clone();
+            try {
+                adjoint_mpi_exchange_3d(g2);
+                worker_msg = "worker-thread raw adjoint was admitted";
+            } catch (const std::exception& e) {
+                if (std::strstr(e.what(), "SDIRK3_MPI_THREAD_CONTRACT_VIOLATION"))
+                    worker_ok = true;
+                else
+                    worker_msg = e.what();
+            }
+        });
+        w.join();
+        if (!worker_ok)
+            fail(label, "worker adjoint negative: %s", worker_msg.c_str());
+        ++g_checks;
+    }
 
     double lhs_local = (Hx.to(torch::kFloat64) * y.to(torch::kFloat64)).sum().item<double>();
     double rhs_local = (x.to(torch::kFloat64) * Hty.to(torch::kFloat64)).sum().item<double>();
@@ -287,6 +319,38 @@ void run_packed_ad_case(const Case& c, MPI_Comm cart, const char* label,
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
+
+    // STANDING baseline contract (P1 review):
+    // 1) a scope BEFORE establishment must fail closed — the first caller is
+    //    never adopted as the baseline;
+    try {
+        mpi_safety::MPIExchangeScope pre(
+            mpi_safety::MPIExchangeKind::Lifecycle, "pre-init probe");
+        fail("baseline", "scope admitted before baseline establishment");
+    } catch (const std::exception& e) {
+        if (!std::strstr(e.what(), "SDIRK3_MPI_THREAD_CONTRACT_VIOLATION"))
+            fail("baseline", "wrong pre-establishment marker: %s", e.what());
+    }
+    // 2) establishment through the REAL production C ABI, BOTH spellings
+    //    (the underscore variant must be idempotent from the same thread);
+    sdirk3_mpi_safety_init();
+    sdirk3_mpi_safety_init_();
+    // 3) the MPI-enabled baseline path must have actually run: the recorded
+    //    MPI_Query_thread level exists only when the safety impl was
+    //    compiled with DMPARALLEL and MPI was active.
+    if (mpi_safety::mpi_baseline_thread_level() < MPI_THREAD_SINGLE)
+        fail("baseline", "MPI_Query_thread did not run (level=%d) - "
+             "MPI-free safety impl linked?",
+             mpi_safety::mpi_baseline_thread_level());
+    // 4) and a scope from the establishing thread is admitted.
+    try {
+        mpi_safety::MPIExchangeScope ok(
+            mpi_safety::MPIExchangeKind::Lifecycle, "post-init probe");
+    } catch (const std::exception& e) {
+        fail("baseline", "scope rejected after init: %s", e.what());
+    }
+    g_checks += 4;
+
     int size, rank;
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
