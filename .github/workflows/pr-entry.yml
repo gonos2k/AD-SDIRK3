@@ -1,0 +1,9 @@
+name: PR entry
+on:
+  pull_request:
+    branches: [never-matches]
+permissions:
+  contents: read
+jobs:
+  call-persistent:
+    uses: ./.github/workflows/persistent.yml
