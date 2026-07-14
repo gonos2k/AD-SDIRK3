@@ -250,6 +250,18 @@ static void halo_exchange_atexit_cleanup() {
 
 static void invalidate_halo_publication_noexcept(bool clear_communicator_config) noexcept;
 
+// PR 7B (review): rollback/teardown paths are noexcept but must NEVER
+// swallow an MPI failure — latch the process fault, print the stable
+// marker, and tear down the publication, all without throwing.
+static void mark_halo_lifecycle_fault_noexcept(const char* operation,
+                                               int mpi_rc) noexcept {
+    g_halo_lifecycle_faulted.store(true, std::memory_order_release);
+    std::fprintf(stderr, "SDIRK3_MPI_HALO_LIFECYCLE_FAULTED: %s rc=%d\n",
+                 operation ? operation : "unknown rollback operation", mpi_rc);
+    std::fflush(stderr);
+    invalidate_halo_publication_noexcept(/*clear_communicator_config=*/true);
+}
+
 #ifdef DMPARALLEL
 static void free_owned_comm(HaloExchangeImpl& impl) {
     if (impl.owned_comm == MPI_COMM_NULL) return;
@@ -303,11 +315,35 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
         HaloExchangeImpl* c;
         ~CommRollback() noexcept {
             if (!c || c->owned_comm == MPI_COMM_NULL) return;
-            int fin = 0;
-            if (MPI_Finalized(&fin) == MPI_SUCCESS && !fin) {
-                MPI_Comm tmp = c->owned_comm;
+            // Never throw, never swallow (review): an MPI failure during
+            // rollback cleanup latches the process fault exactly like the
+            // published-state retirement paths — otherwise a caller could
+            // fix the geometry and quietly retry in the same process on an
+            // MPI runtime of unknown health.
+            int finalized = 0;
+            const int finalized_rc = MPI_Finalized(&finalized);
+            if (finalized_rc != MPI_SUCCESS) {
+                mark_halo_lifecycle_fault_noexcept(
+                    "candidate rollback MPI_Finalized", finalized_rc);
                 c->owned_comm = MPI_COMM_NULL;
-                (void)MPI_Comm_free(&tmp);
+                return;
+            }
+            if (finalized) {
+                c->owned_comm = MPI_COMM_NULL;
+                return;
+            }
+            MPI_Comm tmp = c->owned_comm;
+            c->owned_comm = MPI_COMM_NULL;
+            int free_rc = MPI_SUCCESS;
+            if (std::getenv("WRF_SDIRK3_TEST_FAIL_CANDIDATE_ROLLBACK_FREE")
+                    != nullptr) {
+                free_rc = MPI_ERR_OTHER;  // synthesized; never re-free tmp
+            } else {
+                free_rc = MPI_Comm_free(&tmp);
+            }
+            if (free_rc != MPI_SUCCESS) {
+                mark_halo_lifecycle_fault_noexcept(
+                    "candidate rollback MPI_Comm_free", free_rc);
             }
         }
     } comm_rollback{&impl};
