@@ -612,18 +612,18 @@ void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
             int64_t offset_send = j_send_north_start * nk * ni;
             int64_t offset_recv = (nj - impl.halo_width_y) * nk * ni;
             SDIRK3_MPI_CHECK(MPI_Irecv(data + offset_recv, halo_ns_int, MPI_FLOAT,
-                     impl.neighbor_north, impl.mpi_rank, impl.comm, &req_ns[nreq_ns++]));
+                     impl.neighbor_north, HALO_TAG_SOUTHWARD, impl.comm, &req_ns[nreq_ns++]));
             SDIRK3_MPI_CHECK(MPI_Isend(data + offset_send, halo_ns_int, MPI_FLOAT,
-                     impl.neighbor_north, impl.neighbor_north, impl.comm, &req_ns[nreq_ns++]));
+                     impl.neighbor_north, HALO_TAG_NORTHWARD, impl.comm, &req_ns[nreq_ns++]));
         }
 
         if (impl.neighbor_south >= 0) {
             int64_t offset_send = j_send_south_start * nk * ni;
             float* recv_ptr = data;  // South ghost at beginning of full-halo tensor
             SDIRK3_MPI_CHECK(MPI_Irecv(recv_ptr, halo_ns_int, MPI_FLOAT,
-                     impl.neighbor_south, impl.mpi_rank, impl.comm, &req_ns[nreq_ns++]));
+                     impl.neighbor_south, HALO_TAG_NORTHWARD, impl.comm, &req_ns[nreq_ns++]));
             SDIRK3_MPI_CHECK(MPI_Isend(data + offset_send, halo_ns_int, MPI_FLOAT,
-                     impl.neighbor_south, impl.neighbor_south, impl.comm, &req_ns[nreq_ns++]));
+                     impl.neighbor_south, HALO_TAG_SOUTHWARD, impl.comm, &req_ns[nreq_ns++]));
         }
 
         if (nreq_ns > 0)
@@ -676,15 +676,15 @@ void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
 
         if (has_east_exchange) {
             SDIRK3_MPI_CHECK(MPI_Irecv(recv_buffer_east.data(), ew_buffer_int, MPI_FLOAT,
-                     impl.neighbor_east, impl.mpi_rank, impl.comm, &req_ew[nreq_ew++]));
+                     impl.neighbor_east, HALO_TAG_WESTWARD, impl.comm, &req_ew[nreq_ew++]));
             SDIRK3_MPI_CHECK(MPI_Isend(send_buffer_east.data(), ew_buffer_int, MPI_FLOAT,
-                     impl.neighbor_east, impl.neighbor_east, impl.comm, &req_ew[nreq_ew++]));
+                     impl.neighbor_east, HALO_TAG_EASTWARD, impl.comm, &req_ew[nreq_ew++]));
         }
         if (has_west_exchange) {
             SDIRK3_MPI_CHECK(MPI_Irecv(recv_buffer_west.data(), ew_buffer_int, MPI_FLOAT,
-                     impl.neighbor_west, impl.mpi_rank, impl.comm, &req_ew[nreq_ew++]));
+                     impl.neighbor_west, HALO_TAG_EASTWARD, impl.comm, &req_ew[nreq_ew++]));
             SDIRK3_MPI_CHECK(MPI_Isend(send_buffer_west.data(), ew_buffer_int, MPI_FLOAT,
-                     impl.neighbor_west, impl.neighbor_west, impl.comm, &req_ew[nreq_ew++]));
+                     impl.neighbor_west, HALO_TAG_WESTWARD, impl.comm, &req_ew[nreq_ew++]));
         }
 
         if (nreq_ew > 0)
@@ -880,15 +880,15 @@ void halo_exchange_multiple(std::vector<torch::Tensor>& tensors, bool force_full
         MPI_Request req_ns[4]; int nreq_ns = 0;
         if (impl.neighbor_north >= 0) {
             SDIRK3_MPI_CHECK(MPI_Irecv(ns_recv_north.data(), ns_size_int, MPI_FLOAT,
-                     impl.neighbor_north, impl.mpi_rank, impl.comm, &req_ns[nreq_ns++]));
+                     impl.neighbor_north, HALO_TAG_SOUTHWARD, impl.comm, &req_ns[nreq_ns++]));
             SDIRK3_MPI_CHECK(MPI_Isend(ns_send_north.data(), ns_size_int, MPI_FLOAT,
-                     impl.neighbor_north, impl.neighbor_north, impl.comm, &req_ns[nreq_ns++]));
+                     impl.neighbor_north, HALO_TAG_NORTHWARD, impl.comm, &req_ns[nreq_ns++]));
         }
         if (impl.neighbor_south >= 0) {
             SDIRK3_MPI_CHECK(MPI_Irecv(ns_recv_south.data(), ns_size_int, MPI_FLOAT,
-                     impl.neighbor_south, impl.mpi_rank, impl.comm, &req_ns[nreq_ns++]));
+                     impl.neighbor_south, HALO_TAG_NORTHWARD, impl.comm, &req_ns[nreq_ns++]));
             SDIRK3_MPI_CHECK(MPI_Isend(ns_send_south.data(), ns_size_int, MPI_FLOAT,
-                     impl.neighbor_south, impl.neighbor_south, impl.comm, &req_ns[nreq_ns++]));
+                     impl.neighbor_south, HALO_TAG_SOUTHWARD, impl.comm, &req_ns[nreq_ns++]));
         }
         if (nreq_ns > 0)
             SDIRK3_MPI_CHECK(MPI_Waitall(nreq_ns, req_ns, MPI_STATUSES_IGNORE));
@@ -975,15 +975,15 @@ void halo_exchange_multiple(std::vector<torch::Tensor>& tensors, bool force_full
         MPI_Request req_ew[4]; int nreq_ew = 0;
         if (has_east) {
             SDIRK3_MPI_CHECK(MPI_Irecv(ew_recv_east.data(), ew_size_int, MPI_FLOAT,
-                     impl.neighbor_east, impl.mpi_rank, impl.comm, &req_ew[nreq_ew++]));
+                     impl.neighbor_east, HALO_TAG_WESTWARD, impl.comm, &req_ew[nreq_ew++]));
             SDIRK3_MPI_CHECK(MPI_Isend(ew_send_east.data(), ew_size_int, MPI_FLOAT,
-                     impl.neighbor_east, impl.neighbor_east, impl.comm, &req_ew[nreq_ew++]));
+                     impl.neighbor_east, HALO_TAG_EASTWARD, impl.comm, &req_ew[nreq_ew++]));
         }
         if (has_west) {
             SDIRK3_MPI_CHECK(MPI_Irecv(ew_recv_west.data(), ew_size_int, MPI_FLOAT,
-                     impl.neighbor_west, impl.mpi_rank, impl.comm, &req_ew[nreq_ew++]));
+                     impl.neighbor_west, HALO_TAG_EASTWARD, impl.comm, &req_ew[nreq_ew++]));
             SDIRK3_MPI_CHECK(MPI_Isend(ew_send_west.data(), ew_size_int, MPI_FLOAT,
-                     impl.neighbor_west, impl.neighbor_west, impl.comm, &req_ew[nreq_ew++]));
+                     impl.neighbor_west, HALO_TAG_WESTWARD, impl.comm, &req_ew[nreq_ew++]));
         }
         if (nreq_ew > 0)
             SDIRK3_MPI_CHECK(MPI_Waitall(nreq_ew, req_ew, MPI_STATUSES_IGNORE));

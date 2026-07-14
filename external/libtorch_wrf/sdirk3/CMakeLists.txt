@@ -274,6 +274,33 @@ add_test(NAME Core_Archive_MakeParity
                  ${WRF_SDIRK3_CORE_MANIFEST}
                  ${CMAKE_CURRENT_SOURCE_DIR}/libwrf_sdirk3_libtorch.a)
 
+# MPI halo operator contract (PR 7A). The halo TUs are recompiled here WITH
+# -DDMPARALLEL (the production core archive stays MPI-free; its members are
+# never pulled because these fresh objects already define the symbols).
+# Registered only when MPI exists; hosted CI installs MPI deliberately and
+# the exact CTest inventory pins the three names, so a broken MPI setup
+# fails the inventory diff instead of silently skipping the tests.
+find_package(MPI COMPONENTS CXX QUIET)
+if(MPI_CXX_FOUND)
+    add_executable(test_mpi_halo_contract
+        test_mpi_halo_contract.cpp
+        wrf_sdirk3_halo_exchange.cpp
+        wrf_sdirk3_ad_halo_exchange.cpp)
+    target_compile_definitions(test_mpi_halo_contract PRIVATE DMPARALLEL)
+    target_link_libraries(test_mpi_halo_contract PRIVATE
+        wrf_sdirk3::core wrf_sdirk3_build_config MPI::MPI_CXX)
+    foreach(_np 1 2 4)
+        add_test(NAME MPI_Halo_Contract_np${_np}
+                 COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_np}
+                         $<TARGET_FILE:test_mpi_halo_contract>)
+        # A hung exchange must read as FAILURE, not as a stuck job (PR 7D).
+        set_tests_properties(MPI_Halo_Contract_np${_np} PROPERTIES TIMEOUT 300)
+    endforeach()
+    message(STATUS "  SDIRK3 MPI halo contract: ENABLED (mpiexec=${MPIEXEC_EXECUTABLE})")
+else()
+    message(STATUS "  SDIRK3 MPI halo contract: MPI not found - tests NOT registered")
+endif()
+
 # =========================================================================
 # OPT Pass33+: Test Output Verbosity Control
 # =========================================================================
