@@ -133,9 +133,11 @@ bool is_mpi_baseline_thread() noexcept;
 
 class HaloFreshnessGuard {
 public:
-    // Epoch counter - incremented after each WRF halo exchange (the DATA
-    // freshness epoch; the C++ LIFECYCLE epoch lives in halo_exchange.cpp)
-    static std::atomic<uint64_t> halo_exchange_epoch;
+    // The DATA freshness PUBLICATION epoch — incremented once per WRF halo
+    // exchange completion (markHaloFresh). Distinct from the halo LIFECYCLE
+    // epoch (g_halo_lifecycle_epoch in halo_exchange.cpp), which counts
+    // prepare/finalize transitions.
+    static std::atomic<uint64_t> freshness_published_epoch;
 
     // PR 7B (3b-3): rank-global consumption state. The previous
     // thread_local consumed-epoch let every tile/thread of one rank consume
@@ -168,7 +170,7 @@ public:
     static void beginFreshnessLifecycle(bool required) {
         std::lock_guard<std::mutex> lock(freshness_mutex);
         freshness_state.consumed =
-            halo_exchange_epoch.load(std::memory_order_acquire);
+            freshness_published_epoch.load(std::memory_order_acquire);
         freshness_state.last_timestep = UINT64_MAX;
         freshness_state.last_logical_read_id = -1;
         // Publish "required" only after the rebase above is in place.
@@ -180,7 +182,7 @@ public:
         freshness_required.store(false, std::memory_order_release);
         std::lock_guard<std::mutex> lock(freshness_mutex);
         freshness_state.consumed =
-            halo_exchange_epoch.load(std::memory_order_acquire);
+            freshness_published_epoch.load(std::memory_order_acquire);
         freshness_state.last_timestep = UINT64_MAX;
         freshness_state.last_logical_read_id = -1;
     }
@@ -195,7 +197,7 @@ public:
     // advanced the consumed epoch as a side effect of being asked).
     static HaloFreshnessSnapshot inspectHaloFreshness() noexcept {
         HaloFreshnessSnapshot snap;
-        snap.published = halo_exchange_epoch.load(std::memory_order_acquire);
+        snap.published = freshness_published_epoch.load(std::memory_order_acquire);
         snap.required = freshness_required.load(std::memory_order_acquire);
         {
             std::lock_guard<std::mutex> lock(freshness_mutex);
@@ -238,7 +240,7 @@ public:
             return;  // idempotent re-check of the same logical read
         }
         const uint64_t published =
-            halo_exchange_epoch.load(std::memory_order_acquire);
+            freshness_published_epoch.load(std::memory_order_acquire);
         if (published <= freshness_state.consumed) {
             halo_stale_events.fetch_add(1, std::memory_order_relaxed);
             throw std::runtime_error(std::string(
@@ -283,42 +285,20 @@ public:
                 "freshness may only be published by the MPI baseline thread");
         }
         halo_mark_events.fetch_add(1, std::memory_order_relaxed);
-        halo_exchange_epoch.fetch_add(1, std::memory_order_release);
+        freshness_published_epoch.fetch_add(1, std::memory_order_release);
     }
 
-    /**
-     * @brief Call before SDIRK3 reads from halo region
-     * @return true if halo is fresh, false if potentially stale
-     *
-     * FIX 2025-01-25: Always returns true for single-rank/non-MPI runs
-     */
-    // PR 7B (3b-3): READ-ONLY. The old implementation ADVANCED the
-    // (thread-local) consumed epoch as a side effect of being asked —
-    // inspection and consumption are now separate; consumption happens only
-    // in requireFreshHaloEpoch.
-    static bool isHaloFresh() {
+    // PR 7B (3b-3 P2): what the old isHaloFresh()/verifyFreshness() pair
+    // ACTUALLY answers since consumption became explicit: "is there a
+    // publication nobody has consumed yet?" — right after a successful
+    // requireFreshHaloEpoch this is false, which is normal, not stale.
+    // Named for that meaning; read-only, no counter side effects
+    // (verify/stale counters count REAL consumption attempts only).
+    // Enforcement lives exclusively in requireFreshHaloEpoch.
+    static bool hasUnconsumedFreshnessPublication() {
         const auto snap = inspectHaloFreshness();
         if (!snap.required) return true;
         return snap.published > snap.consumed;
-    }
-
-    /**
-     * @brief Verify halo freshness with optional warning
-     * @param warn_if_stale Print warning if halo might be stale
-     * @return true if fresh, false if stale
-     *
-     * FIX 2025-01-25: No warnings for single-rank/non-MPI runs
-     */
-    // PR 7B (3b-3): telemetry-only, read-only, NON-consuming. The
-    // warning-only stale path is gone — enforcement lives exclusively in
-    // requireFreshHaloEpoch (hard failure).
-    static bool verifyFreshness(bool /*warn_if_stale*/ = true) {
-        halo_verify_events.fetch_add(1, std::memory_order_relaxed);
-        const bool fresh = isHaloFresh();
-        if (!fresh) {
-            halo_stale_events.fetch_add(1, std::memory_order_relaxed);
-        }
-        return fresh;
     }
 
     static uint64_t getMarkEventCount() {
@@ -341,7 +321,7 @@ public:
 };
 
 // Static member definitions (in .cpp file or here for header-only)
-inline std::atomic<uint64_t> HaloFreshnessGuard::halo_exchange_epoch{0};
+inline std::atomic<uint64_t> HaloFreshnessGuard::freshness_published_epoch{0};
 inline std::mutex HaloFreshnessGuard::freshness_mutex;
 inline HaloFreshnessGuard::RankFreshnessState HaloFreshnessGuard::freshness_state;
 inline std::atomic<bool> HaloFreshnessGuard::freshness_required{false};
@@ -654,7 +634,7 @@ inline std::atomic<bool> MPIThreadGuard::initialized{false};
  */
 inline void initializeMPISafety() {
     MPIThreadGuard::initialize();
-    HaloFreshnessGuard::halo_exchange_epoch.store(0, std::memory_order_release);
+    HaloFreshnessGuard::freshness_published_epoch.store(0, std::memory_order_release);
     HaloFreshnessGuard::resetEventCounters();
     // PR 7B (3b-3): freshness state resets here; whether tracking is
     // REQUIRED is decided by the published halo state's exchange_active at

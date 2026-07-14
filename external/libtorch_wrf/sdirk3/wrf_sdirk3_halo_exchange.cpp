@@ -156,9 +156,14 @@ struct HaloExchangeImpl {
 //   - Destroyed: Call to halo_exchange_finalize() (REQUIRED before MPI_Finalize)
 //   - Recreate: Allowed - calling init() after finalize() creates new instance
 //
-// THREAD SAFETY:
-//   - init/finalize: NOT thread-safe (call from main thread only)
-//   - exchange ops: Thread-safe after init completes (MPI handles synchronization)
+// THREAD SAFETY (PR 7B actual contract — NOT "thread-safe"):
+//   - Every lifecycle AND exchange operation runs on the MPI baseline
+//     thread only (established by sdirk3_mpi_safety_init), under the
+//     program-global single-flight MPIExchangeScope.
+//   - Concurrent entry — another thread, or a second operation while one
+//     is in flight — fails closed immediately with a stable marker
+//     (SDIRK3_MPI_THREAD_CONTRACT_VIOLATION /
+//     SDIRK3_MPI_CONCURRENT_EXCHANGE_UNSUPPORTED); it never blocks.
 //
 // MEMORY SAFETY:
 //   - Using unique_ptr ensures cleanup if process exits abnormally (via atexit)
@@ -189,7 +194,7 @@ static std::atomic<bool> g_halo_lifecycle_faulted{false};
 // generation) — distinct from the WRF data-freshness epoch in
 // HaloFreshnessGuard. Atomic: the AD backward compares it against the value
 // saved at forward time.
-static std::atomic<uint64_t> g_halo_exchange_epoch{0};
+static std::atomic<uint64_t> g_halo_lifecycle_epoch{0};
 
 // v11: Promoted from function-static to file-scope so set_wrf_communicator()
 // can reset it when the comm changes, allowing re-init to print updated status.
@@ -606,7 +611,7 @@ static void invalidate_halo_publication_noexcept(
     }
 #endif
     g_halo_impl.reset();
-    g_halo_exchange_epoch.fetch_add(1, std::memory_order_release);
+    g_halo_lifecycle_epoch.fetch_add(1, std::memory_order_release);
 }
 
 static void halo_exchange_finalize_impl() {
@@ -763,7 +768,7 @@ bool halo_exchange_is_initialized() {
 }
 
 uint64_t halo_exchange_get_epoch() noexcept {
-    return g_halo_exchange_epoch.load(std::memory_order_acquire);
+    return g_halo_lifecycle_epoch.load(std::memory_order_acquire);
 }
 
 #ifdef DMPARALLEL
@@ -826,7 +831,7 @@ static void set_wrf_communicator_impl(MPI_Fint fortran_comm, bool periodic_x, bo
             "(cmp=", cmp, "); call halo_exchange_finalize() before "
             "reconfiguring");
     }
-    g_halo_exchange_epoch.fetch_add(1, std::memory_order_release);   // First-time set: signal the epoch change
+    g_halo_lifecycle_epoch.fetch_add(1, std::memory_order_release);   // First-time set: signal the epoch change
     // v11: Reset init log so re-init prints updated communicator status
     g_halo_init_logged = false;
     g_wrf_fortran_comm = fortran_comm;
