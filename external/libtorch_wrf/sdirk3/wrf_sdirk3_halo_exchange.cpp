@@ -99,7 +99,9 @@ struct HaloExchangeImpl {
     // Actual communicator (Cartesian from WRF or fallback MPI_COMM_WORLD) set during init.
     HaloExchangeImpl() : mpi_rank(0), mpi_size(1) {
 #ifdef DMPARALLEL
-        comm = MPI_COMM_WORLD;  // Placeholder until init()
+        // PR 7B (3b-2 part 2): a not-yet-validated object must not carry a
+        // usable communicator — MPI_COMM_NULL until init() publishes it.
+        comm = MPI_COMM_NULL;
         has_cart_comm = false;
 #endif
     }
@@ -227,11 +229,34 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
         atexit_registered = true;
     }
 
-    if (!g_halo_impl) {
-        g_halo_impl = std::make_unique<HaloExchangeImpl>();
-    }
+    // PR 7B (3b-2 part 2): TRANSACTIONAL publication. The old flow mutated
+    // the global object first, so a validation failure left a half-written
+    // impl behind and halo_exchange_is_initialized() reported true. Now a
+    // candidate is fully built and validated; the global is replaced only
+    // after everything passed. On failure the previous valid state (or the
+    // uninitialized state) is preserved and the candidate's communicator is
+    // rolled back without throwing.
+    auto candidate = std::make_unique<HaloExchangeImpl>();
+    auto& impl = *candidate;
 
-    auto& impl = *g_halo_impl;
+#ifdef DMPARALLEL
+    // noexcept rollback (3b-2 part 2): if any validation below throws, the
+    // candidate is destroyed on unwind but its destructor is deliberately
+    // MPI-free (atexit policy) — this guard frees a partially-duplicated
+    // communicator instead. Disarmed at publish.
+    struct CommRollback {
+        HaloExchangeImpl* c;
+        ~CommRollback() noexcept {
+            if (!c || c->owned_comm == MPI_COMM_NULL) return;
+            int fin = 0;
+            if (MPI_Finalized(&fin) == MPI_SUCCESS && !fin) {
+                MPI_Comm tmp = c->owned_comm;
+                c->owned_comm = MPI_COMM_NULL;
+                (void)MPI_Comm_free(&tmp);
+            }
+        }
+    } comm_rollback{&impl};
+#endif
     
     // Store dimensions
     impl.ids = ids; impl.ide = ide;
@@ -259,8 +284,8 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
     if (g_wrf_comm_set) {
         // PR 7B: own a duplicate, never the borrowed Fortran handle. The dup
         // gets MPI_ERRORS_RETURN so every failure reaches the always-on check
-        // instead of MPI's default process kill.
-        free_owned_comm(impl);
+        // instead of MPI's default process kill. (The PREVIOUS owned comm is
+        // freed at publish time — the candidate starts with none.)
         MPI_Comm incoming = MPI_Comm_f2c(g_wrf_fortran_comm);
         SDIRK3_MPI_CHECK(MPI_Comm_dup(incoming, &impl.owned_comm));
         SDIRK3_MPI_CHECK(MPI_Comm_set_errhandler(impl.owned_comm, MPI_ERRORS_RETURN));
@@ -383,12 +408,23 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
     impl.compute_neighbors();
 #endif
 
+    // All validation passed: free the PREVIOUS owned communicator and publish
+    // the fully-built candidate. This is the only line that mutates global
+    // state; every failure above leaves the prior valid state untouched.
+#ifdef DMPARALLEL
+    comm_rollback.c = nullptr;  // candidate survives: disarm the rollback
+    if (g_halo_impl) {
+        free_owned_comm(*g_halo_impl);
+    }
+#endif
+    g_halo_impl = std::move(candidate);
+
     // FIX Round170: Gate initialization output to avoid hot-path spam
     // v11: Use file-scope g_halo_init_logged (reset by set_wrf_communicator on comm change)
     if (impl.mpi_rank == 0 && !g_halo_init_logged) {
         std::cout << "SDIRK3: Halo exchange initialized" << std::endl;
 #ifdef DMPARALLEL
-        std::cout << "  Communicator: " << (impl.has_cart_comm ? "WRF Cartesian" : "MPI_COMM_WORLD (fallback)") << std::endl;
+        std::cout << "  Communicator: " << (impl.has_cart_comm ? "WRF Cartesian owned duplicate" : "serial/no-exchange") << std::endl;
         std::cout << "  Process grid: " << impl.nprocx << " x " << impl.nprocy
                   << " (my position: " << impl.mypx << "," << impl.mypy << ")" << std::endl;
         std::cout << "  Neighbors N/S/E/W: " << impl.neighbor_north << "/" << impl.neighbor_south
@@ -519,9 +555,18 @@ static void set_wrf_communicator_impl(MPI_Fint fortran_comm, bool periodic_x, bo
         "SDIRK3_MPI_COMM_PERIODIC_TOPOLOGY_UNSUPPORTED: periods=[",
         t_periods[0], ",", t_periods[1], "]; pass a non-periodic "
         "local_communicator and use the periodic_x/y flags");
-    // Same comm AND same periodic flags — no-op (no epoch change)
-    if (g_wrf_comm_set && g_wrf_fortran_comm == fortran_comm
-        && g_wrf_periodic_x == periodic_x && g_wrf_periodic_y == periodic_y) return;
+    // Same comm AND same periodic flags — no-op (no epoch change).
+    // PR 7B (3b-2 part 2): semantic identity via MPI_Comm_compare, not raw
+    // Fortran-handle equality — a re-created congruent handle is a REAL
+    // reconfiguration, while the identical communicator under a fresh
+    // integer handle is not.
+    if (g_wrf_comm_set
+        && g_wrf_periodic_x == periodic_x && g_wrf_periodic_y == periodic_y) {
+        int cmp = MPI_UNEQUAL;
+        SDIRK3_MPI_CHECK(MPI_Comm_compare(
+            MPI_Comm_f2c(g_wrf_fortran_comm), test_comm, &cmp));
+        if (cmp == MPI_IDENT) return;
+    }
 
     // Comm changed or first set — exactly one epoch increment:
     if (g_wrf_comm_set) {
