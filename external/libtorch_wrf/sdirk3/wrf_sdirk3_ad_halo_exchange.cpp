@@ -509,6 +509,16 @@ torch::Tensor ADHaloExchangeFunction::forward(
         // per-field calls nest as FieldPrimitive under this scope.
         mpi_safety::MPIExchangeScope batch_scope(
             mpi_safety::MPIExchangeKind::ForwardBatch, "AD forward halo batch");
+        // PR 7B (3b-3 part 3): bind this autograd node to the halo
+        // lifecycle it captured. Active state and epoch are read UNDER the
+        // scope (single-flight excludes any Lifecycle op between this read
+        // and the exchanges below); backward verifies the SAME epoch before
+        // any gradient mutation or MPI call.
+        TORCH_CHECK(halo_exchange_requires_exchange(),
+            "ADHaloExchangeFunction: halo configuration became inactive "
+            "inside the forward batch scope");
+        ctx->saved_data["halo_lifecycle_epoch"] =
+            static_cast<int64_t>(halo_exchange_get_epoch());
         halo_exchange_3d_tensor(fields.u,  /*force_full_halo=*/true);
         halo_exchange_3d_tensor(fields.v,  /*force_full_halo=*/true);
         halo_exchange_3d_tensor(fields.w,  /*force_full_halo=*/true);
@@ -550,6 +560,27 @@ torch::autograd::variable_list ADHaloExchangeFunction::backward(
         return grads;
     }
 
+    // PR 7B (3b-3 part 3): the adjoint transposes the EXACT forward
+    // exchange — it is only valid against the halo lifecycle the forward
+    // captured. Verified UNDER the AdjointBatch scope BEFORE any gradient
+    // mutation or MPI call: on failure the gradients stay unproduced and
+    // no rank enters the exchange (no deadlock — every rank fails the same
+    // local check). The scope wraps BC^T and MPI^T entirely; the per-field
+    // adjoint primitives nest as FieldPrimitive under it.
+    const uint64_t saved_epoch = static_cast<uint64_t>(
+        ctx->saved_data["halo_lifecycle_epoch"].toInt());
+    mpi_safety::MPIExchangeScope batch_scope(
+        mpi_safety::MPIExchangeKind::AdjointBatch, "AD adjoint halo batch");
+    TORCH_CHECK(halo_exchange_requires_exchange(),
+        "SDIRK3_MPI_HALO_EPOCH_CHANGED: adjoint requires the forward's "
+        "halo lifecycle but no active exchange configuration is published");
+    const uint64_t current_epoch = halo_exchange_get_epoch();
+    TORCH_CHECK(current_epoch == saved_epoch,
+        "SDIRK3_MPI_HALO_EPOCH_CHANGED: forward captured lifecycle epoch ",
+        saved_epoch, " but the current epoch is ", current_epoch,
+        " (the halo lifecycle was finalized or re-prepared between "
+        "forward and backward)");
+
     // Reconstruct config from saved_data
     int64_t nz = ctx->saved_data["nz"].toInt();
     int64_t nz_w = ctx->saved_data["nz_w"].toInt();
@@ -586,17 +617,14 @@ torch::autograd::variable_list ADHaloExchangeFunction::backward(
 
     // PR 7B (3b-2): the six-field adjoint exchange is ONE batch under the
     // SHARED single-flight scope (the old adjoint-private mutex could not
-    // exclude a concurrent forward exchange).
-    {
-        mpi_safety::MPIExchangeScope batch_scope(
-            mpi_safety::MPIExchangeKind::AdjointBatch, "AD adjoint halo batch");
-        adjoint_mpi_exchange_3d(grad_fields.u);
-        adjoint_mpi_exchange_3d(grad_fields.v);
-        adjoint_mpi_exchange_3d(grad_fields.w);
-        adjoint_mpi_exchange_3d(grad_fields.ph);
-        adjoint_mpi_exchange_3d(grad_fields.t);
-        adjoint_mpi_exchange_3d(grad_fields.mu);
-    }
+    // exclude a concurrent forward exchange). 3b-3 part 3: the scope was
+    // acquired above, before the gradient clone and BC^T.
+    adjoint_mpi_exchange_3d(grad_fields.u);
+    adjoint_mpi_exchange_3d(grad_fields.v);
+    adjoint_mpi_exchange_3d(grad_fields.w);
+    adjoint_mpi_exchange_3d(grad_fields.ph);
+    adjoint_mpi_exchange_3d(grad_fields.t);
+    adjoint_mpi_exchange_3d(grad_fields.mu);
 
     // Return gradients: only first input (tensor) gets grad, rest are scalars (no grad)
     torch::autograd::variable_list grads(num_inputs);
