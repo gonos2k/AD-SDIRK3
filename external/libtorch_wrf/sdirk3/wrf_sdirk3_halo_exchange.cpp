@@ -446,7 +446,21 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
         // concurrent worker passes the pre-check and is REJECTED at the
         // scope with a stable marker — an early active=false would instead
         // silently no-op an exchange that the configuration requires.
-        free_owned_comm(*g_halo_impl);
+        try {
+            free_owned_comm(*g_halo_impl);
+        } catch (...) {
+            // Retirement failed (Codex): the old communicator is now
+            // INDETERMINATE and the previously published state must never
+            // be reused — once this exception unwinds and the Lifecycle
+            // lock releases, active=true would route callers back onto a
+            // dead handle. Tear the old state down fail-closed (teardown
+            // order: active -> ready -> pointer); the candidate is rolled
+            // back by the still-armed guard; the failure is surfaced.
+            g_halo_exchange_active.store(false, std::memory_order_release);
+            g_halo_ready.store(false, std::memory_order_release);
+            g_halo_impl.reset();
+            throw;
+        }
     }
     comm_rollback.c = nullptr;  // both communicators accounted for: disarm
 #endif
