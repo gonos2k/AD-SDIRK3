@@ -226,15 +226,17 @@ void adjoint_mpi_exchange_3d(torch::Tensor& grad_field) {
     //
     // Tags match the forward exactly (roles reversed: ghost↔edge).
 
-    if (!halo_exchange_is_initialized()) return;
+    // PR 7B (review): is_initialized() now reads a race-free atomic, so the
+    // historical uninitialized NO-OP stays a pre-scope fast path; the scope
+    // then guards every actual global read (and the state is re-validated
+    // by the checked accessors below).
+    if (!halo_exchange_requires_exchange()) return;  // serial/uninit: no-op
 
-    // PR 7B (P1): this is a PUBLIC primitive — it must carry its own
-    // FieldPrimitive scope. Alone it is the outer scope; under the AD
-    // AdjointBatch it nests legally. Without this, a direct caller (the raw
-    // transpose contract test does exactly that) bypassed the single-flight
-    // and baseline-thread checks entirely.
+    // PUBLIC primitive: carries its own FieldPrimitive scope — alone it is
+    // the outer scope; under the AD AdjointBatch it nests legally.
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::FieldPrimitive, "adjoint_mpi_exchange_3d");
+    if (!halo_exchange_requires_exchange()) return;  // reconfigured in between
 
     MPI_Comm comm = halo_exchange_get_comm();
     int my_rank = halo_exchange_get_rank();
@@ -437,6 +439,17 @@ torch::Tensor ADHaloExchangeFunction::forward(
     ctx->saved_data["neighbor_south"] = neighbor_south;
     ctx->saved_data["neighbor_east"] = neighbor_east;
     ctx->saved_data["neighbor_west"] = neighbor_west;
+    // P1-2 (review): EXACT equality with the authoritative state, BEFORE
+    // the early return — a caller passing false while the configuration
+    // requires exchange would otherwise silently return identity and DELETE
+    // cross-rank tangent/adjoint transport.
+    {
+        const bool authoritative_exchange = halo_exchange_requires_exchange();
+        TORCH_CHECK(exchange_performed == authoritative_exchange,
+            "SDIRK3_MPI_EXCHANGE_STATE_MISMATCH: caller exchange_performed=",
+            exchange_performed, " authoritative=", authoritative_exchange);
+        exchange_performed = authoritative_exchange;
+    }
     ctx->saved_data["exchange_performed"] = exchange_performed;
 
     if (!exchange_performed) {
@@ -485,6 +498,13 @@ torch::Tensor ADHaloExchangeFunction::forward(
     // MPI exchange under NoGradGuard (MPI is non-differentiable)
     {
         torch::NoGradGuard no_grad;
+        // Defense in depth (review): a caller claiming exchange_performed
+        // must match the authoritative state — driving the MPI batch against
+        // a serial/no-exchange configuration is a contract violation, not a
+        // silent no-op.
+        TORCH_CHECK(halo_exchange_requires_exchange(),
+            "ADHaloExchangeFunction: exchange_performed=true but the halo "
+            "configuration does not perform MPI exchange");
         // PR 7B (3b-2): the six-field forward exchange is ONE batch; the
         // per-field calls nest as FieldPrimitive under this scope.
         mpi_safety::MPIExchangeScope batch_scope(

@@ -15,6 +15,7 @@
 #include <iostream>
 #include <limits>   // FIX Round169: For std::numeric_limits
 #include <memory>   // OPT Pass34: For std::unique_ptr
+#include <atomic>   // PR 7B: g_halo_ready pre-check
 #include <cstdlib>  // OPT Pass34: For std::atexit
 
 #ifdef DMPARALLEL
@@ -99,7 +100,9 @@ struct HaloExchangeImpl {
     // Actual communicator (Cartesian from WRF or fallback MPI_COMM_WORLD) set during init.
     HaloExchangeImpl() : mpi_rank(0), mpi_size(1) {
 #ifdef DMPARALLEL
-        comm = MPI_COMM_WORLD;  // Placeholder until init()
+        // PR 7B (3b-2 part 2): a not-yet-validated object must not carry a
+        // usable communicator — MPI_COMM_NULL until init() publishes it.
+        comm = MPI_COMM_NULL;
         has_cart_comm = false;
 #endif
     }
@@ -159,6 +162,19 @@ struct HaloExchangeImpl {
 //   - Explicit finalize() still recommended before MPI_Finalize for clean shutdown
 // ═══════════════════════════════════════════════════════════════════════════
 static std::unique_ptr<HaloExchangeImpl> g_halo_impl = nullptr;
+// PR 7B (review): race-free existence pre-check. The unique_ptr itself may
+// only be read under an MPIExchangeScope; this atomic preserves the
+// historical serial/uninitialized NO-OP without touching the pointer.
+// It is a fast pre-check, not a lifetime lock — re-check g_halo_impl
+// under the scope.
+static std::atomic<bool> g_halo_ready{false};
+// PR 7B (review P1): 'state published' and 'MPI exchange actually needed'
+// are DIFFERENT facts — a fully-published single-rank serial state is ready
+// but must keep the historical silent no-op on every exchange primitive
+// (a tile worker calling a primitive on 1 rank needs no communication and
+// must not die on the thread contract). requires-exchange is the primitives'
+// pre-check; ready remains the is_initialized() answer.
+static std::atomic<bool> g_halo_exchange_active{false};
 
 // Epoch counter: incremented on every comm change or finalize event.
 static uint64_t g_halo_exchange_epoch = 0;
@@ -193,12 +209,20 @@ static void halo_exchange_atexit_cleanup() {
     if (MPI_Finalized(&mpi_finalized) == MPI_SUCCESS && mpi_finalized) {
         // MPI already finalized - just release pointer, skip any MPI cleanup
         // Current destructor is MPI-free, but this documents the policy
+        g_halo_exchange_active.store(false, std::memory_order_release);
+        g_halo_ready.store(false, std::memory_order_release);
         g_halo_impl.reset();
         return;
     }
 #endif
 
-    // MPI still active (or non-MPI build) - safe to do full cleanup
+    // MPI still active (or non-MPI build) - safe to do full cleanup.
+    // CONTRACT NOTE (review P2): the owned-communicator exactly-once free is
+    // guaranteed on the EXPLICIT finalize/re-init paths only. This atexit
+    // safety net deliberately performs no MPI calls; at process exit the OS
+    // reclaims the resource.
+    g_halo_exchange_active.store(false, std::memory_order_release);
+    g_halo_ready.store(false, std::memory_order_release);
     g_halo_impl.reset();
 }
 
@@ -227,11 +251,34 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
         atexit_registered = true;
     }
 
-    if (!g_halo_impl) {
-        g_halo_impl = std::make_unique<HaloExchangeImpl>();
-    }
+    // PR 7B (3b-2 part 2): TRANSACTIONAL publication. The old flow mutated
+    // the global object first, so a validation failure left a half-written
+    // impl behind and halo_exchange_is_initialized() reported true. Now a
+    // candidate is fully built and validated; the global is replaced only
+    // after everything passed. On failure the previous valid state (or the
+    // uninitialized state) is preserved and the candidate's communicator is
+    // rolled back without throwing.
+    auto candidate = std::make_unique<HaloExchangeImpl>();
+    auto& impl = *candidate;
 
-    auto& impl = *g_halo_impl;
+#ifdef DMPARALLEL
+    // noexcept rollback (3b-2 part 2): if any validation below throws, the
+    // candidate is destroyed on unwind but its destructor is deliberately
+    // MPI-free (atexit policy) — this guard frees a partially-duplicated
+    // communicator instead. Disarmed at publish.
+    struct CommRollback {
+        HaloExchangeImpl* c;
+        ~CommRollback() noexcept {
+            if (!c || c->owned_comm == MPI_COMM_NULL) return;
+            int fin = 0;
+            if (MPI_Finalized(&fin) == MPI_SUCCESS && !fin) {
+                MPI_Comm tmp = c->owned_comm;
+                c->owned_comm = MPI_COMM_NULL;
+                (void)MPI_Comm_free(&tmp);
+            }
+        }
+    } comm_rollback{&impl};
+#endif
     
     // Store dimensions
     impl.ids = ids; impl.ide = ide;
@@ -259,8 +306,8 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
     if (g_wrf_comm_set) {
         // PR 7B: own a duplicate, never the borrowed Fortran handle. The dup
         // gets MPI_ERRORS_RETURN so every failure reaches the always-on check
-        // instead of MPI's default process kill.
-        free_owned_comm(impl);
+        // instead of MPI's default process kill. (The PREVIOUS owned comm is
+        // freed at publish time — the candidate starts with none.)
         MPI_Comm incoming = MPI_Comm_f2c(g_wrf_fortran_comm);
         SDIRK3_MPI_CHECK(MPI_Comm_dup(incoming, &impl.owned_comm));
         SDIRK3_MPI_CHECK(MPI_Comm_set_errhandler(impl.owned_comm, MPI_ERRORS_RETURN));
@@ -383,12 +430,58 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
     impl.compute_neighbors();
 #endif
 
+    // All validation passed. Contract precision (review): candidate BUILD/
+    // VALIDATION failures preserve the previous valid state (strong
+    // guarantee). A failure while RETIRING the previous communicator below
+    // rolls the candidate back and fails closed, but after an MPI error the
+    // MPI runtime itself is not guaranteed usable — that failure is
+    // surfaced, not survived.
+#ifdef DMPARALLEL
+    // Free the PREVIOUS owned communicator FIRST — free_owned_comm can throw
+    // (always-on MPI check), and until it succeeds the rollback must stay
+    // armed so the candidate's fresh duplicate cannot leak on unwind.
+    if (g_halo_impl) {
+        // active stays TRUE through the replacement window (P1-3): the
+        // single-flight Lifecycle scope already protects the old state, so a
+        // concurrent worker passes the pre-check and is REJECTED at the
+        // scope with a stable marker — an early active=false would instead
+        // silently no-op an exchange that the configuration requires.
+        try {
+            free_owned_comm(*g_halo_impl);
+        } catch (...) {
+            // Retirement failed (Codex): the old communicator is now
+            // INDETERMINATE and the previously published state must never
+            // be reused — once this exception unwinds and the Lifecycle
+            // lock releases, active=true would route callers back onto a
+            // dead handle. Tear the old state down fail-closed (teardown
+            // order: active -> ready -> pointer); the candidate is rolled
+            // back by the still-armed guard; the failure is surfaced.
+            g_halo_exchange_active.store(false, std::memory_order_release);
+            g_halo_ready.store(false, std::memory_order_release);
+            g_halo_impl.reset();
+            throw;
+        }
+    }
+    comm_rollback.c = nullptr;  // both communicators accounted for: disarm
+#endif
+    bool exchange_active = false;
+#ifdef DMPARALLEL
+    // has_cart_comm exists only in the MPI shape; the MPI-free core build
+    // must stay compilable (P1-1) and is always no-exchange.
+    exchange_active =
+        impl.has_cart_comm && impl.mpi_size > 1 &&
+        (impl.nprocx > 1 || impl.nprocy > 1);
+#endif
+    g_halo_impl = std::move(candidate);
+    g_halo_ready.store(true, std::memory_order_release);
+    g_halo_exchange_active.store(exchange_active, std::memory_order_release);
+
     // FIX Round170: Gate initialization output to avoid hot-path spam
     // v11: Use file-scope g_halo_init_logged (reset by set_wrf_communicator on comm change)
     if (impl.mpi_rank == 0 && !g_halo_init_logged) {
         std::cout << "SDIRK3: Halo exchange initialized" << std::endl;
 #ifdef DMPARALLEL
-        std::cout << "  Communicator: " << (impl.has_cart_comm ? "WRF Cartesian" : "MPI_COMM_WORLD (fallback)") << std::endl;
+        std::cout << "  Communicator: " << (impl.has_cart_comm ? "WRF Cartesian owned duplicate" : "serial/no-exchange") << std::endl;
         std::cout << "  Process grid: " << impl.nprocx << " x " << impl.nprocy
                   << " (my position: " << impl.mypx << "," << impl.mypy << ")" << std::endl;
         std::cout << "  Neighbors N/S/E/W: " << impl.neighbor_north << "/" << impl.neighbor_south
@@ -413,6 +506,8 @@ static void halo_exchange_finalize_impl() {
 #ifdef DMPARALLEL
     int mpi_finalized = 0;
     if (MPI_Finalized(&mpi_finalized) == MPI_SUCCESS && mpi_finalized) {
+        g_halo_exchange_active.store(false, std::memory_order_release);
+        g_halo_ready.store(false, std::memory_order_release);
         g_halo_impl.reset();
         ++g_halo_exchange_epoch;
         return;
@@ -420,7 +515,12 @@ static void halo_exchange_finalize_impl() {
     if (g_halo_impl) {
         free_owned_comm(*g_halo_impl);  // exactly-once; no-op if never dup'd
     }
+    // POLICY A: the communicator configuration's lifetime IS the halo
+    // lifecycle — after an explicit finalize a new configuration is legal.
+    g_wrf_comm_set = false;
 #endif
+    g_halo_exchange_active.store(false, std::memory_order_release);
+    g_halo_ready.store(false, std::memory_order_release);
     g_halo_impl.reset();
     ++g_halo_exchange_epoch;
 }
@@ -477,8 +577,16 @@ HaloWidthInfo halo_exchange_get_widths() {
     return {g_halo_impl->halo_width_x, g_halo_impl->halo_width_y};
 }
 
+bool halo_exchange_requires_exchange() noexcept {
+    // True only when the CURRENT configuration performs real MPI halo
+    // communication (multi-rank Cartesian). Distinct from is_initialized().
+    return g_halo_exchange_active.load(std::memory_order_acquire);
+}
+
 bool halo_exchange_is_initialized() {
-    return g_halo_impl != nullptr;
+    // PR 7B (review): callers may be unscoped — read the race-free atomic,
+    // never the unique_ptr. True only for a fully-validated published state.
+    return g_halo_ready.load(std::memory_order_acquire);
 }
 
 uint64_t halo_exchange_get_epoch() { return g_halo_exchange_epoch; }
@@ -519,16 +627,31 @@ static void set_wrf_communicator_impl(MPI_Fint fortran_comm, bool periodic_x, bo
         "SDIRK3_MPI_COMM_PERIODIC_TOPOLOGY_UNSUPPORTED: periods=[",
         t_periods[0], ",", t_periods[1], "]; pass a non-periodic "
         "local_communicator and use the periodic_x/y flags");
-    // Same comm AND same periodic flags — no-op (no epoch change)
-    if (g_wrf_comm_set && g_wrf_fortran_comm == fortran_comm
-        && g_wrf_periodic_x == periodic_x && g_wrf_periodic_y == periodic_y) return;
-
-    // Comm changed or first set — exactly one epoch increment:
+    // POLICY A (review): dynamic communicator replacement is UNSUPPORTED.
+    // The repeated per-step setter call is a no-op only for the IDENTICAL
+    // communicator (MPI_IDENT) with identical periodic flags. Anything else
+    // while configured is a hard failure — comparing against the stored raw
+    // Fortran handle is only sound because the CONTRACT requires WRF's
+    // local_communicator to stay stable (never freed, never re-created) for
+    // the domain lifetime; reconfiguration requires an explicit
+    // halo_exchange_finalize() first. A congruent-but-recreated handle
+    // cannot be reliably distinguished from a reused integer without a
+    // caller-supplied generation, so it is rejected rather than guessed.
     if (g_wrf_comm_set) {
-        halo_exchange_finalize_impl();  // epoch++ inside; _impl: no nested Lifecycle scope
-    } else {
-        ++g_halo_exchange_epoch;   // First-time set: no finalize needed, just signal
+        int cmp = MPI_UNEQUAL;
+        SDIRK3_MPI_CHECK(MPI_Comm_compare(
+            MPI_Comm_f2c(g_wrf_fortran_comm), test_comm, &cmp));
+        if (cmp == MPI_IDENT
+            && g_wrf_periodic_x == periodic_x && g_wrf_periodic_y == periodic_y) {
+            return;  // steady-state per-step call: no-op, no epoch change
+        }
+        TORCH_CHECK(false,
+            "SDIRK3_MPI_COMM_RECONFIGURATION_UNSUPPORTED: a different "
+            "communicator or changed periodic flags while configured "
+            "(cmp=", cmp, "); call halo_exchange_finalize() before "
+            "reconfiguring");
     }
+    ++g_halo_exchange_epoch;   // First-time set: signal the epoch change
     // v11: Reset init log so re-init prints updated communicator status
     g_halo_init_logged = false;
     g_wrf_fortran_comm = fortran_comm;
@@ -582,21 +705,24 @@ HaloProcInfo halo_exchange_get_nproc() {
  * For WRF usage, full halo-included tensors are the expected pattern.
  */
 void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
-    if (!g_halo_impl) {
-        // Silent return for single processor runs
-        // Halo exchange is not needed when running on a single processor
-        return;
-    }
-
     // FIX Round170: Add NoGradGuard to prevent AD graph pollution
     // Halo exchange is a communication operation, not computational
     torch::NoGradGuard no_grad;
 
 #ifdef DMPARALLEL
-    // PR 7B (3b-2): a bare field exchange is a FieldPrimitive — legal alone
-    // or nested directly inside a forward/adjoint batch, never elsewhere.
+    // PR 7B (review): historical serial/uninitialized NO-OP preserved via the
+    // race-free atomic pre-check — the unique_ptr itself is only read under
+    // the scope (an unsynchronized pointer read races lifecycle
+    // publish/reset), and it is RE-CHECKED there.
+    if (!g_halo_exchange_active.load(std::memory_order_acquire)) {
+        return;  // serial/no-exchange or uninitialized: historical no-op
+    }
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::FieldPrimitive, "halo_exchange_3d_tensor");
+    if (!g_halo_impl ||
+        !g_halo_exchange_active.load(std::memory_order_acquire)) {
+        return;  // reconfigured/finalized between pre-check and scope
+    }
     auto& impl = *g_halo_impl;
 
     // FIX Round168: Add CPU/contig/FP32 guard for safe data_ptr<float>() access
@@ -801,16 +927,22 @@ void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
 void halo_exchange_multiple(std::vector<torch::Tensor>& tensors, bool force_full_halo) {
     // For efficiency, pack multiple variables and exchange together
 
-    // No-op semantics preserved (P2): an uninitialized/serial or empty call
-    // touches no MPI or global state, so it must not require the scope.
-    if (!g_halo_impl || tensors.empty()) {
-        return;
+    // empty() reads no global state and stays a pre-scope no-op; the
+    // g_halo_impl read moves BEHIND the scope (P1: an unsynchronized
+    // unique_ptr read races lifecycle publish/reset).
+    if (tensors.empty() ||
+        !g_halo_exchange_active.load(std::memory_order_acquire)) {
+        return;  // empty, serial/no-exchange, or uninitialized: no-op
     }
 
     // PR 7B (3b-2): the whole pack -> NS -> EW -> unpack sequence is ONE
     // logical exchange; nothing may interleave between fields.
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::ForwardBatch, "halo_exchange_multiple");
+    if (!g_halo_impl ||
+        !g_halo_exchange_active.load(std::memory_order_acquire)) {
+        return;  // reconfigured/finalized between pre-check and scope
+    }
 
     // FIX Round170: Add NoGradGuard to prevent AD graph pollution
     // Halo exchange is a communication operation, not a computational one

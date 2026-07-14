@@ -157,6 +157,14 @@ jobs:
       - name: build core + tests
         run: cmake --build build/sdirk3-core --parallel 2
 
+      - name: MPI-free core shape must stay compilable (P1 regression gate)
+        run: |
+          set -euo pipefail
+          cmake -S external/libtorch_wrf/sdirk3 -B build/sdirk3-nompi -G Ninja                 -DCMAKE_BUILD_TYPE=Release                 -DCMAKE_DISABLE_FIND_PACKAGE_MPI=ON                 -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX"                 -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI"                 -DSDIRK3_QUIET_TESTS=ON                 -DUSE_FAST_POW_0875=OFF                 | tee nompi-configure.log
+          # prove MPI was really disabled, not silently found:
+          grep -q "SDIRK3 MPI halo contract: MPI not found - tests NOT registered" nompi-configure.log
+          cmake --build build/sdirk3-nompi --target wrf_sdirk3_lib --parallel 2
+
       - name: lint_all
         run: cmake --build build/sdirk3-core --target lint_all --parallel 2
 

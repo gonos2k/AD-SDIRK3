@@ -214,7 +214,7 @@ void run_adjoint_case(const Case& c, MPI_Comm cart, const char* label) {
     // STANDING (P1 review): a DIRECT raw-adjoint call from a worker thread
     // must be rejected with the thread marker BEFORE any MPI call.
     static bool worker_neg_done = false;
-    if (!worker_neg_done) {
+    if (!worker_neg_done && halo_exchange_requires_exchange()) {
         worker_neg_done = true;
         bool worker_ok = false;
         std::string worker_msg;
@@ -312,6 +312,26 @@ void run_packed_ad_case(const Case& c, MPI_Comm cart, const char* label,
              lhs, rhs, rel);
     }
     ++g_checks;
+
+    // STANDING (review P1-2): the caller's exchange_performed must EXACTLY
+    // equal the authoritative state — both mismatch directions fail with
+    // the stable marker (np1: true vs authoritative false; np>1: false vs
+    // authoritative true).
+    static bool mismatch_neg_done = false;
+    if (!mismatch_neg_done) {
+        mismatch_neg_done = true;
+        ADHaloConfig bad = cfg;
+        bad.exchange_performed = !halo_exchange_requires_exchange();
+        auto xb = torch::rand({packed_len}, torch::kFloat32);
+        try {
+            (void)performADHaloExchange(xb, bad);
+            fail(label, "exchange_performed mismatch was admitted");
+        } catch (const std::exception& e) {
+            if (!std::strstr(e.what(), "SDIRK3_MPI_EXCHANGE_STATE_MISMATCH"))
+                fail(label, "wrong mismatch marker: %s", e.what());
+        }
+        ++g_checks;
+    }
     halo_exchange_finalize();
 }
 
@@ -371,6 +391,114 @@ int main(int argc, char** argv) {
         int dims[2] = {py, px}, periods[2] = {0, 0};
         MPI_Comm cart;
         MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, 0, &cart);
+
+        // STANDING (review, POLICY A): the steady-state repeated setter call
+        // (identical communicator + flags) is a no-op; a DIFFERENT (congruent
+        // duplicate) communicator while configured must fail closed with the
+        // reconfiguration marker until an explicit finalize.
+        static bool policyA_done = false;
+        if (!policyA_done) {
+            policyA_done = true;
+            Case c{px, py, false, false, 1, 0};
+            setup_case(c, cart);
+
+            // STANDING (review P1): with halo INITIALIZED, EXCHANGE ACTIVE
+            // (np>1 — at np=1 a worker call is now correctly a silent
+            // no-op), and the main thread HOLDING a Lifecycle scope, a
+            // worker's exchange attempt must die at the scope with a stable
+            // marker before any global halo-state pointer read.
+            if (halo_exchange_requires_exchange()) {
+                mpi_safety::MPIExchangeScope held(
+                    mpi_safety::MPIExchangeKind::Lifecycle, "held for negative");
+                bool ok = false;
+                std::thread w([&] {
+                    auto t = torch::zeros({4, 2, 4}, torch::kFloat32);
+                    try { halo_exchange_3d_tensor(t); }
+                    catch (const std::exception& e) {
+                        ok = std::strstr(e.what(),
+                            "SDIRK3_MPI_THREAD_CONTRACT_VIOLATION") != nullptr ||
+                             std::strstr(e.what(),
+                            "SDIRK3_MPI_CONCURRENT_EXCHANGE_UNSUPPORTED") != nullptr;
+                    }
+                });
+                w.join();
+                if (!ok) fail("lifecycle-held", "worker exchange not rejected");
+                ++g_checks;
+            }
+
+            // Serial/uninitialized NO-OP is standing too: after finalize a
+            // bare exchange call must return quietly (historical contract).
+            try {
+                set_wrf_communicator(MPI_Comm_c2f(cart), false, false);
+                ++g_checks;  // identical repeat: quiet no-op
+            } catch (const std::exception& e) {
+                fail("policyA", "identical repeat rejected: %s", e.what());
+            }
+            MPI_Comm dup;
+            MPI_Comm_dup(cart, &dup);
+            try {
+                set_wrf_communicator(MPI_Comm_c2f(dup), false, false);
+                fail("policyA", "congruent replacement was admitted");
+            } catch (const std::exception& e) {
+                if (!std::strstr(e.what(),
+                        "SDIRK3_MPI_COMM_RECONFIGURATION_UNSUPPORTED"))
+                    fail("policyA", "wrong marker: %s", e.what());
+                ++g_checks;
+            }
+            MPI_Comm_free(&dup);
+
+            // STANDING (review P1): ready vs exchange-active separation.
+            if (!halo_exchange_is_initialized())
+                fail("active-state", "initialized state not reported ready");
+            bool want_exchange = (px * py > 1);
+            if (halo_exchange_requires_exchange() != want_exchange)
+                fail("active-state", "requires_exchange=%d, want %d",
+                     (int)halo_exchange_requires_exchange(), (int)want_exchange);
+            ++g_checks;
+
+            if (!want_exchange) {
+                // Published single-rank serial state: every primitive from a
+                // WORKER thread must be a SILENT no-op (bit-identical tensor,
+                // no thread/concurrent marker) — no communication is needed,
+                // so the thread contract must not fire.
+                bool quiet = true;
+                std::string wmsg;
+                std::thread w([&] {
+                    try {
+                        auto t = torch::rand({5, 3, 5}, torch::kFloat32);
+                        auto before = t.clone();
+                        halo_exchange_3d_tensor(t);
+                        std::vector<torch::Tensor> b{t};
+                        halo_exchange_multiple(b);
+                        adjoint_mpi_exchange_3d(t);
+                        quiet = torch::equal(t, before);
+                        if (!quiet) wmsg = "tensor modified";
+                    } catch (const std::exception& e) {
+                        quiet = false;
+                        wmsg = e.what();
+                    }
+                });
+                w.join();
+                if (!quiet)
+                    fail("active-state", "single-rank worker no-op broken: %s",
+                         wmsg.c_str());
+                ++g_checks;
+            }
+
+            halo_exchange_finalize();
+            if (halo_exchange_is_initialized() ||
+                halo_exchange_requires_exchange())
+                fail("active-state", "flags not cleared by finalize");
+            ++g_checks;
+            auto noop = torch::zeros({4, 2, 4}, torch::kFloat32);
+            auto before = noop.clone();
+            halo_exchange_3d_tensor(noop);  // uninitialized: silent no-op
+            std::vector<torch::Tensor> batch{noop};
+            halo_exchange_multiple(batch);  // uninitialized: silent no-op
+            if (!torch::equal(noop, before))
+                fail("noop", "uninitialized exchange modified the tensor");
+            ++g_checks;
+        }
 
         for (bool per_x : {false, true})
         for (bool per_y : {false, true})
