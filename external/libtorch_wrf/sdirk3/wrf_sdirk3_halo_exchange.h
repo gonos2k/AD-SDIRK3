@@ -115,7 +115,7 @@ void halo_exchange_finalize();
 
 // Epoch counter — incremented on every comm change or finalize event.
 // Used by TileSDIRK3UnifiedSolver to detect stale halo state.
-uint64_t halo_exchange_get_epoch();
+uint64_t halo_exchange_get_epoch() noexcept;
 
 #ifdef DMPARALLEL
 // Pass WRF's domain-specific Cartesian communicator (local_communicator)
