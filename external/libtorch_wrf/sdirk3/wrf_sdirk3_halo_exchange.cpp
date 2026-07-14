@@ -278,6 +278,11 @@ void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
             "Ensure local_communicator (from MPI_Cart_create) is passed.");
         impl.has_cart_comm = true;
 
+        int cart_ndims = 0;
+        SDIRK3_MPI_CHECK(MPI_Cartdim_get(impl.comm, &cart_ndims));
+        TORCH_CHECK(cart_ndims == 2,
+            "SDIRK3_MPI_COMM_TOPOLOGY_MISMATCH: Cartesian communicator has ",
+            cart_ndims, " dimension(s), expected 2 (y,x)");
         int cart_dims[2], cart_periods[2], cart_coords[2];
         SDIRK3_MPI_CHECK(MPI_Cart_get(impl.comm, 2, cart_dims, cart_periods, cart_coords));
         // PR 7B: the WRF-declared decomposition must MATCH the communicator,
@@ -467,6 +472,12 @@ void set_wrf_communicator(MPI_Fint fortran_comm, bool periodic_x, bool periodic_
     TORCH_CHECK(topo_status == MPI_CART,
         "SDIRK3_MPI_COMM_REQUIRED: communicator is not Cartesian "
         "(topo_status=", topo_status, "); pass WRF's local_communicator");
+    int t_ndims = 0;
+    SDIRK3_MPI_CHECK(MPI_Cartdim_get(test_comm, &t_ndims));
+    TORCH_CHECK(t_ndims == 2,
+        "SDIRK3_MPI_COMM_TOPOLOGY_MISMATCH: Cartesian communicator has ",
+        t_ndims, " dimension(s), expected 2 (y,x); MPI_Cart_get would read "
+        "uninitialized entries");
     int t_dims[2], t_periods[2], t_coords[2];
     SDIRK3_MPI_CHECK(MPI_Cart_get(test_comm, 2, t_dims, t_periods, t_coords));
     TORCH_CHECK(t_periods[0] == 0 && t_periods[1] == 0,
