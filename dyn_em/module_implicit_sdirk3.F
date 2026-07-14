@@ -377,6 +377,14 @@ MODULE module_implicit_sdirk3
          INTEGER(C_INT), VALUE :: nprocx, nprocy, mypx, mypy
          INTEGER(C_INT), VALUE :: halo_width
       END FUNCTION sdirk3_halo_prepare_checked
+
+      ! PR 7B: explicit rank-halo lifecycle teardown (owned communicator
+      ! freed exactly once; fingerprint invalidated; Policy A configuration
+      ! lifetime ends). Failures stop with a coordinated abort (void ABI).
+      SUBROUTINE sdirk3_halo_finalize() &
+         BIND(C, name="sdirk3_halo_finalize")
+         USE, INTRINSIC :: ISO_C_BINDING
+      END SUBROUTINE sdirk3_halo_finalize
    END INTERFACE
    
    ! Module state with improved solver management
@@ -887,6 +895,20 @@ CONTAINS
          CALL wrf_error_fatal(TRIM(message))
       END IF
 
+      ! PR 7B (review P1-2): the opt-in AD halo path with multiple tiles is
+      ! UNSUPPORTED (rank halo geometry equivalence unproven). Refuse on the
+      ! MAIN THREAD before any communicator or halo mutation — a worker-side
+      ! throw after other tiles already mutated solver state is a defense
+      ! line, not a rejection point. The C++ guard remains defense-in-depth.
+      IF (config_flags%sdirk3_enable_ad_halo_exchange .AND. &
+          grid%num_tiles > 1) THEN
+         WRITE(message, '(A,I0,A,I0,A,I0)') &
+            "SDIRK3_MPI_MULTI_TILE_UNSUPPORTED: enable_ad_halo_exchange=" // &
+            "true, num_tiles=", grid%num_tiles, ", rk_step=", rk_step, &
+            ", itimestep=", grid%itimestep
+         CALL wrf_error_fatal(TRIM(message))
+      END IF
+
       IF (ntasks_x * ntasks_y > 1) THEN
          IF (local_communicator == MPI_UNDEFINED .OR. &
              local_communicator == MPI_COMM_NULL) THEN
@@ -1305,11 +1327,21 @@ CONTAINS
             END IF
          END DO
          
+         ! PR 7B (review P1-1): the rank halo lifecycle now creates an owned
+         ! communicator, a geometry fingerprint and a published state — end
+         ! them EXACTLY ONCE here, on the main thread, after every tile
+         ! solver is destroyed. Without this a re-init stayed bound to the
+         ! previous fingerprint/communicator.
+         CALL sdirk3_halo_finalize()
+
          IF (ALLOCATED(tile_solvers)) DEALLOCATE(tile_solvers)
          IF (ALLOCATED(solver_valid)) DEALLOCATE(solver_valid)
          IF (ALLOCATED(solver_states)) DEALLOCATE(solver_states)
          
          sdirk3_initialized = .FALSE.
+         ! PR 7B (review P1-1): without this reset a re-created solver set
+         ! never receives its base state again.
+         base_state_initialized = .FALSE.
          num_tiles_initialized = 0
 
          ! v20.14r27n: Reset config freeze so re-initialization can set config again
