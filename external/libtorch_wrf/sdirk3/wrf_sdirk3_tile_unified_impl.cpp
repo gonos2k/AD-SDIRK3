@@ -5561,28 +5561,23 @@ vertical_coefficients:
             }
         }
 
-        // Step 1b: Ensure halo is initialized (needed for neighbor_*_ used by BC check)
-        // v10: Check epoch first, then init if needed
+        // Step 1b (PR 7B rank-level prepare): the tile solver runs on OpenMP
+        // WORKER threads and MUST NOT perform lifecycle MPI. The old lazy
+        // init here (a) ran halo_exchange_init from a worker — now a thread-
+        // contract violation by design — and (b) passed TILE bounds
+        // (its_/ite_) as the rank PATCH bounds, so with num_tiles>1 the
+        // first tile's geometry silently became the rank halo geometry.
+        // Rank-level preparation (sdirk3_halo_prepare_checked) now runs on
+        // the Fortran main thread BEFORE the tile loop; here we only CHECK
+        // and sync solver-local caches. No init, no warning-fallback.
         checkAndInvalidateOnEpochChange();
-        if (ad_halo_viable && !halo_exchange_initialized_) {
-            const int halo_width = wrf::sdirk3::g_sdirk3_config.halo_width;
-            wrf::sdirk3::halo_exchange_init(
-                ids_, ide_, jds_, jde_, kds_, kde_,
-                ims_, ime_, jms_, jme_, kms_, kme_,
-                its_, ite_, jts_, jte_, kts_, kte_,
-                nprocx_, nprocy_, mypx_, mypy_,
-                halo_width
-            );
-            syncHaloStateAfterInit();
-        }
-        if (ad_halo_viable && !halo_exchange_initialized_) {
-            static bool warned_init = false;
-            if (!warned_init) {
-                std::cerr << "WARNING: AD halo: halo exchange init failed. "
-                          << "Falling back to non-AD halo.\n";
-                warned_init = true;
+        if (ad_halo_viable) {
+            TORCH_CHECK(wrf::sdirk3::halo_exchange_is_initialized(),
+                "SDIRK3_MPI_HALO_NOT_PREPARED: rank-level halo preparation "
+                "must complete before entering the tile solver");
+            if (!halo_exchange_initialized_) {
+                syncHaloStateAfterInit();  // solver-local caches only
             }
-            ad_halo_viable = false;
         }
 
         // Finding #57: neighbor_cache_valid_ defense
