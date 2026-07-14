@@ -131,6 +131,11 @@ int mpi_baseline_thread_level() noexcept {
     return g_mpi_thread_level;
 }
 
+bool is_mpi_baseline_thread() noexcept {
+    return g_baseline_set.load() &&
+           std::this_thread::get_id() == g_baseline_thread;
+}
+
 MPIExchangeScope::MPIExchangeScope(MPIExchangeKind kind, const char* operation) {
     if (!g_baseline_set.load()) {
         // NEVER adopt the first caller: the tile-worker lazy init would

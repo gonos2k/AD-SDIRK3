@@ -127,6 +127,10 @@ inline HaloAccessStatus checkHaloAccess(
  * FIX 2025-01-25: MPI exchange timing synchronization
  * FIX 2025-01-25: Single-rank/non-MPI runs return OK without warnings
  */
+// Declared early: consumed by HaloFreshnessGuard below; defined in
+// wrf_sdirk3_mpi_safety_impl.cpp beside the scope state it reads.
+bool is_mpi_baseline_thread() noexcept;
+
 class HaloFreshnessGuard {
 public:
     // Epoch counter - incremented after each WRF halo exchange (the DATA
@@ -192,6 +196,18 @@ public:
                                       const char* operation) {
         if (!freshness_required.load(std::memory_order_acquire)) {
             return;
+        }
+        // Fail closed BEFORE any counter/lock/state mutation (review):
+        // consumption is a rank-level act owned by the baseline thread. A
+        // worker consuming first would make the legitimate baseline read
+        // pass idempotently or fail stale — corrupting the very contract
+        // this function enforces.
+        if (!is_mpi_baseline_thread()) {
+            throw std::runtime_error(std::string(
+                "SDIRK3_MPI_THREAD_CONTRACT_VIOLATION: ") +
+                (operation ? operation : "?") +
+                ": requireFreshHaloEpoch may only run on the MPI baseline "
+                "thread (inspectHaloFreshness is the worker-safe query)");
         }
         halo_verify_events.fetch_add(1, std::memory_order_relaxed);
         std::lock_guard<std::mutex> lock(freshness_mutex);
@@ -707,6 +723,9 @@ void establish_mpi_baseline_thread(const char* who) noexcept;
 // active). Lets standing tests assert the MPI-enabled baseline path really
 // executed instead of trusting a log line.
 int mpi_baseline_thread_level() noexcept;
+
+// True iff the baseline was established AND the caller is that thread.
+bool is_mpi_baseline_thread() noexcept;
 
 class MPIExchangeScope {
 public:
