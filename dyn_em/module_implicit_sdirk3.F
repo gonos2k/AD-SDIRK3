@@ -882,6 +882,22 @@ CONTAINS
       ! rank run without a usable local_communicator is fatal BEFORE any
       ! tile process info or solver step; a failed validation is fatal too.
       ! Runs before the OpenMP tile loop on the main thread.
+      ! PR 7B (review P1-2): the opt-in AD halo path with multiple tiles is
+      ! UNSUPPORTED (rank halo geometry equivalence unproven). Refuse on the
+      ! MAIN THREAD before any communicator or halo mutation — a worker-side
+      ! throw after other tiles already mutated solver state is a defense
+      ! line, not a rejection point. The C++ guard remains defense-in-depth. Deliberately
+      ! OUTSIDE #ifdef DM_PARALLEL — the unsupported combination is not
+      ! MPI-specific and must be refused in serial builds too.
+      IF (config_flags%sdirk3_enable_ad_halo_exchange .AND. &
+          grid%num_tiles > 1) THEN
+         WRITE(message, '(A,I0,A,I0,A,I0)') &
+            "SDIRK3_MPI_MULTI_TILE_UNSUPPORTED: enable_ad_halo_exchange=" // &
+            "true, num_tiles=", grid%num_tiles, ", rk_step=", rk_step, &
+            ", itimestep=", grid%itimestep
+         CALL wrf_error_fatal(TRIM(message))
+      END IF
+
 #ifdef DM_PARALLEL
       ! PR 7B (7C guard): every internal SDIRK stage executes inside ONE
       ! tile-worker C++ call, so multi-rank stage-halo correctness is NOT
@@ -892,20 +908,6 @@ CONTAINS
             "SDIRK3_MPI_STAGE_HALO_UNSUPPORTED: decomposition ", &
             ntasks_x, " x ", ntasks_y, ", mytask (", mytask_x, ",", &
             mytask_y, "), rk_step=", rk_step, ", num_tiles=", grid%num_tiles
-         CALL wrf_error_fatal(TRIM(message))
-      END IF
-
-      ! PR 7B (review P1-2): the opt-in AD halo path with multiple tiles is
-      ! UNSUPPORTED (rank halo geometry equivalence unproven). Refuse on the
-      ! MAIN THREAD before any communicator or halo mutation — a worker-side
-      ! throw after other tiles already mutated solver state is a defense
-      ! line, not a rejection point. The C++ guard remains defense-in-depth.
-      IF (config_flags%sdirk3_enable_ad_halo_exchange .AND. &
-          grid%num_tiles > 1) THEN
-         WRITE(message, '(A,I0,A,I0,A,I0)') &
-            "SDIRK3_MPI_MULTI_TILE_UNSUPPORTED: enable_ad_halo_exchange=" // &
-            "true, num_tiles=", grid%num_tiles, ", rk_step=", rk_step, &
-            ", itimestep=", grid%itimestep
          CALL wrf_error_fatal(TRIM(message))
       END IF
 
