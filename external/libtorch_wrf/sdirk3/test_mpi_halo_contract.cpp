@@ -372,6 +372,60 @@ int main(int argc, char** argv) {
         MPI_Comm cart;
         MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, 0, &cart);
 
+        // STANDING (review P1): while the MAIN thread holds a Lifecycle
+        // scope, a worker's exchange attempt must die at the scope with a
+        // stable marker BEFORE any global halo-state read.
+        static bool lifecycle_worker_neg_done = false;
+        if (!lifecycle_worker_neg_done) {
+            lifecycle_worker_neg_done = true;
+            mpi_safety::MPIExchangeScope held(
+                mpi_safety::MPIExchangeKind::Lifecycle, "held for negative");
+            bool ok = false;
+            std::thread w([&] {
+                auto t = torch::zeros({4, 2, 4}, torch::kFloat32);
+                try { halo_exchange_3d_tensor(t); }
+                catch (const std::exception& e) {
+                    ok = std::strstr(e.what(),
+                        "SDIRK3_MPI_THREAD_CONTRACT_VIOLATION") != nullptr ||
+                         std::strstr(e.what(),
+                        "SDIRK3_MPI_CONCURRENT_EXCHANGE_UNSUPPORTED") != nullptr;
+                }
+            });
+            w.join();
+            if (!ok) fail("lifecycle-held", "worker exchange not rejected");
+            ++g_checks;
+        }
+
+        // STANDING (review, POLICY A): the steady-state repeated setter call
+        // (identical communicator + flags) is a no-op; a DIFFERENT (congruent
+        // duplicate) communicator while configured must fail closed with the
+        // reconfiguration marker until an explicit finalize.
+        static bool policyA_done = false;
+        if (!policyA_done) {
+            policyA_done = true;
+            Case c{px, py, false, false, 1, 0};
+            setup_case(c, cart);
+            try {
+                set_wrf_communicator(MPI_Comm_c2f(cart), false, false);
+                ++g_checks;  // identical repeat: quiet no-op
+            } catch (const std::exception& e) {
+                fail("policyA", "identical repeat rejected: %s", e.what());
+            }
+            MPI_Comm dup;
+            MPI_Comm_dup(cart, &dup);
+            try {
+                set_wrf_communicator(MPI_Comm_c2f(dup), false, false);
+                fail("policyA", "congruent replacement was admitted");
+            } catch (const std::exception& e) {
+                if (!std::strstr(e.what(),
+                        "SDIRK3_MPI_COMM_RECONFIGURATION_UNSUPPORTED"))
+                    fail("policyA", "wrong marker: %s", e.what());
+                ++g_checks;
+            }
+            MPI_Comm_free(&dup);
+            halo_exchange_finalize();
+        }
+
         for (bool per_x : {false, true})
         for (bool per_y : {false, true})
         for (int hw : {1, 2})

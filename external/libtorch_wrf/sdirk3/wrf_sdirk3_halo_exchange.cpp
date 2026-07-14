@@ -200,7 +200,11 @@ static void halo_exchange_atexit_cleanup() {
     }
 #endif
 
-    // MPI still active (or non-MPI build) - safe to do full cleanup
+    // MPI still active (or non-MPI build) - safe to do full cleanup.
+    // CONTRACT NOTE (review P2): the owned-communicator exactly-once free is
+    // guaranteed on the EXPLICIT finalize/re-init paths only. This atexit
+    // safety net deliberately performs no MPI calls; at process exit the OS
+    // reclaims the resource.
     g_halo_impl.reset();
 }
 
@@ -408,9 +412,12 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
     impl.compute_neighbors();
 #endif
 
-    // All validation passed: free the PREVIOUS owned communicator and publish
-    // the fully-built candidate. This is the only line that mutates global
-    // state; every failure above leaves the prior valid state untouched.
+    // All validation passed. Contract precision (review): candidate BUILD/
+    // VALIDATION failures preserve the previous valid state (strong
+    // guarantee). A failure while RETIRING the previous communicator below
+    // rolls the candidate back and fails closed, but after an MPI error the
+    // MPI runtime itself is not guaranteed usable — that failure is
+    // surfaced, not survived.
 #ifdef DMPARALLEL
     // Free the PREVIOUS owned communicator FIRST — free_owned_comm can throw
     // (always-on MPI check), and until it succeeds the rollback must stay
@@ -459,6 +466,9 @@ static void halo_exchange_finalize_impl() {
     if (g_halo_impl) {
         free_owned_comm(*g_halo_impl);  // exactly-once; no-op if never dup'd
     }
+    // POLICY A: the communicator configuration's lifetime IS the halo
+    // lifecycle — after an explicit finalize a new configuration is legal.
+    g_wrf_comm_set = false;
 #endif
     g_halo_impl.reset();
     ++g_halo_exchange_epoch;
@@ -558,25 +568,31 @@ static void set_wrf_communicator_impl(MPI_Fint fortran_comm, bool periodic_x, bo
         "SDIRK3_MPI_COMM_PERIODIC_TOPOLOGY_UNSUPPORTED: periods=[",
         t_periods[0], ",", t_periods[1], "]; pass a non-periodic "
         "local_communicator and use the periodic_x/y flags");
-    // Same comm AND same periodic flags — no-op (no epoch change).
-    // PR 7B (3b-2 part 2): semantic identity via MPI_Comm_compare, not raw
-    // Fortran-handle equality — a re-created congruent handle is a REAL
-    // reconfiguration, while the identical communicator under a fresh
-    // integer handle is not.
-    if (g_wrf_comm_set
-        && g_wrf_periodic_x == periodic_x && g_wrf_periodic_y == periodic_y) {
+    // POLICY A (review): dynamic communicator replacement is UNSUPPORTED.
+    // The repeated per-step setter call is a no-op only for the IDENTICAL
+    // communicator (MPI_IDENT) with identical periodic flags. Anything else
+    // while configured is a hard failure — comparing against the stored raw
+    // Fortran handle is only sound because the CONTRACT requires WRF's
+    // local_communicator to stay stable (never freed, never re-created) for
+    // the domain lifetime; reconfiguration requires an explicit
+    // halo_exchange_finalize() first. A congruent-but-recreated handle
+    // cannot be reliably distinguished from a reused integer without a
+    // caller-supplied generation, so it is rejected rather than guessed.
+    if (g_wrf_comm_set) {
         int cmp = MPI_UNEQUAL;
         SDIRK3_MPI_CHECK(MPI_Comm_compare(
             MPI_Comm_f2c(g_wrf_fortran_comm), test_comm, &cmp));
-        if (cmp == MPI_IDENT) return;
+        if (cmp == MPI_IDENT
+            && g_wrf_periodic_x == periodic_x && g_wrf_periodic_y == periodic_y) {
+            return;  // steady-state per-step call: no-op, no epoch change
+        }
+        TORCH_CHECK(false,
+            "SDIRK3_MPI_COMM_RECONFIGURATION_UNSUPPORTED: a different "
+            "communicator or changed periodic flags while configured "
+            "(cmp=", cmp, "); call halo_exchange_finalize() before "
+            "reconfiguring");
     }
-
-    // Comm changed or first set — exactly one epoch increment:
-    if (g_wrf_comm_set) {
-        halo_exchange_finalize_impl();  // epoch++ inside; _impl: no nested Lifecycle scope
-    } else {
-        ++g_halo_exchange_epoch;   // First-time set: no finalize needed, just signal
-    }
+    ++g_halo_exchange_epoch;   // First-time set: signal the epoch change
     // v11: Reset init log so re-init prints updated communicator status
     g_halo_init_logged = false;
     g_wrf_fortran_comm = fortran_comm;
@@ -630,21 +646,21 @@ HaloProcInfo halo_exchange_get_nproc() {
  * For WRF usage, full halo-included tensors are the expected pattern.
  */
 void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
-    if (!g_halo_impl) {
-        // Silent return for single processor runs
-        // Halo exchange is not needed when running on a single processor
-        return;
-    }
-
     // FIX Round170: Add NoGradGuard to prevent AD graph pollution
     // Halo exchange is a communication operation, not computational
     torch::NoGradGuard no_grad;
 
 #ifdef DMPARALLEL
-    // PR 7B (3b-2): a bare field exchange is a FieldPrimitive — legal alone
-    // or nested directly inside a forward/adjoint batch, never elsewhere.
+    // PR 7B (P1): the scope comes BEFORE the first g_halo_impl read — a
+    // lifecycle thread may be publishing/resetting the unique_ptr, and an
+    // unsynchronized read (even one that only checks for null) is a data
+    // race. A wrong-thread caller is rejected by the scope without ever
+    // touching global halo state.
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::FieldPrimitive, "halo_exchange_3d_tensor");
+    if (!g_halo_impl) {
+        return;  // serial / not initialized: nothing to exchange
+    }
     auto& impl = *g_halo_impl;
 
     // FIX Round168: Add CPU/contig/FP32 guard for safe data_ptr<float>() access
@@ -849,9 +865,10 @@ void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
 void halo_exchange_multiple(std::vector<torch::Tensor>& tensors, bool force_full_halo) {
     // For efficiency, pack multiple variables and exchange together
 
-    // No-op semantics preserved (P2): an uninitialized/serial or empty call
-    // touches no MPI or global state, so it must not require the scope.
-    if (!g_halo_impl || tensors.empty()) {
+    // empty() reads no global state and stays a pre-scope no-op; the
+    // g_halo_impl read moves BEHIND the scope (P1: an unsynchronized
+    // unique_ptr read races lifecycle publish/reset).
+    if (tensors.empty()) {
         return;
     }
 
@@ -859,6 +876,9 @@ void halo_exchange_multiple(std::vector<torch::Tensor>& tensors, bool force_full
     // logical exchange; nothing may interleave between fields.
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::ForwardBatch, "halo_exchange_multiple");
+    if (!g_halo_impl) {
+        return;  // serial / not initialized: nothing to exchange
+    }
 
     // FIX Round170: Add NoGradGuard to prevent AD graph pollution
     // Halo exchange is a communication operation, not a computational one
