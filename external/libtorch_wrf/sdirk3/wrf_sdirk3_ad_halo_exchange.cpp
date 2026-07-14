@@ -439,6 +439,17 @@ torch::Tensor ADHaloExchangeFunction::forward(
     ctx->saved_data["neighbor_south"] = neighbor_south;
     ctx->saved_data["neighbor_east"] = neighbor_east;
     ctx->saved_data["neighbor_west"] = neighbor_west;
+    // P1-2 (review): EXACT equality with the authoritative state, BEFORE
+    // the early return — a caller passing false while the configuration
+    // requires exchange would otherwise silently return identity and DELETE
+    // cross-rank tangent/adjoint transport.
+    {
+        const bool authoritative_exchange = halo_exchange_requires_exchange();
+        TORCH_CHECK(exchange_performed == authoritative_exchange,
+            "SDIRK3_MPI_EXCHANGE_STATE_MISMATCH: caller exchange_performed=",
+            exchange_performed, " authoritative=", authoritative_exchange);
+        exchange_performed = authoritative_exchange;
+    }
     ctx->saved_data["exchange_performed"] = exchange_performed;
 
     if (!exchange_performed) {

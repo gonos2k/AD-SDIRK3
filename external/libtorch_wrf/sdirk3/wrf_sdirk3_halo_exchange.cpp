@@ -441,15 +441,23 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
     // (always-on MPI check), and until it succeeds the rollback must stay
     // armed so the candidate's fresh duplicate cannot leak on unwind.
     if (g_halo_impl) {
-        // the old configuration is about to die: block exchanges first
-        g_halo_exchange_active.store(false, std::memory_order_release);
+        // active stays TRUE through the replacement window (P1-3): the
+        // single-flight Lifecycle scope already protects the old state, so a
+        // concurrent worker passes the pre-check and is REJECTED at the
+        // scope with a stable marker — an early active=false would instead
+        // silently no-op an exchange that the configuration requires.
         free_owned_comm(*g_halo_impl);
     }
     comm_rollback.c = nullptr;  // both communicators accounted for: disarm
 #endif
-    const bool exchange_active =
+    bool exchange_active = false;
+#ifdef DMPARALLEL
+    // has_cart_comm exists only in the MPI shape; the MPI-free core build
+    // must stay compilable (P1-1) and is always no-exchange.
+    exchange_active =
         impl.has_cart_comm && impl.mpi_size > 1 &&
         (impl.nprocx > 1 || impl.nprocy > 1);
+#endif
     g_halo_impl = std::move(candidate);
     g_halo_ready.store(true, std::memory_order_release);
     g_halo_exchange_active.store(exchange_active, std::memory_order_release);

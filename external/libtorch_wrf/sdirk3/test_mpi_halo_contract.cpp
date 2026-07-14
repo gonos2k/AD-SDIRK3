@@ -312,6 +312,26 @@ void run_packed_ad_case(const Case& c, MPI_Comm cart, const char* label,
              lhs, rhs, rel);
     }
     ++g_checks;
+
+    // STANDING (review P1-2): the caller's exchange_performed must EXACTLY
+    // equal the authoritative state — both mismatch directions fail with
+    // the stable marker (np1: true vs authoritative false; np>1: false vs
+    // authoritative true).
+    static bool mismatch_neg_done = false;
+    if (!mismatch_neg_done) {
+        mismatch_neg_done = true;
+        ADHaloConfig bad = cfg;
+        bad.exchange_performed = !halo_exchange_requires_exchange();
+        auto xb = torch::rand({packed_len}, torch::kFloat32);
+        try {
+            (void)performADHaloExchange(xb, bad);
+            fail(label, "exchange_performed mismatch was admitted");
+        } catch (const std::exception& e) {
+            if (!std::strstr(e.what(), "SDIRK3_MPI_EXCHANGE_STATE_MISMATCH"))
+                fail(label, "wrong mismatch marker: %s", e.what());
+        }
+        ++g_checks;
+    }
     halo_exchange_finalize();
 }
 
