@@ -95,7 +95,9 @@ struct HaloWidthInfo {
 };
 HaloWidthInfo halo_exchange_get_widths();
 
-// Returns whether the halo exchange module is initialized and has MPI support.
+// True iff a FULLY VALIDATED halo state has been published. Says nothing
+// about whether MPI communication happens — a single-rank serial state is
+// initialized with requires_exchange() == false.
 bool halo_exchange_is_initialized();
 
 // True only when the current configuration performs real MPI halo
@@ -129,7 +131,9 @@ inline void set_wrf_communicator(int, bool, bool) {}
 inline bool is_wrf_communicator_set() { return false; }
 #endif
 
-// Process grid info from initialized halo exchange (Cart or fallback).
+// Process grid info from the published halo state: a validated owned
+// Cartesian configuration, or the explicit serial/no-exchange state
+// (there is no COMM_WORLD fallback).
 struct HaloProcInfo { int nprocx, nprocy, mypx, mypy; };
 HaloProcInfo halo_exchange_get_nproc();
 

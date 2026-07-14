@@ -9,6 +9,7 @@
 #include "wrf_sdirk3_halo_exchange.h"
 #include "wrf_sdirk3_mpi_safety.h"  // PR 7B: shared always-on MPI check
 #include "wrf_sdirk3_config.h"      // PR 7B: configured halo width authority
+#include "wrf_sdirk3_halo_c_api.h"  // PR 7B: THE shared checked C ABI declaration
 #include "wrf_sdirk3_common_macros.h"  // OPT Pass34: For SDIRK3_MPI_CHECK
 #include <torch/torch.h>
 #include <vector>
@@ -679,10 +680,6 @@ static void halo_prepare_impl(const HaloPrepareFingerprint& fp,
     g_prepare_fp = fp;
     g_prepare_fp_valid = true;
 }
-
-extern "C" int sdirk3_halo_prepare_checked(
-    int, int, int, int, int, int, int, int, int, int, int, int,
-    int, int, int, int, int, int, int, int, int, int, int) noexcept;
 
 static void halo_prepare(int ids, int ide, int jds, int jde, int kds, int kde,
                          int ims, int ime, int jms, int jme, int kms, int kme,
@@ -1571,7 +1568,7 @@ int sdirk3_halo_prepare_checked(
   }
 }
 
-void sdirk3_halo_finalize() {
+void sdirk3_halo_finalize(void) noexcept {
   try {
     halo_exchange_finalize();
   } catch (const std::exception& e) {

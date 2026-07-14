@@ -34,10 +34,7 @@
 // The REAL production init entry points (both linkage spellings).
 extern "C" void sdirk3_mpi_safety_init(void);
 extern "C" void sdirk3_mpi_safety_init_(void);
-// The sole geometry authority (raw halo_exchange_init is no longer public).
-extern "C" int sdirk3_halo_prepare_checked(
-    int, int, int, int, int, int, int, int, int, int, int, int,
-    int, int, int, int, int, int, int, int, int, int, int);
+#include "wrf_sdirk3_halo_c_api.h"  // the sole geometry authority's shared declaration
 
 using namespace wrf::sdirk3;
 
