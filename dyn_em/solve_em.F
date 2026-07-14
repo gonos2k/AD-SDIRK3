@@ -201,6 +201,7 @@ SUBROUTINE solve_em ( grid , config_flags  &
    INTEGER :: sdirk3_final_step
    INTEGER :: sdirk3_tile, sdirk3_checkpoint_count, sdirk3_global_timestep
    INTEGER :: sdirk3_state_size, sdirk3_ierr, sdirk3_checkpoints_used
+   INTEGER :: sdirk3_notify_status
    REAL, PARAMETER :: sdirk3_adjoint_gamma = 0.4358665
    REAL, ALLOCATABLE, DIMENSION(:) :: sdirk3_lambda_terminal, sdirk3_lambda_initial
 #endif
@@ -746,9 +747,12 @@ SUBROUTINE solve_em ( grid , config_flags  &
             ELSE IF (config_flags%h_mom_adv_order <= 4 .and. config_flags%h_sca_adv_order <= 4) THEN
 #              include "HALO_EM_D2_3.inc"
             ENDIF
-            ! FIX 2025-01-25: Notify SDIRK3 C++ that halo exchange completed
-            ! This prevents stale halo data usage in subsequent computations
-            CALL sdirk3_notify_halo_fresh()
+            ! PR 7B (3b-3 P1): checked freshness publication — status consumed
+            sdirk3_notify_status = sdirk3_notify_halo_fresh_checked()
+            IF (sdirk3_notify_status /= 1) THEN
+               CALL wrf_error_fatal( &
+                  "SDIRK3_MPI_HALO_FRESH_NOTIFY_FAILED: post-solve halo")
+            END IF
 #endif
          END IF
       END DO
@@ -762,8 +766,12 @@ SUBROUTINE solve_em ( grid , config_flags  &
       ! Apply periodic boundary conditions (for parallel domains)
 #ifdef DM_PARALLEL
 #  include "PERIOD_BDY_EM_D.inc"
-      ! FIX 2025-01-25: Notify SDIRK3 C++ that periodic BC exchange completed
-      CALL sdirk3_notify_halo_fresh()
+      ! PR 7B (3b-3 P1): checked freshness publication — status consumed
+      sdirk3_notify_status = sdirk3_notify_halo_fresh_checked()
+      IF (sdirk3_notify_status /= 1) THEN
+         CALL wrf_error_fatal( &
+            "SDIRK3_MPI_HALO_FRESH_NOTIFY_FAILED: periodic BC exchange")
+      END IF
 #endif
 
       ! Apply physical boundary conditions (open, specified, nested)
@@ -785,7 +793,12 @@ SUBROUTINE solve_em ( grid , config_flags  &
 #ifdef DM_PARALLEL
       ! Physical/open/specified BC updates boundary zones after periodic halo sync.
       ! Mark halo freshness again so C++ side sees post-BC state as latest.
-      CALL sdirk3_notify_halo_fresh()
+      ! PR 7B (3b-3 P1): checked freshness publication — status consumed
+      sdirk3_notify_status = sdirk3_notify_halo_fresh_checked()
+      IF (sdirk3_notify_status /= 1) THEN
+         CALL wrf_error_fatal( &
+            "SDIRK3_MPI_HALO_FRESH_NOTIFY_FAILED: post-BC freshness mark")
+      END IF
 #endif
       
       ! Print solver statistics periodically

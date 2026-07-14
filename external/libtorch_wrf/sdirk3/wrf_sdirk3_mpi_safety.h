@@ -159,8 +159,30 @@ public:
     static std::atomic<uint64_t> halo_verify_events;
     static std::atomic<uint64_t> halo_stale_events;
 
-    static void setFreshnessRequired(bool required) noexcept {
+    // PR 7B (3b-3 P1): freshness credits are LIFECYCLE-scoped. A mark left
+    // unconsumed by lifecycle A must never satisfy a require in lifecycle B,
+    // and a (timestep, read_id) consumed in lifecycle A must never pass
+    // idempotently in lifecycle B. Both begin AND end rebase consumed to
+    // published and retire the idempotence key, so no teardown/re-prepare
+    // ordering can leak credit across lifecycles.
+    static void beginFreshnessLifecycle(bool required) {
+        std::lock_guard<std::mutex> lock(freshness_mutex);
+        freshness_state.consumed =
+            halo_exchange_epoch.load(std::memory_order_acquire);
+        freshness_state.last_timestep = UINT64_MAX;
+        freshness_state.last_logical_read_id = -1;
+        // Publish "required" only after the rebase above is in place.
         freshness_required.store(required, std::memory_order_release);
+    }
+
+    static void endFreshnessLifecycle() noexcept {
+        // Stop new publishers/consumers first, then retire old credit.
+        freshness_required.store(false, std::memory_order_release);
+        std::lock_guard<std::mutex> lock(freshness_mutex);
+        freshness_state.consumed =
+            halo_exchange_epoch.load(std::memory_order_acquire);
+        freshness_state.last_timestep = UINT64_MAX;
+        freshness_state.last_logical_read_id = -1;
     }
 
     struct HaloFreshnessSnapshot {
@@ -245,7 +267,21 @@ public:
     /**
      * @brief Call this after WRF completes halo exchange
      */
+    // PR 7B (3b-3 P1): publication is gated exactly like consumption.
+    //   not required -> true no-op: a serial/no-exchange notify must not
+    //                   accumulate credit a later lifecycle could inherit
+    //   off-baseline -> throws BEFORE any counter/epoch mutation: a worker
+    //                   publishing would let requireFreshHaloEpoch consume
+    //                   a forged mark as a real WRF halo completion
     static void markHaloFresh() {
+        if (!freshness_required.load(std::memory_order_acquire)) {
+            return;
+        }
+        if (!is_mpi_baseline_thread()) {
+            throw std::runtime_error(
+                "SDIRK3_MPI_THREAD_CONTRACT_VIOLATION: markHaloFresh: halo "
+                "freshness may only be published by the MPI baseline thread");
+        }
         halo_mark_events.fetch_add(1, std::memory_order_relaxed);
         halo_exchange_epoch.fetch_add(1, std::memory_order_release);
     }
@@ -627,18 +663,6 @@ inline void initializeMPISafety() {
     HaloFreshnessGuard::resetFreshness();
 }
 
-/**
- * @brief Call from Fortran after WRF halo exchange completes
- * This signals SDIRK3 that halo data is fresh
- *
- * FIX 2025-01-25: No-op for single-rank runs (no halo exchange needed)
- */
-inline void notifyHaloExchangeComplete() {
-    // Only mark fresh if MPI is active (multi-rank)
-    // Single-rank runs skip this entirely (isHaloFresh always returns true)
-    HaloFreshnessGuard::markHaloFresh();
-}
-
 // PR 7B: last line of defense at every extern "C" entry point. A C++
 // exception must never unwind through the C ABI into Fortran (UB); legacy
 // void ABIs cannot return a status, so the only honest outcome is a loud,
@@ -760,8 +784,14 @@ void sdirk3_mpi_safety_init(void);
 /**
  * @brief Notify SDIRK3 that WRF halo exchange has completed
  * Call this from Fortran AFTER halo_exchange_finish
+ *
+ * PR 7B (3b-3 P1): checked spelling returns 1 on success, 0 on a rejected
+ * publication (off-baseline thread) — active Fortran consumes this status.
+ * The legacy void spelling delegates to the checked one and performs a
+ * coordinated abort on failure (a void ABI cannot report the violation).
  */
-void sdirk3_notify_halo_fresh(void);
+int sdirk3_notify_halo_fresh_checked(void) noexcept;
+void sdirk3_notify_halo_fresh(void) noexcept;
 
 /**
  * @brief Set current timestep for periodic BC guard (64-bit version)
@@ -778,7 +808,7 @@ void sdirk3_set_timestep_i4(int* timestep);
 
 // Alternate symbols with trailing underscore for Linux GFortran compatibility
 void sdirk3_mpi_safety_init_(void);
-void sdirk3_notify_halo_fresh_(void);
+void sdirk3_notify_halo_fresh_(void) noexcept;
 void sdirk3_set_timestep_(int64_t* timestep);
 void sdirk3_set_timestep_i4_(int* timestep);
 

@@ -20,8 +20,30 @@ extern "C" {
 // Primary implementations (without trailing underscore - for macOS GFortran)
 // =============================================================================
 
-void sdirk3_notify_halo_fresh(void) {
-    wrf::sdirk3::mpi_safety::HaloFreshnessGuard::markHaloFresh();
+// PR 7B (3b-3 P1): markHaloFresh enforces the baseline-thread publication
+// contract by throwing, and a C++ exception must never cross the C ABI.
+// Active Fortran consumes this status; the legacy void spellings cannot
+// report the violation, so they abort in a coordinated way instead.
+int sdirk3_notify_halo_fresh_checked(void) noexcept {
+    try {
+        wrf::sdirk3::mpi_safety::HaloFreshnessGuard::markHaloFresh();
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return 0;
+    } catch (...) {
+        std::cerr << "SDIRK3_MPI_HALO_FRESH_NOTIFY_FAILED: non-std exception"
+                  << std::endl;
+        return 0;
+    }
+}
+
+void sdirk3_notify_halo_fresh(void) noexcept {
+    if (sdirk3_notify_halo_fresh_checked() != 1) {
+        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+            "sdirk3_notify_halo_fresh",
+            "checked freshness publication failed");
+    }
 }
 
 void sdirk3_set_timestep(int64_t* timestep) {
@@ -45,8 +67,10 @@ void sdirk3_mpi_safety_init(void) {
 // Alternate symbols (with trailing underscore - for Linux GFortran)
 // =============================================================================
 
-void sdirk3_notify_halo_fresh_(void) {
-    wrf::sdirk3::mpi_safety::HaloFreshnessGuard::markHaloFresh();
+void sdirk3_notify_halo_fresh_(void) noexcept {
+    // Delegate to the primary spelling so the two ABI names can never
+    // drift apart (the baseline-wrapper drift class of defect).
+    sdirk3_notify_halo_fresh();
 }
 
 void sdirk3_set_timestep_(int64_t* timestep) {

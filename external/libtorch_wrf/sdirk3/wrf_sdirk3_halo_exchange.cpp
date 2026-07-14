@@ -229,6 +229,12 @@ static void halo_exchange_atexit_cleanup() {
         return;  // Already cleaned up via explicit finalize()
     }
 
+    // P1 (review): the freshness lifecycle ends with the publication on
+    // EVERY teardown path — atexit included — so no credit or idempotence
+    // key survives the publication it was earned under. MPI-free and
+    // noexcept, so it is safe on both branches below.
+    mpi_safety::HaloFreshnessGuard::endFreshnessLifecycle();
+
 #ifdef DMPARALLEL
     // Check if MPI is still active - if finalized, destructor might fail
     int mpi_finalized = 0;
@@ -549,7 +555,10 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
     g_halo_exchange_active.store(exchange_active, std::memory_order_release);
     // PR 7B (3b-3): freshness tracking is required exactly when the published
     // state performs real exchange — never inferred from MPI_COMM_WORLD size.
-    mpi_safety::HaloFreshnessGuard::setFreshnessRequired(exchange_active);
+    // P1: beginning the lifecycle also RETIRES every credit and idempotence
+    // key left by a previous lifecycle — a stale mark must never satisfy a
+    // require issued against this publication.
+    mpi_safety::HaloFreshnessGuard::beginFreshnessLifecycle(exchange_active);
 
     // FIX Round170: Gate initialization output to avoid hot-path spam
     // v11: Use file-scope g_halo_init_logged (reset by set_wrf_communicator on comm change)
@@ -584,7 +593,7 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
 // retries an indeterminate communicator handle.
 static void invalidate_halo_publication_noexcept(
     bool clear_communicator_config) noexcept {
-    mpi_safety::HaloFreshnessGuard::setFreshnessRequired(false);
+    mpi_safety::HaloFreshnessGuard::endFreshnessLifecycle();
     g_halo_exchange_active.store(false, std::memory_order_release);
     g_halo_ready.store(false, std::memory_order_release);
     g_prepare_fp_valid = false;

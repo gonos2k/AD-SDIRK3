@@ -16,6 +16,8 @@ MODULE module_implicit_sdirk3
    PUBLIC :: get_sdirk3_dt_recommendation
    PUBLIC :: set_base_state_sdirk3
    PUBLIC :: sdirk3_halo_exchange
+   ! PR 7B (3b-3 P1): solve_em consumes the checked notify status directly
+   PUBLIC :: sdirk3_notify_halo_fresh_checked
    ! Removed unused wrapper functions: sdirk3_timestep_init, sdirk3_timestep_tile, sdirk3_timestep_finalize
    PUBLIC :: sdirk3_configure_from_namelist
    PUBLIC :: sdirk3_prepare_physics_coupling, sdirk3_apply_physics_tendencies
@@ -342,11 +344,15 @@ MODULE module_implicit_sdirk3
          REAL(C_FLOAT), VALUE :: diff_6th_thresh, c_s, c_k
       END SUBROUTINE sdirk3_tile_set_base_state_zerocopy
 
-      ! FIX 2025-01-25: Halo freshness notification for C++ cache invalidation
-      SUBROUTINE sdirk3_notify_halo_fresh() &
-         BIND(C, name="sdirk3_notify_halo_fresh")
+      ! PR 7B (3b-3 P1): checked halo freshness publication. Returns 1 on
+      ! success (serial/no-exchange notify is a true no-op), 0 when the
+      ! publication is rejected (off-baseline thread). Fortran MUST consume
+      ! the status and stop on 0 — the legacy void form is no longer
+      ! referenced by active code (it aborts on failure at the C ABI).
+      INTEGER(C_INT) FUNCTION sdirk3_notify_halo_fresh_checked() &
+            BIND(C, name="sdirk3_notify_halo_fresh_checked")
          USE, INTRINSIC :: ISO_C_BINDING
-      END SUBROUTINE sdirk3_notify_halo_fresh
+      END FUNCTION sdirk3_notify_halo_fresh_checked
 
       ! PR 7B (3b-1): checked communicator setup. Returns 1 on success, 0 on
       ! ANY validation failure (null/non-Cartesian/periodic/1-D communicator,
@@ -2326,7 +2332,8 @@ CONTAINS
       INTEGER :: ips, ipe, jps, jpe, kps, kpe
       ! num_moist, num_chem, num_tracer, num_scalar come from module_state_description
       REAL, DIMENSION(:,:,:,:), POINTER :: moist, chem, tracer, scalar
-      
+      INTEGER(C_INT) :: notify_status
+
 #ifdef DM_PARALLEL
       ! Get communicator and process information
       local_communicator = grid%communicator
@@ -2356,8 +2363,12 @@ CONTAINS
       !   mu_2 (mass continuity equation)
       ! The _5 suffix indicates 5-point stencil for 5th/6th order advection
 # include "HALO_EM_D2_5.inc"
-      ! FIX 2025-01-25: Notify C++ that halo exchange completed
-      CALL sdirk3_notify_halo_fresh()
+      ! PR 7B (3b-3 P1): checked freshness publication — status consumed
+      notify_status = sdirk3_notify_halo_fresh_checked()
+      IF (notify_status /= 1_C_INT) THEN
+         CALL wrf_error_fatal( &
+            "SDIRK3_MPI_HALO_FRESH_NOTIFY_FAILED: sdirk3_halo_exchange")
+      END IF
 #endif
 
    END SUBROUTINE sdirk3_halo_exchange
