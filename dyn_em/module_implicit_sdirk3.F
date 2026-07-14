@@ -347,6 +347,19 @@ MODULE module_implicit_sdirk3
          BIND(C, name="sdirk3_notify_halo_fresh")
          USE, INTRINSIC :: ISO_C_BINDING
       END SUBROUTINE sdirk3_notify_halo_fresh
+
+      ! PR 7B (3b-1): checked communicator setup. Returns 1 on success, 0 on
+      ! ANY validation failure (null/non-Cartesian/periodic/1-D communicator,
+      ! MPI not initialized). Fortran MUST consume the status and stop on 0 —
+      ! the legacy void form is no longer referenced by active code.
+      INTEGER(C_INT) FUNCTION sdirk3_set_mpi_comm_checked( &
+            comm_handle, periodic_x, periodic_y) &
+            BIND(C, name="sdirk3_set_mpi_comm_checked")
+         USE, INTRINSIC :: ISO_C_BINDING
+         INTEGER(C_INT), VALUE :: comm_handle
+         INTEGER(C_INT), VALUE :: periodic_x
+         INTEGER(C_INT), VALUE :: periodic_y
+      END FUNCTION sdirk3_set_mpi_comm_checked
    END INTERFACE
    
    ! Module state with improved solver management
@@ -814,6 +827,7 @@ CONTAINS
       INTEGER :: i, j, nzeros       ! Loop counters and zero counter
       INTEGER :: sdirk3_nprocx, sdirk3_nprocy
       INTEGER :: sdirk3_mypx, sdirk3_mypy
+      INTEGER(C_INT) :: mpi_comm_status
       CHARACTER(LEN=256) :: message
       INTEGER(C_INT) :: step_outcome_rc
       INTEGER(C_INT) :: step_outcome_code
@@ -829,29 +843,39 @@ CONTAINS
 
       ! Zero-copy interface is now declared at module level - no need to repeat here
       
-      ! v11: Interface for setting MPI communicator with periodic flags
-      INTERFACE
-         SUBROUTINE sdirk3_set_mpi_comm(comm_handle, periodic_x, periodic_y) &
-            BIND(C, name="sdirk3_set_mpi_comm")
-            USE, INTRINSIC :: ISO_C_BINDING
-            INTEGER(C_INT), VALUE :: comm_handle
-            INTEGER(C_INT), VALUE :: periodic_x
-            INTEGER(C_INT), VALUE :: periodic_y
-         END SUBROUTINE sdirk3_set_mpi_comm
-      END INTERFACE
-
       IF (.NOT. sdirk3_initialized) THEN
          CALL wrf_error_fatal("SDIRK3: Solvers not initialized")
       END IF
 
-      ! v11: Pass WRF's domain-specific Cartesian communicator + periodic flags to C++
+      ! PR 7B (3b-1): checked communicator setup, status CONSUMED. A multi-
+      ! rank run without a usable local_communicator is fatal BEFORE any
+      ! tile process info or solver step; a failed validation is fatal too.
+      ! Runs before the OpenMP tile loop on the main thread.
 #ifdef DM_PARALLEL
+      IF (ntasks_x * ntasks_y > 1) THEN
+         IF (local_communicator == MPI_UNDEFINED .OR. &
+             local_communicator == MPI_COMM_NULL) THEN
+            WRITE(message, '(A,I0,A,I0,A)') &
+               "SDIRK3_MPI_COMM_REQUIRED: multi-rank run (ntasks ", &
+               ntasks_x, " x ", ntasks_y, ") has no local_communicator"
+            CALL wrf_error_fatal(TRIM(message))
+         END IF
+      END IF
+
       IF (local_communicator /= MPI_UNDEFINED .AND. &
           local_communicator /= MPI_COMM_NULL) THEN
-         CALL sdirk3_set_mpi_comm( &
+         mpi_comm_status = sdirk3_set_mpi_comm_checked( &
             INT(local_communicator, C_INT), &
             INT(MERGE(1, 0, config_flags%periodic_x), C_INT), &
             INT(MERGE(1, 0, config_flags%periodic_y), C_INT))
+         IF (mpi_comm_status /= 1_C_INT) THEN
+            WRITE(message, '(A,I0,A,I0,A,I0,A,I0,A,L1,A,L1)') &
+               "SDIRK3 MPI communicator validation failed: ntasks ", &
+               ntasks_x, " x ", ntasks_y, ", mytask (", mytask_x, ",", &
+               mytask_y, "), periodic_x=", config_flags%periodic_x, &
+               ", periodic_y=", config_flags%periodic_y
+            CALL wrf_error_fatal(TRIM(message))
+         END IF
       END IF
 #endif
 
