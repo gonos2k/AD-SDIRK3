@@ -648,6 +648,15 @@ namespace wrf { namespace sdirk3 { namespace mpi_safety {
 // does not relax this — production is single-flight by contract.
 enum class MPIExchangeKind { FieldPrimitive, ForwardBatch, AdjointBatch, Lifecycle };
 
+// The baseline thread is ESTABLISHED by an authoritative event —
+// sdirk3_mpi_safety_init on the Fortran main thread (before OpenMP) or a
+// test harness main — never inferred from whoever enters a scope first
+// (the tile-worker lazy init would otherwise canonize a worker thread and
+// the real main thread would be rejected). Entering any scope before the
+// baseline is established fails closed. No-throw: a second call from a
+// DIFFERENT thread is a coordinated stop, not an exception.
+void establish_mpi_baseline_thread(const char* who) noexcept;
+
 class MPIExchangeScope {
 public:
     MPIExchangeScope(MPIExchangeKind kind, const char* operation);

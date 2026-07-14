@@ -13,6 +13,8 @@
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_mpi_safety.h"
 
+#include "wrf_sdirk3_mpi_safety.h"
+
 extern "C" {
 
 // =============================================================================
@@ -36,6 +38,7 @@ void sdirk3_set_timestep_i4(int* timestep) {
 }
 
 void sdirk3_mpi_safety_init(void) {
+    wrf::sdirk3::mpi_safety::establish_mpi_baseline_thread("sdirk3_mpi_safety_init");
     wrf::sdirk3::mpi_safety::initializeMPISafety();
 }
 
@@ -69,7 +72,6 @@ void sdirk3_mpi_safety_init_(void) {
 // PR 7B (3b-2): MPIExchangeScope — THE single-flight state for exchange and
 // lifecycle. Defined once here so forward, adjoint, and lifecycle share it.
 // ═══════════════════════════════════════════════════════════════════════════
-#include "wrf_sdirk3_mpi_safety.h"
 #include <mutex>
 #include <thread>
 
@@ -80,7 +82,7 @@ std::mutex g_exchange_mutex;                 // held by the outermost scope only
 std::thread::id g_owner_thread;              // valid while g_depth > 0
 int g_depth = 0;                             // same-thread nesting depth
 MPIExchangeKind g_outer_kind = MPIExchangeKind::FieldPrimitive;
-std::once_flag g_baseline_once;
+std::atomic<bool> g_baseline_set{false};
 std::thread::id g_baseline_thread;           // the MPI baseline (init) thread
 int g_mpi_thread_level = -1;                 // MPI_Query_thread result, if any
 
@@ -94,30 +96,42 @@ const char* kind_name(MPIExchangeKind k) {
     return "?";
 }
 
-void record_baseline() {
-    std::call_once(g_baseline_once, [] {
-        g_baseline_thread = std::this_thread::get_id();
-#ifdef DMPARALLEL
-        int inited = 0, finalized = 0;
-        MPI_Initialized(&inited);
-        MPI_Finalized(&finalized);
-        if (inited && !finalized) {
-            if (MPI_Query_thread(&g_mpi_thread_level) == MPI_SUCCESS) {
-                std::cerr << "SDIRK3: MPI thread level " << g_mpi_thread_level
-                          << " (single-flight contract enforced regardless)"
-                          << std::endl;
-            }
-        }
-#endif
-    });
-}
-
 }  // namespace
 
+void establish_mpi_baseline_thread(const char* who) noexcept {
+    if (g_baseline_set.load()) {
+        if (std::this_thread::get_id() != g_baseline_thread) {
+            abort_c_abi_exception("establish_mpi_baseline_thread",
+                "re-establishment attempted from a different thread");
+        }
+        return;  // idempotent from the baseline thread itself
+    }
+    g_baseline_thread = std::this_thread::get_id();
+#ifdef DMPARALLEL
+    int inited = 0, finalized = 0;
+    MPI_Initialized(&inited);
+    MPI_Finalized(&finalized);
+    if (inited && !finalized &&
+        MPI_Query_thread(&g_mpi_thread_level) == MPI_SUCCESS) {
+        std::cerr << "SDIRK3: MPI baseline thread established by " << who
+                  << ", MPI thread level " << g_mpi_thread_level
+                  << " (single-flight contract enforced regardless)" << std::endl;
+    }
+#endif
+    g_baseline_set.store(true);
+}
+
+
 MPIExchangeScope::MPIExchangeScope(MPIExchangeKind kind, const char* operation) {
-    // The first scope on the process records the baseline thread (production:
-    // the Fortran main thread — communicator setup runs before OpenMP).
-    record_baseline();
+    if (!g_baseline_set.load()) {
+        // NEVER adopt the first caller: the tile-worker lazy init would
+        // canonize a worker thread. Fail closed until the authoritative
+        // establishment ran.
+        throw std::runtime_error(std::string(
+            "SDIRK3_MPI_THREAD_CONTRACT_VIOLATION: ") + operation +
+            " entered before the MPI baseline thread was established "
+            "(sdirk3_mpi_safety_init must run first)");
+    }
     const auto self = std::this_thread::get_id();
     if (self != g_baseline_thread) {
         // Rejected BEFORE any MPI call is made from this thread.

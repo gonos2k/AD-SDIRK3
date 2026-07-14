@@ -26,6 +26,7 @@
 
 #include "wrf_sdirk3_halo_exchange.h"
 #include "wrf_sdirk3_ad_halo_exchange.h"
+#include "wrf_sdirk3_mpi_safety.h"
 
 using namespace wrf::sdirk3;
 
@@ -287,6 +288,9 @@ void run_packed_ad_case(const Case& c, MPI_Comm cart, const char* label,
 
 int main(int argc, char** argv) {
     MPI_Init(&argc, &argv);
+    // Authoritative baseline: production does this via sdirk3_mpi_safety_init
+    // on the Fortran main thread; the harness main is the analog here.
+    mpi_safety::establish_mpi_baseline_thread("test_mpi_halo_contract main");
     int size, rank;
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
