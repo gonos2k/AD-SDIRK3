@@ -116,7 +116,7 @@ jobs:
         run: bash .github/ci/setup_torch_env.sh
 
       - name: install ninja
-        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build mpich libmpich-dev
 
       - name: production Make archive (21 TU) + exact-set contracts
         run: |
@@ -145,6 +145,8 @@ jobs:
           # torch>=2.6 wheels omit the GLIBCXX macro from TORCH_CXX_FLAGS; the
           # runtime-derived value must have been resolved, not assumed:
           grep -q "SDIRK3 torch ABI: _GLIBCXX_USE_CXX11_ABI=$TORCH_ABI" configure.log
+          # the MPI contract must be REGISTERED, not silently skipped:
+          grep -q "SDIRK3 MPI halo contract: ENABLED" configure.log
 
       - name: build core + tests
         run: cmake --build build/sdirk3-core --parallel 2
