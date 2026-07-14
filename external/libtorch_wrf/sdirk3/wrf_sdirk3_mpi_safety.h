@@ -28,6 +28,7 @@
 #include <thread>
 #include <cstdint>
 #include <cstdlib>   // FIX 2025-01-25: For std::abort()
+#include <cstdio>    // PR 7B: abort_c_abi_exception (no-throw fprintf)
 #include <iostream>  // FIX 2025-01-25: For std::cerr warnings
 #include <sstream>    // PR 7B: mpi_safety::check message assembly
 #include <stdexcept>  // PR 7B: mpi_safety::check throws
@@ -574,6 +575,30 @@ inline void notifyHaloExchangeComplete() {
     // Only mark fresh if MPI is active (multi-rank)
     // Single-rank runs skip this entirely (isHaloFresh always returns true)
     HaloFreshnessGuard::markHaloFresh();
+}
+
+// PR 7B: last line of defense at every extern "C" entry point. A C++
+// exception must never unwind through the C ABI into Fortran (UB); legacy
+// void ABIs cannot return a status, so the only honest outcome is a loud,
+// coordinated stop. The marker is deliberately GENERIC — the MPI check's
+// what() already carries SDIRK3_MPI_CALL_FAILED, and renaming every
+// std::exception (shape validation, bad_alloc) as an MPI failure would
+// misclassify. Multi-rank termination is coordinated via MPI_Abort so no
+// peer rank deadlocks waiting on a dead sender; std::abort is the fallback.
+[[noreturn]] inline void abort_c_abi_exception(const char* entry,
+                                               const char* detail) noexcept {
+    std::fprintf(stderr, "SDIRK3_C_ABI_EXCEPTION: %s: %s\n",
+                 entry, detail ? detail : "unknown exception");
+    std::fflush(stderr);
+#ifdef DMPARALLEL
+    int initialized = 0, finalized = 0;
+    MPI_Initialized(&initialized);
+    MPI_Finalized(&finalized);
+    if (initialized && !finalized) {
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+#endif
+    std::abort();
 }
 
 #ifdef DMPARALLEL

@@ -8,6 +8,7 @@
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_interface.h"
+#include "wrf_sdirk3_mpi_safety.h"  // PR 7B: abort_c_abi_exception
 #include "wrf_sdirk3_interface_params.h"
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_config.h"
@@ -162,9 +163,9 @@ extern "C" void sdirk3_set_mpi_comm(int fortran_comm,
             static_cast<MPI_Fint>(fortran_comm),
             periodic_x != 0, periodic_y != 0);
     } catch (const std::exception& e) {
-        std::cerr << "SDIRK3_MPI_CALL_FAILED: sdirk3_set_mpi_comm: "
-                  << e.what() << std::endl;
-        std::abort();
+        wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_set_mpi_comm", e.what());
+    } catch (...) {
+        wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_set_mpi_comm", nullptr);
     }
 #else
     (void)fortran_comm; (void)periodic_x; (void)periodic_y;

@@ -1127,9 +1127,9 @@ void sdirk3_halo_exchange(float* state_array, int nx, int ny, int nz, int num_va
         }
     }
   } catch (const std::exception& e) {
-      std::cerr << "SDIRK3_MPI_CALL_FAILED: sdirk3_halo_exchange: "
-                << e.what() << std::endl;
-      std::abort();
+      wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_halo_exchange", e.what());
+  } catch (...) {
+      wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_halo_exchange", nullptr);
   }
 }
 
@@ -1138,14 +1138,29 @@ void sdirk3_halo_init(int ids, int ide, int jds, int jde, int kds, int kde,
                      int ips, int ipe, int jps, int jpe, int kps, int kpe,
                      int nprocx, int nprocy, int mypx, int mypy,
                      int halo_width) {
+  // halo_exchange_init reaches the throwing MPI check (Comm_rank/size,
+  // Topo_test, Cart_get/shift/rank) and TORCH_CHECK; nothing may unwind
+  // through this C ABI.
+  try {
     halo_exchange_init(ids, ide, jds, jde, kds, kde,
                       ims, ime, jms, jme, kms, kme,
                       ips, ipe, jps, jpe, kps, kpe,
                       nprocx, nprocy, mypx, mypy, halo_width);
+  } catch (const std::exception& e) {
+      wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_halo_init", e.what());
+  } catch (...) {
+      wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_halo_init", nullptr);
+  }
 }
 
 void sdirk3_halo_finalize() {
+  try {
     halo_exchange_finalize();
+  } catch (const std::exception& e) {
+      wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_halo_finalize", e.what());
+  } catch (...) {
+      wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_halo_finalize", nullptr);
+  }
 }
 
 } // extern "C"
