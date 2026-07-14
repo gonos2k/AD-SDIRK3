@@ -202,6 +202,7 @@ static void halo_exchange_atexit_cleanup() {
     if (MPI_Finalized(&mpi_finalized) == MPI_SUCCESS && mpi_finalized) {
         // MPI already finalized - just release pointer, skip any MPI cleanup
         // Current destructor is MPI-free, but this documents the policy
+        g_halo_ready.store(false, std::memory_order_release);
         g_halo_impl.reset();
         return;
     }
