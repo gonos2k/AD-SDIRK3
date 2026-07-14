@@ -5435,11 +5435,12 @@ vertical_coefficients:
             ? wrf::sdirk3::mpi_safety::HaloFreshnessGuard::getStaleEventCount() : 0ULL;
         bool halo_fresh_entry = true;
         if (solver_telemetry_on) {
-            // Telemetry snapshot only (3b-3 P2): reports whether an
-            // unconsumed publication exists at step entry. Consumption and
-            // the verify/stale counters live in requireFreshHaloEpoch.
+            // Telemetry snapshot only (3b-3 P2/P3): reports whether the
+            // freshness contract is currently satisfied at step entry.
+            // Consumption and the verify/stale counters live in
+            // requireFreshHaloEpoch.
             halo_fresh_entry = wrf::sdirk3::mpi_safety::HaloFreshnessGuard::
-                hasUnconsumedFreshnessPublication();
+                isFreshnessSatisfiedForTelemetry();
         }
 
         const bool slow_in_tangent = wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent;

@@ -288,14 +288,15 @@ public:
         freshness_published_epoch.fetch_add(1, std::memory_order_release);
     }
 
-    // PR 7B (3b-3 P2): what the old isHaloFresh()/verifyFreshness() pair
-    // ACTUALLY answers since consumption became explicit: "is there a
-    // publication nobody has consumed yet?" — right after a successful
-    // requireFreshHaloEpoch this is false, which is normal, not stale.
-    // Named for that meaning; read-only, no counter side effects
-    // (verify/stale counters count REAL consumption attempts only).
-    // Enforcement lives exclusively in requireFreshHaloEpoch.
-    static bool hasUnconsumedFreshnessPublication() {
+    // PR 7B (3b-3 P2/P3): read-only telemetry query — "is the freshness
+    // contract currently satisfied?" True when tracking is not required
+    // (serial/no-exchange) OR an unconsumed publication exists; false only
+    // when a required publication has already been consumed (right after a
+    // successful requireFreshHaloEpoch — normal, not stale). Named for the
+    // value it returns (the earlier hasUnconsumedFreshnessPublication read
+    // true in the not-required case, contradicting its name). No counter
+    // side effects; enforcement lives exclusively in requireFreshHaloEpoch.
+    static bool isFreshnessSatisfiedForTelemetry() {
         const auto snap = inspectHaloFreshness();
         if (!snap.required) return true;
         return snap.published > snap.consumed;
