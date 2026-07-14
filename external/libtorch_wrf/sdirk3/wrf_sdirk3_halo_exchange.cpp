@@ -61,6 +61,12 @@ struct HaloExchangeImpl {
     int halo_width_y;
     
     // MPI info
+#ifdef DMPARALLEL
+    // PR 7B: we never borrow WRF's communicator long-term. init() dups it
+    // into owned_comm (with MPI_ERRORS_RETURN) and frees it exactly once on
+    // finalize/re-init — never after MPI_Finalize.
+    MPI_Comm owned_comm = MPI_COMM_NULL;
+#endif
     int mpi_rank;
     int mpi_size;
     int nprocx, nprocy;  // Process grid dimensions
@@ -196,6 +202,17 @@ static void halo_exchange_atexit_cleanup() {
     g_halo_impl.reset();
 }
 
+#ifdef DMPARALLEL
+static void free_owned_comm(HaloExchangeImpl& impl) {
+    if (impl.owned_comm == MPI_COMM_NULL) return;
+    int mpi_finalized = 0;
+    if (MPI_Finalized(&mpi_finalized) == MPI_SUCCESS && !mpi_finalized) {
+        SDIRK3_MPI_CHECK(MPI_Comm_free(&impl.owned_comm));
+    }
+    impl.owned_comm = MPI_COMM_NULL;
+}
+#endif
+
 // Initialize halo exchange
 void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
                        int ims, int ime, int jms, int jme, int kms, int kme,
@@ -240,7 +257,14 @@ void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
     // Compute neighbor ranks — use Cart comm if WRF provided one, else fallback
 #ifdef DMPARALLEL
     if (g_wrf_comm_set) {
-        impl.comm = MPI_Comm_f2c(g_wrf_fortran_comm);
+        // PR 7B: own a duplicate, never the borrowed Fortran handle. The dup
+        // gets MPI_ERRORS_RETURN so every failure reaches the always-on check
+        // instead of MPI's default process kill.
+        free_owned_comm(impl);
+        MPI_Comm incoming = MPI_Comm_f2c(g_wrf_fortran_comm);
+        SDIRK3_MPI_CHECK(MPI_Comm_dup(incoming, &impl.owned_comm));
+        SDIRK3_MPI_CHECK(MPI_Comm_set_errhandler(impl.owned_comm, MPI_ERRORS_RETURN));
+        impl.comm = impl.owned_comm;
         SDIRK3_MPI_CHECK(MPI_Comm_rank(impl.comm, &impl.mpi_rank));
         SDIRK3_MPI_CHECK(MPI_Comm_size(impl.comm, &impl.mpi_size));
 
@@ -256,10 +280,21 @@ void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
 
         int cart_dims[2], cart_periods[2], cart_coords[2];
         SDIRK3_MPI_CHECK(MPI_Cart_get(impl.comm, 2, cart_dims, cart_periods, cart_coords));
-        impl.nprocy = cart_dims[0];
-        impl.nprocx = cart_dims[1];
-        impl.mypy = cart_coords[0];
-        impl.mypx = cart_coords[1];
+        // PR 7B: the WRF-declared decomposition must MATCH the communicator,
+        // never be silently replaced by it — a mismatch means the caller's
+        // patch arithmetic used a different grid than the one messages will
+        // route on.
+        TORCH_CHECK(impl.mpi_size == cart_dims[0] * cart_dims[1],
+            "SDIRK3_MPI_COMM_TOPOLOGY_MISMATCH: comm size ", impl.mpi_size,
+            " != cart dims ", cart_dims[0], "x", cart_dims[1]);
+        TORCH_CHECK(impl.nprocy == cart_dims[0] && impl.nprocx == cart_dims[1],
+            "SDIRK3_MPI_COMM_TOPOLOGY_MISMATCH: declared grid ", impl.nprocx,
+            "x", impl.nprocy, " (x,y) != communicator ", cart_dims[1], "x",
+            cart_dims[0]);
+        TORCH_CHECK(impl.mypy == cart_coords[0] && impl.mypx == cart_coords[1],
+            "SDIRK3_MPI_COMM_COORD_MISMATCH: declared position (", impl.mypx,
+            ",", impl.mypy, ") != communicator coords (", cart_coords[1], ",",
+            cart_coords[0], ")");
 
         int ym, yp, xm, xp;
         SDIRK3_MPI_CHECK(MPI_Cart_shift(impl.comm, 0, 1, &ym, &yp));
@@ -276,26 +311,15 @@ void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
         // If periodic, MPI_Cart_shift already returned wrap-around neighbors
         // even for boundary processes. Override non-periodic directions to -1.
         if (cart_periods[0] != 0 || cart_periods[1] != 0) {
-            if (impl.mpi_rank == 0) {
-                std::cerr << "SDIRK3 WARNING: Communicator has periodic topology "
-                          << "(periods=[" << cart_periods[0] << "," << cart_periods[1] << "]). "
-                          << "Expected non-periodic local_communicator. "
-                          << "Periodic wrap controlled by periodic_x/y flags." << std::endl;
-            }
-            // For non-periodic directions, force boundary neighbors to -1
-            // (Cart_shift on periodic comm returns wrap-around, not MPI_PROC_NULL)
-            if (!g_wrf_periodic_y) {
-                if (cart_coords[0] == 0)
-                    impl.neighbor_south = -1;
-                if (cart_coords[0] == cart_dims[0] - 1)
-                    impl.neighbor_north = -1;
-            }
-            if (!g_wrf_periodic_x) {
-                if (cart_coords[1] == 0)
-                    impl.neighbor_west = -1;
-                if (cart_coords[1] == cart_dims[1] - 1)
-                    impl.neighbor_east = -1;
-            }
+            // PR 7B: the contract is a NON-periodic Cartesian communicator
+            // with periodic wrap carried by the periodic_x/y flags. A
+            // periodic communicator means Cart_shift already wrapped and the
+            // flag logic would double-apply — hard failure, never a warning.
+            TORCH_CHECK(false,
+                "SDIRK3_MPI_COMM_PERIODIC_TOPOLOGY_UNSUPPORTED: communicator has "
+                "periodic topology (periods=[", cart_periods[0], ",", cart_periods[1],
+                "]); pass a non-periodic local_communicator and use the "
+                "periodic_x/y flags");
         }
 
         // For periodic directions on a non-periodic comm, MPI_Cart_shift returned
@@ -333,10 +357,21 @@ void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
             }
         }
     } else {
-        impl.comm = MPI_COMM_WORLD;
+        // PR 7B: MPI_COMM_WORLD is never auto-promoted to the halo
+        // communicator. Single rank = explicit serial/no-exchange state;
+        // multi-rank without the WRF Cartesian communicator is a hard error.
+        int world_size = 1;
+        SDIRK3_MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &world_size));
+        TORCH_CHECK(world_size == 1,
+            "SDIRK3_MPI_COMM_REQUIRED: ", world_size, " ranks but no WRF "
+            "Cartesian communicator was set; call sdirk3_set_mpi_comm_checked "
+            "before halo init");
+        impl.comm = MPI_COMM_NULL;  // serial: no exchange path may touch it
         impl.has_cart_comm = false;
-        SDIRK3_MPI_CHECK(MPI_Comm_rank(impl.comm, &impl.mpi_rank));
-        SDIRK3_MPI_CHECK(MPI_Comm_size(impl.comm, &impl.mpi_size));
+        impl.mpi_rank = 0;
+        impl.mpi_size = 1;
+        impl.nprocx = 1; impl.nprocy = 1;
+        impl.mypx = 0; impl.mypy = 0;
         impl.compute_neighbors();
     }
 #else
@@ -376,6 +411,9 @@ void halo_exchange_finalize() {
         g_halo_impl.reset();
         ++g_halo_exchange_epoch;
         return;
+    }
+    if (g_halo_impl) {
+        free_owned_comm(*g_halo_impl);  // exactly-once; no-op if never dup'd
     }
 #endif
     g_halo_impl.reset();

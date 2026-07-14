@@ -153,23 +153,41 @@ void set_solver_step_outcome_if_present(void* solver_ptr,
 // v10: C entry point for WRF Fortran to pass Cartesian communicator
 // Located in this file (not wrf_sdirk3_interface.cpp) because Makefile.physics
 // and Makefile.simple only compile wrf_sdirk3_interface_zerocopy.cpp.
-extern "C" void sdirk3_set_mpi_comm(int fortran_comm,
-                                     int periodic_x, int periodic_y) {
+// PR 7B: checked communicator API — Fortran consumes the status and calls
+// wrf_error_fatal on 0. Returns 1 on success, 0 on ANY failure; no exception
+// crosses the ABI.
+extern "C" int sdirk3_set_mpi_comm_checked(int fortran_comm,
+                                           int periodic_x, int periodic_y) {
 #if defined(DMPARALLEL) || defined(DM_PARALLEL)
-    // PR 7B: the MPI check throws; a C++ exception must NEVER cross this
-    // extern "C" boundary into Fortran (UB). Fail loudly and stop instead.
     try {
         wrf::sdirk3::set_wrf_communicator(
             static_cast<MPI_Fint>(fortran_comm),
             periodic_x != 0, periodic_y != 0);
+        return 1;
     } catch (const std::exception& e) {
-        wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_set_mpi_comm", e.what());
+        std::cerr << "SDIRK3_MPI_COMM_REQUIRED: sdirk3_set_mpi_comm_checked failed: "
+                  << e.what() << std::endl;
+        return 0;
     } catch (...) {
-        wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_set_mpi_comm", nullptr);
+        std::cerr << "SDIRK3_MPI_COMM_REQUIRED: sdirk3_set_mpi_comm_checked failed: "
+                  << "non-std C++ exception" << std::endl;
+        return 0;
     }
 #else
     (void)fortran_comm; (void)periodic_x; (void)periodic_y;
+    return 1;  // serial build: nothing to set
 #endif
+}
+
+extern "C" void sdirk3_set_mpi_comm(int fortran_comm,
+                                     int periodic_x, int periodic_y) {
+    // PR 7B: legacy void ABI kept for compatibility; it routes through the
+    // checked API and a failure is never ignored — the void form's only
+    // honest outcome is a loud coordinated stop.
+    if (sdirk3_set_mpi_comm_checked(fortran_comm, periodic_x, periodic_y) == 0) {
+        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+            "sdirk3_set_mpi_comm", "checked communicator setup returned 0");
+    }
 }
 
 extern "C" {
