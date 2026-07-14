@@ -445,23 +445,34 @@ uint64_t halo_exchange_get_epoch() { return g_halo_exchange_epoch; }
 
 #ifdef DMPARALLEL
 void set_wrf_communicator(MPI_Fint fortran_comm, bool periodic_x, bool periodic_y) {
-    // Invalid comm → teardown + epoch++
+    // PR 7B (Codex): a null/invalid/non-conforming communicator previously
+    // UNSET the state and returned silently, so the checked C ABI reported
+    // SUCCESS for garbage input. Validation now happens AT SET TIME and every
+    // violation throws (the checked API turns that into status 0; the legacy
+    // void API aborts). No state is mutated on rejection.
+    int mpi_inited = 0, mpi_finalized = 0;
+    MPI_Initialized(&mpi_inited);
+    MPI_Finalized(&mpi_finalized);
+    TORCH_CHECK(mpi_inited && !mpi_finalized,
+        "SDIRK3_MPI_COMM_REQUIRED: set_wrf_communicator called while MPI is ",
+        (mpi_inited ? "finalized" : "not initialized"));
     MPI_Comm test_comm = MPI_Comm_f2c(fortran_comm);
-    if (test_comm == MPI_COMM_NULL) {
-        if (g_wrf_comm_set) {
-            halo_exchange_finalize();  // epoch++ inside finalize
-        }
-        g_wrf_comm_set = false;
-        return;
-    }
+    TORCH_CHECK(test_comm != MPI_COMM_NULL,
+        "SDIRK3_MPI_COMM_REQUIRED: null communicator handle");
     int test_rank;
-    if (MPI_Comm_rank(test_comm, &test_rank) != MPI_SUCCESS) {
-        if (g_wrf_comm_set) {
-            halo_exchange_finalize();  // epoch++ inside finalize
-        }
-        g_wrf_comm_set = false;
-        return;
-    }
+    TORCH_CHECK(MPI_Comm_rank(test_comm, &test_rank) == MPI_SUCCESS,
+        "SDIRK3_MPI_COMM_REQUIRED: communicator handle rejects MPI_Comm_rank");
+    int topo_status = MPI_UNDEFINED;
+    SDIRK3_MPI_CHECK(MPI_Topo_test(test_comm, &topo_status));
+    TORCH_CHECK(topo_status == MPI_CART,
+        "SDIRK3_MPI_COMM_REQUIRED: communicator is not Cartesian "
+        "(topo_status=", topo_status, "); pass WRF's local_communicator");
+    int t_dims[2], t_periods[2], t_coords[2];
+    SDIRK3_MPI_CHECK(MPI_Cart_get(test_comm, 2, t_dims, t_periods, t_coords));
+    TORCH_CHECK(t_periods[0] == 0 && t_periods[1] == 0,
+        "SDIRK3_MPI_COMM_PERIODIC_TOPOLOGY_UNSUPPORTED: periods=[",
+        t_periods[0], ",", t_periods[1], "]; pass a non-periodic "
+        "local_communicator and use the periodic_x/y flags");
     // Same comm AND same periodic flags — no-op (no epoch change)
     if (g_wrf_comm_set && g_wrf_fortran_comm == fortran_comm
         && g_wrf_periodic_x == periodic_x && g_wrf_periodic_y == periodic_y) return;
