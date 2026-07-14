@@ -799,15 +799,18 @@ void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
 
 // Perform halo exchange for multiple 3D tensors
 void halo_exchange_multiple(std::vector<torch::Tensor>& tensors, bool force_full_halo) {
+    // For efficiency, pack multiple variables and exchange together
+
+    // No-op semantics preserved (P2): an uninitialized/serial or empty call
+    // touches no MPI or global state, so it must not require the scope.
+    if (!g_halo_impl || tensors.empty()) {
+        return;
+    }
+
     // PR 7B (3b-2): the whole pack -> NS -> EW -> unpack sequence is ONE
     // logical exchange; nothing may interleave between fields.
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::ForwardBatch, "halo_exchange_multiple");
-    // For efficiency, pack multiple variables and exchange together
-
-    if (!g_halo_impl || tensors.empty()) {
-        return;
-    }
 
     // FIX Round170: Add NoGradGuard to prevent AD graph pollution
     // Halo exchange is a communication operation, not a computational one

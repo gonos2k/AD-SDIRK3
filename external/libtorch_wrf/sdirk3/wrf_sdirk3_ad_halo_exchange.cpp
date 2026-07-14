@@ -228,6 +228,14 @@ void adjoint_mpi_exchange_3d(torch::Tensor& grad_field) {
 
     if (!halo_exchange_is_initialized()) return;
 
+    // PR 7B (P1): this is a PUBLIC primitive — it must carry its own
+    // FieldPrimitive scope. Alone it is the outer scope; under the AD
+    // AdjointBatch it nests legally. Without this, a direct caller (the raw
+    // transpose contract test does exactly that) bypassed the single-flight
+    // and baseline-thread checks entirely.
+    mpi_safety::MPIExchangeScope scope(
+        mpi_safety::MPIExchangeKind::FieldPrimitive, "adjoint_mpi_exchange_3d");
+
     MPI_Comm comm = halo_exchange_get_comm();
     int my_rank = halo_exchange_get_rank();
     auto nbrs = halo_exchange_get_neighbors();

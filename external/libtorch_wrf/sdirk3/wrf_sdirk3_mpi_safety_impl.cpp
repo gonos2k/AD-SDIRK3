@@ -13,7 +13,6 @@
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_mpi_safety.h"
 
-#include "wrf_sdirk3_mpi_safety.h"
 
 extern "C" {
 
@@ -85,6 +84,7 @@ std::thread::id g_owner_thread;              // valid while g_depth > 0
 int g_depth = 0;                             // same-thread nesting depth
 MPIExchangeKind g_outer_kind = MPIExchangeKind::FieldPrimitive;
 std::atomic<bool> g_baseline_set{false};
+std::mutex g_baseline_mutex;                 // serializes FIRST publication
 std::thread::id g_baseline_thread;           // the MPI baseline (init) thread
 int g_mpi_thread_level = -1;                 // MPI_Query_thread result, if any
 
@@ -101,6 +101,9 @@ const char* kind_name(MPIExchangeKind k) {
 }  // namespace
 
 void establish_mpi_baseline_thread(const char* who) noexcept {
+    // First publication is race-free (P2): two threads racing the initial
+    // establishment must not both write g_baseline_thread.
+    std::lock_guard<std::mutex> lock(g_baseline_mutex);
     if (g_baseline_set.load()) {
         if (std::this_thread::get_id() != g_baseline_thread) {
             abort_c_abi_exception("establish_mpi_baseline_thread",
@@ -123,6 +126,10 @@ void establish_mpi_baseline_thread(const char* who) noexcept {
     g_baseline_set.store(true);
 }
 
+
+int mpi_baseline_thread_level() noexcept {
+    return g_mpi_thread_level;
+}
 
 MPIExchangeScope::MPIExchangeScope(MPIExchangeKind kind, const char* operation) {
     if (!g_baseline_set.load()) {

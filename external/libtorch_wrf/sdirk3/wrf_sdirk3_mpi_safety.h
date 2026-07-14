@@ -657,6 +657,11 @@ enum class MPIExchangeKind { FieldPrimitive, ForwardBatch, AdjointBatch, Lifecyc
 // DIFFERENT thread is a coordinated stop, not an exception.
 void establish_mpi_baseline_thread(const char* who) noexcept;
 
+// Recorded MPI_Query_thread result (-1 until establishment ran with MPI
+// active). Lets standing tests assert the MPI-enabled baseline path really
+// executed instead of trusting a log line.
+int mpi_baseline_thread_level() noexcept;
+
 class MPIExchangeScope {
 public:
     MPIExchangeScope(MPIExchangeKind kind, const char* operation);
