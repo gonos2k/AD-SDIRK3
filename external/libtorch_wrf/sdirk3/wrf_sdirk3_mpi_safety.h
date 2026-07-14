@@ -29,6 +29,8 @@
 #include <cstdint>
 #include <cstdlib>   // FIX 2025-01-25: For std::abort()
 #include <iostream>  // FIX 2025-01-25: For std::cerr warnings
+#include <sstream>    // PR 7B: mpi_safety::check message assembly
+#include <stdexcept>  // PR 7B: mpi_safety::check throws
 
 #ifdef DMPARALLEL
 #include <mpi.h>
@@ -547,7 +549,14 @@ inline void initializeMPISafety() {
     MPI_Initialized(&mpi_initialized);
     if (mpi_initialized) {
         int mpi_size = 1;
-        MPI_Comm_size(MPI_COMM_WORLD, &mpi_size);
+        // Explicit checked branch (this helper predates SDIRK3_MPI_SAFETY_CHECK
+        // and must not throw): a failed size query must not silently read as
+        // single-rank, which would disable halo freshness tracking.
+        if (MPI_Comm_size(MPI_COMM_WORLD, &mpi_size) != MPI_SUCCESS) {
+            std::cerr << "SDIRK3_MPI_CALL_FAILED: MPI_Comm_size in setMPIActiveFromEnv"
+                      << std::endl;
+            std::abort();
+        }
         // Only activate halo freshness tracking if multiple ranks
         mpi_active = (mpi_size > 1);
     }
@@ -567,9 +576,43 @@ inline void notifyHaloExchangeComplete() {
     HaloFreshnessGuard::markHaloFresh();
 }
 
+#ifdef DMPARALLEL
+// PR 7B: the single authoritative MPI return-code check.
+// The previous per-file macros compiled to `(void)(call)` under NDEBUG, so
+// Release production discarded every MPI error code. This check is ALWAYS on
+// (Debug and Release); the success path costs one integer compare.
+// On failure it prints the stable marker and throws — the exception is for
+// C++ callers; extern "C" entry points must catch before the ABI boundary.
+inline void check(int rc, const char* expression, const char* file, int line) {
+    if (rc == MPI_SUCCESS) return;
+    int rank = -1, inited = 0, finalized = 0;
+    char errstr[MPI_MAX_ERROR_STRING] = "(MPI error string unavailable)";
+    int errlen = 0;
+    MPI_Initialized(&inited);
+    MPI_Finalized(&finalized);
+    if (inited && !finalized) {
+        // Only query MPI while it is safely queryable; otherwise report the
+        // numeric code alone rather than risking a second failure.
+        MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+        MPI_Error_string(rc, errstr, &errlen);
+    }
+    std::ostringstream oss;
+    oss << "SDIRK3_MPI_CALL_FAILED: " << expression << " rc=" << rc
+        << " rank=" << rank << " at " << file << ":" << line
+        << " : " << errstr;
+    std::cerr << oss.str() << std::endl;
+    throw std::runtime_error(oss.str());
+}
+#endif  // DMPARALLEL
+
 } // namespace mpi_safety
 } // namespace sdirk3
 } // namespace wrf
+
+#ifdef DMPARALLEL
+#define SDIRK3_MPI_SAFETY_CHECK(call) \
+    ::wrf::sdirk3::mpi_safety::check((call), #call, __FILE__, __LINE__)
+#endif
 
 // ═══════════════════════════════════════════════════════════════════════════
 // C INTERFACE FOR FORTRAN INTEROP

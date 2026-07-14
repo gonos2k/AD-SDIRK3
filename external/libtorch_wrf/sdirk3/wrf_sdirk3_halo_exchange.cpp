@@ -7,6 +7,7 @@
  */
 
 #include "wrf_sdirk3_halo_exchange.h"
+#include "wrf_sdirk3_mpi_safety.h"  // PR 7B: shared always-on MPI check
 #include "wrf_sdirk3_common_macros.h"  // OPT Pass34: For SDIRK3_MPI_CHECK
 #include <torch/torch.h>
 #include <vector>
@@ -19,23 +20,10 @@
 #ifdef DMPARALLEL
 #include <mpi.h>
 
-// OPT Pass34: Debug-only MPI error checking macro
-// See wrf_sdirk3_common_macros.h for full specification
-// In release builds, this compiles to (void)(mpi_call) with zero overhead
-#ifndef NDEBUG
-#define SDIRK3_MPI_CHECK(mpi_call) \
-    do { \
-        int _mpi_err = (mpi_call); \
-        if (_mpi_err != MPI_SUCCESS) { \
-            char _mpi_err_str[MPI_MAX_ERROR_STRING]; \
-            int _mpi_err_len; \
-            MPI_Error_string(_mpi_err, _mpi_err_str, &_mpi_err_len); \
-            TORCH_CHECK(false, "SDIRK3 MPI error in " #mpi_call ": ", _mpi_err_str); \
-        } \
-    } while(0)
-#else
-#define SDIRK3_MPI_CHECK(mpi_call) (void)(mpi_call)
-#endif
+// PR 7B: Release builds previously compiled this to (void)(call),
+// discarding every MPI error code in production. Route to the single
+// always-on check in wrf_sdirk3_mpi_safety.h.
+#define SDIRK3_MPI_CHECK(mpi_call) SDIRK3_MPI_SAFETY_CHECK(mpi_call)
 
 #endif // DMPARALLEL
 

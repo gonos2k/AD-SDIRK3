@@ -9,6 +9,7 @@
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_ad_halo_exchange.h"
 #include "wrf_sdirk3_halo_exchange.h"
+#include "wrf_sdirk3_mpi_safety.h"  // PR 7B: shared always-on MPI check
 #include "wrf_sdirk3_config.h"
 #include <iostream>
 #include <cstring>
@@ -17,14 +18,10 @@
 #ifdef DMPARALLEL
 #include <mpi.h>
 // MPI error check macro (matches wrf_sdirk3_halo_exchange.cpp)
-#ifndef NDEBUG
-#define AD_MPI_CHECK(mpi_call) \
-    do { int rc = (mpi_call); \
-         TORCH_CHECK(rc == MPI_SUCCESS, "MPI call failed: rc=", rc); \
-    } while(0)
-#else
-#define AD_MPI_CHECK(mpi_call) (void)(mpi_call)
-#endif
+// PR 7B: Release builds previously compiled this to (void)(call),
+// discarding every MPI error code in production. Route to the single
+// always-on check in wrf_sdirk3_mpi_safety.h.
+#define AD_MPI_CHECK(mpi_call) SDIRK3_MPI_SAFETY_CHECK(mpi_call)
 #endif
 
 namespace wrf {
