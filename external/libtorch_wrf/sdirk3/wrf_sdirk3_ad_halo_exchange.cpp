@@ -28,7 +28,8 @@ namespace wrf {
 namespace sdirk3 {
 
 // Thread safety for MPI adjoint operations
-static std::mutex g_ad_halo_mpi_mutex;
+// PR 7B (3b-2): the adjoint-private mutex is retired — forward, adjoint
+// and lifecycle share mpi_safety::MPIExchangeScope now.
 
 // ============================================================================
 // HaloBCConditions::fromConfig
@@ -207,7 +208,8 @@ void adjoint_bc_v(torch::Tensor& grad, const HaloBCConditions& bc,
 // ============================================================================
 
 void adjoint_mpi_exchange_3d(torch::Tensor& grad_field) {
-    // Must hold g_ad_halo_mpi_mutex (caller responsibility)
+    // PR 7B (3b-2): callers hold an MPIExchangeScope batch; this function
+    // is invoked per-field inside it.
     torch::NoGradGuard no_grad;
 
 #ifdef DMPARALLEL
@@ -475,6 +477,10 @@ torch::Tensor ADHaloExchangeFunction::forward(
     // MPI exchange under NoGradGuard (MPI is non-differentiable)
     {
         torch::NoGradGuard no_grad;
+        // PR 7B (3b-2): the six-field forward exchange is ONE batch; the
+        // per-field calls nest as FieldPrimitive under this scope.
+        mpi_safety::MPIExchangeScope batch_scope(
+            mpi_safety::MPIExchangeKind::ForwardBatch, "AD forward halo batch");
         halo_exchange_3d_tensor(fields.u,  /*force_full_halo=*/true);
         halo_exchange_3d_tensor(fields.v,  /*force_full_halo=*/true);
         halo_exchange_3d_tensor(fields.w,  /*force_full_halo=*/true);
@@ -550,9 +556,12 @@ torch::autograd::variable_list ADHaloExchangeFunction::backward(
     adjoint_bc_u(grad_fields.u, bc, ni_mem, nj_mem);
     adjoint_bc_v(grad_fields.v, bc, ni_mem, nj_mem);
 
-    // Adjoint MPI exchange (lock for thread safety)
+    // PR 7B (3b-2): the six-field adjoint exchange is ONE batch under the
+    // SHARED single-flight scope (the old adjoint-private mutex could not
+    // exclude a concurrent forward exchange).
     {
-        std::lock_guard<std::mutex> lock(g_ad_halo_mpi_mutex);
+        mpi_safety::MPIExchangeScope batch_scope(
+            mpi_safety::MPIExchangeKind::AdjointBatch, "AD adjoint halo batch");
         adjoint_mpi_exchange_3d(grad_fields.u);
         adjoint_mpi_exchange_3d(grad_fields.v);
         adjoint_mpi_exchange_3d(grad_fields.w);

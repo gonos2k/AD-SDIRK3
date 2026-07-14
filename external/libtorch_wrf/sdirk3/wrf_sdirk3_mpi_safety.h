@@ -634,6 +634,30 @@ inline void check(int rc, const char* expression, const char* file, int line) {
 } // namespace sdirk3
 } // namespace wrf
 
+namespace wrf { namespace sdirk3 { namespace mpi_safety {
+
+// PR 7B (3b-2): single-flight guard for every MPI exchange AND lifecycle
+// operation. One program-global state (defined in wrf_sdirk3_mpi_safety_impl
+// .cpp — forward and adjoint share it). Allowed nesting is ONLY
+// ForwardBatch->FieldPrimitive and AdjointBatch->FieldPrimitive on the SAME
+// thread; every other re-entry (Lifecycle->Lifecycle, Lifecycle<->exchange,
+// FieldPrimitive->FieldPrimitive, any other-thread entry) fails closed
+// immediately — never blocks (SDIRK3_MPI_CONCURRENT_EXCHANGE_UNSUPPORTED).
+// A thread other than the recorded MPI baseline thread is rejected BEFORE
+// any MPI call (SDIRK3_MPI_THREAD_CONTRACT_VIOLATION); MPI_THREAD_MULTIPLE
+// does not relax this — production is single-flight by contract.
+enum class MPIExchangeKind { FieldPrimitive, ForwardBatch, AdjointBatch, Lifecycle };
+
+class MPIExchangeScope {
+public:
+    MPIExchangeScope(MPIExchangeKind kind, const char* operation);
+    ~MPIExchangeScope() noexcept;
+    MPIExchangeScope(const MPIExchangeScope&) = delete;
+    MPIExchangeScope& operator=(const MPIExchangeScope&) = delete;
+};
+
+}}}  // namespace wrf::sdirk3::mpi_safety
+
 #ifdef DMPARALLEL
 #define SDIRK3_MPI_SAFETY_CHECK(call) \
     ::wrf::sdirk3::mpi_safety::check((call), #call, __FILE__, __LINE__)

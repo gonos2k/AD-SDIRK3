@@ -214,7 +214,7 @@ static void free_owned_comm(HaloExchangeImpl& impl) {
 #endif
 
 // Initialize halo exchange
-void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
+static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds, int kde,
                        int ims, int ime, int jms, int jme, int kms, int kme,
                        int ips, int ipe, int jps, int jpe, int kps, int kpe,
                        int nprocx, int nprocy, int mypx, int mypy,
@@ -409,7 +409,7 @@ void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
 // FIX Round176: Removed MPI derived type cleanup - types no longer created
 // OPT Pass34: Use unique_ptr::reset() for automatic cleanup
 // v10: Epoch incremented on every finalize (single point of increment on teardown)
-void halo_exchange_finalize() {
+static void halo_exchange_finalize_impl() {
 #ifdef DMPARALLEL
     int mpi_finalized = 0;
     if (MPI_Finalized(&mpi_finalized) == MPI_SUCCESS && mpi_finalized) {
@@ -424,6 +424,41 @@ void halo_exchange_finalize() {
     g_halo_impl.reset();
     ++g_halo_exchange_epoch;
 }
+
+#ifdef DMPARALLEL
+static void set_wrf_communicator_impl(MPI_Fint fortran_comm, bool periodic_x, bool periodic_y);
+#endif
+
+// PR 7B (3b-2): public lifecycle entry points take the single-flight
+// Lifecycle scope; bodies live in the _impl functions so internal
+// cross-calls (set_wrf_communicator -> finalize) never nest two Lifecycle
+// scopes. Reconfiguration during an active exchange fails closed here.
+void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
+                       int ims, int ime, int jms, int jme, int kms, int kme,
+                       int ips, int ipe, int jps, int jpe, int kps, int kpe,
+                       int nprocx, int nprocy, int mypx, int mypy,
+                       int halo_width) {
+    mpi_safety::MPIExchangeScope scope(
+        mpi_safety::MPIExchangeKind::Lifecycle, "halo_exchange_init");
+    halo_exchange_init_impl(ids, ide, jds, jde, kds, kde,
+                            ims, ime, jms, jme, kms, kme,
+                            ips, ipe, jps, jpe, kps, kpe,
+                            nprocx, nprocy, mypx, mypy, halo_width);
+}
+
+void halo_exchange_finalize() {
+    mpi_safety::MPIExchangeScope scope(
+        mpi_safety::MPIExchangeKind::Lifecycle, "halo_exchange_finalize");
+    halo_exchange_finalize_impl();
+}
+
+#ifdef DMPARALLEL
+void set_wrf_communicator(MPI_Fint fortran_comm, bool periodic_x, bool periodic_y) {
+    mpi_safety::MPIExchangeScope scope(
+        mpi_safety::MPIExchangeKind::Lifecycle, "set_wrf_communicator");
+    set_wrf_communicator_impl(fortran_comm, periodic_x, periodic_y);
+}
+#endif
 
 // Step 1.5: Accessor for MPI neighbor ranks (Finding #45/#53)
 // Returns neighbor ranks from g_halo_impl. -1 = no neighbor (edge of Cartesian grid).
@@ -449,7 +484,7 @@ bool halo_exchange_is_initialized() {
 uint64_t halo_exchange_get_epoch() { return g_halo_exchange_epoch; }
 
 #ifdef DMPARALLEL
-void set_wrf_communicator(MPI_Fint fortran_comm, bool periodic_x, bool periodic_y) {
+static void set_wrf_communicator_impl(MPI_Fint fortran_comm, bool periodic_x, bool periodic_y) {
     // PR 7B (Codex): a null/invalid/non-conforming communicator previously
     // UNSET the state and returned silently, so the checked C ABI reported
     // SUCCESS for garbage input. Validation now happens AT SET TIME and every
@@ -490,7 +525,7 @@ void set_wrf_communicator(MPI_Fint fortran_comm, bool periodic_x, bool periodic_
 
     // Comm changed or first set — exactly one epoch increment:
     if (g_wrf_comm_set) {
-        halo_exchange_finalize();  // epoch++ inside finalize — no extra increment
+        halo_exchange_finalize_impl();  // epoch++ inside; _impl: no nested Lifecycle scope
     } else {
         ++g_halo_exchange_epoch;   // First-time set: no finalize needed, just signal
     }
@@ -558,6 +593,10 @@ void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
     torch::NoGradGuard no_grad;
 
 #ifdef DMPARALLEL
+    // PR 7B (3b-2): a bare field exchange is a FieldPrimitive — legal alone
+    // or nested directly inside a forward/adjoint batch, never elsewhere.
+    mpi_safety::MPIExchangeScope scope(
+        mpi_safety::MPIExchangeKind::FieldPrimitive, "halo_exchange_3d_tensor");
     auto& impl = *g_halo_impl;
 
     // FIX Round168: Add CPU/contig/FP32 guard for safe data_ptr<float>() access
@@ -760,6 +799,10 @@ void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
 
 // Perform halo exchange for multiple 3D tensors
 void halo_exchange_multiple(std::vector<torch::Tensor>& tensors, bool force_full_halo) {
+    // PR 7B (3b-2): the whole pack -> NS -> EW -> unpack sequence is ONE
+    // logical exchange; nothing may interleave between fields.
+    mpi_safety::MPIExchangeScope scope(
+        mpi_safety::MPIExchangeKind::ForwardBatch, "halo_exchange_multiple");
     // For efficiency, pack multiple variables and exchange together
 
     if (!g_halo_impl || tensors.empty()) {
