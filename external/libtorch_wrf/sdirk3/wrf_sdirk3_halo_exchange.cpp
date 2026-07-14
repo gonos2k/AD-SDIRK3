@@ -7,6 +7,7 @@
  */
 
 #include "wrf_sdirk3_halo_exchange.h"
+#include "wrf_sdirk3_mpi_safety.h"  // PR 7B: shared always-on MPI check
 #include "wrf_sdirk3_common_macros.h"  // OPT Pass34: For SDIRK3_MPI_CHECK
 #include <torch/torch.h>
 #include <vector>
@@ -19,23 +20,10 @@
 #ifdef DMPARALLEL
 #include <mpi.h>
 
-// OPT Pass34: Debug-only MPI error checking macro
-// See wrf_sdirk3_common_macros.h for full specification
-// In release builds, this compiles to (void)(mpi_call) with zero overhead
-#ifndef NDEBUG
-#define SDIRK3_MPI_CHECK(mpi_call) \
-    do { \
-        int _mpi_err = (mpi_call); \
-        if (_mpi_err != MPI_SUCCESS) { \
-            char _mpi_err_str[MPI_MAX_ERROR_STRING]; \
-            int _mpi_err_len; \
-            MPI_Error_string(_mpi_err, _mpi_err_str, &_mpi_err_len); \
-            TORCH_CHECK(false, "SDIRK3 MPI error in " #mpi_call ": ", _mpi_err_str); \
-        } \
-    } while(0)
-#else
-#define SDIRK3_MPI_CHECK(mpi_call) (void)(mpi_call)
-#endif
+// PR 7B: Release builds previously compiled this to (void)(call),
+// discarding every MPI error code in production. Route to the single
+// always-on check in wrf_sdirk3_mpi_safety.h.
+#define SDIRK3_MPI_CHECK(mpi_call) SDIRK3_MPI_SAFETY_CHECK(mpi_call)
 
 #endif // DMPARALLEL
 
@@ -1071,6 +1059,9 @@ void sdirk3_halo_exchange(float* state_array, int nx, int ny, int nz, int num_va
                          int ids, int ide, int jds, int jde, int kds, int kde,
                          int ims, int ime, int jms, int jme, int kms, int kme,
                          int ips, int ipe, int jps, int jpe, int kps, int kpe) {
+  // PR 7B: exceptions (incl. the always-on MPI check) must never cross the
+  // extern "C" boundary into Fortran. Fail loudly and stop instead.
+  try {
     
     if (!g_halo_impl) {
         std::cerr << "Error: halo exchange not initialized" << std::endl;
@@ -1135,6 +1126,11 @@ void sdirk3_halo_exchange(float* state_array, int nx, int ny, int nz, int num_va
             }
         }
     }
+  } catch (const std::exception& e) {
+      std::cerr << "SDIRK3_MPI_CALL_FAILED: sdirk3_halo_exchange: "
+                << e.what() << std::endl;
+      std::abort();
+  }
 }
 
 void sdirk3_halo_init(int ids, int ide, int jds, int jde, int kds, int kde,

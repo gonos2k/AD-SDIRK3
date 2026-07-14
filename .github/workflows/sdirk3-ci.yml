@@ -101,6 +101,12 @@ jobs:
     name: core-linux
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      # mpich's UCX netmod probes InfiniBand verbs on some hosted VM nodes and
+      # MPI_Init aborts (ibv_create_srq: Operation not supported) — observed
+      # nondeterministically across runner nodes. Pin UCX to transports that
+      # exist everywhere.
+      UCX_TLS: shm,tcp,self
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:

@@ -33,6 +33,7 @@ namespace {
 
 int g_failures = 0;
 int g_checks = 0;
+int g_fwd_cases = 0, g_adj_cases = 0, g_packed_cases = 0;
 
 void fail(const char* label, const char* fmt, ...) {
     ++g_failures;
@@ -176,6 +177,7 @@ void verify_field(const Case& c, const Geom& g, const torch::Tensor& t,
 }
 
 void run_forward_case(const Case& c, MPI_Comm cart, char* label) {
+    ++g_fwd_cases;
     Geom g = setup_case(c, cart);
     auto t = make_field(g);
     halo_exchange_3d_tensor(t);
@@ -188,6 +190,7 @@ void run_forward_case(const Case& c, MPI_Comm cart, char* label) {
 
 // <H x, y> == <x, H^T y>, summed over ranks.
 void run_adjoint_case(const Case& c, MPI_Comm cart, const char* label) {
+    ++g_adj_cases;
     Geom g = setup_case(c, cart);
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -211,6 +214,69 @@ void run_adjoint_case(const Case& c, MPI_Comm cart, const char* label) {
     double rel = std::abs(lhs - rhs) / denom;
     if (rel > 1e-6) {
         fail(label, "dot-product identity broken: <Hx,y>=%.12g <x,Hty>=%.12g rel=%.3g",
+             lhs, rhs, rel);
+    }
+    ++g_checks;
+    halo_exchange_finalize();
+}
+
+
+// Full packed six-field AD halo exchange + physical BC, via the production
+// autograd path (performADHaloExchange). Identity: with z = H(x),
+// d/dx <z,y> = H^T y, so <H x, y> == <x, H^T y> iff backward is the true
+// transpose of exchange -> x-BC -> y-BC.
+void run_packed_ad_case(const Case& c, MPI_Comm cart, const char* label,
+                        bool use_open) {
+    ++g_packed_cases;
+    Geom g = setup_case(c, cart);
+    auto nbrs = halo_exchange_get_neighbors();
+
+    ADHaloConfig cfg;
+    cfg.nx = g.ipe - g.ips + 1; cfg.ny = g.jpe - g.jps + 1; cfg.nz = g.nk;
+    cfg.nx_u = cfg.nx + 1; cfg.ny_v = cfg.ny + 1; cfg.nz_w = g.nk + 1;
+    cfg.ni_mem = g.ni_mem; cfg.nj_mem = g.nj_mem;
+    cfg.i_off = c.halo_w; cfg.j_off = c.halo_w;
+    cfg.halo_size = c.halo_w;
+    cfg.periodic_x = c.periodic_x; cfg.periodic_y = c.periodic_y;
+    cfg.sym_xs = cfg.sym_xe = cfg.sym_ys = cfg.sym_ye = !use_open;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = use_open;
+    cfg.its = g.ips; cfg.ite = g.ipe; cfg.jts = g.jps; cfg.jte = g.jpe;
+    cfg.ids = g.ids; cfg.ide = g.ide; cfg.jds = g.jds; cfg.jde = g.jde;
+    cfg.neighbor_north = nbrs.neighbor_north;
+    cfg.neighbor_south = nbrs.neighbor_south;
+    cfg.neighbor_east = nbrs.neighbor_east;
+    cfg.neighbor_west = nbrs.neighbor_west;
+    int size = 1;
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    cfg.exchange_performed = (size > 1);
+
+    int64_t plane = cfg.nj_mem * cfg.ni_mem;
+    int64_t packed_len = plane * (3 * cfg.nz + 2 * cfg.nz_w) + plane;
+
+    int rank = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    torch::manual_seed(4321 + rank);
+    auto x = torch::rand({packed_len}, torch::kFloat32).requires_grad_(true);
+    auto y = torch::rand({packed_len}, torch::kFloat32);
+
+    auto z = performADHaloExchange(x, cfg);
+    auto loss = (z * y).sum();
+    loss.backward();
+    TORCH_CHECK(x.grad().defined(), "packed AD: no gradient produced");
+
+    double lhs_local, rhs_local;
+    {
+        torch::NoGradGuard no_grad;
+        lhs_local = (z.to(torch::kFloat64) * y.to(torch::kFloat64)).sum().item<double>();
+        rhs_local = (x.detach().to(torch::kFloat64) * x.grad().to(torch::kFloat64)).sum().item<double>();
+    }
+    double lhs = 0, rhs = 0;
+    MPI_Allreduce(&lhs_local, &lhs, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    MPI_Allreduce(&rhs_local, &rhs, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+    double denom = std::max({std::abs(lhs), std::abs(rhs), 1e-30});
+    double rel = std::abs(lhs - rhs) / denom;
+    if (rel > 1e-6) {
+        fail(label, "packed AD identity broken: <Hx,y>=%.12g <x,Hty>=%.12g rel=%.3g",
              lhs, rhs, rel);
     }
     ++g_checks;
@@ -254,16 +320,41 @@ int main(int argc, char** argv) {
             run_forward_case(c, cart, label);
         }
 
-        for (bool per : {false, true})
-        for (int hw : {1, 2}) {
-            Case c{px, py, per, per, hw, 0};
+        for (bool per_x : {false, true})
+        for (bool per_y : {false, true})
+        for (int hw : {1, 2})
+        for (int stag : {0, 1, 2, 3}) {
+            Case c{px, py, per_x, per_y, hw, stag};
             char label[128];
-            std::snprintf(label, sizeof label, "adj %dx%d per=%d w=%d",
-                          px, py, per, hw);
+            std::snprintf(label, sizeof label, "adj %dx%d per=%d%d w=%d %s",
+                          px, py, per_x, per_y, hw, stag_name(stag));
             run_adjoint_case(c, cart, label);
         }
 
+        // Full packed AD halo + physical BC identity (7A.1): H = MPI exchange
+        // then x-BC then y-BC via ADHaloExchangeFunction; backward must be the
+        // exact reverse. sym and open exercised separately; mixed periodicity.
+        for (auto [per_x, per_y] : {std::pair{false,false}, {true,false}, {false,true}})
+        for (bool use_open : {false, true})
+        for (int hw : {1, 2}) {
+            Case c{px, py, per_x, per_y, hw, 0};
+            char label[128];
+            std::snprintf(label, sizeof label, "packed %dx%d per=%d%d %s w=%d",
+                          px, py, per_x, per_y, use_open ? "open" : "sym", hw);
+            run_packed_ad_case(c, cart, label, use_open);
+        }
+
         MPI_Comm_free(&cart);
+    }
+
+    // A silently vanished loop must not read as green: assert the exact
+    // number of executed combinations per topology.
+    int n_topos = static_cast<int>(topos.size());
+    if (g_fwd_cases != 32 * n_topos || g_adj_cases != 32 * n_topos ||
+        g_packed_cases != 12 * n_topos) {
+        fail("case-count", "fwd=%d adj=%d packed=%d (expected %d/%d/%d)",
+             g_fwd_cases, g_adj_cases, g_packed_cases,
+             32 * n_topos, 32 * n_topos, 12 * n_topos);
     }
 
     int total_failures = 0, total_checks = 0;
