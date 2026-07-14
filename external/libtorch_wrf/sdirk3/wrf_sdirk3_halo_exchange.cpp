@@ -168,6 +168,13 @@ static std::unique_ptr<HaloExchangeImpl> g_halo_impl = nullptr;
 // It is a fast pre-check, not a lifetime lock — re-check g_halo_impl
 // under the scope.
 static std::atomic<bool> g_halo_ready{false};
+// PR 7B (review P1): 'state published' and 'MPI exchange actually needed'
+// are DIFFERENT facts — a fully-published single-rank serial state is ready
+// but must keep the historical silent no-op on every exchange primitive
+// (a tile worker calling a primitive on 1 rank needs no communication and
+// must not die on the thread contract). requires-exchange is the primitives'
+// pre-check; ready remains the is_initialized() answer.
+static std::atomic<bool> g_halo_exchange_active{false};
 
 // Epoch counter: incremented on every comm change or finalize event.
 static uint64_t g_halo_exchange_epoch = 0;
@@ -202,6 +209,7 @@ static void halo_exchange_atexit_cleanup() {
     if (MPI_Finalized(&mpi_finalized) == MPI_SUCCESS && mpi_finalized) {
         // MPI already finalized - just release pointer, skip any MPI cleanup
         // Current destructor is MPI-free, but this documents the policy
+        g_halo_exchange_active.store(false, std::memory_order_release);
         g_halo_ready.store(false, std::memory_order_release);
         g_halo_impl.reset();
         return;
@@ -213,6 +221,7 @@ static void halo_exchange_atexit_cleanup() {
     // guaranteed on the EXPLICIT finalize/re-init paths only. This atexit
     // safety net deliberately performs no MPI calls; at process exit the OS
     // reclaims the resource.
+    g_halo_exchange_active.store(false, std::memory_order_release);
     g_halo_ready.store(false, std::memory_order_release);
     g_halo_impl.reset();
 }
@@ -432,12 +441,18 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
     // (always-on MPI check), and until it succeeds the rollback must stay
     // armed so the candidate's fresh duplicate cannot leak on unwind.
     if (g_halo_impl) {
+        // the old configuration is about to die: block exchanges first
+        g_halo_exchange_active.store(false, std::memory_order_release);
         free_owned_comm(*g_halo_impl);
     }
     comm_rollback.c = nullptr;  // both communicators accounted for: disarm
 #endif
+    const bool exchange_active =
+        impl.has_cart_comm && impl.mpi_size > 1 &&
+        (impl.nprocx > 1 || impl.nprocy > 1);
     g_halo_impl = std::move(candidate);
     g_halo_ready.store(true, std::memory_order_release);
+    g_halo_exchange_active.store(exchange_active, std::memory_order_release);
 
     // FIX Round170: Gate initialization output to avoid hot-path spam
     // v11: Use file-scope g_halo_init_logged (reset by set_wrf_communicator on comm change)
@@ -469,6 +484,7 @@ static void halo_exchange_finalize_impl() {
 #ifdef DMPARALLEL
     int mpi_finalized = 0;
     if (MPI_Finalized(&mpi_finalized) == MPI_SUCCESS && mpi_finalized) {
+        g_halo_exchange_active.store(false, std::memory_order_release);
         g_halo_ready.store(false, std::memory_order_release);
         g_halo_impl.reset();
         ++g_halo_exchange_epoch;
@@ -481,6 +497,7 @@ static void halo_exchange_finalize_impl() {
     // lifecycle — after an explicit finalize a new configuration is legal.
     g_wrf_comm_set = false;
 #endif
+    g_halo_exchange_active.store(false, std::memory_order_release);
     g_halo_ready.store(false, std::memory_order_release);
     g_halo_impl.reset();
     ++g_halo_exchange_epoch;
@@ -536,6 +553,12 @@ HaloWidthInfo halo_exchange_get_widths() {
     TORCH_CHECK(g_halo_impl != nullptr,
         "halo_exchange_get_widths: halo exchange not initialized.");
     return {g_halo_impl->halo_width_x, g_halo_impl->halo_width_y};
+}
+
+bool halo_exchange_requires_exchange() noexcept {
+    // True only when the CURRENT configuration performs real MPI halo
+    // communication (multi-rank Cartesian). Distinct from is_initialized().
+    return g_halo_exchange_active.load(std::memory_order_acquire);
 }
 
 bool halo_exchange_is_initialized() {
@@ -669,13 +692,14 @@ void halo_exchange_3d_tensor(torch::Tensor& tensor, bool force_full_halo) {
     // race-free atomic pre-check — the unique_ptr itself is only read under
     // the scope (an unsynchronized pointer read races lifecycle
     // publish/reset), and it is RE-CHECKED there.
-    if (!g_halo_ready.load(std::memory_order_acquire)) {
-        return;
+    if (!g_halo_exchange_active.load(std::memory_order_acquire)) {
+        return;  // serial/no-exchange or uninitialized: historical no-op
     }
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::FieldPrimitive, "halo_exchange_3d_tensor");
-    if (!g_halo_impl) {
-        return;  // finalized between pre-check and scope
+    if (!g_halo_impl ||
+        !g_halo_exchange_active.load(std::memory_order_acquire)) {
+        return;  // reconfigured/finalized between pre-check and scope
     }
     auto& impl = *g_halo_impl;
 
@@ -884,19 +908,18 @@ void halo_exchange_multiple(std::vector<torch::Tensor>& tensors, bool force_full
     // empty() reads no global state and stays a pre-scope no-op; the
     // g_halo_impl read moves BEHIND the scope (P1: an unsynchronized
     // unique_ptr read races lifecycle publish/reset).
-    if (tensors.empty()) {
-        return;
-    }
-    if (!g_halo_ready.load(std::memory_order_acquire)) {
-        return;  // historical serial/uninitialized no-op (race-free pre-check)
+    if (tensors.empty() ||
+        !g_halo_exchange_active.load(std::memory_order_acquire)) {
+        return;  // empty, serial/no-exchange, or uninitialized: no-op
     }
 
     // PR 7B (3b-2): the whole pack -> NS -> EW -> unpack sequence is ONE
     // logical exchange; nothing may interleave between fields.
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::ForwardBatch, "halo_exchange_multiple");
-    if (!g_halo_impl) {
-        return;  // finalized between pre-check and scope
+    if (!g_halo_impl ||
+        !g_halo_exchange_active.load(std::memory_order_acquire)) {
+        return;  // reconfigured/finalized between pre-check and scope
     }
 
     // FIX Round170: Add NoGradGuard to prevent AD graph pollution

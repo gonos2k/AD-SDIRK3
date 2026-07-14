@@ -230,13 +230,13 @@ void adjoint_mpi_exchange_3d(torch::Tensor& grad_field) {
     // historical uninitialized NO-OP stays a pre-scope fast path; the scope
     // then guards every actual global read (and the state is re-validated
     // by the checked accessors below).
-    if (!halo_exchange_is_initialized()) return;
+    if (!halo_exchange_requires_exchange()) return;  // serial/uninit: no-op
 
     // PUBLIC primitive: carries its own FieldPrimitive scope — alone it is
     // the outer scope; under the AD AdjointBatch it nests legally.
     mpi_safety::MPIExchangeScope scope(
         mpi_safety::MPIExchangeKind::FieldPrimitive, "adjoint_mpi_exchange_3d");
-    if (!halo_exchange_is_initialized()) return;  // finalized in between
+    if (!halo_exchange_requires_exchange()) return;  // reconfigured in between
 
     MPI_Comm comm = halo_exchange_get_comm();
     int my_rank = halo_exchange_get_rank();
@@ -487,6 +487,13 @@ torch::Tensor ADHaloExchangeFunction::forward(
     // MPI exchange under NoGradGuard (MPI is non-differentiable)
     {
         torch::NoGradGuard no_grad;
+        // Defense in depth (review): a caller claiming exchange_performed
+        // must match the authoritative state — driving the MPI batch against
+        // a serial/no-exchange configuration is a contract violation, not a
+        // silent no-op.
+        TORCH_CHECK(halo_exchange_requires_exchange(),
+            "ADHaloExchangeFunction: exchange_performed=true but the halo "
+            "configuration does not perform MPI exchange");
         // PR 7B (3b-2): the six-field forward exchange is ONE batch; the
         // per-field calls nest as FieldPrimitive under this scope.
         mpi_safety::MPIExchangeScope batch_scope(

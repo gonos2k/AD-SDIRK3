@@ -98,6 +98,11 @@ HaloWidthInfo halo_exchange_get_widths();
 // Returns whether the halo exchange module is initialized and has MPI support.
 bool halo_exchange_is_initialized();
 
+// True only when the current configuration performs real MPI halo
+// communication (multi-rank Cartesian); a published single-rank serial
+// state is initialized but does NOT require exchange (PR 7B review P1).
+bool halo_exchange_requires_exchange() noexcept;
+
 // Initialize halo exchange system
 void halo_exchange_init(int ids, int ide, int jds, int jde, int kds, int kde,
                        int ims, int ime, int jms, int jme, int kms, int kme,
