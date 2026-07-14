@@ -1597,6 +1597,33 @@ void sdirk3_halo_finalize(void) noexcept {
   }
 }
 
+int sdirk3_require_halo_fresh_checked(int64_t global_timestep,
+                                      int logical_read_id) noexcept {
+  // PR 7B (3b-3 part 2): THE Fortran-side freshness consumption point.
+  try {
+    // required=false alone cannot distinguish a fully-prepared serial
+    // no-exchange state from a state that was never prepared — a require
+    // issued before rank-level preparation must fail, not early-return.
+    TORCH_CHECK(halo_exchange_is_initialized(),
+        "SDIRK3_MPI_HALO_NOT_PREPARED: rank-level halo preparation must "
+        "complete before freshness consumption");
+    TORCH_CHECK(global_timestep >= 0 && logical_read_id > 0,
+        "SDIRK3_MPI_HALO_FRESHNESS_INVALID_INPUT: timestep=",
+        global_timestep, " read_id=", logical_read_id);
+    mpi_safety::HaloFreshnessGuard::requireFreshHaloEpoch(
+        static_cast<uint64_t>(global_timestep), logical_read_id,
+        "sdirk3_require_halo_fresh_checked");
+    return 1;
+  } catch (const std::exception& e) {
+    std::cerr << e.what() << std::endl;
+    return 0;
+  } catch (...) {
+    std::cerr << "SDIRK3_MPI_HALO_FRESHNESS_REQUIRE_FAILED: non-std C++ "
+                 "exception" << std::endl;
+    return 0;
+  }
+}
+
 } // extern "C"
 
 } // namespace sdirk3

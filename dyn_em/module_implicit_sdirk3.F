@@ -391,6 +391,19 @@ MODULE module_implicit_sdirk3
          BIND(C, name="sdirk3_halo_finalize")
          USE, INTRINSIC :: ISO_C_BINDING
       END SUBROUTINE sdirk3_halo_finalize
+
+      ! PR 7B (3b-3 part 2): THE freshness consumption point. 1 = fresh for
+      ! this (timestep, read_id) — a no-exchange configuration is trivially
+      ! fresh; 0 = NOT_PREPARED / invalid input / off-baseline caller /
+      ! SDIRK3_MPI_HALO_STALE (marker on stderr). Consumed once per SDIRK
+      ! call at rk_step == 1; the same logical read re-checks idempotently.
+      INTEGER(C_INT) FUNCTION sdirk3_require_halo_fresh_checked( &
+            global_timestep, logical_read_id) &
+            BIND(C, name="sdirk3_require_halo_fresh_checked")
+         USE, INTRINSIC :: ISO_C_BINDING
+         INTEGER(C_INT64_T), VALUE :: global_timestep
+         INTEGER(C_INT), VALUE :: logical_read_id
+      END FUNCTION sdirk3_require_halo_fresh_checked
    END INTERFACE
    
    ! Module state with improved solver management
@@ -860,6 +873,7 @@ CONTAINS
       INTEGER :: sdirk3_mypx, sdirk3_mypy
       INTEGER(C_INT) :: mpi_comm_status
       INTEGER(C_INT) :: halo_prepare_status
+      INTEGER(C_INT) :: freshness_status
       INTEGER(C_INT) :: measured_halo_width
       INTEGER :: r_ids, r_ide, r_jds, r_jde, r_kds, r_kde
       INTEGER :: r_ims, r_ime, r_jms, r_jme, r_kms, r_kme
@@ -1017,6 +1031,23 @@ CONTAINS
             west_halo, east_halo, south_halo, north_halo, &
             ", num_tiles=", grid%num_tiles
          CALL wrf_error_fatal(TRIM(message))
+      END IF
+
+      ! PR 7B (3b-3 part 2): consume halo freshness exactly once per SDIRK
+      ! call. The unified solver completes all internal stages at rk_step=1;
+      ! rk_step=2,3 are compatibility no-ops in C++ and MUST NOT consume.
+      ! Preparation is NOT a data publish — there is no free first-step
+      ! credit; on a no-exchange (single-rank) configuration the require is
+      ! a prepared-state check plus a no-op.
+      IF (rk_step == 1) THEN
+         freshness_status = sdirk3_require_halo_fresh_checked( &
+            INT(grid%itimestep, C_INT64_T), 1_C_INT)
+         IF (freshness_status /= 1_C_INT) THEN
+            WRITE(message, '(A,I0,A,I0)') &
+               "SDIRK3_MPI_HALO_STALE: freshness consumption failed at " // &
+               "itimestep=", grid%itimestep, ", rk_step=", rk_step
+            CALL wrf_error_fatal(TRIM(message))
+         END IF
       END IF
 
       DO ij = 1, grid%num_tiles
