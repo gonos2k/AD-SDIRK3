@@ -51,6 +51,16 @@ jobs:
           shellcheck --version | head -2
           shellcheck -S warning .github/ci/*.sh
 
+      # PR 7C: the decomposition harness carries its own logic (marker /
+      # exit / stage-norm / pre-refusal-solve assertions + manifest sanity).
+      # --self-test exercises that logic against synthetic fixtures with no
+      # WRF/mpirun, so a laundered assertion is caught in hosted CI; the live
+      # multi-rank matrix runs on the self-hosted integration runner.
+      - name: decomposition harness self-test
+        run: |
+          set -euo pipefail
+          bash .github/ci/run_decomposition_matrix.sh --self-test
+
       - name: actionlint (pinned binary, checksum-verified)
         run: |
           set -euo pipefail

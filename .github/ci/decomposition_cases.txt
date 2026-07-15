@@ -1,0 +1,28 @@
+# SDIRK3 decomposition fail-close matrix (PR 7C).
+#
+# The SDIRK3 differentiable core supports exactly ONE decomposition: a single
+# MPI rank with a single tile. Every other decomposition is REFUSED before any
+# communicator or halo state mutation (the guards live in advance_implicit's
+# prologue in dyn_em/module_implicit_sdirk3.F). This manifest pins that
+# contract; run_decomposition_matrix.sh executes it on a real WRF build.
+#
+# A USE_SDIRK3 binary always routes through advance_implicit, so there is no
+# in-binary "stock RK3" control here — the baseline-solver comparison would
+# need a separate non-USE_SDIRK3 build and is intentionally out of scope.
+#
+# Columns (whitespace-separated; '-' = not applicable):
+#   case_id           unique label; success and reject cases never collide
+#   ranks             mpirun -np value
+#   nproc_x nproc_y   WRF decomposition (product MUST equal ranks)
+#   mode              split | split_multitile
+#                       split           = WRF_SDIRK3_SPLIT_EXPLICIT=1
+#                       split_multitile = split + sdirk3_enable_ad_halo_exchange
+#                                         = .true. + numtiles = 2 (AD multi-tile)
+#   expect            success | reject
+#   marker            exact rejection marker for reject cases; '-' for success
+#
+# case_id         ranks nproc_x nproc_y mode             expect  marker
+np1_split         1     1       1       split            success -
+np2_stage_halo    2     2       1       split            reject  SDIRK3_MPI_STAGE_HALO_UNSUPPORTED
+np4_stage_halo    4     2       2       split            reject  SDIRK3_MPI_STAGE_HALO_UNSUPPORTED
+np1_multitile     1     1       1       split_multitile  reject  SDIRK3_MPI_MULTI_TILE_UNSUPPORTED
