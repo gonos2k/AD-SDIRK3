@@ -157,6 +157,18 @@ jobs:
           fi
           exit $rc
 
+      # PR 7D: the live 1/2/4-rank decomposition fail-close matrix. Runs the
+      # PR 7C harness (single build, SDIRK3-only) on this real runner: the
+      # sole supported decomposition reaches SUCCESS COMPLETE with bit-
+      # identical stage norms, every other decomposition is refused before
+      # the solve with its exact marker. Each mpirun is timeout-bounded, so a
+      # deadlock reads as FAILURE, never a stuck 120-minute job. Run from the
+      # repo root (the harness anchors CWD there).
+      - name: decomposition fail-close matrix (1/2/4 rank)
+        run: |
+          set -euo pipefail
+          bash .github/ci/run_decomposition_matrix.sh
+
       - name: logs artifact (always)
         if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -166,6 +178,7 @@ jobs:
           path: |
             test/em_b_wave/rsl.error.0000
             test/em_b_wave/rsl.out.0000
+            test/em_b_wave/logs_*/
             /tmp/stage_norms_actual.txt
             compile.log
 
