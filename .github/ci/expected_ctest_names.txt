@@ -7,6 +7,9 @@ Geometry_Contract_Matrix
 MPI_Halo_Contract_np1
 MPI_Halo_Contract_np2
 MPI_Halo_Contract_np4
+MPI_Runtime_Contract_np1
+MPI_Runtime_Contract_np2
+MPI_Runtime_Contract_np4
 MSF_Raw_Stats_Matrix
 VJP_Semantics
 WRMS_Gate_Metric

@@ -16,6 +16,8 @@ MODULE module_implicit_sdirk3
    PUBLIC :: get_sdirk3_dt_recommendation
    PUBLIC :: set_base_state_sdirk3
    PUBLIC :: sdirk3_halo_exchange
+   ! PR 7B (3b-3 P1): solve_em consumes the checked notify status directly
+   PUBLIC :: sdirk3_notify_halo_fresh_checked
    ! Removed unused wrapper functions: sdirk3_timestep_init, sdirk3_timestep_tile, sdirk3_timestep_finalize
    PUBLIC :: sdirk3_configure_from_namelist
    PUBLIC :: sdirk3_prepare_physics_coupling, sdirk3_apply_physics_tendencies
@@ -342,11 +344,15 @@ MODULE module_implicit_sdirk3
          REAL(C_FLOAT), VALUE :: diff_6th_thresh, c_s, c_k
       END SUBROUTINE sdirk3_tile_set_base_state_zerocopy
 
-      ! FIX 2025-01-25: Halo freshness notification for C++ cache invalidation
-      SUBROUTINE sdirk3_notify_halo_fresh() &
-         BIND(C, name="sdirk3_notify_halo_fresh")
+      ! PR 7B (3b-3 P1): checked halo freshness publication. Returns 1 on
+      ! success (serial/no-exchange notify is a true no-op), 0 when the
+      ! publication is rejected (off-baseline thread). Fortran MUST consume
+      ! the status and stop on 0 — the legacy void form is no longer
+      ! referenced by active code (it aborts on failure at the C ABI).
+      INTEGER(C_INT) FUNCTION sdirk3_notify_halo_fresh_checked() &
+            BIND(C, name="sdirk3_notify_halo_fresh_checked")
          USE, INTRINSIC :: ISO_C_BINDING
-      END SUBROUTINE sdirk3_notify_halo_fresh
+      END FUNCTION sdirk3_notify_halo_fresh_checked
 
       ! PR 7B (3b-1): checked communicator setup. Returns 1 on success, 0 on
       ! ANY validation failure (null/non-Cartesian/periodic/1-D communicator,
@@ -385,6 +391,19 @@ MODULE module_implicit_sdirk3
          BIND(C, name="sdirk3_halo_finalize")
          USE, INTRINSIC :: ISO_C_BINDING
       END SUBROUTINE sdirk3_halo_finalize
+
+      ! PR 7B (3b-3 part 2): THE freshness consumption point. 1 = fresh for
+      ! this (timestep, read_id) — a no-exchange configuration is trivially
+      ! fresh; 0 = NOT_PREPARED / invalid input / off-baseline caller /
+      ! SDIRK3_MPI_HALO_STALE (marker on stderr). Consumed once per SDIRK
+      ! call at rk_step == 1; the same logical read re-checks idempotently.
+      INTEGER(C_INT) FUNCTION sdirk3_require_halo_fresh_checked( &
+            global_timestep, logical_read_id) &
+            BIND(C, name="sdirk3_require_halo_fresh_checked")
+         USE, INTRINSIC :: ISO_C_BINDING
+         INTEGER(C_INT64_T), VALUE :: global_timestep
+         INTEGER(C_INT), VALUE :: logical_read_id
+      END FUNCTION sdirk3_require_halo_fresh_checked
    END INTERFACE
    
    ! Module state with improved solver management
@@ -854,6 +873,7 @@ CONTAINS
       INTEGER :: sdirk3_mypx, sdirk3_mypy
       INTEGER(C_INT) :: mpi_comm_status
       INTEGER(C_INT) :: halo_prepare_status
+      INTEGER(C_INT) :: freshness_status
       INTEGER(C_INT) :: measured_halo_width
       INTEGER :: r_ids, r_ide, r_jds, r_jde, r_kds, r_kde
       INTEGER :: r_ims, r_ime, r_jms, r_jme, r_kms, r_kme
@@ -882,6 +902,22 @@ CONTAINS
       ! rank run without a usable local_communicator is fatal BEFORE any
       ! tile process info or solver step; a failed validation is fatal too.
       ! Runs before the OpenMP tile loop on the main thread.
+      ! PR 7B (review P1-2): the opt-in AD halo path with multiple tiles is
+      ! UNSUPPORTED (rank halo geometry equivalence unproven). Refuse on the
+      ! MAIN THREAD before any communicator or halo mutation — a worker-side
+      ! throw after other tiles already mutated solver state is a defense
+      ! line, not a rejection point. The C++ guard remains defense-in-depth. Deliberately
+      ! OUTSIDE #ifdef DM_PARALLEL — the unsupported combination is not
+      ! MPI-specific and must be refused in serial builds too.
+      IF (config_flags%sdirk3_enable_ad_halo_exchange .AND. &
+          grid%num_tiles > 1) THEN
+         WRITE(message, '(A,I0,A,I0,A,I0)') &
+            "SDIRK3_MPI_MULTI_TILE_UNSUPPORTED: enable_ad_halo_exchange=" // &
+            "true, num_tiles=", grid%num_tiles, ", rk_step=", rk_step, &
+            ", itimestep=", grid%itimestep
+         CALL wrf_error_fatal(TRIM(message))
+      END IF
+
 #ifdef DM_PARALLEL
       ! PR 7B (7C guard): every internal SDIRK stage executes inside ONE
       ! tile-worker C++ call, so multi-rank stage-halo correctness is NOT
@@ -892,20 +928,6 @@ CONTAINS
             "SDIRK3_MPI_STAGE_HALO_UNSUPPORTED: decomposition ", &
             ntasks_x, " x ", ntasks_y, ", mytask (", mytask_x, ",", &
             mytask_y, "), rk_step=", rk_step, ", num_tiles=", grid%num_tiles
-         CALL wrf_error_fatal(TRIM(message))
-      END IF
-
-      ! PR 7B (review P1-2): the opt-in AD halo path with multiple tiles is
-      ! UNSUPPORTED (rank halo geometry equivalence unproven). Refuse on the
-      ! MAIN THREAD before any communicator or halo mutation — a worker-side
-      ! throw after other tiles already mutated solver state is a defense
-      ! line, not a rejection point. The C++ guard remains defense-in-depth.
-      IF (config_flags%sdirk3_enable_ad_halo_exchange .AND. &
-          grid%num_tiles > 1) THEN
-         WRITE(message, '(A,I0,A,I0,A,I0)') &
-            "SDIRK3_MPI_MULTI_TILE_UNSUPPORTED: enable_ad_halo_exchange=" // &
-            "true, num_tiles=", grid%num_tiles, ", rk_step=", rk_step, &
-            ", itimestep=", grid%itimestep
          CALL wrf_error_fatal(TRIM(message))
       END IF
 
@@ -1009,6 +1031,23 @@ CONTAINS
             west_halo, east_halo, south_halo, north_halo, &
             ", num_tiles=", grid%num_tiles
          CALL wrf_error_fatal(TRIM(message))
+      END IF
+
+      ! PR 7B (3b-3 part 2): consume halo freshness exactly once per SDIRK
+      ! call. The unified solver completes all internal stages at rk_step=1;
+      ! rk_step=2,3 are compatibility no-ops in C++ and MUST NOT consume.
+      ! Preparation is NOT a data publish — there is no free first-step
+      ! credit; on a no-exchange (single-rank) configuration the require is
+      ! a prepared-state check plus a no-op.
+      IF (rk_step == 1) THEN
+         freshness_status = sdirk3_require_halo_fresh_checked( &
+            INT(grid%itimestep, C_INT64_T), 1_C_INT)
+         IF (freshness_status /= 1_C_INT) THEN
+            WRITE(message, '(A,I0,A,I0)') &
+               "SDIRK3_MPI_HALO_STALE: freshness consumption failed at " // &
+               "itimestep=", grid%itimestep, ", rk_step=", rk_step
+            CALL wrf_error_fatal(TRIM(message))
+         END IF
       END IF
 
       DO ij = 1, grid%num_tiles
@@ -2324,7 +2363,8 @@ CONTAINS
       INTEGER :: ips, ipe, jps, jpe, kps, kpe
       ! num_moist, num_chem, num_tracer, num_scalar come from module_state_description
       REAL, DIMENSION(:,:,:,:), POINTER :: moist, chem, tracer, scalar
-      
+      INTEGER(C_INT) :: notify_status
+
 #ifdef DM_PARALLEL
       ! Get communicator and process information
       local_communicator = grid%communicator
@@ -2354,8 +2394,12 @@ CONTAINS
       !   mu_2 (mass continuity equation)
       ! The _5 suffix indicates 5-point stencil for 5th/6th order advection
 # include "HALO_EM_D2_5.inc"
-      ! FIX 2025-01-25: Notify C++ that halo exchange completed
-      CALL sdirk3_notify_halo_fresh()
+      ! PR 7B (3b-3 P1): checked freshness publication — status consumed
+      notify_status = sdirk3_notify_halo_fresh_checked()
+      IF (notify_status /= 1_C_INT) THEN
+         CALL wrf_error_fatal( &
+            "SDIRK3_MPI_HALO_FRESH_NOTIFY_FAILED: sdirk3_halo_exchange")
+      END IF
 #endif
 
    END SUBROUTINE sdirk3_halo_exchange

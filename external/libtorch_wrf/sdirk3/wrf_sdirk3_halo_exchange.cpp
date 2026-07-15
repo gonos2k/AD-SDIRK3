@@ -156,9 +156,14 @@ struct HaloExchangeImpl {
 //   - Destroyed: Call to halo_exchange_finalize() (REQUIRED before MPI_Finalize)
 //   - Recreate: Allowed - calling init() after finalize() creates new instance
 //
-// THREAD SAFETY:
-//   - init/finalize: NOT thread-safe (call from main thread only)
-//   - exchange ops: Thread-safe after init completes (MPI handles synchronization)
+// THREAD SAFETY (PR 7B actual contract — NOT "thread-safe"):
+//   - Every lifecycle AND exchange operation runs on the MPI baseline
+//     thread only (established by sdirk3_mpi_safety_init), under the
+//     program-global single-flight MPIExchangeScope.
+//   - Concurrent entry — another thread, or a second operation while one
+//     is in flight — fails closed immediately with a stable marker
+//     (SDIRK3_MPI_THREAD_CONTRACT_VIOLATION /
+//     SDIRK3_MPI_CONCURRENT_EXCHANGE_UNSUPPORTED); it never blocks.
 //
 // MEMORY SAFETY:
 //   - Using unique_ptr ensures cleanup if process exits abnormally (via atexit)
@@ -185,7 +190,11 @@ static std::atomic<bool> g_halo_exchange_active{false};
 static std::atomic<bool> g_halo_lifecycle_faulted{false};
 
 // Epoch counter: incremented on every comm change or finalize event.
-static uint64_t g_halo_exchange_epoch = 0;
+// PR 7B (3b-3): the LIFECYCLE epoch (communicator/geometry/publication
+// generation) — distinct from the WRF data-freshness epoch in
+// HaloFreshnessGuard. Atomic: the AD backward compares it against the value
+// saved at forward time.
+static std::atomic<uint64_t> g_halo_lifecycle_epoch{0};
 
 // v11: Promoted from function-static to file-scope so set_wrf_communicator()
 // can reset it when the comm changes, allowing re-init to print updated status.
@@ -224,6 +233,12 @@ static void halo_exchange_atexit_cleanup() {
     if (!g_halo_impl) {
         return;  // Already cleaned up via explicit finalize()
     }
+
+    // P1 (review): the freshness lifecycle ends with the publication on
+    // EVERY teardown path — atexit included — so no credit or idempotence
+    // key survives the publication it was earned under. MPI-free and
+    // noexcept, so it is safe on both branches below.
+    mpi_safety::HaloFreshnessGuard::endFreshnessLifecycle();
 
 #ifdef DMPARALLEL
     // Check if MPI is still active - if finalized, destructor might fail
@@ -543,6 +558,12 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
     g_halo_impl = std::move(candidate);
     g_halo_ready.store(true, std::memory_order_release);
     g_halo_exchange_active.store(exchange_active, std::memory_order_release);
+    // PR 7B (3b-3): freshness tracking is required exactly when the published
+    // state performs real exchange — never inferred from MPI_COMM_WORLD size.
+    // P1: beginning the lifecycle also RETIRES every credit and idempotence
+    // key left by a previous lifecycle — a stale mark must never satisfy a
+    // require issued against this publication.
+    mpi_safety::HaloFreshnessGuard::beginFreshnessLifecycle(exchange_active);
 
     // FIX Round170: Gate initialization output to avoid hot-path spam
     // v11: Use file-scope g_halo_init_logged (reset by set_wrf_communicator on comm change)
@@ -577,6 +598,7 @@ static void halo_exchange_init_impl(int ids, int ide, int jds, int jde, int kds,
 // retries an indeterminate communicator handle.
 static void invalidate_halo_publication_noexcept(
     bool clear_communicator_config) noexcept {
+    mpi_safety::HaloFreshnessGuard::endFreshnessLifecycle();
     g_halo_exchange_active.store(false, std::memory_order_release);
     g_halo_ready.store(false, std::memory_order_release);
     g_prepare_fp_valid = false;
@@ -589,7 +611,7 @@ static void invalidate_halo_publication_noexcept(
     }
 #endif
     g_halo_impl.reset();
-    ++g_halo_exchange_epoch;
+    g_halo_lifecycle_epoch.fetch_add(1, std::memory_order_release);
 }
 
 static void halo_exchange_finalize_impl() {
@@ -745,7 +767,9 @@ bool halo_exchange_is_initialized() {
     return g_halo_ready.load(std::memory_order_acquire);
 }
 
-uint64_t halo_exchange_get_epoch() { return g_halo_exchange_epoch; }
+uint64_t halo_exchange_get_epoch() noexcept {
+    return g_halo_lifecycle_epoch.load(std::memory_order_acquire);
+}
 
 #ifdef DMPARALLEL
 static void set_wrf_communicator_impl(MPI_Fint fortran_comm, bool periodic_x, bool periodic_y) {
@@ -807,7 +831,7 @@ static void set_wrf_communicator_impl(MPI_Fint fortran_comm, bool periodic_x, bo
             "(cmp=", cmp, "); call halo_exchange_finalize() before "
             "reconfiguring");
     }
-    ++g_halo_exchange_epoch;   // First-time set: signal the epoch change
+    g_halo_lifecycle_epoch.fetch_add(1, std::memory_order_release);   // First-time set: signal the epoch change
     // v11: Reset init log so re-init prints updated communicator status
     g_halo_init_logged = false;
     g_wrf_fortran_comm = fortran_comm;
@@ -1575,6 +1599,33 @@ void sdirk3_halo_finalize(void) noexcept {
       wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_halo_finalize", e.what());
   } catch (...) {
       wrf::sdirk3::mpi_safety::abort_c_abi_exception("sdirk3_halo_finalize", nullptr);
+  }
+}
+
+int sdirk3_require_halo_fresh_checked(int64_t global_timestep,
+                                      int logical_read_id) noexcept {
+  // PR 7B (3b-3 part 2): THE Fortran-side freshness consumption point.
+  try {
+    // required=false alone cannot distinguish a fully-prepared serial
+    // no-exchange state from a state that was never prepared — a require
+    // issued before rank-level preparation must fail, not early-return.
+    TORCH_CHECK(halo_exchange_is_initialized(),
+        "SDIRK3_MPI_HALO_NOT_PREPARED: rank-level halo preparation must "
+        "complete before freshness consumption");
+    TORCH_CHECK(global_timestep >= 0 && logical_read_id > 0,
+        "SDIRK3_MPI_HALO_FRESHNESS_INVALID_INPUT: timestep=",
+        global_timestep, " read_id=", logical_read_id);
+    mpi_safety::HaloFreshnessGuard::requireFreshHaloEpoch(
+        static_cast<uint64_t>(global_timestep), logical_read_id,
+        "sdirk3_require_halo_fresh_checked");
+    return 1;
+  } catch (const std::exception& e) {
+    std::cerr << e.what() << std::endl;
+    return 0;
+  } catch (...) {
+    std::cerr << "SDIRK3_MPI_HALO_FRESHNESS_REQUIRE_FAILED: non-std C++ "
+                 "exception" << std::endl;
+    return 0;
   }
 }
 

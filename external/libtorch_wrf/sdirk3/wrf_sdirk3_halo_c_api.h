@@ -15,12 +15,24 @@
  * sdirk3_halo_finalize: explicit teardown; ends the communicator
  * configuration lifetime (Policy A) and invalidates the prepare
  * fingerprint. Failures abort with a coordinated stop (void ABI).
+ *
+ * sdirk3_require_halo_fresh_checked: THE freshness consumption point
+ * (PR 7B 3b-3 part 2). Returns 1 when the rank's halo data is fresh for
+ * (global_timestep, logical_read_id) — a no-exchange configuration is
+ * trivially fresh — and 0 with a stable marker on any failure:
+ * SDIRK3_MPI_HALO_NOT_PREPARED (require before rank-level preparation;
+ * required=false alone cannot distinguish a prepared serial state from
+ * an unprepared one), invalid inputs, off-baseline caller, or
+ * SDIRK3_MPI_HALO_STALE. Consume exactly once per SDIRK call
+ * (rk_step == 1); re-checking the same logical read is idempotent.
  */
 
 #ifdef __cplusplus
+#include <cstdint>
 #define SDIRK3_C_NOEXCEPT noexcept
 extern "C" {
 #else
+#include <stdint.h>
 #define SDIRK3_C_NOEXCEPT
 #endif
 
@@ -32,6 +44,9 @@ int sdirk3_halo_prepare_checked(
     int halo_width) SDIRK3_C_NOEXCEPT;
 
 void sdirk3_halo_finalize(void) SDIRK3_C_NOEXCEPT;
+
+int sdirk3_require_halo_fresh_checked(
+    int64_t global_timestep, int logical_read_id) SDIRK3_C_NOEXCEPT;
 
 #ifdef __cplusplus
 }
