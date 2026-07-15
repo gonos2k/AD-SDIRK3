@@ -156,6 +156,9 @@ run_case() {
 }
 
 run_matrix() {
+  # CASE_DIR is repo-root-relative; anchor CWD so the live matrix works
+  # regardless of the caller's working directory (PR 7D).
+  cd "$REPO_ROOT"
   command -v mpirun >/dev/null 2>&1 || { echo "FAIL: mpirun not on PATH"; exit 1; }
   [ -x "$CASE_DIR/ideal.exe" ] && [ -x "$CASE_DIR/wrf.exe" ] || {
     echo "FAIL: $CASE_DIR/{ideal,wrf}.exe not built"; exit 1; }
