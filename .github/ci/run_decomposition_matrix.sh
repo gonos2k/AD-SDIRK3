@@ -139,7 +139,7 @@ run_case() {
   # ideal.exe builds the IC at this decomposition; its failure is an
   # environment fault, reported distinctly from the SDIRK3 contract.
   ( cd "$CASE_DIR" && rm -f rsl.error.* rsl.out.* )
-  if ! ( cd "$CASE_DIR" && timeout "$CASE_TIMEOUT" mpirun -np "$ranks" ./ideal.exe >/dev/null 2>&1 ); then
+  if ! ( cd "$CASE_DIR" && timeout "$CASE_TIMEOUT" mpirun -np "$ranks" ./ideal.exe </dev/null >/dev/null 2>&1 ); then
     echo "FAIL [$id]: ideal.exe did not complete at np=$ranks (environment/decomposition)"
     ( cd "$CASE_DIR" && cp -f rsl.error.* rsl.out.* "../../$logdir/" 2>/dev/null || true )
     return 1
@@ -148,7 +148,7 @@ run_case() {
   ( cd "$CASE_DIR" && rm -f rsl.error.* rsl.out.* )
   local ec=0
   ( cd "$CASE_DIR" && env WRF_SDIRK3_SPLIT_EXPLICIT=1 \
-      timeout "$CASE_TIMEOUT" mpirun -np "$ranks" ./wrf.exe >/dev/null 2>&1 ) || ec=$?
+      timeout "$CASE_TIMEOUT" mpirun -np "$ranks" ./wrf.exe </dev/null >/dev/null 2>&1 ) || ec=$?
   # Preserve every rank's logs for the CI artifact before asserting.
   ( cd "$CASE_DIR" && cp -f rsl.error.* rsl.out.* "logs_$id/" 2>/dev/null || true )
 
@@ -167,16 +167,31 @@ run_matrix() {
   # shellcheck disable=SC2064
   trap "cp -f '$restore' '$CASE_DIR/namelist.input'; rm -f '$restore'" EXIT
 
+  # The manifest is read on fd 3 and every child command gets stdin from
+  # /dev/null: with the manifest on fd 0, mpirun DRAINED the remaining rows
+  # and the loop ended silently after the first case — exactly the
+  # coverage-laundering class this harness exists to prevent (found live:
+  # 1 of 4 cases ran and the matrix still reported success).
+  local expected_cases executed_cases=0
+  expected_cases="$(grep -cvE '^[[:space:]]*(#|$)' "$MANIFEST")"
   local id ranks nx ny mode expect marker
-  while read -r id ranks nx ny mode expect marker; do
+  while read -r id ranks nx ny mode expect marker <&3; do
     case "$id" in ''|\#*) continue ;; esac
+    executed_cases=$((executed_cases + 1))
     cp -f "$restore" "$CASE_DIR/namelist.input"
     run_case "$id" "$ranks" "$nx" "$ny" "$mode" "$expect" "$marker" || fail=1
-  done < "$MANIFEST"
+  done 3< "$MANIFEST"
+
+  # Case-count ratchet: a vanished case (stdin eaten, early break, manifest
+  # parse drift) must FAIL the matrix, never shrink it silently.
+  if [ "$executed_cases" -ne "$expected_cases" ]; then
+    echo "FAIL: executed $executed_cases of $expected_cases manifest cases"
+    fail=1
+  fi
 
   if [ "$fail" -ne 0 ]; then
     echo "DECOMPOSITION MATRIX: FAILED"; exit 1; fi
-  echo "DECOMPOSITION MATRIX: all cases hold"
+  echo "DECOMPOSITION MATRIX: all $executed_cases cases hold"
 }
 
 # ---------------------------------------------------------------------------
