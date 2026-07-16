@@ -80,8 +80,10 @@ Two stage-4-only anomalies, each absent at stages 2/3:
    stage 3's FGMRES also misses its tolerance (rel_err 0.53–0.71 on the
    same 7-vector budget), yet its directions contract the nonlinear
    residual 0.50→0.19. Stage 4's FGMRES *stagnates* (early exit after 4 of
-   7 vectors) at rel_err 0.990, then 1.003 — the linear residual is not
-   reduced at all. The nonlinear consequences, as measured: the iter-0
+   7 vectors): at iter 0 it reduces the linear residual by only ~1.0%
+   (rel_err 0.990), and at iter 1 it ends ABOVE ‖b‖ (rel_err 1.003, with
+   x0 ≈ 0 so the start is ≈ ‖b‖ — no net reduction). The nonlinear
+   consequences, as measured: the iter-0
    step IS accepted and reduces ‖R‖ by only 2.6% (2.71e8 → 2.64e8 — weak
    but real descent, so "non-descent direction" would overstate); the
    iter-1 direction is rejected **by the total-failure policy**
@@ -100,7 +102,8 @@ Two stage-4-only anomalies, each absent at stages 2/3:
 
 - **A. Linear solve failure — CONFIRMED as the proximate mechanism, not the
   root.** Evidence: stagnation=1, rel_err 0.990/1.003 at stage 4 only —
-  the LINEAR solve makes essentially no progress. Refutation as root cause:
+  the LINEAR solve reduces its residual by only ~1.0% (iter 0) and then
+  not at all (iter 1, rel_err 1.003 > 1). Refutation as root cause:
   stage 3 fails the same linear tolerance on the same budget (0.53/0.71)
   and still converges — an unconverged linear solve is not sufficient for
   nonlinear failure. What distinguishes stage 4, as measured, is that its
@@ -177,7 +180,8 @@ Two stage-4-only anomalies, each absent at stages 2/3:
 
 - **MEASURED and confirmed: class A at stage 4** — the linear solves
   stagnate (stagnation=1 within 4 of 7 Arnoldi vectors; rel_err 0.990 /
-  1.003, i.e. no LINEAR-residual reduction), and the nonlinear iteration
+  1.003 — a ~1.0% linear-residual reduction at iter 0 and none at
+  iter 1), and the nonlinear iteration
   makes negligible progress on what they return: the one evaluated step
   (iter 0) reduces ‖R‖ by only 2.6%, the iter-1 direction is rejected
   UNTESTED by the rel_err ≥ 0.999 total-failure policy (dk_norm=0), and
@@ -200,7 +204,7 @@ Two stage-4-only anomalies, each absent at stages 2/3:
 **Linear vs nonlinear failure, distinguished (measured):** stage 3 shows the
 nonlinear iteration tolerates failed linear tolerances (linear failure ≠
 nonlinear failure); stage 4's nonlinear stall coincides with the linear
-model stagnating outright (no linear-residual reduction) — and the
+model stagnating (a ~1.0% linear-residual reduction, then none) — and the
 globalization machinery is observed following its policies on those
 directions. Whether those directions were strictly non-descent for the
 nonlinear merit was not directly measured; the one that was evaluated
