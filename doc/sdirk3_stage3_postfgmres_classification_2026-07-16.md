@@ -74,14 +74,23 @@ Post-failure context (existing telemetry, same run):
 
 Two stage-4-only anomalies, each absent at stages 2/3:
 
-1. **The linear solve produces no descent direction.** Stage 3's FGMRES also
-   misses its tolerance (rel_err 0.53–0.71 on the same 7-vector budget), yet
-   Newton contracts 0.50→0.19 — inexact Newton works when the returned
-   direction is a descent direction. Stage 4's FGMRES *stagnates* (early
-   exit after 4 of 7 vectors) at rel_err ≈ 0.99, and at Newton iter 1 at
-   rel_err = 1.003 — the best Krylov correction makes the linear residual
-   *larger*. The update is rejected (`accepted=0, dk_norm=0`), the external
-   damping is reverted for "no absolute improvement", and the stage stalls.
+1. **The linear solve stagnates, and the available updates give negligible
+   nonlinear progress.** Precisely (`rel_err` is the LINEAR quantity
+   `‖b−Ax‖/‖b‖`; it says nothing directly about nonlinear descent):
+   stage 3's FGMRES also misses its tolerance (rel_err 0.53–0.71 on the
+   same 7-vector budget), yet its directions contract the nonlinear
+   residual 0.50→0.19. Stage 4's FGMRES *stagnates* (early exit after 4 of
+   7 vectors) at rel_err 0.990, then 1.003 — the linear residual is not
+   reduced at all. The nonlinear consequences, as measured: the iter-0
+   step IS accepted and reduces ‖R‖ by only 2.6% (2.71e8 → 2.64e8 — weak
+   but real descent, so "non-descent direction" would overstate); the
+   iter-1 direction is rejected **by the total-failure policy**
+   (`gmres_total_failure=1`, predicate rel_err ≥ 0.999) *without a
+   nonlinear trial evaluation* — no descent measurement exists for that
+   direction; the externally damped fallback (a different direction: the
+   damped K, not the Krylov correction) measurably increases
+   ‖R_fast‖ 2.594e5 → 2.598e5 and is reverted. Net: two Newton iterations
+   move the scaled residual 1.000 → 0.980 and the stage stalls.
 2. **The stage-4 operand is ~5 orders of magnitude larger.** Initial
    nonlinear residual L2: 1.76e+3 (stage 3) vs 2.71e+8 (stage 4). The
    scaled-RMS hides this by construction (S is built from R0, so
@@ -90,26 +99,38 @@ Two stage-4-only anomalies, each absent at stages 2/3:
 ## 3. Hypothesis classification (A–H), evidence and refutation
 
 - **A. Linear solve failure — CONFIRMED as the proximate mechanism, not the
-  root.** Evidence: stagnation=1, rel_err 0.990/1.003 at stage 4 only.
-  Refutation as root cause: stage 3 fails the same linear tolerance on the
-  same budget (0.53/0.71) and still converges — an unconverged linear solve
-  is not sufficient for nonlinear failure; a *non-descent* direction is.
+  root.** Evidence: stagnation=1, rel_err 0.990/1.003 at stage 4 only —
+  the LINEAR solve makes essentially no progress. Refutation as root cause:
+  stage 3 fails the same linear tolerance on the same budget (0.53/0.71)
+  and still converges — an unconverged linear solve is not sufficient for
+  nonlinear failure. What distinguishes stage 4, as measured, is that its
+  one evaluated direction yields only 2.6% nonlinear reduction and its
+  second direction is rejected untested by the rel_err ≥ 0.999 policy.
+  Whether the stagnated directions are strictly non-descent for the
+  nonlinear merit was NOT directly measured (no directional-derivative or
+  trial evaluation exists for the rejected direction) — that is
+  discriminating measurement (4) in §3a.
 - **B. JVP inconsistency / non-finite direction — the NON-FINITE half is
   EXCLUDED; the CONSISTENCY half is NOT INDICATED but NOT excluded by this
   run.** Measured: every record shows `state_finite=1 rhs_finite=1
   dx_finite=1`, zero NaN-retry events, no `breakdown` — a non-finite or
   NaN-poisoned direction did not occur. NOT measured here: a JVP-vs-FD
   directional consistency check **at the stage-4 state** (a finite but wrong
-  J·v would produce exactly the observed non-descent directions). The
+  J·v is one way to produce exactly the observed linear stagnation and
+  near-zero nonlinear progress). The
   standing JVP/FGMRES contract tests are green at this commit, but they
   exercise test operators, not this operand. This is discriminating
   measurement (1) in §3a.
-- **C. Nonlinear globalization failure — EXCLUDED as root (behaves
-  correctly).** At stage 4 the machinery does what it should given a
-  non-descent direction: iter-0 accepts a step that reduces R by only 2.6%
-  (2.71e8→2.64e8), iter-1 rejects (`gmres_total_failure=1`), external
-  damping (0.1226) is tried and honestly reverted. Globalization cannot
-  manufacture descent that the linear model does not provide.
+- **C. Nonlinear globalization failure — EXCLUDED as root (observed
+  following its policies).** At stage 4: iter-0 accepts a step that
+  reduces R by 2.6% (2.71e8→2.64e8); iter-1 rejects by the
+  `gmres_total_failure` policy (rel_err ≥ 0.999) without a trial
+  evaluation; external damping (0.1226) is tried and honestly reverted
+  when ‖R_fast‖ increases. Every observed decision matches its documented
+  policy. Caveat within this run's scope: the untested iter-1 rejection is
+  a POLICY choice — this run cannot say whether a trial evaluation of that
+  direction would have progressed (see §3a item 4); it can only say the
+  globalization did not misbehave relative to its rules.
 - **D. Residual scaling / WRMS gate artifact — EXCLUDED.** The gate fired on
   a genuine non-contraction (`wrms_growth=0.9997` — no contraction), the
   scaled and unscaled residuals tell the same stall story, and the fail-close
@@ -155,13 +176,19 @@ Two stage-4-only anomalies, each absent at stages 2/3:
 **Classification, scoped to what this run measured:**
 
 - **MEASURED and confirmed: class A at stage 4** — the linear solves
-  stagnate (stagnation=1 within 4 of 7 Arnoldi vectors) and return
-  non-descent directions (rel_err 0.990 / 1.003; the accepted iter-0 step
-  reduces R by only 2.6%; the iter-1 update is rejected with dk_norm=0; the
-  externally damped retry measurably increases ‖R‖ 2.594e5 → 2.598e5), and
-  simultaneously the stage-4 operand is ~5 orders larger than stage 3's.
-  Non-finite directions, gate artifacts, and geometry inputs are excluded
-  for THIS run (B's finiteness half, D, G).
+  stagnate (stagnation=1 within 4 of 7 Arnoldi vectors; rel_err 0.990 /
+  1.003, i.e. no LINEAR-residual reduction), and the nonlinear iteration
+  makes negligible progress on what they return: the one evaluated step
+  (iter 0) reduces ‖R‖ by only 2.6%, the iter-1 direction is rejected
+  UNTESTED by the rel_err ≥ 0.999 total-failure policy (dk_norm=0), and
+  the externally damped fallback — a different direction, measured in
+  ‖R_fast‖ — increases 2.594e5 → 2.598e5 and is reverted. Simultaneously
+  the stage-4 operand is ~5 orders larger than stage 3's. ("Non-descent
+  direction" is deliberately NOT claimed: rel_err is a linear quantity,
+  the only evaluated Krylov step did descend weakly, and no
+  directional-derivative/trial measurement exists for the rejected one —
+  §3a item 4.) Non-finite directions, gate artifacts, and geometry inputs
+  are excluded for THIS run (B's finiteness half, D, G).
 - **RANKED HYPOTHESES for the root, not re-established here: E + F under
   H** — the prior Wall-1/Wall-2 measurements provide the standing
   explanation and nothing in the new records contradicts it, but this run
@@ -173,8 +200,11 @@ Two stage-4-only anomalies, each absent at stages 2/3:
 **Linear vs nonlinear failure, distinguished (measured):** stage 3 shows the
 nonlinear iteration tolerates failed linear tolerances (linear failure ≠
 nonlinear failure); stage 4's nonlinear stall coincides with the linear
-model returning non-descent directions — the globalization machinery
-(accept/reject/damping) is observed doing its job on those directions.
+model stagnating outright (no linear-residual reduction) — and the
+globalization machinery is observed following its policies on those
+directions. Whether those directions were strictly non-descent for the
+nonlinear merit was not directly measured; the one that was evaluated
+descended weakly (2.6%).
 
 ## 3a. Discriminating next measurements (diagnosis-only, no numerics change)
 
@@ -184,6 +214,11 @@ model returning non-descent directions — the globalization machinery
    separates physical over-extrapolation from a construction defect (F).
 3. **Post-FGMRES dt-ladder** at the current head — establishes the
    dt-dependence (H) in a configuration-equivalent setting.
+4. **Directional-derivative / nonlinear trial evaluation of the rejected
+   stage-4 Krylov direction** — the iter-1 rejection is a policy decision
+   taken without a trial; measuring the direction's actual merit-function
+   slope (or one trial residual) separates "the subspace contains no
+   useful direction" from "the policy discards a usable one".
 
 ## 4. Relation to pre-FGMRES records
 
