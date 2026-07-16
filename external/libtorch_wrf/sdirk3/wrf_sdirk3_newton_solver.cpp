@@ -59,6 +59,8 @@
 #include <algorithm>  // std::min
 #include <stdexcept>
 #include <vector>
+#include <mutex>    // PR 8.1: emit_stage_diag line-atomic output mutex
+#include <sstream>  // PR 8.1: per-record ostringstream (libstdc++ needs it explicit)
 #include <chrono>
 #include <limits>
 #include <tuple>
@@ -164,9 +166,15 @@ namespace sdirk3 {
 // extra norms, no .item(), no output, and no change to production numerics.
 // When on, records are emitted to stderr as stable machine-readable
 // key=value lines under the markers SDIRK3_NEWTON_DIAG / SDIRK3_FGMRES_DIAG /
-// SDIRK3_STAGE_DIAG (the same format for stages 1/2/3, so the Stage-3
-// anomaly is judged against identical Stage-1/2 records). Reads only; the
-// solve path is untouched.
+// SDIRK3_STAGE_DIAG — the SAME format for every implicit stage (internal
+// ARK324 stages 2/3/4 in IMEX mode 3; stage 1 is explicit and has no Newton
+// solve), so the failing stage is judged against identical records from its
+// healthy siblings. Reads only; the solve path is untouched.
+//
+// CUDA/MPS cost note (review P2): when ENABLED, diag_norm/diag_all_finite
+// perform synchronous device-to-host scalar reads every Newton iteration —
+// diagnosis-only; never use WRF_SDIRK3_STAGE_DIAG=1 for throughput or
+// timing measurements.
 // ============================================================================
 static inline bool stage_diag_enabled() {
     static const bool on = [] {
@@ -174,6 +182,21 @@ static inline bool stage_diag_enabled() {
         return v != nullptr && v[0] != '\0' && v[0] != '0';
     }();
     return on;
+}
+
+// PR 8.1 (review P2): machine-readable records must be LINE-ATOMIC. Each
+// record is composed in a local ostringstream — so std::scientific /
+// std::defaultfloat manipulate ONLY the local stream, never the global
+// std::cerr formatting state — and written in one call under a
+// process-global mutex, so concurrent emitters cannot interleave characters
+// within a line.
+static std::mutex g_stage_diag_output_mutex;
+template <typename Build>
+static inline void emit_stage_diag(Build&& build) {
+    std::ostringstream oss;
+    build(oss);
+    std::lock_guard<std::mutex> lock(g_stage_diag_output_mutex);
+    std::cerr << oss.str();
 }
 
 // Finite check for a diagnostic record: detached, no-grad, single sync.
@@ -4362,7 +4385,8 @@ public:
                 }
                 // PR 8: per-iteration nonlinear-residual record (opt-in).
                 if (stage_diag_enabled()) {
-                    std::cerr << "SDIRK3_NEWTON_DIAG ts=" << global_timestep_
+                    emit_stage_diag([&](std::ostream& os) {
+                    os << "SDIRK3_NEWTON_DIAG ts=" << global_timestep_
                               << " stage=" << stage
                               << " iter=" << newton_iter
                               << " event=residual"
@@ -4375,6 +4399,7 @@ public:
                               << " state_finite=" << (diag_all_finite(K) ? 1 : 0)
                               << " rhs_finite=" << (diag_all_finite(F) ? 1 : 0)
                               << "\n";
+                    });
                 }
 
                 // Per-block scaled residual diagnostic (debug_level >= 1, throttled)
@@ -5929,7 +5954,8 @@ public:
                 // PR 8: per-linear-solve record (opt-in). Reads only —
                 // the returned result is used unchanged below.
                 if (stage_diag_enabled()) {
-                    std::cerr << "SDIRK3_FGMRES_DIAG ts=" << global_timestep_
+                    emit_stage_diag([&](std::ostream& os) {
+                    os << "SDIRK3_FGMRES_DIAG ts=" << global_timestep_
                               << " stage=" << stage
                               << " iter=" << newton_iter
                               << " path=" << (gmres_M_inv ? "fgmres" : "gmres")
@@ -5969,6 +5995,7 @@ public:
                               << " variable_pc=" << (variable_pc_event_this_newton ? 1 : 0)
                               << " msg=\"" << gmres_result.message << "\""
                               << "\n";
+                    });
                 }
 
                 // Unscale solution: dK = S · dK_tilde
@@ -7431,7 +7458,8 @@ public:
             // PR 8: per-iteration update record (opt-in). Emitted after the
             // update is applied; reads only.
             if (stage_diag_enabled()) {
-                std::cerr << "SDIRK3_NEWTON_DIAG ts=" << global_timestep_
+                emit_stage_diag([&](std::ostream& os) {
+                os << "SDIRK3_NEWTON_DIAG ts=" << global_timestep_
                           << " stage=" << stage
                           << " iter=" << newton_iter
                           << " event=update"
@@ -7444,6 +7472,7 @@ public:
                           << " gmres_total_failure=" << (gmres_total_failure ? 1 : 0)
                           << " state_finite=" << (diag_all_finite(K) ? 1 : 0)
                           << "\n";
+                });
             }
 
             // FIX 2026-01-29: Krylov iteration counter is now updated at line ~2241
@@ -7707,7 +7736,8 @@ sdirk3::WRFNewtonKrylovSolver::NewtonResult sdirk3::WRFNewtonKrylovSolver::solve
         // in the SAME format for stages 1/2/3, at the single funnel every
         // stage solve returns through.
         if (stage_diag_enabled()) {
-            std::cerr << "SDIRK3_STAGE_DIAG stage=" << stage
+            emit_stage_diag([&](std::ostream& os) {
+            os << "SDIRK3_STAGE_DIAG stage=" << stage
                       << " converged=" << (result.converged ? 1 : 0)
                       << " newton_iters=" << result.iterations
                       << std::scientific
@@ -7715,6 +7745,7 @@ sdirk3::WRFNewtonKrylovSolver::NewtonResult sdirk3::WRFNewtonKrylovSolver::solve
                       << std::defaultfloat
                       << " msg=\"" << result.message << "\""
                       << "\n";
+            });
         }
         return result;
     } catch (const std::exception& e) {
@@ -7793,7 +7824,8 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
     // (the tile solver calls this overload directly, bypassing
     // solve_stage_with_status, so both funnels emit the same record).
     if (stage_diag_enabled()) {
-        std::cerr << "SDIRK3_STAGE_DIAG stage=" << stage
+        emit_stage_diag([&](std::ostream& os) {
+        os << "SDIRK3_STAGE_DIAG stage=" << stage
                   << " converged=" << (result.converged ? 1 : 0)
                   << " newton_iters=" << result.iterations
                   << std::scientific
@@ -7801,6 +7833,7 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
                   << std::defaultfloat
                   << " msg=\"" << result.message << "\""
                   << "\n";
+        });
     }
 
     // Warn if convergence failed but still returning K
