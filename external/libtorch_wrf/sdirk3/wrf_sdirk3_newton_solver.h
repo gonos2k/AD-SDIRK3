@@ -126,6 +126,40 @@ public:
     ~WRFNewtonKrylovSolver();
     
     /**
+     * PR 8.1 (review P1): the EXACT Krylov termination reason. The previous
+     * single `stagnation` boolean conflated two different exits — the
+     * consecutive true-residual Arnoldi stagnation detector and the
+     * ru-dominant MID-BUDGET HOPELESS probe (forced at j == max(2,
+     * restart/2)) — both produced "Arnoldi stagnation early exit", so the
+     * classification report could not tell which policy actually fired.
+     */
+    enum class KrylovTerminationReason {
+        InitialConverged,            // ||b - A x0|| already under tolerance
+        ToleranceReached,            // converged during the Arnoldi sweep
+        InternalConvergenceStop,     // internal-stop criterion before budget
+        ArnoldiStagnation,           // consecutive true-residual ratio detector
+        MidBudgetHopeless,           // forced ru-dominant mid-budget probe
+        RestartStagnationThreshold,  // restart-to-restart stagnation guard
+        HappyBreakdown,              // Arnoldi early/happy breakdown exit
+        NanRetryExhausted,           // NaN failures exceeded max retries
+        MaxBudget                    // ran the full restart budget
+    };
+    static const char* krylov_termination_reason_name(KrylovTerminationReason r) {
+        switch (r) {
+            case KrylovTerminationReason::InitialConverged:           return "initial_converged";
+            case KrylovTerminationReason::ToleranceReached:           return "tolerance_reached";
+            case KrylovTerminationReason::InternalConvergenceStop:    return "internal_convergence_stop";
+            case KrylovTerminationReason::ArnoldiStagnation:          return "arnoldi_stagnation";
+            case KrylovTerminationReason::MidBudgetHopeless:          return "mid_budget_hopeless";
+            case KrylovTerminationReason::RestartStagnationThreshold: return "restart_stagnation_threshold";
+            case KrylovTerminationReason::HappyBreakdown:             return "happy_breakdown";
+            case KrylovTerminationReason::NanRetryExhausted:          return "nan_retry_exhausted";
+            case KrylovTerminationReason::MaxBudget:                  return "max_budget";
+        }
+        return "unknown";
+    }
+
+    /**
      * Result structure for GMRES solver
      */
     struct GMRESResult {
@@ -142,7 +176,16 @@ public:
         // the return sites populate them where the trackers are in scope.
         int restarts = 0;          // completed outer restart cycles
         bool breakdown = false;    // Arnoldi early/happy breakdown occurred
-        bool stagnation = false;   // terminated by a stagnation guard
+        bool stagnation = false;   // terminated by a stagnation guard (either
+                                   // detector — see termination_reason)
+        // PR 8.1 (review P1): exact termination metadata.
+        KrylovTerminationReason termination_reason =
+            KrylovTerminationReason::MaxBudget;
+        int probe_j = -1;                 // Arnoldi j at the deciding check (-1 = n/a)
+        float probe_true_err = -1.0f;     // true relative error at that check
+        float probe_hopeless_floor = -1.0f;  // max(0.9, 2*tol) when probed
+        float stag_ratio_used = -1.0f;    // configured stagnation ratio
+        int stag_count_final = 0;         // consecutive stagnating checks seen
     };
 
     /**

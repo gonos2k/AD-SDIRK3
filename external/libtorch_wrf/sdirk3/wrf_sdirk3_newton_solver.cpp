@@ -470,8 +470,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         // v20.14r24: final_residual = ||r_true_inner|| (absolute), rel_error = error_val (relative).
         // r_true = RAW (not halo-zeroed), consistent with normal exit (line ~1127) and NaN paths.
         // Callers must apply halo zeroing to r_true before per-block analysis.
-        return {x, true, 0, r_true_norm, error_val, "Initial residual already converged",
+        WRFNewtonKrylovSolver::GMRESResult res{
+                x, true, 0, r_true_norm, error_val,
+                "Initial residual already converged",
                 r_true.detach().clone(), 0, false, false};
+        res.termination_reason =
+            WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
+        return res;
     }
     
     // GMRES FAILURE DETECTION: Track NaN/Inf occurrences in apply_jacobian
@@ -484,6 +489,17 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     bool terminated_by_restart_stag_threshold = false;
     bool terminated_by_arnoldi_stagnation = false;
     bool terminated_by_internal_convergence = false;
+    // PR 8.1 (review P1): exact termination metadata. The two early-exit
+    // detectors (consecutive Arnoldi stagnation vs the forced ru-dominant
+    // mid-budget hopeless probe) previously collapsed into ONE boolean and
+    // one message, so the classification could not tell which policy fired.
+    using KTR = WRFNewtonKrylovSolver::KrylovTerminationReason;
+    KTR early_exit_reason = KTR::MaxBudget;  // set ONLY by the two detectors
+    int diag_probe_j = -1;
+    float diag_probe_true_err = -1.0f;
+    float diag_probe_floor = -1.0f;
+    float diag_stag_ratio = -1.0f;
+    int diag_stag_count = 0;
 
     for (int iter = 0; iter < max_iter; ++iter) {
         actual_restarts = iter + 1;  // Track current restart number
@@ -654,9 +670,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                     float r_norm = guarded_item<float>(safe_tensor_norm(r_true_nan));
                     // v20.14r37: Include current restart's j (same fix as early-breakdown path).
                     // r_true returned RAW (caller applies halo zeroing for per-block analysis).
-                    return {torch::zeros_like(x0), false, total_arnoldi_iters + j, r_norm, 1.0f,
+                    WRFNewtonKrylovSolver::GMRESResult res{
+                            torch::zeros_like(x0), false,
+                            total_arnoldi_iters + j, r_norm, 1.0f,
                             "NaN failures exceeded max retries",
                             r_true.detach().clone(), iter, false, false};
+                    res.termination_reason = KTR::NanRetryExhausted;
+                    return res;
                 } else {
                     // Continue GMRES loop, hope next iteration succeeds
                     // OPT Pass34: Gate retry message + use \n (avoids flush in hot path)
@@ -998,6 +1018,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 // v20.14r48: Early termination on Arnoldi stagnation.
                 if (arnoldi_stagnated) {
                     terminated_by_arnoldi_stagnation = true;
+                    // PR 8.1: record WHICH detector fired, with its inputs.
+                    early_exit_reason = KTR::ArnoldiStagnation;
+                    diag_probe_j = j;
+                    diag_probe_true_err = prev_true_err;
+                    diag_stag_ratio = stag_ratio;
+                    diag_stag_count = stag_count;
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                         std::cerr << "[GMRES] Arnoldi stagnation at j=" << j
                                   << " (" << stag_count << " consecutive, ratio>"
@@ -1009,6 +1035,14 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
 
                 if (budget_probe_hopeless) {
                     terminated_by_arnoldi_stagnation = true;
+                    // PR 8.1: the forced mid-budget hopeless probe is a
+                    // DIFFERENT policy from the stagnation detector above.
+                    early_exit_reason = KTR::MidBudgetHopeless;
+                    diag_probe_j = j;
+                    diag_probe_true_err = guarded_item<float>(error_true);
+                    diag_probe_floor = std::max(0.9f, 2.0f * tol);
+                    diag_stag_ratio = stag_ratio;
+                    diag_stag_count = stag_count;
                     j++;  // keep convention with other early exits
                     break;
                 }
@@ -1104,10 +1138,14 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             // v20.14r37: Include current restart's j in the total count.
             // total_arnoldi_iters only accumulates at end of restart (line ~1065),
             // so early return here would under-count by j Arnoldi vectors.
-            return {x, actually_converged, total_arnoldi_iters + j, r_norm, error_val,
+            WRFNewtonKrylovSolver::GMRESResult res{
+                    x, actually_converged, total_arnoldi_iters + j, r_norm,
+                    error_val,
                     actually_converged ? "Early breakdown, already converged"
                                        : "Early breakdown, NOT converged",
                     r_final.detach().clone(), iter, true, false};
+            res.termination_reason = KTR::HappyBreakdown;
+            return res;
         }
 
         // Solve least squares problem with diagonal check
@@ -1412,9 +1450,32 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // PR 8: terminal Arnoldi breakdown exits through the dedicated early-
     // breakdown return above; a breakdown that merely restarted a cycle is
     // not reported here.
-    return {x, gmres_converged, final_iterations, r_true_final, rel_error_final,
-            gmres_msg, r_true_out, actual_restarts, false,
+    // PR 8.1: resolve the EXACT termination reason. Convergence wins; the
+    // restart-level guard next; then whichever early-exit detector fired
+    // (ArnoldiStagnation vs MidBudgetHopeless — previously conflated); then
+    // the internal-stop criterion; else the budget simply ran out.
+    WRFNewtonKrylovSolver::GMRESResult res{
+            x, gmres_converged, final_iterations, r_true_final,
+            rel_error_final, gmres_msg, r_true_out, actual_restarts, false,
             terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
+    if (gmres_converged) {
+        res.termination_reason = KTR::ToleranceReached;
+    } else if (terminated_by_restart_stag_threshold) {
+        res.termination_reason = KTR::RestartStagnationThreshold;
+    } else if (early_exit_reason == KTR::ArnoldiStagnation ||
+               early_exit_reason == KTR::MidBudgetHopeless) {
+        res.termination_reason = early_exit_reason;
+    } else if (terminated_by_internal_convergence) {
+        res.termination_reason = KTR::InternalConvergenceStop;
+    } else {
+        res.termination_reason = KTR::MaxBudget;
+    }
+    res.probe_j = diag_probe_j;
+    res.probe_true_err = diag_probe_true_err;
+    res.probe_hopeless_floor = diag_probe_floor;
+    res.stag_ratio_used = diag_stag_ratio;
+    res.stag_count_final = diag_stag_count;
+    return res;
 }
 
 // ============================================================================
@@ -1586,8 +1647,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // v20.14r24: final_residual = ||r_true_inner|| (absolute), rel_error = error_val (relative).
         // r_true = RAW (not halo-zeroed), consistent with normal exit (line ~1127) and NaN paths.
         // Callers must apply halo zeroing to r_true before per-block analysis.
-        return {x, true, 0, r_true_norm, error_val, "Initial residual already converged",
+        WRFNewtonKrylovSolver::GMRESResult res{
+                x, true, 0, r_true_norm, error_val,
+                "Initial residual already converged",
                 r_true.detach().clone(), 0, false, false};
+        res.termination_reason =
+            WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
+        return res;
     }
     
     // GMRES FAILURE DETECTION: Track NaN/Inf occurrences in apply_jacobian
@@ -1600,6 +1666,17 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     bool terminated_by_restart_stag_threshold = false;
     bool terminated_by_arnoldi_stagnation = false;
     bool terminated_by_internal_convergence = false;
+    // PR 8.1 (review P1): exact termination metadata. The two early-exit
+    // detectors (consecutive Arnoldi stagnation vs the forced ru-dominant
+    // mid-budget hopeless probe) previously collapsed into ONE boolean and
+    // one message, so the classification could not tell which policy fired.
+    using KTR = WRFNewtonKrylovSolver::KrylovTerminationReason;
+    KTR early_exit_reason = KTR::MaxBudget;  // set ONLY by the two detectors
+    int diag_probe_j = -1;
+    float diag_probe_true_err = -1.0f;
+    float diag_probe_floor = -1.0f;
+    float diag_stag_ratio = -1.0f;
+    int diag_stag_count = 0;
 
     for (int iter = 0; iter < max_iter; ++iter) {
         actual_restarts = iter + 1;  // Track current restart number
@@ -1794,9 +1871,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                     float r_norm = guarded_item<float>(safe_tensor_norm(r_true_nan));
                     // v20.14r37: Include current restart's j (same fix as early-breakdown path).
                     // r_true returned RAW (caller applies halo zeroing for per-block analysis).
-                    return {torch::zeros_like(x0), false, total_arnoldi_iters + j, r_norm, 1.0f,
+                    WRFNewtonKrylovSolver::GMRESResult res{
+                            torch::zeros_like(x0), false,
+                            total_arnoldi_iters + j, r_norm, 1.0f,
                             "NaN failures exceeded max retries",
                             r_true.detach().clone(), iter, false, false};
+                    res.termination_reason = KTR::NanRetryExhausted;
+                    return res;
                 } else {
                     // Continue GMRES loop, hope next iteration succeeds
                     // OPT Pass34: Gate retry message + use \n (avoids flush in hot path)
@@ -2138,6 +2219,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 // v20.14r48: Early termination on Arnoldi stagnation.
                 if (arnoldi_stagnated) {
                     terminated_by_arnoldi_stagnation = true;
+                    // PR 8.1: record WHICH detector fired, with its inputs.
+                    early_exit_reason = KTR::ArnoldiStagnation;
+                    diag_probe_j = j;
+                    diag_probe_true_err = prev_true_err;
+                    diag_stag_ratio = stag_ratio;
+                    diag_stag_count = stag_count;
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                         std::cerr << "[GMRES] Arnoldi stagnation at j=" << j
                                   << " (" << stag_count << " consecutive, ratio>"
@@ -2149,6 +2236,14 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
 
                 if (budget_probe_hopeless) {
                     terminated_by_arnoldi_stagnation = true;
+                    // PR 8.1: the forced mid-budget hopeless probe is a
+                    // DIFFERENT policy from the stagnation detector above.
+                    early_exit_reason = KTR::MidBudgetHopeless;
+                    diag_probe_j = j;
+                    diag_probe_true_err = guarded_item<float>(error_true);
+                    diag_probe_floor = std::max(0.9f, 2.0f * tol);
+                    diag_stag_ratio = stag_ratio;
+                    diag_stag_count = stag_count;
                     j++;  // keep convention with other early exits
                     break;
                 }
@@ -2244,10 +2339,14 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             // v20.14r37: Include current restart's j in the total count.
             // total_arnoldi_iters only accumulates at end of restart (line ~1065),
             // so early return here would under-count by j Arnoldi vectors.
-            return {x, actually_converged, total_arnoldi_iters + j, r_norm, error_val,
+            WRFNewtonKrylovSolver::GMRESResult res{
+                    x, actually_converged, total_arnoldi_iters + j, r_norm,
+                    error_val,
                     actually_converged ? "Early breakdown, already converged"
                                        : "Early breakdown, NOT converged",
                     r_final.detach().clone(), iter, true, false};
+            res.termination_reason = KTR::HappyBreakdown;
+            return res;
         }
 
         // Solve least squares problem with diagonal check
@@ -2551,9 +2650,32 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // PR 8: terminal Arnoldi breakdown exits through the dedicated early-
     // breakdown return above; a breakdown that merely restarted a cycle is
     // not reported here.
-    return {x, gmres_converged, final_iterations, r_true_final, rel_error_final,
-            gmres_msg, r_true_out, actual_restarts, false,
+    // PR 8.1: resolve the EXACT termination reason. Convergence wins; the
+    // restart-level guard next; then whichever early-exit detector fired
+    // (ArnoldiStagnation vs MidBudgetHopeless — previously conflated); then
+    // the internal-stop criterion; else the budget simply ran out.
+    WRFNewtonKrylovSolver::GMRESResult res{
+            x, gmres_converged, final_iterations, r_true_final,
+            rel_error_final, gmres_msg, r_true_out, actual_restarts, false,
             terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
+    if (gmres_converged) {
+        res.termination_reason = KTR::ToleranceReached;
+    } else if (terminated_by_restart_stag_threshold) {
+        res.termination_reason = KTR::RestartStagnationThreshold;
+    } else if (early_exit_reason == KTR::ArnoldiStagnation ||
+               early_exit_reason == KTR::MidBudgetHopeless) {
+        res.termination_reason = early_exit_reason;
+    } else if (terminated_by_internal_convergence) {
+        res.termination_reason = KTR::InternalConvergenceStop;
+    } else {
+        res.termination_reason = KTR::MaxBudget;
+    }
+    res.probe_j = diag_probe_j;
+    res.probe_true_err = diag_probe_true_err;
+    res.probe_hopeless_floor = diag_probe_floor;
+    res.stag_ratio_used = diag_stag_ratio;
+    res.stag_count_final = diag_stag_count;
+    return res;
 }
 
 
@@ -5827,6 +5949,22 @@ public:
                               << " converged=" << (gmres_result.success ? 1 : 0)
                               << " breakdown=" << (gmres_result.breakdown ? 1 : 0)
                               << " stagnation=" << (gmres_result.stagnation ? 1 : 0)
+                              // PR 8.1: the EXACT termination reason plus the
+                              // detector inputs — the stagnation boolean alone
+                              // conflated ArnoldiStagnation with the forced
+                              // mid-budget hopeless probe.
+                              << " termination_reason="
+                              << WRFNewtonKrylovSolver::
+                                     krylov_termination_reason_name(
+                                         gmres_result.termination_reason)
+                              << " ru_share=" << ru_share
+                              << " probe_j=" << gmres_result.probe_j
+                              << std::scientific
+                              << " probe_true_err=" << gmres_result.probe_true_err
+                              << " hopeless_floor=" << gmres_result.probe_hopeless_floor
+                              << " stag_ratio=" << gmres_result.stag_ratio_used
+                              << std::defaultfloat
+                              << " stag_count=" << gmres_result.stag_count_final
                               << " dx_finite=" << (diag_all_finite(gmres_result.x) ? 1 : 0)
                               << " variable_pc=" << (variable_pc_event_this_newton ? 1 : 0)
                               << " msg=\"" << gmres_result.message << "\""
