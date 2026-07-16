@@ -1,5 +1,12 @@
 # SDIRK3 Baseline (em_b_wave)
 
+> **HISTORICAL RECORD (dated snapshot).** Solver/API descriptions in this
+> document (e.g. the pre-FGMRES GMRES/BiCGSTAB era) reflect the code as of
+> the date of this record, not the current contract. For the current state
+> (FGMRES solver, MPI support boundary, CTest inventory) see the repository
+> root `README.md` and `external/libtorch_wrf/sdirk3/README.md`.
+
+
 - Date: 2026-02-16
 - Configure command: `printf '37\n1\n' | ./configure`
 - Compile command: `./compile em_b_wave -j 8`

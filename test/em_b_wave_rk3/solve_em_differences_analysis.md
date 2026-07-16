@@ -1,5 +1,12 @@
 # Analysis of solve_em.F Differences Between Modified and Original WRF v4.7.0
 
+> **HISTORICAL RECORD (dated snapshot).** Solver/API descriptions in this
+> document (e.g. the pre-FGMRES GMRES/BiCGSTAB era) reflect the code as of
+> the date of this record, not the current contract. For the current state
+> (FGMRES solver, MPI support boundary, CTest inventory) see the repository
+> root `README.md` and `external/libtorch_wrf/sdirk3/README.md`.
+
+
 ## Overview
 This analysis compares the modified solve_em.F with the original WRF v4.7.0 code, focusing on changes that could affect the RK3 (split-explicit) implementation.
 

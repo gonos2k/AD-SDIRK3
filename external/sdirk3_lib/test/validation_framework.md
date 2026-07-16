@@ -1,5 +1,12 @@
 # WRF SDIRK3 Validation Framework
 
+> **HISTORICAL RECORD (dated snapshot).** Solver/API descriptions in this
+> document (e.g. the pre-FGMRES GMRES/BiCGSTAB era) reflect the code as of
+> the date of this record, not the current contract. For the current state
+> (FGMRES solver, MPI support boundary, CTest inventory) see the repository
+> root `README.md` and `external/libtorch_wrf/sdirk3/README.md`.
+
+
 ## 1. Unit Tests (컬럼 단위)
 
 ### 1.1 Memory Layout Tests

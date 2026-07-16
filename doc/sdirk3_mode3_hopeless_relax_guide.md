@@ -1,5 +1,12 @@
 # SDIRK3 Mode3 Hopeless-Relax Guide
 
+> **HISTORICAL RECORD (dated snapshot).** Solver/API descriptions in this
+> document (e.g. the pre-FGMRES GMRES/BiCGSTAB era) reflect the code as of
+> the date of this record, not the current contract. For the current state
+> (FGMRES solver, MPI support boundary, CTest inventory) see the repository
+> root `README.md` and `external/libtorch_wrf/sdirk3/README.md`.
+
+
 ## Scope
 
 This note summarizes mode3 (`imex_split_mode=3`) behavior around:

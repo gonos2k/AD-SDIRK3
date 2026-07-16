@@ -1,4 +1,11 @@
 > **[2026-07-13 PRE-FGMRES 주석]** 이 문서의 모든 GMRES 수렴/정체 측정과
+
+> **HISTORICAL RECORD (dated snapshot).** Solver/API descriptions in this
+> document (e.g. the pre-FGMRES GMRES/BiCGSTAB era) reflect the code as of
+> the date of this record, not the current contract. For the current state
+> (FGMRES solver, MPI support boundary, CTest inventory) see the repository
+> root `README.md` and `external/libtorch_wrf/sdirk3/README.md`.
+
 > "전처리기 계열 효과 없음/dead" 결론은 **pre-FGMRES 구현에서 측정**된 것이다.
 > 당시 GMRES는 가변 전처리기(ratio-guard identity lock 등) 하에서 Arnoldi
 > Hessenberg와 불일치하는 correction을 적용했다(전수 리뷰 P1-1; 단일-사이클

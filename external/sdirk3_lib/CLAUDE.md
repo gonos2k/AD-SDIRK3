@@ -4,6 +4,15 @@
 **Project**: WRF SDIRK3 PyTorch Integration  
 **Location**: /Users/yhlee/dWRF/external/sdirk3_lib  
 
+> **HISTORICAL INDEX (2025-08).** This index describes the August-2025 design
+> era. The `docs/` tree it links to is a **local working archive that is not
+> tracked in this repository** — only `docs_archive_2025_08_16/` is tracked
+> here. Statements below about the solver (GMRES-era), APIs, or "approved /
+> production-ready" status reflect that snapshot, not the current contract.
+> For the current state (FGMRES solver, MPI support boundary, 15-test CTest
+> inventory), see the repository root `README.md` and
+> `external/libtorch_wrf/sdirk3/README.md`.
+
 ---
 
 ## 🎯 Project Overview

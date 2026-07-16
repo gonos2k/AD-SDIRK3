@@ -2,13 +2,15 @@
 
 A **differentiable SDIRK3** (3rd-order singly-diagonally-implicit Runge–Kutta) implicit time
 integrator built into **WRF v4.7.0**, using **PyTorch / libtorch** with a zero-copy Fortran↔C++
-interface and full autodiff (JVP / VJP / HVP). The goal is a differentiable dynamical core for
+interface and autodiff (JVP and VJP are implemented and contract-tested on the supported paths;
+HVP via double-backward is a design goal). The goal is a differentiable dynamical core for
 **4D-Var adjoint** modeling.
 
 - **IMEX split** (mode 3 = ARK324L2SA): horizontal/slow terms explicit, vertical acoustic implicit.
-- **Matrix-free Newton–Krylov** implicit solve: GMRES (Givens) with Eisenstat–Walker adaptive
-  forcing, a vertical preconditioner, and a trust-region fallback. `A·v = v − dt·γ·J·v` is a JVP;
-  the 4D-Var gradient is a VJP.
+- **Matrix-free Newton–Krylov** implicit solve: **FGMRES** (flexible, right-preconditioned — the
+  earlier fixed-preconditioner GMRES was replaced during the full-repo review) with Eisenstat–Walker
+  adaptive forcing, a vertical preconditioner, and a trust-region fallback. `A·v = v − dt·γ·J·v` is
+  a JVP; the 4D-Var gradient is a VJP.
 - **Zero-copy interface:** Fortran `(i,k,j)` column-major maps to C++ `(j,k,i)` row-major with no
   data copy — layout `{nj,nk,ni}`, strides `{ni*nk, ni, 1}`.
 - Cross-platform CPU / CUDA / MPS.
@@ -62,7 +64,7 @@ The IMEX split is selected by `sdirk3_imex_split_mode` (`0` full-implicit → `2
 
 | File | Role |
 |---|---|
-| `wrf_sdirk3_newton_solver.cpp` | Newton–Krylov + GMRES + solver diagnostics |
+| `wrf_sdirk3_newton_solver.cpp` | Newton–Krylov + FGMRES + solver diagnostics |
 | `wrf_sdirk3_tile_unified_impl.cpp` | Unified RHS, tile parallelization, ARK324 stage loop, HEVI split |
 | `wrf_sdirk3_unified_preconditioner.cpp` | Vertical preconditioner (M) |
 | `wrf_sdirk3_imex_ark324_coeffs.h` | ARK324L2SA Butcher tableau |
@@ -70,12 +72,35 @@ The IMEX split is selected by `sdirk3_imex_split_mode` (`0` full-implicit → `2
 | `wrf_sdirk3_config.h` | Config knobs, `effective_imex_split_mode()` |
 | `jvp_bridge.F90` | Fortran↔C++ AD bridge |
 
+## MPI / decomposition support boundary
+
+The differentiable SDIRK3 core supports exactly one decomposition; everything else fails closed
+with a stable marker **before** any communicator/halo state mutation or solve:
+
+- **Single MPI rank + supported single-tile path** — production WRF positive evidence
+  (`SUCCESS COMPLETE`, six split-explicit stage norms bit-identical to the tracked golden).
+- **2/4-rank SDIRK** — refused pre-solve with `SDIRK3_MPI_STAGE_HALO_UNSUPPORTED`.
+- **AD halo + multi-tile** — refused pre-solve with `SDIRK3_MPI_MULTI_TILE_UNSUPPORTED`.
+- **MPI halo primitive** — verified independently of the solver at np=1/2/4: forward, adjoint,
+  packed AD+BC transpose, and the runtime fail-close contracts
+  (`MPI_Halo_Contract_np{1,2,4}` + `MPI_Runtime_Contract_np{1,2,4}` in the 15-test CTest suite).
+- **Decomposition evidence** — the SDIRK3 decomposition fail-close matrix
+  (`.github/ci/run_decomposition_matrix.sh`, 4 cases) was produced by direct local-machine
+  execution; it is *not* a full-WRF decomposition validation and does not include a stock-RK3
+  baseline.
+- **Stock RK3 1/2/4-rank decomposition baseline** — deferred: it requires a separate
+  non-`USE_SDIRK3` build (a `USE_SDIRK3` binary always routes through the SDIRK3 path).
+
 ## Documentation
 
 - `doc/SDIRK3_EM_B_WAVE_BASELINE_2026-02-16.md` — baseline validation
 - `doc/sdirk3_hevi_preconditioner_findings_2026-06-21.md` — HEVI + preconditioner findings
 - `doc/sdirk3_mode3_stage3_rootcause_2026-06-20.md` — Stage-3 root-cause analysis
-- `external/sdirk3_lib/docs/` — design spec, critical/runtime fixes, JVP / `.item()` guidance
+- `doc/` files are dated point-in-time evidence records; where they describe the solver of their
+  day (pre-FGMRES GMRES), that is historical, not the current contract.
+- `external/sdirk3_lib/docs_archive_2025_08_16/` — archived early design documents (historical).
+  The `external/sdirk3_lib/docs/` design-spec tree referenced by older notes is a local working
+  archive and is **not tracked in this repository**.
 
 ## Constraints (for contributors)
 

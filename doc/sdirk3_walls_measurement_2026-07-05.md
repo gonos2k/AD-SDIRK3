@@ -1,5 +1,12 @@
 # SDIRK3 dt=600 walls — measurement campaign (2026-07-05)
 
+> **HISTORICAL RECORD (dated snapshot).** Solver/API descriptions in this
+> document (e.g. the pre-FGMRES GMRES/BiCGSTAB era) reflect the code as of
+> the date of this record, not the current contract. For the current state
+> (FGMRES solver, MPI support boundary, CTest inventory) see the repository
+> root `README.md` and `external/libtorch_wrf/sdirk3/README.md`.
+
+
 Measured results for the two obstacles to a working differentiable forward core on `em_b_wave`
 (mode-3 / ARK324). All findings are from direct instrumentation (env-gated, default-off probes),
 not inference — earlier causal stories in this investigation were repeatedly downgraded, so only

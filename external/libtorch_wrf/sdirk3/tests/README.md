@@ -149,8 +149,14 @@ rg "GradMode" --glob "*.cpp"
 **Issue #2: MPI Exchange Timing (Stale Halo Prevention)**:
 - [x] `HaloFreshnessGuard` tracks halo exchange epochs
 - [x] `markHaloFresh()` called from Fortran after WRF halo exchange
-- [x] `verifyFreshness()` warns if reading potentially stale halo data
-- [x] Epoch-based synchronization between WRF and C++
+      (PR 7B: publication is lifecycle-scoped, baseline-thread-only; Fortran
+      consumes the checked `sdirk3_notify_halo_fresh_checked()` status)
+- [x] Stale reads are a HARD FAILURE: `requireFreshHaloEpoch()` is the sole
+      consumption point and throws `SDIRK3_MPI_HALO_STALE`. The old
+      warning-only `verifyFreshness()` was removed (PR 7B 3b-3); the read-only
+      telemetry query is `isFreshnessSatisfiedForTelemetry()`.
+- [x] Epoch-based synchronization between WRF and C++ (freshness publication
+      epoch, distinct from the halo lifecycle epoch the AD backward binds to)
 
 **Issue #3: Tile Partition Boundary Validation**:
 - [x] `validateTileBoundaries()` checks for off-by-one errors
@@ -168,7 +174,10 @@ rg "GradMode" --glob "*.cpp"
 - [x] WRF uses `MPI_THREAD_FUNNELED` (only master thread can call MPI)
 - [x] `MPIThreadGuard` validates MPI calls from master thread only
 - [x] `SDIRK3_MPI_THREAD_GUARD(func_name)` macro for MPI call validation
-- [x] Warning/abort if MPI called from OpenMP worker thread
+- [x] FAIL-CLOSE if MPI is entered off the baseline thread: every exchange and
+      lifecycle operation runs under the program-global single-flight
+      `MPIExchangeScope`, which throws `SDIRK3_MPI_THREAD_CONTRACT_VIOLATION`
+      (never a warning) before any MPI call from a worker thread
 
 **Safety Header Location**:
 - `wrf_sdirk3_mpi_safety.h` - Comprehensive MPI safety guards
