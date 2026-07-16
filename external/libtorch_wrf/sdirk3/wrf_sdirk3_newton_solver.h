@@ -136,6 +136,13 @@ public:
         float rel_error;           // Relative error ||r_true||/||b|| for trust region predicted (added 2025-11-28)
         std::string message;       // Status/error message
         torch::Tensor r_true;     // v20.11: Final true residual tensor b-A(x) for per-block diagnostics
+        // PR 8 (Stage-3 diagnostics): termination metadata for the opt-in
+        // SDIRK3_FGMRES_DIAG record. Default member initializers keep every
+        // existing aggregate `return {…}` valid (missing fields value-init);
+        // the return sites populate them where the trackers are in scope.
+        int restarts = 0;          // completed outer restart cycles
+        bool breakdown = false;    // Arnoldi early/happy breakdown occurred
+        bool stagnation = false;   // terminated by a stagnation guard
     };
 
     /**

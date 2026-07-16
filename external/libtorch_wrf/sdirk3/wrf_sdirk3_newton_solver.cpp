@@ -157,6 +157,39 @@ constexpr float BNORM_MIN_THRESHOLD = 1e-12f;
 namespace wrf {
 namespace sdirk3 {
 
+// ============================================================================
+// PR 8: opt-in Stage-3 convergence diagnostics (post-FGMRES rediagnosis).
+// Enabled ONLY by WRF_SDIRK3_STAGE_DIAG=1 in the environment — read once and
+// cached. When off, every diagnostic site is a single cached-bool branch: no
+// extra norms, no .item(), no output, and no change to production numerics.
+// When on, records are emitted to stderr as stable machine-readable
+// key=value lines under the markers SDIRK3_NEWTON_DIAG / SDIRK3_FGMRES_DIAG /
+// SDIRK3_STAGE_DIAG (the same format for stages 1/2/3, so the Stage-3
+// anomaly is judged against identical Stage-1/2 records). Reads only; the
+// solve path is untouched.
+// ============================================================================
+static inline bool stage_diag_enabled() {
+    static const bool on = [] {
+        const char* v = std::getenv("WRF_SDIRK3_STAGE_DIAG");
+        return v != nullptr && v[0] != '\0' && v[0] != '0';
+    }();
+    return on;
+}
+
+// Finite check for a diagnostic record: detached, no-grad, single sync.
+static inline bool diag_all_finite(const torch::Tensor& t) {
+    torch::NoGradGuard no_grad;
+    return t.defined() &&
+           t.isfinite().all().to(torch::kCPU).item<bool>();
+}
+
+// Norm for a diagnostic record: detached, no-grad, single sync.
+static inline float diag_norm(const torch::Tensor& t) {
+    torch::NoGradGuard no_grad;
+    if (!t.defined()) return -1.0f;
+    return t.detach().norm().to(torch::kCPU).item<float>();
+}
+
 // v20.14r27i: Unified GMRES residual norm — consistent for internal, final, and adaptive paths.
 // 3D tensors: halo-zeroed norm (boundary noise excluded).
 // 1D packed tensors: raw norm (halo mask disabled — see build_halo_mask).
@@ -438,7 +471,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         // r_true = RAW (not halo-zeroed), consistent with normal exit (line ~1127) and NaN paths.
         // Callers must apply halo zeroing to r_true before per-block analysis.
         return {x, true, 0, r_true_norm, error_val, "Initial residual already converged",
-                r_true.detach().clone()};
+                r_true.detach().clone(), 0, false, false};
     }
     
     // GMRES FAILURE DETECTION: Track NaN/Inf occurrences in apply_jacobian
@@ -623,7 +656,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                     // r_true returned RAW (caller applies halo zeroing for per-block analysis).
                     return {torch::zeros_like(x0), false, total_arnoldi_iters + j, r_norm, 1.0f,
                             "NaN failures exceeded max retries",
-                            r_true.detach().clone()};
+                            r_true.detach().clone(), iter, false, false};
                 } else {
                     // Continue GMRES loop, hope next iteration succeeds
                     // OPT Pass34: Gate retry message + use \n (avoids flush in hot path)
@@ -1074,7 +1107,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             return {x, actually_converged, total_arnoldi_iters + j, r_norm, error_val,
                     actually_converged ? "Early breakdown, already converged"
                                        : "Early breakdown, NOT converged",
-                    r_final.detach().clone()};
+                    r_final.detach().clone(), iter, true, false};
         }
 
         // Solve least squares problem with diagonal check
@@ -1376,8 +1409,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     } else {
         gmres_msg = "GMRES max iterations reached (" + std::to_string(total_arnoldi_iters) + " Arnoldi)";
     }
+    // PR 8: terminal Arnoldi breakdown exits through the dedicated early-
+    // breakdown return above; a breakdown that merely restarted a cycle is
+    // not reported here.
     return {x, gmres_converged, final_iterations, r_true_final, rel_error_final,
-            gmres_msg, r_true_out};
+            gmres_msg, r_true_out, actual_restarts, false,
+            terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
 }
 
 // ============================================================================
@@ -1550,7 +1587,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // r_true = RAW (not halo-zeroed), consistent with normal exit (line ~1127) and NaN paths.
         // Callers must apply halo zeroing to r_true before per-block analysis.
         return {x, true, 0, r_true_norm, error_val, "Initial residual already converged",
-                r_true.detach().clone()};
+                r_true.detach().clone(), 0, false, false};
     }
     
     // GMRES FAILURE DETECTION: Track NaN/Inf occurrences in apply_jacobian
@@ -1759,7 +1796,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                     // r_true returned RAW (caller applies halo zeroing for per-block analysis).
                     return {torch::zeros_like(x0), false, total_arnoldi_iters + j, r_norm, 1.0f,
                             "NaN failures exceeded max retries",
-                            r_true.detach().clone()};
+                            r_true.detach().clone(), iter, false, false};
                 } else {
                     // Continue GMRES loop, hope next iteration succeeds
                     // OPT Pass34: Gate retry message + use \n (avoids flush in hot path)
@@ -2210,7 +2247,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             return {x, actually_converged, total_arnoldi_iters + j, r_norm, error_val,
                     actually_converged ? "Early breakdown, already converged"
                                        : "Early breakdown, NOT converged",
-                    r_final.detach().clone()};
+                    r_final.detach().clone(), iter, true, false};
         }
 
         // Solve least squares problem with diagonal check
@@ -2511,8 +2548,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     } else {
         gmres_msg = "FGMRES max iterations reached (" + std::to_string(total_arnoldi_iters) + " Arnoldi)";
     }
+    // PR 8: terminal Arnoldi breakdown exits through the dedicated early-
+    // breakdown return above; a breakdown that merely restarted a cycle is
+    // not reported here.
     return {x, gmres_converged, final_iterations, r_true_final, rel_error_final,
-            gmres_msg, r_true_out};
+            gmres_msg, r_true_out, actual_restarts, false,
+            terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
 }
 
 
@@ -4197,6 +4238,22 @@ public:
                              << ", tol=" << newton_tol_adaptive
                              << std::defaultfloat << std::endl;
                 }
+                // PR 8: per-iteration nonlinear-residual record (opt-in).
+                if (stage_diag_enabled()) {
+                    std::cerr << "SDIRK3_NEWTON_DIAG ts=" << global_timestep_
+                              << " stage=" << stage
+                              << " iter=" << newton_iter
+                              << " event=residual"
+                              << std::scientific
+                              << " res_scaled_rms=" << res_scaled
+                              << " res_l2=" << res_unscaled
+                              << " tol=" << newton_tol_adaptive
+                              << " r0=" << init_R0_norm
+                              << std::defaultfloat
+                              << " state_finite=" << (diag_all_finite(K) ? 1 : 0)
+                              << " rhs_finite=" << (diag_all_finite(F) ? 1 : 0)
+                              << "\n";
+                }
 
                 // Per-block scaled residual diagnostic (debug_level >= 1, throttled)
                 // Print at iter 0, every 5 iters, and at convergence/failure to limit log volume
@@ -5747,6 +5804,35 @@ public:
                           options_.periodic_y);
                 variable_pc_event_this_newton = *variable_pc_event;
 
+                // PR 8: per-linear-solve record (opt-in). Reads only —
+                // the returned result is used unchanged below.
+                if (stage_diag_enabled()) {
+                    std::cerr << "SDIRK3_FGMRES_DIAG ts=" << global_timestep_
+                              << " stage=" << stage
+                              << " iter=" << newton_iter
+                              << " path=" << (gmres_M_inv ? "fgmres" : "gmres")
+                              << std::scientific
+                              << " rhs_norm=" << diag_norm(gmres_rhs)
+                              << " x0_norm=" << diag_norm(gmres_x0)
+                              << " tol=" << krylov_tol_adaptive
+                              << std::defaultfloat
+                              << " restart=" << effective_restart
+                              << " max_restarts=" << effective_max_restarts
+                              << " iters=" << gmres_result.iterations
+                              << " restarts=" << gmres_result.restarts
+                              << std::scientific
+                              << " final_res=" << gmres_result.final_residual
+                              << " rel_err=" << gmres_result.rel_error
+                              << std::defaultfloat
+                              << " converged=" << (gmres_result.success ? 1 : 0)
+                              << " breakdown=" << (gmres_result.breakdown ? 1 : 0)
+                              << " stagnation=" << (gmres_result.stagnation ? 1 : 0)
+                              << " dx_finite=" << (diag_all_finite(gmres_result.x) ? 1 : 0)
+                              << " variable_pc=" << (variable_pc_event_this_newton ? 1 : 0)
+                              << " msg=\"" << gmres_result.message << "\""
+                              << "\n";
+                }
+
                 // Unscale solution: dK = S · dK_tilde
                 if (scaling_initialized_) {
                     dK = S_diag_ * gmres_result.x;
@@ -7204,6 +7290,24 @@ public:
             // Update K with damped and scaled step
             K = K + alpha * dK_scaled;  // Functional operation to preserve autograd graph
 
+            // PR 8: per-iteration update record (opt-in). Emitted after the
+            // update is applied; reads only.
+            if (stage_diag_enabled()) {
+                std::cerr << "SDIRK3_NEWTON_DIAG ts=" << global_timestep_
+                          << " stage=" << stage
+                          << " iter=" << newton_iter
+                          << " event=update"
+                          << " accepted=" << (step_accepted ? 1 : 0)
+                          << std::scientific
+                          << " alpha=" << alpha
+                          << " dk_norm=" << diag_norm(dK_scaled)
+                          << " res_after=" << diag_norm(accepted_residual)
+                          << std::defaultfloat
+                          << " gmres_total_failure=" << (gmres_total_failure ? 1 : 0)
+                          << " state_finite=" << (diag_all_finite(K) ? 1 : 0)
+                          << "\n";
+            }
+
             // FIX 2026-01-29: Krylov iteration counter is now updated at line ~2241
             // via stats_.total_krylov_iterations += gmres_result.iterations
 
@@ -7458,8 +7562,21 @@ sdirk3::WRFNewtonKrylovSolver::NewtonResult sdirk3::WRFNewtonKrylovSolver::solve
                                               std::function<torch::Tensor(const torch::Tensor&)>(),
                                               dt, gamma, stage, torch::Tensor());
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-            std::cerr << "  pImpl->solve_stage_impl returned with convergence: " 
+            std::cerr << "  pImpl->solve_stage_impl returned with convergence: "
                      << (result.converged ? "TRUE" : "FALSE") << std::endl;
+        }
+        // PR 8: per-stage summary record (opt-in) — one line per SDIRK stage
+        // in the SAME format for stages 1/2/3, at the single funnel every
+        // stage solve returns through.
+        if (stage_diag_enabled()) {
+            std::cerr << "SDIRK3_STAGE_DIAG stage=" << stage
+                      << " converged=" << (result.converged ? 1 : 0)
+                      << " newton_iters=" << result.iterations
+                      << std::scientific
+                      << " final_res=" << result.final_residual
+                      << std::defaultfloat
+                      << " msg=\"" << result.message << "\""
+                      << "\n";
         }
         return result;
     } catch (const std::exception& e) {
@@ -7533,7 +7650,21 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
     
     auto result = pImpl->solve_stage_impl(U_n, K_prev, compute_rhs, compute_rhs_fast,
                                           dt, gamma, stage, F_phys);
-    
+
+    // PR 8: per-stage summary record (opt-in) — the PRODUCTION entry point
+    // (the tile solver calls this overload directly, bypassing
+    // solve_stage_with_status, so both funnels emit the same record).
+    if (stage_diag_enabled()) {
+        std::cerr << "SDIRK3_STAGE_DIAG stage=" << stage
+                  << " converged=" << (result.converged ? 1 : 0)
+                  << " newton_iters=" << result.iterations
+                  << std::scientific
+                  << " final_res=" << result.final_residual
+                  << std::defaultfloat
+                  << " msg=\"" << result.message << "\""
+                  << "\n";
+    }
+
     // Warn if convergence failed but still returning K
     if (!result.converged) {
         std::cerr << "WARNING: Newton solver did not converge! Stage " << stage 
