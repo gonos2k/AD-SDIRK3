@@ -94,10 +94,16 @@ Two stage-4-only anomalies, each absent at stages 2/3:
   Refutation as root cause: stage 3 fails the same linear tolerance on the
   same budget (0.53/0.71) and still converges — an unconverged linear solve
   is not sufficient for nonlinear failure; a *non-descent* direction is.
-- **B. JVP inconsistency / non-finite direction — EXCLUDED.** Every record
-  shows `state_finite=1 rhs_finite=1 dx_finite=1`; zero NaN-retry events;
-  no `breakdown`; the standing FGMRES/JVP contract tests are green at this
-  commit (15/15). Nothing distinguishes stage 4's JVP from stage 3's.
+- **B. JVP inconsistency / non-finite direction — the NON-FINITE half is
+  EXCLUDED; the CONSISTENCY half is NOT INDICATED but NOT excluded by this
+  run.** Measured: every record shows `state_finite=1 rhs_finite=1
+  dx_finite=1`, zero NaN-retry events, no `breakdown` — a non-finite or
+  NaN-poisoned direction did not occur. NOT measured here: a JVP-vs-FD
+  directional consistency check **at the stage-4 state** (a finite but wrong
+  J·v would produce exactly the observed non-descent directions). The
+  standing JVP/FGMRES contract tests are green at this commit, but they
+  exercise test operators, not this operand. This is discriminating
+  measurement (1) in §3a.
 - **C. Nonlinear globalization failure — EXCLUDED as root (behaves
   correctly).** At stage 4 the machinery does what it should given a
   non-descent direction: iter-0 accepts a step that reduces R by only 2.6%
@@ -108,47 +114,76 @@ Two stage-4-only anomalies, each absent at stages 2/3:
   a genuine non-contraction (`wrms_growth=0.9997` — no contraction), the
   scaled and unscaled residuals tell the same stall story, and the fail-close
   abort (`outcome=20`) matches the recorded stall rather than creating it.
-- **E. Preconditioner / Krylov-subspace quality — CONFIRMED component.**
-  Stagnation within 4 Arnoldi vectors with rel_err ≈ 1 under the vertical
-  preconditioner is the behavior previously *measured* for this operator at
-  dt=600: the fast acoustic operator `A = I − dt·γ·J_fast` is intrinsically
-  indefinite (Ritz/numerical-range spectrum straddles the origin;
-  `doc/sdirk3_walls_measurement_2026-07-05.md`, Wall-1). The new data adds:
-  the FGMRES conversion (flexible preconditioning) does not change this —
-  expected, since the indefiniteness is operator-level, not an artifact of
-  preconditioner switching.
-- **F. Stage RHS/state construction — PARTIALLY CONFIRMED, as physical
-  over-extrapolation, not a construction bug.** The 5-orders operand blowup
-  entering the last implicit stage matches the measured Wall-2 signature
-  (the ARK324 explicit accumulation over-extrapolates the sheared jet's
-  u-momentum advective tendency at large dt;
-  `doc/sdirk3_walls_measurement_2026-07-05.md`). The same construction
-  converges at small dt (historic dt-ladder), so the construction itself is
-  not indicated as defective. INFERRED (not re-measured here): the per-term
-  attribution to `ru` horizontal advection is carried over from the Wall-2
-  measurements; this run adds the stage-resolved magnitude (1.76e3 → 2.71e8)
-  but did not re-slice by component.
+- **E. Preconditioner / Krylov-subspace quality — MEASURED symptom;
+  CONSISTENT WITH the prior indefiniteness measurement, but not
+  independently re-established by this run.** Measured here: stagnation
+  within 4 Arnoldi vectors with rel_err ≈ 1 under the vertical
+  preconditioner, at stage 4 only. NOT measured here: the operator spectrum
+  (no Ritz/numerical-range probe ran in this configuration). The prior
+  Wall-1 measurement (`doc/sdirk3_walls_measurement_2026-07-05.md`:
+  intrinsic indefiniteness of `A = I − dt·γ·J_fast` at dt=600) is the
+  standing explanation this data is consistent with — but per §4 those
+  records are pre-FGMRES and configuration equivalence is unproven, so this
+  run treats indefiniteness as the leading HYPOTHESIS for the stagnation,
+  not as re-confirmed fact. Alternatives not excluded by this run: a
+  preconditioner defect specific to the stage-4 operand scale, or a wrong-
+  but-finite JVP (see B).
+- **F. Stage RHS/state construction — MEASURED: the stage-4 operand is ~5
+  orders larger; NOT DETERMINED by this run whether that is physical
+  over-extrapolation or a construction defect.** What this run measured is
+  only the magnitude jump (initial nonlinear residual L2 1.76e+3 → 2.71e+8
+  between the second and third implicit solves) — a large operand is what
+  BOTH explanations would produce. The physical-over-extrapolation reading
+  (Wall-2: the ARK324 explicit accumulation over-extrapolates the sheared
+  jet's u-momentum tendency at large dt) and the small-dt convergence of the
+  same construction come from the pre-FGMRES records, which per §4 are
+  reference-only here. No per-term/per-component slice of the stage-4
+  operand was run in this configuration. This is discriminating
+  measurement (2) in §3a.
 - **G. Geometry/metric input — EXCLUDED.** Single-rank supported path; the
   geometry contract matrix and per-call validation are standing (15-test
   suite green at this commit); no geometry markers in the run.
-- **H. Timestep outside the model's convergence region — CONFIRMED as the
-  umbrella conclusion.** At dt=600 the two measured walls meet in the last
-  implicit stage: the explicit accumulation hands stage 4 an operand ~1e5×
-  larger than stage 3's, and the implicit operator that must absorb it is
-  intrinsically indefinite, so the preconditioned Krylov space contains no
-  descent direction. Stages 2/3 (smaller operands, same operator class)
-  still converge; dt≤~70 historically converges. This is consistent with —
-  and now stage-resolved by — the prior measurements that motivated the
-  split-explicit rebuild.
+- **H. Timestep outside the model's convergence region — SUPPORTED, not
+  confirmed by this run.** This is a single 2-step run at one dt; a
+  dt-dependence claim needs the post-FGMRES dt-ladder, which was not run
+  here. What this run shows is consistent with H: at dt=600 the failure
+  concentrates in the stage that carries the largest accumulated operand,
+  while stages 2/3 converge. The historic dt-ladder (dt ≤ ~70 converging)
+  is pre-FGMRES and reference-only per §4. This is discriminating
+  measurement (3) in §3a.
 
-**Classification: E + F under H, with A as the proximate symptom; B, D, G
-excluded by direct evidence; C behaves correctly.**
+**Classification, scoped to what this run measured:**
 
-**Linear vs nonlinear failure, distinguished:** stage 3 *proves* the
+- **MEASURED and confirmed: class A at stage 4** — the linear solves
+  stagnate (stagnation=1 within 4 of 7 Arnoldi vectors) and return
+  non-descent directions (rel_err 0.990 / 1.003; the accepted iter-0 step
+  reduces R by only 2.6%; the iter-1 update is rejected with dk_norm=0; the
+  externally damped retry measurably increases ‖R‖ 2.594e5 → 2.598e5), and
+  simultaneously the stage-4 operand is ~5 orders larger than stage 3's.
+  Non-finite directions, gate artifacts, and geometry inputs are excluded
+  for THIS run (B's finiteness half, D, G).
+- **RANKED HYPOTHESES for the root, not re-established here: E + F under
+  H** — the prior Wall-1/Wall-2 measurements provide the standing
+  explanation and nothing in the new records contradicts it, but this run
+  did not re-measure the spectrum, the operand composition, or the
+  dt-dependence, and the pre-FGMRES records are reference-only (§4).
+  A finite-but-wrong stage-4 JVP (B's consistency half) also remains
+  unexcluded.
+
+**Linear vs nonlinear failure, distinguished (measured):** stage 3 shows the
 nonlinear iteration tolerates failed linear tolerances (linear failure ≠
-nonlinear failure); stage 4's nonlinear failure is *caused by* the linear
-model producing non-descent directions (rel_err ≥ 1) on an operand the
-operator cannot treat — not by the nonlinear globalization.
+nonlinear failure); stage 4's nonlinear stall coincides with the linear
+model returning non-descent directions — the globalization machinery
+(accept/reject/damping) is observed doing its job on those directions.
+
+## 3a. Discriminating next measurements (diagnosis-only, no numerics change)
+
+1. **JVP-vs-FD directional check at the stage-4 state** — separates a
+   finite-but-wrong J·v (B) from an operator/preconditioner property (E).
+2. **Per-term/per-component slice of the stage-4 initial operand** —
+   separates physical over-extrapolation from a construction defect (F).
+3. **Post-FGMRES dt-ladder** at the current head — establishes the
+   dt-dependence (H) in a configuration-equivalent setting.
 
 ## 4. Relation to pre-FGMRES records
 
