@@ -1,91 +1,75 @@
-# WRF-SDIRK3 PyTorch Integration v6.0
+# WRF-SDIRK3 differentiable core (libtorch)
 
-Production-ready implementation of SDIRK3 (Singly Diagonally Implicit Runge-Kutta 3rd order) time integration for WRF using LibTorch C++ API.
+The differentiable SDIRK3 implicit time integrator for WRF v4.7.0: a matrix-free
+Newton–Krylov solve built on PyTorch / libtorch C++ with a zero-copy Fortran↔C++
+interface. **Research code** — the supported single-rank path builds and runs
+production WRF (`em_b_wave`); convergence at the operational timestep is an
+active investigation (see the repository root `README.md` and `doc/`).
 
-## 🎯 Overview
+## Overview
 
-This implementation provides a high-performance, GPU-accelerated SDIRK3 solver for WRF's dynamical core with:
+- **Newton–Krylov solver** with Eisenstat–Walker forcing and a trust-region
+  fallback (`wrf_sdirk3_newton_solver.cpp`).
+- **FGMRES** (flexible, right-preconditioned) as the linear solver. The earlier
+  fixed-preconditioner GMRES was replaced during the full-repo review; the
+  legacy `wrf_sdirk3_gmres_fixed.h` / `wrf_sdirk3_gmres_ad_safe.h` headers
+  remain in-tree for history but the production Krylov loop is the FGMRES
+  implementation inside the Newton solver.
+- **JVP** via forward-mode autodiff (dual numbers) with an explicit,
+  counted finite-difference fallback (`wrf_sdirk3_jvp_autograd.{cpp,h}`,
+  `wrf_sdirk3_jvp_fwad_or_fd.h`). The FGMRES matvec is
+  `A·v = v − dt·γ·(J·v)`.
+- **VJP / adjoint** via reverse-mode autodiff with fail-close semantics on the
+  supported paths (identity paths stay unenforced; unsupported configurations
+  refuse before touching gradients). HVP via double-backward is a design goal,
+  not a shipped contract.
+- **Zero-copy interface:** Fortran `(i,k,j)` column-major maps to C++ `(j,k,i)`
+  row-major with no data copy — layout `{nj,nk,ni}`, strides `{ni*nk, ni, 1}`.
+  This layout is verified — do not change it.
+- Cross-platform CPU / CUDA / MPS.
 
-- **Newton-Krylov solver** with Eisenstat-Walker forcing and trust-region methods
-- **GMRES solver** with Givens rotation (fixed for LibTorch C++)
-- **Zero-copy interface** between Fortran and PyTorch tensors
-- **JVP routing system** with static dispatch for thread safety
-- **Vertical preconditioner** with TDMA solver
-- **Comprehensive test suite** with Taylor tests and conservation checks
+## Key files
 
-## 📁 File Structure
+| File | Role |
+|---|---|
+| `wrf_sdirk3_newton_solver.cpp` | Newton–Krylov + FGMRES + solver diagnostics |
+| `wrf_sdirk3_tile_unified_impl.cpp` | Unified RHS, tile parallelization, ARK324 stage loop, HEVI split |
+| `wrf_sdirk3_unified_preconditioner.cpp` | Vertical preconditioner (M) |
+| `wrf_sdirk3_config.h` | Config knobs, `effective_imex_split_mode()` |
+| `wrf_sdirk3_jvp_autograd.{cpp,h}`, `wrf_sdirk3_jvp_fwad_or_fd.h` | JVP (forward-mode dual + counted FD fallback) |
+| `wrf_sdirk3_interface_zerocopy.cpp` | Struct-based zero-copy C ABI for the Fortran bridge |
+| `wrf_sdirk3_halo_exchange.cpp`, `wrf_sdirk3_ad_halo_exchange.cpp` | MPI halo primitive (forward + adjoint) with lifecycle/freshness contracts |
+| `wrf_sdirk3_mpi_safety.h`, `wrf_sdirk3_mpi_safety_impl.cpp` | MPI fail-close contracts: baseline thread, single-flight scope, freshness guard |
+| `jvp_bridge.F90` | Fortran↔C++ AD bridge |
 
-```
-wrf_sdirk3/
-├── wrf_sdirk3_state_vector.h          # State representation with staggered grids
-├── wrf_sdirk3_zero_copy_interface.h   # Fortran↔PyTorch memory interface
-├── wrf_sdirk3_gmres_fixed.h          # GMRES with Givens rotation
-├── wrf_sdirk3_newton_krylov_fixed.h  # Newton-Krylov solver
-├── wrf_sdirk3_jvp_router.h           # JVP static routing system
-├── wrf_sdirk3_vertical_preconditioner.h # TDMA preconditioner
-├── wrf_sdirk3_jacobian_transpose.h   # J^T v computation methods
-├── wrf_sdirk3_solver.h               # Main SDIRK3 integrator
-├── wrf_sdirk3_test_suite.h           # Comprehensive tests
-├── wrf_sdirk3_main.cpp               # Example usage
-└── CMakeLists.txt                     # Build configuration
-```
+The production archive is `libwrf_sdirk3_libtorch.a` (exact 21-TU manifest in
+`wrf_sdirk3_core_sources.txt`, enforced by `tests/check_core_archive.sh`). The
+sole Fortran bridge is `dyn_em/module_implicit_sdirk3.F` — the dormant
+`module_implicit_sdirk3_zerocopy.F` duplicate was removed and a build contract
+keeps it from resurfacing.
 
-## 🔧 Build Instructions
+## Build
 
-### Prerequisites
-
-1. **LibTorch C++** (PyTorch 2.0+)
-2. **CMake** (3.18+)
-3. **C++17 compiler** (GCC 9+, Clang 10+, MSVC 2019+)
-4. **CUDA** (optional, for GPU acceleration)
-
-### Building
+This directory is built as part of the WRF top-level build — never `make` here
+by hand for production:
 
 ```bash
-# Download LibTorch
-wget https://download.pytorch.org/libtorch/nightly/cpu/libtorch-shared-with-deps-latest.zip
-unzip libtorch-shared-with-deps-latest.zip
-
-# Configure and build
-mkdir build && cd build
-cmake -DCMAKE_PREFIX_PATH=/path/to/libtorch ..
-make -j4
-
-# Run tests
-./wrf_sdirk3 --test
-
-# Run example simulation
-./wrf_sdirk3 --dt 1.0 --tfinal 10.0 --verbose
+# from the repository root
+printf '37\n1\n' | ./configure     # machine option, nesting (read from STDIN)
+./compile -j 4 em_b_wave
 ```
 
-## 🚀 Usage
+For the standalone test suite, configure the CMake tree against a libtorch
+install:
 
-### Basic Integration
-
-```cpp
-#include "wrf_sdirk3_solver.h"
-
-// Configure solver
-SDIRK3Solver::Config config;
-config.dt = 1.0f;  // Time step
-config.newton_config.max_newton_iter = 50;
-config.newton_config.use_eisenstat_walker = true;
-config.newton_config.use_trust_region = true;
-
-// Create solver
-SDIRK3Solver solver(config);
-
-// Time integration
-StateVector initial_state = /* initialize from WRF */;
-StateVector final_state = solver.integrate(
-    initial_state,
-    0.0f,    // t0
-    100.0f,  // tf
-    false    // adaptive_dt
-);
+```bash
+cmake -S external/libtorch_wrf/sdirk3 -B build/sdirk3 -G Ninja \
+      -DCMAKE_PREFIX_PATH=/path/to/torch
+cmake --build build/sdirk3 --parallel
+ctest --test-dir build/sdirk3 --output-on-failure
 ```
 
-### Runtime Configuration: Namelist First (WRF)
+## Runtime Configuration: Namelist First (WRF)
 
 SDIRK3 runtime knobs that were frequently set via environment variables are now
 available in `&dynamics` namelist entries. The recommended workflow is:
@@ -101,7 +85,11 @@ Current load order is:
 
 So if both are set, environment still wins.
 
-#### Moved/standardized controls
+New knobs must be **opt-in** (default = no behavior change) and fully wired
+through Registry + Fortran `set_config` + C++ (env, string setter, dump,
+`[CONFIG EFFECTIVE]`, `validate()`).
+
+### Moved/standardized controls
 
 | Purpose | Namelist key (`&dynamics`) | Legacy env var |
 |---|---|---|
@@ -118,7 +106,7 @@ So if both are set, environment still wins.
 | Stage-2 Krylov restarts | `sdirk3_stage2_max_krylov_restarts` | `WRF_SDIRK3_STAGE2_MAX_KRYLOV_RESTARTS` |
 | Stage-2 Krylov tolerance | `sdirk3_stage2_krylov_tol` | `WRF_SDIRK3_STAGE2_KRYLOV_TOL` |
 
-#### Example (`imex_split_mode=3`, `stage2_budget=8/1/0`)
+### Example (`imex_split_mode=3`, `stage2_budget=8/1/0`)
 
 ```fortran
 &dynamics
@@ -135,7 +123,7 @@ So if both are set, environment still wins.
 /
 ```
 
-#### 4DVAR operation note
+### 4DVAR operation note
 
 For long windows, use `retain_graph_for_adjoint = .false.` with trajectory/checkpoint
 replay (`save_trajectory`, `checkpoint_interval`). Retaining the full graph is intended
@@ -145,103 +133,57 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 - `x0` (window-start state) must be present for replay-enabled windows.
 - `xN` is terminal-state input for `lambda_T` assembly and must not add an extra replay step.
 
-### Zero-Copy Interface with WRF
+## Testing
 
-```cpp
-// Create PyTorch tensors from Fortran arrays WITHOUT copying
-StateVector state;
-state.u = ZeroCopyInterface::from_fortran_3d(
-    u_fortran, ni+1, nk, nj, torch::kCUDA);
+The CMake tree registers an **exact 15-test CTest inventory** (pinned by
+`.github/ci/expected_ctest_names.txt`; any drift fails hosted CI):
 
-// Copy results back to Fortran
-ZeroCopyInterface::to_fortran_3d(
-    state.u, u_fortran, ni+1, nk, nj);
-```
+- 9 core contracts (geometry matrix, MSF stats, VJP semantics, FGMRES
+  contract, WRMS gate metric, acoustic-substep AD, core manifest/archive/link
+  parity),
+- `MPI_Halo_Contract_np{1,2,4}` — halo primitive forward/adjoint/packed AD+BC
+  transpose matrices,
+- `MPI_Runtime_Contract_np{1,2,4}` — runtime fail-close contracts (baseline
+  thread, single-flight scope, checked communicator/prepare, freshness
+  lifecycle, AD lifecycle-epoch binding, field semantics) with exact
+  failure-reason markers and a per-section coverage ratchet.
 
-## ⚡ Key Features
+The decomposition fail-close matrix (`.github/ci/run_decomposition_matrix.sh`,
+4 cases) runs against a real WRF build; its current evidence was produced by
+**direct local-machine execution** (it is not a full-WRF decomposition
+validation and contains no stock-RK3 baseline — that baseline needs a separate
+non-`USE_SDIRK3` build and is deferred).
 
-### 1. Newton-Krylov Solver
-- **Eisenstat-Walker forcing**: Adaptive GMRES tolerance
-- **Trust-region Dogleg**: Robust fallback for difficult problems
-- **Non-monotone line search**: Better convergence for turbulent flows
-- **Scaled norms**: Field-specific convergence criteria
+## MPI / decomposition support boundary
 
-### 2. GMRES Implementation
-- **Givens rotation**: Numerically stable orthogonalization
-- **index_put_ usage**: LibTorch C++ compatible tensor operations
-- **Flexible preconditioning**: Support for various preconditioners
+- **Single MPI rank + supported single-tile path**: production WRF positive
+  evidence (`SUCCESS COMPLETE`, six split-explicit stage norms bit-identical
+  to the tracked golden `test/em_b_wave/ci_expected_stage_norms.txt`).
+- **2/4-rank SDIRK**: refused pre-solve with
+  `SDIRK3_MPI_STAGE_HALO_UNSUPPORTED` (guards in `advance_implicit`'s
+  prologue, before any communicator/halo state mutation).
+- **AD halo + multi-tile**: refused pre-solve with
+  `SDIRK3_MPI_MULTI_TILE_UNSUPPORTED`.
+- **MPI halo primitive**: verified independently of the solver at np=1/2/4
+  (forward, adjoint, packed AD+BC, runtime contracts).
+- Halo freshness is a **hard fail-close contract** (publication/consumption
+  bound to the halo lifecycle, baseline-thread-only, exact
+  `SDIRK3_MPI_HALO_STALE` failures). There is no warning-only freshness mode
+  and no `MPI_COMM_WORLD` fallback for the halo communicator.
 
-### 3. Memory Layout
-- **Correct (j,k,i) layout**: Already verified, DO NOT CHANGE
-- **Zero-copy interface**: Direct memory sharing with Fortran
-- **Defensive coding**: Null checks and dimension validation
+## Critical constraints
 
-### 4. Physics Integration
-- **Static JVP routing**: Thread-safe physics tendency dispatch
-- **Vertical preconditioner**: TDMA solver for acoustic modes
-- **Conservation monitoring**: Mass, energy, momentum tracking
+1. The `(j,k,i)` memory layout is CORRECT — do not change it.
+2. Every `.item()` must be inside a `NoGradGuard` scope; keep it off the hot
+   path. Protect the autograd graph: no stray `.detach()` / `.data` / CPU
+   syncs in graph regions; use `index_put_` for tensor assignment; scoped
+   autocast only (no global dtype changes).
+3. Defensive Fortran interface: null checks and dimension validation at every
+   boundary.
 
-## 🧪 Testing
+## Documentation
 
-Run comprehensive test suite:
-
-```bash
-./wrf_sdirk3 --test --verbose
-```
-
-Tests include:
-- Taylor test for JVP accuracy
-- Jacobian transpose consistency
-- GMRES convergence
-- Newton-Krylov solver
-- SDIRK3 order verification
-- Conservation properties
-- Preconditioner effectiveness
-
-## 📊 Performance
-
-### Optimization Features
-- GPU acceleration via CUDA/MPS
-- Mixed precision support (FP16 compute, FP32 accumulate)
-- Parallel JVP evaluation
-- Cached preconditioner factorization
-- Memory pool for temporary allocations
-
-### Benchmarks
-- **CPU (Intel Xeon)**: ~10x speedup over reference implementation
-- **GPU (NVIDIA V100)**: ~50x speedup for large grids
-- **Apple Silicon (M1)**: ~20x speedup with MPS backend
-
-## ⚠️ Critical Notes
-
-### MUST FIX Before Compilation
-1. Replace ALL tensor `[]` with `index_put_`
-2. Use Givens rotation for GMRES (not lstsq)
-3. Compute J^T r for Dogleg (not just r)
-4. Memory layout (j,k,i) is CORRECT - DO NOT CHANGE
-
-### Known Limitations
-- J^T v computation uses finite differences (autodiff preferred)
-- Simplified physics tendencies (production needs full WRF physics)
-- Fixed grid spacing (needs adaptive mesh support)
-
-## 📝 Documentation
-
-See `/Users/yhlee/dWRF/external/sdirk3_lib/docs/WRF_SDIRK3_FINAL_DESIGN.md` for complete design specification.
-
-## 🔗 Integration with WRF
-
-1. Link against `libwrf_sdirk3_lib.a`
-2. Include headers from `include/wrf_sdirk3/`
-3. Call from Fortran using C bindings (iso_c_binding)
-
-## 📄 License
-
-This implementation follows WRF's licensing terms.
-
-## ✅ Status
-
-**v6.0 APPROVED** - Production ready with all critical fixes applied.
-
----
-*Generated with approved design v6.0 - August 16, 2025*
+Dated evidence and design history live in the repository `doc/` directory and
+`external/sdirk3_lib/docs_archive_2025_08_16/` (historical). The
+`external/sdirk3_lib/docs/` design-spec tree referenced by older notes is a
+local working archive that is **not tracked in this repository**.

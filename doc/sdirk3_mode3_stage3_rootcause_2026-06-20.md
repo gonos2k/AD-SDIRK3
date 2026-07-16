@@ -1,5 +1,12 @@
 # WRF-SDIRK3 mode-3 Stage-3 non-convergence — Root-cause investigation
 
+> **HISTORICAL RECORD (dated snapshot).** Solver/API descriptions in this
+> document (e.g. the pre-FGMRES GMRES/BiCGSTAB era) reflect the code as of
+> the date of this record, not the current contract. For the current state
+> (FGMRES solver, MPI support boundary, CTest inventory) see the repository
+> root `README.md` and `external/libtorch_wrf/sdirk3/README.md`.
+
+
 **Date:** 2026-06-20
 **Scope:** Operational IMEX **mode-3 (ARK324)** on `em_b_wave` fails the implicit solve at **ARK Stage 3**
 (the ESDIRK 4th stage) for **dt ≥ 600** (measured at dt = 100, 150, 200, 300, 450, 600, 900, 1200).

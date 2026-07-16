@@ -1,5 +1,12 @@
 # WRF Implicit Scheme 구현 및 테스트 진행 보고서
 
+> **HISTORICAL RECORD (dated snapshot).** Solver/API descriptions in this
+> document (e.g. the pre-FGMRES GMRES/BiCGSTAB era) reflect the code as of
+> the date of this record, not the current contract. For the current state
+> (FGMRES solver, MPI support boundary, CTest inventory) see the repository
+> root `README.md` and `external/libtorch_wrf/sdirk3/README.md`.
+
+
 **작성일**: 2025년 6월 14일  
 **프로젝트**: WRF Implicit Time Integration Scheme  
 **테스트 위치**: `/Users/yhlee/WRF/WRFV4.7.0/test/em_quarter_ss`
