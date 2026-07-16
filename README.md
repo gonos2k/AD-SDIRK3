@@ -22,20 +22,29 @@ The model **builds and runs** (`main/wrf.exe`, `main/ideal.exe`,
 differentiable implicit solve converges at small timesteps; making it converge and remain stable at
 the **operational timestep dt=600** on `em_b_wave` is the active investigation.
 
-Two obstacles are measured (see `doc/` and below):
+**Evidence status (post-FGMRES rediagnosis, 2026-07):** prior *pre-FGMRES* campaigns measured two
+candidate wall structures, summarized below. The current post-FGMRES run
+(`doc/sdirk3_stage3_postfgmres_classification_2026-07-16.md`) **confirms the proximate stage-4
+linear failure** at dt=600 but has **not yet re-established the operator spectrum, the operand
+composition, or the dt-dependence at the current head** — configuration equivalence with the
+pre-FGMRES records is unproven, so the walls below are **prior measurements / current leading
+hypotheses**, not currently re-confirmed facts.
 
-- **Wall-1 — implicit indefiniteness at large dt (≥~80, incl. 600).** The fast acoustic operator
-  `A = I − dt·γ·J_fast` is *intrinsically indefinite* — its Ritz/numerical-range spectrum straddles
-  the origin, and it is ~linear, so no smooth linearization background removes the indefiniteness. By
-  Sylvester's law no SPD preconditioner reaches dt=600; the preconditioner track is measured-dead.
-  This is the same stiffness that motivates WRF's split-explicit acoustic sub-stepping. The
-  large-step adjoint is therefore deferred to a WRFPLUS-style TL/AD coupling.
-- **Wall-2 — explicit advection cascade at small dt (≤~70).** The explicit **u-momentum** slow
-  tendency blows up in a super-exponential stage cascade (measured ≥99.99% in the `ru` block; a
-  **bilinear/quadratic** runaway confirmed by amplitude-scaling; HEVI-independent). Root cause: the
-  ARK324 explicit tableau over-extrapolates the physical advective tendency of the sheared baroclinic
-  jet at large dt. The fix under development is to **sub-cycle the explicit slow tendency** (WRF-native
-  split-explicit style), keeping the SDIRK implicit machinery intact.
+- **Wall-1 (prior measurement, 2026-06/07) — implicit indefiniteness at large dt (≥~80, incl.
+  600).** The pre-FGMRES campaign measured the fast acoustic operator `A = I − dt·γ·J_fast` as
+  *intrinsically indefinite* — its Ritz/numerical-range spectrum straddled the origin, and it is
+  ~linear, so no smooth linearization background removed the indefiniteness; by Sylvester's law no
+  SPD preconditioner reached dt=600, and the preconditioner track was judged measured-dead. This is
+  the same stiffness that motivates WRF's split-explicit acoustic sub-stepping. The large-step
+  adjoint was therefore deferred to a WRFPLUS-style TL/AD coupling.
+- **Wall-2 (prior measurement, 2026-07) — explicit advection cascade at small dt (≤~70).** The
+  pre-FGMRES campaign measured the explicit **u-momentum** slow tendency blowing up in a
+  super-exponential stage cascade (≥99.99% in the `ru` block; a **bilinear/quadratic** runaway
+  confirmed by amplitude-scaling; HEVI-independent), attributed to the ARK324 explicit tableau
+  over-extrapolating the sheared jet's advective tendency at large dt. The fix under development is
+  to **sub-cycle the explicit slow tendency** (WRF-native split-explicit style), keeping the SDIRK
+  implicit machinery intact. Whether the post-FGMRES stage-4 operand blowup is this physical
+  over-extrapolation or a construction defect is not yet determined at the current head.
 
 ## Build & run
 

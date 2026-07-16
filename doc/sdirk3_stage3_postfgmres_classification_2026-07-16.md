@@ -5,6 +5,14 @@
 `73a6da8` (production numerics identical to `main` = `f432cb24`; the branch
 adds only documentation and the read-only diagnostics).
 
+**Refreshed 2026-07-17 (PR 8.1):** the same dt=600 run was repeated on branch
+`pr8.1-exact-diagnostics` (numerics identical to `main` = `5bc3b747`; the
+branch adds only the exact `termination_reason` metadata and line-atomic
+record serialization). Every numeric field shared with the original run is
+identical to all printed digits, so this is the same failure — now with the
+exact termination mechanism measured (§2, §2a). The record dump below is the
+refreshed run's verbatim output.
+
 ## 1. Configuration fingerprint
 
 Everything held at its current production value — nothing was tuned for this
@@ -38,20 +46,20 @@ Full record set (verbatim from `rsl.error.0000`):
 SDIRK3_NEWTON_DIAG ts=0 stage=2 iter=0 event=residual res_scaled_rms=2.345264e-02 res_l2=2.437823e+01 tol=2.000000e-01 r0=2.345264e-02 state_finite=1 rhs_finite=1
 SDIRK3_STAGE_DIAG stage=2 converged=1 newton_iters=1 final_res=2.345264e-02 msg="Newton solver converged successfully"
 SDIRK3_NEWTON_DIAG ts=0 stage=3 iter=0 event=residual res_scaled_rms=5.004250e-01 res_l2=1.760896e+03 tol=2.000000e-01 r0=5.004250e-01 state_finite=1 rhs_finite=1
-SDIRK3_FGMRES_DIAG ts=0 stage=3 iter=0 path=fgmres rhs_norm=5.2018e+02 x0_norm=0.0000e+00 tol=3.0000e-01 restart=7 max_restarts=1 iters=7 restarts=1 final_res=2.7577e+02 rel_err=5.3016e-01 converged=0 breakdown=0 stagnation=0 dx_finite=1 variable_pc=0 msg="FGMRES max iterations reached (7 Arnoldi)"
-SDIRK3_NEWTON_DIAG ts=0 stage=3 iter=0 event=update accepted=1 alpha=1.0000e+00 dk_norm=6.6951e-04 res_after=7.4664e+02 gmres_total_failure=0 state_finite=1
-SDIRK3_NEWTON_DIAG ts=0 stage=3 iter=1 event=residual res_scaled_rms=2.6530e-01 res_l2=7.4664e+02 tol=2.0000e-01 r0=5.0042e-01 state_finite=1 rhs_finite=1
-SDIRK3_FGMRES_DIAG ts=0 stage=3 iter=1 path=fgmres rhs_norm=2.7578e+02 x0_norm=3.0820e-04 tol=3.0000e-01 restart=7 max_restarts=1 iters=7 restarts=1 final_res=1.9482e+02 rel_err=7.0643e-01 converged=0 breakdown=0 stagnation=0 dx_finite=1 variable_pc=0 msg="FGMRES max iterations reached (7 Arnoldi)"
-SDIRK3_NEWTON_DIAG ts=0 stage=3 iter=1 event=update accepted=1 alpha=1.0000e+00 dk_norm=6.2629e-04 res_after=3.0286e+02 gmres_total_failure=0 state_finite=1
-SDIRK3_NEWTON_DIAG ts=0 stage=3 iter=2 event=residual res_scaled_rms=1.8742e-01 res_l2=3.0286e+02 tol=2.0000e-01 r0=5.0042e-01 state_finite=1 rhs_finite=1
-SDIRK3_STAGE_DIAG stage=3 converged=1 newton_iters=3 final_res=1.8742e-01 msg="Newton solver converged successfully"
-SDIRK3_NEWTON_DIAG ts=0 stage=4 iter=0 event=residual res_scaled_rms=9.9999e-01 res_l2=2.7115e+08 tol=2.0000e-01 r0=9.9999e-01 state_finite=1 rhs_finite=1
-SDIRK3_FGMRES_DIAG ts=0 stage=4 iter=0 path=fgmres rhs_norm=1.0395e+03 x0_norm=0.0000e+00 tol=3.0000e-01 restart=7 max_restarts=1 iters=4 restarts=1 final_res=1.0294e+03 rel_err=9.9034e-01 converged=0 breakdown=0 stagnation=1 dx_finite=1 variable_pc=0 msg="FGMRES Arnoldi stagnation early exit (restart 1/1)"
-SDIRK3_NEWTON_DIAG ts=0 stage=4 iter=0 event=update accepted=1 alpha=1.0000e+00 dk_norm=2.4107e+00 res_after=2.6414e+08 gmres_total_failure=0 state_finite=1
-SDIRK3_NEWTON_DIAG ts=0 stage=4 iter=1 event=residual res_scaled_rms=9.8038e-01 res_l2=2.6414e+08 tol=2.0000e-01 r0=9.9999e-01 state_finite=1 rhs_finite=1
-SDIRK3_FGMRES_DIAG ts=0 stage=4 iter=1 path=fgmres rhs_norm=1.0191e+03 x0_norm=1.0455e-03 tol=3.0000e-01 restart=7 max_restarts=1 iters=4 restarts=1 final_res=1.0222e+03 rel_err=1.0031e+00 converged=0 breakdown=0 stagnation=1 dx_finite=1 variable_pc=0 msg="FGMRES Arnoldi stagnation early exit (restart 1/1)"
-SDIRK3_NEWTON_DIAG ts=0 stage=4 iter=1 event=update accepted=0 alpha=1.0000e+00 dk_norm=0.0000e+00 res_after=2.6414e+08 gmres_total_failure=1 state_finite=1
-SDIRK3_STAGE_DIAG stage=4 converged=0 newton_iters=2 final_res=9.8038e-01 msg="Newton solver exited early (stall/stagnation) at iter 2"
+SDIRK3_FGMRES_DIAG ts=0 stage=3 iter=0 path=fgmres rhs_norm=5.201751e+02 x0_norm=0.000000e+00 tol=3.000000e-01 restart=7 max_restarts=1 iters=7 restarts=1 final_res=2.757749e+02 rel_err=5.301579e-01 converged=0 breakdown=0 stagnation=0 termination_reason=max_budget ru_share=0.977296 probe_j=-1 probe_true_err=-1.000000e+00 hopeless_floor=-1.000000e+00 stag_ratio=-1.000000e+00 stag_count=0 dx_finite=1 variable_pc=0 msg="FGMRES max iterations reached (7 Arnoldi)"
+SDIRK3_NEWTON_DIAG ts=0 stage=3 iter=0 event=update accepted=1 alpha=1.000000e+00 dk_norm=6.695120e-04 res_after=7.466440e+02 gmres_total_failure=0 state_finite=1
+SDIRK3_NEWTON_DIAG ts=0 stage=3 iter=1 event=residual res_scaled_rms=2.653046e-01 res_l2=7.466440e+02 tol=2.000000e-01 r0=5.004250e-01 state_finite=1 rhs_finite=1
+SDIRK3_FGMRES_DIAG ts=0 stage=3 iter=1 path=fgmres rhs_norm=2.757753e+02 x0_norm=3.081968e-04 tol=3.000000e-01 restart=7 max_restarts=1 iters=7 restarts=1 final_res=1.948159e+02 rel_err=7.064297e-01 converged=0 breakdown=0 stagnation=0 termination_reason=max_budget ru_share=0.924041 probe_j=-1 probe_true_err=-1.000000e+00 hopeless_floor=-1.000000e+00 stag_ratio=-1.000000e+00 stag_count=0 dx_finite=1 variable_pc=0 msg="FGMRES max iterations reached (7 Arnoldi)"
+SDIRK3_NEWTON_DIAG ts=0 stage=3 iter=1 event=update accepted=1 alpha=1.000000e+00 dk_norm=6.262945e-04 res_after=3.028553e+02 gmres_total_failure=0 state_finite=1
+SDIRK3_NEWTON_DIAG ts=0 stage=3 iter=2 event=residual res_scaled_rms=1.874190e-01 res_l2=3.028553e+02 tol=2.000000e-01 r0=5.004250e-01 state_finite=1 rhs_finite=1
+SDIRK3_STAGE_DIAG stage=3 converged=1 newton_iters=3 final_res=1.874190e-01 msg="Newton solver converged successfully"
+SDIRK3_NEWTON_DIAG ts=0 stage=4 iter=0 event=residual res_scaled_rms=9.999886e-01 res_l2=2.711461e+08 tol=2.000000e-01 r0=9.999886e-01 state_finite=1 rhs_finite=1
+SDIRK3_FGMRES_DIAG ts=0 stage=4 iter=0 path=fgmres rhs_norm=1.039455e+03 x0_norm=0.000000e+00 tol=3.000000e-01 restart=7 max_restarts=1 iters=4 restarts=1 final_res=1.029411e+03 rel_err=9.903372e-01 converged=0 breakdown=0 stagnation=1 termination_reason=mid_budget_hopeless ru_share=0.999992 probe_j=3 probe_true_err=9.897076e-01 hopeless_floor=9.000000e-01 stag_ratio=9.950000e-01 stag_count=0 dx_finite=1 variable_pc=0 msg="FGMRES Arnoldi stagnation early exit (restart 1/1)"
+SDIRK3_NEWTON_DIAG ts=0 stage=4 iter=0 event=update accepted=1 alpha=1.000000e+00 dk_norm=2.410733e+00 res_after=2.641398e+08 gmres_total_failure=0 state_finite=1
+SDIRK3_NEWTON_DIAG ts=0 stage=4 iter=1 event=residual res_scaled_rms=9.803790e-01 res_l2=2.641398e+08 tol=2.000000e-01 r0=9.999886e-01 state_finite=1 rhs_finite=1
+SDIRK3_FGMRES_DIAG ts=0 stage=4 iter=1 path=fgmres rhs_norm=1.019071e+03 x0_norm=1.045462e-03 tol=3.000000e-01 restart=7 max_restarts=1 iters=4 restarts=1 final_res=1.022214e+03 rel_err=1.003084e+00 converged=0 breakdown=0 stagnation=1 termination_reason=arnoldi_stagnation ru_share=0.999993 probe_j=3 probe_true_err=9.977555e-01 hopeless_floor=-1.000000e+00 stag_ratio=9.950000e-01 stag_count=1 dx_finite=1 variable_pc=0 msg="FGMRES Arnoldi stagnation early exit (restart 1/1)"
+SDIRK3_NEWTON_DIAG ts=0 stage=4 iter=1 event=update accepted=0 alpha=1.000000e+00 dk_norm=0.000000e+00 res_after=2.641398e+08 gmres_total_failure=1 state_finite=1
+SDIRK3_STAGE_DIAG stage=4 converged=0 newton_iters=2 final_res=9.803790e-01 msg="Newton solver exited early (stall/stagnation) at iter 2"
 ```
 
 Post-failure context (existing telemetry, same run):
@@ -64,23 +72,67 @@ Post-failure context (existing telemetry, same run):
 [STEP OUTCOME] fail-closed outcome=20; skipping unifiedStep state publish before Fortran fatal gate.
 ```
 
+### 2a. Exact termination metadata (measured 2026-07-17, PR 8.1)
+
+The original records carried one boolean (`stagnation=1`) and one message
+("FGMRES Arnoldi stagnation early exit") for **two different early-exit
+policies**. The refreshed run separates them with a measured
+`termination_reason` per solve:
+
+| solve | termination_reason | detector inputs (measured) |
+|---|---|---|
+| stage 3, iter 0 | `max_budget` | 7/7 Arnoldi consumed; no early exit |
+| stage 3, iter 1 | `max_budget` | 7/7 Arnoldi consumed; no early exit |
+| stage 4, iter 0 | **`mid_budget_hopeless`** | probe_j=3, probe_true_err=0.98971 > hopeless_floor=0.9; stag_count=0 |
+| stage 4, iter 1 | **`arnoldi_stagnation`** | probe_j=3, true_err=0.99776, ratio > stag_ratio=0.995, stag_count=1 (window 1) |
+
+What the metadata establishes, read against the solver's policy code
+(`wrf_sdirk3_newton_solver.cpp`, the `mid_budget_probe` /
+`arnoldi_stagnated` blocks):
+
+- **Both stage-4 early exits happened at the same forced mid-budget
+  true-residual probe, j=3** (`j == max(2, restart/2)` with restart 7), which
+  is why both returned `iters=4`. The labels differ by which detector
+  tripped at that probe: at iter 0 the improvement ratio vs. the initial
+  reference (0.98971 / 1.0) was BELOW the 0.995 stagnation ratio — so the
+  consecutive-ratio stagnation detector did **not** fire (`stag_count=0`);
+  the exit was the hopeless-floor test (true_err 0.98971 > floor 0.9). At
+  iter 1 the ratio (0.99776 / 1.0) exceeded 0.995, so the single-check
+  stagnation detector (window = 1 under the aggressive ru-dominant gate)
+  fired, and it takes precedence over the also-satisfied hopeless-floor
+  test in the exit ordering. The earlier description of iter 0 as "Arnoldi
+  stagnation" therefore over-labeled it: iter 0 was a **budget-policy
+  abort**, not a measured stagnation; only iter 1 measured an actual
+  non-improving consecutive check.
+- **The 4-vs-7 Arnoldi difference between stage 4 and stage 3 is POLICY, not
+  a spectral measurement.** The mid-budget probe and the window-1 stagnation
+  detector arm only when `ru_share > 0.98` (measured: stage 4 at 0.999992 /
+  0.999993; stage 3 at 0.977296 / 0.924041, below the gate) — so stage 3
+  runs its full budget by construction, and the shorter stage-4 solves say
+  "the early-exit policies armed and tripped", not "the subspace was
+  exhausted". The linear-quality contrast that remains a measurement is the
+  relative residual at the checks that ran: 0.53 / 0.71 (stage 3, full
+  budget) vs 0.990 / 1.003 (stage 4, at the j=3 probe and final).
+
 ### Comparison table (identical format, one row per implicit stage)
 
 | | initial R (scaled-RMS) | initial R (L2) | Newton contraction | FGMRES per Newton iter | outcome |
 |---|---|---|---|---|---|
 | stage 2 | 2.35e-2 | 2.44e+1 | already < tol | not needed | **converged** (1 iter) |
-| stage 3 | 5.00e-1 | 1.76e+3 | 0.50 → 0.27 → 0.19 (< tol 0.2) | 7/7 Arnoldi, rel_err 0.53 / 0.71, no stagnation | **converged** (3 iters) |
-| stage 4 | 1.00e+0 | **2.71e+8** | 1.00 → 0.98 → stall | **4 Arnoldi, stagnation=1, rel_err 0.990 / 1.003** | **FAILED** → gate outcome=20 |
+| stage 3 | 5.00e-1 | 1.76e+3 | 0.50 → 0.27 → 0.19 (< tol 0.2) | 7/7 Arnoldi, rel_err 0.53 / 0.71, termination `max_budget` ×2 | **converged** (3 iters) |
+| stage 4 | 1.00e+0 | **2.71e+8** | 1.00 → 0.98 → stall | **4 Arnoldi, rel_err 0.990 / 1.003; termination `mid_budget_hopeless` (iter 0) / `arnoldi_stagnation` (iter 1), both at the j=3 probe** | **FAILED** → gate outcome=20 |
 
 Two stage-4-only anomalies, each absent at stages 2/3:
 
-1. **The linear solve stagnates, and the available updates give negligible
-   nonlinear progress.** Precisely (`rel_err` is the LINEAR quantity
-   `‖b−Ax‖/‖b‖`; it says nothing directly about nonlinear descent):
+1. **The linear solve makes almost no progress, and the available updates
+   give negligible nonlinear progress.** Precisely (`rel_err` is the LINEAR
+   quantity `‖b−Ax‖/‖b‖`; it says nothing directly about nonlinear descent):
    stage 3's FGMRES also misses its tolerance (rel_err 0.53–0.71 on the
    same 7-vector budget), yet its directions contract the nonlinear
-   residual 0.50→0.19. Stage 4's FGMRES *stagnates* (early exit after 4 of
-   7 vectors): at iter 0 it reduces the linear residual by only ~1.0%
+   residual 0.50→0.19. Stage 4's FGMRES exits early at the forced j=3
+   probe (per §2a: a hopeless-floor budget abort at iter 0, a measured
+   single-check stagnation at iter 1): at iter 0 it reduces the linear
+   residual by only ~1.0%
    (rel_err 0.990), and at iter 1 it ends ABOVE ‖b‖ (rel_err 1.003, with
    x0 ≈ 0 so the start is ≈ ‖b‖ — no net reduction). The nonlinear
    consequences, as measured: the iter-0
@@ -101,15 +153,19 @@ Two stage-4-only anomalies, each absent at stages 2/3:
 ## 3. Hypothesis classification (A–H), evidence and refutation
 
 - **A. Linear solve failure — CONFIRMED as the proximate mechanism, not the
-  root.** Evidence: stagnation=1, rel_err 0.990/1.003 at stage 4 only —
-  the LINEAR solve reduces its residual by only ~1.0% (iter 0) and then
-  not at all (iter 1, rel_err 1.003 > 1). Refutation as root cause:
+  root.** Evidence: rel_err 0.990/1.003 at stage 4 only — the LINEAR solve
+  reduces its residual by only ~1.0% (iter 0) and then not at all (iter 1,
+  rel_err 1.003 > 1) — with the exact termination now measured (§2a):
+  iter 0 exited by the `mid_budget_hopeless` budget policy (true_err
+  0.98971 > floor 0.9 at the forced j=3 probe, stagnation detector NOT
+  fired), iter 1 by a measured single-check `arnoldi_stagnation`
+  (ratio > 0.995). Refutation as root cause:
   stage 3 fails the same linear tolerance on the same budget (0.53/0.71)
   and still converges — an unconverged linear solve is not sufficient for
   nonlinear failure. What distinguishes stage 4, as measured, is that its
   one evaluated direction yields only 2.6% nonlinear reduction and its
   second direction is rejected untested by the rel_err ≥ 0.999 policy.
-  Whether the stagnated directions are strictly non-descent for the
+  Whether the returned directions are strictly non-descent for the
   nonlinear merit was NOT directly measured (no directional-derivative or
   trial evaluation exists for the rejected direction) — that is
   discriminating measurement (4) in §3a.
@@ -119,7 +175,8 @@ Two stage-4-only anomalies, each absent at stages 2/3:
   dx_finite=1`, zero NaN-retry events, no `breakdown` — a non-finite or
   NaN-poisoned direction did not occur. NOT measured here: a JVP-vs-FD
   directional consistency check **at the stage-4 state** (a finite but wrong
-  J·v is one way to produce exactly the observed linear stagnation and
+  J·v is one way to produce exactly the observed near-unity linear
+  residuals and
   near-zero nonlinear progress). The
   standing JVP/FGMRES contract tests are green at this commit, but they
   exercise test operators, not this operand. This is discriminating
@@ -140,15 +197,19 @@ Two stage-4-only anomalies, each absent at stages 2/3:
   abort (`outcome=20`) matches the recorded stall rather than creating it.
 - **E. Preconditioner / Krylov-subspace quality — MEASURED symptom;
   CONSISTENT WITH the prior indefiniteness measurement, but not
-  independently re-established by this run.** Measured here: stagnation
-  within 4 Arnoldi vectors with rel_err ≈ 1 under the vertical
-  preconditioner, at stage 4 only. NOT measured here: the operator spectrum
+  independently re-established by this run.** Measured here: rel_err ≈ 1
+  at the j=3 probe and at the final check under the vertical
+  preconditioner, at stage 4 only (per §2a, the 4-vector exit itself is a
+  ru-dominance-gated POLICY, so "stagnated within 4 vectors" is the
+  policy's reading; the measurement is the ≈1 relative residual at the
+  checks that ran). NOT measured here: the operator spectrum
   (no Ritz/numerical-range probe ran in this configuration). The prior
   Wall-1 measurement (`doc/sdirk3_walls_measurement_2026-07-05.md`:
   intrinsic indefiniteness of `A = I − dt·γ·J_fast` at dt=600) is the
   standing explanation this data is consistent with — but per §4 those
   records are pre-FGMRES and configuration equivalence is unproven, so this
-  run treats indefiniteness as the leading HYPOTHESIS for the stagnation,
+  run treats indefiniteness as the leading HYPOTHESIS for the near-unity
+  linear residuals,
   not as re-confirmed fact. Alternatives not excluded by this run: a
   preconditioner defect specific to the stage-4 operand scale, or a wrong-
   but-finite JVP (see B).
@@ -178,10 +239,11 @@ Two stage-4-only anomalies, each absent at stages 2/3:
 
 **Classification, scoped to what this run measured:**
 
-- **MEASURED and confirmed: class A at stage 4** — the linear solves
-  stagnate (stagnation=1 within 4 of 7 Arnoldi vectors; rel_err 0.990 /
-  1.003 — a ~1.0% linear-residual reduction at iter 0 and none at
-  iter 1), and the nonlinear iteration
+- **MEASURED and confirmed: class A at stage 4** — the linear solves make
+  almost no progress (rel_err 0.990 / 1.003 — a ~1.0% linear-residual
+  reduction at iter 0 and none at iter 1; exact terminations per §2a:
+  `mid_budget_hopeless` then `arnoldi_stagnation`, both tripping at the
+  forced j=3 probe), and the nonlinear iteration
   makes negligible progress on what they return: the one evaluated step
   (iter 0) reduces ‖R‖ by only 2.6%, the iter-1 direction is rejected
   UNTESTED by the rel_err ≥ 0.999 total-failure policy (dk_norm=0), and
@@ -204,7 +266,8 @@ Two stage-4-only anomalies, each absent at stages 2/3:
 **Linear vs nonlinear failure, distinguished (measured):** stage 3 shows the
 nonlinear iteration tolerates failed linear tolerances (linear failure ≠
 nonlinear failure); stage 4's nonlinear stall coincides with the linear
-model stagnating (a ~1.0% linear-residual reduction, then none) — and the
+model making almost no progress (a ~1.0% linear-residual reduction, then
+none) — and the
 globalization machinery is observed following its policies on those
 directions. Whether those directions were strictly non-descent for the
 nonlinear merit was not directly measured; the one that was evaluated
