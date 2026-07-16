@@ -154,6 +154,20 @@ The decomposition fail-close matrix (`.github/ci/run_decomposition_matrix.sh`,
 validation and contains no stock-RK3 baseline — that baseline needs a separate
 non-`USE_SDIRK3` build and is deferred).
 
+### Stage convergence diagnostics (opt-in)
+
+`WRF_SDIRK3_STAGE_DIAG=1` enables the machine-readable
+`SDIRK3_NEWTON_DIAG` / `SDIRK3_FGMRES_DIAG` / `SDIRK3_STAGE_DIAG` records
+(identical format for every implicit stage — internal ARK324 stages 2/3/4 in
+IMEX mode 3). When unset, every site is a single cached-boolean branch and
+production output and numerics are unchanged (verified: split-path stage norms
+bit-identical with the flag on and off).
+
+> **Cost warning:** `WRF_SDIRK3_STAGE_DIAG=1` is a diagnosis-only mode. On
+> CUDA/MPS it performs synchronous device-to-host scalar reads (norms and
+> finiteness checks) every Newton iteration and can substantially reduce
+> performance. It must not be used for throughput or timing measurements.
+
 ## MPI / decomposition support boundary
 
 - **Single MPI rank + supported single-tile path**: production WRF positive
