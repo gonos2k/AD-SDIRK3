@@ -725,16 +725,19 @@ static void run_rw_term_bisection(const Context& c) {
         auto F = c.compute_rhs(U);
         (void)F;
         auto raw = scope.take();
+        // PR 9B.2 (P1-2): validate the RAW capture (names AND definedness)
+        // BEFORE any detach().clone() — an undefined tensor must fail closed
+        // with the stable marker, never a libtorch exception.
+        const std::string why = validate_rw_term_inventory(raw, expect_wdamp);
+        if (!why.empty()) {
+            emit_capture_fail("SDIRK3_RW_TERM_CAPTURE_INCOMPLETE", why);
+            return {};
+        }
         Terms out;
         {
             torch::NoGradGuard no_grad;
             for (const auto& kv : raw)
                 out.emplace_back(kv.first, kv.second.detach().clone());
-        }
-        const std::string why = validate_rw_term_inventory(out, expect_wdamp);
-        if (!why.empty()) {
-            emit_capture_fail("SDIRK3_RW_TERM_CAPTURE_INCOMPLETE", why);
-            return {};
         }
         ok = true;
         return out;
@@ -787,6 +790,15 @@ static void run_rw_term_bisection(const Context& c) {
         (void)F_dual;
         // take() while the dual level guard is still alive.
         auto raw = scope.take();
+        // PR 9B.2 (P1-2): validate the RAW capture BEFORE _unpack_dual —
+        // an undefined CAPTURED tensor fails closed with the marker. (An
+        // undefined unpacked TANGENT of a defined tensor remains normal for
+        // constant terms and is treated as a zero tangent below.)
+        const std::string why = validate_rw_term_inventory(raw, expect_wdamp);
+        if (!why.empty()) {
+            emit_capture_fail("SDIRK3_RW_TERM_CAPTURE_INCOMPLETE", why);
+            return;
+        }
         for (const auto& kv : raw) {
             auto parts = torch::_unpack_dual(
                 kv.second, static_cast<int64_t>(dual_guard.level()));
@@ -796,11 +808,6 @@ static void run_rw_term_bisection(const Context& c) {
                                 ? tgt.detach().clone()
                                 : torch::zeros_like(std::get<0>(parts))
                                       .detach());
-        }
-        const std::string why = validate_rw_term_inventory(tg, expect_wdamp);
-        if (!why.empty()) {
-            emit_capture_fail("SDIRK3_RW_TERM_CAPTURE_INCOMPLETE", why);
-            return;
         }
     }
     // Closure #2: sum of term tangents == full production rw tangent.
