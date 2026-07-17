@@ -109,6 +109,18 @@ through Registry + Fortran `set_config` + C++ (env, string setter, dump,
 | IEVA / implicit vertical adv (WRF parity) | `zadvect_implicit` (standard WRF key) | `WRF_SDIRK3_WRF_ZADVECT_IMPLICIT` |
 | W-damping critical CFL (WRF parity) | `w_crit_cfl` (standard WRF key; wired as `wrf_w_crit_cfl` — a separate field from the legacy sdirk3 knob) | `WRF_SDIRK3_WRF_W_CRIT_CFL` |
 
+The parity W-damping STRENGTH is WRF's module constant `w_alpha = 0.3`
+(`share/module_model_constants.F:88`), fixed as `kWrfWAlpha` in
+`wrf_sdirk3_w_damping.h` — WRF exposes no namelist for it, so neither do we.
+The legacy `sdirk3_w_damp_alpha` knob is a NON-PARITY tuning input: it no
+longer feeds the parity RHS term (it still feeds the preconditioner's legacy
+damping mirror, whose consistency is the PR 9D scope). The enabled parity
+path requires the complete `calc_ww_cp` geometry (`c1h/c2h`, `msftx`,
+`msfuy`, `msfvx`); if any piece is missing the term FAILS CLOSED with a
+`SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED` marker, and contract-violating
+inputs fail closed with `SDIRK3_WDAMP_INVALID_INPUT` /
+`SDIRK3_WDAMP_INVALID_MASS` — there is no silent unit-metric substitution.
+
 ### Example (`imex_split_mode=3`, `stage2_budget=8/1/0`)
 
 ```fortran

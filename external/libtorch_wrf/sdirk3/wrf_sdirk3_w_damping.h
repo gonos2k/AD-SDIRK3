@@ -31,6 +31,8 @@
 // parity, and the WRF Registry default (0) means the damping is OFF unless
 // the namelist enables it.
 #include <torch/torch.h>
+#include <cmath>
+#include <stdexcept>
 #include "wrf_sdirk3_rw_term_capture.h"
 
 namespace wrf {
@@ -39,6 +41,13 @@ namespace sdirk3 {
 // WRF activation CFL constant (share/module_model_constants.F:89:
 // "REAL, PARAMETER :: w_beta = 1.0  ! activation cfl number").
 inline constexpr float kWrfWBeta = 1.0f;
+
+// WRF damping strength constant (share/module_model_constants.F:88:
+// "REAL, PARAMETER :: w_alpha = 0.3  ! strength m/s/s"). The PARITY path
+// must use THIS constant — WRF exposes no namelist for it. The legacy
+// sdirk3 knob (w_damp_alpha) is a non-parity tuning input and no longer
+// feeds the parity term.
+inline constexpr float kWrfWAlpha = 0.3f;
 
 inline torch::Tensor compute_w_damping_term(
     const torch::Tensor& ww_momentum,   // omega / coupled vertical flux [ny,nz_w,nx]
@@ -54,6 +63,39 @@ inline torch::Tensor compute_w_damping_term(
     int k_start,
     int k_end,
     int nz_w) {
+    // PR 9C.1: fail-close input authority. WRF's W_DAMP divides by the
+    // column mass and scales by dt — a non-finite or non-positive mass, a
+    // bad dt, or mismatched shapes produce a silently wrong (not merely
+    // inactive) term, so they are rejected, never repaired.
+    if (!(dt > 0.0f) || !std::isfinite(dt) || !std::isfinite(gate_threshold) ||
+        !std::isfinite(excess_offset) || !std::isfinite(w_alpha) ||
+        k_start < 0 || k_end <= k_start || k_end > nz_w) {
+        throw std::invalid_argument(
+            "SDIRK3_WDAMP_INVALID_INPUT: dt/gate/offset/alpha must be finite "
+            "(dt>0) and 0<=k_start<k_end<=nz_w");
+    }
+    if (!ww_momentum.defined() || !w_velocity.defined() ||
+        !mu_full.defined() || ww_momentum.dim() != 3 ||
+        w_velocity.dim() != 3 || mu_full.dim() != 2 ||
+        ww_momentum.size(0) != mu_full.size(0) ||
+        ww_momentum.size(2) != mu_full.size(1) ||
+        w_velocity.sizes() != ww_momentum.sizes() ||
+        c1f.numel() < k_end || c2f.numel() < k_end) {
+        throw std::invalid_argument(
+            "SDIRK3_WDAMP_INVALID_INPUT: ww/w [ny,nz_w,nx] and mu [ny,nx] "
+            "shape contract violated (or c1f/c2f shorter than k_end)");
+    }
+    {
+        // Mass positivity/finiteness gate — a diagnostic reduction, not a
+        // graph participant. Runs only on the ENABLED path (w_damping=1).
+        torch::NoGradGuard no_grad;
+        if (!mu_full.isfinite().all().item<bool>() ||
+            !(mu_full.min().item<float>() > 0.0f)) {
+            throw std::invalid_argument(
+                "SDIRK3_WDAMP_INVALID_MASS: full column mass must be finite "
+                "and strictly positive");
+        }
+    }
     const int n_interior = k_end - k_start;
 
     auto ww_int = ww_momentum.slice(1, k_start, k_end);
@@ -68,9 +110,10 @@ inline torch::Tensor compute_w_damping_term(
     auto active = vert_cfl > gate_threshold;
 
     // Fortran SIGN(1., w) — oracle-pinned signbit semantics (see header).
-    auto hard_sign = torch::where(torch::signbit(w_int),
-                                  torch::full_like(w_int, -1.0f),
-                                  torch::full_like(w_int, 1.0f));
+    // signbit -> {0,1} -> {+1,-1} arithmetically (one allocation; the
+    // where/full_like form allocated two full tensors per call).
+    auto hard_sign =
+        1.0f - 2.0f * torch::signbit(w_int).to(w_int.scalar_type());
 
     {
         auto& rw_cap = rw_term_capture_slot();
@@ -81,7 +124,11 @@ inline torch::Tensor compute_w_damping_term(
     }
 
     auto raw_term = hard_sign * w_alpha * cfl_excess * mass_factor;
-    auto w_damp = torch::where(active, raw_term, torch::zeros_like(raw_term));
+    // Hard where-gate (NOT active*raw_term: a multiplicative mask would let
+    // a NaN/Inf in an INACTIVE cell poison the term as 0*NaN=NaN). The
+    // zero branch broadcasts a 1-element tensor instead of a full clone.
+    auto w_damp = torch::where(active, raw_term,
+                               torch::zeros({1}, raw_term.options()));
     return torch::constant_pad_nd(w_damp, {0, 0, k_start, nz_w - k_end});
 }
 

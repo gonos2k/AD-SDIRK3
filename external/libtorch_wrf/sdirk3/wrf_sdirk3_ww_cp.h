@@ -31,6 +31,7 @@
 // interior algebra is contracted exactly and the edge convention is
 // contracted explicitly.
 #include <torch/torch.h>
+#include <stdexcept>
 
 namespace wrf {
 namespace sdirk3 {
@@ -53,6 +54,21 @@ inline torch::Tensor compute_wrf_ww_cp(
     const int ny = static_cast<int>(mup.size(0));
     const int nx = static_cast<int>(mup.size(1));
     const int nz = static_cast<int>(u.size(1));
+
+    // PR 9C.1 fail-close: every operand must satisfy the calc_ww_cp shape
+    // contract; a silent mismatch would broadcast into a wrong omega.
+    if (u.dim() != 3 || v.dim() != 3 || mup.dim() != 2 || mub.dim() != 2 ||
+        u.size(0) != ny || u.size(2) != nx + 1 || v.size(0) != ny + 1 ||
+        v.size(1) != nz || v.size(2) != nx || mub.size(0) != ny ||
+        mub.size(1) != nx || c1h.numel() < nz || c2h.numel() < nz ||
+        dnw.numel() < nz || msftx.size(0) != ny || msftx.size(1) != nx ||
+        msfuy.size(0) != ny || msfuy.size(1) != nx + 1 ||
+        msfvx_inv.size(0) != ny + 1 || msfvx_inv.size(1) != nx) {
+        throw std::invalid_argument(
+            "SDIRK3_WDAMP_INVALID_INPUT: calc_ww_cp operand shape contract "
+            "violated (u[ny,nz,nx+1], v[ny+1,nz,nx], mu[ny,nx], msf* on "
+            "their staggers, c1h/c2h/dnw >= nz)");
+    }
 
     auto mut = mup + mub;  // [ny, nx]
 

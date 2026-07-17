@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <vector>
 #include "wrf_sdirk3_ww_cp.h"
+#include "wrf_sdirk3_w_damping.h"
 
 namespace {
 
@@ -219,7 +220,125 @@ int main() {
               "full contract on non-unit fixtures");
     }
 
-    const int kExpectedCases = 3 + 1 + fx.nx + 1;  // = 9 with nx=4
+
+    // (5) END-TO-END composed contract: production chain
+    //     compute_wrf_ww_cp -> compute_w_damping_term  vs  the scalar
+    //     calc_ww_cp reference composed with an independent scalar W_DAMP
+    //     transcription (mass = c1f*mut+c2f; vert_cfl = |ww/mass*rdnw*dt|;
+    //     gate '>'; term = SIGN(1.,w)*alpha*(cfl-crit)*mass), on the
+    //     non-unit fixture with BOTH active and inactive cells present.
+    {
+        torch::NoGradGuard no_grad2;
+        auto opt = torch::TensorOptions().dtype(torch::kFloat32);
+        const int nz_w = fx.nz + 1;
+        const int k_start = 1, k_end = nz_w - 1;
+        const int n_int = k_end - k_start;
+        auto kw = torch::arange(nz_w, opt);
+        auto c1f = 1.0f - 0.05f * kw;
+        auto c2f = 90.0f * kw;
+        auto rdnw_full = 1.0f / (0.011f + 0.0015f * kw);
+        auto rdnw_int = rdnw_full.slice(0, k_start, k_end)
+                            .reshape({1, n_int, 1});
+        auto i3w = torch::arange(fx.ny * nz_w * fx.nx, opt)
+                       .reshape({fx.ny, nz_w, fx.nx});
+        auto w_phys = 3.0f * torch::sin(i3w * 0.83f);  // +/- physical w
+        auto mut_full = fx.mup + fx.mub;
+
+        auto ww = fx.prod();
+        // Pick dt so the gate splits the interior: scale to max cfl ~ 8.
+        float cfl_at_1 = (ww.slice(1, k_start, k_end) /
+                          (c1f.slice(0, k_start, k_end).reshape({1, n_int, 1}) *
+                               mut_full.unsqueeze(1) +
+                           c2f.slice(0, k_start, k_end).reshape({1, n_int, 1})) *
+                          rdnw_int)
+                             .abs()
+                             .max()
+                             .item<float>();
+        const float dt = 8.0f / cfl_at_1;
+        const float alpha = wrf::sdirk3::kWrfWAlpha;
+        const float gate = wrf::sdirk3::kWrfWBeta;
+        const float crit = 1.0f;
+
+        auto prod_term = wrf::sdirk3::compute_w_damping_term(
+            ww, w_phys, mut_full, c1f, c2f, rdnw_int, dt, alpha, gate, crit,
+            k_start, k_end, nz_w);
+
+        // Independent scalar composition.
+        auto ww_ref = fx.ref();
+        auto ref_term = torch::zeros_like(prod_term);
+        {
+            auto wwa = ww_ref.accessor<float, 3>();
+            auto wa = w_phys.accessor<float, 3>();
+            auto muta = mut_full.accessor<float, 2>();
+            auto c1a = c1f.accessor<float, 1>();
+            auto c2a = c2f.accessor<float, 1>();
+            auto rda = rdnw_full.accessor<float, 1>();
+            auto ra = ref_term.accessor<float, 3>();
+            int active = 0, inactive = 0;
+            for (int j = 0; j < fx.ny; ++j)
+                for (int k = k_start; k < k_end; ++k)
+                    for (int i = 0; i < fx.nx; ++i) {
+                        const float mass = c1a[k] * muta[j][i] + c2a[k];
+                        const float cfl =
+                            std::fabs(wwa[j][k][i] / mass * rda[k] * dt);
+                        if (cfl > gate) {
+                            const float sgn =
+                                std::signbit(wa[j][k][i]) ? -1.0f : 1.0f;
+                            ra[j][k][i] = sgn * alpha * (cfl - crit) * mass;
+                            ++active;
+                        } else {
+                            ++inactive;
+                        }
+                    }
+            check(active > 0, "end-to-end: gate has active cells");
+            check(inactive > 0, "end-to-end: gate has inactive cells");
+        }
+        const float re = rel_err(prod_term, ref_term);
+        std::printf("ww_cp end-to-end composed: prod vs scalar rel=%.3e\n",
+                    re);
+        check(re <= 1e-5f,
+              "END-TO-END: production omega+W_DAMP chain matches the "
+              "composed scalar references");
+
+        // (6) validation fail-close: the production helpers REJECT contract
+        //     violations with stable markers (never silently repair).
+        auto throws_with = [](const char* marker, auto&& fn) {
+            try {
+                fn();
+            } catch (const std::invalid_argument& e) {
+                return std::string(e.what()).find(marker) == 0;
+            }
+            return false;
+        };
+        check(throws_with("SDIRK3_WDAMP_INVALID_MASS", [&] {
+                  wrf::sdirk3::compute_w_damping_term(
+                      ww, w_phys, -mut_full, c1f, c2f, rdnw_int, dt, alpha,
+                      gate, crit, k_start, k_end, nz_w);
+              }),
+              "fail-close: non-positive mass rejected");
+        check(throws_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  wrf::sdirk3::compute_w_damping_term(
+                      ww, w_phys, mut_full, c1f, c2f, rdnw_int, 0.0f, alpha,
+                      gate, crit, k_start, k_end, nz_w);
+              }),
+              "fail-close: dt=0 rejected");
+        check(throws_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  wrf::sdirk3::compute_w_damping_term(
+                      ww, w_phys, mut_full.slice(1, 0, fx.nx - 1), c1f, c2f,
+                      rdnw_int, dt, alpha, gate, crit, k_start, k_end, nz_w);
+              }),
+              "fail-close: mis-shaped mass rejected");
+        check(throws_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  wrf::sdirk3::compute_wrf_ww_cp(
+                      fx.u, fx.v, fx.mup, fx.mub, fx.c1h, fx.c2h, fx.dnw,
+                      fx.rdx, fx.rdy, fx.msftx,
+                      fx.msfuy.slice(1, 0, fx.nx),  // wrong u-stagger width
+                      fx.msfvx_inv);
+              }),
+              "fail-close: mis-shaped u-stagger map factor rejected");
+    }
+
+    const int kExpectedCases = 3 + 1 + fx.nx + 1 + 3 + 4;  // = 16 with nx=4
     if (g_cases != kExpectedCases) {
         std::printf("FAIL: case-count ratchet: executed %d, expected %d\n",
                     g_cases, kExpectedCases);

@@ -17038,7 +17038,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // deliberately UNTOUCHED (preconditioner changes are out of scope);
         // its consistency with the parity-gated RHS term is flagged for
         // review.
-        float w_alpha = wrf::sdirk3::g_sdirk3_config.w_damp_alpha;
+        // PR 9C.1: the parity term uses WRF's module CONSTANT w_alpha=0.3
+        // (kWrfWAlpha; share/module_model_constants.F:88 — WRF has no
+        // namelist for it). The legacy sdirk3 knob w_damp_alpha is a
+        // NON-PARITY tuning input and no longer feeds this term.
+        float w_alpha = wrf::sdirk3::kWrfWAlpha;
         // PR 9C: the parity term uses the WRF namelist w_crit_cfl
         // (wrf_w_crit_cfl — its own field; the legacy sdirk3 knob is
         // overwritten later in the bridge by sdirk3_w_crit_cfl).
@@ -17046,7 +17050,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
         if (wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
             wrf::sdirk3::g_sdirk3_config.implicit_wdamp &&
-            w_alpha > 0.0f && w_crit_cfl > 0.0f) {
+            w_crit_cfl > 0.0f) {
             float dt = dt_stage_;
             int k_start = 1;
             int k_end = nz_w_ - 1;  // exclusive
@@ -17094,6 +17098,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                                  "contract; term skipped (fail-close)\n";
                 }
             } else {
+            try {
             torch::Tensor ww;
             {
                 auto dev = u.device();
@@ -17140,6 +17145,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             {
                 auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
                 rw_cap2.add("w_damp_padded", w_damp_padded);
+            }
+            } catch (const std::invalid_argument& e) {
+                // PR 9C.1 fail-close: a validation throw from the parity
+                // helpers means the inputs violate WRF's W_DAMP contract;
+                // the term is skipped, never silently repaired.
+                static bool wdamp_input_warned = false;
+                if (!wdamp_input_warned) {
+                    wdamp_input_warned = true;
+                    std::cerr << e.what()
+                              << " — W-damping term skipped (fail-close)\n";
+                }
             }
             }  // geometry_ok
         }
