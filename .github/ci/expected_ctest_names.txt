@@ -12,4 +12,5 @@ MPI_Runtime_Contract_np2
 MPI_Runtime_Contract_np4
 MSF_Raw_Stats_Matrix
 VJP_Semantics
+WDamp_Tangent_Contract
 WRMS_Gate_Metric

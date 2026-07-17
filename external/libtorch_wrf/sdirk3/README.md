@@ -135,12 +135,12 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 15-test CTest inventory** (pinned by
+The CMake tree registers an **exact 16-test CTest inventory** (pinned by
 `.github/ci/expected_ctest_names.txt`; any drift fails hosted CI):
 
-- 9 core contracts (geometry matrix, MSF stats, VJP semantics, FGMRES
-  contract, WRMS gate metric, acoustic-substep AD, core manifest/archive/link
-  parity),
+- 10 core contracts (geometry matrix, MSF stats, VJP semantics, FGMRES
+  contract, WRMS gate metric, acoustic-substep AD, the W-damping forward-mode
+  tangent contract, core manifest/archive/link parity),
 - `MPI_Halo_Contract_np{1,2,4}` — halo primitive forward/adjoint/packed AD+BC
   transpose matrices,
 - `MPI_Runtime_Contract_np{1,2,4}` — runtime fail-close contracts (baseline
