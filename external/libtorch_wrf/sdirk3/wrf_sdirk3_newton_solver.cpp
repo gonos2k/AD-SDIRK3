@@ -213,6 +213,26 @@ static inline float diag_norm(const torch::Tensor& t) {
     return t.detach().norm().to(torch::kCPU).item<float>();
 }
 
+// ============================================================================
+// PR 9A: opt-in directional consistency check of the production
+// linearization at the ACTUAL failing operand (WRF_SDIRK3_STAGE4_JVP_CHECK=1).
+// Diagnosis-only. When unset, the only cost anywhere is a cached-boolean
+// branch (and a null capture pointer inside FGMRES). Like the stage
+// diagnostics, the checker performs synchronous device-to-host scalar reads
+// and extra RHS evaluations — never enable it for throughput or timing
+// measurements.
+// ============================================================================
+static inline bool stage4_jvp_check_enabled() {
+    static const bool on = [] {
+        const char* v = std::getenv("WRF_SDIRK3_STAGE4_JVP_CHECK");
+        return v != nullptr && v[0] != '\0' && v[0] != '0';
+    }();
+    return on;
+}
+
+// PR 9A: KrylovBasisCapture is declared in wrf_sdirk3_newton_solver.h.
+static constexpr size_t kKrylovBasisCaptureMax = 16;
+
 // v20.14r27i: Unified GMRES residual norm — consistent for internal, final, and adaptive paths.
 // 3D tensors: halo-zeroed norm (boundary noise excluded).
 // 1D packed tensors: raw norm (halo mask disabled — see build_halo_mask).
@@ -1551,7 +1571,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     const StateLayout* layout,
     const torch::Tensor* halo_mask,
     bool periodic_x,
-    bool periodic_y) {
+    bool periodic_y,
+    KrylovBasisCapture* basis_capture) {
     
     torch::Tensor x = x0.clone();
 
@@ -1798,6 +1819,10 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         }
 
         V.push_back(r_precond / r_norm_tensor);
+        if (basis_capture && basis_capture->V.size() < kKrylovBasisCaptureMax) {
+            torch::NoGradGuard no_grad;
+            basis_capture->V.push_back(V.back().detach().clone());
+        }
 
         // PERFORMANCE FIX: Move V0 validation diagnostics to debug_level >= 3 (HOT PATH)
         // This was causing 2 .item() syncs per GMRES call at debug_level >= 1
@@ -1883,6 +1908,10 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 // FGMRES: keep the EXACT preconditioned vector used for this
                 // Arnoldi column (not a recomputation — M may differ next call).
                 Z.push_back(v_precond);
+                if (basis_capture && basis_capture->Z.size() < kKrylovBasisCaptureMax) {
+                    torch::NoGradGuard no_grad;
+                    basis_capture->Z.push_back(v_precond.detach().clone());
+                }
             }
             torch::Tensor w = A(v_precond);
             auto jvp_end = std::chrono::high_resolution_clock::now();
@@ -2088,6 +2117,10 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             }
             
             V.push_back(w / H[j + 1][j]);
+        if (basis_capture && basis_capture->V.size() < kKrylovBasisCaptureMax) {
+            torch::NoGradGuard no_grad;
+            basis_capture->V.push_back(V.back().detach().clone());
+        }
             
             // AUTOGRAD FIX: Apply Givens rotations using tensor operations
             for (int i = 0; i < j; ++i) {
@@ -5942,6 +5975,16 @@ public:
                     }
                 }
 
+                // PR 9A: capture the actual Krylov basis for the opt-in
+                // directional consistency check. The pointer is null unless the
+                // checker is enabled AND this is one of its checkpoints, so the
+                // capture costs nothing on the production path.
+                KrylovBasisCapture jvp_check_basis;
+                const bool jvp_check_this_iter =
+                    stage4_jvp_check_enabled() &&
+                    ((stage == 4 && newton_iter <= 1) ||
+                     (stage == 3 && newton_iter == 0));
+
                 // FGMRES ROUTING (full-repo review P1-1, mandatory — not a knob):
                 // any right-preconditioned solve MUST use FGMRES, because the
                 // production preconditioner wrapper can change mid-solve (ratio-guard
@@ -5962,7 +6005,8 @@ public:
                           layout_initialized_ ? &cached_layout_ : nullptr,
                           halo_mask_initialized_ ? &halo_mask_ : nullptr,
                           options_.periodic_x,
-                          options_.periodic_y)
+                          options_.periodic_y,
+                          jvp_check_this_iter ? &jvp_check_basis : nullptr)
                     : krylov_methods::solve_gmres(
                           gmres_op,
                           gmres_rhs,
@@ -6081,6 +6125,311 @@ public:
                 gmres_raw_rel_error = gmres_result.rel_error;
                 gmres_rel_error = std::clamp(gmres_raw_rel_error, 0.0f, 1.0f);
                 stats_.total_krylov_iterations += gmres_result.iterations;
+
+                // ============================================================
+                // PR 9A: opt-in directional consistency check of the ACTUAL
+                // production linearization at this Newton iterate
+                // (WRF_SDIRK3_STAGE4_JVP_CHECK=1). Two independent layers:
+                //   operator=J : the production JVP of compute_rhs at U_eval
+                //                (extracted from the production matvec as
+                //                d - A_unscaled(d), so it is EXACTLY what the
+                //                solve used) vs the central-FD directional
+                //                derivative of compute_rhs at U_eval;
+                //   operator=A : the operator FGMRES actually iterated
+                //                (gmres_op — including the S/S^-1 conjugation
+                //                — for scaled-space directions V/Z;
+                //                apply_jacobian for K-space directions) vs a
+                //                central FD of the assembled Newton residual
+                //                R(K') = K' - F(U_stage + dt*gamma*K') in the
+                //                same coordinate frame.
+                // Directions: the actual Arnoldi V_j and preconditioned Z_j
+                // (first and last captured), the returned dK, and a fixed
+                // deterministic block-balanced probe. Full epsilon ladder per
+                // direction/operator; per-block rows at the best epsilon.
+                // Side-effect isolation: compute_rhs is invoked directly on
+                // detached clones (the loop's jacobian_cache_ bookkeeping is
+                // bypassed); the preconditioner is never invoked; the
+                // loop-local JVP telemetry counters are snapshot/restored;
+                // FD and metric math run under NoGradGuard. Refused with a
+                // skip record when omega_update_ref_per_newton is set, since
+                // compute_rhs then rewrites the tile's U_ref_stage_ member.
+                if (jvp_check_this_iter) {
+                    if (wrf::sdirk3::g_sdirk3_config.omega_update_ref_per_newton) {
+                        emit_stage_diag([&](std::ostream& os) {
+                            os << "SDIRK3_STAGE4_JVP_DIAG ts=" << global_timestep_
+                               << " stage=" << stage
+                               << " newton_iter=" << newton_iter
+                               << " skipped=1 reason=omega_update_ref_per_newton\n";
+                        });
+                    } else {
+                        // Snapshot the loop-local JVP telemetry (restored at
+                        // the end of this block); a high call count also mutes
+                        // the first-N-call [JVP DIAG]/[JVP FD] logs during the
+                        // shadow evaluations.
+                        const int sv_calls = jvp_call_count;
+                        const int sv_ad = jvp_ad_calls;
+                        const int sv_fd = jvp_fd_calls;
+                        const int sv_fdf = jvp_fd_forward_calls;
+                        const int sv_fdc = jvp_fd_central_calls;
+                        const int sv_ea = jvp_eps_auto_calls;
+                        const int sv_em = jvp_eps_manual_calls;
+                        const int sv_es = jvp_eps_sample_count;
+                        const double sv_esum = jvp_eps_sum;
+                        const float sv_emin = jvp_eps_min;
+                        const float sv_emax = jvp_eps_max;
+                        const double sv_ms = total_jvp_time_ms;
+                        jvp_call_count = std::max(jvp_call_count, 1000);
+
+                        struct JvpCheckDir {
+                            const char* label;
+                            int arnoldi_j;
+                            torch::Tensor d;
+                            bool scaled_space;
+                        };
+                        std::vector<JvpCheckDir> check_dirs;
+                        auto add_basis_dirs = [&](const std::vector<torch::Tensor>& basis,
+                                                  const char* label) {
+                            if (!basis.empty()) {
+                                check_dirs.push_back({label, 0, basis.front(), true});
+                                if (basis.size() > 1) {
+                                    check_dirs.push_back(
+                                        {label, static_cast<int>(basis.size()) - 1,
+                                         basis.back(), true});
+                                }
+                            }
+                        };
+                        add_basis_dirs(jvp_check_basis.V, "V");
+                        add_basis_dirs(jvp_check_basis.Z, "Z");
+                        if (dK.defined() && diag_norm(dK) > 0.0f) {
+                            check_dirs.push_back({"dK", -1, dK.detach().clone(), false});
+                        }
+                        {
+                            // Fixed deterministic block-balanced probe. Built
+                            // from a hash, not torch RNG, so no generator state
+                            // — global or local — is created or consumed.
+                            torch::NoGradGuard no_grad;
+                            auto idx = torch::arange(
+                                K.numel(), torch::TensorOptions()
+                                               .dtype(torch::kFloat32)
+                                               .device(torch::kCPU));
+                            auto probe = torch::sin(idx * 12.9898f + 78.233f);
+                            if (layout_initialized_) {
+                                for (const auto& blk : cached_layout_.blocks) {
+                                    if (blk.start + blk.size <= probe.numel()) {
+                                        auto slc = probe.slice(
+                                            0, blk.start, blk.start + blk.size);
+                                        auto rms = slc.square().mean().sqrt()
+                                                       .clamp_min(1e-30f);
+                                        slc.div_(rms);
+                                    }
+                                }
+                            }
+                            check_dirs.push_back(
+                                {"random", -1,
+                                 probe.to(K.device()).to(K.dtype()), false});
+                        }
+
+                        const torch::Tensor K_base = K.detach().clone();
+                        const torch::Tensor Ueval_base = U_eval.detach().clone();
+                        const float K_ref_norm = diag_norm(K_base);
+                        const float U_ref_norm = diag_norm(Ueval_base);
+                        const float kEpsLadder[] =
+                            {1e-2f, 3e-3f, 1e-3f, 3e-4f, 1e-4f, 3e-5f, 1e-5f};
+
+                        // Side-effect-free residual replay: R(K') assembled
+                        // exactly as the Newton loop assembles it.
+                        auto shadow_residual =
+                            [&](const torch::Tensor& Kp) -> torch::Tensor {
+                            auto Up = (U_stage + dt * gamma * Kp).detach();
+                            return (Kp - compute_rhs(Up)).detach();
+                        };
+
+                        auto emit_row = [&](const char* dlabel, int aj,
+                                            const char* op, float eps_rel,
+                                            float eps_abs,
+                                            const torch::Tensor& prod,
+                                            const torch::Tensor& fd,
+                                            const char* block, int64_t bstart,
+                                            int64_t bsize) -> float {
+                            torch::NoGradGuard no_grad;
+                            auto pt = (bsize >= 0)
+                                ? prod.slice(0, bstart, bstart + bsize) : prod;
+                            auto ft = (bsize >= 0)
+                                ? fd.slice(0, bstart, bstart + bsize) : fd;
+                            auto stats = torch::stack({pt.norm(), ft.norm(),
+                                                       (pt - ft).norm(),
+                                                       (pt * ft).sum()})
+                                             .to(torch::kCPU);
+                            const float pn = stats[0].item<float>();
+                            const float fn = stats[1].item<float>();
+                            const float ae = stats[2].item<float>();
+                            const float denom = std::max({pn, fn, 1e-30f});
+                            const float re = ae / denom;
+                            const float cs = (pn > 0.0f && fn > 0.0f)
+                                ? stats[3].item<float>() / (pn * fn) : 0.0f;
+                            const bool fin = std::isfinite(pn) &&
+                                             std::isfinite(fn) &&
+                                             std::isfinite(ae);
+                            emit_stage_diag([&](std::ostream& os) {
+                                os << "SDIRK3_STAGE4_JVP_DIAG ts="
+                                   << global_timestep_
+                                   << " stage=" << stage
+                                   << " newton_iter=" << newton_iter
+                                   << " arnoldi_j=" << aj
+                                   << " direction=" << dlabel
+                                   << " operator=" << op
+                                   << std::scientific
+                                   << " epsilon=" << eps_rel
+                                   << " eps_abs=" << eps_abs
+                                   << " prod_norm=" << pn
+                                   << " fd_norm=" << fn
+                                   << " abs_err=" << ae
+                                   << " rel_err=" << re
+                                   << " cosine=" << cs
+                                   << std::defaultfloat
+                                   << " finite=" << (fin ? 1 : 0)
+                                   << " block=" << block
+                                   << "\n";
+                            });
+                            return re;
+                        };
+
+                        auto emit_block_rows = [&](const char* dlabel, int aj,
+                                                   const char* op, float eps_rel,
+                                                   float eps_abs,
+                                                   const torch::Tensor& prod,
+                                                   const torch::Tensor& fd) {
+                            if (!layout_initialized_) return;
+                            for (const auto& blk : cached_layout_.blocks) {
+                                if (blk.start + blk.size <= prod.numel()) {
+                                    emit_row(dlabel, aj, op, eps_rel, eps_abs,
+                                             prod, fd, blk.name.c_str(),
+                                             blk.start, blk.size);
+                                }
+                            }
+                        };
+
+                        for (const auto& cd : check_dirs) {
+                            torch::Tensor d_unscaled;
+                            {
+                                torch::NoGradGuard no_grad;
+                                d_unscaled =
+                                    (cd.scaled_space && scaling_initialized_)
+                                        ? (S_diag_ * cd.d).detach()
+                                        : cd.d.detach().clone();
+                            }
+                            const float d_norm = diag_norm(d_unscaled);
+                            if (!(d_norm > 0.0f) || !std::isfinite(d_norm)) {
+                                continue;
+                            }
+
+                            // Production operator values, called exactly as the
+                            // solve calls them (outputs detached immediately).
+                            torch::Tensor prod_A =
+                                (cd.scaled_space ? gmres_op(cd.d)
+                                                 : apply_jacobian(d_unscaled))
+                                    .detach();
+                            torch::Tensor prod_A_unscaled =
+                                cd.scaled_space
+                                    ? apply_jacobian(d_unscaled).detach()
+                                    : prod_A;
+                            torch::Tensor prod_J, w_dir;
+                            {
+                                torch::NoGradGuard no_grad;
+                                prod_J = (d_unscaled - prod_A_unscaled).detach();
+                                w_dir = (dt * gamma * d_unscaled).detach();
+                            }
+                            const float w_norm = diag_norm(w_dir);
+
+                            float bestJ_rel =
+                                std::numeric_limits<float>::infinity();
+                            float bestJ_eps_rel = 0.0f, bestJ_eps_abs = 0.0f;
+                            torch::Tensor bestJ_fd;
+                            for (float eps_rel : kEpsLadder) {
+                                const float eps_abs =
+                                    eps_rel * (1.0f + U_ref_norm) /
+                                    std::max(w_norm, 1e-30f);
+                                torch::Tensor fd_J;
+                                {
+                                    torch::NoGradGuard no_grad;
+                                    auto F_p = compute_rhs(
+                                        (Ueval_base + eps_abs * w_dir).detach());
+                                    auto F_m = compute_rhs(
+                                        (Ueval_base - eps_abs * w_dir).detach());
+                                    fd_J = ((F_p - F_m) / (2.0f * eps_abs))
+                                               .detach();
+                                }
+                                const float re = emit_row(
+                                    cd.label, cd.arnoldi_j, "J", eps_rel,
+                                    eps_abs, prod_J, fd_J, "global", -1, -1);
+                                if (re < bestJ_rel) {
+                                    bestJ_rel = re;
+                                    bestJ_eps_rel = eps_rel;
+                                    bestJ_eps_abs = eps_abs;
+                                    bestJ_fd = fd_J;
+                                }
+                            }
+                            if (bestJ_fd.defined()) {
+                                emit_block_rows(cd.label, cd.arnoldi_j, "J",
+                                                bestJ_eps_rel, bestJ_eps_abs,
+                                                prod_J, bestJ_fd);
+                            }
+
+                            float bestA_rel =
+                                std::numeric_limits<float>::infinity();
+                            float bestA_eps_rel = 0.0f, bestA_eps_abs = 0.0f;
+                            torch::Tensor bestA_fd;
+                            for (float eps_rel : kEpsLadder) {
+                                const float eps_abs =
+                                    eps_rel * (1.0f + K_ref_norm) /
+                                    std::max(d_norm, 1e-30f);
+                                torch::Tensor fd_A;
+                                {
+                                    torch::NoGradGuard no_grad;
+                                    auto R_p = shadow_residual(
+                                        (K_base + eps_abs * d_unscaled)
+                                            .detach());
+                                    auto R_m = shadow_residual(
+                                        (K_base - eps_abs * d_unscaled)
+                                            .detach());
+                                    fd_A = ((R_p - R_m) / (2.0f * eps_abs))
+                                               .detach();
+                                    if (cd.scaled_space &&
+                                        scaling_initialized_) {
+                                        fd_A = (S_inv_diag_ * fd_A).detach();
+                                    }
+                                }
+                                const float re = emit_row(
+                                    cd.label, cd.arnoldi_j, "A", eps_rel,
+                                    eps_abs, prod_A, fd_A, "global", -1, -1);
+                                if (re < bestA_rel) {
+                                    bestA_rel = re;
+                                    bestA_eps_rel = eps_rel;
+                                    bestA_eps_abs = eps_abs;
+                                    bestA_fd = fd_A;
+                                }
+                            }
+                            if (bestA_fd.defined()) {
+                                emit_block_rows(cd.label, cd.arnoldi_j, "A",
+                                                bestA_eps_rel, bestA_eps_abs,
+                                                prod_A, bestA_fd);
+                            }
+                        }
+
+                        jvp_call_count = sv_calls;
+                        jvp_ad_calls = sv_ad;
+                        jvp_fd_calls = sv_fd;
+                        jvp_fd_forward_calls = sv_fdf;
+                        jvp_fd_central_calls = sv_fdc;
+                        jvp_eps_auto_calls = sv_ea;
+                        jvp_eps_manual_calls = sv_em;
+                        jvp_eps_sample_count = sv_es;
+                        jvp_eps_sum = sv_esum;
+                        jvp_eps_min = sv_emin;
+                        jvp_eps_max = sv_emax;
+                        total_jvp_time_ms = sv_ms;
+                    }
+                }
 
                 if (!gmres_success) {
                     if (gmres_rel_error > 0.5f) {
