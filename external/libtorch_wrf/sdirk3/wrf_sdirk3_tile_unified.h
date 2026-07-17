@@ -20,6 +20,7 @@
 #include "wrf_sdirk3_pressure_gradient_vectorized.h"  // FIX 2025-01-11 Round58: For pg_detail::invalidateAllCaches()
 #include "wrf_sdirk3_tensor_cache.h"  // OPT Pass33+: For getThreadLocalTensorViewCache() in invalidateThreadLocalCachesOnly()
 #include "wrf_sdirk3_config.h"  // FIX Round122: For g_sdirk3_config.log_solver_pointer in tls_debug
+#include "wrf_sdirk3_ww_cp.h"   // PR 9C.2: WdampRuntimeContract + boundary policies
 #include "wrf_sdirk3_ad_halo_exchange.h"  // AD halo exchange for DA mode
 #include "wrf_sdirk3_ad_halo_utils.h"     // Full-halo utilities
 #include <memory>
@@ -1836,6 +1837,10 @@ private:
     bool mpi_info_set_ = false;  // Flag indicating setMPIProcessInfo was called
 
     // WRF tile and domain indices
+    // PR 9C.2: enabled W-damping runtime contract, resolved once per step
+    // BEFORE any Newton callback is constructed (topology + boundary
+    // authority; see resolve_wdamp_runtime_contract).
+    wrf::sdirk3::WdampRuntimeContract wdamp_contract_{};
     int its_ = 1, ite_ = 1, jts_ = 1, jte_ = 1, kts_ = 1, kte_ = 1;  // Tile indices
     int ids_ = 1, ide_ = 1, jds_ = 1, jde_ = 1, kds_ = 1, kde_ = 1;  // Domain indices
     int ims_ = 1, ime_ = 1, jms_ = 1, jme_ = 1, kms_ = 1, kme_ = 1;  // Memory indices

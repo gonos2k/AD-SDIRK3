@@ -44,6 +44,7 @@
 // class of defect this helper exists to remove.
 #include <torch/torch.h>
 #include <stdexcept>
+#include "wrf_sdirk3_contract_fail.h"
 #include <string>
 
 namespace wrf {
@@ -55,6 +56,76 @@ enum class WWCPBoundaryPolicy {
     HaloProvided,
     Unsupported
 };
+
+// PR 9C.2: the single authority that decides whether the ENABLED W-damping
+// parity path may run at all, and with which per-axis boundary policies.
+// Judged BEFORE any Newton callback is constructed, in the reviewer-fixed
+// order — and unsupported flags take PRIORITY over periodic/symmetric, so a
+// conflicting flag combination can never smuggle a guessed physical
+// boundary past the contract. Throws the stable marker on any violation;
+// returns {active=false} when the damping is simply disabled.
+struct WdampRuntimeContract {
+    bool active = false;
+    WWCPBoundaryPolicy x_policy = WWCPBoundaryPolicy::Unsupported;
+    WWCPBoundaryPolicy y_policy = WWCPBoundaryPolicy::Unsupported;
+};
+
+inline WdampRuntimeContract resolve_wdamp_runtime_contract(
+    bool w_damping_enabled,
+    int nprocx, int nprocy,
+    bool tile_covers_patch,
+    bool periodic_x, bool symmetric_xs, bool symmetric_xe,
+    bool open_xs, bool open_xe,
+    bool periodic_y, bool symmetric_ys, bool symmetric_ye,
+    bool open_ys, bool open_ye,
+    bool specified, bool nested, bool polar) {
+    if (!w_damping_enabled) {
+        return {};  // inactive: no constraint on topology or boundaries
+    }
+    if (nprocx * nprocy != 1) {
+        wdamp_geometry_fail(
+            "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: enabled W-damping on "
+            "a multi-rank decomposition — patch edges are internal seams "
+            "with no authoritative mass halo (HaloProvided is not "
+            "implemented)");
+    }
+    if (!tile_covers_patch) {
+        wdamp_geometry_fail(
+            "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: enabled W-damping on "
+            "an internal tile — this tile does not cover the rank patch, so "
+            "its edges are internal multi-tile seams, not physical "
+            "boundaries");
+    }
+    if (specified || nested || polar) {
+        wdamp_geometry_fail(
+            "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: enabled W-damping "
+            "with specified/nested/polar boundaries — no authoritative mass "
+            "halo policy exists for them");
+    }
+    const auto axis = [](bool open_s, bool open_e, bool periodic, bool sym_s,
+                         bool sym_e, const char* name) {
+        if (open_s || open_e) {
+            wdamp_geometry_fail(
+                std::string("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: "
+                            "enabled W-damping with an open ") +
+                name + "-boundary (takes priority over any periodic/"
+                "symmetric flag also set)");
+        }
+        if (periodic) return WWCPBoundaryPolicy::Periodic;
+        if (sym_s && sym_e) return WWCPBoundaryPolicy::SymmetricReplicate;
+        wdamp_geometry_fail(
+            std::string("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: enabled "
+                        "W-damping ") +
+            name + "-boundary is neither periodic nor two-sided symmetric");
+    };
+    WdampRuntimeContract c;
+    c.active = true;
+    c.x_policy = axis(open_xs, open_xe, periodic_x, symmetric_xs,
+                      symmetric_xe, "x");
+    c.y_policy = axis(open_ys, open_ye, periodic_y, symmetric_ys,
+                      symmetric_ye, "y");
+    return c;
+}
 
 inline const char* wwcp_policy_name(WWCPBoundaryPolicy p) {
     switch (p) {
@@ -92,14 +163,14 @@ inline torch::Tensor compute_wrf_ww_cp(
     if (!u.defined() || !v.defined() || !mup.defined() || !mub.defined() ||
         !c1h.defined() || !c2h.defined() || !dnw.defined() ||
         !msftx.defined() || !msfuy.defined() || !msfvx_inv.defined()) {
-        throw std::invalid_argument(
+        wdamp_input_fail(
             "SDIRK3_WDAMP_INVALID_INPUT: calc_ww_cp received an undefined "
             "tensor operand");
     }
     if (u.dim() != 3 || v.dim() != 3 || mup.dim() != 2 || mub.dim() != 2 ||
         msftx.dim() != 2 || msfuy.dim() != 2 || msfvx_inv.dim() != 2 ||
         c1h.dim() != 1 || c2h.dim() != 1 || dnw.dim() != 1) {
-        throw std::invalid_argument(
+        wdamp_input_fail(
             "SDIRK3_WDAMP_INVALID_INPUT: calc_ww_cp operand rank contract "
             "violated (u/v 3-D, mu/msf 2-D, c1h/c2h/dnw 1-D)");
     }
@@ -117,7 +188,7 @@ inline torch::Tensor compute_wrf_ww_cp(
         dnw.numel() != nz || msftx.size(0) != ny || msftx.size(1) != nx ||
         msfuy.size(0) != ny || msfuy.size(1) != nx + 1 ||
         msfvx_inv.size(0) != ny + 1 || msfvx_inv.size(1) != nx) {
-        throw std::invalid_argument(
+        wdamp_input_fail(
             "SDIRK3_WDAMP_INVALID_INPUT: calc_ww_cp operand shape contract "
             "violated (u[ny,nz,nx+1], v[ny+1,nz,nx], mu[ny,nx], msf* on "
             "their staggers, c1h/c2h/dnw exactly nz)");
@@ -128,7 +199,7 @@ inline torch::Tensor compute_wrf_ww_cp(
         for (const auto* t : {&u, &v, &mub, &c1h, &c2h, &dnw, &msftx, &msfuy,
                               &msfvx_inv}) {
             if (t->device() != dev || t->scalar_type() != dtp) {
-                throw std::invalid_argument(
+                wdamp_input_fail(
                     "SDIRK3_WDAMP_INVALID_INPUT: calc_ww_cp operands must "
                     "share one device and dtype");
             }
@@ -148,7 +219,7 @@ inline torch::Tensor compute_wrf_ww_cp(
                                  (~dnw.isfinite()).any()})
                        .to(torch::kCPU);
         if (bad.any().item<bool>()) {
-            throw std::invalid_argument(
+            wdamp_input_fail(
                 "SDIRK3_WDAMP_INVALID_INPUT: calc_ww_cp metric/coefficient "
                 "contract violated (msftx/msfuy/msfvx_inv/c1h/c2h/dnw must "
                 "be finite; msfuy strictly positive)");
@@ -160,7 +231,7 @@ inline torch::Tensor compute_wrf_ww_cp(
             p == WWCPBoundaryPolicy::SymmetricReplicate) {
             return;
         }
-        throw std::runtime_error(
+        wdamp_geometry_fail(
             std::string("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: "
                         "calc_ww_cp ") +
             axis + "-boundary policy '" + wwcp_policy_name(p) +

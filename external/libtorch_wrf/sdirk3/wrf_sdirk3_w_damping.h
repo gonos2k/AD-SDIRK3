@@ -33,6 +33,7 @@
 #include <torch/torch.h>
 #include <cmath>
 #include <stdexcept>
+#include "wrf_sdirk3_contract_fail.h"
 #include "wrf_sdirk3_rw_term_capture.h"
 
 namespace wrf {
@@ -72,14 +73,14 @@ inline torch::Tensor compute_w_damping_term(
     if (!(dt > 0.0f) || !std::isfinite(dt) || !std::isfinite(gate_threshold) ||
         !std::isfinite(excess_offset) || !std::isfinite(w_alpha) ||
         k_start < 0 || k_end <= k_start || k_end > nz_w) {
-        throw std::invalid_argument(
+        wdamp_input_fail(
             "SDIRK3_WDAMP_INVALID_INPUT: dt/gate/offset/alpha must be finite "
             "(dt>0) and 0<=k_start<k_end<=nz_w");
     }
     if (!ww_momentum.defined() || !w_velocity.defined() ||
         !mu_full.defined() || !c1f.defined() || !c2f.defined() ||
         !rdnw_interior.defined()) {
-        throw std::invalid_argument(
+        wdamp_input_fail(
             "SDIRK3_WDAMP_INVALID_INPUT: W_DAMP received an undefined "
             "tensor operand");
     }
@@ -92,7 +93,7 @@ inline torch::Tensor compute_w_damping_term(
         w_velocity.sizes() != ww_momentum.sizes() ||
         c1f.numel() < k_end || c2f.numel() < k_end ||
         !rdnw_interior.sizes().equals({1, n_interior, 1})) {
-        throw std::invalid_argument(
+        wdamp_input_fail(
             "SDIRK3_WDAMP_INVALID_INPUT: ww/w [ny,nz_w,nx], mu [ny,nx], "
             "rdnw_interior [1,k_end-k_start,1] shape contract violated "
             "(or c1f/c2f shorter than k_end)");
@@ -103,7 +104,7 @@ inline torch::Tensor compute_w_damping_term(
         for (const auto* t :
              {&w_velocity, &mu_full, &c1f, &c2f, &rdnw_interior}) {
             if (t->device() != dev || t->scalar_type() != dtp) {
-                throw std::invalid_argument(
+                wdamp_input_fail(
                     "SDIRK3_WDAMP_INVALID_INPUT: W_DAMP operands must share "
                     "one device and dtype");
             }
@@ -132,13 +133,13 @@ inline torch::Tensor compute_w_damping_term(
                        .to(torch::kCPU);
         auto bad_a = bad.accessor<bool, 1>();
         if (bad_a[0] || bad_a[1]) {
-            throw std::invalid_argument(
+            wdamp_input_fail(
                 "SDIRK3_WDAMP_INVALID_MASS: the W_DAMP denominator "
                 "c1f(k)*mu+c2f(k) must be finite and strictly positive at "
                 "every interior point");
         }
         if (bad_a[2] || bad_a[3] || bad_a[4]) {
-            throw std::invalid_argument(
+            wdamp_input_fail(
                 "SDIRK3_WDAMP_INVALID_INPUT: c1f/c2f/rdnw_interior must be "
                 "finite");
         }

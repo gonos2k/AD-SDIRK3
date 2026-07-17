@@ -5386,6 +5386,27 @@ vertical_coefficients:
     }
     
     try {
+        // PR 9C.2 commit 1: settle the enabled W-damping topology/boundary
+        // contract BEFORE any Newton callback exists. Multi-rank patches,
+        // internal tiles (tile != rank patch), and unsupported/conflicting
+        // lateral BCs are rejected here with the stable marker — never
+        // discovered mid-solve.
+        {
+            const bool tile_covers_patch =
+                its_ <= ids_ && ite_ >= ide_ - 1 &&
+                jts_ <= jds_ && jte_ >= jde_ - 1;
+            wdamp_contract_ = wrf::sdirk3::resolve_wdamp_runtime_contract(
+                wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
+                    wrf::sdirk3::g_sdirk3_config.implicit_wdamp,
+                nprocx_, nprocy_, tile_covers_patch,
+                config_flags_periodic_x_, config_flags_symmetric_xs_,
+                config_flags_symmetric_xe_, config_flags_open_xs_,
+                config_flags_open_xe_, config_flags_periodic_y_,
+                config_flags_symmetric_ys_, config_flags_symmetric_ye_,
+                config_flags_open_ys_, config_flags_open_ye_,
+                config_flags_specified_, config_flags_nested_,
+                config_flags_polar_);
+        }
         // ===== SHARED PRIORITY MAPPING (identical in stage loop + solveImplicitStage) =====
         int split_mode = wrf::sdirk3::g_sdirk3_config.imex_split_mode;
         if (split_mode == 0 && wrf::sdirk3::g_sdirk3_config.imex_enabled) {
@@ -17089,45 +17110,31 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 msfvx_.defined() && msfvx_.dim() == 2 &&
                 msfvx_.size(0) == nyv_i && msfvx_.size(1) == nx_i;
             if (!geometry_ok) {
-                // Review P1-2: the user asked for w_damping=1; integrating
-                // on WITHOUT the requested physics would be fail-open. The
-                // throw propagates to the existing fatal boundary (the
-                // C/Fortran ABI seal) — no marker-and-continue.
-                throw std::runtime_error(
+                // Review P1-2 (9C.2): the user asked for w_damping=1;
+                // integrating on WITHOUT the requested physics would be
+                // fail-open. In production this routes to the installed
+                // controlled-abort handler (the mpif90-linked executable
+                // cannot unwind C++ exceptions - measured, see
+                // wrf_sdirk3_contract_fail.h); offline it throws.
+                wrf::sdirk3::wdamp_geometry_fail(
                     "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: enabled WRF "
                     "W-damping requires the complete calc_ww_cp coefficient "
                     "and map-factor contract (c1h/c2h, mu_base, "
                     "msftx/msfuy/msfvx on their staggers)");
             }
-            try {
-            // PR 9C.1 P1-1: the muu/muv seam averages are a property of the
-            // LATERAL BOUNDARY CONDITION (WRF fills them from the memory
-            // halo), so the omega diagnosis receives an explicit per-axis
-            // policy derived from the wired WRF flags. Anything without an
-            // authoritative mass halo — open/specified/nested boundaries,
-            // or internal seams of a multi-rank decomposition — is
-            // UNSUPPORTED and the helper fails closed.
-            using wrf::sdirk3::WWCPBoundaryPolicy;
-            const auto wwcp_axis_policy = [](bool periodic, bool sym_s,
-                                             bool sym_e) {
-                if (periodic) return WWCPBoundaryPolicy::Periodic;
-                if (sym_s && sym_e)
-                    return WWCPBoundaryPolicy::SymmetricReplicate;
-                return WWCPBoundaryPolicy::Unsupported;
-            };
-            WWCPBoundaryPolicy wwcp_x_policy = wwcp_axis_policy(
-                config_flags_periodic_x_, config_flags_symmetric_xs_,
-                config_flags_symmetric_xe_);
-            WWCPBoundaryPolicy wwcp_y_policy = wwcp_axis_policy(
-                config_flags_periodic_y_, config_flags_symmetric_ys_,
-                config_flags_symmetric_ye_);
-            if (nprocx_ * nprocy_ != 1) {
-                // Multi-rank preflight: this tile's edges are internal
-                // seams whose true neighbor mass lives on other ranks; the
-                // helper has no authoritative halo for them.
-                wwcp_x_policy = WWCPBoundaryPolicy::HaloProvided;
-                wwcp_y_policy = WWCPBoundaryPolicy::HaloProvided;
+            // PR 9C.2 commit 1: the per-axis policies come from the runtime
+            // contract resolved at unifiedStep entry (topology + boundary
+            // authority, settled BEFORE the Newton callback existed). A
+            // stale/inactive contract here is a programming error, not a
+            // recoverable state.
+            if (!wdamp_contract_.active) {
+                wrf::sdirk3::wdamp_geometry_fail(
+                    "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: W-damping "
+                    "term reached without an active runtime contract "
+                    "(preflight did not run)");
             }
+            const auto wwcp_x_policy = wdamp_contract_.x_policy;
+            const auto wwcp_y_policy = wdamp_contract_.y_policy;
             torch::Tensor ww;
             {
                 auto dev = u.device();
@@ -17167,21 +17174,31 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     ? w_crit_cfl
                     : wrf::sdirk3::kWrfWBeta;
 
+            // PR 9C.2 (test-only, env-gated, default OFF): dynamic-state
+            // fault injection so the INTEGRATION negatives can prove the
+            // controlled fatal routing on contract violations that only a
+            // live state can produce. "mass" poisons the mass argument,
+            // "rdnw" poisons the vertical metric. Absent env => untouched.
+            torch::Tensor damp_mu_arg = mu_full;
+            torch::Tensor damp_rdnw_arg = rdnw_int;
+            if (const char* fault =
+                    std::getenv("WRF_SDIRK3_WDAMP_FAULT_INJECT")) {
+                if (std::strcmp(fault, "mass") == 0) {
+                    damp_mu_arg = -mu_full;
+                } else if (std::strcmp(fault, "rdnw") == 0) {
+                    damp_rdnw_arg = rdnw_int.clone();
+                    damp_rdnw_arg.index_put_(
+                        {0, 0, 0},
+                        std::numeric_limits<float>::infinity());
+                }
+            }
             auto w_damp_padded = wrf::sdirk3::compute_w_damping_term(
-                ww, w, mu_full, c1f_, c2f_, rdnw_int, dt, w_alpha,
+                ww, w, damp_mu_arg, c1f_, c2f_, damp_rdnw_arg, dt, w_alpha,
                 gate_threshold, w_crit_cfl, k_start, k_end, nz_w_);
             rw_tend = rw_tend - w_damp_padded;
             {
                 auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
                 rw_cap2.add("w_damp_padded", w_damp_padded);
-            }
-            } catch (const std::invalid_argument& e) {
-                // Review P1-2: contract violations are FATAL, not skipped —
-                // rethrow with call-site context, keeping the stable marker
-                // at the front of the message for the integration contract.
-                throw std::runtime_error(
-                    std::string(e.what()) +
-                    " [enabled W-damping, computeUnifiedRHS]");
             }
         }
         
