@@ -62,7 +62,13 @@ REGISTRY        =    Registry
 CC_TOOLS_CFLAGS = CONFIGURE_NMM_CORE
 
 LIB             =    $(LIB_BUNDLED) $(LIB_EXTERNAL) $(LIB_LOCAL) $(LIB_WRF_HYDRO) $(LIB_EXTRA) CONFIGURE_CTSM_LIB
-LDFLAGS         =    $(OMP) $(FCFLAGS) $(LDFLAGS_LOCAL) CONFIGURE_LDFLAGS
+# PR 9C.3 (P0-EH): LD_FCFLAGS defaults to the historical $(FCFLAGS) so every
+# stanza that links with the Fortran driver is byte-identical to before. A
+# stanza that sets a C++ final linker (LD = g++/clang++) overrides it,
+# because clang errors on Fortran-only flags (-ffree-form, -fconvert=...)
+# at link time.
+LD_FCFLAGS      ?=   $(FCFLAGS)
+LDFLAGS         =    $(OMP) $(LD_FCFLAGS) $(LDFLAGS_LOCAL) CONFIGURE_LDFLAGS
 ENVCOMPDEFS     =    CONFIGURE_COMPILEFLAGS
 CPPFLAGS        =    $(ARCHFLAGS) $(ENVCOMPDEFS) -I$(LIBINCLUDE) $(TRADFLAG) CONFIGURE_COMMS_INCLUDE
 NETCDFPATH      =    CONFIGURE_NETCDF_PATH

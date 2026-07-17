@@ -2363,13 +2363,20 @@ DM_FC           =       mpif90
 DM_CC           =       mpicc
 FC              =       time $(DM_FC)
 CC              =       $(DM_CC) -DFSEEKO_OK 
-LD              =       $(FC)
+# PR 9C.3 (P0-EH, measured): the gfortran/mpif90 final link CANNOT unwind
+# C++ exceptions on this toolchain (a same-TU try/catch still terminates;
+# see external/libtorch_wrf/sdirk3/eh_link_contract/). The final link is
+# therefore driven by the C++ compiler, with the Fortran and MPI runtimes
+# (from `mpif90 -show`) made explicit below, and LD_FCFLAGS overridden so
+# Fortran-only compile flags never reach the C++ link driver.
+LD              =       g++
+LD_FCFLAGS      =      
 RWORDSIZE       =       $(NATIVE_RWORDSIZE)
 PROMOTION       =       #-fdefault-real-8
 ARCH_LOCAL      =       -DNONSTANDARD_SYSTEM_SUBR -DMACOS  -DWRF_USE_CLM $(NETCDF4_IO_OPTS) -DUSE_SDIRK3 -DDM_PARALLEL
 CFLAGS_LOCAL    =       -w -O3 -c -DMACOS -DRPC_TYPES=1 -DDM_PARALLEL -DUSE_SDIRK3 -I$(WRF_SRC_ROOT_DIR)/external/libtorch_wrf/sdirk3
 CXXFLAGS        =       -std=c++17 -O3 -c -DMACOS -DDMPARALLEL -DUSE_SDIRK3 -I$(WRF_SRC_ROOT_DIR)/external/libtorch_wrf/sdirk3 -I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include -I/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/include/torch/csrc/api/include -I/opt/homebrew/include
-LDFLAGS_LOCAL   =       -L$(WRF_SRC_ROOT_DIR)/external/libtorch_wrf/sdirk3 -lwrf_sdirk3_libtorch -L/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib -ltorch -ltorch_cpu -lc10 -Wl,-rpath,/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib -L/opt/homebrew/opt/llvm/lib/c++ -lc++ -lc++abi -Wl,-rpath,/opt/homebrew/opt/llvm/lib/c++
+LDFLAGS_LOCAL   =       -L$(WRF_SRC_ROOT_DIR)/external/libtorch_wrf/sdirk3 -lwrf_sdirk3_libtorch -L/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib -ltorch -ltorch_cpu -lc10 -Wl,-rpath,/opt/homebrew/opt/pytorch/libexec/lib/python3.14/site-packages/torch/lib -L/opt/homebrew/opt/gcc/lib/gcc/current -lgfortran -lquadmath -Wl,-rpath,/opt/homebrew/opt/gcc/lib/gcc/current -L/opt/homebrew/opt/open-mpi/lib -lmpi_usempif08 -lmpi_usempi_ignore_tkr -lmpi_mpifh -lmpi -Wl,-rpath,/opt/homebrew/opt/open-mpi/lib
 CPLUSPLUSLIB    =       -lc++
 ESMF_LDFLAG     =       $(CPLUSPLUSLIB)
 FCOPTIM         =       -O2 -ftree-vectorize -funroll-loops
