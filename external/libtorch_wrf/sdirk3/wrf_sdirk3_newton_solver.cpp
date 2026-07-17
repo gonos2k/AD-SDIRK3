@@ -50,6 +50,7 @@
 #include "wrf_sdirk3_config.h"
 #include "wrf_sdirk3_jvp_autograd.h"
 #include "wrf_sdirk3_jvp_fwad_or_fd.h"
+#include "wrf_sdirk3_rw_term_capture.h"  // PR 9B: rw term bisection
 #include "wrf_sdirk3_autograd_utils.h"
 #include "wrf_sdirk3_unified_preconditioner.h"  // v20.5: For set_stage_state()
 #include <torch/torch.h>
@@ -617,6 +618,208 @@ static bool run_purity_probe(const Context& c, const torch::Tensor& w_dir) {
     return pure;
 }
 
+// PR 9B commit 2: term-level bisection of the rw tendency at the actual
+// operand. Captures every separable rw term inside dedicated compute_rhs
+// calls (primal, production forward-dual, and +/- FD states), verifies the
+// two closures (sum of primal terms ~= assembled rw tendency; sum of term
+// tangents ~= full production rw tangent), and compares each term's
+// production fwAD tangent against central/plus/minus FD. Emits
+// SDIRK3_RW_TERM_DIAG records via the line-atomic helper.
+static void run_rw_term_bisection(const Context& c) {
+    auto& cap = rw_term_capture_slot();
+    using Terms = std::vector<std::pair<std::string, torch::Tensor>>;
+
+    // Fixed deterministic block-balanced probe (w-rich; same hash as the
+    // direction loop) mapped to U-space: w_dir = dt*gamma*probe.
+    torch::Tensor w_dir;
+    {
+        torch::NoGradGuard no_grad;
+        auto idx = torch::arange(c.K.numel(),
+                                 torch::TensorOptions()
+                                     .dtype(torch::kFloat32)
+                                     .device(torch::kCPU));
+        auto probe = torch::sin(idx * 12.9898f + 78.233f);
+        if (c.layout) {
+            for (const auto& blk : c.layout->blocks) {
+                if (blk.start + blk.size <= probe.numel()) {
+                    auto slc = probe.slice(0, blk.start, blk.start + blk.size);
+                    auto rms = slc.square().mean().sqrt().clamp_min(1e-30f);
+                    slc.div_(rms);
+                }
+            }
+        }
+        w_dir = (c.dt * c.gamma *
+                 probe.to(c.K.device()).to(c.K.dtype())).detach();
+    }
+    const float U_ref = diag_norm(c.U_eval);
+    const float w_norm = diag_norm(w_dir);
+
+    auto find_term = [](const Terms& t, const char* name) -> torch::Tensor {
+        for (const auto& kv : t)
+            if (kv.first == name) return kv.second;
+        return torch::Tensor();
+    };
+
+    auto emit_term_row = [&](const char* term, const char* fdlabel,
+                             float eps_rel, float eps_abs,
+                             const torch::Tensor& prod,
+                             const torch::Tensor& fd) {
+        torch::NoGradGuard no_grad;
+        if (!prod.defined() || !fd.defined()) return;
+        auto stats = torch::stack({prod.norm(), fd.norm(), (prod - fd).norm(),
+                                   (prod * fd).sum()}).to(torch::kCPU);
+        const float pn = stats[0].item<float>();
+        const float fn = stats[1].item<float>();
+        const float ae = stats[2].item<float>();
+        const float re = ae / std::max({pn, fn, 1e-30f});
+        const float cs = (pn > 0.f && fn > 0.f)
+            ? stats[3].item<float>() / (pn * fn) : 0.0f;
+        const bool fin = std::isfinite(pn) && std::isfinite(fn) &&
+                         std::isfinite(ae);
+        emit_stage_diag([&](std::ostream& os) {
+            os << "SDIRK3_RW_TERM_DIAG ts=" << c.ts
+               << " stage=" << c.stage << " newton_iter=" << c.newton_iter
+               << " term=" << term
+               << " fd=" << fdlabel
+               << std::scientific
+               << " epsilon=" << eps_rel
+               << " eps_abs=" << eps_abs
+               << " prod_norm=" << pn
+               << " fd_norm=" << fn
+               << " abs_err=" << ae
+               << " rel_err=" << re
+               << " cosine=" << cs
+               << std::defaultfloat
+               << " finite=" << (fin ? 1 : 0)
+               << "\n";
+        });
+    };
+
+    // Capture the rw terms of one plain evaluation (detached clones).
+    auto capture_eval = [&](const torch::Tensor& U) -> Terms {
+        cap.reset();
+        cap.armed = true;
+        auto F = c.compute_rhs(U);
+        cap.armed = false;
+        Terms out;
+        {
+            torch::NoGradGuard no_grad;
+            for (const auto& kv : cap.terms)
+                out.emplace_back(kv.first, kv.second.detach().clone());
+        }
+        cap.reset();
+        (void)F;
+        return out;
+    };
+
+    // ---- 1) primal terms + closure #1 (sum of terms == assembled rw) ----
+    Terms t0 = capture_eval(c.U_eval);
+    {
+        torch::NoGradGuard no_grad;
+        auto pre = find_term(t0, "rw_pre_pgf");
+        auto pgf = find_term(t0, "w_pgf_buoy_all");
+        auto top = find_term(t0, "w_top_contrib");
+        auto prem = find_term(t0, "rw_pre_mask");
+        auto postm = find_term(t0, "rw_post_mask");
+        auto damp = find_term(t0, "w_damp_padded");
+        auto fin = find_term(t0, "rw_tend_final");
+        auto pg = find_term(t0, "pg");
+        auto b1 = find_term(t0, "buoy_mu1");
+        auto b2 = find_term(t0, "buoy_mu2");
+        if (pg.defined() && pgf.defined()) {
+            emit_term_row("closure_subterms_vs_pgf", "closure", 0, 0,
+                          (pg - b1 - b2), pgf);
+        }
+        if (pre.defined() && pgf.defined() && top.defined() && prem.defined()) {
+            emit_term_row("closure_sum_vs_premask", "closure", 0, 0,
+                          (pre + pgf + top), prem);
+        }
+        if (postm.defined() && fin.defined()) {
+            auto rhs = damp.defined() ? (postm - damp) : postm;
+            emit_term_row("closure_postmask_vs_final", "closure", 0, 0,
+                          rhs, fin);
+        }
+    }
+
+    // ---- 2) production per-term tangents (fwAD, production mechanics) ----
+    Terms tg;
+    {
+        torch::NoGradGuard no_grad;
+        wrf::sdirk3::jvp_detail::DualLevelGuard dual_guard;
+        auto u_dual = torch::_make_dual(c.U_eval, w_dir,
+                                        static_cast<int64_t>(dual_guard.level()));
+        cap.reset();
+        cap.armed = true;
+        auto F_dual = c.compute_rhs(u_dual);
+        cap.armed = false;
+        for (const auto& kv : cap.terms) {
+            auto parts = torch::_unpack_dual(
+                kv.second, static_cast<int64_t>(dual_guard.level()));
+            auto tgt = std::get<1>(parts);
+            tg.emplace_back(kv.first,
+                            tgt.defined()
+                                ? tgt.detach().clone()
+                                : torch::zeros_like(std::get<0>(parts))
+                                      .detach());
+        }
+        cap.reset();
+        (void)F_dual;
+    }
+    // Closure #2: sum of term tangents == full production rw tangent.
+    {
+        torch::NoGradGuard no_grad;
+        auto pg = find_term(tg, "pg");
+        auto b1 = find_term(tg, "buoy_mu1");
+        auto b2 = find_term(tg, "buoy_mu2");
+        auto pgf = find_term(tg, "w_pgf_buoy_all");
+        auto postm = find_term(tg, "rw_post_mask");
+        auto damp = find_term(tg, "w_damp_padded");
+        auto fin = find_term(tg, "rw_tend_final");
+        if (pg.defined() && pgf.defined()) {
+            emit_term_row("closure_tangent_subterms_vs_pgf", "closure", 0, 0,
+                          (pg - b1 - b2), pgf);
+        }
+        if (postm.defined() && fin.defined()) {
+            auto rhs = damp.defined() ? (postm - damp) : postm;
+            emit_term_row("closure_tangent_postmask_vs_final", "closure", 0, 0,
+                          rhs, fin);
+        }
+    }
+
+    // ---- 3) per-term FD ladder: central + one-sided against the tangent ----
+    // Extended far below sign_smooth_delta (1e-3): the W-damping chain's
+    // smooth-sign has curvature ~1/delta^2, so its FD converges only once the
+    // per-point w perturbation drops well below delta — the discriminating
+    // regime between "tangent defect" and "FD truncation artifact".
+    const float kTermEps[] = {1e-3f, 1e-4f, 1e-5f, 1e-6f, 1e-7f, 1e-8f, 1e-9f};
+    for (float eps_rel : kTermEps) {
+        const float eps_abs = eps_rel * (1.0f + U_ref) /
+                              std::max(w_norm, 1e-30f);
+        Terms tp, tm;
+        {
+            torch::NoGradGuard no_grad;
+            tp = capture_eval((c.U_eval + eps_abs * w_dir).detach());
+            tm = capture_eval((c.U_eval - eps_abs * w_dir).detach());
+        }
+        for (const auto& kv : tg) {
+            torch::NoGradGuard no_grad;
+            auto p = find_term(tp, kv.first.c_str());
+            auto m = find_term(tm, kv.first.c_str());
+            auto z = find_term(t0, kv.first.c_str());
+            if (!p.defined() || !m.defined() || !z.defined()) continue;
+            auto central = ((p - m) / (2.0f * eps_abs)).detach();
+            auto plus = ((p - z) / eps_abs).detach();
+            auto minus = ((z - m) / eps_abs).detach();
+            emit_term_row(kv.first.c_str(), "central", eps_rel, eps_abs,
+                          kv.second, central);
+            emit_term_row(kv.first.c_str(), "plus", eps_rel, eps_abs,
+                          kv.second, plus);
+            emit_term_row(kv.first.c_str(), "minus", eps_rel, eps_abs,
+                          kv.second, minus);
+        }
+    }
+}
+
 static void run_directional_consistency_check(const Context& c) {
     struct Dir {
         const char* label;
@@ -752,6 +955,10 @@ static void run_directional_consistency_check(const Context& c) {
             },
             K_ref, d_norm);
     }
+
+    // PR 9B commit 2: rw term-level bisection at the same (purity-gated)
+    // operand.
+    run_rw_term_bisection(c);
 }
 
 }  // namespace jvp_check
