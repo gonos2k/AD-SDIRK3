@@ -6,6 +6,7 @@
 // cases is asserted so silent coverage shrink fails the test.
 #include <torch/torch.h>
 #include <atomic>
+#include <memory>
 #include <cstdio>
 #include <stdexcept>
 #include <string>
@@ -160,8 +161,49 @@ int main() {
               "unexpected w_damp_padded detected");
     }
 
+    // (6) PR 9B.2 P1-1: post-take overlap — a scope kept alive past its
+    //     take() must never disarm or clear a later capture.
+    {
+        auto s1 = std::make_unique<RwTermCaptureScope>();
+        check(s1->armed_ok(), "overlap: scope1 arms");
+        rw_term_capture_slot().add("first", torch::ones({2}));
+        auto taken1 = s1->take();
+        check(taken1.size() == 1 && taken1[0].first == "first",
+              "overlap: scope1 takes its own term");
+        RwTermCaptureScope s2;
+        check(s2.armed_ok(), "overlap: post-take scope2 arms");
+        rw_term_capture_slot().add("second", torch::ones({2}));
+        s1.reset();  // scope1 destructor runs while scope2 is armed
+        check(rw_term_capture_slot().armed,
+              "overlap: scope2 still armed after scope1 destruction");
+        auto taken2 = s2.take();
+        check(taken2.size() == 1 && taken2[0].first == "second",
+              "overlap: scope2 terms preserved across scope1 destruction");
+    }
+
+    // (7) PR 9B.2 P1-2: undefined captured tensors fail closed BY NAME.
+    {
+        auto undef = full_inventory(true);
+        undef[2].second = torch::Tensor();  // pg captured but undefined
+        check(validate_rw_term_inventory(undef, true).find("undefined:pg") !=
+                  std::string::npos,
+              "undefined required term detected by name");
+
+        auto undef_opt = full_inventory(true);
+        undef_opt.back().second = torch::Tensor();  // w_damp_padded undefined
+        check(validate_rw_term_inventory(undef_opt, true).find(
+                  "undefined:w_damp_padded") != std::string::npos,
+              "undefined optional w_damp_padded detected by name");
+
+        auto mixed = full_inventory(true);
+        mixed.emplace_back("pg", torch::Tensor());  // defined + undefined pair
+        check(validate_rw_term_inventory(mixed, true).find("duplicate:pg") !=
+                  std::string::npos,
+              "defined+undefined pair under one name is still a duplicate");
+    }
+
     // Case-count ratchet: exactly this many checks must have executed.
-    const int kExpectedCases = 22;
+    const int kExpectedCases = 30;
     if (g_cases != kExpectedCases) {
         std::printf("FAIL: case-count ratchet: executed %d cases, expected %d\n",
                     g_cases, kExpectedCases);

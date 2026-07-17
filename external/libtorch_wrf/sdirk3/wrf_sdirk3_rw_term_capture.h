@@ -68,8 +68,13 @@ class RwTermCaptureScope {
     bool armed_ok() const { return owned_; }
 
     // Disarm and move the captured terms out (normal completion path).
+    // PR 9B.2 (P1-1): ownership is relinquished FIRST — after take() this
+    // scope's destructor is a no-op, so a later scope armed on the same
+    // thread (while this object is still alive) can never be disarmed or
+    // cleared by it.
     std::vector<std::pair<std::string, torch::Tensor>> take() {
         if (!owned_) return {};
+        owned_ = false;
         slot_.armed = false;
         auto out = std::move(slot_.terms);
         slot_.reset();
@@ -83,10 +88,16 @@ class RwTermCaptureScope {
 
 // Expected inventory of one ImplicitOnly rw capture. w_damp_padded is
 // present only when the implicit W-damping gate is active. Returns an empty
-// string when the inventory is complete and duplicate-free; otherwise a
-// human-readable reason ("missing:<name>", "duplicate:<name>",
-// "unknown:<name>", comma-joined) for the fail-close
-// SDIRK3_RW_TERM_CAPTURE_INCOMPLETE marker.
+// string when the inventory is complete, duplicate-free, and every captured
+// tensor is DEFINED; otherwise a human-readable reason ("missing:<name>",
+// "duplicate:<name>", "undefined:<name>", "unknown:<name>", comma-joined)
+// for the fail-close SDIRK3_RW_TERM_CAPTURE_INCOMPLETE marker.
+//
+// PR 9B.2 (P1-2): total and defined counts are tracked separately —
+// total==0 -> missing, total>1 -> duplicate (even when one copy is
+// undefined), total==1 && defined==0 -> undefined. Callers MUST run this on
+// the RAW captured terms BEFORE any detach().clone() or _unpack_dual(),
+// which would throw on an undefined tensor instead of failing closed.
 inline std::string validate_rw_term_inventory(
     const std::vector<std::pair<std::string, torch::Tensor>>& terms,
     bool expect_wdamp) {
@@ -102,22 +113,33 @@ inline std::string validate_rw_term_inventory(
         if (!reason.empty()) reason += ",";
         reason += r;
     };
-    auto count_of = [&](const char* name) {
-        int n = 0;
-        for (const auto& kv : terms)
-            if (kv.first == name) ++n;
-        return n;
+    struct Counts {
+        int total = 0;
+        int defined = 0;
+    };
+    auto stats_of = [&](const char* name) {
+        Counts c;
+        for (const auto& kv : terms) {
+            if (kv.first == name) {
+                ++c.total;
+                if (kv.second.defined()) ++c.defined;
+            }
+        }
+        return c;
     };
     for (const char* name : kRequired) {
-        const int n = count_of(name);
-        if (n == 0) append(std::string("missing:") + name);
-        if (n > 1) append(std::string("duplicate:") + name);
+        const Counts c = stats_of(name);
+        if (c.total == 0) append(std::string("missing:") + name);
+        if (c.total > 1) append(std::string("duplicate:") + name);
+        if (c.total == 1 && c.defined == 0)
+            append(std::string("undefined:") + name);
     }
     {
-        const int n = count_of("w_damp_padded");
-        if (expect_wdamp && n == 0) append("missing:w_damp_padded");
-        if (!expect_wdamp && n > 0) append("unexpected:w_damp_padded");
-        if (n > 1) append("duplicate:w_damp_padded");
+        const Counts c = stats_of("w_damp_padded");
+        if (expect_wdamp && c.total == 0) append("missing:w_damp_padded");
+        if (!expect_wdamp && c.total > 0) append("unexpected:w_damp_padded");
+        if (c.total > 1) append("duplicate:w_damp_padded");
+        if (c.total == 1 && c.defined == 0) append("undefined:w_damp_padded");
     }
     for (const auto& kv : terms) {
         bool known = kv.first == "w_damp_padded";
