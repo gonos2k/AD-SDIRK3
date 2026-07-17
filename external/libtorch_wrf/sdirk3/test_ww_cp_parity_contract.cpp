@@ -107,8 +107,10 @@ torch::Tensor simplified_ww(const torch::Tensor& u, const torch::Tensor& v,
     auto onesT = torch::ones({ny, nx}, u.options());
     auto onesU = torch::ones({ny, nx + 1}, u.options());
     auto onesV = torch::ones({ny + 1, nx}, u.options());
-    return wrf::sdirk3::compute_wrf_ww_cp(u, v, mup, mub, unit1, zero1, dnw,
-                                          rdx, rdy, onesT, onesU, onesV);
+    return wrf::sdirk3::compute_wrf_ww_cp(
+        u, v, mup, mub, unit1, zero1, dnw, rdx, rdy, onesT, onesU, onesV,
+        wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate,
+        wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate);
 }
 
 struct Fixture {
@@ -134,10 +136,14 @@ struct Fixture {
         auto i2v = torch::arange((ny + 1) * nx, opt).reshape({ny + 1, nx});
         msfvx_inv = 1.0f / (1.0f + 0.07f * torch::sin(i2v * 2.1f));
     }
-    torch::Tensor prod() const {
+    torch::Tensor prod(wrf::sdirk3::WWCPBoundaryPolicy xp =
+                           wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate,
+                       wrf::sdirk3::WWCPBoundaryPolicy yp =
+                           wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate)
+        const {
         return wrf::sdirk3::compute_wrf_ww_cp(u, v, mup, mub, c1h, c2h, dnw,
                                               rdx, rdy, msftx, msfuy,
-                                              msfvx_inv);
+                                              msfvx_inv, xp, yp);
     }
     torch::Tensor ref() const {
         return scalar_ww_cp(u, v, mup, mub, c1h, c2h, dnw, rdx, rdy, msftx,
@@ -174,9 +180,11 @@ int main() {
         auto onesT = torch::ones({fx.ny, fx.nx}, opt);
         auto onesU = torch::ones({fx.ny, fx.nx + 1}, opt);
         auto onesV = torch::ones({fx.ny + 1, fx.nx}, opt);
-        auto p = wrf::sdirk3::compute_wrf_ww_cp(fx.u, fx.v, fx.mup, fx.mub,
-                                                unit1, zero1, fx.dnw, fx.rdx,
-                                                fx.rdy, onesT, onesU, onesV);
+        auto p = wrf::sdirk3::compute_wrf_ww_cp(
+            fx.u, fx.v, fx.mup, fx.mub, unit1, zero1, fx.dnw, fx.rdx, fx.rdy,
+            onesT, onesU, onesV,
+            wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate,
+            wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate);
         auto r = scalar_ww_cp(fx.u, fx.v, fx.mup, fx.mub, unit1, zero1,
                               fx.dnw, fx.rdx, fx.rdy, onesT, onesU, onesV);
         check(rel_err(p, r) <= 1e-5f, "unit-metric limit matches reference");
@@ -188,10 +196,11 @@ int main() {
         auto u2 = fx.u.clone();
         const int iface = 2;  // interior u-point
         u2.select(2, iface) += 1.0f;
-        auto d = (wrf::sdirk3::compute_wrf_ww_cp(u2, fx.v, fx.mup, fx.mub,
-                                                 fx.c1h, fx.c2h, fx.dnw,
-                                                 fx.rdx, fx.rdy, fx.msftx,
-                                                 fx.msfuy, fx.msfvx_inv) -
+        auto d = (wrf::sdirk3::compute_wrf_ww_cp(
+                      u2, fx.v, fx.mup, fx.mub, fx.c1h, fx.c2h, fx.dnw,
+                      fx.rdx, fx.rdy, fx.msftx, fx.msfuy, fx.msfvx_inv,
+                      wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate,
+                      wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate) -
                   fx.prod())
                      .abs()
                      .sum(1);  // [ny, nx]
@@ -333,7 +342,9 @@ int main() {
                       fx.u, fx.v, fx.mup, fx.mub, fx.c1h, fx.c2h, fx.dnw,
                       fx.rdx, fx.rdy, fx.msftx,
                       fx.msfuy.slice(1, 0, fx.nx),  // wrong u-stagger width
-                      fx.msfvx_inv);
+                      fx.msfvx_inv,
+                      wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate,
+                      wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate);
               }),
               "fail-close: mis-shaped u-stagger map factor rejected");
     }

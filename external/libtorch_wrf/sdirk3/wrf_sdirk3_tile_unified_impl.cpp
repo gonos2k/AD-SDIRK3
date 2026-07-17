@@ -17099,6 +17099,34 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 }
             } else {
             try {
+            // PR 9C.1 P1-1: the muu/muv seam averages are a property of the
+            // LATERAL BOUNDARY CONDITION (WRF fills them from the memory
+            // halo), so the omega diagnosis receives an explicit per-axis
+            // policy derived from the wired WRF flags. Anything without an
+            // authoritative mass halo — open/specified/nested boundaries,
+            // or internal seams of a multi-rank decomposition — is
+            // UNSUPPORTED and the helper fails closed.
+            using wrf::sdirk3::WWCPBoundaryPolicy;
+            const auto wwcp_axis_policy = [](bool periodic, bool sym_s,
+                                             bool sym_e) {
+                if (periodic) return WWCPBoundaryPolicy::Periodic;
+                if (sym_s && sym_e)
+                    return WWCPBoundaryPolicy::SymmetricReplicate;
+                return WWCPBoundaryPolicy::Unsupported;
+            };
+            WWCPBoundaryPolicy wwcp_x_policy = wwcp_axis_policy(
+                config_flags_periodic_x_, config_flags_symmetric_xs_,
+                config_flags_symmetric_xe_);
+            WWCPBoundaryPolicy wwcp_y_policy = wwcp_axis_policy(
+                config_flags_periodic_y_, config_flags_symmetric_ys_,
+                config_flags_symmetric_ye_);
+            if (nprocx_ * nprocy_ != 1) {
+                // Multi-rank preflight: this tile's edges are internal
+                // seams whose true neighbor mass lives on other ranks; the
+                // helper has no authoritative halo for them.
+                wwcp_x_policy = WWCPBoundaryPolicy::HaloProvided;
+                wwcp_y_policy = WWCPBoundaryPolicy::HaloProvided;
+            }
             torch::Tensor ww;
             {
                 auto dev = u.device();
@@ -17115,7 +17143,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 ww = wrf::sdirk3::compute_wrf_ww_cp(
                     u, v, mu, mub_al, c1h_al.slice(0, 0, nz_),
                     c2h_al.slice(0, 0, nz_), dnw_t, rdx, rdy, msftx_al,
-                    msfuy_al, msfvx_inv_al);
+                    msfuy_al, msfvx_inv_al, wwcp_x_policy, wwcp_y_policy);
             }
 
             {
