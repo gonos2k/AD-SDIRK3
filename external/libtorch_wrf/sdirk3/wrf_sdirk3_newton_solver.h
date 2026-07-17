@@ -344,6 +344,16 @@ struct StateLayout;
 struct KrylovBasisCapture {
     std::vector<torch::Tensor> V;
     std::vector<torch::Tensor> Z;
+    // PR 9B: actual in-situ operator outputs of the live Arnoldi loop.
+    // A_Z[j] is the operator output w = A(Z_j) exactly as the solve used it
+    // (in the space FGMRES iterates); J_w[j] is the raw production JVP
+    // J*(dt*gamma*S*Z_j) computed inside that same matvec (unscaled space).
+    // Probe / true-residual operator applications are NOT captured.
+    std::vector<torch::Tensor> A_Z;
+    std::vector<torch::Tensor> J_w;
+    // Armed by solve_fgmres around exactly the Arnoldi operator application
+    // so the operator implementation can attribute its JVP capture.
+    bool arnoldi_call_active = false;
 };
 
 namespace krylov_methods {

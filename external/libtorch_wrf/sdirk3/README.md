@@ -135,12 +135,12 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 15-test CTest inventory** (pinned by
+The CMake tree registers an **exact 16-test CTest inventory** (pinned by
 `.github/ci/expected_ctest_names.txt`; any drift fails hosted CI):
 
-- 9 core contracts (geometry matrix, MSF stats, VJP semantics, FGMRES
-  contract, WRMS gate metric, acoustic-substep AD, core manifest/archive/link
-  parity),
+- 10 core contracts (geometry matrix, MSF stats, VJP semantics, FGMRES
+  contract, WRMS gate metric, acoustic-substep AD, the W-damping forward-mode
+  tangent contract, core manifest/archive/link parity),
 - `MPI_Halo_Contract_np{1,2,4}` — halo primitive forward/adjoint/packed AD+BC
   transpose matrices,
 - `MPI_Runtime_Contract_np{1,2,4}` — runtime fail-close contracts (baseline
@@ -187,8 +187,28 @@ relative epsilon ladder (1e-2 … 1e-5):
 Directions: the actual Arnoldi basis `V_j` and preconditioned basis
 `Z_j = M_j⁻¹V_j` captured from the failing solve (first and last), the
 returned correction `dK`, and a fixed deterministic block-balanced probe.
-Global metrics per epsilon plus per-block (`ru/rv/rw/ph/t/mu`) rows at the
-best epsilon; `rel_err = ‖prod−fd‖ / max(‖prod‖, ‖fd‖)`.
+`rel_err = ‖prod−fd‖ / max(‖prod‖, ‖fd‖)`.
+
+Record semantics (PR 9B evidence strengthening):
+
+- **Per-block full ladders**: global AND every block (`ru/rv/rw/ph/t/mu`)
+  rows at EVERY epsilon — a block's own best epsilon can differ from the
+  global one (the global norm is ru-dominated). `summary=1` rows report the
+  per-block best epsilon and best rel_err.
+- **`fd=central|plus|minus|richardson`**: one-sided FDs discriminate
+  nonsmooth/branch points (`plus`≠`minus` limits mean fwAD must not be
+  judged wrong outright); `richardson` extrapolates consecutive central
+  pairs.
+- **`source=replay|actual`**: `replay` rows re-apply the production
+  operators post-solve at the same state/direction; `actual` rows compare
+  the in-situ `A_Z`/`J_w` captured inside the live Arnoldi loop.
+  `fd=replay_vs_actual` rows measure drift between the two (route-lock /
+  cache effects).
+- **`purity=1` rows**: repeated + order-swapped evaluations of identical
+  inputs, run BEFORE any FD ladder. The gate is fail-close: if any pair
+  differs beyond `10*FLT_EPSILON`, a `purity_gate=failed` record is emitted
+  and the checker refuses to produce FD verdicts for that checkpoint
+  (`skipped=1 reason=shadow_rhs_impure`).
 
 Isolation contract: when unset, the only cost anywhere is a cached-boolean
 branch and a null capture pointer (zero extra tensor ops, RHS calls, or

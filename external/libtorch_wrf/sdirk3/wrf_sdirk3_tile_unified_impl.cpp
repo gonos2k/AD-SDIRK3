@@ -87,6 +87,8 @@
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
 #include "wrf_sdirk3_config.h"
+#include "wrf_sdirk3_rw_term_capture.h"  // PR 9B: rw term bisection capture
+#include "wrf_sdirk3_w_damping.h"       // PR 9B: production W-damping helper (contract-tested)
 #include "wrf_sdirk3_types.h"  // FIX Round186: For centralized safe_device_index()
 #include "wrf_sdirk3_halo_exchange.h"  // For exchange_halo_3d_u/v/w/mass, halo_exchange_init
 #include "wrf_sdirk3_mpi_safety.h"  // Step-2 telemetry: halo freshness event counters
@@ -16189,6 +16191,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 
                 // Add zero tensor for k=0
                 w_pgf_buoy_levels.push_back(torch::zeros({ny_, nx_}, torch::kFloat32).to(rw_tend.device()));
+
+                // PR 9B (rw term bisection): per-sub-term capture vectors,
+                // mirroring w_pgf_buoy_levels exactly (k=0 seed, end padding).
+                auto& rw_cap = wrf::sdirk3::rw_term_capture_slot();
+                std::vector<torch::Tensor> rw_cap_pg, rw_cap_b1, rw_cap_b2;
+                if (rw_cap.armed) {
+                    const auto& z0 = w_pgf_buoy_levels.front();
+                    rw_cap_pg.push_back(z0);
+                    rw_cap_b1.push_back(z0);
+                    rw_cap_b2.push_back(z0);
+                }
                 
                 // Match WRF's loop: DO k = 2, kde-1
                 // In C++: k from 1 to nz_-1 (since kde-1 in WRF = nz_ in C++)
@@ -16615,6 +16628,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     
                     // AUTOGRAD FIX: Collect contribution for later stacking
                     w_pgf_buoy_levels.push_back(w_pgf_buoy);
+                    if (rw_cap.armed) {
+                        // Same g/msf weighting as w_pgf_buoy so the sub-terms
+                        // close against it: pg - b1 - b2 ~= w_pgf_buoy.
+                        auto rw_cap_wgt = msfty_inv * g_val_wpgf;
+                        rw_cap_pg.push_back(rw_cap_wgt * pressure_gradient);
+                        rw_cap_b1.push_back(rw_cap_wgt * buoyancy_mu1);
+                        rw_cap_b2.push_back(rw_cap_wgt * buoyancy_mu2);
+                    }
                     
                     // Check rw_tend after update
                     if (k == 1 || k == nz_-1 || (k > 0 && k < nz_ && k % 10 == 0)) {
@@ -16645,7 +16666,24 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 
                 // Stack all levels together (dimension 1 is the vertical dimension)
                 auto w_pgf_buoy_all = torch::stack(w_pgf_buoy_levels, 1);
-                
+
+                if (rw_cap.armed) {
+                    auto rw_cap_pad = [&](std::vector<torch::Tensor>& v) {
+                        while (v.size() < (size_t)nz_w_) {
+                            v.push_back(torch::zeros({ny_, nx_}, torch::kFloat32)
+                                            .to(rw_tend.device()));
+                        }
+                    };
+                    rw_cap_pad(rw_cap_pg);
+                    rw_cap_pad(rw_cap_b1);
+                    rw_cap_pad(rw_cap_b2);
+                    rw_cap.add("pg", torch::stack(rw_cap_pg, 1));
+                    rw_cap.add("buoy_mu1", torch::stack(rw_cap_b1, 1));
+                    rw_cap.add("buoy_mu2", torch::stack(rw_cap_b2, 1));
+                    rw_cap.add("rw_pre_pgf", rw_tend);
+                    rw_cap.add("w_pgf_buoy_all", w_pgf_buoy_all);
+                }
+
                 // Add all contributions at once
                 rw_tend = rw_tend + w_pgf_buoy_all;
 
@@ -16837,6 +16875,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     }
                     auto w_top_contrib = torch::cat(top_contrib_levels, 1);
                     rw_tend = rw_tend + w_top_contrib;
+                    {
+                        auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
+                        rw_cap2.add("w_top_contrib", w_top_contrib);
+                    }
                 } else {
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                         std::cerr << "[SDIRK3] W-PGF top boundary skipped: k=" << k
@@ -16853,9 +16895,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // Boundary conditions
             // Bottom: w=0 at surface (k=0)
             // AUTOGRAD FIX: Create a mask instead of modifying rw_tend directly
+            {
+                auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
+                rw_cap2.add("rw_pre_mask", rw_tend);
+            }
             torch::Tensor bottom_mask = torch::ones_like(rw_tend);
             bottom_mask.index_put_({torch::indexing::Slice(), 0, torch::indexing::Slice()}, 0.0f);
             rw_tend = rw_tend * bottom_mask;  // Zero out bottom level without index_put_ on rw_tend
+            {
+                auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
+                rw_cap2.add("rw_post_mask", rw_tend);
+            }
             // Note: Top boundary (k=nz_) was already handled above with special formula
             
         } else {
@@ -16996,32 +17046,28 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             int k_end = nz_w_ - 1;  // exclusive
             int n_interior = k_end - k_start;
 
-            // w_interior: [ny, n_interior, nx]
+            // w_interior view retained for the input-tangent capture and the
+            // sign_vel diagnostic below; the damp chain itself lives in
+            // compute_w_damping_term (wrf_sdirk3_w_damping.h) so the standing
+            // tangent contract exercises the PRODUCTION path.
             auto w_interior = w.slice(1, k_start, k_end);
+            {
+                // PR 9B factor-level capture: the damp inputs' own tangents.
+                auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
+                rw_cap2.add("w_input", w_interior);
+                rw_cap2.add("mu_input", mu_full);
+            }
 
             // dz per interior level: 1/rdnw[k-1] for k in [1..nz_w-2]
-            // rdnw_ indices: [0..nz_w-3] → dz shape [n_interior]
             std::vector<float> dz_vec(n_interior);
             for (int i = 0; i < n_interior; ++i) {
                 dz_vec[i] = 1.0f / rdnw_[i];  // rdnw_[k-1] where k = i+1
             }
-            // Reshape to [1, n_interior, 1] for broadcasting
             auto dz = torch::from_blob(dz_vec.data(), {n_interior},
                                         torch::kFloat32).clone().to(w.device())
                        .reshape({1, n_interior, 1});
 
-            // Vertical CFL: [ny, n_interior, nx]
-            auto vert_cfl = torch::abs(w_interior) * dt / dz;
-            auto cfl_excess = vert_cfl - w_crit_cfl;
-
-            // v20.8: Smooth sign — same fix as flux5_upwind (see comment there)
-            torch::Tensor w_sign;
             float delta_cfl = wrf::sdirk3::g_sdirk3_config.sign_smooth_delta;
-            if (delta_cfl > 0.0f) {
-                w_sign = w_interior / torch::sqrt(w_interior * w_interior + delta_cfl * delta_cfl);
-            } else {
-                w_sign = torch::sign(w_interior).detach();
-            }
 
             // DIAGNOSTIC: Accumulate sign_vel==0 count
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -17030,23 +17076,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 wrf::sdirk3::g_mask_counters.sign_vel_total += w_interior.numel();
             }
 
-            // Mass coupling: c1f[k]*mu_full + c2f[k] for interior k
-            // c1f_/c2f_ are 1D [nz_w], slice to [n_interior] → [1, n_interior, 1]
-            auto c1f_int = c1f_.slice(0, k_start, k_end).reshape({1, n_interior, 1});
-            auto c2f_int = c2f_.slice(0, k_start, k_end).reshape({1, n_interior, 1});
-            // mu_full: [ny, nx] → [ny, 1, nx] for broadcasting
-            auto mu_3d = mu_full.unsqueeze(1);
-            auto mass_factor = c1f_int * mu_3d + c2f_int;  // [ny, n_interior, nx]
-
-            // Compute damping: [ny, n_interior, nx]
-            auto w_damp = w_sign * w_alpha * cfl_excess * mass_factor;
-
-            // Apply to rw_tend: out-of-place via pad to avoid in-place view issues.
-            // w_damp is [ny, n_interior, nx], pad dim 1 with k_start zeros left,
-            // (nz_w - k_end) zeros right → [ny, nz_w, nx]
-            auto w_damp_padded = torch::constant_pad_nd(w_damp,
-                {0, 0, k_start, nz_w_ - k_end});  // {dim2_l, dim2_r, dim1_l, dim1_r}
+            auto w_damp_padded = wrf::sdirk3::compute_w_damping_term(
+                w, mu_full, c1f_, c2f_, dz, dt, w_alpha, w_crit_cfl,
+                delta_cfl, k_start, k_end, nz_w_);
             rw_tend = rw_tend - w_damp_padded;
+            {
+                auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
+                rw_cap2.add("w_damp_padded", w_damp_padded);
+            }
         }
         
         // Additional top boundary damping - also moved to implicit
@@ -17079,6 +17116,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                                           : hevi_ph_snap;
         rw_tend = hevi_rw_snap;
         t_tend  = hevi_t_snap;
+    }
+
+    {
+        auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
+        rw_cap2.add("rw_tend_final", rw_tend);
     }
 
     }  // end if (do_implicit) — Steps 3.5, 4, 5, 5.3, 6

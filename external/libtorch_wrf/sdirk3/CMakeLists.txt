@@ -246,6 +246,13 @@ add_executable(test_fgmres_contract test_fgmres_contract.cpp)
 target_link_libraries(test_fgmres_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME FGMRES_Contract COMMAND test_fgmres_contract)
 
+# PR 9B: standing forward-mode tangent contract for the W-damping chain —
+# guards the dual propagation that FD-based checks cannot see at kink-heavy
+# operands (see doc/sdirk3_rw_tangent_bisection_2026-07-17.md).
+add_executable(test_wdamp_tangent_contract test_wdamp_tangent_contract.cpp)
+target_link_libraries(test_wdamp_tangent_contract "${TORCH_LIBRARIES}")
+add_test(NAME WDamp_Tangent_Contract COMMAND test_wdamp_tangent_contract)
+
 # =========================================================================
 # PR 5 commit 3: full-object link closure + archive/manifest contracts
 # =========================================================================
