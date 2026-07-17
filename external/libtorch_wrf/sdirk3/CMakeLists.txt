@@ -253,6 +253,13 @@ add_executable(test_wdamp_tangent_contract test_wdamp_tangent_contract.cpp)
 target_link_libraries(test_wdamp_tangent_contract "${TORCH_LIBRARIES}")
 add_test(NAME WDamp_Tangent_Contract COMMAND test_wdamp_tangent_contract)
 
+# PR 9B.1: rw term-capture safety contract (thread-locality, RAII/exception
+# safety, nested-arm fail-close, inventory validation) with a case-count
+# ratchet.
+add_executable(test_rw_term_capture_contract test_rw_term_capture_contract.cpp)
+target_link_libraries(test_rw_term_capture_contract "${TORCH_LIBRARIES}")
+add_test(NAME RW_Term_Capture_Contract COMMAND test_rw_term_capture_contract)
+
 # =========================================================================
 # PR 5 commit 3: full-object link closure + archive/manifest contracts
 # =========================================================================
