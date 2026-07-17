@@ -652,37 +652,47 @@ inline void initializeMPISafety() {
 // std::exception (shape validation, bad_alloc) as an MPI failure would
 // misclassify. Multi-rank termination is coordinated via MPI_Abort so no
 // peer rank deadlocks waiting on a dead sender; std::abort is the fallback.
+// Forward declarations (defined in wrf_sdirk3_mpi_safety_impl.cpp; the
+// full declarations appear later in this header): needed here so the
+// fatal path below can judge the thread contract WITHOUT calling MPI.
+bool is_mpi_baseline_thread() noexcept;
+int mpi_baseline_thread_level() noexcept;
+
 [[noreturn]] inline void abort_c_abi_exception(const char* entry,
                                                const char* detail) noexcept {
     std::fprintf(stderr, "SDIRK3_C_ABI_EXCEPTION: %s: %s\n",
                  entry, detail ? detail : "unknown exception");
     std::fflush(stderr);
 #ifdef DMPARALLEL
-    // PR 9C.3 commit 4: MPI_THREAD_FUNNELED policy. MPI_Initialized /
-    // MPI_Finalized / MPI_Query_thread are the standard's always-callable
-    // exceptions; MPI_Abort is NOT — only the established baseline thread
-    // (or a MULTIPLE-provided runtime) may call it. A non-baseline fatal
-    // must not touch MPI: stable marker + local hard abort, and rank-set
-    // termination is the launcher's job (verified by the standing child
-    // negatives).
-    int initialized = 0, finalized = 0;
-    MPI_Initialized(&initialized);
-    MPI_Finalized(&finalized);
-    if (initialized && !finalized) {
-        int provided = MPI_THREAD_SINGLE;
-        MPI_Query_thread(&provided);
-        const bool may_call_mpi =
-            (provided == MPI_THREAD_MULTIPLE) || is_mpi_baseline_thread();
-        if (may_call_mpi) {
+    // PR 9C.3: MPI_THREAD_FUNNELED policy, judged MPI-FREE. The thread
+    // identity is a local comparison and the provided level was CACHED on
+    // the baseline thread at establishment — so the non-baseline
+    // FUNNELED/SERIALIZED path below makes ZERO MPI calls of any kind
+    // (the review's contract is stricter than the standard's
+    // always-callable list, and this honors the contract). Only the
+    // baseline thread, or any thread under a MULTIPLE-provided runtime,
+    // proceeds to the coordinated MPI_Abort; everyone else emits the
+    // LOCAL_ABORT marker and hard-aborts locally — rank-set termination
+    // is the launcher's job (verified by the standing child negatives).
+    // An unestablished baseline (very early fatal) conservatively takes
+    // the local path too.
+    const bool may_call_mpi =
+        is_mpi_baseline_thread() ||
+        mpi_baseline_thread_level() == MPI_THREAD_MULTIPLE;
+    if (may_call_mpi) {
+        int initialized = 0, finalized = 0;
+        MPI_Initialized(&initialized);
+        MPI_Finalized(&finalized);
+        if (initialized && !finalized) {
             MPI_Abort(MPI_COMM_WORLD, 1);
-        } else {
-            std::fprintf(stderr,
-                         "SDIRK3_C_ABI_EXCEPTION_LOCAL_ABORT: non-baseline "
-                         "thread under MPI thread level %d: aborting "
-                         "locally without MPI calls\n",
-                         provided);
-            std::fflush(stderr);
         }
+    } else {
+        std::fprintf(stderr,
+                     "SDIRK3_C_ABI_EXCEPTION_LOCAL_ABORT: non-baseline "
+                     "thread under MPI thread level %d: aborting locally "
+                     "with zero MPI calls\n",
+                     mpi_baseline_thread_level());
+        std::fflush(stderr);
     }
 #endif
     std::abort();
