@@ -125,6 +125,7 @@ external/libtorch_wrf/sdirk3/test_*
 external/libtorch_wrf/sdirk3/tests/test_*
 !external/libtorch_wrf/sdirk3/tests/test_wrms_gate_metric.cpp
 !external/libtorch_wrf/sdirk3/test_wdamp_tangent_contract.cpp
+!external/libtorch_wrf/sdirk3/test_rw_term_capture_contract.cpp
 # Torch-free contract test SOURCES are tracked (the extensionless binaries the
 # broad test_* rule above targets stay ignored). CI compiles these standalone.
 !external/libtorch_wrf/sdirk3/test_msf_raw_stats.cpp
