@@ -1452,24 +1452,6 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     //   rel_error      = ||r_true||/||b|| halo-zeroed (relative)
     //   r_true         = RAW residual b-A(x) — callers apply halo zeroing for per-block analysis
     torch::Tensor r_true_out = r_true.detach().clone();
-    // v20.14r27g: Accurate termination message
-    std::string gmres_msg;
-    if (gmres_converged) {
-        gmres_msg = "GMRES converged";
-    } else if (terminated_by_restart_stag_threshold) {
-        gmres_msg = "GMRES stagnation-threshold early exit (restart "
-                  + std::to_string(actual_restarts) + "/" + std::to_string(max_iter) + ")";
-    } else if (terminated_by_arnoldi_stagnation) {
-        gmres_msg = "GMRES Arnoldi stagnation early exit (restart "
-                  + std::to_string(actual_restarts) + "/" + std::to_string(max_iter) + ")";
-    } else if (terminated_by_internal_convergence) {
-        gmres_msg = "GMRES internal-stop criterion met before max restarts";
-    } else if (total_arnoldi_iters < max_iter * restart) {
-        gmres_msg = "GMRES early exit before max restarts (restart "
-                  + std::to_string(actual_restarts) + "/" + std::to_string(max_iter) + ")";
-    } else {
-        gmres_msg = "GMRES max iterations reached (" + std::to_string(total_arnoldi_iters) + " Arnoldi)";
-    }
     // PR 8: terminal Arnoldi breakdown exits through the dedicated early-
     // breakdown return above; a breakdown that merely restarted a cycle is
     // not reported here.
@@ -1477,22 +1459,54 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // restart-level guard next; then whichever early-exit detector fired
     // (ArnoldiStagnation vs MidBudgetHopeless — previously conflated); then
     // the internal-stop criterion; else the budget simply ran out.
+    KTR resolved_reason;
+    if (gmres_converged) {
+        resolved_reason = KTR::ToleranceReached;
+    } else if (terminated_by_restart_stag_threshold) {
+        resolved_reason = KTR::RestartStagnationThreshold;
+    } else if (early_exit_reason == KTR::ArnoldiStagnation ||
+               early_exit_reason == KTR::MidBudgetHopeless) {
+        resolved_reason = early_exit_reason;
+    } else if (terminated_by_internal_convergence) {
+        resolved_reason = KTR::InternalConvergenceStop;
+    } else {
+        resolved_reason = KTR::MaxBudget;
+    }
+    // PR 9A: derive the human-readable message FROM the resolved reason —
+    // exactly one message per reason. The previous boolean cascade printed
+    // "Arnoldi stagnation early exit" for the mid-budget hopeless probe as
+    // well, because both early exits share terminated_by_arnoldi_stagnation.
+    const std::string restart_suffix = " (restart " + std::to_string(actual_restarts)
+                                     + "/" + std::to_string(max_iter) + ")";
+    std::string gmres_msg;
+    switch (resolved_reason) {
+        case KTR::ToleranceReached:
+            gmres_msg = "GMRES converged";
+            break;
+        case KTR::RestartStagnationThreshold:
+            gmres_msg = "GMRES restart-stagnation-threshold early exit" + restart_suffix;
+            break;
+        case KTR::ArnoldiStagnation:
+            gmres_msg = "GMRES Arnoldi stagnation early exit" + restart_suffix;
+            break;
+        case KTR::MidBudgetHopeless:
+            gmres_msg = "GMRES mid-budget hopeless-policy early exit" + restart_suffix;
+            break;
+        case KTR::InternalConvergenceStop:
+            gmres_msg = "GMRES internal-stop criterion met before max restarts";
+            break;
+        default:  // MaxBudget (other reasons return through dedicated sites above)
+            gmres_msg = (total_arnoldi_iters < max_iter * restart)
+                ? "GMRES early exit before max restarts" + restart_suffix
+                : "GMRES max iterations reached ("
+                  + std::to_string(total_arnoldi_iters) + " Arnoldi)";
+            break;
+    }
     WRFNewtonKrylovSolver::GMRESResult res{
             x, gmres_converged, final_iterations, r_true_final,
             rel_error_final, gmres_msg, r_true_out, actual_restarts, false,
             terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
-    if (gmres_converged) {
-        res.termination_reason = KTR::ToleranceReached;
-    } else if (terminated_by_restart_stag_threshold) {
-        res.termination_reason = KTR::RestartStagnationThreshold;
-    } else if (early_exit_reason == KTR::ArnoldiStagnation ||
-               early_exit_reason == KTR::MidBudgetHopeless) {
-        res.termination_reason = early_exit_reason;
-    } else if (terminated_by_internal_convergence) {
-        res.termination_reason = KTR::InternalConvergenceStop;
-    } else {
-        res.termination_reason = KTR::MaxBudget;
-    }
+    res.termination_reason = resolved_reason;
     res.probe_j = diag_probe_j;
     res.probe_true_err = diag_probe_true_err;
     res.probe_hopeless_floor = diag_probe_floor;
@@ -2652,24 +2666,6 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     //   rel_error      = ||r_true||/||b|| halo-zeroed (relative)
     //   r_true         = RAW residual b-A(x) — callers apply halo zeroing for per-block analysis
     torch::Tensor r_true_out = r_true.detach().clone();
-    // v20.14r27g: Accurate termination message
-    std::string gmres_msg;
-    if (gmres_converged) {
-        gmres_msg = "FGMRES converged";
-    } else if (terminated_by_restart_stag_threshold) {
-        gmres_msg = "FGMRES stagnation-threshold early exit (restart "
-                  + std::to_string(actual_restarts) + "/" + std::to_string(max_iter) + ")";
-    } else if (terminated_by_arnoldi_stagnation) {
-        gmres_msg = "FGMRES Arnoldi stagnation early exit (restart "
-                  + std::to_string(actual_restarts) + "/" + std::to_string(max_iter) + ")";
-    } else if (terminated_by_internal_convergence) {
-        gmres_msg = "FGMRES internal-stop criterion met before max restarts";
-    } else if (total_arnoldi_iters < max_iter * restart) {
-        gmres_msg = "FGMRES early exit before max restarts (restart "
-                  + std::to_string(actual_restarts) + "/" + std::to_string(max_iter) + ")";
-    } else {
-        gmres_msg = "FGMRES max iterations reached (" + std::to_string(total_arnoldi_iters) + " Arnoldi)";
-    }
     // PR 8: terminal Arnoldi breakdown exits through the dedicated early-
     // breakdown return above; a breakdown that merely restarted a cycle is
     // not reported here.
@@ -2677,22 +2673,54 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // restart-level guard next; then whichever early-exit detector fired
     // (ArnoldiStagnation vs MidBudgetHopeless — previously conflated); then
     // the internal-stop criterion; else the budget simply ran out.
+    KTR resolved_reason;
+    if (gmres_converged) {
+        resolved_reason = KTR::ToleranceReached;
+    } else if (terminated_by_restart_stag_threshold) {
+        resolved_reason = KTR::RestartStagnationThreshold;
+    } else if (early_exit_reason == KTR::ArnoldiStagnation ||
+               early_exit_reason == KTR::MidBudgetHopeless) {
+        resolved_reason = early_exit_reason;
+    } else if (terminated_by_internal_convergence) {
+        resolved_reason = KTR::InternalConvergenceStop;
+    } else {
+        resolved_reason = KTR::MaxBudget;
+    }
+    // PR 9A: derive the human-readable message FROM the resolved reason —
+    // exactly one message per reason. The previous boolean cascade printed
+    // "Arnoldi stagnation early exit" for the mid-budget hopeless probe as
+    // well, because both early exits share terminated_by_arnoldi_stagnation.
+    const std::string restart_suffix = " (restart " + std::to_string(actual_restarts)
+                                     + "/" + std::to_string(max_iter) + ")";
+    std::string gmres_msg;
+    switch (resolved_reason) {
+        case KTR::ToleranceReached:
+            gmres_msg = "FGMRES converged";
+            break;
+        case KTR::RestartStagnationThreshold:
+            gmres_msg = "FGMRES restart-stagnation-threshold early exit" + restart_suffix;
+            break;
+        case KTR::ArnoldiStagnation:
+            gmres_msg = "FGMRES Arnoldi stagnation early exit" + restart_suffix;
+            break;
+        case KTR::MidBudgetHopeless:
+            gmres_msg = "FGMRES mid-budget hopeless-policy early exit" + restart_suffix;
+            break;
+        case KTR::InternalConvergenceStop:
+            gmres_msg = "FGMRES internal-stop criterion met before max restarts";
+            break;
+        default:  // MaxBudget (other reasons return through dedicated sites above)
+            gmres_msg = (total_arnoldi_iters < max_iter * restart)
+                ? "FGMRES early exit before max restarts" + restart_suffix
+                : "FGMRES max iterations reached ("
+                  + std::to_string(total_arnoldi_iters) + " Arnoldi)";
+            break;
+    }
     WRFNewtonKrylovSolver::GMRESResult res{
             x, gmres_converged, final_iterations, r_true_final,
             rel_error_final, gmres_msg, r_true_out, actual_restarts, false,
             terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
-    if (gmres_converged) {
-        res.termination_reason = KTR::ToleranceReached;
-    } else if (terminated_by_restart_stag_threshold) {
-        res.termination_reason = KTR::RestartStagnationThreshold;
-    } else if (early_exit_reason == KTR::ArnoldiStagnation ||
-               early_exit_reason == KTR::MidBudgetHopeless) {
-        res.termination_reason = early_exit_reason;
-    } else if (terminated_by_internal_convergence) {
-        res.termination_reason = KTR::InternalConvergenceStop;
-    } else {
-        res.termination_reason = KTR::MaxBudget;
-    }
+    res.termination_reason = resolved_reason;
     res.probe_j = diag_probe_j;
     res.probe_true_err = diag_probe_true_err;
     res.probe_hopeless_floor = diag_probe_floor;
