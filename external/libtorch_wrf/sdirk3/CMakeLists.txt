@@ -267,6 +267,12 @@ add_executable(test_wdamp_wrf_reference_contract test_wdamp_wrf_reference_contra
 target_link_libraries(test_wdamp_wrf_reference_contract "${TORCH_LIBRARIES}")
 add_test(NAME WDamp_WRF_Reference_Contract COMMAND test_wdamp_wrf_reference_contract)
 
+# PR 9C.1: complete WRF calc_ww_cp state-to-omega contract (non-unit metric
+# fixtures; the em_b_wave unit-metric simplification is the negative control).
+add_executable(test_ww_cp_parity_contract test_ww_cp_parity_contract.cpp)
+target_link_libraries(test_ww_cp_parity_contract "${TORCH_LIBRARIES}")
+add_test(NAME WW_CP_Parity_Contract COMMAND test_ww_cp_parity_contract)
+
 # =========================================================================
 # PR 5 commit 3: full-object link closure + archive/manifest contracts
 # =========================================================================
