@@ -12,6 +12,7 @@
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_mpi_safety.h"
+#include "wrf_sdirk3_contract_fail.h"  // PR 9C.2: production fail route
 
 
 extern "C" {
@@ -61,6 +62,14 @@ void sdirk3_set_timestep_i4(int* timestep) {
 void sdirk3_mpi_safety_init(void) {
     wrf::sdirk3::mpi_safety::establish_mpi_baseline_thread("sdirk3_mpi_safety_init");
     wrf::sdirk3::mpi_safety::initializeMPISafety();
+    // PR 9C.2: production W-damping contract violations must not throw -
+    // the mpif90-linked executable cannot unwind C++ exceptions (measured;
+    // see wrf_sdirk3_contract_fail.h). Route them to the coordinated
+    // controlled abort instead.
+    wrf::sdirk3::wdamp_contract_fail_handler() = [](const char* what) {
+        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+            "enabled W-damping contract", what);
+    };
 }
 
 // =============================================================================

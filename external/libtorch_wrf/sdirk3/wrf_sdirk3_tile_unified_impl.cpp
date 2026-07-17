@@ -17110,24 +17110,25 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 msfvx_.defined() && msfvx_.dim() == 2 &&
                 msfvx_.size(0) == nyv_i && msfvx_.size(1) == nx_i;
             if (!geometry_ok) {
-                // Review P1-2: the user asked for w_damping=1; integrating
-                // on WITHOUT the requested physics would be fail-open. The
-                // throw propagates to the existing fatal boundary (the
-                // C/Fortran ABI seal) — no marker-and-continue.
-                throw std::runtime_error(
+                // Review P1-2 (9C.2): the user asked for w_damping=1;
+                // integrating on WITHOUT the requested physics would be
+                // fail-open. In production this routes to the installed
+                // controlled-abort handler (the mpif90-linked executable
+                // cannot unwind C++ exceptions - measured, see
+                // wrf_sdirk3_contract_fail.h); offline it throws.
+                wrf::sdirk3::wdamp_geometry_fail(
                     "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: enabled WRF "
                     "W-damping requires the complete calc_ww_cp coefficient "
                     "and map-factor contract (c1h/c2h, mu_base, "
                     "msftx/msfuy/msfvx on their staggers)");
             }
-            try {
             // PR 9C.2 commit 1: the per-axis policies come from the runtime
             // contract resolved at unifiedStep entry (topology + boundary
             // authority, settled BEFORE the Newton callback existed). A
             // stale/inactive contract here is a programming error, not a
             // recoverable state.
             if (!wdamp_contract_.active) {
-                throw std::runtime_error(
+                wrf::sdirk3::wdamp_geometry_fail(
                     "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: W-damping "
                     "term reached without an active runtime contract "
                     "(preflight did not run)");
@@ -17180,14 +17181,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             {
                 auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
                 rw_cap2.add("w_damp_padded", w_damp_padded);
-            }
-            } catch (const std::invalid_argument& e) {
-                // Review P1-2: contract violations are FATAL, not skipped —
-                // rethrow with call-site context, keeping the stable marker
-                // at the front of the message for the integration contract.
-                throw std::runtime_error(
-                    std::string(e.what()) +
-                    " [enabled W-damping, computeUnifiedRHS]");
             }
         }
         
