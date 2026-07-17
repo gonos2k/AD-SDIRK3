@@ -168,6 +168,37 @@ bit-identical with the flag on and off).
 > finiteness checks) every Newton iteration and can substantially reduce
 > performance. It must not be used for throughput or timing measurements.
 
+### Stage-4 JVP / operator directional consistency check (opt-in)
+
+`WRF_SDIRK3_STAGE4_JVP_CHECK=1` runs a shadow directional-consistency check of
+the production linearization at the ACTUAL operands of the implicit solves
+(stage 4 Newton iterations 0/1, plus stage 3 iteration 0 as a positive
+control), emitting machine-readable `SDIRK3_STAGE4_JVP_DIAG` records. Two
+layers are verified independently against central finite differences over a
+relative epsilon ladder (1e-2 … 1e-5):
+
+- `operator=J` — the production JVP of the RHS at `U_eval` (extracted from
+  the production matvec) vs `[F(U+eps*v) - F(U-eps*v)] / (2*eps)`;
+- `operator=A` — the composed operator FGMRES actually iterated (including
+  the S/S⁻¹ block conjugation, packed layout, and the dt·gamma factor) vs a
+  central FD of the assembled Newton residual
+  `R(K') = K' - F(U_stage + dt*gamma*K')` in the same coordinate frame.
+
+Directions: the actual Arnoldi basis `V_j` and preconditioned basis
+`Z_j = M_j⁻¹V_j` captured from the failing solve (first and last), the
+returned correction `dK`, and a fixed deterministic block-balanced probe.
+Global metrics per epsilon plus per-block (`ru/rv/rw/ph/t/mu`) rows at the
+best epsilon; `rel_err = ‖prod−fd‖ / max(‖prod‖, ‖fd‖)`.
+
+Isolation contract: when unset, the only cost anywhere is a cached-boolean
+branch and a null capture pointer (zero extra tensor ops, RHS calls, or
+records). When set, the checker calls `compute_rhs` directly on detached
+clones (the solver's `jacobian_cache_` bookkeeping is bypassed), never calls
+the preconditioner, snapshots/restores the loop-local JVP telemetry counters,
+and refuses (with a `skipped=1` record) when `omega_update_ref_per_newton` is
+enabled, since the RHS closure then mutates tile state. The same CUDA/MPS
+cost warning as above applies — diagnosis only.
+
 ## MPI / decomposition support boundary
 
 - **Single MPI rank + supported single-tile path**: production WRF positive

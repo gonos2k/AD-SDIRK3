@@ -337,6 +337,15 @@ private:
 // Forward declaration for GMRES per-block diagnostics (defined in newton_solver.cpp)
 struct StateLayout;
 
+// PR 9A: detached clones of the actual Krylov basis of one solve, exported
+// for the opt-in directional consistency checker: V = Arnoldi basis, Z = the
+// preconditioned vectors Z_j = M_j^{-1} V_j the operator was actually applied
+// to. Only populated when a non-null pointer reaches solve_fgmres.
+struct KrylovBasisCapture {
+    std::vector<torch::Tensor> V;
+    std::vector<torch::Tensor> Z;
+};
+
 namespace krylov_methods {
 
     /**
@@ -391,7 +400,8 @@ namespace krylov_methods {
         const StateLayout* layout = nullptr,
         const torch::Tensor* halo_mask = nullptr,
         bool periodic_x = false,
-        bool periodic_y = false
+        bool periodic_y = false,
+        KrylovBasisCapture* basis_capture = nullptr
     );
     
     /**
