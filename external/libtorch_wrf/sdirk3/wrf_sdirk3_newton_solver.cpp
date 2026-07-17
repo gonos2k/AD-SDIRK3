@@ -626,7 +626,6 @@ static bool run_purity_probe(const Context& c, const torch::Tensor& w_dir) {
 // production fwAD tangent against central/plus/minus FD. Emits
 // SDIRK3_RW_TERM_DIAG records via the line-atomic helper.
 static void run_rw_term_bisection(const Context& c) {
-    auto& cap = rw_term_capture_slot();
     using Terms = std::vector<std::pair<std::string, torch::Tensor>>;
 
     // Fixed deterministic block-balanced probe (w-rich; same hash as the
@@ -695,25 +694,56 @@ static void run_rw_term_bisection(const Context& c) {
         });
     };
 
+    // PR 9B.1: whether the implicit W-damping gate is active decides the
+    // expected capture inventory (w_damp_padded present or not).
+    const bool expect_wdamp =
+        wrf::sdirk3::g_sdirk3_config.implicit_wdamp &&
+        wrf::sdirk3::g_sdirk3_config.w_damp_alpha > 0.0f &&
+        wrf::sdirk3::g_sdirk3_config.w_crit_cfl > 0.0f;
+
+    auto emit_capture_fail = [&](const char* marker, const std::string& why) {
+        emit_stage_diag([&](std::ostream& os) {
+            os << "SDIRK3_RW_TERM_DIAG ts=" << c.ts
+               << " stage=" << c.stage << " newton_iter=" << c.newton_iter
+               << " " << marker << "=1";
+            if (!why.empty()) os << " reason=" << why;
+            os << "\n";
+        });
+    };
+
     // Capture the rw terms of one plain evaluation (detached clones).
-    auto capture_eval = [&](const torch::Tensor& U) -> Terms {
-        cap.reset();
-        cap.armed = true;
+    // PR 9B.1: RAII arming (exception-safe), nested-arm and incomplete-
+    // inventory captures FAIL CLOSED with stable markers — no term verdicts
+    // are produced from a partial or contaminated capture.
+    auto capture_eval = [&](const torch::Tensor& U, bool& ok) -> Terms {
+        ok = false;
+        RwTermCaptureScope scope;
+        if (!scope.armed_ok()) {
+            emit_capture_fail("SDIRK3_RW_TERM_CAPTURE_NESTED", {});
+            return {};
+        }
         auto F = c.compute_rhs(U);
-        cap.armed = false;
+        (void)F;
+        auto raw = scope.take();
         Terms out;
         {
             torch::NoGradGuard no_grad;
-            for (const auto& kv : cap.terms)
+            for (const auto& kv : raw)
                 out.emplace_back(kv.first, kv.second.detach().clone());
         }
-        cap.reset();
-        (void)F;
+        const std::string why = validate_rw_term_inventory(out, expect_wdamp);
+        if (!why.empty()) {
+            emit_capture_fail("SDIRK3_RW_TERM_CAPTURE_INCOMPLETE", why);
+            return {};
+        }
+        ok = true;
         return out;
     };
 
     // ---- 1) primal terms + closure #1 (sum of terms == assembled rw) ----
-    Terms t0 = capture_eval(c.U_eval);
+    bool t0_ok = false;
+    Terms t0 = capture_eval(c.U_eval, t0_ok);
+    if (!t0_ok) return;  // fail-close: marker already emitted
     {
         torch::NoGradGuard no_grad;
         auto pre = find_term(t0, "rw_pre_pgf");
@@ -726,7 +756,7 @@ static void run_rw_term_bisection(const Context& c) {
         auto pg = find_term(t0, "pg");
         auto b1 = find_term(t0, "buoy_mu1");
         auto b2 = find_term(t0, "buoy_mu2");
-        if (pg.defined() && pgf.defined()) {
+        if (pg.defined() && b1.defined() && b2.defined() && pgf.defined()) {
             emit_term_row("closure_subterms_vs_pgf", "closure", 0, 0,
                           (pg - b1 - b2), pgf);
         }
@@ -748,11 +778,16 @@ static void run_rw_term_bisection(const Context& c) {
         wrf::sdirk3::jvp_detail::DualLevelGuard dual_guard;
         auto u_dual = torch::_make_dual(c.U_eval, w_dir,
                                         static_cast<int64_t>(dual_guard.level()));
-        cap.reset();
-        cap.armed = true;
+        RwTermCaptureScope scope;
+        if (!scope.armed_ok()) {
+            emit_capture_fail("SDIRK3_RW_TERM_CAPTURE_NESTED", {});
+            return;
+        }
         auto F_dual = c.compute_rhs(u_dual);
-        cap.armed = false;
-        for (const auto& kv : cap.terms) {
+        (void)F_dual;
+        // take() while the dual level guard is still alive.
+        auto raw = scope.take();
+        for (const auto& kv : raw) {
             auto parts = torch::_unpack_dual(
                 kv.second, static_cast<int64_t>(dual_guard.level()));
             auto tgt = std::get<1>(parts);
@@ -762,8 +797,11 @@ static void run_rw_term_bisection(const Context& c) {
                                 : torch::zeros_like(std::get<0>(parts))
                                       .detach());
         }
-        cap.reset();
-        (void)F_dual;
+        const std::string why = validate_rw_term_inventory(tg, expect_wdamp);
+        if (!why.empty()) {
+            emit_capture_fail("SDIRK3_RW_TERM_CAPTURE_INCOMPLETE", why);
+            return;
+        }
     }
     // Closure #2: sum of term tangents == full production rw tangent.
     {
@@ -775,7 +813,7 @@ static void run_rw_term_bisection(const Context& c) {
         auto postm = find_term(tg, "rw_post_mask");
         auto damp = find_term(tg, "w_damp_padded");
         auto fin = find_term(tg, "rw_tend_final");
-        if (pg.defined() && pgf.defined()) {
+        if (pg.defined() && b1.defined() && b2.defined() && pgf.defined()) {
             emit_term_row("closure_tangent_subterms_vs_pgf", "closure", 0, 0,
                           (pg - b1 - b2), pgf);
         }
@@ -796,11 +834,13 @@ static void run_rw_term_bisection(const Context& c) {
         const float eps_abs = eps_rel * (1.0f + U_ref) /
                               std::max(w_norm, 1e-30f);
         Terms tp, tm;
+        bool tp_ok = false, tm_ok = false;
         {
             torch::NoGradGuard no_grad;
-            tp = capture_eval((c.U_eval + eps_abs * w_dir).detach());
-            tm = capture_eval((c.U_eval - eps_abs * w_dir).detach());
+            tp = capture_eval((c.U_eval + eps_abs * w_dir).detach(), tp_ok);
+            tm = capture_eval((c.U_eval - eps_abs * w_dir).detach(), tm_ok);
         }
+        if (!tp_ok || !tm_ok) continue;  // fail-close: markers already emitted
         for (const auto& kv : tg) {
             torch::NoGradGuard no_grad;
             auto p = find_term(tp, kv.first.c_str());
