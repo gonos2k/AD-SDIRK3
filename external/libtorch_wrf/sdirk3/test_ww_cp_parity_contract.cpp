@@ -8,6 +8,7 @@
 // CONTROL and must FAIL on the non-unit fixtures.
 #include <torch/torch.h>
 #include <cmath>
+#include <string>
 #include <cstdio>
 #include <vector>
 #include "wrf_sdirk3_ww_cp.h"
@@ -601,8 +602,55 @@ int main() {
               "contract: one-sided symmetric y refuses");
     }
 
+
+    // (13) PR 9C.2: the production fail-handler ROUTING switch. With a
+    //      handler installed, contract violations must reach the handler
+    //      BEFORE any throw (the mpif90-linked production executable
+    //      cannot unwind C++ exceptions — measured); without one, the
+    //      helpers throw as every case above verified. The test handler
+    //      throws a sentinel std::string, which can only escape if the
+    //      router called the handler instead of throwing.
+    {
+        using wrf::sdirk3::wdamp_contract_fail_handler;
+        wdamp_contract_fail_handler() = [](const char* what) {
+            throw std::string(what);
+        };
+        bool routed_geometry = false;
+        try {
+            fx.prod(WWCPBoundaryPolicy::Unsupported,
+                    WWCPBoundaryPolicy::SymmetricReplicate);
+        } catch (const std::string& m) {
+            routed_geometry =
+                m.find("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED") == 0;
+        } catch (...) {
+        }
+        check(routed_geometry,
+              "fail routing: geometry violation reaches the installed "
+              "handler, not a throw");
+        bool routed_input = false;
+        try {
+            torch::Tensor undef;
+            wrf::sdirk3::compute_wrf_ww_cp(
+                undef, fx.v, fx.mup, fx.mub, fx.c1h, fx.c2h, fx.dnw, fx.rdx,
+                fx.rdy, fx.msftx, fx.msfuy, fx.msfvx_inv,
+                WWCPBoundaryPolicy::SymmetricReplicate,
+                WWCPBoundaryPolicy::SymmetricReplicate);
+        } catch (const std::string& m) {
+            routed_input = m.find("SDIRK3_WDAMP_INVALID_INPUT") == 0;
+        } catch (...) {
+        }
+        check(routed_input,
+              "fail routing: input violation reaches the installed handler");
+        wdamp_contract_fail_handler() = nullptr;
+        check(fails_with("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED", [&] {
+                  fx.prod(WWCPBoundaryPolicy::Unsupported,
+                          WWCPBoundaryPolicy::SymmetricReplicate);
+              }),
+              "fail routing: handler reset restores throw semantics");
+    }
+
     const int kExpectedCases =
-        3 + 1 + fx.nx + 1 + 3 + 4 + 2 + 2 + 2 + 7 + 7 + 9;  // = 45 with nx=4
+        3 + 1 + fx.nx + 1 + 3 + 4 + 2 + 2 + 2 + 7 + 7 + 9 + 3;  // = 48 with nx=4
     if (g_cases != kExpectedCases) {
         std::printf("FAIL: case-count ratchet: executed %d, expected %d\n",
                     g_cases, kExpectedCases);

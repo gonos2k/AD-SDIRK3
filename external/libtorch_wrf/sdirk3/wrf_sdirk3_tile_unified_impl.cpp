@@ -17174,8 +17174,26 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     ? w_crit_cfl
                     : wrf::sdirk3::kWrfWBeta;
 
+            // PR 9C.2 (test-only, env-gated, default OFF): dynamic-state
+            // fault injection so the INTEGRATION negatives can prove the
+            // controlled fatal routing on contract violations that only a
+            // live state can produce. "mass" poisons the mass argument,
+            // "rdnw" poisons the vertical metric. Absent env => untouched.
+            torch::Tensor damp_mu_arg = mu_full;
+            torch::Tensor damp_rdnw_arg = rdnw_int;
+            if (const char* fault =
+                    std::getenv("WRF_SDIRK3_WDAMP_FAULT_INJECT")) {
+                if (std::strcmp(fault, "mass") == 0) {
+                    damp_mu_arg = -mu_full;
+                } else if (std::strcmp(fault, "rdnw") == 0) {
+                    damp_rdnw_arg = rdnw_int.clone();
+                    damp_rdnw_arg.index_put_(
+                        {0, 0, 0},
+                        std::numeric_limits<float>::infinity());
+                }
+            }
             auto w_damp_padded = wrf::sdirk3::compute_w_damping_term(
-                ww, w, mu_full, c1f_, c2f_, rdnw_int, dt, w_alpha,
+                ww, w, damp_mu_arg, c1f_, c2f_, damp_rdnw_arg, dt, w_alpha,
                 gate_threshold, w_crit_cfl, k_start, k_end, nz_w_);
             rw_tend = rw_tend - w_damp_padded;
             {

@@ -128,6 +128,23 @@ contract-violating inputs. The term is never silently skipped and never
 computed with substituted unit metrics: integrating on without the physics
 the namelist requested would be fail-open.
 
+**Fatal mechanism (PR 9C.2, measured)**: the mpif90-linked `wrf.exe` cannot
+unwind C++ exceptions at all (a same-function try/catch still terminates —
+see `wrf_sdirk3_contract_fail.h`), so in production every W-damping contract
+violation routes to the installed controlled-abort handler:
+`SDIRK3_C_ABI_EXCEPTION` + the specific WDAMP marker to stderr, flush,
+coordinated `MPI_Abort` on multi-rank, abort. Never an uncaught-exception
+`std::terminate`. The runtime contract (topology + boundary policy) is
+settled ONCE per step at `unifiedStep` entry, before any Newton callback
+exists: multi-rank patches, internal tiles (tile ≠ rank patch), and
+open/specified/nested/polar boundaries all refuse there, with open flags
+taking priority over any conflicting periodic/symmetric flag.
+
+`WRF_SDIRK3_WDAMP_FAULT_INJECT` (env-only, test-only, default OFF; values
+`mass` | `rdnw`) poisons the corresponding W-damping operand on the enabled
+path so the integration negatives can prove the controlled fatal routing on
+dynamic-state violations; absent env leaves every operand untouched.
+
 ### Example (`imex_split_mode=3`, `stage2_budget=8/1/0`)
 
 ```fortran
