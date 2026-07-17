@@ -536,8 +536,73 @@ int main() {
               "input fail-close: dtype mismatch");
     }
 
+
+    // (12) PR 9C.2: the runtime-contract authority. Judgment order and
+    //      flag PRIORITY are the contract: disabled short-circuits every
+    //      topology check; multi-rank / internal-tile / specified / nested
+    //      / polar / open / one-sided-symmetric all refuse with the stable
+    //      marker; open takes priority over conflicting periodic+symmetric.
+    {
+        using wrf::sdirk3::resolve_wdamp_runtime_contract;
+        auto ok = [&](bool enabled, int npx, int npy, bool covers,
+                      bool px, bool sxs, bool sxe, bool oxs, bool oxe,
+                      bool py, bool sys, bool sye, bool oys, bool oye,
+                      bool spec, bool nest, bool polar) {
+            return resolve_wdamp_runtime_contract(
+                enabled, npx, npy, covers, px, sxs, sxe, oxs, oxe, py, sys,
+                sye, oys, oye, spec, nest, polar);
+        };
+        // em_b_wave shape: periodic x + two-sided symmetric y.
+        auto c = ok(true, 1, 1, true, true, false, false, false, false,
+                    false, true, true, false, false, false, false, false);
+        check(c.active &&
+                  c.x_policy == WWCPBoundaryPolicy::Periodic &&
+                  c.y_policy == WWCPBoundaryPolicy::SymmetricReplicate,
+              "contract: em_b_wave maps to {Periodic, SymmetricReplicate}");
+        // disabled short-circuits even a hostile topology.
+        auto d = ok(false, 4, 4, false, false, false, false, true, true,
+                    false, false, false, true, true, true, true, true);
+        check(!d.active, "contract: disabled is inactive, never throws");
+        check(fails_with("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED", [&] {
+                  ok(true, 2, 1, true, true, false, false, false, false,
+                     false, true, true, false, false, false, false, false);
+              }),
+              "contract: multi-rank refuses");
+        check(fails_with("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED", [&] {
+                  ok(true, 1, 1, false, true, false, false, false, false,
+                     false, true, true, false, false, false, false, false);
+              }),
+              "contract: internal tile (does not cover patch) refuses");
+        check(fails_with("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED", [&] {
+                  ok(true, 1, 1, true, true, true, true, true, false,
+                     false, true, true, false, false, false, false, false);
+              }),
+              "contract: open-x refuses EVEN WITH periodic+symmetric also "
+              "set (priority)");
+        check(fails_with("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED", [&] {
+                  ok(true, 1, 1, true, true, false, false, false, false,
+                     false, true, true, false, false, true, false, false);
+              }),
+              "contract: specified refuses");
+        check(fails_with("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED", [&] {
+                  ok(true, 1, 1, true, true, false, false, false, false,
+                     false, true, true, false, false, false, true, false);
+              }),
+              "contract: nested refuses");
+        check(fails_with("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED", [&] {
+                  ok(true, 1, 1, true, true, false, false, false, false,
+                     false, true, true, false, false, false, false, true);
+              }),
+              "contract: polar refuses");
+        check(fails_with("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED", [&] {
+                  ok(true, 1, 1, true, true, false, false, false, false,
+                     false, true, false, false, false, false, false, false);
+              }),
+              "contract: one-sided symmetric y refuses");
+    }
+
     const int kExpectedCases =
-        3 + 1 + fx.nx + 1 + 3 + 4 + 2 + 2 + 2 + 7 + 7;  // = 36 with nx=4
+        3 + 1 + fx.nx + 1 + 3 + 4 + 2 + 2 + 2 + 7 + 7 + 9;  // = 45 with nx=4
     if (g_cases != kExpectedCases) {
         std::printf("FAIL: case-count ratchet: executed %d, expected %d\n",
                     g_cases, kExpectedCases);

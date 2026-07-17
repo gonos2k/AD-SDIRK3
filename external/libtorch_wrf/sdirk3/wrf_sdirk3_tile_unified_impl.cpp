@@ -5386,6 +5386,27 @@ vertical_coefficients:
     }
     
     try {
+        // PR 9C.2 commit 1: settle the enabled W-damping topology/boundary
+        // contract BEFORE any Newton callback exists. Multi-rank patches,
+        // internal tiles (tile != rank patch), and unsupported/conflicting
+        // lateral BCs are rejected here with the stable marker — never
+        // discovered mid-solve.
+        {
+            const bool tile_covers_patch =
+                its_ <= ids_ && ite_ >= ide_ - 1 &&
+                jts_ <= jds_ && jte_ >= jde_ - 1;
+            wdamp_contract_ = wrf::sdirk3::resolve_wdamp_runtime_contract(
+                wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
+                    wrf::sdirk3::g_sdirk3_config.implicit_wdamp,
+                nprocx_, nprocy_, tile_covers_patch,
+                config_flags_periodic_x_, config_flags_symmetric_xs_,
+                config_flags_symmetric_xe_, config_flags_open_xs_,
+                config_flags_open_xe_, config_flags_periodic_y_,
+                config_flags_symmetric_ys_, config_flags_symmetric_ye_,
+                config_flags_open_ys_, config_flags_open_ye_,
+                config_flags_specified_, config_flags_nested_,
+                config_flags_polar_);
+        }
         // ===== SHARED PRIORITY MAPPING (identical in stage loop + solveImplicitStage) =====
         int split_mode = wrf::sdirk3::g_sdirk3_config.imex_split_mode;
         if (split_mode == 0 && wrf::sdirk3::g_sdirk3_config.imex_enabled) {
@@ -17100,34 +17121,19 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     "msftx/msfuy/msfvx on their staggers)");
             }
             try {
-            // PR 9C.1 P1-1: the muu/muv seam averages are a property of the
-            // LATERAL BOUNDARY CONDITION (WRF fills them from the memory
-            // halo), so the omega diagnosis receives an explicit per-axis
-            // policy derived from the wired WRF flags. Anything without an
-            // authoritative mass halo — open/specified/nested boundaries,
-            // or internal seams of a multi-rank decomposition — is
-            // UNSUPPORTED and the helper fails closed.
-            using wrf::sdirk3::WWCPBoundaryPolicy;
-            const auto wwcp_axis_policy = [](bool periodic, bool sym_s,
-                                             bool sym_e) {
-                if (periodic) return WWCPBoundaryPolicy::Periodic;
-                if (sym_s && sym_e)
-                    return WWCPBoundaryPolicy::SymmetricReplicate;
-                return WWCPBoundaryPolicy::Unsupported;
-            };
-            WWCPBoundaryPolicy wwcp_x_policy = wwcp_axis_policy(
-                config_flags_periodic_x_, config_flags_symmetric_xs_,
-                config_flags_symmetric_xe_);
-            WWCPBoundaryPolicy wwcp_y_policy = wwcp_axis_policy(
-                config_flags_periodic_y_, config_flags_symmetric_ys_,
-                config_flags_symmetric_ye_);
-            if (nprocx_ * nprocy_ != 1) {
-                // Multi-rank preflight: this tile's edges are internal
-                // seams whose true neighbor mass lives on other ranks; the
-                // helper has no authoritative halo for them.
-                wwcp_x_policy = WWCPBoundaryPolicy::HaloProvided;
-                wwcp_y_policy = WWCPBoundaryPolicy::HaloProvided;
+            // PR 9C.2 commit 1: the per-axis policies come from the runtime
+            // contract resolved at unifiedStep entry (topology + boundary
+            // authority, settled BEFORE the Newton callback existed). A
+            // stale/inactive contract here is a programming error, not a
+            // recoverable state.
+            if (!wdamp_contract_.active) {
+                throw std::runtime_error(
+                    "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: W-damping "
+                    "term reached without an active runtime contract "
+                    "(preflight did not run)");
             }
+            const auto wwcp_x_policy = wdamp_contract_.x_policy;
+            const auto wwcp_y_policy = wdamp_contract_.y_policy;
             torch::Tensor ww;
             {
                 auto dev = u.device();
