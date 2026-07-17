@@ -1599,6 +1599,20 @@ CONTAINS
       REAL, PARAMETER :: default_krylov_tol = 1.0E-3
       REAL, PARAMETER :: default_gmres_tol  = 1.0E-7
       
+      ! PR 9C (WRF W-damping parity): pass the AUTHORITATIVE WRF namelist
+      ! values through — the damping activation flag, the implicit vertical
+      ! advection switch (ieva), and the critical CFL. These are standard WRF
+      ! &dynamics entries (Registry defaults 0 / 0 / 1.0), NOT sdirk3 knobs.
+      config_name = "wrf_w_damping"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_int(config_name, config_flags%w_damping)
+      config_name = "wrf_zadvect_implicit"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_int(config_name, config_flags%zadvect_implicit)
+      ! NOTE: wired as wrf_w_crit_cfl (its own field) — the legacy sdirk3
+      ! w_crit_cfl knob is set later from config_flags%sdirk3_w_crit_cfl and
+      ! would silently overwrite a shared field.
+      config_name = "wrf_w_crit_cfl"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_float(config_name, config_flags%w_crit_cfl)
+
       ! Newton solver settings
       config_name = "max_newton_iter"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_int(config_name, config_flags%sdirk3_max_newton_iter)

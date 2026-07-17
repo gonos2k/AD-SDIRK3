@@ -697,11 +697,10 @@ static void run_rw_term_bisection(const Context& c) {
     // PR 9B.1: whether the implicit W-damping gate is active decides the
     // expected capture inventory (w_damp_padded present or not).
     const bool expect_wdamp =
+        wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
         wrf::sdirk3::g_sdirk3_config.implicit_wdamp &&
         wrf::sdirk3::g_sdirk3_config.w_damp_alpha > 0.0f &&
-        wrf::sdirk3::g_sdirk3_config.w_crit_cfl > 0.0f;
-    // PR 9C commit 2: WRF-parity shadow captures ride the same armed calls.
-    const bool expect_parity = expect_wdamp && wdamp_parity_shadow_enabled();
+        wrf::sdirk3::g_sdirk3_config.wrf_w_crit_cfl > 0.0f;
 
     auto emit_capture_fail = [&](const char* marker, const std::string& why) {
         emit_stage_diag([&](std::ostream& os) {
@@ -730,7 +729,7 @@ static void run_rw_term_bisection(const Context& c) {
         // PR 9B.2 (P1-2): validate the RAW capture (names AND definedness)
         // BEFORE any detach().clone() — an undefined tensor must fail closed
         // with the stable marker, never a libtorch exception.
-        const std::string why = validate_rw_term_inventory(raw, expect_wdamp, expect_parity);
+        const std::string why = validate_rw_term_inventory(raw, expect_wdamp);
         if (!why.empty()) {
             emit_capture_fail("SDIRK3_RW_TERM_CAPTURE_INCOMPLETE", why);
             return {};
@@ -776,67 +775,6 @@ static void run_rw_term_bisection(const Context& c) {
         }
     }
 
-    // ---- 1b) PR 9C commit 2: WRF-parity shadow record (legacy vs the
-    //          reference-gated, mass-decoupled term on this live operand) ----
-    if (expect_parity) {
-        torch::NoGradGuard no_grad;
-        auto legacy = find_term(t0, "w_damp_padded");
-        auto wrf = find_term(t0, "wdamp_wrf_shadow");
-        auto cfl = find_term(t0, "wdamp_wrf_cfl");
-        auto mass = find_term(t0, "wd_mass_factor");
-        auto postm = find_term(t0, "rw_post_mask");
-        auto ww = find_term(t0, "wdamp_ww");
-        if (legacy.defined() && wrf.defined() && cfl.defined() &&
-            mass.defined() && postm.defined() && ww.defined()) {
-            auto cflf = cfl.flatten().to(torch::kFloat32);
-            auto qs = torch::quantile(
-                cflf, torch::tensor({0.5, 0.9, 0.99},
-                                    torch::TensorOptions()
-                                        .dtype(torch::kFloat32)
-                                        .device(cflf.device())));
-            auto qs_cpu = qs.to(torch::kCPU);
-            const int64_t total = cfl.numel();
-            // WRF gate: w_beta = 1.0 (module constant), ieva==0 on this path.
-            const int64_t active = (cfl > 1.0f).sum().item<int64_t>();
-            auto stats = torch::stack({legacy.norm(), wrf.norm(),
-                                       (legacy - wrf).norm(),
-                                       (legacy * wrf).sum(), postm.norm(),
-                                       cfl.max(), mass.min(), mass.max(),
-                                       ww.norm()})
-                             .to(torch::kCPU);
-            const float ln = stats[0].item<float>();
-            const float wn = stats[1].item<float>();
-            const float dn = stats[2].item<float>();
-            const float cs = (ln > 0.f && wn > 0.f)
-                                 ? stats[3].item<float>() / (ln * wn)
-                                 : 0.0f;
-            emit_stage_diag([&](std::ostream& os) {
-                os << "SDIRK3_WDAMP_PARITY_DIAG ts=" << c.ts
-                   << " stage=" << c.stage << " newton_iter=" << c.newton_iter
-                   << " enabled_assumed=1 wrf_w_damping_flag=unwired ieva=0"
-                   << " gate_threshold=1.0"
-                   << " excess_offset="
-                   << wrf::sdirk3::g_sdirk3_config.w_crit_cfl
-                   << " active_count=" << active
-                   << " total_count=" << total
-                   << std::scientific
-                   << " max_vert_cfl=" << stats[5].item<float>()
-                   << " p50_vert_cfl=" << qs_cpu[0].item<float>()
-                   << " p90_vert_cfl=" << qs_cpu[1].item<float>()
-                   << " p99_vert_cfl=" << qs_cpu[2].item<float>()
-                   << " legacy_norm=" << ln
-                   << " wrf_norm=" << wn
-                   << " difference_norm=" << dn
-                   << " cosine=" << cs
-                   << " rw_other_terms_norm=" << stats[4].item<float>()
-                   << " mass_min=" << stats[6].item<float>()
-                   << " mass_max=" << stats[7].item<float>()
-                   << " ww_norm=" << stats[8].item<float>()
-                   << std::defaultfloat << "\n";
-            });
-        }
-    }
-
     // ---- 2) production per-term tangents (fwAD, production mechanics) ----
     Terms tg;
     {
@@ -857,7 +795,7 @@ static void run_rw_term_bisection(const Context& c) {
         // an undefined CAPTURED tensor fails closed with the marker. (An
         // undefined unpacked TANGENT of a defined tensor remains normal for
         // constant terms and is treated as a zero tangent below.)
-        const std::string why = validate_rw_term_inventory(raw, expect_wdamp, expect_parity);
+        const std::string why = validate_rw_term_inventory(raw, expect_wdamp);
         if (!why.empty()) {
             emit_capture_fail("SDIRK3_RW_TERM_CAPTURE_INCOMPLETE", why);
             return;

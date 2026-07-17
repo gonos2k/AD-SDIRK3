@@ -25,11 +25,11 @@
 //  - damping applies on interior k only (Fortran DO k=2,kde-1); boundary
 //    levels stay zero.
 //
-// NEGATIVE CONTROL (parity deviation pin): the CURRENT production helper
-// (compute_w_damping_term) is asserted to DISAGREE with this reference on a
-// below-threshold fixture — it is ungated (negative excess applies) and
-// builds its CFL from the raw w-block without mass decoupling. Commit 3
-// flips this case to equality when production parity lands.
+// PR 9C commit 3: production parity landed — the production helper now
+// MATCHES this reference (below-gate exactly zero; active-grid equality),
+// and the retired LEGACY formula (ungated, raw-w CFL, smoothed sign) is
+// kept as a local transcription serving as the NEGATIVE CONTROL that the
+// contract still detects the deviation class it was written against.
 #include <torch/torch.h>
 #include <cmath>
 #include <cstdio>
@@ -180,55 +180,84 @@ int main() {
               "nonfinite ww fails close");
     }
 
-    // (8) interior-k / boundary semantics on a grid: reference damping lives
-    //     on k = 1..nz_w-2 only (Fortran DO k=2,kde-1); boundary rows zero.
-    //     (Checked against the production helper's PADDING ONLY — the pad
-    //     geometry is shared semantics; values are checked in (9).)
+    // (8) interior-k / boundary semantics on a grid: damping lives on
+    //     k = 1..nz_w-2 only (Fortran DO k=2,kde-1); boundary rows zero.
     {
         const int ny = 2, nzw = 6, nx = 3;
-        auto w = torch::full({ny, nzw, nx}, 5.0f);  // huge => any CFL recipe active
+        auto ww = torch::full({ny, nzw, nx}, 5.0f * mass);  // fully active
+        auto w = torch::full({ny, nzw, nx}, 1.0f);
         auto mu = torch::full({ny, nx}, mut);
         auto c1 = torch::full({nzw}, c1f);
         auto c2 = torch::full({nzw}, c2f);
-        auto dz = torch::full({1, nzw - 2, 1}, 1.0f / rdnw);
-        auto legacy = wrf::sdirk3::compute_w_damping_term(
-            w, mu, c1, c2, dz, dt, alpha, crit, 1e-3f, 1, nzw - 1, nzw);
-        check(legacy.select(1, 0).abs().max().item<float>() == 0.0f,
+        auto rdnw_int = torch::full({1, nzw - 2, 1}, rdnw);
+        auto prod = wrf::sdirk3::compute_w_damping_term(
+            ww, w, mu, c1, c2, rdnw_int, dt, alpha, beta, crit, 1, nzw - 1,
+            nzw);
+        check(prod.select(1, 0).abs().max().item<float>() == 0.0f,
               "k=0 boundary padded to zero");
-        check(legacy.select(1, nzw - 1).abs().max().item<float>() == 0.0f,
+        check(prod.select(1, nzw - 1).abs().max().item<float>() == 0.0f,
               "k=nz_w-1 boundary padded to zero");
     }
 
-    // (9) NEGATIVE CONTROL — the pinned parity deviation. On a fixture where
-    //     every point sits BELOW both thresholds in WRF's decoupled CFL, the
-    //     reference is exactly zero everywhere, but the CURRENT production
-    //     helper (ungated + raw-w CFL) produces a large nonzero term.
-    //     Commit 3 flips this case to equality when parity lands.
+    // (9) PRODUCTION PARITY (commit 3): the production helper equals the
+    //     scalar reference — exactly zero below the gate, and matching
+    //     per-point values on an active grid.
     {
         const int ny = 2, nzw = 6, nx = 3;
-        const float w_small = 0.01f;  // physical w ~ cm/s: decoupled CFL ~ 1e-9
-        auto w = torch::full({ny, nzw, nx}, w_small);
         auto mu = torch::full({ny, nx}, mut);
         auto c1 = torch::full({nzw}, c1f);
         auto c2 = torch::full({nzw}, c2f);
-        auto dz = torch::full({1, nzw - 2, 1}, 1.0f / rdnw);
-        // WRF reference at these points (ww ~ mass * w-ish is irrelevant:
-        // even ww = mass * w_small gives vert_cfl = w_small*rdnw*dt ≈ 384 —
-        // so use the DECOUPLED definition faithfully with eta-dot scale):
-        // a physically-consistent ww for a balanced state is tiny; take
-        // ww = 1e-4 * mass (eta-dot 1e-4/s) => vert_cfl = 1e-4*64*600 = 3.84.
-        // To pin the BELOW-threshold case use eta-dot 1e-6 => cfl 0.0384.
+        auto rdnw_int = torch::full({1, nzw - 2, 1}, rdnw);
+        // below-gate: decoupled CFL ~ 0.0384 << gate
+        auto ww_lo = torch::full({ny, nzw, nx}, 1e-6f * mass);
+        auto w_any = torch::full({ny, nzw, nx}, 0.01f);
+        auto prod_lo = wrf::sdirk3::compute_w_damping_term(
+            ww_lo, w_any, mu, c1, c2, rdnw_int, dt, alpha, beta, crit, 1,
+            nzw - 1, nzw);
+        check(prod_lo.abs().max().item<float>() == 0.0f,
+              "production: below-gate damping is exactly zero (parity)");
+        // active grid: per-point equality with the scalar reference
+        const float cfl_hi = 3.0f;
+        auto ww_hi = torch::full({ny, nzw, nx}, ww_for_cfl(cfl_hi));
+        auto w_neg = torch::full({ny, nzw, nx}, -1.5f);
+        auto prod_hi = wrf::sdirk3::compute_w_damping_term(
+            ww_hi, w_neg, mu, c1, c2, rdnw_int, dt, alpha, beta, crit, 1,
+            nzw - 1, nzw);
+        auto ref_pt = wrf_wdamp_reference(ww_for_cfl(cfl_hi), -1.5f, mut, c1f,
+                                          c2f, rdnw, dt, alpha, crit, beta, 0,
+                                          true);
+        const float got = prod_hi.select(1, 2)[0][0].item<float>();
+        check(ref_pt.has_value() &&
+                  std::fabs(got - *ref_pt) <=
+                      1e-4f * std::max(std::fabs(*ref_pt), 1e-30f),
+              "production: active point equals the scalar reference");
+    }
+
+    // (10b) NEGATIVE CONTROL — the retired legacy formula (ungated, raw-w
+    //       CFL, smoothed sign) must FAIL this contract: nonzero below the
+    //       reference gate. Proves the contract detects the deviation class.
+    {
+        const int ny = 2, nzw = 6, nx = 3;
+        const float w_small = 0.01f;
+        auto w = torch::full({ny, nzw, nx}, w_small);
+        auto mu = torch::full({ny, nx}, mut);
+        auto legacy_transcription = [&]() {
+            auto w_int = w.slice(1, 1, nzw - 1);
+            auto vert_cfl = torch::abs(w_int) * dt * rdnw;  // raw-w, no mass
+            auto excess = vert_cfl - crit;                  // UNGATED
+            const float delta = 1e-3f;
+            auto sgn = w_int / torch::sqrt(w_int * w_int + delta * delta);
+            auto mass_t = torch::full_like(w_int, mass);
+            return sgn * alpha * excess * mass_t;
+        };
+        const float legacy_norm = legacy_transcription().norm().item<float>();
         auto ref = wrf_wdamp_reference(1e-6f * mass, w_small, mut, c1f, c2f,
                                        rdnw, dt, alpha, crit, beta, 0, true);
         check(ref.has_value() && *ref == 0.0f,
-              "reference: below-threshold point damps exactly zero");
-        auto legacy = wrf::sdirk3::compute_w_damping_term(
-            w, mu, c1, c2, dz, dt, alpha, crit, 1e-3f, 1, nzw - 1, nzw);
-        const float legacy_norm = legacy.norm().item<float>();
+              "reference: below-gate point damps exactly zero");
         check(legacy_norm > 1.0f,
-              "NEGATIVE CONTROL: current production term is NONZERO below "
-              "threshold (ungated legacy deviation pinned; commit 3 flips "
-              "this to equality)");
+              "NEGATIVE CONTROL: the legacy formula is nonzero below the "
+              "gate — the contract detects the retired deviation class");
     }
 
     // (10) ww == 0: CFL is exactly zero -> below every gate -> zero damping.
@@ -277,7 +306,7 @@ int main() {
               "active point, w=-0: damping sign -1 (oracle)");
     }
 
-    const int kExpectedCases = 24;
+    const int kExpectedCases = 26;
     if (g_cases != kExpectedCases) {
         std::printf("FAIL: case-count ratchet: executed %d, expected %d\n",
                     g_cases, kExpectedCases);

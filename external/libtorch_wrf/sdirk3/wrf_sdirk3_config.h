@@ -2071,6 +2071,20 @@ struct SDIRK3Config {
     // W-damping parameters for acoustic mode control
     float w_damp_alpha = 0.3f;      // W-damping coefficient
     float w_crit_cfl = 1.0f;        // Critical vertical CFL for W-damping
+    // PR 9C (WRF W-damping parity): the WRF namelist activation flag and the
+    // implicit-vertical-advection switch, wired from config_flags by the
+    // Fortran bridge. Defaults match the WRF Registry (both 0), so the
+    // parity-gated damping is OFF unless the WRF namelist enables it —
+    // exactly WRF's own default behavior.
+    int wrf_w_damping = 0;          // config_flags%w_damping (Registry default 0)
+    int wrf_zadvect_implicit = 0;   // config_flags%zadvect_implicit / ieva (default 0)
+    // The WRF namelist w_crit_cfl (Registry default 1.0) — a SEPARATE field
+    // from the legacy sdirk3 w_crit_cfl knob above, because the bridge sets
+    // that one from config_flags%sdirk3_w_crit_cfl AFTER the WRF
+    // pass-through (it would silently overwrite a shared field). The
+    // parity-gated damping reads THIS value for its excess offset (and for
+    // the gate when ieva > 0).
+    float wrf_w_crit_cfl = 1.0f;
     bool damp_t = false;            // Apply damping to potential temperature (WRF naming: t)
     
     // Time step for dynamics (used in W-damping CFL calculation)

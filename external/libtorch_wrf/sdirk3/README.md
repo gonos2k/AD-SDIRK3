@@ -105,6 +105,9 @@ through Registry + Fortran `set_config` + C++ (env, string setter, dump,
 | Stage-2 GMRES restart | `sdirk3_stage2_gmres_restart` | `WRF_SDIRK3_STAGE2_GMRES_RESTART` |
 | Stage-2 Krylov restarts | `sdirk3_stage2_max_krylov_restarts` | `WRF_SDIRK3_STAGE2_MAX_KRYLOV_RESTARTS` |
 | Stage-2 Krylov tolerance | `sdirk3_stage2_krylov_tol` | `WRF_SDIRK3_STAGE2_KRYLOV_TOL` |
+| W-damping activation (WRF parity) | `w_damping` (standard WRF key) | `WRF_SDIRK3_WRF_W_DAMPING` |
+| IEVA / implicit vertical adv (WRF parity) | `zadvect_implicit` (standard WRF key) | `WRF_SDIRK3_WRF_ZADVECT_IMPLICIT` |
+| W-damping critical CFL (WRF parity) | `w_crit_cfl` (standard WRF key; wired as `wrf_w_crit_cfl` — a separate field from the legacy sdirk3 knob) | `WRF_SDIRK3_WRF_W_CRIT_CFL` |
 
 ### Example (`imex_split_mode=3`, `stage2_budget=8/1/0`)
 
