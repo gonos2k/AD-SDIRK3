@@ -17084,6 +17084,73 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
                 rw_cap2.add("w_damp_padded", w_damp_padded);
             }
+
+            // PR 9C commit 2: opt-in WRF-parity SHADOW (diagnosis only —
+            // production tendency untouched). Computes the reference-gated,
+            // mass-decoupled damping of the SAME evaluation state, with
+            // omega diagnosed by WRF's calc_ww_cp recurrence (as in the
+            // split driver's omega_of_state; c1h==1/c2h==0 and msf==1
+            // assumed — em_b_wave). Captured for the checker's
+            // SDIRK3_WDAMP_PARITY_DIAG records.
+            {
+                auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
+                if (rw_cap2.armed &&
+                    wrf::sdirk3::wdamp_parity_shadow_enabled()) {
+                    torch::NoGradGuard no_grad;
+                    using torch::indexing::Slice;
+                    auto u_d = u.detach();
+                    auto v_d = v.detach();
+                    auto mu_d = mu_full.detach();
+                    const int nxs = static_cast<int>(mu_d.size(1));
+                    const int nys = static_cast<int>(mu_d.size(0));
+                    const int nzs = static_cast<int>(u_d.size(1));
+                    auto muu = avg_x_to_u_2d(mu_d, u_d.size(2)).unsqueeze(1);
+                    auto muv = avg_y_to_v_2d(mu_d, v_d.size(0)).unsqueeze(1);
+                    auto rdnw_t = getRdnwTensor(u_d.device(), u_d.scalar_type(), nz_);
+                    auto dnw_t = -torch::reciprocal(rdnw_t);
+                    auto uflux = muu * u_d;
+                    auto vflux = muv * v_d;
+                    auto divx = rdx * (uflux.index({Slice(), Slice(), Slice(1, nxs + 1)}) -
+                                       uflux.index({Slice(), Slice(), Slice(0, nxs)}));
+                    auto divy = rdy * (vflux.index({Slice(1, nys + 1), Slice(), Slice()}) -
+                                       vflux.index({Slice(0, nys), Slice(), Slice()}));
+                    auto divv = dnw_t.view({1, nzs, 1}) * (divx + divy);
+                    auto dmdt = divv.sum(1);
+                    std::vector<torch::Tensor> wwv(static_cast<size_t>(nzs) + 1);
+                    wwv[0] = torch::zeros({nys, nxs}, u_d.options());
+                    for (int kf = 1; kf <= nzs - 1; ++kf) {
+                        wwv[kf] = wwv[kf - 1] - dnw_t[kf - 1] * dmdt -
+                                  divv.index({Slice(), kf - 1, Slice()});
+                    }
+                    wwv[nzs] = torch::zeros({nys, nxs}, u_d.options());
+                    auto ww = torch::stack(wwv, 1);  // [ny, nz_w, nx]
+                    auto ww_int = ww.slice(1, k_start, k_end);
+                    auto c1f_i = c1f_.slice(0, k_start, k_end)
+                                     .reshape({1, n_interior, 1});
+                    auto c2f_i = c2f_.slice(0, k_start, k_end)
+                                     .reshape({1, n_interior, 1});
+                    auto mass_i = c1f_i * mu_d.unsqueeze(1) + c2f_i;
+                    auto rdnw_i = torch::reciprocal(dz);  // dz = 1/rdnw
+                    auto cfl_wrf = (ww_int / mass_i * rdnw_i * dt).abs();
+                    // WRF gate: w_beta = 1.0 (module constant);
+                    // ieva/zadvect_implicit treated as 0 on this path.
+                    const float shadow_w_beta = 1.0f;
+                    auto w_i = w.detach().slice(1, k_start, k_end);
+                    // Fortran SIGN(1.,w) approximated with w<0 ? -1 : +1
+                    // (differs only at w == -0.0; measure-zero for a shadow).
+                    auto sgn = torch::where(w_i < 0.0f,
+                                            torch::full_like(w_i, -1.0f),
+                                            torch::full_like(w_i, 1.0f));
+                    auto term = sgn * w_alpha * (cfl_wrf - w_crit_cfl) * mass_i;
+                    auto wrf_term = torch::where(cfl_wrf > shadow_w_beta, term,
+                                                 torch::zeros_like(term));
+                    rw_cap2.add("wdamp_wrf_shadow",
+                                torch::constant_pad_nd(
+                                    wrf_term, {0, 0, k_start, nz_w_ - k_end}));
+                    rw_cap2.add("wdamp_wrf_cfl", cfl_wrf);
+                    rw_cap2.add("wdamp_ww", ww_int);
+                }
+            }
         }
         
         // Additional top boundary damping - also moved to implicit

@@ -23,6 +23,7 @@
 // evaluation the caller unpacks the tangents (via take()) while its
 // DualLevelGuard is still alive, then the scope ends.
 #include <torch/torch.h>
+#include <cstdlib>
 #include <string>
 #include <utility>
 #include <vector>
@@ -42,6 +43,18 @@ struct RwTermCapture {
 inline RwTermCapture& rw_term_capture_slot() {
     static thread_local RwTermCapture t_slot;
     return t_slot;
+}
+
+// PR 9C commit 2: opt-in WRF-parity W-damping shadow (diagnosis-only,
+// temporary — not a production knob). When set AND a capture is armed, the
+// tile computes the reference-gated mass-decoupled damping alongside the
+// legacy term and captures it for SDIRK3_WDAMP_PARITY_DIAG records.
+inline bool wdamp_parity_shadow_enabled() {
+    static const bool on = [] {
+        const char* v = std::getenv("WRF_SDIRK3_WDAMP_PARITY_DIAG");
+        return v != nullptr && v[0] != '\0' && v[0] != '0';
+    }();
+    return on;
 }
 
 // RAII arm/disarm. Constructor arms THIS THREAD's slot (refusing if it is
@@ -100,7 +113,8 @@ class RwTermCaptureScope {
 // which would throw on an undefined tensor instead of failing closed.
 inline std::string validate_rw_term_inventory(
     const std::vector<std::pair<std::string, torch::Tensor>>& terms,
-    bool expect_wdamp) {
+    bool expect_wdamp,
+    bool expect_parity_shadow = false) {
     static const char* kRequired[] = {
         "w_input",      "mu_input",       "pg",           "buoy_mu1",
         "buoy_mu2",     "rw_pre_pgf",     "w_pgf_buoy_all",
@@ -141,9 +155,23 @@ inline std::string validate_rw_term_inventory(
         if (c.total > 1) append("duplicate:w_damp_padded");
         if (c.total == 1 && c.defined == 0) append("undefined:w_damp_padded");
     }
+    static const char* kParityShadow[] = {"wdamp_wrf_shadow", "wdamp_wrf_cfl",
+                                          "wdamp_ww"};
+    for (const char* name : kParityShadow) {
+        const Counts c = stats_of(name);
+        if (expect_parity_shadow && c.total == 0)
+            append(std::string("missing:") + name);
+        if (!expect_parity_shadow && c.total > 0)
+            append(std::string("unexpected:") + name);
+        if (c.total > 1) append(std::string("duplicate:") + name);
+        if (c.total == 1 && c.defined == 0)
+            append(std::string("undefined:") + name);
+    }
     for (const auto& kv : terms) {
         bool known = kv.first == "w_damp_padded";
         for (const char* name : kRequired)
+            if (kv.first == name) known = true;
+        for (const char* name : kParityShadow)
             if (kv.first == name) known = true;
         if (!known) append(std::string("unknown:") + kv.first);
     }
