@@ -31,15 +31,18 @@ float rel_err(const torch::Tensor& a, const torch::Tensor& b) {
     return (a - b).norm().item<float>() / std::max({an, bn, 1e-30f});
 }
 
-// Scalar-loop reference: verbatim calc_ww_cp with the documented
-// domain-edge REPLICATE policy for muu/muv.
+// Scalar-loop reference: verbatim calc_ww_cp with an INDEPENDENT
+// transcription of the halo semantics per axis — periodic wrap reads the
+// opposite physical edge (WRF memory halo under periodic_x/y), symmetric
+// replicate degenerates the one-sided average to the edge value.
 torch::Tensor scalar_ww_cp(const torch::Tensor& u, const torch::Tensor& v,
                            const torch::Tensor& mup, const torch::Tensor& mub,
                            const torch::Tensor& c1h, const torch::Tensor& c2h,
                            const torch::Tensor& dnw, float rdx, float rdy,
                            const torch::Tensor& msftx,
                            const torch::Tensor& msfuy,
-                           const torch::Tensor& msfvx_inv) {
+                           const torch::Tensor& msfvx_inv,
+                           bool x_periodic = false, bool y_periodic = false) {
     const int ny = mup.size(0), nx = mup.size(1), nz = u.size(1);
     auto ua = u.accessor<float, 3>();
     auto va = v.accessor<float, 3>();
@@ -54,13 +57,21 @@ torch::Tensor scalar_ww_cp(const torch::Tensor& u, const torch::Tensor& v,
 
     auto mut = [&](int j, int i) { return mupa[j][i] + muba[j][i]; };
     auto muu = [&](int j, int i) {  // u-point i in [0..nx]
-        if (i == 0) return mut(j, 0);
-        if (i == nx) return mut(j, nx - 1);
+        if (i == 0)
+            return x_periodic ? 0.5f * (mut(j, 0) + mut(j, nx - 1))
+                              : mut(j, 0);
+        if (i == nx)
+            return x_periodic ? 0.5f * (mut(j, 0) + mut(j, nx - 1))
+                              : mut(j, nx - 1);
         return 0.5f * (mut(j, i) + mut(j, i - 1));
     };
     auto muv = [&](int j, int i) {  // v-point j in [0..ny]
-        if (j == 0) return mut(0, i);
-        if (j == ny) return mut(ny - 1, i);
+        if (j == 0)
+            return y_periodic ? 0.5f * (mut(0, i) + mut(ny - 1, i))
+                              : mut(0, i);
+        if (j == ny)
+            return y_periodic ? 0.5f * (mut(0, i) + mut(ny - 1, i))
+                              : mut(ny - 1, i);
         return 0.5f * (mut(j, i) + mut(j - 1, i));
     };
 
@@ -349,7 +360,184 @@ int main() {
               "fail-close: mis-shaped u-stagger map factor rejected");
     }
 
-    const int kExpectedCases = 3 + 1 + fx.nx + 1 + 3 + 4;  // = 16 with nx=4
+
+    // (7)-(8) PERIODIC seam contract (review P1-1): the production helper's
+    //     wrap must match an INDEPENDENT scalar periodic-halo transcription,
+    //     and must measurably differ from the replicate policy (the fixture
+    //     has first mass != last mass by construction).
+    using wrf::sdirk3::WWCPBoundaryPolicy;
+    {
+        auto prod_px = fx.prod(WWCPBoundaryPolicy::Periodic,
+                               WWCPBoundaryPolicy::SymmetricReplicate);
+        auto ref_px = scalar_ww_cp(fx.u, fx.v, fx.mup, fx.mub, fx.c1h,
+                                   fx.c2h, fx.dnw, fx.rdx, fx.rdy, fx.msftx,
+                                   fx.msfuy, fx.msfvx_inv,
+                                   /*x_periodic=*/true, /*y_periodic=*/false);
+        const float re = rel_err(prod_px, ref_px);
+        std::printf("ww_cp periodic-x seam: prod vs scalar rel=%.3e\n", re);
+        check(re <= 1e-5f, "periodic-x: wrap matches the scalar halo");
+        check((prod_px - fx.prod()).abs().max().item<float>() > 0.0f,
+              "periodic-x: wrap measurably differs from replicate");
+    }
+    {
+        auto prod_py = fx.prod(WWCPBoundaryPolicy::SymmetricReplicate,
+                               WWCPBoundaryPolicy::Periodic);
+        auto ref_py = scalar_ww_cp(fx.u, fx.v, fx.mup, fx.mub, fx.c1h,
+                                   fx.c2h, fx.dnw, fx.rdx, fx.rdy, fx.msftx,
+                                   fx.msfuy, fx.msfvx_inv,
+                                   /*x_periodic=*/false, /*y_periodic=*/true);
+        check(rel_err(prod_py, ref_py) <= 1e-5f,
+              "periodic-y: wrap matches the scalar halo");
+        check((prod_py - fx.prod()).abs().max().item<float>() > 0.0f,
+              "periodic-y: wrap measurably differs from replicate");
+    }
+
+    // (9)-(11) fail-close families: every violation must end in its STABLE
+    //     marker (never a generic c10 exception), and unsupported boundary
+    //     policies must refuse rather than guess a halo.
+    auto fails_with = [](const char* marker, auto&& fn) {
+        try {
+            fn();
+        } catch (const std::exception& e) {
+            return std::string(e.what()).find(marker) == 0;
+        }
+        return false;
+    };
+    {
+        check(fails_with("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED", [&] {
+                  fx.prod(WWCPBoundaryPolicy::Unsupported,
+                          WWCPBoundaryPolicy::SymmetricReplicate);
+              }),
+              "policy fail-close: Unsupported x refuses");
+        check(fails_with("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED", [&] {
+                  fx.prod(WWCPBoundaryPolicy::SymmetricReplicate,
+                          WWCPBoundaryPolicy::HaloProvided);
+              }),
+              "policy fail-close: HaloProvided (no halo wired) refuses");
+    }
+    {
+        auto opt = torch::TensorOptions().dtype(torch::kFloat32);
+        auto SR = WWCPBoundaryPolicy::SymmetricReplicate;
+        auto call_with = [&](const torch::Tensor& mup_a,
+                             const torch::Tensor& u_a,
+                             const torch::Tensor& c1h_a,
+                             const torch::Tensor& dnw_a,
+                             const torch::Tensor& msftx_a,
+                             const torch::Tensor& msfuy_a) {
+            return wrf::sdirk3::compute_wrf_ww_cp(
+                u_a, fx.v, mup_a, fx.mub, c1h_a, fx.c2h, dnw_a, fx.rdx,
+                fx.rdy, msftx_a, msfuy_a, fx.msfvx_inv, SR, SR);
+        };
+        torch::Tensor undef;
+        check(fails_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  call_with(undef, fx.u, fx.c1h, fx.dnw, fx.msftx, fx.msfuy);
+              }),
+              "helper fail-close: undefined mup -> stable marker");
+        check(fails_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  call_with(fx.mup.reshape({-1}), fx.u, fx.c1h, fx.dnw,
+                            fx.msftx, fx.msfuy);
+              }),
+              "helper fail-close: 1-D mup -> stable marker");
+        check(fails_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  call_with(fx.mup, undef, fx.c1h, fx.dnw, fx.msftx,
+                            fx.msfuy);
+              }),
+              "helper fail-close: undefined u -> stable marker");
+        check(fails_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  call_with(fx.mup, fx.u, torch::ones({fx.nz + 2}, opt),
+                            fx.dnw, fx.msftx, fx.msfuy);
+              }),
+              "helper fail-close: c1h length nz+2 -> stable marker");
+        check(fails_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  call_with(fx.mup, fx.u, fx.c1h,
+                            torch::full({fx.nz + 1}, -0.01f, opt), fx.msftx,
+                            fx.msfuy);
+              }),
+              "helper fail-close: dnw length nz+1 -> stable marker");
+        {
+            auto msftx_nan = fx.msftx.clone();
+            msftx_nan[0][0] = std::nanf("");
+            check(fails_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                      call_with(fx.mup, fx.u, fx.c1h, fx.dnw, msftx_nan,
+                                fx.msfuy);
+                  }),
+                  "helper fail-close: NaN msftx -> stable marker");
+        }
+        {
+            auto msfuy_zero = fx.msfuy.clone();
+            msfuy_zero[0][0] = 0.0f;
+            check(fails_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                      call_with(fx.mup, fx.u, fx.c1h, fx.dnw, fx.msftx,
+                                msfuy_zero);
+                  }),
+                  "helper fail-close: zero msfuy (division metric) -> "
+                  "stable marker");
+        }
+    }
+    {
+        // Denominator negatives (review P1-3): judged on the ACTUAL
+        // c1f*mu+c2f, plus the rdnw/shape/dtype input contract.
+        auto opt = torch::TensorOptions().dtype(torch::kFloat32);
+        const int nz_w = fx.nz + 1;
+        const int k_start = 1, k_end = nz_w - 1;
+        const int n_int = k_end - k_start;
+        auto kw = torch::arange(nz_w, opt);
+        auto c1f = 1.0f - 0.05f * kw;
+        auto c2f = 90.0f * kw;
+        auto rdnw_int =
+            (1.0f / (0.011f + 0.0015f * kw)).slice(0, k_start, k_end)
+                .reshape({1, n_int, 1});
+        auto i3w = torch::arange(fx.ny * nz_w * fx.nx, opt)
+                       .reshape({fx.ny, nz_w, fx.nx});
+        auto w_phys = 3.0f * torch::sin(i3w * 0.83f);
+        auto mut_full = fx.mup + fx.mub;
+        auto ww = fx.prod();
+        auto damp = [&](const torch::Tensor& mu_a, const torch::Tensor& c1f_a,
+                        const torch::Tensor& c2f_a,
+                        const torch::Tensor& rdnw_a,
+                        const torch::Tensor& ww_a) {
+            return wrf::sdirk3::compute_w_damping_term(
+                ww_a, w_phys, mu_a, c1f_a, c2f_a, rdnw_a, 30.0f,
+                wrf::sdirk3::kWrfWAlpha, wrf::sdirk3::kWrfWBeta, 1.0f,
+                k_start, k_end, nz_w);
+        };
+        check(fails_with("SDIRK3_WDAMP_INVALID_MASS", [&] {
+                  damp(mut_full, -c1f, c2f, rdnw_int, ww);
+              }),
+              "denominator fail-close: positive mu, negative c1f");
+        check(fails_with("SDIRK3_WDAMP_INVALID_MASS", [&] {
+                  damp(mut_full, c1f, c2f - 2.0e5f, rdnw_int, ww);
+              }),
+              "denominator fail-close: sufficiently negative c2f");
+        check(fails_with("SDIRK3_WDAMP_INVALID_MASS", [&] {
+                  auto c1f_nan = c1f.clone();
+                  c1f_nan[1] = std::nanf("");
+                  damp(mut_full, c1f_nan, c2f, rdnw_int, ww);
+              }),
+              "denominator fail-close: NaN c1f -> non-finite denominator");
+        check(fails_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  auto rdnw_inf = rdnw_int.clone();
+                  rdnw_inf[0][0][0] = INFINITY;
+                  damp(mut_full, c1f, c2f, rdnw_inf, ww);
+              }),
+              "input fail-close: Inf rdnw_interior");
+        check(fails_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  damp(mut_full, c1f, c2f, rdnw_int.reshape({n_int}), ww);
+              }),
+              "input fail-close: wrong rdnw shape");
+        check(fails_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  damp(mut_full, c1f, c2f, rdnw_int,
+                       torch::cat({ww, ww.slice(1, 0, 1)}, 1));
+              }),
+              "input fail-close: vertical size != nz_w");
+        check(fails_with("SDIRK3_WDAMP_INVALID_INPUT", [&] {
+                  damp(mut_full.to(torch::kFloat64), c1f, c2f, rdnw_int, ww);
+              }),
+              "input fail-close: dtype mismatch");
+    }
+
+    const int kExpectedCases =
+        3 + 1 + fx.nx + 1 + 3 + 4 + 2 + 2 + 2 + 7 + 7;  // = 36 with nx=4
     if (g_cases != kExpectedCases) {
         std::printf("FAIL: case-count ratchet: executed %d, expected %d\n",
                     g_cases, kExpectedCases);
