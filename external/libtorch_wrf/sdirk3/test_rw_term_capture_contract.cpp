@@ -30,14 +30,18 @@ void check(bool ok, const char* what) {
 }
 using Terms = std::vector<std::pair<std::string, torch::Tensor>>;
 Terms full_inventory(bool with_wdamp) {
-    static const char* names[] = {
-        "w_input", "mu_input", "pg", "buoy_mu1", "buoy_mu2", "rw_pre_pgf",
-        "w_pgf_buoy_all", "w_top_contrib", "rw_pre_mask", "rw_post_mask",
-        "wd_vert_cfl", "wd_cfl_excess", "wd_w_sign", "wd_mass_factor",
-        "rw_tend_final"};
+    // PR 9C: the whole W-damping family (inputs, chain factors, term) is
+    // present only when the parity-gated damping is active.
+    static const char* base_names[] = {
+        "pg", "buoy_mu1", "buoy_mu2", "rw_pre_pgf", "w_pgf_buoy_all",
+        "w_top_contrib", "rw_pre_mask", "rw_post_mask", "rw_tend_final"};
+    static const char* wdamp_names[] = {
+        "w_input", "mu_input", "wd_vert_cfl", "wd_cfl_excess", "wd_w_sign",
+        "wd_mass_factor", "w_damp_padded"};
     Terms t;
-    for (const char* n : names) t.emplace_back(n, torch::ones({2}));
-    if (with_wdamp) t.emplace_back("w_damp_padded", torch::ones({2}));
+    for (const char* n : base_names) t.emplace_back(n, torch::ones({2}));
+    if (with_wdamp)
+        for (const char* n : wdamp_names) t.emplace_back(n, torch::ones({2}));
     return t;
 }
 }  // namespace
@@ -136,7 +140,9 @@ int main() {
               "complete inventory (wdamp inactive) validates clean");
 
         auto missing = full_inventory(true);
-        missing.erase(missing.begin() + 3);  // drop buoy_mu1
+        for (auto it = missing.begin(); it != missing.end(); ++it) {
+            if (it->first == "buoy_mu1") { missing.erase(it); break; }
+        }
         check(validate_rw_term_inventory(missing, true).find(
                   "missing:buoy_mu1") != std::string::npos,
               "missing buoy_mu1 detected by name");
@@ -184,7 +190,9 @@ int main() {
     // (7) PR 9B.2 P1-2: undefined captured tensors fail closed BY NAME.
     {
         auto undef = full_inventory(true);
-        undef[2].second = torch::Tensor();  // pg captured but undefined
+        for (auto& kv : undef) {
+            if (kv.first == "pg") { kv.second = torch::Tensor(); break; }
+        }
         check(validate_rw_term_inventory(undef, true).find("undefined:pg") !=
                   std::string::npos,
               "undefined required term detected by name");

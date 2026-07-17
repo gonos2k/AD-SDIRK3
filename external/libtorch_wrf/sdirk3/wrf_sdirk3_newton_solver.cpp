@@ -697,9 +697,10 @@ static void run_rw_term_bisection(const Context& c) {
     // PR 9B.1: whether the implicit W-damping gate is active decides the
     // expected capture inventory (w_damp_padded present or not).
     const bool expect_wdamp =
+        wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
         wrf::sdirk3::g_sdirk3_config.implicit_wdamp &&
         wrf::sdirk3::g_sdirk3_config.w_damp_alpha > 0.0f &&
-        wrf::sdirk3::g_sdirk3_config.w_crit_cfl > 0.0f;
+        wrf::sdirk3::g_sdirk3_config.wrf_w_crit_cfl > 0.0f;
 
     auto emit_capture_fail = [&](const char* marker, const std::string& why) {
         emit_stage_diag([&](std::ostream& os) {

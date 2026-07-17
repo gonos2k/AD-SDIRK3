@@ -17024,61 +17024,98 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // Applied when vertical CFL exceeds critical value
         
         // W-damping: restored in RHS for preconditioner-RHS consistency (2026-02-01)
-        // Previously precond-only; now applied explicitly in do_implicit so the
-        // preconditioner diagonal and RHS both contain the W-damp contribution.
-        // Gated by implicit_wdamp for consistency with preconditioner eff_wdamp.
-        // Get W-damping parameters from configuration
-        float w_alpha = wrf::sdirk3::g_sdirk3_config.w_damp_alpha;  // Damping coefficient
-        float w_crit_cfl = wrf::sdirk3::g_sdirk3_config.w_crit_cfl; // Critical CFL threshold
+        // PR 9C (WRF parity): the term is now gated by the AUTHORITATIVE WRF
+        // namelist flag config_flags%w_damping (wired via the bridge; Registry
+        // default 0 => OFF, matching WRF's own default), uses the
+        // MASS-DECOUPLED vertical CFL of the omega diagnosed from the SAME
+        // evaluation state (WRF's calc_ww_cp recurrence), separates the gate
+        // threshold (w_beta, or w_crit_cfl when zadvect_implicit/ieva>0) from
+        // the excess offset (w_crit_cfl), and takes its sign from the
+        // PHYSICAL w with oracle-pinned Fortran SIGN semantics — see
+        // wrf_sdirk3_w_damping.h. implicit_wdamp remains the sdirk3-internal
+        // placement switch. NOTE: the preconditioner's eff_wdamp mirror is
+        // deliberately UNTOUCHED (preconditioner changes are out of scope);
+        // its consistency with the parity-gated RHS term is flagged for
+        // review.
+        float w_alpha = wrf::sdirk3::g_sdirk3_config.w_damp_alpha;
+        // PR 9C: the parity term uses the WRF namelist w_crit_cfl
+        // (wrf_w_crit_cfl — its own field; the legacy sdirk3 knob is
+        // overwritten later in the bridge by sdirk3_w_crit_cfl).
+        float w_crit_cfl = wrf::sdirk3::g_sdirk3_config.wrf_w_crit_cfl;
 
-        if (wrf::sdirk3::g_sdirk3_config.implicit_wdamp && w_alpha > 0.0f && w_crit_cfl > 0.0f) {
-            // FIX 2026-02-01: Use dt_stage_ (actual Fortran dt) instead of
-            // g_sdirk3_config.dt_dynamics which defaults to 1.0 and has no setter.
+        if (wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
+            wrf::sdirk3::g_sdirk3_config.implicit_wdamp &&
+            w_alpha > 0.0f && w_crit_cfl > 0.0f) {
             float dt = dt_stage_;
-
-            // AD/JVP FIX 2026-02-01: Vectorized W-damping over interior levels.
-            // Replaces per-k loop + index_copy (O(nz) graph nodes) with a single
-            // batched operation (O(1) graph nodes). Reduces AD graph size and
-            // improves JVP/VJP performance.
-            //
-            // Interior w-levels: k = 1 .. nz_w-2 (indices into dim 1)
             int k_start = 1;
             int k_end = nz_w_ - 1;  // exclusive
             int n_interior = k_end - k_start;
 
-            // w_interior view retained for the input-tangent capture and the
-            // sign_vel diagnostic below; the damp chain itself lives in
-            // compute_w_damping_term (wrf_sdirk3_w_damping.h) so the standing
-            // tangent contract exercises the PRODUCTION path.
-            auto w_interior = w.slice(1, k_start, k_end);
+            // rdnw on interior levels: [1, n_interior, 1]
+            std::vector<float> rdnw_vec(n_interior);
+            for (int i = 0; i < n_interior; ++i) {
+                rdnw_vec[i] = rdnw_[i];  // rdnw_[k-1] where k = i+1
+            }
+            auto rdnw_int = torch::from_blob(rdnw_vec.data(), {n_interior},
+                                             torch::kFloat32)
+                                .clone()
+                                .to(w.device())
+                                .reshape({1, n_interior, 1});
+
+            // Omega of the SAME evaluation state via WRF's calc_ww_cp
+            // recurrence (as the split driver's omega_of_state; c1h==1,
+            // c2h==0, msf==1 assumed — em_b_wave).
+            torch::Tensor ww;
+            {
+                using torch::indexing::Slice;
+                const int nxs = static_cast<int>(mu_full.size(1));
+                const int nys = static_cast<int>(mu_full.size(0));
+                const int nzs = static_cast<int>(u.size(1));
+                auto muu = avg_x_to_u_2d(mu_full, u.size(2)).unsqueeze(1);
+                auto muv = avg_y_to_v_2d(mu_full, v.size(0)).unsqueeze(1);
+                auto rdnw_t = getRdnwTensor(u.device(), u.scalar_type(), nz_);
+                auto dnw_t = -torch::reciprocal(rdnw_t);
+                auto uflux = muu * u;
+                auto vflux = muv * v;
+                auto divx = rdx * (uflux.index({Slice(), Slice(), Slice(1, nxs + 1)}) -
+                                   uflux.index({Slice(), Slice(), Slice(0, nxs)}));
+                auto divy = rdy * (vflux.index({Slice(1, nys + 1), Slice(), Slice()}) -
+                                   vflux.index({Slice(0, nys), Slice(), Slice()}));
+                auto divv = dnw_t.view({1, nzs, 1}) * (divx + divy);
+                auto dmdt = divv.sum(1);
+                std::vector<torch::Tensor> wwv(static_cast<size_t>(nzs) + 1);
+                wwv[0] = torch::zeros({nys, nxs}, u.options());
+                for (int kf = 1; kf <= nzs - 1; ++kf) {
+                    wwv[kf] = wwv[kf - 1] - dnw_t[kf - 1] * dmdt -
+                              divv.index({Slice(), kf - 1, Slice()});
+                }
+                wwv[nzs] = torch::zeros({nys, nxs}, u.options());
+                ww = torch::stack(wwv, 1);  // [ny, nz_w, nx]
+            }
+
             {
                 // PR 9B factor-level capture: the damp inputs' own tangents.
                 auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
-                rw_cap2.add("w_input", w_interior);
+                rw_cap2.add("w_input", w.slice(1, k_start, k_end));
                 rw_cap2.add("mu_input", mu_full);
             }
-
-            // dz per interior level: 1/rdnw[k-1] for k in [1..nz_w-2]
-            std::vector<float> dz_vec(n_interior);
-            for (int i = 0; i < n_interior; ++i) {
-                dz_vec[i] = 1.0f / rdnw_[i];  // rdnw_[k-1] where k = i+1
-            }
-            auto dz = torch::from_blob(dz_vec.data(), {n_interior},
-                                        torch::kFloat32).clone().to(w.device())
-                       .reshape({1, n_interior, 1});
-
-            float delta_cfl = wrf::sdirk3::g_sdirk3_config.sign_smooth_delta;
 
             // DIAGNOSTIC: Accumulate sign_vel==0 count
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                 torch::NoGradGuard no_grad;
+                auto w_interior = w.slice(1, k_start, k_end);
                 wrf::sdirk3::g_mask_counters.sign_vel_zero += (w_interior == 0).sum().item<int64_t>();
                 wrf::sdirk3::g_mask_counters.sign_vel_total += w_interior.numel();
             }
 
+            const float gate_threshold =
+                (wrf::sdirk3::g_sdirk3_config.wrf_zadvect_implicit > 0)
+                    ? w_crit_cfl
+                    : wrf::sdirk3::kWrfWBeta;
+
             auto w_damp_padded = wrf::sdirk3::compute_w_damping_term(
-                w, mu_full, c1f_, c2f_, dz, dt, w_alpha, w_crit_cfl,
-                delta_cfl, k_start, k_end, nz_w_);
+                ww, w, mu_full, c1f_, c2f_, rdnw_int, dt, w_alpha,
+                gate_threshold, w_crit_cfl, k_start, k_end, nz_w_);
             rw_tend = rw_tend - w_damp_padded;
             {
                 auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();

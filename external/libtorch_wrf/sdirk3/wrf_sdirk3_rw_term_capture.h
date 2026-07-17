@@ -23,6 +23,7 @@
 // evaluation the caller unpacks the tangents (via take()) while its
 // DualLevelGuard is still alive, then the scope ends.
 #include <torch/torch.h>
+#include <cstdlib>
 #include <string>
 #include <utility>
 #include <vector>
@@ -43,6 +44,8 @@ inline RwTermCapture& rw_term_capture_slot() {
     static thread_local RwTermCapture t_slot;
     return t_slot;
 }
+
+
 
 // RAII arm/disarm. Constructor arms THIS THREAD's slot (refusing if it is
 // already armed — nested capture); destructor disarms and clears whatever
@@ -101,12 +104,17 @@ class RwTermCaptureScope {
 inline std::string validate_rw_term_inventory(
     const std::vector<std::pair<std::string, torch::Tensor>>& terms,
     bool expect_wdamp) {
+    // PR 9C: the W-damping family (inputs, chain factors, and the term) is
+    // present only when the parity-gated damping is ACTIVE (expect_wdamp);
+    // with WRF's default w_damping=0 the whole family is absent.
     static const char* kRequired[] = {
-        "w_input",      "mu_input",       "pg",           "buoy_mu1",
-        "buoy_mu2",     "rw_pre_pgf",     "w_pgf_buoy_all",
-        "w_top_contrib", "rw_pre_mask",   "rw_post_mask", "wd_vert_cfl",
-        "wd_cfl_excess", "wd_w_sign",     "wd_mass_factor",
+        "pg",           "buoy_mu1",     "buoy_mu2",      "rw_pre_pgf",
+        "w_pgf_buoy_all", "w_top_contrib", "rw_pre_mask", "rw_post_mask",
         "rw_tend_final",
+    };
+    static const char* kWdampFamily[] = {
+        "w_input",       "mu_input",     "wd_vert_cfl",  "wd_cfl_excess",
+        "wd_w_sign",     "wd_mass_factor", "w_damp_padded",
     };
     std::string reason;
     auto append = [&](const std::string& r) {
@@ -134,16 +142,20 @@ inline std::string validate_rw_term_inventory(
         if (c.total == 1 && c.defined == 0)
             append(std::string("undefined:") + name);
     }
-    {
-        const Counts c = stats_of("w_damp_padded");
-        if (expect_wdamp && c.total == 0) append("missing:w_damp_padded");
-        if (!expect_wdamp && c.total > 0) append("unexpected:w_damp_padded");
-        if (c.total > 1) append("duplicate:w_damp_padded");
-        if (c.total == 1 && c.defined == 0) append("undefined:w_damp_padded");
+    for (const char* name : kWdampFamily) {
+        const Counts c = stats_of(name);
+        if (expect_wdamp && c.total == 0) append(std::string("missing:") + name);
+        if (!expect_wdamp && c.total > 0)
+            append(std::string("unexpected:") + name);
+        if (c.total > 1) append(std::string("duplicate:") + name);
+        if (c.total == 1 && c.defined == 0)
+            append(std::string("undefined:") + name);
     }
     for (const auto& kv : terms) {
-        bool known = kv.first == "w_damp_padded";
+        bool known = false;
         for (const char* name : kRequired)
+            if (kv.first == name) known = true;
+        for (const char* name : kWdampFamily)
             if (kv.first == name) known = true;
         if (!known) append(std::string("unknown:") + kv.first);
     }

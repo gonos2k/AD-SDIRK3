@@ -595,6 +595,12 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 w_damp_alpha = std::clamp(std::stof(value), 0.0f, 2.0f);
             } else if (key == "sdirk3_w_crit_cfl" || key == "w_crit_cfl") {
                 w_crit_cfl = std::clamp(std::stof(value), 0.1f, 10.0f);
+            } else if (key == "wrf_w_damping") {
+                wrf_w_damping = std::clamp(std::stoi(value), 0, 1);
+            } else if (key == "wrf_zadvect_implicit") {
+                wrf_zadvect_implicit = std::clamp(std::stoi(value), 0, 2);
+            } else if (key == "wrf_w_crit_cfl") {
+                wrf_w_crit_cfl = std::clamp(std::stof(value), 0.1f, 10.0f);
             } else if (key == "sdirk3_validation_level" || key == "validation_level") {
                 validation_level = std::clamp(std::stoi(value), 0, 3);
                 syncValidationSettings(validation_level);
@@ -1153,6 +1159,18 @@ void SDIRK3Config::load_from_env() {
     if ((env_val = std::getenv("WRF_SDIRK3_W_CRIT_CFL"))) {
         w_crit_cfl = std::clamp(static_cast<float>(std::atof(env_val)), 0.1f, 10.0f);
         std::cerr << "[CONFIG ENV] w_crit_cfl = " << w_crit_cfl << std::endl;
+    }
+    if (const char* env_val = std::getenv("WRF_SDIRK3_WRF_W_DAMPING")) {
+        wrf_w_damping = std::clamp(std::atoi(env_val), 0, 1);
+        std::cerr << "[CONFIG ENV] wrf_w_damping = " << wrf_w_damping << std::endl;
+    }
+    if (const char* env_val = std::getenv("WRF_SDIRK3_WRF_ZADVECT_IMPLICIT")) {
+        wrf_zadvect_implicit = std::clamp(std::atoi(env_val), 0, 2);
+        std::cerr << "[CONFIG ENV] wrf_zadvect_implicit = " << wrf_zadvect_implicit << std::endl;
+    }
+    if (const char* env_val = std::getenv("WRF_SDIRK3_WRF_W_CRIT_CFL")) {
+        wrf_w_crit_cfl = std::clamp(static_cast<float>(std::atof(env_val)), 0.1f, 10.0f);
+        std::cerr << "[CONFIG ENV] wrf_w_crit_cfl = " << wrf_w_crit_cfl << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_VALIDATION_LEVEL"))) {
         validation_level = std::clamp(std::atoi(env_val), 0, 3);
@@ -1857,6 +1875,12 @@ void SDIRK3Config::load_from_env() {
               << "/" << precond_du_weak_ru_thresh
               << (precond_du_weak_factor < 0.999f ? " (dual-phase)" : "")
               << std::endl;
+    std::cerr << "[CONFIG EFFECTIVE] wdamp_parity: wrf_w_damping=" << wrf_w_damping
+              << " wrf_zadvect_implicit=" << wrf_zadvect_implicit
+              << " w_damp_alpha=" << w_damp_alpha
+              << " wrf_w_crit_cfl=" << wrf_w_crit_cfl
+              << " legacy_w_crit_cfl=" << w_crit_cfl
+              << " implicit_wdamp=" << (implicit_wdamp ? 1 : 0) << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] stagnation_gate=" << (stagnation_gate_enable ? "ON" : "off")
               << ", growth_floor=" << stagnation_growth_floor << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] stage_require_convergence="
@@ -2956,6 +2980,12 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
 
     if (key == "max_newton_iter") {
         g_sdirk3_config.max_newton_iter = value;
+    } else if (key == "wrf_w_damping") {
+        g_sdirk3_config.wrf_w_damping = std::clamp(value, 0, 1);
+        std::cerr << "[CONFIG] wrf_w_damping = " << g_sdirk3_config.wrf_w_damping << std::endl;
+    } else if (key == "wrf_zadvect_implicit") {
+        g_sdirk3_config.wrf_zadvect_implicit = std::clamp(value, 0, 2);
+        std::cerr << "[CONFIG] wrf_zadvect_implicit = " << g_sdirk3_config.wrf_zadvect_implicit << std::endl;
     } else if (key == "gmres_restart") {
         g_sdirk3_config.gmres_restart = value;
     } else if (key == "max_krylov_iter") {
@@ -3320,6 +3350,9 @@ void wrf_sdirk3_set_config_float(const char* name, float value) {
         g_sdirk3_config.w_damp_alpha = std::clamp(value, 0.0f, 2.0f);
     } else if (key == "w_crit_cfl") {
         g_sdirk3_config.w_crit_cfl = std::clamp(value, 0.1f, 10.0f);
+    } else if (key == "wrf_w_crit_cfl") {
+        g_sdirk3_config.wrf_w_crit_cfl = std::clamp(value, 0.1f, 10.0f);
+        std::cerr << "[CONFIG] wrf_w_crit_cfl = " << g_sdirk3_config.wrf_w_crit_cfl << std::endl;
     } else if (key == "conservation_tol_mass") {
         g_sdirk3_config.conservation_tol_mass = std::max(1.0e-12f, value);
     } else if (key == "conservation_tol_energy") {
