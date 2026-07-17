@@ -72,19 +72,21 @@ inline torch::Tensor compute_wrf_ww_cp(
 
     auto mut = mup + mub;  // [ny, nx]
 
-    // muu at u-points [ny, nx+1], edge REPLICATE
-    auto muu = torch::empty({ny, nx + 1}, mut.options());
-    muu.slice(1, 1, nx) =
-        0.5f * (mut.slice(1, 1, nx) + mut.slice(1, 0, nx - 1));
-    muu.select(1, 0) = mut.select(1, 0);
-    muu.select(1, nx) = mut.select(1, nx - 1);
+    // muu at u-points [ny, nx+1], edge REPLICATE — assembled out-of-place
+    // (cat), never by slice/select assignment, so the autograd graph stays
+    // intact through the staggered averages.
+    auto muu = torch::cat(
+        {mut.slice(1, 0, 1),
+         0.5f * (mut.slice(1, 1, nx) + mut.slice(1, 0, nx - 1)),
+         mut.slice(1, nx - 1, nx)},
+        1);
 
-    // muv at v-points [ny+1, nx], edge REPLICATE
-    auto muv = torch::empty({ny + 1, nx}, mut.options());
-    muv.slice(0, 1, ny) =
-        0.5f * (mut.slice(0, 1, ny) + mut.slice(0, 0, ny - 1));
-    muv.select(0, 0) = mut.select(0, 0);
-    muv.select(0, ny) = mut.select(0, ny - 1);
+    // muv at v-points [ny+1, nx], edge REPLICATE (same out-of-place policy)
+    auto muv = torch::cat(
+        {mut.slice(0, 0, 1),
+         0.5f * (mut.slice(0, 1, ny) + mut.slice(0, 0, ny - 1)),
+         mut.slice(0, ny - 1, ny)},
+        0);
 
     auto c1k = c1h.view({1, nz, 1});
     auto c2k = c2h.view({1, nz, 1});
