@@ -114,12 +114,19 @@ The parity W-damping STRENGTH is WRF's module constant `w_alpha = 0.3`
 `wrf_sdirk3_w_damping.h` — WRF exposes no namelist for it, so neither do we.
 The legacy `sdirk3_w_damp_alpha` knob is a NON-PARITY tuning input: it no
 longer feeds the parity RHS term (it still feeds the preconditioner's legacy
-damping mirror, whose consistency is the PR 9D scope). The enabled parity
-path requires the complete `calc_ww_cp` geometry (`c1h/c2h`, `msftx`,
-`msfuy`, `msfvx`); if any piece is missing the term FAILS CLOSED with a
-`SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED` marker, and contract-violating
-inputs fail closed with `SDIRK3_WDAMP_INVALID_INPUT` /
-`SDIRK3_WDAMP_INVALID_MASS` — there is no silent unit-metric substitution.
+damping mirror, whose consistency is the PR 9D scope).
+
+The enabled parity path requires the complete `calc_ww_cp` geometry
+(`c1h/c2h`, `msftx`, `msfuy`, `msfvx`) AND a supported lateral-boundary
+policy per axis (periodic wrap, or symmetric replicate; open/specified/
+nested boundaries and multi-rank internal seams have no authoritative mass
+halo and are unsupported). Any violation is **FATAL**: the run terminates
+through the ABI fatal boundary with a stable marker at the front of the
+error — `SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED` for geometry/boundary
+support, `SDIRK3_WDAMP_INVALID_INPUT` / `SDIRK3_WDAMP_INVALID_MASS` for
+contract-violating inputs. The term is never silently skipped and never
+computed with substituted unit metrics: integrating on without the physics
+the namelist requested would be fail-open.
 
 ### Example (`imex_split_mode=3`, `stage2_budget=8/1/0`)
 

@@ -64,9 +64,11 @@ inline torch::Tensor compute_w_damping_term(
     int k_end,
     int nz_w) {
     // PR 9C.1: fail-close input authority. WRF's W_DAMP divides by the
-    // column mass and scales by dt — a non-finite or non-positive mass, a
-    // bad dt, or mismatched shapes produce a silently wrong (not merely
-    // inactive) term, so they are rejected, never repaired.
+    // column mass factor and scales by dt — a non-finite or non-positive
+    // denominator, a bad dt, or mismatched shapes produce a silently wrong
+    // (not merely inactive) term, so they are rejected, never repaired.
+    // Ordered stable-marker discipline: definedness -> rank -> sizes ->
+    // device/dtype, so no violation reaches a raw size()/slice() call.
     if (!(dt > 0.0f) || !std::isfinite(dt) || !std::isfinite(gate_threshold) ||
         !std::isfinite(excess_offset) || !std::isfinite(w_alpha) ||
         k_start < 0 || k_end <= k_start || k_end > nz_w) {
@@ -75,34 +77,72 @@ inline torch::Tensor compute_w_damping_term(
             "(dt>0) and 0<=k_start<k_end<=nz_w");
     }
     if (!ww_momentum.defined() || !w_velocity.defined() ||
-        !mu_full.defined() || ww_momentum.dim() != 3 ||
-        w_velocity.dim() != 3 || mu_full.dim() != 2 ||
+        !mu_full.defined() || !c1f.defined() || !c2f.defined() ||
+        !rdnw_interior.defined()) {
+        throw std::invalid_argument(
+            "SDIRK3_WDAMP_INVALID_INPUT: W_DAMP received an undefined "
+            "tensor operand");
+    }
+    const int n_interior = k_end - k_start;
+    if (ww_momentum.dim() != 3 || w_velocity.dim() != 3 ||
+        mu_full.dim() != 2 || c1f.dim() != 1 || c2f.dim() != 1 ||
+        ww_momentum.size(1) != nz_w ||
         ww_momentum.size(0) != mu_full.size(0) ||
         ww_momentum.size(2) != mu_full.size(1) ||
         w_velocity.sizes() != ww_momentum.sizes() ||
-        c1f.numel() < k_end || c2f.numel() < k_end) {
+        c1f.numel() < k_end || c2f.numel() < k_end ||
+        !rdnw_interior.sizes().equals({1, n_interior, 1})) {
         throw std::invalid_argument(
-            "SDIRK3_WDAMP_INVALID_INPUT: ww/w [ny,nz_w,nx] and mu [ny,nx] "
-            "shape contract violated (or c1f/c2f shorter than k_end)");
+            "SDIRK3_WDAMP_INVALID_INPUT: ww/w [ny,nz_w,nx], mu [ny,nx], "
+            "rdnw_interior [1,k_end-k_start,1] shape contract violated "
+            "(or c1f/c2f shorter than k_end)");
     }
     {
-        // Mass positivity/finiteness gate — a diagnostic reduction, not a
-        // graph participant. Runs only on the ENABLED path (w_damping=1).
-        torch::NoGradGuard no_grad;
-        if (!mu_full.isfinite().all().item<bool>() ||
-            !(mu_full.min().item<float>() > 0.0f)) {
-            throw std::invalid_argument(
-                "SDIRK3_WDAMP_INVALID_MASS: full column mass must be finite "
-                "and strictly positive");
+        const auto dev = ww_momentum.device();
+        const auto dtp = ww_momentum.scalar_type();
+        for (const auto* t :
+             {&w_velocity, &mu_full, &c1f, &c2f, &rdnw_interior}) {
+            if (t->device() != dev || t->scalar_type() != dtp) {
+                throw std::invalid_argument(
+                    "SDIRK3_WDAMP_INVALID_INPUT: W_DAMP operands must share "
+                    "one device and dtype");
+            }
         }
     }
-    const int n_interior = k_end - k_start;
 
     auto ww_int = ww_momentum.slice(1, k_start, k_end);
     auto w_int = w_velocity.slice(1, k_start, k_end);
     auto c1f_int = c1f.slice(0, k_start, k_end).reshape({1, n_interior, 1});
     auto c2f_int = c2f.slice(0, k_start, k_end).reshape({1, n_interior, 1});
     auto mass_factor = c1f_int * mu_full.unsqueeze(1) + c2f_int;
+
+    // Review P1-3: validate the ACTUAL denominator, not its ingredients —
+    // a positive mu with a bad c1f/c2f still yields a non-positive or
+    // non-finite c1f*mu+c2f, and a NaN vert_cfl would compare false and
+    // hide in the where-gate's zero branch. One batched device sync covers
+    // the denominator, the coefficients, and the vertical metric
+    // (diagnostic reductions under NoGradGuard; enabled path only).
+    {
+        torch::NoGradGuard no_grad;
+        auto bad = torch::stack({(~mass_factor.isfinite()).any(),
+                                 (mass_factor <= 0.0f).any(),
+                                 (~c1f_int.isfinite()).any(),
+                                 (~c2f_int.isfinite()).any(),
+                                 (~rdnw_interior.isfinite()).any()})
+                       .to(torch::kCPU);
+        auto bad_a = bad.accessor<bool, 1>();
+        if (bad_a[0] || bad_a[1]) {
+            throw std::invalid_argument(
+                "SDIRK3_WDAMP_INVALID_MASS: the W_DAMP denominator "
+                "c1f(k)*mu+c2f(k) must be finite and strictly positive at "
+                "every interior point");
+        }
+        if (bad_a[2] || bad_a[3] || bad_a[4]) {
+            throw std::invalid_argument(
+                "SDIRK3_WDAMP_INVALID_INPUT: c1f/c2f/rdnw_interior must be "
+                "finite");
+        }
+    }
 
     // Mass-decoupled vertical CFL.
     auto vert_cfl = torch::abs(ww_int / mass_factor * rdnw_interior * dt);

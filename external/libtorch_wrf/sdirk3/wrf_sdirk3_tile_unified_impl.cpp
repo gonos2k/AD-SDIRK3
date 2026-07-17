@@ -17089,16 +17089,45 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 msfvx_.defined() && msfvx_.dim() == 2 &&
                 msfvx_.size(0) == nyv_i && msfvx_.size(1) == nx_i;
             if (!geometry_ok) {
-                static bool geometry_warned = false;
-                if (!geometry_warned) {
-                    geometry_warned = true;
-                    std::cerr << "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED "
-                                 "enabled WRF W-damping requires the complete "
-                                 "calc_ww_cp coefficient and map-factor "
-                                 "contract; term skipped (fail-close)\n";
-                }
-            } else {
+                // Review P1-2: the user asked for w_damping=1; integrating
+                // on WITHOUT the requested physics would be fail-open. The
+                // throw propagates to the existing fatal boundary (the
+                // C/Fortran ABI seal) — no marker-and-continue.
+                throw std::runtime_error(
+                    "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: enabled WRF "
+                    "W-damping requires the complete calc_ww_cp coefficient "
+                    "and map-factor contract (c1h/c2h, mu_base, "
+                    "msftx/msfuy/msfvx on their staggers)");
+            }
             try {
+            // PR 9C.1 P1-1: the muu/muv seam averages are a property of the
+            // LATERAL BOUNDARY CONDITION (WRF fills them from the memory
+            // halo), so the omega diagnosis receives an explicit per-axis
+            // policy derived from the wired WRF flags. Anything without an
+            // authoritative mass halo — open/specified/nested boundaries,
+            // or internal seams of a multi-rank decomposition — is
+            // UNSUPPORTED and the helper fails closed.
+            using wrf::sdirk3::WWCPBoundaryPolicy;
+            const auto wwcp_axis_policy = [](bool periodic, bool sym_s,
+                                             bool sym_e) {
+                if (periodic) return WWCPBoundaryPolicy::Periodic;
+                if (sym_s && sym_e)
+                    return WWCPBoundaryPolicy::SymmetricReplicate;
+                return WWCPBoundaryPolicy::Unsupported;
+            };
+            WWCPBoundaryPolicy wwcp_x_policy = wwcp_axis_policy(
+                config_flags_periodic_x_, config_flags_symmetric_xs_,
+                config_flags_symmetric_xe_);
+            WWCPBoundaryPolicy wwcp_y_policy = wwcp_axis_policy(
+                config_flags_periodic_y_, config_flags_symmetric_ys_,
+                config_flags_symmetric_ye_);
+            if (nprocx_ * nprocy_ != 1) {
+                // Multi-rank preflight: this tile's edges are internal
+                // seams whose true neighbor mass lives on other ranks; the
+                // helper has no authoritative halo for them.
+                wwcp_x_policy = WWCPBoundaryPolicy::HaloProvided;
+                wwcp_y_policy = WWCPBoundaryPolicy::HaloProvided;
+            }
             torch::Tensor ww;
             {
                 auto dev = u.device();
@@ -17115,7 +17144,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 ww = wrf::sdirk3::compute_wrf_ww_cp(
                     u, v, mu, mub_al, c1h_al.slice(0, 0, nz_),
                     c2h_al.slice(0, 0, nz_), dnw_t, rdx, rdy, msftx_al,
-                    msfuy_al, msfvx_inv_al);
+                    msfuy_al, msfvx_inv_al, wwcp_x_policy, wwcp_y_policy);
             }
 
             {
@@ -17147,17 +17176,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 rw_cap2.add("w_damp_padded", w_damp_padded);
             }
             } catch (const std::invalid_argument& e) {
-                // PR 9C.1 fail-close: a validation throw from the parity
-                // helpers means the inputs violate WRF's W_DAMP contract;
-                // the term is skipped, never silently repaired.
-                static bool wdamp_input_warned = false;
-                if (!wdamp_input_warned) {
-                    wdamp_input_warned = true;
-                    std::cerr << e.what()
-                              << " — W-damping term skipped (fail-close)\n";
-                }
+                // Review P1-2: contract violations are FATAL, not skipped —
+                // rethrow with call-site context, keeping the stable marker
+                // at the front of the message for the integration contract.
+                throw std::runtime_error(
+                    std::string(e.what()) +
+                    " [enabled W-damping, computeUnifiedRHS]");
             }
-            }  // geometry_ok
         }
         
         // Additional top boundary damping - also moved to implicit
