@@ -5,6 +5,7 @@
 // capture inventories. Case-count ratchet: the exact number of executed
 // cases is asserted so silent coverage shrink fails the test.
 #include <torch/torch.h>
+#include <algorithm>
 #include <atomic>
 #include <memory>
 #include <cstdio>
@@ -140,9 +141,10 @@ int main() {
               "complete inventory (wdamp inactive) validates clean");
 
         auto missing = full_inventory(true);
-        for (auto it = missing.begin(); it != missing.end(); ++it) {
-            if (it->first == "buoy_mu1") { missing.erase(it); break; }
-        }
+        auto drop = std::find_if(
+            missing.begin(), missing.end(),
+            [](const auto& t) { return t.first == "buoy_mu1"; });
+        if (drop != missing.end()) missing.erase(drop);
         check(validate_rw_term_inventory(missing, true).find(
                   "missing:buoy_mu1") != std::string::npos,
               "missing buoy_mu1 detected by name");

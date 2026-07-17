@@ -165,9 +165,9 @@ int main() {
 
     // (7) nonfinite / nonpositive mass -> fail-close (no value).
     {
-        check(!wrf_wdamp_reference(1.0f, 1.0f, mut, c1f, c2f, rdnw, dt, alpha,
-                                   crit, beta, 0, true)
-                   .has_value() == false,
+        check(wrf_wdamp_reference(1.0f, 1.0f, mut, c1f, c2f, rdnw, dt, alpha,
+                                  crit, beta, 0, true)
+                  .has_value(),
               "sanity: valid input has a value");
         const float mut_neg = -(c2f / c1f) - 1.0f;  // mass < 0
         check(!wrf_wdamp_reference(1.0f, 1.0f, mut_neg, c1f, c2f, rdnw, dt,

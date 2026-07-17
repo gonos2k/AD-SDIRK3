@@ -89,6 +89,7 @@
 #include "wrf_sdirk3_config.h"
 #include "wrf_sdirk3_rw_term_capture.h"  // PR 9B: rw term bisection capture
 #include "wrf_sdirk3_w_damping.h"       // PR 9B: production W-damping helper (contract-tested)
+#include "wrf_sdirk3_ww_cp.h"           // PR 9C.1: complete calc_ww_cp omega diagnosis
 #include "wrf_sdirk3_types.h"  // FIX Round186: For centralized safe_device_index()
 #include "wrf_sdirk3_halo_exchange.h"  // For exchange_halo_3d_u/v/w/mass, halo_exchange_init
 #include "wrf_sdirk3_mpi_safety.h"  // Step-2 telemetry: halo freshness event counters
@@ -17037,7 +17038,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // deliberately UNTOUCHED (preconditioner changes are out of scope);
         // its consistency with the parity-gated RHS term is flagged for
         // review.
-        float w_alpha = wrf::sdirk3::g_sdirk3_config.w_damp_alpha;
+        // PR 9C.1: the parity term uses WRF's module CONSTANT w_alpha=0.3
+        // (kWrfWAlpha; share/module_model_constants.F:88 — WRF has no
+        // namelist for it). The legacy sdirk3 knob w_damp_alpha is a
+        // NON-PARITY tuning input and no longer feeds this term.
+        float w_alpha = wrf::sdirk3::kWrfWAlpha;
         // PR 9C: the parity term uses the WRF namelist w_crit_cfl
         // (wrf_w_crit_cfl — its own field; the legacy sdirk3 knob is
         // overwritten later in the bridge by sdirk3_w_crit_cfl).
@@ -17045,7 +17050,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
         if (wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
             wrf::sdirk3::g_sdirk3_config.implicit_wdamp &&
-            w_alpha > 0.0f && w_crit_cfl > 0.0f) {
+            w_crit_cfl > 0.0f) {
             float dt = dt_stage_;
             int k_start = 1;
             int k_end = nz_w_ - 1;  // exclusive
@@ -17062,35 +17067,55 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                                 .to(w.device())
                                 .reshape({1, n_interior, 1});
 
-            // Omega of the SAME evaluation state via WRF's calc_ww_cp
-            // recurrence (as the split driver's omega_of_state; c1h==1,
-            // c2h==0, msf==1 assumed — em_b_wave).
+            // PR 9C.1: omega of the SAME evaluation state via the COMPLETE
+            // calc_ww_cp helper (full c1h/c2h + msftx/msfuy/msfvx_inv map
+            // factors) — the em_b_wave unit-metric simplification is retired
+            // (it survives only as the WW_CP contract's negative control).
+            // The ENABLED parity path requires the complete geometry; there
+            // is NO silent unit-metric fallback — anything missing fails
+            // closed with a stable marker and the term is skipped.
+            const int64_t ny_i = mu_full.size(0);
+            const int64_t nx_i = mu_full.size(1);
+            const int64_t nxu_i = u.size(2);
+            const int64_t nyv_i = v.size(0);
+            const bool geometry_ok =
+                c1h_.defined() && c1h_.numel() >= nz_ &&
+                c2h_.defined() && c2h_.numel() >= nz_ &&
+                mu_base_.defined() && mu_base_.numel() == ny_i * nx_i &&
+                msftx_.defined() && msftx_.dim() == 2 &&
+                msftx_.size(0) == ny_i && msftx_.size(1) == nx_i &&
+                msfuy_.defined() && msfuy_.dim() == 2 &&
+                msfuy_.size(0) == ny_i && msfuy_.size(1) == nxu_i &&
+                msfvx_.defined() && msfvx_.dim() == 2 &&
+                msfvx_.size(0) == nyv_i && msfvx_.size(1) == nx_i;
+            if (!geometry_ok) {
+                static bool geometry_warned = false;
+                if (!geometry_warned) {
+                    geometry_warned = true;
+                    std::cerr << "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED "
+                                 "enabled WRF W-damping requires the complete "
+                                 "calc_ww_cp coefficient and map-factor "
+                                 "contract; term skipped (fail-close)\n";
+                }
+            } else {
+            try {
             torch::Tensor ww;
             {
-                using torch::indexing::Slice;
-                const int nxs = static_cast<int>(mu_full.size(1));
-                const int nys = static_cast<int>(mu_full.size(0));
-                const int nzs = static_cast<int>(u.size(1));
-                auto muu = avg_x_to_u_2d(mu_full, u.size(2)).unsqueeze(1);
-                auto muv = avg_y_to_v_2d(mu_full, v.size(0)).unsqueeze(1);
-                auto rdnw_t = getRdnwTensor(u.device(), u.scalar_type(), nz_);
-                auto dnw_t = -torch::reciprocal(rdnw_t);
-                auto uflux = muu * u;
-                auto vflux = muv * v;
-                auto divx = rdx * (uflux.index({Slice(), Slice(), Slice(1, nxs + 1)}) -
-                                   uflux.index({Slice(), Slice(), Slice(0, nxs)}));
-                auto divy = rdy * (vflux.index({Slice(1, nys + 1), Slice(), Slice()}) -
-                                   vflux.index({Slice(0, nys), Slice(), Slice()}));
-                auto divv = dnw_t.view({1, nzs, 1}) * (divx + divy);
-                auto dmdt = divv.sum(1);
-                std::vector<torch::Tensor> wwv(static_cast<size_t>(nzs) + 1);
-                wwv[0] = torch::zeros({nys, nxs}, u.options());
-                for (int kf = 1; kf <= nzs - 1; ++kf) {
-                    wwv[kf] = wwv[kf - 1] - dnw_t[kf - 1] * dmdt -
-                              divv.index({Slice(), kf - 1, Slice()});
-                }
-                wwv[nzs] = torch::zeros({nys, nxs}, u.options());
-                ww = torch::stack(wwv, 1);  // [ny, nz_w, nx]
+                auto dev = u.device();
+                auto dtp = u.scalar_type();
+                auto c1h_al = c1h_.to(dev, dtp);
+                auto c2h_al = c2h_.to(dev, dtp);
+                auto dnw_t =
+                    -torch::reciprocal(getRdnwTensor(dev, dtp, nz_));
+                auto msftx_al = msftx_.to(dev, dtp);
+                auto msfuy_al = msfuy_.to(dev, dtp);
+                auto msfvx_inv_al =
+                    torch::reciprocal(msfvx_.to(dev, dtp));
+                auto mub_al = mu_base_.to(dev, dtp).reshape({ny_i, nx_i});
+                ww = wrf::sdirk3::compute_wrf_ww_cp(
+                    u, v, mu, mub_al, c1h_al.slice(0, 0, nz_),
+                    c2h_al.slice(0, 0, nz_), dnw_t, rdx, rdy, msftx_al,
+                    msfuy_al, msfvx_inv_al);
             }
 
             {
@@ -17121,6 +17146,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
                 rw_cap2.add("w_damp_padded", w_damp_padded);
             }
+            } catch (const std::invalid_argument& e) {
+                // PR 9C.1 fail-close: a validation throw from the parity
+                // helpers means the inputs violate WRF's W_DAMP contract;
+                // the term is skipped, never silently repaired.
+                static bool wdamp_input_warned = false;
+                if (!wdamp_input_warned) {
+                    wdamp_input_warned = true;
+                    std::cerr << e.what()
+                              << " — W-damping term skipped (fail-close)\n";
+                }
+            }
+            }  // geometry_ok
         }
         
         // Additional top boundary damping - also moved to implicit
