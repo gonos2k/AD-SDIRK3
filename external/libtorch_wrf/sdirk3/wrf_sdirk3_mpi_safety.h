@@ -658,11 +658,31 @@ inline void initializeMPISafety() {
                  entry, detail ? detail : "unknown exception");
     std::fflush(stderr);
 #ifdef DMPARALLEL
+    // PR 9C.3 commit 4: MPI_THREAD_FUNNELED policy. MPI_Initialized /
+    // MPI_Finalized / MPI_Query_thread are the standard's always-callable
+    // exceptions; MPI_Abort is NOT — only the established baseline thread
+    // (or a MULTIPLE-provided runtime) may call it. A non-baseline fatal
+    // must not touch MPI: stable marker + local hard abort, and rank-set
+    // termination is the launcher's job (verified by the standing child
+    // negatives).
     int initialized = 0, finalized = 0;
     MPI_Initialized(&initialized);
     MPI_Finalized(&finalized);
     if (initialized && !finalized) {
-        MPI_Abort(MPI_COMM_WORLD, 1);
+        int provided = MPI_THREAD_SINGLE;
+        MPI_Query_thread(&provided);
+        const bool may_call_mpi =
+            (provided == MPI_THREAD_MULTIPLE) || is_mpi_baseline_thread();
+        if (may_call_mpi) {
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        } else {
+            std::fprintf(stderr,
+                         "SDIRK3_C_ABI_EXCEPTION_LOCAL_ABORT: non-baseline "
+                         "thread under MPI thread level %d: aborting "
+                         "locally without MPI calls\n",
+                         provided);
+            std::fflush(stderr);
+        }
     }
 #endif
     std::abort();

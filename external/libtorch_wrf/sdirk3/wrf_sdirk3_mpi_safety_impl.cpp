@@ -12,7 +12,8 @@
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_mpi_safety.h"
-#include "wrf_sdirk3_contract_fail.h"  // PR 9C.2: production fail route
+#include "wrf_sdirk3_contract_fail.h"
+#include <cstdlib>  // PR 9C.2: production fail route
 
 
 extern "C" {
@@ -62,14 +63,22 @@ void sdirk3_set_timestep_i4(int* timestep) {
 void sdirk3_mpi_safety_init(void) {
     wrf::sdirk3::mpi_safety::establish_mpi_baseline_thread("sdirk3_mpi_safety_init");
     wrf::sdirk3::mpi_safety::initializeMPISafety();
-    // PR 9C.2: production W-damping contract violations must not throw -
-    // the mpif90-linked executable cannot unwind C++ exceptions (measured;
-    // see wrf_sdirk3_contract_fail.h). Route them to the coordinated
-    // controlled abort instead.
-    wrf::sdirk3::wdamp_contract_fail_handler() = [](const char* what) {
-        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
-            "enabled W-damping contract", what);
-    };
+    // PR 9C.2/9C.3: production W-damping contract violations route to the
+    // coordinated controlled abort. Since PR 9C.3 the final link CAN unwind
+    // C++ exceptions again, but the controlled-abort policy stands (single
+    // marker discipline + coordinated multi-rank stop).
+    // WRF_SDIRK3_EH_SEAL_PROBE=1 (test-only, default OFF) skips the handler
+    // install so a contract violation THROWS instead — the standing
+    // integration negative uses it to prove the v2 ABI seal is LIVE under
+    // the restored link (catch -> FATAL_INTERNAL outcome -> wrf_error_fatal,
+    // no SDIRK3_C_ABI_EXCEPTION, no uncaught-terminate).
+    const char* seal_probe = std::getenv("WRF_SDIRK3_EH_SEAL_PROBE");
+    if (!(seal_probe && seal_probe[0] == '1')) {
+        wrf::sdirk3::wdamp_contract_fail_handler() = [](const char* what) {
+            wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+                "enabled W-damping contract", what);
+        };
+    }
 }
 
 // =============================================================================
