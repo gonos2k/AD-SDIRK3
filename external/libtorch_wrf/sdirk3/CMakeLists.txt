@@ -260,6 +260,13 @@ add_executable(test_rw_term_capture_contract test_rw_term_capture_contract.cpp)
 target_link_libraries(test_rw_term_capture_contract "${TORCH_LIBRARIES}")
 add_test(NAME RW_Term_Capture_Contract COMMAND test_rw_term_capture_contract)
 
+# PR 9C: independent line-by-line WRF W-damping reference (scalar transcription
+# of dyn_em W_DAMP) pinning gate/offset/decoupled-CFL/SIGN semantics, with the
+# current production deviation held as an explicit negative control.
+add_executable(test_wdamp_wrf_reference_contract test_wdamp_wrf_reference_contract.cpp)
+target_link_libraries(test_wdamp_wrf_reference_contract "${TORCH_LIBRARIES}")
+add_test(NAME WDamp_WRF_Reference_Contract COMMAND test_wdamp_wrf_reference_contract)
+
 # =========================================================================
 # PR 5 commit 3: full-object link closure + archive/manifest contracts
 # =========================================================================
