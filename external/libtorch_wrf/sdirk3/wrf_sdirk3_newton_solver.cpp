@@ -59,6 +59,8 @@
 #include <algorithm>  // std::min
 #include <stdexcept>
 #include <vector>
+#include <cstring>  // PR 9B: std::strcmp in the checker direction loop
+#include <map>      // PR 9B: per-block best-epsilon tracking in the checker
 #include <mutex>    // PR 8.1: emit_stage_diag line-atomic output mutex
 #include <sstream>  // PR 8.1: per-record ostringstream (libstdc++ needs it explicit)
 #include <chrono>
@@ -233,6 +235,16 @@ static inline bool stage4_jvp_check_enabled() {
 // PR 9A: KrylovBasisCapture is declared in wrf_sdirk3_newton_solver.h.
 static constexpr size_t kKrylovBasisCaptureMax = 16;
 
+// PR 9B: single capture primitive shared by every basis/operator capture
+// site (V, Z, A_Z, J_w) — detached clone under NoGradGuard, size-capped.
+static inline void capture_basis_vector(std::vector<torch::Tensor>& list,
+                                        const torch::Tensor& t) {
+    if (list.size() < kKrylovBasisCaptureMax) {
+        torch::NoGradGuard no_grad;
+        list.push_back(t.detach().clone());
+    }
+}
+
 // v20.14r27i: Unified GMRES residual norm — consistent for internal, final, and adaptive paths.
 // 3D tensors: halo-zeroed norm (boundary noise excluded).
 // 1D packed tensors: raw norm (halo mask disabled — see build_halo_mask).
@@ -363,6 +375,453 @@ struct StateLayout {
         return computed == total_size;
     }
 };
+
+// ============================================================================
+// PR 9B: directional consistency checker, extracted from the Newton loop
+// (review refactor of the PR 9A inline block) and strengthened per the
+// evidence stop-gate:
+//   - per-block FULL epsilon ladders (block-specific best epsilon can differ
+//     from the global one — the global norm is ru-dominated);
+//   - central AND one-sided (plus/minus) FD at every epsilon: plus != minus
+//     limits flag a nonsmooth/branch point where fwAD must not be judged
+//     "wrong" outright; Richardson extrapolation from consecutive central
+//     pairs;
+//   - actual in-situ operator outputs (A_Z, J_w captured inside the live
+//     Arnoldi loop) compared against the same FD, separately from the
+//     post-solve replay; plus a direct replay-vs-actual drift row;
+//   - a shadow-RHS purity probe (repeated + order-swapped evaluations of
+//     identical inputs) that gates every FD verdict.
+// Everything runs on detached clones under NoGradGuard; compute_rhs is
+// invoked directly (the loop's jacobian_cache_ bookkeeping is bypassed);
+// the preconditioner is never invoked.
+// ============================================================================
+namespace jvp_check {
+
+struct Context {
+    int ts = 0, stage = 0, newton_iter = 0;
+    float dt = 0.0f, gamma = 0.0f;
+    torch::Tensor U_stage, K, U_eval, dK;   // detached clones
+    bool scaled = false;
+    torch::Tensor S_diag, S_inv_diag;
+    const StateLayout* layout = nullptr;
+    const KrylovBasisCapture* basis = nullptr;
+    std::function<torch::Tensor(const torch::Tensor&)> compute_rhs;
+    std::function<torch::Tensor(const torch::Tensor&)> apply_jacobian;
+    std::function<torch::Tensor(const torch::Tensor&)> gmres_op;
+};
+
+// One comparison row (global or block slice); returns rel_err.
+static float emit_cmp_row(const Context& c, const char* dlabel, int aj,
+                          const char* op, const char* fdlabel, const char* source,
+                          float eps_rel, float eps_abs,
+                          const torch::Tensor& prod, const torch::Tensor& fd,
+                          const char* block, int64_t bstart, int64_t bsize) {
+    torch::NoGradGuard no_grad;
+    auto pt = (bsize >= 0) ? prod.slice(0, bstart, bstart + bsize) : prod;
+    auto ft = (bsize >= 0) ? fd.slice(0, bstart, bstart + bsize) : fd;
+    auto stats = torch::stack({pt.norm(), ft.norm(), (pt - ft).norm(),
+                               (pt * ft).sum()}).to(torch::kCPU);
+    const float pn = stats[0].item<float>();
+    const float fn = stats[1].item<float>();
+    const float ae = stats[2].item<float>();
+    const float denom = std::max({pn, fn, 1e-30f});
+    const float re = ae / denom;
+    const float cs = (pn > 0.0f && fn > 0.0f) ? stats[3].item<float>() / (pn * fn)
+                                              : 0.0f;
+    const bool fin = std::isfinite(pn) && std::isfinite(fn) && std::isfinite(ae);
+    emit_stage_diag([&](std::ostream& os) {
+        os << "SDIRK3_STAGE4_JVP_DIAG ts=" << c.ts
+           << " stage=" << c.stage << " newton_iter=" << c.newton_iter
+           << " arnoldi_j=" << aj
+           << " direction=" << dlabel
+           << " operator=" << op
+           << " fd=" << fdlabel
+           << " source=" << source
+           << std::scientific
+           << " epsilon=" << eps_rel
+           << " eps_abs=" << eps_abs
+           << " prod_norm=" << pn
+           << " fd_norm=" << fn
+           << " abs_err=" << ae
+           << " rel_err=" << re
+           << " cosine=" << cs
+           << std::defaultfloat
+           << " finite=" << (fin ? 1 : 0)
+           << " block=" << block
+           << "\n";
+    });
+    return re;
+}
+
+struct BlockBest {
+    float rel = std::numeric_limits<float>::infinity();
+    float eps_rel = 0.0f;
+    float eps_abs = 0.0f;
+};
+
+// Rows for global + every layout block; central rows can feed best-tracking.
+static void emit_all_blocks(const Context& c, const char* dlabel, int aj,
+                            const char* op, const char* fdlabel, const char* source,
+                            float eps_rel, float eps_abs,
+                            const torch::Tensor& prod, const torch::Tensor& fd,
+                            std::map<std::string, BlockBest>* best) {
+    auto note = [&](const std::string& block, float re) {
+        if (best && std::isfinite(re)) {
+            auto& b = (*best)[block];
+            if (re < b.rel) { b.rel = re; b.eps_rel = eps_rel; b.eps_abs = eps_abs; }
+        }
+    };
+    note("global", emit_cmp_row(c, dlabel, aj, op, fdlabel, source, eps_rel,
+                                eps_abs, prod, fd, "global", -1, -1));
+    if (c.layout) {
+        for (const auto& blk : c.layout->blocks) {
+            if (blk.start + blk.size <= prod.numel()) {
+                note(blk.name, emit_cmp_row(c, dlabel, aj, op, fdlabel, source,
+                                            eps_rel, eps_abs, prod, fd,
+                                            blk.name.c_str(), blk.start, blk.size));
+            }
+        }
+    }
+}
+
+// Full epsilon ladder for one (direction, operator): central + one-sided FD
+// at every epsilon, Richardson extrapolation from consecutive central pairs,
+// per-block best-epsilon summaries, actual-vs-FD rows when an in-situ
+// capture exists, and a replay-vs-actual drift row.
+static void evaluate_epsilon_ladder(const Context& c, const char* dlabel, int aj,
+                                    const char* op,
+                                    const torch::Tensor& prod_replay,
+                                    const torch::Tensor& prod_actual,
+                                    const std::function<torch::Tensor(float)>& eval_at,
+                                    float ref_norm, float dir_norm) {
+    static const float kEpsLadder[] = {1e-2f, 3e-3f, 1e-3f, 3e-4f, 1e-4f, 3e-5f, 1e-5f};
+    torch::Tensor F0 = eval_at(0.0f);
+    std::map<std::string, BlockBest> best;
+    torch::Tensor prev_central;
+    float prev_eps_abs = -1.0f;
+    for (float eps_rel : kEpsLadder) {
+        const float eps_abs = eps_rel * (1.0f + ref_norm) / std::max(dir_norm, 1e-30f);
+        torch::Tensor central, plus, minus;
+        {
+            torch::NoGradGuard no_grad;
+            auto Fp = eval_at(+eps_abs);
+            auto Fm = eval_at(-eps_abs);
+            central = ((Fp - Fm) / (2.0f * eps_abs)).detach();
+            plus = ((Fp - F0) / eps_abs).detach();
+            minus = ((F0 - Fm) / eps_abs).detach();
+        }
+        emit_all_blocks(c, dlabel, aj, op, "central", "replay", eps_rel, eps_abs,
+                        prod_replay, central, &best);
+        emit_all_blocks(c, dlabel, aj, op, "plus", "replay", eps_rel, eps_abs,
+                        prod_replay, plus, nullptr);
+        emit_all_blocks(c, dlabel, aj, op, "minus", "replay", eps_rel, eps_abs,
+                        prod_replay, minus, nullptr);
+        if (prod_actual.defined()) {
+            emit_all_blocks(c, dlabel, aj, op, "central", "actual", eps_rel,
+                            eps_abs, prod_actual, central, nullptr);
+        }
+        if (prev_central.defined() && prev_eps_abs > 0.0f) {
+            torch::NoGradGuard no_grad;
+            const float r = prev_eps_abs / eps_abs;
+            auto rich = (((r * r) * central - prev_central) / (r * r - 1.0f)).detach();
+            emit_all_blocks(c, dlabel, aj, op, "richardson", "replay", eps_rel,
+                            eps_abs, prod_replay, rich, nullptr);
+        }
+        prev_central = central;
+        prev_eps_abs = eps_abs;
+    }
+    for (const auto& kv : best) {
+        emit_stage_diag([&](std::ostream& os) {
+            os << "SDIRK3_STAGE4_JVP_DIAG ts=" << c.ts
+               << " stage=" << c.stage << " newton_iter=" << c.newton_iter
+               << " arnoldi_j=" << aj
+               << " direction=" << dlabel << " operator=" << op
+               << " summary=1 fd=central source=replay"
+               << std::scientific
+               << " best_epsilon=" << kv.second.eps_rel
+               << " best_eps_abs=" << kv.second.eps_abs
+               << " best_rel_err=" << kv.second.rel
+               << std::defaultfloat
+               << " block=" << kv.first
+               << "\n";
+        });
+    }
+    if (prod_actual.defined()) {
+        // Route-lock / cache / mutable-RHS drift between the live Arnoldi
+        // application and the post-solve replay of the same operator.
+        emit_all_blocks(c, dlabel, aj, op, "replay_vs_actual", "actual", 0.0f,
+                        0.0f, prod_replay, prod_actual, nullptr);
+    }
+}
+
+// Shadow-RHS purity probe: repeated + order-swapped evaluations of IDENTICAL
+// inputs. Runs BEFORE any FD ladder and GATES them fail-close: if any pair
+// differs beyond 10*FLT_EPSILON (the RHS_DETERMINISM_CHECK threshold), the
+// checker refuses to produce FD verdicts from the impure replay and emits a
+// purity_gate=failed record instead.
+static bool run_purity_probe(const Context& c, const torch::Tensor& w_dir) {
+    torch::NoGradGuard no_grad;
+    const float w_norm = diag_norm(w_dir);
+    const float eps_abs =
+        1e-3f * (1.0f + diag_norm(c.U_eval)) / std::max(w_norm, 1e-30f);
+    auto Up = (c.U_eval + eps_abs * w_dir).detach();
+    auto Um = (c.U_eval - eps_abs * w_dir).detach();
+    auto F0a = c.compute_rhs(c.U_eval).detach();
+    auto F0b = c.compute_rhs(c.U_eval).detach();
+    auto Fp1 = c.compute_rhs(Up).detach();
+    auto Fm1 = c.compute_rhs(Um).detach();
+    auto Fm2 = c.compute_rhs(Um).detach();
+    auto Fp2 = c.compute_rhs(Up).detach();
+    auto emit_pair = [&](const char* pair, const torch::Tensor& a,
+                         const torch::Tensor& b) -> float {
+        auto stats = torch::stack({a.norm(), (a - b).norm()}).to(torch::kCPU);
+        const float an = stats[0].item<float>();
+        const float dn = stats[1].item<float>();
+        const float rd = dn / std::max(an, 1e-30f);
+        // Non-finite probe results (NaN norms, NaN-NaN diffs) must FAIL the
+        // gate, never slip through it: NaN compares false against the
+        // threshold and std::max(0, NaN) keeps 0, so promote any non-finite
+        // outcome to +inf before it reaches the accumulator.
+        const bool fin = std::isfinite(an) && std::isfinite(dn) && std::isfinite(rd);
+        emit_stage_diag([&](std::ostream& os) {
+            os << "SDIRK3_STAGE4_JVP_DIAG ts=" << c.ts
+               << " stage=" << c.stage << " newton_iter=" << c.newton_iter
+               << " purity=1 pair=" << pair
+               << std::scientific
+               << " eps_abs=" << eps_abs
+               << " base_norm=" << an
+               << " abs_diff=" << dn
+               << " rel_diff=" << rd
+               << std::defaultfloat
+               << " finite=" << (fin ? 1 : 0)
+               << " bit_identical=" << (fin && dn == 0.0f ? 1 : 0)
+               << "\n";
+        });
+        return fin ? rd : std::numeric_limits<float>::infinity();
+    };
+    float worst = 0.0f;
+    worst = std::max(worst, emit_pair("F0_repeat", F0a, F0b));
+    worst = std::max(worst, emit_pair("Fplus_order_swap", Fp1, Fp2));
+    worst = std::max(worst, emit_pair("Fminus_order_swap", Fm1, Fm2));
+    const float purity_tol = 10.0f * std::numeric_limits<float>::epsilon();
+    const bool pure = std::isfinite(worst) && worst <= purity_tol;
+    emit_stage_diag([&](std::ostream& os) {
+        os << "SDIRK3_STAGE4_JVP_DIAG ts=" << c.ts
+           << " stage=" << c.stage << " newton_iter=" << c.newton_iter
+           << " purity_gate=" << (pure ? "passed" : "failed")
+           << std::scientific
+           << " worst_rel_diff=" << worst
+           << " purity_tol=" << purity_tol
+           << std::defaultfloat << "\n";
+    });
+    return pure;
+}
+
+static void run_directional_consistency_check(const Context& c) {
+    struct Dir {
+        const char* label;
+        int aj;
+        torch::Tensor d;
+        bool scaled_space;
+        int cap_idx;  // index into the in-situ capture lists (Z only)
+    };
+    std::vector<Dir> dirs;
+    auto add_basis_dirs = [&](const std::vector<torch::Tensor>& basis,
+                              const char* label) {
+        if (!basis.empty()) {
+            dirs.push_back({label, 0, basis.front(), true, 0});
+            if (basis.size() > 1) {
+                dirs.push_back({label, static_cast<int>(basis.size()) - 1,
+                                basis.back(), true,
+                                static_cast<int>(basis.size()) - 1});
+            }
+        }
+    };
+    if (c.basis) {
+        add_basis_dirs(c.basis->V, "V");
+        add_basis_dirs(c.basis->Z, "Z");
+    }
+    if (c.dK.defined() && diag_norm(c.dK) > 0.0f) {
+        dirs.push_back({"dK", -1, c.dK, false, -1});
+    }
+    {
+        // Fixed deterministic block-balanced probe (hash, not torch RNG — no
+        // generator state, global or local, is created or consumed).
+        torch::NoGradGuard no_grad;
+        auto idx = torch::arange(c.K.numel(),
+                                 torch::TensorOptions()
+                                     .dtype(torch::kFloat32)
+                                     .device(torch::kCPU));
+        auto probe = torch::sin(idx * 12.9898f + 78.233f);
+        if (c.layout) {
+            for (const auto& blk : c.layout->blocks) {
+                if (blk.start + blk.size <= probe.numel()) {
+                    auto slc = probe.slice(0, blk.start, blk.start + blk.size);
+                    auto rms = slc.square().mean().sqrt().clamp_min(1e-30f);
+                    slc.div_(rms);
+                }
+            }
+        }
+        dirs.push_back({"random", -1, probe.to(c.K.device()).to(c.K.dtype()),
+                        false, -1});
+    }
+
+    const float K_ref = diag_norm(c.K);
+    const float U_ref = diag_norm(c.U_eval);
+    const float dtg = c.dt * c.gamma;
+
+    // GATE (review P1): the purity probe runs BEFORE any FD ladder. An impure
+    // shadow replay would contaminate every FD verdict, so on failure the
+    // checker refuses to produce them (fail-close) — isolate the replay first.
+    {
+        torch::Tensor w_probe;
+        {
+            torch::NoGradGuard no_grad;
+            w_probe = (dtg * dirs.back().d).detach();  // dirs.back() = probe (unscaled)
+        }
+        if (!run_purity_probe(c, w_probe)) {
+            emit_stage_diag([&](std::ostream& os) {
+                os << "SDIRK3_STAGE4_JVP_DIAG ts=" << c.ts
+                   << " stage=" << c.stage << " newton_iter=" << c.newton_iter
+                   << " skipped=1 reason=shadow_rhs_impure\n";
+            });
+            return;
+        }
+    }
+
+    for (const auto& cd : dirs) {
+        torch::Tensor d_unscaled;
+        {
+            torch::NoGradGuard no_grad;
+            d_unscaled = (cd.scaled_space && c.scaled)
+                             ? (c.S_diag * cd.d).detach()
+                             : cd.d.detach().clone();
+        }
+        const float d_norm = diag_norm(d_unscaled);
+        if (!(d_norm > 0.0f) || !std::isfinite(d_norm)) continue;
+
+        // Production values, called exactly as the solve calls them (replay).
+        torch::Tensor prod_A_replay =
+            (cd.scaled_space ? c.gmres_op(cd.d) : c.apply_jacobian(d_unscaled))
+                .detach();
+        torch::Tensor prod_A_unscaled =
+            cd.scaled_space ? c.apply_jacobian(d_unscaled).detach()
+                            : prod_A_replay;
+        torch::Tensor prod_J_replay, w_dir;
+        {
+            torch::NoGradGuard no_grad;
+            prod_J_replay = (d_unscaled - prod_A_unscaled).detach();
+            w_dir = (dtg * d_unscaled).detach();
+        }
+        const float w_norm = diag_norm(w_dir);
+
+        // Actual in-situ operator outputs exist for Z directions (the
+        // operator is applied to Z_j in the live Arnoldi loop; V has no
+        // directly-applied output).
+        torch::Tensor actual_A, actual_J;
+        if (c.basis && std::strcmp(cd.label, "Z") == 0 && cd.cap_idx >= 0) {
+            if (cd.cap_idx < static_cast<int>(c.basis->A_Z.size()))
+                actual_A = c.basis->A_Z[cd.cap_idx];
+            if (cd.cap_idx < static_cast<int>(c.basis->J_w.size()))
+                actual_J = c.basis->J_w[cd.cap_idx];
+        }
+
+        // operator=J: FD of compute_rhs at U_eval along w = dt*gamma*d.
+        evaluate_epsilon_ladder(
+            c, cd.label, cd.aj, "J", prod_J_replay, actual_J,
+            [&](float e) -> torch::Tensor {
+                torch::NoGradGuard no_grad;
+                if (e == 0.0f) return c.compute_rhs(c.U_eval).detach();
+                return c.compute_rhs((c.U_eval + e * w_dir).detach()).detach();
+            },
+            U_ref, w_norm);
+
+        // operator=A: FD of the assembled Newton residual along d, in the
+        // operator's own comparison space.
+        evaluate_epsilon_ladder(
+            c, cd.label, cd.aj, "A", prod_A_replay, actual_A,
+            [&](float e) -> torch::Tensor {
+                torch::NoGradGuard no_grad;
+                auto Kp = (e == 0.0f)
+                              ? c.K
+                              : (c.K + e * d_unscaled).detach();
+                auto Up = (c.U_stage + c.dt * c.gamma * Kp).detach();
+                auto R = (Kp - c.compute_rhs(Up)).detach();
+                if (cd.scaled_space && c.scaled) R = (c.S_inv_diag * R).detach();
+                return R;
+            },
+            K_ref, d_norm);
+    }
+}
+
+}  // namespace jvp_check
+
+// ============================================================================
+// PR 9B (review refactor): single authority for resolving the exact Krylov
+// termination reason AND deriving the human-readable message from it — one
+// message per reason, shared by solve_gmres and solve_fgmres. Resolution
+// order is unchanged from PR 8.1: convergence wins; the restart-level guard
+// next; then whichever early-exit detector fired (ArnoldiStagnation vs
+// MidBudgetHopeless — previously conflated); then the internal-stop
+// criterion; else the budget ran out. Terminal breakdown / NaN-retry /
+// initial-convergence exits return through their dedicated sites and never
+// reach this resolver.
+// ============================================================================
+struct KrylovTerminationResolution {
+    WRFNewtonKrylovSolver::KrylovTerminationReason reason;
+    std::string message;
+};
+
+static KrylovTerminationResolution resolve_krylov_termination(
+    const char* prefix,
+    bool converged,
+    bool restart_stag_threshold,
+    WRFNewtonKrylovSolver::KrylovTerminationReason early_exit_reason,
+    bool internal_convergence,
+    int total_arnoldi_iters,
+    int max_iter,
+    int restart,
+    int actual_restarts) {
+    using KTR = WRFNewtonKrylovSolver::KrylovTerminationReason;
+    KrylovTerminationResolution out{KTR::MaxBudget, {}};
+    if (converged) {
+        out.reason = KTR::ToleranceReached;
+    } else if (restart_stag_threshold) {
+        out.reason = KTR::RestartStagnationThreshold;
+    } else if (early_exit_reason == KTR::ArnoldiStagnation ||
+               early_exit_reason == KTR::MidBudgetHopeless) {
+        out.reason = early_exit_reason;
+    } else if (internal_convergence) {
+        out.reason = KTR::InternalConvergenceStop;
+    }
+    const std::string restart_suffix = " (restart " + std::to_string(actual_restarts)
+                                     + "/" + std::to_string(max_iter) + ")";
+    const std::string p(prefix);
+    switch (out.reason) {
+        case KTR::ToleranceReached:
+            out.message = p + " converged";
+            break;
+        case KTR::RestartStagnationThreshold:
+            out.message = p + " restart-stagnation-threshold early exit" + restart_suffix;
+            break;
+        case KTR::ArnoldiStagnation:
+            out.message = p + " Arnoldi stagnation early exit" + restart_suffix;
+            break;
+        case KTR::MidBudgetHopeless:
+            out.message = p + " mid-budget hopeless-policy early exit" + restart_suffix;
+            break;
+        case KTR::InternalConvergenceStop:
+            out.message = p + " internal-stop criterion met before max restarts";
+            break;
+        default:  // MaxBudget
+            out.message = (total_arnoldi_iters < max_iter * restart)
+                ? p + " early exit before max restarts" + restart_suffix
+                : p + " max iterations reached ("
+                  + std::to_string(total_arnoldi_iters) + " Arnoldi)";
+            break;
+    }
+    return out;
+}
 
 // GMRES implementation for Krylov subspace method
 namespace krylov_methods {
@@ -1472,61 +1931,19 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     //   rel_error      = ||r_true||/||b|| halo-zeroed (relative)
     //   r_true         = RAW residual b-A(x) — callers apply halo zeroing for per-block analysis
     torch::Tensor r_true_out = r_true.detach().clone();
-    // PR 8: terminal Arnoldi breakdown exits through the dedicated early-
-    // breakdown return above; a breakdown that merely restarted a cycle is
-    // not reported here.
-    // PR 8.1: resolve the EXACT termination reason. Convergence wins; the
-    // restart-level guard next; then whichever early-exit detector fired
-    // (ArnoldiStagnation vs MidBudgetHopeless — previously conflated); then
-    // the internal-stop criterion; else the budget simply ran out.
-    KTR resolved_reason;
-    if (gmres_converged) {
-        resolved_reason = KTR::ToleranceReached;
-    } else if (terminated_by_restart_stag_threshold) {
-        resolved_reason = KTR::RestartStagnationThreshold;
-    } else if (early_exit_reason == KTR::ArnoldiStagnation ||
-               early_exit_reason == KTR::MidBudgetHopeless) {
-        resolved_reason = early_exit_reason;
-    } else if (terminated_by_internal_convergence) {
-        resolved_reason = KTR::InternalConvergenceStop;
-    } else {
-        resolved_reason = KTR::MaxBudget;
-    }
-    // PR 9A: derive the human-readable message FROM the resolved reason —
-    // exactly one message per reason. The previous boolean cascade printed
-    // "Arnoldi stagnation early exit" for the mid-budget hopeless probe as
-    // well, because both early exits share terminated_by_arnoldi_stagnation.
-    const std::string restart_suffix = " (restart " + std::to_string(actual_restarts)
-                                     + "/" + std::to_string(max_iter) + ")";
-    std::string gmres_msg;
-    switch (resolved_reason) {
-        case KTR::ToleranceReached:
-            gmres_msg = "GMRES converged";
-            break;
-        case KTR::RestartStagnationThreshold:
-            gmres_msg = "GMRES restart-stagnation-threshold early exit" + restart_suffix;
-            break;
-        case KTR::ArnoldiStagnation:
-            gmres_msg = "GMRES Arnoldi stagnation early exit" + restart_suffix;
-            break;
-        case KTR::MidBudgetHopeless:
-            gmres_msg = "GMRES mid-budget hopeless-policy early exit" + restart_suffix;
-            break;
-        case KTR::InternalConvergenceStop:
-            gmres_msg = "GMRES internal-stop criterion met before max restarts";
-            break;
-        default:  // MaxBudget (other reasons return through dedicated sites above)
-            gmres_msg = (total_arnoldi_iters < max_iter * restart)
-                ? "GMRES early exit before max restarts" + restart_suffix
-                : "GMRES max iterations reached ("
-                  + std::to_string(total_arnoldi_iters) + " Arnoldi)";
-            break;
-    }
+    // PR 9B (review refactor): reason + message resolved by the shared
+    // resolve_krylov_termination — see its contract note near the top of
+    // namespace krylov_methods.
+    const KrylovTerminationResolution resolution = resolve_krylov_termination(
+        "GMRES", gmres_converged, terminated_by_restart_stag_threshold,
+        early_exit_reason, terminated_by_internal_convergence,
+        total_arnoldi_iters, max_iter, restart, actual_restarts);
+    const std::string& gmres_msg = resolution.message;
     WRFNewtonKrylovSolver::GMRESResult res{
             x, gmres_converged, final_iterations, r_true_final,
             rel_error_final, gmres_msg, r_true_out, actual_restarts, false,
             terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
-    res.termination_reason = resolved_reason;
+    res.termination_reason = resolution.reason;
     res.probe_j = diag_probe_j;
     res.probe_true_err = diag_probe_true_err;
     res.probe_hopeless_floor = diag_probe_floor;
@@ -1819,10 +2236,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         }
 
         V.push_back(r_precond / r_norm_tensor);
-        if (basis_capture && basis_capture->V.size() < kKrylovBasisCaptureMax) {
-            torch::NoGradGuard no_grad;
-            basis_capture->V.push_back(V.back().detach().clone());
-        }
+        if (basis_capture) capture_basis_vector(basis_capture->V, V.back());
 
         // PERFORMANCE FIX: Move V0 validation diagnostics to debug_level >= 3 (HOT PATH)
         // This was causing 2 .item() syncs per GMRES call at debug_level >= 1
@@ -1908,12 +2322,17 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 // FGMRES: keep the EXACT preconditioned vector used for this
                 // Arnoldi column (not a recomputation — M may differ next call).
                 Z.push_back(v_precond);
-                if (basis_capture && basis_capture->Z.size() < kKrylovBasisCaptureMax) {
-                    torch::NoGradGuard no_grad;
-                    basis_capture->Z.push_back(v_precond.detach().clone());
-                }
+                if (basis_capture) capture_basis_vector(basis_capture->Z, v_precond);
             }
+            // PR 9B: arm the in-situ capture around EXACTLY the Arnoldi
+            // operator application (probe/true-residual A calls stay dark),
+            // and capture the actual operator output the solve used.
+            if (basis_capture) basis_capture->arnoldi_call_active = true;
             torch::Tensor w = A(v_precond);
+            if (basis_capture) {
+                basis_capture->arnoldi_call_active = false;
+                capture_basis_vector(basis_capture->A_Z, w);
+            }
             auto jvp_end = std::chrono::high_resolution_clock::now();
             auto jvp_duration = std::chrono::duration_cast<std::chrono::milliseconds>(jvp_end - jvp_start).count();
 
@@ -2117,10 +2536,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             }
             
             V.push_back(w / H[j + 1][j]);
-        if (basis_capture && basis_capture->V.size() < kKrylovBasisCaptureMax) {
-            torch::NoGradGuard no_grad;
-            basis_capture->V.push_back(V.back().detach().clone());
-        }
+        if (basis_capture) capture_basis_vector(basis_capture->V, V.back());
             
             // AUTOGRAD FIX: Apply Givens rotations using tensor operations
             for (int i = 0; i < j; ++i) {
@@ -2699,61 +3115,19 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     //   rel_error      = ||r_true||/||b|| halo-zeroed (relative)
     //   r_true         = RAW residual b-A(x) — callers apply halo zeroing for per-block analysis
     torch::Tensor r_true_out = r_true.detach().clone();
-    // PR 8: terminal Arnoldi breakdown exits through the dedicated early-
-    // breakdown return above; a breakdown that merely restarted a cycle is
-    // not reported here.
-    // PR 8.1: resolve the EXACT termination reason. Convergence wins; the
-    // restart-level guard next; then whichever early-exit detector fired
-    // (ArnoldiStagnation vs MidBudgetHopeless — previously conflated); then
-    // the internal-stop criterion; else the budget simply ran out.
-    KTR resolved_reason;
-    if (gmres_converged) {
-        resolved_reason = KTR::ToleranceReached;
-    } else if (terminated_by_restart_stag_threshold) {
-        resolved_reason = KTR::RestartStagnationThreshold;
-    } else if (early_exit_reason == KTR::ArnoldiStagnation ||
-               early_exit_reason == KTR::MidBudgetHopeless) {
-        resolved_reason = early_exit_reason;
-    } else if (terminated_by_internal_convergence) {
-        resolved_reason = KTR::InternalConvergenceStop;
-    } else {
-        resolved_reason = KTR::MaxBudget;
-    }
-    // PR 9A: derive the human-readable message FROM the resolved reason —
-    // exactly one message per reason. The previous boolean cascade printed
-    // "Arnoldi stagnation early exit" for the mid-budget hopeless probe as
-    // well, because both early exits share terminated_by_arnoldi_stagnation.
-    const std::string restart_suffix = " (restart " + std::to_string(actual_restarts)
-                                     + "/" + std::to_string(max_iter) + ")";
-    std::string gmres_msg;
-    switch (resolved_reason) {
-        case KTR::ToleranceReached:
-            gmres_msg = "FGMRES converged";
-            break;
-        case KTR::RestartStagnationThreshold:
-            gmres_msg = "FGMRES restart-stagnation-threshold early exit" + restart_suffix;
-            break;
-        case KTR::ArnoldiStagnation:
-            gmres_msg = "FGMRES Arnoldi stagnation early exit" + restart_suffix;
-            break;
-        case KTR::MidBudgetHopeless:
-            gmres_msg = "FGMRES mid-budget hopeless-policy early exit" + restart_suffix;
-            break;
-        case KTR::InternalConvergenceStop:
-            gmres_msg = "FGMRES internal-stop criterion met before max restarts";
-            break;
-        default:  // MaxBudget (other reasons return through dedicated sites above)
-            gmres_msg = (total_arnoldi_iters < max_iter * restart)
-                ? "FGMRES early exit before max restarts" + restart_suffix
-                : "FGMRES max iterations reached ("
-                  + std::to_string(total_arnoldi_iters) + " Arnoldi)";
-            break;
-    }
+    // PR 9B (review refactor): reason + message resolved by the shared
+    // resolve_krylov_termination — see its contract note near the top of
+    // namespace krylov_methods.
+    const KrylovTerminationResolution resolution = resolve_krylov_termination(
+        "FGMRES", gmres_converged, terminated_by_restart_stag_threshold,
+        early_exit_reason, terminated_by_internal_convergence,
+        total_arnoldi_iters, max_iter, restart, actual_restarts);
+    const std::string& gmres_msg = resolution.message;
     WRFNewtonKrylovSolver::GMRESResult res{
             x, gmres_converged, final_iterations, r_true_final,
             rel_error_final, gmres_msg, r_true_out, actual_restarts, false,
             terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
-    res.termination_reason = resolved_reason;
+    res.termination_reason = resolution.reason;
     res.probe_j = diag_probe_j;
     res.probe_true_err = diag_probe_true_err;
     res.probe_hopeless_floor = diag_probe_floor;
@@ -4794,6 +5168,17 @@ public:
             // compute_rhs() call per Newton iteration.
             // Now we simply log the JVP method and let apply_jacobian handle it.
             // ========================================
+            // PR 9A/9B: capture buffer for the opt-in directional consistency
+            // check. Declared BEFORE apply_jacobian so the matvec can attribute
+            // its in-situ JVP capture (J_w) when solve_fgmres arms
+            // arnoldi_call_active. Null-routed unless the checker is enabled
+            // AND this is one of its checkpoints — zero production cost.
+            KrylovBasisCapture jvp_check_basis;
+            const bool jvp_check_this_iter =
+                stage4_jvp_check_enabled() &&
+                ((stage == 4 && newton_iter <= 1) ||
+                 (stage == 3 && newton_iter == 0));
+
             int jvp_call_count = 0;
             int jvp_ad_calls = 0;
             int jvp_fd_calls = 0;
@@ -5170,6 +5555,14 @@ public:
                 // Since v = dt*gamma*dK and jvp_result = J*v = J*(dt*gamma*dK),
                 // the result is dK - jvp_result (NOT dK - dt*gamma*jvp_result)
                 auto result = dK - jvp_result;
+
+                // PR 9B: in-situ capture of the raw production JVP for the
+                // checker — armed by solve_fgmres around exactly the Arnoldi
+                // operator applications, so probe/true-residual A calls are
+                // never captured.
+                if (jvp_check_this_iter && jvp_check_basis.arnoldi_call_active) {
+                    capture_basis_vector(jvp_check_basis.J_w, jvp_result);
+                }
 
                 // DIAG 2026-01-27: JVP diagnostic for first 3 calls
                 if (jvp_call_count <= 3) {
@@ -5975,16 +6368,6 @@ public:
                     }
                 }
 
-                // PR 9A: capture the actual Krylov basis for the opt-in
-                // directional consistency check. The pointer is null unless the
-                // checker is enabled AND this is one of its checkpoints, so the
-                // capture costs nothing on the production path.
-                KrylovBasisCapture jvp_check_basis;
-                const bool jvp_check_this_iter =
-                    stage4_jvp_check_enabled() &&
-                    ((stage == 4 && newton_iter <= 1) ||
-                     (stage == 3 && newton_iter == 0));
-
                 // FGMRES ROUTING (full-repo review P1-1, mandatory — not a knob):
                 // any right-preconditioned solve MUST use FGMRES, because the
                 // production preconditioner wrapper can change mid-solve (ratio-guard
@@ -6127,32 +6510,13 @@ public:
                 stats_.total_krylov_iterations += gmres_result.iterations;
 
                 // ============================================================
-                // PR 9A: opt-in directional consistency check of the ACTUAL
-                // production linearization at this Newton iterate
-                // (WRF_SDIRK3_STAGE4_JVP_CHECK=1). Two independent layers:
-                //   operator=J : the production JVP of compute_rhs at U_eval
-                //                (extracted from the production matvec as
-                //                d - A_unscaled(d), so it is EXACTLY what the
-                //                solve used) vs the central-FD directional
-                //                derivative of compute_rhs at U_eval;
-                //   operator=A : the operator FGMRES actually iterated
-                //                (gmres_op — including the S/S^-1 conjugation
-                //                — for scaled-space directions V/Z;
-                //                apply_jacobian for K-space directions) vs a
-                //                central FD of the assembled Newton residual
-                //                R(K') = K' - F(U_stage + dt*gamma*K') in the
-                //                same coordinate frame.
-                // Directions: the actual Arnoldi V_j and preconditioned Z_j
-                // (first and last captured), the returned dK, and a fixed
-                // deterministic block-balanced probe. Full epsilon ladder per
-                // direction/operator; per-block rows at the best epsilon.
-                // Side-effect isolation: compute_rhs is invoked directly on
-                // detached clones (the loop's jacobian_cache_ bookkeeping is
-                // bypassed); the preconditioner is never invoked; the
-                // loop-local JVP telemetry counters are snapshot/restored;
-                // FD and metric math run under NoGradGuard. Refused with a
-                // skip record when omega_update_ref_per_newton is set, since
-                // compute_rhs then rewrites the tile's U_ref_stage_ member.
+                // PR 9B: opt-in directional consistency check — the checker
+                // itself lives in jvp_check::run_directional_consistency_check
+                // (review refactor + evidence strengthening; see its docs).
+                // The omega_update_ref_per_newton fail-close skip and the
+                // snapshot/restore of the loop-local JVP telemetry stay HERE,
+                // the only scope with access to those locals.
+                // ============================================================
                 if (jvp_check_this_iter) {
                     if (wrf::sdirk3::g_sdirk3_config.omega_update_ref_per_newton) {
                         emit_stage_diag([&](std::ostream& os) {
@@ -6162,10 +6526,6 @@ public:
                                << " skipped=1 reason=omega_update_ref_per_newton\n";
                         });
                     } else {
-                        // Snapshot the loop-local JVP telemetry (restored at
-                        // the end of this block); a high call count also mutes
-                        // the first-N-call [JVP DIAG]/[JVP FD] logs during the
-                        // shadow evaluations.
                         const int sv_calls = jvp_call_count;
                         const int sv_ad = jvp_ad_calls;
                         const int sv_fd = jvp_fd_calls;
@@ -6179,243 +6539,33 @@ public:
                         const float sv_emax = jvp_eps_max;
                         const double sv_ms = total_jvp_time_ms;
                         jvp_call_count = std::max(jvp_call_count, 1000);
-
-                        struct JvpCheckDir {
-                            const char* label;
-                            int arnoldi_j;
-                            torch::Tensor d;
-                            bool scaled_space;
-                        };
-                        std::vector<JvpCheckDir> check_dirs;
-                        auto add_basis_dirs = [&](const std::vector<torch::Tensor>& basis,
-                                                  const char* label) {
-                            if (!basis.empty()) {
-                                check_dirs.push_back({label, 0, basis.front(), true});
-                                if (basis.size() > 1) {
-                                    check_dirs.push_back(
-                                        {label, static_cast<int>(basis.size()) - 1,
-                                         basis.back(), true});
-                                }
-                            }
-                        };
-                        add_basis_dirs(jvp_check_basis.V, "V");
-                        add_basis_dirs(jvp_check_basis.Z, "Z");
-                        if (dK.defined() && diag_norm(dK) > 0.0f) {
-                            check_dirs.push_back({"dK", -1, dK.detach().clone(), false});
-                        }
                         {
-                            // Fixed deterministic block-balanced probe. Built
-                            // from a hash, not torch RNG, so no generator state
-                            // — global or local — is created or consumed.
-                            torch::NoGradGuard no_grad;
-                            auto idx = torch::arange(
-                                K.numel(), torch::TensorOptions()
-                                               .dtype(torch::kFloat32)
-                                               .device(torch::kCPU));
-                            auto probe = torch::sin(idx * 12.9898f + 78.233f);
-                            if (layout_initialized_) {
-                                for (const auto& blk : cached_layout_.blocks) {
-                                    if (blk.start + blk.size <= probe.numel()) {
-                                        auto slc = probe.slice(
-                                            0, blk.start, blk.start + blk.size);
-                                        auto rms = slc.square().mean().sqrt()
-                                                       .clamp_min(1e-30f);
-                                        slc.div_(rms);
-                                    }
-                                }
-                            }
-                            check_dirs.push_back(
-                                {"random", -1,
-                                 probe.to(K.device()).to(K.dtype()), false});
-                        }
-
-                        const torch::Tensor K_base = K.detach().clone();
-                        const torch::Tensor Ueval_base = U_eval.detach().clone();
-                        const float K_ref_norm = diag_norm(K_base);
-                        const float U_ref_norm = diag_norm(Ueval_base);
-                        const float kEpsLadder[] =
-                            {1e-2f, 3e-3f, 1e-3f, 3e-4f, 1e-4f, 3e-5f, 1e-5f};
-
-                        // Side-effect-free residual replay: R(K') assembled
-                        // exactly as the Newton loop assembles it.
-                        auto shadow_residual =
-                            [&](const torch::Tensor& Kp) -> torch::Tensor {
-                            auto Up = (U_stage + dt * gamma * Kp).detach();
-                            return (Kp - compute_rhs(Up)).detach();
-                        };
-
-                        auto emit_row = [&](const char* dlabel, int aj,
-                                            const char* op, float eps_rel,
-                                            float eps_abs,
-                                            const torch::Tensor& prod,
-                                            const torch::Tensor& fd,
-                                            const char* block, int64_t bstart,
-                                            int64_t bsize) -> float {
-                            torch::NoGradGuard no_grad;
-                            auto pt = (bsize >= 0)
-                                ? prod.slice(0, bstart, bstart + bsize) : prod;
-                            auto ft = (bsize >= 0)
-                                ? fd.slice(0, bstart, bstart + bsize) : fd;
-                            auto stats = torch::stack({pt.norm(), ft.norm(),
-                                                       (pt - ft).norm(),
-                                                       (pt * ft).sum()})
-                                             .to(torch::kCPU);
-                            const float pn = stats[0].item<float>();
-                            const float fn = stats[1].item<float>();
-                            const float ae = stats[2].item<float>();
-                            const float denom = std::max({pn, fn, 1e-30f});
-                            const float re = ae / denom;
-                            const float cs = (pn > 0.0f && fn > 0.0f)
-                                ? stats[3].item<float>() / (pn * fn) : 0.0f;
-                            const bool fin = std::isfinite(pn) &&
-                                             std::isfinite(fn) &&
-                                             std::isfinite(ae);
-                            emit_stage_diag([&](std::ostream& os) {
-                                os << "SDIRK3_STAGE4_JVP_DIAG ts="
-                                   << global_timestep_
-                                   << " stage=" << stage
-                                   << " newton_iter=" << newton_iter
-                                   << " arnoldi_j=" << aj
-                                   << " direction=" << dlabel
-                                   << " operator=" << op
-                                   << std::scientific
-                                   << " epsilon=" << eps_rel
-                                   << " eps_abs=" << eps_abs
-                                   << " prod_norm=" << pn
-                                   << " fd_norm=" << fn
-                                   << " abs_err=" << ae
-                                   << " rel_err=" << re
-                                   << " cosine=" << cs
-                                   << std::defaultfloat
-                                   << " finite=" << (fin ? 1 : 0)
-                                   << " block=" << block
-                                   << "\n";
-                            });
-                            return re;
-                        };
-
-                        auto emit_block_rows = [&](const char* dlabel, int aj,
-                                                   const char* op, float eps_rel,
-                                                   float eps_abs,
-                                                   const torch::Tensor& prod,
-                                                   const torch::Tensor& fd) {
-                            if (!layout_initialized_) return;
-                            for (const auto& blk : cached_layout_.blocks) {
-                                if (blk.start + blk.size <= prod.numel()) {
-                                    emit_row(dlabel, aj, op, eps_rel, eps_abs,
-                                             prod, fd, blk.name.c_str(),
-                                             blk.start, blk.size);
-                                }
-                            }
-                        };
-
-                        for (const auto& cd : check_dirs) {
-                            torch::Tensor d_unscaled;
+                            jvp_check::Context ctx;
+                            ctx.ts = global_timestep_;
+                            ctx.stage = stage;
+                            ctx.newton_iter = newton_iter;
+                            ctx.dt = dt;
+                            ctx.gamma = gamma;
                             {
                                 torch::NoGradGuard no_grad;
-                                d_unscaled =
-                                    (cd.scaled_space && scaling_initialized_)
-                                        ? (S_diag_ * cd.d).detach()
-                                        : cd.d.detach().clone();
+                                ctx.U_stage = U_stage.detach().clone();
+                                ctx.K = K.detach().clone();
+                                ctx.U_eval = U_eval.detach().clone();
+                                if (dK.defined()) ctx.dK = dK.detach().clone();
                             }
-                            const float d_norm = diag_norm(d_unscaled);
-                            if (!(d_norm > 0.0f) || !std::isfinite(d_norm)) {
-                                continue;
+                            ctx.scaled = scaling_initialized_;
+                            if (ctx.scaled) {
+                                ctx.S_diag = S_diag_;
+                                ctx.S_inv_diag = S_inv_diag_;
                             }
-
-                            // Production operator values, called exactly as the
-                            // solve calls them (outputs detached immediately).
-                            torch::Tensor prod_A =
-                                (cd.scaled_space ? gmres_op(cd.d)
-                                                 : apply_jacobian(d_unscaled))
-                                    .detach();
-                            torch::Tensor prod_A_unscaled =
-                                cd.scaled_space
-                                    ? apply_jacobian(d_unscaled).detach()
-                                    : prod_A;
-                            torch::Tensor prod_J, w_dir;
-                            {
-                                torch::NoGradGuard no_grad;
-                                prod_J = (d_unscaled - prod_A_unscaled).detach();
-                                w_dir = (dt * gamma * d_unscaled).detach();
-                            }
-                            const float w_norm = diag_norm(w_dir);
-
-                            float bestJ_rel =
-                                std::numeric_limits<float>::infinity();
-                            float bestJ_eps_rel = 0.0f, bestJ_eps_abs = 0.0f;
-                            torch::Tensor bestJ_fd;
-                            for (float eps_rel : kEpsLadder) {
-                                const float eps_abs =
-                                    eps_rel * (1.0f + U_ref_norm) /
-                                    std::max(w_norm, 1e-30f);
-                                torch::Tensor fd_J;
-                                {
-                                    torch::NoGradGuard no_grad;
-                                    auto F_p = compute_rhs(
-                                        (Ueval_base + eps_abs * w_dir).detach());
-                                    auto F_m = compute_rhs(
-                                        (Ueval_base - eps_abs * w_dir).detach());
-                                    fd_J = ((F_p - F_m) / (2.0f * eps_abs))
-                                               .detach();
-                                }
-                                const float re = emit_row(
-                                    cd.label, cd.arnoldi_j, "J", eps_rel,
-                                    eps_abs, prod_J, fd_J, "global", -1, -1);
-                                if (re < bestJ_rel) {
-                                    bestJ_rel = re;
-                                    bestJ_eps_rel = eps_rel;
-                                    bestJ_eps_abs = eps_abs;
-                                    bestJ_fd = fd_J;
-                                }
-                            }
-                            if (bestJ_fd.defined()) {
-                                emit_block_rows(cd.label, cd.arnoldi_j, "J",
-                                                bestJ_eps_rel, bestJ_eps_abs,
-                                                prod_J, bestJ_fd);
-                            }
-
-                            float bestA_rel =
-                                std::numeric_limits<float>::infinity();
-                            float bestA_eps_rel = 0.0f, bestA_eps_abs = 0.0f;
-                            torch::Tensor bestA_fd;
-                            for (float eps_rel : kEpsLadder) {
-                                const float eps_abs =
-                                    eps_rel * (1.0f + K_ref_norm) /
-                                    std::max(d_norm, 1e-30f);
-                                torch::Tensor fd_A;
-                                {
-                                    torch::NoGradGuard no_grad;
-                                    auto R_p = shadow_residual(
-                                        (K_base + eps_abs * d_unscaled)
-                                            .detach());
-                                    auto R_m = shadow_residual(
-                                        (K_base - eps_abs * d_unscaled)
-                                            .detach());
-                                    fd_A = ((R_p - R_m) / (2.0f * eps_abs))
-                                               .detach();
-                                    if (cd.scaled_space &&
-                                        scaling_initialized_) {
-                                        fd_A = (S_inv_diag_ * fd_A).detach();
-                                    }
-                                }
-                                const float re = emit_row(
-                                    cd.label, cd.arnoldi_j, "A", eps_rel,
-                                    eps_abs, prod_A, fd_A, "global", -1, -1);
-                                if (re < bestA_rel) {
-                                    bestA_rel = re;
-                                    bestA_eps_rel = eps_rel;
-                                    bestA_eps_abs = eps_abs;
-                                    bestA_fd = fd_A;
-                                }
-                            }
-                            if (bestA_fd.defined()) {
-                                emit_block_rows(cd.label, cd.arnoldi_j, "A",
-                                                bestA_eps_rel, bestA_eps_abs,
-                                                prod_A, bestA_fd);
-                            }
+                            ctx.layout =
+                                layout_initialized_ ? &cached_layout_ : nullptr;
+                            ctx.basis = &jvp_check_basis;
+                            ctx.compute_rhs = compute_rhs;
+                            ctx.apply_jacobian = apply_jacobian;
+                            ctx.gmres_op = gmres_op;
+                            jvp_check::run_directional_consistency_check(ctx);
                         }
-
                         jvp_call_count = sv_calls;
                         jvp_ad_calls = sv_ad;
                         jvp_fd_calls = sv_fd;

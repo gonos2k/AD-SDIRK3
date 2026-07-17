@@ -187,8 +187,28 @@ relative epsilon ladder (1e-2 … 1e-5):
 Directions: the actual Arnoldi basis `V_j` and preconditioned basis
 `Z_j = M_j⁻¹V_j` captured from the failing solve (first and last), the
 returned correction `dK`, and a fixed deterministic block-balanced probe.
-Global metrics per epsilon plus per-block (`ru/rv/rw/ph/t/mu`) rows at the
-best epsilon; `rel_err = ‖prod−fd‖ / max(‖prod‖, ‖fd‖)`.
+`rel_err = ‖prod−fd‖ / max(‖prod‖, ‖fd‖)`.
+
+Record semantics (PR 9B evidence strengthening):
+
+- **Per-block full ladders**: global AND every block (`ru/rv/rw/ph/t/mu`)
+  rows at EVERY epsilon — a block's own best epsilon can differ from the
+  global one (the global norm is ru-dominated). `summary=1` rows report the
+  per-block best epsilon and best rel_err.
+- **`fd=central|plus|minus|richardson`**: one-sided FDs discriminate
+  nonsmooth/branch points (`plus`≠`minus` limits mean fwAD must not be
+  judged wrong outright); `richardson` extrapolates consecutive central
+  pairs.
+- **`source=replay|actual`**: `replay` rows re-apply the production
+  operators post-solve at the same state/direction; `actual` rows compare
+  the in-situ `A_Z`/`J_w` captured inside the live Arnoldi loop.
+  `fd=replay_vs_actual` rows measure drift between the two (route-lock /
+  cache effects).
+- **`purity=1` rows**: repeated + order-swapped evaluations of identical
+  inputs, run BEFORE any FD ladder. The gate is fail-close: if any pair
+  differs beyond `10*FLT_EPSILON`, a `purity_gate=failed` record is emitted
+  and the checker refuses to produce FD verdicts for that checkpoint
+  (`skipped=1 reason=shadow_rhs_impure`).
 
 Isolation contract: when unset, the only cost anywhere is a cached-boolean
 branch and a null capture pointer (zero extra tensor ops, RHS calls, or
