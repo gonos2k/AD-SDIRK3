@@ -253,6 +253,11 @@ add_executable(test_wdamp_tangent_contract test_wdamp_tangent_contract.cpp)
 target_link_libraries(test_wdamp_tangent_contract "${TORCH_LIBRARIES}")
 add_test(NAME WDamp_Tangent_Contract COMMAND test_wdamp_tangent_contract)
 
+# PR 9D: W-damping operator/preconditioner source-semantics policy contract.
+add_executable(test_wdamp_preconditioner_policy_contract test_wdamp_preconditioner_policy_contract.cpp)
+target_link_libraries(test_wdamp_preconditioner_policy_contract "${TORCH_LIBRARIES}")
+add_test(NAME WDamp_Preconditioner_Policy_Contract COMMAND test_wdamp_preconditioner_policy_contract)
+
 # PR 9B.1: rw term-capture safety contract (thread-locality, RAII/exception
 # safety, nested-arm fail-close, inventory validation) with a case-count
 # ratchet.
