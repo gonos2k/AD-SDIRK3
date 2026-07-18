@@ -291,7 +291,20 @@ int main() {
         src[0].a_implicit = 1.0;
         src[0].k_slow = &k_slow;
         src[0].k_fast = &k_fast;
-        std::vector<StageDefectSnapshot> defs;
+        // target stage 2 expects source stage 1's defect (explicit ESDIRK stage:
+        // defect==0, F_fast ~= K). A valid defect table is now required to pass
+        // the defect-inventory hard gate.
+        const double k1n = k_fast.to(torch::kFloat64).norm().item<double>();
+        StageDefectSnapshot d1;
+        d1.stage = 1;
+        d1.explicit_stage = true;
+        d1.converged = true;
+        d1.k_norm = k1n;
+        d1.f_fast_norm = k1n;
+        d1.newton_defect_norm = 0.0;
+        d1.defect_to_k_ratio = 0.0;
+        d1.scaled_final_residual = 0.0;
+        std::vector<StageDefectSnapshot> defs{d1};
         std::string ok =
             emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage, src, defs);
         check(ok.empty(), "case16: sound history passes the emit hard gate");
