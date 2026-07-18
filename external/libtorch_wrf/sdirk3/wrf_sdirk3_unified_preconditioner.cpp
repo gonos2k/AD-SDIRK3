@@ -34,6 +34,7 @@
 #include <torch/torch.h>
 #include <cmath>
 #include <algorithm>  // std::min
+#include <cstdlib>    // PR 9D: std::getenv for the legacy-M paired-comparison toggle
 #include <unordered_map>
 #include <atomic>
 #ifdef USE_CUDA
@@ -547,6 +548,19 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     const bool wdamp_extra_regularization = wdamp_policy.extra_regularization;
     const float wdamp_extra_diag = wdamp_policy.extra_regularization_alpha;
 
+    // PR 9D commit 3: legacy-M paired-comparison toggle (env-only, test-only,
+    // default OFF). When set, the physical W diagonal is RESTORED to the
+    // retired legacy value (w_damp_alpha gated on implicit_wdamp) so the SAME
+    // dt=600 case can be run both ways for the operator/preconditioner
+    // consistency evidence. It NEVER fires on the default/production path.
+    float wdamp_legacy_physical_diag = 0.0f;
+    {
+        const char* leg = std::getenv("WRF_SDIRK3_PRECOND_LEGACY_WDAMP");
+        if (leg && leg[0] == '1' && config.implicit_wdamp) {
+            wdamp_legacy_physical_diag = config.w_damp_alpha;
+        }
+    }
+
     // Effective per-term gates: start from config.implicit_*, then apply scope gating
     bool eff_rayleigh = config.implicit_rayleigh;
     bool eff_vdiff = config.implicit_vdiff;
@@ -1037,6 +1051,11 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         // PR 9D: scalar W diagonal only when an explicit regularization is set.
         if (wdamp_extra_diag != 0.0f) {
             diag_contrib += wdamp_extra_diag;
+        }
+        // PR 9D commit 3: legacy physical W diagonal — ONLY under the env
+        // paired-comparison toggle (0 on the production path).
+        if (wdamp_legacy_physical_diag != 0.0f) {
+            diag_contrib += wdamp_legacy_physical_diag;
         }
         if (eff_vdiff) {
             diag_contrib += vdiff_val;
@@ -1686,6 +1705,44 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         if (w_max < 1.01f && t_max < 1.01f && u_max < 1.01f) {
             std::cerr << "  *** WARNING: ALL diagonals ~1.0 → PRECONDITIONER IS IDENTITY! ***" << std::endl;
             std::cerr << "  This means dt*gamma*contributions are negligible." << std::endl;
+        }
+        // PR 9D commit 3: machine-readable W-damping preconditioner diagnosis.
+        // physical_w_direct_diag is 0 in the parity-consistent build (the
+        // retired legacy scalar is gone) and equals w_damp_alpha only under
+        // the legacy-M paired-comparison toggle. legacy_scaled_{min,max} is the
+        // range the RETIRED legacy diagonal WOULD contribute to the scaled W
+        // diagonal (w_damp_alpha / momentum_coupling_k); final_wdiag_{min,max}
+        // is the actual D_w range applied. A paired legacy/consistent run diffs
+        // final_wdiag and the FGMRES trajectory.
+        {
+            const float legacy_raw =
+                config.implicit_wdamp ? config.w_damp_alpha : 0.0f;
+            float mck_min = momentum_coupling_k.empty()
+                                ? 1.0f
+                                : *std::min_element(
+                                      momentum_coupling_k.begin() + (nz_w_local > 1 ? 1 : 0),
+                                      momentum_coupling_k.end());
+            float mck_max = momentum_coupling_k.empty()
+                                ? 1.0f
+                                : *std::max_element(
+                                      momentum_coupling_k.begin() + (nz_w_local > 1 ? 1 : 0),
+                                      momentum_coupling_k.end());
+            if (mck_min <= 0.0f) mck_min = 1e-6f;
+            if (mck_max <= 0.0f) mck_max = 1e-6f;
+            std::cerr << "SDIRK3_PRECOND_WDAMP_DIAG"
+                      << " dt=" << dt_
+                      << " rhs_config_enabled=" << (wdamp_policy.rhs_config_enabled ? 1 : 0)
+                      << " physical_w_direct_diag=" << wdamp_legacy_physical_diag
+                      << " extra_regularization=" << (wdamp_extra_regularization ? 1 : 0)
+                      << " extra_alpha=" << wdamp_extra_diag
+                      << " momentum_coupling_min=" << mck_min
+                      << " momentum_coupling_max=" << mck_max
+                      << " legacy_scaled_min=" << (legacy_raw / mck_max)
+                      << " legacy_scaled_max=" << (legacy_raw / mck_min)
+                      << " final_wdiag_min=" << w_min
+                      << " final_wdiag_max=" << w_max
+                      << " coefficient_generation=" << coefficient_generation_
+                      << std::endl;
         }
     }
 
