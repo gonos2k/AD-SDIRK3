@@ -72,8 +72,11 @@ struct StageHistorySource {
 // Emit SDIRK3_STAGE_HISTORY_DIAG (per-source ARK increment provenance) and
 // SDIRK3_STAGE_HISTORY_SUMMARY (history closure + per-source defect table) for
 // the record stage `target_stage`. Every line is stamped with the full-precision
-// `dt`, the solver-local monotonic `step_seq`, and the authoritative WRF
-// `global_timestep`, so a long dt=600 run can be grepped unambiguously.
+// `dt` and the solver-local monotonic `step_seq` (the primary, always-advancing
+// diagnostic identifier). `checkpoint_timestep` is the solver's 4D-Var
+// trajectory-checkpoint counter (get_saved_global_timestep()); it advances ONLY
+// under save_trajectory and is 0 in a default run, so it is emitted for
+// reference but is NOT the WRF model timestep -- do not read it as such.
 //
 // HARD GATE (PR 9E Commit A): returns an EMPTY string when the evidence is
 // sound; otherwise a non-empty reason after printing the specific failure marker
@@ -87,8 +90,8 @@ struct StageHistorySource {
 // mutation) so the FP64 closure reproduces it. All output goes to std::cerr
 // (WRF routes cerr to rsl.error.0000).
 inline std::string emit_stage_history_diag(
-    int step_seq,
-    int global_timestep,
+    int64_t step_seq,
+    int checkpoint_timestep,
     int target_stage,
     float dt,
     const torch::Tensor& U_n,
@@ -101,7 +104,8 @@ inline std::string emit_stage_history_diag(
     std::snprintf(dtbuf, sizeof(dtbuf), "%.9e", static_cast<double>(dt));
     const std::string tag = std::string("dt=") + dtbuf +
                             " step_seq=" + std::to_string(step_seq) +
-                            " global_timestep=" + std::to_string(global_timestep) +
+                            " checkpoint_timestep=" +
+                            std::to_string(checkpoint_timestep) +
                             " target_stage=" + std::to_string(target_stage) +
                             " iter=0";
 
