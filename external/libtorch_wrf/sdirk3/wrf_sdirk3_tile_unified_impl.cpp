@@ -8108,7 +8108,6 @@ vertical_coefficients:
                 if (stage_operand_diag_on) {
                     wrf::sdirk3::StageDefectSnapshot snap;
                     snap.stage = stage_id;
-                    snap.converged = last_stage_converged_;
                     {
                         torch::NoGradGuard no_grad;
                         snap.k_norm =
@@ -8121,21 +8120,31 @@ vertical_coefficients:
                         (std::abs(effective_aii) < 1e-14f);
                     snap.explicit_stage = explicit_stage;
                     if (explicit_stage) {
-                        // ESDIRK first stage: k_fast = F_fast(U_stage) exactly and
-                        // U_eval_final == U_stage, so the Newton defect is 0.
-                        snap.f_fast_norm = snap.k_norm;
-                        snap.newton_defect_norm = 0.0;
-                        snap.scaled_final_residual = 0.0;
+                        // ESDIRK first stage: NO Newton solve ran, so convergence
+                        // is NOT APPLICABLE. Record the canonical n/a sentinel for
+                        // every Newton field and DO NOT copy last_stage_converged_
+                        // -- that verdict belongs to a different, implicit stage or
+                        // sweep, and copying it manufactured a fake "converged
+                        // solve" record (with f_fast forced == k_norm, defect == 0)
+                        // that made the validator's explicit check self-fulfilling.
+                        snap.f_fast_norm = wrf::sdirk3::kDefectNA;
+                        snap.newton_defect_norm = wrf::sdirk3::kDefectNA;
+                        snap.scaled_final_residual = wrf::sdirk3::kDefectNA;
+                        snap.defect_to_k_ratio = wrf::sdirk3::kDefectNA;
+                        snap.converged = false;
                     } else {
+                        // Implicit solve: report THIS stage's OWN observed values,
+                        // captured now while last_stage_* still refer to it.
+                        snap.converged = last_stage_converged_;
                         snap.f_fast_norm =
                             static_cast<double>(last_stage_fast_rhs_norm_);
                         snap.newton_defect_norm =
                             static_cast<double>(last_stage_defect_l2_raw_);
                         snap.scaled_final_residual =
                             static_cast<double>(last_stage_residual_);
+                        snap.defect_to_k_ratio =
+                            snap.newton_defect_norm / std::max(snap.k_norm, 1e-300);
                     }
-                    snap.defect_to_k_ratio =
-                        snap.newton_defect_norm / std::max(snap.k_norm, 1e-300);
                     stage_operand_defects.push_back(snap);
                 }
 

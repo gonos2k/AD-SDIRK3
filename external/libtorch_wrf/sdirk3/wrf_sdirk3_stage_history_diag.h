@@ -50,18 +50,37 @@
 namespace wrf {
 namespace sdirk3 {
 
-// One prior stage's converged-solve quality, snapshotted AT that stage's own
+// Canonical "not applicable" sentinel for the Newton-convergence fields of an
+// EXPLICIT ESDIRK stage. An explicit stage runs NO Newton solve, so f_fast /
+// newton_defect / ratio / scaled_final_residual are not merely unobserved but
+// UNDEFINED. The record carries this fixed sentinel (independent of k_norm), and
+// the validator requires it EXACTLY -- so it can never be a manufactured
+// "F_fast == K" that makes the explicit check self-fulfilling (P1-1). A real
+// norm is >= 0, so -1.0 is unreachable by observation and unambiguous.
+static constexpr double kDefectNA = -1.0;
+
+// One prior stage's convergence quality, snapshotted AT that stage's own
 // completion (so it is that stage's value, not a later "last_stage_*" overwrite).
 // All norms observe production tensors; nothing is recomputed.
+//
+// EXPLICIT stage (ESDIRK stage 1): convergence is NOT APPLICABLE. There is no
+// Newton solve, hence no F_fast, no defect, and no "converged" verdict to report.
+// Such a record MUST set convergence_applicable=false, the four Newton fields to
+// kDefectNA, and converged=false (canonical -- it must NOT copy the solver's
+// last_stage_converged_, which belongs to a DIFFERENT, implicit stage/sweep).
+// The machine-readable line prints `convergence_applicable=0` and omits
+// `converged`. This replaces the earlier synthetic f_fast_norm=k_norm /
+// newton_defect_norm=0 record, whose validator check (f_fast ~= k_norm,
+// defect == 0) merely re-read values the caller had just forced equal.
 struct StageDefectSnapshot {
     int stage = -1;                    // 1-based source stage id
     double k_norm = 0.0;               // ||k_fast[stage-1]||  (= ||K_final||), raw L2
-    double f_fast_norm = -1.0;         // ||F_fast(U_eval_final)||, raw L2 (-1 = unobserved)
-    double newton_defect_norm = 0.0;   // ||K_final - F_fast(U_eval_final)||, raw L2
-    double defect_to_k_ratio = 0.0;    // newton_defect_norm / max(k_norm, tiny)
-    double scaled_final_residual = -1.0; // solver ||S^-1 R||_rms cross-reference (-1 = n/a)
-    bool converged = false;            // solver-reported convergence for this stage
-    bool explicit_stage = false;       // ESDIRK first stage (no Newton solve; defect==0)
+    double f_fast_norm = -1.0;         // ||F_fast(U_eval_final)||, raw L2 (kDefectNA = n/a)
+    double newton_defect_norm = 0.0;   // ||K_final - F_fast(U_eval_final)||, raw L2 (kDefectNA = n/a)
+    double defect_to_k_ratio = 0.0;    // newton_defect_norm / max(k_norm, tiny) (kDefectNA = n/a)
+    double scaled_final_residual = -1.0; // solver ||S^-1 R||_rms cross-reference (kDefectNA = n/a)
+    bool converged = false;            // solver-reported convergence (implicit stages only)
+    bool explicit_stage = false;       // ESDIRK first stage: convergence NOT APPLICABLE
 };
 
 // One source stage's contribution to the target stage's ARK history.
@@ -295,11 +314,15 @@ inline std::string emit_stage_applied_delta_diag(
 // comma-joined reason for the SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE marker.
 //   expected stage ids = 1 .. target_stage-1, each exactly once
 //   stage 1 (the ESDIRK explicit stage) MUST carry explicit=true; every later
-//     stage MUST carry explicit=false
-//   every norm/ratio finite AND non-negative -- k_norm, f_fast_norm,
-//     newton_defect_norm, scaled_final_residual, defect_to_k_ratio -- checked
-//     UNCONDITIONALLY (independent of role; the -1 "unobserved" sentinel fails)
-//   explicit stage additionally: newton_defect == 0 and f_fast_norm ~= k_norm
+//     stage MUST carry explicit=false  (pinned BOTH ways: role <=> stage id)
+//   k_norm (observed for both roles) finite AND non-negative, unconditionally
+//   IMPLICIT stage: f_fast_norm, newton_defect_norm, defect_to_k_ratio,
+//     scaled_final_residual all OBSERVED -> finite AND non-negative
+//   EXPLICIT stage (convergence NOT APPLICABLE): those four Newton fields MUST
+//     equal kDefectNA EXACTLY (independent of k_norm, so NOT self-fulfilling),
+//     and converged MUST be false (no last_stage_converged_ pollution). Every
+//     field is constrained in BOTH roles -- the branch changes the EXPECTED
+//     value, never SKIPS a field (the earlier role-skip stop-gate bug).
 inline std::string validate_stage_defect_inventory(
     const std::vector<StageDefectSnapshot>& defects, int target_stage) {
     std::string reason;
@@ -319,38 +342,43 @@ inline std::string validate_stage_defect_inventory(
         const std::string sid = "s" + std::to_string(d.stage);
         if (d.stage < 1 || d.stage >= target_stage)
             append("unknown_stage:" + sid);
-        if (!std::isfinite(d.k_norm) || !std::isfinite(d.f_fast_norm) ||
-            !std::isfinite(d.newton_defect_norm) ||
-            !std::isfinite(d.defect_to_k_ratio) ||
-            !std::isfinite(d.scaled_final_residual))
-            append("nonfinite:" + sid);
-        // Every numeric field is a norm or a ratio of norms -> inherently
-        // non-negative for BOTH roles; a negative value (including the -1
-        // "unobserved" sentinel on a solved stage) is invalid data the finiteness
-        // check alone would pass. These are checked UNCONDITIONALLY: putting a
-        // non-negativity check inside a role branch (as an earlier fix did for
-        // f_fast/defect/scaled) let the OTHER role skip it -- e.g. an explicit
-        // stage 1 with a negative scaled_final_residual (Codex stop-gate). Only
-        // the genuinely role-specific SEMANTIC checks live in the branch below.
-        if (d.k_norm < 0.0) append("neg_k_norm:" + sid);
-        if (d.f_fast_norm < 0.0) append("neg_f_fast:" + sid);
-        if (d.newton_defect_norm < 0.0) append("neg_defect:" + sid);
-        if (d.scaled_final_residual < 0.0) append("neg_scaled_resid:" + sid);
-        if (d.defect_to_k_ratio < 0.0) append("neg_ratio:" + sid);
-        // The explicit role is fully constrained BOTH ways: stage 1 IS the
-        // ESDIRK explicit stage (a_implicit[0][0]==0, no Newton solve), so it
-        // MUST carry explicit=true; every later stage MUST carry explicit=false.
+        // Role is pinned to stage id BOTH ways: stage 1 IS the ESDIRK explicit
+        // stage (a_implicit[0][0]==0, no Newton solve); every later stage is
+        // implicit. This anchors which expected-value contract applies below, so
+        // a record cannot dodge a check by mislabeling its role.
         if (d.explicit_stage && d.stage != 1)
             append("explicit_flag_nonstage1:" + sid);
         if (d.stage == 1 && !d.explicit_stage)
             append("stage1_not_explicit:" + sid);
-        // Role-specific SEMANTIC constraints only (non-negativity handled above).
+        // k_norm = ||k_fast[stage-1]|| is OBSERVED for both roles.
+        if (!std::isfinite(d.k_norm)) append("nonfinite_k:" + sid);
+        if (d.k_norm < 0.0) append("neg_k_norm:" + sid);
         if (d.explicit_stage) {
-            if (d.newton_defect_norm != 0.0)
-                append("explicit_defect_nonzero:" + sid);
-            const double denom = std::max(std::abs(d.k_norm), 1e-300);
-            if (std::abs(d.f_fast_norm - d.k_norm) / denom > 1e-6)
-                append("explicit_F_ne_K:" + sid);
+            // Convergence NOT APPLICABLE. The four Newton fields MUST equal the
+            // fixed kDefectNA sentinel, checked EXACTLY and INDEPENDENT of k_norm
+            // -- so this can never be the old self-fulfilling "f_fast ~= k_norm /
+            // defect == 0" that just re-read caller-forced values. converged MUST
+            // be false: an explicit record must not carry the solver's
+            // last_stage_converged_ (a different, implicit stage's verdict).
+            if (d.f_fast_norm != kDefectNA) append("explicit_f_fast_not_na:" + sid);
+            if (d.newton_defect_norm != kDefectNA) append("explicit_defect_not_na:" + sid);
+            if (d.defect_to_k_ratio != kDefectNA) append("explicit_ratio_not_na:" + sid);
+            if (d.scaled_final_residual != kDefectNA) append("explicit_scaled_not_na:" + sid);
+            if (d.converged) append("explicit_converged_claim:" + sid);
+        } else {
+            // Implicit solve: the four Newton fields are OBSERVED -> finite AND
+            // non-negative (the -1 "unobserved"/n-a sentinel is invalid here). Each
+            // field is checked -- the role branch selects the contract, it does not
+            // skip any field (the earlier role-skip stop-gate bug).
+            if (!std::isfinite(d.f_fast_norm) ||
+                !std::isfinite(d.newton_defect_norm) ||
+                !std::isfinite(d.defect_to_k_ratio) ||
+                !std::isfinite(d.scaled_final_residual))
+                append("nonfinite:" + sid);
+            if (d.f_fast_norm < 0.0) append("neg_f_fast:" + sid);
+            if (d.newton_defect_norm < 0.0) append("neg_defect:" + sid);
+            if (d.defect_to_k_ratio < 0.0) append("neg_ratio:" + sid);
+            if (d.scaled_final_residual < 0.0) append("neg_scaled_resid:" + sid);
         }
     }
     return reason;
@@ -590,13 +618,21 @@ inline std::string emit_stage_history_diag(
         std::ostringstream os;
         os << "[SDIRK3_STAGE_HISTORY_SUMMARY] " << tag
            << " src_stage=" << d.stage
-           << " k_norm=" << std::scientific << std::setprecision(6) << d.k_norm
-           << " f_fast_norm=" << d.f_fast_norm
-           << " newton_defect_norm=" << d.newton_defect_norm
-           << " defect_to_k_ratio=" << d.defect_to_k_ratio
-           << " scaled_final_residual=" << d.scaled_final_residual
-           << " converged=" << (d.converged ? 1 : 0)
-           << " explicit=" << (d.explicit_stage ? 1 : 0);
+           << " explicit=" << (d.explicit_stage ? 1 : 0)
+           << " convergence_applicable=" << (d.explicit_stage ? 0 : 1)
+           << " k_norm=" << std::scientific << std::setprecision(6) << d.k_norm;
+        if (d.explicit_stage) {
+            // Convergence not applicable: emit n/a for every Newton field and do
+            // NOT print a converged verdict (there was no solve to converge).
+            os << " f_fast_norm=n/a newton_defect_norm=n/a"
+               << " defect_to_k_ratio=n/a scaled_final_residual=n/a";
+        } else {
+            os << " f_fast_norm=" << d.f_fast_norm
+               << " newton_defect_norm=" << d.newton_defect_norm
+               << " defect_to_k_ratio=" << d.defect_to_k_ratio
+               << " scaled_final_residual=" << d.scaled_final_residual
+               << " converged=" << (d.converged ? 1 : 0);
+        }
         std::cerr << os.str() << std::endl;
     }
     return std::string();
