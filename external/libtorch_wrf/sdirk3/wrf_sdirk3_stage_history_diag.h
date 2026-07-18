@@ -38,9 +38,11 @@
 #include <torch/torch.h>
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdio>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -70,6 +72,163 @@ struct StageHistorySource {
     const torch::Tensor* k_slow = nullptr; // production tensor, observed (not owned)
     const torch::Tensor* k_fast = nullptr;
 };
+
+// A packed six-block boundary (ru/rv/rw/ph/t/mu), for per-block localization of
+// an attribution failure.
+struct StageOperandBlock {
+    const char* name = "";
+    int64_t start = 0;
+    int64_t size = 0;
+};
+
+// AUTHORITATIVE per-source ARK attribution check (PR 9E history-authority C1).
+// The aggregate history closure proves only that the reconstructed TOTAL matches
+// U_stage - U_n; it cannot catch a +delta/-delta compensation between two sources
+// or a source-label swap, and reconstructing the history in FP64 does not verify
+// the real FP32 production rounding. This check instead re-applies each source's
+// intended increment with the IDENTICAL FP32 expression production used, on top of
+// the captured running state `states[j-1]` (U_n for j=0), and asserts it lands on
+// the captured production state `states[j]`:
+//     states[j-1] + dt*aE*k_slow[j] + dt*aI*k_fast[j]  ==  states[j]   (per element)
+// For a correct attribution this is BIT-EXACT (same inputs, same FP32 ops) even
+// under huge-base ULP loss (both round identically), so the check requires
+// residual == 0 exactly -- a magnitude-scaled tolerance like eps*|state| would
+// allow ~477 at |state|=1e9 and hide a wrong small increment. A wrong k /
+// coefficient / sign misses states[j] by a nonzero residual; per-block slicing
+// localizes which block failed. The stage LABEL is enforced separately (below).
+//
+// `states` are the running FP32 states AFTER each source's production add
+// (states.size() == sources.size(); states.back() must equal U_stage). Returns ""
+// when sound, else a reason for the SDIRK3_STAGE_OPERAND_ATTRIBUTION_FAILED marker.
+// Emits SDIRK3_STAGE_APPLIED_DELTA success lines only after the gate passes.
+inline std::string emit_stage_applied_delta_diag(
+    int64_t step_seq,
+    int checkpoint_timestep,
+    int target_stage,
+    float dt,
+    const torch::Tensor& U_n,
+    const torch::Tensor& U_stage,
+    const std::vector<StageHistorySource>& sources,
+    const std::vector<const torch::Tensor*>& states,
+    const std::vector<StageOperandBlock>& blocks) {
+    torch::NoGradGuard no_grad;
+    char dtbuf[32];
+    std::snprintf(dtbuf, sizeof(dtbuf), "%.9e", static_cast<double>(dt));
+    const std::string tag = std::string("dt=") + dtbuf +
+                            " step_seq=" + std::to_string(step_seq) +
+                            " checkpoint_timestep=" +
+                            std::to_string(checkpoint_timestep) +
+                            " target_stage=" + std::to_string(target_stage) +
+                            " iter=0";
+    auto fail = [&](const std::string& detail) -> std::string {
+        std::cerr << "[SDIRK3_STAGE_OPERAND_ATTRIBUTION_FAILED] " << tag << " "
+                  << detail << std::endl;
+        return "SDIRK3_STAGE_OPERAND_ATTRIBUTION_FAILED: " + detail;
+    };
+
+    if (states.size() != sources.size())
+        return fail("state_count=" + std::to_string(states.size()) +
+                    " != source_count=" + std::to_string(sources.size()));
+
+    // LABEL AUTHORITY (derived from the AUTHORITATIVE target_stage, not the
+    // observed order): the history of target stage i is composed of source stages
+    // 1..i-1 applied in order, so there must be exactly target_stage-1 sources and
+    // the source at position j MUST carry the label j+1. The per-element reapply
+    // check below ties each POSITION's k/coefficient to states[j]; it does NOT
+    // constrain the stage LABEL, so a swapped label is a real misattribution the
+    // reapply alone cannot catch. Enforce it here.
+    if (static_cast<int>(sources.size()) != target_stage - 1)
+        return fail("source_count=" + std::to_string(sources.size()) +
+                    " != target_stage-1=" + std::to_string(target_stage - 1));
+    for (std::size_t j = 0; j < sources.size(); ++j) {
+        if (sources[j].stage != static_cast<int>(j) + 1)
+            return fail("label_mismatch pos=" + std::to_string(j) + " stage=" +
+                        std::to_string(sources[j].stage) +
+                        " expected=" + std::to_string(j + 1));
+    }
+
+    std::vector<std::string> diag_lines;
+    diag_lines.reserve(sources.size());
+    double worst_residual = 0.0;
+    std::string block_fail;
+
+    for (std::size_t j = 0; j < sources.size(); ++j) {
+        const auto& s = sources[j];
+        if (!states[j] || !states[j]->defined() || !s.k_slow ||
+            !s.k_slow->defined() || !s.k_fast || !s.k_fast->defined())
+            return fail("undefined source/state at src_stage=" +
+                        std::to_string(s.stage));
+        const torch::Tensor& prev = (j == 0) ? U_n : *states[j - 1];
+        if (!prev.defined())
+            return fail("undefined prev state at src_stage=" +
+                        std::to_string(s.stage));
+        // IDENTICAL FP32 expression to production's compute_stage_rhs add.
+        torch::Tensor reapply = prev +
+                                dt * static_cast<float>(s.a_explicit) * (*s.k_slow) +
+                                dt * static_cast<float>(s.a_implicit) * (*s.k_fast);
+        // Non-finite inputs would make the residual NaN, and with the strict-zero
+        // gate below std::max(0,NaN)==0 and NaN>0 is false -- so a NaN would FAIL
+        // OPEN, emitting a "successful" attribution. Require finite prev / state /
+        // reapply (which also covers non-finite k) BEFORE the zero comparison.
+        if (!prev.isfinite().all().item<bool>() ||
+            !states[j]->isfinite().all().item<bool>() ||
+            !reapply.isfinite().all().item<bool>())
+            return fail("nonfinite input/reapply at src_stage=" +
+                        std::to_string(s.stage));
+        // BIT-EXACT replay. Production and this re-application evaluate the same
+        // FP32 expression, so a correct attribution lands on the captured state
+        // EXACTLY (residual == 0), independent of |state| -- a huge-base ULP loss
+        // is absorbed identically on both sides. A magnitude-scaled tolerance like
+        // eps*|state| would allow ~477 at |state|=1e9 and hide a wrong small
+        // increment; a strict zero cannot. Any nonzero residual is a real
+        // misattribution.
+        torch::Tensor residual = (reapply - *states[j]).abs();  // FP32, element-wise
+        const double res_max = residual.max().item<double>();
+        if (!std::isfinite(res_max))
+            return fail("nonfinite residual at src_stage=" +
+                        std::to_string(s.stage));
+        worst_residual = std::max(worst_residual, res_max);
+        const double applied_norm =
+            (*states[j] - prev).to(torch::kFloat64).norm().item<double>();
+
+        std::ostringstream os;
+        os << "[SDIRK3_STAGE_APPLIED_DELTA] " << tag
+           << " src_stage=" << s.stage << std::scientific << std::setprecision(6)
+           << " applied_norm=" << applied_norm << " reapply_res_max=" << res_max;
+        for (const auto& b : blocks) {
+            if (b.start + b.size > residual.numel()) continue;
+            const double bres =
+                residual.slice(0, b.start, b.start + b.size).max().item<double>();
+            os << " res_" << b.name << "=" << bres;
+            if (bres > 0.0) {
+                if (!block_fail.empty()) block_fail += ",";
+                block_fail += std::string(b.name) + "@s" + std::to_string(s.stage);
+            }
+        }
+        diag_lines.push_back(os.str());
+    }
+
+    if (worst_residual > 0.0) {
+        char rb[128];
+        std::snprintf(rb, sizeof(rb), "worst_reapply_residual=%.6e blocks=%s",
+                      worst_residual,
+                      block_fail.empty() ? "?" : block_fail.c_str());
+        return fail(rb);
+    }
+    // Capture integrity: the last running state must be the assembled U_stage.
+    if (states.back() && states.back()->defined() && U_stage.defined()) {
+        const double integ =
+            (*states.back() - U_stage).abs().max().item<double>();
+        if (!std::isfinite(integ) || integ > 0.0) {  // NaN also fails closed
+            char rb[96];
+            std::snprintf(rb, sizeof(rb), "capture_integrity last_state_vs_U_stage=%.6e",
+                          integ);
+            return fail(rb);
+        }
+    }
+    for (const auto& line : diag_lines) std::cerr << line << std::endl;
+    return std::string();
+}
 
 // Validate the per-source-stage Newton-defect table against the AUTHORITATIVE
 // expected set (the target stage), independent of the observed `defects` vector

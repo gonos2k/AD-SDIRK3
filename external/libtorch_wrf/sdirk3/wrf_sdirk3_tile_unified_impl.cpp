@@ -7650,12 +7650,35 @@ vertical_coefficients:
                 return 0;
             };
 
+            // PR 9E history-authority: declared BEFORE compute_stage_rhs so the
+            // lambda can capture them. stage_operand_applied_deltas holds, for the
+            // record stage being assembled, the ACTUAL production delta each
+            // source applied (rhs_after - rhs_before, in production FP32) -- the
+            // ground truth the emitter checks per-source attribution against.
+            const bool stage_operand_diag_on =
+                wrf::sdirk3::g_sdirk3_config.stage_operand_diag;
+            // The running FP32 state AFTER each source's add (index j = state
+            // after source j). Together with U_n these give both the actual
+            // applied delta per source (state[j]-state[j-1]) and the base
+            // magnitude |state[j]| for the rounding-aware attribution bound.
+            std::vector<torch::Tensor> stage_operand_stage_states;
+
             auto compute_stage_rhs = [&](int stage_idx) -> torch::Tensor {
+                // Record stages are stage_id 2,3 -> 0-based stage_idx 1,2.
+                const bool capture_deltas =
+                    stage_operand_diag_on && (stage_idx == 1 || stage_idx == 2);
+                if (capture_deltas) stage_operand_stage_states.clear();
                 torch::Tensor rhs = U_n;
                 for (int j = 0; j < stage_idx; ++j) {
+                    // UNCHANGED production assembly statement (not decomposed).
                     rhs = rhs
                         + dt * static_cast<float>(Ark::a_explicit[stage_idx][j]) * k_slow[j]
                         + dt * static_cast<float>(Ark::a_implicit[stage_idx][j]) * k_fast[j];
+                    if (capture_deltas) {
+                        torch::NoGradGuard no_grad;
+                        // Running FP32 state after source j's actual add.
+                        stage_operand_stage_states.push_back(rhs.detach().clone());
+                    }
                 }
                 return rhs;
             };
@@ -7772,10 +7795,9 @@ vertical_coefficients:
 
             // PR 9E (diagnosis-only, opt-in): per-ARK-sweep scratch for the
             // stage-operand history + defect summary. All emission OBSERVES
-            // production tensors (k_slow/k_fast/U_stage) and never re-evaluates
-            // an RHS.
-            const bool stage_operand_diag_on =
-                wrf::sdirk3::g_sdirk3_config.stage_operand_diag;
+            // production tensors (k_slow/k_fast/U_stage/applied-deltas) and never
+            // re-evaluates an RHS. (stage_operand_diag_on is declared above so
+            // compute_stage_rhs can capture the per-source applied deltas.)
             std::vector<wrf::sdirk3::StageDefectSnapshot> stage_operand_defects;
             int64_t stage_operand_step_label = 0;  // full width; never truncated
             if (stage_operand_diag_on) {
@@ -7860,6 +7882,47 @@ vertical_coefficients:
                         wrf::sdirk3::mpi_safety::abort_c_abi_exception(
                             "stage_operand_history_diag",
                             stage_operand_fail.c_str());
+                    }
+
+                    // PR 9E history-authority C1: AUTHORITATIVE per-source
+                    // attribution. The running FP32 states captured around the
+                    // production ARK add (stage_operand_stage_states) are the
+                    // ground truth; the emitter re-applies each source's intended
+                    // increment with the identical FP32 expression and asserts it
+                    // lands (per element, per block) on the captured state. This
+                    // catches a +delta/-delta source compensation or label swap
+                    // that the aggregate history closure cannot.
+                    std::vector<const torch::Tensor*> stage_operand_state_ptrs;
+                    stage_operand_state_ptrs.reserve(
+                        stage_operand_stage_states.size());
+                    for (const auto& st : stage_operand_stage_states)
+                        stage_operand_state_ptrs.push_back(&st);
+                    std::vector<wrf::sdirk3::StageOperandBlock> stage_operand_blocks;
+                    {
+                        const int64_t su = static_cast<int64_t>(nx_u_) * ny_ * nz_;
+                        const int64_t sv = static_cast<int64_t>(nx_) * ny_v_ * nz_;
+                        const int64_t sw = static_cast<int64_t>(nx_) * ny_ * nz_w_;
+                        const int64_t sph = static_cast<int64_t>(nx_) * ny_ * nz_w_;
+                        const int64_t st = static_cast<int64_t>(nx_) * ny_ * nz_;
+                        const int64_t smu = static_cast<int64_t>(nx_) * ny_;
+                        int64_t off = 0;
+                        stage_operand_blocks.push_back({"ru", off, su});  off += su;
+                        stage_operand_blocks.push_back({"rv", off, sv});  off += sv;
+                        stage_operand_blocks.push_back({"rw", off, sw});  off += sw;
+                        stage_operand_blocks.push_back({"ph", off, sph}); off += sph;
+                        stage_operand_blocks.push_back({"t",  off, st});  off += st;
+                        stage_operand_blocks.push_back({"mu", off, smu});
+                    }
+                    std::string stage_operand_attr_fail =
+                        wrf::sdirk3::emit_stage_applied_delta_diag(
+                            stage_operand_step_label,
+                            stage_operand_checkpoint_ts, stage_id, dt, U_n,
+                            U_stage, sources, stage_operand_state_ptrs,
+                            stage_operand_blocks);
+                    if (!stage_operand_attr_fail.empty()) {
+                        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+                            "stage_operand_applied_delta",
+                            stage_operand_attr_fail.c_str());
                     }
                 }
 
