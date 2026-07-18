@@ -36,6 +36,8 @@
 // The per-block raw/scaled/halo decomposition is Commit 3's job.
 #include "wrf_sdirk3_stage_operand_capture.h"
 #include <torch/torch.h>
+#include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <iomanip>
 #include <iostream>
@@ -69,26 +71,103 @@ struct StageHistorySource {
     const torch::Tensor* k_fast = nullptr;
 };
 
+// Validate the per-source-stage Newton-defect table against the AUTHORITATIVE
+// expected set (the target stage), independent of the observed `defects` vector
+// -- an omitted or duplicated source-stage defect must fail closed, not be
+// silently under-reported (which would quietly gut PR 9E's candidate C, the
+// prior-stage-defect-inheritance question). Returns "" when sound, else a
+// comma-joined reason for the SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE marker.
+//   expected stage ids = 1 .. target_stage-1, each exactly once
+//   stage 1 (the ESDIRK explicit stage) MUST carry explicit=true; every later
+//     stage MUST carry explicit=false
+//   every norm/ratio finite AND non-negative -- k_norm, f_fast_norm,
+//     newton_defect_norm, scaled_final_residual, defect_to_k_ratio -- checked
+//     UNCONDITIONALLY (independent of role; the -1 "unobserved" sentinel fails)
+//   explicit stage additionally: newton_defect == 0 and f_fast_norm ~= k_norm
+inline std::string validate_stage_defect_inventory(
+    const std::vector<StageDefectSnapshot>& defects, int target_stage) {
+    std::string reason;
+    auto append = [&](const std::string& r) {
+        if (!reason.empty()) reason += ",";
+        reason += r;
+    };
+    // presence: each expected source stage appears exactly once
+    for (int j = 1; j < target_stage; ++j) {
+        int count = 0;
+        for (const auto& d : defects)
+            if (d.stage == j) ++count;
+        if (count == 0) append("missing:s" + std::to_string(j));
+        if (count > 1) append("duplicate:s" + std::to_string(j));
+    }
+    for (const auto& d : defects) {
+        const std::string sid = "s" + std::to_string(d.stage);
+        if (d.stage < 1 || d.stage >= target_stage)
+            append("unknown_stage:" + sid);
+        if (!std::isfinite(d.k_norm) || !std::isfinite(d.f_fast_norm) ||
+            !std::isfinite(d.newton_defect_norm) ||
+            !std::isfinite(d.defect_to_k_ratio) ||
+            !std::isfinite(d.scaled_final_residual))
+            append("nonfinite:" + sid);
+        // Every numeric field is a norm or a ratio of norms -> inherently
+        // non-negative for BOTH roles; a negative value (including the -1
+        // "unobserved" sentinel on a solved stage) is invalid data the finiteness
+        // check alone would pass. These are checked UNCONDITIONALLY: putting a
+        // non-negativity check inside a role branch (as an earlier fix did for
+        // f_fast/defect/scaled) let the OTHER role skip it -- e.g. an explicit
+        // stage 1 with a negative scaled_final_residual (Codex stop-gate). Only
+        // the genuinely role-specific SEMANTIC checks live in the branch below.
+        if (d.k_norm < 0.0) append("neg_k_norm:" + sid);
+        if (d.f_fast_norm < 0.0) append("neg_f_fast:" + sid);
+        if (d.newton_defect_norm < 0.0) append("neg_defect:" + sid);
+        if (d.scaled_final_residual < 0.0) append("neg_scaled_resid:" + sid);
+        if (d.defect_to_k_ratio < 0.0) append("neg_ratio:" + sid);
+        // The explicit role is fully constrained BOTH ways: stage 1 IS the
+        // ESDIRK explicit stage (a_implicit[0][0]==0, no Newton solve), so it
+        // MUST carry explicit=true; every later stage MUST carry explicit=false.
+        if (d.explicit_stage && d.stage != 1)
+            append("explicit_flag_nonstage1:" + sid);
+        if (d.stage == 1 && !d.explicit_stage)
+            append("stage1_not_explicit:" + sid);
+        // Role-specific SEMANTIC constraints only (non-negativity handled above).
+        if (d.explicit_stage) {
+            if (d.newton_defect_norm != 0.0)
+                append("explicit_defect_nonzero:" + sid);
+            const double denom = std::max(std::abs(d.k_norm), 1e-300);
+            if (std::abs(d.f_fast_norm - d.k_norm) / denom > 1e-6)
+                append("explicit_F_ne_K:" + sid);
+        }
+    }
+    return reason;
+}
+
 // Emit SDIRK3_STAGE_HISTORY_DIAG (per-source ARK increment provenance) and
 // SDIRK3_STAGE_HISTORY_SUMMARY (history closure + per-source defect table) for
 // the record stage `target_stage`. Every line is stamped with the full-precision
-// `dt`, the solver-local monotonic `step_seq`, and the authoritative WRF
-// `global_timestep`, so a long dt=600 run can be grepped unambiguously.
+// `dt` and the solver-local monotonic `step_seq` (the primary, always-advancing
+// diagnostic identifier). `checkpoint_timestep` is the solver's 4D-Var
+// trajectory-checkpoint counter (get_saved_global_timestep()); it advances ONLY
+// under save_trajectory and is 0 in a default run, so it is emitted for
+// reference but is NOT the WRF model timestep -- do not read it as such.
 //
-// HARD GATE (PR 9E Commit A): returns an EMPTY string when the evidence is
-// sound; otherwise a non-empty reason after printing the specific failure marker
-// (SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE for a broken inventory,
-// SDIRK3_STAGE_OPERAND_CLOSURE_FAILED for a non-finite closure or one whose
-// relative error exceeds 1e-6). The caller MUST controlled-fatal on a non-empty
-// return -- printing broken evidence and continuing would launder a false
-// closure.
+// HARD GATE (PR 9E evidence integrity): returns an EMPTY string when the
+// evidence is sound; otherwise a non-empty reason after printing the specific
+// failure marker -- SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE (history inventory),
+// SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE (defect-table inventory), or
+// SDIRK3_STAGE_OPERAND_CLOSURE_FAILED (the AUTHORITATIVE history-relative
+// closure: Sum of increments vs U_stage - U_n, whose relative-error denominator
+// EXCLUDES U_n so a base state far larger than the increments cannot launder a
+// wrong coefficient or sign -- a full-state ||.||/||U_stage|| would). The caller
+// MUST controlled-fatal on a non-empty return. On failure ONLY the failure
+// marker is printed: no success-form STAGE_HISTORY_* record is emitted for a
+// rejected capture, so a consumer that greps only the success markers can never
+// mistake broken evidence for sound.
 //
 // `U_stage` MUST be the pristine production history (before any halo/sanitize
 // mutation) so the FP64 closure reproduces it. All output goes to std::cerr
 // (WRF routes cerr to rsl.error.0000).
 inline std::string emit_stage_history_diag(
-    int step_seq,
-    int global_timestep,
+    int64_t step_seq,
+    int checkpoint_timestep,
     int target_stage,
     float dt,
     const torch::Tensor& U_n,
@@ -101,17 +180,19 @@ inline std::string emit_stage_history_diag(
     std::snprintf(dtbuf, sizeof(dtbuf), "%.9e", static_cast<double>(dt));
     const std::string tag = std::string("dt=") + dtbuf +
                             " step_seq=" + std::to_string(step_seq) +
-                            " global_timestep=" + std::to_string(global_timestep) +
+                            " checkpoint_timestep=" +
+                            std::to_string(checkpoint_timestep) +
                             " target_stage=" + std::to_string(target_stage) +
                             " iter=0";
 
-    // Build the detached FP64 increment leaves that compose the history, using
-    // the SAME float coefficient cast production uses, so the closure reproduces
-    // the assembled U_stage to ~float32 eps. `leaves` is filled completely FIRST
-    // (so no reallocation can dangle a pointer), then the closure pointer list is
-    // taken from the settled `leaves` vector.
+    // ---- PHASE 1: build the FP64 increment leaves and BUFFER the per-source
+    // DIAG lines (do NOT print yet -- see PHASE 3/4 ordering). Increments use the
+    // SAME float coefficient cast production uses. `leaves` is filled completely
+    // first so no reallocation can dangle a pointer. ----
     std::vector<OperandLeaf> leaves;           // inventory records (name + tensor)
     leaves.reserve(sources.size() * 2 + 1);
+    std::vector<std::string> diag_lines;
+    diag_lines.reserve(sources.size());
 
     auto add_leaf = [&](const std::string& name, const torch::Tensor& t) {
         OperandLeaf l;
@@ -122,7 +203,7 @@ inline std::string emit_stage_history_diag(
         leaves.push_back(std::move(l));
     };
 
-    // Base state U_n is the first history leaf.
+    // Base state U_n is the first leaf (index 0); increments follow.
     add_leaf("U_n", U_n.defined() ? U_n.detach().to(torch::kFloat64)
                                   : torch::Tensor());
 
@@ -159,26 +240,14 @@ inline std::string emit_stage_history_diag(
            << " k_fast_norm=" << k_fast_norm
            << " expl_incr_norm=" << expl_norm
            << " impl_incr_norm=" << impl_norm;
-        std::cerr << os.str() << std::endl;
+        diag_lines.push_back(os.str());
     }
 
-    // `leaves` is now complete; take stable pointers for the closure.
-    std::vector<const torch::Tensor*> closure_leaves;
-    closure_leaves.reserve(leaves.size());
-    for (const auto& l : leaves) closure_leaves.push_back(&l.tensor);
-
-    // The EXPECTED inventory MUST be derived from an AUTHORITATIVE source that is
-    // independent of the observed `sources` -- here the target stage itself. An
-    // ESDIRK ARK history for target stage i is composed of exactly the lower
-    // stages j = 1..i-1, each contributing one explicit and one implicit
-    // increment (zero-coefficient stages included, as zero tensors). Building
-    // `required` from `sources` (as an earlier fix did) would let an OMITTED
-    // source stage look valid: the dropped leaf would simply not be in `required`
-    // either, so the "missing" check would have nothing to fire on (Codex
-    // stop-gate). With the set fixed by target_stage and passed as `required`
-    // (validate gates missing/duplicate/undefined on `required`, unknown on
-    // `required U optional`), a dropped, duplicated, undefined, or mislabeled
-    // source stage -- or a stray leaf -- now fails closed.
+    // ---- PHASE 2: validate against INDEPENDENT authorities + compute closures ----
+    // 2a. History inventory: expected leaf set derived from the AUTHORITATIVE
+    // target stage (lower stages j = 1..i-1, zero-coefficient included), NOT from
+    // the observed `sources` -- so an omitted source stage fails closed as a
+    // missing leaf.
     std::vector<std::string> required;
     required.reserve(static_cast<size_t>(target_stage > 0 ? target_stage : 1) * 2);
     required.push_back("U_n");
@@ -186,36 +255,98 @@ inline std::string emit_stage_history_diag(
         required.push_back("expl_incr_s" + std::to_string(j));
         required.push_back("impl_incr_s" + std::to_string(j));
     }
-
-    // FP64 closure: U_n + sum_j (expl_incr_j + impl_incr_j) == U_stage ?
-    // Reuse the Commit-1 machinery so the standing contract and production share
-    // one authority.
-    ClosureResult closure = closure_of(closure_leaves, U_stage);
     const std::string inventory =
         validate_stage_operand_inventory(leaves, required, /*optional=*/{});
 
-    double u_n_norm = U_n.defined()
-                          ? U_n.detach().to(torch::kFloat64).norm().item<double>()
-                          : 0.0;
-    double u_stage_norm =
-        U_stage.defined()
-            ? U_stage.detach().to(torch::kFloat64).norm().item<double>()
-            : 0.0;
+    // 2b. Defect-table inventory (independent authority: target stage).
+    const std::string defect_reason =
+        validate_stage_defect_inventory(defects, target_stage);
 
-    {
-        std::ostringstream os;
-        os << "[SDIRK3_STAGE_HISTORY_SUMMARY] " << tag
-           << " closure_rel_err=" << std::scientific << std::setprecision(6)
-           << closure.rel_err
-           << " closure_abs_err=" << closure.abs_err
-           << " closure_max_abs=" << closure.max_abs_err
-           << " closure_finite=" << (closure.finite ? 1 : 0)
-           << " U_n_norm=" << u_n_norm
-           << " U_stage_norm=" << u_stage_norm
-           << " inventory=" << (inventory.empty() ? std::string("OK") : inventory);
-        std::cerr << os.str() << std::endl;
+    // 2c. AUTHORITATIVE history-relative closure: reconstructed increments (leaves
+    // 1..N, WITHOUT U_n) vs the actual history U_stage - U_n. The relative-error
+    // denominator EXCLUDES U_n, so a base state far larger than the increments
+    // cannot hide a wrong coefficient or sign. hist_max_rel additionally catches a
+    // block-local spike the L2 metric would average out (per-element denom floored
+    // by the history RMS to avoid a zero-crossing blow-up).
+    torch::Tensor recon;
+    for (std::size_t k = 1; k < leaves.size(); ++k) {
+        if (!leaves[k].tensor.defined()) continue;
+        recon = recon.defined() ? recon + leaves[k].tensor
+                                : leaves[k].tensor.clone();
+    }
+    torch::Tensor U_n64 = U_n.defined() ? U_n.detach().to(torch::kFloat64)
+                                        : torch::Tensor();
+    torch::Tensor U_stage64 = U_stage.detach().to(torch::kFloat64);
+    torch::Tensor actual_history =
+        U_n64.defined() ? (U_stage64 - U_n64) : U_stage64.clone();
+    if (!recon.defined()) recon = torch::zeros_like(actual_history);
+    torch::Tensor hdiff = recon - actual_history;
+    const double hist_abs = hdiff.norm().item<double>();
+    const double recon_norm = recon.norm().item<double>();
+    const double actual_norm = actual_history.norm().item<double>();
+    const double hist_rel =
+        hist_abs / std::max(std::max(recon_norm, actual_norm), 1e-300);
+    const double hist_max_abs = hdiff.abs().max().item<double>();
+    const double actual_rms =
+        actual_norm /
+        std::sqrt(static_cast<double>(std::max<int64_t>(actual_history.numel(), 1)));
+    const double spike_floor = std::max(actual_rms * 1e-3, 1e-300);
+    const double hist_max_rel =
+        (hdiff.abs() / (actual_history.abs() + spike_floor)).max().item<double>();
+    const bool hist_finite = hdiff.isfinite().all().item<bool>() &&
+                             recon.isfinite().all().item<bool>();
+
+    // Full-state closure is TELEMETRY ONLY (never the gate): with ||U_n|| >>
+    // ||increments|| it stays ~eps even for a wrong increment, which is exactly
+    // why it must not be the authority.
+    std::vector<const torch::Tensor*> closure_leaves;
+    closure_leaves.reserve(leaves.size());
+    for (const auto& l : leaves) closure_leaves.push_back(&l.tensor);
+    const ClosureResult full_closure = closure_of(closure_leaves, U_stage);
+
+    const double u_n_norm = U_n64.defined() ? U_n64.norm().item<double>() : 0.0;
+    const double u_stage_norm = U_stage64.norm().item<double>();
+
+    // ---- PHASE 3: GATE. On ANY failure print ONLY the failure marker and return;
+    // NO success-form STAGE_HISTORY_* record is emitted for a rejected capture. ----
+    auto fail = [&](const char* marker, const std::string& detail) -> std::string {
+        std::cerr << "[" << marker << "] " << tag << " " << detail << std::endl;
+        return std::string(marker) + ": " + detail;
+    };
+    if (!inventory.empty())
+        return fail("SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE",
+                    "inventory=" + inventory);
+    if (!defect_reason.empty())
+        return fail("SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE",
+                    "defect=" + defect_reason);
+    if (!hist_finite || hist_rel > 1e-6 || hist_max_rel > 1e-1) {
+        char rb[224];
+        std::snprintf(rb, sizeof(rb),
+                      "hist_rel=%.6e hist_max_abs=%.6e hist_max_rel=%.6e "
+                      "finite=%d recon_norm=%.6e actual_norm=%.6e",
+                      hist_rel, hist_max_abs, hist_max_rel, hist_finite ? 1 : 0,
+                      recon_norm, actual_norm);
+        return fail("SDIRK3_STAGE_OPERAND_CLOSURE_FAILED", rb);
     }
 
+    // ---- PHASE 4: all authorities passed -> emit the SUCCESS records ----
+    for (const auto& line : diag_lines) std::cerr << line << std::endl;
+    {
+        std::ostringstream os;
+        os << "[SDIRK3_STAGE_HISTORY_SUMMARY] " << tag << std::scientific
+           << std::setprecision(6)
+           << " hist_rel=" << hist_rel
+           << " hist_abs=" << hist_abs
+           << " hist_max_abs=" << hist_max_abs
+           << " hist_max_rel=" << hist_max_rel
+           << " recon_norm=" << recon_norm
+           << " actual_norm=" << actual_norm
+           << " full_state_rel=" << full_closure.rel_err
+           << " U_n_norm=" << u_n_norm
+           << " U_stage_norm=" << u_stage_norm
+           << " inventory=OK defect=OK";
+        std::cerr << os.str() << std::endl;
+    }
     for (const auto& d : defects) {
         std::ostringstream os;
         os << "[SDIRK3_STAGE_HISTORY_SUMMARY] " << tag
@@ -228,26 +359,6 @@ inline std::string emit_stage_history_diag(
            << " converged=" << (d.converged ? 1 : 0)
            << " explicit=" << (d.explicit_stage ? 1 : 0);
         std::cerr << os.str() << std::endl;
-    }
-
-    // HARD GATE (PR 9E Commit A): the diagnostic evidence must itself be sound.
-    // A broken inventory (missing/duplicate/undefined/unknown/non-finite leaf) or
-    // a history that does not reconstruct the production U_stage means the
-    // measurement is wrong; continuing would launder a false closure. Print the
-    // specific failure marker and return a non-empty reason for the caller to
-    // controlled-fatal on.
-    if (!inventory.empty()) {
-        std::cerr << "[SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE] " << tag
-                  << " inventory=" << inventory << std::endl;
-        return "SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE: " + inventory;
-    }
-    if (!closure.finite || closure.rel_err > 1e-6) {
-        char rb[96];
-        std::snprintf(rb, sizeof(rb), "rel_err=%.6e finite=%d",
-                      closure.rel_err, closure.finite ? 1 : 0);
-        std::cerr << "[SDIRK3_STAGE_OPERAND_CLOSURE_FAILED] " << tag << " " << rb
-                  << std::endl;
-        return std::string("SDIRK3_STAGE_OPERAND_CLOSURE_FAILED: ") + rb;
     }
     return std::string();
 }

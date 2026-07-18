@@ -8,6 +8,8 @@
 #include <thread>
 #include <numeric>
 #include <functional>
+#include <iostream>
+#include <sstream>
 #include "wrf_sdirk3_stage_operand_capture.h"
 #include "wrf_sdirk3_stage_history_diag.h"
 
@@ -291,7 +293,20 @@ int main() {
         src[0].a_implicit = 1.0;
         src[0].k_slow = &k_slow;
         src[0].k_fast = &k_fast;
-        std::vector<StageDefectSnapshot> defs;
+        // target stage 2 expects source stage 1's defect (explicit ESDIRK stage:
+        // defect==0, F_fast ~= K). A valid defect table is now required to pass
+        // the defect-inventory hard gate.
+        const double k1n = k_fast.to(torch::kFloat64).norm().item<double>();
+        StageDefectSnapshot d1;
+        d1.stage = 1;
+        d1.explicit_stage = true;
+        d1.converged = true;
+        d1.k_norm = k1n;
+        d1.f_fast_norm = k1n;
+        d1.newton_defect_norm = 0.0;
+        d1.defect_to_k_ratio = 0.0;
+        d1.scaled_final_residual = 0.0;
+        std::vector<StageDefectSnapshot> defs{d1};
         std::string ok =
             emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage, src, defs);
         check(ok.empty(), "case16: sound history passes the emit hard gate");
@@ -319,7 +334,149 @@ int main() {
               "case16: omitted source stage -> CAPTURE_INCOMPLETE (missing leaf)");
     }
 
-    const int kExpected = 29;  // ratchet: update deliberately with the cases
+    // (17) base-state-dominated laundering negative (P1-2). A large U_n must NOT
+    //      hide a wrong increment sign. float64 tensors isolate the deliberate
+    //      sign flip from float32 noise: the full-state ratio stays ~2e-7 (would
+    //      PASS the old ||.||/||U_stage|| gate) but the authoritative
+    //      history-relative closure FAILS.
+    {
+        const float dt = 1.0f;
+        auto U_n = rnd({4, 3, 2}, 1e10f, 0.2f).to(torch::kFloat64);
+        auto k_slow = rnd({4, 3, 2}, 1e3f, 0.4f).to(torch::kFloat64);
+        auto k_fast = rnd({4, 3, 2}, 1e3f, 0.6f).to(torch::kFloat64);
+        auto U_stage = U_n + k_slow + k_fast;  // CORRECT history (exact in float64)
+        std::vector<StageHistorySource> src(1);
+        src[0].stage = 1;
+        src[0].a_explicit = -1.0;  // WRONG sign (should be +1)
+        src[0].a_implicit = 1.0;
+        src[0].k_slow = &k_slow;
+        src[0].k_fast = &k_fast;
+        const double k1n = k_fast.norm().item<double>();
+        StageDefectSnapshot d1;
+        d1.stage = 1;
+        d1.explicit_stage = true;
+        d1.converged = true;
+        d1.k_norm = k1n;
+        d1.f_fast_norm = k1n;
+        d1.newton_defect_norm = 0.0;
+        d1.defect_to_k_ratio = 0.0;
+        d1.scaled_final_residual = 0.0;
+        std::vector<StageDefectSnapshot> defs{d1};
+        std::string r =
+            emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage, src, defs);
+        check(r.find("CLOSURE_FAILED") != std::string::npos,
+              "case17: large-U_n wrong sign -> CLOSURE_FAILED (not laundered)");
+    }
+
+    // (18) defect-inventory validator negatives (P1-3), exercised directly.
+    {
+        auto good = [](int stage, bool expl) {
+            StageDefectSnapshot d;
+            d.stage = stage;
+            d.explicit_stage = expl;
+            d.converged = true;
+            d.k_norm = 10.0;
+            d.f_fast_norm = expl ? 10.0 : 5.0;
+            d.newton_defect_norm = expl ? 0.0 : 2.0;
+            d.defect_to_k_ratio = expl ? 0.0 : 0.2;
+            d.scaled_final_residual = expl ? 0.0 : 0.1;
+            return d;
+        };
+        std::vector<StageDefectSnapshot> okv{good(1, true), good(2, false)};
+        check(validate_stage_defect_inventory(okv, 3).empty(),
+              "case18: sound defect table passes");
+        std::vector<StageDefectSnapshot> missv{good(1, true)};
+        check(validate_stage_defect_inventory(missv, 3).find("missing:s2") !=
+                  std::string::npos,
+              "case18: missing source-stage defect -> missing:s2");
+        std::vector<StageDefectSnapshot> dupv{good(1, true), good(1, true),
+                                              good(2, false)};
+        check(validate_stage_defect_inventory(dupv, 3).find("duplicate:s1") !=
+                  std::string::npos,
+              "case18: duplicate source-stage defect -> duplicate:s1");
+        std::vector<StageDefectSnapshot> oorv{good(1, true), good(2, false),
+                                              good(3, false)};
+        check(validate_stage_defect_inventory(oorv, 3).find("unknown_stage:s3") !=
+                  std::string::npos,
+              "case18: out-of-range defect stage -> unknown_stage:s3");
+        auto nanrec = good(2, false);
+        nanrec.newton_defect_norm = std::nan("");
+        std::vector<StageDefectSnapshot> nanv{good(1, true), nanrec};
+        check(validate_stage_defect_inventory(nanv, 3).find("nonfinite:s2") !=
+                  std::string::npos,
+              "case18: NaN defect norm -> nonfinite:s2");
+        auto unobs = good(2, false);
+        unobs.f_fast_norm = -1.0;  // the "unobserved" sentinel on a solved stage
+        std::vector<StageDefectSnapshot> unobsv{good(1, true), unobs};
+        check(validate_stage_defect_inventory(unobsv, 3).find("neg_f_fast:s2") !=
+                  std::string::npos,
+              "case18: non-explicit -1 sentinel -> neg_f_fast:s2");
+        auto badexpl = good(2, true);  // explicit flag on a non-stage-1 source
+        badexpl.newton_defect_norm = 0.0;
+        badexpl.f_fast_norm = badexpl.k_norm;
+        std::vector<StageDefectSnapshot> badexplv{good(1, true), badexpl};
+        check(validate_stage_defect_inventory(badexplv, 3).find(
+                  "explicit_flag_nonstage1:s2") != std::string::npos,
+              "case18: explicit flag on stage 2 -> explicit_flag_nonstage1:s2");
+        // stage 1 misflagged as NON-explicit must also fail (the converse) -- it
+        // would otherwise pass the non-explicit branch and skip the defect==0/F==K
+        // explicit constraints entirely.
+        std::vector<StageDefectSnapshot> s1nev{good(1, false), good(2, false)};
+        check(validate_stage_defect_inventory(s1nev, 3).find(
+                  "stage1_not_explicit:s1") != std::string::npos,
+              "case18: stage 1 misflagged non-explicit -> stage1_not_explicit:s1");
+        // a negative norm/ratio (invalid: finiteness alone would pass it)
+        auto negk = good(2, false);
+        negk.k_norm = -1.0;
+        std::vector<StageDefectSnapshot> negkv{good(1, true), negk};
+        check(validate_stage_defect_inventory(negkv, 3).find("neg_k_norm:s2") !=
+                  std::string::npos,
+              "case18: negative k_norm -> neg_k_norm:s2");
+        // non-negativity is UNCONDITIONAL: an explicit stage 1 with a negative
+        // scaled_final_residual must also fail (the explicit branch must not skip
+        // it).
+        auto negsc = good(1, true);
+        negsc.scaled_final_residual = -1.0;
+        std::vector<StageDefectSnapshot> negscv{negsc, good(2, false)};
+        check(validate_stage_defect_inventory(negscv, 3).find(
+                  "neg_scaled_resid:s1") != std::string::npos,
+              "case18: explicit stage-1 negative scaled_final_residual -> "
+              "neg_scaled_resid:s1");
+    }
+
+    // (19) ordering (P2): a REJECTED capture emits ONLY the failure marker, never
+    //      a success-form STAGE_HISTORY_* record, so a consumer that greps the
+    //      success markers can never mistake broken evidence for sound.
+    {
+        const float dt = 1.0f;
+        auto U_n = rnd({4, 3, 2}, 5.0f, 0.2f);
+        auto k_fast = rnd({4, 3, 2}, 1.0f, 0.6f);
+        auto U_stage = U_n + k_fast;
+        std::vector<StageHistorySource> src(1);
+        src[0].stage = 1;
+        src[0].a_explicit = 1.0;
+        src[0].a_implicit = 1.0;
+        torch::Tensor undef;
+        src[0].k_slow = &undef;  // undefined -> inventory failure
+        src[0].k_fast = &k_fast;
+        std::vector<StageDefectSnapshot> defs;
+        std::ostringstream captured;
+        std::streambuf* old = std::cerr.rdbuf(captured.rdbuf());
+        std::string r =
+            emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage, src, defs);
+        std::cerr.rdbuf(old);
+        const std::string out = captured.str();
+        check(!r.empty() &&
+                  out.find("SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE") !=
+                      std::string::npos,
+              "case19: failure marker emitted on rejected capture");
+        check(out.find("SDIRK3_STAGE_HISTORY_DIAG") == std::string::npos,
+              "case19: no success STAGE_HISTORY_DIAG on failure");
+        check(out.find("SDIRK3_STAGE_HISTORY_SUMMARY") == std::string::npos,
+              "case19: no success STAGE_HISTORY_SUMMARY on failure");
+    }
+
+    const int kExpected = 43;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

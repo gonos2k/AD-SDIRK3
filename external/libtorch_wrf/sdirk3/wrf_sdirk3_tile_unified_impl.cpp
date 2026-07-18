@@ -7777,7 +7777,7 @@ vertical_coefficients:
             const bool stage_operand_diag_on =
                 wrf::sdirk3::g_sdirk3_config.stage_operand_diag;
             std::vector<wrf::sdirk3::StageDefectSnapshot> stage_operand_defects;
-            int stage_operand_step_label = 0;
+            int64_t stage_operand_step_label = 0;  // full width; never truncated
             if (stage_operand_diag_on) {
                 // PR 9E Commit A: single-authority topology FAIL-CLOSE. The
                 // stage-operand diagnostic is validated ONLY for a single MPI
@@ -7810,8 +7810,7 @@ vertical_coefficients:
                     wrf::sdirk3::mpi_safety::abort_c_abi_exception(
                         "stage_operand_diag_topology", detail);
                 }
-                stage_operand_step_label =
-                    static_cast<int>(++stage_operand_diag_step_);
+                stage_operand_step_label = ++stage_operand_diag_step_;
             }
 
             for (int i = 0; i < Ark::stages; ++i) {
@@ -7844,14 +7843,17 @@ vertical_coefficients:
                         s.k_fast = &k_fast[j];
                         sources.push_back(s);
                     }
-                    const int stage_operand_gts =
+                    // 4D-Var trajectory-checkpoint counter (0 in a default run);
+                    // emitted for reference only, NOT the WRF model timestep.
+                    const int stage_operand_checkpoint_ts =
                         newton_solver_
                             ? newton_solver_->get_saved_global_timestep()
                             : -1;
                     std::string stage_operand_fail =
                         wrf::sdirk3::emit_stage_history_diag(
-                            stage_operand_step_label, stage_operand_gts, stage_id,
-                            dt, U_n, U_stage, sources, stage_operand_defects);
+                            stage_operand_step_label, stage_operand_checkpoint_ts,
+                            stage_id, dt, U_n, U_stage, sources,
+                            stage_operand_defects);
                     if (!stage_operand_fail.empty()) {
                         // HARD GATE (PR 9E Commit A): broken diagnostic evidence
                         // fails closed via controlled-fatal, never continues.
