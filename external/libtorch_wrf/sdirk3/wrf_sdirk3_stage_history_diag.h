@@ -78,11 +78,12 @@ struct StageHistorySource {
 // prior-stage-defect-inheritance question). Returns "" when sound, else a
 // comma-joined reason for the SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE marker.
 //   expected stage ids = 1 .. target_stage-1, each exactly once
-//   only stage 1 (the ESDIRK explicit stage) may carry explicit=true
-//   explicit stage:     newton_defect == 0 and f_fast_norm ~= k_norm
-//   non-explicit stage: f_fast_norm, newton_defect_norm, scaled_final_residual
-//                       all observed and >= 0 (the -1 "unobserved" sentinel fails)
-//   every norm/ratio finite
+//   stage 1 (the ESDIRK explicit stage) MUST carry explicit=true; every later
+//     stage MUST carry explicit=false
+//   every norm/ratio finite AND non-negative -- k_norm, f_fast_norm,
+//     newton_defect_norm, scaled_final_residual, defect_to_k_ratio -- checked
+//     UNCONDITIONALLY (independent of role; the -1 "unobserved" sentinel fails)
+//   explicit stage additionally: newton_defect == 0 and f_fast_norm ~= k_norm
 inline std::string validate_stage_defect_inventory(
     const std::vector<StageDefectSnapshot>& defects, int target_stage) {
     std::string reason;
@@ -107,18 +108,33 @@ inline std::string validate_stage_defect_inventory(
             !std::isfinite(d.defect_to_k_ratio) ||
             !std::isfinite(d.scaled_final_residual))
             append("nonfinite:" + sid);
+        // Every numeric field is a norm or a ratio of norms -> inherently
+        // non-negative for BOTH roles; a negative value (including the -1
+        // "unobserved" sentinel on a solved stage) is invalid data the finiteness
+        // check alone would pass. These are checked UNCONDITIONALLY: putting a
+        // non-negativity check inside a role branch (as an earlier fix did for
+        // f_fast/defect/scaled) let the OTHER role skip it -- e.g. an explicit
+        // stage 1 with a negative scaled_final_residual (Codex stop-gate). Only
+        // the genuinely role-specific SEMANTIC checks live in the branch below.
+        if (d.k_norm < 0.0) append("neg_k_norm:" + sid);
+        if (d.f_fast_norm < 0.0) append("neg_f_fast:" + sid);
+        if (d.newton_defect_norm < 0.0) append("neg_defect:" + sid);
+        if (d.scaled_final_residual < 0.0) append("neg_scaled_resid:" + sid);
+        if (d.defect_to_k_ratio < 0.0) append("neg_ratio:" + sid);
+        // The explicit role is fully constrained BOTH ways: stage 1 IS the
+        // ESDIRK explicit stage (a_implicit[0][0]==0, no Newton solve), so it
+        // MUST carry explicit=true; every later stage MUST carry explicit=false.
         if (d.explicit_stage && d.stage != 1)
             append("explicit_flag_nonstage1:" + sid);
+        if (d.stage == 1 && !d.explicit_stage)
+            append("stage1_not_explicit:" + sid);
+        // Role-specific SEMANTIC constraints only (non-negativity handled above).
         if (d.explicit_stage) {
             if (d.newton_defect_norm != 0.0)
                 append("explicit_defect_nonzero:" + sid);
             const double denom = std::max(std::abs(d.k_norm), 1e-300);
             if (std::abs(d.f_fast_norm - d.k_norm) / denom > 1e-6)
                 append("explicit_F_ne_K:" + sid);
-        } else {
-            if (d.f_fast_norm < 0.0) append("unobserved_F_fast:" + sid);
-            if (d.newton_defect_norm < 0.0) append("neg_defect:" + sid);
-            if (d.scaled_final_residual < 0.0) append("neg_scaled_resid:" + sid);
         }
     }
     return reason;

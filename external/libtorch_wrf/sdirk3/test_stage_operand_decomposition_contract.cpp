@@ -408,9 +408,9 @@ int main() {
         auto unobs = good(2, false);
         unobs.f_fast_norm = -1.0;  // the "unobserved" sentinel on a solved stage
         std::vector<StageDefectSnapshot> unobsv{good(1, true), unobs};
-        check(validate_stage_defect_inventory(unobsv, 3).find(
-                  "unobserved_F_fast:s2") != std::string::npos,
-              "case18: non-explicit -1 sentinel -> unobserved_F_fast:s2");
+        check(validate_stage_defect_inventory(unobsv, 3).find("neg_f_fast:s2") !=
+                  std::string::npos,
+              "case18: non-explicit -1 sentinel -> neg_f_fast:s2");
         auto badexpl = good(2, true);  // explicit flag on a non-stage-1 source
         badexpl.newton_defect_norm = 0.0;
         badexpl.f_fast_norm = badexpl.k_norm;
@@ -418,6 +418,30 @@ int main() {
         check(validate_stage_defect_inventory(badexplv, 3).find(
                   "explicit_flag_nonstage1:s2") != std::string::npos,
               "case18: explicit flag on stage 2 -> explicit_flag_nonstage1:s2");
+        // stage 1 misflagged as NON-explicit must also fail (the converse) -- it
+        // would otherwise pass the non-explicit branch and skip the defect==0/F==K
+        // explicit constraints entirely.
+        std::vector<StageDefectSnapshot> s1nev{good(1, false), good(2, false)};
+        check(validate_stage_defect_inventory(s1nev, 3).find(
+                  "stage1_not_explicit:s1") != std::string::npos,
+              "case18: stage 1 misflagged non-explicit -> stage1_not_explicit:s1");
+        // a negative norm/ratio (invalid: finiteness alone would pass it)
+        auto negk = good(2, false);
+        negk.k_norm = -1.0;
+        std::vector<StageDefectSnapshot> negkv{good(1, true), negk};
+        check(validate_stage_defect_inventory(negkv, 3).find("neg_k_norm:s2") !=
+                  std::string::npos,
+              "case18: negative k_norm -> neg_k_norm:s2");
+        // non-negativity is UNCONDITIONAL: an explicit stage 1 with a negative
+        // scaled_final_residual must also fail (the explicit branch must not skip
+        // it).
+        auto negsc = good(1, true);
+        negsc.scaled_final_residual = -1.0;
+        std::vector<StageDefectSnapshot> negscv{negsc, good(2, false)};
+        check(validate_stage_defect_inventory(negscv, 3).find(
+                  "neg_scaled_resid:s1") != std::string::npos,
+              "case18: explicit stage-1 negative scaled_final_residual -> "
+              "neg_scaled_resid:s1");
     }
 
     // (19) ordering (P2): a REJECTED capture emits ONLY the failure marker, never
@@ -452,7 +476,7 @@ int main() {
               "case19: no success STAGE_HISTORY_SUMMARY on failure");
     }
 
-    const int kExpected = 40;  // ratchet: update deliberately with the cases
+    const int kExpected = 43;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);
