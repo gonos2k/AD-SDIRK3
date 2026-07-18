@@ -12,7 +12,8 @@
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_mpi_safety.h"
-#include "wrf_sdirk3_contract_fail.h"  // PR 9C.2: production fail route
+#include "wrf_sdirk3_contract_fail.h"
+#include <cstdlib>  // PR 9C.2: production fail route
 
 
 extern "C" {
@@ -62,14 +63,22 @@ void sdirk3_set_timestep_i4(int* timestep) {
 void sdirk3_mpi_safety_init(void) {
     wrf::sdirk3::mpi_safety::establish_mpi_baseline_thread("sdirk3_mpi_safety_init");
     wrf::sdirk3::mpi_safety::initializeMPISafety();
-    // PR 9C.2: production W-damping contract violations must not throw -
-    // the mpif90-linked executable cannot unwind C++ exceptions (measured;
-    // see wrf_sdirk3_contract_fail.h). Route them to the coordinated
-    // controlled abort instead.
-    wrf::sdirk3::wdamp_contract_fail_handler() = [](const char* what) {
-        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
-            "enabled W-damping contract", what);
-    };
+    // PR 9C.2/9C.3: production W-damping contract violations route to the
+    // coordinated controlled abort. Since PR 9C.3 the final link CAN unwind
+    // C++ exceptions again, but the controlled-abort policy stands (single
+    // marker discipline + coordinated multi-rank stop).
+    // WRF_SDIRK3_EH_SEAL_PROBE=1 (test-only, default OFF) skips the handler
+    // install so a contract violation THROWS instead — the standing
+    // integration negative uses it to prove the v2 ABI seal is LIVE under
+    // the restored link (catch -> FATAL_INTERNAL outcome -> wrf_error_fatal,
+    // no SDIRK3_C_ABI_EXCEPTION, no uncaught-terminate).
+    const char* seal_probe = std::getenv("WRF_SDIRK3_EH_SEAL_PROBE");
+    if (!(seal_probe && seal_probe[0] == '1')) {
+        wrf::sdirk3::wdamp_contract_fail_handler() = [](const char* what) {
+            wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+                "enabled W-damping contract", what);
+        };
+    }
 }
 
 // =============================================================================
@@ -119,7 +128,12 @@ MPIExchangeKind g_outer_kind = MPIExchangeKind::FieldPrimitive;
 std::atomic<bool> g_baseline_set{false};
 std::mutex g_baseline_mutex;                 // serializes FIRST publication
 std::thread::id g_baseline_thread;           // the MPI baseline (init) thread
-int g_mpi_thread_level = -1;                 // MPI_Query_thread result, if any
+// PR 9C.3: ATOMIC — the fatal path (abort_c_abi_exception) reads this from a
+// NON-baseline worker thread that may race the baseline thread's write inside
+// establish_mpi_baseline_thread(). A plain int would be a data race (UB). The
+// accessor additionally gates on g_baseline_set so an early worker fatal
+// (before establishment) reads the -1 sentinel and takes the local path.
+std::atomic<int> g_mpi_thread_level{-1};      // MPI_Query_thread result, if any
 
 const char* kind_name(MPIExchangeKind k) {
     switch (k) {
@@ -149,19 +163,28 @@ void establish_mpi_baseline_thread(const char* who) noexcept {
     int inited = 0, finalized = 0;
     MPI_Initialized(&inited);
     MPI_Finalized(&finalized);
+    int level = -1;
     if (inited && !finalized &&
-        MPI_Query_thread(&g_mpi_thread_level) == MPI_SUCCESS) {
+        MPI_Query_thread(&level) == MPI_SUCCESS) {
+        g_mpi_thread_level.store(level, std::memory_order_relaxed);
         std::cerr << "SDIRK3: MPI baseline thread established by " << who
-                  << ", MPI thread level " << g_mpi_thread_level
+                  << ", MPI thread level " << level
                   << " (single-flight contract enforced regardless)" << std::endl;
     }
 #endif
+    // Release: publishes g_baseline_thread AND g_mpi_thread_level to any
+    // thread that observes g_baseline_set == true via its acquire load.
     g_baseline_set.store(true);
 }
 
 
 int mpi_baseline_thread_level() noexcept {
-    return g_mpi_thread_level;
+    // Acquire-gate: a caller that has not observed establishment gets the
+    // -1 sentinel (never a torn/racing read of the level). Once established,
+    // the acquire load orders-after the release store above, so the level
+    // read is race-free even though the fatal caller runs off-baseline.
+    if (!g_baseline_set.load()) return -1;
+    return g_mpi_thread_level.load(std::memory_order_relaxed);
 }
 
 bool is_mpi_baseline_thread() noexcept {

@@ -80,7 +80,7 @@ using G = mpi_safety::HaloFreshnessGuard;
 #define FRESH_W  15, 35, 35
 #define AD_W      4, 10, 10
 #define FIELD_W  48, 96, 48
-#define CHILD_W   3,  3,  3
+#define CHILD_W  12, 12, 12
 #define LATCH_W   6,  6,  6
 
 namespace {
@@ -847,6 +847,42 @@ void run_children_section(const char* argv0, int rank) {
                 "abort-finalize child missing SDIRK3_C_ABI_EXCEPTION marker\n%s",
                 r.output.c_str());
         }
+        // PR 9C.3 commit 4: MPI-thread-level fatal policy.
+        // Baseline-thread fatal -> coordinated MPI_Abort (no LOCAL_ABORT).
+        {
+            ChildResult r = run_child(argv0, "baseline-abort");
+            CHECK_TRUE(r.ran && r.nonzero,
+                "baseline-abort child exited 0\n%s", r.output.c_str());
+            CHECK_TRUE(r.output.find("SDIRK3_C_ABI_EXCEPTION") != std::string::npos,
+                "baseline-abort child missing marker\n%s", r.output.c_str());
+            CHECK_TRUE(r.output.find("SDIRK3_C_ABI_EXCEPTION_LOCAL_ABORT") == std::string::npos,
+                "baseline-abort child took the LOCAL_ABORT path\n%s",
+                r.output.c_str());
+        }
+        // Non-baseline worker fatal under FUNNELED/SERIALIZED -> NO MPI
+        // calls: LOCAL_ABORT marker + local hard abort.
+        {
+            ChildResult r = run_child(argv0, "worker-abort");
+            CHECK_TRUE(r.ran && r.nonzero,
+                "worker-abort child exited 0\n%s", r.output.c_str());
+            CHECK_TRUE(r.output.find("SDIRK3_C_ABI_EXCEPTION") != std::string::npos,
+                "worker-abort child missing marker\n%s", r.output.c_str());
+            CHECK_TRUE(r.output.find("SDIRK3_C_ABI_EXCEPTION_LOCAL_ABORT") != std::string::npos,
+                "worker-abort child missing the LOCAL_ABORT marker (it "
+                "called MPI off-baseline?)\n%s", r.output.c_str());
+        }
+        // Early worker fatal that RACES establishment: baseline never set,
+        // the level read is the race-free -1 sentinel -> LOCAL_ABORT, no MPI.
+        {
+            ChildResult r = run_child(argv0, "early-worker-abort");
+            CHECK_TRUE(r.ran && r.nonzero,
+                "early-worker-abort child exited 0\n%s", r.output.c_str());
+            CHECK_TRUE(r.output.find("SDIRK3_C_ABI_EXCEPTION") != std::string::npos,
+                "early-worker-abort child missing marker\n%s", r.output.c_str());
+            CHECK_TRUE(r.output.find("SDIRK3_C_ABI_EXCEPTION_LOCAL_ABORT") != std::string::npos,
+                "early-worker-abort child missing LOCAL_ABORT (raced level "
+                "read or called MPI pre-establishment?)\n%s", r.output.c_str());
+        }
     }
     MPI_Barrier(MPI_COMM_WORLD);
 }
@@ -938,6 +974,50 @@ int child_abort_finalize_main(int argc, char** argv) {
     return 0;  // ditto: zero exit == the abort contract is broken
 }
 
+int child_baseline_abort_main(int argc, char** argv) {
+    // PR 9C.3 commit 4: a fatal on the BASELINE thread must take the
+    // coordinated MPI_Abort path — marker present, LOCAL_ABORT absent.
+    MPI_Init(&argc, &argv);
+    sdirk3_mpi_safety_init();
+    wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+        "baseline-abort-child", "deliberate baseline fatal");
+    // unreachable
+}
+
+int child_early_worker_abort_main(int argc, char** argv) {
+    // PR 9C.3 (stop-gate): a worker fatal that RACES baseline
+    // establishment. MPI is inited but sdirk3_mpi_safety_init() is NOT
+    // called, so the baseline is unestablished; the worker's fatal must
+    // read the -1 level sentinel (race-free atomic + acquire gate) and
+    // take the LOCAL path with ZERO MPI calls, never a data race on
+    // g_mpi_thread_level.
+    MPI_Init(&argc, &argv);
+    std::thread worker([] {
+        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+            "early-worker-abort-child", "worker fatal before establishment");
+    });
+    worker.join();  // never reached
+    std::printf("CHILD FAIL: early worker abort returned\n");
+    MPI_Finalize();
+    return 0;  // parent expects NONZERO
+}
+
+int child_worker_abort_main(int argc, char** argv) {
+    // PR 9C.3 commit 4: a fatal on a NON-baseline thread under a
+    // FUNNELED/SERIALIZED runtime must NOT call MPI — the LOCAL_ABORT
+    // marker fires and the process hard-aborts locally.
+    MPI_Init(&argc, &argv);
+    sdirk3_mpi_safety_init();  // establishes THIS (main) thread as baseline
+    std::thread worker([] {
+        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+            "worker-abort-child", "deliberate worker fatal");
+    });
+    worker.join();  // never reached: the worker aborts the process
+    std::printf("CHILD FAIL: worker abort returned\n");
+    MPI_Finalize();
+    return 0;  // parent expects NONZERO
+}
+
 // Coverage ratchet: rank 0 runs every section, so its per-section counts are
 // fixed by the contract structure. A vanished section/negative changes a
 // count and fails HERE, localizing which bundle regressed. Baked from the
@@ -977,6 +1057,12 @@ int main(int argc, char** argv) {
             return child_rollback_fault_main(argc, argv);
         if (std::strcmp(mode, "abort-finalize") == 0)
             return child_abort_finalize_main(argc, argv);
+        if (std::strcmp(mode, "baseline-abort") == 0)
+            return child_baseline_abort_main(argc, argv);
+        if (std::strcmp(mode, "worker-abort") == 0)
+            return child_worker_abort_main(argc, argv);
+        if (std::strcmp(mode, "early-worker-abort") == 0)
+            return child_early_worker_abort_main(argc, argv);
         std::fprintf(stderr, "unknown child mode: %s\n", mode);
         return 125;
     }
