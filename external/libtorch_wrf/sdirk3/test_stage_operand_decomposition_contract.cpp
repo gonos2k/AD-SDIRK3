@@ -283,9 +283,9 @@ int main() {
     //      with SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE.
     {
         const float dt = 1.0f;  // aE=aI=1, dt=1 => exact float reconstruction
-        auto U_n = rnd({4, 3, 2}, 5.0f, 0.2f);
-        auto k_slow = rnd({4, 3, 2}, 2.0f, 0.4f);
-        auto k_fast = rnd({4, 3, 2}, 1.0f, 0.6f);
+        auto U_n = rnd({24}, 5.0f, 0.2f);
+        auto k_slow = rnd({24}, 2.0f, 0.4f);
+        auto k_fast = rnd({24}, 1.0f, 0.6f);
         auto U_stage = U_n + k_slow + k_fast;
         std::vector<StageHistorySource> src(1);
         src[0].stage = 1;
@@ -341,9 +341,9 @@ int main() {
     //      history-relative closure FAILS.
     {
         const float dt = 1.0f;
-        auto U_n = rnd({4, 3, 2}, 1e10f, 0.2f).to(torch::kFloat64);
-        auto k_slow = rnd({4, 3, 2}, 1e3f, 0.4f).to(torch::kFloat64);
-        auto k_fast = rnd({4, 3, 2}, 1e3f, 0.6f).to(torch::kFloat64);
+        auto U_n = rnd({24}, 1e10f, 0.2f).to(torch::kFloat64);
+        auto k_slow = rnd({24}, 1e3f, 0.4f).to(torch::kFloat64);
+        auto k_fast = rnd({24}, 1e3f, 0.6f).to(torch::kFloat64);
         auto U_stage = U_n + k_slow + k_fast;  // CORRECT history (exact in float64)
         std::vector<StageHistorySource> src(1);
         src[0].stage = 1;
@@ -449,8 +449,8 @@ int main() {
     //      success markers can never mistake broken evidence for sound.
     {
         const float dt = 1.0f;
-        auto U_n = rnd({4, 3, 2}, 5.0f, 0.2f);
-        auto k_fast = rnd({4, 3, 2}, 1.0f, 0.6f);
+        auto U_n = rnd({24}, 5.0f, 0.2f);
+        auto k_fast = rnd({24}, 1.0f, 0.6f);
         auto U_stage = U_n + k_fast;
         std::vector<StageHistorySource> src(1);
         src[0].stage = 1;
@@ -476,7 +476,163 @@ int main() {
               "case19: no success STAGE_HISTORY_SUMMARY on failure");
     }
 
-    const int kExpected = 43;  // ratchet: update deliberately with the cases
+    // (20) AUTHORITATIVE per-source ARK attribution (C1). States are built with
+    //      the IDENTICAL FP32 expression production/emitter use, so a correct
+    //      attribution re-applies bit-exactly; a source label swap or a +delta
+    //      coefficient error misses the captured state and fails.
+    {
+        const float dt = 1.0f;
+        auto U_n = rnd({18}, 5.0f, 0.1f);
+        auto ks0 = rnd({18}, 2.0f, 0.2f), kf0 = rnd({18}, 1.0f, 0.3f);
+        auto ks1 = rnd({18}, 1.5f, 0.4f), kf1 = rnd({18}, 0.8f, 0.5f);
+        auto state0 = U_n + dt * 1.0f * ks0 + dt * 1.0f * kf0;
+        auto state1 = state0 + dt * 1.0f * ks1 + dt * 1.0f * kf1;
+        auto U_stage = state1;
+        std::vector<StageHistorySource> src(2);
+        src[0] = {1, 1.0, 1.0, &ks0, &kf0};
+        src[1] = {2, 1.0, 1.0, &ks1, &kf1};
+        std::vector<const torch::Tensor*> states{&state0, &state1};
+        std::vector<StageOperandBlock> blocks = {{"ru", 0, 6}, {"rv", 6, 3},
+                                                 {"rw", 9, 2}, {"ph", 11, 2},
+                                                 {"t", 13, 3}, {"mu", 16, 2}};
+        check(emit_stage_applied_delta_diag(0, 0, 3, dt, U_n, U_stage, src,
+                                            states, blocks)
+                  .empty(),
+              "case20: correct attribution re-applies bit-exactly (passes)");
+        // k-pointer swap (labels correct, k wrong) -> caught by the reapply.
+        std::vector<StageHistorySource> kswap = src;
+        kswap[0].k_slow = &ks1; kswap[0].k_fast = &kf1;
+        kswap[1].k_slow = &ks0; kswap[1].k_fast = &kf0;
+        check(emit_stage_applied_delta_diag(0, 0, 3, dt, U_n, U_stage, kswap,
+                                            states, blocks)
+                  .find("ATTRIBUTION_FAILED") != std::string::npos,
+              "case20: source k-pointer swap -> ATTRIBUTION_FAILED (reapply)");
+        // pure LABEL swap (k/coeff correct at each position, stage labels
+        // swapped) -> caught by the label authority, which the reapply alone
+        // cannot enforce.
+        std::vector<StageHistorySource> labelswap = src;
+        labelswap[0].stage = 2; labelswap[1].stage = 1;
+        check(emit_stage_applied_delta_diag(0, 0, 3, dt, U_n, U_stage, labelswap,
+                                            states, blocks)
+                  .find("label_mismatch") != std::string::npos,
+              "case20: pure source-label swap -> label_mismatch");
+        std::vector<StageHistorySource> perturbed = src;
+        perturbed[0].a_explicit = 1.5;  // +delta coefficient error
+        check(emit_stage_applied_delta_diag(0, 0, 3, dt, U_n, U_stage, perturbed,
+                                            states, blocks)
+                  .find("ATTRIBUTION_FAILED") != std::string::npos,
+              "case20: +delta coefficient error -> ATTRIBUTION_FAILED");
+    }
+
+    // (21) huge-base + ULP increment: a CORRECT production assembly (where FP32
+    //      rounding partially absorbs the increment into the base) must PASS,
+    //      because the emitter re-applies with the identical FP32 op and rounds
+    //      identically -- validating the real production rounding regime.
+    {
+        const float dt = 1.0f;
+        // Constant 1e9 base -> uniform FP32 ULP (~119).
+        auto U_n = torch::full({8}, 1.0e9f, torch::kFloat32);
+        auto ks0 = rnd({8}, 1.0e2f, 0.2f), kf0 = rnd({8}, 1.0e2f, 0.3f);
+        auto state0 = U_n + dt * 1.0f * ks0 + dt * 1.0f * kf0;  // real FP32 (ULP loss)
+        std::vector<StageHistorySource> src(1);
+        src[0] = {1, 1.0, 1.0, &ks0, &kf0};
+        std::vector<const torch::Tensor*> states{&state0};
+        std::vector<StageOperandBlock> blocks = {{"ru", 0, 8}};
+        check(emit_stage_applied_delta_diag(0, 0, 2, dt, U_n, state0, src, states,
+                                            blocks)
+                  .empty(),
+              "case21: huge-base ULP correct production passes (FP32 regime)");
+        // Huge-base MISATTRIBUTION: a wrong increment offset by ~2.5 ULP (300 at
+        // 1e9). Its residual (~238) is BELOW the old 4*eps*|state| (~476)
+        // tolerance -- so a magnitude-scaled tolerance would have hidden it -- but
+        // strict bit-exact replay catches it.
+        auto ks_wrong = ks0 + 300.0f;
+        std::vector<StageHistorySource> bad(1);
+        bad[0] = {1, 1.0, 1.0, &ks_wrong, &kf0};
+        check(emit_stage_applied_delta_diag(0, 0, 2, dt, U_n, state0, bad, states,
+                                            blocks)
+                  .find("ATTRIBUTION_FAILED") != std::string::npos,
+              "case21: huge-base sub-tolerance misattribution -> ATTRIBUTION_FAILED "
+              "(bit-exact catches what eps*|state| would mask)");
+    }
+
+    // (22) huge ru block, tiny mu block, mu sign error: a global-RMS floor would
+    //      bury the mu error under the ru magnitude; per-block localization must
+    //      fail specifically on mu.
+    {
+        const float dt = 1.0f;
+        auto U_n = rnd({10}, 1.0f, 0.1f);
+        auto ks0 = torch::cat({rnd({8}, 1.0e6f, 0.2f), rnd({2}, 1.0f, 0.3f)});
+        auto kf0 = torch::zeros({10}, torch::kFloat32);
+        auto state0 = U_n + dt * 1.0f * ks0 + dt * 1.0f * kf0;  // correct production
+        auto ks0_wrong = ks0.clone();
+        ks0_wrong.index_put_({torch::indexing::Slice(8, 10)},
+                             -ks0.slice(0, 8, 10));  // flip mu sign only
+        std::vector<StageHistorySource> src(1);
+        src[0] = {1, 1.0, 1.0, &ks0_wrong, &kf0};
+        std::vector<const torch::Tensor*> states{&state0};
+        std::vector<StageOperandBlock> blocks = {{"ru", 0, 8}, {"mu", 8, 2}};
+        std::string r = emit_stage_applied_delta_diag(0, 0, 2, dt, U_n, state0,
+                                                      src, states, blocks);
+        check(r.find("ATTRIBUTION_FAILED") != std::string::npos &&
+                  r.find("mu@s1") != std::string::npos,
+              "case22: huge-ru small-mu sign error fails on the mu block");
+    }
+
+    // (23) non-finite input must FAIL CLOSED. With strict residual==0,
+    //      std::max(0,NaN)==0 and NaN>0 is false, so a NaN residual would fail
+    //      OPEN (emit a "successful" attribution) without an explicit finite gate.
+    {
+        const float dt = 1.0f;
+        auto U_n = rnd({6}, 5.0f, 0.1f);
+        auto ks0 = rnd({6}, 2.0f, 0.2f), kf0 = rnd({6}, 1.0f, 0.3f);
+        auto state0 = U_n + dt * 1.0f * ks0 + dt * 1.0f * kf0;
+        auto ks_nan = ks0.clone();
+        ks_nan.index_put_({0}, std::nanf(""));  // NaN in the source
+        std::vector<StageHistorySource> src(1);
+        src[0] = {1, 1.0, 1.0, &ks_nan, &kf0};
+        std::vector<const torch::Tensor*> states{&state0};
+        std::vector<StageOperandBlock> blocks = {{"ru", 0, 6}};
+        check(emit_stage_applied_delta_diag(0, 0, 2, dt, U_n, state0, src, states,
+                                            blocks)
+                  .find("nonfinite") != std::string::npos,
+              "case23: non-finite source input -> nonfinite (fails closed, not open)");
+    }
+
+    // (24) structural preflight (P1-5): a shape/dtype/dimensionality mismatch
+    //      fails with a STABLE marker before any tensor arithmetic, not a generic
+    //      LibTorch throw or a silent broadcast.
+    {
+        const float dt = 1.0f;
+        auto U_n = rnd({6}, 5.0f, 0.1f);
+        auto ks0 = rnd({6}, 2.0f, 0.2f), kf0 = rnd({6}, 1.0f, 0.3f);
+        auto state0 = U_n + dt * 1.0f * ks0 + dt * 1.0f * kf0;
+        std::vector<StageOperandBlock> blocks = {{"ru", 0, 6}};
+        std::vector<const torch::Tensor*> states{&state0};
+        auto ks_short = rnd({5}, 2.0f, 0.2f);  // N-1 length
+        std::vector<StageHistorySource> src_shape(1);
+        src_shape[0] = {1, 1.0, 1.0, &ks_short, &kf0};
+        check(emit_stage_applied_delta_diag(0, 0, 2, dt, U_n, state0, src_shape,
+                                            states, blocks)
+                  .find("SHAPE_MISMATCH") != std::string::npos,
+              "case24: N-1 operand -> SHAPE_MISMATCH");
+        auto ks_2d = ks0.reshape({6, 1});  // 2-D
+        std::vector<StageHistorySource> src_2d(1);
+        src_2d[0] = {1, 1.0, 1.0, &ks_2d, &kf0};
+        check(emit_stage_applied_delta_diag(0, 0, 2, dt, U_n, state0, src_2d,
+                                            states, blocks)
+                  .find("SHAPE_MISMATCH") != std::string::npos,
+              "case24: 2-D operand -> SHAPE_MISMATCH");
+        auto ks_f64 = ks0.to(torch::kFloat64);  // wrong dtype
+        std::vector<StageHistorySource> src_dtype(1);
+        src_dtype[0] = {1, 1.0, 1.0, &ks_f64, &kf0};
+        check(emit_stage_applied_delta_diag(0, 0, 2, dt, U_n, state0, src_dtype,
+                                            states, blocks)
+                  .find("DTYPE_MISMATCH") != std::string::npos,
+              "case24: FP64 operand -> DTYPE_MISMATCH");
+    }
+
+    const int kExpected = 54;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);
