@@ -81,6 +81,38 @@ struct StageOperandBlock {
     int64_t size = 0;
 };
 
+// Structural preflight (PR 9E history-authority P1-5): every packed operand must
+// be a defined, non-empty, 1-D tensor of the SAME shape / device / dtype as the
+// reference. This runs BEFORE any norm / multiply / subtract, which would
+// otherwise raise a generic (non-Stage-operand) LibTorch exception on a
+// dimension/dtype/device mismatch -- or, worse, SILENTLY BROADCAST a wrong shape.
+// Returns "" when sound, else a stable marker+detail:
+//   SDIRK3_STAGE_OPERAND_SHAPE_MISMATCH / _DEVICE_MISMATCH / _DTYPE_MISMATCH.
+inline std::string check_stage_operand_structure(
+    const torch::Tensor& ref, const char* ref_name,
+    const std::vector<std::pair<const char*, const torch::Tensor*>>& operands) {
+    if (!ref.defined() || ref.numel() == 0 || ref.dim() != 1)
+        return std::string("SDIRK3_STAGE_OPERAND_SHAPE_MISMATCH: ") + ref_name +
+               " (must be a defined non-empty 1-D packed tensor)";
+    for (const auto& kv : operands) {
+        const char* name = kv.first;
+        const torch::Tensor* t = kv.second;
+        // A null/undefined operand is a COMPLETENESS concern, left to the caller's
+        // inventory / undefined-source check (which emits CAPTURE_INCOMPLETE or an
+        // undefined-source fail). The structural preflight validates the
+        // shape/device/dtype of the DEFINED operands, which is what would
+        // otherwise raise a generic LibTorch throw or silently broadcast.
+        if (!t || !t->defined()) continue;
+        if (t->numel() == 0 || t->dim() != 1 || t->sizes() != ref.sizes())
+            return std::string("SDIRK3_STAGE_OPERAND_SHAPE_MISMATCH: ") + name;
+        if (t->device() != ref.device())
+            return std::string("SDIRK3_STAGE_OPERAND_DEVICE_MISMATCH: ") + name;
+        if (t->scalar_type() != ref.scalar_type())
+            return std::string("SDIRK3_STAGE_OPERAND_DTYPE_MISMATCH: ") + name;
+    }
+    return std::string();
+}
+
 // AUTHORITATIVE per-source ARK attribution check (PR 9E history-authority C1).
 // The aggregate history closure proves only that the reconstructed TOTAL matches
 // U_stage - U_n; it cannot catch a +delta/-delta compensation between two sources
@@ -129,6 +161,31 @@ inline std::string emit_stage_applied_delta_diag(
     if (states.size() != sources.size())
         return fail("state_count=" + std::to_string(states.size()) +
                     " != source_count=" + std::to_string(sources.size()));
+
+    // STRUCTURAL PREFLIGHT (P1-5) before ANY tensor arithmetic below.
+    {
+        std::vector<std::pair<const char*, const torch::Tensor*>> ops;
+        ops.reserve(1 + states.size() + sources.size() * 2);
+        ops.push_back({"U_n", &U_n});
+        for (std::size_t j = 0; j < states.size(); ++j)
+            ops.push_back({"state", states[j]});
+        for (const auto& s : sources) {
+            ops.push_back({"k_slow", s.k_slow});
+            ops.push_back({"k_fast", s.k_fast});
+        }
+        const std::string sr =
+            check_stage_operand_structure(U_stage, "U_stage", ops);
+        if (!sr.empty()) {
+            const auto pos = sr.find(':');
+            const std::string marker =
+                (pos == std::string::npos) ? sr : sr.substr(0, pos);
+            const std::string detail =
+                (pos == std::string::npos) ? std::string() : sr.substr(pos + 2);
+            std::cerr << "[" << marker << "] " << tag << " " << detail
+                      << std::endl;
+            return sr;
+        }
+    }
 
     // LABEL AUTHORITY (derived from the AUTHORITATIVE target_stage, not the
     // observed order): the history of target stage i is composed of source stages
@@ -343,6 +400,29 @@ inline std::string emit_stage_history_diag(
                             std::to_string(checkpoint_timestep) +
                             " target_stage=" + std::to_string(target_stage) +
                             " iter=0";
+
+    // ---- PHASE 0: STRUCTURAL PREFLIGHT (P1-5) before ANY tensor arithmetic. ----
+    {
+        std::vector<std::pair<const char*, const torch::Tensor*>> ops;
+        ops.reserve(1 + sources.size() * 2);
+        ops.push_back({"U_n", &U_n});
+        for (const auto& s : sources) {
+            ops.push_back({"k_slow", s.k_slow});
+            ops.push_back({"k_fast", s.k_fast});
+        }
+        const std::string sr =
+            check_stage_operand_structure(U_stage, "U_stage", ops);
+        if (!sr.empty()) {
+            const auto pos = sr.find(':');
+            const std::string marker =
+                (pos == std::string::npos) ? sr : sr.substr(0, pos);
+            const std::string detail =
+                (pos == std::string::npos) ? std::string() : sr.substr(pos + 2);
+            std::cerr << "[" << marker << "] " << tag << " " << detail
+                      << std::endl;
+            return sr;
+        }
+    }
 
     // ---- PHASE 1: build the FP64 increment leaves and BUFFER the per-source
     // DIAG lines (do NOT print yet -- see PHASE 3/4 ordering). Increments use the

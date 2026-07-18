@@ -283,9 +283,9 @@ int main() {
     //      with SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE.
     {
         const float dt = 1.0f;  // aE=aI=1, dt=1 => exact float reconstruction
-        auto U_n = rnd({4, 3, 2}, 5.0f, 0.2f);
-        auto k_slow = rnd({4, 3, 2}, 2.0f, 0.4f);
-        auto k_fast = rnd({4, 3, 2}, 1.0f, 0.6f);
+        auto U_n = rnd({24}, 5.0f, 0.2f);
+        auto k_slow = rnd({24}, 2.0f, 0.4f);
+        auto k_fast = rnd({24}, 1.0f, 0.6f);
         auto U_stage = U_n + k_slow + k_fast;
         std::vector<StageHistorySource> src(1);
         src[0].stage = 1;
@@ -341,9 +341,9 @@ int main() {
     //      history-relative closure FAILS.
     {
         const float dt = 1.0f;
-        auto U_n = rnd({4, 3, 2}, 1e10f, 0.2f).to(torch::kFloat64);
-        auto k_slow = rnd({4, 3, 2}, 1e3f, 0.4f).to(torch::kFloat64);
-        auto k_fast = rnd({4, 3, 2}, 1e3f, 0.6f).to(torch::kFloat64);
+        auto U_n = rnd({24}, 1e10f, 0.2f).to(torch::kFloat64);
+        auto k_slow = rnd({24}, 1e3f, 0.4f).to(torch::kFloat64);
+        auto k_fast = rnd({24}, 1e3f, 0.6f).to(torch::kFloat64);
         auto U_stage = U_n + k_slow + k_fast;  // CORRECT history (exact in float64)
         std::vector<StageHistorySource> src(1);
         src[0].stage = 1;
@@ -449,8 +449,8 @@ int main() {
     //      success markers can never mistake broken evidence for sound.
     {
         const float dt = 1.0f;
-        auto U_n = rnd({4, 3, 2}, 5.0f, 0.2f);
-        auto k_fast = rnd({4, 3, 2}, 1.0f, 0.6f);
+        auto U_n = rnd({24}, 5.0f, 0.2f);
+        auto k_fast = rnd({24}, 1.0f, 0.6f);
         auto U_stage = U_n + k_fast;
         std::vector<StageHistorySource> src(1);
         src[0].stage = 1;
@@ -599,7 +599,40 @@ int main() {
               "case23: non-finite source input -> nonfinite (fails closed, not open)");
     }
 
-    const int kExpected = 51;  // ratchet: update deliberately with the cases
+    // (24) structural preflight (P1-5): a shape/dtype/dimensionality mismatch
+    //      fails with a STABLE marker before any tensor arithmetic, not a generic
+    //      LibTorch throw or a silent broadcast.
+    {
+        const float dt = 1.0f;
+        auto U_n = rnd({6}, 5.0f, 0.1f);
+        auto ks0 = rnd({6}, 2.0f, 0.2f), kf0 = rnd({6}, 1.0f, 0.3f);
+        auto state0 = U_n + dt * 1.0f * ks0 + dt * 1.0f * kf0;
+        std::vector<StageOperandBlock> blocks = {{"ru", 0, 6}};
+        std::vector<const torch::Tensor*> states{&state0};
+        auto ks_short = rnd({5}, 2.0f, 0.2f);  // N-1 length
+        std::vector<StageHistorySource> src_shape(1);
+        src_shape[0] = {1, 1.0, 1.0, &ks_short, &kf0};
+        check(emit_stage_applied_delta_diag(0, 0, 2, dt, U_n, state0, src_shape,
+                                            states, blocks)
+                  .find("SHAPE_MISMATCH") != std::string::npos,
+              "case24: N-1 operand -> SHAPE_MISMATCH");
+        auto ks_2d = ks0.reshape({6, 1});  // 2-D
+        std::vector<StageHistorySource> src_2d(1);
+        src_2d[0] = {1, 1.0, 1.0, &ks_2d, &kf0};
+        check(emit_stage_applied_delta_diag(0, 0, 2, dt, U_n, state0, src_2d,
+                                            states, blocks)
+                  .find("SHAPE_MISMATCH") != std::string::npos,
+              "case24: 2-D operand -> SHAPE_MISMATCH");
+        auto ks_f64 = ks0.to(torch::kFloat64);  // wrong dtype
+        std::vector<StageHistorySource> src_dtype(1);
+        src_dtype[0] = {1, 1.0, 1.0, &ks_f64, &kf0};
+        check(emit_stage_applied_delta_diag(0, 0, 2, dt, U_n, state0, src_dtype,
+                                            states, blocks)
+                  .find("DTYPE_MISMATCH") != std::string::npos,
+              "case24: FP64 operand -> DTYPE_MISMATCH");
+    }
+
+    const int kExpected = 54;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);
