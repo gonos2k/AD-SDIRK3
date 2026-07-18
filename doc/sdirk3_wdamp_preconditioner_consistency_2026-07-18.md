@@ -24,7 +24,7 @@ survives only as an explicit `precond_extra_wdamp` regularization.
 | | physical_w_direct_diag | legacy_scaled | final_wdiag range |
 |---|---|---|---|
 | consistent-M (default) | 0 | 3.36761e-06 | [1, **523.113**] |
-| legacy-M (`WRF_SDIRK3_PRECOND_LEGACY_WDAMP=1`) | 0.3 | 3.36761e-06 | [1, **523.114**] |
+| legacy-M (comparison build, `-DSDIRK3_PRECOND_LEGACY_WDAMP_COMPARISON`) | 0.3 | 3.36761e-06 | [1, **523.114**] |
 
 The retired legacy scalar `w_damp_alpha = 0.3` enters the W diagonal as
 `0.3 / momentum_coupling_k ≈ 0.3 / 89083.9 ≈ 3.4e-6`, utterly negligible next
@@ -44,22 +44,30 @@ SDIRK3_FGMRES_DIAG ts=0 stage=3 iter=0 rhs_norm=5.201751e+02 ... final_res=5.202
 `rel_err=1.000125e+00`, same `termination_reason=max_budget`. Not "no
 measurable change" — literally the same digits.
 
-## 3. Bounded conclusion
+## 3. Bounded conclusion (MEASURED vs INFERRED, kept separate)
 
-> The stale W-diagonal mismatch was real (a genuine operator/preconditioner
-> inconsistency: `M` modeled a 0.3 W diagonal the operator no longer
-> contained), but removing it produced no measurable Stage-3 solver change at
-> this operating point — the 0.3 scalar scales to 3.4e-6 against a D_w of ~523
-> and the FGMRES trajectory is identical. It is therefore **not** the observed
-> Stage-3 failure mechanism.
+**MEASURED (this run):**
+- Removing the 0.3 physical W diagonal changes `D_w` max from 523.114 to
+  523.113 (Δ ≈ 1e-3) and leaves the stage-2/3 records and the stage-3 FGMRES
+  trajectory byte-identical.
+- `D_w ≈ 523` is dominated by the acoustic-Schur contribution; the retired
+  0.3 W-damping scalar scales to `3.4e-6`, ~8 orders below `D_w`.
 
-This is the full extent of the claim. It does **not** show the preconditioner
-is "fixed" or "correct", and it does **not** show the mismatch "caused" Stage
-3. The identical trajectory means only that this coefficient was **not
-load-bearing** at this operating point. (This reconciles the 2026-06
-precond-inc2 observation: the "over-damped W diagonal that was load-bearing"
-was the acoustic-Schur `D_w ≈ 523`, NOT the 0.3 W-damping scalar — the two
-were conflated before this measurement separated them.)
+**INFERRED (bounded, from the above):**
+- The stale W-diagonal mismatch was real (a genuine operator/preconditioner
+  inconsistency: `M` modeled a 0.3 W diagonal the operator no longer
+  contained), but at this operating point it is **not load-bearing** and is
+  therefore **not** the observed Stage-3 failure mechanism.
+
+**NOT shown / explicitly UNRESOLVED:**
+- This does **not** show the preconditioner is "fixed" or "correct", and does
+  **not** show the mismatch "caused" Stage 3.
+- This run does **not** identify what precond-inc2's load-bearing "over-damped
+  W diagonal" actually was. It only **excludes the 0.3 W-damping scalar** as
+  that component. Whether the acoustic-Schur `D_w` (which dominates the
+  magnitude) is the precond-inc2 lever is a separate question this run does
+  not measure — precond-inc2 was a different experiment (a vertical W↔φ block
+  refinement), and re-measuring it is out of scope here.
 
 The real smooth Jacobian of the W-damping term is the `u/v/mu → rw`
 cross-block, which a 1-D W diagonal cannot represent; implementing that
@@ -84,11 +92,20 @@ cross-block preconditioner is separate, out-of-scope design work.
 
 ## 5. Reproduction
 
+The legacy-M side is a DEDICATED comparison build (compile-time only): the
+retired physics is never present in the production binary and is not reachable
+through any runtime knob. Both wrf.exe are run on the same 2-step dt=600 case.
+
 ```bash
-cd test/em_b_wave   # built at this branch head; 2 steps at dt=600
-# consistent-M (default):
+# consistent-M = the normal production build:
+cd test/em_b_wave
 env OMP_NUM_THREADS=2 WRF_SDIRK3_STAGE_DIAG=1 ./wrf.exe
-# legacy-M (paired comparison; env-only, test-only):
-env OMP_NUM_THREADS=2 WRF_SDIRK3_STAGE_DIAG=1 WRF_SDIRK3_PRECOND_LEGACY_WDAMP=1 ./wrf.exe
-grep "SDIRK3_PRECOND_WDAMP_DIAG dt=600" rsl.error.0000
+grep "SDIRK3_PRECOND_WDAMP_DIAG dt=600" rsl.error.0000   # physical_w_direct_diag=0
+
+# legacy-M = rebuild the SDIRK3 preconditioner object with the comparison
+# macro and relink wrf.exe (the macro is undefined in every production build):
+#   recompile wrf_sdirk3_unified_preconditioner.o with
+#     -DSDIRK3_PRECOND_LEGACY_WDAMP_COMPARISON (WRF's exact g++ flags),
+#   ar rcs the SDIRK3 archive, relink wrf.exe, then run as above.
+grep "SDIRK3_PRECOND_WDAMP_DIAG dt=600" rsl.error.0000   # physical_w_direct_diag=0.3
 ```

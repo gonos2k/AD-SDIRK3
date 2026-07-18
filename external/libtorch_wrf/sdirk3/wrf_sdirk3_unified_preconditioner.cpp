@@ -34,7 +34,6 @@
 #include <torch/torch.h>
 #include <cmath>
 #include <algorithm>  // std::min
-#include <cstdlib>    // PR 9D: std::getenv for the legacy-M paired-comparison toggle
 #include <unordered_map>
 #include <atomic>
 #ifdef USE_CUDA
@@ -548,18 +547,22 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     const bool wdamp_extra_regularization = wdamp_policy.extra_regularization;
     const float wdamp_extra_diag = wdamp_policy.extra_regularization_alpha;
 
-    // PR 9D commit 3: legacy-M paired-comparison toggle (env-only, test-only,
-    // default OFF). When set, the physical W diagonal is RESTORED to the
-    // retired legacy value (w_damp_alpha gated on implicit_wdamp) so the SAME
-    // dt=600 case can be run both ways for the operator/preconditioner
-    // consistency evidence. It NEVER fires on the default/production path.
+    // PR 9D commit 3: legacy-M paired-comparison path — COMPILE-TIME ONLY.
+    // Defining SDIRK3_PRECOND_LEGACY_WDAMP_COMPARISON at build time restores
+    // the retired legacy physical W diagonal (w_damp_alpha gated on
+    // implicit_wdamp) so a DEDICATED comparison binary can run the same dt=600
+    // case both ways for the operator/preconditioner consistency evidence.
+    // The macro is NEVER defined for production, so the retired physics is not
+    // present in the shipped binary (the compiler strips this branch) and is
+    // NOT reachable through any runtime knob — a raw env toggle would ship
+    // retired behavior behind an un-wired configuration, which the repo's
+    // config guardrails forbid.
     float wdamp_legacy_physical_diag = 0.0f;
-    {
-        const char* leg = std::getenv("WRF_SDIRK3_PRECOND_LEGACY_WDAMP");
-        if (leg && leg[0] == '1' && config.implicit_wdamp) {
-            wdamp_legacy_physical_diag = config.w_damp_alpha;
-        }
+#ifdef SDIRK3_PRECOND_LEGACY_WDAMP_COMPARISON
+    if (config.implicit_wdamp) {
+        wdamp_legacy_physical_diag = config.w_damp_alpha;
     }
+#endif
 
     // Effective per-term gates: start from config.implicit_*, then apply scope gating
     bool eff_rayleigh = config.implicit_rayleigh;
