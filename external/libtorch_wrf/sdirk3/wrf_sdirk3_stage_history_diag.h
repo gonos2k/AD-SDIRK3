@@ -105,13 +105,23 @@ struct StageDefectTensorSnapshot {
     torch::Tensor returned_K;  // the stage value the caller returned (must equal K)
 };
 
-// One source stage's contribution to the target stage's ARK history.
+// One source stage's contribution to the target stage's ARK history. k_slow /
+// k_fast MUST point at that source stage's BIRTH-TIME immutable snapshot (a
+// detached clone taken when the derivative was finalized), NOT the live vector
+// element (P1-3). Consuming the birth snapshot means the recorded provenance is
+// the value the derivative had WHEN BORN; if a future in-place mutation ever
+// diverged the live derivative from its birth value before the production ARK
+// add, the closure / applied-delta gates would catch it (birth != applied delta),
+// so the immutability is structurally enforced rather than assumed.
 struct StageHistorySource {
     int stage = -1;                    // 1-based source stage id (j+1)
     double a_explicit = 0.0;           // aE[target-1][j]
     double a_implicit = 0.0;           // aI[target-1][j]
-    const torch::Tensor* k_slow = nullptr; // production tensor, observed (not owned)
-    const torch::Tensor* k_fast = nullptr;
+    const torch::Tensor* k_slow = nullptr; // BIRTH snapshot (immutable), not owned
+    const torch::Tensor* k_fast = nullptr; // BIRTH snapshot (immutable), not owned
+    int birth_generation = -1;         // monotonic generation stamped when born
+                                       // (kept LAST so positional aggregate inits
+                                       //  {stage, aE, aI, k_slow, k_fast} still work)
 };
 
 // A packed six-block boundary (ru/rv/rw/ph/t/mu), for per-block localization of
@@ -574,6 +584,7 @@ inline std::string emit_stage_history_diag(
         std::ostringstream os;
         os << "[SDIRK3_STAGE_HISTORY_DIAG] " << tag
            << " src_stage=" << s.stage
+           << " birth_generation=" << s.birth_generation
            << " aE=" << std::scientific << std::setprecision(9) << s.a_explicit
            << " aI=" << s.a_implicit
            << " k_slow_norm=" << k_slow_norm

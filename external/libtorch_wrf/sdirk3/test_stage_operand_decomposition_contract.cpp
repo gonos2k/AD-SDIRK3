@@ -763,7 +763,59 @@ int main() {
               "case26: non-finite R rejected (NONFINITE)");
     }
 
-    const int kExpected = 66;  // ratchet: update deliberately with the cases
+    // (27) birth-time immutable source snapshot (P1-3): a source that references a
+    //      DETACHED BIRTH CLONE keeps the value the derivative had at birth even
+    //      after the live derivative is mutated in place, so the provenance closure
+    //      reflects birth -- not the later mutation.
+    {
+        const float dt = 1.0f;
+        auto U_n = rnd({24}, 5.0f, 0.2f);
+        auto k_slow_live = rnd({24}, 2.0f, 0.4f);
+        auto k_fast_live = rnd({24}, 1.0f, 0.6f);
+        auto k_slow_birth = k_slow_live.detach().clone();  // what the tile stores
+        auto k_fast_birth = k_fast_live.detach().clone();
+        auto U_stage = U_n + k_slow_birth + k_fast_birth;  // history from BIRTH values
+        const double k1n = k_fast_birth.to(torch::kFloat64).norm().item<double>();
+        StageDefectSnapshot d1;
+        d1.stage = 1;
+        d1.explicit_stage = true;
+        d1.converged = false;
+        d1.k_norm = k1n;
+        d1.f_fast_norm = kDefectNA;
+        d1.newton_defect_norm = kDefectNA;
+        d1.defect_to_k_ratio = kDefectNA;
+        d1.scaled_final_residual = kDefectNA;
+        std::vector<StageDefectSnapshot> defs{d1};
+        auto mk_src = [&](const torch::Tensor* ks, const torch::Tensor* kf) {
+            std::vector<StageHistorySource> src(1);
+            src[0].stage = 1;
+            src[0].birth_generation = 7;
+            src[0].a_explicit = 1.0;
+            src[0].a_implicit = 1.0;
+            src[0].k_slow = ks;
+            src[0].k_fast = kf;
+            return src;
+        };
+        // CORRUPT the live derivatives in place AFTER birth.
+        {
+            torch::NoGradGuard g;
+            k_slow_live.mul_(3.0f);
+            k_fast_live.add_(7.0f);
+        }
+        // the birth-clone source still closes against U_stage (birth values)
+        check(emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage,
+                                      mk_src(&k_slow_birth, &k_fast_birth), defs)
+                  .empty(),
+              "case27: birth-clone source survives live-derivative mutation");
+        // the SAME source on the MUTATED live tensors fails -- proving the closure
+        // depends on the derivative values, so consuming the clone mattered.
+        check(!emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage,
+                                       mk_src(&k_slow_live, &k_fast_live), defs)
+                   .empty(),
+              "case27: same source on mutated live tensors fails (clone mattered)");
+    }
+
+    const int kExpected = 68;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

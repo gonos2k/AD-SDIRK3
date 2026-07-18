@@ -7392,6 +7392,16 @@ vertical_coefficients:
             std::vector<torch::Tensor> k_fast(Ark::stages);
             std::vector<torch::Tensor> k_slow(Ark::stages);
             std::vector<torch::Tensor> k_full(Ark::stages);
+            // PR 9F P1-3: BIRTH-time immutable snapshots (detached clones) of each
+            // stage derivative, taken when it is finalized. The record-stage history
+            // sources consume THESE, not the live k_fast/k_slow vectors, so the
+            // recorded provenance is the value each derivative had when born; a later
+            // in-place mutation cannot silently rewrite it (and would be caught by
+            // the closure / applied-delta gate). Populated only under the diag flag.
+            std::vector<torch::Tensor> k_fast_birth(Ark::stages);
+            std::vector<torch::Tensor> k_slow_birth(Ark::stages);
+            std::vector<int> k_birth_generation(Ark::stages, -1);
+            int k_birth_seq = 0;  // monotonic; a stage retry re-births -> new gen
             bool ark_stage_aborted = false;
 
             // Return code: 0=accept, 1=recoverable retry, 2=abort.
@@ -7863,10 +7873,18 @@ vertical_coefficients:
                     for (int j = 0; j < i; ++j) {
                         wrf::sdirk3::StageHistorySource s;
                         s.stage = j + 1;
+                        s.birth_generation = k_birth_generation[j];
                         s.a_explicit = Ark::a_explicit[i][j];
                         s.a_implicit = Ark::a_implicit[i][j];
-                        s.k_slow = &k_slow[j];
-                        s.k_fast = &k_fast[j];
+                        // P1-3: consume the BIRTH snapshot (immutable detached clone
+                        // taken when the derivative was finalized), NOT the live
+                        // k_slow/k_fast vector element. In the current code the
+                        // derivatives are stable after birth so birth == live and
+                        // the gates pass unchanged; if a future in-place mutation
+                        // ever diverged them before the production add, the closure /
+                        // applied-delta gate would fail closed.
+                        s.k_slow = &k_slow_birth[j];
+                        s.k_fast = &k_fast_birth[j];
                         sources.push_back(s);
                     }
                     // 4D-Var trajectory-checkpoint counter (0 in a default run);
@@ -8179,6 +8197,15 @@ vertical_coefficients:
                     if (!explicit_stage) tsnap = last_stage_defect_tensor_;
                     tsnap.stage = stage_id;
                     stage_operand_defect_tensors.push_back(tsnap);
+                    // PR 9F P1-3: birth snapshot of THIS stage's fast derivative,
+                    // now finalized (post solve/sanitize/damping), for later stages'
+                    // history sources. A detached clone -- immune to any later
+                    // in-place mutation of the live k_fast[i].
+                    if (k_fast[i].defined() && k_fast[i].numel() > 0) {
+                        torch::NoGradGuard no_grad;
+                        k_fast_birth[i] = k_fast[i].detach().clone();
+                        k_birth_generation[i] = ++k_birth_seq;
+                    }
                 }
 
                 if (stage_id == 1) {
@@ -8217,6 +8244,14 @@ vertical_coefficients:
 
                 k_slow[i] = compute_k_slow(U_conv, U_full_exch_conv);
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_slow", k_slow[i]);
+                // PR 9F P1-3: birth snapshot of THIS stage's slow derivative, now
+                // finalized, for later stages' history sources (detached clone).
+                if (stage_operand_diag_on && k_slow[i].defined() &&
+                    k_slow[i].numel() > 0) {
+                    torch::NoGradGuard no_grad;
+                    k_slow_birth[i] = k_slow[i].detach().clone();
+                    if (k_birth_generation[i] < 0) k_birth_generation[i] = ++k_birth_seq;
+                }
                 k_full[i] = k_fast[i] + k_slow[i];
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_full", k_full[i]);
 
