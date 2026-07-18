@@ -125,6 +125,7 @@ external/libtorch_wrf/sdirk3/test_*
 external/libtorch_wrf/sdirk3/tests/test_*
 !external/libtorch_wrf/sdirk3/tests/test_wrms_gate_metric.cpp
 !external/libtorch_wrf/sdirk3/test_wdamp_tangent_contract.cpp
+!external/libtorch_wrf/sdirk3/test_wdamp_preconditioner_policy_contract.cpp
 !external/libtorch_wrf/sdirk3/test_rw_term_capture_contract.cpp
 !external/libtorch_wrf/sdirk3/test_wdamp_wrf_reference_contract.cpp
 !external/libtorch_wrf/sdirk3/test_ww_cp_parity_contract.cpp

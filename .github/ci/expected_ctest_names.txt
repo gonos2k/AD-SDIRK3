@@ -13,6 +13,7 @@ MPI_Runtime_Contract_np4
 MSF_Raw_Stats_Matrix
 RW_Term_Capture_Contract
 VJP_Semantics
+WDamp_Preconditioner_Policy_Contract
 WDamp_Tangent_Contract
 WDamp_WRF_Reference_Contract
 WRMS_Gate_Metric

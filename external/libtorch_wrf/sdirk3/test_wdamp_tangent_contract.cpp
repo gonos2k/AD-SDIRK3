@@ -150,8 +150,48 @@ int main() {
         ++failures;
     }
 
+    // PR 9D load-bearing case A: a PURE-w perturbation (ww and mu severed)
+    // produces an EXACTLY zero production tangent in the smooth region — w
+    // enters only through the hard SIGN, whose derivative is 0 away from
+    // w == 0. This is the proof behind "physical W direct diagonal = 0" in
+    // the preconditioner policy: there is no direct W Jacobian to mirror.
+    {
+        torch::NoGradGuard ng;
+        wrf::sdirk3::jvp_detail::DualLevelGuard g;
+        auto w_d = torch::_make_dual(fx.w, fx.wdot, (int64_t)g.level());
+        auto out = fx.chain(fx.ww, w_d, fx.mu);  // ww, mu severed (plain primal)
+        auto tgt = std::get<1>(torch::_unpack_dual(out, (int64_t)g.level()));
+        float pure_w = tgt.defined() ? tgt.abs().max().item<float>() : 0.0f;
+        std::printf("wdamp_tangent pure-w (ww,mu severed): max|tangent|=%.3e (must be 0)\n",
+                    pure_w);
+        if (pure_w != 0.0f) {
+            std::printf("FAIL: pure-w perturbation moved the term — a direct W "
+                        "diagonal WOULD be justified\n");
+            ++failures;
+        }
+    }
+
+    // PR 9D load-bearing case B (positive control): a ww/mu perturbation (w
+    // severed) DOES move the term — the real smooth Jacobian is the ww/mu
+    // path, which a 1-D W diagonal cannot represent.
+    {
+        torch::NoGradGuard ng;
+        wrf::sdirk3::jvp_detail::DualLevelGuard g;
+        auto ww_d = torch::_make_dual(fx.ww, fx.wwdot, (int64_t)g.level());
+        auto mu_d = torch::_make_dual(fx.mu, fx.mudot, (int64_t)g.level());
+        auto out = fx.chain(ww_d, fx.w, mu_d);  // w severed (plain primal)
+        auto tgt = std::get<1>(torch::_unpack_dual(out, (int64_t)g.level()));
+        float ww_mu = tgt.defined() ? tgt.abs().max().item<float>() : 0.0f;
+        std::printf("wdamp_tangent ww/mu (w severed): max|tangent|=%.3e (must be > 0)\n",
+                    ww_mu);
+        if (!(ww_mu > 0.0f)) {
+            std::printf("FAIL: ww/mu perturbation produced no tangent — chain broken\n");
+            ++failures;
+        }
+    }
+
     if (failures == 0) {
-        std::printf("W-damping tangent contract: ALL PASS (4/4 cases)\n");
+        std::printf("W-damping tangent contract: ALL PASS (6/6 cases)\n");
         return 0;
     }
     std::printf("W-damping tangent contract: %d FAILURE(S)\n", failures);
