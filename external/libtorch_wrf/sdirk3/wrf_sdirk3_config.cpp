@@ -583,6 +583,8 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
             } else if (key == "sdirk3_retain_graph" || key == "retain_graph" ||
                        key == "sdirk3_retain_graph_for_adjoint" || key == "retain_graph_for_adjoint") {
                 retain_graph_for_adjoint = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_stage_operand_diag" || key == "stage_operand_diag") {
+                stage_operand_diag = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_obs_aware_4dvar" || key == "obs_aware_4dvar") {
                 obs_aware_4dvar = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_obs_source_mode" || key == "obs_source_mode") {
@@ -1124,6 +1126,11 @@ void SDIRK3Config::load_from_env() {
     if ((env_val = std::getenv("WRF_SDIRK3_CHECKPOINT_INTERVAL"))) {
         checkpoint_interval = std::max(1, std::atoi(env_val));
         std::cerr << "[CONFIG ENV] checkpoint_interval = " << checkpoint_interval << std::endl;
+    }
+    if ((env_val = std::getenv("WRF_SDIRK3_STAGE_OPERAND_DIAG"))) {
+        stage_operand_diag = parse_bool_env(env_val);
+        std::cerr << "[CONFIG ENV] stage_operand_diag = "
+                  << (stage_operand_diag ? "true" : "false") << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_RETAIN_GRAPH_FOR_ADJOINT"))) {
         retain_graph_for_adjoint = parse_bool_env(env_val);

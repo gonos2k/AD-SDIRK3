@@ -12,6 +12,7 @@ MPI_Runtime_Contract_np2
 MPI_Runtime_Contract_np4
 MSF_Raw_Stats_Matrix
 RW_Term_Capture_Contract
+Stage_Operand_Decomposition_Contract
 VJP_Semantics
 WDamp_Preconditioner_Policy_Contract
 WDamp_Tangent_Contract

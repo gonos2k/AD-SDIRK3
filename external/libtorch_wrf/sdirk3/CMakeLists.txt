@@ -278,6 +278,11 @@ add_executable(test_ww_cp_parity_contract test_ww_cp_parity_contract.cpp)
 target_link_libraries(test_ww_cp_parity_contract "${TORCH_LIBRARIES}")
 add_test(NAME WW_CP_Parity_Contract COMMAND test_ww_cp_parity_contract)
 
+# PR 9E: generic stage-operand provenance/closure capture contract.
+add_executable(test_stage_operand_decomposition_contract test_stage_operand_decomposition_contract.cpp)
+target_link_libraries(test_stage_operand_decomposition_contract "${TORCH_LIBRARIES}")
+add_test(NAME Stage_Operand_Decomposition_Contract COMMAND test_stage_operand_decomposition_contract)
+
 # =========================================================================
 # PR 5 commit 3: full-object link closure + archive/manifest contracts
 # =========================================================================
