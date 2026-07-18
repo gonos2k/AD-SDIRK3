@@ -3399,6 +3399,12 @@ class sdirk3::WRFNewtonKrylovSolver::Impl {
 public:
     WRFNewtonKrylovOptions options_;
     ConvergenceStats stats_;
+    // PR 9E (diagnosis-only): detached FINAL fast RHS and Newton defect of the
+    // most recent record-stage solve. Stored as sync-free tensor handles during
+    // the Newton loop; their norms are materialized (one .item() each) only in
+    // get_stats(), so no GPU->CPU transfer happens per Newton iteration.
+    torch::Tensor diag_final_F_;
+    torch::Tensor diag_final_R_;
     WRFPreconditioner* preconditioner_ = nullptr;
     int mu_size_ = 0;  // Size of mu component for SDIRK3
     
@@ -3776,7 +3782,14 @@ public:
         float gamma,
         int stage,
         const torch::Tensor& F_phys = torch::Tensor()) {  // Added F_phys with default
-        
+
+        // PR 9E (diagnosis-only): clear the retained final fast-RHS / defect
+        // tensors so a stale value from a previous solve can never leak into
+        // this stage's history summary. Populated (when stage_operand_diag is on)
+        // at the residual site below; norms materialized once in get_stats().
+        diag_final_F_ = torch::Tensor();
+        diag_final_R_ = torch::Tensor();
+
         // FIX Round156: Gate entry debug with debug_level >= 2
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
             std::cout << "\n=== ENTERED solve_stage_impl ===" << std::endl;
@@ -4773,6 +4786,21 @@ public:
             // Before buggy code: R = K - F - F_phys  (double-counted F_phys)
             // After fix:         R = K - F           (correct for all configurations)
             torch::Tensor R = K - F;
+
+            // PR 9E (diagnosis-only, opt-in): retain the FINAL fast RHS and Newton
+            // defect for this record-stage solve. Assigning the detached tensor
+            // handles is O(1) and sync-free; the LAST accepted iteration's write
+            // wins. The single ||.||.item() materialization happens once in
+            // get_stats() (called once per stage solve), NOT per Newton iteration,
+            // so there is no per-iteration GPU->CPU transfer. Gated on
+            // stage_operand_diag and the record stages (default off) so the OFF
+            // path is byte-identical; F is the production tendency, so this is
+            // ZERO extra RHS evaluations.
+            if (wrf::sdirk3::g_sdirk3_config.stage_operand_diag &&
+                (stage == 2 || stage == 3)) {
+                diag_final_F_ = F.detach();
+                diag_final_R_ = R.detach();
+            }
 
             // DIAGNOSTIC: Per-variable residual decomposition (debug_level >= 2)
             // Identifies which variable (ru/rv/rw/ph/t/mu) dominates the residual
@@ -8629,7 +8657,17 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
 }
 
 sdirk3::WRFNewtonKrylovSolver::ConvergenceStats sdirk3::WRFNewtonKrylovSolver::get_stats() const {
-    return pImpl->stats_;
+    ConvergenceStats s = pImpl->stats_;
+    // PR 9E (diagnosis-only): materialize the RAW L2 fast-RHS / defect norms
+    // exactly ONCE here -- get_stats() is called once per stage solve -- from the
+    // tensors retained sync-free during the Newton loop. This keeps the .item()
+    // GPU->CPU transfer off the per-iteration hot path.
+    if (pImpl->diag_final_F_.defined() && pImpl->diag_final_R_.defined()) {
+        torch::NoGradGuard no_grad;
+        s.final_fast_rhs_norm = pImpl->diag_final_F_.norm().item<float>();
+        s.final_defect_l2_raw = pImpl->diag_final_R_.norm().item<float>();
+    }
+    return s;
 }
 
 void sdirk3::WRFNewtonKrylovSolver::reset_stats() {

@@ -1287,6 +1287,14 @@ private:
     float last_stage_initial_R0_ = 0.0f;  // v20.14r39: Newton's initial unscaled L2 ||R_0|| for diagnostics
     int progress_low_streak_ = 0;         // v20.14r64: consecutive low-progress step counter
 
+    // PR 9E (diagnosis-only, stage_operand_diag): RAW L2 diagnostics carried
+    // back from the most recent implicit stage solve (-1 when the flag is off).
+    // Never affect the solve; consumed only by the stage-operand history summary.
+    float last_stage_fast_rhs_norm_ = -1.0f; // ||F_fast(U_eval_final)|| of last stage solve
+    float last_stage_defect_l2_raw_ = -1.0f; // ||K_final - F_fast(U_eval_final)|| of last stage solve
+    long long stage_operand_diag_step_ = 0;  // monotonic diag step label (advanced only when flag on)
+    bool stage_operand_topo_warned_ = false; // once-only unsupported-topology fail-close latch
+
     // Last step outcome for ABI-side fail-closed checks.
     int last_step_outcome_code_ = static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED);
     bool last_step_final_update_aborted_ = false;

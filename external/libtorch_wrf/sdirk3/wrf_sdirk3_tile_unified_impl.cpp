@@ -89,6 +89,7 @@
 #include "wrf_sdirk3_config.h"
 #include "wrf_sdirk3_rw_term_capture.h"  // PR 9B: rw term bisection capture
 #include "wrf_sdirk3_w_damping.h"       // PR 9B: production W-damping helper (contract-tested)
+#include "wrf_sdirk3_stage_history_diag.h"  // PR 9E: opt-in ARK history + defect summary (diagnosis-only)
 #include "wrf_sdirk3_ww_cp.h"           // PR 9C.1: complete calc_ww_cp omega diagnosis
 #include "wrf_sdirk3_types.h"  // FIX Round186: For centralized safe_device_index()
 #include "wrf_sdirk3_halo_exchange.h"  // For exchange_halo_3d_u/v/w/mass, halo_exchange_init
@@ -7769,6 +7770,30 @@ vertical_coefficients:
             };
             bool prev_stage_retry_used = false;
 
+            // PR 9E (diagnosis-only, opt-in): per-ARK-sweep scratch for the
+            // stage-operand history + defect summary. All emission OBSERVES
+            // production tensors (k_slow/k_fast/U_stage) and never re-evaluates
+            // an RHS. Single-rank/single-tile only; other topologies fail-close
+            // once with a stable marker and disable emission for this sweep.
+            const bool stage_operand_diag_on =
+                wrf::sdirk3::g_sdirk3_config.stage_operand_diag;
+            const bool stage_operand_topo_ok = (nprocx_ * nprocy_ == 1);
+            std::vector<wrf::sdirk3::StageDefectSnapshot> stage_operand_defects;
+            int stage_operand_step_label = 0;
+            if (stage_operand_diag_on) {
+                stage_operand_step_label =
+                    static_cast<int>(++stage_operand_diag_step_);
+                if (!stage_operand_topo_ok && !stage_operand_topo_warned_) {
+                    stage_operand_topo_warned_ = true;
+                    std::cerr << "[SDIRK3_STAGE_OPERAND_DIAG_UNSUPPORTED_TOPOLOGY]"
+                              << " dt=" << static_cast<int>(dt)
+                              << " nprocx=" << nprocx_ << " nprocy=" << nprocy_
+                              << " (stage-operand history diagnostics require"
+                              << " single-rank/single-tile; disabled)"
+                              << std::endl;
+                }
+            }
+
             for (int i = 0; i < Ark::stages; ++i) {
                 if (ark_stage_aborted) {
                     break;
@@ -7779,6 +7804,30 @@ vertical_coefficients:
                 torch::Tensor U_stage = compute_stage_rhs(i);
                 probe_firsthit_nonfinite(stage_id, false, "U_stage_pre", U_stage);
                 checkTensorHealth(U_stage, "U_stage_ark");
+
+                // PR 9E (diagnosis-only): emit the ARK stage-HISTORY provenance +
+                // per-source-stage Newton-defect summary for the record stages
+                // (2 = converging control, 3 = failing target), at the iter-0
+                // operand. U_stage here is the pristine history (pre-halo). Every
+                // input is a production tensor already built this sweep; the
+                // emitter only reads detached copies under NoGradGuard.
+                if (stage_operand_diag_on && stage_operand_topo_ok &&
+                    (stage_id == 2 || stage_id == 3)) {
+                    std::vector<wrf::sdirk3::StageHistorySource> sources;
+                    sources.reserve(static_cast<size_t>(i));
+                    for (int j = 0; j < i; ++j) {
+                        wrf::sdirk3::StageHistorySource s;
+                        s.stage = j + 1;
+                        s.a_explicit = Ark::a_explicit[i][j];
+                        s.a_implicit = Ark::a_implicit[i][j];
+                        s.k_slow = &k_slow[j];
+                        s.k_fast = &k_fast[j];
+                        sources.push_back(s);
+                    }
+                    wrf::sdirk3::emit_stage_history_diag(
+                        stage_operand_step_label, stage_id, dt, U_n, U_stage,
+                        sources, stage_operand_defects);
+                }
 
                 torch::Tensor U_full_exch_stage;
                 if (use_ad_halo) {
@@ -7953,6 +8002,44 @@ vertical_coefficients:
                     break;
                 }
                 prev_stage_retry_used = retry_used;
+
+                // PR 9E (diagnosis-only): snapshot THIS stage's converged-solve
+                // quality now, while last_stage_* still refer to it, so a later
+                // record stage's summary reports each source's OWN defect (not a
+                // "last_stage_*" overwrite). Observe-only; no RHS re-evaluation.
+                if (stage_operand_diag_on && stage_operand_topo_ok) {
+                    wrf::sdirk3::StageDefectSnapshot snap;
+                    snap.stage = stage_id;
+                    snap.converged = last_stage_converged_;
+                    {
+                        torch::NoGradGuard no_grad;
+                        snap.k_norm =
+                            (k_fast[i].defined() && k_fast[i].numel() > 0)
+                                ? k_fast[i].detach().to(torch::kFloat64)
+                                      .norm().item<double>()
+                                : 0.0;
+                    }
+                    const bool explicit_stage =
+                        (std::abs(effective_aii) < 1e-14f);
+                    snap.explicit_stage = explicit_stage;
+                    if (explicit_stage) {
+                        // ESDIRK first stage: k_fast = F_fast(U_stage) exactly and
+                        // U_eval_final == U_stage, so the Newton defect is 0.
+                        snap.f_fast_norm = snap.k_norm;
+                        snap.newton_defect_norm = 0.0;
+                        snap.scaled_final_residual = 0.0;
+                    } else {
+                        snap.f_fast_norm =
+                            static_cast<double>(last_stage_fast_rhs_norm_);
+                        snap.newton_defect_norm =
+                            static_cast<double>(last_stage_defect_l2_raw_);
+                        snap.scaled_final_residual =
+                            static_cast<double>(last_stage_residual_);
+                    }
+                    snap.defect_to_k_ratio =
+                        snap.newton_defect_norm / std::max(snap.k_norm, 1e-300);
+                    stage_operand_defects.push_back(snap);
+                }
 
                 if (stage_id == 1) {
                     const bool seed_empty_history = !k1_prev_.defined();
@@ -9865,6 +9952,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_converged_ = stats.converged;
     last_stage_residual_ = stats.final_residual;
     last_stage_initial_R0_ = stats.initial_unscaled_residual;  // v20.14r39: for diagnostics
+    // PR 9E (diagnosis-only): carry the raw-L2 fast-RHS / defect norms back for
+    // this stage's history-summary snapshot (-1 when stage_operand_diag is off).
+    last_stage_fast_rhs_norm_ = stats.final_fast_rhs_norm;
+    last_stage_defect_l2_raw_ = stats.final_defect_l2_raw;
     last_stage_rel_R_full_ = 0.0f;  // reset; updated below by residual re-eval
     last_stage_rel_R_full_raw_ = 0.0f;  // v20.14r41: raw ratio reset
     last_stage_R_full_norm_ = 0.0f; // v20.14r36: reset to prevent stale OR-cap reference

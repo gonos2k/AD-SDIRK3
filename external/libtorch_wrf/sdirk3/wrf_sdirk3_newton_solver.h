@@ -266,8 +266,17 @@ public:
         torch::Tensor initial_residual_vector;  // Detached packed R_0 used by WRMS stage-gate growth metric
         float condition_number;
         bool converged;
+        // PR 9E (diagnosis-only): RAW L2 norms at the FINAL accepted Newton
+        // iteration, populated ONLY when g_sdirk3_config.stage_operand_diag is
+        // on (else left at -1). final_fast_rhs_norm = ||F_fast(U_eval_final)||;
+        // final_defect_l2_raw = ||K_final - F_fast(U_eval_final)|| (the raw
+        // Newton defect). These OBSERVE F/R that the solve already built — no
+        // extra RHS evaluation — and never influence the solve. Consumed by the
+        // PR 9E stage-operand history summary.
+        float final_fast_rhs_norm = -1.0f;
+        float final_defect_l2_raw = -1.0f;
     };
-    
+
     ConvergenceStats get_stats() const;
     void reset_stats();
     
