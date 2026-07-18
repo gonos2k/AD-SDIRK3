@@ -1293,7 +1293,6 @@ private:
     float last_stage_fast_rhs_norm_ = -1.0f; // ||F_fast(U_eval_final)|| of last stage solve
     float last_stage_defect_l2_raw_ = -1.0f; // ||K_final - F_fast(U_eval_final)|| of last stage solve
     long long stage_operand_diag_step_ = 0;  // monotonic diag step label (advanced only when flag on)
-    bool stage_operand_topo_warned_ = false; // once-only unsupported-topology fail-close latch
 
     // Last step outcome for ABI-side fail-closed checks.
     int last_step_outcome_code_ = static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED);

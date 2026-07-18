@@ -9,6 +9,7 @@
 #include <numeric>
 #include <functional>
 #include "wrf_sdirk3_stage_operand_capture.h"
+#include "wrf_sdirk3_stage_history_diag.h"
 
 using namespace wrf::sdirk3;
 
@@ -272,7 +273,53 @@ int main() {
               "case15: additive + transform closes to the post-mask result");
     }
 
-    const int kExpected = 24;  // ratchet: update deliberately with the cases
+    // (16) emit-path inventory HARD GATE (Commit A / Codex stop-gate regression).
+    //      emit_stage_history_diag must pass the EXPECTED leaf set as `required`
+    //      to the validator; with the old empty-`required`/all-`optional` call a
+    //      missing/undefined/duplicate increment was laundered (returned ""). A
+    //      sound history passes; an undefined explicit derivative fails closed
+    //      with SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE.
+    {
+        const float dt = 1.0f;  // aE=aI=1, dt=1 => exact float reconstruction
+        auto U_n = rnd({4, 3, 2}, 5.0f, 0.2f);
+        auto k_slow = rnd({4, 3, 2}, 2.0f, 0.4f);
+        auto k_fast = rnd({4, 3, 2}, 1.0f, 0.6f);
+        auto U_stage = U_n + k_slow + k_fast;
+        std::vector<StageHistorySource> src(1);
+        src[0].stage = 1;
+        src[0].a_explicit = 1.0;
+        src[0].a_implicit = 1.0;
+        src[0].k_slow = &k_slow;
+        src[0].k_fast = &k_fast;
+        std::vector<StageDefectSnapshot> defs;
+        std::string ok =
+            emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage, src, defs);
+        check(ok.empty(), "case16: sound history passes the emit hard gate");
+
+        torch::Tensor undef;  // undefined explicit derivative
+        std::vector<StageHistorySource> bad = src;
+        bad[0].k_slow = &undef;
+        std::string fail =
+            emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage, bad, defs);
+        check(!fail.empty(),
+              "case16: undefined increment fails the emit hard gate closed");
+        check(fail.find("CAPTURE_INCOMPLETE") != std::string::npos,
+              "case16: undefined increment -> SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE");
+
+        // Omitted source stage: target stage 3's history expects sources 1 AND 2.
+        // The expected inventory is derived from target_stage, NOT from the
+        // (incomplete) sources vector, so providing only stage 1 must fail closed
+        // as a MISSING leaf -- not be laundered as valid.
+        std::vector<StageHistorySource> omitted = src;  // only stage 1
+        std::string miss =
+            emit_stage_history_diag(0, 0, 3, dt, U_n, U_stage, omitted, defs);
+        check(!miss.empty(),
+              "case16: omitted source stage fails the emit hard gate closed");
+        check(miss.find("CAPTURE_INCOMPLETE") != std::string::npos,
+              "case16: omitted source stage -> CAPTURE_INCOMPLETE (missing leaf)");
+    }
+
+    const int kExpected = 29;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

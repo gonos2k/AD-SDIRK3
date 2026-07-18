@@ -7773,25 +7773,45 @@ vertical_coefficients:
             // PR 9E (diagnosis-only, opt-in): per-ARK-sweep scratch for the
             // stage-operand history + defect summary. All emission OBSERVES
             // production tensors (k_slow/k_fast/U_stage) and never re-evaluates
-            // an RHS. Single-rank/single-tile only; other topologies fail-close
-            // once with a stable marker and disable emission for this sweep.
+            // an RHS.
             const bool stage_operand_diag_on =
                 wrf::sdirk3::g_sdirk3_config.stage_operand_diag;
-            const bool stage_operand_topo_ok = (nprocx_ * nprocy_ == 1);
             std::vector<wrf::sdirk3::StageDefectSnapshot> stage_operand_defects;
             int stage_operand_step_label = 0;
             if (stage_operand_diag_on) {
+                // PR 9E Commit A: single-authority topology FAIL-CLOSE. The
+                // stage-operand diagnostic is validated ONLY for a single MPI
+                // rank whose single tile covers the whole authoritative patch --
+                // this shares the W-damping preflight's whole-patch judgment
+                // (tile_covers_patch). Because WRF drives the solver once per
+                // tile, "this tile covers the patch" IS "num_tiles==1 for this
+                // rank". Any other topology (multi-rank, or an internal tile that
+                // covers only part of the patch) would let the thread-local
+                // capture observe a partial state and emit misleading evidence,
+                // so we fail closed BEFORE any Newton/FGMRES diagnostic
+                // evaluation with a controlled-fatal (P0-EH: survives the mpif90
+                // link boundary and is MPI-thread-safe) -- never
+                // marker-and-continue.
+                const bool single_rank = (nprocx_ * nprocy_ == 1);
+                const bool tile_covers_patch =
+                    its_ <= ids_ && ite_ >= ide_ - 1 &&
+                    jts_ <= jds_ && jte_ >= jde_ - 1;
+                if (!(single_rank && tile_covers_patch)) {
+                    char detail[320];
+                    std::snprintf(detail, sizeof(detail),
+                        "SDIRK3_STAGE_OPERAND_DIAG_UNSUPPORTED_TOPOLOGY: "
+                        "single_rank=%d tile_covers_patch=%d nprocx=%d nprocy=%d "
+                        "its=%d ite=%d jts=%d jte=%d ids=%d ide=%d jds=%d jde=%d "
+                        "(requires exactly 1 rank AND 1 tile covering the whole "
+                        "patch)",
+                        single_rank ? 1 : 0, tile_covers_patch ? 1 : 0,
+                        nprocx_, nprocy_, its_, ite_, jts_, jte_,
+                        ids_, ide_, jds_, jde_);
+                    wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+                        "stage_operand_diag_topology", detail);
+                }
                 stage_operand_step_label =
                     static_cast<int>(++stage_operand_diag_step_);
-                if (!stage_operand_topo_ok && !stage_operand_topo_warned_) {
-                    stage_operand_topo_warned_ = true;
-                    std::cerr << "[SDIRK3_STAGE_OPERAND_DIAG_UNSUPPORTED_TOPOLOGY]"
-                              << " dt=" << static_cast<int>(dt)
-                              << " nprocx=" << nprocx_ << " nprocy=" << nprocy_
-                              << " (stage-operand history diagnostics require"
-                              << " single-rank/single-tile; disabled)"
-                              << std::endl;
-                }
             }
 
             for (int i = 0; i < Ark::stages; ++i) {
@@ -7811,7 +7831,7 @@ vertical_coefficients:
                 // operand. U_stage here is the pristine history (pre-halo). Every
                 // input is a production tensor already built this sweep; the
                 // emitter only reads detached copies under NoGradGuard.
-                if (stage_operand_diag_on && stage_operand_topo_ok &&
+                if (stage_operand_diag_on &&
                     (stage_id == 2 || stage_id == 3)) {
                     std::vector<wrf::sdirk3::StageHistorySource> sources;
                     sources.reserve(static_cast<size_t>(i));
@@ -7824,9 +7844,21 @@ vertical_coefficients:
                         s.k_fast = &k_fast[j];
                         sources.push_back(s);
                     }
-                    wrf::sdirk3::emit_stage_history_diag(
-                        stage_operand_step_label, stage_id, dt, U_n, U_stage,
-                        sources, stage_operand_defects);
+                    const int stage_operand_gts =
+                        newton_solver_
+                            ? newton_solver_->get_saved_global_timestep()
+                            : -1;
+                    std::string stage_operand_fail =
+                        wrf::sdirk3::emit_stage_history_diag(
+                            stage_operand_step_label, stage_operand_gts, stage_id,
+                            dt, U_n, U_stage, sources, stage_operand_defects);
+                    if (!stage_operand_fail.empty()) {
+                        // HARD GATE (PR 9E Commit A): broken diagnostic evidence
+                        // fails closed via controlled-fatal, never continues.
+                        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+                            "stage_operand_history_diag",
+                            stage_operand_fail.c_str());
+                    }
                 }
 
                 torch::Tensor U_full_exch_stage;
@@ -8007,7 +8039,8 @@ vertical_coefficients:
                 // quality now, while last_stage_* still refer to it, so a later
                 // record stage's summary reports each source's OWN defect (not a
                 // "last_stage_*" overwrite). Observe-only; no RHS re-evaluation.
-                if (stage_operand_diag_on && stage_operand_topo_ok) {
+                // (Topology already fail-closed up front, so no topo guard here.)
+                if (stage_operand_diag_on) {
                     wrf::sdirk3::StageDefectSnapshot snap;
                     snap.stage = stage_id;
                     snap.converged = last_stage_converged_;

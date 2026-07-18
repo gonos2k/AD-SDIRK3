@@ -36,6 +36,7 @@
 // The per-block raw/scaled/halo decomposition is Commit 3's job.
 #include "wrf_sdirk3_stage_operand_capture.h"
 #include <torch/torch.h>
+#include <cstdio>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -70,14 +71,24 @@ struct StageHistorySource {
 
 // Emit SDIRK3_STAGE_HISTORY_DIAG (per-source ARK increment provenance) and
 // SDIRK3_STAGE_HISTORY_SUMMARY (history closure + per-source defect table) for
-// the record stage `target_stage`. `dt` and `target_stage` and `timestep` are
-// stamped on every line so a long dt=600 run can be grepped by step/stage.
+// the record stage `target_stage`. Every line is stamped with the full-precision
+// `dt`, the solver-local monotonic `step_seq`, and the authoritative WRF
+// `global_timestep`, so a long dt=600 run can be grepped unambiguously.
+//
+// HARD GATE (PR 9E Commit A): returns an EMPTY string when the evidence is
+// sound; otherwise a non-empty reason after printing the specific failure marker
+// (SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE for a broken inventory,
+// SDIRK3_STAGE_OPERAND_CLOSURE_FAILED for a non-finite closure or one whose
+// relative error exceeds 1e-6). The caller MUST controlled-fatal on a non-empty
+// return -- printing broken evidence and continuing would launder a false
+// closure.
 //
 // `U_stage` MUST be the pristine production history (before any halo/sanitize
 // mutation) so the FP64 closure reproduces it. All output goes to std::cerr
 // (WRF routes cerr to rsl.error.0000).
-inline void emit_stage_history_diag(
-    int timestep,
+inline std::string emit_stage_history_diag(
+    int step_seq,
+    int global_timestep,
     int target_stage,
     float dt,
     const torch::Tensor& U_n,
@@ -86,8 +97,11 @@ inline void emit_stage_history_diag(
     const std::vector<StageDefectSnapshot>& defects) {
     torch::NoGradGuard no_grad;
 
-    const std::string tag = "dt=" + std::to_string(static_cast<int>(dt)) +
-                            " timestep=" + std::to_string(timestep) +
+    char dtbuf[32];
+    std::snprintf(dtbuf, sizeof(dtbuf), "%.9e", static_cast<double>(dt));
+    const std::string tag = std::string("dt=") + dtbuf +
+                            " step_seq=" + std::to_string(step_seq) +
+                            " global_timestep=" + std::to_string(global_timestep) +
                             " target_stage=" + std::to_string(target_stage) +
                             " iter=0";
 
@@ -148,15 +162,29 @@ inline void emit_stage_history_diag(
         std::cerr << os.str() << std::endl;
     }
 
-    // `leaves` is now complete; take stable pointers for the closure and the
-    // full name set for the inventory validator.
+    // `leaves` is now complete; take stable pointers for the closure.
     std::vector<const torch::Tensor*> closure_leaves;
-    std::vector<std::string> known_names;
     closure_leaves.reserve(leaves.size());
-    known_names.reserve(leaves.size());
-    for (const auto& l : leaves) {
-        closure_leaves.push_back(&l.tensor);
-        known_names.push_back(l.name);
+    for (const auto& l : leaves) closure_leaves.push_back(&l.tensor);
+
+    // The EXPECTED inventory MUST be derived from an AUTHORITATIVE source that is
+    // independent of the observed `sources` -- here the target stage itself. An
+    // ESDIRK ARK history for target stage i is composed of exactly the lower
+    // stages j = 1..i-1, each contributing one explicit and one implicit
+    // increment (zero-coefficient stages included, as zero tensors). Building
+    // `required` from `sources` (as an earlier fix did) would let an OMITTED
+    // source stage look valid: the dropped leaf would simply not be in `required`
+    // either, so the "missing" check would have nothing to fire on (Codex
+    // stop-gate). With the set fixed by target_stage and passed as `required`
+    // (validate gates missing/duplicate/undefined on `required`, unknown on
+    // `required U optional`), a dropped, duplicated, undefined, or mislabeled
+    // source stage -- or a stray leaf -- now fails closed.
+    std::vector<std::string> required;
+    required.reserve(static_cast<size_t>(target_stage > 0 ? target_stage : 1) * 2);
+    required.push_back("U_n");
+    for (int j = 1; j < target_stage; ++j) {
+        required.push_back("expl_incr_s" + std::to_string(j));
+        required.push_back("impl_incr_s" + std::to_string(j));
     }
 
     // FP64 closure: U_n + sum_j (expl_incr_j + impl_incr_j) == U_stage ?
@@ -164,7 +192,7 @@ inline void emit_stage_history_diag(
     // one authority.
     ClosureResult closure = closure_of(closure_leaves, U_stage);
     const std::string inventory =
-        validate_stage_operand_inventory(leaves, /*required=*/{}, known_names);
+        validate_stage_operand_inventory(leaves, required, /*optional=*/{});
 
     double u_n_norm = U_n.defined()
                           ? U_n.detach().to(torch::kFloat64).norm().item<double>()
@@ -201,6 +229,27 @@ inline void emit_stage_history_diag(
            << " explicit=" << (d.explicit_stage ? 1 : 0);
         std::cerr << os.str() << std::endl;
     }
+
+    // HARD GATE (PR 9E Commit A): the diagnostic evidence must itself be sound.
+    // A broken inventory (missing/duplicate/undefined/unknown/non-finite leaf) or
+    // a history that does not reconstruct the production U_stage means the
+    // measurement is wrong; continuing would launder a false closure. Print the
+    // specific failure marker and return a non-empty reason for the caller to
+    // controlled-fatal on.
+    if (!inventory.empty()) {
+        std::cerr << "[SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE] " << tag
+                  << " inventory=" << inventory << std::endl;
+        return "SDIRK3_STAGE_OPERAND_CAPTURE_INCOMPLETE: " + inventory;
+    }
+    if (!closure.finite || closure.rel_err > 1e-6) {
+        char rb[96];
+        std::snprintf(rb, sizeof(rb), "rel_err=%.6e finite=%d",
+                      closure.rel_err, closure.finite ? 1 : 0);
+        std::cerr << "[SDIRK3_STAGE_OPERAND_CLOSURE_FAILED] " << tag << " " << rb
+                  << std::endl;
+        return std::string("SDIRK3_STAGE_OPERAND_CLOSURE_FAILED: ") + rb;
+    }
+    return std::string();
 }
 
 }  // namespace sdirk3
