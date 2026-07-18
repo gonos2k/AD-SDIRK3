@@ -83,6 +83,28 @@ struct StageDefectSnapshot {
     bool explicit_stage = false;       // ESDIRK first stage: convergence NOT APPLICABLE
 };
 
+// Where the {K, F, R} triple was observed. Unobserved is the default -- a defect
+// record that never captured a residual evaluation for the RETURNED stage value
+// fails closed rather than reusing a stale/foreign snapshot.
+enum class DefectEvaluationPoint { Unobserved = 0, ResidualEval = 1 };
+
+// The COHERENT Newton-defect tensors for ONE implicit stage solve, captured at a
+// single residual evaluation (K, F=F_fast(K), R=K-F, all detached at the same
+// point). `returned_K` is the stage value the caller actually returned/used; the
+// authority check requires K == returned_K so the F/R provably belong to the
+// returned evaluation point and not a later trust-region/step update. This carries
+// TENSORS (not caller scalars) so the emitter is the norm authority.
+struct StageDefectTensorSnapshot {
+    int stage = -1;
+    int retry_generation = -1;
+    int newton_iter = -1;
+    DefectEvaluationPoint point = DefectEvaluationPoint::Unobserved;
+    torch::Tensor K;           // implicit stage value at the residual evaluation
+    torch::Tensor F;           // F_fast(K) at that evaluation
+    torch::Tensor R;           // K - F at that evaluation (coherent by construction)
+    torch::Tensor returned_K;  // the stage value the caller returned (must equal K)
+};
+
 // One source stage's contribution to the target stage's ARK history.
 struct StageHistorySource {
     int stage = -1;                    // 1-based source stage id (j+1)
@@ -129,6 +151,57 @@ inline std::string check_stage_operand_structure(
         if (t->scalar_type() != ref.scalar_type())
             return std::string("SDIRK3_STAGE_OPERAND_DTYPE_MISMATCH: ") + name;
     }
+    return std::string();
+}
+
+// AUTHORITATIVE Newton-defect coherence check (PR 9F, P1-4). The scalar defect
+// telemetry (final_defect_l2_raw etc.) is computed by the solver and is NOT an
+// independent authority: nothing proves the stored F/R were evaluated at the K the
+// solve actually returned (a trust-region/recovery step can update K after F/R were
+// stored). This check derives every number DIRECTLY from the captured tensors and
+// pins them to the returned stage value:
+//   - point must be ResidualEval (an Unobserved record -> DEFECT_UNOBSERVED)
+//   - K/F/R/returned_K structurally sound (defined, 1-D, same shape/device/dtype)
+//   - ||K - returned_K|| == 0 EXACTLY: the F/R belong to the RETURNED evaluation
+//     point (else DEFECT_UNOBSERVED -- the returned K was never residual-evaluated)
+//   - ||K - F - R|| == 0 EXACTLY: the triple is internally coherent (R was defined
+//     as K-F in the same float32 evaluation, so this is bit-exact, not a tolerance)
+// Outputs (optional) the tensor-derived defect ||R||, closure, and ratio ||R||/||K||
+// for the caller to cross-check against its scalar telemetry. Returns "" when
+// coherent, else a stable marker string.
+inline std::string validate_stage_defect_tensor(
+    const StageDefectTensorSnapshot& s,
+    double* out_defect_norm = nullptr,
+    double* out_closure = nullptr,
+    double* out_ratio = nullptr) {
+    if (out_defect_norm) *out_defect_norm = -1.0;
+    if (out_closure) *out_closure = -1.0;
+    if (out_ratio) *out_ratio = -1.0;
+    const std::string sid = "s" + std::to_string(s.stage);
+    if (s.point != DefectEvaluationPoint::ResidualEval)
+        return "SDIRK3_STAGE_OPERAND_DEFECT_UNOBSERVED: no residual evaluation captured (" + sid + ")";
+    std::string sr = check_stage_operand_structure(
+        s.K, "defect_K",
+        {{"defect_F", &s.F}, {"defect_R", &s.R}, {"returned_K", &s.returned_K}});
+    if (!sr.empty()) return sr;
+    torch::NoGradGuard no_grad;
+    // Correspondence + coherence in the NATIVE float32 the solve used: R was
+    // defined as K-F in float32, so both differences are bit-exact zero when sound.
+    double k_return_mismatch = (s.K - s.returned_K).abs().max().item<double>();
+    if (!std::isfinite(k_return_mismatch) || k_return_mismatch > 0.0)
+        return "SDIRK3_STAGE_OPERAND_DEFECT_UNOBSERVED: captured K != returned K (" + sid + ")";
+    double closure = (s.K - s.F - s.R).abs().max().item<double>();
+    // norms in float64 for a faithful report (does not affect the exact gates).
+    double defect = s.R.to(torch::kFloat64).norm().item<double>();
+    double kn = s.K.to(torch::kFloat64).norm().item<double>();
+    double ratio = defect / std::max(kn, 1e-300);
+    if (out_defect_norm) *out_defect_norm = defect;
+    if (out_closure) *out_closure = closure;
+    if (out_ratio) *out_ratio = ratio;
+    if (!std::isfinite(closure) || !std::isfinite(defect) || !std::isfinite(ratio))
+        return "SDIRK3_STAGE_OPERAND_DEFECT_NONFINITE: " + sid;
+    if (closure > 0.0)
+        return "SDIRK3_STAGE_OPERAND_DEFECT_INCOHERENT: ||K-F-R|| != 0 (" + sid + ")";
     return std::string();
 }
 

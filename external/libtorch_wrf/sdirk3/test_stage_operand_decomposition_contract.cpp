@@ -709,7 +709,61 @@ int main() {
               "(no last_stage_converged_ pollution)");
     }
 
-    const int kExpected = 59;  // ratchet: update deliberately with the cases
+    // (26) coherent Newton-defect tensor authority (P1-4): the {K,F,R} triple must
+    //      be internally coherent (||K-F-R||==0) AND belong to the stage value the
+    //      solve returned (K==returned_K) -- both derived by the emitter FROM THE
+    //      TENSORS, never a caller scalar. A stale/foreign or incoherent triple
+    //      fails closed.
+    {
+        auto K = rnd({6}, 4.0f, 0.3f);
+        auto F = rnd({6}, 1.5f, 0.9f);
+        auto R = K - F;  // coherent, bit-exact in float32
+        auto make = [&](DefectEvaluationPoint p) {
+            StageDefectTensorSnapshot s;
+            s.stage = 2;
+            s.retry_generation = 1;
+            s.newton_iter = 0;
+            s.point = p;
+            s.K = K;
+            s.F = F;
+            s.R = R;
+            s.returned_K = K;
+            return s;
+        };
+        double defect = -1, closure = -1, ratio = -1;
+        check(validate_stage_defect_tensor(make(DefectEvaluationPoint::ResidualEval),
+                                           &defect, &closure, &ratio)
+                  .empty(),
+              "case26: coherent {K,F,R} + K==returned_K passes");
+        check(closure == 0.0 && defect > 0.0 && ratio > 0.0,
+              "case26: emitter derives ||K-F-R||==0 and ||R||>0 from the tensors");
+        check(validate_stage_defect_tensor(make(DefectEvaluationPoint::Unobserved))
+                  .find("DEFECT_UNOBSERVED") != std::string::npos,
+              "case26: unobserved point -> DEFECT_UNOBSERVED");
+        auto mism = make(DefectEvaluationPoint::ResidualEval);
+        mism.returned_K = K + rnd({6}, 0.01f, 0.1f);  // F/R from a different point
+        check(validate_stage_defect_tensor(mism).find("DEFECT_UNOBSERVED") !=
+                  std::string::npos,
+              "case26: captured K != returned K -> DEFECT_UNOBSERVED");
+        auto inc = make(DefectEvaluationPoint::ResidualEval);
+        inc.R = R + rnd({6}, 0.5f, 0.2f);  // ||K-F-R|| != 0
+        check(validate_stage_defect_tensor(inc).find("DEFECT_INCOHERENT") !=
+                  std::string::npos,
+              "case26: ||K-F-R|| != 0 -> DEFECT_INCOHERENT");
+        auto badshape = make(DefectEvaluationPoint::ResidualEval);
+        badshape.F = rnd({5}, 1.5f, 0.9f);  // wrong length
+        check(validate_stage_defect_tensor(badshape).find("SHAPE_MISMATCH") !=
+                  std::string::npos,
+              "case26: mismatched-length F -> SHAPE_MISMATCH");
+        auto nanr = make(DefectEvaluationPoint::ResidualEval);
+        auto rnan = R.clone();
+        rnan.index_put_({0}, std::nan(""));
+        nanr.R = rnan;  // non-finite closure/defect
+        check(!validate_stage_defect_tensor(nanr).empty(),
+              "case26: non-finite R rejected (NONFINITE)");
+    }
+
+    const int kExpected = 66;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

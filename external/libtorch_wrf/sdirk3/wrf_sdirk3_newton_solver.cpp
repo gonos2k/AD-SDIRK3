@@ -3405,6 +3405,14 @@ public:
     // get_stats(), so no GPU->CPU transfer happens per Newton iteration.
     torch::Tensor diag_final_F_;
     torch::Tensor diag_final_R_;
+    // PR 9F (diagnosis-only): the stage value K captured at the SAME residual
+    // evaluation as diag_final_F_/R_, so {K, F, R} is a coherent triple, plus its
+    // evaluation-point identifiers. diag_solve_generation_ increments once per
+    // solve_stage entry so a retry gets a distinct generation.
+    torch::Tensor diag_final_K_;
+    int diag_final_newton_iter_ = -1;
+    int diag_retry_generation_ = -1;
+    int diag_solve_generation_ = 0;
     WRFPreconditioner* preconditioner_ = nullptr;
     int mu_size_ = 0;  // Size of mu component for SDIRK3
     
@@ -3789,6 +3797,13 @@ public:
         // at the residual site below; norms materialized once in get_stats().
         diag_final_F_ = torch::Tensor();
         diag_final_R_ = torch::Tensor();
+        diag_final_K_ = torch::Tensor();
+        diag_final_newton_iter_ = -1;
+        diag_retry_generation_ = -1;
+        // A fresh generation for THIS solve attempt (a stage retry re-enters here
+        // and gets the next generation), so a stale triple from a prior attempt
+        // can never be mistaken for this one.
+        ++diag_solve_generation_;
 
         // FIX Round156: Gate entry debug with debug_level >= 2
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -4798,8 +4813,16 @@ public:
             // ZERO extra RHS evaluations.
             if (wrf::sdirk3::g_sdirk3_config.stage_operand_diag &&
                 (stage == 2 || stage == 3)) {
+                // Capture the COHERENT triple: R was just defined as K - F in this
+                // exact float32 evaluation, so {K, F, R} share one evaluation point
+                // and K - F - R == 0 bit-exactly. The last accepted iteration's
+                // write wins; the emitter later verifies this K equals the K the
+                // solve actually returns (else DEFECT_UNOBSERVED).
                 diag_final_F_ = F.detach();
                 diag_final_R_ = R.detach();
+                diag_final_K_ = K.detach();
+                diag_final_newton_iter_ = newton_iter;
+                diag_retry_generation_ = diag_solve_generation_;
             }
 
             // DIAGNOSTIC: Per-variable residual decomposition (debug_level >= 2)
@@ -8667,6 +8690,20 @@ sdirk3::WRFNewtonKrylovSolver::ConvergenceStats sdirk3::WRFNewtonKrylovSolver::g
         s.final_fast_rhs_norm = pImpl->diag_final_F_.norm().item<float>();
         s.final_defect_l2_raw = pImpl->diag_final_R_.norm().item<float>();
     }
+    // PR 9F: hand back the coherent {K, F, R} triple and its evaluation-point
+    // identifiers. CLONE (once per stage solve, here -- NOT per Newton iteration)
+    // so the caller can hold an IMMUTABLE snapshot across later stage solves that
+    // reuse the solver's K/F/R buffers; the emitter, not this scalar path, is the
+    // norm authority. Empty / -1 when the diagnostic was off.
+    if (pImpl->diag_final_K_.defined() && pImpl->diag_final_F_.defined() &&
+        pImpl->diag_final_R_.defined()) {
+        torch::NoGradGuard no_grad;
+        s.defect_K = pImpl->diag_final_K_.clone();
+        s.defect_F = pImpl->diag_final_F_.clone();
+        s.defect_R = pImpl->diag_final_R_.clone();
+    }
+    s.defect_newton_iter = pImpl->diag_final_newton_iter_;
+    s.defect_retry_generation = pImpl->diag_retry_generation_;
     return s;
 }
 
