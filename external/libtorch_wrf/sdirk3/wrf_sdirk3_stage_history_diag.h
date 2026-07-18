@@ -43,12 +43,27 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <mutex>
 #include <sstream>
 #include <string>
 #include <vector>
 
 namespace wrf {
 namespace sdirk3 {
+
+// PR 9F P2: every machine-readable Stage-operand line is LINE-ATOMIC. Each line is
+// composed in a local ostringstream (so std::scientific / std::setprecision touch
+// ONLY the local stream, never the shared std::cerr formatting state) and written
+// in ONE call under a process-global mutex, so concurrent emitters (threads/tiles)
+// can never interleave characters within a line. This mirrors the solver's
+// NEWTON_DIAG / FGMRES_DIAG emit_stage_diag pattern. The mutex is a function-local
+// static inside an inline function, so there is exactly ONE instance across every
+// translation unit that includes this header.
+inline void emit_sdirk3_diag_line(const std::string& line) {
+    static std::mutex mtx;
+    std::lock_guard<std::mutex> lock(mtx);
+    std::cerr << line;
+}
 
 // Canonical "not applicable" sentinel for the Newton-convergence fields of an
 // EXPLICIT ESDIRK stage. An explicit stage runs NO Newton solve, so f_fast /
@@ -255,8 +270,8 @@ inline std::string emit_stage_applied_delta_diag(
                             " target_stage=" + std::to_string(target_stage) +
                             " iter=0";
     auto fail = [&](const std::string& detail) -> std::string {
-        std::cerr << "[SDIRK3_STAGE_OPERAND_ATTRIBUTION_FAILED] " << tag << " "
-                  << detail << std::endl;
+        emit_sdirk3_diag_line("[SDIRK3_STAGE_OPERAND_ATTRIBUTION_FAILED] " + tag +
+                              " " + detail + "\n");
         return "SDIRK3_STAGE_OPERAND_ATTRIBUTION_FAILED: " + detail;
     };
 
@@ -283,8 +298,7 @@ inline std::string emit_stage_applied_delta_diag(
                 (pos == std::string::npos) ? sr : sr.substr(0, pos);
             const std::string detail =
                 (pos == std::string::npos) ? std::string() : sr.substr(pos + 2);
-            std::cerr << "[" << marker << "] " << tag << " " << detail
-                      << std::endl;
+            emit_sdirk3_diag_line("[" + marker + "] " + tag + " " + detail + "\n");
             return sr;
         }
     }
@@ -385,7 +399,7 @@ inline std::string emit_stage_applied_delta_diag(
             return fail(rb);
         }
     }
-    for (const auto& line : diag_lines) std::cerr << line << std::endl;
+    for (const auto& line : diag_lines) emit_sdirk3_diag_line(line + "\n");
     return std::string();
 }
 
@@ -529,8 +543,7 @@ inline std::string emit_stage_history_diag(
                 (pos == std::string::npos) ? sr : sr.substr(0, pos);
             const std::string detail =
                 (pos == std::string::npos) ? std::string() : sr.substr(pos + 2);
-            std::cerr << "[" << marker << "] " << tag << " " << detail
-                      << std::endl;
+            emit_sdirk3_diag_line("[" + marker + "] " + tag + " " + detail + "\n");
             return sr;
         }
     }
@@ -661,7 +674,8 @@ inline std::string emit_stage_history_diag(
     // ---- PHASE 3: GATE. On ANY failure print ONLY the failure marker and return;
     // NO success-form STAGE_HISTORY_* record is emitted for a rejected capture. ----
     auto fail = [&](const char* marker, const std::string& detail) -> std::string {
-        std::cerr << "[" << marker << "] " << tag << " " << detail << std::endl;
+        emit_sdirk3_diag_line(std::string("[") + marker + "] " + tag + " " +
+                              detail + "\n");
         return std::string(marker) + ": " + detail;
     };
     if (!inventory.empty())
@@ -681,7 +695,7 @@ inline std::string emit_stage_history_diag(
     }
 
     // ---- PHASE 4: all authorities passed -> emit the SUCCESS records ----
-    for (const auto& line : diag_lines) std::cerr << line << std::endl;
+    for (const auto& line : diag_lines) emit_sdirk3_diag_line(line + "\n");
     {
         std::ostringstream os;
         os << "[SDIRK3_STAGE_HISTORY_SUMMARY] " << tag << std::scientific
@@ -696,7 +710,7 @@ inline std::string emit_stage_history_diag(
            << " U_n_norm=" << u_n_norm
            << " U_stage_norm=" << u_stage_norm
            << " inventory=OK defect=OK";
-        std::cerr << os.str() << std::endl;
+        emit_sdirk3_diag_line(os.str() + "\n");
     }
     for (const auto& d : defects) {
         std::ostringstream os;
@@ -717,7 +731,7 @@ inline std::string emit_stage_history_diag(
                << " scaled_final_residual=" << d.scaled_final_residual
                << " converged=" << (d.converged ? 1 : 0);
         }
-        std::cerr << os.str() << std::endl;
+        emit_sdirk3_diag_line(os.str() + "\n");
     }
     return std::string();
 }

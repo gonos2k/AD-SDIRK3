@@ -815,7 +815,42 @@ int main() {
               "case27: same source on mutated live tensors fails (clone mattered)");
     }
 
-    const int kExpected = 68;  // ratchet: update deliberately with the cases
+    // (28) line-atomic output helper (P2): emit_sdirk3_diag_line writes the exact
+    //      line, and concurrent emitters never interleave characters within a line
+    //      (mirrors the solver's NEWTON/FGMRES diag serialization).
+    {
+        std::ostringstream cap;
+        auto* old = std::cerr.rdbuf(cap.rdbuf());
+        emit_sdirk3_diag_line("[SDIRK3_TEST] a=1 b=2\n");
+        std::cerr.rdbuf(old);
+        check(cap.str() == "[SDIRK3_TEST] a=1 b=2\n",
+              "case28: emit_sdirk3_diag_line writes the exact line");
+
+        std::ostringstream cap2;
+        auto* old2 = std::cerr.rdbuf(cap2.rdbuf());
+        {
+            std::vector<std::thread> ts;
+            for (int t = 0; t < 8; ++t)
+                ts.emplace_back([] {
+                    for (int i = 0; i < 50; ++i)
+                        emit_sdirk3_diag_line("[SDIRK3_TEST] LINE_MARK end\n");
+                });
+            for (auto& th : ts) th.join();
+        }
+        std::cerr.rdbuf(old2);
+        std::istringstream iss(cap2.str());
+        std::string ln;
+        int n = 0;
+        bool all_intact = true;
+        while (std::getline(iss, ln)) {
+            ++n;
+            if (ln != "[SDIRK3_TEST] LINE_MARK end") all_intact = false;
+        }
+        check(n == 400 && all_intact,
+              "case28: 8x50 concurrent lines all intact (no interleaving)");
+    }
+
+    const int kExpected = 70;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

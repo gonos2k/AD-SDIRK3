@@ -52,6 +52,7 @@
 #include "wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "wrf_sdirk3_rw_term_capture.h"  // PR 9B: rw term bisection
 #include "wrf_sdirk3_autograd_utils.h"
+#include "wrf_sdirk3_stage_history_diag.h"  // PR 9F P2: shared emit_sdirk3_diag_line
 #include "wrf_sdirk3_unified_preconditioner.h"  // v20.5: For set_stage_state()
 #include <torch/torch.h>
 #include <iostream>
@@ -192,14 +193,14 @@ static inline bool stage_diag_enabled() {
 // std::defaultfloat manipulate ONLY the local stream, never the global
 // std::cerr formatting state — and written in one call under a
 // process-global mutex, so concurrent emitters cannot interleave characters
-// within a line.
-static std::mutex g_stage_diag_output_mutex;
+// within a line. PR 9F P2: the write is delegated to the shared
+// wrf::sdirk3::emit_sdirk3_diag_line so NEWTON/FGMRES and the stage-operand
+// markers serialize on ONE process-global mutex (no cross-marker interleaving).
 template <typename Build>
 static inline void emit_stage_diag(Build&& build) {
     std::ostringstream oss;
     build(oss);
-    std::lock_guard<std::mutex> lock(g_stage_diag_output_mutex);
-    std::cerr << oss.str();
+    wrf::sdirk3::emit_sdirk3_diag_line(oss.str());
 }
 
 // Finite check for a diagnostic record: detached, no-grad, single sync.
