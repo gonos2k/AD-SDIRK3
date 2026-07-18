@@ -113,8 +113,25 @@ The parity W-damping STRENGTH is WRF's module constant `w_alpha = 0.3`
 (`share/module_model_constants.F:88`), fixed as `kWrfWAlpha` in
 `wrf_sdirk3_w_damping.h` — WRF exposes no namelist for it, so neither do we.
 The legacy `sdirk3_w_damp_alpha` knob is a NON-PARITY tuning input: it no
-longer feeds the parity RHS term (it still feeds the preconditioner's legacy
-damping mirror, whose consistency is the PR 9D scope).
+longer feeds the parity RHS term. Since PR 9D it no longer feeds any physical
+preconditioner diagonal either (see below).
+
+**W-damping preconditioner policy (PR 9D)**: the WRF-parity W-damping term's
+smooth-region tangent flows through `ww`/`mu` (`calc_ww_cp` → rw tendency);
+the physical `w` enters only through the hard SIGN, whose derivative is 0 away
+from `w == 0` (proven by `WDamp_Tangent_Contract`'s pure-`w` case, which
+measures an exactly zero production tangent). The term therefore has **no
+direct W-diagonal Jacobian** in the smooth region, so the preconditioner's
+physical W direct diagonal is **always 0** — an enabled RHS W-damping term is
+never mirrored as a scalar onto the W diagonal. The only scalar W diagonal is
+`precond_extra_wdamp`, which **is an explicit, deliberately non-operator
+regularization. It does not mirror the WRF W-damping Jacobian.** It is gated
+solely on `precond_extra_wdamp` (independent of `implicit_wdamp`,
+`precond_match_rhs`, or IMEX scope) and consumes `w_damp_alpha` only when set;
+config dumps report `source=extra_regularization` when it is active. The real
+smooth Jacobian is the `u/v/mu → rw` cross-block, which a 1-D W diagonal
+cannot represent and a scalar `alpha` does not approximate — implementing that
+cross-block preconditioner is separate, out-of-scope design work.
 
 The enabled parity path requires the complete `calc_ww_cp` geometry
 (`c1h/c2h`, `msftx`, `msfuy`, `msfvx`) AND a supported lateral-boundary

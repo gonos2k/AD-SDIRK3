@@ -26,6 +26,7 @@
 #include "wrf_sdirk3_unified_preconditioner.h"
 #include "wrf_sdirk3_unified_rhs.h"
 #include "wrf_sdirk3_config.h"
+#include "wrf_sdirk3_wdamp_preconditioner_policy.h"  // PR 9D: W-damping precond policy
 #include <cstddef>  // for size_t
 #include <iomanip>  // for std::setprecision, std::fixed, cerr flags save/restore
 #include "wrf_sdirk3_profiler.h"
@@ -526,10 +527,28 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         (config.precond_extra_vdiff ? 8 : 0) |
         (config.precond_extra_divergence ? 16 : 0)
     );
+    // PR 9D: record the W-damping policy fingerprint at build time. Resolved
+    // here so an invalid explicit alpha fails at construction; the signature
+    // drives rebuilds (see needsCoefficientRebuild).
+    cached_wdamp_signature_ =
+        wrf::sdirk3::wdamp_preconditioner_signature(
+            wrf::sdirk3::resolve_wdamp_preconditioner_policy(config));
+
+    // PR 9D: the W-damping operator/preconditioner policy. The WRF-parity
+    // W-damping term has NO direct W-diagonal Jacobian in the smooth region
+    // (its tangent flows through ww/mu; the physical w enters only through the
+    // hard SIGN, ∂/∂w = 0 away from w==0 — proven by WDamp_Tangent_Contract's
+    // pure-w case). So the physical W diagonal is ALWAYS 0: an enabled RHS
+    // W-damping term is NEVER mirrored as a scalar onto the W diagonal. The
+    // scalar w_damp_alpha reaches the W diagonal ONLY as an EXPLICIT
+    // precond_extra_wdamp regularization (a deliberate non-operator enrichment
+    // of M), independent of implicit_wdamp / precond_match_rhs / scope.
+    const auto wdamp_policy = resolve_wdamp_preconditioner_policy(config);
+    const bool wdamp_extra_regularization = wdamp_policy.extra_regularization;
+    const float wdamp_extra_diag = wdamp_policy.extra_regularization_alpha;
 
     // Effective per-term gates: start from config.implicit_*, then apply scope gating
     bool eff_rayleigh = config.implicit_rayleigh;
-    bool eff_wdamp = config.implicit_wdamp;
     bool eff_vdiff = config.implicit_vdiff;
     bool eff_divergence = config.implicit_divergence;
 
@@ -538,15 +557,14 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         // Preconditioner should approximate J_fast only.
         //
         // Slow-only terms (in do_explicit): Rayleigh, vdiff → exclude by default.
-        // Fast terms (in do_implicit): W-damp, divergence → keep by default.
+        // Fast terms (in do_implicit): divergence → keep by default.
         // precond_extra_*: force-include a term even if scope would exclude it.
         //
-        // Logic: eff_X = (scope keeps it ? config.implicit_X : false) || precond_extra_X
-        // For slow terms (Rayleigh, vdiff): scope excludes → eff = extra only
-        // For fast terms (wdamp, divergence): scope keeps → eff = implicit || extra
+        // (W-damping is NOT in this gate: it has no physical W diagonal — see
+        // wdamp_policy above — so scope gating never adds a W scalar. The only
+        // W scalar is wdamp_extra_diag, gated solely on precond_extra_wdamp.)
         eff_rayleigh = config.precond_extra_rayleigh;   // slow → excluded unless forced
         eff_vdiff = config.precond_extra_vdiff;         // slow → excluded unless forced
-        eff_wdamp = config.implicit_wdamp || config.precond_extra_wdamp;       // fast → keep or force
         eff_divergence = config.implicit_divergence || config.precond_extra_divergence; // fast → keep or force
     }
 
@@ -560,11 +578,17 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         if (kvdif > 0.0f) std::cerr << "  - Vertical diffusion: kvdif=" << kvdif << std::endl;
         if (config.precond_match_rhs && precond_scope >= 1) {
             std::cerr << "  IMEX scope gating (mode=" << precond_scope << "): rayleigh="
-                      << (eff_rayleigh ? "on" : "OFF") << " wdamp="
-                      << (eff_wdamp ? "on" : "OFF") << " vdiff="
+                      << (eff_rayleigh ? "on" : "OFF") << " vdiff="
                       << (eff_vdiff ? "on" : "OFF") << " divergence="
                       << (eff_divergence ? "on" : "OFF") << std::endl;
         }
+        // PR 9D: W-damping has no physical W diagonal; report only the explicit
+        // regularization state (source=extra_regularization when present).
+        std::cerr << "  wdamp: physical_w_direct_diag=0 extra_regularization="
+                  << (wdamp_extra_regularization ? "on" : "OFF");
+        if (wdamp_extra_regularization)
+            std::cerr << " source=extra_regularization extra_alpha=" << wdamp_extra_diag;
+        std::cerr << std::endl;
     }
 
     // DEBUG 2026-02-05: Track constructor crash location
@@ -989,8 +1013,10 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
             ray_damp_val = rayleigh_coef * z_frac * z_frac;
         }
 
-        // W-damping and vertical diffusion coefficients
-        float w_damp_val = w_damp_alpha;
+        // PR 9D: the ONLY W-damping diagonal contribution is the explicit
+        // precond_extra_wdamp regularization (0 unless opted in). There is no
+        // physical W-damping diagonal — see wdamp_policy above.
+        float w_damp_val = wdamp_extra_diag;
         float vdiff_val = kvdif * dz_w_inv2;
 
         // Combined operator with selective implicit treatment (accumulate as scalar)
@@ -1008,8 +1034,9 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         if (eff_rayleigh) {
             diag_contrib += ray_damp_val;
         }
-        if (eff_wdamp) {
-            diag_contrib += w_damp_val;
+        // PR 9D: scalar W diagonal only when an explicit regularization is set.
+        if (wdamp_extra_diag != 0.0f) {
+            diag_contrib += wdamp_extra_diag;
         }
         if (eff_vdiff) {
             diag_contrib += vdiff_val;
@@ -1021,7 +1048,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
             if (config.implicit_acoustic) std::cerr << "    Acoustic (c_s²/dz²): " << acoustic_val << std::endl;
             if (config.implicit_gravity) std::cerr << "    Gravity (N²/dz²): " << gravity_val << std::endl;
             if (eff_rayleigh) std::cerr << "    Rayleigh damping: " << ray_damp_val << std::endl;
-            if (eff_wdamp) std::cerr << "    W-damping: " << w_damp_val << std::endl;
+            if (wdamp_extra_diag != 0.0f) std::cerr << "    W-damping extra regularization: " << wdamp_extra_diag << std::endl;
             if (eff_vdiff) std::cerr << "    Vertical diffusion: " << vdiff_val << std::endl;
             std::cerr << "    TOTAL raw: " << diag_contrib << std::endl;
         }
@@ -4688,6 +4715,16 @@ void UnifiedPreconditioner::update(const torch::Tensor& state, float dt, float g
     );
     bool flags_changed = (current_flags != cached_precond_flags_);
 
+    // PR 9D: the W-damping policy fingerprint. The bitmask above already flips
+    // on a precond_extra_wdamp toggle; this additionally catches a w_damp_alpha
+    // change while the extra regularization is ON (normalized_extra_alpha is 0
+    // when extra is OFF, so an alpha change with extra OFF does NOT rebuild).
+    auto current_wdamp_signature =
+        wrf::sdirk3::wdamp_preconditioner_signature(
+            wrf::sdirk3::resolve_wdamp_preconditioner_policy(config));
+    bool wdamp_signature_changed =
+        (current_wdamp_signature != cached_wdamp_signature_);
+
     // v20.14: Detect external tuning parameter changes.
     // When override is active, theta is controlled by the adaptive setter.
     // If the user explicitly writes config theta (via set_config_float), the config
@@ -4716,7 +4753,7 @@ void UnifiedPreconditioner::update(const torch::Tensor& state, float dt, float g
     bool dw_floor_changed = (std::abs(config.precond_dw_nosboost_floor - cached_dw_nosboost_floor_) > 1e-8f);
     bool tuning_changed = w_boost_changed || theta_tuning_changed || uv_vfrac_changed || coupling_scale_changed || dw_floor_changed;
 
-    if (dt_changed || base_state_changed || scalar_cache_invalidated || scope_changed || flags_changed || tuning_changed) {
+    if (dt_changed || base_state_changed || scalar_cache_invalidated || scope_changed || flags_changed || wdamp_signature_changed || tuning_changed) {
         if (dt_changed) {
             dt_ = dt;
             gamma_ = gamma;

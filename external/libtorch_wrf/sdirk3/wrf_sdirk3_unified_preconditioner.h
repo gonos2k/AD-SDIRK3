@@ -5,7 +5,9 @@
 #include <memory>
 #include <cstdint>
 #include <atomic>  // OPT Pass33+: For diagnostic sampling counter
+#include <limits>  // PR 9D: sentinel NaN for the W-damping policy signature
 #include "wrf_sdirk3_newton_solver.h"
+#include "wrf_sdirk3_wdamp_preconditioner_policy.h"  // PR 9D: WdampPreconditionerSignature
 
 namespace wrf {
 namespace sdirk3 {
@@ -246,6 +248,14 @@ private:
     // bit 0: precond_match_rhs, bits 1-4: precond_extra_{rayleigh,wdamp,vdiff,divergence}
     // bit 5: precond_coupled_phi_w (v20.14 Phase 2)
     uint8_t cached_precond_flags_ = 0xFF;  // 0xFF = sentinel (never matches initial config)
+    // PR 9D: W-damping policy fingerprint. The bitmask above already captures
+    // the precond_extra_wdamp toggle; this additionally captures a w_damp_alpha
+    // change WHILE the extra regularization is on (normalized_extra_alpha is 0
+    // when extra is off, so an alpha change with extra OFF is a no-op) and the
+    // rhs_config_enabled state (telemetry). Sentinel true/true/NaN never
+    // matches the first resolved policy, forcing an initial build.
+    wrf::sdirk3::WdampPreconditionerSignature cached_wdamp_signature_{
+        true, true, std::numeric_limits<float>::quiet_NaN()};
 
     // =========================================================================
     // OPT Pass33+: DIAGNOSTIC SAMPLING COUNTERS (INDEPENDENT)
