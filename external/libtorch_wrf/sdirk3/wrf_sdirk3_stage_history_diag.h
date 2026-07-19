@@ -128,10 +128,15 @@ inline bool sdirk3_rhs_count_enabled() {
 // touching the atomic, so the disabled-path guarantee holds at one site.
 inline void sdirk3_rhs_count_tick() {
     if (!sdirk3_rhs_count_enabled()) return;   // default path: no atomic RMW
-    sdirk3_rhs_call_counter().fetch_add(1, std::memory_order_relaxed);
+    // seq_cst, not relaxed: see sdirk3_sample_overlap_after_total. The overlap
+    // argument needs ONE total order over the counter, the sweep sequence and the
+    // depth, so a reader that observes another sweep's RHS contribution is
+    // guaranteed to observe that sweep's sequence bump too. The cost lands only on
+    // runs that opted into counting; the default path returns above.
+    sdirk3_rhs_call_counter().fetch_add(1, std::memory_order_seq_cst);
 }
 inline long long sdirk3_rhs_count_value() {
-    return sdirk3_rhs_call_counter().load(std::memory_order_relaxed);
+    return sdirk3_rhs_call_counter().load(std::memory_order_seq_cst);
 }
 
 // Monotonic sweep identifier, so begin/end records can be PAIRED rather than merely
@@ -142,7 +147,7 @@ inline std::atomic<long long>& sdirk3_rhs_sweep_seq_atomic() {
     return seq;
 }
 inline long long sdirk3_next_rhs_sweep_seq() {
-    return sdirk3_rhs_sweep_seq_atomic().fetch_add(1, std::memory_order_relaxed);
+    return sdirk3_rhs_sweep_seq_atomic().fetch_add(1, std::memory_order_seq_cst);
 }
 
 // Number of sweeps currently in flight. The per-sweep delta is computed from a
@@ -195,10 +200,27 @@ inline bool sdirk3_sweep_overlapped(bool concurrent_at_entry,
 //     invisible to the earlier seq read -> a contaminated delta reported CLEAN.
 //
 // The name encodes the requirement so the two reads cannot be transposed at the call
-// site without the mistake being obvious. The fence stops the compiler and CPU from
-// undoing the ordering that relaxed loads would otherwise permit; both loads are
-// seq_cst for the same reason. All of this is inside the enabled-only path, so the
-// default path pays nothing for it.
+// site without the mistake being obvious.
+//
+// Sequencing the two READS is necessary but NOT sufficient. The argument is
+// cross-thread, so every participant must share one total order -- the counter, the
+// sweep sequence, and the depth are therefore all seq_cst, on the WRITE side as well.
+// An earlier version fenced only the reads and left the increments relaxed, which
+// left the argument unsound: with relaxed writes there is no ordering between another
+// sweep's sequence bump and its subsequent counter increments, so a reader could
+// observe that sweep's RHS contribution in `total` while missing its bump in `seq`,
+// and report a contaminated delta as clean -- precisely the hole this guard exists to
+// close.
+//
+// With seq_cst throughout: if our `total` read observes a foreign counter increment,
+// that increment precedes our read in the single total order; the foreign sweep's
+// sequence bump precedes its own counter increments; and our `seq` read follows our
+// `total` read. Transitively the foreign bump precedes our `seq` read, so we see it.
+//
+// All of it is inside the enabled-only path -- the default path returns before every
+// one of these operations, so it pays nothing. A run that opted into counting pays
+// full barriers on the RHS funnel, which is the correct trade: the point of that run
+// is trustworthy evidence, not speed.
 inline bool sdirk3_sample_overlap_after_total(bool concurrent_at_entry,
                                               long long my_seq) {
     std::atomic_thread_fence(std::memory_order_seq_cst);
@@ -249,7 +271,7 @@ public:
           // Non-zero prior depth means another sweep was already in flight, so this
           // delta cannot be attributed to this sweep alone.
           concurrent_(enabled_ &&
-                      sdirk3_rhs_sweep_depth().fetch_add(1, std::memory_order_relaxed) != 0) {
+                      sdirk3_rhs_sweep_depth().fetch_add(1, std::memory_order_seq_cst) != 0) {
         if (enabled_) emit_sdirk3_rhs_count("begin", seq_, start_, -1, concurrent_);
     }
     ~Sdirk3RhsSweepScope() {
@@ -270,7 +292,7 @@ public:
             emit_sdirk3_rhs_count("end", seq_, total, total - start_, overlapped);
         } catch (...) {
         }
-        sdirk3_rhs_sweep_depth().fetch_sub(1, std::memory_order_relaxed);
+        sdirk3_rhs_sweep_depth().fetch_sub(1, std::memory_order_seq_cst);
     }
     Sdirk3RhsSweepScope(const Sdirk3RhsSweepScope&) = delete;
     Sdirk3RhsSweepScope& operator=(const Sdirk3RhsSweepScope&) = delete;
