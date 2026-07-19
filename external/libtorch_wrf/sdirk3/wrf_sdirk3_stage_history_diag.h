@@ -35,6 +35,7 @@
 // carried alongside as a cross-reference column, NOT mixed into the raw defect.
 // The per-block raw/scaled/halo decomposition is Commit 3's job.
 #include "wrf_sdirk3_stage_operand_capture.h"
+#include "wrf_sdirk3_mpi_safety.h"   // sdirk3_set_pre_abort_hook (PR 9F.3)
 #include <torch/torch.h>
 #include <algorithm>
 #include <atomic>
@@ -172,16 +173,28 @@ inline long long sdirk3_rhs_run_total() {
 // a controlled fatal terminates -- deliberately leaves NO end record: the harness
 // treats a missing run-end as a failure, so an aborted run can never be read as
 // having proven the zero-extra property.
-struct Sdirk3RhsRunTotalEmitter {
-    ~Sdirk3RhsRunTotalEmitter() {
-        try {
-            if (!sdirk3_rhs_count_enabled()) return;
-            std::ostringstream os;
-            os << "SDIRK3_RHS_RUN_TOTAL phase=end total=" << sdirk3_rhs_run_total();
-            emit_sdirk3_diag_line(os.str() + "\n");
-        } catch (...) {
-        }
+// Publishes the closing run total exactly once, from whichever exit happens first.
+// Idempotent because BOTH exits can occur in principle and a duplicate end record
+// is itself a harness failure (duplicate_seq-style), so double-emission would turn
+// a good run red.
+inline void sdirk3_rhs_run_emit_end_once() noexcept {
+    static std::atomic<bool> emitted{false};
+    try {
+        if (!sdirk3_rhs_count_enabled()) return;
+        if (emitted.exchange(true, std::memory_order_relaxed)) return;
+        std::ostringstream os;
+        os << "SDIRK3_RHS_RUN_TOTAL phase=end total=" << sdirk3_rhs_run_total();
+        emit_sdirk3_diag_line(os.str() + "\n");
+    } catch (...) {
     }
+}
+
+// Covers the CLEAN exits. A controlled fatal never reaches here -- MPI_Abort and
+// std::abort run no static destructors -- which is why the pre-abort hook below
+// exists. Registering only this one would make the closing record unreachable on
+// precisely the aborting runs the acceptance harness measures.
+struct Sdirk3RhsRunTotalEmitter {
+    ~Sdirk3RhsRunTotalEmitter() { sdirk3_rhs_run_emit_end_once(); }
 };
 // Registers the exit emitter and publishes the opening total, exactly once.
 inline void sdirk3_rhs_run_register_once() {
@@ -192,7 +205,8 @@ inline void sdirk3_rhs_run_register_once() {
         emit_sdirk3_diag_line(os.str() + "\n");
         return true;
     }();
-    static Sdirk3RhsRunTotalEmitter emitter;   // destructor runs at process exit
+    static Sdirk3RhsRunTotalEmitter emitter;   // clean-exit path
+    mpi_safety::sdirk3_set_pre_abort_hook(&sdirk3_rhs_run_emit_end_once);  // fatal path
     (void)done;
 }
 

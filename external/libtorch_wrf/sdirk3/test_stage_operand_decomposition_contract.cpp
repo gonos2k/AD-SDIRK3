@@ -74,6 +74,16 @@ static int run_child_mode(const char* mode) {
         wrf::sdirk3::sdirk3_rhs_count_tick();
         return 0;   // BOTH records must carry concurrent=1
     }
+    if (std::strcmp(mode, "abort") == 0) {
+        // The exit path the acceptance run actually takes. A controlled fatal ends
+        // in MPI_Abort/std::abort, which run NO static destructors -- so if the
+        // closing run total is only emitted from one, it is structurally
+        // unreachable here and the harness gate could only ever fail.
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::mpi_safety::abort_c_abi_exception("child_abort_mode",
+                                                       "deliberate controlled fatal");
+    }
     if (std::strcmp(mode, "no-sweep") == 0) {
         // RHS calls with no sweep open at all: invisible to the sweep table, which
         // is precisely why the whole-run total exists.
@@ -1235,7 +1245,27 @@ int main(int argc, char** argv) {
               "case39: ...but the whole-run total still counts them");
     }
 
-    const int kExpected = 110;  // ratchet: update deliberately with the cases
+    // ---- case40: the closing run total survives a CONTROLLED FATAL -------------
+    // This is the exit the dt=600 acceptance run actually takes. MPI_Abort and
+    // std::abort run no static destructors and no atexit handlers, so an
+    // exit-handler-only emitter makes the closing record structurally unreachable
+    // on precisely the runs being measured -- and the harness gate that requires it
+    // could then only ever fail. The pre-abort hook is what closes that.
+    {
+        const std::string out = capture_child(argv[0], "abort");
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=begin total=0") != std::string::npos,
+              "case40: aborting child still opens the whole-run total");
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=2") != std::string::npos,
+              "case40: aborting child EMITS the closing run total before dying "
+              "(static destructors never run through MPI_Abort/std::abort)");
+        check(out.find("SDIRK3_C_ABI_EXCEPTION") != std::string::npos,
+              "case40: ...and the controlled-fatal marker is still emitted");
+        check(count_occurrences(out, "SDIRK3_RHS_RUN_TOTAL phase=end") == 1,
+              "case40: exactly one closing record -- the emit is idempotent across "
+              "the fatal hook and the exit handler");
+    }
+
+    const int kExpected = 114;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

@@ -658,8 +658,31 @@ inline void initializeMPISafety() {
 bool is_mpi_baseline_thread() noexcept;
 int mpi_baseline_thread_level() noexcept;
 
+// PR 9F.3: hook invoked immediately before a controlled fatal terminates the
+// process. A controlled fatal ends in MPI_Abort and/or std::abort, and NEITHER
+// runs static destructors or atexit handlers -- so any diagnostic that must
+// publish a closing record has to publish it here or never. The RHS whole-run
+// total registers itself; without this the closing record is structurally
+// unreachable on exactly the runs the acceptance harness measures, and its gate
+// could only ever fail.
+//
+// Deliberately a raw function pointer set once, not an owning callable: this runs
+// on the fatal path where allocation and locking are unsafe.
+inline std::atomic<void (*)()>& sdirk3_pre_abort_hook() {
+    static std::atomic<void (*)()> hook{nullptr};
+    return hook;
+}
+inline void sdirk3_set_pre_abort_hook(void (*fn)()) {
+    sdirk3_pre_abort_hook().store(fn, std::memory_order_relaxed);
+}
+
 [[noreturn]] inline void abort_c_abi_exception(const char* entry,
                                                const char* detail) noexcept {
+    // Publish any pending closing diagnostics BEFORE the abort, while stderr is
+    // still ours. The hook is noexcept by contract and must not allocate.
+    if (auto hook = sdirk3_pre_abort_hook().load(std::memory_order_relaxed)) {
+        hook();
+    }
     std::fprintf(stderr, "SDIRK3_C_ABI_EXCEPTION: %s: %s\n",
                  entry, detail ? detail : "unknown exception");
     std::fflush(stderr);
