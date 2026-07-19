@@ -157,7 +157,13 @@ struct StageDefectTensorSnapshot {
     torch::Tensor K;           // implicit stage value at the residual evaluation
     torch::Tensor F;           // F_fast(K) at that evaluation
     torch::Tensor R;           // K - F at that evaluation (coherent by construction)
-    torch::Tensor returned_K;  // the stage value the caller returned (must equal K)
+    torch::Tensor returned_K;  // the stage value the SOLVER returned (must equal K)
+    // PR 9F.1: the stage derivative the ARK history actually consumes, i.e.
+    // k_fast[stage-1] AFTER every post-solve transform. The Newton defect is
+    // evaluated at returned_K, which is captured BEFORE those transforms, so these
+    // are different objects whenever a transform fires. Supplying it lets the
+    // emitter MEASURE the gap instead of silently mixing the two.
+    torch::Tensor final_k;
 };
 
 // PR 9F.1: the AUTHORITATIVE per-source defect numbers, derived BY THE EMITTER from
@@ -180,6 +186,15 @@ struct DerivedDefectRecord {
     double ratio = kDefectNA;       // ||R|| / max(||K||, eps)
     double closure = kDefectNA;     // ||K - F - R||  (exactly 0 when coherent)
     bool observed = false;          // true ONLY after every tensor gate passed
+    // PR 9F.1 evaluation-point semantics. The defect is evaluated at the SOLVER's
+    // returned K (pre-postprocess). The ARK history consumes k_fast AFTER the
+    // post-solve transforms. postprocess_delta_max = ||final_k - returned_K||_inf
+    // measures the gap; postprocess_applied says whether a transform actually fired.
+    // Publishing both makes the boundary explicit instead of mixing a pre-transform
+    // defect with a post-transform k_norm in one record.
+    double postprocess_delta_max = kDefectNA;
+    bool postprocess_applied = false;
+    bool final_k_observed = false;
 };
 
 // One source stage's contribution to the target stage's ARK history. k_slow /
@@ -298,12 +313,32 @@ inline std::string validate_stage_defect_tensor(
         return "SDIRK3_STAGE_OPERAND_DEFECT_NONFINITE: " + sid;
     if (closure > 0.0)
         return "SDIRK3_STAGE_OPERAND_DEFECT_INCOHERENT: ||K-F-R|| != 0 (" + sid + ")";
+    // PR 9F.1: MEASURE the pre/post-postprocess boundary rather than mixing it. The
+    // defect above is evaluated at the solver-returned K; the ARK history consumes
+    // final_k (k_fast after the post-solve transforms). If a transform fired, these
+    // differ, and the record must say so explicitly.
+    double post_delta = kDefectNA;
+    bool post_applied = false;
+    bool final_k_seen = false;
+    if (s.final_k.defined() && s.final_k.numel() > 0) {
+        std::string fr = check_stage_operand_structure(s.K, "defect_K",
+                                                       {{"final_k", &s.final_k}});
+        if (!fr.empty()) return fr;
+        post_delta = (s.final_k - s.returned_K).abs().max().item<double>();
+        if (!std::isfinite(post_delta))
+            return "SDIRK3_STAGE_OPERAND_DEFECT_NONFINITE: postprocess_delta (" + sid + ")";
+        post_applied = (post_delta > 0.0);
+        final_k_seen = true;
+    }
     if (out_record) {
         out_record->k_norm = kn;
         out_record->f_norm = fn;
         out_record->defect_norm = defect;
         out_record->ratio = ratio;
         out_record->closure = closure;
+        out_record->postprocess_delta_max = post_delta;
+        out_record->postprocess_applied = post_applied;
+        out_record->final_k_observed = final_k_seen;
         out_record->observed = true;   // set ONLY after every gate above passed
     }
     return std::string();
@@ -888,6 +923,14 @@ inline std::string emit_stage_history_diag(
             // demoted to explicitly-labelled telemetry_* columns (already
             // cross-checked against these values in PHASE 3).
             os << " defect_eval=tensor"
+               // Evaluation-point semantics, explicit: the defect below is measured
+               // at the SOLVER-returned K (pre-postprocess), while k_norm above is
+               // the POST-postprocess history derivative. postprocess_delta_max is
+               // the measured gap between them (0 when no transform fired).
+               << " defect_eval_point=pre_postprocess"
+               << " postprocess_applied=" << (dr->postprocess_applied ? 1 : 0)
+               << " postprocess_delta_max=" << dr->postprocess_delta_max
+               << " final_k_observed=" << (dr->final_k_observed ? 1 : 0)
                << " f_fast_norm=" << dr->f_norm
                << " newton_defect_norm=" << dr->defect_norm
                << " defect_to_k_ratio=" << dr->ratio

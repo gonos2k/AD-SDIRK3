@@ -967,7 +967,46 @@ int main() {
               "case30: scalar defect disagreeing with tensor -> DEFECT_INCOHERENT");
     }
 
-    const int kExpected = 80;  // ratchet: update deliberately with the cases
+    // (31) PR 9F.1 — pre/post-postprocess K semantics are MEASURED, not mixed.
+    //      The Newton defect is evaluated at the solver-returned K; the ARK history
+    //      consumes k_fast AFTER the post-solve damping transforms. At dt=600 the
+    //      solve does not converge, so that damping DOES fire and the two differ.
+    //      The record must report the measured gap, not silently blend them.
+    {
+        auto K = rnd({12}, 3.0f, 0.25f), F = rnd({12}, 1.1f, 0.75f);
+        auto R = K - F;
+        auto mk = [&](const torch::Tensor& final_k) {
+            StageDefectTensorSnapshot s;
+            s.stage = 2; s.retry_generation = 1; s.newton_iter = 0;
+            s.point = DefectEvaluationPoint::ResidualEval;
+            s.K = K; s.F = F; s.R = R; s.returned_K = K; s.final_k = final_k;
+            return s;
+        };
+        // (a) no post-solve transform: final_k IS the returned K
+        DerivedDefectRecord r0;
+        check(validate_stage_defect_tensor(mk(K), nullptr, nullptr, nullptr, &r0).empty(),
+              "case31: coherent triple with final_k == returned_K passes");
+        check(r0.final_k_observed && !r0.postprocess_applied &&
+                  r0.postprocess_delta_max == 0.0,
+              "case31: no transform -> postprocess_applied=0, delta==0");
+        // (b) a damping transform fired: final_k = 0.5 * returned_K
+        DerivedDefectRecord r1;
+        auto damped = K * 0.5f;
+        check(validate_stage_defect_tensor(mk(damped), nullptr, nullptr, nullptr, &r1).empty(),
+              "case31: damped final_k still passes the coherence gates (defect is "
+              "evaluated at returned_K, which is unchanged)");
+        check(r1.postprocess_applied && r1.postprocess_delta_max > 0.0,
+              "case31: damping fired -> postprocess_applied=1 and delta>0 (MEASURED, "
+              "not silently mixed with the pre-transform defect)");
+        // (c) absent final_k is reported as unobserved rather than assumed equal
+        DerivedDefectRecord r2;
+        check(validate_stage_defect_tensor(mk(torch::Tensor()), nullptr, nullptr,
+                                           nullptr, &r2).empty() &&
+                  !r2.final_k_observed && !r2.postprocess_applied,
+              "case31: absent final_k -> final_k_observed=0 (never assumed identical)");
+    }
+
+    const int kExpected = 85;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

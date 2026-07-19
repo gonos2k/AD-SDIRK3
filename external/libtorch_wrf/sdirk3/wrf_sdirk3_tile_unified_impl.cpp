@@ -8222,6 +8222,14 @@ vertical_coefficients:
                     wrf::sdirk3::StageDefectTensorSnapshot tsnap;
                     if (!explicit_stage) tsnap = last_stage_defect_tensor_;
                     tsnap.stage = stage_id;
+                    // PR 9F.1: hand the emitter the POST-postprocess derivative the
+                    // ARK history actually consumes, so it can MEASURE the gap to the
+                    // solver-returned K the defect was evaluated at (the two differ
+                    // whenever a post-solve damping/sanitize transform fires).
+                    if (!explicit_stage && k_fast[i].defined() && k_fast[i].numel() > 0) {
+                        torch::NoGradGuard no_grad;
+                        tsnap.final_k = k_fast[i].detach().clone();
+                    }
                     stage_operand_defect_tensors.push_back(tsnap);
                     // PR 9F P1-3: birth snapshot of THIS stage's fast derivative,
                     // now finalized (post solve/sanitize/damping), for later stages'
@@ -10158,9 +10166,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_fast_rhs_norm_ = stats.final_fast_rhs_norm;
     last_stage_defect_l2_raw_ = stats.final_defect_l2_raw;
     // PR 9F (diagnosis-only): retain the coherent {K, F, R} defect triple and the
-    // stage value the solver just returned (k, BEFORE any post-solve W-damping at
-    // ~10209), so the record-stage summary proves the F/R belong to THIS returned
-    // stage value (else DEFECT_UNOBSERVED). Fresh each implicit solve.
+    // stage value the solver just returned (k), captured BEFORE every post-solve
+    // transform of k in this function, so the record-stage summary proves the F/R
+    // belong to THIS returned stage value (else DEFECT_UNOBSERVED). Fresh each solve.
+    //
+    // CORRECTED (PR 9F.1): those transforms are the Newton NON-CONVERGENCE damping
+    // (`[NEWTON DAMP]`, k = k*damp) and the rel-R post-damp (k = k*extra_damp) — NOT
+    // "W-damping", which is an unrelated knob (wrf_w_damping, default 0). Both damping
+    // paths are LIVE by default: hard_abort_on_newton_fail defaults false and
+    // stage_damp_rel_threshold is an always-armed float threshold. At the dt=600
+    // operating point the Newton solve does NOT converge, so the damping DOES fire and
+    // the returned k here differs from the final k_fast the ARK history consumes. The
+    // emitter measures that gap (postprocess_delta_max) instead of mixing the two.
     last_stage_defect_tensor_ = wrf::sdirk3::StageDefectTensorSnapshot{};
     if (wrf::sdirk3::g_sdirk3_config.stage_operand_diag &&
         stats.defect_K.defined() && stats.defect_F.defined() &&
