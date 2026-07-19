@@ -850,7 +850,30 @@ int main() {
               "case28: 8x50 concurrent lines all intact (no interleaving)");
     }
 
-    const int kExpected = 70;  // ratchet: update deliberately with the cases
+    // (29) Gemini review hardening: the four Newton fields default to kDefectNA,
+    //      so a partially-populated IMPLICIT snapshot (e.g. the defect was never
+    //      written) FAILS the inventory instead of passing silently on a 0.0 that
+    //      reads as a legitimate zero defect. A fully-defaulted EXPLICIT record
+    //      still passes (all-kDefectNA is exactly its contract).
+    {
+        StageDefectSnapshot expl;  // default-constructed
+        expl.stage = 1;
+        expl.explicit_stage = true;
+        expl.k_norm = 10.0;  // the four Newton fields keep their kDefectNA defaults
+        StageDefectSnapshot partial;
+        partial.stage = 2;
+        partial.explicit_stage = false;
+        partial.k_norm = 10.0;
+        partial.f_fast_norm = 5.0;
+        partial.scaled_final_residual = 0.1;
+        // newton_defect_norm and defect_to_k_ratio deliberately left at default
+        std::string r = validate_stage_defect_inventory({expl, partial}, 3);
+        check(r.find("neg_defect:s2") != std::string::npos,
+              "case29: unset implicit defect defaults to kDefectNA -> neg_defect "
+              "(no silent 0.0 pass); default explicit record still valid");
+    }
+
+    const int kExpected = 71;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

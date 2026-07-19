@@ -72,7 +72,7 @@ inline void emit_sdirk3_diag_line(const std::string& line) {
 // the validator requires it EXACTLY -- so it can never be a manufactured
 // "F_fast == K" that makes the explicit check self-fulfilling (P1-1). A real
 // norm is >= 0, so -1.0 is unreachable by observation and unambiguous.
-static constexpr double kDefectNA = -1.0;
+inline constexpr double kDefectNA = -1.0;
 
 // One prior stage's convergence quality, snapshotted AT that stage's own
 // completion (so it is that stage's value, not a later "last_stage_*" overwrite).
@@ -90,10 +90,15 @@ static constexpr double kDefectNA = -1.0;
 struct StageDefectSnapshot {
     int stage = -1;                    // 1-based source stage id
     double k_norm = 0.0;               // ||k_fast[stage-1]||  (= ||K_final||), raw L2
-    double f_fast_norm = -1.0;         // ||F_fast(U_eval_final)||, raw L2 (kDefectNA = n/a)
-    double newton_defect_norm = 0.0;   // ||K_final - F_fast(U_eval_final)||, raw L2 (kDefectNA = n/a)
-    double defect_to_k_ratio = 0.0;    // newton_defect_norm / max(k_norm, tiny) (kDefectNA = n/a)
-    double scaled_final_residual = -1.0; // solver ||S^-1 R||_rms cross-reference (kDefectNA = n/a)
+    // The four Newton-convergence fields default to kDefectNA, NOT 0.0: a
+    // default-constructed / never-populated IMPLICIT snapshot must FAIL the
+    // inventory (kDefectNA is negative -> neg_* / n-a-mismatch) rather than pass
+    // silently on a 0.0 that reads as a legitimate zero defect. Populated records
+    // overwrite these (explicit -> kDefectNA sentinel; implicit -> observed >= 0).
+    double f_fast_norm = kDefectNA;         // ||F_fast(U_eval_final)||, raw L2 (kDefectNA = n/a)
+    double newton_defect_norm = kDefectNA;  // ||K_final - F_fast(U_eval_final)||, raw L2 (kDefectNA = n/a)
+    double defect_to_k_ratio = kDefectNA;   // newton_defect_norm / max(k_norm, tiny) (kDefectNA = n/a)
+    double scaled_final_residual = kDefectNA; // solver ||S^-1 R||_rms cross-reference (kDefectNA = n/a)
     bool converged = false;            // solver-reported convergence (implicit stages only)
     bool explicit_stage = false;       // ESDIRK first stage: convergence NOT APPLICABLE
 };
