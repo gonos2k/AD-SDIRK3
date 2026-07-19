@@ -113,8 +113,29 @@ struct StageOperandEvidenceBundle {
 // claim "default path unchanged / no synchronisation cost" was false as written.
 // With the gate, an unset WRF_SDIRK3_RHS_COUNT costs one predictable load of a
 // function-local static bool and no write of any kind.
-inline std::atomic<long long>& sdirk3_rhs_call_counter() {
-    static std::atomic<long long> counter{0};
+// PR 9F.2 P1-2: the increment is GATED on the same cached flag that gates emission.
+// The previous version incremented unconditionally and gated only the printing, so
+// the DEFAULT production path paid a read-modify-write per RHS evaluation.
+//
+// PR 9F.2, after Codex review: the counter is THREAD_LOCAL, not a global atomic.
+//
+// The quantity a sweep wants is "how many RHS evaluations did THIS sweep make", and
+// that was never expressible on a process-global counter. RHS evaluations happen at
+// many sites outside any sweep scope -- predictor and k_slow bootstrap before the
+// sweep opens (impl:5768-5861, 6779-6810), post-solve checks after it closes
+// (impl:9828, 10383-10558), and calls from other entry points entirely (impl:34120,
+// 37363). With OpenMP tiles those land in whatever sweep another thread happens to
+// have open, and no amount of memory ordering reveals them: an unregistered call
+// leaves nothing to synchronise with. Three successive fixes (depth sampling, then a
+// sequence-counter discriminator, then seq_cst on every participant) each closed one
+// interleaving and left this one, because the defect was the shared counter itself.
+//
+// thread_local makes the property structural. Each thread accumulates only its own
+// RHS calls, so a sweep's delta cannot absorb another thread's work -- there is no
+// race to reason about, no barrier to get right, and the default path is a plain
+// non-atomic load of a cached bool.
+inline long long& sdirk3_rhs_call_counter() {
+    static thread_local long long counter = 0;
     return counter;
 }
 inline bool sdirk3_rhs_count_enabled() {
@@ -124,111 +145,43 @@ inline bool sdirk3_rhs_count_enabled() {
     }();
     return on;
 }
-// The ONLY place the counter is advanced. Callers must use this rather than
-// touching the atomic, so the disabled-path guarantee holds at one site.
+// The ONLY place the counter is advanced, so the disabled-path guarantee holds at
+// one site. No atomic, no shared line: this is thread-private storage.
 inline void sdirk3_rhs_count_tick() {
-    if (!sdirk3_rhs_count_enabled()) return;   // default path: no atomic RMW
-    // seq_cst, not relaxed: see sdirk3_sample_overlap_after_total. The overlap
-    // argument needs ONE total order over the counter, the sweep sequence and the
-    // depth, so a reader that observes another sweep's RHS contribution is
-    // guaranteed to observe that sweep's sequence bump too. The cost lands only on
-    // runs that opted into counting; the default path returns above.
-    sdirk3_rhs_call_counter().fetch_add(1, std::memory_order_seq_cst);
+    if (!sdirk3_rhs_count_enabled()) return;   // default path: no write at all
+    ++sdirk3_rhs_call_counter();
 }
 inline long long sdirk3_rhs_count_value() {
-    return sdirk3_rhs_call_counter().load(std::memory_order_seq_cst);
+    return sdirk3_rhs_call_counter();
 }
 
-// Monotonic sweep identifier, so begin/end records can be PAIRED rather than merely
-// counted. Only advanced when counting is enabled. Exposed as an atomic (not just a
-// next() call) because the overlap test below has to READ it at sweep exit.
-inline std::atomic<long long>& sdirk3_rhs_sweep_seq_atomic() {
-    static std::atomic<long long> seq{0};
-    return seq;
-}
+// Sweep identifier. This one stays GLOBAL and atomic, because its only job is to
+// make record keys unique across threads so the harness can pair begin/end and
+// reject duplicates. It carries no part of the attribution argument any more.
 inline long long sdirk3_next_rhs_sweep_seq() {
-    return sdirk3_rhs_sweep_seq_atomic().fetch_add(1, std::memory_order_seq_cst);
+    static std::atomic<long long> seq{0};
+    return seq.fetch_add(1, std::memory_order_relaxed);
 }
 
-// Number of sweeps currently in flight. The per-sweep delta is computed from a
-// PROCESS-GLOBAL counter, so it is only attributable to this sweep while it is the
-// only one running. WRF's tile loop is OpenMP-parallel at the Fortran level and
-// unifiedStep is called per tile, so with numtiles>1 several sweeps can overlap and
-// each one's "delta" would silently absorb the others' RHS calls. The stage-operand
-// diagnostic itself requires a single tile, but WRF_SDIRK3_RHS_COUNT is independent
-// of that gate and can be set in a multi-tile run. Rather than leave the
-// single-sweep precondition as an unchecked comment, measure it and mark the record.
-inline std::atomic<int>& sdirk3_rhs_sweep_depth() {
-    static std::atomic<int> depth{0};
+// Same-thread sweep nesting. Cross-thread contamination is now impossible by
+// construction, but a sweep opened inside another sweep ON THE SAME THREAD would
+// still make the inner calls count twice. unifiedStep is not re-entrant, so this is
+// defence-in-depth rather than a known-reachable path -- and it is thread_local, so
+// it costs a non-atomic increment and only when counting is enabled.
+inline int& sdirk3_rhs_sweep_depth() {
+    static thread_local int depth = 0;
     return depth;
 }
 
-// Was this sweep's delta contaminated by another sweep?
-//
-// Sampling the DEPTH at entry and exit alone is insufficient: a sweep that both
-// starts and finishes inside our lifetime drives depth 1 -> 2 -> 1, so entry sees
-// prior-depth 0 and exit sees depth 1 and the overlap is invisible -- while that
-// inner sweep's RHS calls have already been absorbed into our delta. The sequence
-// counter closes it: it is monotonic and advanced once per sweep construction, so
-// if no other sweep began during our lifetime it still reads exactly my_seq + 1.
-//
-// Kept as a PURE function of sampled values, with no atomic access of its own, so
-// the standing contracts can drive every case directly. The enabled-path cache
-// (sdirk3_rhs_count_enabled) initialises false in the unit-test process and cannot
-// be flipped later, so a predicate reachable only through the live scope would not
-// be testable there at all.
-inline bool sdirk3_sweep_overlapped(bool concurrent_at_entry,
-                                    int depth_at_exit,
-                                    long long seq_at_exit,
-                                    long long my_seq) {
-    return concurrent_at_entry
-        || depth_at_exit != 1
-        || seq_at_exit != my_seq + 1;
-}
-
-// Sample the overlap state, and ONLY ever AFTER the caller has already captured the
-// total it is going to report. The order is load-bearing, not stylistic:
-//
-//   total read first, overlap read second (correct)
-//     a foreign sweep that could have contributed to `total` necessarily started
-//     before the later seq read, so its increment is visible -> overlapped=true.
-//     A sweep starting between the two reads did NOT contribute but still trips the
-//     flag: a false positive, which is the fail-closed direction.
-//
-//   overlap read first, total read second (the bug this replaces)
-//     a foreign sweep starting between the two reads contributes to `total` but is
-//     invisible to the earlier seq read -> a contaminated delta reported CLEAN.
-//
-// The name encodes the requirement so the two reads cannot be transposed at the call
-// site without the mistake being obvious.
-//
-// Sequencing the two READS is necessary but NOT sufficient. The argument is
-// cross-thread, so every participant must share one total order -- the counter, the
-// sweep sequence, and the depth are therefore all seq_cst, on the WRITE side as well.
-// An earlier version fenced only the reads and left the increments relaxed, which
-// left the argument unsound: with relaxed writes there is no ordering between another
-// sweep's sequence bump and its subsequent counter increments, so a reader could
-// observe that sweep's RHS contribution in `total` while missing its bump in `seq`,
-// and report a contaminated delta as clean -- precisely the hole this guard exists to
-// close.
-//
-// With seq_cst throughout: if our `total` read observes a foreign counter increment,
-// that increment precedes our read in the single total order; the foreign sweep's
-// sequence bump precedes its own counter increments; and our `seq` read follows our
-// `total` read. Transitively the foreign bump precedes our `seq` read, so we see it.
-//
-// All of it is inside the enabled-only path -- the default path returns before every
-// one of these operations, so it pays nothing. A run that opted into counting pays
-// full barriers on the RHS funnel, which is the correct trade: the point of that run
-// is trustworthy evidence, not speed.
-inline bool sdirk3_sample_overlap_after_total(bool concurrent_at_entry,
-                                              long long my_seq) {
-    std::atomic_thread_fence(std::memory_order_seq_cst);
-    return sdirk3_sweep_overlapped(
-        concurrent_at_entry,
-        sdirk3_rhs_sweep_depth().load(std::memory_order_seq_cst),
-        sdirk3_rhs_sweep_seq_atomic().load(std::memory_order_seq_cst),
-        my_seq);
+// Was this sweep's delta contaminated? With a thread-private counter the only
+// remaining way is same-thread nesting, which both samples below detect: a non-zero
+// prior depth at entry, or a depth other than 1 at exit. Kept as a PURE function of
+// sampled values so the standing contracts can drive every case directly -- the
+// enabled-path cache initialises false in the unit-test process and cannot be
+// flipped, so a predicate reachable only through the live scope would be untestable
+// in that binary.
+inline bool sdirk3_sweep_overlapped(bool nested_at_entry, int depth_at_exit) {
+    return nested_at_entry || depth_at_exit != 1;
 }
 
 // Emit one record in a stable, machine-readable, line-atomic form.
@@ -255,24 +208,20 @@ inline void emit_sdirk3_rhs_count(const char* phase, long long sweep_seq,
 // hand-placed call that a future early-return could bypass.
 class Sdirk3RhsSweepScope {
 public:
-    // EVERY shared-memory access below is behind enabled_, which is a cached
-    // function-local static bool. With WRF_SDIRK3_RHS_COUNT unset this object
-    // constructs and destructs without a single atomic operation of any kind --
-    // no RMW, no load of a shared line. The first version of this guard did the
-    // depth fetch_add unconditionally in the member-init list, re-introducing on a
-    // per-sweep basis exactly the default-path atomic that P1-2 had just removed on
-    // a per-RHS-call basis. Short-circuit && in concurrent_ is what keeps the
-    // fetch_add from running when disabled; do not rewrite it into a statement that
-    // evaluates the atomic first.
+    // EVERY state access below is behind enabled_, a cached function-local static
+    // bool. With WRF_SDIRK3_RHS_COUNT unset this object constructs and destructs
+    // without touching the counter or the depth at all. An earlier version did the
+    // depth increment unconditionally in the member-init list, re-introducing on a
+    // per-sweep basis exactly the default-path cost that P1-2 had just removed on a
+    // per-RHS-call basis -- the short-circuit && is what prevents that, so do not
+    // rewrite it into a statement that evaluates the increment first.
     Sdirk3RhsSweepScope()
         : enabled_(sdirk3_rhs_count_enabled()),
           seq_(enabled_ ? sdirk3_next_rhs_sweep_seq() : -1),
           start_(enabled_ ? sdirk3_rhs_count_value() : 0),
-          // Non-zero prior depth means another sweep was already in flight, so this
-          // delta cannot be attributed to this sweep alone.
-          concurrent_(enabled_ &&
-                      sdirk3_rhs_sweep_depth().fetch_add(1, std::memory_order_seq_cst) != 0) {
-        if (enabled_) emit_sdirk3_rhs_count("begin", seq_, start_, -1, concurrent_);
+          // Non-zero prior depth means a sweep is already open ON THIS THREAD.
+          nested_(enabled_ && sdirk3_rhs_sweep_depth()++ != 0) {
+        if (enabled_) emit_sdirk3_rhs_count("begin", seq_, start_, -1, nested_);
     }
     ~Sdirk3RhsSweepScope() {
         if (!enabled_) return;   // default path: nothing was acquired, nothing to release
@@ -281,18 +230,16 @@ public:
         // missing_end and fails closed on -- silence here degrades to a FAILING gate,
         // never to a passing one.
         try {
-            // ORDER MATTERS: capture the total we are about to report FIRST, then
-            // sample the overlap state. Reading overlap first lets a sweep that
-            // starts between the two reads contribute to `total` while staying
-            // invisible to the earlier seq read -- a contaminated delta reported
-            // clean. See sdirk3_sample_overlap_after_total.
+            // Both reads are thread-private, so there is no interleaving to order
+            // against and no barrier to get right -- the property the previous three
+            // fixes kept failing to establish is now structural.
             const long long total = sdirk3_rhs_count_value();
             const bool overlapped =
-                sdirk3_sample_overlap_after_total(concurrent_, seq_);
+                sdirk3_sweep_overlapped(nested_, sdirk3_rhs_sweep_depth());
             emit_sdirk3_rhs_count("end", seq_, total, total - start_, overlapped);
         } catch (...) {
         }
-        sdirk3_rhs_sweep_depth().fetch_sub(1, std::memory_order_seq_cst);
+        --sdirk3_rhs_sweep_depth();
     }
     Sdirk3RhsSweepScope(const Sdirk3RhsSweepScope&) = delete;
     Sdirk3RhsSweepScope& operator=(const Sdirk3RhsSweepScope&) = delete;
@@ -300,7 +247,7 @@ private:
     bool enabled_;        // declared first: the others' initializers read it
     long long seq_;
     long long start_;
-    bool concurrent_;
+    bool nested_;
 };
 
 // Route one success line either into the transaction (preferred) or straight out

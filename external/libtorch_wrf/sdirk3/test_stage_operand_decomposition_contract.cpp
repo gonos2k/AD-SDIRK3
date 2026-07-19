@@ -1033,44 +1033,61 @@ int main() {
         // concurrency guard incremented it unconditionally in the member-init list --
         // re-introducing per-sweep exactly the default-path atomic RMW that case32
         // removes per-RHS-call. Pin it: disabled construction must not touch depth.
-        check(wrf::sdirk3::sdirk3_rhs_sweep_depth().load(std::memory_order_relaxed) == 0,
+        check(wrf::sdirk3::sdirk3_rhs_sweep_depth() == 0,
               "case33: sweep depth is UNTOUCHED when counting is disabled (no atomic "
               "RMW on the default path, entry or exit)");
         {
             wrf::sdirk3::Sdirk3RhsSweepScope outer;
-            check(wrf::sdirk3::sdirk3_rhs_sweep_depth().load(std::memory_order_relaxed) == 0,
+            check(wrf::sdirk3::sdirk3_rhs_sweep_depth() == 0,
                   "case33: depth stays 0 even DURING a disabled scope lifetime");
         }
     }
 
-    // ---- case34: overlap detection, including the NESTED case ------------------
-    // sdirk3_sweep_overlapped is a pure function of sampled values precisely so it
-    // can be driven here: the enabled-path cache initialises false in this process
-    // (case32/33 above force it), so a predicate reachable only through the live
-    // scope would be untestable in this binary.
-    //
-    // The case that matters is the third one. A sweep nested entirely inside ours
-    // drives depth 1 -> 2 -> 1, so BOTH depth samples look clean while the inner
-    // sweep's RHS calls have already been absorbed into our delta. Only the
-    // sequence counter reveals it. The depth-only predicate this replaces returned
-    // false here, i.e. reported an uncontaminated delta that was contaminated.
+    // ---- case34: same-thread nesting detection ---------------------------------
+    // The counter is thread_local, so cross-thread contamination is impossible by
+    // construction and the predicate only has to catch a sweep nested inside another
+    // ON THE SAME THREAD. Kept as a pure function of sampled values so it is testable
+    // here: the enabled-path cache initialises false in this process (case32/33 force
+    // it), so a predicate reachable only through the live scope would be unreachable.
     {
         using wrf::sdirk3::sdirk3_sweep_overlapped;
-        const long long my = 7;
-        check(!sdirk3_sweep_overlapped(false, 1, my + 1, my),
-              "case34: solitary sweep (depth 1 at exit, seq advanced once) -> clean");
-        check(sdirk3_sweep_overlapped(true, 1, my + 1, my),
-              "case34: another sweep already in flight at entry -> overlapped");
-        check(sdirk3_sweep_overlapped(false, 1, my + 2, my),
-              "case34: NESTED sweep that began AND ended inside our lifetime is "
-              "detected via the sequence counter (both depth samples look clean)");
-        check(sdirk3_sweep_overlapped(false, 2, my + 2, my),
-              "case34: a sweep still open at our exit -> overlapped");
-        check(sdirk3_sweep_overlapped(false, 0, my + 1, my),
-              "case34: impossible depth 0 at exit is treated as overlapped (fail-closed)");
+        check(!sdirk3_sweep_overlapped(false, 1),
+              "case34: solitary sweep (no prior depth, depth 1 at exit) -> clean");
+        check(sdirk3_sweep_overlapped(true, 1),
+              "case34: a sweep already open on this thread at entry -> nested");
+        check(sdirk3_sweep_overlapped(false, 2),
+              "case34: an inner sweep still open at our exit -> nested");
+        check(sdirk3_sweep_overlapped(false, 0),
+              "case34: impossible depth 0 at exit is treated as nested (fail-closed)");
     }
 
-    const int kExpected = 95;  // ratchet: update deliberately with the cases
+    // ---- case35: the counter is thread-private ---------------------------------
+    // This is the property that replaced three failed attempts to make a global
+    // counter attributable. A second thread's RHS calls must not move this thread's
+    // counter at all -- if they do, every per-sweep delta is contaminated again and
+    // no memory ordering can repair it, because RHS calls also occur outside any
+    // sweep scope (predictor/bootstrap before it opens, post-solve checks after it
+    // closes, and other entry points entirely).
+    {
+        const long long before = wrf::sdirk3::sdirk3_rhs_count_value();
+        long long observed_in_thread = -1;
+        std::thread t([&] {
+            for (int i = 0; i < 128; ++i) wrf::sdirk3::sdirk3_rhs_count_tick();
+            observed_in_thread = wrf::sdirk3::sdirk3_rhs_count_value();
+        });
+        t.join();
+        check(wrf::sdirk3::sdirk3_rhs_count_value() == before,
+              "case35: 128 ticks on ANOTHER thread leave this thread's counter "
+              "unchanged (counter is thread-private)");
+        // Counting is disabled in this process, so the other thread's own view must
+        // also be unmoved -- this pins that the disabled gate holds per-thread too,
+        // not just on the thread that first cached the flag.
+        check(observed_in_thread == 0,
+              "case35: the other thread's own counter is also 0 (disabled gate is "
+              "evaluated per thread, not inherited as enabled)");
+    }
+
+    const int kExpected = 96;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);
