@@ -275,6 +275,21 @@ public:
         // PR 9E stage-operand history summary.
         float final_fast_rhs_norm = -1.0f;
         float final_defect_l2_raw = -1.0f;
+        // PR 9F (diagnosis-only): the COHERENT {K, F, R} triple captured
+        // ATOMICALLY at the final residual evaluation (defect_R == defect_K -
+        // defect_F bit-exactly, so ||K-F-R|| == 0 by construction), plus the
+        // evaluation-point identifiers. Populated only under stage_operand_diag at
+        // record stages; empty tensors / -1 otherwise. The stage-operand emitter
+        // computes ||K-F-R||, ||R||, and the ratio DIRECTLY from these tensors
+        // (the scalar norms above are telemetry only) and fails closed
+        // (DEFECT_UNOBSERVED) unless defect_K equals the stage value the caller
+        // actually returned -- i.e. the F/R belong to the returned evaluation
+        // point, not a later trust-region/step update.
+        torch::Tensor defect_K;
+        torch::Tensor defect_F;
+        torch::Tensor defect_R;
+        int defect_newton_iter = -1;
+        int defect_retry_generation = -1;
     };
 
     ConvergenceStats get_stats() const;

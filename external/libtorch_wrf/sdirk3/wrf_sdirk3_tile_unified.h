@@ -21,6 +21,7 @@
 #include "wrf_sdirk3_tensor_cache.h"  // OPT Pass33+: For getThreadLocalTensorViewCache() in invalidateThreadLocalCachesOnly()
 #include "wrf_sdirk3_config.h"  // FIX Round122: For g_sdirk3_config.log_solver_pointer in tls_debug
 #include "wrf_sdirk3_ww_cp.h"   // PR 9C.2: WdampRuntimeContract + boundary policies
+#include "wrf_sdirk3_stage_history_diag.h"  // PR 9F: StageDefectTensorSnapshot
 #include "wrf_sdirk3_ad_halo_exchange.h"  // AD halo exchange for DA mode
 #include "wrf_sdirk3_ad_halo_utils.h"     // Full-halo utilities
 #include <memory>
@@ -1292,6 +1293,11 @@ private:
     // Never affect the solve; consumed only by the stage-operand history summary.
     float last_stage_fast_rhs_norm_ = -1.0f; // ||F_fast(U_eval_final)|| of last stage solve
     float last_stage_defect_l2_raw_ = -1.0f; // ||K_final - F_fast(U_eval_final)|| of last stage solve
+    // PR 9F (diagnosis-only): the coherent {K, F, R} defect triple + returned stage
+    // value of the most recent implicit stage solve (point==Unobserved when the flag
+    // is off or the stage was explicit). Consumed by the record-stage summary, which
+    // fails closed (DEFECT_UNOBSERVED) unless K equals the returned stage value.
+    wrf::sdirk3::StageDefectTensorSnapshot last_stage_defect_tensor_;
     long long stage_operand_diag_step_ = 0;  // monotonic diag step label (advanced only when flag on)
 
     // Last step outcome for ABI-side fail-closed checks.

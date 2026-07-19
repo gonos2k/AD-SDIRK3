@@ -294,18 +294,19 @@ int main() {
         src[0].k_slow = &k_slow;
         src[0].k_fast = &k_fast;
         // target stage 2 expects source stage 1's defect (explicit ESDIRK stage:
-        // defect==0, F_fast ~= K). A valid defect table is now required to pass
-        // the defect-inventory hard gate.
+        // convergence NOT APPLICABLE -> every Newton field is the kDefectNA
+        // sentinel and no converged claim). A valid defect table is now required
+        // to pass the defect-inventory hard gate.
         const double k1n = k_fast.to(torch::kFloat64).norm().item<double>();
         StageDefectSnapshot d1;
         d1.stage = 1;
         d1.explicit_stage = true;
-        d1.converged = true;
+        d1.converged = false;
         d1.k_norm = k1n;
-        d1.f_fast_norm = k1n;
-        d1.newton_defect_norm = 0.0;
-        d1.defect_to_k_ratio = 0.0;
-        d1.scaled_final_residual = 0.0;
+        d1.f_fast_norm = kDefectNA;
+        d1.newton_defect_norm = kDefectNA;
+        d1.defect_to_k_ratio = kDefectNA;
+        d1.scaled_final_residual = kDefectNA;
         std::vector<StageDefectSnapshot> defs{d1};
         std::string ok =
             emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage, src, defs);
@@ -355,12 +356,12 @@ int main() {
         StageDefectSnapshot d1;
         d1.stage = 1;
         d1.explicit_stage = true;
-        d1.converged = true;
+        d1.converged = false;
         d1.k_norm = k1n;
-        d1.f_fast_norm = k1n;
-        d1.newton_defect_norm = 0.0;
-        d1.defect_to_k_ratio = 0.0;
-        d1.scaled_final_residual = 0.0;
+        d1.f_fast_norm = kDefectNA;
+        d1.newton_defect_norm = kDefectNA;
+        d1.defect_to_k_ratio = kDefectNA;
+        d1.scaled_final_residual = kDefectNA;
         std::vector<StageDefectSnapshot> defs{d1};
         std::string r =
             emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage, src, defs);
@@ -374,12 +375,21 @@ int main() {
             StageDefectSnapshot d;
             d.stage = stage;
             d.explicit_stage = expl;
-            d.converged = true;
             d.k_norm = 10.0;
-            d.f_fast_norm = expl ? 10.0 : 5.0;
-            d.newton_defect_norm = expl ? 0.0 : 2.0;
-            d.defect_to_k_ratio = expl ? 0.0 : 0.2;
-            d.scaled_final_residual = expl ? 0.0 : 0.1;
+            if (expl) {
+                // convergence NOT APPLICABLE -> kDefectNA + no converged claim
+                d.converged = false;
+                d.f_fast_norm = kDefectNA;
+                d.newton_defect_norm = kDefectNA;
+                d.defect_to_k_ratio = kDefectNA;
+                d.scaled_final_residual = kDefectNA;
+            } else {
+                d.converged = true;
+                d.f_fast_norm = 5.0;
+                d.newton_defect_norm = 2.0;
+                d.defect_to_k_ratio = 0.2;
+                d.scaled_final_residual = 0.1;
+            }
             return d;
         };
         std::vector<StageDefectSnapshot> okv{good(1, true), good(2, false)};
@@ -412,15 +422,13 @@ int main() {
                   std::string::npos,
               "case18: non-explicit -1 sentinel -> neg_f_fast:s2");
         auto badexpl = good(2, true);  // explicit flag on a non-stage-1 source
-        badexpl.newton_defect_norm = 0.0;
-        badexpl.f_fast_norm = badexpl.k_norm;
         std::vector<StageDefectSnapshot> badexplv{good(1, true), badexpl};
         check(validate_stage_defect_inventory(badexplv, 3).find(
                   "explicit_flag_nonstage1:s2") != std::string::npos,
               "case18: explicit flag on stage 2 -> explicit_flag_nonstage1:s2");
         // stage 1 misflagged as NON-explicit must also fail (the converse) -- it
-        // would otherwise pass the non-explicit branch and skip the defect==0/F==K
-        // explicit constraints entirely.
+        // would otherwise be judged by the implicit contract and dodge the
+        // n/a-sentinel explicit constraints entirely.
         std::vector<StageDefectSnapshot> s1nev{good(1, false), good(2, false)};
         check(validate_stage_defect_inventory(s1nev, 3).find(
                   "stage1_not_explicit:s1") != std::string::npos,
@@ -432,16 +440,15 @@ int main() {
         check(validate_stage_defect_inventory(negkv, 3).find("neg_k_norm:s2") !=
                   std::string::npos,
               "case18: negative k_norm -> neg_k_norm:s2");
-        // non-negativity is UNCONDITIONAL: an explicit stage 1 with a negative
-        // scaled_final_residual must also fail (the explicit branch must not skip
-        // it).
-        auto negsc = good(1, true);
-        negsc.scaled_final_residual = -1.0;
-        std::vector<StageDefectSnapshot> negscv{negsc, good(2, false)};
+        // The implicit role keeps unconditional non-negativity: a non-explicit
+        // stage with a negative scaled_final_residual fails.
+        auto negsc = good(2, false);
+        negsc.scaled_final_residual = -0.5;
+        std::vector<StageDefectSnapshot> negscv{good(1, true), negsc};
         check(validate_stage_defect_inventory(negscv, 3).find(
-                  "neg_scaled_resid:s1") != std::string::npos,
-              "case18: explicit stage-1 negative scaled_final_residual -> "
-              "neg_scaled_resid:s1");
+                  "neg_scaled_resid:s2") != std::string::npos,
+              "case18: implicit negative scaled_final_residual -> "
+              "neg_scaled_resid:s2");
     }
 
     // (19) ordering (P2): a REJECTED capture emits ONLY the failure marker, never
@@ -632,7 +639,241 @@ int main() {
               "case24: FP64 operand -> DTYPE_MISMATCH");
     }
 
-    const int kExpected = 54;  // ratchet: update deliberately with the cases
+    // (25) explicit-stage N/A semantics (P1-1): an explicit ESDIRK stage runs NO
+    //      Newton solve, so convergence is NOT APPLICABLE. Its record must carry
+    //      the kDefectNA sentinel for every Newton field and MUST NOT claim
+    //      converged. The old synthetic record (f_fast forced == k_norm, defect
+    //      == 0, converged copied from the solver's last_stage_converged_) made
+    //      the validator self-fulfilling -- each of those manufactured shapes
+    //      must now FAIL, and the expected value (the sentinel) is INDEPENDENT of
+    //      k_norm, so no norm coincidence can pass it.
+    {
+        auto expl_na = []() {
+            StageDefectSnapshot d;
+            d.stage = 1;
+            d.explicit_stage = true;
+            d.converged = false;
+            d.k_norm = 10.0;
+            d.f_fast_norm = kDefectNA;
+            d.newton_defect_norm = kDefectNA;
+            d.defect_to_k_ratio = kDefectNA;
+            d.scaled_final_residual = kDefectNA;
+            return d;
+        };
+        auto impl2 = []() {
+            StageDefectSnapshot d;
+            d.stage = 2;
+            d.explicit_stage = false;
+            d.converged = true;
+            d.k_norm = 8.0;
+            d.f_fast_norm = 3.0;
+            d.newton_defect_norm = 1.0;
+            d.defect_to_k_ratio = 0.125;
+            d.scaled_final_residual = 0.05;
+            return d;
+        };
+        std::vector<StageDefectSnapshot> okv{expl_na(), impl2()};
+        check(validate_stage_defect_inventory(okv, 3).empty(),
+              "case25: canonical explicit N/A defect record passes");
+        // manufactured f_fast == k_norm (the OLD self-fulfilling value) FAILS:
+        // "F_fast ~= K" is no longer a pass path.
+        auto manuF = expl_na();
+        manuF.f_fast_norm = manuF.k_norm;  // 10.0, not kDefectNA
+        std::vector<StageDefectSnapshot> manuFv{manuF, impl2()};
+        check(validate_stage_defect_inventory(manuFv, 3).find(
+                  "explicit_f_fast_not_na:s1") != std::string::npos,
+              "case25: manufactured f_fast==k_norm -> explicit_f_fast_not_na "
+              "(not self-fulfilling)");
+        // F == -K yields ||F|| == ||K|| just as F == K does; because the contract
+        // is the n/a sentinel (not a norm comparison), it is rejected identically
+        // -- the norm-only trap the reviewer named cannot pass.
+        auto negF = expl_na();
+        negF.f_fast_norm = negF.k_norm;  // ||F||==||K|| regardless of sign
+        check(!validate_stage_defect_inventory({negF, impl2()}, 3).empty(),
+              "case25: ||F||==||K|| explicit record rejected (no norm-only pass)");
+        // synthesized defect == 0 (a real observed 0, not n/a) also fails
+        auto zeroDef = expl_na();
+        zeroDef.newton_defect_norm = 0.0;
+        std::vector<StageDefectSnapshot> zeroDefv{zeroDef, impl2()};
+        check(validate_stage_defect_inventory(zeroDefv, 3).find(
+                  "explicit_defect_not_na:s1") != std::string::npos,
+              "case25: synthesized defect==0 -> explicit_defect_not_na");
+        // converged claim on an explicit record (last_stage_converged_ pollution)
+        // fails -- an explicit stage carries NO convergence verdict.
+        auto polluted = expl_na();
+        polluted.converged = true;
+        std::vector<StageDefectSnapshot> pollv{polluted, impl2()};
+        check(validate_stage_defect_inventory(pollv, 3).find(
+                  "explicit_converged_claim:s1") != std::string::npos,
+              "case25: explicit converged claim -> explicit_converged_claim "
+              "(no last_stage_converged_ pollution)");
+    }
+
+    // (26) coherent Newton-defect tensor authority (P1-4): the {K,F,R} triple must
+    //      be internally coherent (||K-F-R||==0) AND belong to the stage value the
+    //      solve returned (K==returned_K) -- both derived by the emitter FROM THE
+    //      TENSORS, never a caller scalar. A stale/foreign or incoherent triple
+    //      fails closed.
+    {
+        auto K = rnd({6}, 4.0f, 0.3f);
+        auto F = rnd({6}, 1.5f, 0.9f);
+        auto R = K - F;  // coherent, bit-exact in float32
+        auto make = [&](DefectEvaluationPoint p) {
+            StageDefectTensorSnapshot s;
+            s.stage = 2;
+            s.retry_generation = 1;
+            s.newton_iter = 0;
+            s.point = p;
+            s.K = K;
+            s.F = F;
+            s.R = R;
+            s.returned_K = K;
+            return s;
+        };
+        double defect = -1, closure = -1, ratio = -1;
+        check(validate_stage_defect_tensor(make(DefectEvaluationPoint::ResidualEval),
+                                           &defect, &closure, &ratio)
+                  .empty(),
+              "case26: coherent {K,F,R} + K==returned_K passes");
+        check(closure == 0.0 && defect > 0.0 && ratio > 0.0,
+              "case26: emitter derives ||K-F-R||==0 and ||R||>0 from the tensors");
+        check(validate_stage_defect_tensor(make(DefectEvaluationPoint::Unobserved))
+                  .find("DEFECT_UNOBSERVED") != std::string::npos,
+              "case26: unobserved point -> DEFECT_UNOBSERVED");
+        auto mism = make(DefectEvaluationPoint::ResidualEval);
+        mism.returned_K = K + rnd({6}, 0.01f, 0.1f);  // F/R from a different point
+        check(validate_stage_defect_tensor(mism).find("DEFECT_UNOBSERVED") !=
+                  std::string::npos,
+              "case26: captured K != returned K -> DEFECT_UNOBSERVED");
+        auto inc = make(DefectEvaluationPoint::ResidualEval);
+        inc.R = R + rnd({6}, 0.5f, 0.2f);  // ||K-F-R|| != 0
+        check(validate_stage_defect_tensor(inc).find("DEFECT_INCOHERENT") !=
+                  std::string::npos,
+              "case26: ||K-F-R|| != 0 -> DEFECT_INCOHERENT");
+        auto badshape = make(DefectEvaluationPoint::ResidualEval);
+        badshape.F = rnd({5}, 1.5f, 0.9f);  // wrong length
+        check(validate_stage_defect_tensor(badshape).find("SHAPE_MISMATCH") !=
+                  std::string::npos,
+              "case26: mismatched-length F -> SHAPE_MISMATCH");
+        auto nanr = make(DefectEvaluationPoint::ResidualEval);
+        auto rnan = R.clone();
+        rnan.index_put_({0}, std::nan(""));
+        nanr.R = rnan;  // non-finite closure/defect
+        check(!validate_stage_defect_tensor(nanr).empty(),
+              "case26: non-finite R rejected (NONFINITE)");
+    }
+
+    // (27) birth-time immutable source snapshot (P1-3): a source that references a
+    //      DETACHED BIRTH CLONE keeps the value the derivative had at birth even
+    //      after the live derivative is mutated in place, so the provenance closure
+    //      reflects birth -- not the later mutation.
+    {
+        const float dt = 1.0f;
+        auto U_n = rnd({24}, 5.0f, 0.2f);
+        auto k_slow_live = rnd({24}, 2.0f, 0.4f);
+        auto k_fast_live = rnd({24}, 1.0f, 0.6f);
+        auto k_slow_birth = k_slow_live.detach().clone();  // what the tile stores
+        auto k_fast_birth = k_fast_live.detach().clone();
+        auto U_stage = U_n + k_slow_birth + k_fast_birth;  // history from BIRTH values
+        const double k1n = k_fast_birth.to(torch::kFloat64).norm().item<double>();
+        StageDefectSnapshot d1;
+        d1.stage = 1;
+        d1.explicit_stage = true;
+        d1.converged = false;
+        d1.k_norm = k1n;
+        d1.f_fast_norm = kDefectNA;
+        d1.newton_defect_norm = kDefectNA;
+        d1.defect_to_k_ratio = kDefectNA;
+        d1.scaled_final_residual = kDefectNA;
+        std::vector<StageDefectSnapshot> defs{d1};
+        auto mk_src = [&](const torch::Tensor* ks, const torch::Tensor* kf) {
+            std::vector<StageHistorySource> src(1);
+            src[0].stage = 1;
+            src[0].birth_generation = 7;
+            src[0].a_explicit = 1.0;
+            src[0].a_implicit = 1.0;
+            src[0].k_slow = ks;
+            src[0].k_fast = kf;
+            return src;
+        };
+        // CORRUPT the live derivatives in place AFTER birth.
+        {
+            torch::NoGradGuard g;
+            k_slow_live.mul_(3.0f);
+            k_fast_live.add_(7.0f);
+        }
+        // the birth-clone source still closes against U_stage (birth values)
+        check(emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage,
+                                      mk_src(&k_slow_birth, &k_fast_birth), defs)
+                  .empty(),
+              "case27: birth-clone source survives live-derivative mutation");
+        // the SAME source on the MUTATED live tensors fails -- proving the closure
+        // depends on the derivative values, so consuming the clone mattered.
+        check(!emit_stage_history_diag(0, 0, 2, dt, U_n, U_stage,
+                                       mk_src(&k_slow_live, &k_fast_live), defs)
+                   .empty(),
+              "case27: same source on mutated live tensors fails (clone mattered)");
+    }
+
+    // (28) line-atomic output helper (P2): emit_sdirk3_diag_line writes the exact
+    //      line, and concurrent emitters never interleave characters within a line
+    //      (mirrors the solver's NEWTON/FGMRES diag serialization).
+    {
+        std::ostringstream cap;
+        auto* old = std::cerr.rdbuf(cap.rdbuf());
+        emit_sdirk3_diag_line("[SDIRK3_TEST] a=1 b=2\n");
+        std::cerr.rdbuf(old);
+        check(cap.str() == "[SDIRK3_TEST] a=1 b=2\n",
+              "case28: emit_sdirk3_diag_line writes the exact line");
+
+        std::ostringstream cap2;
+        auto* old2 = std::cerr.rdbuf(cap2.rdbuf());
+        {
+            std::vector<std::thread> ts;
+            for (int t = 0; t < 8; ++t)
+                ts.emplace_back([] {
+                    for (int i = 0; i < 50; ++i)
+                        emit_sdirk3_diag_line("[SDIRK3_TEST] LINE_MARK end\n");
+                });
+            for (auto& th : ts) th.join();
+        }
+        std::cerr.rdbuf(old2);
+        std::istringstream iss(cap2.str());
+        std::string ln;
+        int n = 0;
+        bool all_intact = true;
+        while (std::getline(iss, ln)) {
+            ++n;
+            if (ln != "[SDIRK3_TEST] LINE_MARK end") all_intact = false;
+        }
+        check(n == 400 && all_intact,
+              "case28: 8x50 concurrent lines all intact (no interleaving)");
+    }
+
+    // (29) Gemini review hardening: the four Newton fields default to kDefectNA,
+    //      so a partially-populated IMPLICIT snapshot (e.g. the defect was never
+    //      written) FAILS the inventory instead of passing silently on a 0.0 that
+    //      reads as a legitimate zero defect. A fully-defaulted EXPLICIT record
+    //      still passes (all-kDefectNA is exactly its contract).
+    {
+        StageDefectSnapshot expl;  // default-constructed
+        expl.stage = 1;
+        expl.explicit_stage = true;
+        expl.k_norm = 10.0;  // the four Newton fields keep their kDefectNA defaults
+        StageDefectSnapshot partial;
+        partial.stage = 2;
+        partial.explicit_stage = false;
+        partial.k_norm = 10.0;
+        partial.f_fast_norm = 5.0;
+        partial.scaled_final_residual = 0.1;
+        // newton_defect_norm and defect_to_k_ratio deliberately left at default
+        std::string r = validate_stage_defect_inventory({expl, partial}, 3);
+        check(r.find("neg_defect:s2") != std::string::npos,
+              "case29: unset implicit defect defaults to kDefectNA -> neg_defect "
+              "(no silent 0.0 pass); default explicit record still valid");
+    }
+
+    const int kExpected = 71;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

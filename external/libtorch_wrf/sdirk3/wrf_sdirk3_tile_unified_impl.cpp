@@ -7392,6 +7392,16 @@ vertical_coefficients:
             std::vector<torch::Tensor> k_fast(Ark::stages);
             std::vector<torch::Tensor> k_slow(Ark::stages);
             std::vector<torch::Tensor> k_full(Ark::stages);
+            // PR 9F P1-3: BIRTH-time immutable snapshots (detached clones) of each
+            // stage derivative, taken when it is finalized. The record-stage history
+            // sources consume THESE, not the live k_fast/k_slow vectors, so the
+            // recorded provenance is the value each derivative had when born; a later
+            // in-place mutation cannot silently rewrite it (and would be caught by
+            // the closure / applied-delta gate). Populated only under the diag flag.
+            std::vector<torch::Tensor> k_fast_birth(Ark::stages);
+            std::vector<torch::Tensor> k_slow_birth(Ark::stages);
+            std::vector<int> k_birth_generation(Ark::stages, -1);
+            int k_birth_seq = 0;  // monotonic; a stage retry re-births -> new gen
             bool ark_stage_aborted = false;
 
             // Return code: 0=accept, 1=recoverable retry, 2=abort.
@@ -7799,6 +7809,10 @@ vertical_coefficients:
             // re-evaluates an RHS. (stage_operand_diag_on is declared above so
             // compute_stage_rhs can capture the per-source applied deltas.)
             std::vector<wrf::sdirk3::StageDefectSnapshot> stage_operand_defects;
+            // PR 9F P1-4: parallel coherent {K,F,R} defect triples (one per source
+            // stage, same order as stage_operand_defects). Validated at the record
+            // stage as an authoritative, tensor-derived defect-provenance gate.
+            std::vector<wrf::sdirk3::StageDefectTensorSnapshot> stage_operand_defect_tensors;
             int64_t stage_operand_step_label = 0;  // full width; never truncated
             if (stage_operand_diag_on) {
                 // PR 9E Commit A: single-authority topology FAIL-CLOSE. The
@@ -7859,10 +7873,18 @@ vertical_coefficients:
                     for (int j = 0; j < i; ++j) {
                         wrf::sdirk3::StageHistorySource s;
                         s.stage = j + 1;
+                        s.birth_generation = k_birth_generation[j];
                         s.a_explicit = Ark::a_explicit[i][j];
                         s.a_implicit = Ark::a_implicit[i][j];
-                        s.k_slow = &k_slow[j];
-                        s.k_fast = &k_fast[j];
+                        // P1-3: consume the BIRTH snapshot (immutable detached clone
+                        // taken when the derivative was finalized), NOT the live
+                        // k_slow/k_fast vector element. In the current code the
+                        // derivatives are stable after birth so birth == live and
+                        // the gates pass unchanged; if a future in-place mutation
+                        // ever diverged them before the production add, the closure /
+                        // applied-delta gate would fail closed.
+                        s.k_slow = &k_slow_birth[j];
+                        s.k_fast = &k_fast_birth[j];
                         sources.push_back(s);
                     }
                     // 4D-Var trajectory-checkpoint counter (0 in a default run);
@@ -7882,6 +7904,26 @@ vertical_coefficients:
                         wrf::sdirk3::mpi_safety::abort_c_abi_exception(
                             "stage_operand_history_diag",
                             stage_operand_fail.c_str());
+                    }
+
+                    // PR 9F P1-4: AUTHORITATIVE coherent-defect gate. For each
+                    // IMPLICIT source stage, the {K,F,R} triple must be internally
+                    // coherent (||K-F-R||==0) AND belong to the stage value the
+                    // solve returned (K==returned_K) -- computed by the emitter from
+                    // the TENSORS, not the caller's scalar. A missing/incoherent
+                    // triple on an implicit source fails closed (DEFECT_UNOBSERVED),
+                    // so a defect from a different attempt/update point can never be
+                    // laundered as this source's. Explicit stage 1 has no Newton
+                    // defect (convergence n/a) and is skipped.
+                    for (const auto& td : stage_operand_defect_tensors) {
+                        if (td.stage < 1 || td.stage == 1) continue;
+                        std::string defect_fail =
+                            wrf::sdirk3::validate_stage_defect_tensor(td);
+                        if (!defect_fail.empty()) {
+                            wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+                                "stage_operand_defect_tensor",
+                                defect_fail.c_str());
+                        }
                     }
 
                     // PR 9E history-authority C1: AUTHORITATIVE per-source
@@ -8108,7 +8150,6 @@ vertical_coefficients:
                 if (stage_operand_diag_on) {
                     wrf::sdirk3::StageDefectSnapshot snap;
                     snap.stage = stage_id;
-                    snap.converged = last_stage_converged_;
                     {
                         torch::NoGradGuard no_grad;
                         snap.k_norm =
@@ -8121,22 +8162,50 @@ vertical_coefficients:
                         (std::abs(effective_aii) < 1e-14f);
                     snap.explicit_stage = explicit_stage;
                     if (explicit_stage) {
-                        // ESDIRK first stage: k_fast = F_fast(U_stage) exactly and
-                        // U_eval_final == U_stage, so the Newton defect is 0.
-                        snap.f_fast_norm = snap.k_norm;
-                        snap.newton_defect_norm = 0.0;
-                        snap.scaled_final_residual = 0.0;
+                        // ESDIRK first stage: NO Newton solve ran, so convergence
+                        // is NOT APPLICABLE. Record the canonical n/a sentinel for
+                        // every Newton field and DO NOT copy last_stage_converged_
+                        // -- that verdict belongs to a different, implicit stage or
+                        // sweep, and copying it manufactured a fake "converged
+                        // solve" record (with f_fast forced == k_norm, defect == 0)
+                        // that made the validator's explicit check self-fulfilling.
+                        snap.f_fast_norm = wrf::sdirk3::kDefectNA;
+                        snap.newton_defect_norm = wrf::sdirk3::kDefectNA;
+                        snap.scaled_final_residual = wrf::sdirk3::kDefectNA;
+                        snap.defect_to_k_ratio = wrf::sdirk3::kDefectNA;
+                        snap.converged = false;
                     } else {
+                        // Implicit solve: report THIS stage's OWN observed values,
+                        // captured now while last_stage_* still refer to it.
+                        snap.converged = last_stage_converged_;
                         snap.f_fast_norm =
                             static_cast<double>(last_stage_fast_rhs_norm_);
                         snap.newton_defect_norm =
                             static_cast<double>(last_stage_defect_l2_raw_);
                         snap.scaled_final_residual =
                             static_cast<double>(last_stage_residual_);
+                        snap.defect_to_k_ratio =
+                            snap.newton_defect_norm / std::max(snap.k_norm, 1e-300);
                     }
-                    snap.defect_to_k_ratio =
-                        snap.newton_defect_norm / std::max(snap.k_norm, 1e-300);
                     stage_operand_defects.push_back(snap);
+                    // PR 9F P1-4: parallel coherent {K,F,R} tensor snapshot. For an
+                    // EXPLICIT stage there is no Newton solve, so leave it Unobserved
+                    // (its scalar record already declares convergence n/a) -- the
+                    // record-stage gate skips explicit sources. For an implicit
+                    // stage, carry THIS solve's fresh triple (stamped with stage id).
+                    wrf::sdirk3::StageDefectTensorSnapshot tsnap;
+                    if (!explicit_stage) tsnap = last_stage_defect_tensor_;
+                    tsnap.stage = stage_id;
+                    stage_operand_defect_tensors.push_back(tsnap);
+                    // PR 9F P1-3: birth snapshot of THIS stage's fast derivative,
+                    // now finalized (post solve/sanitize/damping), for later stages'
+                    // history sources. A detached clone -- immune to any later
+                    // in-place mutation of the live k_fast[i].
+                    if (k_fast[i].defined() && k_fast[i].numel() > 0) {
+                        torch::NoGradGuard no_grad;
+                        k_fast_birth[i] = k_fast[i].detach().clone();
+                        k_birth_generation[i] = ++k_birth_seq;
+                    }
                 }
 
                 if (stage_id == 1) {
@@ -8175,6 +8244,14 @@ vertical_coefficients:
 
                 k_slow[i] = compute_k_slow(U_conv, U_full_exch_conv);
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_slow", k_slow[i]);
+                // PR 9F P1-3: birth snapshot of THIS stage's slow derivative, now
+                // finalized, for later stages' history sources (detached clone).
+                if (stage_operand_diag_on && k_slow[i].defined() &&
+                    k_slow[i].numel() > 0) {
+                    torch::NoGradGuard no_grad;
+                    k_slow_birth[i] = k_slow[i].detach().clone();
+                    if (k_birth_generation[i] < 0) k_birth_generation[i] = ++k_birth_seq;
+                }
                 k_full[i] = k_fast[i] + k_slow[i];
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_full", k_full[i]);
 
@@ -10054,6 +10131,24 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     // this stage's history-summary snapshot (-1 when stage_operand_diag is off).
     last_stage_fast_rhs_norm_ = stats.final_fast_rhs_norm;
     last_stage_defect_l2_raw_ = stats.final_defect_l2_raw;
+    // PR 9F (diagnosis-only): retain the coherent {K, F, R} defect triple and the
+    // stage value the solver just returned (k, BEFORE any post-solve W-damping at
+    // ~10209), so the record-stage summary proves the F/R belong to THIS returned
+    // stage value (else DEFECT_UNOBSERVED). Fresh each implicit solve.
+    last_stage_defect_tensor_ = wrf::sdirk3::StageDefectTensorSnapshot{};
+    if (wrf::sdirk3::g_sdirk3_config.stage_operand_diag &&
+        stats.defect_K.defined() && stats.defect_F.defined() &&
+        stats.defect_R.defined()) {
+        torch::NoGradGuard no_grad;
+        last_stage_defect_tensor_.retry_generation = stats.defect_retry_generation;
+        last_stage_defect_tensor_.newton_iter = stats.defect_newton_iter;
+        last_stage_defect_tensor_.point =
+            wrf::sdirk3::DefectEvaluationPoint::ResidualEval;
+        last_stage_defect_tensor_.K = stats.defect_K;
+        last_stage_defect_tensor_.F = stats.defect_F;
+        last_stage_defect_tensor_.R = stats.defect_R;
+        last_stage_defect_tensor_.returned_K = k.detach().clone();
+    }
     last_stage_rel_R_full_ = 0.0f;  // reset; updated below by residual re-eval
     last_stage_rel_R_full_raw_ = 0.0f;  // v20.14r41: raw ratio reset
     last_stage_R_full_norm_ = 0.0f; // v20.14r36: reset to prevent stale OR-cap reference
