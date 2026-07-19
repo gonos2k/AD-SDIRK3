@@ -1,0 +1,31 @@
+// PR 9F.5: the whole-run RHS close, exposed to Fortran.
+//
+// Its own translation unit on purpose. Fortran needs a real linkable symbol for
+// BIND(C), so this cannot be a header-only inline; and putting it in the big
+// interface TU would force every consumer -- including the torch-free standing
+// contract binary -- to link the entire solver just to reach a 20-line function.
+//
+// Called at the points that actually decide process termination. MEASURED on the
+// dt=600 path: SDIRK3_C_ABI_EXCEPTION 0, Fortran "FATAL CALLED" 4, closing record 0
+// -- the C++ pre-abort hook and the static destructor are fallbacks for exit classes
+// WRF never takes, so the authority is Fortran and this is how it speaks.
+//
+// Contract: disabled -> 1 (no-op); no begin emitted -> 1 (no-op); valid kind ->
+// frozen end record, 1; repeat with the same kind -> the same frozen record, 1;
+// conflicting kind -> 0. No exception escapes, no MPI call, no allocation, no mutex
+// (workers may run under MPI_THREAD_FUNNELED, and a peer blocked on a lock here
+// would never reach its own fatal).
+#include "wrf_sdirk3_stage_history_diag.h"
+
+extern "C" int sdirk3_rhs_run_close_checked(int exit_kind) noexcept {
+    if (exit_kind != wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN &&
+        exit_kind != wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL) {
+        return 0;
+    }
+    const bool clean = (exit_kind == wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
+    return wrf::sdirk3::sdirk3_rhs_run_close_impl(
+        clean ? wrf::sdirk3::Sdirk3RunExit::Clean
+              : wrf::sdirk3::Sdirk3RunExit::Fatal,
+        clean ? wrf::sdirk3::Sdirk3RunAuthority::FortranFinalize
+              : wrf::sdirk3::Sdirk3RunAuthority::FortranOutcome);
+}

@@ -17,6 +17,8 @@
 
 using namespace wrf::sdirk3;
 
+extern "C" int sdirk3_rhs_run_close_checked(int exit_kind) noexcept;
+
 namespace {
 
 int g_cases = 0, g_fail = 0;
@@ -73,6 +75,33 @@ static int run_child_mode(const char* mode) {
         }
         wrf::sdirk3::sdirk3_rhs_count_tick();
         return 0;   // BOTH records must carry concurrent=1
+    }
+    if (std::strcmp(mode, "authority-frozen") == 0) {
+        // The authority closes first (as Fortran does), then a FALLBACK fires. The
+        // fallback must NOT produce a second, differently-attributed record: the
+        // frozen {exit,total,authority} is re-emitted verbatim or nothing is.
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
+        // now the C++ fallbacks, in both flavours
+        wrf::sdirk3::sdirk3_rhs_run_emit_end_once(wrf::sdirk3::Sdirk3RunExit::Fatal);
+        wrf::sdirk3::sdirk3_rhs_run_emit_end_once(wrf::sdirk3::Sdirk3RunExit::Clean);
+        return 0;
+    }
+    if (std::strcmp(mode, "close-conflict") == 0) {
+        // A second close asking for a DIFFERENT outcome is a wiring bug, and must be
+        // reported rather than silently answered with the first verdict.
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        const int a = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
+        const int b = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
+        std::fprintf(stderr, "CLOSE_RC first=%d second=%d\n", a, b);
+        return 0;
+    }
+    if (std::strcmp(mode, "close-disabled") == 0) {
+        // Contract: with counting disabled the close is a total no-op returning 1.
+        const int rc = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
+        std::fprintf(stderr, "CLOSE_RC disabled=%d\n", rc);
+        return 0;
     }
     if (std::strcmp(mode, "abort") == 0) {
         // The exit path the acceptance run actually takes. A controlled fatal ends
@@ -1270,7 +1299,46 @@ int main(int argc, char** argv) {
               "the fatal hook and the exit handler");
     }
 
-    const int kExpected = 114;  // ratchet: update deliberately with the cases
+    // ---- case41: the authority record is FROZEN against fallbacks ---------------
+    // Three earlier rounds mistook "a closing record exists" for "the production
+    // path works". The authority field makes that checkable, but only if a later
+    // fallback cannot overwrite or contradict it.
+    {
+        const std::string out = capture_child(argv[0], "authority-frozen");
+        check(count_occurrences(out, "SDIRK3_RHS_RUN_TOTAL phase=end") >= 1,
+              "case41: the authority close emits a closing record");
+        check(out.find("exit=fatal authority=fortran_outcome") != std::string::npos,
+              "case41: it is attributed to the FORTRAN authority");
+        check(out.find("authority=cpp_preabort") == std::string::npos &&
+                  out.find("authority=cpp_destructor") == std::string::npos,
+              "case41: later C++ fallbacks do NOT re-attribute the record to "
+              "themselves (frozen authority)");
+        // Every end line must be byte-identical: duplication is tolerated, drift is
+        // not, and a fallback emitting a DIFFERENT total would be drift.
+        check(count_occurrences(out, "phase=end total=2 exit=fatal "
+                                     "authority=fortran_outcome") ==
+                  count_occurrences(out, "SDIRK3_RHS_RUN_TOTAL phase=end"),
+              "case41: every closing record is the same frozen line");
+    }
+
+    // ---- case42: a conflicting second close is reported, not absorbed -----------
+    {
+        const std::string out = capture_child(argv[0], "close-conflict");
+        check(out.find("CLOSE_RC first=1 second=0") != std::string::npos,
+              "case42: closing again with a DIFFERENT exit kind returns 0 (a wiring "
+              "bug is surfaced rather than answered with the first verdict)");
+    }
+
+    // ---- case43: disabled close is a total no-op -------------------------------
+    {
+        const std::string out = capture_child(argv[0], "close-disabled");
+        check(out.find("CLOSE_RC disabled=1") != std::string::npos,
+              "case43: with counting disabled the close returns 1 and emits nothing");
+        check(out.find("SDIRK3_RHS_RUN_TOTAL") == std::string::npos,
+              "case43: ...and no run record is produced at all");
+    }
+
+    const int kExpected = 121;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

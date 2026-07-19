@@ -26,3 +26,4 @@ wrf_sdirk3_rayleigh_damping_ad.cpp
 wrf_sdirk3_mpi_safety_impl.cpp
 wrf_sdirk3_halo_exchange.cpp
 wrf_sdirk3_ad_halo_exchange.cpp
+wrf_sdirk3_rhs_run_close.cpp
