@@ -387,6 +387,17 @@ MODULE module_implicit_sdirk3
       ! PR 7B: explicit rank-halo lifecycle teardown (owned communicator
       ! freed exactly once; fingerprint invalidated; Policy A configuration
       ! lifetime ends). Failures stop with a coordinated abort (void ABI).
+      ! PR 9F.5: whole-run RHS close. WRF terminates through wrf_error_fatal, which
+      ! reaches neither the C++ pre-abort hook nor a static destructor -- MEASURED on
+      ! the dt=600 path (SDIRK3_C_ABI_EXCEPTION 0, "FATAL CALLED" 4, closing record
+      ! 0). Fortran is the exit authority, so Fortran must close the run.
+      FUNCTION sdirk3_rhs_run_close_checked(exit_kind) &
+         BIND(C, name="sdirk3_rhs_run_close_checked") RESULT(status)
+         IMPORT :: C_INT
+         INTEGER(C_INT), VALUE :: exit_kind
+         INTEGER(C_INT) :: status
+      END FUNCTION sdirk3_rhs_run_close_checked
+
       SUBROUTINE sdirk3_halo_finalize() &
          BIND(C, name="sdirk3_halo_finalize")
          USE, INTRINSIC :: ISO_C_BINDING
@@ -880,6 +891,10 @@ CONTAINS
       INTEGER :: r_ips, r_ipe, r_jps, r_jpe, r_kps, r_kpe
       INTEGER(C_INT64_T) :: west_halo, east_halo, south_halo, north_halo
       CHARACTER(LEN=256) :: message
+      ! PR 9F.5: run-close exit kinds, shared with the C++ enum of the same names.
+      INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_EXIT_CLEAN = 0_C_INT
+      INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_EXIT_FATAL = 1_C_INT
+      INTEGER(C_INT) :: rhs_run_close_status
       INTEGER(C_INT) :: step_outcome_rc
       INTEGER(C_INT) :: step_outcome_code
       INTEGER(C_INT) :: step_final_update_aborted
@@ -1071,7 +1086,7 @@ CONTAINS
       !$OMP                     bounds,dims,scalars,bdy_cfg, &
       !$OMP                     step_outcome_rc,step_outcome_code, &
       !$OMP                     step_final_update_aborted,step_progress_ratio_valid, &
-      !$OMP                     step_progress_ratio)
+      !$OMP                     step_progress_ratio,rhs_run_close_status)
       DO ij = 1, grid%num_tiles
          
          ! Get tile bounds
@@ -1325,6 +1340,14 @@ CONTAINS
             tile_solvers(ij), step_outcome_code, step_final_update_aborted, &
             step_progress_ratio, step_progress_ratio_valid)
          IF (step_outcome_rc == 0_C_INT) THEN
+            ! Close the whole-run RHS evidence BEFORE the fatal: wrf_error_fatal does
+            ! not return, and nothing downstream of it runs.
+            rhs_run_close_status = &
+               sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL)
+            IF (rhs_run_close_status /= 1_C_INT) THEN
+               WRITE(0,*) "SDIRK3_RHS_RUN_CLOSE_FAILED: query-failure path"
+               FLUSH(0)
+            END IF
             CALL wrf_error_fatal("SDIRK3: Failed to query zerocopy step outcome")
          END IF
          IF (step_outcome_code >= SDIRK3_STEP_OUTCOME_FATAL_INPUT .OR. &
@@ -1336,6 +1359,15 @@ CONTAINS
                ' progress_ratio=', step_progress_ratio, &
                ' progress_ratio_valid=', step_progress_ratio_valid, &
                ' rk_step=', rk_step
+            ! The measured dt=600 exit. The message is already composed and no RHS
+            ! evaluation happens between here and the fatal, so the frozen total is
+            ! the final value for this run prefix.
+            rhs_run_close_status = &
+               sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL)
+            IF (rhs_run_close_status /= 1_C_INT) THEN
+               WRITE(0,*) "SDIRK3_RHS_RUN_CLOSE_FAILED: fail-closed outcome path"
+               FLUSH(0)
+            END IF
             CALL wrf_error_fatal(TRIM(message))
          END IF
          
@@ -1356,6 +1388,7 @@ CONTAINS
    SUBROUTINE finalize_implicit_sdirk3()
       IMPLICIT NONE
       INTEGER :: ij
+      INTEGER(C_INT) :: rhs_run_close_status
       
       IF (sdirk3_initialized) THEN
          DO ij = 1, max_tiles
@@ -1388,6 +1421,17 @@ CONTAINS
          max_tiles = 0
          
          CALL wrf_message("UNIFIED SDIRK3: Solvers finalized and memory deallocated")
+      END IF
+
+      ! PR 9F.5: the normal lifecycle authority, after every solver and the halo are
+      ! torn down. Outside the sdirk3_initialized block on purpose: with no begin
+      ! record the C++ side is a no-op, so a partial init or a repeated finalize is
+      ! safe, and a run that DID count still gets its clean close.
+      rhs_run_close_status = &
+         sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_CLEAN)
+      IF (rhs_run_close_status /= 1_C_INT) THEN
+         CALL wrf_error_fatal( &
+            "SDIRK3_RHS_RUN_CLOSE_FAILED: normal finalizer path")
       END IF
       
    END SUBROUTINE finalize_implicit_sdirk3

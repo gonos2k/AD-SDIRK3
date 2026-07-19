@@ -1,6 +1,7 @@
 // wrf_sdirk3_tile_unified_interface.cpp
 // Unified SDIRK3 C interface implementation
 
+#include "wrf_sdirk3_stage_history_diag.h"
 #include "wrf_sdirk3_torch_wrapper.h"
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_config.h"  // FIX Round157: For g_sdirk3_config debug_level
@@ -19,6 +20,32 @@ namespace sdirk3 {
 }
 
 extern "C" {
+
+// PR 9F.5: whole-run close, called by Fortran at the points that actually decide
+// process termination. Measured: the dt=600 path emits SDIRK3_C_ABI_EXCEPTION zero
+// times and Fortran's "FATAL CALLED" four times, so the C++-side pre-abort hook and
+// the static destructor are FALLBACKS for exit classes WRF never takes. The
+// authority is Fortran, and this is how it speaks.
+//
+// Contract: disabled -> 1 (no-op); no begin emitted -> 1 (no-op); valid kind ->
+// frozen end record, 1; repeat with the same kind -> the same frozen record, 1;
+// conflicting kind -> 0. No exception escapes, no MPI call, no allocation, no mutex
+// (worker threads may run under MPI_THREAD_FUNNELED, and a peer blocked on a lock
+// here would never reach the fatal).
+int sdirk3_rhs_run_close_checked(int exit_kind) noexcept {
+    if (exit_kind != wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN &&
+        exit_kind != wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL) {
+        return 0;
+    }
+    const auto how = (exit_kind == wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN)
+                         ? wrf::sdirk3::Sdirk3RunExit::Clean
+                         : wrf::sdirk3::Sdirk3RunExit::Fatal;
+    const auto who = (exit_kind == wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN)
+                         ? wrf::sdirk3::Sdirk3RunAuthority::FortranFinalize
+                         : wrf::sdirk3::Sdirk3RunAuthority::FortranOutcome;
+    return wrf::sdirk3::sdirk3_rhs_run_close_impl(how, who);
+}
+
 
 // Create unified solver instance
 // Note: This matches the Fortran call from module_implicit_sdirk3.F which passes rdx, rdy as scalars, rdnw as array
