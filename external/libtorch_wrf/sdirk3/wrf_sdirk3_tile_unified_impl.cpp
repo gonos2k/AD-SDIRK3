@@ -8336,6 +8336,16 @@ vertical_coefficients:
                 }
             }
 
+            // PR 9F.1: second sample point, AFTER all stage work. The start-of-sweep
+            // emit alone is vacuous evidence: it is taken before any RHS evaluation, so
+            // both the OFF and the ON run report total=0 and the "0 extra RHS
+            // evaluations" equality holds trivially -- it could not detect an extra
+            // call. Sampling again here makes the compared interval the sweep itself.
+            // Placed before the abort branch so it fires on BOTH the aborting and the
+            // completing path (dt=600 aborts at stage 3; without this the end sample
+            // would never be reached in the very run the harness measures).
+            wrf::sdirk3::emit_sdirk3_rhs_count("ark_sweep_end");
+
             if (ark_stage_aborted) {
                 final_update_aborted = true;
                 k1 = torch::zeros_like(U_n);

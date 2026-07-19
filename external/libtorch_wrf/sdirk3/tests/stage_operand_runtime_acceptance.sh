@@ -25,6 +25,20 @@
 #     look like a pass.
 #  8. The negative only counted `inventory=OK` lines, ignoring the other success-form
 #     markers (HISTORY_DIAG, APPLIED_DELTA).
+# 10. (found by running it) The RHS counter was sampled ONLY at ark_sweep_start --
+#     before any RHS evaluation -- so both runs emitted `total=0` and the "0 extra RHS
+#     evaluations" diff passed trivially, unable to detect an extra call. The gate was
+#     green and vacuous. Fixed by adding an ark_sweep_end sample (so the compared
+#     interval is the sweep) plus a non-degeneracy gate that fails if no record has
+#     total>0. This is the same false-green class as defect 1: two degenerate values
+#     compared for equality.
+# 10b.(found by Codex reviewing the fix for 10) That first fix was ITSELF vacuous-
+#     capable: the counter is cumulative and process-global, so once an earlier sweep
+#     advances it, a sweep that evaluates NOTHING still reports total>0 at both ends
+#     and "some record has total>0" passes. Only a strict end>start DELTA across one
+#     sweep proves the measured interval contains RHS activity. Lesson: a
+#     non-degeneracy check must be stated over the measured INTERVAL, not over the
+#     absolute value of a cumulative counter.
 #  9. np=2 was recorded as proving the same gate as numtiles=2. It does not: the gate
 #     is (single_rank && tile_covers_patch); numtiles=2 yields single_rank=1,
 #     tile_covers_patch=0 -- only the TILE predicate is exercised.
@@ -68,6 +82,27 @@ gate_success_count()  { cnt "$SUCCESS_FORM" "$1"; }
 gate_fail_count()     { cnt "$FAIL_FAMILY" "$1"; }
 gate_closure_count()  { cnt "$(closure_re "$1")" "$2"; }
 
+# The RHS counter is CUMULATIVE and process-global, so "some record has total>0" is
+# NOT evidence that the measured interval contains any RHS activity: on sweep 2 the
+# ark_sweep_start sample already inherits sweep 1's total, so a sweep that evaluated
+# nothing still reports total>0 at both ends. The property that actually gives the
+# OFF-vs-ON diff teeth is a POSITIVE DELTA across one sweep. Emit 1 iff some
+# ark_sweep_end total strictly exceeds the ark_sweep_start total that preceded it.
+rhs_positive_delta() { # <log>
+  awk '
+    /SDIRK3_RHS_CALLS/ {
+      where=""; total=0
+      for (i = 1; i <= NF; i++) {
+        if ($i ~ /^where=/) where = substr($i, 7)
+        if ($i ~ /^total=/) total = substr($i, 7) + 0
+      }
+      if (where == "ark_sweep_start") { start = total; have = 1 }
+      else if (where == "ark_sweep_end" && have == 1 && total > start) { found = 1; exit }
+    }
+    END { print (found == 1) ? 1 : 0 }
+  ' "$1" 2>/dev/null || echo 0
+}
+
 # =============================================================================
 if [ "${1:-}" = "--self-test" ]; then
   note "== SELF-TEST: prove each gate fires on a bad fixture =="
@@ -79,7 +114,8 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "[SDIRK3_STAGE_HISTORY_SUMMARY] $TAG2 hist_rel=1e-8 inventory=OK defect=OK"
     echo "[SDIRK3_STAGE_HISTORY_SUMMARY] $TAG3 hist_rel=1e-8 inventory=OK defect=OK"
     echo "[SDIRK3_STAGE_APPLIED_DELTA] $TAG3 src_stage=2 applied_norm=1.0"
-    echo "SDIRK3_RHS_CALLS where=ark_sweep_start total=42"; } > "$TMP/good.log"
+    echo "SDIRK3_RHS_CALLS where=ark_sweep_start total=0"
+    echo "SDIRK3_RHS_CALLS where=ark_sweep_end total=42"; } > "$TMP/good.log"
   sed 's/outcome=ok/outcome=ABORT/' "$TMP/good.log" > "$TMP/stagediff.log"
   cp "$TMP/good.log" "$TMP/dupclosure.log"
   echo "[SDIRK3_STAGE_HISTORY_SUMMARY] $TAG3 hist_rel=1e-8 inventory=OK defect=OK" >> "$TMP/dupclosure.log"
@@ -88,6 +124,15 @@ if [ "${1:-}" = "--self-test" ]; then
   cp "$TMP/good.log" "$TMP/unobserved.log"
   echo "SDIRK3_C_ABI_EXCEPTION: stage_operand_defect_tensor: SDIRK3_STAGE_OPERAND_DEFECT_UNOBSERVED: captured K != returned K (s2)" >> "$TMP/unobserved.log"
   sed 's/total=42/total=43/' "$TMP/good.log" > "$TMP/rhsdiff.log"
+  # The historical vacuous case: counter sampled only at sweep start, so every run
+  # reports total=0 and the OFF/ON diff passes while proving nothing.
+  grep -v 'ark_sweep_end' "$TMP/good.log" > "$TMP/rhsvacuous.log"
+  # The subtler vacuous case (found by Codex on the first fix): the counter is
+  # CUMULATIVE, so a sweep that evaluated nothing still reports total>0 at both ends
+  # once an earlier sweep has advanced it. A "some record has total>0" check passes
+  # here; only an end>start delta rejects it.
+  { echo "SDIRK3_RHS_CALLS where=ark_sweep_start total=7"
+    echo "SDIRK3_RHS_CALLS where=ark_sweep_end total=7"; } > "$TMP/rhsnomove.log"
 
   gate "self: good fixture has 0 failure-family markers" \
        "$([ "$(gate_fail_count "$TMP/good.log")" -eq 0 ] && echo 1 || echo 0)"
@@ -105,6 +150,15 @@ if [ "${1:-}" = "--self-test" ]; then
        "$(diff -q <(gate_rhs_records "$TMP/good.log") <(gate_rhs_records "$TMP/rhsdiff.log") >/dev/null 2>&1 && echo 0 || echo 1)"
   gate "self: success-form counter sees all three marker kinds (defect 8)" \
        "$([ "$(gate_success_count "$TMP/good.log")" -ge 3 ] && echo 1 || echo 0)"
+  gate "self: good fixture HAS a positive in-sweep RHS delta (defect 10)" \
+       "$([ "$(rhs_positive_delta "$TMP/good.log")" -eq 1 ] && echo 1 || echo 0)"
+  gate "self: vacuous RHS counter (start-only, all total=0) IS rejected (defect 10)" \
+       "$([ "$(rhs_positive_delta "$TMP/rhsvacuous.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: CUMULATIVE no-movement sweep (start=end=7) IS rejected (defect 10b)" \
+       "$([ "$(rhs_positive_delta "$TMP/rhsnomove.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: good fixture has BOTH sweep-start and sweep-end samples (defect 10)" \
+       "$([ "$(cnt 'where=ark_sweep_start' "$TMP/good.log")" -ge 1 ] && \
+          [ "$(cnt 'where=ark_sweep_end' "$TMP/good.log")" -ge 1 ] && echo 1 || echo 0)"
   note "============================================================"
   [ "$fails" -eq 0 ] && { note "SELF-TEST: ALL PASS"; exit 0; }
   note "SELF-TEST: $fails FAILURE(S)"; exit 1
@@ -214,6 +268,16 @@ gate_rhs_records "$OUT/pos_off.log" > "$OUT/pos_off.rhs"
 gate_rhs_records "$OUT/pos_on.log"  > "$OUT/pos_on.rhs"
 gate "RHS-call records present (counter actually emitted)" \
      "$([ -s "$OUT/pos_on.rhs" ] && echo 1 || echo 0)"
+# NON-DEGENERACY: the equality below is only evidence if the counter actually moved.
+# The first version of this gate sampled the counter ONLY at ark_sweep_start -- i.e.
+# before any RHS evaluation -- so both runs reported total=0 and the diff passed
+# trivially while being incapable of detecting an extra call. A sweep_end sample now
+# exists; this gate fails if the compared interval is empty again.
+gate "RHS counter MOVED within a sweep (end>start: the interval is non-empty)" \
+     "$(rhs_positive_delta "$OUT/pos_on.log")"
+gate "RHS counter sampled at BOTH sweep start and sweep end" \
+     "$([ "$(cnt 'where=ark_sweep_start' "$OUT/pos_on.log")" -ge 1 ] && \
+        [ "$(cnt 'where=ark_sweep_end' "$OUT/pos_on.log")" -ge 1 ] && echo 1 || echo 0)"
 gate "0 extra RHS evaluations: RHS-call sequence identical OFF vs ON" \
      "$(diff -q "$OUT/pos_off.rhs" "$OUT/pos_on.rhs" >/dev/null 2>&1 && echo 1 || echo 0)"
 
