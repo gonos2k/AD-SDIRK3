@@ -92,10 +92,6 @@ gate_rhs_records()    { grep -E '^SDIRK3_RHS_CALLS ' "$1" 2>/dev/null || true; }
 # in any of those places leaves the sweep records byte-identical while the run really
 # did evaluate the RHS once more. These records close that gap.
 gate_run_records()    { grep -E '^SDIRK3_RHS_RUN_TOTAL ' "$1" 2>/dev/null || true; }
-run_total_final() {  # <log> -> the closing whole-run total, or empty if absent
-  grep -E '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1" 2>/dev/null | tail -1 |
-    sed -n 's/.*total=\([0-9][0-9]*\).*/\1/p'
-}
 # 1 iff exactly one begin and one end exist and the end is >= the begin. A missing
 # end is the signature of an aborted run, and must FAIL rather than be ignored:
 # a run that died cannot have proven that it added no RHS evaluations.
@@ -104,26 +100,6 @@ run_total_final() {  # <log> -> the closing whole-run total, or empty if absent
 # indistinguishable from a run that never reached the emitter, while duplicates that
 # agree are reconcilable -- so requiring exactly one here would turn that safety
 # margin into a failure. Disagreement and absence are still rejected.
-run_total_well_formed() { # <log>
-  local nb ne fin kind distinct
-  nb=$(cnt '^SDIRK3_RHS_RUN_TOTAL phase=begin ' "$1")
-  ne=$(cnt '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1")
-  fin=$(run_total_final "$1")
-  kind=$(run_exit_kind "$1")
-  distinct=$(grep -E '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1" 2>/dev/null |
-               sort -u | wc -l | tr -d ' ')
-  # BEGIN must be EXACTLY one. Only the END record needed duplication tolerance:
-  # it is written on the fatal path where losing it is worse than repeating it. The
-  # begin is emitted once under a thread-safe static-init guard, off the fatal path
-  # entirely, so a second one is evidence of a corrupted or re-assembled log --
-  # exactly what this parser exists to reject. Relaxing both was an overreach.
-  if [ "$nb" -eq 1 ] && [ "$ne" -ge 1 ] && [ "$distinct" = "1" ] \
-     && [ -n "$fin" ] && [ -n "$kind" ]; then
-    printf 1
-  else
-    printf 0
-  fi
-}
 # How the run ended: clean|fatal, or empty if the record is absent or unlabelled.
 # Making the closing record reachable on the abort path removed the natural
 # distinction between a completed run and one that died early -- both now emit a
@@ -131,10 +107,6 @@ run_total_well_formed() { # <log>
 # two aborted runs and report non-interference PROVEN, when the property was never
 # exercised over a complete run. An unlabelled record is treated as absent so a
 # pre-`exit=` binary cannot pass this gate silently.
-run_exit_kind() { # <log>
-  grep -E '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1" 2>/dev/null | tail -1 |
-    sed -n 's/.*exit=\([a-z][a-z]*\).*/\1/p'
-}
 gate_success_count()  { cnt "$SUCCESS_FORM" "$1"; }
 gate_fail_count()     { cnt "$FAIL_FAMILY" "$1"; }
 gate_closure_count()  { cnt "$(closure_re "$1")" "$2"; }
@@ -150,12 +122,42 @@ gate_closure_count()  { cnt "$(closure_re "$1")" "$2"; }
 # The validator's rule is that every line carrying a marker is consumed exactly once
 # and must satisfy the schema; a line it cannot classify is a violation, never a
 # skip. Exit 0 means the log satisfies the schema.
-EVIDENCE_PARSER="$(dirname "$0")/rhs_evidence_parser.py"
+# Resolved to a PHYSICAL absolute path at startup. A relative `dirname "$0"` broke
+# the moment the script cd'd to $RUN: the parser could not be found, every gate that
+# used it reported FAIL, and that read as bad evidence rather than a bad path. The
+# self-test never caught it because --self-test exits before that cd. MEASURED in a
+# full WRF acceptance run, not hypothesised.
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+EVIDENCE_PARSER="$SCRIPT_DIR/rhs_evidence_parser.py"
+[ -r "$EVIDENCE_PARSER" ] || {
+  echo "FATAL: evidence parser not found: $EVIDENCE_PARSER" >&2
+  exit 2
+}
 rhs_sweep_table() { python3 "$EVIDENCE_PARSER" sweeps "$1" 2>/dev/null || true; }
 rhs_sweeps_well_formed() { # <log>
   if python3 "$EVIDENCE_PARSER" sweeps "$1" >/dev/null 2>&1; then printf 1; else printf 0; fi
 }
 rhs_positive_delta() { rhs_sweeps_well_formed "$1"; }
+
+# Whole-run records go through the SAME strict schema authority as the sweeps. They
+# were still on grep|tail|sed, so `sort -u` was the only duplicate check, the last
+# matching line won regardless of order, and a loose `.*total=` matched anywhere on
+# the line. The parser enforces begin-before-end, begin total zero, monotone totals,
+# exit in {clean,fatal}, exactly one begin, and agreeing-only duplicate ends.
+run_total_table() { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null || true; }
+run_total_well_formed() { # <log>
+  if python3 "$EVIDENCE_PARSER" run "$1" >/dev/null 2>&1; then printf 1; else printf 0; fi
+}
+# Anchored on the parser's exact RUN line, which it prints only when begin and end
+# both parsed, so a malformed log cannot yield a value through a loose match.
+run_total_final() { # <log>
+  python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
+    sed -n 's/^RUN begin=[0-9][0-9]* end=\([0-9][0-9]*\) exit=.*$/\1/p'
+}
+run_exit_kind() { # <log>
+  python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
+    sed -n 's/^RUN begin=[0-9][0-9]* end=[0-9][0-9]* exit=\([^ ]*\)$/\1/p'
+}
 
 # =============================================================================
 if [ "${1:-}" = "--self-test" ]; then
@@ -270,6 +272,16 @@ if [ "${1:-}" = "--self-test" ]; then
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
     echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42"; } > "$TMP/runnokind.log"
   grep -v 'phase=end' "$TMP/runok.log" > "$TMP/runaborted.log"
+  # The production path cd's to $RUN before using the parser; --self-test does not.
+  # That asymmetry is exactly what hid the relative-path defect through a full CI
+  # cycle and a merged PR, surfacing only in a real WRF acceptance run. Exercise the
+  # helpers from a DIFFERENT cwd so it cannot return.
+  gate "self: sweep parser works from a different cwd (absolute path)" \
+       "$( ( cd / && rhs_sweeps_well_formed "$TMP/good.log" ) )"
+  gate "self: run parser works from a different cwd (absolute path)" \
+       "$( ( cd / && run_total_well_formed "$TMP/runok.log" ) )"
+  gate "self: a bad fixture still FAILS from a different cwd (not a blanket pass)" \
+       "$( ( cd / && [ "$(rhs_sweeps_well_formed "$TMP/rhsdangling.log")" -eq 0 ] && echo 1 || echo 0 ) )"
   gate "self: a well-formed whole-run total is accepted" \
        "$([ "$(run_total_well_formed "$TMP/runok.log")" -eq 1 ] && echo 1 || echo 0)"
   gate "self: a run with NO closing total (aborted) IS rejected" \
@@ -355,8 +367,8 @@ if [ "${1:-}" = "--self-test" ]; then
   # Exact-count ratchet. Without it a deleted gate leaves the suite green with one
   # fewer property enforced. Two expected counts because the live gates require the
   # contract binary, which the torch-free hosted job does not build.
-  SELF_TEST_EXPECTED_WITH_LIVE=40
-  SELF_TEST_EXPECTED_NO_LIVE=28
+  SELF_TEST_EXPECTED_WITH_LIVE=43
+  SELF_TEST_EXPECTED_NO_LIVE=31
   if [ -x "$CBIN" ]; then exp=$SELF_TEST_EXPECTED_WITH_LIVE; else exp=$SELF_TEST_EXPECTED_NO_LIVE; fi
   if [ "$checks" -ne "$exp" ]; then
     note "  FAIL: self-test executed $checks checks, expected $exp"
