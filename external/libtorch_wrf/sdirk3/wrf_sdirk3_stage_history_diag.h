@@ -135,10 +135,37 @@ inline long long sdirk3_rhs_count_value() {
 }
 
 // Monotonic sweep identifier, so begin/end records can be PAIRED rather than merely
-// counted. Only advanced when counting is enabled.
-inline long long sdirk3_next_rhs_sweep_seq() {
+// counted. Only advanced when counting is enabled. Exposed as an atomic (not just a
+// next() call) because the overlap test below has to READ it at sweep exit.
+inline std::atomic<long long>& sdirk3_rhs_sweep_seq_atomic() {
     static std::atomic<long long> seq{0};
-    return seq.fetch_add(1, std::memory_order_relaxed);
+    return seq;
+}
+inline long long sdirk3_next_rhs_sweep_seq() {
+    return sdirk3_rhs_sweep_seq_atomic().fetch_add(1, std::memory_order_relaxed);
+}
+
+// Was this sweep's delta contaminated by another sweep?
+//
+// Sampling the DEPTH at entry and exit alone is insufficient: a sweep that both
+// starts and finishes inside our lifetime drives depth 1 -> 2 -> 1, so entry sees
+// prior-depth 0 and exit sees depth 1 and the overlap is invisible -- while that
+// inner sweep's RHS calls have already been absorbed into our delta. The sequence
+// counter closes it: it is monotonic and advanced once per sweep construction, so
+// if no other sweep began during our lifetime it still reads exactly my_seq + 1.
+//
+// Kept as a PURE function of sampled values, with no atomic access of its own, so
+// the standing contracts can drive every case directly. The enabled-path cache
+// (sdirk3_rhs_count_enabled) initialises false in the unit-test process and cannot
+// be flipped later, so a predicate reachable only through the live scope would not
+// be testable there at all.
+inline bool sdirk3_sweep_overlapped(bool concurrent_at_entry,
+                                    int depth_at_exit,
+                                    long long seq_at_exit,
+                                    long long my_seq) {
+    return concurrent_at_entry
+        || depth_at_exit != 1
+        || seq_at_exit != my_seq + 1;
 }
 
 // Number of sweeps currently in flight. The per-sweep delta is computed from a
@@ -204,11 +231,15 @@ public:
         // missing_end and fails closed on -- silence here degrades to a FAILING gate,
         // never to a passing one.
         try {
-            // Another sweep opening or closing during our lifetime also taints the
-            // delta, so re-check the depth at exit rather than trusting entry alone.
-            const bool overlapped =
-                concurrent_ ||
-                sdirk3_rhs_sweep_depth().load(std::memory_order_relaxed) != 1;
+            // Depth at entry and exit is not enough -- a sweep nested entirely
+            // inside ours leaves both samples looking clean. See
+            // sdirk3_sweep_overlapped for why the sequence counter is the
+            // discriminator.
+            const bool overlapped = sdirk3_sweep_overlapped(
+                concurrent_,
+                sdirk3_rhs_sweep_depth().load(std::memory_order_relaxed),
+                sdirk3_rhs_sweep_seq_atomic().load(std::memory_order_relaxed),
+                seq_);
             const long long total = sdirk3_rhs_count_value();
             emit_sdirk3_rhs_count("end", seq_, total, total - start_, overlapped);
         } catch (...) {

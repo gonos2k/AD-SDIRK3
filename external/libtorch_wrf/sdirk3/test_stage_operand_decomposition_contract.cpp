@@ -1043,7 +1043,34 @@ int main() {
         }
     }
 
-    const int kExpected = 90;  // ratchet: update deliberately with the cases
+    // ---- case34: overlap detection, including the NESTED case ------------------
+    // sdirk3_sweep_overlapped is a pure function of sampled values precisely so it
+    // can be driven here: the enabled-path cache initialises false in this process
+    // (case32/33 above force it), so a predicate reachable only through the live
+    // scope would be untestable in this binary.
+    //
+    // The case that matters is the third one. A sweep nested entirely inside ours
+    // drives depth 1 -> 2 -> 1, so BOTH depth samples look clean while the inner
+    // sweep's RHS calls have already been absorbed into our delta. Only the
+    // sequence counter reveals it. The depth-only predicate this replaces returned
+    // false here, i.e. reported an uncontaminated delta that was contaminated.
+    {
+        using wrf::sdirk3::sdirk3_sweep_overlapped;
+        const long long my = 7;
+        check(!sdirk3_sweep_overlapped(false, 1, my + 1, my),
+              "case34: solitary sweep (depth 1 at exit, seq advanced once) -> clean");
+        check(sdirk3_sweep_overlapped(true, 1, my + 1, my),
+              "case34: another sweep already in flight at entry -> overlapped");
+        check(sdirk3_sweep_overlapped(false, 1, my + 2, my),
+              "case34: NESTED sweep that began AND ended inside our lifetime is "
+              "detected via the sequence counter (both depth samples look clean)");
+        check(sdirk3_sweep_overlapped(false, 2, my + 2, my),
+              "case34: a sweep still open at our exit -> overlapped");
+        check(sdirk3_sweep_overlapped(false, 0, my + 1, my),
+              "case34: impossible depth 0 at exit is treated as overlapped (fail-closed)");
+    }
+
+    const int kExpected = 95;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);
