@@ -55,8 +55,16 @@ OUT="${STAGE_OPERAND_ACCEPT_OUT:-$RUN/stage_operand_accept}"
 DT="${STAGE_OPERAND_DT:-600}"
 
 fails=0
+checks=0
 note() { printf '%s\n' "$*"; }
-gate() { if [ "$2" = "1" ]; then note "  PASS: $1"; else note "  FAIL: $1"; fails=$((fails+1)); fi; }
+# `checks` is ratcheted at the end of --self-test. Without it, deleting a gate
+# leaves the suite green and one fewer property enforced -- the count was a manual
+# ledger in the PR body, not a contract. The C++ side has had this via kExpected all
+# along; the shell side did not.
+gate() {
+  checks=$((checks+1))
+  if [ "$2" = "1" ]; then note "  PASS: $1"; else note "  FAIL: $1"; fails=$((fails+1)); fi
+}
 skip() { note "  SKIP: $1"; }
 
 # ---- marker taxonomy (read off the emitter, not guessed) --------------------
@@ -131,85 +139,21 @@ gate_success_count()  { cnt "$SUCCESS_FORM" "$1"; }
 gate_fail_count()     { cnt "$FAIL_FAMILY" "$1"; }
 gate_closure_count()  { cnt "$(closure_re "$1")" "$2"; }
 
-# The RHS counter is CUMULATIVE and process-global, so "some record has total>0" is
-# NOT evidence that the measured interval contains any RHS activity: on sweep 2 the
-# begin sample already inherits sweep 1's total, so a sweep that evaluated nothing
-# still reports total>0 at both ends. The property that gives the OFF-vs-ON diff
-# teeth is a POSITIVE DELTA across a sweep.
+# Evidence parsing is delegated to a strict schema validator rather than an inline
+# awk reduction. The awk version keyed its table on sweep_seq and only entered a seq
+# into the iteration order on a valid `begin`, so a record with an invalid phase set
+# a flag on a seq the END block never visited: the malformed line VANISHED and an
+# otherwise-clean log passed. It also matched the marker anywhere in the line, so
+# `WARNING: ... SDIRK3_RHS_CALLS ...` was consumed as real evidence. Both were
+# measured false-greens, not hypotheticals.
 #
-# PR 9F.2 P1-1 additionally requires that the record stream be COMPLETE and PAIRED.
-# Reducing each sweep to `sweep_seq -> begin_total end_total delta` lets every
-# required property be gated on the reduction rather than on ad-hoc greps:
-#   - every begin has a matching end (an extra call after the LAST begin, in a run
-#     that then exits, is otherwise invisible: it lands in no emitted record)
-#   - the emitted delta equals end-begin (the emitter is not free-typing the number)
-#   - sweep_seq values are unique
-# Output: one line per sweep, "seq begin end delta status", status in
-# {ok, missing_end, missing_begin, delta_mismatch}.
-rhs_sweep_table() { # <log>
-  awk '
-    /SDIRK3_RHS_CALLS/ {
-      phase=""; seq=-1; total=0; delta=-1; has_delta=0; conc=0
-      for (i = 1; i <= NF; i++) {
-        if ($i ~ /^phase=/)     phase = substr($i, 7)
-        if ($i ~ /^sweep_seq=/) seq   = substr($i, 11) + 0
-        if ($i ~ /^total=/)     total = substr($i, 7) + 0
-        if ($i ~ /^delta=/)   { delta = substr($i, 7) + 0; has_delta = 1 }
-        if ($i == "concurrent=1") conc = 1
-      }
-      if (seq < 0) next
-      if (phase != "begin" && phase != "end") { badphase[seq] = 1; next }
-      if (total < 0) badval[seq] = 1
-      # A repeated sweep_seq must FAIL rather than silently overwrite: without this,
-      # two begins sharing a seq collapse to one table entry and emit two identical
-      # "ok" rows, so a duplicated or replayed sweep reads as well-formed.
-      # Line ordinals are recorded because the table is keyed on seq, not on arrival
-      # order: without them an end record arriving BEFORE its begin is stored and
-      # later completed into a well-formed pair. The emitter always writes begin
-      # first, so that order is evidence of a corrupted or re-assembled log.
-      if (phase == "begin") {
-        if (seen_b[seq]) dup_b[seq] = 1
-        if (has_delta) baddelta_on_begin[seq] = 1
-        b[seq] = total; seen_b[seq] = 1; bline[seq] = NR; order[++n] = seq
-      } else if (phase == "end") {
-        if (seen_e[seq]) dup_e[seq] = 1
-        if (!has_delta) missing_delta_on_end[seq] = 1
-        if (has_delta && delta < 0) badval[seq] = 1
-        e[seq] = total; seen_e[seq] = 1; d[seq] = delta; hd[seq] = has_delta
-        eline[seq] = NR
-      }
-      if (conc) tainted[seq] = 1
-    }
-    END {
-      for (i = 1; i <= n; i++) {
-        s = order[i]
-        if (emitted[s]) continue          # one row per seq; duplicates flagged below
-        emitted[s] = 1
-        if (badphase[s] || badval[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "malformed_record"; continue }
-        if (baddelta_on_begin[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "delta_on_begin"; continue }
-        if (seen_e[s] && missing_delta_on_end[s]) { print s, b[s], e[s], "-", "delta_missing_on_end"; continue }
-        if (dup_b[s] || dup_e[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "duplicate_seq"; continue }
-        if (seen_e[s] && eline[s] < bline[s]) { print s, b[s], e[s], "-", "record_order_invalid"; continue }
-        if (seen_e[s] && e[s] < b[s]) { print s, b[s], e[s], "-", "total_decreased"; continue }
-        # Overlapping sweeps share the global counter, so this delta absorbed RHS
-        # calls made by another sweep and is not attributable. Never use as evidence.
-        # (No apostrophes in this awk block: it is single-quoted in the shell.)
-        if (tainted[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "concurrent_sweeps"; continue }
-        if (!seen_e[s]) { print s, b[s], "-", "-", "missing_end"; continue }
-        st = "ok"
-        if (!hd[s] || d[s] != e[s] - b[s]) st = "delta_mismatch"
-        print s, b[s], e[s], d[s], st
-      }
-      for (s in seen_e) if (!seen_b[s]) print s, "-", e[s], "-", "missing_begin"
-    }
-  ' "$1" 2>/dev/null
-}
-# 1 iff the table is non-empty, every sweep is status=ok, and some sweep moved.
+# The validator's rule is that every line carrying a marker is consumed exactly once
+# and must satisfy the schema; a line it cannot classify is a violation, never a
+# skip. Exit 0 means the log satisfies the schema.
+EVIDENCE_PARSER="$(dirname "$0")/rhs_evidence_parser.py"
+rhs_sweep_table() { python3 "$EVIDENCE_PARSER" sweeps "$1" 2>/dev/null || true; }
 rhs_sweeps_well_formed() { # <log>
-  local t; t="$(rhs_sweep_table "$1")"
-  [ -n "$t" ] || { printf 0; return; }
-  printf '%s\n' "$t" | awk '{ if ($5 != "ok") bad=1; if ($4+0 > 0) moved=1 }
-                            END { print (bad != 1 && moved == 1) ? 1 : 0 }'
+  if python3 "$EVIDENCE_PARSER" sweeps "$1" >/dev/null 2>&1; then printf 1; else printf 0; fi
 }
 rhs_positive_delta() { rhs_sweeps_well_formed "$1"; }
 
@@ -359,26 +303,68 @@ if [ "${1:-}" = "--self-test" ]; then
   # proven against text this script authored. If the C++ emitter changed its schema
   # the parser would keep passing. When the contract binary is available, judge its
   # REAL output with the real parser.
+  # ---- LIVE emitter -> LIVE parser, ALL FOUR modes (PR 9F.4) ----------------
+  # Every fixture above is hand-written, so the parser has only ever been proven
+  # against text this script authored. Two of the four child modes -- no-sweep and
+  # abort -- carry the schemas this campaign exists to establish (calls outside any
+  # sweep, and the fatal-exit run total), and neither was previously fed to the real
+  # parser. Child EXIT STATUS is now authoritative too: a child that printed the
+  # right records and then crashed used to pass.
   CBIN="${STAGE_OPERAND_CONTRACT_BIN:-$ROOT/external/libtorch_wrf/sdirk3/test_stage_operand_decomposition_contract}"
   if [ -x "$CBIN" ]; then
-    WRF_SDIRK3_RHS_COUNT=1 "$CBIN" --child one-sweep > "$TMP/live_one.log" 2>&1 || true
-    WRF_SDIRK3_RHS_COUNT=1 "$CBIN" --child nested    > "$TMP/live_nested.log" 2>&1 || true
-    gate "self: LIVE C++ one-sweep output is well-formed to the real parser" \
-         "$([ "$(rhs_sweeps_well_formed "$TMP/live_one.log")" -eq 1 ] && echo 1 || echo 0)"
-    gate "self: LIVE C++ one-sweep run total is well-formed" \
-         "$([ "$(run_total_well_formed "$TMP/live_one.log")" -eq 1 ] && echo 1 || echo 0)"
-    gate "self: LIVE C++ NESTED output is REJECTED by the real parser" \
+    live() { # <mode> -> writes $TMP/live_<mode>.log, echoes child rc
+      WRF_SDIRK3_RHS_COUNT=1 "$CBIN" --child "$1" > "$TMP/live_$1.log" 2>&1
+      printf '%s' "$?"
+    }
+    rc_one=$(live one-sweep); rc_nest=$(live nested)
+    rc_nos=$(live no-sweep);  rc_ab=$(live abort)
+    note "  live child rc: one-sweep=$rc_one nested=$rc_nest no-sweep=$rc_nos abort=$rc_ab"
+
+    gate "live one-sweep: child exits 0" "$([ "$rc_one" -eq 0 ] && echo 1 || echo 0)"
+    gate "live one-sweep: real records accepted by the real parser" \
+         "$([ "$(rhs_sweeps_well_formed "$TMP/live_one-sweep.log")" -eq 1 ] && echo 1 || echo 0)"
+    gate "live one-sweep: whole-run total accepted, exit=clean" \
+         "$([ "$(run_total_well_formed "$TMP/live_one-sweep.log")" -eq 1 ] && \
+            [ "$(run_exit_kind "$TMP/live_one-sweep.log")" = "clean" ] && echo 1 || echo 0)"
+
+    gate "live nested: child exits 0" "$([ "$rc_nest" -eq 0 ] && echo 1 || echo 0)"
+    gate "live nested: real records REJECTED (both sweeps tainted)" \
          "$([ "$(rhs_sweeps_well_formed "$TMP/live_nested.log")" -eq 0 ] && echo 1 || echo 0)"
+
+    gate "live no-sweep: child exits 0" "$([ "$rc_nos" -eq 0 ] && echo 1 || echo 0)"
+    gate "live no-sweep: whole-run total counts calls made outside any sweep" \
+         "$([ "$(run_total_final "$TMP/live_no-sweep.log")" = "2" ] && echo 1 || echo 0)"
+    gate "live no-sweep: run exit is clean" \
+         "$([ "$(run_exit_kind "$TMP/live_no-sweep.log")" = "clean" ] && echo 1 || echo 0)"
+
+    gate "live abort: child exits NONZERO (a controlled fatal really terminated it)" \
+         "$([ "$rc_ab" -ne 0 ] && echo 1 || echo 0)"
+    gate "live abort: whole-run total survives the fatal and is accepted" \
+         "$([ "$(run_total_well_formed "$TMP/live_abort.log")" -eq 1 ] && \
+            [ "$(run_total_final "$TMP/live_abort.log")" = "2" ] && echo 1 || echo 0)"
+    gate "live abort: run is labelled exit=fatal, not clean" \
+         "$([ "$(run_exit_kind "$TMP/live_abort.log")" = "fatal" ] && echo 1 || echo 0)"
+    gate "live abort: the controlled-fatal marker is present" \
+         "$([ "$(cnt 'SDIRK3_C_ABI_EXCEPTION' "$TMP/live_abort.log")" -ge 1 ] && echo 1 || echo 0)"
   else
     skip "contract binary not built -- live emitter/parser contract UNPROVEN here"
     note "        (set STAGE_OPERAND_CONTRACT_BIN, or build the target, to enable)"
   fi
-  gate "self: good fixture has BOTH begin and end phase records (defect 10)" \
-       "$([ "$(cnt 'phase=begin' "$TMP/good.log")" -ge 1 ] && \
-          [ "$(cnt 'phase=end' "$TMP/good.log")" -ge 1 ] && echo 1 || echo 0)"
+
   note "============================================================"
-  [ "$fails" -eq 0 ] && { note "SELF-TEST: ALL PASS"; exit 0; }
-  note "SELF-TEST: $fails FAILURE(S)"; exit 1
+  # Exact-count ratchet. Without it a deleted gate leaves the suite green with one
+  # fewer property enforced. Two expected counts because the live gates require the
+  # contract binary, which the torch-free hosted job does not build.
+  SELF_TEST_EXPECTED_WITH_LIVE=40
+  SELF_TEST_EXPECTED_NO_LIVE=28
+  if [ -x "$CBIN" ]; then exp=$SELF_TEST_EXPECTED_WITH_LIVE; else exp=$SELF_TEST_EXPECTED_NO_LIVE; fi
+  if [ "$checks" -ne "$exp" ]; then
+    note "  FAIL: self-test executed $checks checks, expected $exp"
+    note "        (a gate was added or removed -- update the ratchet deliberately)"
+    fails=$((fails+1))
+  fi
+  [ "$fails" -eq 0 ] && { note "SELF-TEST: ALL PASS ($checks/$checks)"; exit 0; }
+  note "SELF-TEST: $fails FAILURE(S) (of $checks checks)"; exit 1
 fi
 
 # =============================================================================
