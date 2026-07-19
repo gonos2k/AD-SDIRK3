@@ -1063,31 +1063,58 @@ int main() {
 
     // ---- case35: the counter is thread-private ---------------------------------
     // This is the property that replaced three failed attempts to make a global
-    // counter attributable. A second thread's RHS calls must not move this thread's
-    // counter at all -- if they do, every per-sweep delta is contaminated again and
-    // no memory ordering can repair it, because RHS calls also occur outside any
-    // sweep scope (predictor/bootstrap before it opens, post-solve checks after it
-    // closes, and other entry points entirely).
+    // counter attributable, so it must be tested NON-VACUOUSLY.
+    //
+    // The obvious test -- call sdirk3_rhs_count_tick() on another thread and check
+    // this thread is unmoved -- is worthless here: counting is DISABLED in this
+    // process (case32/33 force the cached flag false), so tick() returns before
+    // incrementing and NOTHING moves on either thread. A process-global counter
+    // would pass that test identically. It proves only that the gate holds.
+    //
+    // The counter accessor itself is not gated, so drive it directly. If the storage
+    // were shared, the main thread would observe the other thread's writes.
     {
+        // Seed THIS thread first, so "the other thread sees 0" is itself
+        // non-vacuous: with shared storage the other thread would observe this
+        // seed rather than zero.
+        for (int i = 0; i < 41; ++i) ++wrf::sdirk3::sdirk3_rhs_call_counter();
         const long long before = wrf::sdirk3::sdirk3_rhs_count_value();
-        long long observed_in_thread = -1;
+        check(before >= 41,
+              "case35: this thread's own direct increments ARE visible to itself "
+              "(the accessor is not a no-op, so the checks below have teeth)");
+        long long other_thread_saw = -1;
         std::thread t([&] {
-            for (int i = 0; i < 128; ++i) wrf::sdirk3::sdirk3_rhs_count_tick();
-            observed_in_thread = wrf::sdirk3::sdirk3_rhs_count_value();
+            // A fresh thread's private counter must start at zero...
+            other_thread_saw = wrf::sdirk3::sdirk3_rhs_count_value();
+            // ...and writes here must be invisible to the spawning thread.
+            for (int i = 0; i < 128; ++i) ++wrf::sdirk3::sdirk3_rhs_call_counter();
         });
         t.join();
         check(wrf::sdirk3::sdirk3_rhs_count_value() == before,
-              "case35: 128 ticks on ANOTHER thread leave this thread's counter "
-              "unchanged (counter is thread-private)");
-        // Counting is disabled in this process, so the other thread's own view must
-        // also be unmoved -- this pins that the disabled gate holds per-thread too,
-        // not just on the thread that first cached the flag.
-        check(observed_in_thread == 0,
-              "case35: the other thread's own counter is also 0 (disabled gate is "
-              "evaluated per thread, not inherited as enabled)");
+              "case35: 128 DIRECT increments on another thread leave this thread's "
+              "counter unchanged (storage is thread-private, not merely gated)");
+        check(other_thread_saw == 0,
+              "case35: a fresh thread starts from its own zeroed counter, not from "
+              "this thread's accumulated value");
     }
 
-    const int kExpected = 96;  // ratchet: update deliberately with the cases
+    // ---- case36: the disabled gate is evaluated per thread ----------------------
+    // Separate from case35 on purpose: this one IS about the gate, and stating it
+    // separately keeps case35 from being read as covering both.
+    {
+        long long moved = -1;
+        std::thread t([&] {
+            const long long b = wrf::sdirk3::sdirk3_rhs_count_value();
+            for (int i = 0; i < 128; ++i) wrf::sdirk3::sdirk3_rhs_count_tick();
+            moved = wrf::sdirk3::sdirk3_rhs_count_value() - b;
+        });
+        t.join();
+        check(moved == 0,
+              "case36: with counting disabled, 128 ticks on a NEW thread move that "
+              "thread's counter by 0 (the gate is not inherited as enabled)");
+    }
+
+    const int kExpected = 98;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);
