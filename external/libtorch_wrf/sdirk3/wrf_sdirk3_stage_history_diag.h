@@ -65,6 +65,41 @@ inline void emit_sdirk3_diag_line(const std::string& line) {
     std::cerr << line;
 }
 
+// PR 9F.1: SUCCESS-line TRANSACTION.
+//
+// PR 9E closed "no success record before the verdict" WITHIN each emitter: both
+// emitters buffer their per-source lines and flush only after their own gate. But
+// the record stage runs THREE authorities in sequence --
+//     emit_stage_history_diag -> validate_stage_defect_tensor -> emit_stage_applied_delta_diag
+// -- so the history emitter's success lines reached the log before the defect-tensor
+// and applied-delta gates had run. A failure in either later gate therefore left
+// SUCCESS-form evidence behind: the same laundering, reopened at STAGE scope.
+//
+// The fix is a real transaction. Every emitter APPENDS its success lines to this
+// bundle instead of writing them; the caller runs ALL authorities first and calls
+// commit() only when every one passed. FAILURE markers are NOT buffered -- they must
+// appear immediately and are the only thing a rejected stage may leave behind.
+struct StageOperandEvidenceBundle {
+    std::vector<std::string> success_lines;
+    void stage_line(const std::string& line) { success_lines.push_back(line); }
+    // Write every buffered success line. Call ONLY after all gates passed.
+    void commit() {
+        for (const auto& l : success_lines) emit_sdirk3_diag_line(l + "\n");
+        success_lines.clear();
+    }
+    // Drop buffered evidence without writing it (a gate failed).
+    void discard() { success_lines.clear(); }
+    std::size_t pending() const { return success_lines.size(); }
+};
+
+// Route one success line either into the transaction (preferred) or straight out
+// (legacy/no-bundle callers, and the standing contract tests).
+inline void stage_success_line(StageOperandEvidenceBundle* bundle,
+                               const std::string& line) {
+    if (bundle) bundle->stage_line(line);
+    else emit_sdirk3_diag_line(line + "\n");
+}
+
 // Canonical "not applicable" sentinel for the Newton-convergence fields of an
 // EXPLICIT ESDIRK stage. An explicit stage runs NO Newton solve, so f_fast /
 // newton_defect / ratio / scaled_final_residual are not merely unobserved but
@@ -123,6 +158,28 @@ struct StageDefectTensorSnapshot {
     torch::Tensor F;           // F_fast(K) at that evaluation
     torch::Tensor R;           // K - F at that evaluation (coherent by construction)
     torch::Tensor returned_K;  // the stage value the caller returned (must equal K)
+};
+
+// PR 9F.1: the AUTHORITATIVE per-source defect numbers, derived BY THE EMITTER from
+// the coherent {K,F,R} tensors -- never from the caller's scalars.
+//
+// Before this, validate_stage_defect_tensor computed ||K-F-R||, ||R|| and the ratio
+// and then the caller DISCARDED them (it passed no output pointers), while the
+// success summary printed StageDefectSnapshot's scalar fields. The gate and the
+// report were therefore different numbers: a wrong-but-finite-and-positive scalar
+// defect passed the scalar inventory and got printed even though the tensor
+// authority never endorsed it. These fields are what the summary must publish; the
+// scalars are demoted to cross-checked telemetry.
+struct DerivedDefectRecord {
+    int stage = -1;
+    int retry_generation = -1;   // which solve attempt produced the triple
+    int newton_iter = -1;        // which Newton iteration was residual-evaluated
+    double k_norm = kDefectNA;      // ||K||   at the residual evaluation
+    double f_norm = kDefectNA;      // ||F||   at that evaluation
+    double defect_norm = kDefectNA; // ||R||
+    double ratio = kDefectNA;       // ||R|| / max(||K||, eps)
+    double closure = kDefectNA;     // ||K - F - R||  (exactly 0 when coherent)
+    bool observed = false;          // true ONLY after every tensor gate passed
 };
 
 // One source stage's contribution to the target stage's ARK history. k_slow /
@@ -203,10 +260,17 @@ inline std::string validate_stage_defect_tensor(
     const StageDefectTensorSnapshot& s,
     double* out_defect_norm = nullptr,
     double* out_closure = nullptr,
-    double* out_ratio = nullptr) {
+    double* out_ratio = nullptr,
+    DerivedDefectRecord* out_record = nullptr) {
     if (out_defect_norm) *out_defect_norm = -1.0;
     if (out_closure) *out_closure = -1.0;
     if (out_ratio) *out_ratio = -1.0;
+    if (out_record) {
+        *out_record = DerivedDefectRecord{};
+        out_record->stage = s.stage;
+        out_record->retry_generation = s.retry_generation;
+        out_record->newton_iter = s.newton_iter;
+    }
     const std::string sid = "s" + std::to_string(s.stage);
     if (s.point != DefectEvaluationPoint::ResidualEval)
         return "SDIRK3_STAGE_OPERAND_DEFECT_UNOBSERVED: no residual evaluation captured (" + sid + ")";
@@ -224,15 +288,60 @@ inline std::string validate_stage_defect_tensor(
     // norms in float64 for a faithful report (does not affect the exact gates).
     double defect = s.R.to(torch::kFloat64).norm().item<double>();
     double kn = s.K.to(torch::kFloat64).norm().item<double>();
+    double fn = s.F.to(torch::kFloat64).norm().item<double>();
     double ratio = defect / std::max(kn, 1e-300);
     if (out_defect_norm) *out_defect_norm = defect;
     if (out_closure) *out_closure = closure;
     if (out_ratio) *out_ratio = ratio;
-    if (!std::isfinite(closure) || !std::isfinite(defect) || !std::isfinite(ratio))
+    if (!std::isfinite(closure) || !std::isfinite(defect) || !std::isfinite(ratio) ||
+        !std::isfinite(kn) || !std::isfinite(fn))
         return "SDIRK3_STAGE_OPERAND_DEFECT_NONFINITE: " + sid;
     if (closure > 0.0)
         return "SDIRK3_STAGE_OPERAND_DEFECT_INCOHERENT: ||K-F-R|| != 0 (" + sid + ")";
+    if (out_record) {
+        out_record->k_norm = kn;
+        out_record->f_norm = fn;
+        out_record->defect_norm = defect;
+        out_record->ratio = ratio;
+        out_record->closure = closure;
+        out_record->observed = true;   // set ONLY after every gate above passed
+    }
     return std::string();
+}
+
+// AUTHORITATIVE inventory over the DERIVED (tensor-backed) defect records, PR 9F.1.
+// validate_stage_defect_tensor only judges records that EXIST, so a silently missing
+// tensor snapshot was invisible: the scalar table could be complete while the tensor
+// evidence was not. This derives the expected set from `target_stage` (the same
+// independent authority the scalar inventory uses) and requires every IMPLICIT source
+// stage 2..target_stage-1 to have exactly one OBSERVED derived record. Stage 1 is the
+// explicit ESDIRK stage: convergence is not applicable, so it must NOT appear.
+// Returns "" when sound, else a comma-joined reason for
+// SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE.
+inline std::string validate_derived_defect_inventory(
+    const std::vector<DerivedDefectRecord>& derived, int target_stage) {
+    std::string reason;
+    auto append = [&](const std::string& r) {
+        if (!reason.empty()) reason += ",";
+        reason += r;
+    };
+    for (int j = 2; j < target_stage; ++j) {
+        int count = 0;
+        for (const auto& d : derived) if (d.stage == j) ++count;
+        if (count == 0) append("tensor_missing:s" + std::to_string(j));
+        if (count > 1) append("tensor_duplicate:s" + std::to_string(j));
+    }
+    for (const auto& d : derived) {
+        const std::string sid = "s" + std::to_string(d.stage);
+        if (d.stage < 2 || d.stage >= target_stage)
+            append("tensor_unknown_stage:" + sid);
+        if (!d.observed) append("tensor_unobserved:" + sid);
+        // Evaluation-point identifiers must be real, not defaulted -- otherwise a
+        // stale/foreign snapshot could not be told apart from a fresh one.
+        if (d.retry_generation < 0) append("tensor_no_retry_generation:" + sid);
+        if (d.newton_iter < 0) append("tensor_no_newton_iter:" + sid);
+    }
+    return reason;
 }
 
 // AUTHORITATIVE per-source ARK attribution check (PR 9E history-authority C1).
@@ -264,7 +373,8 @@ inline std::string emit_stage_applied_delta_diag(
     const torch::Tensor& U_stage,
     const std::vector<StageHistorySource>& sources,
     const std::vector<const torch::Tensor*>& states,
-    const std::vector<StageOperandBlock>& blocks) {
+    const std::vector<StageOperandBlock>& blocks,
+    StageOperandEvidenceBundle* bundle = nullptr) {
     torch::NoGradGuard no_grad;
     char dtbuf[32];
     std::snprintf(dtbuf, sizeof(dtbuf), "%.9e", static_cast<double>(dt));
@@ -404,7 +514,9 @@ inline std::string emit_stage_applied_delta_diag(
             return fail(rb);
         }
     }
-    for (const auto& line : diag_lines) emit_sdirk3_diag_line(line + "\n");
+    // This emitter's own gate passed -- STAGE the success lines. They are written
+    // only when the caller commits the bundle, i.e. after EVERY authority passed.
+    for (const auto& line : diag_lines) stage_success_line(bundle, line);
     return std::string();
 }
 
@@ -519,7 +631,9 @@ inline std::string emit_stage_history_diag(
     const torch::Tensor& U_n,
     const torch::Tensor& U_stage,
     const std::vector<StageHistorySource>& sources,
-    const std::vector<StageDefectSnapshot>& defects) {
+    const std::vector<StageDefectSnapshot>& defects,
+    const std::vector<DerivedDefectRecord>* derived = nullptr,
+    StageOperandEvidenceBundle* bundle = nullptr) {
     torch::NoGradGuard no_grad;
 
     char dtbuf[32];
@@ -689,6 +803,36 @@ inline std::string emit_stage_history_diag(
     if (!defect_reason.empty())
         return fail("SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE",
                     "defect=" + defect_reason);
+    // PR 9F.1: the TENSOR evidence must be complete and must agree with the scalar
+    // telemetry before anything is published. Without this, a missing tensor record
+    // was invisible (only existing records were judged) and a wrong scalar could be
+    // printed under a passing tensor gate.
+    if (derived) {
+        const std::string tinv = validate_derived_defect_inventory(*derived, target_stage);
+        if (!tinv.empty())
+            return fail("SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE", "tensor_" + tinv);
+        for (const auto& d : defects) {
+            if (d.explicit_stage) continue;   // convergence n/a: no tensor expected
+            const DerivedDefectRecord* dr = nullptr;
+            for (const auto& r : *derived)
+                if (r.stage == d.stage && r.observed) { dr = &r; break; }
+            if (!dr)
+                return fail("SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE",
+                            "tensor_absent_for_implicit:s" + std::to_string(d.stage));
+            // Scalar telemetry is float32-derived, the tensor value float64, so a
+            // small relative gap is expected; a LARGE one means the two describe
+            // different evaluations and the record must not be published.
+            auto rel_gap = [](double scalar, double tensor) {
+                return std::abs(scalar - tensor) / std::max(std::abs(tensor), 1e-30);
+            };
+            const double kTelemetryTol = 1e-3;
+            if (rel_gap(d.newton_defect_norm, dr->defect_norm) > kTelemetryTol ||
+                rel_gap(d.f_fast_norm, dr->f_norm) > kTelemetryTol)
+                return fail("SDIRK3_STAGE_OPERAND_DEFECT_INCOHERENT",
+                            "scalar_telemetry_disagrees_with_tensor:s" +
+                                std::to_string(d.stage));
+        }
+    }
     if (!hist_finite || hist_rel > 1e-6 || hist_max_rel > 1e-1) {
         char rb[224];
         std::snprintf(rb, sizeof(rb),
@@ -699,8 +843,11 @@ inline std::string emit_stage_history_diag(
         return fail("SDIRK3_STAGE_OPERAND_CLOSURE_FAILED", rb);
     }
 
-    // ---- PHASE 4: all authorities passed -> emit the SUCCESS records ----
-    for (const auto& line : diag_lines) emit_sdirk3_diag_line(line + "\n");
+    // ---- PHASE 4: THIS emitter's authorities passed -> STAGE the SUCCESS records.
+    // They are NOT written here. The caller commits the bundle only after the
+    // coherent-defect-tensor and applied-delta authorities have also passed, so a
+    // failure in either of those leaves zero success-form evidence behind.
+    for (const auto& line : diag_lines) stage_success_line(bundle, line);
     {
         std::ostringstream os;
         os << "[SDIRK3_STAGE_HISTORY_SUMMARY] " << tag << std::scientific
@@ -715,9 +862,15 @@ inline std::string emit_stage_history_diag(
            << " U_n_norm=" << u_n_norm
            << " U_stage_norm=" << u_stage_norm
            << " inventory=OK defect=OK";
-        emit_sdirk3_diag_line(os.str() + "\n");
+        stage_success_line(bundle, os.str());
     }
     for (const auto& d : defects) {
+        // The tensor-derived authority for THIS source stage, if one was supplied.
+        const DerivedDefectRecord* dr = nullptr;
+        if (derived) {
+            for (const auto& r : *derived)
+                if (r.stage == d.stage && r.observed) { dr = &r; break; }
+        }
         std::ostringstream os;
         os << "[SDIRK3_STAGE_HISTORY_SUMMARY] " << tag
            << " src_stage=" << d.stage
@@ -729,14 +882,35 @@ inline std::string emit_stage_history_diag(
             // NOT print a converged verdict (there was no solve to converge).
             os << " f_fast_norm=n/a newton_defect_norm=n/a"
                << " defect_to_k_ratio=n/a scaled_final_residual=n/a";
+        } else if (dr) {
+            // AUTHORITY: every convergence number published here is derived by this
+            // emitter from the coherent {K,F,R} tensors. The caller's scalars are
+            // demoted to explicitly-labelled telemetry_* columns (already
+            // cross-checked against these values in PHASE 3).
+            os << " defect_eval=tensor"
+               << " f_fast_norm=" << dr->f_norm
+               << " newton_defect_norm=" << dr->defect_norm
+               << " defect_to_k_ratio=" << dr->ratio
+               << " defect_closure=" << dr->closure
+               << " newton_iter=" << dr->newton_iter
+               << " retry_generation=" << dr->retry_generation
+               << " scaled_final_residual=" << d.scaled_final_residual
+               << " converged=" << (d.converged ? 1 : 0)
+               << " telemetry_f_fast_norm=" << d.f_fast_norm
+               << " telemetry_newton_defect_norm=" << d.newton_defect_norm
+               << " telemetry_defect_to_k_ratio=" << d.defect_to_k_ratio;
         } else {
-            os << " f_fast_norm=" << d.f_fast_norm
+            // No tensor authority supplied (legacy/no-bundle caller or a standing
+            // contract test). Publish the scalars but LABEL them, so a consumer can
+            // never mistake un-endorsed telemetry for tensor-derived evidence.
+            os << " defect_eval=scalar_unverified"
+               << " f_fast_norm=" << d.f_fast_norm
                << " newton_defect_norm=" << d.newton_defect_norm
                << " defect_to_k_ratio=" << d.defect_to_k_ratio
                << " scaled_final_residual=" << d.scaled_final_residual
                << " converged=" << (d.converged ? 1 : 0);
         }
-        emit_sdirk3_diag_line(os.str() + "\n");
+        stage_success_line(bundle, os.str());
     }
     return std::string();
 }

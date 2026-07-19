@@ -873,7 +873,101 @@ int main() {
               "(no silent 0.0 pass); default explicit record still valid");
     }
 
-    const int kExpected = 71;  // ratchet: update deliberately with the cases
+    // (30) PR 9F.1 — evidence TRANSACTION + tensor-derived defect authority.
+    //      (a) success lines must be STAGED, never written, until every authority
+    //          passed; a later-gate failure must leave ZERO success-form evidence.
+    //      (b) the published convergence numbers must be TENSOR-derived, and the
+    //          caller's scalars must be cross-checked, not trusted.
+    //      (c) the tensor evidence itself needs an inventory (a MISSING tensor
+    //          record was previously invisible, since only existing ones were judged).
+    {
+        const float dt = 1.0f;
+        auto U_n = rnd({24}, 5.0f, 0.2f);
+        auto ks1 = rnd({24}, 2.0f, 0.4f), kf1 = rnd({24}, 1.0f, 0.6f);
+        auto ks2 = rnd({24}, 1.5f, 0.8f), kf2 = rnd({24}, 0.9f, 1.1f);
+        auto U_stage = U_n + ks1 + kf1 + ks2 + kf2;   // aE=aI=1, dt=1
+        std::vector<StageHistorySource> src(2);
+        src[0] = {1, 1.0, 1.0, &ks1, &kf1}; src[0].birth_generation = 1;
+        src[1] = {2, 1.0, 1.0, &ks2, &kf2}; src[1].birth_generation = 2;
+
+        // coherent tensors for the IMPLICIT source (stage 2)
+        auto K = rnd({24}, 4.0f, 0.3f), F = rnd({24}, 1.5f, 0.9f);
+        auto R = K - F;
+        StageDefectTensorSnapshot ts;
+        ts.stage = 2; ts.retry_generation = 1; ts.newton_iter = 0;
+        ts.point = DefectEvaluationPoint::ResidualEval;
+        ts.K = K; ts.F = F; ts.R = R; ts.returned_K = K;
+        DerivedDefectRecord rec;
+        check(validate_stage_defect_tensor(ts, nullptr, nullptr, nullptr, &rec).empty() &&
+                  rec.observed,
+              "case30: coherent triple yields an OBSERVED derived record");
+
+        // scalar telemetry that AGREES with the tensor (float32-vs-float64 gap only)
+        StageDefectSnapshot d1;
+        d1.stage = 1; d1.explicit_stage = true; d1.converged = false;
+        d1.k_norm = kf1.to(torch::kFloat64).norm().item<double>();
+        d1.f_fast_norm = kDefectNA; d1.newton_defect_norm = kDefectNA;
+        d1.defect_to_k_ratio = kDefectNA; d1.scaled_final_residual = kDefectNA;
+        StageDefectSnapshot d2;
+        d2.stage = 2; d2.explicit_stage = false; d2.converged = true;
+        d2.k_norm = rec.k_norm;
+        d2.f_fast_norm = rec.f_norm;
+        d2.newton_defect_norm = rec.defect_norm;
+        d2.defect_to_k_ratio = rec.ratio;
+        d2.scaled_final_residual = 0.05;
+        std::vector<StageDefectSnapshot> defs{d1, d2};
+        std::vector<DerivedDefectRecord> derived{rec};
+
+        // --- (a) TRANSACTION: nothing written while staged ---
+        StageOperandEvidenceBundle bundle;
+        std::ostringstream cap;
+        auto* old = std::cerr.rdbuf(cap.rdbuf());
+        std::string r = emit_stage_history_diag(0, 0, 3, dt, U_n, U_stage, src, defs,
+                                                &derived, &bundle);
+        std::cerr.rdbuf(old);
+        check(r.empty(), "case30: sound history + tensor authority passes");
+        check(cap.str().find("SDIRK3_STAGE_HISTORY") == std::string::npos,
+              "case30: NO success line written while staged (transaction holds)");
+        check(bundle.pending() > 0, "case30: success lines buffered in the bundle");
+
+        // a later gate fails -> discard -> the evidence never reaches the log
+        std::ostringstream cap2;
+        old = std::cerr.rdbuf(cap2.rdbuf());
+        bundle.discard();
+        std::cerr.rdbuf(old);
+        check(cap2.str().empty() && bundle.pending() == 0,
+              "case30: discard drops staged evidence without writing any of it");
+
+        // commit DOES write, and publishes TENSOR-derived numbers
+        StageOperandEvidenceBundle b2;
+        std::ostringstream cap3;
+        old = std::cerr.rdbuf(cap3.rdbuf());
+        emit_stage_history_diag(0, 0, 3, dt, U_n, U_stage, src, defs, &derived, &b2);
+        b2.commit();
+        std::cerr.rdbuf(old);
+        check(cap3.str().find("defect_eval=tensor") != std::string::npos,
+              "case30: committed summary publishes tensor-derived defect (defect_eval=tensor)");
+        check(cap3.str().find("telemetry_newton_defect_norm=") != std::string::npos,
+              "case30: caller scalars demoted to labelled telemetry_* columns");
+
+        // --- (c) tensor INVENTORY: a missing implicit tensor record fails closed ---
+        std::vector<DerivedDefectRecord> empty_derived;
+        StageOperandEvidenceBundle b3;
+        check(emit_stage_history_diag(0, 0, 3, dt, U_n, U_stage, src, defs,
+                                      &empty_derived, &b3)
+                  .find("DEFECT_INCOMPLETE") != std::string::npos,
+              "case30: missing tensor record -> DEFECT_INCOMPLETE (was invisible before)");
+
+        // --- (b) scalar telemetry disagreeing with the tensor fails closed ---
+        auto bad = defs;
+        bad[1].newton_defect_norm = rec.defect_norm * 2.0;   // plausible, finite, wrong
+        StageOperandEvidenceBundle b4;
+        check(emit_stage_history_diag(0, 0, 3, dt, U_n, U_stage, src, bad, &derived, &b4)
+                  .find("DEFECT_INCOHERENT") != std::string::npos,
+              "case30: scalar defect disagreeing with tensor -> DEFECT_INCOHERENT");
+    }
+
+    const int kExpected = 80;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

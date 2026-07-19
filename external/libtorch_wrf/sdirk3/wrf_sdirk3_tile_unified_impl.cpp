@@ -7893,37 +7893,56 @@ vertical_coefficients:
                         newton_solver_
                             ? newton_solver_->get_saved_global_timestep()
                             : -1;
-                    std::string stage_operand_fail =
-                        wrf::sdirk3::emit_stage_history_diag(
-                            stage_operand_step_label, stage_operand_checkpoint_ts,
-                            stage_id, dt, U_n, U_stage, sources,
-                            stage_operand_defects);
-                    if (!stage_operand_fail.empty()) {
-                        // HARD GATE (PR 9E Commit A): broken diagnostic evidence
-                        // fails closed via controlled-fatal, never continues.
-                        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
-                            "stage_operand_history_diag",
-                            stage_operand_fail.c_str());
-                    }
+                    // PR 9F.1: SUCCESS-line transaction. Every emitter STAGES its
+                    // success records into this bundle; nothing is written until
+                    // ALL THREE authorities (history closure/inventory, coherent
+                    // defect tensor, applied-delta replay) have passed. Previously
+                    // the history emitter wrote its success lines before the two
+                    // later gates ran, so a failure there still left success-form
+                    // evidence in the log.
+                    wrf::sdirk3::StageOperandEvidenceBundle stage_operand_evidence;
 
-                    // PR 9F P1-4: AUTHORITATIVE coherent-defect gate. For each
-                    // IMPLICIT source stage, the {K,F,R} triple must be internally
-                    // coherent (||K-F-R||==0) AND belong to the stage value the
-                    // solve returned (K==returned_K) -- computed by the emitter from
-                    // the TENSORS, not the caller's scalar. A missing/incoherent
-                    // triple on an implicit source fails closed (DEFECT_UNOBSERVED),
-                    // so a defect from a different attempt/update point can never be
-                    // laundered as this source's. Explicit stage 1 has no Newton
-                    // defect (convergence n/a) and is skipped.
+                    // PR 9F.1 ORDERING: the coherent-defect TENSOR authority runs
+                    // FIRST, because the history summary must PUBLISH tensor-derived
+                    // numbers. Previously this ran after the history emitter, so the
+                    // emitter could only print the caller's scalars while the tensor
+                    // values it had computed were discarded.
+                    //
+                    // For each IMPLICIT source stage the {K,F,R} triple must be
+                    // internally coherent (||K-F-R||==0) AND belong to the stage value
+                    // the solve returned (K==returned_K), so a defect from a different
+                    // attempt/update point can never be laundered as this source's.
+                    // Explicit stage 1 has no Newton defect (convergence n/a).
+                    std::vector<wrf::sdirk3::DerivedDefectRecord> stage_operand_derived;
+                    stage_operand_derived.reserve(stage_operand_defect_tensors.size());
                     for (const auto& td : stage_operand_defect_tensors) {
                         if (td.stage < 1 || td.stage == 1) continue;
+                        wrf::sdirk3::DerivedDefectRecord rec;
                         std::string defect_fail =
-                            wrf::sdirk3::validate_stage_defect_tensor(td);
+                            wrf::sdirk3::validate_stage_defect_tensor(
+                                td, nullptr, nullptr, nullptr, &rec);
                         if (!defect_fail.empty()) {
+                            stage_operand_evidence.discard();
                             wrf::sdirk3::mpi_safety::abort_c_abi_exception(
                                 "stage_operand_defect_tensor",
                                 defect_fail.c_str());
                         }
+                        stage_operand_derived.push_back(rec);
+                    }
+
+                    std::string stage_operand_fail =
+                        wrf::sdirk3::emit_stage_history_diag(
+                            stage_operand_step_label, stage_operand_checkpoint_ts,
+                            stage_id, dt, U_n, U_stage, sources,
+                            stage_operand_defects, &stage_operand_derived,
+                            &stage_operand_evidence);
+                    if (!stage_operand_fail.empty()) {
+                        // HARD GATE (PR 9E Commit A): broken diagnostic evidence
+                        // fails closed via controlled-fatal, never continues.
+                        stage_operand_evidence.discard();
+                        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+                            "stage_operand_history_diag",
+                            stage_operand_fail.c_str());
                     }
 
                     // PR 9E history-authority C1: AUTHORITATIVE per-source
@@ -7960,12 +7979,19 @@ vertical_coefficients:
                             stage_operand_step_label,
                             stage_operand_checkpoint_ts, stage_id, dt, U_n,
                             U_stage, sources, stage_operand_state_ptrs,
-                            stage_operand_blocks);
+                            stage_operand_blocks, &stage_operand_evidence);
                     if (!stage_operand_attr_fail.empty()) {
+                        // Failure marker already emitted by the emitter; the staged
+                        // success lines are discarded and never reach the log.
+                        stage_operand_evidence.discard();
                         wrf::sdirk3::mpi_safety::abort_c_abi_exception(
                             "stage_operand_applied_delta",
                             stage_operand_attr_fail.c_str());
                     }
+
+                    // ---- COMMIT: every authority passed. Only now may the
+                    // success-form evidence be written. ----
+                    stage_operand_evidence.commit();
                 }
 
                 torch::Tensor U_full_exch_stage;
