@@ -102,10 +102,17 @@ struct StageOperandEvidenceBundle {
 // compute_rhs each, and excluding the base residual, line-search trials and the
 // k_slow/predictor evaluations) so it cannot stand in for RHS evaluations.
 //
-// This counts the single funnel every RHS path goes through. The increment is a
-// relaxed atomic add — it changes no numerics and no control flow. EMISSION is
-// opt-in via WRF_SDIRK3_RHS_COUNT, which the harness sets for BOTH the OFF and ON
-// runs so the two counts are directly comparable.
+// This counts the single funnel every RHS path goes through.
+//
+// PR 9F.2 P1-2: the increment is GATED on the same cached flag that gates emission.
+// The previous version incremented unconditionally and gated only the printing,
+// which meant the DEFAULT production path paid an atomic read-modify-write per RHS
+// evaluation. `memory_order_relaxed` removes the ordering fence, not the RMW or the
+// cache-line coherence traffic, so with several OpenMP threads evaluating the RHS
+// this is real contention on a shared line. The numerics were unchanged, but the
+// claim "default path unchanged / no synchronisation cost" was false as written.
+// With the gate, an unset WRF_SDIRK3_RHS_COUNT costs one predictable load of a
+// function-local static bool and no write of any kind.
 inline std::atomic<long long>& sdirk3_rhs_call_counter() {
     static std::atomic<long long> counter{0};
     return counter;
@@ -117,14 +124,64 @@ inline bool sdirk3_rhs_count_enabled() {
     }();
     return on;
 }
-// Emit the running total in a stable, machine-readable, line-atomic record.
-inline void emit_sdirk3_rhs_count(const char* where) {
+// The ONLY place the counter is advanced. Callers must use this rather than
+// touching the atomic, so the disabled-path guarantee holds at one site.
+inline void sdirk3_rhs_count_tick() {
+    if (!sdirk3_rhs_count_enabled()) return;   // default path: no atomic RMW
+    sdirk3_rhs_call_counter().fetch_add(1, std::memory_order_relaxed);
+}
+inline long long sdirk3_rhs_count_value() {
+    return sdirk3_rhs_call_counter().load(std::memory_order_relaxed);
+}
+
+// Monotonic sweep identifier, so begin/end records can be PAIRED rather than merely
+// counted. Only advanced when counting is enabled.
+inline long long sdirk3_next_rhs_sweep_seq() {
+    static std::atomic<long long> seq{0};
+    return seq.fetch_add(1, std::memory_order_relaxed);
+}
+
+// Emit one record in a stable, machine-readable, line-atomic form.
+inline void emit_sdirk3_rhs_count(const char* phase, long long sweep_seq,
+                                  long long total, long long delta) {
     if (!sdirk3_rhs_count_enabled()) return;
     std::ostringstream os;
-    os << "SDIRK3_RHS_CALLS where=" << where
-       << " total=" << sdirk3_rhs_call_counter().load(std::memory_order_relaxed);
+    os << "SDIRK3_RHS_CALLS phase=" << phase
+       << " sweep_seq=" << sweep_seq
+       << " total=" << total;
+    if (delta >= 0) os << " delta=" << delta;
     emit_sdirk3_diag_line(os.str() + "\n");
 }
+
+// PR 9F.2 P1-1: a sweep's begin record alone cannot prove "the diagnostic added zero
+// RHS evaluations" — an extra call made AFTER the last begin, in a run that then
+// ends, is never reflected in any emitted record, so the OFF/ON sequences match and
+// the gate passes while the property is violated. The end record must therefore be
+// emitted on EVERY exit from the sweep: normal completion, stage abort, recoverable
+// stage failure, and stack unwinding from a thrown C++ exception. A destructor is
+// the only construct that covers all four, so the pairing is RAII rather than a
+// hand-placed call that a future early-return could bypass.
+class Sdirk3RhsSweepScope {
+public:
+    Sdirk3RhsSweepScope()
+        : seq_(sdirk3_rhs_count_enabled() ? sdirk3_next_rhs_sweep_seq() : -1),
+          start_(sdirk3_rhs_count_value()) {
+        emit_sdirk3_rhs_count("begin", seq_, start_, -1);
+    }
+    ~Sdirk3RhsSweepScope() {
+        // noexcept context: emission must not throw out of a destructor.
+        try {
+            const long long total = sdirk3_rhs_count_value();
+            emit_sdirk3_rhs_count("end", seq_, total, total - start_);
+        } catch (...) {
+        }
+    }
+    Sdirk3RhsSweepScope(const Sdirk3RhsSweepScope&) = delete;
+    Sdirk3RhsSweepScope& operator=(const Sdirk3RhsSweepScope&) = delete;
+private:
+    long long seq_;
+    long long start_;
+};
 
 // Route one success line either into the transaction (preferred) or straight out
 // (legacy/no-bundle callers, and the standing contract tests).

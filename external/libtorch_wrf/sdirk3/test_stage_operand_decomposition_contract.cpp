@@ -1006,7 +1006,32 @@ int main() {
               "case31: absent final_k -> final_k_observed=0 (never assumed identical)");
     }
 
-    const int kExpected = 85;  // ratchet: update deliberately with the cases
+    // ---- case32: PR 9F.2 P1-2 -- the DISABLED counter must not move -------------
+    // The default production path must pay no atomic read-modify-write. The env var
+    // is unread in this unit-test process, so sdirk3_rhs_count_enabled() is false and
+    // the tick must be a no-op. This pins the property that regressed once already:
+    // gating only the PRINTING while leaving the atomic unconditional.
+    {
+        const long long before = wrf::sdirk3::sdirk3_rhs_count_value();
+        for (int i = 0; i < 1000; ++i) wrf::sdirk3::sdirk3_rhs_count_tick();
+        const long long after = wrf::sdirk3::sdirk3_rhs_count_value();
+        check(!wrf::sdirk3::sdirk3_rhs_count_enabled(),
+              "case32: counting is DISABLED in this process (no WRF_SDIRK3_RHS_COUNT)");
+        check(after == before,
+              "case32: 1000 ticks with counting disabled leave the counter UNCHANGED "
+              "(default path performs no atomic RMW)");
+    }
+
+    // ---- case33: the sweep scope emits nothing when counting is disabled ---------
+    // RAII pairing must not become an unconditional I/O cost on the default path.
+    {
+        const long long before = wrf::sdirk3::sdirk3_rhs_count_value();
+        { wrf::sdirk3::Sdirk3RhsSweepScope s; wrf::sdirk3::sdirk3_rhs_count_tick(); }
+        check(wrf::sdirk3::sdirk3_rhs_count_value() == before,
+              "case33: sweep scope + tick with counting disabled is a total no-op");
+    }
+
+    const int kExpected = 88;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

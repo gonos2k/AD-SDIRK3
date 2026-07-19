@@ -84,24 +84,53 @@ gate_closure_count()  { cnt "$(closure_re "$1")" "$2"; }
 
 # The RHS counter is CUMULATIVE and process-global, so "some record has total>0" is
 # NOT evidence that the measured interval contains any RHS activity: on sweep 2 the
-# ark_sweep_start sample already inherits sweep 1's total, so a sweep that evaluated
-# nothing still reports total>0 at both ends. The property that actually gives the
-# OFF-vs-ON diff teeth is a POSITIVE DELTA across one sweep. Emit 1 iff some
-# ark_sweep_end total strictly exceeds the ark_sweep_start total that preceded it.
-rhs_positive_delta() { # <log>
+# begin sample already inherits sweep 1's total, so a sweep that evaluated nothing
+# still reports total>0 at both ends. The property that gives the OFF-vs-ON diff
+# teeth is a POSITIVE DELTA across a sweep.
+#
+# PR 9F.2 P1-1 additionally requires that the record stream be COMPLETE and PAIRED.
+# Reducing each sweep to `sweep_seq -> begin_total end_total delta` lets every
+# required property be gated on the reduction rather than on ad-hoc greps:
+#   - every begin has a matching end (an extra call after the LAST begin, in a run
+#     that then exits, is otherwise invisible: it lands in no emitted record)
+#   - the emitted delta equals end-begin (the emitter is not free-typing the number)
+#   - sweep_seq values are unique
+# Output: one line per sweep, "seq begin end delta status", status in
+# {ok, missing_end, missing_begin, delta_mismatch}.
+rhs_sweep_table() { # <log>
   awk '
     /SDIRK3_RHS_CALLS/ {
-      where=""; total=0
+      phase=""; seq=-1; total=0; delta=-1; has_delta=0
       for (i = 1; i <= NF; i++) {
-        if ($i ~ /^where=/) where = substr($i, 7)
-        if ($i ~ /^total=/) total = substr($i, 7) + 0
+        if ($i ~ /^phase=/)     phase = substr($i, 7)
+        if ($i ~ /^sweep_seq=/) seq   = substr($i, 11) + 0
+        if ($i ~ /^total=/)     total = substr($i, 7) + 0
+        if ($i ~ /^delta=/)   { delta = substr($i, 7) + 0; has_delta = 1 }
       }
-      if (where == "ark_sweep_start") { start = total; have = 1 }
-      else if (where == "ark_sweep_end" && have == 1 && total > start) { found = 1; exit }
+      if (seq < 0) next
+      if (phase == "begin") { b[seq] = total; seen_b[seq] = 1; order[++n] = seq }
+      else if (phase == "end") { e[seq] = total; seen_e[seq] = 1; d[seq] = delta; hd[seq] = has_delta }
     }
-    END { print (found == 1) ? 1 : 0 }
-  ' "$1" 2>/dev/null || echo 0
+    END {
+      for (i = 1; i <= n; i++) {
+        s = order[i]
+        if (!seen_e[s]) { print s, b[s], "-", "-", "missing_end"; continue }
+        st = "ok"
+        if (!hd[s] || d[s] != e[s] - b[s]) st = "delta_mismatch"
+        print s, b[s], e[s], d[s], st
+      }
+      for (s in seen_e) if (!seen_b[s]) print s, "-", e[s], "-", "missing_begin"
+    }
+  ' "$1" 2>/dev/null
 }
+# 1 iff the table is non-empty, every sweep is status=ok, and some sweep moved.
+rhs_sweeps_well_formed() { # <log>
+  local t; t="$(rhs_sweep_table "$1")"
+  [ -n "$t" ] || { printf 0; return; }
+  printf '%s\n' "$t" | awk '{ if ($5 != "ok") bad=1; if ($4+0 > 0) moved=1 }
+                            END { print (bad != 1 && moved == 1) ? 1 : 0 }'
+}
+rhs_positive_delta() { rhs_sweeps_well_formed "$1"; }
 
 # =============================================================================
 if [ "${1:-}" = "--self-test" ]; then
@@ -114,8 +143,8 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "[SDIRK3_STAGE_HISTORY_SUMMARY] $TAG2 hist_rel=1e-8 inventory=OK defect=OK"
     echo "[SDIRK3_STAGE_HISTORY_SUMMARY] $TAG3 hist_rel=1e-8 inventory=OK defect=OK"
     echo "[SDIRK3_STAGE_APPLIED_DELTA] $TAG3 src_stage=2 applied_norm=1.0"
-    echo "SDIRK3_RHS_CALLS where=ark_sweep_start total=0"
-    echo "SDIRK3_RHS_CALLS where=ark_sweep_end total=42"; } > "$TMP/good.log"
+    echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=0"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=42"; } > "$TMP/good.log"
   sed 's/outcome=ok/outcome=ABORT/' "$TMP/good.log" > "$TMP/stagediff.log"
   cp "$TMP/good.log" "$TMP/dupclosure.log"
   echo "[SDIRK3_STAGE_HISTORY_SUMMARY] $TAG3 hist_rel=1e-8 inventory=OK defect=OK" >> "$TMP/dupclosure.log"
@@ -126,13 +155,23 @@ if [ "${1:-}" = "--self-test" ]; then
   sed 's/total=42/total=43/' "$TMP/good.log" > "$TMP/rhsdiff.log"
   # The historical vacuous case: counter sampled only at sweep start, so every run
   # reports total=0 and the OFF/ON diff passes while proving nothing.
-  grep -v 'ark_sweep_end' "$TMP/good.log" > "$TMP/rhsvacuous.log"
+  grep -v 'phase=end' "$TMP/good.log" > "$TMP/rhsvacuous.log"
+  # PR 9F.2 P1-1, the false-green the reviewer named: the ON run makes one extra RHS
+  # call AFTER the last begin and the run then exits, so no end record ever carries
+  # it. begin records are byte-identical OFF vs ON, so a diff-only gate PASSES while
+  # an extra call really happened. Only "every begin has a matching end" rejects it.
+  { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=0"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=42"
+    echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=1 total=42"; } > "$TMP/rhsdangling.log"
+  # The emitter free-typing a delta that disagrees with end-begin.
+  { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=10"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=7"; } > "$TMP/rhsbaddelta.log"
   # The subtler vacuous case (found by Codex on the first fix): the counter is
   # CUMULATIVE, so a sweep that evaluated nothing still reports total>0 at both ends
   # once an earlier sweep has advanced it. A "some record has total>0" check passes
   # here; only an end>start delta rejects it.
-  { echo "SDIRK3_RHS_CALLS where=ark_sweep_start total=7"
-    echo "SDIRK3_RHS_CALLS where=ark_sweep_end total=7"; } > "$TMP/rhsnomove.log"
+  { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=7"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=7 delta=0"; } > "$TMP/rhsnomove.log"
 
   gate "self: good fixture has 0 failure-family markers" \
        "$([ "$(gate_fail_count "$TMP/good.log")" -eq 0 ] && echo 1 || echo 0)"
@@ -156,9 +195,13 @@ if [ "${1:-}" = "--self-test" ]; then
        "$([ "$(rhs_positive_delta "$TMP/rhsvacuous.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: CUMULATIVE no-movement sweep (start=end=7) IS rejected (defect 10b)" \
        "$([ "$(rhs_positive_delta "$TMP/rhsnomove.log")" -eq 0 ] && echo 1 || echo 0)"
-  gate "self: good fixture has BOTH sweep-start and sweep-end samples (defect 10)" \
-       "$([ "$(cnt 'where=ark_sweep_start' "$TMP/good.log")" -ge 1 ] && \
-          [ "$(cnt 'where=ark_sweep_end' "$TMP/good.log")" -ge 1 ] && echo 1 || echo 0)"
+  gate "self: DANGLING begin (extra call after last begin, no end) IS rejected (P1-1)" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsdangling.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: emitted delta disagreeing with end-begin IS rejected (P1-1)" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsbaddelta.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: good fixture has BOTH begin and end phase records (defect 10)" \
+       "$([ "$(cnt 'phase=begin' "$TMP/good.log")" -ge 1 ] && \
+          [ "$(cnt 'phase=end' "$TMP/good.log")" -ge 1 ] && echo 1 || echo 0)"
   note "============================================================"
   [ "$fails" -eq 0 ] && { note "SELF-TEST: ALL PASS"; exit 0; }
   note "SELF-TEST: $fails FAILURE(S)"; exit 1
@@ -273,11 +316,19 @@ gate "RHS-call records present (counter actually emitted)" \
 # before any RHS evaluation -- so both runs reported total=0 and the diff passed
 # trivially while being incapable of detecting an extra call. A sweep_end sample now
 # exists; this gate fails if the compared interval is empty again.
-gate "RHS counter MOVED within a sweep (end>start: the interval is non-empty)" \
-     "$(rhs_positive_delta "$OUT/pos_on.log")"
-gate "RHS counter sampled at BOTH sweep start and sweep end" \
-     "$([ "$(cnt 'where=ark_sweep_start' "$OUT/pos_on.log")" -ge 1 ] && \
-        [ "$(cnt 'where=ark_sweep_end' "$OUT/pos_on.log")" -ge 1 ] && echo 1 || echo 0)"
+# PR 9F.2 P1-1: every sweep begin/end paired, emitted delta == end-begin, and at
+# least one sweep actually moved. A dangling final begin (the extra-call-then-exit
+# false-green) fails here even though the begin records still diff clean.
+gate "RHS sweeps well-formed ON (every begin paired, delta consistent, some movement)" \
+     "$(rhs_sweeps_well_formed "$OUT/pos_on.log")"
+gate "RHS sweeps well-formed OFF (same completeness contract)" \
+     "$(rhs_sweeps_well_formed "$OUT/pos_off.log")"
+rhs_sweep_table "$OUT/pos_off.log" > "$OUT/pos_off.sweeps"
+rhs_sweep_table "$OUT/pos_on.log"  > "$OUT/pos_on.sweeps"
+gate "per-sweep RHS deltas identical OFF vs ON (sweep-resolved, not just cumulative)" \
+     "$(diff -q "$OUT/pos_off.sweeps" "$OUT/pos_on.sweeps" >/dev/null 2>&1 && echo 1 || echo 0)"
+gate "same NUMBER of sweeps OFF vs ON" \
+     "$([ "$(wc -l < "$OUT/pos_off.sweeps")" -eq "$(wc -l < "$OUT/pos_on.sweeps")" ] && echo 1 || echo 0)"
 gate "0 extra RHS evaluations: RHS-call sequence identical OFF vs ON" \
      "$(diff -q "$OUT/pos_off.rhs" "$OUT/pos_on.rhs" >/dev/null 2>&1 && echo 1 || echo 0)"
 

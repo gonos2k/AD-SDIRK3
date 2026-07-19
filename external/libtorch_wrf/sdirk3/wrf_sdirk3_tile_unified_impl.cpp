@@ -7410,7 +7410,11 @@ vertical_coefficients:
             // OFF and ON runs) so the two runs produce the same sequence of records
             // and "the diagnostic added zero RHS evaluations" becomes a checkable
             // equality instead of a comment.
-            wrf::sdirk3::emit_sdirk3_rhs_count("ark_sweep_start");
+            // PR 9F.2 P1-1: RAII, so the paired `end` record is emitted on every exit
+            // from this sweep -- normal completion, stage abort, recoverable stage
+            // failure, and unwinding from a throw. A hand-placed end call could be
+            // bypassed by any early return added later; a destructor cannot.
+            wrf::sdirk3::Sdirk3RhsSweepScope rhs_sweep_scope;
 
             // Return code: 0=accept, 1=recoverable retry, 2=abort.
             auto handle_stage_gate = [&](int stage_id,
@@ -8336,15 +8340,9 @@ vertical_coefficients:
                 }
             }
 
-            // PR 9F.1: second sample point, AFTER all stage work. The start-of-sweep
-            // emit alone is vacuous evidence: it is taken before any RHS evaluation, so
-            // both the OFF and the ON run report total=0 and the "0 extra RHS
-            // evaluations" equality holds trivially -- it could not detect an extra
-            // call. Sampling again here makes the compared interval the sweep itself.
-            // Placed before the abort branch so it fires on BOTH the aborting and the
-            // completing path (dt=600 aborts at stage 3; without this the end sample
-            // would never be reached in the very run the harness measures).
-            wrf::sdirk3::emit_sdirk3_rhs_count("ark_sweep_end");
+            // (PR 9F.1 emitted the sweep-end sample here by hand; PR 9F.2 replaced it
+            // with the RAII Sdirk3RhsSweepScope declared at the top of the sweep, which
+            // also covers the throw and early-return paths this call site did not.)
 
             if (ark_stage_aborted) {
                 final_update_aborted = true;
@@ -10694,11 +10692,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // PR 9F.1: count this RHS evaluation. Placed AFTER the full-halo redirect so a
     // delegated call is counted exactly once (the full-halo path re-enters here with
-    // the interior state). Relaxed atomic add: no numerics, no control flow, no
-    // synchronisation cost on the hot path. Emission is opt-in
-    // (WRF_SDIRK3_RHS_COUNT) and is what lets the runtime acceptance PROVE that
-    // turning the stage-operand diagnostic ON adds zero RHS evaluations.
-    wrf::sdirk3::sdirk3_rhs_call_counter().fetch_add(1, std::memory_order_relaxed);
+    // the interior state). Emission is opt-in (WRF_SDIRK3_RHS_COUNT) and is what lets
+    // the runtime acceptance PROVE that turning the stage-operand diagnostic ON adds
+    // zero RHS evaluations.
+    //
+    // PR 9F.2 P1-2: the ATOMIC ITSELF is now gated, not just the printing. Previously
+    // this line ran on every RHS evaluation of every production run, so the default
+    // path paid an atomic read-modify-write on a shared cache line -- relaxed ordering
+    // drops the fence but not the RMW or the coherence traffic, and under OpenMP the
+    // contention is real. sdirk3_rhs_count_tick() short-circuits on a cached bool, so
+    // with the env var unset there is no write at all.
+    wrf::sdirk3::sdirk3_rhs_count_tick();
 
     /*
      * Unified RHS Computation for WRF-SDIRK3 Implicit Solver
