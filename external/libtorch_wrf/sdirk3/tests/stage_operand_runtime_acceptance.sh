@@ -104,7 +104,12 @@ run_total_well_formed() { # <log>
   kind=$(run_exit_kind "$1")
   distinct=$(grep -E '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1" 2>/dev/null |
                sort -u | wc -l | tr -d ' ')
-  if [ "$nb" -ge 1 ] && [ "$ne" -ge 1 ] && [ "$distinct" = "1" ] \
+  # BEGIN must be EXACTLY one. Only the END record needed duplication tolerance:
+  # it is written on the fatal path where losing it is worse than repeating it. The
+  # begin is emitted once under a thread-safe static-init guard, off the fatal path
+  # entirely, so a second one is evidence of a corrupted or re-assembled log --
+  # exactly what this parser exists to reject. Relaxing both was an overreach.
+  if [ "$nb" -eq 1 ] && [ "$ne" -ge 1 ] && [ "$distinct" = "1" ] \
      && [ -n "$fin" ] && [ -n "$kind" ]; then
     printf 1
   else
@@ -333,6 +338,11 @@ if [ "${1:-}" = "--self-test" ]; then
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
     echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal"
     echo "SDIRK3_RHS_RUN_TOTAL phase=end total=43 exit=fatal"; } > "$TMP/rundisagree.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal"; } > "$TMP/rundupbegin.log"
+  gate "self: DUPLICATE begin records ARE rejected (only end tolerates repetition)" \
+       "$([ "$(run_total_well_formed "$TMP/rundupbegin.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: DUPLICATE closing totals that AGREE are accepted (loss > duplication)" \
        "$([ "$(run_total_well_formed "$TMP/rundup.log")" -eq 1 ] && echo 1 || echo 0)"
   gate "self: closing totals that DISAGREE are rejected" \
