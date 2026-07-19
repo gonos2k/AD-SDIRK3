@@ -187,31 +187,44 @@ inline long long sdirk3_rhs_run_total() {
 enum class Sdirk3RunExit { Clean, Fatal };
 
 inline void sdirk3_rhs_run_emit_end_once(Sdirk3RunExit how) noexcept {
-    // Two flags, not one. `claimed` elects a single emitter; `done` says the bytes
-    // are actually out. A loser that returned immediately on `claimed` could reach
-    // std::abort() before the winner had written anything, losing the record while
-    // every thread believed it was handled -- so the loser waits, bounded, for the
-    // write to complete. The bound matters more than the wait: this runs on the
-    // fatal path, where blocking indefinitely is worse than a missing record.
+    // `claimed` elects a single emitter; `done` says the bytes are actually out. A
+    // loser that returned immediately on `claimed` could reach std::abort() before
+    // the winner had written anything -- record gone, every thread believing it was
+    // handled -- so the loser waits, bounded, for the write to complete.
     static std::atomic<bool> claimed{false};
     static std::atomic<bool> done{false};
-    try {
-        if (!sdirk3_rhs_count_enabled()) return;
-        if (claimed.exchange(true, std::memory_order_acq_rel)) {
-            for (int spin = 0; spin < 100000; ++spin) {
-                if (done.load(std::memory_order_acquire)) break;
-            }
-            return;
+    if (!sdirk3_rhs_count_enabled()) return;
+    if (claimed.exchange(true, std::memory_order_acq_rel)) {
+        for (int spin = 0; spin < 100000; ++spin) {
+            if (done.load(std::memory_order_acquire)) break;
         }
-        std::ostringstream os;
-        os << "SDIRK3_RHS_RUN_TOTAL phase=end total=" << sdirk3_rhs_run_total()
-           << " exit=" << (how == Sdirk3RunExit::Clean ? "clean" : "fatal");
-        emit_sdirk3_diag_line(os.str() + "\n");
-        done.store(true, std::memory_order_release);
-    } catch (...) {
-        done.store(true, std::memory_order_release);   // never strand a waiter
+        return;
     }
+
+    // NOT emit_sdirk3_diag_line. That helper takes a std::mutex and allocates
+    // (ostringstream, std::string), and this can run on the controlled-fatal path
+    // where both are unsafe: if any other thread holds that mutex while being torn
+    // down, the aborting thread blocks inside lock_guard and the record is lost --
+    // which is precisely the concurrent-loss mode this function is supposed to
+    // prevent. Formatting goes into a stack buffer and out through the same
+    // fprintf/fflush pair abort_c_abi_exception itself uses, so the write is
+    // lock-free, allocation-free, and flushed before the process can die.
+    char buf[128];
+    const int n = std::snprintf(
+        buf, sizeof buf,
+        "SDIRK3_RHS_RUN_TOTAL phase=end total=%lld exit=%s\n",
+        static_cast<long long>(sdirk3_rhs_run_total()),
+        how == Sdirk3RunExit::Clean ? "clean" : "fatal");
+    if (n > 0) {
+        std::fwrite(buf, 1, static_cast<size_t>(n) < sizeof buf
+                                ? static_cast<size_t>(n)
+                                : sizeof buf - 1,
+                    stderr);
+        std::fflush(stderr);
+    }
+    done.store(true, std::memory_order_release);
 }
+
 // Entry point for the pre-abort hook, which takes a plain void(*)().
 inline void sdirk3_rhs_run_emit_end_fatal() noexcept {
     sdirk3_rhs_run_emit_end_once(Sdirk3RunExit::Fatal);

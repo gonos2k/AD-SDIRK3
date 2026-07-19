@@ -506,10 +506,18 @@ gate "0 extra RHS evaluations OVER THE WHOLE RUN (final totals equal, non-empty)
 # reported, because "both runs aborted identically" is a weaker statement than "a
 # complete run added no RHS evaluations" and the reader must be able to tell which
 # one this evidence supports.
-if [ "$EK_ON" = "fatal" ]; then
-  note "  NOTE: both runs ended in a CONTROLLED FATAL. The whole-run equality above"
-  note "        therefore proves non-interference UP TO the abort point, not over a"
-  note "        completed integration."
+# A NOTE is not a gate. The final verdict line is what a reader and a CI job act on,
+# so a run that died early must not be able to print a bare ALL PASS: that reads as
+# "non-interference proven" when the evidence only covers the prefix before the
+# abort. The scope is carried into the verdict itself, and a fatal run exits
+# NON-ZERO unless the caller has explicitly accepted the narrower scope.
+EVIDENCE_SCOPE="complete-run"
+if [ "$EK_ON" = "fatal" ] || [ "$EK_OFF" = "fatal" ]; then
+  EVIDENCE_SCOPE="up-to-abort"
+  note "  NOTE: the run ended in a CONTROLLED FATAL. The whole-run equality above"
+  note "        proves non-interference UP TO the abort point, not over a completed"
+  note "        integration. dt=600 is expected to abort, so this is the normal"
+  note "        outcome there -- but it is a WEAKER claim and the verdict says so."
 fi
 gate "whole-run total is NON-DEGENERATE (the run really evaluated the RHS)" \
      "$([ -n "$RT_ON" ] && [ "$RT_ON" -gt 0 ] && echo 1 || echo 0)"
@@ -585,8 +593,18 @@ fi
 
 # =============================================================================
 note "============================================================"
-if [ "$fails" -eq 0 ]; then
-  note "STAGE-OPERAND RUNTIME ACCEPTANCE: ALL PASS"; exit 0
-else
+if [ "$fails" -ne 0 ]; then
   note "STAGE-OPERAND RUNTIME ACCEPTANCE: $fails FAILURE(S) (see $OUT/*.log)"; exit 1
 fi
+if [ "${EVIDENCE_SCOPE:-complete-run}" = "complete-run" ]; then
+  note "STAGE-OPERAND RUNTIME ACCEPTANCE: ALL PASS (scope=complete-run)"; exit 0
+fi
+note "STAGE-OPERAND RUNTIME ACCEPTANCE: ALL GATES PASS (scope=up-to-abort)"
+note "  This is NOT a whole-run non-interference proof: the run aborted, so the"
+note "  totals were compared over the prefix before the abort only."
+if [ "${STAGE_OPERAND_ACCEPT_PARTIAL:-0}" = "1" ]; then
+  note "  Accepted because STAGE_OPERAND_ACCEPT_PARTIAL=1 was set deliberately."
+  exit 0
+fi
+note "  Set STAGE_OPERAND_ACCEPT_PARTIAL=1 to accept this narrower scope."
+exit 2
