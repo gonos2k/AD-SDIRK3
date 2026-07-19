@@ -72,19 +72,28 @@ jobs:
       # PR 9F.2 P2: same argument for the stage-operand harness, but be exact
       # about what this does and does not cover.
       #
-      # COVERED: the 16 gates inside the --self-test block, each run against a
-      # synthetic fixture built to VIOLATE the property it claims. No WRF, no
-      # mpirun, sub-second. Until now that pass rate was local evidence, not a
-      # standing gate -- nothing failed if a gate silently stopped rejecting its
-      # fixture.
+      # Census, counted rather than estimated (42 `gate` calls + 2 `skip` total):
       #
-      # NOT COVERED: the 25 gate calls in the production body (the provenance,
-      # ideal.exe, positive OFF/ON, and negative topology sections). --self-test
-      # exits before them, so they get `bash -n` syntax checking ONLY. A logic
-      # error there -- an inverted test, a stale variable, a gate that can never
-      # fire -- still passes CI. Closing that needs the gate bodies extracted
-      # into functions the self-test can drive with synthetic logs; until then,
-      # do not read a green fast-contracts as "the acceptance gates are proven".
+      # COVERED -- 16 gates, lines 205-235, inside the --self-test block. Each
+      # runs against a synthetic fixture built to VIOLATE the property it claims.
+      # No WRF, no mpirun, sub-second. Until now that pass rate was local
+      # evidence, not a standing gate: nothing failed if a gate silently stopped
+      # rejecting its fixture.
+      #
+      # NOT COVERED -- the 26 gates at lines 263-434 (provenance, ideal.exe,
+      # positive OFF/ON, negative topology). --self-test exits at 239, so these
+      # get `bash -n` syntax checking ONLY.
+      #
+      # Precisely what is and is not proven: the shared HELPERS those gates call
+      # (cnt, gate_common_records, gate_rhs_records, gate_success_count,
+      # gate_fail_count, gate_closure_count, rhs_sweep_table,
+      # rhs_sweeps_well_formed) ARE exercised by the self-test. What is unproven
+      # is the WIRING at each production gate -- which helper it calls, with
+      # which argument, against which comparison. An inverted test, a stale
+      # variable, or a gate that can never fire still passes CI. Closing that
+      # needs the gate bodies extracted into functions the self-test can drive
+      # with synthetic logs; until then a green fast-contracts does NOT mean
+      # "the acceptance gates are proven".
       #
       # Run under `bash -e` deliberately -- several gates count with `grep -c`,
       # which exits 1 on a zero match, and a zero match is exactly the "must be
