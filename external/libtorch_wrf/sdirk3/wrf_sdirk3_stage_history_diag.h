@@ -187,28 +187,26 @@ inline long long sdirk3_rhs_run_total() {
 enum class Sdirk3RunExit { Clean, Fatal };
 
 inline void sdirk3_rhs_run_emit_end_once(Sdirk3RunExit how) noexcept {
-    // `claimed` elects a single emitter; `done` says the bytes are actually out. A
-    // loser that returned immediately on `claimed` could reach std::abort() before
-    // the winner had written anything -- record gone, every thread believing it was
-    // handled -- so the loser waits, bounded, for the write to complete.
-    static std::atomic<bool> claimed{false};
+    // Loss is worse than duplication, so this does NOT elect a single emitter.
+    //
+    // The previous version claimed the emit with an exchange and made losers wait,
+    // bounded, for the winner. If the winner was preempted past that bound the loser
+    // gave up and the process aborted with nothing written -- and a MISSING record
+    // is indistinguishable from a run that never got here, whereas a DUPLICATE that
+    // agrees with its twin is trivially reconcilable. So: skip only if the write has
+    // demonstrably completed, otherwise write. A race can then produce two identical
+    // records and never zero, and the harness accepts repeated end records that
+    // AGREE while rejecting absence or disagreement.
     static std::atomic<bool> done{false};
     if (!sdirk3_rhs_count_enabled()) return;
-    if (claimed.exchange(true, std::memory_order_acq_rel)) {
-        for (int spin = 0; spin < 100000; ++spin) {
-            if (done.load(std::memory_order_acquire)) break;
-        }
-        return;
-    }
+    if (done.load(std::memory_order_acquire)) return;
 
-    // NOT emit_sdirk3_diag_line. That helper takes a std::mutex and allocates
-    // (ostringstream, std::string), and this can run on the controlled-fatal path
-    // where both are unsafe: if any other thread holds that mutex while being torn
-    // down, the aborting thread blocks inside lock_guard and the record is lost --
-    // which is precisely the concurrent-loss mode this function is supposed to
-    // prevent. Formatting goes into a stack buffer and out through the same
-    // fprintf/fflush pair abort_c_abi_exception itself uses, so the write is
-    // lock-free, allocation-free, and flushed before the process can die.
+    // NOT emit_sdirk3_diag_line: that helper takes a std::mutex and allocates
+    // (ostringstream, std::string), and this runs on the controlled-fatal path where
+    // both are unsafe -- a thread torn down while holding that mutex would block the
+    // aborting thread inside lock_guard and lose the record. Stack buffer out
+    // through the same fprintf/fflush pair abort_c_abi_exception itself uses:
+    // lock-free, allocation-free, flushed before the process can die.
     char buf[128];
     const int n = std::snprintf(
         buf, sizeof buf,
@@ -216,9 +214,9 @@ inline void sdirk3_rhs_run_emit_end_once(Sdirk3RunExit how) noexcept {
         static_cast<long long>(sdirk3_rhs_run_total()),
         how == Sdirk3RunExit::Clean ? "clean" : "fatal");
     if (n > 0) {
-        std::fwrite(buf, 1, static_cast<size_t>(n) < sizeof buf
-                                ? static_cast<size_t>(n)
-                                : sizeof buf - 1,
+        std::fwrite(buf, 1,
+                    static_cast<size_t>(n) < sizeof buf ? static_cast<size_t>(n)
+                                                        : sizeof buf - 1,
                     stderr);
         std::fflush(stderr);
     }

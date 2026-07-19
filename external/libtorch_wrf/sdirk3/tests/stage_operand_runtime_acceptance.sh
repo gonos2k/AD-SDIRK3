@@ -91,13 +91,21 @@ run_total_final() {  # <log> -> the closing whole-run total, or empty if absent
 # 1 iff exactly one begin and one end exist and the end is >= the begin. A missing
 # end is the signature of an aborted run, and must FAIL rather than be ignored:
 # a run that died cannot have proven that it added no RHS evaluations.
+# Repeated end records are ACCEPTED when they agree. The emitter deliberately
+# prefers duplication to loss on the fatal path -- a missing record is
+# indistinguishable from a run that never reached the emitter, while duplicates that
+# agree are reconcilable -- so requiring exactly one here would turn that safety
+# margin into a failure. Disagreement and absence are still rejected.
 run_total_well_formed() { # <log>
-  local nb ne fin kind
+  local nb ne fin kind distinct
   nb=$(cnt '^SDIRK3_RHS_RUN_TOTAL phase=begin ' "$1")
   ne=$(cnt '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1")
   fin=$(run_total_final "$1")
   kind=$(run_exit_kind "$1")
-  if [ "$nb" -eq 1 ] && [ "$ne" -eq 1 ] && [ -n "$fin" ] && [ -n "$kind" ]; then
+  distinct=$(grep -E '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1" 2>/dev/null |
+               sort -u | wc -l | tr -d ' ')
+  if [ "$nb" -ge 1 ] && [ "$ne" -ge 1 ] && [ "$distinct" = "1" ] \
+     && [ -n "$fin" ] && [ -n "$kind" ]; then
     printf 1
   else
     printf 0
@@ -319,6 +327,16 @@ if [ "${1:-}" = "--self-test" ]; then
        "$([ "$(run_total_well_formed "$TMP/runaborted.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: the closing whole-run total is extracted correctly" \
        "$([ "$(run_total_final "$TMP/runok.log")" = "42" ] && echo 1 || echo 0)"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal"; } > "$TMP/rundup.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=43 exit=fatal"; } > "$TMP/rundisagree.log"
+  gate "self: DUPLICATE closing totals that AGREE are accepted (loss > duplication)" \
+       "$([ "$(run_total_well_formed "$TMP/rundup.log")" -eq 1 ] && echo 1 || echo 0)"
+  gate "self: closing totals that DISAGREE are rejected" \
+       "$([ "$(run_total_well_formed "$TMP/rundisagree.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: an UNLABELLED closing total (no exit=) IS rejected" \
        "$([ "$(run_total_well_formed "$TMP/runnokind.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: exit kind is read as clean" \
@@ -511,11 +529,25 @@ gate "0 extra RHS evaluations OVER THE WHOLE RUN (final totals equal, non-empty)
 # "non-interference proven" when the evidence only covers the prefix before the
 # abort. The scope is carried into the verdict itself, and a fatal run exits
 # NON-ZERO unless the caller has explicitly accepted the narrower scope.
+# `exit=clean` means the C++ side ran its destructors -- NOT that the model finished
+# the integration. A run that fails and unwinds tidily reports exit=clean while
+# having completed nothing, so treating that field alone as proof of completeness
+# would hand a failed run the strongest possible label. Completeness requires all
+# three: a clean C++ exit, a zero process exit code, and WRF's own completion
+# marker.
+COMPLETE_OFF=0; COMPLETE_ON=0
+[ "$EK_OFF" = "clean" ] && [ "$rc_off" -eq 0 ] \
+  && [ "$(cnt 'SUCCESS COMPLETE' "$OUT/pos_off.log")" -ge 1 ] && COMPLETE_OFF=1
+[ "$EK_ON" = "clean" ] && [ "$rc_on" -eq 0 ] \
+  && [ "$(cnt 'SUCCESS COMPLETE' "$OUT/pos_on.log")" -ge 1 ] && COMPLETE_ON=1
+note "  integration completed: OFF=$COMPLETE_OFF ON=$COMPLETE_ON (exit kind + rc + SUCCESS COMPLETE)"
+
 EVIDENCE_SCOPE="complete-run"
-if [ "$EK_ON" = "fatal" ] || [ "$EK_OFF" = "fatal" ]; then
+if [ "$COMPLETE_OFF" -ne 1 ] || [ "$COMPLETE_ON" -ne 1 ]; then
   EVIDENCE_SCOPE="up-to-abort"
-  note "  NOTE: the run ended in a CONTROLLED FATAL. The whole-run equality above"
-  note "        proves non-interference UP TO the abort point, not over a completed"
+  note "  NOTE: at least one run did not complete the integration (fatal exit, or"
+  note "        nonzero rc, or no SUCCESS COMPLETE). The whole-run equality above"
+  note "        proves non-interference UP TO that point, not over a completed"
   note "        integration. dt=600 is expected to abort, so this is the normal"
   note "        outcome there -- but it is a WEAKER claim and the verdict says so."
 fi
