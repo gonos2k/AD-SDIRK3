@@ -92,11 +92,27 @@ run_total_final() {  # <log> -> the closing whole-run total, or empty if absent
 # end is the signature of an aborted run, and must FAIL rather than be ignored:
 # a run that died cannot have proven that it added no RHS evaluations.
 run_total_well_formed() { # <log>
-  local nb ne fin
+  local nb ne fin kind
   nb=$(cnt '^SDIRK3_RHS_RUN_TOTAL phase=begin ' "$1")
   ne=$(cnt '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1")
   fin=$(run_total_final "$1")
-  if [ "$nb" -eq 1 ] && [ "$ne" -eq 1 ] && [ -n "$fin" ]; then printf 1; else printf 0; fi
+  kind=$(run_exit_kind "$1")
+  if [ "$nb" -eq 1 ] && [ "$ne" -eq 1 ] && [ -n "$fin" ] && [ -n "$kind" ]; then
+    printf 1
+  else
+    printf 0
+  fi
+}
+# How the run ended: clean|fatal, or empty if the record is absent or unlabelled.
+# Making the closing record reachable on the abort path removed the natural
+# distinction between a completed run and one that died early -- both now emit a
+# well-formed total. Without this field the harness would compare two numbers from
+# two aborted runs and report non-interference PROVEN, when the property was never
+# exercised over a complete run. An unlabelled record is treated as absent so a
+# pre-`exit=` binary cannot pass this gate silently.
+run_exit_kind() { # <log>
+  grep -E '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1" 2>/dev/null | tail -1 |
+    sed -n 's/.*exit=\([a-z][a-z]*\).*/\1/p'
 }
 gate_success_count()  { cnt "$SUCCESS_FORM" "$1"; }
 gate_fail_count()     { cnt "$FAIL_FAMILY" "$1"; }
@@ -290,7 +306,12 @@ if [ "${1:-}" = "--self-test" ]; then
 
   # ---- whole-run total fixtures (PR 9F.3) ----------------------------------
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42"; } > "$TMP/runok.log"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=clean"; } > "$TMP/runok.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal"; } > "$TMP/runfatal.log"
+  # A pre-`exit=` emitter: well-formed in every other respect, and must NOT pass.
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42"; } > "$TMP/runnokind.log"
   grep -v 'phase=end' "$TMP/runok.log" > "$TMP/runaborted.log"
   gate "self: a well-formed whole-run total is accepted" \
        "$([ "$(run_total_well_formed "$TMP/runok.log")" -eq 1 ] && echo 1 || echo 0)"
@@ -298,6 +319,12 @@ if [ "${1:-}" = "--self-test" ]; then
        "$([ "$(run_total_well_formed "$TMP/runaborted.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: the closing whole-run total is extracted correctly" \
        "$([ "$(run_total_final "$TMP/runok.log")" = "42" ] && echo 1 || echo 0)"
+  gate "self: an UNLABELLED closing total (no exit=) IS rejected" \
+       "$([ "$(run_total_well_formed "$TMP/runnokind.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: exit kind is read as clean" \
+       "$([ "$(run_exit_kind "$TMP/runok.log")" = "clean" ] && echo 1 || echo 0)"
+  gate "self: exit kind is read as fatal (an aborted run cannot pose as complete)" \
+       "$([ "$(run_exit_kind "$TMP/runfatal.log")" = "fatal" ] && echo 1 || echo 0)"
 
   # ---- LIVE emitter -> LIVE parser (PR 9F.3) --------------------------------
   # Every fixture above is hand-written, so the shell parser has only ever been
@@ -465,8 +492,25 @@ gate "whole-run total is well-formed ON (one begin, one end)" \
 RT_OFF="$(run_total_final "$OUT/pos_off.log")"
 RT_ON="$(run_total_final "$OUT/pos_on.log")"
 note "  whole-run RHS totals: OFF=${RT_OFF:-<none>} ON=${RT_ON:-<none>}"
+EK_OFF="$(run_exit_kind "$OUT/pos_off.log")"
+EK_ON="$(run_exit_kind "$OUT/pos_on.log")"
+note "  run exit kinds: OFF=${EK_OFF:-<none>} ON=${EK_ON:-<none>}"
+# Comparing totals across two DIFFERENT exit kinds is not a comparison: one run got
+# further than the other, so equal totals would be coincidence and unequal totals
+# would not indicate interference.
+gate "OFF and ON ended the SAME way (both clean, or both fatal)" \
+     "$([ -n "$EK_OFF" ] && [ "$EK_OFF" = "$EK_ON" ] && echo 1 || echo 0)"
 gate "0 extra RHS evaluations OVER THE WHOLE RUN (final totals equal, non-empty)" \
      "$([ -n "$RT_OFF" ] && [ -n "$RT_ON" ] && [ "$RT_OFF" = "$RT_ON" ] && echo 1 || echo 0)"
+# dt=600 is EXPECTED to end fatal, so this is reported rather than gated -- but it is
+# reported, because "both runs aborted identically" is a weaker statement than "a
+# complete run added no RHS evaluations" and the reader must be able to tell which
+# one this evidence supports.
+if [ "$EK_ON" = "fatal" ]; then
+  note "  NOTE: both runs ended in a CONTROLLED FATAL. The whole-run equality above"
+  note "        therefore proves non-interference UP TO the abort point, not over a"
+  note "        completed integration."
+fi
 gate "whole-run total is NON-DEGENERATE (the run really evaluated the RHS)" \
      "$([ -n "$RT_ON" ] && [ "$RT_ON" -gt 0 ] && echo 1 || echo 0)"
 

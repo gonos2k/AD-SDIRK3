@@ -1213,8 +1213,10 @@ int main(int argc, char** argv) {
               "case37: a solitary sweep is not marked concurrent");
         check(out.find("SDIRK3_RHS_RUN_TOTAL phase=begin total=0") != std::string::npos,
               "case37: whole-run total is opened");
-        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=3") != std::string::npos,
-              "case37: whole-run total is closed from the exit handler and agrees");
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=3 exit=clean") !=
+                  std::string::npos,
+              "case37: whole-run total is closed from the exit handler, agrees, and "
+              "is labelled exit=clean");
     }
 
     // ---- case38: nested child -- BOTH records must be tainted ------------------
@@ -1241,7 +1243,8 @@ int main(int argc, char** argv) {
         const std::string out = capture_child(argv[0], "no-sweep");
         check(count_occurrences(out, "SDIRK3_RHS_CALLS ") == 0,
               "case39: calls outside any sweep leave NO sweep records (the gap)");
-        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=2") != std::string::npos,
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=2 exit=clean") !=
+                  std::string::npos,
               "case39: ...but the whole-run total still counts them");
     }
 
@@ -1255,9 +1258,11 @@ int main(int argc, char** argv) {
         const std::string out = capture_child(argv[0], "abort");
         check(out.find("SDIRK3_RHS_RUN_TOTAL phase=begin total=0") != std::string::npos,
               "case40: aborting child still opens the whole-run total");
-        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=2") != std::string::npos,
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=2 exit=fatal") !=
+                  std::string::npos,
               "case40: aborting child EMITS the closing run total before dying "
-              "(static destructors never run through MPI_Abort/std::abort)");
+              "(static destructors never run through MPI_Abort/std::abort) AND "
+              "labels it exit=fatal so it cannot pose as a completed run");
         check(out.find("SDIRK3_C_ABI_EXCEPTION") != std::string::npos,
               "case40: ...and the controlled-fatal marker is still emitted");
         check(count_occurrences(out, "SDIRK3_RHS_RUN_TOTAL phase=end") == 1,

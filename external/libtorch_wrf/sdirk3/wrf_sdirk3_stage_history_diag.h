@@ -177,16 +177,44 @@ inline long long sdirk3_rhs_run_total() {
 // Idempotent because BOTH exits can occur in principle and a duplicate end record
 // is itself a harness failure (duplicate_seq-style), so double-emission would turn
 // a good run red.
-inline void sdirk3_rhs_run_emit_end_once() noexcept {
-    static std::atomic<bool> emitted{false};
+// The closing record must say HOW the run ended. Emitting the same text for a
+// clean exit and a controlled fatal would let an ABORTED run present itself as a
+// completed one: the harness would see a well-formed run total, compare two equal
+// numbers, and report non-interference proven -- when in fact both runs died early
+// and the property was never exercised over a complete run. `exit=` keeps the two
+// cases distinguishable so the harness can require OFF and ON to have ended the
+// SAME way before comparing anything.
+enum class Sdirk3RunExit { Clean, Fatal };
+
+inline void sdirk3_rhs_run_emit_end_once(Sdirk3RunExit how) noexcept {
+    // Two flags, not one. `claimed` elects a single emitter; `done` says the bytes
+    // are actually out. A loser that returned immediately on `claimed` could reach
+    // std::abort() before the winner had written anything, losing the record while
+    // every thread believed it was handled -- so the loser waits, bounded, for the
+    // write to complete. The bound matters more than the wait: this runs on the
+    // fatal path, where blocking indefinitely is worse than a missing record.
+    static std::atomic<bool> claimed{false};
+    static std::atomic<bool> done{false};
     try {
         if (!sdirk3_rhs_count_enabled()) return;
-        if (emitted.exchange(true, std::memory_order_relaxed)) return;
+        if (claimed.exchange(true, std::memory_order_acq_rel)) {
+            for (int spin = 0; spin < 100000; ++spin) {
+                if (done.load(std::memory_order_acquire)) break;
+            }
+            return;
+        }
         std::ostringstream os;
-        os << "SDIRK3_RHS_RUN_TOTAL phase=end total=" << sdirk3_rhs_run_total();
+        os << "SDIRK3_RHS_RUN_TOTAL phase=end total=" << sdirk3_rhs_run_total()
+           << " exit=" << (how == Sdirk3RunExit::Clean ? "clean" : "fatal");
         emit_sdirk3_diag_line(os.str() + "\n");
+        done.store(true, std::memory_order_release);
     } catch (...) {
+        done.store(true, std::memory_order_release);   // never strand a waiter
     }
+}
+// Entry point for the pre-abort hook, which takes a plain void(*)().
+inline void sdirk3_rhs_run_emit_end_fatal() noexcept {
+    sdirk3_rhs_run_emit_end_once(Sdirk3RunExit::Fatal);
 }
 
 // Covers the CLEAN exits. A controlled fatal never reaches here -- MPI_Abort and
@@ -194,7 +222,7 @@ inline void sdirk3_rhs_run_emit_end_once() noexcept {
 // exists. Registering only this one would make the closing record unreachable on
 // precisely the aborting runs the acceptance harness measures.
 struct Sdirk3RhsRunTotalEmitter {
-    ~Sdirk3RhsRunTotalEmitter() { sdirk3_rhs_run_emit_end_once(); }
+    ~Sdirk3RhsRunTotalEmitter() { sdirk3_rhs_run_emit_end_once(Sdirk3RunExit::Clean); }
 };
 // Registers the exit emitter and publishes the opening total, exactly once.
 inline void sdirk3_rhs_run_register_once() {
@@ -206,7 +234,7 @@ inline void sdirk3_rhs_run_register_once() {
         return true;
     }();
     static Sdirk3RhsRunTotalEmitter emitter;   // clean-exit path
-    mpi_safety::sdirk3_set_pre_abort_hook(&sdirk3_rhs_run_emit_end_once);  // fatal path
+    mpi_safety::sdirk3_set_pre_abort_hook(&sdirk3_rhs_run_emit_end_fatal);  // fatal path
     (void)done;
 }
 
