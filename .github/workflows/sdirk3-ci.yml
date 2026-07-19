@@ -235,8 +235,13 @@ jobs:
           STAGE_OPERAND_CONTRACT_BIN="$PWD/$BIN" \
             bash -e external/libtorch_wrf/sdirk3/tests/stage_operand_runtime_acceptance.sh --self-test \
             | tee /tmp/live_selftest.log
-          grep -q 'LIVE C++ one-sweep output is well-formed' /tmp/live_selftest.log \
-            || { echo "FAIL: live gates SKIPPED -- binary was not picked up"; exit 1; }
+          # Key on the exact-count ratchet, not a gate title. A title is prose and
+          # silently drifts (this grep broke the moment the gate was renamed); the
+          # count is a contract, and 40-vs-28 is itself the proof that the live
+          # gates ran rather than skipped.
+          grep -q 'SELF-TEST: ALL PASS (40/40)' /tmp/live_selftest.log \
+            || { echo "FAIL: live gates did not run (expected the 40/40 ratchet)"; \
+                 tail -5 /tmp/live_selftest.log; exit 1; }
 
       - name: CTest inventory (exact set, then run)
         run: |
