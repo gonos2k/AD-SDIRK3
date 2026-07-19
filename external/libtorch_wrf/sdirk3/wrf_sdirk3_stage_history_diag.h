@@ -37,7 +37,9 @@
 #include "wrf_sdirk3_stage_operand_capture.h"
 #include <torch/torch.h>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstdlib>
 #include <cstddef>
 #include <cstdio>
 #include <iomanip>
@@ -91,6 +93,38 @@ struct StageOperandEvidenceBundle {
     void discard() { success_lines.clear(); }
     std::size_t pending() const { return success_lines.size(); }
 };
+
+// PR 9F.1: RHS-EVALUATION COUNTER.
+//
+// The runtime acceptance contract claims "0 extra RHS evaluations when the
+// diagnostic is ON", but no production counter existed to prove it: rhs_call_id is
+// gated behind debug_level>=2, and jvp_calls counts Newton matvecs (1 or 2
+// compute_rhs each, and excluding the base residual, line-search trials and the
+// k_slow/predictor evaluations) so it cannot stand in for RHS evaluations.
+//
+// This counts the single funnel every RHS path goes through. The increment is a
+// relaxed atomic add — it changes no numerics and no control flow. EMISSION is
+// opt-in via WRF_SDIRK3_RHS_COUNT, which the harness sets for BOTH the OFF and ON
+// runs so the two counts are directly comparable.
+inline std::atomic<long long>& sdirk3_rhs_call_counter() {
+    static std::atomic<long long> counter{0};
+    return counter;
+}
+inline bool sdirk3_rhs_count_enabled() {
+    static const bool on = [] {
+        const char* v = std::getenv("WRF_SDIRK3_RHS_COUNT");
+        return v != nullptr && v[0] != '\0' && v[0] != '0';
+    }();
+    return on;
+}
+// Emit the running total in a stable, machine-readable, line-atomic record.
+inline void emit_sdirk3_rhs_count(const char* where) {
+    if (!sdirk3_rhs_count_enabled()) return;
+    std::ostringstream os;
+    os << "SDIRK3_RHS_CALLS where=" << where
+       << " total=" << sdirk3_rhs_call_counter().load(std::memory_order_relaxed);
+    emit_sdirk3_diag_line(os.str() + "\n");
+}
 
 // Route one success line either into the transaction (preferred) or straight out
 // (legacy/no-bundle callers, and the standing contract tests).
@@ -176,10 +210,20 @@ struct StageDefectTensorSnapshot {
 // defect passed the scalar inventory and got printed even though the tensor
 // authority never endorsed it. These fields are what the summary must publish; the
 // scalars are demoted to cross-checked telemetry.
+// GENERATION / ITERATION FIELDS ARE IDENTITY METADATA, NOT A STALENESS AUTHORITY.
+// What is enforced: both must be PRESENT (>= 0) for every implicit source, checked
+// by validate_derived_defect_inventory -- a defaulted -1 means the snapshot carries
+// no evaluation-point identity and the record is rejected. Both are published in the
+// summary so a consumer can see which attempt/iteration produced the triple.
+// What is NOT claimed: they are never compared against an independently-known
+// expected generation, so they do NOT by themselves prove "this is not a stale retry".
+// The property that actually excludes a stale/foreign triple is the exact
+// correspondence gate ||K - returned_K|| == 0 plus the per-solve reset of the
+// captured tensors -- not these integers. Do not cite them as retry authority.
 struct DerivedDefectRecord {
     int stage = -1;
-    int retry_generation = -1;   // which solve attempt produced the triple
-    int newton_iter = -1;        // which Newton iteration was residual-evaluated
+    int retry_generation = -1;   // identity: which solve attempt produced the triple
+    int newton_iter = -1;        // identity: which Newton iteration was evaluated
     double k_norm = kDefectNA;      // ||K||   at the residual evaluation
     double f_norm = kDefectNA;      // ||F||   at that evaluation
     double defect_norm = kDefectNA; // ||R||
@@ -211,7 +255,13 @@ struct StageHistorySource {
     double a_implicit = 0.0;           // aI[target-1][j]
     const torch::Tensor* k_slow = nullptr; // BIRTH snapshot (immutable), not owned
     const torch::Tensor* k_fast = nullptr; // BIRTH snapshot (immutable), not owned
-    int birth_generation = -1;         // monotonic generation stamped when born
+    // IDENTITY METADATA ONLY (PR 9F.1). Stamped when the derivative was born and
+    // published for traceability. It is NOT validated: no >=1 check, no ordering /
+    // uniqueness / monotonicity check, and no re-birth-after-retry check. What
+    // actually protects the provenance is that the source consumes a DETACHED BIRTH
+    // CLONE, so a later mutation cannot rewrite it (and would be caught by the
+    // closure / applied-delta gates). Do not cite this integer as an authority.
+    int birth_generation = -1;
                                        // (kept LAST so positional aggregate inits
                                        //  {stage, aE, aI, k_slow, k_fast} still work)
 };

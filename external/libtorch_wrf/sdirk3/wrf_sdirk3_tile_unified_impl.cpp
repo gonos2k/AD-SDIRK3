@@ -7404,6 +7404,14 @@ vertical_coefficients:
             int k_birth_seq = 0;  // monotonic; a stage retry re-births -> new gen
             bool ark_stage_aborted = false;
 
+            // PR 9F.1: publish the cumulative RHS-evaluation count once per ARK
+            // sweep. Emitted from an UNGATED location (the record is itself gated on
+            // WRF_SDIRK3_RHS_COUNT, which the acceptance harness sets for BOTH the
+            // OFF and ON runs) so the two runs produce the same sequence of records
+            // and "the diagnostic added zero RHS evaluations" becomes a checkable
+            // equality instead of a comment.
+            wrf::sdirk3::emit_sdirk3_rhs_count("ark_sweep_start");
+
             // Return code: 0=accept, 1=recoverable retry, 2=abort.
             auto handle_stage_gate = [&](int stage_id,
                                          bool retry_used) -> int {
@@ -10673,6 +10681,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             return computeUnifiedRHSFullHalo(U, mode);
         }
     }
+
+    // PR 9F.1: count this RHS evaluation. Placed AFTER the full-halo redirect so a
+    // delegated call is counted exactly once (the full-halo path re-enters here with
+    // the interior state). Relaxed atomic add: no numerics, no control flow, no
+    // synchronisation cost on the hot path. Emission is opt-in
+    // (WRF_SDIRK3_RHS_COUNT) and is what lets the runtime acceptance PROVE that
+    // turning the stage-operand diagnostic ON adds zero RHS evaluations.
+    wrf::sdirk3::sdirk3_rhs_call_counter().fetch_add(1, std::memory_order_relaxed);
 
     /*
      * Unified RHS Computation for WRF-SDIRK3 Implicit Solver

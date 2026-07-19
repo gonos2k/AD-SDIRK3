@@ -1,29 +1,37 @@
 #!/usr/bin/env bash
 # =============================================================================
-# PR 9F P1-6 — Stage-operand diagnostic: full-WRF runtime acceptance
+# PR 9F.1 — Stage-operand diagnostic: full-WRF runtime acceptance (fail-closed)
 # =============================================================================
-# Runs the built wrf.exe on em_b_wave at dt=600 and checks the opt-in
-# stage_operand diagnostic against the reviewer's acceptance contract.
+# Every gate below is one the PREVIOUS version CLAIMED in comments but did not
+# enforce. Each defect was verified against merged main before being fixed:
 #
-# POSITIVE (single rank, single tile, OMP=2), OFF vs ON:
-#   - the common NEWTON/FGMRES/STAGE records are byte-identical (the diagnostic
-#     is observe-only: it must not perturb the solve)
-#   - ON adds exactly ONE stage-2 and ONE stage-3 record set
-#   - the real FP32 attribution / defect closures PASS (no *_FAILED / *_UNOBSERVED
-#     / *_INCOHERENT / *_MISMATCH marker)
-#   - 0 extra RHS evaluations (RHS-eval counter identical OFF vs ON, if logged)
-#   - identical stage outcome OFF vs ON
+#  1. `common_records` grepped 'SDIRK3_STAGE ' (trailing space) but the real record
+#     is SDIRK3_STAGE_DIAG -> the pattern NEVER matched, so "NEWTON/FGMRES/STAGE
+#     byte-identical" compared only NEWTON/FGMRES and a differing stage outcome
+#     passed silently.
+#  2. rc_off / rc_on were printed and never gated.
+#  3. The OFF run never unset WRF_SDIRK3_STAGE_OPERAND_DIAG, so an exported parent
+#     value made OFF run as ON; and OFF was never checked for zero operand markers.
+#  4. "exactly one stage-2/3 record set" was really ">=1 occurrence of the substring
+#     target_stage=N" -- which failure markers also contain (same tag), and which
+#     counts 4 (stage 2) / 7 (stage 3) success lines per set. n_s2/s2_sets were
+#     computed and discarded.
+#  5. The failure denylist omitted DEFECT_INCOMPLETE (really emitted), and was
+#     bracket-anchored while DEFECT_UNOBSERVED / _NONFINITE / _INCOHERENT are never
+#     bracketed -- they surface only via SDIRK3_C_ABI_EXCEPTION.
+#  6. "0 extra RHS calls" was a comment; no counter was read or compared.
+#  7. No binary/source provenance: a stale wrf.exe passed. ideal.exe's exit code was
+#     unchecked and a stale wrfinput_d01 was never removed, so an ideal failure could
+#     look like a pass.
+#  8. The negative only counted `inventory=OK` lines, ignoring the other success-form
+#     markers (HISTORY_DIAG, APPLIED_DELTA).
+#  9. np=2 was recorded as proving the same gate as numtiles=2. It does not: the gate
+#     is (single_rank && tile_covers_patch); numtiles=2 yields single_rank=1,
+#     tile_covers_patch=0 -- only the TILE predicate is exercised.
 #
-# NEGATIVE (numtiles=2 x OMP {1,2,4}, and optionally np=2), ON:
-#   - nonzero exit
-#   - SDIRK3_STAGE_OPERAND_DIAG_UNSUPPORTED_TOPOLOGY marker present
-#   - controlled-fatal marker present
-#   - 0 success records (no STAGE_HISTORY_SUMMARY ... inventory=OK)
-#   - 0 SUCCESS / COMPLETE (the run must not report success)
-#   - 0 uncaught-exception signature (the fatal is CONTROLLED, not a raw throw)
-#
-# Run from the repo root of a tree whose wrf.exe was built WITH the PR 9F changes:
+# Usage (from the repo root of a tree whose wrf.exe was built WITH PR 9F.1):
 #   bash external/libtorch_wrf/sdirk3/tests/stage_operand_runtime_acceptance.sh
+#   bash external/libtorch_wrf/sdirk3/tests/stage_operand_runtime_acceptance.sh --self-test
 # =============================================================================
 set -uo pipefail
 
@@ -31,65 +39,148 @@ ROOT="$(cd "$(dirname "$0")/../../../.." && pwd)"
 RUN="$ROOT/test/em_b_wave"
 OUT="${STAGE_OPERAND_ACCEPT_OUT:-$RUN/stage_operand_accept}"
 DT="${STAGE_OPERAND_DT:-600}"
-mkdir -p "$OUT"
-cd "$RUN" || { echo "FATAL: no $RUN"; exit 2; }
-
-[ -x ./wrf.exe ] || { echo "FATAL: wrf.exe not built"; exit 2; }
-[ -x ./ideal.exe ] || { echo "FATAL: ideal.exe not built"; exit 2; }
 
 fails=0
 note() { printf '%s\n' "$*"; }
-gate() { # gate "label" <0|1 pass>
-  if [ "$2" = "1" ]; then note "  PASS: $1"; else note "  FAIL: $1"; fails=$((fails+1)); fi
+gate() { if [ "$2" = "1" ]; then note "  PASS: $1"; else note "  FAIL: $1"; fails=$((fails+1)); fi; }
+skip() { note "  SKIP: $1"; }
+
+# ---- marker taxonomy (read off the emitter, not guessed) --------------------
+# Success-form: the only markers a PASSING record stage may leave behind.
+SUCCESS_FORM='SDIRK3_STAGE_(HISTORY_DIAG|HISTORY_SUMMARY|APPLIED_DELTA)'
+# Failure family, matched by MARKER NAME rather than a leading bracket, because
+# DEFECT_UNOBSERVED / _NONFINITE / _INCOHERENT are returned (not bracket-emitted)
+# and reach the log only via SDIRK3_C_ABI_EXCEPTION.
+FAIL_FAMILY='SDIRK3_STAGE_OPERAND_[A-Z_]*(FAILED|INCOMPLETE|UNOBSERVED|INCOHERENT|NONFINITE|MISMATCH|UNSUPPORTED)'
+closure_re() { printf '\[SDIRK3_STAGE_HISTORY_SUMMARY\].*target_stage=%s .*inventory=OK defect=OK' "$1"; }
+
+# Count matches WITHOUT the `grep -c ... || echo 0` double-emit bug (grep -c prints
+# 0 and exits 1 on no match, so `|| echo 0` produced "0\n0" and broke -eq tests).
+cnt() { local n; n=$(grep -Ec "$1" "$2" 2>/dev/null); printf '%s' "${n:-0}"; }
+
+gate_common_records() { grep -E 'SDIRK3_(NEWTON|FGMRES|STAGE)_DIAG\b' "$1" 2>/dev/null || true; }
+gate_rhs_records()    { grep -E '^SDIRK3_RHS_CALLS ' "$1" 2>/dev/null || true; }
+gate_success_count()  { cnt "$SUCCESS_FORM" "$1"; }
+gate_fail_count()     { cnt "$FAIL_FAMILY" "$1"; }
+gate_closure_count()  { cnt "$(closure_re "$1")" "$2"; }
+
+# =============================================================================
+if [ "${1:-}" = "--self-test" ]; then
+  note "== SELF-TEST: prove each gate fires on a bad fixture =="
+  TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
+  TAG3='dt=6.000000000e+02 step_seq=1 checkpoint_timestep=0 target_stage=3 iter=0'
+  TAG2='dt=6.000000000e+02 step_seq=1 checkpoint_timestep=0 target_stage=2 iter=0'
+  { echo "SDIRK3_NEWTON_DIAG ts=0 stage=3 iter=0 event=residual"
+    echo "SDIRK3_STAGE_DIAG stage=3 outcome=ok"
+    echo "[SDIRK3_STAGE_HISTORY_SUMMARY] $TAG2 hist_rel=1e-8 inventory=OK defect=OK"
+    echo "[SDIRK3_STAGE_HISTORY_SUMMARY] $TAG3 hist_rel=1e-8 inventory=OK defect=OK"
+    echo "[SDIRK3_STAGE_APPLIED_DELTA] $TAG3 src_stage=2 applied_norm=1.0"
+    echo "SDIRK3_RHS_CALLS where=ark_sweep_start total=42"; } > "$TMP/good.log"
+  sed 's/outcome=ok/outcome=ABORT/' "$TMP/good.log" > "$TMP/stagediff.log"
+  cp "$TMP/good.log" "$TMP/dupclosure.log"
+  echo "[SDIRK3_STAGE_HISTORY_SUMMARY] $TAG3 hist_rel=1e-8 inventory=OK defect=OK" >> "$TMP/dupclosure.log"
+  cp "$TMP/good.log" "$TMP/incomplete.log"
+  echo "[SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE] $TAG3 defect=tensor_missing:s2" >> "$TMP/incomplete.log"
+  cp "$TMP/good.log" "$TMP/unobserved.log"
+  echo "SDIRK3_C_ABI_EXCEPTION: stage_operand_defect_tensor: SDIRK3_STAGE_OPERAND_DEFECT_UNOBSERVED: captured K != returned K (s2)" >> "$TMP/unobserved.log"
+  sed 's/total=42/total=43/' "$TMP/good.log" > "$TMP/rhsdiff.log"
+
+  gate "self: good fixture has 0 failure-family markers" \
+       "$([ "$(gate_fail_count "$TMP/good.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: good fixture has exactly one stage-3 closure" \
+       "$([ "$(gate_closure_count 3 "$TMP/good.log")" -eq 1 ] && echo 1 || echo 0)"
+  gate "self: STAGE_DIAG difference IS detected (defect 1)" \
+       "$(diff -q <(gate_common_records "$TMP/good.log") <(gate_common_records "$TMP/stagediff.log") >/dev/null 2>&1 && echo 0 || echo 1)"
+  gate "self: duplicate closure set is rejected (defect 4)" \
+       "$([ "$(gate_closure_count 3 "$TMP/dupclosure.log")" -eq 2 ] && echo 1 || echo 0)"
+  gate "self: DEFECT_INCOMPLETE is in the denylist (defect 5a)" \
+       "$([ "$(gate_fail_count "$TMP/incomplete.log")" -ge 1 ] && echo 1 || echo 0)"
+  gate "self: non-bracketed DEFECT_UNOBSERVED via C_ABI_EXCEPTION is caught (defect 5b)" \
+       "$([ "$(gate_fail_count "$TMP/unobserved.log")" -ge 1 ] && echo 1 || echo 0)"
+  gate "self: RHS-count difference IS detected (defect 6)" \
+       "$(diff -q <(gate_rhs_records "$TMP/good.log") <(gate_rhs_records "$TMP/rhsdiff.log") >/dev/null 2>&1 && echo 0 || echo 1)"
+  gate "self: success-form counter sees all three marker kinds (defect 8)" \
+       "$([ "$(gate_success_count "$TMP/good.log")" -ge 3 ] && echo 1 || echo 0)"
+  note "============================================================"
+  [ "$fails" -eq 0 ] && { note "SELF-TEST: ALL PASS"; exit 0; }
+  note "SELF-TEST: $fails FAILURE(S)"; exit 1
+fi
+
+# =============================================================================
+mkdir -p "$OUT"
+cd "$RUN" || { echo "FATAL: no $RUN"; exit 2; }
+[ -x ./wrf.exe ]   || { echo "FATAL: wrf.exe not built";   exit 2; }
+[ -x ./ideal.exe ] || { echo "FATAL: ideal.exe not built"; exit 2; }
+
+# ---- (7) BINARY / SOURCE PROVENANCE ----------------------------------------
+note "== provenance =="
+GIT_HEAD="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo UNKNOWN)"
+WRF_SHA="$(shasum -a 256 ./wrf.exe 2>/dev/null | cut -d' ' -f1)"
+NML_SHA="$(shasum -a 256 ./namelist.input 2>/dev/null | cut -d' ' -f1)"
+note "  git HEAD      : $GIT_HEAD"
+note "  wrf.exe sha256: $WRF_SHA"
+note "  namelist sha  : $NML_SHA"
+{ echo "git_head=$GIT_HEAD"; echo "wrf_sha256=$WRF_SHA"; echo "namelist_sha256=$NML_SHA"; } > "$OUT/provenance.txt"
+STALE_SRC="$(find "$ROOT/external/libtorch_wrf/sdirk3" -type f \( -name '*.cpp' -o -name '*.h' \) \
+             -newer ./wrf.exe 2>/dev/null | head -1)"
+gate "wrf.exe is newer than every sdirk3 source (binary not stale)" \
+     "$([ -z "$STALE_SRC" ] && echo 1 || echo 0)"
+[ -n "$STALE_SRC" ] && note "        newer than binary: $STALE_SRC"
+
+# ---- run driver -------------------------------------------------------------
+mk_namelist() { # <dst> <numtiles>
+  cp namelist.input "$1"
+  perl -0pi -e "s/(\btime_step\s*=\s*)\d+/\${1}$DT/" "$1"
+  if grep -q 'numtiles' "$1"; then perl -0pi -e "s/(\bnumtiles\s*=\s*)\d+/\${1}$2/" "$1"
+  else perl -0pi -e "s/(&domains\s*\n)/\${1} numtiles = $2,\n/" "$1"; fi
 }
 
-# --- namelist helpers: set time_step and numtiles in a fresh namelist copy -----
-mk_namelist() { # mk_namelist <dst> <numtiles>
-  local dst="$1" nt="$2"
-  cp namelist.input "$dst"
-  # time_step = DT (whole seconds); run only a couple of steps
-  perl -0pi -e "s/(\btime_step\s*=\s*)\d+/\${1}$DT/" "$dst"
-  # ensure a numtiles entry in &domains
-  if grep -q 'numtiles' "$dst"; then
-    perl -0pi -e "s/(\bnumtiles\s*=\s*)\d+/\${1}$nt/" "$dst"
-  else
-    perl -0pi -e "s/(&domains\s*\n)/\${1} numtiles = $nt,\n/" "$dst"
-  fi
-}
-
-# --- one wrf.exe run; returns exit code, stderr+stdout captured ----------------
-run_wrf() { # run_wrf <logfile> <numtiles> <omp> <diag 0|1> [np]
+run_wrf() { # <logfile> <numtiles> <omp> <diag 0|1> [np]
   local log="$1" nt="$2" omp="$3" diag="$4" np="${5:-1}"
   mk_namelist namelist.input.accept "$nt"
   cp namelist.input namelist.input.bak 2>/dev/null || true
   cp namelist.input.accept namelist.input
   : > "$log"
-  # WRF (DMPARALLEL) redirects the per-rank stdout/stderr -- and therefore the
-  # SDIRK3 diagnostic std::cerr lines -- into rsl.out.NNNN / rsl.error.NNNN, NOT
-  # the pipe below. Clear the stale rsl files, run, then fold every rank's
-  # rsl.error into the logfile so the marker greps see the real diagnostic output.
+  # WRF (DMPARALLEL) routes per-rank stdout/stderr -- and thus the diagnostic
+  # std::cerr lines -- into rsl.out./rsl.error.NNNN, not the pipe below.
   rm -f rsl.error.* rsl.out.*
-  local -a env=(OMP_NUM_THREADS="$omp" WRF_SDIRK3_STAGE_DIAG=1)
-  [ "$diag" = "1" ] && env+=(WRF_SDIRK3_STAGE_OPERAND_DIAG=1)
+  # (3) OFF must be FORCED off: an exported parent value would otherwise make the
+  # OFF run behave as ON. WRF_SDIRK3_RHS_COUNT is set for BOTH runs so the RHS
+  # totals are directly comparable.
+  local rc=0
   if [ "$np" -gt 1 ] && command -v mpirun >/dev/null 2>&1; then
-    env "${env[@]}" mpirun -np "$np" ./wrf.exe >>"$log" 2>&1
+    if [ "$diag" = "1" ]; then
+      env OMP_NUM_THREADS="$omp" WRF_SDIRK3_STAGE_DIAG=1 WRF_SDIRK3_RHS_COUNT=1 \
+          WRF_SDIRK3_STAGE_OPERAND_DIAG=1 mpirun -np "$np" ./wrf.exe >>"$log" 2>&1
+    else
+      env -u WRF_SDIRK3_STAGE_OPERAND_DIAG OMP_NUM_THREADS="$omp" \
+          WRF_SDIRK3_STAGE_DIAG=1 WRF_SDIRK3_RHS_COUNT=1 \
+          mpirun -np "$np" ./wrf.exe >>"$log" 2>&1
+    fi
+    rc=$?
   else
-    env "${env[@]}" ./wrf.exe >>"$log" 2>&1
+    if [ "$diag" = "1" ]; then
+      env OMP_NUM_THREADS="$omp" WRF_SDIRK3_STAGE_DIAG=1 WRF_SDIRK3_RHS_COUNT=1 \
+          WRF_SDIRK3_STAGE_OPERAND_DIAG=1 ./wrf.exe >>"$log" 2>&1
+    else
+      env -u WRF_SDIRK3_STAGE_OPERAND_DIAG OMP_NUM_THREADS="$omp" \
+          WRF_SDIRK3_STAGE_DIAG=1 WRF_SDIRK3_RHS_COUNT=1 ./wrf.exe >>"$log" 2>&1
+    fi
+    rc=$?
   fi
-  local rc=$?
   cat rsl.error.* >> "$log" 2>/dev/null
-  cat rsl.out.* >> "$log" 2>/dev/null
+  cat rsl.out.*   >> "$log" 2>/dev/null
   [ -f namelist.input.bak ] && mv namelist.input.bak namelist.input
   return $rc
 }
 
-# extract the common (non-operand) machine-readable diag lines, order-preserving
-common_records() { grep -E 'SDIRK3_(NEWTON|FGMRES)_DIAG|SDIRK3_STAGE ' "$1" 2>/dev/null || true; }
-operand_fail_markers='SDIRK3_STAGE_OPERAND_(ATTRIBUTION_FAILED|DEFECT_UNOBSERVED|DEFECT_INCOHERENT|DEFECT_NONFINITE|SHAPE_MISMATCH|DEVICE_MISMATCH|DTYPE_MISMATCH|CAPTURE_INCOMPLETE|CLOSURE_FAILED)'
-
-note "== ideal.exe (generate wrfinput) =="
-OMP_NUM_THREADS=1 ./ideal.exe > "$OUT/ideal.log" 2>&1
-gate "ideal.exe produced wrfinput" "$([ -f wrfinput_d01 ] && echo 1 || echo 0)"
+# ---- (7) ideal.exe: fresh input, checked exit -------------------------------
+note "== ideal.exe (fresh wrfinput) =="
+rm -f wrfinput_d01 rsl.error.* rsl.out.*
+OMP_NUM_THREADS=1 ./ideal.exe > "$OUT/ideal.log" 2>&1; ideal_rc=$?
+cat rsl.error.* >> "$OUT/ideal.log" 2>/dev/null
+gate "ideal.exe exited 0" "$([ "$ideal_rc" -eq 0 ] && echo 1 || echo 0)"
+gate "ideal.exe produced a FRESH wrfinput_d01" "$([ -f wrfinput_d01 ] && echo 1 || echo 0)"
 
 # =============================================================================
 note "== POSITIVE: dt=$DT single-rank single-tile OMP=2, OFF vs ON =="
@@ -97,66 +188,95 @@ run_wrf "$OUT/pos_off.log" 1 2 0; rc_off=$?
 run_wrf "$OUT/pos_on.log"  1 2 1; rc_on=$?
 note "  exit OFF=$rc_off ON=$rc_on"
 
-common_records "$OUT/pos_off.log" > "$OUT/pos_off.common"
-common_records "$OUT/pos_on.log"  > "$OUT/pos_on.common"
-if diff -q "$OUT/pos_off.common" "$OUT/pos_on.common" >/dev/null 2>&1; then
-  gate "common NEWTON/FGMRES/STAGE records byte-identical OFF vs ON" 1
-else
-  gate "common NEWTON/FGMRES/STAGE records byte-identical OFF vs ON" 0
-  diff "$OUT/pos_off.common" "$OUT/pos_on.common" | head -40 > "$OUT/pos_common.diff"
-fi
+# (2) the exit CONTRACT must match. dt=600 is expected to end nonzero; what must
+# hold is that enabling the diagnostic does not change the outcome.
+gate "OFF and ON exit identically (rc_off == rc_on)" \
+     "$([ "$rc_off" -eq "$rc_on" ] && echo 1 || echo 0)"
 
-n_s2=$(grep -c 'SDIRK3_STAGE_HISTORY_SUMMARY.*target_stage=2\|STAGE_HISTORY_DIAG.*stage=2' "$OUT/pos_on.log" 2>/dev/null)
-# a "record SET" = a summary line for that record stage; count SUMMARY closure lines
-s2_sets=$(grep -c 'STAGE_HISTORY_SUMMARY.*inventory=OK.*target_stage=2\|STAGE_HISTORY_SUMMARY .*stage2' "$OUT/pos_on.log" 2>/dev/null)
-# fall back to counting the emit tag "target_stage=2 / =3" on the summary/diag lines
-s2=$(grep -Eo 'target_stage=2' "$OUT/pos_on.log" | wc -l | tr -d ' ')
-s3=$(grep -Eo 'target_stage=3' "$OUT/pos_on.log" | wc -l | tr -d ' ')
-note "  target_stage=2 lines=$s2  target_stage=3 lines=$s3"
-gate "at least one stage-2 AND one stage-3 record present" \
-     "$([ "$s2" -ge 1 ] && [ "$s3" -ge 1 ] && echo 1 || echo 0)"
+# (1) STAGE_DIAG now genuinely participates.
+gate_common_records "$OUT/pos_off.log" > "$OUT/pos_off.common"
+gate_common_records "$OUT/pos_on.log"  > "$OUT/pos_on.common"
+gate "common NEWTON/FGMRES/STAGE_DIAG records byte-identical OFF vs ON" \
+     "$(diff -q "$OUT/pos_off.common" "$OUT/pos_on.common" >/dev/null 2>&1 && echo 1 || echo 0)"
+diff "$OUT/pos_off.common" "$OUT/pos_on.common" > "$OUT/pos_common.diff" 2>&1
+gate "STAGE_DIAG records are actually PRESENT (the pattern really matches)" \
+     "$([ "$(cnt 'SDIRK3_STAGE_DIAG' "$OUT/pos_on.log")" -ge 1 ] && echo 1 || echo 0)"
 
-if grep -Eq "$operand_fail_markers" "$OUT/pos_on.log"; then
-  gate "no attribution/defect failure marker in the positive run" 0
-  grep -E "$operand_fail_markers" "$OUT/pos_on.log" | head -10 > "$OUT/pos_on.failmarkers"
-else
-  gate "no attribution/defect failure marker in the positive run" 1
-fi
+# (6) 0 extra RHS evaluations, proven by the emitted counter sequence.
+gate_rhs_records "$OUT/pos_off.log" > "$OUT/pos_off.rhs"
+gate_rhs_records "$OUT/pos_on.log"  > "$OUT/pos_on.rhs"
+gate "RHS-call records present (counter actually emitted)" \
+     "$([ -s "$OUT/pos_on.rhs" ] && echo 1 || echo 0)"
+gate "0 extra RHS evaluations: RHS-call sequence identical OFF vs ON" \
+     "$(diff -q "$OUT/pos_off.rhs" "$OUT/pos_on.rhs" >/dev/null 2>&1 && echo 1 || echo 0)"
+
+# (3) OFF must emit NO operand evidence; ON must emit some.
+off_succ=$(gate_success_count "$OUT/pos_off.log")
+on_succ=$(gate_success_count "$OUT/pos_on.log")
+note "  success-form markers: OFF=$off_succ ON=$on_succ"
+gate "OFF run emits ZERO operand success markers (diag really off)" \
+     "$([ "$off_succ" -eq 0 ] && echo 1 || echo 0)"
+gate "ON run emits operand success markers" "$([ "$on_succ" -gt 0 ] && echo 1 || echo 0)"
+
+# (4) EXACTLY one closure record per record stage.
+s2=$(gate_closure_count 2 "$OUT/pos_on.log")
+s3=$(gate_closure_count 3 "$OUT/pos_on.log")
+note "  closure summaries: target_stage=2 -> $s2   target_stage=3 -> $s3"
+gate "exactly ONE stage-2 closure record set" "$([ "$s2" -eq 1 ] && echo 1 || echo 0)"
+gate "exactly ONE stage-3 closure record set" "$([ "$s3" -eq 1 ] && echo 1 || echo 0)"
+
+# (5) the WHOLE failure family, bracketed or not.
+on_fail=$(gate_fail_count "$OUT/pos_on.log")
+gate "no operand failure-family marker in the positive run" \
+     "$([ "$on_fail" -eq 0 ] && echo 1 || echo 0)"
+[ "$on_fail" -ne 0 ] && grep -E "$FAIL_FAMILY" "$OUT/pos_on.log" | head -10 > "$OUT/pos_on.failmarkers"
+
+# PR 9F.1: the published numbers must be the TENSOR authority.
+gate "summary publishes tensor-derived defect (defect_eval=tensor)" \
+     "$([ "$(cnt 'defect_eval=tensor' "$OUT/pos_on.log")" -ge 1 ] && echo 1 || echo 0)"
+gate "summary states the pre/post-postprocess evaluation point" \
+     "$([ "$(cnt 'defect_eval_point=pre_postprocess' "$OUT/pos_on.log")" -ge 1 ] && echo 1 || echo 0)"
 
 # =============================================================================
 note "== NEGATIVE: numtiles=2 controlled-fatal, ON, OMP {1,2,4} =="
+note "   (exercises tile_covers_patch=false; single_rank stays TRUE in these runs)"
 for omp in 1 2 4; do
   log="$OUT/neg_nt2_omp${omp}.log"
   run_wrf "$log" 2 "$omp" 1; rc=$?
-  topo=$(grep -c 'SDIRK3_STAGE_OPERAND_DIAG_UNSUPPORTED_TOPOLOGY' "$log" 2>/dev/null)
-  ctrl=$(grep -Ec 'controlled.fatal|abort_c_abi_exception|stage_operand_diag_topology' "$log" 2>/dev/null)
-  succ=$(grep -c 'STAGE_HISTORY_SUMMARY.*inventory=OK' "$log" 2>/dev/null)
-  scomplete=$(grep -Ec 'SUCCESS COMPLETE' "$log" 2>/dev/null)
-  uncaught=$(grep -Ec 'terminate called|what\(\):|libc\+\+abi' "$log" 2>/dev/null)
-  note "  OMP=$omp rc=$rc topo=$topo ctrl=$ctrl success_records=$succ SUCCESS=$scomplete uncaught=$uncaught"
-  gate "OMP=$omp: nonzero exit"                    "$([ "$rc" -ne 0 ] && echo 1 || echo 0)"
-  gate "OMP=$omp: UNSUPPORTED_TOPOLOGY marker"     "$([ "$topo" -ge 1 ] && echo 1 || echo 0)"
-  gate "OMP=$omp: controlled-fatal marker"         "$([ "$ctrl" -ge 1 ] && echo 1 || echo 0)"
-  gate "OMP=$omp: 0 success records"               "$([ "$succ" -eq 0 ] && echo 1 || echo 0)"
-  gate "OMP=$omp: 0 SUCCESS/COMPLETE"              "$([ "$scomplete" -eq 0 ] && echo 1 || echo 0)"
-  gate "OMP=$omp: 0 uncaught-exception signature"  "$([ "$uncaught" -eq 0 ] && echo 1 || echo 0)"
+  topo=$(cnt 'SDIRK3_STAGE_OPERAND_DIAG_UNSUPPORTED_TOPOLOGY' "$log")
+  ctrl=$(cnt 'controlled.fatal|abort_c_abi_exception|stage_operand_diag_topology|SDIRK3_C_ABI_EXCEPTION' "$log")
+  succ=$(gate_success_count "$log")            # (8) ALL success-form markers
+  scomplete=$(cnt 'SUCCESS COMPLETE' "$log")
+  uncaught=$(cnt 'terminate called|libc\+\+abi|what\(\):' "$log")
+  note "  OMP=$omp rc=$rc topo=$topo ctrl=$ctrl success_markers=$succ SUCCESS=$scomplete uncaught=$uncaught"
+  gate "OMP=$omp: nonzero exit"                            "$([ "$rc" -ne 0 ] && echo 1 || echo 0)"
+  gate "OMP=$omp: UNSUPPORTED_TOPOLOGY marker"             "$([ "$topo" -ge 1 ] && echo 1 || echo 0)"
+  gate "OMP=$omp: controlled-fatal marker"                 "$([ "$ctrl" -ge 1 ] && echo 1 || echo 0)"
+  gate "OMP=$omp: ZERO success-form markers (all 3 kinds)"  "$([ "$succ" -eq 0 ] && echo 1 || echo 0)"
+  gate "OMP=$omp: 0 SUCCESS COMPLETE"                      "$([ "$scomplete" -eq 0 ] && echo 1 || echo 0)"
+  gate "OMP=$omp: 0 uncaught-exception signature"          "$([ "$uncaught" -eq 0 ] && echo 1 || echo 0)"
 done
 
-# OPTIONAL np=2 negative ("가능하면 np=2"). The single_rank topology gate is
-# ALREADY proven by the numtiles=2 negatives above (same
-# single_rank && tile_covers_patch check). A 2-rank launch on a single node may not
-# progress past domain init to the first solve, so np=2 is a bonus: PASS if it
-# reaches UNSUPPORTED_TOPOLOGY, SKIP (not FAIL) if it never reaches the solve.
+# =============================================================================
+# (9) np=2 exercises a DIFFERENT predicate. The gate is
+# (single_rank && tile_covers_patch). numtiles=2 gives single_rank=1,
+# tile_covers_patch=0, so only the TILE predicate is exercised; only np>1 can drive
+# single_rank=0. If the 2-rank launch never reaches the solve, that predicate stays
+# UNPROVEN and must NOT be recorded as covered by the numtiles negatives.
 if command -v mpirun >/dev/null 2>&1; then
   log="$OUT/neg_np2.log"; run_wrf "$log" 1 1 1 2; rc=$?
-  topo=$(grep -c 'UNSUPPORTED_TOPOLOGY' "$log" 2>/dev/null)
-  note "  np=2 rc=$rc topo=$topo"
-  if [ "$rc" -ne 0 ] && [ "${topo:-0}" -ge 1 ]; then
-    gate "np=2: nonzero exit AND UNSUPPORTED_TOPOLOGY" 1
+  topo=$(cnt 'UNSUPPORTED_TOPOLOGY' "$log")
+  sr0=$(cnt 'single_rank=0' "$log")
+  note "  np=2 rc=$rc topo=$topo single_rank=0_seen=$sr0"
+  if [ "$rc" -ne 0 ] && [ "$topo" -ge 1 ] && [ "$sr0" -ge 1 ]; then
+    gate "np=2: nonzero exit AND UNSUPPORTED_TOPOLOGY with single_rank=0" 1
   else
-    note "  SKIP: np=2 did not reach the solve on this node (optional; the"
-    note "        numtiles=2 negatives above already prove the same topology gate)"
+    skip "np=2 did not reach the solve on this node -- the single_rank predicate is"
+    note "        UNPROVEN by runtime evidence. numtiles=2 does NOT cover it: those"
+    note "        runs report single_rank=1 tile_covers_patch=0."
   fi
+else
+  skip "mpirun unavailable -- single_rank predicate UNPROVEN (numtiles=2 does not cover it)"
 fi
 
 # =============================================================================
