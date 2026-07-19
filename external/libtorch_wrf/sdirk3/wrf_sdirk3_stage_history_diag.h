@@ -141,15 +141,30 @@ inline long long sdirk3_next_rhs_sweep_seq() {
     return seq.fetch_add(1, std::memory_order_relaxed);
 }
 
+// Number of sweeps currently in flight. The per-sweep delta is computed from a
+// PROCESS-GLOBAL counter, so it is only attributable to this sweep while it is the
+// only one running. WRF's tile loop is OpenMP-parallel at the Fortran level and
+// unifiedStep is called per tile, so with numtiles>1 several sweeps can overlap and
+// each one's "delta" would silently absorb the others' RHS calls. The stage-operand
+// diagnostic itself requires a single tile, but WRF_SDIRK3_RHS_COUNT is independent
+// of that gate and can be set in a multi-tile run. Rather than leave the
+// single-sweep precondition as an unchecked comment, measure it and mark the record.
+inline std::atomic<int>& sdirk3_rhs_sweep_depth() {
+    static std::atomic<int> depth{0};
+    return depth;
+}
+
 // Emit one record in a stable, machine-readable, line-atomic form.
 inline void emit_sdirk3_rhs_count(const char* phase, long long sweep_seq,
-                                  long long total, long long delta) {
+                                  long long total, long long delta,
+                                  bool concurrent = false) {
     if (!sdirk3_rhs_count_enabled()) return;
     std::ostringstream os;
     os << "SDIRK3_RHS_CALLS phase=" << phase
        << " sweep_seq=" << sweep_seq
        << " total=" << total;
     if (delta >= 0) os << " delta=" << delta;
+    if (concurrent) os << " concurrent=1";
     emit_sdirk3_diag_line(os.str() + "\n");
 }
 
@@ -165,22 +180,35 @@ class Sdirk3RhsSweepScope {
 public:
     Sdirk3RhsSweepScope()
         : seq_(sdirk3_rhs_count_enabled() ? sdirk3_next_rhs_sweep_seq() : -1),
-          start_(sdirk3_rhs_count_value()) {
-        emit_sdirk3_rhs_count("begin", seq_, start_, -1);
+          start_(sdirk3_rhs_count_value()),
+          // Non-zero prior depth means another sweep was already in flight, so this
+          // sweep's delta cannot be attributed to it alone.
+          concurrent_(sdirk3_rhs_sweep_depth().fetch_add(1, std::memory_order_relaxed) != 0) {
+        emit_sdirk3_rhs_count("begin", seq_, start_, -1, concurrent_);
     }
     ~Sdirk3RhsSweepScope() {
-        // noexcept context: emission must not throw out of a destructor.
+        // noexcept context: emission must not throw out of a destructor. A swallowed
+        // failure leaves the `end` record absent, which the harness reports as
+        // missing_end and fails closed on -- silence here degrades to a FAILING gate,
+        // never to a passing one.
         try {
+            // Another sweep opening or closing during our lifetime also taints the
+            // delta, so re-check the depth at exit rather than trusting entry alone.
+            const bool overlapped =
+                concurrent_ ||
+                sdirk3_rhs_sweep_depth().load(std::memory_order_relaxed) != 1;
             const long long total = sdirk3_rhs_count_value();
-            emit_sdirk3_rhs_count("end", seq_, total, total - start_);
+            emit_sdirk3_rhs_count("end", seq_, total, total - start_, overlapped);
         } catch (...) {
         }
+        sdirk3_rhs_sweep_depth().fetch_sub(1, std::memory_order_relaxed);
     }
     Sdirk3RhsSweepScope(const Sdirk3RhsSweepScope&) = delete;
     Sdirk3RhsSweepScope& operator=(const Sdirk3RhsSweepScope&) = delete;
 private:
     long long seq_;
     long long start_;
+    bool concurrent_;
 };
 
 // Route one success line either into the transaction (preferred) or straight out

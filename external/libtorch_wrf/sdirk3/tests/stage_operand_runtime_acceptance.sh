@@ -100,12 +100,13 @@ gate_closure_count()  { cnt "$(closure_re "$1")" "$2"; }
 rhs_sweep_table() { # <log>
   awk '
     /SDIRK3_RHS_CALLS/ {
-      phase=""; seq=-1; total=0; delta=-1; has_delta=0
+      phase=""; seq=-1; total=0; delta=-1; has_delta=0; conc=0
       for (i = 1; i <= NF; i++) {
         if ($i ~ /^phase=/)     phase = substr($i, 7)
         if ($i ~ /^sweep_seq=/) seq   = substr($i, 11) + 0
         if ($i ~ /^total=/)     total = substr($i, 7) + 0
         if ($i ~ /^delta=/)   { delta = substr($i, 7) + 0; has_delta = 1 }
+        if ($i == "concurrent=1") conc = 1
       }
       if (seq < 0) next
       # A repeated sweep_seq must FAIL rather than silently overwrite: without this,
@@ -118,6 +119,7 @@ rhs_sweep_table() { # <log>
         if (seen_e[seq]) dup_e[seq] = 1
         e[seq] = total; seen_e[seq] = 1; d[seq] = delta; hd[seq] = has_delta
       }
+      if (conc) tainted[seq] = 1
     }
     END {
       for (i = 1; i <= n; i++) {
@@ -125,6 +127,10 @@ rhs_sweep_table() { # <log>
         if (emitted[s]) continue          # one row per seq; duplicates flagged below
         emitted[s] = 1
         if (dup_b[s] || dup_e[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "duplicate_seq"; continue }
+        # Overlapping sweeps share the global counter, so this delta absorbed RHS
+        # calls made by another sweep and is not attributable. Never use as evidence.
+        # (No apostrophes in this awk block: it is single-quoted in the shell.)
+        if (tainted[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "concurrent_sweeps"; continue }
         if (!seen_e[s]) { print s, b[s], "-", "-", "missing_end"; continue }
         st = "ok"
         if (!hd[s] || d[s] != e[s] - b[s]) st = "delta_mismatch"
@@ -183,6 +189,12 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=42"
     echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=42"
     echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=84 delta=42"; } > "$TMP/rhsdupseq.log"
+  # Overlapping sweeps (multi-tile OpenMP): each pair is complete and delta-consistent
+  # in isolation, but the deltas absorbed each other's calls via the global counter.
+  { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=0"
+    echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=1 total=5 concurrent=1"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=1 total=30 delta=25 concurrent=1"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=40 delta=40 concurrent=1"; } > "$TMP/rhsconcurrent.log"
   # The subtler vacuous case (found by Codex on the first fix): the counter is
   # CUMULATIVE, so a sweep that evaluated nothing still reports total>0 at both ends
   # once an earlier sweep has advanced it. A "some record has total>0" check passes
@@ -218,6 +230,8 @@ if [ "${1:-}" = "--self-test" ]; then
        "$([ "$(rhs_sweeps_well_formed "$TMP/rhsbaddelta.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: DUPLICATE sweep_seq IS rejected (P1-1 uniqueness, found by Codex)" \
        "$([ "$(rhs_sweeps_well_formed "$TMP/rhsdupseq.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: CONCURRENT (overlapping) sweeps ARE rejected -- delta not attributable" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsconcurrent.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: good fixture has BOTH begin and end phase records (defect 10)" \
        "$([ "$(cnt 'phase=begin' "$TMP/good.log")" -ge 1 ] && \
           [ "$(cnt 'phase=end' "$TMP/good.log")" -ge 1 ] && echo 1 || echo 0)"
