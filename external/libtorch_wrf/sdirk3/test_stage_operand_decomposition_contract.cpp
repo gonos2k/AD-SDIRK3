@@ -1006,7 +1006,115 @@ int main() {
               "case31: absent final_k -> final_k_observed=0 (never assumed identical)");
     }
 
-    const int kExpected = 85;  // ratchet: update deliberately with the cases
+    // ---- case32: PR 9F.2 P1-2 -- the DISABLED counter must not move -------------
+    // The default production path must pay no atomic read-modify-write. The env var
+    // is unread in this unit-test process, so sdirk3_rhs_count_enabled() is false and
+    // the tick must be a no-op. This pins the property that regressed once already:
+    // gating only the PRINTING while leaving the atomic unconditional.
+    {
+        const long long before = wrf::sdirk3::sdirk3_rhs_count_value();
+        for (int i = 0; i < 1000; ++i) wrf::sdirk3::sdirk3_rhs_count_tick();
+        const long long after = wrf::sdirk3::sdirk3_rhs_count_value();
+        check(!wrf::sdirk3::sdirk3_rhs_count_enabled(),
+              "case32: counting is DISABLED in this process (no WRF_SDIRK3_RHS_COUNT)");
+        check(after == before,
+              "case32: 1000 ticks with counting disabled leave the counter UNCHANGED "
+              "(default path performs no atomic RMW)");
+    }
+
+    // ---- case33: the sweep scope emits nothing when counting is disabled ---------
+    // RAII pairing must not become an unconditional I/O cost on the default path.
+    {
+        const long long before = wrf::sdirk3::sdirk3_rhs_count_value();
+        { wrf::sdirk3::Sdirk3RhsSweepScope s; wrf::sdirk3::sdirk3_rhs_count_tick(); }
+        check(wrf::sdirk3::sdirk3_rhs_count_value() == before,
+              "case33: sweep scope + tick with counting disabled is a total no-op");
+        // The DEPTH counter is a second shared atomic, and the first version of the
+        // concurrency guard incremented it unconditionally in the member-init list --
+        // re-introducing per-sweep exactly the default-path atomic RMW that case32
+        // removes per-RHS-call. Pin it: disabled construction must not touch depth.
+        check(wrf::sdirk3::sdirk3_rhs_sweep_depth() == 0,
+              "case33: sweep depth is UNTOUCHED when counting is disabled (no atomic "
+              "RMW on the default path, entry or exit)");
+        {
+            wrf::sdirk3::Sdirk3RhsSweepScope outer;
+            check(wrf::sdirk3::sdirk3_rhs_sweep_depth() == 0,
+                  "case33: depth stays 0 even DURING a disabled scope lifetime");
+        }
+    }
+
+    // ---- case34: same-thread nesting detection ---------------------------------
+    // The counter is thread_local, so cross-thread contamination is impossible by
+    // construction and the predicate only has to catch a sweep nested inside another
+    // ON THE SAME THREAD. Kept as a pure function of sampled values so it is testable
+    // here: the enabled-path cache initialises false in this process (case32/33 force
+    // it), so a predicate reachable only through the live scope would be unreachable.
+    {
+        using wrf::sdirk3::sdirk3_sweep_overlapped;
+        check(!sdirk3_sweep_overlapped(false, 1),
+              "case34: solitary sweep (no prior depth, depth 1 at exit) -> clean");
+        check(sdirk3_sweep_overlapped(true, 1),
+              "case34: a sweep already open on this thread at entry -> nested");
+        check(sdirk3_sweep_overlapped(false, 2),
+              "case34: an inner sweep still open at our exit -> nested");
+        check(sdirk3_sweep_overlapped(false, 0),
+              "case34: impossible depth 0 at exit is treated as nested (fail-closed)");
+    }
+
+    // ---- case35: the counter is thread-private ---------------------------------
+    // This is the property that replaced three failed attempts to make a global
+    // counter attributable, so it must be tested NON-VACUOUSLY.
+    //
+    // The obvious test -- call sdirk3_rhs_count_tick() on another thread and check
+    // this thread is unmoved -- is worthless here: counting is DISABLED in this
+    // process (case32/33 force the cached flag false), so tick() returns before
+    // incrementing and NOTHING moves on either thread. A process-global counter
+    // would pass that test identically. It proves only that the gate holds.
+    //
+    // The counter accessor itself is not gated, so drive it directly. If the storage
+    // were shared, the main thread would observe the other thread's writes.
+    {
+        // Seed THIS thread first, so "the other thread sees 0" is itself
+        // non-vacuous: with shared storage the other thread would observe this
+        // seed rather than zero.
+        for (int i = 0; i < 41; ++i) ++wrf::sdirk3::sdirk3_rhs_call_counter();
+        const long long before = wrf::sdirk3::sdirk3_rhs_count_value();
+        check(before >= 41,
+              "case35: this thread's own direct increments ARE visible to itself "
+              "(the accessor is not a no-op, so the checks below have teeth)");
+        long long other_thread_saw = -1;
+        std::thread t([&] {
+            // A fresh thread's private counter must start at zero...
+            other_thread_saw = wrf::sdirk3::sdirk3_rhs_count_value();
+            // ...and writes here must be invisible to the spawning thread.
+            for (int i = 0; i < 128; ++i) ++wrf::sdirk3::sdirk3_rhs_call_counter();
+        });
+        t.join();
+        check(wrf::sdirk3::sdirk3_rhs_count_value() == before,
+              "case35: 128 DIRECT increments on another thread leave this thread's "
+              "counter unchanged (storage is thread-private, not merely gated)");
+        check(other_thread_saw == 0,
+              "case35: a fresh thread starts from its own zeroed counter, not from "
+              "this thread's accumulated value");
+    }
+
+    // ---- case36: the disabled gate is evaluated per thread ----------------------
+    // Separate from case35 on purpose: this one IS about the gate, and stating it
+    // separately keeps case35 from being read as covering both.
+    {
+        long long moved = -1;
+        std::thread t([&] {
+            const long long b = wrf::sdirk3::sdirk3_rhs_count_value();
+            for (int i = 0; i < 128; ++i) wrf::sdirk3::sdirk3_rhs_count_tick();
+            moved = wrf::sdirk3::sdirk3_rhs_count_value() - b;
+        });
+        t.join();
+        check(moved == 0,
+              "case36: with counting disabled, 128 ticks on a NEW thread move that "
+              "thread's counter by 0 (the gate is not inherited as enabled)");
+    }
+
+    const int kExpected = 98;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

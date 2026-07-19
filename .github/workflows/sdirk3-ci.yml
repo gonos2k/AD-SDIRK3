@@ -39,17 +39,25 @@ jobs:
           python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet 'pyyaml==6.0.2'
           bash .github/ci/check_action_pins.sh
 
+      # PR 9F.2 P2: the sdirk3 test harnesses live outside .github/ci/, so the
+      # globs below previously skipped them entirely -- stage_operand_runtime_
+      # acceptance.sh was neither syntax-checked nor shellchecked nor run. Both
+      # directories are covered now. (Measured clean at the time of this change:
+      # bash -n and shellcheck -S warning both pass on tests/*.sh, so this widens
+      # coverage without landing red.)
       - name: shell script syntax
         run: |
           set -euo pipefail
-          for f in .github/ci/*.sh; do bash -n "$f"; done
+          for f in .github/ci/*.sh external/libtorch_wrf/sdirk3/tests/*.sh; do
+            bash -n "$f"
+          done
           echo "bash -n clean"
 
       - name: shellcheck
         run: |
           set -euo pipefail
           shellcheck --version | head -2
-          shellcheck -S warning .github/ci/*.sh
+          shellcheck -S warning .github/ci/*.sh external/libtorch_wrf/sdirk3/tests/*.sh
 
       # PR 7C: the decomposition harness carries its own logic (marker /
       # exit / stage-norm / pre-refusal-solve assertions + manifest sanity).
@@ -60,6 +68,40 @@ jobs:
         run: |
           set -euo pipefail
           bash .github/ci/run_decomposition_matrix.sh --self-test
+
+      # PR 9F.2 P2: same argument for the stage-operand harness, but be exact
+      # about what this does and does not cover.
+      #
+      # Census, counted rather than estimated (42 `gate` calls + 2 `skip` total):
+      #
+      # COVERED -- 16 gates, lines 205-235, inside the --self-test block. Each
+      # runs against a synthetic fixture built to VIOLATE the property it claims.
+      # No WRF, no mpirun, sub-second. Until now that pass rate was local
+      # evidence, not a standing gate: nothing failed if a gate silently stopped
+      # rejecting its fixture.
+      #
+      # NOT COVERED -- the 26 gates at lines 263-434 (provenance, ideal.exe,
+      # positive OFF/ON, negative topology). --self-test exits at 239, so these
+      # get `bash -n` syntax checking ONLY.
+      #
+      # Precisely what is and is not proven: the shared HELPERS those gates call
+      # (cnt, gate_common_records, gate_rhs_records, gate_success_count,
+      # gate_fail_count, gate_closure_count, rhs_sweep_table,
+      # rhs_sweeps_well_formed) ARE exercised by the self-test. What is unproven
+      # is the WIRING at each production gate -- which helper it calls, with
+      # which argument, against which comparison. An inverted test, a stale
+      # variable, or a gate that can never fire still passes CI. Closing that
+      # needs the gate bodies extracted into functions the self-test can drive
+      # with synthetic logs; until then a green fast-contracts does NOT mean
+      # "the acceptance gates are proven".
+      #
+      # Run under `bash -e` deliberately -- several gates count with `grep -c`,
+      # which exits 1 on a zero match, and a zero match is exactly the "must be
+      # zero" case, so -e here also pins that the counting helper stays -e-safe.
+      - name: stage-operand harness self-test
+        run: |
+          set -euo pipefail
+          bash -e external/libtorch_wrf/sdirk3/tests/stage_operand_runtime_acceptance.sh --self-test
 
       - name: actionlint (pinned binary, checksum-verified)
         run: |
