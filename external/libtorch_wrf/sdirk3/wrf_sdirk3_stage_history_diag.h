@@ -178,15 +178,27 @@ inline void emit_sdirk3_rhs_count(const char* phase, long long sweep_seq,
 // hand-placed call that a future early-return could bypass.
 class Sdirk3RhsSweepScope {
 public:
+    // EVERY shared-memory access below is behind enabled_, which is a cached
+    // function-local static bool. With WRF_SDIRK3_RHS_COUNT unset this object
+    // constructs and destructs without a single atomic operation of any kind --
+    // no RMW, no load of a shared line. The first version of this guard did the
+    // depth fetch_add unconditionally in the member-init list, re-introducing on a
+    // per-sweep basis exactly the default-path atomic that P1-2 had just removed on
+    // a per-RHS-call basis. Short-circuit && in concurrent_ is what keeps the
+    // fetch_add from running when disabled; do not rewrite it into a statement that
+    // evaluates the atomic first.
     Sdirk3RhsSweepScope()
-        : seq_(sdirk3_rhs_count_enabled() ? sdirk3_next_rhs_sweep_seq() : -1),
-          start_(sdirk3_rhs_count_value()),
+        : enabled_(sdirk3_rhs_count_enabled()),
+          seq_(enabled_ ? sdirk3_next_rhs_sweep_seq() : -1),
+          start_(enabled_ ? sdirk3_rhs_count_value() : 0),
           // Non-zero prior depth means another sweep was already in flight, so this
-          // sweep's delta cannot be attributed to it alone.
-          concurrent_(sdirk3_rhs_sweep_depth().fetch_add(1, std::memory_order_relaxed) != 0) {
-        emit_sdirk3_rhs_count("begin", seq_, start_, -1, concurrent_);
+          // delta cannot be attributed to this sweep alone.
+          concurrent_(enabled_ &&
+                      sdirk3_rhs_sweep_depth().fetch_add(1, std::memory_order_relaxed) != 0) {
+        if (enabled_) emit_sdirk3_rhs_count("begin", seq_, start_, -1, concurrent_);
     }
     ~Sdirk3RhsSweepScope() {
+        if (!enabled_) return;   // default path: nothing was acquired, nothing to release
         // noexcept context: emission must not throw out of a destructor. A swallowed
         // failure leaves the `end` record absent, which the harness reports as
         // missing_end and fails closed on -- silence here degrades to a FAILING gate,
@@ -206,6 +218,7 @@ public:
     Sdirk3RhsSweepScope(const Sdirk3RhsSweepScope&) = delete;
     Sdirk3RhsSweepScope& operator=(const Sdirk3RhsSweepScope&) = delete;
 private:
+    bool enabled_;        // declared first: the others' initializers read it
     long long seq_;
     long long start_;
     bool concurrent_;

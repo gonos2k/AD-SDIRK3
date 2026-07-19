@@ -1029,9 +1029,21 @@ int main() {
         { wrf::sdirk3::Sdirk3RhsSweepScope s; wrf::sdirk3::sdirk3_rhs_count_tick(); }
         check(wrf::sdirk3::sdirk3_rhs_count_value() == before,
               "case33: sweep scope + tick with counting disabled is a total no-op");
+        // The DEPTH counter is a second shared atomic, and the first version of the
+        // concurrency guard incremented it unconditionally in the member-init list --
+        // re-introducing per-sweep exactly the default-path atomic RMW that case32
+        // removes per-RHS-call. Pin it: disabled construction must not touch depth.
+        check(wrf::sdirk3::sdirk3_rhs_sweep_depth().load(std::memory_order_relaxed) == 0,
+              "case33: sweep depth is UNTOUCHED when counting is disabled (no atomic "
+              "RMW on the default path, entry or exit)");
+        {
+            wrf::sdirk3::Sdirk3RhsSweepScope outer;
+            check(wrf::sdirk3::sdirk3_rhs_sweep_depth().load(std::memory_order_relaxed) == 0,
+                  "case33: depth stays 0 even DURING a disabled scope lifetime");
+        }
     }
 
-    const int kExpected = 88;  // ratchet: update deliberately with the cases
+    const int kExpected = 90;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);
