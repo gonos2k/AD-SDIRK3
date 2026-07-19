@@ -56,7 +56,11 @@ closure_re() { printf '\[SDIRK3_STAGE_HISTORY_SUMMARY\].*target_stage=%s .*inven
 
 # Count matches WITHOUT the `grep -c ... || echo 0` double-emit bug (grep -c prints
 # 0 and exits 1 on no match, so `|| echo 0` produced "0\n0" and broke -eq tests).
-cnt() { local n; n=$(grep -Ec "$1" "$2" 2>/dev/null); printf '%s' "${n:-0}"; }
+# The `|| true` matters even though this script sets only -uo pipefail: grep -c exits
+# 1 on a zero match, so a caller running us under `set -e` (a CI wrapper, or `bash -e`)
+# would terminate on the first legitimately-zero count. grep -c still PRINTS 0, so the
+# value is unaffected.
+cnt() { local n; n=$(grep -Ec "$1" "$2" 2>/dev/null || true); printf '%s' "${n:-0}"; }
 
 gate_common_records() { grep -E 'SDIRK3_(NEWTON|FGMRES|STAGE)_DIAG\b' "$1" 2>/dev/null || true; }
 gate_rhs_records()    { grep -E '^SDIRK3_RHS_CALLS ' "$1" 2>/dev/null || true; }
@@ -115,8 +119,11 @@ cd "$RUN" || { echo "FATAL: no $RUN"; exit 2; }
 # ---- (7) BINARY / SOURCE PROVENANCE ----------------------------------------
 note "== provenance =="
 GIT_HEAD="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo UNKNOWN)"
-WRF_SHA="$(shasum -a 256 ./wrf.exe 2>/dev/null | cut -d' ' -f1)"
-NML_SHA="$(shasum -a 256 ./namelist.input 2>/dev/null | cut -d' ' -f1)"
+# sha256sum (coreutils) first, shasum (perl) as fallback: the hosted core-linux job
+# may have only one of the two.
+sha256_of() { { sha256sum "$1" || shasum -a 256 "$1"; } 2>/dev/null | cut -d' ' -f1; }
+WRF_SHA="$(sha256_of ./wrf.exe)"
+NML_SHA="$(sha256_of ./namelist.input)"
 note "  git HEAD      : $GIT_HEAD"
 note "  wrf.exe sha256: $WRF_SHA"
 note "  namelist sha  : $NML_SHA"

@@ -894,8 +894,10 @@ inline std::string emit_stage_history_diag(
     // printed under a passing tensor gate.
     if (derived) {
         const std::string tinv = validate_derived_defect_inventory(*derived, target_stage);
+        // validate_derived_defect_inventory already prefixes every reason with
+        // "tensor_" (tensor_missing:, tensor_duplicate:, ...); do not double it.
         if (!tinv.empty())
-            return fail("SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE", "tensor_" + tinv);
+            return fail("SDIRK3_STAGE_OPERAND_DEFECT_INCOMPLETE", tinv);
         for (const auto& d : defects) {
             if (d.explicit_stage) continue;   // convergence n/a: no tensor expected
             const DerivedDefectRecord* dr = nullptr;
