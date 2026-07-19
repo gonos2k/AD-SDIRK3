@@ -78,6 +78,55 @@ cnt() { local n; n=$(grep -Ec "$1" "$2" 2>/dev/null || true); printf '%s' "${n:-
 
 gate_common_records() { grep -E 'SDIRK3_(NEWTON|FGMRES|STAGE)_DIAG\b' "$1" 2>/dev/null || true; }
 gate_rhs_records()    { grep -E '^SDIRK3_RHS_CALLS ' "$1" 2>/dev/null || true; }
+# PR 9F.3: WHOLE-RUN authority. The sweep table can only see calls made between a
+# begin and its end. RHS evaluations also occur before the first sweep opens, after
+# the last one closes, and on threads that never open one at all -- so an extra call
+# in any of those places leaves the sweep records byte-identical while the run really
+# did evaluate the RHS once more. These records close that gap.
+gate_run_records()    { grep -E '^SDIRK3_RHS_RUN_TOTAL ' "$1" 2>/dev/null || true; }
+run_total_final() {  # <log> -> the closing whole-run total, or empty if absent
+  grep -E '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1" 2>/dev/null | tail -1 |
+    sed -n 's/.*total=\([0-9][0-9]*\).*/\1/p'
+}
+# 1 iff exactly one begin and one end exist and the end is >= the begin. A missing
+# end is the signature of an aborted run, and must FAIL rather than be ignored:
+# a run that died cannot have proven that it added no RHS evaluations.
+# Repeated end records are ACCEPTED when they agree. The emitter deliberately
+# prefers duplication to loss on the fatal path -- a missing record is
+# indistinguishable from a run that never reached the emitter, while duplicates that
+# agree are reconcilable -- so requiring exactly one here would turn that safety
+# margin into a failure. Disagreement and absence are still rejected.
+run_total_well_formed() { # <log>
+  local nb ne fin kind distinct
+  nb=$(cnt '^SDIRK3_RHS_RUN_TOTAL phase=begin ' "$1")
+  ne=$(cnt '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1")
+  fin=$(run_total_final "$1")
+  kind=$(run_exit_kind "$1")
+  distinct=$(grep -E '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1" 2>/dev/null |
+               sort -u | wc -l | tr -d ' ')
+  # BEGIN must be EXACTLY one. Only the END record needed duplication tolerance:
+  # it is written on the fatal path where losing it is worse than repeating it. The
+  # begin is emitted once under a thread-safe static-init guard, off the fatal path
+  # entirely, so a second one is evidence of a corrupted or re-assembled log --
+  # exactly what this parser exists to reject. Relaxing both was an overreach.
+  if [ "$nb" -eq 1 ] && [ "$ne" -ge 1 ] && [ "$distinct" = "1" ] \
+     && [ -n "$fin" ] && [ -n "$kind" ]; then
+    printf 1
+  else
+    printf 0
+  fi
+}
+# How the run ended: clean|fatal, or empty if the record is absent or unlabelled.
+# Making the closing record reachable on the abort path removed the natural
+# distinction between a completed run and one that died early -- both now emit a
+# well-formed total. Without this field the harness would compare two numbers from
+# two aborted runs and report non-interference PROVEN, when the property was never
+# exercised over a complete run. An unlabelled record is treated as absent so a
+# pre-`exit=` binary cannot pass this gate silently.
+run_exit_kind() { # <log>
+  grep -E '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1" 2>/dev/null | tail -1 |
+    sed -n 's/.*exit=\([a-z][a-z]*\).*/\1/p'
+}
 gate_success_count()  { cnt "$SUCCESS_FORM" "$1"; }
 gate_fail_count()     { cnt "$FAIL_FAMILY" "$1"; }
 gate_closure_count()  { cnt "$(closure_re "$1")" "$2"; }
@@ -109,15 +158,25 @@ rhs_sweep_table() { # <log>
         if ($i == "concurrent=1") conc = 1
       }
       if (seq < 0) next
+      if (phase != "begin" && phase != "end") { badphase[seq] = 1; next }
+      if (total < 0) badval[seq] = 1
       # A repeated sweep_seq must FAIL rather than silently overwrite: without this,
       # two begins sharing a seq collapse to one table entry and emit two identical
       # "ok" rows, so a duplicated or replayed sweep reads as well-formed.
+      # Line ordinals are recorded because the table is keyed on seq, not on arrival
+      # order: without them an end record arriving BEFORE its begin is stored and
+      # later completed into a well-formed pair. The emitter always writes begin
+      # first, so that order is evidence of a corrupted or re-assembled log.
       if (phase == "begin") {
         if (seen_b[seq]) dup_b[seq] = 1
-        b[seq] = total; seen_b[seq] = 1; order[++n] = seq
+        if (has_delta) baddelta_on_begin[seq] = 1
+        b[seq] = total; seen_b[seq] = 1; bline[seq] = NR; order[++n] = seq
       } else if (phase == "end") {
         if (seen_e[seq]) dup_e[seq] = 1
+        if (!has_delta) missing_delta_on_end[seq] = 1
+        if (has_delta && delta < 0) badval[seq] = 1
         e[seq] = total; seen_e[seq] = 1; d[seq] = delta; hd[seq] = has_delta
+        eline[seq] = NR
       }
       if (conc) tainted[seq] = 1
     }
@@ -126,7 +185,12 @@ rhs_sweep_table() { # <log>
         s = order[i]
         if (emitted[s]) continue          # one row per seq; duplicates flagged below
         emitted[s] = 1
+        if (badphase[s] || badval[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "malformed_record"; continue }
+        if (baddelta_on_begin[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "delta_on_begin"; continue }
+        if (seen_e[s] && missing_delta_on_end[s]) { print s, b[s], e[s], "-", "delta_missing_on_end"; continue }
         if (dup_b[s] || dup_e[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "duplicate_seq"; continue }
+        if (seen_e[s] && eline[s] < bline[s]) { print s, b[s], e[s], "-", "record_order_invalid"; continue }
+        if (seen_e[s] && e[s] < b[s]) { print s, b[s], e[s], "-", "total_decreased"; continue }
         # Overlapping sweeps share the global counter, so this delta absorbed RHS
         # calls made by another sweep and is not attributable. Never use as evidence.
         # (No apostrophes in this awk block: it is single-quoted in the shell.)
@@ -232,6 +296,83 @@ if [ "${1:-}" = "--self-test" ]; then
        "$([ "$(rhs_sweeps_well_formed "$TMP/rhsdupseq.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: CONCURRENT (overlapping) sweeps ARE rejected -- delta not attributable" \
        "$([ "$(rhs_sweeps_well_formed "$TMP/rhsconcurrent.log")" -eq 0 ] && echo 1 || echo 0)"
+  # PR 9F.3: an end record arriving BEFORE its begin. The table is keyed on seq, not
+  # arrival order, so without line ordinals this completes into a well-formed pair.
+  { echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=42"
+    echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=0"; } > "$TMP/rhsreorder.log"
+  # Structural violations: delta on a begin, and a missing delta on an end.
+  { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=0 delta=5"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=42"; } > "$TMP/rhsdeltabegin.log"
+  { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=0"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42"; } > "$TMP/rhsnodelta.log"
+  # A cumulative total that went BACKWARDS.
+  { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=50"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=-8"; } > "$TMP/rhsdecrease.log"
+  gate "self: end-before-begin record order IS rejected (P2, temporal ordering)" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsreorder.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: delta on a BEGIN record IS rejected (structural)" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsdeltabegin.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: missing delta on an END record IS rejected (structural)" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsnodelta.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: a cumulative total that DECREASED IS rejected" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsdecrease.log")" -eq 0 ] && echo 1 || echo 0)"
+
+  # ---- whole-run total fixtures (PR 9F.3) ----------------------------------
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=clean"; } > "$TMP/runok.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal"; } > "$TMP/runfatal.log"
+  # A pre-`exit=` emitter: well-formed in every other respect, and must NOT pass.
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42"; } > "$TMP/runnokind.log"
+  grep -v 'phase=end' "$TMP/runok.log" > "$TMP/runaborted.log"
+  gate "self: a well-formed whole-run total is accepted" \
+       "$([ "$(run_total_well_formed "$TMP/runok.log")" -eq 1 ] && echo 1 || echo 0)"
+  gate "self: a run with NO closing total (aborted) IS rejected" \
+       "$([ "$(run_total_well_formed "$TMP/runaborted.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: the closing whole-run total is extracted correctly" \
+       "$([ "$(run_total_final "$TMP/runok.log")" = "42" ] && echo 1 || echo 0)"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal"; } > "$TMP/rundup.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=43 exit=fatal"; } > "$TMP/rundisagree.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal"; } > "$TMP/rundupbegin.log"
+  gate "self: DUPLICATE begin records ARE rejected (only end tolerates repetition)" \
+       "$([ "$(run_total_well_formed "$TMP/rundupbegin.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: DUPLICATE closing totals that AGREE are accepted (loss > duplication)" \
+       "$([ "$(run_total_well_formed "$TMP/rundup.log")" -eq 1 ] && echo 1 || echo 0)"
+  gate "self: closing totals that DISAGREE are rejected" \
+       "$([ "$(run_total_well_formed "$TMP/rundisagree.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: an UNLABELLED closing total (no exit=) IS rejected" \
+       "$([ "$(run_total_well_formed "$TMP/runnokind.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: exit kind is read as clean" \
+       "$([ "$(run_exit_kind "$TMP/runok.log")" = "clean" ] && echo 1 || echo 0)"
+  gate "self: exit kind is read as fatal (an aborted run cannot pose as complete)" \
+       "$([ "$(run_exit_kind "$TMP/runfatal.log")" = "fatal" ] && echo 1 || echo 0)"
+
+  # ---- LIVE emitter -> LIVE parser (PR 9F.3) --------------------------------
+  # Every fixture above is hand-written, so the shell parser has only ever been
+  # proven against text this script authored. If the C++ emitter changed its schema
+  # the parser would keep passing. When the contract binary is available, judge its
+  # REAL output with the real parser.
+  CBIN="${STAGE_OPERAND_CONTRACT_BIN:-$ROOT/external/libtorch_wrf/sdirk3/test_stage_operand_decomposition_contract}"
+  if [ -x "$CBIN" ]; then
+    WRF_SDIRK3_RHS_COUNT=1 "$CBIN" --child one-sweep > "$TMP/live_one.log" 2>&1 || true
+    WRF_SDIRK3_RHS_COUNT=1 "$CBIN" --child nested    > "$TMP/live_nested.log" 2>&1 || true
+    gate "self: LIVE C++ one-sweep output is well-formed to the real parser" \
+         "$([ "$(rhs_sweeps_well_formed "$TMP/live_one.log")" -eq 1 ] && echo 1 || echo 0)"
+    gate "self: LIVE C++ one-sweep run total is well-formed" \
+         "$([ "$(run_total_well_formed "$TMP/live_one.log")" -eq 1 ] && echo 1 || echo 0)"
+    gate "self: LIVE C++ NESTED output is REJECTED by the real parser" \
+         "$([ "$(rhs_sweeps_well_formed "$TMP/live_nested.log")" -eq 0 ] && echo 1 || echo 0)"
+  else
+    skip "contract binary not built -- live emitter/parser contract UNPROVEN here"
+    note "        (set STAGE_OPERAND_CONTRACT_BIN, or build the target, to enable)"
+  fi
   gate "self: good fixture has BOTH begin and end phase records (defect 10)" \
        "$([ "$(cnt 'phase=begin' "$TMP/good.log")" -ge 1 ] && \
           [ "$(cnt 'phase=end' "$TMP/good.log")" -ge 1 ] && echo 1 || echo 0)"
@@ -365,6 +506,64 @@ gate "same NUMBER of sweeps OFF vs ON" \
 gate "0 extra RHS evaluations: RHS-call sequence identical OFF vs ON" \
      "$(diff -q "$OUT/pos_off.rhs" "$OUT/pos_on.rhs" >/dev/null 2>&1 && echo 1 || echo 0)"
 
+# PR 9F.3: the authoritative statement of "0 extra RHS evaluations". Everything above
+# compares SWEEP-LOCAL intervals; this compares the WHOLE RUN, so an extra call made
+# outside every sweep -- before the first, after the last, or on a thread that opens
+# none -- is caught. Both runs must also have closed their run total: an aborted run
+# leaves no end record and must not be read as having proven anything.
+gate_run_records "$OUT/pos_off.log" > "$OUT/pos_off.runtotal"
+gate_run_records "$OUT/pos_on.log"  > "$OUT/pos_on.runtotal"
+gate "whole-run total is well-formed OFF (one begin, one end)" \
+     "$(run_total_well_formed "$OUT/pos_off.log")"
+gate "whole-run total is well-formed ON (one begin, one end)" \
+     "$(run_total_well_formed "$OUT/pos_on.log")"
+RT_OFF="$(run_total_final "$OUT/pos_off.log")"
+RT_ON="$(run_total_final "$OUT/pos_on.log")"
+note "  whole-run RHS totals: OFF=${RT_OFF:-<none>} ON=${RT_ON:-<none>}"
+EK_OFF="$(run_exit_kind "$OUT/pos_off.log")"
+EK_ON="$(run_exit_kind "$OUT/pos_on.log")"
+note "  run exit kinds: OFF=${EK_OFF:-<none>} ON=${EK_ON:-<none>}"
+# Comparing totals across two DIFFERENT exit kinds is not a comparison: one run got
+# further than the other, so equal totals would be coincidence and unequal totals
+# would not indicate interference.
+gate "OFF and ON ended the SAME way (both clean, or both fatal)" \
+     "$([ -n "$EK_OFF" ] && [ "$EK_OFF" = "$EK_ON" ] && echo 1 || echo 0)"
+gate "0 extra RHS evaluations OVER THE WHOLE RUN (final totals equal, non-empty)" \
+     "$([ -n "$RT_OFF" ] && [ -n "$RT_ON" ] && [ "$RT_OFF" = "$RT_ON" ] && echo 1 || echo 0)"
+# dt=600 is EXPECTED to end fatal, so this is reported rather than gated -- but it is
+# reported, because "both runs aborted identically" is a weaker statement than "a
+# complete run added no RHS evaluations" and the reader must be able to tell which
+# one this evidence supports.
+# A NOTE is not a gate. The final verdict line is what a reader and a CI job act on,
+# so a run that died early must not be able to print a bare ALL PASS: that reads as
+# "non-interference proven" when the evidence only covers the prefix before the
+# abort. The scope is carried into the verdict itself, and a fatal run exits
+# NON-ZERO unless the caller has explicitly accepted the narrower scope.
+# `exit=clean` means the C++ side ran its destructors -- NOT that the model finished
+# the integration. A run that fails and unwinds tidily reports exit=clean while
+# having completed nothing, so treating that field alone as proof of completeness
+# would hand a failed run the strongest possible label. Completeness requires all
+# three: a clean C++ exit, a zero process exit code, and WRF's own completion
+# marker.
+COMPLETE_OFF=0; COMPLETE_ON=0
+[ "$EK_OFF" = "clean" ] && [ "$rc_off" -eq 0 ] \
+  && [ "$(cnt 'SUCCESS COMPLETE' "$OUT/pos_off.log")" -ge 1 ] && COMPLETE_OFF=1
+[ "$EK_ON" = "clean" ] && [ "$rc_on" -eq 0 ] \
+  && [ "$(cnt 'SUCCESS COMPLETE' "$OUT/pos_on.log")" -ge 1 ] && COMPLETE_ON=1
+note "  integration completed: OFF=$COMPLETE_OFF ON=$COMPLETE_ON (exit kind + rc + SUCCESS COMPLETE)"
+
+EVIDENCE_SCOPE="complete-run"
+if [ "$COMPLETE_OFF" -ne 1 ] || [ "$COMPLETE_ON" -ne 1 ]; then
+  EVIDENCE_SCOPE="up-to-abort"
+  note "  NOTE: at least one run did not complete the integration (fatal exit, or"
+  note "        nonzero rc, or no SUCCESS COMPLETE). The whole-run equality above"
+  note "        proves non-interference UP TO that point, not over a completed"
+  note "        integration. dt=600 is expected to abort, so this is the normal"
+  note "        outcome there -- but it is a WEAKER claim and the verdict says so."
+fi
+gate "whole-run total is NON-DEGENERATE (the run really evaluated the RHS)" \
+     "$([ -n "$RT_ON" ] && [ "$RT_ON" -gt 0 ] && echo 1 || echo 0)"
+
 # (3) OFF must emit NO operand evidence; ON must emit some.
 off_succ=$(gate_success_count "$OUT/pos_off.log")
 on_succ=$(gate_success_count "$OUT/pos_on.log")
@@ -436,8 +635,18 @@ fi
 
 # =============================================================================
 note "============================================================"
-if [ "$fails" -eq 0 ]; then
-  note "STAGE-OPERAND RUNTIME ACCEPTANCE: ALL PASS"; exit 0
-else
+if [ "$fails" -ne 0 ]; then
   note "STAGE-OPERAND RUNTIME ACCEPTANCE: $fails FAILURE(S) (see $OUT/*.log)"; exit 1
 fi
+if [ "${EVIDENCE_SCOPE:-complete-run}" = "complete-run" ]; then
+  note "STAGE-OPERAND RUNTIME ACCEPTANCE: ALL PASS (scope=complete-run)"; exit 0
+fi
+note "STAGE-OPERAND RUNTIME ACCEPTANCE: ALL GATES PASS (scope=up-to-abort)"
+note "  This is NOT a whole-run non-interference proof: the run aborted, so the"
+note "  totals were compared over the prefix before the abort only."
+if [ "${STAGE_OPERAND_ACCEPT_PARTIAL:-0}" = "1" ]; then
+  note "  Accepted because STAGE_OPERAND_ACCEPT_PARTIAL=1 was set deliberately."
+  exit 0
+fi
+note "  Set STAGE_OPERAND_ACCEPT_PARTIAL=1 to accept this narrower scope."
+exit 2

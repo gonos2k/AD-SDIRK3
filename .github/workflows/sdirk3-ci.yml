@@ -220,6 +220,24 @@ jobs:
       - name: lint_all
         run: cmake --build build/sdirk3-core --target lint_all --parallel 2
 
+      # PR 9F.3: close the live emitter -> live parser loop in CI. The shell
+      # self-test runs in fast-contracts, but that job is torch-free so the contract
+      # binary does not exist there and the live gates SKIP. Here the binary is
+      # built, so point the harness at it: the real C++ records are then judged by
+      # the real shell parser. Without this, a schema change in the emitter and a
+      # stale fixture in the parser would both stay green.
+      - name: stage-operand LIVE emitter/parser contract
+        run: |
+          set -euo pipefail
+          BIN="$(find build/sdirk3-core -name test_stage_operand_decomposition_contract -type f | head -1)"
+          test -n "$BIN" || { echo "FAIL: contract binary not found"; exit 1; }
+          echo "using $BIN"
+          STAGE_OPERAND_CONTRACT_BIN="$PWD/$BIN" \
+            bash -e external/libtorch_wrf/sdirk3/tests/stage_operand_runtime_acceptance.sh --self-test \
+            | tee /tmp/live_selftest.log
+          grep -q 'LIVE C++ one-sweep output is well-formed' /tmp/live_selftest.log \
+            || { echo "FAIL: live gates SKIPPED -- binary was not picked up"; exit 1; }
+
       - name: CTest inventory (exact set, then run)
         run: |
           set -euo pipefail
