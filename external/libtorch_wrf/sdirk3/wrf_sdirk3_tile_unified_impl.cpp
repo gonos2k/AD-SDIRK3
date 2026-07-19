@@ -7404,6 +7404,14 @@ vertical_coefficients:
             int k_birth_seq = 0;  // monotonic; a stage retry re-births -> new gen
             bool ark_stage_aborted = false;
 
+            // PR 9F.1: publish the cumulative RHS-evaluation count once per ARK
+            // sweep. Emitted from an UNGATED location (the record is itself gated on
+            // WRF_SDIRK3_RHS_COUNT, which the acceptance harness sets for BOTH the
+            // OFF and ON runs) so the two runs produce the same sequence of records
+            // and "the diagnostic added zero RHS evaluations" becomes a checkable
+            // equality instead of a comment.
+            wrf::sdirk3::emit_sdirk3_rhs_count("ark_sweep_start");
+
             // Return code: 0=accept, 1=recoverable retry, 2=abort.
             auto handle_stage_gate = [&](int stage_id,
                                          bool retry_used) -> int {
@@ -7893,37 +7901,56 @@ vertical_coefficients:
                         newton_solver_
                             ? newton_solver_->get_saved_global_timestep()
                             : -1;
-                    std::string stage_operand_fail =
-                        wrf::sdirk3::emit_stage_history_diag(
-                            stage_operand_step_label, stage_operand_checkpoint_ts,
-                            stage_id, dt, U_n, U_stage, sources,
-                            stage_operand_defects);
-                    if (!stage_operand_fail.empty()) {
-                        // HARD GATE (PR 9E Commit A): broken diagnostic evidence
-                        // fails closed via controlled-fatal, never continues.
-                        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
-                            "stage_operand_history_diag",
-                            stage_operand_fail.c_str());
-                    }
+                    // PR 9F.1: SUCCESS-line transaction. Every emitter STAGES its
+                    // success records into this bundle; nothing is written until
+                    // ALL THREE authorities (history closure/inventory, coherent
+                    // defect tensor, applied-delta replay) have passed. Previously
+                    // the history emitter wrote its success lines before the two
+                    // later gates ran, so a failure there still left success-form
+                    // evidence in the log.
+                    wrf::sdirk3::StageOperandEvidenceBundle stage_operand_evidence;
 
-                    // PR 9F P1-4: AUTHORITATIVE coherent-defect gate. For each
-                    // IMPLICIT source stage, the {K,F,R} triple must be internally
-                    // coherent (||K-F-R||==0) AND belong to the stage value the
-                    // solve returned (K==returned_K) -- computed by the emitter from
-                    // the TENSORS, not the caller's scalar. A missing/incoherent
-                    // triple on an implicit source fails closed (DEFECT_UNOBSERVED),
-                    // so a defect from a different attempt/update point can never be
-                    // laundered as this source's. Explicit stage 1 has no Newton
-                    // defect (convergence n/a) and is skipped.
+                    // PR 9F.1 ORDERING: the coherent-defect TENSOR authority runs
+                    // FIRST, because the history summary must PUBLISH tensor-derived
+                    // numbers. Previously this ran after the history emitter, so the
+                    // emitter could only print the caller's scalars while the tensor
+                    // values it had computed were discarded.
+                    //
+                    // For each IMPLICIT source stage the {K,F,R} triple must be
+                    // internally coherent (||K-F-R||==0) AND belong to the stage value
+                    // the solve returned (K==returned_K), so a defect from a different
+                    // attempt/update point can never be laundered as this source's.
+                    // Explicit stage 1 has no Newton defect (convergence n/a).
+                    std::vector<wrf::sdirk3::DerivedDefectRecord> stage_operand_derived;
+                    stage_operand_derived.reserve(stage_operand_defect_tensors.size());
                     for (const auto& td : stage_operand_defect_tensors) {
                         if (td.stage < 1 || td.stage == 1) continue;
+                        wrf::sdirk3::DerivedDefectRecord rec;
                         std::string defect_fail =
-                            wrf::sdirk3::validate_stage_defect_tensor(td);
+                            wrf::sdirk3::validate_stage_defect_tensor(
+                                td, nullptr, nullptr, nullptr, &rec);
                         if (!defect_fail.empty()) {
+                            stage_operand_evidence.discard();
                             wrf::sdirk3::mpi_safety::abort_c_abi_exception(
                                 "stage_operand_defect_tensor",
                                 defect_fail.c_str());
                         }
+                        stage_operand_derived.push_back(rec);
+                    }
+
+                    std::string stage_operand_fail =
+                        wrf::sdirk3::emit_stage_history_diag(
+                            stage_operand_step_label, stage_operand_checkpoint_ts,
+                            stage_id, dt, U_n, U_stage, sources,
+                            stage_operand_defects, &stage_operand_derived,
+                            &stage_operand_evidence);
+                    if (!stage_operand_fail.empty()) {
+                        // HARD GATE (PR 9E Commit A): broken diagnostic evidence
+                        // fails closed via controlled-fatal, never continues.
+                        stage_operand_evidence.discard();
+                        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+                            "stage_operand_history_diag",
+                            stage_operand_fail.c_str());
                     }
 
                     // PR 9E history-authority C1: AUTHORITATIVE per-source
@@ -7960,12 +7987,19 @@ vertical_coefficients:
                             stage_operand_step_label,
                             stage_operand_checkpoint_ts, stage_id, dt, U_n,
                             U_stage, sources, stage_operand_state_ptrs,
-                            stage_operand_blocks);
+                            stage_operand_blocks, &stage_operand_evidence);
                     if (!stage_operand_attr_fail.empty()) {
+                        // Failure marker already emitted by the emitter; the staged
+                        // success lines are discarded and never reach the log.
+                        stage_operand_evidence.discard();
                         wrf::sdirk3::mpi_safety::abort_c_abi_exception(
                             "stage_operand_applied_delta",
                             stage_operand_attr_fail.c_str());
                     }
+
+                    // ---- COMMIT: every authority passed. Only now may the
+                    // success-form evidence be written. ----
+                    stage_operand_evidence.commit();
                 }
 
                 torch::Tensor U_full_exch_stage;
@@ -8196,6 +8230,14 @@ vertical_coefficients:
                     wrf::sdirk3::StageDefectTensorSnapshot tsnap;
                     if (!explicit_stage) tsnap = last_stage_defect_tensor_;
                     tsnap.stage = stage_id;
+                    // PR 9F.1: hand the emitter the POST-postprocess derivative the
+                    // ARK history actually consumes, so it can MEASURE the gap to the
+                    // solver-returned K the defect was evaluated at (the two differ
+                    // whenever a post-solve damping/sanitize transform fires).
+                    if (!explicit_stage && k_fast[i].defined() && k_fast[i].numel() > 0) {
+                        torch::NoGradGuard no_grad;
+                        tsnap.final_k = k_fast[i].detach().clone();
+                    }
                     stage_operand_defect_tensors.push_back(tsnap);
                     // PR 9F P1-3: birth snapshot of THIS stage's fast derivative,
                     // now finalized (post solve/sanitize/damping), for later stages'
@@ -10132,9 +10174,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_fast_rhs_norm_ = stats.final_fast_rhs_norm;
     last_stage_defect_l2_raw_ = stats.final_defect_l2_raw;
     // PR 9F (diagnosis-only): retain the coherent {K, F, R} defect triple and the
-    // stage value the solver just returned (k, BEFORE any post-solve W-damping at
-    // ~10209), so the record-stage summary proves the F/R belong to THIS returned
-    // stage value (else DEFECT_UNOBSERVED). Fresh each implicit solve.
+    // stage value the solver just returned (k), captured BEFORE every post-solve
+    // transform of k in this function, so the record-stage summary proves the F/R
+    // belong to THIS returned stage value (else DEFECT_UNOBSERVED). Fresh each solve.
+    //
+    // CORRECTED (PR 9F.1): those transforms are the Newton NON-CONVERGENCE damping
+    // (`[NEWTON DAMP]`, k = k*damp) and the rel-R post-damp (k = k*extra_damp) — NOT
+    // "W-damping", which is an unrelated knob (wrf_w_damping, default 0). Both damping
+    // paths are LIVE by default: hard_abort_on_newton_fail defaults false and
+    // stage_damp_rel_threshold is an always-armed float threshold. At the dt=600
+    // operating point the Newton solve does NOT converge, so the damping DOES fire and
+    // the returned k here differs from the final k_fast the ARK history consumes. The
+    // emitter measures that gap (postprocess_delta_max) instead of mixing the two.
     last_stage_defect_tensor_ = wrf::sdirk3::StageDefectTensorSnapshot{};
     if (wrf::sdirk3::g_sdirk3_config.stage_operand_diag &&
         stats.defect_K.defined() && stats.defect_F.defined() &&
@@ -10630,6 +10681,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             return computeUnifiedRHSFullHalo(U, mode);
         }
     }
+
+    // PR 9F.1: count this RHS evaluation. Placed AFTER the full-halo redirect so a
+    // delegated call is counted exactly once (the full-halo path re-enters here with
+    // the interior state). Relaxed atomic add: no numerics, no control flow, no
+    // synchronisation cost on the hot path. Emission is opt-in
+    // (WRF_SDIRK3_RHS_COUNT) and is what lets the runtime acceptance PROVE that
+    // turning the stage-operand diagnostic ON adds zero RHS evaluations.
+    wrf::sdirk3::sdirk3_rhs_call_counter().fetch_add(1, std::memory_order_relaxed);
 
     /*
      * Unified RHS Computation for WRF-SDIRK3 Implicit Solver
