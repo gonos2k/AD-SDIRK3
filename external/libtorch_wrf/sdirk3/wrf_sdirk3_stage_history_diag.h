@@ -145,6 +145,19 @@ inline long long sdirk3_next_rhs_sweep_seq() {
     return sdirk3_rhs_sweep_seq_atomic().fetch_add(1, std::memory_order_relaxed);
 }
 
+// Number of sweeps currently in flight. The per-sweep delta is computed from a
+// PROCESS-GLOBAL counter, so it is only attributable to this sweep while it is the
+// only one running. WRF's tile loop is OpenMP-parallel at the Fortran level and
+// unifiedStep is called per tile, so with numtiles>1 several sweeps can overlap and
+// each one's "delta" would silently absorb the others' RHS calls. The stage-operand
+// diagnostic itself requires a single tile, but WRF_SDIRK3_RHS_COUNT is independent
+// of that gate and can be set in a multi-tile run. Rather than leave the
+// single-sweep precondition as an unchecked comment, measure it and mark the record.
+inline std::atomic<int>& sdirk3_rhs_sweep_depth() {
+    static std::atomic<int> depth{0};
+    return depth;
+}
+
 // Was this sweep's delta contaminated by another sweep?
 //
 // Sampling the DEPTH at entry and exit alone is insufficient: a sweep that both
@@ -168,17 +181,32 @@ inline bool sdirk3_sweep_overlapped(bool concurrent_at_entry,
         || seq_at_exit != my_seq + 1;
 }
 
-// Number of sweeps currently in flight. The per-sweep delta is computed from a
-// PROCESS-GLOBAL counter, so it is only attributable to this sweep while it is the
-// only one running. WRF's tile loop is OpenMP-parallel at the Fortran level and
-// unifiedStep is called per tile, so with numtiles>1 several sweeps can overlap and
-// each one's "delta" would silently absorb the others' RHS calls. The stage-operand
-// diagnostic itself requires a single tile, but WRF_SDIRK3_RHS_COUNT is independent
-// of that gate and can be set in a multi-tile run. Rather than leave the
-// single-sweep precondition as an unchecked comment, measure it and mark the record.
-inline std::atomic<int>& sdirk3_rhs_sweep_depth() {
-    static std::atomic<int> depth{0};
-    return depth;
+// Sample the overlap state, and ONLY ever AFTER the caller has already captured the
+// total it is going to report. The order is load-bearing, not stylistic:
+//
+//   total read first, overlap read second (correct)
+//     a foreign sweep that could have contributed to `total` necessarily started
+//     before the later seq read, so its increment is visible -> overlapped=true.
+//     A sweep starting between the two reads did NOT contribute but still trips the
+//     flag: a false positive, which is the fail-closed direction.
+//
+//   overlap read first, total read second (the bug this replaces)
+//     a foreign sweep starting between the two reads contributes to `total` but is
+//     invisible to the earlier seq read -> a contaminated delta reported CLEAN.
+//
+// The name encodes the requirement so the two reads cannot be transposed at the call
+// site without the mistake being obvious. The fence stops the compiler and CPU from
+// undoing the ordering that relaxed loads would otherwise permit; both loads are
+// seq_cst for the same reason. All of this is inside the enabled-only path, so the
+// default path pays nothing for it.
+inline bool sdirk3_sample_overlap_after_total(bool concurrent_at_entry,
+                                              long long my_seq) {
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    return sdirk3_sweep_overlapped(
+        concurrent_at_entry,
+        sdirk3_rhs_sweep_depth().load(std::memory_order_seq_cst),
+        sdirk3_rhs_sweep_seq_atomic().load(std::memory_order_seq_cst),
+        my_seq);
 }
 
 // Emit one record in a stable, machine-readable, line-atomic form.
@@ -231,16 +259,14 @@ public:
         // missing_end and fails closed on -- silence here degrades to a FAILING gate,
         // never to a passing one.
         try {
-            // Depth at entry and exit is not enough -- a sweep nested entirely
-            // inside ours leaves both samples looking clean. See
-            // sdirk3_sweep_overlapped for why the sequence counter is the
-            // discriminator.
-            const bool overlapped = sdirk3_sweep_overlapped(
-                concurrent_,
-                sdirk3_rhs_sweep_depth().load(std::memory_order_relaxed),
-                sdirk3_rhs_sweep_seq_atomic().load(std::memory_order_relaxed),
-                seq_);
+            // ORDER MATTERS: capture the total we are about to report FIRST, then
+            // sample the overlap state. Reading overlap first lets a sweep that
+            // starts between the two reads contribute to `total` while staying
+            // invisible to the earlier seq read -- a contaminated delta reported
+            // clean. See sdirk3_sample_overlap_after_total.
             const long long total = sdirk3_rhs_count_value();
+            const bool overlapped =
+                sdirk3_sample_overlap_after_total(concurrent_, seq_);
             emit_sdirk3_rhs_count("end", seq_, total, total - start_, overlapped);
         } catch (...) {
         }
