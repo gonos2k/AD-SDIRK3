@@ -78,6 +78,26 @@ cnt() { local n; n=$(grep -Ec "$1" "$2" 2>/dev/null || true); printf '%s' "${n:-
 
 gate_common_records() { grep -E 'SDIRK3_(NEWTON|FGMRES|STAGE)_DIAG\b' "$1" 2>/dev/null || true; }
 gate_rhs_records()    { grep -E '^SDIRK3_RHS_CALLS ' "$1" 2>/dev/null || true; }
+# PR 9F.3: WHOLE-RUN authority. The sweep table can only see calls made between a
+# begin and its end. RHS evaluations also occur before the first sweep opens, after
+# the last one closes, and on threads that never open one at all -- so an extra call
+# in any of those places leaves the sweep records byte-identical while the run really
+# did evaluate the RHS once more. These records close that gap.
+gate_run_records()    { grep -E '^SDIRK3_RHS_RUN_TOTAL ' "$1" 2>/dev/null || true; }
+run_total_final() {  # <log> -> the closing whole-run total, or empty if absent
+  grep -E '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1" 2>/dev/null | tail -1 |
+    sed -n 's/.*total=\([0-9][0-9]*\).*/\1/p'
+}
+# 1 iff exactly one begin and one end exist and the end is >= the begin. A missing
+# end is the signature of an aborted run, and must FAIL rather than be ignored:
+# a run that died cannot have proven that it added no RHS evaluations.
+run_total_well_formed() { # <log>
+  local nb ne fin
+  nb=$(cnt '^SDIRK3_RHS_RUN_TOTAL phase=begin ' "$1")
+  ne=$(cnt '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$1")
+  fin=$(run_total_final "$1")
+  if [ "$nb" -eq 1 ] && [ "$ne" -eq 1 ] && [ -n "$fin" ]; then printf 1; else printf 0; fi
+}
 gate_success_count()  { cnt "$SUCCESS_FORM" "$1"; }
 gate_fail_count()     { cnt "$FAIL_FAMILY" "$1"; }
 gate_closure_count()  { cnt "$(closure_re "$1")" "$2"; }
@@ -109,15 +129,25 @@ rhs_sweep_table() { # <log>
         if ($i == "concurrent=1") conc = 1
       }
       if (seq < 0) next
+      if (phase != "begin" && phase != "end") { badphase[seq] = 1; next }
+      if (total < 0) badval[seq] = 1
       # A repeated sweep_seq must FAIL rather than silently overwrite: without this,
       # two begins sharing a seq collapse to one table entry and emit two identical
       # "ok" rows, so a duplicated or replayed sweep reads as well-formed.
+      # Line ordinals are recorded because the table is keyed on seq, not on arrival
+      # order: without them an end record arriving BEFORE its begin is stored and
+      # later completed into a well-formed pair. The emitter always writes begin
+      # first, so that order is evidence of a corrupted or re-assembled log.
       if (phase == "begin") {
         if (seen_b[seq]) dup_b[seq] = 1
-        b[seq] = total; seen_b[seq] = 1; order[++n] = seq
+        if (has_delta) baddelta_on_begin[seq] = 1
+        b[seq] = total; seen_b[seq] = 1; bline[seq] = NR; order[++n] = seq
       } else if (phase == "end") {
         if (seen_e[seq]) dup_e[seq] = 1
+        if (!has_delta) missing_delta_on_end[seq] = 1
+        if (has_delta && delta < 0) badval[seq] = 1
         e[seq] = total; seen_e[seq] = 1; d[seq] = delta; hd[seq] = has_delta
+        eline[seq] = NR
       }
       if (conc) tainted[seq] = 1
     }
@@ -126,7 +156,12 @@ rhs_sweep_table() { # <log>
         s = order[i]
         if (emitted[s]) continue          # one row per seq; duplicates flagged below
         emitted[s] = 1
+        if (badphase[s] || badval[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "malformed_record"; continue }
+        if (baddelta_on_begin[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "delta_on_begin"; continue }
+        if (seen_e[s] && missing_delta_on_end[s]) { print s, b[s], e[s], "-", "delta_missing_on_end"; continue }
         if (dup_b[s] || dup_e[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "duplicate_seq"; continue }
+        if (seen_e[s] && eline[s] < bline[s]) { print s, b[s], e[s], "-", "record_order_invalid"; continue }
+        if (seen_e[s] && e[s] < b[s]) { print s, b[s], e[s], "-", "total_decreased"; continue }
         # Overlapping sweeps share the global counter, so this delta absorbed RHS
         # calls made by another sweep and is not attributable. Never use as evidence.
         # (No apostrophes in this awk block: it is single-quoted in the shell.)
@@ -232,6 +267,57 @@ if [ "${1:-}" = "--self-test" ]; then
        "$([ "$(rhs_sweeps_well_formed "$TMP/rhsdupseq.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: CONCURRENT (overlapping) sweeps ARE rejected -- delta not attributable" \
        "$([ "$(rhs_sweeps_well_formed "$TMP/rhsconcurrent.log")" -eq 0 ] && echo 1 || echo 0)"
+  # PR 9F.3: an end record arriving BEFORE its begin. The table is keyed on seq, not
+  # arrival order, so without line ordinals this completes into a well-formed pair.
+  { echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=42"
+    echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=0"; } > "$TMP/rhsreorder.log"
+  # Structural violations: delta on a begin, and a missing delta on an end.
+  { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=0 delta=5"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=42"; } > "$TMP/rhsdeltabegin.log"
+  { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=0"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42"; } > "$TMP/rhsnodelta.log"
+  # A cumulative total that went BACKWARDS.
+  { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=50"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=-8"; } > "$TMP/rhsdecrease.log"
+  gate "self: end-before-begin record order IS rejected (P2, temporal ordering)" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsreorder.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: delta on a BEGIN record IS rejected (structural)" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsdeltabegin.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: missing delta on an END record IS rejected (structural)" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsnodelta.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: a cumulative total that DECREASED IS rejected" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsdecrease.log")" -eq 0 ] && echo 1 || echo 0)"
+
+  # ---- whole-run total fixtures (PR 9F.3) ----------------------------------
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42"; } > "$TMP/runok.log"
+  grep -v 'phase=end' "$TMP/runok.log" > "$TMP/runaborted.log"
+  gate "self: a well-formed whole-run total is accepted" \
+       "$([ "$(run_total_well_formed "$TMP/runok.log")" -eq 1 ] && echo 1 || echo 0)"
+  gate "self: a run with NO closing total (aborted) IS rejected" \
+       "$([ "$(run_total_well_formed "$TMP/runaborted.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: the closing whole-run total is extracted correctly" \
+       "$([ "$(run_total_final "$TMP/runok.log")" = "42" ] && echo 1 || echo 0)"
+
+  # ---- LIVE emitter -> LIVE parser (PR 9F.3) --------------------------------
+  # Every fixture above is hand-written, so the shell parser has only ever been
+  # proven against text this script authored. If the C++ emitter changed its schema
+  # the parser would keep passing. When the contract binary is available, judge its
+  # REAL output with the real parser.
+  CBIN="${STAGE_OPERAND_CONTRACT_BIN:-$ROOT/external/libtorch_wrf/sdirk3/test_stage_operand_decomposition_contract}"
+  if [ -x "$CBIN" ]; then
+    WRF_SDIRK3_RHS_COUNT=1 "$CBIN" --child one-sweep > "$TMP/live_one.log" 2>&1 || true
+    WRF_SDIRK3_RHS_COUNT=1 "$CBIN" --child nested    > "$TMP/live_nested.log" 2>&1 || true
+    gate "self: LIVE C++ one-sweep output is well-formed to the real parser" \
+         "$([ "$(rhs_sweeps_well_formed "$TMP/live_one.log")" -eq 1 ] && echo 1 || echo 0)"
+    gate "self: LIVE C++ one-sweep run total is well-formed" \
+         "$([ "$(run_total_well_formed "$TMP/live_one.log")" -eq 1 ] && echo 1 || echo 0)"
+    gate "self: LIVE C++ NESTED output is REJECTED by the real parser" \
+         "$([ "$(rhs_sweeps_well_formed "$TMP/live_nested.log")" -eq 0 ] && echo 1 || echo 0)"
+  else
+    skip "contract binary not built -- live emitter/parser contract UNPROVEN here"
+    note "        (set STAGE_OPERAND_CONTRACT_BIN, or build the target, to enable)"
+  fi
   gate "self: good fixture has BOTH begin and end phase records (defect 10)" \
        "$([ "$(cnt 'phase=begin' "$TMP/good.log")" -ge 1 ] && \
           [ "$(cnt 'phase=end' "$TMP/good.log")" -ge 1 ] && echo 1 || echo 0)"
@@ -364,6 +450,25 @@ gate "same NUMBER of sweeps OFF vs ON" \
      "$([ "$(wc -l < "$OUT/pos_off.sweeps")" -eq "$(wc -l < "$OUT/pos_on.sweeps")" ] && echo 1 || echo 0)"
 gate "0 extra RHS evaluations: RHS-call sequence identical OFF vs ON" \
      "$(diff -q "$OUT/pos_off.rhs" "$OUT/pos_on.rhs" >/dev/null 2>&1 && echo 1 || echo 0)"
+
+# PR 9F.3: the authoritative statement of "0 extra RHS evaluations". Everything above
+# compares SWEEP-LOCAL intervals; this compares the WHOLE RUN, so an extra call made
+# outside every sweep -- before the first, after the last, or on a thread that opens
+# none -- is caught. Both runs must also have closed their run total: an aborted run
+# leaves no end record and must not be read as having proven anything.
+gate_run_records "$OUT/pos_off.log" > "$OUT/pos_off.runtotal"
+gate_run_records "$OUT/pos_on.log"  > "$OUT/pos_on.runtotal"
+gate "whole-run total is well-formed OFF (one begin, one end)" \
+     "$(run_total_well_formed "$OUT/pos_off.log")"
+gate "whole-run total is well-formed ON (one begin, one end)" \
+     "$(run_total_well_formed "$OUT/pos_on.log")"
+RT_OFF="$(run_total_final "$OUT/pos_off.log")"
+RT_ON="$(run_total_final "$OUT/pos_on.log")"
+note "  whole-run RHS totals: OFF=${RT_OFF:-<none>} ON=${RT_ON:-<none>}"
+gate "0 extra RHS evaluations OVER THE WHOLE RUN (final totals equal, non-empty)" \
+     "$([ -n "$RT_OFF" ] && [ -n "$RT_ON" ] && [ "$RT_OFF" = "$RT_ON" ] && echo 1 || echo 0)"
+gate "whole-run total is NON-DEGENERATE (the run really evaluated the RHS)" \
+     "$([ -n "$RT_ON" ] && [ "$RT_ON" -gt 0 ] && echo 1 || echo 0)"
 
 # (3) OFF must emit NO operand evidence; ON must emit some.
 off_succ=$(gate_success_count "$OUT/pos_off.log")

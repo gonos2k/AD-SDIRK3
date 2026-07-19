@@ -10,6 +10,8 @@
 #include <functional>
 #include <iostream>
 #include <sstream>
+#include <cstring>
+#include <cstdlib>
 #include "wrf_sdirk3_stage_operand_capture.h"
 #include "wrf_sdirk3_stage_history_diag.h"
 
@@ -46,7 +48,68 @@ torch::Tensor rnd(std::initializer_list<int64_t> shape, float scale, float phase
 
 }  // namespace
 
-int main() {
+// ---------------------------------------------------------------------------
+// PR 9F.3: child modes. The cached WRF_SDIRK3_RHS_COUNT flag is latched false the
+// first time it is read, so the ENABLED emitter path cannot be exercised in the
+// parent process at all -- every prior "test" of it drove pure predicates or the
+// storage accessor directly, never the constructor, the tick, the destructor, or
+// the record text. A child process started with the flag SET is the only way to
+// run the real thing, and its stderr is the real emitter output that the real
+// shell parser then judges.
+static int run_child_mode(const char* mode) {
+    if (std::strcmp(mode, "one-sweep") == 0) {
+        wrf::sdirk3::Sdirk3RhsSweepScope scope;
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        return 0;   // scope destructor emits `end` with delta=3
+    }
+    if (std::strcmp(mode, "nested") == 0) {
+        wrf::sdirk3::Sdirk3RhsSweepScope outer;
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        {
+            wrf::sdirk3::Sdirk3RhsSweepScope inner;   // inner begins AND ends inside
+            wrf::sdirk3::sdirk3_rhs_count_tick();
+        }
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        return 0;   // BOTH records must carry concurrent=1
+    }
+    if (std::strcmp(mode, "no-sweep") == 0) {
+        // RHS calls with no sweep open at all: invisible to the sweep table, which
+        // is precisely why the whole-run total exists.
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        return 0;
+    }
+    std::fprintf(stderr, "unknown child mode: %s\n", mode);
+    return 2;
+}
+
+// Run this same binary as a child with counting ENABLED and capture its stderr.
+static std::string capture_child(const char* self, const char* mode) {
+    std::string cmd = "WRF_SDIRK3_RHS_COUNT=1 '";
+    cmd += self;
+    cmd += "' --child ";
+    cmd += mode;
+    cmd += " 2>&1";
+    std::string out;
+    FILE* f = popen(cmd.c_str(), "r");
+    if (!f) return out;
+    char buf[512];
+    while (std::fgets(buf, sizeof buf, f)) out += buf;
+    pclose(f);
+    return out;
+}
+static int count_occurrences(const std::string& hay, const std::string& needle) {
+    int n = 0;
+    for (size_t i = hay.find(needle); i != std::string::npos;
+         i = hay.find(needle, i + needle.size())) ++n;
+    return n;
+}
+
+int main(int argc, char** argv) {
+    if (argc >= 3 && std::strcmp(argv[1], "--child") == 0)
+        return run_child_mode(argv[2]);
     // (1) six-block unequal-size packing/unpacking: leaves on differently
     //     shaped blocks each close against their own block target.
     {
@@ -1043,22 +1106,30 @@ int main() {
         }
     }
 
-    // ---- case34: same-thread nesting detection ---------------------------------
+    // ---- case34: nesting detection, including the COMPLETED inner sweep --------
     // The counter is thread_local, so cross-thread contamination is impossible by
-    // construction and the predicate only has to catch a sweep nested inside another
-    // ON THE SAME THREAD. Kept as a pure function of sampled values so it is testable
-    // here: the enabled-path cache initialises false in this process (case32/33 force
-    // it), so a predicate reachable only through the live scope would be unreachable.
+    // construction; the predicate only has to catch same-thread nesting. Kept pure
+    // so it is testable here at all -- the enabled cache is latched false in this
+    // process, so a predicate reachable only through the live scope could not run.
+    //
+    // The third case is the one a depth-only predicate gets WRONG: an inner sweep
+    // that begins and ends inside our lifetime drives depth 1 -> 2 -> 1, so both of
+    // our depth samples read 1 and the outer row would claim to be clean while
+    // containing the inner sweep's RHS calls. The epoch term is what catches it.
     {
         using wrf::sdirk3::sdirk3_sweep_overlapped;
-        check(!sdirk3_sweep_overlapped(false, 1),
-              "case34: solitary sweep (no prior depth, depth 1 at exit) -> clean");
-        check(sdirk3_sweep_overlapped(true, 1),
-              "case34: a sweep already open on this thread at entry -> nested");
-        check(sdirk3_sweep_overlapped(false, 2),
-              "case34: an inner sweep still open at our exit -> nested");
-        check(sdirk3_sweep_overlapped(false, 0),
-              "case34: impossible depth 0 at exit is treated as nested (fail-closed)");
+        const long long e = 5;
+        check(!sdirk3_sweep_overlapped(false, 1, e, e),
+              "case34: solitary sweep (depth 1, epoch unmoved) -> clean");
+        check(sdirk3_sweep_overlapped(true, 1, e, e),
+              "case34: a sweep already open on this thread at entry -> tainted");
+        check(sdirk3_sweep_overlapped(false, 1, e, e + 1),
+              "case34: COMPLETED inner sweep is detected by the epoch (both depth "
+              "samples read 1, so depth alone would call this clean)");
+        check(sdirk3_sweep_overlapped(false, 2, e, e + 1),
+              "case34: an inner sweep still open at our exit -> tainted");
+        check(sdirk3_sweep_overlapped(false, 0, e, e),
+              "case34: impossible depth 0 at exit is treated as tainted (fail-closed)");
     }
 
     // ---- case35: the counter is thread-private ---------------------------------
@@ -1114,7 +1185,57 @@ int main() {
               "thread's counter by 0 (the gate is not inherited as enabled)");
     }
 
-    const int kExpected = 98;  // ratchet: update deliberately with the cases
+    // ---- case37: the ENABLED emitter path actually runs ------------------------
+    // Everything before this drives predicates and accessors. The constructor, the
+    // enabled tick, the destructor, the delta arithmetic and the record TEXT were
+    // never executed by any standing test, because the cached flag latches false in
+    // this process. A child with the flag set is the only way to reach them, and its
+    // stderr is the real emitter output rather than a hand-written fixture.
+    {
+        const std::string out = capture_child(argv[0], "one-sweep");
+        check(count_occurrences(out, "SDIRK3_RHS_CALLS phase=begin") == 1,
+              "case37: enabled child emits exactly one sweep begin record");
+        check(count_occurrences(out, "SDIRK3_RHS_CALLS phase=end") == 1,
+              "case37: enabled child emits exactly one sweep end record");
+        check(out.find("phase=end sweep_seq=0 total=3 delta=3") != std::string::npos,
+              "case37: the REAL delta is computed and printed (3 ticks -> delta=3)");
+        check(out.find("concurrent=1") == std::string::npos,
+              "case37: a solitary sweep is not marked concurrent");
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=begin total=0") != std::string::npos,
+              "case37: whole-run total is opened");
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=3") != std::string::npos,
+              "case37: whole-run total is closed from the exit handler and agrees");
+    }
+
+    // ---- case38: nested child -- BOTH records must be tainted ------------------
+    // The inner sweep begins and ends inside the outer one, so the outer delta
+    // contains the inner calls. A depth-only predicate marks only the inner record.
+    {
+        const std::string out = capture_child(argv[0], "nested");
+        check(count_occurrences(out, "SDIRK3_RHS_CALLS phase=begin") == 2,
+              "case38: nested child emits two begin records");
+        check(out.find("phase=end sweep_seq=1") != std::string::npos &&
+                  out.find("phase=end sweep_seq=1 total=2 delta=1 concurrent=1") !=
+                      std::string::npos,
+              "case38: the INNER end record is tainted");
+        check(out.find("phase=end sweep_seq=0 total=3 delta=3 concurrent=1") !=
+                  std::string::npos,
+              "case38: the OUTER end record is ALSO tainted -- it contained a "
+              "completed inner sweep that both depth samples miss");
+    }
+
+    // ---- case39: RHS calls with no sweep at all --------------------------------
+    // This is the gap the whole-run total exists to close: the sweep table sees
+    // nothing, so an extra call here is invisible to every per-sweep gate.
+    {
+        const std::string out = capture_child(argv[0], "no-sweep");
+        check(count_occurrences(out, "SDIRK3_RHS_CALLS ") == 0,
+              "case39: calls outside any sweep leave NO sweep records (the gap)");
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=2") != std::string::npos,
+              "case39: ...but the whole-run total still counts them");
+    }
+
+    const int kExpected = 110;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

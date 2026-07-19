@@ -145,11 +145,64 @@ inline bool sdirk3_rhs_count_enabled() {
     }();
     return on;
 }
+// WHOLE-RUN authority (PR 9F.3, contract B).
+//
+// The thread-local counter above measures a SWEEP. That is strictly narrower than
+// the claim "enabling the diagnostic adds zero RHS evaluations": RHS calls also
+// happen outside every sweep scope -- predictor and k_slow bootstrap before a sweep
+// opens, post-solve checks after it closes, other entry points entirely, and any
+// worker thread that never opens a sweep at all. An extra call in any of those
+// places is invisible to the sweep table, so OFF and ON can agree record-for-record
+// while the run really did evaluate the RHS one more time.
+//
+// This counter closes that. It is process-global and covers EVERY tick, and the run
+// total is published once at start and once at exit. It is atomic because several
+// threads tick it, but the atomic is behind the same cached flag as everything else,
+// so a default run performs no shared write at all.
+inline std::atomic<long long>& sdirk3_rhs_run_counter() {
+    static std::atomic<long long> total{0};
+    return total;
+}
+inline long long sdirk3_rhs_run_total() {
+    return sdirk3_rhs_run_counter().load(std::memory_order_relaxed);
+}
+
+// Emits the closing run total from a static destructor, so it fires on normal
+// return and on any exit that unwinds through main. A hard abort() -- which is how
+// a controlled fatal terminates -- deliberately leaves NO end record: the harness
+// treats a missing run-end as a failure, so an aborted run can never be read as
+// having proven the zero-extra property.
+struct Sdirk3RhsRunTotalEmitter {
+    ~Sdirk3RhsRunTotalEmitter() {
+        try {
+            if (!sdirk3_rhs_count_enabled()) return;
+            std::ostringstream os;
+            os << "SDIRK3_RHS_RUN_TOTAL phase=end total=" << sdirk3_rhs_run_total();
+            emit_sdirk3_diag_line(os.str() + "\n");
+        } catch (...) {
+        }
+    }
+};
+// Registers the exit emitter and publishes the opening total, exactly once.
+inline void sdirk3_rhs_run_register_once() {
+    static const bool done = [] {
+        std::ostringstream os;
+        os << "SDIRK3_RHS_RUN_TOTAL phase=begin total="
+           << sdirk3_rhs_run_total();
+        emit_sdirk3_diag_line(os.str() + "\n");
+        return true;
+    }();
+    static Sdirk3RhsRunTotalEmitter emitter;   // destructor runs at process exit
+    (void)done;
+}
+
 // The ONLY place the counter is advanced, so the disabled-path guarantee holds at
 // one site. No atomic, no shared line: this is thread-private storage.
 inline void sdirk3_rhs_count_tick() {
     if (!sdirk3_rhs_count_enabled()) return;   // default path: no write at all
-    ++sdirk3_rhs_call_counter();
+    ++sdirk3_rhs_call_counter();                       // sweep-local, thread-private
+    sdirk3_rhs_run_register_once();
+    sdirk3_rhs_run_counter().fetch_add(1, std::memory_order_relaxed);  // whole-run
 }
 inline long long sdirk3_rhs_count_value() {
     return sdirk3_rhs_call_counter();
@@ -180,8 +233,29 @@ inline int& sdirk3_rhs_sweep_depth() {
 // enabled-path cache initialises false in the unit-test process and cannot be
 // flipped, so a predicate reachable only through the live scope would be untestable
 // in that binary.
-inline bool sdirk3_sweep_overlapped(bool nested_at_entry, int depth_at_exit) {
-    return nested_at_entry || depth_at_exit != 1;
+// Thread-local count of sweeps STARTED on this thread. An outer sweep records it at
+// entry and compares at exit: if it moved, some inner sweep began during our
+// lifetime and its RHS calls are inside our delta -- even if that inner sweep has
+// already finished, which is exactly the case the depth samples cannot see (depth
+// goes 1 -> 2 -> 1 and both of our samples read 1).
+inline long long& sdirk3_rhs_sweep_epoch() {
+    static thread_local long long epoch = 0;
+    return epoch;
+}
+
+// Was this sweep's delta contaminated?
+//   nested_at_entry  - a sweep was already open on this thread when we started
+//   depth_at_exit    - an inner sweep is STILL open as we finish
+//   epoch moved      - an inner sweep began during our lifetime and already ended
+// The third term is what makes the OUTER record truthful. Without it the outer row
+// reads clean while containing the inner sweep's calls, and any analyser that
+// consumes rows individually -- or that drops only tainted rows -- would use a
+// contaminated delta.
+inline bool sdirk3_sweep_overlapped(bool nested_at_entry, int depth_at_exit,
+                                    long long epoch_at_entry, long long epoch_at_exit) {
+    return nested_at_entry
+        || depth_at_exit != 1
+        || epoch_at_exit != epoch_at_entry;
 }
 
 // Emit one record in a stable, machine-readable, line-atomic form.
@@ -220,7 +294,10 @@ public:
           seq_(enabled_ ? sdirk3_next_rhs_sweep_seq() : -1),
           start_(enabled_ ? sdirk3_rhs_count_value() : 0),
           // Non-zero prior depth means a sweep is already open ON THIS THREAD.
-          nested_(enabled_ && sdirk3_rhs_sweep_depth()++ != 0) {
+          nested_(enabled_ && sdirk3_rhs_sweep_depth()++ != 0),
+          // Sampled AFTER the ++ above, so our own start is not counted as an inner
+          // sweep beginning during our lifetime.
+          epoch_(enabled_ ? ++sdirk3_rhs_sweep_epoch() : 0) {
         if (enabled_) emit_sdirk3_rhs_count("begin", seq_, start_, -1, nested_);
     }
     ~Sdirk3RhsSweepScope() {
@@ -235,7 +312,8 @@ public:
             // fixes kept failing to establish is now structural.
             const long long total = sdirk3_rhs_count_value();
             const bool overlapped =
-                sdirk3_sweep_overlapped(nested_, sdirk3_rhs_sweep_depth());
+                sdirk3_sweep_overlapped(nested_, sdirk3_rhs_sweep_depth(),
+                                        epoch_, sdirk3_rhs_sweep_epoch());
             emit_sdirk3_rhs_count("end", seq_, total, total - start_, overlapped);
         } catch (...) {
         }
@@ -248,6 +326,7 @@ private:
     long long seq_;
     long long start_;
     bool nested_;
+    long long epoch_;
 };
 
 // Route one success line either into the transaction (preferred) or straight out
