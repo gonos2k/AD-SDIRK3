@@ -108,12 +108,23 @@ rhs_sweep_table() { # <log>
         if ($i ~ /^delta=/)   { delta = substr($i, 7) + 0; has_delta = 1 }
       }
       if (seq < 0) next
-      if (phase == "begin") { b[seq] = total; seen_b[seq] = 1; order[++n] = seq }
-      else if (phase == "end") { e[seq] = total; seen_e[seq] = 1; d[seq] = delta; hd[seq] = has_delta }
+      # A repeated sweep_seq must FAIL rather than silently overwrite: without this,
+      # two begins sharing a seq collapse to one table entry and emit two identical
+      # "ok" rows, so a duplicated or replayed sweep reads as well-formed.
+      if (phase == "begin") {
+        if (seen_b[seq]) dup_b[seq] = 1
+        b[seq] = total; seen_b[seq] = 1; order[++n] = seq
+      } else if (phase == "end") {
+        if (seen_e[seq]) dup_e[seq] = 1
+        e[seq] = total; seen_e[seq] = 1; d[seq] = delta; hd[seq] = has_delta
+      }
     }
     END {
       for (i = 1; i <= n; i++) {
         s = order[i]
+        if (emitted[s]) continue          # one row per seq; duplicates flagged below
+        emitted[s] = 1
+        if (dup_b[s] || dup_e[s]) { print s, b[s], (seen_e[s] ? e[s] : "-"), "-", "duplicate_seq"; continue }
         if (!seen_e[s]) { print s, b[s], "-", "-", "missing_end"; continue }
         st = "ok"
         if (!hd[s] || d[s] != e[s] - b[s]) st = "delta_mismatch"
@@ -166,6 +177,12 @@ if [ "${1:-}" = "--self-test" ]; then
   # The emitter free-typing a delta that disagrees with end-begin.
   { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=10"
     echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=7"; } > "$TMP/rhsbaddelta.log"
+  # A REPEATED sweep_seq (duplicated/replayed sweep). Each pair is individually
+  # well-formed, so only a uniqueness check rejects it.
+  { echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=0"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=42 delta=42"
+    echo "SDIRK3_RHS_CALLS phase=begin sweep_seq=0 total=42"
+    echo "SDIRK3_RHS_CALLS phase=end sweep_seq=0 total=84 delta=42"; } > "$TMP/rhsdupseq.log"
   # The subtler vacuous case (found by Codex on the first fix): the counter is
   # CUMULATIVE, so a sweep that evaluated nothing still reports total>0 at both ends
   # once an earlier sweep has advanced it. A "some record has total>0" check passes
@@ -199,6 +216,8 @@ if [ "${1:-}" = "--self-test" ]; then
        "$([ "$(rhs_sweeps_well_formed "$TMP/rhsdangling.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: emitted delta disagreeing with end-begin IS rejected (P1-1)" \
        "$([ "$(rhs_sweeps_well_formed "$TMP/rhsbaddelta.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: DUPLICATE sweep_seq IS rejected (P1-1 uniqueness, found by Codex)" \
+       "$([ "$(rhs_sweeps_well_formed "$TMP/rhsdupseq.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: good fixture has BOTH begin and end phase records (defect 10)" \
        "$([ "$(cnt 'phase=begin' "$TMP/good.log")" -ge 1 ] && \
           [ "$(cnt 'phase=end' "$TMP/good.log")" -ge 1 ] && echo 1 || echo 0)"
