@@ -60,6 +60,7 @@ torch::Tensor rnd(std::initializer_list<int64_t> shape, float scale, float phase
 // shell parser then judges.
 static int run_child_mode(const char* mode) {
     if (std::strcmp(mode, "one-sweep") == 0) {
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // PR 9F.7: no lazy begin
         wrf::sdirk3::Sdirk3RhsSweepScope scope;
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
@@ -67,6 +68,7 @@ static int run_child_mode(const char* mode) {
         return 0;   // scope destructor emits `end` with delta=3
     }
     if (std::strcmp(mode, "nested") == 0) {
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // PR 9F.7: no lazy begin
         wrf::sdirk3::Sdirk3RhsSweepScope outer;
         wrf::sdirk3::sdirk3_rhs_count_tick();
         {
@@ -80,6 +82,7 @@ static int run_child_mode(const char* mode) {
         // The authority closes first (as Fortran does), then a FALLBACK fires. The
         // fallback must NOT produce a second, differently-attributed record: the
         // frozen {exit,total,authority} is re-emitted verbatim or nothing is.
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // PR 9F.7: no lazy begin
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
         sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME);
@@ -91,6 +94,7 @@ static int run_child_mode(const char* mode) {
     if (std::strcmp(mode, "close-conflict") == 0) {
         // A second close asking for a DIFFERENT outcome is a wiring bug, and must be
         // reported rather than silently answered with the first verdict.
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // PR 9F.7: no lazy begin
         wrf::sdirk3::sdirk3_rhs_count_tick();
         const int a = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME);
         const int b = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_FINALIZE);
@@ -103,6 +107,7 @@ static int run_child_mode(const char* mode) {
         // path. (The other half, the Fortran finalizer actually calling this, is
         // compile-verified; its runtime emission needs a COMPLETING SDIRK3 run,
         // which em_b_wave cannot yet produce at any dt -- see the scope note.)
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // PR 9F.7: no lazy begin
         wrf::sdirk3::sdirk3_rhs_count_tick();
         sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_FINALIZE);
         return 0;
@@ -112,6 +117,7 @@ static int run_child_mode(const char* mode) {
         // close, NO closing record is lost and every emitted record is identical.
         // The single CAS RUNNING->CLOSED freezes {count,exit,auth}; losers re-decode
         // the same word. There is no winner-publication window to be preempted in.
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // PR 9F.7: no lazy begin
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
@@ -130,11 +136,14 @@ static int run_child_mode(const char* mode) {
         // tick -> close -> tick: the trailing tick must be REJECTED. On the linearized
         // word a tick after CLOSED returns 0 and flags post_close_tick, so a control
         // flow that evaluates the RHS past the fatal decision cannot hide.
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // PR 9F.7: no lazy begin
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
         sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME);
         const int rc = wrf::sdirk3::sdirk3_run_tick();
         std::fprintf(stderr, "POST_CLOSE_TICK_RC=%d\n", rc);
+        // PR 9F.7 P1-1: production emits the always-failing marker on this path.
+        wrf::sdirk3::sdirk3_run_emit_violation("SDIRK3_RHS_POST_CLOSE_TICK");
         // a second close re-emits, now carrying the post_close_tick flag
         sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME);
         return 0;
@@ -143,6 +152,7 @@ static int run_child_mode(const char* mode) {
         // clean finalize -> re-init -> a NEW generation. The old process-once static
         // machinery would have re-emitted generation 1's frozen record; the word
         // opens generation 2 with its own count.
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // PR 9F.7: explicit gen-1 begin
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
@@ -159,6 +169,7 @@ static int run_child_mode(const char* mode) {
         // OTHER than step_outcome. These reasons are only reachable from Fortran on
         // timestep >= 2 (the dt=600 acceptance aborts on timestep 1 = step_outcome),
         // so this is the only fixture that drives reason=topology through the decode.
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // PR 9F.7: no lazy begin
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
         sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_TOPOLOGY);
@@ -175,14 +186,48 @@ static int run_child_mode(const char* mode) {
         // in MPI_Abort/std::abort, which run NO static destructors -- so if the
         // closing run total is only emitted from one, it is structurally
         // unreachable here and the harness gate could only ever fail.
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // PR 9F.7: no lazy begin
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::mpi_safety::abort_c_abi_exception("child_abort_mode",
                                                        "deliberate controlled fatal");
     }
+    if (std::strcmp(mode, "reopen-after-fatal") == 0) {
+        // PR 9F.7 P1-3: after a FATAL close, begin must NOT re-open a generation --
+        // the process was supposed to abort on that fatal. Re-opening would launder a
+        // control-flow defect. Only a CLEAN finalize (case47) permits re-init.
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME);
+        const int rc = wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();
+        std::fprintf(stderr, "REOPEN_AFTER_FATAL_RC=%d\n", rc);
+        return 0;
+    }
+    if (std::strcmp(mode, "begin-emit-fail") == 0) {
+        // PR 9F.7 P1-6: force the begin RECORD write to fail by closing stderr (fd 2 ->
+        // EBADF). begin must NOT report a false OPENED; it returns SDIRK3_BEGIN_EMIT_ERROR
+        // and poisons the run to ERROR. Report via stdout (fd 1), which capture_child's
+        // 2>&1 still routes to the pipe, so the harness sees it even though stderr is gone.
+        ::close(STDERR_FILENO);
+        const int rc = wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();
+        std::printf("BEGIN_EMIT_FAIL_RC=%d\n", rc);
+        std::fflush(stdout);
+        return 0;
+    }
+    if (std::strcmp(mode, "begin-missing") == 0) {
+        // PR 9F.7 P1-1/P1-2: a tick with NO begin opened (lazy-begin removed) returns
+        // SDIRK3_TICK_BEGIN_MISSING and opens nothing. Production emits the always-
+        // failing marker and controlled-fatals; here we drive the tick directly and
+        // emit the marker so the parser rejection can be proven.
+        const int rc = wrf::sdirk3::sdirk3_run_tick();
+        std::fprintf(stderr, "BEGIN_MISSING_RC=%d\n", rc);
+        wrf::sdirk3::sdirk3_run_emit_violation("SDIRK3_RHS_BEGIN_MISSING");
+        return 0;
+    }
     if (std::strcmp(mode, "no-sweep") == 0) {
         // RHS calls with no sweep open at all: invisible to the sweep table, which
         // is precisely why the whole-run total exists.
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // PR 9F.7: no lazy begin
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
         return 0;
@@ -1445,6 +1490,9 @@ int main(int argc, char** argv) {
               "case46: tick after close returns 0 (the RHS-past-fatal violation)");
         check(out.find("post_close_tick=1") != std::string::npos,
               "case46: the violation is recorded in the re-emitted closing record");
+        check(out.find("SDIRK3_RHS_POST_CLOSE_TICK generation=1") != std::string::npos,
+              "case46: the always-failing POST_CLOSE_TICK marker is emitted (P1-1: the "
+              "production gate emits this before the controlled fatal)");
     }
 
     // ---- case47: re-init opens a new generation --------------------------------
@@ -1471,7 +1519,78 @@ int main(int argc, char** argv) {
               "only Fortran timestep>=2 reaches)");
     }
 
-    const int kExpected = 132;  // ratchet: update deliberately with the cases
+    // ---- case49: a tick with no begin is BEGIN_MISSING, not a lazy generation ----
+    {
+        const std::string out = capture_child(argv[0], "begin-missing");
+        check(out.find("BEGIN_MISSING_RC=-1") != std::string::npos,
+              "case49: an IDLE tick returns SDIRK3_TICK_BEGIN_MISSING (-1) and opens "
+              "NO generation (lazy-begin removed, P1-1/P1-2)");
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=begin") == std::string::npos,
+              "case49: no begin record is emitted by an IDLE tick (a missing explicit "
+              "begin can no longer be masked by the first worker RHS)");
+        check(out.find("SDIRK3_RHS_BEGIN_MISSING generation=0") != std::string::npos,
+              "case49: the always-failing BEGIN_MISSING marker is emitted");
+    }
+
+    // ---- case50: the ABI (exit, reason) matrix rejects invalid combinations -----
+    // These run in THIS (disabled) process: sdirk3_rhs_run_close_checked validates the
+    // combination BEFORE the enabled gate, so a valid combo returns 1 (disabled no-op)
+    // and an invalid one returns 0 regardless of counting. P1-4: no OTHER laundering.
+    {
+        using namespace wrf::sdirk3;
+        check(sdirk3_rhs_run_close_checked(7, SDIRK3_RHS_RUN_REASON_FINALIZE) == 0,
+              "case50: an unknown exit_kind is rejected");
+        check(sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_CLEAN,
+                                           SDIRK3_RHS_RUN_REASON_STEP_OUTCOME) == 0,
+              "case50: clean exit with a non-finalize reason is rejected");
+        check(sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL,
+                                           SDIRK3_RHS_RUN_REASON_FINALIZE) == 0,
+              "case50: fatal exit with reason=finalize is rejected");
+        check(sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL,
+                                           SDIRK3_RHS_RUN_REASON_CPP_FALLBACK) == 0,
+              "case50: fatal exit with the C++-only cpp_fallback reason is rejected");
+        check(sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL, 99) == 0,
+              "case50: an out-of-range reason is rejected, NOT laundered to other");
+        check(sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_CLEAN,
+                                           SDIRK3_RHS_RUN_REASON_FINALIZE) == 1,
+              "case50: clean+finalize is a VALID combo (disabled no-op returns 1)");
+        check(sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL,
+                                           SDIRK3_RHS_RUN_REASON_TOPOLOGY) == 1,
+              "case50: fatal+topology is a VALID combo (disabled no-op returns 1)");
+    }
+
+    // ---- case51: begin after a FATAL close is REJECTED (P1-3) -------------------
+    {
+        const std::string out = capture_child(argv[0], "reopen-after-fatal");
+        check(out.find("REOPEN_AFTER_FATAL_RC=-1") != std::string::npos,
+              "case51: begin after a fatal close returns SDIRK3_BEGIN_REJECTED_FATAL "
+              "(-1) -- it does NOT re-open a generation past the fatal");
+        check(out.find("SDIRK3_RHS_REOPEN_AFTER_FATAL") != std::string::npos,
+              "case51: the always-failing REOPEN_AFTER_FATAL marker is emitted");
+    }
+
+    // ---- case52: begin reports DISABLED distinctly (P1-2) -----------------------
+    {
+        check(!wrf::sdirk3::sdirk3_rhs_count_enabled(),
+              "case52: counting is disabled in this process");
+        check(wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl() ==
+                  wrf::sdirk3::SDIRK3_BEGIN_DISABLED,
+              "case52: begin returns SDIRK3_BEGIN_DISABLED (a benign >=0 code), not a "
+              "bare 1 that a caller could confuse with OPENED");
+    }
+
+    // ---- case53: a failed begin-record write is reported, not a false success ---
+    // P1-6: closing stderr makes the begin write(2) fail (EBADF). begin must return
+    // EMIT_ERROR (-3), NOT a false OPENED. This is the defect the buffered std::cerr
+    // emitter hid: it swallowed the failed write and the checked API claimed success.
+    {
+        const std::string out = capture_child(argv[0], "begin-emit-fail");
+        check(out.find("BEGIN_EMIT_FAIL_RC=-3") != std::string::npos,
+              "case53: a begin whose record write FAILS returns SDIRK3_BEGIN_EMIT_ERROR "
+              "(-3), never a false OPENED (P1-6)");
+    }
+
+    const int kExpected = 148;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

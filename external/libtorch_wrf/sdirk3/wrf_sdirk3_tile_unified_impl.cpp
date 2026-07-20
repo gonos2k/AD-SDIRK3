@@ -10701,8 +10701,30 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // path paid an atomic read-modify-write on a shared cache line -- relaxed ordering
     // drops the fence but not the RMW or the coherence traffic, and under OpenMP the
     // contention is real. sdirk3_rhs_count_tick() short-circuits on a cached bool, so
-    // with the env var unset there is no write at all.
-    wrf::sdirk3::sdirk3_rhs_count_tick();
+    // with the env var unset there is no write at all (it returns SDIRK3_TICK_COUNTED,
+    // so the default production path takes the fast branch below and is byte-identical).
+    //
+    // PR 9F.7 P1-1: EXECUTION GATE. The whole-run counter rejecting a tick is no longer
+    // advisory -- production must not evaluate a stage OUTSIDE an open run lifecycle. A
+    // post-close tick (RHS past the fatal/finalize decision) or a begin-missing tick (no
+    // explicit Fortran begin opened the run) emits an always-failing marker and takes a
+    // controlled fatal BEFORE any RHS arithmetic. abort_c_abi_exception fires the
+    // pre-abort hook, which re-emits the frozen closing record, so the evidence carries
+    // both the marker and the post_close_tick flag.
+    {
+        const int rhs_tick = wrf::sdirk3::sdirk3_rhs_count_tick();
+        if (rhs_tick == wrf::sdirk3::SDIRK3_TICK_POST_CLOSE) {
+            wrf::sdirk3::sdirk3_run_emit_violation("SDIRK3_RHS_POST_CLOSE_TICK");
+            wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+                "computeUnifiedRHS",
+                "RHS evaluation after run close (post-close tick)");
+        } else if (rhs_tick == wrf::sdirk3::SDIRK3_TICK_BEGIN_MISSING) {
+            wrf::sdirk3::sdirk3_run_emit_violation("SDIRK3_RHS_BEGIN_MISSING");
+            wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+                "computeUnifiedRHS",
+                "RHS evaluation with no open run lifecycle (begin missing)");
+        }
+    }
 
     /*
      * Unified RHS Computation for WRF-SDIRK3 Implicit Solver

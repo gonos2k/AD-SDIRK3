@@ -649,13 +649,17 @@ CONTAINS
 
       WRITE(message, '(A,I0,A)') "UNIFIED SDIRK3: Initialized ", num_tiles_initialized, " tile solvers"
       CALL wrf_message(message)
-      ! PR 9F.6: measured-accurate wording. L-stability gives UNCONDITIONAL
-      ! stability for the stiff modes the implicit solve actually integrates; it
-      ! does NOT remove the acoustic CFL restriction -- the fast acoustic
-      ! operator (I - dt*gamma*J_fast) is intrinsically indefinite at large dt
-      ! (Ritz spectrum straddles the origin, background-independent), which is
-      ! why sound-wave stiffness is handled by the split-explicit acoustic
-      ! substep, not by L-stability. See doc/sdirk3_hevi_preconditioner_findings.
+      ! PR 9F.7: measurement-scoped wording (avoid the two theory over-claims the
+      ! review flagged). L-stability is a property of the stability function on the
+      ! SCALAR LINEAR TEST equation; it does NOT by itself guarantee unconditional
+      ! stability for the nonlinear, non-normal, operator-split WRF core solved by an
+      ! INEXACT Newton-FGMRES. And the fast acoustic block is not "intrinsically
+      ! indefinite" as a universal theorem: on the MEASURED dt=600 operands the Krylov
+      ! projection of the configured fast operator showed Ritz values on both sides of
+      ! the origin -- an empirical property of the tested discretization and scaling,
+      ! not a theorem for acoustic operators in general. Either way the acoustic CFL is
+      ! handled by the split-explicit substep, not by L-stability. See
+      ! doc/sdirk3_hevi_preconditioner_findings.
       CALL wrf_message("UNIFIED SDIRK3: L-stable implicit integration " // &
          "(acoustic CFL handled by the split-explicit substep, not L-stability)")
 
@@ -1121,8 +1125,20 @@ CONTAINS
       ! opens generation 1, later timesteps see RUNNING and return 0. Doing it here
       ! (not lazily on the first tick from a worker) makes the opening record and the
       ! fallback registration a main-thread act, and leaves the per-RHS path a pure
-      ! counter CAS. Status is advisory (0 just means "already open").
+      ! counter CAS.
+      !
+      ! PR 9F.7 P1-2: the status is NO LONGER purely advisory. Benign codes are >= 0
+      ! (OPENED=1, ALREADY_RUNNING=0, DISABLED=2). A NEGATIVE code is a hard lifecycle
+      ! error -- re-open after a fatal close (REJECTED_FATAL), generation overflow, or a
+      ! begin record that never reached the log (EMIT_ERROR) -- and the solve must not
+      ! proceed on a poisoned lifecycle.
       rhs_run_close_status = sdirk3_rhs_run_begin_checked()
+      IF (rhs_run_close_status < 0_C_INT) THEN
+         WRITE(message, '(A,I0)') &
+            "SDIRK3_RHS_RUN_BEGIN_FAILED: begin_checked returned status=", &
+            rhs_run_close_status
+         CALL wrf_error_fatal(TRIM(message))
+      END IF
 
       ! Process each tile with Zero-Copy approach
       ! P0 FIX (2026-07-12, external review #4): bounds/dims/scalars/bdy_cfg and the
