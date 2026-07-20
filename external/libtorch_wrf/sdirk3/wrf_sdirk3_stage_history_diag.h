@@ -107,6 +107,13 @@ struct StageOperandEvidenceBundle {
 //
 // This counts the single funnel every RHS path goes through.
 //
+// PR 9F.6 caution: an equal RHS count OFF vs ON is NECESSARY but NOT SUFFICIENT
+// for non-interference. It proves the diagnostic added no RHS evaluation; it does
+// NOT prove the diagnostic left every evaluated VALUE bit-identical (that is the
+// separate NEWTON/FGMRES/STAGE_DIAG byte-identity gate) nor that the run
+// integrated to completion (the dt=600 acceptance is scope=up-to-abort). Read the
+// count as one channel of evidence, not a whole-run non-interference proof.
+//
 // PR 9F.2 P1-2: the increment is GATED on the same cached flag that gates emission.
 // The previous version incremented unconditionally and gated only the printing,
 // which meant the DEFAULT production path paid an atomic read-modify-write per RHS
@@ -366,9 +373,16 @@ inline int sdirk3_run_tick() noexcept {
         } else if (st == SDIRK3_LC_STATE_CLOSED) {
             if (sdirk3_lc_post_close_tick(old)) return 0;   // already flagged
             const uint64_t neu = old | kSdirk3LcPostBit;
-            word.compare_exchange_weak(old, neu, std::memory_order_acq_rel,
-                                       std::memory_order_acquire);
-            return 0;
+            if (word.compare_exchange_weak(old, neu, std::memory_order_acq_rel,
+                                           std::memory_order_acquire))
+                return 0;                            // I set the post-close flag
+            // CAS failed -- must NOT return 0 unconditionally. weak CAS can fail
+            // spuriously (LL/SC, e.g. ARM), and the word may have moved on: a
+            // concurrent post-close tick already set the bit, OR a re-init opened a
+            // NEW RUNNING generation. `old` now holds the current word, so loop and
+            // re-dispatch on the fresh state: a spurious failure retries the flag, a
+            // re-init counts this tick in the new generation instead of dropping it.
+            continue;
         } else {  // IDLE -> lazy begin
             const long long gen = sdirk3_lc_gen(old) + 1;
             const uint64_t neu = sdirk3_lc_pack(SDIRK3_LC_STATE_RUNNING, gen, 1,

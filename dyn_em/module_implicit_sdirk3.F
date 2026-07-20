@@ -649,7 +649,15 @@ CONTAINS
 
       WRITE(message, '(A,I0,A)') "UNIFIED SDIRK3: Initialized ", num_tiles_initialized, " tile solvers"
       CALL wrf_message(message)
-      CALL wrf_message("UNIFIED SDIRK3: L-stability eliminates CFL restriction on sound waves")
+      ! PR 9F.6: measured-accurate wording. L-stability gives UNCONDITIONAL
+      ! stability for the stiff modes the implicit solve actually integrates; it
+      ! does NOT remove the acoustic CFL restriction -- the fast acoustic
+      ! operator (I - dt*gamma*J_fast) is intrinsically indefinite at large dt
+      ! (Ritz spectrum straddles the origin, background-independent), which is
+      ! why sound-wave stiffness is handled by the split-explicit acoustic
+      ! substep, not by L-stability. See doc/sdirk3_hevi_preconditioner_findings.
+      CALL wrf_message("UNIFIED SDIRK3: L-stable implicit integration " // &
+         "(acoustic CFL handled by the split-explicit substep, not L-stability)")
 
       ! NOTE: Config freeze (mark_workers_started) is now called at the END of
       ! sdirk3_initialize_solvers, AFTER all config including physics coupling.
