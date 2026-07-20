@@ -44,6 +44,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <unistd.h>   // write(2) on the fatal path
+#include <sched.h>    // sched_yield on the fatal-path spin (PR 9F.5, Gemini #52)
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -263,6 +264,18 @@ inline std::atomic<bool>& sdirk3_run_close_published() {
 // internal stdio lock, so calling them "mutex-free" on the fatal path would be
 // wishful; write(2) to STDERR_FILENO takes none. Returns 1 on success or benign
 // no-op, 0 only on a contract violation the caller should surface.
+// A single CPU relax instruction: pause on x86, yield on arm. Slows a spin
+// iteration to something meaningful (a bare atomic load is a few cycles) and, on
+// SMT, hands the sibling thread the pipeline. No syscall, no allocation -- safe on
+// the fatal path.
+inline void sdirk3_cpu_relax() noexcept {
+#if defined(__x86_64__) || defined(__i386__)
+    __builtin_ia32_pause();
+#elif defined(__aarch64__) || defined(__arm__)
+    __asm__ __volatile__("yield" ::: "memory");
+#endif
+}
+
 inline int sdirk3_rhs_run_close_impl(Sdirk3RunExit how,
                                      Sdirk3RunAuthority who) noexcept {
     if (!sdirk3_rhs_count_enabled()) return 1;          // disabled: total no-op
@@ -276,12 +289,27 @@ inline int sdirk3_rhs_run_close_impl(Sdirk3RunExit how,
         sdirk3_run_close_published().store(true, std::memory_order_release);
     } else {
         // Wait, bounded, for the winner to finish writing the fields we are about
-        // to read. Bounded because this is the fatal path: a stale duplicate is
-        // worse than nothing, but hanging forever is worse than either.
+        // to read. Bounded because this is the fatal path: hanging forever is worse
+        // than a missing record. But a BARE load loop is too fast to be a real wait
+        // -- 100k naked atomic loads finish in a fraction of a millisecond, so if the
+        // winner is preempted right after the exchange the loser exhausts the loop
+        // before the winner resumes and gives up (Gemini review, PR #52). A relax
+        // hint slows each spin, and sched_yield every 1024 spins lets the winner
+        // actually be scheduled -- neither allocates or locks. sched_yield is the
+        // load-bearing part on a single core; the relax hint helps under SMT.
+        bool published = false;
         for (int spin = 0; spin < 100000; ++spin) {
-            if (sdirk3_run_close_published().load(std::memory_order_acquire)) break;
+            if (sdirk3_run_close_published().load(std::memory_order_acquire)) {
+                published = true;
+                break;
+            }
+            sdirk3_cpu_relax();
+            if ((spin & 0x3FF) == 0x3FF) sched_yield();
         }
-        if (!sdirk3_run_close_published().load(std::memory_order_acquire)) return 0;
+        if (!published &&
+            !sdirk3_run_close_published().load(std::memory_order_acquire)) {
+            return 0;
+        }
     }
 
     const Sdirk3FrozenClose& rec = sdirk3_run_close_record();
