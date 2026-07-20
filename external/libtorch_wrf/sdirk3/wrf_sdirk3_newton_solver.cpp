@@ -3465,6 +3465,13 @@ public:
     // Built/rebuilt when layout is known and device/dtype matches K
     torch::Tensor S_diag_;
     torch::Tensor S_inv_diag_;
+    // PR 9F.9 (numerical review P1-1 SHADOW): the FROZEN iter-0 inverse scale. The
+    // production convergence metric uses S_inv_diag_, which grows monotonically over
+    // Newton iterations (S[b]=max(S_old,rms(R_b))). The review argues that growing S
+    // LOOSENS ||S^-1 R|| rather than tightening it. This captures S_0 once at iter 0 so
+    // a diagnosis-only shadow can report BOTH ||S^-1 R|| (dynamic) and ||S_0^-1 R||
+    // (fixed) and MEASURE where the two verdicts diverge -- no behaviour change.
+    torch::Tensor S0_inv_diag_;
     bool scaling_initialized_ = false;
     bool physics_scaling_set_ = false;  // True after set_physics_scaling() called
     torch::Device scaling_device_ = torch::kCPU;
@@ -4901,6 +4908,9 @@ public:
                     S_diag_ = S_diag_.to(K.device());
                     S_inv_diag_ = S_inv_diag_.to(K.device());
                 }
+                // P1-1 SHADOW: freeze S_0 (the iter-0 scale) so the monotonic growth of
+                // S over later iterations can be compared against a fixed reference.
+                S0_inv_diag_ = S_inv_diag_.clone();
             }
 
             // r50-F3: Monotonic S update for iter > 0.
@@ -4991,6 +5001,45 @@ public:
             }
             // NOTE: k_norm_tensor and rel_res_norm removed (2026-02-03).
             // Convergence now uses scaled norm ||S⁻¹R||; relative ||R||/||K|| is no longer needed.
+
+            // PR 9F.9 P1-1 SHADOW (diagnosis-only; debug_level>=1, which the ON
+            // acceptance run already sets). Report BOTH the production dynamic-S metric
+            // and the FIXED-S0 metric, the unscaled RMS, and the per-block MAX scaled RMS,
+            // so the review's claims -- that the monotonically growing S loosens rather
+            // than tightens the convergence test, and that a global RMS can hide a small
+            // non-converged block -- can be MEASURED at stage 2/3. Read-only under
+            // NoGradGuard; NO control flow consumes these values (the production metric is
+            // still res_norm_tensor), so the numerical path is byte-identical.
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 &&
+                scaling_initialized_ && S0_inv_diag_.defined() &&
+                S0_inv_diag_.numel() == R_inner.numel()) {
+                torch::NoGradGuard no_grad;
+                const float dyn_rms = guarded_item<float>(res_norm_tensor);
+                const float fix_rms =
+                    guarded_item<float>(safe_tensor_norm(S0_inv_diag_ * R_inner)) / sqrt_N;
+                const float unsc_rms =
+                    guarded_item<float>(res_norm_unscaled_tensor) / sqrt_N;
+                float block_max = 0.0f;
+                const char* block_max_name = "none";
+                if (layout_initialized_ &&
+                    cached_layout_.total_size == R_inner.numel()) {
+                    auto Rs = (S_inv_diag_ * R_inner).detach().to(torch::kCPU).contiguous();
+                    for (const auto& blk : cached_layout_.blocks) {
+                        if (blk.start + blk.size > Rs.numel()) continue;
+                        float b = Rs.slice(0, blk.start, blk.start + blk.size)
+                                      .norm().item<float>()
+                                  / std::sqrt(static_cast<float>(blk.size));
+                        if (b > block_max) { block_max = b; block_max_name = blk.name.c_str(); }
+                    }
+                }
+                char sh[224];
+                std::snprintf(sh, sizeof sh,
+                    "SDIRK3_NEWTON_SHADOW stage=%d iter=%d dyn_S_rms=%.6e "
+                    "fix_S0_rms=%.6e unscaled_rms=%.6e block_max_rms=%.6e block_max=%s\n",
+                    stage, newton_iter, dyn_rms, fix_rms, unsc_rms, block_max,
+                    block_max_name);
+                std::cerr << sh;
+            }
 
             // v20.14r27x: Unscaled absolute explosion guard for ALL stages.
             // Scaled-RMS is ~1.0 by construction at newton_iter==0 (S built from R₀),
