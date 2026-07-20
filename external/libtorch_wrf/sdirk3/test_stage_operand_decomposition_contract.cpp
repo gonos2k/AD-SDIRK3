@@ -153,6 +153,17 @@ static int run_child_mode(const char* mode) {
         sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_FINALIZE);
         return 0;
     }
+    if (std::strcmp(mode, "lifecycle-funnel-reason") == 0) {
+        // The Fortran fatal funnel (sdirk3_close_and_fatal) routes topology / halo /
+        // solver-state validation aborts through the SAME close ABI with a reason
+        // OTHER than step_outcome. These reasons are only reachable from Fortran on
+        // timestep >= 2 (the dt=600 acceptance aborts on timestep 1 = step_outcome),
+        // so this is the only fixture that drives reason=topology through the decode.
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_TOPOLOGY);
+        return 0;
+    }
     if (std::strcmp(mode, "close-disabled") == 0) {
         // Contract: with counting disabled the close is a total no-op returning 1.
         const int rc = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME);
@@ -1450,7 +1461,17 @@ int main(int argc, char** argv) {
               "replay of generation 1");
     }
 
-    const int kExpected = 131;  // ratchet: update deliberately with the cases
+    // ---- case48: a funnel-routed fatal decodes its reason (topology) -----------
+    {
+        const std::string out = capture_child(argv[0], "lifecycle-funnel-reason");
+        check(out.find("phase=end generation=1 total=2 exit=fatal "
+                       "authority=fortran_outcome reason=topology") !=
+                  std::string::npos,
+              "case48: a funnel-routed fatal records reason=topology (the reasons "
+              "only Fortran timestep>=2 reaches)");
+    }
+
+    const int kExpected = 132;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);
