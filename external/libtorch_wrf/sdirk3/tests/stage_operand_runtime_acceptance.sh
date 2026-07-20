@@ -151,18 +151,21 @@ run_total_well_formed() { # <log>
 # Anchored on the parser's exact RUN line, which it prints only when begin and end
 # both parsed, so a malformed log cannot yield a value through a loose match.
 run_total_final() { # <log>
-  python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
-    sed -n 's/^RUN begin=[0-9][0-9]* end=\([0-9][0-9]*\) exit=.*$/\1/p'
+  # `|| true`: the parser exits non-zero when it rejects a log; under pipefail that
+  # would propagate and, in a caller running `set -e`, terminate the script. sed
+  # still prints (empty on no match), which is the correct "absent" signal.
+  { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
+    sed -n 's/^RUN begin=[0-9][0-9]* end=\([0-9][0-9]*\) exit=.*$/\1/p'; } || true
 }
 run_exit_kind() { # <log>
-  python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
-    sed -n 's/^RUN begin=[0-9][0-9]* end=[0-9][0-9]* exit=\([a-z][a-z]*\) .*$/\1/p'
+  { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
+    sed -n 's/^RUN begin=[0-9][0-9]* end=[0-9][0-9]* exit=\([a-z][a-z]*\) .*$/\1/p'; } || true
 }
 # WHICH layer closed the run. dt=600 must report fortran_outcome; a fallback value
 # there means the authority wiring regressed and the evidence is not what it claims.
 run_authority() { # <log>
-  python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
-    sed -n 's/^RUN .* authority=\([a-z_][a-z_]*\)$/\1/p'
+  { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
+    sed -n 's/^RUN .* authority=\([a-z_][a-z_]*\)$/\1/p'; } || true
 }
 
 # =============================================================================
@@ -540,6 +543,33 @@ gate "OFF and ON ended the SAME way (both clean, or both fatal)" \
      "$([ -n "$EK_OFF" ] && [ "$EK_OFF" = "$EK_ON" ] && echo 1 || echo 0)"
 gate "0 extra RHS evaluations OVER THE WHOLE RUN (final totals equal, non-empty)" \
      "$([ -n "$RT_OFF" ] && [ -n "$RT_ON" ] && [ "$RT_OFF" = "$RT_ON" ] && echo 1 || echo 0)"
+
+# PR 9F.5: WHICH layer closed the run. This is the behavioural proof that the
+# Fortran authority wiring actually fired. dt=600 terminates through Fortran's
+# wrf_error_fatal at the fail-closed-outcome site, so the close MUST be attributed
+# to fortran_outcome. authority=cpp_preabort or cpp_destructor here would mean a
+# FALLBACK fired instead -- the exact misattribution the field exists to expose --
+# and the run total, though present, would not be evidence the production path works.
+AUTH_OFF="$(run_authority "$OUT/pos_off.log")"
+AUTH_ON="$(run_authority "$OUT/pos_on.log")"
+note "  run close authority: OFF=${AUTH_OFF:-<none>} ON=${AUTH_ON:-<none>}"
+gate "the run was closed by the FORTRAN authority, not a C++ fallback (ON)" \
+     "$([ "$AUTH_ON" = "fortran_outcome" ] && echo 1 || echo 0)"
+gate "the run was closed by the FORTRAN authority, not a C++ fallback (OFF)" \
+     "$([ "$AUTH_OFF" = "fortran_outcome" ] && echo 1 || echo 0)"
+# The measured signature of the correct path: the C++-direct-abort funnel does NOT
+# fire on the dt=600 exit. Non-zero SDIRK3_C_ABI_EXCEPTION would mean the run took
+# the cpp_preabort path, contradicting authority=fortran_outcome.
+gate "no C++ ABI-exception abort on the ON run (Fortran, not C++, terminated it)" \
+     "$([ "$(cnt 'SDIRK3_C_ABI_EXCEPTION' "$OUT/pos_on.log")" -eq 0 ] && echo 1 || echo 0)"
+# ORDER: the close record must be emitted BEFORE WRF's fatal banner, since the close
+# call sits immediately before wrf_error_fatal. If the run total appears only AFTER
+# the fatal marker (or not at all), it was not emitted from the authority site.
+end_line="$( { grep -n '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$OUT/pos_on.log" || true; } | head -1 | cut -d: -f1)"
+fatal_line="$( { grep -n 'FATAL CALLED' "$OUT/pos_on.log" || true; } | head -1 | cut -d: -f1)"
+note "  ON: run-end at line ${end_line:-<none>}, WRF fatal at line ${fatal_line:-<none>}"
+gate "the whole-run close is emitted BEFORE WRF's fatal banner" \
+     "$([ -n "$end_line" ] && [ -n "$fatal_line" ] && [ "$end_line" -lt "$fatal_line" ] && echo 1 || echo 0)"
 # dt=600 is EXPECTED to end fatal, so this is reported rather than gated -- but it is
 # reported, because "both runs aborted identically" is a weaker statement than "a
 # complete run added no RHS evaluations" and the reader must be able to tell which

@@ -39,6 +39,14 @@ MODULE module_implicit_sdirk3
    INTEGER(C_INT), PARAMETER :: SDIRK3_STEP_OUTCOME_FATAL_INPUT      = 100_C_INT
    INTEGER(C_INT), PARAMETER :: SDIRK3_STEP_OUTCOME_FATAL_INTERNAL   = 101_C_INT
 
+   ! PR 9F.5: whole-run RHS close exit kinds, shared with the C++ enum of the same
+   ! names. MODULE level, not subroutine-local: both the step subroutine (fatal
+   ! sites) and finalize_implicit_sdirk3 (clean site) call the close, so a local
+   ! declaration left the finalizer's use with no IMPLICIT type. Full-WRF build
+   ! caught this; core-linux CI never compiles this dyn_em module.
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_EXIT_CLEAN = 0_C_INT
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_EXIT_FATAL = 1_C_INT
+
    ! Struct definitions for ABI-safe parameter passing (v2 interface)
    TYPE, BIND(C) :: SDIRK3_IndexBounds
       INTEGER(C_INT) :: its, ite, jts, jte, kts, kte
@@ -891,9 +899,8 @@ CONTAINS
       INTEGER :: r_ips, r_ipe, r_jps, r_jpe, r_kps, r_kpe
       INTEGER(C_INT64_T) :: west_halo, east_halo, south_halo, north_halo
       CHARACTER(LEN=256) :: message
-      ! PR 9F.5: run-close exit kinds, shared with the C++ enum of the same names.
-      INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_EXIT_CLEAN = 0_C_INT
-      INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_EXIT_FATAL = 1_C_INT
+      ! PR 9F.5: SDIRK3_RHS_RUN_EXIT_* are now MODULE-level parameters (see near the
+      ! SDIRK3_STEP_OUTCOME_* block) so the finalizer sees them too.
       INTEGER(C_INT) :: rhs_run_close_status
       INTEGER(C_INT) :: step_outcome_rc
       INTEGER(C_INT) :: step_outcome_code
