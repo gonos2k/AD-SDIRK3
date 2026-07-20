@@ -385,8 +385,10 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=6 exit=clean authority=fortran_finalize reason=finalize"
     echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=2 total=0"
     echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=2 total=3 exit=clean authority=fortran_finalize reason=finalize"; } > "$TMP/runmultigen_b.log"
+  seq_a="$(run_sequence "$TMP/runmultigen.log")"
+  seq_b="$(run_sequence "$TMP/runmultigen_b.log")"
   gate "self: multi-gen logs differing only in gen1 have DIFFERENT RUN sequences (P1)" \
-       "$([ "$(run_sequence "$TMP/runmultigen.log")" != "$(run_sequence "$TMP/runmultigen_b.log")" ] && [ -n "$(run_sequence "$TMP/runmultigen.log")" ] && echo 1 || echo 0)"
+       "$([ "$seq_a" != "$seq_b" ] && [ -n "$seq_a" ] && echo 1 || echo 0)"
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
     echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=2 total=0"
     echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=5 exit=clean authority=fortran_finalize reason=finalize"
