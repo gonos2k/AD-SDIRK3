@@ -239,8 +239,8 @@ jobs:
           # silently drifts (this grep broke the moment the gate was renamed); the
           # count is a contract, and 40-vs-28 is itself the proof that the live
           # gates ran rather than skipped.
-          grep -q 'SELF-TEST: ALL PASS (45/45)' /tmp/live_selftest.log \
-            || { echo "FAIL: live gates did not run (expected the 45/45 ratchet)"; \
+          grep -q 'SELF-TEST: ALL PASS (47/47)' /tmp/live_selftest.log \
+            || { echo "FAIL: live gates did not run (expected the 47/47 ratchet)"; \
                  tail -5 /tmp/live_selftest.log; exit 1; }
 
       - name: CTest inventory (exact set, then run)

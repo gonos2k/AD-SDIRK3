@@ -46,6 +46,15 @@ MODULE module_implicit_sdirk3
    ! caught this; core-linux CI never compiles this dyn_em module.
    INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_EXIT_CLEAN = 0_C_INT
    INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_EXIT_FATAL = 1_C_INT
+   ! PR 9F.6 P1-5: reason codes (WHICH fatal site closed the run). Shared by value
+   ! with the C++ enum of the same names.
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_REASON_STEP_OUTCOME  = 1_C_INT
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_REASON_OUTCOME_QUERY = 2_C_INT
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_REASON_FINALIZE      = 3_C_INT
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_REASON_HALO          = 4_C_INT
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_REASON_SOLVER_STATE  = 5_C_INT
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_REASON_TOPOLOGY      = 6_C_INT
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_REASON_OTHER         = 7_C_INT
 
    ! Struct definitions for ABI-safe parameter passing (v2 interface)
    TYPE, BIND(C) :: SDIRK3_IndexBounds
@@ -399,12 +408,23 @@ MODULE module_implicit_sdirk3
       ! reaches neither the C++ pre-abort hook nor a static destructor -- MEASURED on
       ! the dt=600 path (SDIRK3_C_ABI_EXCEPTION 0, "FATAL CALLED" 4, closing record
       ! 0). Fortran is the exit authority, so Fortran must close the run.
-      FUNCTION sdirk3_rhs_run_close_checked(exit_kind) &
+      FUNCTION sdirk3_rhs_run_close_checked(exit_kind, reason) &
          BIND(C, name="sdirk3_rhs_run_close_checked") RESULT(status)
          IMPORT :: C_INT
          INTEGER(C_INT), VALUE :: exit_kind
+         INTEGER(C_INT), VALUE :: reason
          INTEGER(C_INT) :: status
       END FUNCTION sdirk3_rhs_run_close_checked
+
+      ! PR 9F.6 P1-4: explicit run BEGIN on the main thread before any OpenMP/RHS
+      ! work. Idempotent per generation; a call while already open returns 0. This is
+      ! the lifecycle authority for the opening record and the sole place the C++
+      ! fallbacks are registered, so the per-RHS hot path is a pure counter CAS.
+      FUNCTION sdirk3_rhs_run_begin_checked() &
+         BIND(C, name="sdirk3_rhs_run_begin_checked") RESULT(status)
+         IMPORT :: C_INT
+         INTEGER(C_INT) :: status
+      END FUNCTION sdirk3_rhs_run_begin_checked
 
       SUBROUTINE sdirk3_halo_finalize() &
          BIND(C, name="sdirk3_halo_finalize")
@@ -629,7 +649,15 @@ CONTAINS
 
       WRITE(message, '(A,I0,A)') "UNIFIED SDIRK3: Initialized ", num_tiles_initialized, " tile solvers"
       CALL wrf_message(message)
-      CALL wrf_message("UNIFIED SDIRK3: L-stability eliminates CFL restriction on sound waves")
+      ! PR 9F.6: measured-accurate wording. L-stability gives UNCONDITIONAL
+      ! stability for the stiff modes the implicit solve actually integrates; it
+      ! does NOT remove the acoustic CFL restriction -- the fast acoustic
+      ! operator (I - dt*gamma*J_fast) is intrinsically indefinite at large dt
+      ! (Ritz spectrum straddles the origin, background-independent), which is
+      ! why sound-wave stiffness is handled by the split-explicit acoustic
+      ! substep, not by L-stability. See doc/sdirk3_hevi_preconditioner_findings.
+      CALL wrf_message("UNIFIED SDIRK3: L-stable implicit integration " // &
+         "(acoustic CFL handled by the split-explicit substep, not L-stability)")
 
       ! NOTE: Config freeze (mark_workers_started) is now called at the END of
       ! sdirk3_initialize_solvers, AFTER all config including physics coupling.
@@ -917,7 +945,8 @@ CONTAINS
       ! Zero-copy interface is now declared at module level - no need to repeat here
       
       IF (.NOT. sdirk3_initialized) THEN
-         CALL wrf_error_fatal("SDIRK3: Solvers not initialized")
+         CALL sdirk3_close_and_fatal("SDIRK3: Solvers not initialized", &
+                                     SDIRK3_RHS_RUN_REASON_SOLVER_STATE)
       END IF
 
       ! PR 7B (3b-1): checked communicator setup, status CONSUMED. A multi-
@@ -937,7 +966,7 @@ CONTAINS
             "SDIRK3_MPI_MULTI_TILE_UNSUPPORTED: enable_ad_halo_exchange=" // &
             "true, num_tiles=", grid%num_tiles, ", rk_step=", rk_step, &
             ", itimestep=", grid%itimestep
-         CALL wrf_error_fatal(TRIM(message))
+         CALL sdirk3_close_and_fatal(message, SDIRK3_RHS_RUN_REASON_TOPOLOGY)
       END IF
 
 #ifdef DM_PARALLEL
@@ -950,7 +979,7 @@ CONTAINS
             "SDIRK3_MPI_STAGE_HALO_UNSUPPORTED: decomposition ", &
             ntasks_x, " x ", ntasks_y, ", mytask (", mytask_x, ",", &
             mytask_y, "), rk_step=", rk_step, ", num_tiles=", grid%num_tiles
-         CALL wrf_error_fatal(TRIM(message))
+         CALL sdirk3_close_and_fatal(message, SDIRK3_RHS_RUN_REASON_TOPOLOGY)
       END IF
 
       IF (ntasks_x * ntasks_y > 1) THEN
@@ -959,7 +988,8 @@ CONTAINS
             WRITE(message, '(A,I0,A,I0,A)') &
                "SDIRK3_MPI_COMM_REQUIRED: multi-rank run (ntasks ", &
                ntasks_x, " x ", ntasks_y, ") has no local_communicator"
-            CALL wrf_error_fatal(TRIM(message))
+            CALL sdirk3_close_and_fatal(message, &
+                                        SDIRK3_RHS_RUN_REASON_TOPOLOGY)
          END IF
       END IF
 
@@ -975,7 +1005,8 @@ CONTAINS
                ntasks_x, " x ", ntasks_y, ", mytask (", mytask_x, ",", &
                mytask_y, "), periodic_x=", config_flags%periodic_x, &
                ", periodic_y=", config_flags%periodic_y
-            CALL wrf_error_fatal(TRIM(message))
+            CALL sdirk3_close_and_fatal(message, &
+                                        SDIRK3_RHS_RUN_REASON_TOPOLOGY)
          END IF
       END IF
 #endif
@@ -1012,9 +1043,10 @@ CONTAINS
           r_jde /= jde .OR. r_kds /= kds .OR. r_kde /= kde .OR. &
           r_ims /= ims .OR. r_ime /= ime .OR. r_jms /= jms .OR. &
           r_jme /= jme .OR. r_kms /= kms .OR. r_kme /= kme) THEN
-         CALL wrf_error_fatal( &
+         CALL sdirk3_close_and_fatal( &
             "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: get_ijk_from_grid " // &
-            "disagrees with the subroutine domain/memory arguments")
+            "disagrees with the subroutine domain/memory arguments", &
+            SDIRK3_RHS_RUN_REASON_HALO)
       END IF
 
       west_halo  = INT(r_ips, C_INT64_T) - INT(r_ims, C_INT64_T)
@@ -1026,11 +1058,12 @@ CONTAINS
          WRITE(message, '(A,4(I0,1X))') &
             "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: west/east/south/north=", &
             west_halo, east_halo, south_halo, north_halo
-         CALL wrf_error_fatal(TRIM(message))
+         CALL sdirk3_close_and_fatal(message, SDIRK3_RHS_RUN_REASON_HALO)
       END IF
       IF (west_halo > INT(HUGE(0_C_INT), C_INT64_T)) THEN
-         CALL wrf_error_fatal( &
-            "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: halo width exceeds C_INT")
+         CALL sdirk3_close_and_fatal( &
+            "SDIRK3_MPI_HALO_GEOMETRY_UNSUPPORTED: halo width exceeds C_INT", &
+            SDIRK3_RHS_RUN_REASON_HALO)
       END IF
       measured_halo_width = INT(west_halo, C_INT)
 
@@ -1052,7 +1085,7 @@ CONTAINS
             "SDIRK3_MPI_HALO_PREPARE_FAILED: margins W/E/S/N=", &
             west_halo, east_halo, south_halo, north_halo, &
             ", num_tiles=", grid%num_tiles
-         CALL wrf_error_fatal(TRIM(message))
+         CALL sdirk3_close_and_fatal(message, SDIRK3_RHS_RUN_REASON_HALO)
       END IF
 
       ! PR 7B (3b-3 part 2): consume halo freshness exactly once per SDIRK
@@ -1068,7 +1101,7 @@ CONTAINS
             WRITE(message, '(A,I0,A,I0)') &
                "SDIRK3_MPI_HALO_STALE: freshness consumption failed at " // &
                "itimestep=", grid%itimestep, ", rk_step=", rk_step
-            CALL wrf_error_fatal(TRIM(message))
+            CALL sdirk3_close_and_fatal(message, SDIRK3_RHS_RUN_REASON_HALO)
          END IF
       END IF
 
@@ -1082,6 +1115,14 @@ CONTAINS
 
       ! Rank-level halo preparation above already fetched and cross-checked
       ! the authoritative rank bounds via get_ijk_from_grid.
+
+      ! PR 9F.6 P1-4: open the whole-run RHS lifecycle on the MAIN thread, before the
+      ! OpenMP loop below drives any RHS evaluation. Idempotent: the first timestep
+      ! opens generation 1, later timesteps see RUNNING and return 0. Doing it here
+      ! (not lazily on the first tick from a worker) makes the opening record and the
+      ! fallback registration a main-thread act, and leaves the per-RHS path a pure
+      ! counter CAS. Status is advisory (0 just means "already open").
+      rhs_run_close_status = sdirk3_rhs_run_begin_checked()
 
       ! Process each tile with Zero-Copy approach
       ! P0 FIX (2026-07-12, external review #4): bounds/dims/scalars/bdy_cfg and the
@@ -1167,17 +1208,20 @@ CONTAINS
          IF (ij > max_tiles) THEN
             WRITE(message,'(A,I0,A,I0)') 'SDIRK3 ERROR: Tile index ', ij, &
                  ' exceeds max_tiles ', max_tiles
-            CALL wrf_error_fatal(message)
+            CALL sdirk3_close_and_fatal(message, &
+                                        SDIRK3_RHS_RUN_REASON_SOLVER_STATE)
          END IF
-         
+
          IF (.NOT. solver_valid(ij)) THEN
             WRITE(message,'(A,I0)') 'SDIRK3 ERROR: Solver not initialized for tile ', ij
-            CALL wrf_error_fatal(message)
+            CALL sdirk3_close_and_fatal(message, &
+                                        SDIRK3_RHS_RUN_REASON_SOLVER_STATE)
          END IF
-         
+
          IF (.NOT. C_ASSOCIATED(tile_solvers(ij))) THEN
             WRITE(message,'(A,I0)') 'SDIRK3 ERROR: NULL solver pointer for tile ', ij
-            CALL wrf_error_fatal(message)
+            CALL sdirk3_close_and_fatal(message, &
+                                        SDIRK3_RHS_RUN_REASON_SOLVER_STATE)
          END IF
          
          ! Update solver state
@@ -1350,7 +1394,8 @@ CONTAINS
             ! Close the whole-run RHS evidence BEFORE the fatal: wrf_error_fatal does
             ! not return, and nothing downstream of it runs.
             rhs_run_close_status = &
-               sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL)
+               sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL, &
+                                            SDIRK3_RHS_RUN_REASON_OUTCOME_QUERY)
             IF (rhs_run_close_status /= 1_C_INT) THEN
                WRITE(0,*) "SDIRK3_RHS_RUN_CLOSE_FAILED: query-failure path"
                FLUSH(0)
@@ -1370,7 +1415,8 @@ CONTAINS
             ! evaluation happens between here and the fatal, so the frozen total is
             ! the final value for this run prefix.
             rhs_run_close_status = &
-               sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL)
+               sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL, &
+                                            SDIRK3_RHS_RUN_REASON_STEP_OUTCOME)
             IF (rhs_run_close_status /= 1_C_INT) THEN
                WRITE(0,*) "SDIRK3_RHS_RUN_CLOSE_FAILED: fail-closed outcome path"
                FLUSH(0)
@@ -1435,14 +1481,43 @@ CONTAINS
       ! record the C++ side is a no-op, so a partial init or a repeated finalize is
       ! safe, and a run that DID count still gets its clean close.
       rhs_run_close_status = &
-         sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_CLEAN)
+         sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_CLEAN, &
+                                      SDIRK3_RHS_RUN_REASON_FINALIZE)
       IF (rhs_run_close_status /= 1_C_INT) THEN
          CALL wrf_error_fatal( &
             "SDIRK3_RHS_RUN_CLOSE_FAILED: normal finalizer path")
       END IF
       
    END SUBROUTINE finalize_implicit_sdirk3
-   
+
+   !-----------------------------------------------------------------------
+   ! PR 9F.6 P1-5: single fatal funnel for the advance_implicit validation
+   ! checks. Every mid-integration wrf_error_fatal that can fire while the
+   ! whole-run RHS lifecycle is RUNNING routes through here so the run is
+   ! CLOSED (with the site's reason) before the abort — otherwise a run that
+   ! survives to timestep >= 2 and then fails a topology/halo/solver check
+   ! would abort with no closing evidence record. The close is idempotent and
+   ! fail-closed: on timestep 1 the lifecycle is still IDLE (begin runs later
+   ! in advance_implicit), so close is a no-op returning 1; a close that does
+   ! not return 1 is itself reported before the original fatal message.
+   SUBROUTINE sdirk3_close_and_fatal(fatal_message, reason)
+      IMPLICIT NONE
+      CHARACTER(LEN=*), INTENT(IN) :: fatal_message
+      INTEGER(C_INT), INTENT(IN) :: reason
+      INTEGER(C_INT) :: close_status
+      CHARACTER(LEN=128) :: close_diag
+
+      close_status = &
+         sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL, reason)
+      IF (close_status /= 1_C_INT) THEN
+         WRITE(close_diag, '(A,I0,A,I0)') &
+            "SDIRK3_RHS_RUN_CLOSE_FAILED: funnel reason=", reason, &
+            ", status=", close_status
+         CALL wrf_message(TRIM(close_diag))
+      END IF
+      CALL wrf_error_fatal(TRIM(fatal_message))
+   END SUBROUTINE sdirk3_close_and_fatal
+
    !-----------------------------------------------------------------------
    FUNCTION get_sdirk3_dt_recommendation(grid, config_flags) RESULT(dt_new)
       IMPLICIT NONE

@@ -17,15 +17,32 @@
 // would never reach its own fatal).
 #include "wrf_sdirk3_stage_history_diag.h"
 
-extern "C" int sdirk3_rhs_run_close_checked(int exit_kind) noexcept {
+// PR 9F.6 P1-4: explicit run BEGIN, called by Fortran on the main thread after
+// config is fixed and before any OpenMP/solver/RHS work. Idempotent per generation:
+// the first call (IDLE) opens generation 1; a call while already RUNNING returns 0
+// (harmless -- the step subroutine may call it every timestep). After a clean
+// finalize (CLOSED) it opens the next generation. Registers the C++ fallbacks once,
+// off the per-tick hot path.
+//   disabled            -> 1 (no-op)
+//   IDLE or CLOSED       -> open new generation, 1
+//   already RUNNING      -> 0 (already open; not an error at the call site)
+extern "C" int sdirk3_rhs_run_begin_checked() noexcept {
+    return wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();
+}
+
+extern "C" int sdirk3_rhs_run_close_checked(int exit_kind, int reason) noexcept {
     if (exit_kind != wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN &&
         exit_kind != wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL) {
         return 0;
     }
     const bool clean = (exit_kind == wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
+    unsigned r = static_cast<unsigned>(reason);
+    if (r > wrf::sdirk3::SDIRK3_RHS_RUN_REASON_CPP_FALLBACK)
+        r = wrf::sdirk3::SDIRK3_RHS_RUN_REASON_OTHER;
     return wrf::sdirk3::sdirk3_rhs_run_close_impl(
         clean ? wrf::sdirk3::Sdirk3RunExit::Clean
               : wrf::sdirk3::Sdirk3RunExit::Fatal,
         clean ? wrf::sdirk3::Sdirk3RunAuthority::FortranFinalize
-              : wrf::sdirk3::Sdirk3RunAuthority::FortranOutcome);
+              : wrf::sdirk3::Sdirk3RunAuthority::FortranOutcome,
+        r);
 }
