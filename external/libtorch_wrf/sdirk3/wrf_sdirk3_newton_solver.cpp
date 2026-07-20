@@ -3465,6 +3465,18 @@ public:
     // Built/rebuilt when layout is known and device/dtype matches K
     torch::Tensor S_diag_;
     torch::Tensor S_inv_diag_;
+    // PR 9F.9 (numerical review P1-1 SHADOW): the FROZEN iter-0 inverse scale. The
+    // production convergence metric uses S_inv_diag_, which grows monotonically over
+    // Newton iterations (S[b]=max(S_old,rms(R_b))). The review argues that growing S
+    // LOOSENS ||S^-1 R|| rather than tightening it. This captures S_0 once at iter 0 so
+    // a diagnosis-only shadow can report BOTH ||S^-1 R|| (dynamic) and ||S_0^-1 R||
+    // (fixed) and MEASURE where the two verdicts diverge -- no behaviour change.
+    torch::Tensor S0_inv_diag_;
+    // PR 9F.9 P1-4 SHADOW: the GMRES linear residual r_g = b - A*dK from the current
+    // iteration's solve, saved so the trust-region site (a later, nested scope where
+    // gmres_result is gone) can build the EXACT predicted reduction with no extra JVP.
+    // Written only under debug_level>=1; carries no numerical effect.
+    torch::Tensor last_gmres_r_true_;
     bool scaling_initialized_ = false;
     bool physics_scaling_set_ = false;  // True after set_physics_scaling() called
     torch::Device scaling_device_ = torch::kCPU;
@@ -4901,6 +4913,9 @@ public:
                     S_diag_ = S_diag_.to(K.device());
                     S_inv_diag_ = S_inv_diag_.to(K.device());
                 }
+                // P1-1 SHADOW: freeze S_0 (the iter-0 scale) so the monotonic growth of
+                // S over later iterations can be compared against a fixed reference.
+                S0_inv_diag_ = S_inv_diag_.clone();
             }
 
             // r50-F3: Monotonic S update for iter > 0.
@@ -4991,6 +5006,45 @@ public:
             }
             // NOTE: k_norm_tensor and rel_res_norm removed (2026-02-03).
             // Convergence now uses scaled norm ||S⁻¹R||; relative ||R||/||K|| is no longer needed.
+
+            // PR 9F.9 P1-1 SHADOW (diagnosis-only; debug_level>=1, which the ON
+            // acceptance run already sets). Report BOTH the production dynamic-S metric
+            // and the FIXED-S0 metric, the unscaled RMS, and the per-block MAX scaled RMS,
+            // so the review's claims -- that the monotonically growing S loosens rather
+            // than tightens the convergence test, and that a global RMS can hide a small
+            // non-converged block -- can be MEASURED at stage 2/3. Read-only under
+            // NoGradGuard; NO control flow consumes these values (the production metric is
+            // still res_norm_tensor), so the numerical path is byte-identical.
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 &&
+                scaling_initialized_ && S0_inv_diag_.defined() &&
+                S0_inv_diag_.numel() == R_inner.numel()) {
+                torch::NoGradGuard no_grad;
+                const float dyn_rms = guarded_item<float>(res_norm_tensor);
+                const float fix_rms =
+                    guarded_item<float>(safe_tensor_norm(S0_inv_diag_ * R_inner)) / sqrt_N;
+                const float unsc_rms =
+                    guarded_item<float>(res_norm_unscaled_tensor) / sqrt_N;
+                float block_max = 0.0f;
+                const char* block_max_name = "none";
+                if (layout_initialized_ &&
+                    cached_layout_.total_size == R_inner.numel()) {
+                    auto Rs = (S_inv_diag_ * R_inner).detach().to(torch::kCPU).contiguous();
+                    for (const auto& blk : cached_layout_.blocks) {
+                        if (blk.start + blk.size > Rs.numel()) continue;
+                        float b = Rs.slice(0, blk.start, blk.start + blk.size)
+                                      .norm().item<float>()
+                                  / std::sqrt(static_cast<float>(blk.size));
+                        if (b > block_max) { block_max = b; block_max_name = blk.name.c_str(); }
+                    }
+                }
+                char sh[224];
+                std::snprintf(sh, sizeof sh,
+                    "SDIRK3_NEWTON_SHADOW stage=%d iter=%d dyn_S_rms=%.6e "
+                    "fix_S0_rms=%.6e unscaled_rms=%.6e block_max_rms=%.6e block_max=%s\n",
+                    stage, newton_iter, dyn_rms, fix_rms, unsc_rms, block_max,
+                    block_max_name);
+                std::cerr << sh;
+            }
 
             // v20.14r27x: Unscaled absolute explosion guard for ALL stages.
             // Scaled-RMS is ~1.0 by construction at newton_iter==0 (S built from R₀),
@@ -6713,6 +6767,20 @@ public:
                           options_.periodic_y);
                 variable_pc_event_this_newton = *variable_pc_event;
 
+                // PR 9F.9 P1-4 SHADOW: save r_g = b - A*dK for the exact trust model at
+                // the later trust-region scope (where gmres_result is gone). Only when
+                // GMRES-internal block scaling is OFF, so r_g lives in the SAME (unscaled)
+                // space as R (gmres_rhs=-R); with block scaling on it would be S-scaled and
+                // must not be mixed with the unscaled R. Diagnosis-only (debug_level>=1).
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 &&
+                    !(wrf::sdirk3::g_sdirk3_config.gmres_block_scale &&
+                      wrf::sdirk3::g_sdirk3_config.use_autograd) &&
+                    gmres_result.r_true.defined()) {
+                    last_gmres_r_true_ = gmres_result.r_true;
+                } else {
+                    last_gmres_r_true_ = torch::Tensor();  // clear stale
+                }
+
                 // PR 8: per-linear-solve record (opt-in). Reads only —
                 // the returned result is used unchanged below.
                 if (stage_diag_enabled()) {
@@ -7931,6 +7999,47 @@ public:
                 // When GMRES rel_error ≈ 1, predicted ≈ 0 → rho = ±inf
                 float predicted_clamped = std::max(predicted_val, 1e-6f * res_old_val * res_old_val);
                 float rho_val = actual_reduction / predicted_clamped;
+
+                // PR 9F.9 P1-4 SHADOW (diagnosis-only; debug_level>=1). The production
+                // predicted reduction ||R||^2*[1-(1-a)^2-a^2*e^2] DROPS the cross term
+                // 2a(1-a)<R,r_g>, valid only if R _|_ r_g -- not guaranteed for the
+                // non-normal WRF operator -- and mixes an UNSCALED e with a SCALED
+                // actual reduction. The EXACT linear model needs no extra JVP: GMRES
+                // already returns r_g = b - A*dK (gmres_result.r_true), so the linear
+                // residual at fraction a is R_lin = (1-a)R - a*r_g, and the predicted
+                // reduction is merit(R)^2 - merit(R_lin)^2 in ONE fixed metric (S-scaled,
+                // halo-masked -- the same merit as res_old_val). Emit both so the
+                // divergence can be MEASURED. Read-only; the acceptance still uses
+                // rho_val, so the numerical path is byte-identical.
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 &&
+                    scaling_initialized_ && last_gmres_r_true_.defined() &&
+                    last_gmres_r_true_.numel() == R.numel()) {
+                    torch::NoGradGuard no_grad;
+                    auto merit_sq = [&](const torch::Tensor& x) -> float {
+                        auto xs = S_inv_diag_ * x;
+                        if (halo_mask_initialized_) xs = xs * halo_mask_;
+                        const float n = guarded_item<float>(xs.norm());
+                        return n * n;
+                    };
+                    auto R_lin = (1.0f - tr_alpha) * R
+                                 - tr_alpha * last_gmres_r_true_;
+                    const float pred_exact = merit_sq(R) - merit_sq(R_lin);
+                    const float rho_heur =
+                        actual_reduction / ((std::abs(predicted_val) > 1e-30f)
+                                                ? predicted_val : 1e-30f);
+                    const float rho_exact =
+                        actual_reduction / ((std::abs(pred_exact) > 1e-30f)
+                                                ? pred_exact : 1e-30f);
+                    char tb[256];
+                    std::snprintf(tb, sizeof tb,
+                        "SDIRK3_TRUST_SHADOW stage=%d iter=%d alpha=%.4f e=%.4e "
+                        "pred_heur=%.6e pred_exact=%.6e actual=%.6e "
+                        "rho_heur=%.4f rho_exact=%.4f\n",
+                        stage, newton_iter, tr_alpha, e, predicted_val, pred_exact,
+                        actual_reduction, rho_heur, rho_exact);
+                    std::cerr << tb;
+                }
+
                 // force_accept removed (2026-02-16 GR v8 F6: computed but unused since 2026-01-31)
                 float rho_accept_threshold = 0.25f;
                 float rho_force_accept_min = 0.05f;
