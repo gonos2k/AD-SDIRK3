@@ -30,6 +30,22 @@ VIOLATION_MARKERS = ("SDIRK3_RHS_POST_CLOSE_TICK", "SDIRK3_RHS_BEGIN_MISSING",
                      "SDIRK3_RHS_COUNT_OVERFLOW", "SDIRK3_RHS_GENERATION_OVERFLOW",
                      "SDIRK3_RHS_REOPEN_AFTER_FATAL")
 
+# PR 9F.7 P1-4: the (exit, authority, reason) combinations a healthy end record may
+# carry. Anything else -- e.g. clean+topology, fatal+finalize, any reason=none on an
+# end -- is a forged or misattributed record. `none` is a RUNNING-state internal value
+# and never appears on a close.
+VALID_END_COMBOS = frozenset({
+    ("clean", "fortran_finalize", "finalize"),
+    ("fatal", "fortran_outcome", "step_outcome"),
+    ("fatal", "fortran_outcome", "outcome_query"),
+    ("fatal", "fortran_outcome", "halo"),
+    ("fatal", "fortran_outcome", "solver_state"),
+    ("fatal", "fortran_outcome", "topology"),
+    ("fatal", "fortran_outcome", "other"),
+    ("fatal", "cpp_preabort", "cpp_fallback"),
+    ("clean", "cpp_destructor", "cpp_fallback"),
+})
+
 # A record line must START with the marker followed by a single space. Anything
 # that merely CONTAINS the marker is a violation rather than a record, because a
 # diagnostic line quoting the marker must never be mistaken for evidence.
@@ -243,36 +259,72 @@ def check_run(path):
                               "none"):
                 violations.append("line %d: bad_or_missing_reason:%s" % (n, reason))
                 continue
+            # P1-4: the (exit, authority, reason) triple must be one the state machine
+            # can actually produce. This rejects reason=none on an end and every
+            # cross-authority forgery (clean+topology, fatal+finalize, ...).
+            if (kind, auth, reason) not in VALID_END_COMBOS:
+                violations.append("line %d: invalid_end_combo:%s/%s/%s"
+                                  % (n, kind, auth, reason))
+                continue
             ends.append((n, total, kind, auth, gen, reason))
 
     info = {}
-    if len(begins) != 1:
-        violations.append("begin_count:%d (must be exactly 1)" % len(begins))
+    if not begins:
+        violations.append("missing_begin")
     if not ends:
         violations.append("missing_end")
-    # The end record is written on the controlled-fatal path, where losing it is
-    # worse than repeating it, so identical repeats are legitimate. Disagreement is
-    # not: it means two different observations of the same quantity.
-    if len({(t, k, a, g, r) for _, t, k, a, g, r in ends}) > 1:
-        violations.append("disagreeing_end_records")
 
-    if begins and ends:
-        bn, btot, bgen = begins[0]
+    # PR 9F.7 P1-3: the log may carry MORE than one generation (a clean finalize
+    # re-inits the next). Group by generation and validate each independently, then
+    # check the generations form a contiguous, non-interleaved 1..K sequence.
+    begin_by_gen = {}
+    for n, total, gen in begins:
+        if gen in begin_by_gen:
+            violations.append("duplicate_begin_gen:%d" % gen)
+        else:
+            begin_by_gen[gen] = (n, total)
+    ends_by_gen = {}
+    for rec in ends:
+        ends_by_gen.setdefault(rec[4], []).append(rec)
+
+    # Generations must be exactly 1..K: a re-init opens the NEXT generation, so a gap
+    # or a non-1 start means a lifecycle was spliced or a generation was lost.
+    gens = sorted(begin_by_gen)
+    if gens and gens != list(range(1, len(gens) + 1)):
+        violations.append("generation_sequence_not_contiguous:%s" % gens)
+
+    last, prev_end_line = None, -1
+    for gen in gens:
+        bn, btot = begin_by_gen[gen]
         if btot != 0:
-            violations.append("begin_total_not_zero:%d" % btot)
-        first_end_line = min(n for n, _, _, _, _, _ in ends)
-        if first_end_line < bn:
-            violations.append("record_order_invalid")
-        etot, kind, auth, egen, ereason = (ends[0][1], ends[0][2],
-                                            ends[0][3], ends[0][4], ends[0][5])
+            violations.append("gen %d: begin_total_not_zero:%d" % (gen, btot))
+        gen_ends = ends_by_gen.get(gen)
+        if not gen_ends:
+            violations.append("gen %d: missing_end" % gen)
+            continue
+        # Duplicate closes on the fatal path are legitimate (loss > repetition); a
+        # DISAGREEMENT is two different observations of one close.
+        if len({(t, k, a, r) for _, t, k, a, _g, r in gen_ends}) > 1:
+            violations.append("gen %d: disagreeing_end_records" % gen)
+        en, etot, kind, auth, _g, reason = gen_ends[0]
+        if min(e[0] for e in gen_ends) < bn:
+            violations.append("gen %d: record_order_invalid" % gen)
         if etot < btot:
-            violations.append("end_total_below_begin")
-        # A single run is a single generation: the close must belong to the begin it
-        # closes. A generation mismatch means two lifecycles were spliced together.
-        if bgen != egen:
-            violations.append("generation_mismatch:begin=%d,end=%d" % (bgen, egen))
-        info = {"begin": btot, "end": etot, "exit": kind, "authority": auth,
-                "generation": bgen, "reason": ereason}
+            violations.append("gen %d: end_total_below_begin" % gen)
+        # No interleaving: a generation's begin must come AFTER the previous
+        # generation's last end -- generations are sequential, never nested.
+        if bn <= prev_end_line:
+            violations.append("gen %d: interleaved_with_previous_generation" % gen)
+        prev_end_line = max(e[0] for e in gen_ends)
+        last = {"begin": btot, "end": etot, "exit": kind, "authority": auth,
+                "generation": gen, "reason": reason}
+
+    for gen in sorted(ends_by_gen):
+        if gen not in begin_by_gen:
+            violations.append("end_without_begin_gen:%d" % gen)
+
+    if last is not None:
+        info = last
     return violations, info
 
 

@@ -167,14 +167,15 @@ inline bool sdirk3_rhs_count_enabled() {
 // well-defined stopping time: a tick could advance the counter after the close read
 // it.
 //
-// Everything now lives in one uint64:
-//   bits [0..1]   state   0=IDLE 1=RUNNING 2=CLOSED
+// Everything now lives in one uint64 (PR 9F.6 reason field + PR 9F.7 ERROR state):
+//   bits [0..1]   state   0=IDLE 1=RUNNING 2=CLOSED 3=ERROR
 //   bit  [2]      exit    0=clean 1=fatal          (meaningful once CLOSED)
 //   bits [3..4]   authority 0..3                    (meaningful once CLOSED)
 //   bit  [5]      post_close_tick -- a tick was seen AFTER the close (a control-flow
 //                 violation: the solver ran an RHS past the fatal decision)
-//   bits [6..21]  generation (16 bits) -- re-init after a clean finalize
-//   bits [22..63] count (42 bits) -- RHS entries this generation
+//   bits [6..9]   reason (4 bits) -- WHICH close site (meaningful once CLOSED)
+//   bits [10..23] generation (14 bits) -- re-init after a clean finalize
+//   bits [24..63] count (40 bits) -- RHS entries this generation
 //
 // close is a single CAS RUNNING->CLOSED that atomically freezes {count,exit,auth}.
 // A loser observes CLOSED and re-decodes the SAME frozen word -- no wait, no
@@ -208,7 +209,8 @@ inline const char* sdirk3_run_authority_name(Sdirk3RunAuthority a) noexcept {
 // every Fortran fatal would misattribute a halo/communicator/solver-state fatal as a
 // fail-closed step outcome. Shared with Fortran by integer value.
 enum {
-    SDIRK3_RHS_RUN_REASON_NONE          = 0,  // clean exits carry this
+    SDIRK3_RHS_RUN_REASON_NONE          = 0,  // RUNNING-internal only; NEVER on an end
+                                              // record (a clean close carries finalize)
     SDIRK3_RHS_RUN_REASON_STEP_OUTCOME  = 1,  // fail-closed step outcome promoted
     SDIRK3_RHS_RUN_REASON_OUTCOME_QUERY = 2,  // step-outcome query failed
     SDIRK3_RHS_RUN_REASON_FINALIZE      = 3,  // normal finalizer
@@ -339,9 +341,11 @@ inline int sdirk3_run_emit_end(uint64_t w) noexcept {
         sdirk3_run_authority_name(sdirk3_lc_auth(w)),
         sdirk3_run_reason_name(sdirk3_lc_reason(w)),
         sdirk3_lc_post_close_tick(w) ? " post_close_tick=1" : "");
-    if (n <= 0) return 0;
-    const size_t len = static_cast<size_t>(n) < sizeof buf
-                           ? static_cast<size_t>(n) : sizeof buf - 1;
+    // PR 9F.7 P2: fail-close on truncation. snprintf returns the length it WOULD have
+    // written; n >= sizeof buf means the record was truncated, and writing a truncated
+    // line (that the parser might still accept) is worse than reporting the failure.
+    if (n <= 0 || static_cast<size_t>(n) >= sizeof buf) return 0;
+    const size_t len = static_cast<size_t>(n);
     size_t off = 0;
     while (off < len) {
         const ssize_t wr = ::write(STDERR_FILENO, buf + off, len - off);

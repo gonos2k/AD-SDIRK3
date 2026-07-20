@@ -361,6 +361,30 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "SDIRK3_RHS_REOPEN_AFTER_FATAL generation=1"; } > "$TMP/runreopen.log"
   gate "self: a REOPEN_AFTER_FATAL marker IS rejected (P1-3: no re-open past a fatal)" \
        "$([ "$(run_total_well_formed "$TMP/runreopen.log")" -eq 0 ] && echo 1 || echo 0)"
+  # PR 9F.7 P1-3: a clean re-init opens a SECOND generation. The parser accepts a
+  # contiguous, non-interleaved multi-generation log (the old parser hard-rejected >1).
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=5 exit=clean authority=fortran_finalize reason=finalize"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=2 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=2 total=3 exit=clean authority=fortran_finalize reason=finalize"; } > "$TMP/runmultigen.log"
+  gate "self: a contiguous 2-generation log (clean re-init) IS accepted (P1-3)" \
+       "$([ "$(run_total_well_formed "$TMP/runmultigen.log")" -eq 1 ] && echo 1 || echo 0)"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=2 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=5 exit=clean authority=fortran_finalize reason=finalize"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=2 total=3 exit=clean authority=fortran_finalize reason=finalize"; } > "$TMP/runinterleaved.log"
+  gate "self: interleaved generations (gen2 opens before gen1 closes) ARE rejected" \
+       "$([ "$(run_total_well_formed "$TMP/runinterleaved.log")" -eq 0 ] && echo 1 || echo 0)"
+  # PR 9F.7 P1-4: an (exit, authority, reason) combination the machine cannot produce.
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=5 exit=clean authority=fortran_finalize reason=topology"; } > "$TMP/runbadcombo.log"
+  gate "self: an invalid (exit,authority,reason) combo IS rejected (P1-4 matrix)" \
+       "$([ "$(run_total_well_formed "$TMP/runbadcombo.log")" -eq 0 ] && echo 1 || echo 0)"
+  # reason=none never appears on an end (it is a RUNNING-internal value).
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=5 exit=clean authority=fortran_finalize reason=none"; } > "$TMP/runnonereason.log"
+  gate "self: reason=none on an end IS rejected (P1-4)" \
+       "$([ "$(run_total_well_formed "$TMP/runnonereason.log")" -eq 0 ] && echo 1 || echo 0)"
 
   # ---- LIVE emitter -> LIVE parser (PR 9F.3) --------------------------------
   # Every fixture above is hand-written, so the shell parser has only ever been
@@ -419,8 +443,8 @@ if [ "${1:-}" = "--self-test" ]; then
   # Exact-count ratchet. Without it a deleted gate leaves the suite green with one
   # fewer property enforced. Two expected counts because the live gates require the
   # contract binary, which the torch-free hosted job does not build.
-  SELF_TEST_EXPECTED_WITH_LIVE=51
-  SELF_TEST_EXPECTED_NO_LIVE=39
+  SELF_TEST_EXPECTED_WITH_LIVE=55
+  SELF_TEST_EXPECTED_NO_LIVE=43
   if [ -x "$CBIN" ]; then exp=$SELF_TEST_EXPECTED_WITH_LIVE; else exp=$SELF_TEST_EXPECTED_NO_LIVE; fi
   if [ "$checks" -ne "$exp" ]; then
     note "  FAIL: self-test executed $checks checks, expected $exp"
