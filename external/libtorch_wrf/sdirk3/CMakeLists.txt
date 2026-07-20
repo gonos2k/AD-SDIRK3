@@ -279,7 +279,13 @@ target_link_libraries(test_ww_cp_parity_contract "${TORCH_LIBRARIES}")
 add_test(NAME WW_CP_Parity_Contract COMMAND test_ww_cp_parity_contract)
 
 # PR 9E: generic stage-operand provenance/closure capture contract.
-add_executable(test_stage_operand_decomposition_contract test_stage_operand_decomposition_contract.cpp)
+# PR 9F.5: the contract now exercises the Fortran-facing run-close ABI, so the
+# translation unit that defines it must be in this link. It is a deliberately tiny
+# TU precisely so this stays cheap -- putting the ABI in the interface TU would drag
+# the whole solver into a torch-free contract binary.
+add_executable(test_stage_operand_decomposition_contract
+    test_stage_operand_decomposition_contract.cpp
+    wrf_sdirk3_rhs_run_close.cpp)
 target_link_libraries(test_stage_operand_decomposition_contract "${TORCH_LIBRARIES}")
 add_test(NAME Stage_Operand_Decomposition_Contract COMMAND test_stage_operand_decomposition_contract)
 

@@ -176,7 +176,7 @@ jobs:
       - name: install ninja
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build mpich libmpich-dev
 
-      - name: production Make archive (21 TU) + exact-set contracts
+      - name: production Make archive (22 TU) + exact-set contracts
         run: |
           set -euo pipefail
           cd external/libtorch_wrf/sdirk3
@@ -199,7 +199,7 @@ jobs:
           # exit 0 alone does not prove AUTO-strict actually engaged:
           grep -q "ABI Header Mode: STRICT" configure.log
           grep -q "Fast pow(x,0.875): DISABLED" configure.log
-          grep -q "SDIRK3 core manifest: 21 production sources" configure.log
+          grep -q "SDIRK3 core manifest: 22 production sources" configure.log
           # torch>=2.6 wheels omit the GLIBCXX macro from TORCH_CXX_FLAGS; the
           # runtime-derived value must have been resolved, not assumed:
           grep -q "SDIRK3 torch ABI: _GLIBCXX_USE_CXX11_ABI=$TORCH_ABI" configure.log
@@ -239,8 +239,8 @@ jobs:
           # silently drifts (this grep broke the moment the gate was renamed); the
           # count is a contract, and 40-vs-28 is itself the proof that the live
           # gates ran rather than skipped.
-          grep -q 'SELF-TEST: ALL PASS (40/40)' /tmp/live_selftest.log \
-            || { echo "FAIL: live gates did not run (expected the 40/40 ratchet)"; \
+          grep -q 'SELF-TEST: ALL PASS (45/45)' /tmp/live_selftest.log \
+            || { echo "FAIL: live gates did not run (expected the 45/45 ratchet)"; \
                  tail -5 /tmp/live_selftest.log; exit 1; }
 
       - name: CTest inventory (exact set, then run)

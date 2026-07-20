@@ -1,6 +1,7 @@
 // wrf_sdirk3_tile_unified_interface.cpp
 // Unified SDIRK3 C interface implementation
 
+#include "wrf_sdirk3_stage_history_diag.h"
 #include "wrf_sdirk3_torch_wrapper.h"
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_config.h"  // FIX Round157: For g_sdirk3_config debug_level
@@ -19,6 +20,8 @@ namespace sdirk3 {
 }
 
 extern "C" {
+
+
 
 // Create unified solver instance
 // Note: This matches the Fortran call from module_implicit_sdirk3.F which passes rdx, rdy as scalars, rdnw as array

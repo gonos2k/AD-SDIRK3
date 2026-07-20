@@ -32,7 +32,7 @@ RUN_LINE = re.compile(r"^" + RUN_MARKER + r" (.*)$")
 UINT = re.compile(r"^(0|[1-9][0-9]*)$")
 
 SWEEP_KEYS = {"phase", "sweep_seq", "total", "delta", "concurrent"}
-RUN_KEYS = {"phase", "total", "exit"}
+RUN_KEYS = {"phase", "total", "exit", "authority"}
 
 
 def parse_kv(rest, allowed):
@@ -181,7 +181,15 @@ def check_run(path):
             if kind not in ("clean", "fatal"):
                 violations.append("line %d: bad_or_missing_exit:%s" % (n, kind))
                 continue
-            ends.append((n, total, kind))
+            # Which layer closed the run. Without it, a FALLBACK firing where the
+            # authority path should have is invisible -- the record's presence alone
+            # was once mistaken for the production path working.
+            auth = f.get("authority")
+            if auth not in ("fortran_outcome", "fortran_finalize",
+                            "cpp_preabort", "cpp_destructor"):
+                violations.append("line %d: bad_or_missing_authority:%s" % (n, auth))
+                continue
+            ends.append((n, total, kind, auth))
 
     info = {}
     if len(begins) != 1:
@@ -191,20 +199,20 @@ def check_run(path):
     # The end record is written on the controlled-fatal path, where losing it is
     # worse than repeating it, so identical repeats are legitimate. Disagreement is
     # not: it means two different observations of the same quantity.
-    if len({(t, k) for _, t, k in ends}) > 1:
+    if len({(t, k, a) for _, t, k, a in ends}) > 1:
         violations.append("disagreeing_end_records")
 
     if begins and ends:
         bn, btot = begins[0]
         if btot != 0:
             violations.append("begin_total_not_zero:%d" % btot)
-        first_end_line = min(n for n, _, _ in ends)
+        first_end_line = min(n for n, _, _, _ in ends)
         if first_end_line < bn:
             violations.append("record_order_invalid")
-        etot, kind = ends[0][1], ends[0][2]
+        etot, kind, auth = ends[0][1], ends[0][2], ends[0][3]
         if etot < btot:
             violations.append("end_total_below_begin")
-        info = {"begin": btot, "end": etot, "exit": kind}
+        info = {"begin": btot, "end": etot, "exit": kind, "authority": auth}
     return violations, info
 
 
@@ -222,8 +230,8 @@ def main(argv):
     else:
         violations, info = check_run(path)
         if info:
-            print("RUN begin=%d end=%d exit=%s"
-                  % (info["begin"], info["end"], info["exit"]))
+            print("RUN begin=%d end=%d exit=%s authority=%s"
+                  % (info["begin"], info["end"], info["exit"], info["authority"]))
     for v in violations:
         print("VIOLATION %s" % v)
     print("VERDICT %s violations=%d"

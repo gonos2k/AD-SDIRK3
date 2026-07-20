@@ -43,6 +43,7 @@
 #include <cstdlib>
 #include <cstddef>
 #include <cstdio>
+#include <unistd.h>   // write(2) on the fatal path
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -186,41 +187,132 @@ inline long long sdirk3_rhs_run_total() {
 // SAME way before comparing anything.
 enum class Sdirk3RunExit { Clean, Fatal };
 
-inline void sdirk3_rhs_run_emit_end_once(Sdirk3RunExit how) noexcept {
-    // Loss is worse than duplication, so this does NOT elect a single emitter.
-    //
-    // The previous version claimed the emit with an exchange and made losers wait,
-    // bounded, for the winner. If the winner was preempted past that bound the loser
-    // gave up and the process aborted with nothing written -- and a MISSING record
-    // is indistinguishable from a run that never got here, whereas a DUPLICATE that
-    // agrees with its twin is trivially reconcilable. So: skip only if the write has
-    // demonstrably completed, otherwise write. A race can then produce two identical
-    // records and never zero, and the harness accepts repeated end records that
-    // AGREE while rejecting absence or disagreement.
-    static std::atomic<bool> done{false};
-    if (!sdirk3_rhs_count_enabled()) return;
-    if (done.load(std::memory_order_acquire)) return;
+// Which layer actually closed the run. Recorded because a fallback firing where the
+// authority path should have is invisible otherwise: a previous version emitted the
+// closing record only from paths WRF never takes, and the record's mere presence in
+// a standing child test was mistaken for the production path working. dt=600 must
+// show authority=fortran_outcome; anything else means the wiring regressed to a
+// fallback.
+// Whether the opening record was published. A close with no begin is a benign
+// no-op (partial initialisation, a finalizer that runs twice, or a run that never
+// evaluated an RHS), not a failure -- so it must be distinguishable from a close
+// that should have emitted and did not.
+inline std::atomic<bool>& sdirk3_rhs_run_begin_flag() {
+    static std::atomic<bool> begun{false};
+    return begun;
+}
+inline bool sdirk3_rhs_run_begin_emitted() noexcept {
+    return sdirk3_rhs_run_begin_flag().load(std::memory_order_acquire);
+}
 
-    // NOT emit_sdirk3_diag_line: that helper takes a std::mutex and allocates
-    // (ostringstream, std::string), and this runs on the controlled-fatal path where
-    // both are unsafe -- a thread torn down while holding that mutex would block the
-    // aborting thread inside lock_guard and lose the record. Stack buffer out
-    // through the same fprintf/fflush pair abort_c_abi_exception itself uses:
-    // lock-free, allocation-free, flushed before the process can die.
-    char buf[128];
+// Shared with Fortran via BIND(C). Declared here, next to the semantics, so the
+// two sides cannot drift apart silently.
+enum {
+    SDIRK3_RHS_RUN_EXIT_CLEAN = 0,
+    SDIRK3_RHS_RUN_EXIT_FATAL = 1
+};
+
+enum class Sdirk3RunAuthority {
+    FortranOutcome,    // Fortran promoted a fail-closed outcome to a process fatal
+    FortranFinalize,   // Fortran finalizer completed the normal lifecycle
+    CppPreAbort,       // C++ called abort_c_abi_exception directly
+    CppDestructor      // last-resort static destructor
+};
+inline const char* sdirk3_run_authority_name(Sdirk3RunAuthority a) noexcept {
+    switch (a) {
+        case Sdirk3RunAuthority::FortranOutcome:  return "fortran_outcome";
+        case Sdirk3RunAuthority::FortranFinalize: return "fortran_finalize";
+        case Sdirk3RunAuthority::CppPreAbort:     return "cpp_preabort";
+        default:                                  return "cpp_destructor";
+    }
+}
+
+// FROZEN close, not merely idempotent.
+//
+// Several tile workers can observe the fatal condition almost simultaneously. A
+// close that re-read the live counter on each call would emit total=17 for one and
+// total=18 for another -- duplicates that DISAGREE, which the parser rejects, and
+// rightly so. Idempotence ("the side effect happens once") is the wrong property
+// here; what is needed is that the OBSERVATION itself is fixed at first close, so
+// every later caller re-emits a byte-identical line.
+//
+// The freeze is a single atomic exchange on a packed word: whoever wins snapshots
+// {exit, total, authority}; everyone else reads what the winner froze. No mutex, no
+// OpenMP critical, no barrier -- a worker inside any of those is about to call
+// wrf_error_fatal, so peers would never arrive.
+struct Sdirk3FrozenClose {
+    long long total;
+    Sdirk3RunExit exit;
+    Sdirk3RunAuthority authority;
+};
+inline std::atomic<bool>& sdirk3_run_close_frozen() {
+    static std::atomic<bool> frozen{false};
+    return frozen;
+}
+inline Sdirk3FrozenClose& sdirk3_run_close_record() {
+    static Sdirk3FrozenClose rec{0, Sdirk3RunExit::Clean,
+                                 Sdirk3RunAuthority::CppDestructor};
+    return rec;
+}
+inline std::atomic<bool>& sdirk3_run_close_published() {
+    static std::atomic<bool> published{false};
+    return published;
+}
+
+// Writes the frozen record with ONE low-level write(2). fwrite/fprintf take an
+// internal stdio lock, so calling them "mutex-free" on the fatal path would be
+// wishful; write(2) to STDERR_FILENO takes none. Returns 1 on success or benign
+// no-op, 0 only on a contract violation the caller should surface.
+inline int sdirk3_rhs_run_close_impl(Sdirk3RunExit how,
+                                     Sdirk3RunAuthority who) noexcept {
+    if (!sdirk3_rhs_count_enabled()) return 1;          // disabled: total no-op
+    if (!sdirk3_rhs_run_begin_emitted()) return 1;      // no begin: nothing to close
+
+    if (!sdirk3_run_close_frozen().exchange(true, std::memory_order_acq_rel)) {
+        Sdirk3FrozenClose& rec = sdirk3_run_close_record();
+        rec.total = sdirk3_rhs_run_total();             // the ONLY live read
+        rec.exit = how;
+        rec.authority = who;
+        sdirk3_run_close_published().store(true, std::memory_order_release);
+    } else {
+        // Wait, bounded, for the winner to finish writing the fields we are about
+        // to read. Bounded because this is the fatal path: a stale duplicate is
+        // worse than nothing, but hanging forever is worse than either.
+        for (int spin = 0; spin < 100000; ++spin) {
+            if (sdirk3_run_close_published().load(std::memory_order_acquire)) break;
+        }
+        if (!sdirk3_run_close_published().load(std::memory_order_acquire)) return 0;
+    }
+
+    const Sdirk3FrozenClose& rec = sdirk3_run_close_record();
+    // A second close asking for a DIFFERENT outcome is a wiring bug, not a race:
+    // report it rather than silently emitting the first answer.
+    if (rec.exit != how) return 0;
+
+    char buf[192];
     const int n = std::snprintf(
         buf, sizeof buf,
-        "SDIRK3_RHS_RUN_TOTAL phase=end total=%lld exit=%s\n",
-        static_cast<long long>(sdirk3_rhs_run_total()),
-        how == Sdirk3RunExit::Clean ? "clean" : "fatal");
+        "SDIRK3_RHS_RUN_TOTAL phase=end total=%lld exit=%s authority=%s\n",
+        rec.total,
+        rec.exit == Sdirk3RunExit::Clean ? "clean" : "fatal",
+        sdirk3_run_authority_name(rec.authority));
     if (n > 0) {
-        std::fwrite(buf, 1,
-                    static_cast<size_t>(n) < sizeof buf ? static_cast<size_t>(n)
-                                                        : sizeof buf - 1,
-                    stderr);
-        std::fflush(stderr);
+        const size_t len = static_cast<size_t>(n) < sizeof buf
+                               ? static_cast<size_t>(n) : sizeof buf - 1;
+        size_t off = 0;
+        while (off < len) {
+            const ssize_t w = ::write(2, buf + off, len - off);
+            if (w <= 0) break;                          // best effort on the fatal path
+            off += static_cast<size_t>(w);
+        }
     }
-    done.store(true, std::memory_order_release);
+    return 1;
+}
+
+inline void sdirk3_rhs_run_emit_end_once(Sdirk3RunExit how) noexcept {
+    sdirk3_rhs_run_close_impl(how, how == Sdirk3RunExit::Clean
+                                       ? Sdirk3RunAuthority::CppDestructor
+                                       : Sdirk3RunAuthority::CppPreAbort);
 }
 
 // Entry point for the pre-abort hook, which takes a plain void(*)().
@@ -242,10 +334,14 @@ inline void sdirk3_rhs_run_register_once() {
         os << "SDIRK3_RHS_RUN_TOTAL phase=begin total="
            << sdirk3_rhs_run_total();
         emit_sdirk3_diag_line(os.str() + "\n");
+        sdirk3_rhs_run_begin_flag().store(true, std::memory_order_release);
         return true;
     }();
-    static Sdirk3RhsRunTotalEmitter emitter;   // clean-exit path
-    mpi_safety::sdirk3_set_pre_abort_hook(&sdirk3_rhs_run_emit_end_fatal);  // fatal path
+    static Sdirk3RhsRunTotalEmitter emitter;   // clean-exit FALLBACK
+    // C++-direct-abort FALLBACK. Neither of these is the authority: WRF terminates
+    // through Fortran's wrf_error_fatal, which reaches neither. The authority paths
+    // call sdirk3_rhs_run_close_checked() from Fortran.
+    mpi_safety::sdirk3_set_pre_abort_hook(&sdirk3_rhs_run_emit_end_fatal);
     (void)done;
 }
 
