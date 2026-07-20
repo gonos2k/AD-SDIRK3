@@ -244,9 +244,14 @@ inline long long sdirk3_rhs_run_total() {
     return sdirk3_lc_count(sdirk3_run_lifecycle().load(std::memory_order_acquire));
 }
 
+inline void sdirk3_run_register_fallbacks_once();  // fwd
+
 // Emit the opening record for a generation. Not on the fatal path, so the buffered
-// mutex-guarded emitter is fine. begin carries NEITHER exit NOR authority.
+// mutex-guarded emitter is fine. begin carries NEITHER exit NOR authority. Also the
+// one place the C++ fallbacks are registered -- once per generation open, OFF the
+// per-tick hot path (PR 9F.6 P1-4).
 inline void sdirk3_run_emit_begin(long long gen) noexcept {
+    sdirk3_run_register_fallbacks_once();
     try {
         std::ostringstream os;
         os << "SDIRK3_RHS_RUN_TOTAL phase=begin generation=" << gen << " total=0";
@@ -399,8 +404,7 @@ inline void sdirk3_run_register_fallbacks_once() {
 inline void sdirk3_rhs_count_tick() {
     if (!sdirk3_rhs_count_enabled()) return;
     ++sdirk3_rhs_call_counter();          // sweep-local, thread-private
-    sdirk3_run_register_fallbacks_once();
-    sdirk3_run_tick();                     // whole-run lifecycle
+    sdirk3_run_tick();                     // whole-run lifecycle (registers on begin)
 }
 inline long long sdirk3_rhs_count_value() {
     return sdirk3_rhs_call_counter();

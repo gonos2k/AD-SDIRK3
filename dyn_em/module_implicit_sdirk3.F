@@ -406,6 +406,16 @@ MODULE module_implicit_sdirk3
          INTEGER(C_INT) :: status
       END FUNCTION sdirk3_rhs_run_close_checked
 
+      ! PR 9F.6 P1-4: explicit run BEGIN on the main thread before any OpenMP/RHS
+      ! work. Idempotent per generation; a call while already open returns 0. This is
+      ! the lifecycle authority for the opening record and the sole place the C++
+      ! fallbacks are registered, so the per-RHS hot path is a pure counter CAS.
+      FUNCTION sdirk3_rhs_run_begin_checked() &
+         BIND(C, name="sdirk3_rhs_run_begin_checked") RESULT(status)
+         IMPORT :: C_INT
+         INTEGER(C_INT) :: status
+      END FUNCTION sdirk3_rhs_run_begin_checked
+
       SUBROUTINE sdirk3_halo_finalize() &
          BIND(C, name="sdirk3_halo_finalize")
          USE, INTRINSIC :: ISO_C_BINDING
@@ -1082,6 +1092,14 @@ CONTAINS
 
       ! Rank-level halo preparation above already fetched and cross-checked
       ! the authoritative rank bounds via get_ijk_from_grid.
+
+      ! PR 9F.6 P1-4: open the whole-run RHS lifecycle on the MAIN thread, before the
+      ! OpenMP loop below drives any RHS evaluation. Idempotent: the first timestep
+      ! opens generation 1, later timesteps see RUNNING and return 0. Doing it here
+      ! (not lazily on the first tick from a worker) makes the opening record and the
+      ! fallback registration a main-thread act, and leaves the per-RHS path a pure
+      ! counter CAS. Status is advisory (0 just means "already open").
+      rhs_run_close_status = sdirk3_rhs_run_begin_checked()
 
       ! Process each tile with Zero-Copy approach
       ! P0 FIX (2026-07-12, external review #4): bounds/dims/scalars/bdy_cfg and the
