@@ -436,13 +436,25 @@ inline int sdirk3_rhs_run_begin_checked_impl() noexcept {
             if (sdirk3_run_emit_begin(gen) == 1) return SDIRK3_BEGIN_OPENED;
             // P1-6: the state moved to RUNNING but the begin record never reached the
             // log. Poison the run so no tick/close mistakes it for a healthy generation,
-            // and report the failure instead of a false success.
-            uint64_t running = neu;
-            const uint64_t err = sdirk3_lc_pack(
-                SDIRK3_LC_STATE_ERROR, gen, 0, Sdirk3RunExit::Fatal,
-                Sdirk3RunAuthority::CppPreAbort, false, SDIRK3_RHS_RUN_REASON_CPP_FALLBACK);
-            word.compare_exchange_strong(running, err, std::memory_order_acq_rel,
-                                         std::memory_order_acquire);
+            // and report the failure instead of a false success. A concurrent tick may
+            // have bumped the count between the open CAS and here, so retry against the
+            // CURRENT word (preserving its gen/count) for as long as it is still the
+            // RUNNING generation we opened -- a single strong CAS keyed on the count-0
+            // word would spuriously miss a raced tick and leave the run RUNNING. If
+            // another thread already closed it, leave that close alone.
+            uint64_t running = word.load(std::memory_order_acquire);
+            while (sdirk3_lc_state(running) == SDIRK3_LC_STATE_RUNNING) {
+                const uint64_t err = sdirk3_lc_pack(
+                    SDIRK3_LC_STATE_ERROR, sdirk3_lc_gen(running),
+                    sdirk3_lc_count(running), Sdirk3RunExit::Fatal,
+                    Sdirk3RunAuthority::CppPreAbort, false,
+                    SDIRK3_RHS_RUN_REASON_CPP_FALLBACK);
+                if (word.compare_exchange_weak(running, err,
+                                               std::memory_order_acq_rel,
+                                               std::memory_order_acquire))
+                    break;
+                // running refreshed with the current word; loop while still RUNNING.
+            }
             return SDIRK3_BEGIN_EMIT_ERROR;
         }
     }
