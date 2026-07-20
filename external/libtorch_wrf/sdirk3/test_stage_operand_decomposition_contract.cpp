@@ -17,7 +17,7 @@
 
 using namespace wrf::sdirk3;
 
-extern "C" int sdirk3_rhs_run_close_checked(int exit_kind) noexcept;
+extern "C" int sdirk3_rhs_run_close_checked(int exit_kind, int reason) noexcept;
 
 namespace {
 
@@ -82,7 +82,7 @@ static int run_child_mode(const char* mode) {
         // frozen {exit,total,authority} is re-emitted verbatim or nothing is.
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
-        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME);
         // now the C++ fallbacks, in both flavours
         wrf::sdirk3::sdirk3_rhs_run_emit_end_once(wrf::sdirk3::Sdirk3RunExit::Fatal);
         wrf::sdirk3::sdirk3_rhs_run_emit_end_once(wrf::sdirk3::Sdirk3RunExit::Clean);
@@ -92,8 +92,8 @@ static int run_child_mode(const char* mode) {
         // A second close asking for a DIFFERENT outcome is a wiring bug, and must be
         // reported rather than silently answered with the first verdict.
         wrf::sdirk3::sdirk3_rhs_count_tick();
-        const int a = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
-        const int b = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
+        const int a = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME);
+        const int b = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_FINALIZE);
         std::fprintf(stderr, "CLOSE_RC first=%d second=%d\n", a, b);
         return 0;
     }
@@ -104,7 +104,7 @@ static int run_child_mode(const char* mode) {
         // compile-verified; its runtime emission needs a COMPLETING SDIRK3 run,
         // which em_b_wave cannot yet produce at any dt -- see the scope note.)
         wrf::sdirk3::sdirk3_rhs_count_tick();
-        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_FINALIZE);
         return 0;
     }
     if (std::strcmp(mode, "lifecycle-concurrent-close") == 0) {
@@ -119,7 +119,7 @@ static int run_child_mode(const char* mode) {
         std::atomic<int> ones{0};
         for (int i = 0; i < 8; ++i)
             ts.emplace_back([&] {
-                if (sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL) == 1)
+                if (sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME) == 1)
                     ones.fetch_add(1, std::memory_order_relaxed);
             });
         for (auto& t : ts) t.join();
@@ -132,11 +132,11 @@ static int run_child_mode(const char* mode) {
         // flow that evaluates the RHS past the fatal decision cannot hide.
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
-        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME);
         const int rc = wrf::sdirk3::sdirk3_run_tick();
         std::fprintf(stderr, "POST_CLOSE_TICK_RC=%d\n", rc);
         // a second close re-emits, now carrying the post_close_tick flag
-        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME);
         return 0;
     }
     if (std::strcmp(mode, "lifecycle-reinit") == 0) {
@@ -146,16 +146,16 @@ static int run_child_mode(const char* mode) {
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
-        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_FINALIZE);
         wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // explicit re-init
         wrf::sdirk3::sdirk3_rhs_count_tick();
         wrf::sdirk3::sdirk3_rhs_count_tick();
-        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_FINALIZE);
         return 0;
     }
     if (std::strcmp(mode, "close-disabled") == 0) {
         // Contract: with counting disabled the close is a total no-op returning 1.
-        const int rc = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
+        const int rc = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL, wrf::sdirk3::SDIRK3_RHS_RUN_REASON_STEP_OUTCOME);
         std::fprintf(stderr, "CLOSE_RC disabled=%d\n", rc);
         return 0;
     }
@@ -1363,7 +1363,7 @@ int main(int argc, char** argv) {
         const std::string out = capture_child(argv[0], "authority-frozen");
         check(count_occurrences(out, "SDIRK3_RHS_RUN_TOTAL phase=end") >= 1,
               "case41: the authority close emits a closing record");
-        check(out.find("exit=fatal authority=fortran_outcome") != std::string::npos,
+        check(out.find("exit=fatal authority=fortran_outcome reason=step_outcome") != std::string::npos,
               "case41: it is attributed to the FORTRAN authority");
         check(out.find("authority=cpp_preabort") == std::string::npos &&
                   out.find("authority=cpp_destructor") == std::string::npos,
@@ -1404,7 +1404,7 @@ int main(int argc, char** argv) {
         const std::string out = capture_child(argv[0], "close-clean");
         check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end") != std::string::npos,
               "case44: close(CLEAN) emits a closing record");
-        check(out.find("generation=1 total=1 exit=clean authority=fortran_finalize") != std::string::npos,
+        check(out.find("generation=1 total=1 exit=clean authority=fortran_finalize reason=finalize") != std::string::npos,
               "case44: it is attributed to the FORTRAN FINALIZER authority");
         check(out.find("exit=fatal") == std::string::npos &&
                   out.find("fortran_outcome") == std::string::npos,

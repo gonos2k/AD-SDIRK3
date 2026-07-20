@@ -46,6 +46,12 @@ MODULE module_implicit_sdirk3
    ! caught this; core-linux CI never compiles this dyn_em module.
    INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_EXIT_CLEAN = 0_C_INT
    INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_EXIT_FATAL = 1_C_INT
+   ! PR 9F.6 P1-5: reason codes (WHICH fatal site closed the run). Shared by value
+   ! with the C++ enum of the same names.
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_REASON_STEP_OUTCOME  = 1_C_INT
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_REASON_OUTCOME_QUERY = 2_C_INT
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_REASON_FINALIZE      = 3_C_INT
+   INTEGER(C_INT), PARAMETER :: SDIRK3_RHS_RUN_REASON_OTHER         = 7_C_INT
 
    ! Struct definitions for ABI-safe parameter passing (v2 interface)
    TYPE, BIND(C) :: SDIRK3_IndexBounds
@@ -399,10 +405,11 @@ MODULE module_implicit_sdirk3
       ! reaches neither the C++ pre-abort hook nor a static destructor -- MEASURED on
       ! the dt=600 path (SDIRK3_C_ABI_EXCEPTION 0, "FATAL CALLED" 4, closing record
       ! 0). Fortran is the exit authority, so Fortran must close the run.
-      FUNCTION sdirk3_rhs_run_close_checked(exit_kind) &
+      FUNCTION sdirk3_rhs_run_close_checked(exit_kind, reason) &
          BIND(C, name="sdirk3_rhs_run_close_checked") RESULT(status)
          IMPORT :: C_INT
          INTEGER(C_INT), VALUE :: exit_kind
+         INTEGER(C_INT), VALUE :: reason
          INTEGER(C_INT) :: status
       END FUNCTION sdirk3_rhs_run_close_checked
 
@@ -1368,7 +1375,8 @@ CONTAINS
             ! Close the whole-run RHS evidence BEFORE the fatal: wrf_error_fatal does
             ! not return, and nothing downstream of it runs.
             rhs_run_close_status = &
-               sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL)
+               sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL, &
+                                            SDIRK3_RHS_RUN_REASON_OUTCOME_QUERY)
             IF (rhs_run_close_status /= 1_C_INT) THEN
                WRITE(0,*) "SDIRK3_RHS_RUN_CLOSE_FAILED: query-failure path"
                FLUSH(0)
@@ -1388,7 +1396,8 @@ CONTAINS
             ! evaluation happens between here and the fatal, so the frozen total is
             ! the final value for this run prefix.
             rhs_run_close_status = &
-               sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL)
+               sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_FATAL, &
+                                            SDIRK3_RHS_RUN_REASON_STEP_OUTCOME)
             IF (rhs_run_close_status /= 1_C_INT) THEN
                WRITE(0,*) "SDIRK3_RHS_RUN_CLOSE_FAILED: fail-closed outcome path"
                FLUSH(0)
@@ -1453,7 +1462,8 @@ CONTAINS
       ! record the C++ side is a no-op, so a partial init or a repeated finalize is
       ! safe, and a run that DID count still gets its clean close.
       rhs_run_close_status = &
-         sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_CLEAN)
+         sdirk3_rhs_run_close_checked(SDIRK3_RHS_RUN_EXIT_CLEAN, &
+                                      SDIRK3_RHS_RUN_REASON_FINALIZE)
       IF (rhs_run_close_status /= 1_C_INT) THEN
          CALL wrf_error_fatal( &
             "SDIRK3_RHS_RUN_CLOSE_FAILED: normal finalizer path")

@@ -30,15 +30,19 @@ extern "C" int sdirk3_rhs_run_begin_checked() noexcept {
     return wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();
 }
 
-extern "C" int sdirk3_rhs_run_close_checked(int exit_kind) noexcept {
+extern "C" int sdirk3_rhs_run_close_checked(int exit_kind, int reason) noexcept {
     if (exit_kind != wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN &&
         exit_kind != wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL) {
         return 0;
     }
     const bool clean = (exit_kind == wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
+    unsigned r = static_cast<unsigned>(reason);
+    if (r > wrf::sdirk3::SDIRK3_RHS_RUN_REASON_CPP_FALLBACK)
+        r = wrf::sdirk3::SDIRK3_RHS_RUN_REASON_OTHER;
     return wrf::sdirk3::sdirk3_rhs_run_close_impl(
         clean ? wrf::sdirk3::Sdirk3RunExit::Clean
               : wrf::sdirk3::Sdirk3RunExit::Fatal,
         clean ? wrf::sdirk3::Sdirk3RunAuthority::FortranFinalize
-              : wrf::sdirk3::Sdirk3RunAuthority::FortranOutcome);
+              : wrf::sdirk3::Sdirk3RunAuthority::FortranOutcome,
+        r);
 }

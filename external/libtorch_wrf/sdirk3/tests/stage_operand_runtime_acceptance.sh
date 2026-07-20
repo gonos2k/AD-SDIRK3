@@ -165,7 +165,12 @@ run_exit_kind() { # <log>
 # there means the authority wiring regressed and the evidence is not what it claims.
 run_authority() { # <log>
   { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
-    sed -n 's/^RUN .* authority=\([a-z_][a-z_]*\)$/\1/p'; } || true
+    sed -n 's/^RUN .* authority=\([a-z_][a-z_]*\) reason=.*$/\1/p'; } || true
+}
+# WHICH fatal site closed the run. dt=600 must report step_outcome.
+run_reason() { # <log>
+  { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
+    sed -n 's/^RUN .* reason=\([a-z_][a-z_]*\)$/\1/p'; } || true
 }
 
 # =============================================================================
@@ -274,9 +279,9 @@ if [ "${1:-}" = "--self-test" ]; then
 
   # ---- whole-run total fixtures (PR 9F.3) ----------------------------------
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=clean authority=fortran_finalize"; } > "$TMP/runok.log"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=clean authority=fortran_finalize reason=finalize"; } > "$TMP/runok.log"
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome"; } > "$TMP/runfatal.log"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome reason=step_outcome"; } > "$TMP/runfatal.log"
   # A pre-`exit=` emitter: well-formed in every other respect, and must NOT pass.
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
     echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42"; } > "$TMP/runnokind.log"
@@ -298,14 +303,14 @@ if [ "${1:-}" = "--self-test" ]; then
   gate "self: the closing whole-run total is extracted correctly" \
        "$([ "$(run_total_final "$TMP/runok.log")" = "42" ] && echo 1 || echo 0)"
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome"; } > "$TMP/rundup.log"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome reason=step_outcome"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome reason=step_outcome"; } > "$TMP/rundup.log"
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=43 exit=fatal authority=fortran_outcome"; } > "$TMP/rundisagree.log"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome reason=step_outcome"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=43 exit=fatal authority=fortran_outcome reason=step_outcome"; } > "$TMP/rundisagree.log"
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
     echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome"; } > "$TMP/rundupbegin.log"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome reason=step_outcome"; } > "$TMP/rundupbegin.log"
   gate "self: DUPLICATE begin records ARE rejected (only end tolerates repetition)" \
        "$([ "$(run_total_well_formed "$TMP/rundupbegin.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: DUPLICATE closing totals that AGREE are accepted (loss > duplication)" \
@@ -313,11 +318,11 @@ if [ "${1:-}" = "--self-test" ]; then
   gate "self: closing totals that DISAGREE are rejected" \
        "$([ "$(run_total_well_formed "$TMP/rundisagree.log")" -eq 0 ] && echo 1 || echo 0)"
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=bogus"; } > "$TMP/runbadauth.log"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=bogus reason=step_outcome"; } > "$TMP/runbadauth.log"
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0 authority=fortran_outcome"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=1 exit=fatal authority=fortran_outcome"; } > "$TMP/runbeginauth.log"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=1 exit=fatal authority=fortran_outcome reason=step_outcome"; } > "$TMP/runbeginauth.log"
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=2 total=1 exit=fatal authority=fortran_outcome"; } > "$TMP/rungenmismatch.log"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=2 total=1 exit=fatal authority=fortran_outcome reason=step_outcome"; } > "$TMP/rungenmismatch.log"
   gate "self: a begin carrying authority= IS rejected (P2 schema strictness)" \
        "$([ "$(run_total_well_formed "$TMP/runbeginauth.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: a generation mismatch between begin and end IS rejected (P1-3)" \
@@ -565,6 +570,13 @@ gate "the run was closed by the FORTRAN authority, not a C++ fallback (ON)" \
      "$([ "$AUTH_ON" = "fortran_outcome" ] && echo 1 || echo 0)"
 gate "the run was closed by the FORTRAN authority, not a C++ fallback (OFF)" \
      "$([ "$AUTH_OFF" = "fortran_outcome" ] && echo 1 || echo 0)"
+# PR 9F.6 P1-5: reason distinguishes WHICH fatal site closed it. dt=600 aborts at the
+# fail-closed step-outcome promotion, so the reason must be step_outcome -- not a
+# generic fortran fatal reused for every site.
+RSN_ON="$(run_reason "$OUT/pos_on.log")"
+note "  run close reason: ON=${RSN_ON:-<none>}"
+gate "the fatal was attributed to the step-outcome site (reason=step_outcome)" \
+     "$([ "$RSN_ON" = "step_outcome" ] && echo 1 || echo 0)"
 # The measured signature of the correct path: the C++-direct-abort funnel does NOT
 # fire on the dt=600 exit. Non-zero SDIRK3_C_ABI_EXCEPTION would mean the run took
 # the cpp_preabort path, contradicting authority=fortran_outcome.

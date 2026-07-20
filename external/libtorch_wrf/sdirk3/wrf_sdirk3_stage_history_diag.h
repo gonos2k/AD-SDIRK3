@@ -196,22 +196,53 @@ inline const char* sdirk3_run_authority_name(Sdirk3RunAuthority a) noexcept {
     }
 }
 
+// PR 9F.6 P1-5: WHICH fatal site closed the run. authority says the LAYER (Fortran
+// vs a C++ fallback); reason says WHY within that layer. Reusing fortran_outcome for
+// every Fortran fatal would misattribute a halo/communicator/solver-state fatal as a
+// fail-closed step outcome. Shared with Fortran by integer value.
+enum {
+    SDIRK3_RHS_RUN_REASON_NONE          = 0,  // clean exits carry this
+    SDIRK3_RHS_RUN_REASON_STEP_OUTCOME  = 1,  // fail-closed step outcome promoted
+    SDIRK3_RHS_RUN_REASON_OUTCOME_QUERY = 2,  // step-outcome query failed
+    SDIRK3_RHS_RUN_REASON_FINALIZE      = 3,  // normal finalizer
+    SDIRK3_RHS_RUN_REASON_HALO          = 4,  // halo geometry / communicator
+    SDIRK3_RHS_RUN_REASON_SOLVER_STATE  = 5,  // solver not initialized / null tile
+    SDIRK3_RHS_RUN_REASON_TOPOLOGY      = 6,  // multi-rank / stage-halo rejection
+    SDIRK3_RHS_RUN_REASON_OTHER         = 7,  // any other Fortran fatal via the funnel
+    SDIRK3_RHS_RUN_REASON_CPP_FALLBACK  = 8   // a C++ fallback closed it
+};
+inline const char* sdirk3_run_reason_name(unsigned r) noexcept {
+    switch (r) {
+        case SDIRK3_RHS_RUN_REASON_STEP_OUTCOME:  return "step_outcome";
+        case SDIRK3_RHS_RUN_REASON_OUTCOME_QUERY: return "outcome_query";
+        case SDIRK3_RHS_RUN_REASON_FINALIZE:      return "finalize";
+        case SDIRK3_RHS_RUN_REASON_HALO:          return "halo";
+        case SDIRK3_RHS_RUN_REASON_SOLVER_STATE:  return "solver_state";
+        case SDIRK3_RHS_RUN_REASON_TOPOLOGY:      return "topology";
+        case SDIRK3_RHS_RUN_REASON_CPP_FALLBACK:  return "cpp_fallback";
+        case SDIRK3_RHS_RUN_REASON_OTHER:         return "other";
+        default:                                  return "none";
+    }
+}
+
 // ---- packed-word layout ---------------------------------------------------
 enum : unsigned {
     SDIRK3_LC_STATE_IDLE    = 0,
     SDIRK3_LC_STATE_RUNNING = 1,
     SDIRK3_LC_STATE_CLOSED  = 2
 };
-static constexpr unsigned kSdirk3LcAuthShift  = 3;
-static constexpr unsigned kSdirk3LcGenShift   = 6;
-static constexpr unsigned kSdirk3LcCountShift = 22;
-static constexpr uint64_t kSdirk3LcStateMask  = 0x3ULL;
-static constexpr uint64_t kSdirk3LcExitBit    = 1ULL << 2;
-static constexpr uint64_t kSdirk3LcAuthMask   = 0x3ULL;
-static constexpr uint64_t kSdirk3LcPostBit    = 1ULL << 5;
-static constexpr uint64_t kSdirk3LcGenMask    = 0xFFFFULL;
-static constexpr uint64_t kSdirk3LcCountMask  = (1ULL << 42) - 1ULL;
-static constexpr uint64_t kSdirk3LcCountOne   = 1ULL << kSdirk3LcCountShift;
+static constexpr unsigned kSdirk3LcAuthShift   = 3;
+static constexpr unsigned kSdirk3LcReasonShift = 6;
+static constexpr unsigned kSdirk3LcGenShift    = 10;
+static constexpr unsigned kSdirk3LcCountShift  = 24;
+static constexpr uint64_t kSdirk3LcStateMask   = 0x3ULL;
+static constexpr uint64_t kSdirk3LcExitBit     = 1ULL << 2;
+static constexpr uint64_t kSdirk3LcAuthMask    = 0x3ULL;
+static constexpr uint64_t kSdirk3LcPostBit     = 1ULL << 5;
+static constexpr uint64_t kSdirk3LcReasonMask  = 0xFULL;          // 4 bits
+static constexpr uint64_t kSdirk3LcGenMask     = 0x3FFFULL;       // 14 bits
+static constexpr uint64_t kSdirk3LcCountMask   = (1ULL << 40) - 1ULL;
+static constexpr uint64_t kSdirk3LcCountOne    = 1ULL << kSdirk3LcCountShift;
 
 inline std::atomic<uint64_t>& sdirk3_run_lifecycle() {
     static std::atomic<uint64_t> word{0};   // IDLE, gen 0, count 0
@@ -225,13 +256,17 @@ inline Sdirk3RunAuthority sdirk3_lc_auth(uint64_t w) noexcept {
     return static_cast<Sdirk3RunAuthority>((w >> kSdirk3LcAuthShift) & kSdirk3LcAuthMask);
 }
 inline bool sdirk3_lc_post_close_tick(uint64_t w) noexcept { return (w & kSdirk3LcPostBit) != 0; }
+inline unsigned sdirk3_lc_reason(uint64_t w) noexcept {
+    return static_cast<unsigned>((w >> kSdirk3LcReasonShift) & kSdirk3LcReasonMask);
+}
 inline uint64_t sdirk3_lc_pack(unsigned state, long long gen, long long count,
                                Sdirk3RunExit how, Sdirk3RunAuthority who,
-                               bool post) noexcept {
+                               bool post, unsigned reason) noexcept {
     uint64_t w = static_cast<uint64_t>(state) & kSdirk3LcStateMask;
     if (how == Sdirk3RunExit::Fatal) w |= kSdirk3LcExitBit;
     w |= (static_cast<uint64_t>(who) & kSdirk3LcAuthMask) << kSdirk3LcAuthShift;
     if (post) w |= kSdirk3LcPostBit;
+    w |= (static_cast<uint64_t>(reason) & kSdirk3LcReasonMask) << kSdirk3LcReasonShift;
     w |= (static_cast<uint64_t>(gen)   & kSdirk3LcGenMask)   << kSdirk3LcGenShift;
     w |= (static_cast<uint64_t>(count) & kSdirk3LcCountMask) << kSdirk3LcCountShift;
     return w;
@@ -269,10 +304,11 @@ inline int sdirk3_run_emit_end(uint64_t w) noexcept {
     const int n = std::snprintf(
         buf, sizeof buf,
         "SDIRK3_RHS_RUN_TOTAL phase=end generation=%lld total=%lld exit=%s "
-        "authority=%s%s\n",
+        "authority=%s reason=%s%s\n",
         sdirk3_lc_gen(w), sdirk3_lc_count(w),
         sdirk3_lc_exit_fatal(w) ? "fatal" : "clean",
         sdirk3_run_authority_name(sdirk3_lc_auth(w)),
+        sdirk3_run_reason_name(sdirk3_lc_reason(w)),
         sdirk3_lc_post_close_tick(w) ? " post_close_tick=1" : "");
     if (n <= 0) return 0;
     const size_t len = static_cast<size_t>(n) < sizeof buf
@@ -302,7 +338,8 @@ inline int sdirk3_rhs_run_begin_checked_impl() noexcept {
         const long long gen = sdirk3_lc_gen(old) + 1;
         const uint64_t neu = sdirk3_lc_pack(SDIRK3_LC_STATE_RUNNING, gen, 0,
                                             Sdirk3RunExit::Clean,
-                                            Sdirk3RunAuthority::FortranOutcome, false);
+                                            Sdirk3RunAuthority::FortranOutcome, false,
+                                            SDIRK3_RHS_RUN_REASON_NONE);
         if (word.compare_exchange_weak(old, neu, std::memory_order_acq_rel,
                                        std::memory_order_acquire)) {
             sdirk3_run_emit_begin(gen);
@@ -337,7 +374,7 @@ inline int sdirk3_run_tick() noexcept {
             const uint64_t neu = sdirk3_lc_pack(SDIRK3_LC_STATE_RUNNING, gen, 1,
                                                 Sdirk3RunExit::Clean,
                                                 Sdirk3RunAuthority::FortranOutcome,
-                                                false);
+                                                false, SDIRK3_RHS_RUN_REASON_NONE);
             if (word.compare_exchange_weak(old, neu, std::memory_order_acq_rel,
                                            std::memory_order_acquire)) {
                 sdirk3_run_emit_begin(gen);
@@ -352,7 +389,8 @@ inline int sdirk3_run_tick() noexcept {
 // (duplicate close tolerated). CLOSED with a different exit -> 0 (conflict). IDLE ->
 // 1 no-op (no begin, nothing to close). No spin, no publication window.
 inline int sdirk3_rhs_run_close_impl(Sdirk3RunExit how,
-                                     Sdirk3RunAuthority who) noexcept {
+                                     Sdirk3RunAuthority who,
+                                     unsigned reason) noexcept {
     if (!sdirk3_rhs_count_enabled()) return 1;
     std::atomic<uint64_t>& word = sdirk3_run_lifecycle();
     uint64_t old = word.load(std::memory_order_acquire);
@@ -362,7 +400,7 @@ inline int sdirk3_rhs_run_close_impl(Sdirk3RunExit how,
         if (st == SDIRK3_LC_STATE_RUNNING) {
             const uint64_t neu = sdirk3_lc_pack(
                 SDIRK3_LC_STATE_CLOSED, sdirk3_lc_gen(old), sdirk3_lc_count(old),
-                how, who, sdirk3_lc_post_close_tick(old));
+                how, who, sdirk3_lc_post_close_tick(old), reason);
             if (word.compare_exchange_weak(old, neu, std::memory_order_acq_rel,
                                            std::memory_order_acquire))
                 return sdirk3_run_emit_end(neu);   // I froze it
@@ -378,7 +416,8 @@ inline int sdirk3_rhs_run_close_impl(Sdirk3RunExit how,
 inline void sdirk3_rhs_run_emit_end_once(Sdirk3RunExit how) noexcept {
     sdirk3_rhs_run_close_impl(how, how == Sdirk3RunExit::Clean
                                        ? Sdirk3RunAuthority::CppDestructor
-                                       : Sdirk3RunAuthority::CppPreAbort);
+                                       : Sdirk3RunAuthority::CppPreAbort,
+                              SDIRK3_RHS_RUN_REASON_CPP_FALLBACK);
 }
 inline void sdirk3_rhs_run_emit_end_fatal() noexcept {
     sdirk3_rhs_run_emit_end_once(Sdirk3RunExit::Fatal);

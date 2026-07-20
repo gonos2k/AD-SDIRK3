@@ -32,7 +32,7 @@ RUN_LINE = re.compile(r"^" + RUN_MARKER + r" (.*)$")
 UINT = re.compile(r"^(0|[1-9][0-9]*)$")
 
 SWEEP_KEYS = {"phase", "sweep_seq", "total", "delta", "concurrent"}
-RUN_KEYS = {"phase", "total", "exit", "authority", "generation", "post_close_tick"}
+RUN_KEYS = {"phase", "total", "exit", "authority", "reason", "generation", "post_close_tick"}
 
 
 def parse_kv(rest, allowed):
@@ -187,6 +187,9 @@ def check_run(path):
             if "post_close_tick" in f:
                 violations.append("line %d: post_close_tick_on_begin" % n)
                 continue
+            if "reason" in f:
+                violations.append("line %d: reason_on_begin" % n)
+                continue
             begins.append((n, total, gen))
         else:
             kind = f.get("exit")
@@ -205,7 +208,13 @@ def check_run(path):
             if pct is not None and pct != "1":
                 violations.append("line %d: bad_post_close_tick:%s" % (n, pct))
                 continue
-            ends.append((n, total, kind, auth, gen))
+            reason = f.get("reason")
+            if reason not in ("step_outcome", "outcome_query", "finalize", "halo",
+                              "solver_state", "topology", "cpp_fallback", "other",
+                              "none"):
+                violations.append("line %d: bad_or_missing_reason:%s" % (n, reason))
+                continue
+            ends.append((n, total, kind, auth, gen, reason))
 
     info = {}
     if len(begins) != 1:
@@ -215,17 +224,18 @@ def check_run(path):
     # The end record is written on the controlled-fatal path, where losing it is
     # worse than repeating it, so identical repeats are legitimate. Disagreement is
     # not: it means two different observations of the same quantity.
-    if len({(t, k, a, g) for _, t, k, a, g in ends}) > 1:
+    if len({(t, k, a, g, r) for _, t, k, a, g, r in ends}) > 1:
         violations.append("disagreeing_end_records")
 
     if begins and ends:
         bn, btot, bgen = begins[0]
         if btot != 0:
             violations.append("begin_total_not_zero:%d" % btot)
-        first_end_line = min(n for n, _, _, _, _ in ends)
+        first_end_line = min(n for n, _, _, _, _, _ in ends)
         if first_end_line < bn:
             violations.append("record_order_invalid")
-        etot, kind, auth, egen = ends[0][1], ends[0][2], ends[0][3], ends[0][4]
+        etot, kind, auth, egen, ereason = (ends[0][1], ends[0][2],
+                                            ends[0][3], ends[0][4], ends[0][5])
         if etot < btot:
             violations.append("end_total_below_begin")
         # A single run is a single generation: the close must belong to the begin it
@@ -233,7 +243,7 @@ def check_run(path):
         if bgen != egen:
             violations.append("generation_mismatch:begin=%d,end=%d" % (bgen, egen))
         info = {"begin": btot, "end": etot, "exit": kind, "authority": auth,
-                "generation": bgen}
+                "generation": bgen, "reason": ereason}
     return violations, info
 
 
@@ -251,9 +261,9 @@ def main(argv):
     else:
         violations, info = check_run(path)
         if info:
-            print("RUN generation=%d begin=%d end=%d exit=%s authority=%s"
+            print("RUN generation=%d begin=%d end=%d exit=%s authority=%s reason=%s"
                   % (info["generation"], info["begin"], info["end"],
-                     info["exit"], info["authority"]))
+                     info["exit"], info["authority"], info["reason"]))
     for v in violations:
         print("VIOLATION %s" % v)
     print("VERDICT %s violations=%d"
