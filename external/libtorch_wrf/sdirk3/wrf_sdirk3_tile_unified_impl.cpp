@@ -10680,6 +10680,21 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     return k;
 }
 
+// PR 9F.8: FNV-1a 64-bit digest of a tensor's packed float32 bytes, for the RHS
+// operand-identity evidence. Read-only and graph-safe: NoGradGuard + a detached,
+// contiguous CPU float32 COPY, so it cannot touch the live tensor or its autograd
+// graph and cannot perturb the numerical result. Diagnostic-only (a GPU->CPU sync +
+// full-buffer scan); never called on the default production path.
+static uint64_t sdirk3_rhs_operand_digest(const torch::Tensor& t) {
+    torch::NoGradGuard no_grad;
+    auto c = t.detach().to(torch::kCPU, torch::kFloat32).contiguous();
+    const auto* p = reinterpret_cast<const unsigned char*>(c.data_ptr<float>());
+    const size_t n = static_cast<size_t>(c.numel()) * sizeof(float);
+    uint64_t h = 1469598103934665603ULL;      // FNV-1a offset basis
+    for (size_t i = 0; i < n; ++i) { h ^= p[i]; h *= 1099511628211ULL; }
+    return h;
+}
+
 torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U, RhsMode mode) {
     // Step 7b: Detect full-halo input and redirect
     {
@@ -10711,19 +10726,60 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // controlled fatal BEFORE any RHS arithmetic. abort_c_abi_exception fires the
     // pre-abort hook, which re-emits the frozen closing record, so the evidence carries
     // both the marker and the post_close_tick flag.
+    //
+    // PR 9F.8: EXHAUSTIVE fail-close. The prior if/ternary mapped every non-COUNTED
+    // status to COUNT_OVERFLOW -- which correctly caught OVERFLOW but would MISLABEL any
+    // unrecognized status as overflow. A switch with an explicit case per status and a
+    // `default` gives each its own marker and fail-closes an unknown status as INVALID,
+    // so the emitted evidence never misattributes the reason the RHS was refused.
     {
         const int rhs_tick = wrf::sdirk3::sdirk3_rhs_count_tick();
-        if (rhs_tick == wrf::sdirk3::SDIRK3_TICK_POST_CLOSE) {
-            wrf::sdirk3::sdirk3_run_emit_violation("SDIRK3_RHS_POST_CLOSE_TICK");
-            wrf::sdirk3::mpi_safety::abort_c_abi_exception(
-                "computeUnifiedRHS",
-                "RHS evaluation after run close (post-close tick)");
-        } else if (rhs_tick == wrf::sdirk3::SDIRK3_TICK_BEGIN_MISSING) {
-            wrf::sdirk3::sdirk3_run_emit_violation("SDIRK3_RHS_BEGIN_MISSING");
-            wrf::sdirk3::mpi_safety::abort_c_abi_exception(
-                "computeUnifiedRHS",
-                "RHS evaluation with no open run lifecycle (begin missing)");
+        const char* marker = nullptr;
+        const char* detail = nullptr;
+        switch (rhs_tick) {
+            case wrf::sdirk3::SDIRK3_TICK_COUNTED:
+                break;   // the healthy path: proceed into the RHS
+            case wrf::sdirk3::SDIRK3_TICK_POST_CLOSE:
+                marker = "SDIRK3_RHS_POST_CLOSE_TICK";
+                detail = "RHS evaluation after run close (post-close tick)";
+                break;
+            case wrf::sdirk3::SDIRK3_TICK_BEGIN_MISSING:
+                marker = "SDIRK3_RHS_BEGIN_MISSING";
+                detail = "RHS evaluation with no open run lifecycle (begin missing)";
+                break;
+            case wrf::sdirk3::SDIRK3_TICK_OVERFLOW:
+                marker = "SDIRK3_RHS_COUNT_OVERFLOW";
+                detail = "RHS count would overflow the lifecycle word";
+                break;
+            default:
+                marker = "SDIRK3_RHS_TICK_STATUS_INVALID";
+                detail = "RHS tick returned an unrecognized lifecycle status";
+                break;
         }
+        if (marker != nullptr) {
+            wrf::sdirk3::sdirk3_run_emit_violation(marker);
+            wrf::sdirk3::mpi_safety::abort_c_abi_exception("computeUnifiedRHS", detail);
+        }
+    }
+
+    // PR 9F.8: RHS OPERAND DIGEST. A matching RHS count and matching Newton/FGMRES/Stage
+    // NORMS do not prove the RHS was evaluated on the SAME state vectors -- equal counts
+    // can compute different states, and equal norms can hold for different vectors. This
+    // hashes the actual input operand so the acceptance can compare the ORDERED digest
+    // stream OFF vs ON and prove vector identity, not just cardinality. The output is a
+    // deterministic function of (U, mode, solver state), so an identical input-digest
+    // stream in identical order establishes the RHS operands matched. Gated on the SAME
+    // WRF_SDIRK3_RHS_COUNT flag as the whole-run count, so it is present in BOTH the
+    // STAGE_OPERAND_DIAG-off and -on runs and is one of the common records compared
+    // byte-identical -- and NEVER on the default production path.
+    if (wrf::sdirk3::sdirk3_rhs_count_enabled()) {
+        const uint64_t digest = sdirk3_rhs_operand_digest(U);
+        char line[112];
+        std::snprintf(line, sizeof line,
+                      "SDIRK3_RHS_DIGEST total=%lld mode=%d input=0x%016llx\n",
+                      wrf::sdirk3::sdirk3_rhs_run_total(), static_cast<int>(mode),
+                      static_cast<unsigned long long>(digest));
+        wrf::sdirk3::emit_sdirk3_diag_line(line);
     }
 
     /*

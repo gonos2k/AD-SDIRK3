@@ -85,6 +85,10 @@ closure_re() { printf '\[SDIRK3_STAGE_HISTORY_SUMMARY\].*target_stage=%s .*inven
 cnt() { local n; n=$(grep -Ec "$1" "$2" 2>/dev/null || true); printf '%s' "${n:-0}"; }
 
 gate_common_records() { grep -E 'SDIRK3_(NEWTON|FGMRES|STAGE)_DIAG\b' "$1" 2>/dev/null || true; }
+# PR 9F.8: the RHS operand-digest stream. Byte-identity of the NORM records above proves
+# the same scalar diagnostics, not the same VECTORS; these hashes of the actual input
+# operands do. Emitted under the same WRF_SDIRK3_RHS_COUNT gate in both runs.
+gate_rhs_digests() { grep -E '^SDIRK3_RHS_DIGEST ' "$1" 2>/dev/null || true; }
 gate_rhs_records()    { grep -E '^SDIRK3_RHS_CALLS ' "$1" 2>/dev/null || true; }
 # PR 9F.3: WHOLE-RUN authority. The sweep table can only see calls made between a
 # begin and its end. RHS evaluations also occur before the first sweep opens, after
@@ -171,6 +175,12 @@ run_authority() { # <log>
 run_reason() { # <log>
   { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
     sed -n 's/^RUN .* reason=\([a-z_][a-z_]*\)$/\1/p'; } || true
+}
+# PR 9F.8: every normalized RUN line, in generation order. Comparing this whole stream
+# OFF vs ON catches a divergence in ANY generation -- a final-total-only check would
+# miss an OFF/ON difference in an earlier generation of a re-initialised run.
+run_sequence() { # <log>
+  { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null | grep '^RUN '; } || true
 }
 
 # =============================================================================
@@ -369,6 +379,16 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=2 total=3 exit=clean authority=fortran_finalize reason=finalize"; } > "$TMP/runmultigen.log"
   gate "self: a contiguous 2-generation log (clean re-init) IS accepted (P1-3)" \
        "$([ "$(run_total_well_formed "$TMP/runmultigen.log")" -eq 1 ] && echo 1 || echo 0)"
+  # PR 9F.8: two VALID multi-gen logs differing only in an EARLIER generation must
+  # produce DIFFERENT RUN sequences -- a final-total-only compare would miss it.
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=6 exit=clean authority=fortran_finalize reason=finalize"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=2 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=2 total=3 exit=clean authority=fortran_finalize reason=finalize"; } > "$TMP/runmultigen_b.log"
+  seq_a="$(run_sequence "$TMP/runmultigen.log")"
+  seq_b="$(run_sequence "$TMP/runmultigen_b.log")"
+  gate "self: multi-gen logs differing only in gen1 have DIFFERENT RUN sequences (P1)" \
+       "$([ "$seq_a" != "$seq_b" ] && [ -n "$seq_a" ] && echo 1 || echo 0)"
   { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
     echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=2 total=0"
     echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=5 exit=clean authority=fortran_finalize reason=finalize"
@@ -443,8 +463,8 @@ if [ "${1:-}" = "--self-test" ]; then
   # Exact-count ratchet. Without it a deleted gate leaves the suite green with one
   # fewer property enforced. Two expected counts because the live gates require the
   # contract binary, which the torch-free hosted job does not build.
-  SELF_TEST_EXPECTED_WITH_LIVE=55
-  SELF_TEST_EXPECTED_NO_LIVE=43
+  SELF_TEST_EXPECTED_WITH_LIVE=56
+  SELF_TEST_EXPECTED_NO_LIVE=44
   if [ -x "$CBIN" ]; then exp=$SELF_TEST_EXPECTED_WITH_LIVE; else exp=$SELF_TEST_EXPECTED_NO_LIVE; fi
   if [ "$checks" -ne "$exp" ]; then
     note "  FAIL: self-test executed $checks checks, expected $exp"
@@ -554,6 +574,16 @@ diff "$OUT/pos_off.common" "$OUT/pos_on.common" > "$OUT/pos_common.diff" 2>&1
 gate "STAGE_DIAG records are actually PRESENT (the pattern really matches)" \
      "$([ "$(cnt 'SDIRK3_STAGE_DIAG' "$OUT/pos_on.log")" -ge 1 ] && echo 1 || echo 0)"
 
+# PR 9F.8: VECTOR identity, not just norm identity. The digest stream hashes the actual
+# RHS input operands; byte-identity OFF vs ON proves the RHS was evaluated on the same
+# state vectors in the same order -- the gap the norm records above cannot close.
+gate_rhs_digests "$OUT/pos_off.log" > "$OUT/pos_off.digest"
+gate_rhs_digests "$OUT/pos_on.log"  > "$OUT/pos_on.digest"
+gate "RHS operand digests are actually PRESENT (the digest really emitted)" \
+     "$([ -s "$OUT/pos_on.digest" ] && echo 1 || echo 0)"
+gate "RHS operand-digest stream byte-identical OFF vs ON (same VECTORS, not just norms)" \
+     "$(diff -q "$OUT/pos_off.digest" "$OUT/pos_on.digest" >/dev/null 2>&1 && echo 1 || echo 0)"
+
 # (6) 0 extra RHS evaluations, proven by the emitted counter sequence.
 gate_rhs_records "$OUT/pos_off.log" > "$OUT/pos_off.rhs"
 gate_rhs_records "$OUT/pos_on.log"  > "$OUT/pos_on.rhs"
@@ -604,6 +634,14 @@ gate "OFF and ON ended the SAME way (both clean, or both fatal)" \
      "$([ -n "$EK_OFF" ] && [ "$EK_OFF" = "$EK_ON" ] && echo 1 || echo 0)"
 gate "0 extra RHS evaluations OVER THE WHOLE RUN (final totals equal, non-empty)" \
      "$([ -n "$RT_OFF" ] && [ -n "$RT_ON" ] && [ "$RT_OFF" = "$RT_ON" ] && echo 1 || echo 0)"
+# PR 9F.8: compare the ENTIRE per-generation RUN sequence, not just the final total. A
+# re-initialised run has multiple generations; an OFF/ON divergence in an EARLIER one
+# passes a final-total-only check. For the single-generation dt=600 run this is one line
+# and subsumes the total/exit/authority/reason equality above in a single byte-compare.
+RUNSEQ_OFF="$(run_sequence "$OUT/pos_off.log")"
+RUNSEQ_ON="$(run_sequence "$OUT/pos_on.log")"
+gate "the FULL per-generation RUN sequence is byte-identical OFF vs ON (all generations)" \
+     "$([ -n "$RUNSEQ_OFF" ] && [ "$RUNSEQ_OFF" = "$RUNSEQ_ON" ] && echo 1 || echo 0)"
 
 # PR 9F.5: WHICH layer closed the run. This is the behavioural proof that the
 # Fortran authority wiring actually fired. dt=600 terminates through Fortran's

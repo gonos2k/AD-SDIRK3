@@ -28,7 +28,7 @@ RUN_MARKER = "SDIRK3_RHS_RUN_TOTAL"
 # begin). A healthy run emits neither.
 VIOLATION_MARKERS = ("SDIRK3_RHS_POST_CLOSE_TICK", "SDIRK3_RHS_BEGIN_MISSING",
                      "SDIRK3_RHS_COUNT_OVERFLOW", "SDIRK3_RHS_GENERATION_OVERFLOW",
-                     "SDIRK3_RHS_REOPEN_AFTER_FATAL")
+                     "SDIRK3_RHS_REOPEN_AFTER_FATAL", "SDIRK3_RHS_TICK_STATUS_INVALID")
 
 # PR 9F.7 P1-4: the (exit, authority, reason) combinations a healthy end record may
 # carry. Anything else -- e.g. clean+topology, fatal+finalize, any reason=none on an
@@ -293,7 +293,7 @@ def check_run(path):
     if gens and gens != list(range(1, len(gens) + 1)):
         violations.append("generation_sequence_not_contiguous:%s" % gens)
 
-    last, prev_end_line = None, -1
+    infos, prev_end_line = [], -1
     for gen in gens:
         bn, btot = begin_by_gen[gen]
         if btot != 0:
@@ -316,16 +316,16 @@ def check_run(path):
         if bn <= prev_end_line:
             violations.append("gen %d: interleaved_with_previous_generation" % gen)
         prev_end_line = max(e[0] for e in gen_ends)
-        last = {"begin": btot, "end": etot, "exit": kind, "authority": auth,
-                "generation": gen, "reason": reason}
+        infos.append({"begin": btot, "end": etot, "exit": kind, "authority": auth,
+                      "generation": gen, "reason": reason})
 
     for gen in sorted(ends_by_gen):
         if gen not in begin_by_gen:
             violations.append("end_without_begin_gen:%d" % gen)
 
-    if last is not None:
-        info = last
-    return violations, info
+    # Return EVERY generation's summary (PR 9F.8): a caller that compared only the
+    # last total would miss an OFF/ON divergence in an earlier generation.
+    return violations, infos
 
 
 def main(argv):
@@ -340,8 +340,10 @@ def main(argv):
                   % (seq, b, "-" if e is None else e,
                      "-" if d is None else d, st))
     else:
-        violations, info = check_run(path)
-        if info:
+        violations, infos = check_run(path)
+        # One RUN line per generation, in generation order, so a caller can byte-compare
+        # the WHOLE OFF/ON sequence rather than only the final generation's total.
+        for info in infos:
             print("RUN generation=%d begin=%d end=%d exit=%s authority=%s reason=%s"
                   % (info["generation"], info["begin"], info["end"],
                      info["exit"], info["authority"], info["reason"]))

@@ -660,8 +660,12 @@ CONTAINS
       ! not a theorem for acoustic operators in general. Either way the acoustic CFL is
       ! handled by the split-explicit substep, not by L-stability. See
       ! doc/sdirk3_hevi_preconditioner_findings.
-      CALL wrf_message("UNIFIED SDIRK3: L-stable implicit integration " // &
-         "(acoustic CFL handled by the split-explicit substep, not L-stability)")
+      ! PR 9F.8: "intended to be handled", not "handled" -- the split closure (that the
+      ! acoustic terms live on exactly one of explicit/implicit/small-step, additively)
+      ! is not yet proven, so do not claim realized stability.
+      CALL wrf_message("UNIFIED SDIRK3: L-stable implicit integration; realized " // &
+         "stability depends on the verified IMEX partition, the configured " // &
+         "split-explicit acoustic operator, and sufficiently converged implicit stages")
 
       ! NOTE: Config freeze (mark_workers_started) is now called at the END of
       ! sdirk3_initialize_solvers, AFTER all config including physics coupling.
