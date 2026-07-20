@@ -209,6 +209,27 @@ jobs:
       - name: build core + tests
         run: cmake --build build/sdirk3-core --parallel 2
 
+      # PR 9F.7 C4: mixed-language ABI contract. The C++ contracts above never compile
+      # a line of Fortran, so a drift between the Fortran integer constants / BIND(C)
+      # calling convention and the C++ enum / extern "C" ABI escapes this job and only
+      # surfaces in a full WRF build. This tiny Fortran program links the REAL symbols
+      # (mpif90 supplies the MPI + Fortran runtime; the archive is g++/libstdc++) and
+      # drives begin -> already-running -> clean finalize -> re-init -> fatal close ->
+      # rejected re-open, proving the constants agree and the calls link.
+      - name: Fortran <-> C++ RHS lifecycle ABI contract
+        run: |
+          set -euo pipefail
+          LIB="$(find build/sdirk3-core -name libwrf_sdirk3_libtorch.a | head -1)"
+          test -n "$LIB" || { echo "FAIL: sdirk3 archive not built"; exit 1; }
+          mpif90 -ffree-form -ffree-line-length-none \
+            external/libtorch_wrf/sdirk3/tests/test_rhs_lifecycle_abi.F90 \
+            "$LIB" \
+            -L"$TORCH_LIB_DIR" -ltorch -ltorch_cpu -lc10 -Wl,-rpath,"$TORCH_LIB_DIR" \
+            -lstdc++ -o /tmp/test_rhs_lifecycle_abi
+          WRF_SDIRK3_RHS_COUNT=1 /tmp/test_rhs_lifecycle_abi | tee /tmp/abi_contract.log
+          grep -q "FORTRAN_ABI_CONTRACT: ALL PASS" /tmp/abi_contract.log \
+            || { echo "FAIL: Fortran/C++ RHS lifecycle ABI contract"; exit 1; }
+
       - name: MPI-free core shape must stay compilable (P1 regression gate)
         run: |
           set -euo pipefail

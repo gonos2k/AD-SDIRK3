@@ -649,13 +649,17 @@ CONTAINS
 
       WRITE(message, '(A,I0,A)') "UNIFIED SDIRK3: Initialized ", num_tiles_initialized, " tile solvers"
       CALL wrf_message(message)
-      ! PR 9F.6: measured-accurate wording. L-stability gives UNCONDITIONAL
-      ! stability for the stiff modes the implicit solve actually integrates; it
-      ! does NOT remove the acoustic CFL restriction -- the fast acoustic
-      ! operator (I - dt*gamma*J_fast) is intrinsically indefinite at large dt
-      ! (Ritz spectrum straddles the origin, background-independent), which is
-      ! why sound-wave stiffness is handled by the split-explicit acoustic
-      ! substep, not by L-stability. See doc/sdirk3_hevi_preconditioner_findings.
+      ! PR 9F.7: measurement-scoped wording (avoid the two theory over-claims the
+      ! review flagged). L-stability is a property of the stability function on the
+      ! SCALAR LINEAR TEST equation; it does NOT by itself guarantee unconditional
+      ! stability for the nonlinear, non-normal, operator-split WRF core solved by an
+      ! INEXACT Newton-FGMRES. And the fast acoustic block is not "intrinsically
+      ! indefinite" as a universal theorem: on the MEASURED dt=600 operands the Krylov
+      ! projection of the configured fast operator showed Ritz values on both sides of
+      ! the origin -- an empirical property of the tested discretization and scaling,
+      ! not a theorem for acoustic operators in general. Either way the acoustic CFL is
+      ! handled by the split-explicit substep, not by L-stability. See
+      ! doc/sdirk3_hevi_preconditioner_findings.
       CALL wrf_message("UNIFIED SDIRK3: L-stable implicit integration " // &
          "(acoustic CFL handled by the split-explicit substep, not L-stability)")
 
