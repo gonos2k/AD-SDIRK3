@@ -107,6 +107,52 @@ static int run_child_mode(const char* mode) {
         sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
         return 0;
     }
+    if (std::strcmp(mode, "lifecycle-concurrent-close") == 0) {
+        // The property the OLD spin could not guarantee: under many workers racing to
+        // close, NO closing record is lost and every emitted record is identical.
+        // The single CAS RUNNING->CLOSED freezes {count,exit,auth}; losers re-decode
+        // the same word. There is no winner-publication window to be preempted in.
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        std::vector<std::thread> ts;
+        std::atomic<int> ones{0};
+        for (int i = 0; i < 8; ++i)
+            ts.emplace_back([&] {
+                if (sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL) == 1)
+                    ones.fetch_add(1, std::memory_order_relaxed);
+            });
+        for (auto& t : ts) t.join();
+        std::fprintf(stderr, "CONCURRENT_CLOSE_ONES=%d\n", ones.load());
+        return 0;
+    }
+    if (std::strcmp(mode, "lifecycle-post-close-tick") == 0) {
+        // tick -> close -> tick: the trailing tick must be REJECTED. On the linearized
+        // word a tick after CLOSED returns 0 and flags post_close_tick, so a control
+        // flow that evaluates the RHS past the fatal decision cannot hide.
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
+        const int rc = wrf::sdirk3::sdirk3_run_tick();
+        std::fprintf(stderr, "POST_CLOSE_TICK_RC=%d\n", rc);
+        // a second close re-emits, now carrying the post_close_tick flag
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
+        return 0;
+    }
+    if (std::strcmp(mode, "lifecycle-reinit") == 0) {
+        // clean finalize -> re-init -> a NEW generation. The old process-once static
+        // machinery would have re-emitted generation 1's frozen record; the word
+        // opens generation 2 with its own count.
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
+        wrf::sdirk3::sdirk3_rhs_run_begin_checked_impl();   // explicit re-init
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
+        return 0;
+    }
     if (std::strcmp(mode, "close-disabled") == 0) {
         // Contract: with counting disabled the close is a total no-op returning 1.
         const int rc = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
@@ -1250,9 +1296,9 @@ int main(int argc, char** argv) {
               "case37: the REAL delta is computed and printed (3 ticks -> delta=3)");
         check(out.find("concurrent=1") == std::string::npos,
               "case37: a solitary sweep is not marked concurrent");
-        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=begin total=0") != std::string::npos,
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0") != std::string::npos,
               "case37: whole-run total is opened");
-        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=3 exit=clean") !=
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=3 exit=clean") !=
                   std::string::npos,
               "case37: whole-run total is closed from the exit handler, agrees, and "
               "is labelled exit=clean");
@@ -1282,7 +1328,7 @@ int main(int argc, char** argv) {
         const std::string out = capture_child(argv[0], "no-sweep");
         check(count_occurrences(out, "SDIRK3_RHS_CALLS ") == 0,
               "case39: calls outside any sweep leave NO sweep records (the gap)");
-        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=2 exit=clean") !=
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=2 exit=clean") !=
                   std::string::npos,
               "case39: ...but the whole-run total still counts them");
     }
@@ -1295,9 +1341,9 @@ int main(int argc, char** argv) {
     // could then only ever fail. The pre-abort hook is what closes that.
     {
         const std::string out = capture_child(argv[0], "abort");
-        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=begin total=0") != std::string::npos,
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0") != std::string::npos,
               "case40: aborting child still opens the whole-run total");
-        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end total=2 exit=fatal") !=
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=2 exit=fatal") !=
                   std::string::npos,
               "case40: aborting child EMITS the closing run total before dying "
               "(static destructors never run through MPI_Abort/std::abort) AND "
@@ -1325,7 +1371,7 @@ int main(int argc, char** argv) {
               "themselves (frozen authority)");
         // Every end line must be byte-identical: duplication is tolerated, drift is
         // not, and a fallback emitting a DIFFERENT total would be drift.
-        check(count_occurrences(out, "phase=end total=2 exit=fatal "
+        check(count_occurrences(out, "phase=end generation=1 total=2 exit=fatal "
                                      "authority=fortran_outcome") ==
                   count_occurrences(out, "SDIRK3_RHS_RUN_TOTAL phase=end"),
               "case41: every closing record is the same frozen line");
@@ -1358,14 +1404,53 @@ int main(int argc, char** argv) {
         const std::string out = capture_child(argv[0], "close-clean");
         check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end") != std::string::npos,
               "case44: close(CLEAN) emits a closing record");
-        check(out.find("exit=clean authority=fortran_finalize") != std::string::npos,
+        check(out.find("generation=1 total=1 exit=clean authority=fortran_finalize") != std::string::npos,
               "case44: it is attributed to the FORTRAN FINALIZER authority");
         check(out.find("exit=fatal") == std::string::npos &&
                   out.find("fortran_outcome") == std::string::npos,
               "case44: a clean close is not mislabelled fatal/outcome");
     }
 
-    const int kExpected = 124;  // ratchet: update deliberately with the cases
+    // ---- case45: concurrent close loses NO record and all are identical ---------
+    // The regression the reviewer named: the old bounded spin could return 0 (record
+    // lost) if the winner was preempted. The CAS lifecycle cannot -- prove it under 8
+    // racing closers.
+    {
+        const std::string out = capture_child(argv[0], "lifecycle-concurrent-close");
+        check(out.find("CONCURRENT_CLOSE_ONES=8") != std::string::npos,
+              "case45: all 8 concurrent closers return 1 (none lost)");
+        check(count_occurrences(out, "SDIRK3_RHS_RUN_TOTAL phase=end") == 8,
+              "case45: exactly 8 closing records emitted (one per caller)");
+        check(count_occurrences(
+                  out, "phase=end generation=1 total=3 exit=fatal "
+                       "authority=fortran_outcome") == 8,
+              "case45: all 8 records are the SAME frozen line (count frozen at 3)");
+    }
+
+    // ---- case46: a tick after close is rejected and flagged --------------------
+    {
+        const std::string out = capture_child(argv[0], "lifecycle-post-close-tick");
+        check(out.find("POST_CLOSE_TICK_RC=0") != std::string::npos,
+              "case46: tick after close returns 0 (the RHS-past-fatal violation)");
+        check(out.find("post_close_tick=1") != std::string::npos,
+              "case46: the violation is recorded in the re-emitted closing record");
+    }
+
+    // ---- case47: re-init opens a new generation --------------------------------
+    {
+        const std::string out = capture_child(argv[0], "lifecycle-reinit");
+        check(out.find("phase=begin generation=1 total=0") != std::string::npos &&
+                  out.find("phase=end generation=1 total=3 exit=clean") !=
+                      std::string::npos,
+              "case47: first lifecycle is generation 1 (count 3)");
+        check(out.find("phase=begin generation=2 total=0") != std::string::npos &&
+                  out.find("phase=end generation=2 total=2 exit=clean") !=
+                      std::string::npos,
+              "case47: re-init opens generation 2 with its OWN count (2), not a "
+              "replay of generation 1");
+    }
+
+    const int kExpected = 131;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

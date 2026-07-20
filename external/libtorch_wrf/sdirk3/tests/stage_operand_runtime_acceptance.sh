@@ -155,11 +155,11 @@ run_total_final() { # <log>
   # would propagate and, in a caller running `set -e`, terminate the script. sed
   # still prints (empty on no match), which is the correct "absent" signal.
   { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
-    sed -n 's/^RUN begin=[0-9][0-9]* end=\([0-9][0-9]*\) exit=.*$/\1/p'; } || true
+    sed -n 's/^RUN generation=[0-9][0-9]* begin=[0-9][0-9]* end=\([0-9][0-9]*\) exit=.*$/\1/p'; } || true
 }
 run_exit_kind() { # <log>
   { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
-    sed -n 's/^RUN begin=[0-9][0-9]* end=[0-9][0-9]* exit=\([a-z][a-z]*\) .*$/\1/p'; } || true
+    sed -n 's/^RUN generation=[0-9][0-9]* begin=[0-9][0-9]* end=[0-9][0-9]* exit=\([a-z][a-z]*\) .*$/\1/p'; } || true
 }
 # WHICH layer closed the run. dt=600 must report fortran_outcome; a fallback value
 # there means the authority wiring regressed and the evidence is not what it claims.
@@ -273,13 +273,13 @@ if [ "${1:-}" = "--self-test" ]; then
        "$([ "$(rhs_sweeps_well_formed "$TMP/rhsdecrease.log")" -eq 0 ] && echo 1 || echo 0)"
 
   # ---- whole-run total fixtures (PR 9F.3) ----------------------------------
-  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=clean authority=fortran_finalize"; } > "$TMP/runok.log"
-  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal authority=fortran_outcome"; } > "$TMP/runfatal.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=clean authority=fortran_finalize"; } > "$TMP/runok.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome"; } > "$TMP/runfatal.log"
   # A pre-`exit=` emitter: well-formed in every other respect, and must NOT pass.
-  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42"; } > "$TMP/runnokind.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42"; } > "$TMP/runnokind.log"
   grep -v 'phase=end' "$TMP/runok.log" > "$TMP/runaborted.log"
   # The production path cd's to $RUN before using the parser; --self-test does not.
   # That asymmetry is exactly what hid the relative-path defect through a full CI
@@ -297,23 +297,31 @@ if [ "${1:-}" = "--self-test" ]; then
        "$([ "$(run_total_well_formed "$TMP/runaborted.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: the closing whole-run total is extracted correctly" \
        "$([ "$(run_total_final "$TMP/runok.log")" = "42" ] && echo 1 || echo 0)"
-  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal authority=fortran_outcome"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal authority=fortran_outcome"; } > "$TMP/rundup.log"
-  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal authority=fortran_outcome"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=43 exit=fatal authority=fortran_outcome"; } > "$TMP/rundisagree.log"
-  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal authority=fortran_outcome"; } > "$TMP/rundupbegin.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome"; } > "$TMP/rundup.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=43 exit=fatal authority=fortran_outcome"; } > "$TMP/rundisagree.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome"; } > "$TMP/rundupbegin.log"
   gate "self: DUPLICATE begin records ARE rejected (only end tolerates repetition)" \
        "$([ "$(run_total_well_formed "$TMP/rundupbegin.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: DUPLICATE closing totals that AGREE are accepted (loss > duplication)" \
        "$([ "$(run_total_well_formed "$TMP/rundup.log")" -eq 1 ] && echo 1 || echo 0)"
   gate "self: closing totals that DISAGREE are rejected" \
        "$([ "$(run_total_well_formed "$TMP/rundisagree.log")" -eq 0 ] && echo 1 || echo 0)"
-  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin total=0"
-    echo "SDIRK3_RHS_RUN_TOTAL phase=end total=42 exit=fatal authority=bogus"; } > "$TMP/runbadauth.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=bogus"; } > "$TMP/runbadauth.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0 authority=fortran_outcome"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=1 exit=fatal authority=fortran_outcome"; } > "$TMP/runbeginauth.log"
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=2 total=1 exit=fatal authority=fortran_outcome"; } > "$TMP/rungenmismatch.log"
+  gate "self: a begin carrying authority= IS rejected (P2 schema strictness)" \
+       "$([ "$(run_total_well_formed "$TMP/runbeginauth.log")" -eq 0 ] && echo 1 || echo 0)"
+  gate "self: a generation mismatch between begin and end IS rejected (P1-3)" \
+       "$([ "$(run_total_well_formed "$TMP/rungenmismatch.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: an UNKNOWN authority value IS rejected" \
        "$([ "$(run_total_well_formed "$TMP/runbadauth.log")" -eq 0 ] && echo 1 || echo 0)"
   gate "self: a closing total with NO authority= IS rejected (schema drift guard)" \
@@ -382,8 +390,8 @@ if [ "${1:-}" = "--self-test" ]; then
   # Exact-count ratchet. Without it a deleted gate leaves the suite green with one
   # fewer property enforced. Two expected counts because the live gates require the
   # contract binary, which the torch-free hosted job does not build.
-  SELF_TEST_EXPECTED_WITH_LIVE=45
-  SELF_TEST_EXPECTED_NO_LIVE=33
+  SELF_TEST_EXPECTED_WITH_LIVE=47
+  SELF_TEST_EXPECTED_NO_LIVE=35
   if [ -x "$CBIN" ]; then exp=$SELF_TEST_EXPECTED_WITH_LIVE; else exp=$SELF_TEST_EXPECTED_NO_LIVE; fi
   if [ "$checks" -ne "$exp" ]; then
     note "  FAIL: self-test executed $checks checks, expected $exp"
