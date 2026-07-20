@@ -1121,8 +1121,20 @@ CONTAINS
       ! opens generation 1, later timesteps see RUNNING and return 0. Doing it here
       ! (not lazily on the first tick from a worker) makes the opening record and the
       ! fallback registration a main-thread act, and leaves the per-RHS path a pure
-      ! counter CAS. Status is advisory (0 just means "already open").
+      ! counter CAS.
+      !
+      ! PR 9F.7 P1-2: the status is NO LONGER purely advisory. Benign codes are >= 0
+      ! (OPENED=1, ALREADY_RUNNING=0, DISABLED=2). A NEGATIVE code is a hard lifecycle
+      ! error -- re-open after a fatal close (REJECTED_FATAL), generation overflow, or a
+      ! begin record that never reached the log (EMIT_ERROR) -- and the solve must not
+      ! proceed on a poisoned lifecycle.
       rhs_run_close_status = sdirk3_rhs_run_begin_checked()
+      IF (rhs_run_close_status < 0_C_INT) THEN
+         WRITE(message, '(A,I0)') &
+            "SDIRK3_RHS_RUN_BEGIN_FAILED: begin_checked returned status=", &
+            rhs_run_close_status
+         CALL wrf_error_fatal(TRIM(message))
+      END IF
 
       ! Process each tile with Zero-Copy approach
       ! P0 FIX (2026-07-12, external review #4): bounds/dims/scalars/bdy_cfg and the

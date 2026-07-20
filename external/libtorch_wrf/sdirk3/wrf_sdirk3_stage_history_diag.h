@@ -236,7 +236,9 @@ inline const char* sdirk3_run_reason_name(unsigned r) noexcept {
 enum : unsigned {
     SDIRK3_LC_STATE_IDLE    = 0,
     SDIRK3_LC_STATE_RUNNING = 1,
-    SDIRK3_LC_STATE_CLOSED  = 2
+    SDIRK3_LC_STATE_CLOSED  = 2,
+    SDIRK3_LC_STATE_ERROR   = 3   // PR 9F.7 P1-6: begin transitioned but its record
+                                  // never reached the log -- a poisoned, un-usable run
 };
 static constexpr unsigned kSdirk3LcAuthShift   = 3;
 static constexpr unsigned kSdirk3LcReasonShift = 6;
@@ -250,6 +252,12 @@ static constexpr uint64_t kSdirk3LcReasonMask  = 0xFULL;          // 4 bits
 static constexpr uint64_t kSdirk3LcGenMask     = 0x3FFFULL;       // 14 bits
 static constexpr uint64_t kSdirk3LcCountMask   = (1ULL << 40) - 1ULL;
 static constexpr uint64_t kSdirk3LcCountOne    = 1ULL << kSdirk3LcCountShift;
+
+// PR 9F.7 P1-5: the fatal path publishes the closing record from this word without a
+// lock. A hidden libatomic mutex behind a non-lock-free 64-bit atomic would deadlock
+// or allocate on the abort path, so require lock-free at compile time on this target.
+static_assert(std::atomic<uint64_t>::is_always_lock_free,
+              "SDIRK3 RHS lifecycle requires always-lock-free 64-bit atomics");
 
 inline std::atomic<uint64_t>& sdirk3_run_lifecycle() {
     static std::atomic<uint64_t> word{0};   // IDLE, gen 0, count 0
@@ -288,18 +296,32 @@ inline long long sdirk3_rhs_run_total() {
 
 inline void sdirk3_run_register_fallbacks_once();  // fwd
 
-// Emit the opening record for a generation. Not on the fatal path, so the buffered
-// mutex-guarded emitter is fine. begin carries NEITHER exit NOR authority. Also the
-// one place the C++ fallbacks are registered -- once per generation open, OFF the
-// per-tick hot path (PR 9F.6 P1-4).
-inline void sdirk3_run_emit_begin(long long gen) noexcept {
+// Emit the opening record for a generation. begin carries NEITHER exit NOR authority.
+// Also the one place the C++ fallbacks are registered -- once per generation open, OFF
+// the per-tick hot path (PR 9F.6 P1-4).
+//
+// PR 9F.7 P1-6: written with the SAME low-level write(2) the closing record uses, NOT
+// the buffered std::cerr emitter. std::cerr swallows a failed write by setting badbit
+// without throwing, so a try/catch around it would report a false success when the
+// begin record never actually reached the log. write(2) reports a short/failed write
+// honestly: this returns 1 only when every byte was written, 0 otherwise, so the caller
+// (begin_checked_impl) can poison the run to ERROR instead of claiming a false OPENED.
+inline int sdirk3_run_emit_begin(long long gen) noexcept {
     sdirk3_run_register_fallbacks_once();
-    try {
-        std::ostringstream os;
-        os << "SDIRK3_RHS_RUN_TOTAL phase=begin generation=" << gen << " total=0";
-        emit_sdirk3_diag_line(os.str() + "\n");
-    } catch (...) {
+    char buf[96];
+    const int n = std::snprintf(
+        buf, sizeof buf,
+        "SDIRK3_RHS_RUN_TOTAL phase=begin generation=%lld total=0\n", gen);
+    if (n <= 0 || static_cast<size_t>(n) >= sizeof buf) return 0;
+    size_t off = 0;
+    const size_t len = static_cast<size_t>(n);
+    while (off < len) {
+        const ssize_t wr = ::write(STDERR_FILENO, buf + off, len - off);
+        if (wr < 0) { if (errno == EINTR) continue; return 0; }
+        if (wr == 0) return 0;
+        off += static_cast<size_t>(wr);
     }
+    return 1;
 }
 
 // Emit the closing record from a FROZEN word with a single low-level write(2).
@@ -355,24 +377,69 @@ inline void sdirk3_run_emit_violation(const char* kind) noexcept {
     }
 }
 
-// Open a generation. Contract: IDLE or CLOSED -> RUNNING(gen+1, count=0), 1;
-// RUNNING -> 0 (double begin without a close is a violation); disabled -> 1 no-op.
+// Begin-result codes (PR 9F.7 P1-2). Benign outcomes are >= 0; a caller must
+// fail-close on any < 0. The Fortran authority accepts only OPENED / ALREADY_RUNNING
+// / DISABLED and treats REJECTED_FATAL / OVERFLOW / EMIT_ERROR as a hard error.
+enum : int {
+    SDIRK3_BEGIN_OPENED          =  1,   // opened a new generation, record emitted
+    SDIRK3_BEGIN_ALREADY_RUNNING =  0,   // a run is already open (idempotent, benign)
+    SDIRK3_BEGIN_DISABLED        =  2,   // counting off: total no-op (benign)
+    SDIRK3_BEGIN_REJECTED_FATAL  = -1,   // P1-3: CLOSED after a FATAL -- must not re-open
+    SDIRK3_BEGIN_OVERFLOW        = -2,   // generation field would wrap
+    SDIRK3_BEGIN_EMIT_ERROR      = -3    // P1-6: transitioned but the record failed
+};
+
+// Open a generation.
+//   RUNNING           -> ALREADY_RUNNING (idempotent; Fortran calls this every step).
+//   CLOSED after FATAL -> REJECTED_FATAL (P1-3): the process should have aborted on the
+//                        fatal; a live begin here is itself a control-flow defect.
+//   CLOSED after a clean finalize (reason=finalize, no post-close tick) -> re-open a
+//                        NEW generation (a genuine new run in the same process).
+//   IDLE / ERROR      -> open generation gen+1.
+// On a generation wrap -> OVERFLOW; on a begin-record emit failure -> ERROR state +
+// EMIT_ERROR (never a false success).
 inline int sdirk3_rhs_run_begin_checked_impl() noexcept {
-    if (!sdirk3_rhs_count_enabled()) return 1;
+    if (!sdirk3_rhs_count_enabled()) return SDIRK3_BEGIN_DISABLED;
     std::atomic<uint64_t>& word = sdirk3_run_lifecycle();
     uint64_t old = word.load(std::memory_order_acquire);
     for (;;) {
         const unsigned st = sdirk3_lc_state(old);
-        if (st == SDIRK3_LC_STATE_RUNNING) return 0;   // already open
+        if (st == SDIRK3_LC_STATE_RUNNING) return SDIRK3_BEGIN_ALREADY_RUNNING;
+        if (st == SDIRK3_LC_STATE_CLOSED) {
+            // Re-open only after a genuine CLEAN finalize. A fatal close means the run
+            // ended on an error the process was supposed to abort on -- re-opening a
+            // generation past it would launder a control-flow defect.
+            const bool clean_finalize =
+                !sdirk3_lc_exit_fatal(old) &&
+                sdirk3_lc_reason(old) == SDIRK3_RHS_RUN_REASON_FINALIZE &&
+                !sdirk3_lc_post_close_tick(old);
+            if (!clean_finalize) {
+                sdirk3_run_emit_violation("SDIRK3_RHS_REOPEN_AFTER_FATAL");
+                return SDIRK3_BEGIN_REJECTED_FATAL;
+            }
+        }
         const long long gen = sdirk3_lc_gen(old) + 1;
+        if (gen > static_cast<long long>(kSdirk3LcGenMask)) {
+            sdirk3_run_emit_violation("SDIRK3_RHS_GENERATION_OVERFLOW");
+            return SDIRK3_BEGIN_OVERFLOW;
+        }
         const uint64_t neu = sdirk3_lc_pack(SDIRK3_LC_STATE_RUNNING, gen, 0,
                                             Sdirk3RunExit::Clean,
                                             Sdirk3RunAuthority::FortranOutcome, false,
                                             SDIRK3_RHS_RUN_REASON_NONE);
         if (word.compare_exchange_weak(old, neu, std::memory_order_acq_rel,
                                        std::memory_order_acquire)) {
-            sdirk3_run_emit_begin(gen);
-            return 1;
+            if (sdirk3_run_emit_begin(gen) == 1) return SDIRK3_BEGIN_OPENED;
+            // P1-6: the state moved to RUNNING but the begin record never reached the
+            // log. Poison the run so no tick/close mistakes it for a healthy generation,
+            // and report the failure instead of a false success.
+            uint64_t running = neu;
+            const uint64_t err = sdirk3_lc_pack(
+                SDIRK3_LC_STATE_ERROR, gen, 0, Sdirk3RunExit::Fatal,
+                Sdirk3RunAuthority::CppPreAbort, false, SDIRK3_RHS_RUN_REASON_CPP_FALLBACK);
+            word.compare_exchange_strong(running, err, std::memory_order_acq_rel,
+                                         std::memory_order_acquire);
+            return SDIRK3_BEGIN_EMIT_ERROR;
         }
     }
 }
@@ -381,7 +448,8 @@ inline int sdirk3_rhs_run_begin_checked_impl() noexcept {
 enum : int {
     SDIRK3_TICK_COUNTED       = 1,   // RUNNING: this RHS entry was counted
     SDIRK3_TICK_POST_CLOSE    = 0,   // CLOSED:  RHS evaluated after the run closed
-    SDIRK3_TICK_BEGIN_MISSING = -1   // IDLE:    RHS evaluated with no open lifecycle
+    SDIRK3_TICK_BEGIN_MISSING = -1,  // IDLE:    RHS evaluated with no open lifecycle
+    SDIRK3_TICK_OVERFLOW      = -2    // count field would wrap (P1-5): fail-close
 };
 
 // Count one RHS entry against the whole-run lifecycle.
@@ -400,6 +468,12 @@ inline int sdirk3_run_tick() noexcept {
     for (;;) {
         const unsigned st = sdirk3_lc_state(old);
         if (st == SDIRK3_LC_STATE_RUNNING) {
+            // P1-5: never silently wrap the count. At the mask ceiling the run has
+            // evaluated 2^40 RHS entries -- unreachable in practice, but a fail-close
+            // contract does not permit a silent wrap that would corrupt the total.
+            if (sdirk3_lc_count(old) >=
+                static_cast<long long>(kSdirk3LcCountMask))
+                return SDIRK3_TICK_OVERFLOW;
             const uint64_t neu = old + kSdirk3LcCountOne;   // count is the top field
             if (word.compare_exchange_weak(old, neu, std::memory_order_acq_rel,
                                            std::memory_order_acquire))
@@ -436,6 +510,7 @@ inline int sdirk3_rhs_run_close_impl(Sdirk3RunExit how,
     for (;;) {
         const unsigned st = sdirk3_lc_state(old);
         if (st == SDIRK3_LC_STATE_IDLE) return 1;   // no begin -> benign no-op
+        if (st == SDIRK3_LC_STATE_ERROR) return 0;  // P1-6: poisoned run, nothing to close
         if (st == SDIRK3_LC_STATE_RUNNING) {
             const uint64_t neu = sdirk3_lc_pack(
                 SDIRK3_LC_STATE_CLOSED, sdirk3_lc_gen(old), sdirk3_lc_count(old),

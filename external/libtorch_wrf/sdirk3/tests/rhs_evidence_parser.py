@@ -26,7 +26,9 @@ RUN_MARKER = "SDIRK3_RHS_RUN_TOTAL"
 # PR 9F.7 P1-1: control-flow VIOLATION markers. Their mere presence fails the log --
 # each means the RHS was evaluated outside an open lifecycle (after close, or with no
 # begin). A healthy run emits neither.
-VIOLATION_MARKERS = ("SDIRK3_RHS_POST_CLOSE_TICK", "SDIRK3_RHS_BEGIN_MISSING")
+VIOLATION_MARKERS = ("SDIRK3_RHS_POST_CLOSE_TICK", "SDIRK3_RHS_BEGIN_MISSING",
+                     "SDIRK3_RHS_COUNT_OVERFLOW", "SDIRK3_RHS_GENERATION_OVERFLOW",
+                     "SDIRK3_RHS_REOPEN_AFTER_FATAL")
 
 # A record line must START with the marker followed by a single space. Anything
 # that merely CONTAINS the marker is a violation rather than a record, because a

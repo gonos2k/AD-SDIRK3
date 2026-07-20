@@ -355,6 +355,12 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=clean authority=fortran_finalize reason=finalize"; } > "$TMP/runbeginmissing.log"
   gate "self: a BEGIN_MISSING marker IS rejected even with a well-formed total" \
        "$([ "$(run_total_well_formed "$TMP/runbeginmissing.log")" -eq 0 ] && echo 1 || echo 0)"
+  # PR 9F.7 P1-3: re-open after a fatal close is a control-flow violation.
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=9 exit=fatal authority=fortran_outcome reason=step_outcome"
+    echo "SDIRK3_RHS_REOPEN_AFTER_FATAL generation=1"; } > "$TMP/runreopen.log"
+  gate "self: a REOPEN_AFTER_FATAL marker IS rejected (P1-3: no re-open past a fatal)" \
+       "$([ "$(run_total_well_formed "$TMP/runreopen.log")" -eq 0 ] && echo 1 || echo 0)"
 
   # ---- LIVE emitter -> LIVE parser (PR 9F.3) --------------------------------
   # Every fixture above is hand-written, so the shell parser has only ever been
@@ -413,8 +419,8 @@ if [ "${1:-}" = "--self-test" ]; then
   # Exact-count ratchet. Without it a deleted gate leaves the suite green with one
   # fewer property enforced. Two expected counts because the live gates require the
   # contract binary, which the torch-free hosted job does not build.
-  SELF_TEST_EXPECTED_WITH_LIVE=50
-  SELF_TEST_EXPECTED_NO_LIVE=38
+  SELF_TEST_EXPECTED_WITH_LIVE=51
+  SELF_TEST_EXPECTED_NO_LIVE=39
   if [ -x "$CBIN" ]; then exp=$SELF_TEST_EXPECTED_WITH_LIVE; else exp=$SELF_TEST_EXPECTED_NO_LIVE; fi
   if [ "$checks" -ne "$exp" ]; then
     note "  FAIL: self-test executed $checks checks, expected $exp"
