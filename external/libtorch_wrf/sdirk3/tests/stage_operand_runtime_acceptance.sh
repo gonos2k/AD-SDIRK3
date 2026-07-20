@@ -151,18 +151,21 @@ run_total_well_formed() { # <log>
 # Anchored on the parser's exact RUN line, which it prints only when begin and end
 # both parsed, so a malformed log cannot yield a value through a loose match.
 run_total_final() { # <log>
-  python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
-    sed -n 's/^RUN begin=[0-9][0-9]* end=\([0-9][0-9]*\) exit=.*$/\1/p'
+  # `|| true`: the parser exits non-zero when it rejects a log; under pipefail that
+  # would propagate and, in a caller running `set -e`, terminate the script. sed
+  # still prints (empty on no match), which is the correct "absent" signal.
+  { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
+    sed -n 's/^RUN begin=[0-9][0-9]* end=\([0-9][0-9]*\) exit=.*$/\1/p'; } || true
 }
 run_exit_kind() { # <log>
-  python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
-    sed -n 's/^RUN begin=[0-9][0-9]* end=[0-9][0-9]* exit=\([a-z][a-z]*\) .*$/\1/p'
+  { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
+    sed -n 's/^RUN begin=[0-9][0-9]* end=[0-9][0-9]* exit=\([a-z][a-z]*\) .*$/\1/p'; } || true
 }
 # WHICH layer closed the run. dt=600 must report fortran_outcome; a fallback value
 # there means the authority wiring regressed and the evidence is not what it claims.
 run_authority() { # <log>
-  python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
-    sed -n 's/^RUN .* authority=\([a-z_][a-z_]*\)$/\1/p'
+  { python3 "$EVIDENCE_PARSER" run "$1" 2>/dev/null |
+    sed -n 's/^RUN .* authority=\([a-z_][a-z_]*\)$/\1/p'; } || true
 }
 
 # =============================================================================
@@ -562,8 +565,8 @@ gate "no C++ ABI-exception abort on the ON run (Fortran, not C++, terminated it)
 # ORDER: the close record must be emitted BEFORE WRF's fatal banner, since the close
 # call sits immediately before wrf_error_fatal. If the run total appears only AFTER
 # the fatal marker (or not at all), it was not emitted from the authority site.
-end_line="$(grep -n '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$OUT/pos_on.log" | head -1 | cut -d: -f1)"
-fatal_line="$(grep -n 'FATAL CALLED' "$OUT/pos_on.log" | head -1 | cut -d: -f1)"
+end_line="$( { grep -n '^SDIRK3_RHS_RUN_TOTAL phase=end ' "$OUT/pos_on.log" || true; } | head -1 | cut -d: -f1)"
+fatal_line="$( { grep -n 'FATAL CALLED' "$OUT/pos_on.log" || true; } | head -1 | cut -d: -f1)"
 note "  ON: run-end at line ${end_line:-<none>}, WRF fatal at line ${fatal_line:-<none>}"
 gate "the whole-run close is emitted BEFORE WRF's fatal banner" \
      "$([ -n "$end_line" ] && [ -n "$fatal_line" ] && [ "$end_line" -lt "$fatal_line" ] && echo 1 || echo 0)"
