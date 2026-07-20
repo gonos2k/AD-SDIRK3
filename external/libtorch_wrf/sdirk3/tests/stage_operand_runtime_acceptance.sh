@@ -338,6 +338,24 @@ if [ "${1:-}" = "--self-test" ]; then
   gate "self: exit kind is read as fatal (an aborted run cannot pose as complete)" \
        "$([ "$(run_exit_kind "$TMP/runfatal.log")" = "fatal" ] && echo 1 || echo 0)"
 
+  # PR 9F.7 P1-1: post_close_tick is a control-flow defect, not benign telemetry.
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome reason=step_outcome post_close_tick=1"; } > "$TMP/runpostclose.log"
+  gate "self: a closing total carrying post_close_tick=1 IS rejected (P1-1: RHS past close)" \
+       "$([ "$(run_total_well_formed "$TMP/runpostclose.log")" -eq 0 ] && echo 1 || echo 0)"
+  # PR 9F.7 P1-1: a control-flow VIOLATION marker fails the log on its own, even when
+  # the whole-run begin/end schema around it is otherwise well-formed.
+  { echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_POST_CLOSE_TICK generation=1"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=fatal authority=fortran_outcome reason=step_outcome"; } > "$TMP/runpostmarker.log"
+  gate "self: a POST_CLOSE_TICK marker IS rejected even with a well-formed total" \
+       "$([ "$(run_total_well_formed "$TMP/runpostmarker.log")" -eq 0 ] && echo 1 || echo 0)"
+  { echo "SDIRK3_RHS_BEGIN_MISSING generation=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=begin generation=1 total=0"
+    echo "SDIRK3_RHS_RUN_TOTAL phase=end generation=1 total=42 exit=clean authority=fortran_finalize reason=finalize"; } > "$TMP/runbeginmissing.log"
+  gate "self: a BEGIN_MISSING marker IS rejected even with a well-formed total" \
+       "$([ "$(run_total_well_formed "$TMP/runbeginmissing.log")" -eq 0 ] && echo 1 || echo 0)"
+
   # ---- LIVE emitter -> LIVE parser (PR 9F.3) --------------------------------
   # Every fixture above is hand-written, so the shell parser has only ever been
   # proven against text this script authored. If the C++ emitter changed its schema
@@ -395,8 +413,8 @@ if [ "${1:-}" = "--self-test" ]; then
   # Exact-count ratchet. Without it a deleted gate leaves the suite green with one
   # fewer property enforced. Two expected counts because the live gates require the
   # contract binary, which the torch-free hosted job does not build.
-  SELF_TEST_EXPECTED_WITH_LIVE=47
-  SELF_TEST_EXPECTED_NO_LIVE=35
+  SELF_TEST_EXPECTED_WITH_LIVE=50
+  SELF_TEST_EXPECTED_NO_LIVE=38
   if [ -x "$CBIN" ]; then exp=$SELF_TEST_EXPECTED_WITH_LIVE; else exp=$SELF_TEST_EXPECTED_NO_LIVE; fi
   if [ "$checks" -ne "$exp" ]; then
     note "  FAIL: self-test executed $checks checks, expected $exp"

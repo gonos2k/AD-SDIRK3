@@ -23,6 +23,10 @@ import sys
 
 SWEEP_MARKER = "SDIRK3_RHS_CALLS"
 RUN_MARKER = "SDIRK3_RHS_RUN_TOTAL"
+# PR 9F.7 P1-1: control-flow VIOLATION markers. Their mere presence fails the log --
+# each means the RHS was evaluated outside an open lifecycle (after close, or with no
+# begin). A healthy run emits neither.
+VIOLATION_MARKERS = ("SDIRK3_RHS_POST_CLOSE_TICK", "SDIRK3_RHS_BEGIN_MISSING")
 
 # A record line must START with the marker followed by a single space. Anything
 # that merely CONTAINS the marker is a violation rather than a record, because a
@@ -156,10 +160,28 @@ def check_sweeps(path):
     return violations, rows
 
 
+def scan_violation_markers(path):
+    """Any line starting with a VIOLATION marker fails the log (PR 9F.7 P1-1)."""
+    out = []
+    try:
+        with open(path, "r", errors="replace") as fh:
+            for n, raw in enumerate(fh, 1):
+                line = raw.rstrip("\r\n")
+                for mk in VIOLATION_MARKERS:
+                    if line.startswith(mk + " ") or line == mk:
+                        out.append("line %d: control_flow_violation:%s" % (n, mk))
+    except OSError as exc:
+        out.append("unreadable:" + str(exc))
+    return out
+
+
 def check_run(path):
     records, violations = scan(path, RUN_MARKER, RUN_LINE, RUN_KEYS)
     if records is None:
         return violations, {}
+    # A control-flow violation marker anywhere in the log is a hard failure,
+    # independent of the whole-run begin/end schema below.
+    violations.extend(scan_violation_markers(path))
 
     begins, ends = [], []
     for n, f in records:
@@ -204,9 +226,14 @@ def check_run(path):
                             "cpp_preabort", "cpp_destructor"):
                 violations.append("line %d: bad_or_missing_authority:%s" % (n, auth))
                 continue
+            # PR 9F.7 P1-1: post_close_tick is NOT benign telemetry. A tick after
+            # the close means the RHS was evaluated past the fatal/finalize decision
+            # -- a control-flow defect. Any post_close_tick on an end record (any
+            # value) fails the log; the value included in the record's identity below
+            # so a differing duplicate never launders as "agreeing".
             pct = f.get("post_close_tick")
-            if pct is not None and pct != "1":
-                violations.append("line %d: bad_post_close_tick:%s" % (n, pct))
+            if pct is not None:
+                violations.append("line %d: post_close_tick_on_end:%s" % (n, pct))
                 continue
             reason = f.get("reason")
             if reason not in ("step_outcome", "outcome_query", "finalize", "halo",
