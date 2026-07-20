@@ -97,6 +97,16 @@ static int run_child_mode(const char* mode) {
         std::fprintf(stderr, "CLOSE_RC first=%d second=%d\n", a, b);
         return 0;
     }
+    if (std::strcmp(mode, "close-clean") == 0) {
+        // The finalizer authority. close_checked(CLEAN) must emit the run total
+        // attributed to fortran_finalize -- the ABI-mapping half of the normal-exit
+        // path. (The other half, the Fortran finalizer actually calling this, is
+        // compile-verified; its runtime emission needs a COMPLETING SDIRK3 run,
+        // which em_b_wave cannot yet produce at any dt -- see the scope note.)
+        wrf::sdirk3::sdirk3_rhs_count_tick();
+        sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_CLEAN);
+        return 0;
+    }
     if (std::strcmp(mode, "close-disabled") == 0) {
         // Contract: with counting disabled the close is a total no-op returning 1.
         const int rc = sdirk3_rhs_run_close_checked(wrf::sdirk3::SDIRK3_RHS_RUN_EXIT_FATAL);
@@ -1338,7 +1348,24 @@ int main(int argc, char** argv) {
               "case43: ...and no run record is produced at all");
     }
 
-    const int kExpected = 121;  // ratchet: update deliberately with the cases
+    // ---- case44: close(CLEAN) is attributed to fortran_finalize ----------------
+    // The FATAL path is proven end-to-end (case41 + the real dt=600 run). The CLEAN
+    // path had no dedicated positive test: only close-conflict touched it, as a
+    // rejected second call. This pins that a first CLEAN close emits exit=clean
+    // authority=fortran_finalize, so a future wiring change cannot silently
+    // mis-attribute the normal-exit record.
+    {
+        const std::string out = capture_child(argv[0], "close-clean");
+        check(out.find("SDIRK3_RHS_RUN_TOTAL phase=end") != std::string::npos,
+              "case44: close(CLEAN) emits a closing record");
+        check(out.find("exit=clean authority=fortran_finalize") != std::string::npos,
+              "case44: it is attributed to the FORTRAN FINALIZER authority");
+        check(out.find("exit=fatal") == std::string::npos &&
+                  out.find("fortran_outcome") == std::string::npos,
+              "case44: a clean close is not mislabelled fatal/outcome");
+    }
+
+    const int kExpected = 124;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);
