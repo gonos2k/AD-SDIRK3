@@ -3753,6 +3753,28 @@ public:
             }
         }
 
+        // PR 9F.9.6 (review §5): the PRODUCTION mask authority must reject an EMPTY active
+        // domain, not only the trust-shadow helper. A non-empty packed residual whose every
+        // cell is halo (active_dofs == 0) is a layout/halo wiring failure -- if such a mask
+        // were applied, res_old/res_new would both be 0 and the trust region would treat a
+        // dead solve as a perfectly-converged one. This cannot happen for a valid layout
+        // (mark_*_halos only zeros a direction when the domain exceeds 2*hw, so interior
+        // cells always survive), so the check is byte-identical in practice; it fails CLOSED
+        // -- refusing to install a degenerate mask -- if a future multi-tile layout regresses.
+        {
+            torch::NoGradGuard no_grad;
+            const int64_t active_dofs =
+                static_cast<int64_t>(halo_mask_.sum().item<float>());
+            if (cached_layout_.total_size > 0 && active_dofs <= 0) {
+                std::cerr << "[HALO MASK] ERROR: empty active domain (active_dofs="
+                          << active_dofs << " of total=" << cached_layout_.total_size
+                          << ") -- every cell is halo. Layout/halo wiring failure; refusing "
+                             "to install a degenerate all-zero mask." << std::endl;
+                halo_mask_initialized_ = false;
+                return;
+            }
+        }
+
         // Cast to target dtype/device
         halo_mask_ = halo_mask_.to(target_dtype).to(target_device);
         halo_mask_initialized_ = true;
@@ -8108,52 +8130,44 @@ public:
                             stage, newton_iter, trust_prediction_error_name(pred.error()));
                         emit_numerical_shadow_line(inv);
                     } else {
-                        const double pred_exact = pred.reduction();
-                        // PR 9F.9.4 (P1-1): compute the ACTUAL reduction through the SAME
-                        // FP64 merit authority as the predicted, so rho_exact is FP64 in
-                        // BOTH numerator and denominator. The old actual_l2 squared FP32
-                        // res_old_val/res_new_val, mixing an FP32 numerator with the FP64
-                        // pred_exact. R_trial (line ~7975) and the mask are in scope; scale
-                        // R_trial once (r_g is already scaled) and reuse the halo mask.
-                        // Keep the two merit magnitudes separate so the accept/reject
-                        // threshold can be RELATIVE to them (see below), not an absolute
-                        // 1e-30 that means different things at different problem scales.
+                        // PR 9F.9.6: the helper returns the LINEAR-MODEL reduction AND its two
+                        // merits merit_old=m(R_s), merit_model=m((1-a)R_s - a r_g). The ACTUAL
+                        // reduction is merit_old MINUS the NONLINEAR trial merit m(R_trial_s);
+                        // reuse merit_old from the helper (no recompute). The degeneracy
+                        // threshold is scaled by the LINEAR-model merits (assess_trust_model),
+                        // NOT the nonlinear trial -- a blown-up trial belongs in `actual`, and
+                        // must not inflate the linear model's cancellation floor.
+                        const double pred_exact  = pred.reduction();
+                        const double merit_old   = pred.merit_old();
+                        const double merit_model = pred.merit_model();
                         const auto R_trial_s = S_inv_diag_ * R_trial;
-                        const double merit_old   = sdirk3_scaled_merit_sq(R_s, mask);
-                        const double merit_trial = sdirk3_scaled_merit_sq(R_trial_s, mask);
-                        const double actual_l2 = merit_old - merit_trial;
-                        const double rho_heur =
-                            actual_reduction / ((std::abs(predicted_val) > 1e-30f)
-                                                    ? predicted_val : 1e-30f);
-                        // PR 9F.9.5: separate the states the old single rho_exact=nan tangled
-                        // together, and use a SCALE-RELATIVE threshold. pred_exact is an L2^2
-                        // magnitude, so a fixed 1e-30 is meaningless across problem scales;
-                        // tol = 64*eps_fp64*max(merit_old,merit_trial,1) is the cancellation
-                        // floor at this scale. rho_exact is emitted ONLY for a genuine descent
-                        // model; the other three states are named, not collapsed to a number.
-                        const double scale =
-                            std::max({merit_old, merit_trial, 1.0});
-                        const double tol =
-                            64.0 * std::numeric_limits<double>::epsilon() * scale;
-                        const char* status;
-                        double rho_exact = std::numeric_limits<double>::quiet_NaN();
-                        if (!std::isfinite(actual_l2)) {
-                            status = "actual_nonfinite";
-                        } else if (pred_exact < -tol) {
-                            status = "non_descent";     // model predicts NO decrease
-                        } else if (std::abs(pred_exact) <= tol) {
-                            status = "degenerate";      // predicted reduction ~ 0
-                        } else {
-                            status = "valid";
-                            rho_exact = actual_l2 / pred_exact;
-                        }
-                        char tb[288];
+                        const double merit_trial =
+                            wrf::sdirk3::detail::scaled_merit_sq_unchecked(R_trial_s, mask);
+                        const double actual_exact = merit_old - merit_trial;
+                        const auto assess = assess_trust_model(
+                            pred_exact, merit_old, merit_model, actual_exact);
+
+                        // PR 9F.9.6 (P1): emit the ACTUAL production ratio, not a recomputed
+                        // one. Production accept/reject uses rho_val = actual_reduction /
+                        // predicted_clamped with predicted_clamped = max(predicted_val,
+                        // 1e-6*||R||^2). The old rho_heur re-divided by predicted_val (no
+                        // clamp), so it could differ from the real decision by many orders
+                        // when predicted_val is tiny. Emit the production numerator and
+                        // denominator too so the decision is reproducible from the record.
+                        char tb[512];  // 15 fields incl. %.6e / nan / inf -- generous margin
                         std::snprintf(tb, sizeof tb,
                             "SDIRK3_TRUST_SHADOW stage=%d iter=%d alpha=%.4f e=%.4e "
-                            "pred_heur=%.6e pred_exact=%.6e actual=%.6e "
-                            "rho_heur=%.4f rho_exact=%.4f status=%s\n",
-                            stage, newton_iter, tr_alpha, e, predicted_val, pred_exact,
-                            actual_l2, rho_heur, rho_exact, status);
+                            "actual_prod=%.6e pred_prod=%.6e pred_clamped=%.6e rho_prod=%.4f "
+                            "actual_exact=%.6e pred_exact=%.6e merit_old=%.6e "
+                            "merit_model=%.6e rho_exact=%.4f tol=%.3e status=%s\n",
+                            stage, newton_iter, tr_alpha, e,
+                            static_cast<double>(actual_reduction),
+                            static_cast<double>(predicted_val),
+                            static_cast<double>(predicted_clamped),
+                            static_cast<double>(rho_val),
+                            assess.actual, pred_exact, merit_old, merit_model,
+                            assess.rho, assess.prediction_tolerance,
+                            trust_assessment_status_name(assess.status));
                         emit_numerical_shadow_line(tb);
                     }
                 }

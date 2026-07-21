@@ -18,6 +18,8 @@
 
 using wrf::sdirk3::TrustPredictionError;
 using wrf::sdirk3::TrustPrediction;
+using wrf::sdirk3::assess_trust_model;
+using wrf::sdirk3::TrustAssessmentStatus;
 
 // PR 9F.9.4 (P1-2): the invalid state {reduction=NaN, error=None} is no longer
 // REPRESENTABLE -- there is no default constructor, so `TrustPrediction p;` (ok()==true
@@ -253,11 +255,11 @@ int main() {
     // sdirk3_scaled_merit_sq is the ONE FP64 metric both predicted and actual go through.
     // Verify it equals a hand-computed masked FP64 sum-of-squares.
     {
-        using wrf::sdirk3::sdirk3_scaled_merit_sq;
+        using wrf::sdirk3::detail::scaled_merit_sq_unchecked;
         auto v    = torch::randn({64}, torch::kFloat64);
         auto m    = torch::ones({64}, torch::kFloat64);
         m.slice(0, 0, 20).zero_();
-        const double got  = sdirk3_scaled_merit_sq(v, m);
+        const double got  = scaled_merit_sq_unchecked(v, m);
         const double want = (v * m).square().sum().item<double>();
         check(std::abs(got - want) < 1e-12,
               "merit authority: masked FP64 sum-of-squares matches hand calc");
@@ -270,7 +272,7 @@ int main() {
     // non-finite cell in the ACTIVE domain must still fail as NonFiniteInput.
     {
         using wrf::sdirk3::sdirk3_trust_predicted_reduction;
-        using wrf::sdirk3::sdirk3_scaled_merit_sq;
+        using wrf::sdirk3::detail::scaled_merit_sq_unchecked;
         const int64_t n = 32;
         auto R    = torch::randn({n}, torch::kFloat64);
         auto g    = torch::randn({n}, torch::kFloat64);
@@ -290,7 +292,7 @@ int main() {
               std::abs(p_halo.reduction() - want_p.reduction()) < 1e-12,
               "halo NaN/Inf: reduction matches the halo-zeroed residual (no leak)");
         // The merit authority alone also excludes the halo NaN.
-        check(std::isfinite(sdirk3_scaled_merit_sq(R, mask)),
+        check(std::isfinite(scaled_merit_sq_unchecked(R, mask)),
               "merit authority: halo NaN excluded (finite result)");
         // But a non-finite cell in the ACTIVE domain still fails.
         auto R_act_bad = torch::randn({n}, torch::kFloat64);
@@ -327,7 +329,94 @@ int main() {
               "(no cancellation loss)");
     }
 
-    const int kExpected = 32;
+    // ---- MERIT ACCESSORS (PR 9F.9.6) -------------------------------------------------
+    // A successful prediction carries the two LINEAR-MODEL merits it was built from.
+    {
+        using wrf::sdirk3::detail::scaled_merit_sq_unchecked;
+        auto R = torch::randn({50}, torch::kFloat64);
+        auto g = 0.5 * R + 0.3 * torch::randn({50}, torch::kFloat64);
+        const double a = 0.5;
+        const auto p = wrf::sdirk3::sdirk3_trust_predicted_reduction(R, g, a, torch::Tensor());
+        auto R_lin = (1.0 - a) * R - a * g;
+        const double want_old   = scaled_merit_sq_unchecked(R, torch::Tensor());
+        const double want_model = scaled_merit_sq_unchecked(R_lin, torch::Tensor());
+        check(p.ok() && std::abs(p.merit_old() - want_old) < 1e-9,
+              "merit accessor: merit_old() == m(R_s)");
+        check(std::abs(p.merit_model() - want_model) < 1e-9,
+              "merit accessor: merit_model() == m((1-a)R_s - a r_g)");
+        // reduction == merit_old - merit_model (difference-of-squares, mathematically A-B).
+        check(std::abs(p.reduction() - (p.merit_old() - p.merit_model())) < 1e-9,
+              "merit accessor: reduction() == merit_old() - merit_model()");
+    }
+
+    // ---- assess_trust_model: STATUS is a tested numerical policy (PR 9F.9.6 P1) -------
+    // The four-way classification used to be an inline if/else in the Newton solver with no
+    // standing test. Now a pure function; drive its boundaries directly. tol = 64*eps*scale,
+    // scale = max(|merit_old|,|merit_model|,1). With O(1) merits, tol ~ 1.4e-14.
+    {
+        const double eps = std::numeric_limits<double>::epsilon();
+        const double tol1 = 64.0 * eps * 1.0;   // merits = 1 -> scale 1
+        // pred < -tol -> NonDescentModel
+        check(assess_trust_model(-1.0, 1.0, 1.0, 0.5).status
+                  == TrustAssessmentStatus::NonDescentModel,
+              "assess: pred < -tol -> NonDescentModel");
+        // pred == 0 -> Degenerate
+        check(assess_trust_model(0.0, 1.0, 1.0, 0.5).status
+                  == TrustAssessmentStatus::DegeneratePrediction,
+              "assess: pred == 0 -> DegeneratePrediction");
+        // pred == -tol (boundary) -> Degenerate (|pred| <= tol wins over pred < -tol)
+        check(assess_trust_model(-tol1, 1.0, 1.0, 0.5).status
+                  == TrustAssessmentStatus::DegeneratePrediction,
+              "assess: pred == -tol -> DegeneratePrediction (boundary)");
+        // pred > tol -> Valid, rho = actual/pred
+        {
+            const auto a = assess_trust_model(2.0, 1.0, 1.0, 1.0);
+            check(a.status == TrustAssessmentStatus::Valid
+                      && std::abs(a.rho - 0.5) < 1e-12,
+                  "assess: pred > tol -> Valid with rho = actual/pred");
+        }
+        // finite NEGATIVE actual with a descent model -> Valid (negative rho)
+        {
+            const auto a = assess_trust_model(1.0, 1.0, 1.0, -3.0);
+            check(a.status == TrustAssessmentStatus::Valid && a.rho < 0.0,
+                  "assess: negative finite actual -> Valid with negative rho");
+        }
+        // non-finite actual -> NonFiniteActual, rho stays NaN
+        {
+            const auto a = assess_trust_model(
+                1.0, 1.0, 1.0, std::numeric_limits<double>::quiet_NaN());
+            check(a.status == TrustAssessmentStatus::NonFiniteActual
+                      && std::isnan(a.rho),
+                  "assess: non-finite actual -> NonFiniteActual (rho nan)");
+        }
+        // THE §3 FIX: a well-resolved small prediction with a BLOWN-UP actual (huge nonlinear
+        // trial) is VALID, not degenerate -- the threshold scales by the LINEAR merits (~1),
+        // NOT the nonlinear trial. pred=1e-8 >> tol1~1.4e-14, so Valid despite |actual|=1e20.
+        {
+            const auto a = assess_trust_model(1.0e-8, 1.0, 1.0, -1.0e20);
+            check(a.status == TrustAssessmentStatus::Valid,
+                  "assess: small well-resolved pred + huge actual -> Valid "
+                  "(threshold ignores the nonlinear trial magnitude)");
+        }
+        // PR 9F.9.6 (Gemini): a NaN merit must NOT poison tol into NaN and fall through to a
+        // spurious Valid. A degenerate pred (0) with NaN merits stays Degenerate.
+        {
+            const double nan = std::numeric_limits<double>::quiet_NaN();
+            const auto a = assess_trust_model(0.0, nan, nan, 0.5);
+            check(a.status == TrustAssessmentStatus::DegeneratePrediction
+                      && std::isfinite(a.prediction_tolerance),
+                  "assess: NaN merits -> finite tol, no spurious Valid (pred=0 stays Degenerate)");
+        }
+        // A non-finite predicted reduction is never Valid.
+        {
+            const auto a = assess_trust_model(
+                std::numeric_limits<double>::infinity(), 1.0, 1.0, 1.0);
+            check(a.status != TrustAssessmentStatus::Valid && std::isnan(a.rho),
+                  "assess: non-finite predicted -> not Valid, rho nan");
+        }
+    }
+
+    const int kExpected = 44;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;
