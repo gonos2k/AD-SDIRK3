@@ -242,7 +242,7 @@ def _fmt(value: object) -> str:
 def write_summary(results: list[Result], output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "summary.json").write_text(
-        json.dumps([asdict(r) | {"stopped_early": r.stopped_early} for r in results], indent=2)
+        json.dumps([{**asdict(r), "stopped_early": r.stopped_early} for r in results], indent=2)
         + "\n",
         encoding="utf-8",
     )
@@ -271,7 +271,7 @@ def write_summary(results: list[Result], output_dir: Path) -> None:
     ]
     lines = ["\t".join(columns)]
     for result in results:
-        row = asdict(result) | {"stopped_early": result.stopped_early}
+        row = {**asdict(result), "stopped_early": result.stopped_early}
         lines.append("\t".join(_fmt(row[c]) for c in columns))
     (output_dir / "summary.tsv").write_text("\n".join(lines) + "\n", encoding="utf-8")
     (output_dir / "verdict.md").write_text(build_verdict(results), encoding="utf-8")
