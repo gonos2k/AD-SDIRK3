@@ -7998,8 +7998,19 @@ public:
                     auto R_scaled = S_inv_diag_ * R;
                     auto R_trial_scaled = S_inv_diag_ * R_trial;
                     if (halo_mask_initialized_) {
-                        R_scaled.mul_(halo_mask_);
-                        R_trial_scaled.mul_(halo_mask_);
+                        // PR 9F.9.5: project via torch::where, matching the shadow merit
+                        // (sdirk3_scaled_merit_sq). `x.mul_(mask)` propagates a non-finite
+                        // halo cell (NaN*0==NaN), so production res_old/new could go NaN in
+                        // exactly the case the shadow is defined to tolerate -- diverging the
+                        // two metrics. `where` replaces halo cells with 0. For a FINITE halo
+                        // (the operating point) this is byte-identical: norm() squares each
+                        // cell, so a halo (-0.0) from mul_ vs (+0.0) from where gives the same
+                        // norm. Out-of-place is also safer for the autograd graph than mul_.
+                        const auto mb = halo_mask_.to(torch::kBool);
+                        R_scaled = torch::where(mb, R_scaled,
+                                                torch::zeros_like(R_scaled));
+                        R_trial_scaled = torch::where(mb, R_trial_scaled,
+                                                      torch::zeros_like(R_trial_scaled));
                     }
                     res_old_val = guarded_item<float>(R_scaled.norm());
                     res_new_val = guarded_item<float>(R_trial_scaled.norm());
@@ -8104,29 +8115,45 @@ public:
                         // res_old_val/res_new_val, mixing an FP32 numerator with the FP64
                         // pred_exact. R_trial (line ~7975) and the mask are in scope; scale
                         // R_trial once (r_g is already scaled) and reuse the halo mask.
+                        // Keep the two merit magnitudes separate so the accept/reject
+                        // threshold can be RELATIVE to them (see below), not an absolute
+                        // 1e-30 that means different things at different problem scales.
                         const auto R_trial_s = S_inv_diag_ * R_trial;
-                        const double actual_l2 =
-                            sdirk3_scaled_merit_sq(R_s, mask)
-                            - sdirk3_scaled_merit_sq(R_trial_s, mask);
+                        const double merit_old   = sdirk3_scaled_merit_sq(R_s, mask);
+                        const double merit_trial = sdirk3_scaled_merit_sq(R_trial_s, mask);
+                        const double actual_l2 = merit_old - merit_trial;
                         const double rho_heur =
                             actual_reduction / ((std::abs(predicted_val) > 1e-30f)
                                                     ? predicted_val : 1e-30f);
-                        // PR 9F.9.4: rho_exact is meaningful ONLY for a DESCENT linear model
-                        // (pred_exact > 0) and a finite actual. A non-descent (pred_exact<=0,
-                        // the model predicts NO decrease) or non-finite actual is reported as
-                        // rho_exact=nan rather than a plausible finite ratio -- separating the
-                        // "valid but non-descent" state from a normal accept.
-                        const double rho_exact =
-                            (std::isfinite(actual_l2) && pred_exact > 1e-30)
-                                ? (actual_l2 / pred_exact)
-                                : std::numeric_limits<double>::quiet_NaN();
-                        char tb[256];
+                        // PR 9F.9.5: separate the states the old single rho_exact=nan tangled
+                        // together, and use a SCALE-RELATIVE threshold. pred_exact is an L2^2
+                        // magnitude, so a fixed 1e-30 is meaningless across problem scales;
+                        // tol = 64*eps_fp64*max(merit_old,merit_trial,1) is the cancellation
+                        // floor at this scale. rho_exact is emitted ONLY for a genuine descent
+                        // model; the other three states are named, not collapsed to a number.
+                        const double scale =
+                            std::max({merit_old, merit_trial, 1.0});
+                        const double tol =
+                            64.0 * std::numeric_limits<double>::epsilon() * scale;
+                        const char* status;
+                        double rho_exact = std::numeric_limits<double>::quiet_NaN();
+                        if (!std::isfinite(actual_l2)) {
+                            status = "actual_nonfinite";
+                        } else if (pred_exact < -tol) {
+                            status = "non_descent";     // model predicts NO decrease
+                        } else if (std::abs(pred_exact) <= tol) {
+                            status = "degenerate";      // predicted reduction ~ 0
+                        } else {
+                            status = "valid";
+                            rho_exact = actual_l2 / pred_exact;
+                        }
+                        char tb[288];
                         std::snprintf(tb, sizeof tb,
                             "SDIRK3_TRUST_SHADOW stage=%d iter=%d alpha=%.4f e=%.4e "
                             "pred_heur=%.6e pred_exact=%.6e actual=%.6e "
-                            "rho_heur=%.4f rho_exact=%.4f\n",
+                            "rho_heur=%.4f rho_exact=%.4f status=%s\n",
                             stage, newton_iter, tr_alpha, e, predicted_val, pred_exact,
-                            actual_l2, rho_heur, rho_exact);
+                            actual_l2, rho_heur, rho_exact, status);
                         emit_numerical_shadow_line(tb);
                     }
                 }
