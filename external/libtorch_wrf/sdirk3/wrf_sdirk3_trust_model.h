@@ -34,15 +34,16 @@ inline double sdirk3_trust_predicted_reduction(const torch::Tensor& R_scaled,
                                                const torch::Tensor& mask) {
     torch::NoGradGuard no_grad;
     const auto apply_mask = [&](const torch::Tensor& x) {
-        return mask.defined() ? (x * mask) : x;
+        // Match device+dtype so a mask built elsewhere cannot trip a runtime mismatch.
+        return mask.defined() ? (x * mask.to(x.options())) : x;
     };
     const auto R_lin_s =
         (1.0 - alpha) * R_scaled - alpha * r_g_scaled;
     const auto a = apply_mask(R_scaled);
     const auto b = apply_mask(R_lin_s);
-    const double na = a.norm().item<double>();
-    const double nb = b.norm().item<double>();
-    return na * na - nb * nb;
+    // Sum of squares directly -- no sqrt-then-square (more precise and cheaper than
+    // ||.||^2). Equals ||a||^2 - ||b||^2 exactly up to floating point.
+    return (a * a).sum().item<double>() - (b * b).sum().item<double>();
 }
 
 }  // namespace sdirk3

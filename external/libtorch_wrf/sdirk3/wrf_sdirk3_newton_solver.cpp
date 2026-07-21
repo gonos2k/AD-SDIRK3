@@ -5060,7 +5060,8 @@ public:
                     auto Rs_dyn = (S_inv_diag_ * R_inner).detach().to(torch::kCPU).contiguous();
                     auto Rs_s0  = (S0_inv_diag_ * R_inner).detach().to(torch::kCPU).contiguous();
                     for (const auto& blk : cached_layout_.blocks) {
-                        if (blk.start + blk.size > Rs_dyn.numel()) continue;
+                        if (blk.size == 0 ||
+                            blk.start + blk.size > Rs_dyn.numel()) continue;
                         const float inv_sqrt_nb =
                             1.0f / std::sqrt(static_cast<float>(blk.size));
                         const float bd = Rs_dyn.slice(0, blk.start, blk.start + blk.size)
@@ -5071,7 +5072,7 @@ public:
                         if (bs > bmax_s0)  { bmax_s0  = bs; bmax_s0_name  = blk.name.c_str(); }
                     }
                 }
-                char sh[288];
+                char sh[512];
                 std::snprintf(sh, sizeof sh,
                     "SDIRK3_NEWTON_SHADOW stage=%d iter=%d dyn_S_rms=%.6e "
                     "fix_S0_rms=%.6e unscaled_rms=%.6e block_max_dyn=%.6e block_dyn=%s "
@@ -8044,7 +8045,9 @@ public:
                 // divergence can be MEASURED. Read-only; the acceptance still uses
                 // rho_val, so the numerical path is byte-identical.
                 if (numerical_shadow_enabled() &&
-                    scaling_initialized_ && last_gmres_r_true_.defined() &&
+                    scaling_initialized_ && S_inv_diag_.defined() &&
+                    S_inv_diag_.numel() == R.numel() &&
+                    last_gmres_r_true_.defined() &&
                     last_gmres_r_true_.numel() == R.numel()) {
                     torch::NoGradGuard no_grad;
                     // FIX (PR 9F.9.1): compute ENTIRELY in the scaled space. r_g
