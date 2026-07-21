@@ -14,8 +14,18 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <type_traits>
 
 using wrf::sdirk3::TrustPredictionError;
+using wrf::sdirk3::TrustPrediction;
+
+// PR 9F.9.4 (P1-2): the invalid state {reduction=NaN, error=None} is no longer
+// REPRESENTABLE -- there is no default constructor, so `TrustPrediction p;` (ok()==true
+// with a NaN reduction) cannot even be written. This is a compile-time guarantee, not a
+// runtime check.
+static_assert(!std::is_default_constructible<TrustPrediction>::value,
+              "TrustPrediction must not be default-constructible (no representable "
+              "invalid state)");
 
 static int g_fail = 0;
 static int g_cases = 0;
@@ -29,7 +39,7 @@ static void check(bool ok, const char* what) {
 static double pval(const torch::Tensor& R, const torch::Tensor& g, double a,
                    const torch::Tensor& m) {
     const auto p = wrf::sdirk3::sdirk3_trust_predicted_reduction(R, g, a, m);
-    return p.ok() ? p.reduction : std::numeric_limits<double>::quiet_NaN();
+    return p.ok() ? p.reduction() : std::numeric_limits<double>::quiet_NaN();
 }
 
 // Independent reference: ||mask*R_s||^2 - ||mask*((1-a)R_s - a*r_g)||^2, expanded so it
@@ -145,36 +155,80 @@ int main() {
         auto ok = torch::randn({10}, torch::kFloat64);
         auto badn = torch::randn({11}, torch::kFloat64);
         auto p_numel = sdirk3_trust_predicted_reduction(ok, badn, 0.5, torch::Tensor());
-        check(!p_numel.ok() && p_numel.error == TrustPredictionError::ShapeMismatch,
+        check(!p_numel.ok() && p_numel.error() == TrustPredictionError::ShapeMismatch,
               "contract: mismatched numel -> ShapeMismatch (not ok)");
         auto p_2d = sdirk3_trust_predicted_reduction(
             ok, torch::randn({10, 1}, torch::kFloat64), 0.5, torch::Tensor());
-        check(!p_2d.ok() && p_2d.error == TrustPredictionError::NonOneDimInput,
+        check(!p_2d.ok() && p_2d.error() == TrustPredictionError::NonOneDimInput,
               "contract: non-1-D input -> NonOneDimInput");
         auto p_alpha = sdirk3_trust_predicted_reduction(ok, ok, 1.5, torch::Tensor());
-        check(!p_alpha.ok() && p_alpha.error == TrustPredictionError::InvalidAlpha,
+        check(!p_alpha.ok() && p_alpha.error() == TrustPredictionError::InvalidAlpha,
               "contract: alpha out of [0,1] -> InvalidAlpha");
         auto nonfinite = ok.clone();
         nonfinite[0] = std::numeric_limits<double>::infinity();
         auto p_nf = sdirk3_trust_predicted_reduction(ok, nonfinite, 0.5, torch::Tensor());
-        check(!p_nf.ok() && p_nf.error == TrustPredictionError::NonFiniteInput,
+        check(!p_nf.ok() && p_nf.error() == TrustPredictionError::NonFiniteInput,
               "contract: non-finite input -> NonFiniteInput");
         // dtype mismatch
         auto p_dt = sdirk3_trust_predicted_reduction(
             ok, torch::randn({10}, torch::kFloat32), 0.5, torch::Tensor());
-        check(!p_dt.ok() && p_dt.error == TrustPredictionError::DtypeMismatch,
+        check(!p_dt.ok() && p_dt.error() == TrustPredictionError::DtypeMismatch,
               "contract: dtype mismatch -> DtypeMismatch");
         // NON-BINARY mask is rejected (a weight != {0,1} is not a halo mask)
         auto nonbinary = torch::ones({10}, torch::kFloat64);
         nonbinary[3] = 2.0;
         auto p_mask = sdirk3_trust_predicted_reduction(ok, ok, 0.5, nonbinary);
-        check(!p_mask.ok() && p_mask.error == TrustPredictionError::InvalidMask,
+        check(!p_mask.ok() && p_mask.error() == TrustPredictionError::InvalidMask,
               "contract: non-binary mask -> InvalidMask");
         // a BINARY mask is accepted
         auto binmask = torch::ones({10}, torch::kFloat64);
         binmask.slice(0, 0, 4).zero_();
         check(sdirk3_trust_predicted_reduction(ok, ok, 0.5, binmask).ok(),
               "contract: binary 0/1 mask is accepted");
+
+        // PR 9F.9.4 (P1-4): a zero-length residual is a wiring/layout failure, NOT a
+        // valid reduction=0. Two empty 1-D tensors -> EmptyInput, not success.
+        auto empty = torch::empty({0}, torch::kFloat64);
+        auto p_empty = sdirk3_trust_predicted_reduction(empty, empty, 0.5, torch::Tensor());
+        check(!p_empty.ok() && p_empty.error() == TrustPredictionError::EmptyInput,
+              "contract: empty residual -> EmptyInput (not a valid reduction=0)");
+
+        // PR 9F.9.4 (P1-3): FINITE FP64 inputs whose squared sum OVERFLOWS to Inf must
+        // fail as NonFiniteResult -- ok() must not promise a finite reduction the
+        // arithmetic did not produce. 1e200^2 = 1e400 = +Inf in FP64.
+        auto huge = torch::full({4}, 1.0e200, torch::kFloat64);
+        check(std::isfinite(huge[0].item<double>()),
+              "fixture: 1e200 is a FINITE input (the overflow is in the SQUARED sum)");
+        auto p_ovf = sdirk3_trust_predicted_reduction(huge, huge, 1.0, torch::Tensor());
+        check(!p_ovf.ok() && p_ovf.error() == TrustPredictionError::NonFiniteResult,
+              "contract: finite inputs, overflowing squared sum -> NonFiniteResult");
+    }
+
+    // ---- TYPED RESULT: only success()/failure() build one (PR 9F.9.4 P1-2) -----------
+    // Complements the compile-time static_assert (no default ctor) with the runtime
+    // invariant: success() is ok() and carries the value; failure() is !ok() and names
+    // the error. There is no third state.
+    {
+        const auto s = TrustPrediction::success(1.5);
+        check(s.ok() && s.reduction() == 1.5,
+              "typed result: success(1.5) -> ok() with reduction()==1.5");
+        const auto f = TrustPrediction::failure(TrustPredictionError::EmptyInput);
+        check(!f.ok() && f.error() == TrustPredictionError::EmptyInput,
+              "typed result: failure(EmptyInput) -> !ok() with error()==EmptyInput");
+    }
+
+    // ---- SHARED MERIT AUTHORITY (PR 9F.9.4 P1-1) -------------------------------------
+    // sdirk3_scaled_merit_sq is the ONE FP64 metric both predicted and actual go through.
+    // Verify it equals a hand-computed masked FP64 sum-of-squares.
+    {
+        using wrf::sdirk3::sdirk3_scaled_merit_sq;
+        auto v    = torch::randn({64}, torch::kFloat64);
+        auto m    = torch::ones({64}, torch::kFloat64);
+        m.slice(0, 0, 20).zero_();
+        const double got  = sdirk3_scaled_merit_sq(v, m);
+        const double want = (v * m).square().sum().item<double>();
+        check(std::abs(got - want) < 1e-12,
+              "merit authority: masked FP64 sum-of-squares matches hand calc");
     }
 
     // ---- FP32 cancellation: FP64 accumulation preserves a tiny reduction ----------
@@ -204,7 +258,7 @@ int main() {
               "(no cancellation loss)");
     }
 
-    const int kExpected = 16;
+    const int kExpected = 22;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;
