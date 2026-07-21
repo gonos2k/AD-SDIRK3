@@ -283,7 +283,14 @@ inline TrustAssessment assess_trust_model(double predicted_reduction,
                                           double merit_old,
                                           double merit_model,
                                           double actual_reduction) {
-    const double scale = std::max({std::abs(merit_old), std::abs(merit_model), 1.0});
+    // Guard the merits: a non-finite merit (e.g. a success(reduction)-only prediction whose
+    // merits default to NaN) must NOT poison max()/tol into NaN -- a NaN tol makes every
+    // comparison below false and falls through to a spurious Valid with a bogus rho. Merits
+    // are sums-of-squares (>= 0); abs is belt-and-suspenders. Unknown merit -> 0 -> the
+    // scale floors at 1 (tol = 64*eps).
+    const double m_old   = std::isfinite(merit_old)   ? std::abs(merit_old)   : 0.0;
+    const double m_model = std::isfinite(merit_model) ? std::abs(merit_model) : 0.0;
+    const double scale = std::max({m_old, m_model, 1.0});
     const double tol = 64.0 * std::numeric_limits<double>::epsilon() * scale;
     TrustAssessment a;
     a.actual = actual_reduction;
@@ -292,6 +299,10 @@ inline TrustAssessment assess_trust_model(double predicted_reduction,
     a.rho = std::numeric_limits<double>::quiet_NaN();
     if (!std::isfinite(actual_reduction)) {
         a.status = TrustAssessmentStatus::NonFiniteActual;
+    } else if (!std::isfinite(predicted_reduction)) {
+        // A non-finite predicted reduction is not a usable descent model -- never Valid,
+        // never a rho. (Same NaN-fall-through class as the merits above.)
+        a.status = TrustAssessmentStatus::DegeneratePrediction;
     } else if (predicted_reduction < -tol) {
         a.status = TrustAssessmentStatus::NonDescentModel;
     } else if (std::abs(predicted_reduction) <= tol) {

@@ -8131,7 +8131,7 @@ public:
                         // clamp), so it could differ from the real decision by many orders
                         // when predicted_val is tiny. Emit the production numerator and
                         // denominator too so the decision is reproducible from the record.
-                        char tb[352];
+                        char tb[512];  // 15 fields incl. %.6e / nan / inf -- generous margin
                         std::snprintf(tb, sizeof tb,
                             "SDIRK3_TRUST_SHADOW stage=%d iter=%d alpha=%.4f e=%.4e "
                             "actual_prod=%.6e pred_prod=%.6e pred_clamped=%.6e rho_prod=%.4f "

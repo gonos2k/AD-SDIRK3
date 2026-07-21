@@ -398,9 +398,25 @@ int main() {
                   "assess: small well-resolved pred + huge actual -> Valid "
                   "(threshold ignores the nonlinear trial magnitude)");
         }
+        // PR 9F.9.6 (Gemini): a NaN merit must NOT poison tol into NaN and fall through to a
+        // spurious Valid. A degenerate pred (0) with NaN merits stays Degenerate.
+        {
+            const double nan = std::numeric_limits<double>::quiet_NaN();
+            const auto a = assess_trust_model(0.0, nan, nan, 0.5);
+            check(a.status == TrustAssessmentStatus::DegeneratePrediction
+                      && std::isfinite(a.prediction_tolerance),
+                  "assess: NaN merits -> finite tol, no spurious Valid (pred=0 stays Degenerate)");
+        }
+        // A non-finite predicted reduction is never Valid.
+        {
+            const auto a = assess_trust_model(
+                std::numeric_limits<double>::infinity(), 1.0, 1.0, 1.0);
+            check(a.status != TrustAssessmentStatus::Valid && std::isnan(a.rho),
+                  "assess: non-finite predicted -> not Valid, rho nan");
+        }
     }
 
-    const int kExpected = 42;
+    const int kExpected = 44;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;
