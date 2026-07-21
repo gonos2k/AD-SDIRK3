@@ -81,6 +81,20 @@ inline bool numerical_shadow_enabled() {
     }();
     return on;
 }
+// PR 9F.B (B4 EXPERIMENT, [[sdirk3-scaling-metric-separation-plan]]): env-gated block-max
+// convergence gate. Default OFF => byte-identical (the production gate is unchanged). When
+// WRF_SDIRK3_BLOCKMAX_GATE=1 the Newton "converged" test additionally requires every block's
+// scaled RMS to be under the tolerance, not just the size-weighted global RMS. This is a
+// MEASUREMENT experiment (measure-first, before a production config knob): the shadow matrix
+// showed a stage can pass the global gate while its mu block is >tol; this makes the model
+// actually ITERATE on that block so we can measure whether it CONVERGES or stalls.
+inline bool blockmax_gate_enabled() {
+    static const bool on = [] {
+        const char* e = std::getenv("WRF_SDIRK3_BLOCKMAX_GATE");
+        return e != nullptr && e[0] == '1' && e[1] == '\0';
+    }();
+    return on;
+}
 // Route shadow records through the SHARED line-atomic emitter so concurrent OpenMP
 // workers never interleave a record (matches the rest of the solver diagnostics).
 inline void emit_numerical_shadow_line(const char* line) {
@@ -3493,6 +3507,17 @@ public:
     // a diagnosis-only shadow can report BOTH ||S^-1 R|| (dynamic) and ||S_0^-1 R||
     // (fixed) and MEASURE where the two verdicts diverge -- no behaviour change.
     torch::Tensor S0_inv_diag_;
+    // PR 9F.A (A4 -- structural separation, [[sdirk3-scaling-metric-separation-plan]]):
+    // the METRIC-domain inverse scale. FOUR distinct concepts are conflated in S_inv_diag_:
+    // (1) LINEAR-system scaling for GMRES conditioning, and (2) the NONLINEAR convergence /
+    // EW / trust METRIC. These want DIFFERENT policies -- the linear scale may grow
+    // dynamically to help conditioning, but the metric must stay fixed or growing-S loosens
+    // the convergence test (S up => ||S^-1 R|| down). This accessor names the metric-domain
+    // use. In PR A it ALIASES the dynamic S_inv_diag_ (byte-identical -- verified by
+    // tests/numerical_fingerprint.sh). PR B1 will point it at the FIXED S0_inv_diag_,
+    // turning a scattered hunt into a one-line policy change. GMRES/linear sites keep using
+    // S_inv_diag_ directly -- they are the linear domain and must NOT be routed here.
+    const torch::Tensor& metric_scale_inv() const { return S_inv_diag_; }
     // PR 9F.9 P1-4 SHADOW: the GMRES linear residual r_g = b - A*dK from the current
     // iteration's solve, saved so the trust-region site (a later, nested scope where
     // gmres_result is gone) can build the EXACT predicted reduction with no extra JVP.
@@ -3820,8 +3845,8 @@ public:
         float sqrt_N = std::sqrt(static_cast<float>(R.numel()));
 
         if (scaling_initialized_) {
-            // Apply scaling S⁻¹
-            auto R_scaled = S_inv_diag_ * R;
+            // PR 9F.A (A4): METRIC-domain scaling -- see metric_scale_inv().
+            auto R_scaled = metric_scale_inv() * R;
             // Apply halo mask (zero out halo regions so they don't contribute to norm)
             if (halo_mask_initialized_ && R_scaled.numel() == halo_mask_.numel()) {
                 R_scaled = R_scaled * halo_mask_;
@@ -5008,9 +5033,14 @@ public:
             auto res_norm_unscaled_tensor = safe_tensor_norm(R_inner);
             float sqrt_N = std::sqrt(static_cast<float>(R_inner.numel()));
             torch::Tensor res_norm_tensor;
+            // PR 9F.B (Gemini #65): keep the scaled metric residual so the block-max gate
+            // below can REUSE it instead of recomputing metric_scale_inv()*R_inner. S and
+            // R_inner do not change between here and the gate (same Newton iteration), so the
+            // value is identical; hoisting only retains the intermediate (byte-identical).
+            torch::Tensor R_scaled_metric;
             if (scaling_initialized_) {
-                auto R_scaled = S_inv_diag_ * R_inner;
-                res_norm_tensor = safe_tensor_norm(R_scaled) / sqrt_N;  // RMS norm
+                R_scaled_metric = metric_scale_inv() * R_inner;   // PR 9F.A (A4): metric domain
+                res_norm_tensor = safe_tensor_norm(R_scaled_metric) / sqrt_N;  // RMS norm
             } else {
                 // Fallback: if scaling not initialized, force-initialize from R with floor=1.0
                 // to prevent unscaled convergence check from hiding mu/ph errors.
@@ -5049,8 +5079,8 @@ public:
                     std::cerr << "[SCALING] Force-initialized from R (fallback)" << std::endl;
                 }
                 if (scaling_initialized_) {
-                    auto R_scaled = S_inv_diag_ * R_inner;
-                    res_norm_tensor = safe_tensor_norm(R_scaled) / sqrt_N;  // RMS norm
+                    R_scaled_metric = metric_scale_inv() * R_inner;   // PR 9F.A (A4): metric domain
+                    res_norm_tensor = safe_tensor_norm(R_scaled_metric) / sqrt_N;  // RMS norm
                 } else {
                     // Last resort: use unscaled RMS (layout not available)
                     res_norm_tensor = res_norm_unscaled_tensor / sqrt_N;
@@ -5080,6 +5110,14 @@ public:
                 float bmax_dyn = 0.0f, bmax_s0 = 0.0f;
                 const char* bmax_dyn_name = "none";
                 const char* bmax_s0_name = "none";
+                // PR 9F.B (metric-policy measurement, [[sdirk3-scaling-metric-separation-plan]]):
+                // the block-EQUAL RMS under S0 (M4) -- sqrt(mean_b q_b^2), which weights each
+                // block equally instead of by DOF count. Global RMS (M1, fix_S0_rms) weights
+                // by N_b/N_total, so a small block (mu ~0.3% of DOF) is hidden; block-equal
+                // and block-max (M3) both surface it. Emitting all three per iteration lets
+                // the false-convergence count (M1 accepts && M3 rejects) be derived offline
+                // across the dt ladder. Diagnosis-only; production still uses res_norm_tensor.
+                double sum_bs2 = 0.0; int nblk = 0;
                 if (layout_initialized_ &&
                     cached_layout_.total_size == R_inner.numel()) {
                     // One CPU transfer each: the per-block RMS under the dynamic S and
@@ -5098,15 +5136,19 @@ public:
                                              .norm().item<float>() * inv_sqrt_nb;
                         if (bd > bmax_dyn) { bmax_dyn = bd; bmax_dyn_name = blk.name.c_str(); }
                         if (bs > bmax_s0)  { bmax_s0  = bs; bmax_s0_name  = blk.name.c_str(); }
+                        sum_bs2 += static_cast<double>(bs) * bs; ++nblk;
                     }
                 }
-                char sh[512];
+                const float block_equal_s0 =
+                    nblk > 0 ? static_cast<float>(std::sqrt(sum_bs2 / nblk)) : 0.0f;
+                char sh[576];
                 std::snprintf(sh, sizeof sh,
                     "SDIRK3_NEWTON_SHADOW stage=%d iter=%d dyn_S_rms=%.6e "
                     "fix_S0_rms=%.6e unscaled_rms=%.6e block_max_dyn=%.6e block_dyn=%s "
-                    "block_max_S0=%.6e block_S0=%s\n",
+                    "block_max_S0=%.6e block_S0=%s block_equal_S0=%.6e newton_tol=%.6e\n",
                     stage, newton_iter, dyn_rms, fix_rms, unsc_rms,
-                    bmax_dyn, bmax_dyn_name, bmax_s0, bmax_s0_name);
+                    bmax_dyn, bmax_dyn_name, bmax_s0, bmax_s0_name,
+                    block_equal_s0, static_cast<double>(options_.newton_tol));
                 emit_numerical_shadow_line(sh);
             } else if (numerical_shadow_enabled()) {
                 // PR 9F.9.3: the shadow is ON but no frozen S0 is available (e.g. the
@@ -5535,8 +5577,30 @@ public:
             // Scaled norm ensures all variable blocks contribute to convergence check,
             // consistent with GMRES and trust region norms.
             auto converged = res_norm_tensor < newton_tol_adaptive;
+            // PR 9F.B (B4 experiment): env-gated block-max criterion. Default OFF -> the &&
+            // is exactly the legacy gate (block_max_ok stays true), so byte-identical. When
+            // ON, ALSO require every block's scaled RMS < tol, so a stage cannot "converge"
+            // on a small-DOF block (mu) hidden by the size-weighted global RMS.
+            bool block_max_ok = true;
+            if (blockmax_gate_enabled() && scaling_initialized_ &&
+                R_scaled_metric.defined() && layout_initialized_ &&
+                cached_layout_.total_size == R_inner.numel()) {
+                torch::NoGradGuard no_grad;
+                // Reuse the scaled metric residual computed for res_norm_tensor (Gemini #65):
+                // metric_scale_inv() and R_inner are unchanged since, so this is identical.
+                auto Rs = R_scaled_metric.detach().to(torch::kCPU).contiguous();
+                float bmax = 0.0f;
+                for (const auto& blk : cached_layout_.blocks) {
+                    if (blk.size == 0 || blk.start + blk.size > Rs.numel()) continue;
+                    const float q = Rs.slice(0, blk.start, blk.start + blk.size)
+                                        .norm().item<float>()
+                                    / std::sqrt(static_cast<float>(blk.size));
+                    if (q > bmax) bmax = q;
+                }
+                block_max_ok = (bmax < newton_tol_adaptive);
+            }
             // GRADIENT FIX: Use guarded_item for convergence check
-            if (guarded_item<bool>(converged.all())) {
+            if (guarded_item<bool>(converged.all()) && block_max_ok) {
                 if (stage == 2 && stage2_hopeless_budget_mode_) {
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                         std::cerr << "[GMRES HOPLESS MODE] Cleared by successful Stage-2 Newton solve.\n";
