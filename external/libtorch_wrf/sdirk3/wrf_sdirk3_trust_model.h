@@ -22,8 +22,9 @@
 #pragma once
 
 #include <torch/torch.h>
-#include <cmath>    // std::isfinite
-#include <limits>   // std::numeric_limits
+#include <algorithm>  // std::max (initializer_list overload)
+#include <cmath>      // std::isfinite
+#include <limits>     // std::numeric_limits
 
 namespace wrf {
 namespace sdirk3 {
@@ -87,30 +88,49 @@ inline const char* trust_prediction_error_name(TrustPredictionError e) {
 // value -- both re-opened the very hole the type was meant to close. Now success() demotes a
 // non-finite value to failure(NonFiniteResult), and failure(None) is remapped to
 // UndefinedInput, so no factory call can produce ok() with a bad reduction.
+//
+// PR 9F.9.6: a successful prediction also carries the two LINEAR-MODEL merits it was built
+// from -- merit_old = m(R_s) and merit_model = m((1-a)R_s - a r_g). The caller needs
+// merit_model (NOT the nonlinear trial merit) to scale the degeneracy threshold: A - B is
+// roundoff iff it is small relative to max(A, B), and both A and B are LINEAR-model
+// quantities. Sharing them also removes a duplicate GPU reduction (the caller no longer
+// recomputes m(R_s)). Only meaningful when ok().
 class TrustPrediction {
 public:
+    // For direct callers that already have the reduction (e.g. unit tests). Merits unknown.
     static TrustPrediction success(double reduction) {
+        return success(reduction, std::numeric_limits<double>::quiet_NaN(),
+                       std::numeric_limits<double>::quiet_NaN());
+    }
+    static TrustPrediction success(double reduction, double merit_old, double merit_model) {
         if (!std::isfinite(reduction))
-            return TrustPrediction(std::numeric_limits<double>::quiet_NaN(),
-                                   TrustPredictionError::NonFiniteResult);
-        return TrustPrediction(reduction, TrustPredictionError::None);
+            return failure(TrustPredictionError::NonFiniteResult);
+        return TrustPrediction(reduction, merit_old, merit_model,
+                               TrustPredictionError::None);
     }
     static TrustPrediction failure(TrustPredictionError error) {
         // None is the success discriminant; failure(None) is a caller bug -- collapse it to a
         // defined error so a failure() call can NEVER yield ok().
         if (error == TrustPredictionError::None)
             error = TrustPredictionError::UndefinedInput;
-        return TrustPrediction(std::numeric_limits<double>::quiet_NaN(), error);
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        return TrustPrediction(nan, nan, nan, error);
     }
     bool ok() const noexcept { return error_ == TrustPredictionError::None; }
     // Meaningful only when ok(); NaN otherwise (a failure() carries no reduction).
     double reduction() const noexcept { return reduction_; }
+    double merit_old() const noexcept { return merit_old_; }      // m(R_s)
+    double merit_model() const noexcept { return merit_model_; }  // m((1-a)R_s - a r_g)
     TrustPredictionError error() const noexcept { return error_; }
 
 private:
-    TrustPrediction(double reduction, TrustPredictionError error)
-        : reduction_(reduction), error_(error) {}
+    TrustPrediction(double reduction, double merit_old, double merit_model,
+                    TrustPredictionError error)
+        : reduction_(reduction), merit_old_(merit_old), merit_model_(merit_model),
+          error_(error) {}
     double reduction_;
+    double merit_old_;
+    double merit_model_;
     TrustPredictionError error_;
 };
 
@@ -207,19 +227,80 @@ inline TrustPrediction sdirk3_trust_predicted_reduction(const torch::Tensor& R_s
         return TrustPrediction::failure(E::NonFiniteInput);
 
     const auto R_lin_s = (1.0 - alpha) * R_active - alpha * r_g_active;
-    // Accumulate in FP64 through the shared merit authority. The predicted reduction is
-    // A - B of two nearly-equal large sums-of-squares; FP32 accumulation would lose it to
-    // cancellation exactly in the small-reduction region where accept/reject is most
-    // sensitive. Diagnostic-only, so the FP64 reduction (a GPU->CPU sync + a widened
-    // reduce) is an accepted cost. R_active/R_lin_s already have the halo zeroed, so merit
-    // needs no further mask.
+    // A = m(R_s), B = m(R_lin_s) -- the two LINEAR-MODEL merits. They are returned so the
+    // caller can scale the degeneracy threshold by max(A,B,1) (both linear-model), and they
+    // FP64-accumulate through the shared merit authority. R_active/R_lin_s already have the
+    // halo zeroed, so merit needs no further mask. Diagnostic-only, so the FP64 reductions
+    // (GPU->CPU syncs) are an accepted cost.
     const double A = sdirk3_scaled_merit_sq(R_active, torch::Tensor());
     const double B = sdirk3_scaled_merit_sq(R_lin_s, torch::Tensor());
-    // Finite inputs can still overflow the squared sum to Inf, or A-B to NaN (Inf-Inf).
-    // ok() must never promise a finite reduction the arithmetic did not produce.
-    if (!std::isfinite(A) || !std::isfinite(B) || !std::isfinite(A - B))
+    // PR 9F.9.6: compute the REDUCTION as an elementwise difference-of-squares
+    // sum((a-b)(a+b)) rather than (sum a^2) - (sum b^2). When A and B are large and the
+    // reduction is small, forming the two big sums first and subtracting loses digits even
+    // in FP64; the factored form keeps the small result accurate. Mathematically A - B.
+    const auto a64 = R_active.to(torch::kFloat64);
+    const auto b64 = R_lin_s.to(torch::kFloat64);
+    const double reduction = ((a64 - b64) * (a64 + b64)).sum().item<double>();
+    // Finite inputs can still overflow the squared sum to Inf, or the reduction to NaN.
+    // ok() must never promise a finite reduction the arithmetic did not produce. A and B are
+    // still checked because the caller relies on them being finite for the threshold.
+    if (!std::isfinite(A) || !std::isfinite(B) || !std::isfinite(reduction))
         return TrustPrediction::failure(E::NonFiniteResult);
-    return TrustPrediction::success(A - B);
+    return TrustPrediction::success(reduction, A, B);
+}
+
+// PR 9F.9.6: the trust-region ACCEPTANCE assessment, extracted as a pure, tested numerical
+// policy instead of an inline if/else in the 8000-line Newton solver. Given the linear model
+// (predicted_reduction + its two merits) and the ACTUAL nonlinear reduction, it classifies
+// the state and computes rho only when the model genuinely descends.
+enum class TrustAssessmentStatus {
+    Valid,                 // descent model, rho = actual / predicted is meaningful
+    NonDescentModel,       // predicted <= -tol: the linear model predicts NO decrease
+    DegeneratePrediction,  // |predicted| <= tol: predicted reduction is at the roundoff floor
+    NonFiniteActual        // the actual reduction is not finite (trial residual/metric failed)
+};
+inline const char* trust_assessment_status_name(TrustAssessmentStatus s) {
+    switch (s) {
+        case TrustAssessmentStatus::Valid:                return "valid";
+        case TrustAssessmentStatus::NonDescentModel:      return "non_descent";
+        case TrustAssessmentStatus::DegeneratePrediction: return "degenerate";
+        case TrustAssessmentStatus::NonFiniteActual:      return "actual_nonfinite";
+    }
+    return "unknown";
+}
+struct TrustAssessment {
+    double actual;
+    double predicted;
+    double rho;                    // NaN unless status == Valid
+    double prediction_tolerance;   // the scale-relative degeneracy floor
+    TrustAssessmentStatus status;
+};
+// The threshold is RELATIVE to the LINEAR-MODEL merits (max(merit_old, merit_model, 1)) --
+// NOT the nonlinear trial merit. A blown-up nonlinear trial belongs in `actual`, and must
+// NOT inflate the linear model's cancellation floor (which would misclassify a well-resolved
+// predicted reduction as degenerate). tol = 64*eps_fp64*scale is the roundoff floor of A - B.
+inline TrustAssessment assess_trust_model(double predicted_reduction,
+                                          double merit_old,
+                                          double merit_model,
+                                          double actual_reduction) {
+    const double scale = std::max({std::abs(merit_old), std::abs(merit_model), 1.0});
+    const double tol = 64.0 * std::numeric_limits<double>::epsilon() * scale;
+    TrustAssessment a;
+    a.actual = actual_reduction;
+    a.predicted = predicted_reduction;
+    a.prediction_tolerance = tol;
+    a.rho = std::numeric_limits<double>::quiet_NaN();
+    if (!std::isfinite(actual_reduction)) {
+        a.status = TrustAssessmentStatus::NonFiniteActual;
+    } else if (predicted_reduction < -tol) {
+        a.status = TrustAssessmentStatus::NonDescentModel;
+    } else if (std::abs(predicted_reduction) <= tol) {
+        a.status = TrustAssessmentStatus::DegeneratePrediction;
+    } else {
+        a.status = TrustAssessmentStatus::Valid;
+        a.rho = actual_reduction / predicted_reduction;
+    }
+    return a;
 }
 
 }  // namespace sdirk3
