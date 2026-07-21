@@ -3753,6 +3753,28 @@ public:
             }
         }
 
+        // PR 9F.9.6 (review §5): the PRODUCTION mask authority must reject an EMPTY active
+        // domain, not only the trust-shadow helper. A non-empty packed residual whose every
+        // cell is halo (active_dofs == 0) is a layout/halo wiring failure -- if such a mask
+        // were applied, res_old/res_new would both be 0 and the trust region would treat a
+        // dead solve as a perfectly-converged one. This cannot happen for a valid layout
+        // (mark_*_halos only zeros a direction when the domain exceeds 2*hw, so interior
+        // cells always survive), so the check is byte-identical in practice; it fails CLOSED
+        // -- refusing to install a degenerate mask -- if a future multi-tile layout regresses.
+        {
+            torch::NoGradGuard no_grad;
+            const int64_t active_dofs =
+                static_cast<int64_t>(halo_mask_.sum().item<float>());
+            if (cached_layout_.total_size > 0 && active_dofs <= 0) {
+                std::cerr << "[HALO MASK] ERROR: empty active domain (active_dofs="
+                          << active_dofs << " of total=" << cached_layout_.total_size
+                          << ") -- every cell is halo. Layout/halo wiring failure; refusing "
+                             "to install a degenerate all-zero mask." << std::endl;
+                halo_mask_initialized_ = false;
+                return;
+            }
+        }
+
         // Cast to target dtype/device
         halo_mask_ = halo_mask_.to(target_dtype).to(target_device);
         halo_mask_initialized_ = true;
