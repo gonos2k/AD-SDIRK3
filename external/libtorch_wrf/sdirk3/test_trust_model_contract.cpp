@@ -202,6 +202,23 @@ int main() {
         auto p_ovf = sdirk3_trust_predicted_reduction(huge, huge, 1.0, torch::Tensor());
         check(!p_ovf.ok() && p_ovf.error() == TrustPredictionError::NonFiniteResult,
               "contract: finite inputs, overflowing squared sum -> NonFiniteResult");
+
+        // PR 9F.9.5: a mask that zeros EVERY cell has no active DOF -> EmptyActiveDomain,
+        // not a valid reduction=0.
+        auto allzero = torch::zeros({10}, torch::kFloat64);
+        auto p_az = sdirk3_trust_predicted_reduction(ok, ok, 0.5, allzero);
+        check(!p_az.ok() && p_az.error() == TrustPredictionError::EmptyActiveDomain,
+              "contract: all-zero mask -> EmptyActiveDomain (no active DOF)");
+
+        // PR 9F.9.5: non-FP residuals are rejected (the math assumes a real residual).
+        auto int_r = torch::ones({10}, torch::kInt64);
+        auto p_int = sdirk3_trust_predicted_reduction(int_r, int_r, 0.5, torch::Tensor());
+        check(!p_int.ok() && p_int.error() == TrustPredictionError::UnsupportedDtype,
+              "contract: integer residual -> UnsupportedDtype");
+        // FP32 is supported.
+        auto f32 = torch::randn({10}, torch::kFloat32);
+        check(sdirk3_trust_predicted_reduction(f32, f32, 0.5, torch::Tensor()).ok(),
+              "contract: FP32 residual is supported");
     }
 
     // ---- TYPED RESULT: only success()/failure() build one (PR 9F.9.4 P1-2) -----------
@@ -215,6 +232,21 @@ int main() {
         const auto f = TrustPrediction::failure(TrustPredictionError::EmptyInput);
         check(!f.ok() && f.error() == TrustPredictionError::EmptyInput,
               "typed result: failure(EmptyInput) -> !ok() with error()==EmptyInput");
+
+        // PR 9F.9.5: the factories THEMSELVES enforce the invariant -- no factory call can
+        // build an ok() result carrying a bad reduction. Previously success(NaN)/success(Inf)
+        // and failure(None) all produced ok() with a non-finite (or absent) value.
+        const auto s_nan = TrustPrediction::success(
+            std::numeric_limits<double>::quiet_NaN());
+        check(!s_nan.ok() && s_nan.error() == TrustPredictionError::NonFiniteResult,
+              "typed result: success(NaN) is demoted to failure(NonFiniteResult)");
+        const auto s_inf = TrustPrediction::success(
+            std::numeric_limits<double>::infinity());
+        check(!s_inf.ok() && s_inf.error() == TrustPredictionError::NonFiniteResult,
+              "typed result: success(Inf) is demoted to failure(NonFiniteResult)");
+        const auto f_none = TrustPrediction::failure(TrustPredictionError::None);
+        check(!f_none.ok(),
+              "typed result: failure(None) can NEVER yield ok()");
     }
 
     // ---- SHARED MERIT AUTHORITY (PR 9F.9.4 P1-1) -------------------------------------
@@ -295,7 +327,7 @@ int main() {
               "(no cancellation loss)");
     }
 
-    const int kExpected = 26;
+    const int kExpected = 32;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;

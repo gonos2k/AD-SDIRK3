@@ -38,14 +38,20 @@ namespace sdirk3 {
 // valid reduction=0) and NonFiniteResult (finite FP64 inputs can still overflow the
 // squared sum to Inf/NaN -- ok() must not promise a finite reduction the math didn't
 // deliver) complete the contract.
+// PR 9F.9.5: EmptyActiveDomain (a mask that zeros EVERY cell -- a non-empty packed residual
+// with no active DOF is a halo/layout wiring failure, not a valid reduction=0) and
+// UnsupportedDtype (the math assumes a real FP32/FP64 residual; int/bool/complex would be
+// silently mis-promoted) close the last two ways a wiring error could pass as a number.
 enum class TrustPredictionError {
     None,
     UndefinedInput,
     EmptyInput,
+    EmptyActiveDomain,
     NonOneDimInput,
     ShapeMismatch,
     DeviceMismatch,
     DtypeMismatch,
+    UnsupportedDtype,
     NonFiniteInput,
     InvalidMask,
     InvalidAlpha,
@@ -53,17 +59,19 @@ enum class TrustPredictionError {
 };
 inline const char* trust_prediction_error_name(TrustPredictionError e) {
     switch (e) {
-        case TrustPredictionError::None:            return "none";
-        case TrustPredictionError::UndefinedInput:  return "undefined_input";
-        case TrustPredictionError::EmptyInput:      return "empty_input";
-        case TrustPredictionError::NonOneDimInput:  return "non_1d_input";
-        case TrustPredictionError::ShapeMismatch:   return "shape_mismatch";
-        case TrustPredictionError::DeviceMismatch:  return "device_mismatch";
-        case TrustPredictionError::DtypeMismatch:   return "dtype_mismatch";
-        case TrustPredictionError::NonFiniteInput:  return "non_finite_input";
-        case TrustPredictionError::InvalidMask:     return "invalid_mask";
-        case TrustPredictionError::InvalidAlpha:    return "invalid_alpha";
-        case TrustPredictionError::NonFiniteResult: return "non_finite_result";
+        case TrustPredictionError::None:              return "none";
+        case TrustPredictionError::UndefinedInput:    return "undefined_input";
+        case TrustPredictionError::EmptyInput:        return "empty_input";
+        case TrustPredictionError::EmptyActiveDomain: return "empty_active_domain";
+        case TrustPredictionError::NonOneDimInput:    return "non_1d_input";
+        case TrustPredictionError::ShapeMismatch:     return "shape_mismatch";
+        case TrustPredictionError::DeviceMismatch:    return "device_mismatch";
+        case TrustPredictionError::DtypeMismatch:     return "dtype_mismatch";
+        case TrustPredictionError::UnsupportedDtype:  return "unsupported_dtype";
+        case TrustPredictionError::NonFiniteInput:    return "non_finite_input";
+        case TrustPredictionError::InvalidMask:       return "invalid_mask";
+        case TrustPredictionError::InvalidAlpha:      return "invalid_alpha";
+        case TrustPredictionError::NonFiniteResult:   return "non_finite_result";
     }
     return "unknown";  // unreachable; keeps -Wswitch honest AND satisfies -Wreturn-type
 }
@@ -71,14 +79,27 @@ inline const char* trust_prediction_error_name(TrustPredictionError e) {
 // PR 9F.9.4: a result type that CANNOT represent an invalid state. The previous struct had
 // public fields and a default of {reduction=NaN, error=None}, so `TrustPrediction p;` gave
 // ok()==true with a NaN reduction -- exactly the "failure is representable" flaw the typed
-// result was meant to close. Now the only ways to build one are success(value) / failure(e):
-// ok() <=> error==None <=> reduction is meaningful. No default constructor, no public fields.
+// result was meant to close. No default constructor, no public fields.
+//
+// PR 9F.9.5: the factories themselves now enforce the invariant `ok() => finite reduction`
+// and `!ok() => a real error`. Previously `success(NaN)` / `success(Inf)` built an ok()
+// object carrying a non-finite value, and `failure(None)` built an ok() object with no
+// value -- both re-opened the very hole the type was meant to close. Now success() demotes a
+// non-finite value to failure(NonFiniteResult), and failure(None) is remapped to
+// UndefinedInput, so no factory call can produce ok() with a bad reduction.
 class TrustPrediction {
 public:
     static TrustPrediction success(double reduction) {
+        if (!std::isfinite(reduction))
+            return TrustPrediction(std::numeric_limits<double>::quiet_NaN(),
+                                   TrustPredictionError::NonFiniteResult);
         return TrustPrediction(reduction, TrustPredictionError::None);
     }
     static TrustPrediction failure(TrustPredictionError error) {
+        // None is the success discriminant; failure(None) is a caller bug -- collapse it to a
+        // defined error so a failure() call can NEVER yield ok().
+        if (error == TrustPredictionError::None)
+            error = TrustPredictionError::UndefinedInput;
         return TrustPrediction(std::numeric_limits<double>::quiet_NaN(), error);
     }
     bool ok() const noexcept { return error_ == TrustPredictionError::None; }
@@ -144,6 +165,11 @@ inline TrustPrediction sdirk3_trust_predicted_reduction(const torch::Tensor& R_s
         return TrustPrediction::failure(E::DeviceMismatch);
     if (R_scaled.scalar_type() != r_g_scaled.scalar_type())
         return TrustPrediction::failure(E::DtypeMismatch);
+    // The math assumes a REAL residual; int/bool/complex would be silently mis-promoted by
+    // the arithmetic and the to(kFloat64) cast. Restrict to the FP types WRF actually uses.
+    if (R_scaled.scalar_type() != torch::kFloat32 &&
+        R_scaled.scalar_type() != torch::kFloat64)
+        return TrustPrediction::failure(E::UnsupportedDtype);
     if (!std::isfinite(alpha) || alpha < 0.0 || alpha > 1.0)
         return TrustPrediction::failure(E::InvalidAlpha);
     if (mask.defined()) {
@@ -156,6 +182,12 @@ inline TrustPrediction sdirk3_trust_predicted_reduction(const torch::Tensor& R_s
         // NaN/Inf makes the product non-zero (so a non-finite mask also fails here).
         if (!((mask * (1.0 - mask)) == 0.0).all().item<bool>())
             return TrustPrediction::failure(E::InvalidMask);
+        // A mask that zeros EVERY cell leaves no active DOF: a non-empty residual with an
+        // empty active domain is a halo/layout wiring failure, NOT a valid reduction=0.
+        // mask is already validated finite/binary {0,1}, so any() works directly on the
+        // float tensor -- no bool cast/copy needed (nonzero == active).
+        if (!mask.any().item<bool>())
+            return TrustPrediction::failure(E::EmptyActiveDomain);
     }
     // Exclude masked-out (halo) cells BEFORE the finiteness check and any reduction. The
     // mask defines the valid domain; halo cells can hold NaN/Inf garbage, so validating
