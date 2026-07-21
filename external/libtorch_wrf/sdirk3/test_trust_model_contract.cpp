@@ -91,7 +91,62 @@ int main() {
         check(std::abs(p - want) < 1e-9, "undefined mask -> no masking, matches reference");
     }
 
-    const int kExpected = 7;
+    // ---- CALLER-COORDINATE INTEGRATION (PR 9F.9.2) -------------------------------
+    // The bug in PR #58 was in the CALLER's coordinate handling, not the formula. Build
+    // a small system EXACTLY as the outer Newton does -- A_s = S^-1 A S, b_s = -S^-1 R,
+    // r_g = b_s - A_s x -- feed the helper the scaled inputs (R_s = S^-1 R, r_g), and
+    // compare to an INDEPENDENT computation in the ORIGINAL space of the new residual's
+    // linear model R + alpha*A*dK (dK = S x). A caller that forgot to scale, or scaled
+    // twice, would diverge here.
+    {
+        const int64_t n = 40;
+        auto S    = torch::rand({n}, torch::kFloat64) + 0.5;   // diagonal scale != I
+        auto Sinv = S.reciprocal();
+        auto A    = torch::randn({n, n}, torch::kFloat64);     // dense operator
+        auto R    = torch::randn({n}, torch::kFloat64);        // unscaled residual
+        auto x    = torch::randn({n}, torch::kFloat64);        // scaled step (dK_tilde)
+        auto dK   = S * x;                                     // unscaled step
+        // scaled system, exactly as the solver builds it
+        auto R_s  = Sinv * R;
+        auto A_s_x = Sinv * torch::mv(A, S * x);               // A_s x = S^-1 A (S x)
+        auto b_s  = -(Sinv * R);
+        auto r_g  = b_s - A_s_x;                               // GMRES true residual (scaled)
+        const double a = 0.5;
+        const double helper = wrf::sdirk3::sdirk3_trust_predicted_reduction(
+            R_s, r_g, a, torch::Tensor());
+        // Original-space reference: linear model of the new residual is R + a*A*dK, and
+        // the predicted reduction in the SAME scaled L2 norm the helper uses is
+        //   ||S^-1 R||^2 - ||S^-1 (R + a A dK)||^2.
+        auto R_new_lin = R + a * torch::mv(A, dK);
+        auto e0 = Sinv * R;
+        auto e1 = Sinv * R_new_lin;
+        const double ref = (e0 * e0).sum().item<double>() - (e1 * e1).sum().item<double>();
+        check(std::abs(helper - ref) < 1e-9,
+              "caller integration: scaled-space helper == original-space direct calc "
+              "(a mis-scaled or double-scaled caller would diverge)");
+    }
+
+    // ---- CONTRACT VIOLATIONS return NaN (PR 9F.9.2) ------------------------------
+    {
+        auto ok = torch::randn({10}, torch::kFloat64);
+        auto shape2d = torch::randn({10, 1}, torch::kFloat64);
+        auto badn = torch::randn({11}, torch::kFloat64);
+        check(std::isnan(wrf::sdirk3::sdirk3_trust_predicted_reduction(
+                  ok, badn, 0.5, torch::Tensor())),
+              "contract: mismatched numel -> NaN");
+        check(std::isnan(wrf::sdirk3::sdirk3_trust_predicted_reduction(
+                  ok, shape2d.reshape({10}).unsqueeze(1), 0.5, torch::Tensor())),
+              "contract: non-1-D input -> NaN");
+        check(std::isnan(wrf::sdirk3::sdirk3_trust_predicted_reduction(
+                  ok, ok, 1.5, torch::Tensor())),
+              "contract: alpha out of [0,1] -> NaN");
+        auto nonfinite = ok.clone(); nonfinite[0] = std::numeric_limits<double>::infinity();
+        check(std::isnan(wrf::sdirk3::sdirk3_trust_predicted_reduction(
+                  ok, nonfinite, 0.5, torch::Tensor())),
+              "contract: non-finite input -> NaN");
+    }
+
+    const int kExpected = 12;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;

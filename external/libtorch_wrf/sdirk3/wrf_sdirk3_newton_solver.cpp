@@ -4936,7 +4936,12 @@ public:
                 }
                 // P1-1 SHADOW: freeze S_0 (the iter-0 scale) so the monotonic growth of
                 // S over later iterations can be compared against a fixed reference.
-                S0_inv_diag_ = S_inv_diag_.clone();
+                // PR 9F.9.2: only when the shadow is ON. Cloning a full-state tensor on
+                // EVERY production solve just to feed a default-off diagnostic is a
+                // default-path regression (the numerics were unchanged, but the default
+                // path paid a full-state alloc + copy). Gate it on the flag.
+                if (numerical_shadow_enabled())
+                    S0_inv_diag_ = S_inv_diag_.detach().clone();
             }
 
             // r50-F3: Monotonic S update for iter > 0.
@@ -5015,8 +5020,9 @@ public:
                     S_inv_diag_ = S_inv_diag_.to(K.device());
                     scaling_initialized_ = true;
                     // PR 9F.9.1: freeze S0 on the FALLBACK init path too, else the shadow
-                    // could reuse a stale S0 (or none) here. Capture the S just built.
-                    if (!S0_inv_diag_.defined())
+                    // could reuse a stale S0 (or none) here. PR 9F.9.2: only when the
+                    // shadow is ON (no default-path clone).
+                    if (numerical_shadow_enabled() && !S0_inv_diag_.defined())
                         S0_inv_diag_ = S_inv_diag_.detach().clone();
                     std::cerr << "[SCALING] Force-initialized from R (fallback)" << std::endl;
                 }
@@ -7986,7 +7992,13 @@ public:
                     res_old_val = guarded_item<float>(R_scaled.norm());
                     res_new_val = guarded_item<float>(R_trial_scaled.norm());
                 } else {
-                    res_old_val = guarded_item<float>(res_norm_tensor);
+                    // PR 9F.9.2: BOTH raw L2, matching the scaled branch above (||.||_2).
+                    // The old code used res_norm_tensor (RMS = ||R||/sqrt(N)) for old but
+                    // the raw L2 of R_trial for new, so actual_reduction = RMS(R)^2 -
+                    // L2(R_trial)^2 was dimensionally inconsistent and grid-size dependent.
+                    // Reached ONLY when scaling never initialized (no layout / zero grid
+                    // dims via the public options default), so dt=600 is unaffected.
+                    res_old_val = guarded_item<float>(R.norm());
                     res_new_val = guarded_item<float>(res_trial_tensor);
                 }
                 dK_norm_val = guarded_item<float>(dK_norm);
