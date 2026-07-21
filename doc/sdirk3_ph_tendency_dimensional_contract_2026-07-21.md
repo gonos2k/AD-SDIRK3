@@ -23,9 +23,10 @@ ph_new           = rhs_physical
 
 The authoritative WRF locations are:
 
-- `dyn_em/module_big_step_utilities_em.F`, `rhs_ph`: comments immediately above
-  the geopotential tendency state that it is `(mu/my) d(phi)/dt` and is
-  decoupled in `advance_w`.
+- `dyn_em/module_big_step_utilities_em.F`, `rhs_ph`: the algebraic comment writes
+  `(mu/my) d(phi)/dt`, where `my` denotes the mass-point y map factor; the actual
+  routine argument used by the implementation is `msfty`. The same comment says
+  that this coupled tendency is decoupled in `advance_w`.
 - `dyn_em/module_small_step_em.F`, `advance_w`: the first RHS pass multiplies
   `ph_tend` by `dts`; the second pass divides by `c1f*mut+c2f` and multiplies by
   `msfty`; the final update adds the new-`w` arm divided by the updated mass.
@@ -40,7 +41,7 @@ physical d(phi)/dt ~= 1732 / 90000 ~= 1.92e-2
 
 not `1732`. With `dts=200`, the isolated direct increment is about `3.85`, not
 `346400`. Therefore the earlier diagnostic product `ph_tend*dts*N` was
- dimensionally invalid because it omitted the mass decoupling.
+dimensionally invalid because it omitted the mass decoupling.
 
 ## Standing executable contract
 
