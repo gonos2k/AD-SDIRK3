@@ -8094,21 +8094,31 @@ public:
                         char inv[128];
                         std::snprintf(inv, sizeof inv,
                             "SDIRK3_TRUST_SHADOW_INVALID stage=%d iter=%d reason=%s\n",
-                            stage, newton_iter, trust_prediction_error_name(pred.error));
+                            stage, newton_iter, trust_prediction_error_name(pred.error()));
                         emit_numerical_shadow_line(inv);
                     } else {
-                        const double pred_exact = pred.reduction;
+                        const double pred_exact = pred.reduction();
+                        // PR 9F.9.4 (P1-1): compute the ACTUAL reduction through the SAME
+                        // FP64 merit authority as the predicted, so rho_exact is FP64 in
+                        // BOTH numerator and denominator. The old actual_l2 squared FP32
+                        // res_old_val/res_new_val, mixing an FP32 numerator with the FP64
+                        // pred_exact. R_trial (line ~7975) and the mask are in scope; scale
+                        // R_trial once (r_g is already scaled) and reuse the halo mask.
+                        const auto R_trial_s = S_inv_diag_ * R_trial;
                         const double actual_l2 =
-                            static_cast<double>(res_old_val) * res_old_val
-                            - static_cast<double>(res_new_val) * res_new_val;
+                            sdirk3_scaled_merit_sq(R_s, mask)
+                            - sdirk3_scaled_merit_sq(R_trial_s, mask);
                         const double rho_heur =
                             actual_reduction / ((std::abs(predicted_val) > 1e-30f)
                                                     ? predicted_val : 1e-30f);
-                        // pred_exact is guaranteed finite here (pred.ok()); a genuinely
-                        // ~0 predicted reduction is reported as rho_exact=nan rather than
-                        // clamped to a huge value.
+                        // PR 9F.9.4: rho_exact is meaningful ONLY for a DESCENT linear model
+                        // (pred_exact > 0) and a finite actual. A non-descent (pred_exact<=0,
+                        // the model predicts NO decrease) or non-finite actual is reported as
+                        // rho_exact=nan rather than a plausible finite ratio -- separating the
+                        // "valid but non-descent" state from a normal accept.
                         const double rho_exact =
-                            (std::abs(pred_exact) > 1e-30) ? (actual_l2 / pred_exact)
+                            (std::isfinite(actual_l2) && pred_exact > 1e-30)
+                                ? (actual_l2 / pred_exact)
                                 : std::numeric_limits<double>::quiet_NaN();
                         char tb[256];
                         std::snprintf(tb, sizeof tb,

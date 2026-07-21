@@ -33,90 +33,161 @@ namespace sdirk3 {
 // and abs(NaN) > eps is FALSE, so the guard clamped the denominator and turned the
 // violation back into a plausible finite rho -- laundering the failure. Representing the
 // error in the TYPE forces the caller to branch on it explicitly.
+//
+// PR 9F.9.4: EmptyInput (a zero-length packed residual is a wiring/layout failure, not a
+// valid reduction=0) and NonFiniteResult (finite FP64 inputs can still overflow the
+// squared sum to Inf/NaN -- ok() must not promise a finite reduction the math didn't
+// deliver) complete the contract.
 enum class TrustPredictionError {
     None,
     UndefinedInput,
+    EmptyInput,
     NonOneDimInput,
     ShapeMismatch,
     DeviceMismatch,
     DtypeMismatch,
     NonFiniteInput,
     InvalidMask,
-    InvalidAlpha
+    InvalidAlpha,
+    NonFiniteResult
 };
 inline const char* trust_prediction_error_name(TrustPredictionError e) {
     switch (e) {
-        case TrustPredictionError::None:           return "none";
-        case TrustPredictionError::UndefinedInput: return "undefined_input";
-        case TrustPredictionError::NonOneDimInput: return "non_1d_input";
-        case TrustPredictionError::ShapeMismatch:  return "shape_mismatch";
-        case TrustPredictionError::DeviceMismatch: return "device_mismatch";
-        case TrustPredictionError::DtypeMismatch:  return "dtype_mismatch";
-        case TrustPredictionError::NonFiniteInput: return "non_finite_input";
-        case TrustPredictionError::InvalidMask:    return "invalid_mask";
-        case TrustPredictionError::InvalidAlpha:   return "invalid_alpha";
+        case TrustPredictionError::None:            return "none";
+        case TrustPredictionError::UndefinedInput:  return "undefined_input";
+        case TrustPredictionError::EmptyInput:      return "empty_input";
+        case TrustPredictionError::NonOneDimInput:  return "non_1d_input";
+        case TrustPredictionError::ShapeMismatch:   return "shape_mismatch";
+        case TrustPredictionError::DeviceMismatch:  return "device_mismatch";
+        case TrustPredictionError::DtypeMismatch:   return "dtype_mismatch";
+        case TrustPredictionError::NonFiniteInput:  return "non_finite_input";
+        case TrustPredictionError::InvalidMask:     return "invalid_mask";
+        case TrustPredictionError::InvalidAlpha:    return "invalid_alpha";
+        case TrustPredictionError::NonFiniteResult: return "non_finite_result";
     }
     return "unknown";  // unreachable; keeps -Wswitch honest AND satisfies -Wreturn-type
 }
-struct TrustPrediction {
-    double reduction = std::numeric_limits<double>::quiet_NaN();
-    TrustPredictionError error = TrustPredictionError::None;
-    bool ok() const noexcept { return error == TrustPredictionError::None; }
+
+// PR 9F.9.4: a result type that CANNOT represent an invalid state. The previous struct had
+// public fields and a default of {reduction=NaN, error=None}, so `TrustPrediction p;` gave
+// ok()==true with a NaN reduction -- exactly the "failure is representable" flaw the typed
+// result was meant to close. Now the only ways to build one are success(value) / failure(e):
+// ok() <=> error==None <=> reduction is meaningful. No default constructor, no public fields.
+class TrustPrediction {
+public:
+    static TrustPrediction success(double reduction) {
+        return TrustPrediction(reduction, TrustPredictionError::None);
+    }
+    static TrustPrediction failure(TrustPredictionError error) {
+        return TrustPrediction(std::numeric_limits<double>::quiet_NaN(), error);
+    }
+    bool ok() const noexcept { return error_ == TrustPredictionError::None; }
+    // Meaningful only when ok(); NaN otherwise (a failure() carries no reduction).
+    double reduction() const noexcept { return reduction_; }
+    TrustPredictionError error() const noexcept { return error_; }
+
+private:
+    TrustPrediction(double reduction, TrustPredictionError error)
+        : reduction_(reduction), error_(error) {}
+    double reduction_;
+    TrustPredictionError error_;
 };
+
+// PR 9F.9.4: the SINGLE FP64 merit authority. Both the predicted reduction (A, B below) and
+// the caller's ACTUAL reduction go through this one function, so actual and predicted are
+// computed in the SAME norm at the SAME precision -- previously the actual reduction was
+// res_old_val^2 - res_new_val^2 with res_* materialized as FP32, so rho_exact mixed an FP32
+// numerator with an FP64 denominator. Masked (halo) then squared-summed in FP64. Inputs MUST
+// already be validated compatible (the predicted helper validates; the caller shares the
+// production halo mask); this is an unchecked kernel by design. NoGradGuard: diagnostic-only.
+inline double sdirk3_scaled_merit_sq(const torch::Tensor& residual_scaled,
+                                     const torch::Tensor& mask) {
+    torch::NoGradGuard no_grad;
+    // Mask via torch::where, NOT `residual_scaled * mask`: masked-out (halo) cells can hold
+    // NaN/Inf garbage, and NaN*0 == NaN in IEEE-754 would poison the whole sum even when the
+    // active domain is clean. `where` REPLACES those cells with 0, so the halo cannot leak
+    // into the reduction. For a finite halo this is identical to x*mask (binary mask), so it
+    // stays consistent with the active-domain case.
+    const auto x = mask.defined()
+        ? torch::where(mask.to(torch::kBool), residual_scaled,
+                       torch::zeros_like(residual_scaled))
+        : residual_scaled;
+    return x.to(torch::kFloat64).square().sum().item<double>();
+}
 
 // Both inputs are in the SCALED space; `mask` is optional (undefined = no masking) and,
 // if defined, must EXACTLY match (1-D, same shape/device/dtype, finite, binary 0/1) --
 // no implicit conversion or broadcasting, which would turn a wiring error into a
-// plausible-but-wrong number. Returns TrustPrediction{reduction, error}; reduction is
-// only meaningful when ok().
+// plausible-but-wrong number. Returns TrustPrediction::success(reduction) or ::failure(e);
+// reduction is only meaningful when ok().
 //
-// STRICT input contract: both residuals defined, 1-D, identical shape/device/dtype and
-// finite; alpha finite in [0,1]. On any violation the reduction is NaN and error names
-// the cause -- the caller MUST branch on ok(), never divide by reduction blindly.
+// STRICT input contract: both residuals defined, NON-EMPTY, 1-D, identical shape/device/
+// dtype and finite; alpha finite in [0,1]. The RESULT is also checked finite (finite inputs
+// can overflow the squared sum). On any violation error() names the cause -- the caller MUST
+// branch on ok(), never read reduction() blindly.
 inline TrustPrediction sdirk3_trust_predicted_reduction(const torch::Tensor& R_scaled,
                                                         const torch::Tensor& r_g_scaled,
                                                         double alpha,
                                                         const torch::Tensor& mask) {
     using E = TrustPredictionError;
     torch::NoGradGuard no_grad;
-    const auto fail = [](E e) { return TrustPrediction{
-        std::numeric_limits<double>::quiet_NaN(), e}; };
 
-    if (!R_scaled.defined() || !r_g_scaled.defined()) return fail(E::UndefinedInput);
-    if (R_scaled.dim() != 1 || r_g_scaled.dim() != 1)  return fail(E::NonOneDimInput);
-    if (R_scaled.sizes() != r_g_scaled.sizes())        return fail(E::ShapeMismatch);
-    if (R_scaled.device() != r_g_scaled.device())      return fail(E::DeviceMismatch);
-    if (R_scaled.scalar_type() != r_g_scaled.scalar_type()) return fail(E::DtypeMismatch);
-    if (!std::isfinite(alpha) || alpha < 0.0 || alpha > 1.0) return fail(E::InvalidAlpha);
+    if (!R_scaled.defined() || !r_g_scaled.defined())
+        return TrustPrediction::failure(E::UndefinedInput);
+    if (R_scaled.numel() == 0 || r_g_scaled.numel() == 0)
+        return TrustPrediction::failure(E::EmptyInput);
+    if (R_scaled.dim() != 1 || r_g_scaled.dim() != 1)
+        return TrustPrediction::failure(E::NonOneDimInput);
+    if (R_scaled.sizes() != r_g_scaled.sizes())
+        return TrustPrediction::failure(E::ShapeMismatch);
+    if (R_scaled.device() != r_g_scaled.device())
+        return TrustPrediction::failure(E::DeviceMismatch);
+    if (R_scaled.scalar_type() != r_g_scaled.scalar_type())
+        return TrustPrediction::failure(E::DtypeMismatch);
+    if (!std::isfinite(alpha) || alpha < 0.0 || alpha > 1.0)
+        return TrustPrediction::failure(E::InvalidAlpha);
     if (mask.defined()) {
         // EXACT match, no auto-convert; and mask must be finite and binary {0,1}.
         if (mask.dim() != 1 || mask.sizes() != R_scaled.sizes() ||
             mask.device() != R_scaled.device() ||
             mask.scalar_type() != R_scaled.scalar_type())
-            return fail(E::InvalidMask);
+            return TrustPrediction::failure(E::InvalidMask);
         // ONE sync for finite AND binary: mask*(1-mask) == 0 iff mask in {0,1}, and any
         // NaN/Inf makes the product non-zero (so a non-finite mask also fails here).
         if (!((mask * (1.0 - mask)) == 0.0).all().item<bool>())
-            return fail(E::InvalidMask);
+            return TrustPrediction::failure(E::InvalidMask);
     }
-    // ONE sync for both residuals' finiteness.
-    if (!torch::isfinite(R_scaled).logical_and(torch::isfinite(r_g_scaled))
+    // Exclude masked-out (halo) cells BEFORE the finiteness check and any reduction. The
+    // mask defines the valid domain; halo cells can hold NaN/Inf garbage, so validating
+    // finiteness over the FULL tensor would spuriously fail on cells the computation does
+    // not use. torch::where replaces them with 0 (NaN*0==NaN rules out plain multiply). For
+    // a finite halo this is identical to the unmasked tensor on the active domain.
+    torch::Tensor R_active = R_scaled;
+    torch::Tensor r_g_active = r_g_scaled;
+    if (mask.defined()) {
+        const auto mb = mask.to(torch::kBool);
+        R_active   = torch::where(mb, R_scaled,   torch::zeros_like(R_scaled));
+        r_g_active = torch::where(mb, r_g_scaled, torch::zeros_like(r_g_scaled));
+    }
+    // ONE sync for both residuals' finiteness, on the ACTIVE domain only.
+    if (!torch::isfinite(R_active).logical_and(torch::isfinite(r_g_active))
              .all().item<bool>())
-        return fail(E::NonFiniteInput);
+        return TrustPrediction::failure(E::NonFiniteInput);
 
-    const auto apply_mask = [&](const torch::Tensor& x) {
-        return mask.defined() ? (x * mask) : x;
-    };
-    const auto R_lin_s = (1.0 - alpha) * R_scaled - alpha * r_g_scaled;
-    const auto a = apply_mask(R_scaled);
-    const auto b = apply_mask(R_lin_s);
-    // Accumulate in FP64. The predicted reduction is A - B of two nearly-equal large
-    // sums-of-squares; FP32 accumulation would lose it to cancellation exactly in the
-    // small-reduction region where accept/reject is most sensitive. Diagnostic-only, so
-    // the FP64 reduction (a GPU->CPU sync + a widened reduce) is an accepted cost.
-    const double A = a.to(torch::kFloat64).square().sum().item<double>();
-    const double B = b.to(torch::kFloat64).square().sum().item<double>();
-    return TrustPrediction{A - B, E::None};
+    const auto R_lin_s = (1.0 - alpha) * R_active - alpha * r_g_active;
+    // Accumulate in FP64 through the shared merit authority. The predicted reduction is
+    // A - B of two nearly-equal large sums-of-squares; FP32 accumulation would lose it to
+    // cancellation exactly in the small-reduction region where accept/reject is most
+    // sensitive. Diagnostic-only, so the FP64 reduction (a GPU->CPU sync + a widened
+    // reduce) is an accepted cost. R_active/R_lin_s already have the halo zeroed, so merit
+    // needs no further mask.
+    const double A = sdirk3_scaled_merit_sq(R_active, torch::Tensor());
+    const double B = sdirk3_scaled_merit_sq(R_lin_s, torch::Tensor());
+    // Finite inputs can still overflow the squared sum to Inf, or A-B to NaN (Inf-Inf).
+    // ok() must never promise a finite reduction the arithmetic did not produce.
+    if (!std::isfinite(A) || !std::isfinite(B) || !std::isfinite(A - B))
+        return TrustPrediction::failure(E::NonFiniteResult);
+    return TrustPrediction::success(A - B);
 }
 
 }  // namespace sdirk3
