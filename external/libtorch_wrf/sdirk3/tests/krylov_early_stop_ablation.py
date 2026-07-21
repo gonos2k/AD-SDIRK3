@@ -56,7 +56,6 @@ CONTROLLED_ENV_KEYS = {
     "WRF_SDIRK3_GMRES_TRUE_RESIDUAL_PERIOD",
     "WRF_SDIRK3_GMRES_ARNOLDI_STAG_WINDOW",
     "WRF_SDIRK3_GMRES_ARNOLDI_STAG_RATIO",
-    "WRF_SDIRK3_GMRES_STAGNATION_THRESHOLD",
     "WRF_SDIRK3_STAGE2_GMRES_RESTART",
     "WRF_SDIRK3_STAGE2_MAX_KRYLOV_RESTARTS",
     "WRF_SDIRK3_STAGE2_KRYLOV_TOL",
@@ -64,6 +63,9 @@ CONTROLLED_ENV_KEYS = {
     "WRF_SDIRK3_STAGE3_MAX_KRYLOV_RESTARTS",
     "WRF_SDIRK3_STAGE3_KRYLOV_TOL",
     "WRF_SDIRK3_JVP_AUTO_BENCH_CALLS",
+    "WRF_SDIRK3_GMRES_WARMSTART",
+    "WRF_SDIRK3_INN_WARMSTART_ENABLE",
+    "WRF_SDIRK3_INN_TOL_RAMP_ENABLE",
 }
 
 DYNAMIC_PREFIXES = (
@@ -411,8 +413,6 @@ def controlled_env(case: Case, args: argparse.Namespace) -> dict[str, str]:
             "WRF_SDIRK3_GMRES_TRUE_RESIDUAL_PERIOD": str(args.probe_period),
             "WRF_SDIRK3_GMRES_ARNOLDI_STAG_WINDOW": str(case.stagnation_window),
             "WRF_SDIRK3_GMRES_ARNOLDI_STAG_RATIO": str(case.stagnation_ratio),
-            # Disable restart-to-restart early stop as far as the public clamp allows.
-            "WRF_SDIRK3_GMRES_STAGNATION_THRESHOLD": "1.0",
             "WRF_SDIRK3_STAGE2_GMRES_RESTART": str(case.stage2_restart_override),
             "WRF_SDIRK3_STAGE2_MAX_KRYLOV_RESTARTS": str(case.max_restarts),
             # Explicit override prevents EW budget coupling from changing restart counts.
@@ -421,9 +421,35 @@ def controlled_env(case: Case, args: argparse.Namespace) -> dict[str, str]:
             "WRF_SDIRK3_STAGE3_MAX_KRYLOV_RESTARTS": "0",
             "WRF_SDIRK3_STAGE3_KRYLOV_TOL": "0",
             "WRF_SDIRK3_JVP_AUTO_BENCH_CALLS": "0",
+            "WRF_SDIRK3_GMRES_WARMSTART": "0",
+            "WRF_SDIRK3_INN_WARMSTART_ENABLE": "0",
+            "WRF_SDIRK3_INN_TOL_RAMP_ENABLE": "0",
         }
     )
     return env
+
+
+def validate_result_contract(case: Case, result: Result, args: argparse.Namespace) -> None:
+    """Fail closed when a run does not preserve the paired-budget contract."""
+    problems: list[str] = []
+    if result.fgmres_records < 1:
+        problems.append("no Stage-2 iter-0 FGMRES diagnostic")
+    if result.shadow_records < 1:
+        problems.append("no Stage-2 iter-0 Newton shadow")
+    if result.restart != args.restart:
+        problems.append(f"effective restart={result.restart}, expected {args.restart}")
+    if result.max_restarts != case.max_restarts:
+        problems.append(
+            f"effective max_restarts={result.max_restarts}, expected {case.max_restarts}"
+        )
+    if result.krylov_tol is None or abs(result.krylov_tol - args.krylov_tol) > 1.0e-6:
+        problems.append(
+            f"effective tol={result.krylov_tol}, expected {args.krylov_tol}"
+        )
+    if result.block_max_s0 is None or result.newton_tol is None:
+        problems.append("block-max/newton-tolerance evidence missing")
+    if problems:
+        raise RuntimeError(f"{case.name}: invalid paired run: " + "; ".join(problems))
 
 
 def append_rsl(workspace: Path, combined_log: Path) -> None:
@@ -490,6 +516,8 @@ def run_matrix(args: argparse.Namespace) -> int:
 
     if args.output_dir:
         output_dir = Path(args.output_dir).resolve()
+        if output_dir == run_dir or run_dir in output_dir.parents:
+            raise RuntimeError("--output-dir must be outside the WRF run directory")
         output_dir.mkdir(parents=True, exist_ok=False)
     else:
         stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -533,6 +561,7 @@ def run_matrix(args: argparse.Namespace) -> int:
         append_rsl(workspace, combined_log)
         text = combined_log.read_text(encoding="utf-8", errors="replace")
         result = parse_result(case, text, wrf_code, combined_log)
+        validate_result_contract(case, result, args)
         results.append(result)
         write_summary(results, output_dir)
 
@@ -630,14 +659,33 @@ def main() -> int:
         return self_test()
     if not (1 <= args.restart <= 100):
         raise ValueError("--restart must be in [1,100]")
-    if not (1 <= args.long_restarts <= 20):
-        raise ValueError("--long-restarts must be in [1,20]")
+    if not (2 <= args.long_restarts <= 20):
+        raise ValueError("--long-restarts must be in [2,20]")
     if not (1 <= args.normal_stag_window <= 20):
         raise ValueError("--normal-stag-window must be in [1,20]")
     if not (1 <= args.full_stag_window <= 20):
         raise ValueError("--full-stag-window must be in [1,20]")
     if not (0.0 < args.krylov_tol <= 1.0):
         raise ValueError("--krylov-tol must be in (0,1]")
+    if args.probe_start < 0 or not (1 <= args.probe_period <= 100):
+        raise ValueError("--probe-start must be >=0 and --probe-period in [1,100]")
+    if not (0.5 <= args.normal_stag_ratio <= 1.0):
+        raise ValueError("--normal-stag-ratio must be in [0.5,1]")
+    last_j = args.restart - 1
+    periodic_probes = (
+        0
+        if args.probe_start > last_j
+        else 1 + (last_j - args.probe_start) // args.probe_period
+    )
+    # The final Arnoldi index is always probed, even if it is not on the periodic lattice.
+    if last_j >= 0 and (args.probe_start > last_j or
+                        (last_j - args.probe_start) % args.probe_period != 0):
+        periodic_probes += 1
+    if args.full_stag_window <= periodic_probes:
+        raise ValueError(
+            "--full-stag-window must exceed the maximum probes per restart "
+            f"({periodic_probes}) so C/D cannot trip Arnoldi stagnation"
+        )
     return run_matrix(args)
 
 
