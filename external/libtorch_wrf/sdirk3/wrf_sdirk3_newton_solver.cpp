@@ -1433,8 +1433,11 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             float prev_true_err = 1.0f;
             int stag_count = 0;
             auto& cfg_local = wrf::sdirk3::g_sdirk3_config;
+            // Cache once per solve (Gemini #66): no_early_stop_enabled() has a thread-safe
+            // static-init guard checked on every call; hoist it out of the Arnoldi loop.
+            const bool no_early_stop = no_early_stop_enabled();
             const bool aggressive_budget_stag_gate =
-                (!no_early_stop_enabled() &&
+                (!no_early_stop &&
                  stage_id >= 2 &&
                  ru_share_hint > 0.98f &&
                  cfg_local.stage2_gmres_restart > 0 &&
@@ -1797,7 +1800,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 // v20.14r48: Arnoldi stagnation tracking.
                 // Track true_err improvement across consecutive checks.
                 bool arnoldi_stagnated = false;
-                if (!gmres_converged && !no_early_stop_enabled()) {
+                if (!gmres_converged && !no_early_stop) {
                     float err_val_stag = guarded_item<float>(error_true);
                     float ratio = (prev_true_err > 1e-30f) ? err_val_stag / prev_true_err : 0.0f;
                     if (ratio > stag_ratio) {
@@ -2606,8 +2609,11 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             float prev_true_err = 1.0f;
             int stag_count = 0;
             auto& cfg_local = wrf::sdirk3::g_sdirk3_config;
+            // Cache once per solve (Gemini #66): no_early_stop_enabled() has a thread-safe
+            // static-init guard checked on every call; hoist it out of the Arnoldi loop.
+            const bool no_early_stop = no_early_stop_enabled();
             const bool aggressive_budget_stag_gate =
-                (!no_early_stop_enabled() &&
+                (!no_early_stop &&
                  stage_id >= 2 &&
                  ru_share_hint > 0.98f &&
                  cfg_local.stage2_gmres_restart > 0 &&
@@ -2983,7 +2989,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 // v20.14r48: Arnoldi stagnation tracking.
                 // Track true_err improvement across consecutive checks.
                 bool arnoldi_stagnated = false;
-                if (!gmres_converged && !no_early_stop_enabled()) {
+                if (!gmres_converged && !no_early_stop) {
                     float err_val_stag = guarded_item<float>(error_true);
                     float ratio = (prev_true_err > 1e-30f) ? err_val_stag / prev_true_err : 0.0f;
                     if (ratio > stag_ratio) {
