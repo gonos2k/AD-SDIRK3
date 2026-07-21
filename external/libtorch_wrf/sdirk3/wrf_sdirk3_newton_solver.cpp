@@ -8141,7 +8141,8 @@ public:
                         const double merit_old   = pred.merit_old();
                         const double merit_model = pred.merit_model();
                         const auto R_trial_s = S_inv_diag_ * R_trial;
-                        const double merit_trial = sdirk3_scaled_merit_sq(R_trial_s, mask);
+                        const double merit_trial =
+                            wrf::sdirk3::detail::scaled_merit_sq_unchecked(R_trial_s, mask);
                         const double actual_exact = merit_old - merit_trial;
                         const auto assess = assess_trust_model(
                             pred_exact, merit_old, merit_model, actual_exact);

@@ -134,15 +134,20 @@ private:
     TrustPredictionError error_;
 };
 
+namespace detail {
 // PR 9F.9.4: the SINGLE FP64 merit authority. Both the predicted reduction (A, B below) and
 // the caller's ACTUAL reduction go through this one function, so actual and predicted are
 // computed in the SAME norm at the SAME precision -- previously the actual reduction was
 // res_old_val^2 - res_new_val^2 with res_* materialized as FP32, so rho_exact mixed an FP32
-// numerator with an FP64 denominator. Masked (halo) then squared-summed in FP64. Inputs MUST
-// already be validated compatible (the predicted helper validates; the caller shares the
-// production halo mask); this is an unchecked kernel by design. NoGradGuard: diagnostic-only.
-inline double sdirk3_scaled_merit_sq(const torch::Tensor& residual_scaled,
-                                     const torch::Tensor& mask) {
+// numerator with an FP64 denominator. Masked (halo) then squared-summed in FP64.
+//
+// PR 9F.9.6 (review §9): this is an UNCHECKED kernel -- it does NOT validate defined/shape/
+// device/dtype/mask/finiteness. Inputs MUST already be validated compatible (the predicted
+// helper validates; the caller shares the production halo mask). It lives in `detail` and
+// carries the `_unchecked` suffix so it does not read as a safe public merit function.
+// NoGradGuard: diagnostic-only.
+inline double scaled_merit_sq_unchecked(const torch::Tensor& residual_scaled,
+                                        const torch::Tensor& mask) {
     torch::NoGradGuard no_grad;
     // Mask via torch::where, NOT `residual_scaled * mask`: masked-out (halo) cells can hold
     // NaN/Inf garbage, and NaN*0 == NaN in IEEE-754 would poison the whole sum even when the
@@ -155,6 +160,7 @@ inline double sdirk3_scaled_merit_sq(const torch::Tensor& residual_scaled,
         : residual_scaled;
     return x.to(torch::kFloat64).square().sum().item<double>();
 }
+}  // namespace detail
 
 // Both inputs are in the SCALED space; `mask` is optional (undefined = no masking) and,
 // if defined, must EXACTLY match (1-D, same shape/device/dtype, finite, binary 0/1) --
@@ -165,8 +171,11 @@ inline double sdirk3_scaled_merit_sq(const torch::Tensor& residual_scaled,
 // STRICT input contract: both residuals defined, NON-EMPTY, 1-D, identical shape/device/
 // dtype and finite; alpha finite in [0,1]. The RESULT is also checked finite (finite inputs
 // can overflow the squared sum). On any violation error() names the cause -- the caller MUST
-// branch on ok(), never read reduction() blindly.
-inline TrustPrediction sdirk3_trust_predicted_reduction(const torch::Tensor& R_scaled,
+// branch on ok(), never read reduction() blindly. [[nodiscard]] (review §8): the whole point
+// of the typed result is that the caller inspects ok() before using it, so silently dropping
+// the return is a bug.
+[[nodiscard]] inline TrustPrediction sdirk3_trust_predicted_reduction(
+                                                        const torch::Tensor& R_scaled,
                                                         const torch::Tensor& r_g_scaled,
                                                         double alpha,
                                                         const torch::Tensor& mask) {
@@ -232,8 +241,8 @@ inline TrustPrediction sdirk3_trust_predicted_reduction(const torch::Tensor& R_s
     // FP64-accumulate through the shared merit authority. R_active/R_lin_s already have the
     // halo zeroed, so merit needs no further mask. Diagnostic-only, so the FP64 reductions
     // (GPU->CPU syncs) are an accepted cost.
-    const double A = sdirk3_scaled_merit_sq(R_active, torch::Tensor());
-    const double B = sdirk3_scaled_merit_sq(R_lin_s, torch::Tensor());
+    const double A = detail::scaled_merit_sq_unchecked(R_active, torch::Tensor());
+    const double B = detail::scaled_merit_sq_unchecked(R_lin_s, torch::Tensor());
     // PR 9F.9.6: compute the REDUCTION as an elementwise difference-of-squares
     // sum((a-b)(a+b)) rather than (sum a^2) - (sum b^2). When A and B are large and the
     // reduction is small, forming the two big sums first and subtracting loses digits even
@@ -279,7 +288,7 @@ struct TrustAssessment {
 // NOT the nonlinear trial merit. A blown-up nonlinear trial belongs in `actual`, and must
 // NOT inflate the linear model's cancellation floor (which would misclassify a well-resolved
 // predicted reduction as degenerate). tol = 64*eps_fp64*scale is the roundoff floor of A - B.
-inline TrustAssessment assess_trust_model(double predicted_reduction,
+[[nodiscard]] inline TrustAssessment assess_trust_model(double predicted_reduction,
                                           double merit_old,
                                           double merit_model,
                                           double actual_reduction) {

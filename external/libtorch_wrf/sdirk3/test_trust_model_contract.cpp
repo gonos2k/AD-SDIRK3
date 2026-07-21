@@ -255,11 +255,11 @@ int main() {
     // sdirk3_scaled_merit_sq is the ONE FP64 metric both predicted and actual go through.
     // Verify it equals a hand-computed masked FP64 sum-of-squares.
     {
-        using wrf::sdirk3::sdirk3_scaled_merit_sq;
+        using wrf::sdirk3::detail::scaled_merit_sq_unchecked;
         auto v    = torch::randn({64}, torch::kFloat64);
         auto m    = torch::ones({64}, torch::kFloat64);
         m.slice(0, 0, 20).zero_();
-        const double got  = sdirk3_scaled_merit_sq(v, m);
+        const double got  = scaled_merit_sq_unchecked(v, m);
         const double want = (v * m).square().sum().item<double>();
         check(std::abs(got - want) < 1e-12,
               "merit authority: masked FP64 sum-of-squares matches hand calc");
@@ -272,7 +272,7 @@ int main() {
     // non-finite cell in the ACTIVE domain must still fail as NonFiniteInput.
     {
         using wrf::sdirk3::sdirk3_trust_predicted_reduction;
-        using wrf::sdirk3::sdirk3_scaled_merit_sq;
+        using wrf::sdirk3::detail::scaled_merit_sq_unchecked;
         const int64_t n = 32;
         auto R    = torch::randn({n}, torch::kFloat64);
         auto g    = torch::randn({n}, torch::kFloat64);
@@ -292,7 +292,7 @@ int main() {
               std::abs(p_halo.reduction() - want_p.reduction()) < 1e-12,
               "halo NaN/Inf: reduction matches the halo-zeroed residual (no leak)");
         // The merit authority alone also excludes the halo NaN.
-        check(std::isfinite(sdirk3_scaled_merit_sq(R, mask)),
+        check(std::isfinite(scaled_merit_sq_unchecked(R, mask)),
               "merit authority: halo NaN excluded (finite result)");
         // But a non-finite cell in the ACTIVE domain still fails.
         auto R_act_bad = torch::randn({n}, torch::kFloat64);
@@ -332,14 +332,14 @@ int main() {
     // ---- MERIT ACCESSORS (PR 9F.9.6) -------------------------------------------------
     // A successful prediction carries the two LINEAR-MODEL merits it was built from.
     {
-        using wrf::sdirk3::sdirk3_scaled_merit_sq;
+        using wrf::sdirk3::detail::scaled_merit_sq_unchecked;
         auto R = torch::randn({50}, torch::kFloat64);
         auto g = 0.5 * R + 0.3 * torch::randn({50}, torch::kFloat64);
         const double a = 0.5;
         const auto p = wrf::sdirk3::sdirk3_trust_predicted_reduction(R, g, a, torch::Tensor());
         auto R_lin = (1.0 - a) * R - a * g;
-        const double want_old   = sdirk3_scaled_merit_sq(R, torch::Tensor());
-        const double want_model = sdirk3_scaled_merit_sq(R_lin, torch::Tensor());
+        const double want_old   = scaled_merit_sq_unchecked(R, torch::Tensor());
+        const double want_model = scaled_merit_sq_unchecked(R_lin, torch::Tensor());
         check(p.ok() && std::abs(p.merit_old() - want_old) < 1e-9,
               "merit accessor: merit_old() == m(R_s)");
         check(std::abs(p.merit_model() - want_model) < 1e-9,
