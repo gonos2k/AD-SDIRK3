@@ -3493,6 +3493,17 @@ public:
     // a diagnosis-only shadow can report BOTH ||S^-1 R|| (dynamic) and ||S_0^-1 R||
     // (fixed) and MEASURE where the two verdicts diverge -- no behaviour change.
     torch::Tensor S0_inv_diag_;
+    // PR 9F.A (A4 -- structural separation, [[sdirk3-scaling-metric-separation-plan]]):
+    // the METRIC-domain inverse scale. FOUR distinct concepts are conflated in S_inv_diag_:
+    // (1) LINEAR-system scaling for GMRES conditioning, and (2) the NONLINEAR convergence /
+    // EW / trust METRIC. These want DIFFERENT policies -- the linear scale may grow
+    // dynamically to help conditioning, but the metric must stay fixed or growing-S loosens
+    // the convergence test (S up => ||S^-1 R|| down). This accessor names the metric-domain
+    // use. In PR A it ALIASES the dynamic S_inv_diag_ (byte-identical -- verified by
+    // tests/numerical_fingerprint.sh). PR B1 will point it at the FIXED S0_inv_diag_,
+    // turning a scattered hunt into a one-line policy change. GMRES/linear sites keep using
+    // S_inv_diag_ directly -- they are the linear domain and must NOT be routed here.
+    const torch::Tensor& metric_scale_inv() const { return S_inv_diag_; }
     // PR 9F.9 P1-4 SHADOW: the GMRES linear residual r_g = b - A*dK from the current
     // iteration's solve, saved so the trust-region site (a later, nested scope where
     // gmres_result is gone) can build the EXACT predicted reduction with no extra JVP.
@@ -3820,8 +3831,8 @@ public:
         float sqrt_N = std::sqrt(static_cast<float>(R.numel()));
 
         if (scaling_initialized_) {
-            // Apply scaling S⁻¹
-            auto R_scaled = S_inv_diag_ * R;
+            // PR 9F.A (A4): METRIC-domain scaling -- see metric_scale_inv().
+            auto R_scaled = metric_scale_inv() * R;
             // Apply halo mask (zero out halo regions so they don't contribute to norm)
             if (halo_mask_initialized_ && R_scaled.numel() == halo_mask_.numel()) {
                 R_scaled = R_scaled * halo_mask_;
@@ -5009,7 +5020,7 @@ public:
             float sqrt_N = std::sqrt(static_cast<float>(R_inner.numel()));
             torch::Tensor res_norm_tensor;
             if (scaling_initialized_) {
-                auto R_scaled = S_inv_diag_ * R_inner;
+                auto R_scaled = metric_scale_inv() * R_inner;   // PR 9F.A (A4): metric domain
                 res_norm_tensor = safe_tensor_norm(R_scaled) / sqrt_N;  // RMS norm
             } else {
                 // Fallback: if scaling not initialized, force-initialize from R with floor=1.0
@@ -5049,7 +5060,7 @@ public:
                     std::cerr << "[SCALING] Force-initialized from R (fallback)" << std::endl;
                 }
                 if (scaling_initialized_) {
-                    auto R_scaled = S_inv_diag_ * R_inner;
+                    auto R_scaled = metric_scale_inv() * R_inner;   // PR 9F.A (A4): metric domain
                     res_norm_tensor = safe_tensor_norm(R_scaled) / sqrt_N;  // RMS norm
                 } else {
                     // Last resort: use unscaled RMS (layout not available)
