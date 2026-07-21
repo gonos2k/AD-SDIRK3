@@ -5091,6 +5091,14 @@ public:
                 float bmax_dyn = 0.0f, bmax_s0 = 0.0f;
                 const char* bmax_dyn_name = "none";
                 const char* bmax_s0_name = "none";
+                // PR 9F.B (metric-policy measurement, [[sdirk3-scaling-metric-separation-plan]]):
+                // the block-EQUAL RMS under S0 (M4) -- sqrt(mean_b q_b^2), which weights each
+                // block equally instead of by DOF count. Global RMS (M1, fix_S0_rms) weights
+                // by N_b/N_total, so a small block (mu ~0.3% of DOF) is hidden; block-equal
+                // and block-max (M3) both surface it. Emitting all three per iteration lets
+                // the false-convergence count (M1 accepts && M3 rejects) be derived offline
+                // across the dt ladder. Diagnosis-only; production still uses res_norm_tensor.
+                double sum_bs2 = 0.0; int nblk = 0;
                 if (layout_initialized_ &&
                     cached_layout_.total_size == R_inner.numel()) {
                     // One CPU transfer each: the per-block RMS under the dynamic S and
@@ -5109,15 +5117,19 @@ public:
                                              .norm().item<float>() * inv_sqrt_nb;
                         if (bd > bmax_dyn) { bmax_dyn = bd; bmax_dyn_name = blk.name.c_str(); }
                         if (bs > bmax_s0)  { bmax_s0  = bs; bmax_s0_name  = blk.name.c_str(); }
+                        sum_bs2 += static_cast<double>(bs) * bs; ++nblk;
                     }
                 }
-                char sh[512];
+                const float block_equal_s0 =
+                    nblk > 0 ? static_cast<float>(std::sqrt(sum_bs2 / nblk)) : 0.0f;
+                char sh[576];
                 std::snprintf(sh, sizeof sh,
                     "SDIRK3_NEWTON_SHADOW stage=%d iter=%d dyn_S_rms=%.6e "
                     "fix_S0_rms=%.6e unscaled_rms=%.6e block_max_dyn=%.6e block_dyn=%s "
-                    "block_max_S0=%.6e block_S0=%s\n",
+                    "block_max_S0=%.6e block_S0=%s block_equal_S0=%.6e newton_tol=%.6e\n",
                     stage, newton_iter, dyn_rms, fix_rms, unsc_rms,
-                    bmax_dyn, bmax_dyn_name, bmax_s0, bmax_s0_name);
+                    bmax_dyn, bmax_dyn_name, bmax_s0, bmax_s0_name,
+                    block_equal_s0, static_cast<double>(options_.newton_tol));
                 emit_numerical_shadow_line(sh);
             } else if (numerical_shadow_enabled()) {
                 // PR 9F.9.3: the shadow is ON but no frozen S0 is available (e.g. the
