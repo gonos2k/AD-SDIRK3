@@ -48,6 +48,7 @@
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_sdirk3_coefficients.h"
 #include "wrf_sdirk3_config.h"
+#include "wrf_sdirk3_trust_model.h"   // PR 9F.9.1: pure exact trust-prediction (testable)
 #include "wrf_sdirk3_jvp_autograd.h"
 #include "wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "wrf_sdirk3_rw_term_capture.h"  // PR 9B: rw term bisection
@@ -66,6 +67,26 @@
 #include <mutex>    // PR 8.1: emit_stage_diag line-atomic output mutex
 #include <sstream>  // PR 8.1: per-record ostringstream (libstdc++ needs it explicit)
 #include <chrono>
+#include <cstdlib>  // PR 9F.9.1: std::getenv for the numerical-shadow gate
+
+namespace {
+// PR 9F.9.1: the numerical shadows (fixed-S0 / block-max / exact-trust) are a very
+// specific experiment -- full-state tensor mults + GPU->CPU syncs. Gate them on their
+// OWN env flag, NOT the broad debug_level, so a general debug run does not pay for them
+// and turning them on is an explicit, intuitive act. Cached once.
+inline bool numerical_shadow_enabled() {
+    static const bool on = [] {
+        const char* e = std::getenv("WRF_SDIRK3_NUMERICAL_SHADOW");
+        return e != nullptr && e[0] == '1' && e[1] == '\0';
+    }();
+    return on;
+}
+// Route shadow records through the SHARED line-atomic emitter so concurrent OpenMP
+// workers never interleave a record (matches the rest of the solver diagnostics).
+inline void emit_numerical_shadow_line(const char* line) {
+    wrf::sdirk3::emit_sdirk3_diag_line(std::string(line));
+}
+}  // namespace
 #include <limits>
 #include <tuple>
 #include <functional>
@@ -4993,6 +5014,10 @@ public:
                     S_diag_ = S_diag_.to(K.device());
                     S_inv_diag_ = S_inv_diag_.to(K.device());
                     scaling_initialized_ = true;
+                    // PR 9F.9.1: freeze S0 on the FALLBACK init path too, else the shadow
+                    // could reuse a stale S0 (or none) here. Capture the S just built.
+                    if (!S0_inv_diag_.defined())
+                        S0_inv_diag_ = S_inv_diag_.detach().clone();
                     std::cerr << "[SCALING] Force-initialized from R (fallback)" << std::endl;
                 }
                 if (scaling_initialized_) {
@@ -5007,15 +5032,15 @@ public:
             // NOTE: k_norm_tensor and rel_res_norm removed (2026-02-03).
             // Convergence now uses scaled norm ||S⁻¹R||; relative ||R||/||K|| is no longer needed.
 
-            // PR 9F.9 P1-1 SHADOW (diagnosis-only; debug_level>=1, which the ON
-            // acceptance run already sets). Report BOTH the production dynamic-S metric
-            // and the FIXED-S0 metric, the unscaled RMS, and the per-block MAX scaled RMS,
-            // so the review's claims -- that the monotonically growing S loosens rather
-            // than tightens the convergence test, and that a global RMS can hide a small
-            // non-converged block -- can be MEASURED at stage 2/3. Read-only under
-            // NoGradGuard; NO control flow consumes these values (the production metric is
-            // still res_norm_tensor), so the numerical path is byte-identical.
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 &&
+            // PR 9F.9.1 SHADOW (diagnosis-only; own env flag WRF_SDIRK3_NUMERICAL_SHADOW).
+            // Report BOTH the production dynamic-S metric and the FIXED-S0 metric, the
+            // unscaled RMS, and the per-block MAX RMS under BOTH scales, so the review's
+            // claims -- that the monotonically growing S loosens the test, and that a
+            // global RMS hides a small non-converged block -- can be MEASURED and cleanly
+            // SEPARATED (block_max under S0 isolates aggregation-laundering from
+            // dynamic-scale loosening). Read-only under NoGradGuard; NO control flow
+            // consumes these values, so the numerical path is byte-identical.
+            if (numerical_shadow_enabled() &&
                 scaling_initialized_ && S0_inv_diag_.defined() &&
                 S0_inv_diag_.numel() == R_inner.numel()) {
                 torch::NoGradGuard no_grad;
@@ -5024,26 +5049,36 @@ public:
                     guarded_item<float>(safe_tensor_norm(S0_inv_diag_ * R_inner)) / sqrt_N;
                 const float unsc_rms =
                     guarded_item<float>(res_norm_unscaled_tensor) / sqrt_N;
-                float block_max = 0.0f;
-                const char* block_max_name = "none";
+                float bmax_dyn = 0.0f, bmax_s0 = 0.0f;
+                const char* bmax_dyn_name = "none";
+                const char* bmax_s0_name = "none";
                 if (layout_initialized_ &&
                     cached_layout_.total_size == R_inner.numel()) {
-                    auto Rs = (S_inv_diag_ * R_inner).detach().to(torch::kCPU).contiguous();
+                    // One CPU transfer each: the per-block RMS under the dynamic S and
+                    // under the frozen S0. Comparing the two isolates aggregation
+                    // laundering (S0) from monotonic-S loosening (dyn vs S0).
+                    auto Rs_dyn = (S_inv_diag_ * R_inner).detach().to(torch::kCPU).contiguous();
+                    auto Rs_s0  = (S0_inv_diag_ * R_inner).detach().to(torch::kCPU).contiguous();
                     for (const auto& blk : cached_layout_.blocks) {
-                        if (blk.start + blk.size > Rs.numel()) continue;
-                        float b = Rs.slice(0, blk.start, blk.start + blk.size)
-                                      .norm().item<float>()
-                                  / std::sqrt(static_cast<float>(blk.size));
-                        if (b > block_max) { block_max = b; block_max_name = blk.name.c_str(); }
+                        if (blk.start + blk.size > Rs_dyn.numel()) continue;
+                        const float inv_sqrt_nb =
+                            1.0f / std::sqrt(static_cast<float>(blk.size));
+                        const float bd = Rs_dyn.slice(0, blk.start, blk.start + blk.size)
+                                             .norm().item<float>() * inv_sqrt_nb;
+                        const float bs = Rs_s0.slice(0, blk.start, blk.start + blk.size)
+                                             .norm().item<float>() * inv_sqrt_nb;
+                        if (bd > bmax_dyn) { bmax_dyn = bd; bmax_dyn_name = blk.name.c_str(); }
+                        if (bs > bmax_s0)  { bmax_s0  = bs; bmax_s0_name  = blk.name.c_str(); }
                     }
                 }
-                char sh[224];
+                char sh[288];
                 std::snprintf(sh, sizeof sh,
                     "SDIRK3_NEWTON_SHADOW stage=%d iter=%d dyn_S_rms=%.6e "
-                    "fix_S0_rms=%.6e unscaled_rms=%.6e block_max_rms=%.6e block_max=%s\n",
-                    stage, newton_iter, dyn_rms, fix_rms, unsc_rms, block_max,
-                    block_max_name);
-                std::cerr << sh;
+                    "fix_S0_rms=%.6e unscaled_rms=%.6e block_max_dyn=%.6e block_dyn=%s "
+                    "block_max_S0=%.6e block_S0=%s\n",
+                    stage, newton_iter, dyn_rms, fix_rms, unsc_rms,
+                    bmax_dyn, bmax_dyn_name, bmax_s0, bmax_s0_name);
+                emit_numerical_shadow_line(sh);
             }
 
             // v20.14r27x: Unscaled absolute explosion guard for ALL stages.
@@ -6767,18 +6802,15 @@ public:
                           options_.periodic_y);
                 variable_pc_event_this_newton = *variable_pc_event;
 
-                // PR 9F.9 P1-4 SHADOW: save r_g = b - A*dK for the exact trust model at
-                // the later trust-region scope (where gmres_result is gone). Only when
-                // GMRES-internal block scaling is OFF, so r_g lives in the SAME (unscaled)
-                // space as R (gmres_rhs=-R); with block scaling on it would be S-scaled and
-                // must not be mixed with the unscaled R. Diagnosis-only (debug_level>=1).
-                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 &&
-                    !(wrf::sdirk3::g_sdirk3_config.gmres_block_scale &&
-                      wrf::sdirk3::g_sdirk3_config.use_autograd) &&
-                    gmres_result.r_true.defined()) {
-                    last_gmres_r_true_ = gmres_result.r_true;
-                } else {
-                    last_gmres_r_true_ = torch::Tensor();  // clear stale
+                // PR 9F.9.1 SHADOW: save r_g = b_s - A_s*x for the exact trust model at
+                // the later trust-region scope (where gmres_result is gone). r_g is in the
+                // SCALED space (gmres_rhs=-S^-1 R, x=S^-1 dK -> r_true=S^-1(-R-A dK)); the
+                // trust shadow consumes it as scaled and does NOT re-apply S^-1. Cleared
+                // FIRST so a solve that ends before the trust trial cannot leak a stale r_g
+                // from a previous iteration into this one. Diagnosis-only (own env flag).
+                last_gmres_r_true_ = torch::Tensor();
+                if (numerical_shadow_enabled() && gmres_result.r_true.defined()) {
+                    last_gmres_r_true_ = gmres_result.r_true.detach();
                 }
 
                 // PR 8: per-linear-solve record (opt-in). Reads only —
@@ -8011,33 +8043,37 @@ public:
                 // halo-masked -- the same merit as res_old_val). Emit both so the
                 // divergence can be MEASURED. Read-only; the acceptance still uses
                 // rho_val, so the numerical path is byte-identical.
-                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 &&
+                if (numerical_shadow_enabled() &&
                     scaling_initialized_ && last_gmres_r_true_.defined() &&
                     last_gmres_r_true_.numel() == R.numel()) {
                     torch::NoGradGuard no_grad;
-                    auto merit_sq = [&](const torch::Tensor& x) -> float {
-                        auto xs = S_inv_diag_ * x;
-                        if (halo_mask_initialized_) xs = xs * halo_mask_;
-                        const float n = guarded_item<float>(xs.norm());
-                        return n * n;
-                    };
-                    auto R_lin = (1.0f - tr_alpha) * R
-                                 - tr_alpha * last_gmres_r_true_;
-                    const float pred_exact = merit_sq(R) - merit_sq(R_lin);
-                    const float rho_heur =
+                    // FIX (PR 9F.9.1): compute ENTIRELY in the scaled space. r_g
+                    // (last_gmres_r_true_) is ALREADY S-scaled (b_s=-S^-1 R, x=S^-1 dK),
+                    // so scale R once (R_s = S^-1 R) and do NOT re-scale r_g. The trust
+                    // region's res_old/new are ||S^-1 R . mask||_2 (L2 of scaled masked),
+                    // so match that norm and reuse res_old_val for perfect consistency.
+                    const auto R_s = S_inv_diag_ * R;
+                    const auto mask = halo_mask_initialized_ ? halo_mask_
+                                                             : torch::Tensor();
+                    const double pred_exact = sdirk3_trust_predicted_reduction(
+                        R_s, last_gmres_r_true_, static_cast<double>(tr_alpha), mask);
+                    const double actual_l2 =
+                        static_cast<double>(res_old_val) * res_old_val
+                        - static_cast<double>(res_new_val) * res_new_val;
+                    const double rho_heur =
                         actual_reduction / ((std::abs(predicted_val) > 1e-30f)
                                                 ? predicted_val : 1e-30f);
-                    const float rho_exact =
-                        actual_reduction / ((std::abs(pred_exact) > 1e-30f)
-                                                ? pred_exact : 1e-30f);
+                    const double rho_exact =
+                        actual_l2 / ((std::abs(pred_exact) > 1e-30)
+                                         ? pred_exact : 1e-30);
                     char tb[256];
                     std::snprintf(tb, sizeof tb,
                         "SDIRK3_TRUST_SHADOW stage=%d iter=%d alpha=%.4f e=%.4e "
                         "pred_heur=%.6e pred_exact=%.6e actual=%.6e "
                         "rho_heur=%.4f rho_exact=%.4f\n",
                         stage, newton_iter, tr_alpha, e, predicted_val, pred_exact,
-                        actual_reduction, rho_heur, rho_exact);
-                    std::cerr << tb;
+                        actual_l2, rho_heur, rho_exact);
+                    emit_numerical_shadow_line(tb);
                 }
 
                 // force_accept removed (2026-02-16 GR v8 F6: computed but unused since 2026-01-31)
@@ -8616,6 +8652,12 @@ public:
         stats_.initial_residual_vector = torch::Tensor();
         stats_.condition_number = 0.0f;
         stats_.converged = false;
+
+        // PR 9F.9.1: clear the numerical-shadow state at solve entry so a stale S0 or
+        // r_g from a PREVIOUS stage/solve of the same size can never be silently reused
+        // (the shadow gates only check defined()+numel()). S0 is re-frozen at iter 0.
+        S0_inv_diag_ = torch::Tensor();
+        last_gmres_r_true_ = torch::Tensor();
 
         // v20.14r19: Reset per-stage preconditioner fallback stats.
         precond_fallback_count_ = 0;

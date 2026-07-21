@@ -19,3 +19,4 @@ WDamp_Tangent_Contract
 WDamp_WRF_Reference_Contract
 WRMS_Gate_Metric
 WW_CP_Parity_Contract
+Trust_Model_Contract

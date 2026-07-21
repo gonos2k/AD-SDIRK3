@@ -246,6 +246,17 @@ add_executable(test_fgmres_contract test_fgmres_contract.cpp)
 target_link_libraries(test_fgmres_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME FGMRES_Contract COMMAND test_fgmres_contract)
 
+# PR 9F.9.1: pure exact trust-region predicted-reduction contract. The first shadow
+# shipped the coordinate space wrong with no test and never fired at dt=600, so CI could
+# not catch it. This drives the extracted pure function against an independent reference
+# (cross term included, alpha in {0,0.5,1}, mask with zeros). Header-only under test, so
+# link only torch.
+add_executable(test_trust_model_contract test_trust_model_contract.cpp)
+target_include_directories(test_trust_model_contract PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+set_property(TARGET test_trust_model_contract PROPERTY CXX_STANDARD 17)
+target_link_libraries(test_trust_model_contract "${TORCH_LIBRARIES}")
+add_test(NAME Trust_Model_Contract COMMAND test_trust_model_contract)
+
 # PR 9B: standing forward-mode tangent contract for the W-damping chain —
 # guards the dual propagation that FD-based checks cannot see at kink-heavy
 # operands (see doc/sdirk3_rw_tangent_bisection_2026-07-17.md).
