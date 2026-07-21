@@ -13,12 +13,23 @@
 #include <torch/torch.h>
 #include <cmath>
 #include <cstdio>
+#include <limits>
+
+using wrf::sdirk3::TrustPredictionError;
 
 static int g_fail = 0;
 static int g_cases = 0;
 static void check(bool ok, const char* what) {
     ++g_cases;
     if (!ok) { std::printf("FAIL: %s\n", what); ++g_fail; }
+}
+
+// Unwrap a valid prediction to its reduction (NaN if not ok -- the value cases below all
+// expect ok()).
+static double pval(const torch::Tensor& R, const torch::Tensor& g, double a,
+                   const torch::Tensor& m) {
+    const auto p = wrf::sdirk3::sdirk3_trust_predicted_reduction(R, g, a, m);
+    return p.ok() ? p.reduction : std::numeric_limits<double>::quiet_NaN();
 }
 
 // Independent reference: ||mask*R_s||^2 - ||mask*((1-a)R_s - a*r_g)||^2, expanded so it
@@ -51,12 +62,12 @@ int main() {
 
     // ---- alpha = 0 : no step, predicted reduction is exactly 0 --------------------
     {
-        const double p = wrf::sdirk3::sdirk3_trust_predicted_reduction(R_s, r_g, 0.0, mask);
+        const double p = pval(R_s, r_g, 0.0, mask);
         check(std::abs(p) < 1e-9, "alpha=0 -> predicted reduction is 0");
     }
     // ---- alpha = 1 : ||mask R_s||^2 - ||mask r_g||^2 -----------------------------
     {
-        const double p = wrf::sdirk3::sdirk3_trust_predicted_reduction(R_s, r_g, 1.0, mask);
+        const double p = pval(R_s, r_g, 1.0, mask);
         auto mR = mask * R_s; auto mg = mask * r_g;
         const double want = mR.norm().item<double>() * mR.norm().item<double>()
                           - mg.norm().item<double>() * mg.norm().item<double>();
@@ -64,7 +75,7 @@ int main() {
     }
     // ---- alpha = 0.5 : matches the independent reference (cross term included) -----
     {
-        const double p = wrf::sdirk3::sdirk3_trust_predicted_reduction(R_s, r_g, 0.5, mask);
+        const double p = pval(R_s, r_g, 0.5, mask);
         const double want = ref_pred(R_s, r_g, 0.5, mask);
         check(std::abs(p - want) < 1e-9, "alpha=0.5 -> matches independent reference");
 
@@ -85,7 +96,7 @@ int main() {
     }
     // ---- no mask: N_active = N ---------------------------------------------------
     {
-        const double p = wrf::sdirk3::sdirk3_trust_predicted_reduction(
+        const double p = pval(
             R_s, r_g, 0.5, torch::Tensor());
         const double want = ref_pred(R_s, r_g, 0.5, torch::Tensor());
         check(std::abs(p - want) < 1e-9, "undefined mask -> no masking, matches reference");
@@ -112,8 +123,7 @@ int main() {
         auto b_s  = -(Sinv * R);
         auto r_g  = b_s - A_s_x;                               // GMRES true residual (scaled)
         const double a = 0.5;
-        const double helper = wrf::sdirk3::sdirk3_trust_predicted_reduction(
-            R_s, r_g, a, torch::Tensor());
+        const double helper = pval(R_s, r_g, a, torch::Tensor());
         // Original-space reference: linear model of the new residual is R + a*A*dK, and
         // the predicted reduction in the SAME scaled L2 norm the helper uses is
         //   ||S^-1 R||^2 - ||S^-1 (R + a A dK)||^2.
@@ -126,27 +136,75 @@ int main() {
               "(a mis-scaled or double-scaled caller would diverge)");
     }
 
-    // ---- CONTRACT VIOLATIONS return NaN (PR 9F.9.2) ------------------------------
+    // ---- CONTRACT VIOLATIONS -> TYPED error (PR 9F.9.3) --------------------------
+    // The error is now in the TYPE, not encoded as NaN (which the caller's `abs(x)>eps`
+    // guard silently laundered back into a finite rho). Each case asserts the exact
+    // TrustPredictionError, and that the result is not ok().
     {
+        using wrf::sdirk3::sdirk3_trust_predicted_reduction;
         auto ok = torch::randn({10}, torch::kFloat64);
-        auto shape2d = torch::randn({10, 1}, torch::kFloat64);
         auto badn = torch::randn({11}, torch::kFloat64);
-        check(std::isnan(wrf::sdirk3::sdirk3_trust_predicted_reduction(
-                  ok, badn, 0.5, torch::Tensor())),
-              "contract: mismatched numel -> NaN");
-        check(std::isnan(wrf::sdirk3::sdirk3_trust_predicted_reduction(
-                  ok, shape2d.reshape({10}).unsqueeze(1), 0.5, torch::Tensor())),
-              "contract: non-1-D input -> NaN");
-        check(std::isnan(wrf::sdirk3::sdirk3_trust_predicted_reduction(
-                  ok, ok, 1.5, torch::Tensor())),
-              "contract: alpha out of [0,1] -> NaN");
-        auto nonfinite = ok.clone(); nonfinite[0] = std::numeric_limits<double>::infinity();
-        check(std::isnan(wrf::sdirk3::sdirk3_trust_predicted_reduction(
-                  ok, nonfinite, 0.5, torch::Tensor())),
-              "contract: non-finite input -> NaN");
+        auto p_numel = sdirk3_trust_predicted_reduction(ok, badn, 0.5, torch::Tensor());
+        check(!p_numel.ok() && p_numel.error == TrustPredictionError::ShapeMismatch,
+              "contract: mismatched numel -> ShapeMismatch (not ok)");
+        auto p_2d = sdirk3_trust_predicted_reduction(
+            ok, torch::randn({10, 1}, torch::kFloat64), 0.5, torch::Tensor());
+        check(!p_2d.ok() && p_2d.error == TrustPredictionError::NonOneDimInput,
+              "contract: non-1-D input -> NonOneDimInput");
+        auto p_alpha = sdirk3_trust_predicted_reduction(ok, ok, 1.5, torch::Tensor());
+        check(!p_alpha.ok() && p_alpha.error == TrustPredictionError::InvalidAlpha,
+              "contract: alpha out of [0,1] -> InvalidAlpha");
+        auto nonfinite = ok.clone();
+        nonfinite[0] = std::numeric_limits<double>::infinity();
+        auto p_nf = sdirk3_trust_predicted_reduction(ok, nonfinite, 0.5, torch::Tensor());
+        check(!p_nf.ok() && p_nf.error == TrustPredictionError::NonFiniteInput,
+              "contract: non-finite input -> NonFiniteInput");
+        // dtype mismatch
+        auto p_dt = sdirk3_trust_predicted_reduction(
+            ok, torch::randn({10}, torch::kFloat32), 0.5, torch::Tensor());
+        check(!p_dt.ok() && p_dt.error == TrustPredictionError::DtypeMismatch,
+              "contract: dtype mismatch -> DtypeMismatch");
+        // NON-BINARY mask is rejected (a weight != {0,1} is not a halo mask)
+        auto nonbinary = torch::ones({10}, torch::kFloat64);
+        nonbinary[3] = 2.0;
+        auto p_mask = sdirk3_trust_predicted_reduction(ok, ok, 0.5, nonbinary);
+        check(!p_mask.ok() && p_mask.error == TrustPredictionError::InvalidMask,
+              "contract: non-binary mask -> InvalidMask");
+        // a BINARY mask is accepted
+        auto binmask = torch::ones({10}, torch::kFloat64);
+        binmask.slice(0, 0, 4).zero_();
+        check(sdirk3_trust_predicted_reduction(ok, ok, 0.5, binmask).ok(),
+              "contract: binary 0/1 mask is accepted");
     }
 
-    const int kExpected = 12;
+    // ---- FP32 cancellation: FP64 accumulation preserves a tiny reduction ----------
+    // A - B of two nearly-equal LARGE sums-of-squares. In FP32 the accumulation loses
+    // the small true reduction; the helper accumulates in FP64 and must match an FP64
+    // reference. This is exactly the small-reduction region where accept/reject matters.
+    {
+        const int64_t n = 4000;
+        // big common part + tiny distinct part so ||R_s||^2 ~ ||R_lin||^2 >> reduction.
+        auto big = 1.0e3 * torch::ones({n}, torch::kFloat64);
+        auto R_s64 = big + 1.0e-2 * torch::randn({n}, torch::kFloat64);
+        // choose r_g so that at alpha=1 the reduction is small: r_g ~ R_s + tiny
+        auto r_g64 = R_s64 + 1.0e-1 * torch::randn({n}, torch::kFloat64);
+        auto R_s32 = R_s64.to(torch::kFloat32);
+        auto r_g32 = r_g64.to(torch::kFloat32);
+        const double a = 1.0;
+        const double got = pval(R_s32, r_g32, a, torch::Tensor());
+        // FP64 reference from the FP32 VALUES (same inputs, exact accumulation).
+        auto R_lin = (1.0 - a) * R_s32.to(torch::kFloat64) - a * r_g32.to(torch::kFloat64);
+        auto e0 = R_s32.to(torch::kFloat64);
+        const double ref = (e0 * e0).sum().item<double>()
+                         - (R_lin * R_lin).sum().item<double>();
+        // Tolerance relative to the reduction magnitude; a naive FP32 accumulation would
+        // be off by O(||R||^2 * eps_fp32) ~ 1e3^2*4000*1e-7 ~ 1e5, far above this bound.
+        check(std::abs(got - ref) < 1e-3 * (std::abs(ref) + 1.0),
+              "FP32 inputs: FP64-accumulated reduction matches the FP64 reference "
+              "(no cancellation loss)");
+    }
+
+    const int kExpected = 16;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;

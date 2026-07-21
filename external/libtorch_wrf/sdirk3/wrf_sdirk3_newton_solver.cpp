@@ -5086,6 +5086,18 @@ public:
                     stage, newton_iter, dyn_rms, fix_rms, unsc_rms,
                     bmax_dyn, bmax_dyn_name, bmax_s0, bmax_s0_name);
                 emit_numerical_shadow_line(sh);
+            } else if (numerical_shadow_enabled()) {
+                // PR 9F.9.3: the shadow is ON but no frozen S0 is available (e.g. the
+                // physics-scaling path, which sets S_diag_ but not S0_inv_diag_). Make
+                // the SKIP explicit rather than silently emitting no record, so a missing
+                // shadow reads as "unavailable here", not "measured nothing".
+                char un[160];
+                std::snprintf(un, sizeof un,
+                    "SDIRK3_NUMERICAL_SHADOW_UNAVAILABLE stage=%d iter=%d reason=%s\n",
+                    stage, newton_iter,
+                    physics_scaling_set_ ? "physics_scaling_no_fixed_s0"
+                                         : "no_fixed_s0");
+                emit_numerical_shadow_line(un);
             }
 
             // v20.14r27x: Unscaled absolute explosion guard for ALL stages.
@@ -8045,17 +8057,19 @@ public:
                 float predicted_clamped = std::max(predicted_val, 1e-6f * res_old_val * res_old_val);
                 float rho_val = actual_reduction / predicted_clamped;
 
-                // PR 9F.9 P1-4 SHADOW (diagnosis-only; debug_level>=1). The production
-                // predicted reduction ||R||^2*[1-(1-a)^2-a^2*e^2] DROPS the cross term
-                // 2a(1-a)<R,r_g>, valid only if R _|_ r_g -- not guaranteed for the
-                // non-normal WRF operator -- and mixes an UNSCALED e with a SCALED
-                // actual reduction. The EXACT linear model needs no extra JVP: GMRES
-                // already returns r_g = b - A*dK (gmres_result.r_true), so the linear
-                // residual at fraction a is R_lin = (1-a)R - a*r_g, and the predicted
-                // reduction is merit(R)^2 - merit(R_lin)^2 in ONE fixed metric (S-scaled,
-                // halo-masked -- the same merit as res_old_val). Emit both so the
-                // divergence can be MEASURED. Read-only; the acceptance still uses
-                // rho_val, so the numerical path is byte-identical.
+                // PR 9F.9 P1-4 SHADOW (diagnosis-only; env flag WRF_SDIRK3_NUMERICAL_SHADOW).
+                // The production predicted reduction ||R||^2*[1-(1-a)^2-a^2*e^2] approximates
+                // the fractional-step model in TWO ways: (1) it DROPS the cross term
+                // 2a(1-a)<R_s,r_g>, valid only if R_s _|_ r_g -- not guaranteed for the
+                // non-normal WRF operator; (2) it uses the SCALAR gmres_rel_error e in place
+                // of the true residual VECTOR r_g. (Note: e is NOT unscaled -- the outer
+                // Newton hands GMRES the S-scaled system, so e is the S-scaled relative
+                // residual; the earlier "unscaled e" note was wrong.) The EXACT model needs
+                // no extra JVP: GMRES already returns r_g = b_s - A_s*x (already S-scaled),
+                // so R_lin_s(a) = (1-a)R_s - a*r_g and the predicted reduction is
+                // ||mask R_s||^2 - ||mask R_lin_s||^2 in the SAME norm as res_old_val. Emit
+                // both so the divergence can be MEASURED. Read-only; the acceptance still
+                // uses rho_val, so the numerical path is byte-identical.
                 if (numerical_shadow_enabled() &&
                     scaling_initialized_ && S_inv_diag_.defined() &&
                     S_inv_diag_.numel() == R.numel() &&
@@ -8070,25 +8084,41 @@ public:
                     const auto R_s = S_inv_diag_ * R;
                     const auto mask = halo_mask_initialized_ ? halo_mask_
                                                              : torch::Tensor();
-                    const double pred_exact = sdirk3_trust_predicted_reduction(
+                    const auto pred = sdirk3_trust_predicted_reduction(
                         R_s, last_gmres_r_true_, static_cast<double>(tr_alpha), mask);
-                    const double actual_l2 =
-                        static_cast<double>(res_old_val) * res_old_val
-                        - static_cast<double>(res_new_val) * res_new_val;
-                    const double rho_heur =
-                        actual_reduction / ((std::abs(predicted_val) > 1e-30f)
-                                                ? predicted_val : 1e-30f);
-                    const double rho_exact =
-                        actual_l2 / ((std::abs(pred_exact) > 1e-30)
-                                         ? pred_exact : 1e-30);
-                    char tb[256];
-                    std::snprintf(tb, sizeof tb,
-                        "SDIRK3_TRUST_SHADOW stage=%d iter=%d alpha=%.4f e=%.4e "
-                        "pred_heur=%.6e pred_exact=%.6e actual=%.6e "
-                        "rho_heur=%.4f rho_exact=%.4f\n",
-                        stage, newton_iter, tr_alpha, e, predicted_val, pred_exact,
-                        actual_l2, rho_heur, rho_exact);
-                    emit_numerical_shadow_line(tb);
+                    if (!pred.ok()) {
+                        // PR 9F.9.3: a contract violation is NOT laundered into a finite
+                        // rho. Emit an explicit INVALID marker naming the reason and skip
+                        // this trust record. (The parser treats it as a shadow failure,
+                        // not evidence.)
+                        char inv[128];
+                        std::snprintf(inv, sizeof inv,
+                            "SDIRK3_TRUST_SHADOW_INVALID stage=%d iter=%d reason=%s\n",
+                            stage, newton_iter, trust_prediction_error_name(pred.error));
+                        emit_numerical_shadow_line(inv);
+                    } else {
+                        const double pred_exact = pred.reduction;
+                        const double actual_l2 =
+                            static_cast<double>(res_old_val) * res_old_val
+                            - static_cast<double>(res_new_val) * res_new_val;
+                        const double rho_heur =
+                            actual_reduction / ((std::abs(predicted_val) > 1e-30f)
+                                                    ? predicted_val : 1e-30f);
+                        // pred_exact is guaranteed finite here (pred.ok()); a genuinely
+                        // ~0 predicted reduction is reported as rho_exact=nan rather than
+                        // clamped to a huge value.
+                        const double rho_exact =
+                            (std::abs(pred_exact) > 1e-30) ? (actual_l2 / pred_exact)
+                                : std::numeric_limits<double>::quiet_NaN();
+                        char tb[256];
+                        std::snprintf(tb, sizeof tb,
+                            "SDIRK3_TRUST_SHADOW stage=%d iter=%d alpha=%.4f e=%.4e "
+                            "pred_heur=%.6e pred_exact=%.6e actual=%.6e "
+                            "rho_heur=%.4f rho_exact=%.4f\n",
+                            stage, newton_iter, tr_alpha, e, predicted_val, pred_exact,
+                            actual_l2, rho_heur, rho_exact);
+                        emit_numerical_shadow_line(tb);
+                    }
                 }
 
                 // force_accept removed (2026-02-16 GR v8 F6: computed but unused since 2026-01-31)
