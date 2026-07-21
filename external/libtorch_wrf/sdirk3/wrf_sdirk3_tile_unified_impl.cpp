@@ -7360,8 +7360,22 @@ vertical_coefficients:
                         torch::NoGradGuard ng;
                         std::cerr << "[SPLIT-EXPLICIT RK] stage=" << se_rk
                                   << " dts=" << sched.dts << " n_sub=" << sched.n_sub
-                                  << " |U_stage-U_n|=" << (U_stage - U_n).detach().norm().to(torch::kCPU).item<float>()
-                                  << std::endl;
+                                  << " |U_stage-U_n|=" << (U_stage - U_n).detach().norm().to(torch::kCPU).item<float>();
+                        // PR (parity-debug 2026-07-21): per-variable breakdown of the update so the
+                        // over-large |U|~547 for a dt/3 stage can be attributed to a variable
+                        // (u/v/w/ph/t/mu). Diagnostic-only in the opt-in split path.
+                        {
+                            auto [du, dv, dw, dph, dt2, dmu] =
+                                extractStateVariables((U_stage - U_n).detach());
+                            std::cerr << "  [blocks]"
+                                      << " u="  << du.norm().to(torch::kCPU).item<float>()
+                                      << " v="  << dv.norm().to(torch::kCPU).item<float>()
+                                      << " w="  << dw.norm().to(torch::kCPU).item<float>()
+                                      << " ph=" << dph.norm().to(torch::kCPU).item<float>()
+                                      << " t="  << dt2.norm().to(torch::kCPU).item<float>()
+                                      << " mu=" << dmu.norm().to(torch::kCPU).item<float>();
+                        }
+                        std::cerr << std::endl;
                     }
                 }
 
