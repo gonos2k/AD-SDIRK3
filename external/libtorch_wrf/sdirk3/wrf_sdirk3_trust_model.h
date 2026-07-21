@@ -28,44 +28,93 @@
 namespace wrf {
 namespace sdirk3 {
 
-// Both inputs are in the SCALED space; `mask` is optional (undefined = no masking) and
-// same 1-D shape as the residual (undefined = no masking). Returns the predicted
-// reduction in L2^2 units, or NaN on a CONTRACT VIOLATION.
+// PR 9F.9.3: a TYPED result. The previous version encoded a contract violation as NaN;
+// the caller then divided by it (rho = actual / pred) with a `abs(pred) > eps` guard,
+// and abs(NaN) > eps is FALSE, so the guard clamped the denominator and turned the
+// violation back into a plausible finite rho -- laundering the failure. Representing the
+// error in the TYPE forces the caller to branch on it explicitly.
+enum class TrustPredictionError {
+    None,
+    UndefinedInput,
+    NonOneDimInput,
+    ShapeMismatch,
+    DeviceMismatch,
+    DtypeMismatch,
+    NonFiniteInput,
+    InvalidMask,
+    InvalidAlpha
+};
+inline const char* trust_prediction_error_name(TrustPredictionError e) {
+    switch (e) {
+        case TrustPredictionError::None:           return "none";
+        case TrustPredictionError::UndefinedInput: return "undefined_input";
+        case TrustPredictionError::NonOneDimInput: return "non_1d_input";
+        case TrustPredictionError::ShapeMismatch:  return "shape_mismatch";
+        case TrustPredictionError::DeviceMismatch: return "device_mismatch";
+        case TrustPredictionError::DtypeMismatch:  return "dtype_mismatch";
+        case TrustPredictionError::NonFiniteInput: return "non_finite_input";
+        case TrustPredictionError::InvalidMask:    return "invalid_mask";
+        default:                                   return "invalid_alpha";
+    }
+}
+struct TrustPrediction {
+    double reduction = std::numeric_limits<double>::quiet_NaN();
+    TrustPredictionError error = TrustPredictionError::None;
+    bool ok() const noexcept { return error == TrustPredictionError::None; }
+};
+
+// Both inputs are in the SCALED space; `mask` is optional (undefined = no masking) and,
+// if defined, must EXACTLY match (1-D, same shape/device/dtype, finite, binary 0/1) --
+// no implicit conversion or broadcasting, which would turn a wiring error into a
+// plausible-but-wrong number. Returns TrustPrediction{reduction, error}; reduction is
+// only meaningful when ok().
 //
-// PR 9F.9.2 -- STRICT input contract. A packed solver residual has ONE exact shape;
-// broadcasting is NOT a feature here, it is a way to turn a wiring error (e.g. [N] vs
-// [N,1] vs [1,N]) into a plausible-but-wrong number. So require: both residuals defined,
-// 1-D, identical shape/device/dtype and finite; mask (if defined) 1-D and same shape;
-// alpha finite in [0,1]. A violation returns NaN -- a diagnostic must neither silently
-// produce a wrong number nor crash production.
-inline double sdirk3_trust_predicted_reduction(const torch::Tensor& R_scaled,
-                                               const torch::Tensor& r_g_scaled,
-                                               double alpha,
-                                               const torch::Tensor& mask) {
+// STRICT input contract: both residuals defined, 1-D, identical shape/device/dtype and
+// finite; alpha finite in [0,1]. On any violation the reduction is NaN and error names
+// the cause -- the caller MUST branch on ok(), never divide by reduction blindly.
+inline TrustPrediction sdirk3_trust_predicted_reduction(const torch::Tensor& R_scaled,
+                                                        const torch::Tensor& r_g_scaled,
+                                                        double alpha,
+                                                        const torch::Tensor& mask) {
+    using E = TrustPredictionError;
     torch::NoGradGuard no_grad;
-    const double kNaN = std::numeric_limits<double>::quiet_NaN();
-    if (!R_scaled.defined() || !r_g_scaled.defined()) return kNaN;
-    if (R_scaled.dim() != 1 || r_g_scaled.dim() != 1) return kNaN;
-    if (R_scaled.sizes() != r_g_scaled.sizes()) return kNaN;
-    if (R_scaled.device() != r_g_scaled.device()) return kNaN;
-    if (R_scaled.scalar_type() != r_g_scaled.scalar_type()) return kNaN;
-    if (!std::isfinite(alpha) || alpha < 0.0 || alpha > 1.0) return kNaN;
-    if (mask.defined() &&
-        (mask.dim() != 1 || mask.sizes() != R_scaled.sizes())) return kNaN;
+    const auto fail = [](E e) { return TrustPrediction{
+        std::numeric_limits<double>::quiet_NaN(), e}; };
+
+    if (!R_scaled.defined() || !r_g_scaled.defined()) return fail(E::UndefinedInput);
+    if (R_scaled.dim() != 1 || r_g_scaled.dim() != 1)  return fail(E::NonOneDimInput);
+    if (R_scaled.sizes() != r_g_scaled.sizes())        return fail(E::ShapeMismatch);
+    if (R_scaled.device() != r_g_scaled.device())      return fail(E::DeviceMismatch);
+    if (R_scaled.scalar_type() != r_g_scaled.scalar_type()) return fail(E::DtypeMismatch);
+    if (!std::isfinite(alpha) || alpha < 0.0 || alpha > 1.0) return fail(E::InvalidAlpha);
+    if (mask.defined()) {
+        // EXACT match, no auto-convert; and mask must be finite and binary {0,1}.
+        if (mask.dim() != 1 || mask.sizes() != R_scaled.sizes() ||
+            mask.device() != R_scaled.device() ||
+            mask.scalar_type() != R_scaled.scalar_type())
+            return fail(E::InvalidMask);
+        if (!torch::isfinite(mask).all().item<bool>()) return fail(E::InvalidMask);
+        // binary: every element equals 0 or 1.
+        if (!((mask == 0).logical_or(mask == 1)).all().item<bool>())
+            return fail(E::InvalidMask);
+    }
     if (!torch::isfinite(R_scaled).all().item<bool>() ||
-        !torch::isfinite(r_g_scaled).all().item<bool>()) return kNaN;
+        !torch::isfinite(r_g_scaled).all().item<bool>())
+        return fail(E::NonFiniteInput);
 
     const auto apply_mask = [&](const torch::Tensor& x) {
-        // Match device+dtype so a mask built elsewhere cannot trip a runtime mismatch.
-        return mask.defined() ? (x * mask.to(x.options())) : x;
+        return mask.defined() ? (x * mask) : x;
     };
-    const auto R_lin_s =
-        (1.0 - alpha) * R_scaled - alpha * r_g_scaled;
+    const auto R_lin_s = (1.0 - alpha) * R_scaled - alpha * r_g_scaled;
     const auto a = apply_mask(R_scaled);
     const auto b = apply_mask(R_lin_s);
-    // Sum of squares directly -- no sqrt-then-square (more precise and cheaper than
-    // ||.||^2). Equals ||a||^2 - ||b||^2 exactly up to floating point.
-    return (a * a).sum().item<double>() - (b * b).sum().item<double>();
+    // Accumulate in FP64. The predicted reduction is A - B of two nearly-equal large
+    // sums-of-squares; FP32 accumulation would lose it to cancellation exactly in the
+    // small-reduction region where accept/reject is most sensitive. Diagnostic-only, so
+    // the FP64 reduction (a GPU->CPU sync + a widened reduce) is an accepted cost.
+    const double A = a.to(torch::kFloat64).square().sum().item<double>();
+    const double B = b.to(torch::kFloat64).square().sum().item<double>();
+    return TrustPrediction{A - B, E::None};
 }
 
 }  // namespace sdirk3
