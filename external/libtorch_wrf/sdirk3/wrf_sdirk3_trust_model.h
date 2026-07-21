@@ -103,7 +103,15 @@ private:
 inline double sdirk3_scaled_merit_sq(const torch::Tensor& residual_scaled,
                                      const torch::Tensor& mask) {
     torch::NoGradGuard no_grad;
-    const auto x = mask.defined() ? (residual_scaled * mask) : residual_scaled;
+    // Mask via torch::where, NOT `residual_scaled * mask`: masked-out (halo) cells can hold
+    // NaN/Inf garbage, and NaN*0 == NaN in IEEE-754 would poison the whole sum even when the
+    // active domain is clean. `where` REPLACES those cells with 0, so the halo cannot leak
+    // into the reduction. For a finite halo this is identical to x*mask (binary mask), so it
+    // stays consistent with the active-domain case.
+    const auto x = mask.defined()
+        ? torch::where(mask.to(torch::kBool), residual_scaled,
+                       torch::zeros_like(residual_scaled))
+        : residual_scaled;
     return x.to(torch::kFloat64).square().sum().item<double>();
 }
 
@@ -149,19 +157,32 @@ inline TrustPrediction sdirk3_trust_predicted_reduction(const torch::Tensor& R_s
         if (!((mask * (1.0 - mask)) == 0.0).all().item<bool>())
             return TrustPrediction::failure(E::InvalidMask);
     }
-    // ONE sync for both residuals' finiteness.
-    if (!torch::isfinite(R_scaled).logical_and(torch::isfinite(r_g_scaled))
+    // Exclude masked-out (halo) cells BEFORE the finiteness check and any reduction. The
+    // mask defines the valid domain; halo cells can hold NaN/Inf garbage, so validating
+    // finiteness over the FULL tensor would spuriously fail on cells the computation does
+    // not use. torch::where replaces them with 0 (NaN*0==NaN rules out plain multiply). For
+    // a finite halo this is identical to the unmasked tensor on the active domain.
+    torch::Tensor R_active = R_scaled;
+    torch::Tensor r_g_active = r_g_scaled;
+    if (mask.defined()) {
+        const auto mb = mask.to(torch::kBool);
+        R_active   = torch::where(mb, R_scaled,   torch::zeros_like(R_scaled));
+        r_g_active = torch::where(mb, r_g_scaled, torch::zeros_like(r_g_scaled));
+    }
+    // ONE sync for both residuals' finiteness, on the ACTIVE domain only.
+    if (!torch::isfinite(R_active).logical_and(torch::isfinite(r_g_active))
              .all().item<bool>())
         return TrustPrediction::failure(E::NonFiniteInput);
 
-    const auto R_lin_s = (1.0 - alpha) * R_scaled - alpha * r_g_scaled;
+    const auto R_lin_s = (1.0 - alpha) * R_active - alpha * r_g_active;
     // Accumulate in FP64 through the shared merit authority. The predicted reduction is
     // A - B of two nearly-equal large sums-of-squares; FP32 accumulation would lose it to
     // cancellation exactly in the small-reduction region where accept/reject is most
     // sensitive. Diagnostic-only, so the FP64 reduction (a GPU->CPU sync + a widened
-    // reduce) is an accepted cost.
-    const double A = sdirk3_scaled_merit_sq(R_scaled, mask);
-    const double B = sdirk3_scaled_merit_sq(R_lin_s, mask);
+    // reduce) is an accepted cost. R_active/R_lin_s already have the halo zeroed, so merit
+    // needs no further mask.
+    const double A = sdirk3_scaled_merit_sq(R_active, torch::Tensor());
+    const double B = sdirk3_scaled_merit_sq(R_lin_s, torch::Tensor());
     // Finite inputs can still overflow the squared sum to Inf, or A-B to NaN (Inf-Inf).
     // ok() must never promise a finite reduction the arithmetic did not produce.
     if (!std::isfinite(A) || !std::isfinite(B) || !std::isfinite(A - B))

@@ -231,6 +231,43 @@ int main() {
               "merit authority: masked FP64 sum-of-squares matches hand calc");
     }
 
+    // ---- HALO NaN/Inf is EXCLUDED by the mask (Gemini PR #62) -------------------------
+    // Masked-out (halo) cells can hold NaN/Inf garbage. Because the merit and the finiteness
+    // check mask via torch::where (not x*mask, where NaN*0==NaN), a non-finite HALO cell must
+    // NOT fail the contract or poison the reduction -- only the ACTIVE domain matters. A
+    // non-finite cell in the ACTIVE domain must still fail as NonFiniteInput.
+    {
+        using wrf::sdirk3::sdirk3_trust_predicted_reduction;
+        using wrf::sdirk3::sdirk3_scaled_merit_sq;
+        const int64_t n = 32;
+        auto R    = torch::randn({n}, torch::kFloat64);
+        auto g    = torch::randn({n}, torch::kFloat64);
+        auto mask = torch::ones({n}, torch::kFloat64);
+        mask.slice(0, 0, 8).zero_();                       // first 8 = halo
+        // Poison the HALO of both residuals with NaN and Inf.
+        R[0] = std::numeric_limits<double>::quiet_NaN();
+        g[1] = std::numeric_limits<double>::infinity();
+        auto p_halo = sdirk3_trust_predicted_reduction(R, g, 0.5, mask);
+        check(p_halo.ok() && std::isfinite(p_halo.reduction()),
+              "halo NaN/Inf is EXCLUDED: contract ok() and reduction() is finite");
+        // Value equals the reduction computed on a CLEAN residual (halo zeroed by hand).
+        auto Rc = R.clone(); auto gc = g.clone();
+        Rc.slice(0, 0, 8).zero_(); gc.slice(0, 0, 8).zero_();
+        auto want_p = sdirk3_trust_predicted_reduction(Rc, gc, 0.5, mask);
+        check(want_p.ok() &&
+              std::abs(p_halo.reduction() - want_p.reduction()) < 1e-12,
+              "halo NaN/Inf: reduction matches the halo-zeroed residual (no leak)");
+        // The merit authority alone also excludes the halo NaN.
+        check(std::isfinite(sdirk3_scaled_merit_sq(R, mask)),
+              "merit authority: halo NaN excluded (finite result)");
+        // But a non-finite cell in the ACTIVE domain still fails.
+        auto R_act_bad = torch::randn({n}, torch::kFloat64);
+        R_act_bad[20] = std::numeric_limits<double>::quiet_NaN();   // active cell
+        auto p_bad = sdirk3_trust_predicted_reduction(R_act_bad, g, 0.5, mask);
+        check(!p_bad.ok() && p_bad.error() == TrustPredictionError::NonFiniteInput,
+              "active-domain NaN still fails -> NonFiniteInput");
+    }
+
     // ---- FP32 cancellation: FP64 accumulation preserves a tiny reduction ----------
     // A - B of two nearly-equal LARGE sums-of-squares. In FP32 the accumulation loses
     // the small true reduction; the helper accumulates in FP64 and must match an FP64
@@ -258,7 +295,7 @@ int main() {
               "(no cancellation loss)");
     }
 
-    const int kExpected = 22;
+    const int kExpected = 26;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;
