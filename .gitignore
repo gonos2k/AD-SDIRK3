@@ -135,6 +135,7 @@ external/libtorch_wrf/sdirk3/tests/test_*
 !external/libtorch_wrf/sdirk3/test_msf_raw_stats.cpp
 !external/libtorch_wrf/sdirk3/test_geometry_contract.cpp
 !external/libtorch_wrf/sdirk3/test_vjp_semantics.cpp
+!external/libtorch_wrf/sdirk3/test_trust_model_contract.cpp
 !external/libtorch_wrf/sdirk3/test_fgmres_contract.cpp
 !external/libtorch_wrf/sdirk3/test_mpi_halo_contract.cpp
 !external/libtorch_wrf/sdirk3/test_mpi_runtime_contract.cpp
