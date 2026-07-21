@@ -7274,6 +7274,25 @@ vertical_coefficients:
                     // product-rule recoupling of ru/rv/rw/ft.)
                     C.mu_tend = torch::zeros_like(mu_slow);
 
+                    // PR (parity-debug 2026-07-21): magnitudes of the FROZEN slow tendencies fed
+                    // to the acoustic loop. The ph-channel instability (99.9% of |U|) is either
+                    // ph_tend over-large (=> tendency/recoupling bug) or the advance_w ph-update
+                    // (=> acoustic term). max|ph_tend|*dts*n_sub ~ the ph update pins which.
+                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                        torch::NoGradGuard ng;
+                        auto mx = [](const torch::Tensor& t) {
+                            return t.defined()
+                                ? t.detach().abs().max().to(torch::kCPU).item<float>() : -1.0f;
+                        };
+                        std::cerr << "[SPLIT-EXPLICIT TEND] stage=" << se_rk
+                                  << " dts=" << sched.dts << " n_sub=" << sched.n_sub
+                                  << " max|ph_tend|=" << mx(C.ph_tend)
+                                  << " (ph_tend*dts*N=" << mx(C.ph_tend) * sched.dts * sched.n_sub << ")"
+                                  << " max|rw_tend|=" << mx(C.rw_tend)
+                                  << " max|ru_tend|=" << mx(C.ru_tend)
+                                  << " max|ft|=" << mx(C.ft) << std::endl;
+                    }
+
                     S = acoustic::calc_p_rho(S, C, 0);
                     for (int small_step = 1; small_step <= sched.n_sub; ++small_step) {
                         static std::atomic<int> substep_log_count{0};
