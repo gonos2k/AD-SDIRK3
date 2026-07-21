@@ -81,6 +81,20 @@ inline bool numerical_shadow_enabled() {
     }();
     return on;
 }
+// PR 9F.B (B4 EXPERIMENT, [[sdirk3-scaling-metric-separation-plan]]): env-gated block-max
+// convergence gate. Default OFF => byte-identical (the production gate is unchanged). When
+// WRF_SDIRK3_BLOCKMAX_GATE=1 the Newton "converged" test additionally requires every block's
+// scaled RMS to be under the tolerance, not just the size-weighted global RMS. This is a
+// MEASUREMENT experiment (measure-first, before a production config knob): the shadow matrix
+// showed a stage can pass the global gate while its mu block is >tol; this makes the model
+// actually ITERATE on that block so we can measure whether it CONVERGES or stalls.
+inline bool blockmax_gate_enabled() {
+    static const bool on = [] {
+        const char* e = std::getenv("WRF_SDIRK3_BLOCKMAX_GATE");
+        return e != nullptr && e[0] == '1' && e[1] == '\0';
+    }();
+    return on;
+}
 // Route shadow records through the SHARED line-atomic emitter so concurrent OpenMP
 // workers never interleave a record (matches the rest of the solver diagnostics).
 inline void emit_numerical_shadow_line(const char* line) {
@@ -5558,8 +5572,27 @@ public:
             // Scaled norm ensures all variable blocks contribute to convergence check,
             // consistent with GMRES and trust region norms.
             auto converged = res_norm_tensor < newton_tol_adaptive;
+            // PR 9F.B (B4 experiment): env-gated block-max criterion. Default OFF -> the &&
+            // is exactly the legacy gate (block_max_ok stays true), so byte-identical. When
+            // ON, ALSO require every block's scaled RMS < tol, so a stage cannot "converge"
+            // on a small-DOF block (mu) hidden by the size-weighted global RMS.
+            bool block_max_ok = true;
+            if (blockmax_gate_enabled() && layout_initialized_ &&
+                cached_layout_.total_size == R_inner.numel()) {
+                torch::NoGradGuard no_grad;
+                auto Rs = (metric_scale_inv() * R_inner).detach().to(torch::kCPU).contiguous();
+                float bmax = 0.0f;
+                for (const auto& blk : cached_layout_.blocks) {
+                    if (blk.size == 0 || blk.start + blk.size > Rs.numel()) continue;
+                    const float q = Rs.slice(0, blk.start, blk.start + blk.size)
+                                        .norm().item<float>()
+                                    / std::sqrt(static_cast<float>(blk.size));
+                    if (q > bmax) bmax = q;
+                }
+                block_max_ok = (bmax < newton_tol_adaptive);
+            }
             // GRADIENT FIX: Use guarded_item for convergence check
-            if (guarded_item<bool>(converged.all())) {
+            if (guarded_item<bool>(converged.all()) && block_max_ok) {
                 if (stage == 2 && stage2_hopeless_budget_mode_) {
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                         std::cerr << "[GMRES HOPLESS MODE] Cleared by successful Stage-2 Newton solve.\n";
