@@ -395,6 +395,71 @@ static bool substep_ad_triple() {
     return ok;
 }
 
+// WRF contract: ph_tend is NOT physical d(phi)/dt. rhs_ph stores the mass/map-factor
+// coupled quantity (mu/msfty)*d(phi)/dt; advance_w decouples it as
+//     delta_phi_direct = dts * msfty * ph_tend / (c1f*mut + c2f).
+// em_b_wave has msfty=1. Isolate that arm with g=0, ww=0, w=0 and identity Thomas
+// factors. Scaling mass and ph_tend together must leave delta_phi invariant.
+static bool ph_tendency_mass_coupling_contract() {
+    State base; Const base_c; make_2d_case(base, base_c);
+    const int64_t ny = base.ph.size(0), nzw = base.ph.size(1), nx = base.ph.size(2);
+    const float dts = 5.0f, q = 2.0e-2f;  // physical d(phi)/dt; expected direct increment = 0.1
+
+    auto run = [&](float mass, float physical_q) {
+        State s = base;
+        Const c = base_c;
+        s.ph = torch::zeros_like(base.ph);
+        s.w = torch::zeros_like(base.w);
+        s.ww = torch::zeros_like(base.ww);
+        s.t_ave = torch::zeros_like(base.t);
+        s.t_2ave = torch::zeros_like(base.t);
+        s.muave = torch::zeros_like(base.muave);
+        s.muts = torch::full_like(base.muts, mass);
+
+        c.dts = dts;
+        c.g = 0.0f;  // remove acoustic PGF/buoyancy/final-w arms; leave only frozen ph_tend
+        c.mut = torch::full_like(base_c.mut, mass);
+        c.muts = torch::full_like(base_c.muts, mass);
+        c.a = torch::zeros_like(base_c.a);
+        c.alpha = torch::ones_like(base_c.alpha);
+        c.gamma = torch::zeros_like(base_c.gamma);
+        c.rw_tend = torch::zeros_like(base_c.rw_tend);
+        c.ph_1 = torch::zeros_like(base_c.ph_1);
+        c.phb = torch::zeros_like(base_c.phb);
+        c.ph_tend = torch::full({ny, nzw, nx}, mass * physical_q, base.ph.options());
+        c.ph_tend.index_put_({torch::indexing::Slice(), 0, torch::indexing::Slice()},
+                             torch::zeros({ny, nx}, base.ph.options()));
+        return advance_w(s, c);
+    };
+
+    State out1 = run(9.0e4f, q);
+    State out2 = run(1.8e5f, q);       // same physical q, doubled coupled tendency and mass
+    State out3 = run(9.0e4f, 2.0f*q);  // linearity control
+
+    auto expected = torch::zeros_like(base.ph);
+    expected.index_put_({torch::indexing::Slice(), torch::indexing::Slice(1, nzw),
+                         torch::indexing::Slice()},
+                        torch::full({ny, nzw - 1, nx}, dts * q, base.ph.options()));
+    const float formula_err = (out1.ph - expected).abs().max().item<float>();
+    const float mass_invariance_err = (out2.ph - out1.ph).abs().max().item<float>();
+    const float linearity_err = (out3.ph - 2.0f*out1.ph).abs().max().item<float>();
+    const float w_leak = std::max({out1.w.abs().max().item<float>(),
+                                   out2.w.abs().max().item<float>(),
+                                   out3.w.abs().max().item<float>()});
+    const float coupled = 9.0e4f * q;
+    const float recovered_q = coupled / 9.0e4f;
+    const bool dimensional = std::abs(coupled - 1800.0f) < 1e-3f
+                          && std::abs(recovered_q - q) < 1e-7f;
+    const bool ok = dimensional && formula_err < 2e-6f && mass_invariance_err < 2e-6f
+                  && linearity_err < 2e-6f && w_leak < 1e-7f;
+    std::cout << "# ph_tend mass-coupled contract: coupled=" << coupled
+              << " physical=" << recovered_q << " dphi=" << dts*q
+              << " err(formula,mass,linearity,w)=(" << formula_err << ","
+              << mass_invariance_err << "," << linearity_err << "," << w_leak
+              << ") : " << (ok ? "PASS" : "FAIL") << "\n";
+    return ok;
+}
+
 int main() {
     bool smoke_ok = full_substep_smoke();
     bool grad_ok  = grad_check();
@@ -404,6 +469,7 @@ int main() {
     bool sched_ok = schedule_check();
     bool ad3_ok   = stage_ops_ad_triple();
     bool sub3_ok  = substep_ad_triple();
+    bool phmass_ok = ph_tendency_mass_coupling_contract();
     const int nz = 40, nzw = nz + 1, ny = 1, nx = 1;
     const float g = 9.81f, eps = 0.1f, deta = 1.0f / nz, mut = 9.0e4f, c2a0 = 1.16e6f;
     const float dts = 1.0f;   // match the von-Neumann reference (resolved limit); |lambda| is dts-normalized
@@ -514,7 +580,7 @@ int main() {
     bool coeffs_ok = mia_relerr < 1e-4f;
     bool lambda_ok = std::isfinite(lam) && std::abs(lam - lam_ref) < 1e-3f;
     bool ok = smoke_ok && grad_ok && prep_ok && rt_ok && mass_ok && sched_ok
-           && ad3_ok && sub3_ok && coeffs_ok && lambda_ok;
+           && ad3_ok && sub3_ok && phmass_ok && coeffs_ok && lambda_ok;
     std::cout << "# advance_w matches numpy scheme  coeffs=" << (coeffs_ok ? "ok" : "BAD")
               << "  |lambda|-match=" << (lambda_ok ? "ok" : "BAD")
               << "  : " << (ok ? "PASS" : "FAIL") << "\n";
