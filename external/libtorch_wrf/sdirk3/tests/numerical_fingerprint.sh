@@ -27,23 +27,27 @@ cd "$RUN" || { echo "FATAL: no run dir $RUN"; exit 2; }
 
 sha256_of_stdin() { { sha256sum || shasum -a 256; } 2>/dev/null | cut -d' ' -f1; }
 
+# mktemp'd logs (Gemini #65): unique names so concurrent runs don't clobber each other.
+IDEAL_LOG="$(mktemp)"; WRF_LOG="$(mktemp)"
+trap 'rm -f "$IDEAL_LOG" "$WRF_LOG"' EXIT
+
 # Fresh IC, then a deterministic single-rank/single-thread ON run. WRF writes its std::cerr
 # diagnostics into rsl.error.NNNN / rsl.out.NNNN, NOT the pipe, so clear stale rsl files
 # first and read them back (exactly as the acceptance does).
 rm -f rsl.error.* rsl.out.*
-OMP_NUM_THREADS=1 ./ideal.exe > /tmp/nf_ideal.log 2>&1
+OMP_NUM_THREADS=1 ./ideal.exe > "$IDEAL_LOG" 2>&1
 [ -f wrfinput_d01 ] || { echo "FATAL: ideal.exe produced no wrfinput_d01"; exit 2; }
 rm -f rsl.error.* rsl.out.*
 OMP_NUM_THREADS=1 WRF_SDIRK3_STAGE_DIAG=1 WRF_SDIRK3_RHS_COUNT=1 \
-    WRF_SDIRK3_STAGE_OPERAND_DIAG=1 ./wrf.exe > /tmp/nf_wrf.log 2>&1
-cat rsl.error.* rsl.out.* >> /tmp/nf_wrf.log 2>/dev/null
+    WRF_SDIRK3_STAGE_OPERAND_DIAG=1 ./wrf.exe > "$WRF_LOG" 2>&1
+cat rsl.error.* rsl.out.* >> "$WRF_LOG" 2>/dev/null
 
 # The deterministic numerical streams (same predicates the acceptance compares OFF vs ON).
 FP="$(
-  { grep -E 'SDIRK3_(NEWTON|FGMRES|STAGE)_DIAG\b' /tmp/nf_wrf.log
-    grep -E '^SDIRK3_RHS_DIGEST '                 /tmp/nf_wrf.log; } \
+  { grep -E 'SDIRK3_(NEWTON|FGMRES|STAGE)_DIAG\b' "$WRF_LOG"
+    grep -E '^SDIRK3_RHS_DIGEST '                 "$WRF_LOG"; } \
   | sort | sha256_of_stdin )"
-RHS_TOTAL="$(grep -Eo 'SDIRK3_RHS_RUN_TOTAL[^ ]* total=[0-9]+' /tmp/nf_wrf.log | grep -Eo 'total=[0-9]+' | tail -1)"
+RHS_TOTAL="$(grep -Eo 'SDIRK3_RHS_RUN_TOTAL[^ ]* total=[0-9]+' "$WRF_LOG" | grep -Eo 'total=[0-9]+' | tail -1)"
 
 echo "fingerprint sha256: $FP"
 echo "rhs run total:      ${RHS_TOTAL:-<none>}"

@@ -5033,9 +5033,14 @@ public:
             auto res_norm_unscaled_tensor = safe_tensor_norm(R_inner);
             float sqrt_N = std::sqrt(static_cast<float>(R_inner.numel()));
             torch::Tensor res_norm_tensor;
+            // PR 9F.B (Gemini #65): keep the scaled metric residual so the block-max gate
+            // below can REUSE it instead of recomputing metric_scale_inv()*R_inner. S and
+            // R_inner do not change between here and the gate (same Newton iteration), so the
+            // value is identical; hoisting only retains the intermediate (byte-identical).
+            torch::Tensor R_scaled_metric;
             if (scaling_initialized_) {
-                auto R_scaled = metric_scale_inv() * R_inner;   // PR 9F.A (A4): metric domain
-                res_norm_tensor = safe_tensor_norm(R_scaled) / sqrt_N;  // RMS norm
+                R_scaled_metric = metric_scale_inv() * R_inner;   // PR 9F.A (A4): metric domain
+                res_norm_tensor = safe_tensor_norm(R_scaled_metric) / sqrt_N;  // RMS norm
             } else {
                 // Fallback: if scaling not initialized, force-initialize from R with floor=1.0
                 // to prevent unscaled convergence check from hiding mu/ph errors.
@@ -5074,8 +5079,8 @@ public:
                     std::cerr << "[SCALING] Force-initialized from R (fallback)" << std::endl;
                 }
                 if (scaling_initialized_) {
-                    auto R_scaled = metric_scale_inv() * R_inner;   // PR 9F.A (A4): metric domain
-                    res_norm_tensor = safe_tensor_norm(R_scaled) / sqrt_N;  // RMS norm
+                    R_scaled_metric = metric_scale_inv() * R_inner;   // PR 9F.A (A4): metric domain
+                    res_norm_tensor = safe_tensor_norm(R_scaled_metric) / sqrt_N;  // RMS norm
                 } else {
                     // Last resort: use unscaled RMS (layout not available)
                     res_norm_tensor = res_norm_unscaled_tensor / sqrt_N;
@@ -5577,10 +5582,13 @@ public:
             // ON, ALSO require every block's scaled RMS < tol, so a stage cannot "converge"
             // on a small-DOF block (mu) hidden by the size-weighted global RMS.
             bool block_max_ok = true;
-            if (blockmax_gate_enabled() && layout_initialized_ &&
+            if (blockmax_gate_enabled() && scaling_initialized_ &&
+                R_scaled_metric.defined() && layout_initialized_ &&
                 cached_layout_.total_size == R_inner.numel()) {
                 torch::NoGradGuard no_grad;
-                auto Rs = (metric_scale_inv() * R_inner).detach().to(torch::kCPU).contiguous();
+                // Reuse the scaled metric residual computed for res_norm_tensor (Gemini #65):
+                // metric_scale_inv() and R_inner are unchanged since, so this is identical.
+                auto Rs = R_scaled_metric.detach().to(torch::kCPU).contiguous();
                 float bmax = 0.0f;
                 for (const auto& blk : cached_layout_.blocks) {
                     if (blk.size == 0 || blk.start + blk.size > Rs.numel()) continue;
