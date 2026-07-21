@@ -184,7 +184,9 @@ inline TrustPrediction sdirk3_trust_predicted_reduction(const torch::Tensor& R_s
             return TrustPrediction::failure(E::InvalidMask);
         // A mask that zeros EVERY cell leaves no active DOF: a non-empty residual with an
         // empty active domain is a halo/layout wiring failure, NOT a valid reduction=0.
-        if (!mask.to(torch::kBool).any().item<bool>())
+        // mask is already validated finite/binary {0,1}, so any() works directly on the
+        // float tensor -- no bool cast/copy needed (nonzero == active).
+        if (!mask.any().item<bool>())
             return TrustPrediction::failure(E::EmptyActiveDomain);
     }
     // Exclude masked-out (halo) cells BEFORE the finiteness check and any reduction. The

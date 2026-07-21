@@ -7998,19 +7998,19 @@ public:
                     auto R_scaled = S_inv_diag_ * R;
                     auto R_trial_scaled = S_inv_diag_ * R_trial;
                     if (halo_mask_initialized_) {
-                        // PR 9F.9.5: project via torch::where, matching the shadow merit
-                        // (sdirk3_scaled_merit_sq). `x.mul_(mask)` propagates a non-finite
-                        // halo cell (NaN*0==NaN), so production res_old/new could go NaN in
-                        // exactly the case the shadow is defined to tolerate -- diverging the
-                        // two metrics. `where` replaces halo cells with 0. For a FINITE halo
-                        // (the operating point) this is byte-identical: norm() squares each
-                        // cell, so a halo (-0.0) from mul_ vs (+0.0) from where gives the same
-                        // norm. Out-of-place is also safer for the autograd graph than mul_.
-                        const auto mb = halo_mask_.to(torch::kBool);
-                        R_scaled = torch::where(mb, R_scaled,
-                                                torch::zeros_like(R_scaled));
-                        R_trial_scaled = torch::where(mb, R_trial_scaled,
-                                                      torch::zeros_like(R_trial_scaled));
+                        // PR 9F.9.5: force halo cells to 0, matching the shadow merit
+                        // (sdirk3_scaled_merit_sq). The old `x.mul_(mask)` propagates a
+                        // non-finite halo cell (NaN*0==NaN), so production res_old/new could
+                        // go NaN in exactly the case the shadow is defined to tolerate --
+                        // diverging the two metrics. masked_fill_ REPLACES halo cells with 0
+                        // instead. For a FINITE halo (the operating point) this is
+                        // byte-identical: norm() squares each cell, so a halo (-0.0) from mul_
+                        // vs (+0.0) here gives the same norm. In-place with no extra
+                        // allocation; R_scaled is a fresh product consumed only by the
+                        // detached norm below, so (like the original mul_) it is graph-safe.
+                        const auto mb_inv = halo_mask_.to(torch::kBool).logical_not();
+                        R_scaled.masked_fill_(mb_inv, 0);
+                        R_trial_scaled.masked_fill_(mb_inv, 0);
                     }
                     res_old_val = guarded_item<float>(R_scaled.norm());
                     res_new_val = guarded_item<float>(R_trial_scaled.norm());
