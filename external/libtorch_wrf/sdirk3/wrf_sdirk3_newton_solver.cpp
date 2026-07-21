@@ -95,6 +95,21 @@ inline bool blockmax_gate_enabled() {
     }();
     return on;
 }
+// PR 9F.67 (early-stop ABLATION, [[sdirk3-scaling-metric-separation-plan]]): default OFF =>
+// byte-identical. When WRF_SDIRK3_NO_EARLY_STOP=1 the FGMRES aggressive early-stop policies
+// are disabled -- the ru-dominant aggressive gate (stag_window=1 vs a hardcoded
+// prev_true_err=1.0), the forced mid-budget hopeless probe, and the Arnoldi stagnation break
+// -- so GMRES runs the FULL restart budget. This is the paired-ablation lever that decides
+// whether the B4 "7-iter rel_error=1" is a genuine operator plateau or a self-inflicted
+// early-stop artifact: if the residual drops once the full budget runs, the POLICY was the
+// cause, not the operator.
+inline bool no_early_stop_enabled() {
+    static const bool on = [] {
+        const char* e = std::getenv("WRF_SDIRK3_NO_EARLY_STOP");
+        return e != nullptr && e[0] == '1' && e[1] == '\0';
+    }();
+    return on;
+}
 // Route shadow records through the SHARED line-atomic emitter so concurrent OpenMP
 // workers never interleave a record (matches the rest of the solver diagnostics).
 inline void emit_numerical_shadow_line(const char* line) {
@@ -1418,8 +1433,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             float prev_true_err = 1.0f;
             int stag_count = 0;
             auto& cfg_local = wrf::sdirk3::g_sdirk3_config;
+            // Cache once per solve (Gemini #66): no_early_stop_enabled() has a thread-safe
+            // static-init guard checked on every call; hoist it out of the Arnoldi loop.
+            const bool no_early_stop = no_early_stop_enabled();
             const bool aggressive_budget_stag_gate =
-                (stage_id >= 2 &&
+                (!no_early_stop &&
+                 stage_id >= 2 &&
                  ru_share_hint > 0.98f &&
                  cfg_local.stage2_gmres_restart > 0 &&
                  cfg_local.stage2_max_krylov_restarts == 1);
@@ -1781,7 +1800,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 // v20.14r48: Arnoldi stagnation tracking.
                 // Track true_err improvement across consecutive checks.
                 bool arnoldi_stagnated = false;
-                if (!gmres_converged) {
+                if (!gmres_converged && !no_early_stop) {
                     float err_val_stag = guarded_item<float>(error_true);
                     float ratio = (prev_true_err > 1e-30f) ? err_val_stag / prev_true_err : 0.0f;
                     if (ratio > stag_ratio) {
@@ -2590,8 +2609,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             float prev_true_err = 1.0f;
             int stag_count = 0;
             auto& cfg_local = wrf::sdirk3::g_sdirk3_config;
+            // Cache once per solve (Gemini #66): no_early_stop_enabled() has a thread-safe
+            // static-init guard checked on every call; hoist it out of the Arnoldi loop.
+            const bool no_early_stop = no_early_stop_enabled();
             const bool aggressive_budget_stag_gate =
-                (stage_id >= 2 &&
+                (!no_early_stop &&
+                 stage_id >= 2 &&
                  ru_share_hint > 0.98f &&
                  cfg_local.stage2_gmres_restart > 0 &&
                  cfg_local.stage2_max_krylov_restarts == 1);
@@ -2966,7 +2989,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 // v20.14r48: Arnoldi stagnation tracking.
                 // Track true_err improvement across consecutive checks.
                 bool arnoldi_stagnated = false;
-                if (!gmres_converged) {
+                if (!gmres_converged && !no_early_stop) {
                     float err_val_stag = guarded_item<float>(error_true);
                     float ratio = (prev_true_err > 1e-30f) ? err_val_stag / prev_true_err : 0.0f;
                     if (ratio > stag_ratio) {
