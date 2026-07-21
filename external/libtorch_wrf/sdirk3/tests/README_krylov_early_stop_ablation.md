@@ -25,7 +25,15 @@ changing the early-stop route:
 
 `stage2_krylov_tol` is explicitly set in all four cases. This prevents the
 Eisenstat-Walker budget coupling from changing the effective restart count and
-keeps the comparison paired.
+keeps the comparison paired. GMRES/INN warm starts and JVP auto-benchmarking are
+also disabled so each process starts from the same controlled linear-solve path.
+The harness fails closed if the emitted effective restart, restart count, or
+tolerance differs from the requested case.
+
+The current configuration exposes no environment override for the separate
+restart-to-restart stagnation threshold. Therefore `D_full3` can still terminate
+with `restart_stagnation_threshold`; the summary flags that result as an invalid
+full-budget control instead of treating it as proof of an operator plateau.
 
 ## Run
 
