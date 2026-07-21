@@ -54,8 +54,9 @@ inline const char* trust_prediction_error_name(TrustPredictionError e) {
         case TrustPredictionError::DtypeMismatch:  return "dtype_mismatch";
         case TrustPredictionError::NonFiniteInput: return "non_finite_input";
         case TrustPredictionError::InvalidMask:    return "invalid_mask";
-        default:                                   return "invalid_alpha";
+        case TrustPredictionError::InvalidAlpha:   return "invalid_alpha";
     }
+    return "unknown";  // unreachable; keeps -Wswitch honest AND satisfies -Wreturn-type
 }
 struct TrustPrediction {
     double reduction = std::numeric_limits<double>::quiet_NaN();
@@ -93,13 +94,14 @@ inline TrustPrediction sdirk3_trust_predicted_reduction(const torch::Tensor& R_s
             mask.device() != R_scaled.device() ||
             mask.scalar_type() != R_scaled.scalar_type())
             return fail(E::InvalidMask);
-        if (!torch::isfinite(mask).all().item<bool>()) return fail(E::InvalidMask);
-        // binary: every element equals 0 or 1.
-        if (!((mask == 0).logical_or(mask == 1)).all().item<bool>())
+        // ONE sync for finite AND binary: mask*(1-mask) == 0 iff mask in {0,1}, and any
+        // NaN/Inf makes the product non-zero (so a non-finite mask also fails here).
+        if (!((mask * (1.0 - mask)) == 0.0).all().item<bool>())
             return fail(E::InvalidMask);
     }
-    if (!torch::isfinite(R_scaled).all().item<bool>() ||
-        !torch::isfinite(r_g_scaled).all().item<bool>())
+    // ONE sync for both residuals' finiteness.
+    if (!torch::isfinite(R_scaled).logical_and(torch::isfinite(r_g_scaled))
+             .all().item<bool>())
         return fail(E::NonFiniteInput);
 
     const auto apply_mask = [&](const torch::Tensor& x) {
