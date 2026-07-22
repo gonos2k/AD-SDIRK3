@@ -80,6 +80,26 @@ scheme property) that yields `|λ|≈1.4` is therefore confined to the **remaini
 composition** (per-stage slow-tendency regeneration `ru_tend/rw_tend/ph_tend/t_tend` + stage-state
 handoff + the `dt/3, dt/2, dt` acoustic schedule). Those are the next matched-input-parity targets.
 
+## P0-5 continued — advance_uv is ALSO faithful
+Compared `advance_uv` (`acoustic_substep.cpp:446-544`) vs WRF `module_small_step_em.F:805-868`:
+- `u += dts·ru_tend` (:805) ✓
+- 3-term horizontal PGF `dpxy` (:828-831 — ph-gradient at k+1&k, `(alt+alt₋)·dp`, `(al+al₋)·dpb`)
+  ✓ (`msfux/msfuy=1`); the wrap_d/wrap_s periodic differences map verbatim.
+- **non-hydrostatic 4th term** (:848-862; em_b_wave IS non-hydrostatic) ✓ — `dpn` surface
+  (`cf1/cf2/cf3`), interior (`fnm/fnp`), top-lid-off=0, `php` gradient, and
+  `rdnw·(dpn(k+1)-dpn(k)) − 0.5·c1h·(mu+mu₋)` all match, incl. the `rdnw` WRF-sign and the dpn
+  level indexing.
+- `u −= dts·cqu·dpxy + c1h·mudf_xy` (:868, cqu=1) and the `−emdiv·dx·(mudf−mudf₋)` divergence damping
+  (:809) ✓. v is the y-symmetric analog (wall rows frozen, :790-797).
+
+⇒ **`advance_uv` is faithful.** Cumulative verified-faithful set: isolated w-φ Thomas (|λ|=0.998),
+`advance_w` arithmetic, the rhs/ww/t_2ave build, `advance_uv` (PGF + non-hydro + damping), mass
+conservation, φ-denominator. The `|λ|≈1.4` coupling defect (or genuine scheme property) is now
+confined to: `advance_mu_t`'s `muave` (1±eps) average + the `ww` vertical recurrence (feeds
+advance_w's rhs), `calc_p_rho` (the EOS pressure/density update that CLOSES the acoustic feedback
+loop p→PGF→u→div→μ,θ→p — a prime amplification suspect), and/or the RK3 stage composition. Next:
+`calc_p_rho` term-by-term, then the RK3 slow-tendency regeneration.
+
 ## Result summary
 The split-explicit geopotential (`ph`) blowup is **parameter-insensitive** (buoyancy/epssm/damping sweeps
 do not stop it) and localized by per-operator logging to the **horizontal / mass-continuity channel** — the
