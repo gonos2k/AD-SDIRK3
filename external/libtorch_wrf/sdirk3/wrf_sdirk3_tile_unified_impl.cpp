@@ -7356,6 +7356,29 @@ vertical_coefficients:
                             log_state("entry     ", S);
                             S = acoustic::advance_uv(S, C);              log_state("after_uv  ", S);
                             S = acoustic::advance_mu_t(S, C);            log_state("after_mu_t", S);
+                            {
+                                // P0-4 (review): GLOBAL MASS-CONSERVATION probe. advance_mu_t sets
+                                // S.mudf = DMDT + mu_tend (acoustic_substep.cpp:572), and
+                                // mu_new = mu_old + dts*(DMDT+mu_tend). DMDT = Σ_k dnw·dvdxi is the
+                                // column-integrated horizontal-divergence mass tendency. On this closed
+                                // domain (periodic-x seam-wrapped :522, symmetric-y walls) a CONSERVATIVE
+                                // discretization telescopes to Σ_ij DMDT ≈ 0. A nonzero — and GROWING —
+                                // Σ(DMDT) is a genuine NET mass SOURCE (a non-cancelling seam/wall flux or
+                                // reference-flux divergence): the affine-drift mechanism, distinct from a
+                                // bounded |λ|≈1 transient. This localizes WHICH channel drifts μ without
+                                // needing dyn_em. rel_imbalance normalizes the net source by the gross
+                                // |DMDT| activity so it is comparable across the run.
+                                torch::NoGradGuard ng;
+                                auto mudf = S.mudf.detach();
+                                const float sum_dmdt  = mudf.sum().to(torch::kCPU).item<float>();
+                                const float sum_admdt = mudf.abs().sum().to(torch::kCPU).item<float>();
+                                const float max_admdt = mudf.abs().max().to(torch::kCPU).item<float>();
+                                std::cerr << "[SPLIT-EXPLICIT MASS] stage=" << se_rk << " sub=" << small_step
+                                          << " sum(DMDT+mu_tend)=" << sum_dmdt
+                                          << " sum|DMDT|=" << sum_admdt
+                                          << " rel_imbalance=" << (sum_admdt > 0.0f ? std::abs(sum_dmdt) / sum_admdt : 0.0f)
+                                          << " max|DMDT|=" << max_admdt << std::endl;
+                            }
                             S = acoustic::advance_w(S, C);               log_state("after_w   ", S);
                             S = acoustic::calc_p_rho(S, C, small_step);  log_state("after_prho", S);
                         } else {

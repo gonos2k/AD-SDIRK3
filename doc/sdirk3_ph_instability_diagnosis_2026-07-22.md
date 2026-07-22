@@ -62,7 +62,33 @@ arm-parity + the provenance/sign/mass-domain contracts, NOT an `advance_mu_t` ar
   (The file-level comment block at :28-53 describes the STANDARD-path positive convention; the split path
   uses WRF-signed negative dnw via `dnw_d=-1/rdnw_d`, documented at :7015-7017.)
 
+## P0-4 (global mass conservation) — mechanism reframed, MEASURED
+`[SPLIT-EXPLICIT MASS]` logs the column-integrated mass tendency after `advance_mu_t`
+(`S.mudf = DMDT + mu_tend`, `acoustic_substep.cpp:572`) on the live dt=600 split run, 35 records
+stage-1 → the crash:
+
+- **NET mass is conserved to roundoff at EVERY substep, including the catastrophic one.**
+  `max |Σ_ij DMDT| = 1.77e-08`, `max rel_imbalance = 4.67e-09` across all 35 records. ⇒ the
+  divergence operator is exactly conservative; there is **no net mass source**. **REFUTED: the
+  affine-mass-drift hypothesis** (steady-forcing / non-conserving seam-wall flux / reference-flux
+  divergence — the review's `ρ(J)≈1 + steady forcing` alternative). μ does not globally grow.
+- **The blowup is a CONSERVATIVE gross-amplitude explosion.** `sum|DMDT|` (gross divergence
+  activity) sits ~14–37 for ~30 substeps, then in the FINAL substep jumps `37.3 → 222.9` with
+  `max|DMDT| 0.9 → 42.1` — a single-substep catastrophic amplification **while the net stays
+  exactly 0**. Equal-and-opposite mass shuffling whose amplitude explodes = a growing
+  **mass-conserving** mode, not a leak.
+
+⇒ The μ drift localized earlier (`advance_mu_t` μ 1.41→11.7) is **not** a rising mean (mass is
+conserved) but a growing **local** perturbation amplitude. Mechanism class is now **conservative
+amplification of a divergence/acoustic eigenmode**, consistent with a structural `|λ|>1` coupling.
+**Still not over-claimed (P0-6):** MEASURED = conservation + gross growth; the strict
+`|λ|>1` vs non-normal-transient (`ρ≤1, ‖Jᵏ‖>1`) distinction remains open and needs the assembled
+amplification-matrix analysis on a matched substep. But the entire **non-conservation / mass-source
+class is measured-dead.**
+
 ## Diagnostics added here (opt-in, default-off byte-identical)
+- `[SPLIT-EXPLICIT MASS]` (debug_level≥2) — `Σ DMDT` (net, conservation), `Σ|DMDT|` (gross),
+  `rel_imbalance`, `max|DMDT|` after each `advance_mu_t`. Proved conservation exact + gross blowup.
 - `WRF_SDIRK3_ABLATE_BUOY_W` — zero the `advance_w` buoyancy + mass-feedback term (used to refute buoyancy).
 - `[SPLIT-EXPLICIT SUBSTEP]` per-operator log window widened (first 8 + every 10th to 400) so the slow
   onset (~substep 85+) is captured, not just the neutral early phase.
