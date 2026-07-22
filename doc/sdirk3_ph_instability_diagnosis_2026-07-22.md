@@ -113,6 +113,34 @@ step ~6 — its "~30" is only the neutral early phase. The 35-vs-47 MASS-line co
 both paths fail at the same step. The **P0-4 conservation result is window-independent and stands**
 (net Σ DMDT ≈ 1e-8 at every logged substep, all N).
 
+## P0-3/§5/§6 — ph-arm numerator/denominator separation: DENOMINATOR-COLLAPSE REFUTED
+The `advance_w` ph update is `ph = rhs + (0.5·dts·g·(1+eps))·w_new / mf_ts`, `mf_ts = c1f·muts+c2f`
+(the ph DENOMINATOR — NOT column mass μ). `[SPLIT-EXPLICIT PHDENOM]` separates the growing new-w
+arm into numerator (`w_new`) vs denominator (`mf_ts`) on the live N=4 run to the step-39 failure:
+
+| substep (last 6) | mf_ts_min | nonpos | nearz | w_new_max | neww_arm_max |
+|---|---|---|---|---|---|
+| … | 89032 | 0 | 0 | 1096 | 10.0 |
+| … | 89036 | 0 | 0 | 7426 | 67.5 |
+| … | 89038 | 0 | 0 | 3044 | 27.7 |
+| … | 88979 | 0 | 0 | 16777 | 152.6 |
+| … | 88797 | 0 | 0 | 14106 | 128.3 |
+| **final** | **82089** | **0** | **0** | **4,897,398** | **48284** |
+
+- **Denominator collapse REFUTED.** `mf_ts_min` holds ~89000, only dips ~8% (→82089) at the very
+  end, with `nonpos=0` and `nearz=0` at **every** substep incl. the blowup. ⇒ the review's leading
+  ph-mechanism (mf_new → 0/negative) is measured-DEAD, and **a production mass-domain fail-close
+  (P0-3) would NOT catch this failure** — the denominator never violates. (A near-zero/non-positive
+  guard is still defensible defense-in-depth, but it is not the fix here.)
+- **The blowup is a `w_new` NUMERATOR explosion**: `w_new_max` 138 → 235 → 390 → 2430 → 7426 →
+  16777 → **4.9e6**; `neww_arm` tracks it (→48284) with the denominator flat. ⇒ the ph growth is
+  DRIVEN by the vertical velocity `w` exploding — a coupled **w↔ph acoustic mode amplifying** (`w`
+  drives `ph` via `(1+eps)·w/mf`; `ph` drives `w` via the pressure-gradient/buoyancy w-RHS),
+  consistent with the P0-4 conservative growing mode. This refines the earlier `advance_mu_t`
+  μ-channel localization: μ grows (~11) but `w` is the EXPLODING variable (4.9e6), and mass +
+  denominator are healthy ⇒ the amplifying mode lives in the **w-solve / w↔ph coupling**, not
+  mass-continuity.
+
 ## Diagnostics added here (opt-in, default-off byte-identical)
 - `[SPLIT-EXPLICIT MASS]` (debug_level≥2) — `Σ DMDT` (net, conservation), `Σ|DMDT|` (gross),
   `rel_imbalance`, `max|DMDT|` after each `advance_mu_t`. Proved conservation exact + gross blowup.

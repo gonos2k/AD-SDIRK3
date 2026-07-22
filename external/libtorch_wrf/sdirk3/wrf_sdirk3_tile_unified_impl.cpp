@@ -7380,6 +7380,39 @@ vertical_coefficients:
                                           << " max|DMDT|=" << max_admdt << std::endl;
                             }
                             S = acoustic::advance_w(S, C);               log_state("after_w   ", S);
+                            {
+                                // P0-3/§5/§6 (review): SEPARATE the new-w ph arm into NUMERATOR vs
+                                // DENOMINATOR. advance_w's ph update is
+                                //   ph = rhs + (0.5·dts·g·(1+eps))·w_new / mf_ts,  mf_ts = c1f·muts + c2f
+                                // (acoustic_substep.cpp ph-update :1462). A growing new-w arm can be
+                                // w_new↑ (numerator) OR mf_ts→0/negative (denominator collapse — the
+                                // review's leading ph-blowup mechanism, and the target of a production
+                                // fail-close). This measures BOTH, plus the ph-DENOMINATOR domain
+                                // (min, min|·|, non-positive & near-zero counts) that advance_w divides
+                                // by WITHOUT a guard. Distinct from column mass μ — this is c1f·muts+c2f.
+                                torch::NoGradGuard ng;
+                                const float eps = epssm;
+                                auto muts2  = S.muts.detach().unsqueeze(1);                    // {ny,1,nx}
+                                auto c1f    = C.c1f.detach().view({1, -1, 1});                 // {1,nzw,1}
+                                auto c2f    = C.c2f.detach().view({1, -1, 1});
+                                auto mf_ts  = c1f * muts2 + c2f;                               // {ny,nzw,nx} ph denom
+                                auto w_new  = S.w.detach();                                    // {ny,nzw,nx}
+                                auto num_w  = (0.5f * sched.dts * g_acc * (1.0f + eps)) * w_new;
+                                const float scale = std::max(mf_ts.abs().max().to(torch::kCPU).item<float>(), 1.0f);
+                                const float nz_thr = 64.0f * 1.1920929e-07f * scale;           // 64·eps32·scale
+                                const int64_t nonpos = (mf_ts <= 0.0f).sum().to(torch::kCPU).item<int64_t>();
+                                const int64_t nearz  = (mf_ts.abs() <= nz_thr).sum().to(torch::kCPU).item<int64_t>();
+                                std::cerr << "[SPLIT-EXPLICIT PHDENOM] stage=" << se_rk << " sub=" << small_step
+                                          << " mf_ts_min="   << mf_ts.min().to(torch::kCPU).item<float>()
+                                          << " mf_ts_minabs="<< mf_ts.abs().min().to(torch::kCPU).item<float>()
+                                          << " mf_ts_max="   << mf_ts.max().to(torch::kCPU).item<float>()
+                                          << " nonpos="      << nonpos
+                                          << " nearz="       << nearz
+                                          << " w_new_max="   << w_new.abs().max().to(torch::kCPU).item<float>()
+                                          << " num_w_max="   << num_w.abs().max().to(torch::kCPU).item<float>()
+                                          << " neww_arm_max="<< (num_w / mf_ts).abs().max().to(torch::kCPU).item<float>()
+                                          << std::endl;
+                            }
                             S = acoustic::calc_p_rho(S, C, small_step);  log_state("after_prho", S);
                         } else {
                             S = acoustic::advance_substep(S, C, small_step);
