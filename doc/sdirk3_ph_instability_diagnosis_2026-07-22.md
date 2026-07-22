@@ -100,6 +100,23 @@ advance_w's rhs), `calc_p_rho` (the EOS pressure/density update that CLOSES the 
 loop p→PGF→u→div→μ,θ→p — a prime amplification suspect), and/or the RK3 stage composition. Next:
 `calc_p_rho` term-by-term, then the RK3 slow-tendency regeneration.
 
+## P0-5 continued — calc_p_rho is ALSO faithful (muts-arg confirmed)
+Compared `calc_p_rho` (`acoustic_substep.cpp:751-770`) vs WRF `module_small_step_em.F:515-567`:
+- `al = -1/(c1h·mut+c2h)·(alt·c1h·mu + rdnw·(ph(k+1)-ph(k)))` (:522-523) ✓ (rdnw WRF-sign).
+- `p = c2a·(alt·(t_2 - c1h·mu·t_1)/((c1h·mut+c2h)·(t0+t_1)) − al)` (:527-528) ✓.
+- divergence damping `p += smdiv·(p − pm1)` (:562, step≠0) ✓.
+- **The `mut`-arg subtlety (candidate for the feedback loop) is REFUTED:** the port uses `s.muts`
+  (per-substep updated mass) in the density denominator, and this is FAITHFUL — WRF's `calc_p_rho`
+  call (`solve_em.F:1382`) passes `grid%mu_2, grid%muts` into the `(mu, mut)` dummies (:440), so the
+  reference `Mut` here IS `grid%muts` (updated), exactly as the port uses. Not a defect.
+
+⇒ **all four acoustic operators are now verified faithful**: `advance_uv`, `advance_mu_t` (DMDT
+conservation), `advance_w` + its input build, `calc_p_rho`. The remaining unverified pieces are
+`advance_mu_t`'s `muave` (1±eps) average + `ww` vertical recurrence (term-by-term), and — the prime
+remaining suspect — the **RK3 stage composition** (the `dt/3, dt/2, dt` acoustic schedule + per-stage
+slow-tendency regeneration + stage-state handoff), which is the SDIRK3-specific outer structure that
+diverges most from stock WRF and is where a `|λ|>1` composition defect would live.
+
 ## Result summary
 The split-explicit geopotential (`ph`) blowup is **parameter-insensitive** (buoyancy/epssm/damping sweeps
 do not stop it) and localized by per-operator logging to the **horizontal / mass-continuity channel** — the
