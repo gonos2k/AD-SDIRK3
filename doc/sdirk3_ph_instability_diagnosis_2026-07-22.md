@@ -58,6 +58,28 @@ definitive P0-5 unit is therefore **matched-input dyn_em parity of the FULL acou
 a dumped WRF intermediate state through the coupled operators, compare term by term), not a
 single-operator check — which are all already verified.
 
+## P0-5 continued — advance_w's FULL INPUT BUILD is also faithful (t_2ave lifecycle resolved)
+Extended the parity inward to everything that feeds the (already-faithful) w-solve, vs WRF
+`module_small_step_em.F:1305-1368`:
+
+- **rhs pass-1 (:1318)** `rhs=dts·(ph_tend + 0.5·g·(1-eps)·w)` — matches port :656.
+- **`ww·d(φ)/dη` advection (:1343-1355, ELSE branch; em_b_wave `phi_adv_z` unset ⇒ default)** — matches
+  port :662-675. Verified the 1-based↔0-based `fnm/fnp/wdwn` index map term by term:
+  `rhs₀[r] -= dts·(fnm₀[r]·wdwn_body[r] + fnp₀[r]·wdwn_body[r-1])` on both sides (the apparent
+  off-by-one dissolves once WRF's `wdwn(k+1)` storage index is tracked correctly).
+- **rhs pass-2 (:1368)** `rhs = ph + rhs/(c1f·mut+c2f)` — matches port :678 (msfty=1).
+- **`t_2ave` off-centering (:1314-1317)** — matches port :684-685, INCLUDING the subtle old-time arm:
+  WRF passes `t_2save` as advance_w's `t_2ave`; `advance_mu_t` (:969, arg `t_ave`↔`t_2save`)
+  OVERWRITES `t_2save = t_old` at :1141 every substep BEFORE advance_w reads it ⇒ the `(1-eps)` arm is
+  the pre-update theta this substep, NOT a recursively-accumulated value. The port's `o.t_ave = s.t`
+  (:589) → `s.t_ave` reproduces exactly this. **No accumulation-semantics defect.**
+
+⇒ `advance_w` and its **entire input build** are faithful. The coupling defect (or the genuine
+scheme property) that yields `|λ|≈1.4` is therefore confined to the **remaining coupled operators**
+(`advance_uv` PGF/damping, `calc_p_rho`, the `muave` (1±eps) mass average) and/or the **RK3 stage
+composition** (per-stage slow-tendency regeneration `ru_tend/rw_tend/ph_tend/t_tend` + stage-state
+handoff + the `dt/3, dt/2, dt` acoustic schedule). Those are the next matched-input-parity targets.
+
 ## Result summary
 The split-explicit geopotential (`ph`) blowup is **parameter-insensitive** (buoyancy/epssm/damping sweeps
 do not stop it) and localized by per-operator logging to the **horizontal / mass-continuity channel** — the
