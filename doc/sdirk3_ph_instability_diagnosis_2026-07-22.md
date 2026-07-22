@@ -86,6 +86,33 @@ amplification of a divergence/acoustic eigenmode**, consistent with a structural
 amplification-matrix analysis on a matched substep. But the entire **non-conservation / mass-source
 class is measured-dead.**
 
+## Acoustic-substep CFL sweep — the last tunable, EXCLUDED (structural confirmed)
+`num_sound_steps` (`split_explicit_time_step_sound`, via `WRF_SDIRK3_SPLIT_EXPLICIT_TIME_STEP_SOUND`)
+sets the acoustic substep `dts = dt/N` (stage 3) — the split-explicit **CFL knob**, and the one
+parameter the earlier epssm/buoyancy/smdiv sweeps did NOT cover. Production-path (debug=0) step-reach:
+
+| N | dts (stage-3) | steps completed | outcome |
+|---|---|---|---|
+| 4  | 150.0  | 39 | stage-3 catastrophic-growth gate (ph-dominated) |
+| 8  | 75.0   | 39 | same |
+| 16 | 37.5   | 39 | same |
+| 32 | 18.75  | 38 | same |
+
+**`num_sound_steps`-INDEPENDENT** (38↔39 is FP/threading run-variation, not a systematic trend): an
+8× refinement of the acoustic CFL does not move the failure. ⇒ the blowup is **structural, not an
+acoustic-substep CFL violation** — the skill's dts-sweep discriminator returns "structural". This
+excludes the last tunable and corroborates the parameter-insensitive/structural thesis.
+
+**Instrumentation caveat (measured, important):** at debug≥2 the `[SPLIT-EXPLICIT MASS]` gross
+`Σ|DMDT|` looked N-dependent (223 at N=4 vs ~30 at N≥8). That is a **logging-window artifact**, NOT
+a CFL effect: the probe's global substep counter caps at 400, so N=4 (7 substeps/step) logs all the
+way to the step-39 failure and catches the 223 spike, while N=32 (69 substeps/step) stops logging at
+step ~6 — its "~30" is only the neutral early phase. The 35-vs-47 MASS-line counts are exactly
+`8 + min(#substeps,400)/10`. `advance_substep` == `advance_uv→advance_mu_t→advance_w→calc_p_rho`
+(the debug≥2 per-operator path is byte-identical to production; probes are read-only detached), so
+both paths fail at the same step. The **P0-4 conservation result is window-independent and stands**
+(net Σ DMDT ≈ 1e-8 at every logged substep, all N).
+
 ## Diagnostics added here (opt-in, default-off byte-identical)
 - `[SPLIT-EXPLICIT MASS]` (debug_level≥2) — `Σ DMDT` (net, conservation), `Σ|DMDT|` (gross),
   `rel_imbalance`, `max|DMDT|` after each `advance_mu_t`. Proved conservation exact + gross blowup.
