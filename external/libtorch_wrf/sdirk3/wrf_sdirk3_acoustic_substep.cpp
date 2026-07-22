@@ -27,6 +27,19 @@ using torch::indexing::Slice;
 using torch::indexing::None;
 inline torch::indexing::Slice SL() { return torch::indexing::Slice(); }
 
+// PR (ph-instability ablation 2026-07-22): env-gated ablation of the advance_w buoyancy/
+// thermal + mass-feedback term (c2a*alt*t_2ave - c1f*muave). Default OFF => byte-identical.
+// The dt=600 ph-decomposition (PR #69) localized the split instability to a SLOW new_w
+// (w-channel) growth; the isolated vertical w-phi was proven |lambda|=0.998 but buoyancy
+// (theta->w) + mass feedback were never offline-provable. If zeroing this term stops the
+// new_w growth, it is the destabilizer. Diagnostic experiment, split path only.
+inline bool ablate_buoy_w_enabled() {
+    static const bool on = [] {
+        const char* e = std::getenv("WRF_SDIRK3_ABLATE_BUOY_W");
+        return e != nullptr && e[0] == '1' && e[1] == '\0';
+    }();
+    return on;
+}
 inline bool advance_w_ph_diag_enabled() {
     static const bool on = [] {
         const char* e = std::getenv("WRF_SDIRK3_ADVANCE_W_PH_DIAG");
@@ -689,7 +702,8 @@ State advance_w(const State& s, const Const& c) {
         // buoyancy/thermal term (:1414-1417): dts*g*(rdn(k)*(c2a*alt*t_2ave diff) - c1f(k)*muave)
         auto alt_k  = c.alt.index({SL(), kf,   SL()});   auto alt_km = c.alt.index({SL(), kf-1, SL()});
         auto t2a_k  = t2ave.index({SL(), kf,   SL()});   auto t2a_km = t2ave.index({SL(), kf-1, SL()});
-        auto buoy = dts*g*(rdn_k*(c2a_k*alt_k*t2a_k - c2a_km*alt_km*t2a_km) - c.c1f[kf]*s.muave);
+        const float buoy_scale = ablate_buoy_w_enabled() ? 0.0f : 1.0f;  // ablation (default 1)
+        auto buoy = buoy_scale*dts*g*(rdn_k*(c2a_k*alt_k*t2a_k - c2a_km*alt_km*t2a_km) - c.c1f[kf]*s.muave);
         // + dts*rw_tend (frozen slow w-tendency, :1405) — REQUIRED, mirrors ru_tend in advance_uv.
         auto val = s.w.index({SL(), kf, SL()}) + dts * c.rw_tend.index({SL(), kf, SL()})
                    + 0.5f*dts*g*rdn_k*(up - lo) + buoy;
@@ -706,7 +720,8 @@ State advance_w(const State& s, const Const& c) {
         // top buoyancy (:1427-1429): -dts*g*(2*rdnw*c2a*alt*t_2ave + c1f(kde)*muave)
         auto alt_km = c.alt.index({SL(), kde-1, SL()});
         auto t2a_km = t2ave.index({SL(), kde-1, SL()});
-        auto buoy_top = -dts*g*(2.0f*rdnw_km*c2a_km*alt_km*t2a_km + c.c1f[kde]*s.muave);
+        const float buoy_scale = ablate_buoy_w_enabled() ? 0.0f : 1.0f;  // ablation (default 1)
+        auto buoy_top = -buoy_scale*dts*g*(2.0f*rdnw_km*c2a_km*alt_km*t2a_km + c.c1f[kde]*s.muave);
         auto val = s.w.index({SL(), kde, SL()}) + dts * c.rw_tend.index({SL(), kde, SL()})
                    - 0.5f*dts*g/mh_km*rdnw_km*rdnw_km*2.0f*c2a_km*grad + buoy_top;
         w_rhs.index_put_({SL(), kde, SL()}, val);
