@@ -51,6 +51,17 @@ arm-parity + the provenance/sign/mass-domain contracts, NOT an `advance_mu_t` ar
    ⇒ the bug is subtle here OR upstream in `advance_uv` (μ integrates any persistent u-divergence bias).
    Coupled operators mean "which output grows" cannot separate cause from accumulator.
 
+## P0 verifications (review 2026-07-22)
+- **P0-1 (epssm effective):** VERIFIED — env `WRF_SDIRK3_SPLIT_EXPLICIT_EPSSM` reaches `calc_coef_w`
+  (cof ×2.98 at 0.1→0.9); the blowup is epssm-insensitive despite the 3× stiffness change (small ~3% early
+  effect swamped). `[SPLIT-EXPLICIT COEF]` logs `epssm_effective`/`cof`/`max|coef.a|` at the point of use.
+- **P0-2 (dnw/rdnw signed-metric):** VERIFIED on production operands — `dnw ∈ [-0.0356, -0.00497]` (NEGATIVE,
+  WRF-signed ✓), `rdnw ∈ [28, 201]` (POSITIVE ✓), `max|dnw·rdnw+1| = 5.96e-08` (reciprocity exact ✓). The
+  **dnw-sign-flip hypothesis is REFUTED** — `DMDT = Σ dnw·dvdxi` is not sign-flipped. A `TORCH_CHECK` now
+  locks the contract (dnw<0, rdnw>0, dnw·rdnw==-1) on the live operands so a future regression fails closed.
+  (The file-level comment block at :28-53 describes the STANDARD-path positive convention; the split path
+  uses WRF-signed negative dnw via `dnw_d=-1/rdnw_d`, documented at :7015-7017.)
+
 ## Diagnostics added here (opt-in, default-off byte-identical)
 - `WRF_SDIRK3_ABLATE_BUOY_W` — zero the `advance_w` buoyancy + mass-feedback term (used to refute buoyancy).
 - `[SPLIT-EXPLICIT SUBSTEP]` per-operator log window widened (first 8 + every 10th to 400) so the slow

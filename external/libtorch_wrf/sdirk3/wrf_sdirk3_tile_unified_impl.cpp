@@ -7241,14 +7241,33 @@ vertical_coefficients:
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                         torch::NoGradGuard ng;
                         const float cof = 0.5f*sched.dts*g_acc*(1.0f+epssm);
+                        // P0-2 (review): the signed-eta-metric contract on PRODUCTION operands.
+                        // WRF dnw=eta(k+1)-eta(k)<0; here dnw_d=-1/rdnw_d must be NEGATIVE and
+                        // rdnw_d POSITIVE, with dnw_d*rdnw_d==-1. A positive dnw would flip DMDT.
+                        auto dmn = dnw_d.detach().min().to(torch::kCPU).item<float>();
+                        auto dmx = dnw_d.detach().max().to(torch::kCPU).item<float>();
+                        auto rmn = rdnw_d.detach().min().to(torch::kCPU).item<float>();
+                        auto rmx = rdnw_d.detach().max().to(torch::kCPU).item<float>();
+                        auto recip = (dnw_d.detach() * rdnw_d.detach() + 1.0f)
+                                         .abs().max().to(torch::kCPU).item<float>();
                         std::cerr << "[SPLIT-EXPLICIT COEF] stage=" << se_rk
                                   << " epssm_effective=" << epssm
                                   << " dts=" << sched.dts
                                   << " cof=" << (cof*cof)
                                   << " max_abs_coef_a="
                                   << coef.a.detach().abs().max().to(torch::kCPU).item<float>()
+                                  << " dnw_min=" << dmn << " dnw_max=" << dmx
+                                  << " rdnw_min=" << rmn << " rdnw_max=" << rmx
+                                  << " max|dnw*rdnw+1|=" << recip
                                   << " g_config.split_explicit_epssm="
                                   << wrf::sdirk3::g_sdirk3_config.split_explicit_epssm << std::endl;
+                        // P0-2 CONTRACT (review): lock the signed-eta invariant on the actual
+                        // production operands. WRF dnw<0, rdnw>0, dnw*rdnw==-1. A regression that
+                        // flips dnw would reverse DMDT and silently drift mu; fail-close here.
+                        TORCH_CHECK(dmx < 0.0f && rmn > 0.0f && recip < 1.0e-5f,
+                            "SPLIT signed-eta contract violated: dnw must be <0, rdnw >0, "
+                            "dnw*rdnw==-1 (dnw_max=", dmx, " rdnw_min=", rmn,
+                            " |dnw*rdnw+1|=", recip, ")");
                     }
 
                     acoustic::PrepInput prep;
