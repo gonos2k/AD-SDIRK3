@@ -7417,6 +7417,22 @@ vertical_coefficients:
                         } else {
                             S = acoustic::advance_substep(S, C, small_step);
                         }
+                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
+                            // Amplification probe (review: assembled |λ| on the EXACT live operator,
+                            // not an offline reconstruction). Within one stage's acoustic loop dts &
+                            // the operator are FIXED, so the per-substep ratio w_rms[k+1]/w_rms[k] IS
+                            // the measured per-substep amplification |λ|_eff of the w↔ph mode. Logged
+                            // EVERY substep (no window) so the ratio is computable in the fixed-operator
+                            // regime; read-only, byte-identical.
+                            torch::NoGradGuard ng;
+                            auto rms = [](const torch::Tensor& t) {
+                                return t.detach().pow(2).mean().sqrt().to(torch::kCPU).item<float>();
+                            };
+                            std::cerr << "[SPLIT-EXPLICIT AMP] stage=" << se_rk
+                                      << " dts=" << sched.dts << " sub=" << small_step
+                                      << " w_rms=" << rms(S.w) << " ph_rms=" << rms(S.ph)
+                                      << " t_rms=" << rms(S.t) << " mu_rms=" << rms(S.mu) << std::endl;
+                        }
                     }
 
                     auto finish_in = prep;

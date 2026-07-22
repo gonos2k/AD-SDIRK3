@@ -5,6 +5,35 @@ Continuation of the PR #69 `advance_w` geopotential decomposition. All measureme
 not run the live executable). Every diagnostic here is **opt-in and default-off ⇒ the baseline numerical
 path is byte-identical** (verified via `tests/numerical_fingerprint.sh` MATCH after each change).
 
+## DEFINITIVE MECHANISM (measured 2026-07-23): fixed |λ|≈1.4 w↔φ eigen-instability
+`[SPLIT-EXPLICIT AMP]` logs `w_rms`/`ph_rms` every substep. Because one stage's acoustic loop uses a
+FIXED operator/`dts`, the model itself performs **power iteration** on its dominant mode — so the
+end-of-stage-3 (`sub=4`) `w_rms` ratio across consecutive physical steps IS the per-step amplification
+`|λ_step|` of the exact LIVE operator (no offline reconstruction / toy). Full 39-step trajectory:
+
+- steps 1–14: initial transient **decays** (w_rms 69→10, ratios <1) — the mode is not yet aligned.
+- steps 15–30: dominant unstable mode emerges, step-ratio **climbs** 1.01→1.06→1.17→1.27→1.36.
+- steps 30–38: step-ratio **plateaus at ≈1.36–1.44** (w_rms 73→100→136→186→257→360→513→741) — the
+  classic power-iteration convergence to `|λ_max|`. `ph_rms` co-amplifies in phase.
+- step 39: nonlinear runaway (ratio 1739, w_rms→2e6).
+
+**MEASURED:** the dominant coupled w↔φ acoustic mode grows geometrically with a per-step ratio that
+**converges to ≈1.4 > 1** ⇒ `ρ(G_step) ≈ 1.4`, a **fixed |λ|>1 local eigen-instability**. The
+power-iteration *convergence* signature discriminates the three review candidates decisively:
+**affine drift** (linear growth, constant additive) — REFUTED (growth is geometric, ratio→plateau not
+constant slope); **non-normal transient** (`ρ≤1, ‖Jᵏ‖>1`, peaks then decays) — REFUTED (growth is
+sustained and the ratio asymptotes to a stable >1 over ~10 steps); **fixed |λ|>1** — CONFIRMED. This
+supersedes the P0-6-retracted "|λ|>1" guess — it is now measured, with the discriminating signature.
+
+**INFERRED (well-founded, not directly measured):** WRF's split-explicit acoustic scheme is
+*stable* at this dt by construction — that is why WRF uses acoustic sub-stepping. A ported acoustic
+scheme showing `|λ|>1` therefore points to a **defect in the ported w↔φ coupling** (a dropped/
+mis-signed/mis-weighted term in `advance_w`'s w-RHS or the φ-update off-centering), not to intrinsic
+stiffness. ⇒ **`advance_w` is the priority target for dyn_em matched-input parity (P0-5)** — term by
+term on the w-solve and the w↔φ off-centering, at a matched mid-run substep. The mass-continuity
+channel (`advance_mu_t`, P0-4/§7 decomposition) is de-prioritized: mass + φ-denominator are healthy;
+`w` is the exploding variable.
+
 ## Result summary
 The split-explicit geopotential (`ph`) blowup is **parameter-insensitive** (buoyancy/epssm/damping sweeps
 do not stop it) and localized by per-operator logging to the **horizontal / mass-continuity channel** — the
