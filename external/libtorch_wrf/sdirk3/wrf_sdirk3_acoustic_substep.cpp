@@ -8,6 +8,17 @@
 //   advance_mu_t / advance_w / calc_p_rho — signatures in place; bodies to follow.
 // Validation is deferred to the ASSEMBLED sub-step vs a dyn_em [PARITY substep] dump.
 #include "wrf_sdirk3_acoustic_substep.h"
+#include "wrf_sdirk3_stage_history_diag.h"  // process-global line-atomic diagnostic emitter
+
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <sstream>
+#include <string>
+#include <utility>
 
 namespace wrf { namespace sdirk3 { namespace acoustic {
 
@@ -15,6 +26,191 @@ namespace {
 using torch::indexing::Slice;
 using torch::indexing::None;
 inline torch::indexing::Slice SL() { return torch::indexing::Slice(); }
+
+// PR (ph-instability ablation 2026-07-22): env-gated ablation of the advance_w buoyancy/
+// thermal + mass-feedback term (c2a*alt*t_2ave - c1f*muave). Default OFF => byte-identical.
+// The dt=600 ph-decomposition (PR #69) localized the split instability to a SLOW new_w
+// (w-channel) growth; the isolated vertical w-phi was proven |lambda|=0.998 but buoyancy
+// (theta->w) + mass feedback were never offline-provable. If zeroing this term stops the
+// new_w growth, it is the destabilizer. Diagnostic experiment, split path only.
+inline bool ablate_buoy_w_enabled() {
+    static const bool on = [] {
+        const char* e = std::getenv("WRF_SDIRK3_ABLATE_BUOY_W");
+        return e != nullptr && e[0] == '1' && e[1] == '\0';
+    }();
+    return on;
+}
+inline bool advance_w_ph_diag_enabled() {
+    static const bool on = [] {
+        const char* e = std::getenv("WRF_SDIRK3_ADVANCE_W_PH_DIAG");
+        return e != nullptr && e[0] == '1' && e[1] == '\0';
+    }();
+    return on;
+}
+
+inline uint64_t advance_w_ph_diag_sequence(int small_step) {
+    static thread_local uint64_t sequence = 0;
+    if (small_step == 1) ++sequence;
+    return sequence;
+}
+
+struct PhStats {
+    double max_abs = std::numeric_limits<double>::quiet_NaN();
+    double rms = std::numeric_limits<double>::quiet_NaN();
+};
+
+PhStats active_ph_stats(const torch::Tensor& t) {
+    if (!t.defined() || t.dim() != 3 || t.size(1) <= 1) return {};
+    auto active = t.detach().index({SL(), Slice(1, None), SL()});
+    if (active.numel() == 0) return {};
+    auto a64 = active.to(torch::kFloat64);
+    return {a64.abs().max().item<double>(), torch::sqrt(a64.square().mean()).item<double>()};
+}
+
+std::pair<double, double> active_ph_minmax(const torch::Tensor& t) {
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    if (!t.defined() || t.dim() != 3 || t.size(1) <= 1) return {nan, nan};
+    auto active = t.detach().index({SL(), Slice(1, None), SL()});
+    if (active.numel() == 0) return {nan, nan};
+    auto a64 = active.to(torch::kFloat64);
+    return {a64.min().item<double>(), a64.max().item<double>()};
+}
+
+torch::Tensor zero_bottom_level(torch::Tensor t) {
+    t = t.clone();
+    t.index_put_({SL(), 0, SL()}, torch::zeros_like(t.index({SL(), 0, SL()})));
+    return t;
+}
+
+struct AdvanceWPhBreakdown {
+    torch::Tensor ph_tend_coupled;
+    torch::Tensor ph_tend_physical;
+    torch::Tensor previous;
+    torch::Tensor frozen;
+    torch::Tensor old_w;
+    torch::Tensor vertical_advection;
+    torch::Tensor new_w;
+    torch::Tensor actual_delta;
+    torch::Tensor sum_delta;
+    torch::Tensor closure;
+    torch::Tensor mass_denom_old;
+    torch::Tensor mass_denom_new;
+};
+
+AdvanceWPhBreakdown build_advance_w_ph_breakdown(
+    const State& before_w, const Const& c, const State& after_w) {
+    torch::NoGradGuard no_grad;
+    const int nz = before_w.p.size(1);
+    const int nzw = before_w.ph.size(1);
+    TORCH_CHECK(nzw == nz + 1,
+                "advance_w ph diagnostic: expected nzw=nz+1, got ", nzw, " vs ", nz);
+
+    auto mut2 = c.mut.detach().unsqueeze(1);
+    auto muts2 = before_w.muts.detach().unsqueeze(1);
+    auto mf_old = c.c1f.detach().view({1, nzw, 1}) * mut2
+                + c.c2f.detach().view({1, nzw, 1});
+    auto mf_new = c.c1f.detach().view({1, nzw, 1}) * muts2
+                + c.c2f.detach().view({1, nzw, 1});
+    TORCH_CHECK(mf_old.isfinite().all().item<bool>() && mf_new.isfinite().all().item<bool>(),
+                "advance_w ph diagnostic: non-finite old/new mass denominator");
+    TORCH_CHECK(mf_old.abs().min().item<double>() > 0.0 &&
+                mf_new.abs().min().item<double>() > 0.0,
+                "advance_w ph diagnostic: zero old/new mass denominator");
+
+    auto previous = zero_bottom_level(before_w.ph.detach());
+    auto coupled = zero_bottom_level(c.ph_tend.detach());
+    auto physical = zero_bottom_level(c.ph_tend.detach() / mf_old);
+    auto frozen = zero_bottom_level(c.dts * c.ph_tend.detach() / mf_old);
+    auto old_w = zero_bottom_level(
+        (0.5f * c.dts * c.g * (1.0f - c.epssm)) * before_w.w.detach() / mf_old);
+
+    auto phf = c.ph_1.detach() + c.phb.detach();
+    auto dphf = phf.index({SL(), Slice(1, nz + 1), SL()})
+               - phf.index({SL(), Slice(0, nz), SL()});
+    auto ww_avg = 0.5f * (before_w.ww.detach().index({SL(), Slice(1, nz + 1), SL()})
+                         + before_w.ww.detach().index({SL(), Slice(0, nz), SL()}));
+    auto wdwn_body = ww_avg * (-c.rdnw.detach().view({1, nz, 1})) * dphf;
+    auto wd_kp1 = wdwn_body.index({SL(), Slice(1, nz), SL()});
+    auto wd_k = wdwn_body.index({SL(), Slice(0, nz - 1), SL()});
+    auto fnm_i = c.fnm.detach().slice(0, 1, nz).view({1, nz - 1, 1});
+    auto fnp_i = c.fnp.detach().slice(0, 1, nz).view({1, nz - 1, 1});
+    auto adv_active = c.dts * (fnm_i * wd_kp1 + fnp_i * wd_k);
+    auto zero_lvl = torch::zeros_like(previous.index({SL(), Slice(0, 1), SL()}));
+    auto adv_full = torch::cat({zero_lvl, adv_active, zero_lvl}, 1);
+    auto vertical_advection = -adv_full / mf_old;
+
+    auto new_w = zero_bottom_level(
+        (0.5f * c.dts * c.g * (1.0f + c.epssm)) * after_w.w.detach() / mf_new);
+    auto actual = zero_bottom_level(after_w.ph.detach());
+    auto actual_delta = actual - previous;
+    auto sum_delta = frozen + old_w + vertical_advection + new_w;
+    auto reconstructed = previous + sum_delta;
+    auto closure = actual - reconstructed;
+
+    return {coupled, physical, previous, frozen, old_w, vertical_advection, new_w,
+            actual_delta, sum_delta, closure, mf_old, mf_new};
+}
+
+void emit_advance_w_ph_breakdown(
+    uint64_t sequence, int small_step, float dts, const AdvanceWPhBreakdown& b) {
+    auto append = [](std::ostringstream& os, const char* name, const torch::Tensor& t) {
+        const auto s = active_ph_stats(t);
+        os << ' ' << name << "_max=" << s.max_abs << ' ' << name << "_rms=" << s.rms;
+    };
+    const auto old_mm = active_ph_minmax(b.mass_denom_old);
+    const auto new_mm = active_ph_minmax(b.mass_denom_new);
+    std::ostringstream os;
+    os << std::setprecision(std::numeric_limits<double>::max_digits10)
+       << "SDIRK3_ADVANCE_W_PH_DIAG"
+       << " sequence=" << sequence
+       << " small_step=" << small_step
+       << " dts=" << dts;
+    append(os, "coupled", b.ph_tend_coupled);
+    append(os, "physical", b.ph_tend_physical);
+    append(os, "previous", b.previous);
+    append(os, "frozen", b.frozen);
+    append(os, "old_w", b.old_w);
+    append(os, "vertical_adv", b.vertical_advection);
+    append(os, "new_w", b.new_w);
+    append(os, "actual_delta", b.actual_delta);
+    append(os, "sum_delta", b.sum_delta);
+    append(os, "closure", b.closure);
+    os << " mass_old_min=" << old_mm.first << " mass_old_max=" << old_mm.second
+       << " mass_new_min=" << new_mm.first << " mass_new_max=" << new_mm.second;
+    wrf::sdirk3::emit_sdirk3_diag_line(os.str() + "\n");
+}
+
+std::string single_line_diag_reason(const char* reason) {
+    const std::string input = reason ? reason : "unknown";
+    std::string output;
+    output.reserve(input.size());
+    for (const unsigned char ch : input) {
+        switch (ch) {
+            case '\n': output += "\\n"; break;
+            case '\r': output += "\\r"; break;
+            case '\t': output += "\\t"; break;
+            default:
+                if (ch < 0x20 || ch == 0x7f) {
+                    output += '?';
+                } else {
+                    output.push_back(static_cast<char>(ch));
+                }
+        }
+    }
+    return output.empty() ? std::string("unknown") : output;
+}
+
+void emit_advance_w_ph_diag_invalid(
+    uint64_t sequence, int small_step, float dts, const char* reason) {
+    const std::string clean_reason = single_line_diag_reason(reason);
+    std::ostringstream os;
+    os << "SDIRK3_ADVANCE_W_PH_DIAG_INVALID"
+       << " sequence=" << sequence
+       << " small_step=" << small_step
+       << " dts=" << dts
+       << " reason=" << clean_reason;
+    wrf::sdirk3::emit_sdirk3_diag_line(os.str() + "\n");
+}
 
 // mass-field i-difference X[i] - X[i-1] over the last (nx) dim -> {..., nx-1} interior u-points.
 inline torch::Tensor di(const torch::Tensor& X) {
@@ -506,7 +702,8 @@ State advance_w(const State& s, const Const& c) {
         // buoyancy/thermal term (:1414-1417): dts*g*(rdn(k)*(c2a*alt*t_2ave diff) - c1f(k)*muave)
         auto alt_k  = c.alt.index({SL(), kf,   SL()});   auto alt_km = c.alt.index({SL(), kf-1, SL()});
         auto t2a_k  = t2ave.index({SL(), kf,   SL()});   auto t2a_km = t2ave.index({SL(), kf-1, SL()});
-        auto buoy = dts*g*(rdn_k*(c2a_k*alt_k*t2a_k - c2a_km*alt_km*t2a_km) - c.c1f[kf]*s.muave);
+        const float buoy_scale = ablate_buoy_w_enabled() ? 0.0f : 1.0f;  // ablation (default 1)
+        auto buoy = buoy_scale*dts*g*(rdn_k*(c2a_k*alt_k*t2a_k - c2a_km*alt_km*t2a_km) - c.c1f[kf]*s.muave);
         // + dts*rw_tend (frozen slow w-tendency, :1405) — REQUIRED, mirrors ru_tend in advance_uv.
         auto val = s.w.index({SL(), kf, SL()}) + dts * c.rw_tend.index({SL(), kf, SL()})
                    + 0.5f*dts*g*rdn_k*(up - lo) + buoy;
@@ -523,7 +720,8 @@ State advance_w(const State& s, const Const& c) {
         // top buoyancy (:1427-1429): -dts*g*(2*rdnw*c2a*alt*t_2ave + c1f(kde)*muave)
         auto alt_km = c.alt.index({SL(), kde-1, SL()});
         auto t2a_km = t2ave.index({SL(), kde-1, SL()});
-        auto buoy_top = -dts*g*(2.0f*rdnw_km*c2a_km*alt_km*t2a_km + c.c1f[kde]*s.muave);
+        const float buoy_scale = ablate_buoy_w_enabled() ? 0.0f : 1.0f;  // ablation (default 1)
+        auto buoy_top = -buoy_scale*dts*g*(2.0f*rdnw_km*c2a_km*alt_km*t2a_km + c.c1f[kde]*s.muave);
         auto val = s.w.index({SL(), kde, SL()}) + dts * c.rw_tend.index({SL(), kde, SL()})
                    - 0.5f*dts*g/mh_km*rdnw_km*rdnw_km*2.0f*c2a_km*grad + buoy_top;
         w_rhs.index_put_({SL(), kde, SL()}, val);
@@ -717,7 +915,21 @@ State advance_substep(const State& s, const Const& c, int small_step) {
         "pre-loop calc_p_rho call, not the loop body.");
     State x = advance_uv(s, c);
     x = advance_mu_t(x, c);
-    x = advance_w(x, c);
+    if (advance_w_ph_diag_enabled()) {
+        const uint64_t sequence = advance_w_ph_diag_sequence(small_step);
+        State before_w = x;
+        State after_w = advance_w(x, c);
+        try {
+            emit_advance_w_ph_breakdown(
+                sequence, small_step, c.dts,
+                build_advance_w_ph_breakdown(before_w, c, after_w));
+        } catch (const std::exception& e) {
+            emit_advance_w_ph_diag_invalid(sequence, small_step, c.dts, e.what());
+        }
+        x = after_w;
+    } else {
+        x = advance_w(x, c);
+    }
     x = calc_p_rho(x, c, small_step);   // small_step>=1 => divergence damping
     return x;
 }
