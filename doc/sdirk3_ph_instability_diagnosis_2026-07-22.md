@@ -34,6 +34,30 @@ term on the w-solve and the w↔φ off-centering, at a matched mid-run substep. 
 channel (`advance_mu_t`, P0-4/§7 decomposition) is de-prioritized: mass + φ-denominator are healthy;
 `w` is the exploding variable.
 
+## P0-5 (advance_w term-by-term parity) — advance_w is FAITHFUL; the defect is in the COUPLING
+Compared the ported `advance_w` (`wrf_sdirk3_acoustic_substep.cpp:687-742`) against WRF
+`dyn_em/module_small_step_em.F:1366-1465` term by term:
+
+- **w-RHS interior (:1405-1417)** and **top (:1421-1429)**, and the **φ-update (:1462)** match verbatim.
+  The only reference factors absent from the port are `msft_inv(i)` (both PGF+buoyancy terms) and
+  `cqw(i,k,j)` (PGF term). For em_b_wave both are **exactly 1.0**: `mp_physics=0` ⇒ dry ⇒ `cqw≡1`
+  (cqw is the moist coefficient; it also multiplies the `calc_coef_w` a/b/c :632-639, all cqw=1 here),
+  and idealized ⇒ unit map ⇒ `msft_inv=1`.
+- **`damp_opt==3` top w-Rayleigh damping (:1445-1458)** — em_b_wave has `damp_opt=0`, so WRF applies
+  none; the port correctly treats the branch as inert. **Not the defect.**
+
+⇒ `advance_w`'s arithmetic is a faithful WRF port for this case, so the measured `|λ|≈1.4` is **NOT an
+`advance_w` formula defect.** This reconciles with the prior offline verification that the **isolated
+w-φ Thomas solve is `|λ|=0.998` (stable)**: the instability is not in any single operator. Per the
+differentiable-core discipline — *isolated primitives can each be faithful while the coupled
+semi-implicit step is `|λ|>1` from one subtly dropped/mis-coupled term* — the defect lives in the
+**coupling of the acoustic operators** (`advance_uv→advance_mu_t→advance_w→calc_p_rho` composition, the
+`t_2ave`/`muave` off-centered averages that thread thermodynamics into w, the `rhs`/`ww` build) and/or
+the **RK3 stage composition** (per-stage frozen-tendency regeneration + stage-state handoff). The
+definitive P0-5 unit is therefore **matched-input dyn_em parity of the FULL acoustic substep** (replay
+a dumped WRF intermediate state through the coupled operators, compare term by term), not a
+single-operator check — which are all already verified.
+
 ## Result summary
 The split-explicit geopotential (`ph`) blowup is **parameter-insensitive** (buoyancy/epssm/damping sweeps
 do not stop it) and localized by per-operator logging to the **horizontal / mass-continuity channel** — the
