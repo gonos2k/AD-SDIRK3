@@ -117,6 +117,26 @@ remaining suspect — the **RK3 stage composition** (the `dt/3, dt/2, dt` acoust
 slow-tendency regeneration + stage-state handoff), which is the SDIRK3-specific outer structure that
 diverges most from stock WRF and is where a `|λ|>1` composition defect would live.
 
+## Composition probes — uniform per-stage growth + divergence damping is the WRONG stabilizer
+- **Per-stage amplification is UNIFORM.** `[SPLIT-EXPLICIT COMPONENTS]` w-increment `‖dx‖` per stage
+  across steps: stage-1 ≈1.4-1.5, stage-2 ≈1.4-1.5, stage-3 ≈1.4-1.5 — all three RK stages amplify at
+  the SAME ~1.4/step. ⇒ NOT a single-stage composition bug (no one stage carries the mode); the shared
+  acoustic-coupling eigenmode is reflected uniformly in every stage.
+- **Divergence damping does NOT stabilize the mode.** `smdiv=emdiv ∈ {0, 0.05, 0.1}` all reach the
+  same step-39 failure ⇒ the `|λ|≈1.4` mode is NOT an acoustic-divergence mode (smdiv is designed for
+  that; it has no effect here). At `smdiv=emdiv=0.5` the run instead CRASHES at step 6 (ratios
+  1.7→4.2→11.5→32) — the forward-pressure-weighting term itself becomes destabilizing at large
+  coefficient. Both the formula (`p += smdiv·(p−pm1)`, `mudf_xy = −emdiv·dx·Δmudf`) and this behavior
+  are consistent with WRF; the point is the growing mode lives OUTSIDE the divergence-damping subspace.
+- ⇒ the mode is the **w↔φ vertical acoustic/gravity mode**, whose WRF stabilizer is the implicit
+  `epssm` off-centering. Yet the isolated w-φ Thomas (with that off-centering) is `|λ|=0.998` and the
+  `epssm` sweep doesn't fix the coupled step — so the defect is in the coupling the isolated solve
+  omits (it holds u/μ/θ/p fixed). LAST un-verified coupling outputs: `advance_mu_t`'s **`muave`**
+  ((1±eps) mass average → advance_w buoyancy + t_2ave normalization) and the **`ww` recurrence** (→
+  advance_w rhs). Those are the next term-by-term targets; if both are faithful, the coupled scheme's
+  `|λ|>1` at dt=600 must be validated against a stock-RK3 dt=600 control (memory: baseline done ⇒ stock
+  is stable ⇒ port defect) and then via the full-step FD amplification matrix.
+
 ## Result summary
 The split-explicit geopotential (`ph`) blowup is **parameter-insensitive** (buoyancy/epssm/damping sweeps
 do not stop it) and localized by per-operator logging to the **horizontal / mass-continuity channel** — the
