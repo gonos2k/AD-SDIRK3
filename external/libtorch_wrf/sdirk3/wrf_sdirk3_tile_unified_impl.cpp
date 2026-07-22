@@ -7296,8 +7296,12 @@ vertical_coefficients:
                     S = acoustic::calc_p_rho(S, C, 0);
                     for (int small_step = 1; small_step <= sched.n_sub; ++small_step) {
                         static std::atomic<int> substep_log_count{0};
-                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 &&
-                            substep_log_count.fetch_add(1) < 8) {
+                        // parity-debug 2026-07-22: log the first 8 AND every 10th substep up to
+                        // 400, so the SLOW divergence onset (~substep 85-115) is captured, not
+                        // just the neutral early phase. Reveals WHICH operator first grows.
+                        int se_lc = (wrf::sdirk3::g_sdirk3_config.debug_level >= 2)
+                                        ? substep_log_count.fetch_add(1) : -1;
+                        if (se_lc >= 0 && (se_lc < 8 || (se_lc % 10 == 0 && se_lc < 400))) {
                             // Per-operator localization (first substeps): same operators, same
                             // order as advance_substep — just logged between calls.
                             std::cerr << "[SPLIT-EXPLICIT SUBSTEP] stage=" << se_rk
