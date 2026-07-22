@@ -23,8 +23,13 @@ pin the exact term.
    → catastrophic blowup. "big arm + small actual = cancellation" — never clip on individual-arm max.
 4. **Parameter sweeps eliminate the tunable hypotheses (env, no rebuild):**
    - buoyancy ablation (`WRF_SDIRK3_ABLATE_BUOY_W=1`): trajectory UNCHANGED ⇒ buoyancy REFUTED.
-   - `epssm` 0.1/0.5/0.9: IDENTICAL ⇒ the vertical w–φ off-centering (the offline-proven |λ|=0.998 part)
-     REFUTED.
+   - `epssm` 0.1/0.9: the effective value + Thomas stiffness `cof` PROVEN to change ×2.98 at the point of
+     use (`[SPLIT-EXPLICIT COEF]`, epssm_effective 0.1→0.9, cof 1.16e6→3.47e6, max|coef.a| 30500→90995 —
+     the env override genuinely reaches calc_coef_w, past the Fortran set_config pass-through). Despite that
+     3× change in the implicit vertical stiffness, the blowup is UNCHANGED (ph 982→952 at step 1, a ~3%
+     early difference swamped by step 2) ⇒ the instability does NOT live in the vertical w–φ off-centering
+     operator (a 3× stiffness change doesn't stop it). [NB: an earlier note said "IDENTICAL" — corrected;
+     there is a small early epssm effect, just swamped by the dominant instability.]
    - `smdiv/emdiv` 0.1/0.5/0.9: ~1.4% effect ⇒ divergence damping REFUTED.
    ⇒ parameter-INSENSITIVE ⇒ a **STRUCTURAL** coupling error (fixed |λ|>1), not marginal stability.
 5. **Per-operator localization** (`[SPLIT-EXPLICIT SUBSTEP]`, log window widened to catch the slow onset):

@@ -7234,6 +7234,22 @@ vertical_coefficients:
                     auto coef = acoustic::calc_coef_w(
                         c2a_ac, mut, cqw_for_coef(U_stage), c1h_d, c2h_d, c1f_d, c2f_d,
                         rdn_d, rdnw_d, sched.dts, g_acc, epssm, top_lid);
+                    // parity-debug 2026-07-22 (review P0-1): PROVE the epssm/cof the acoustic
+                    // substep ACTUALLY uses (at the point of use, after the Fortran set_config
+                    // pass-through), not the config-load value. cof=[.5*dts*g*(1+epssm)]^2, so
+                    // max|coef.a| must change ~3x between epssm 0.1 and 0.9 IF the sweep is real.
+                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                        torch::NoGradGuard ng;
+                        const float cof = 0.5f*sched.dts*g_acc*(1.0f+epssm);
+                        std::cerr << "[SPLIT-EXPLICIT COEF] stage=" << se_rk
+                                  << " epssm_effective=" << epssm
+                                  << " dts=" << sched.dts
+                                  << " cof=" << (cof*cof)
+                                  << " max_abs_coef_a="
+                                  << coef.a.detach().abs().max().to(torch::kCPU).item<float>()
+                                  << " g_config.split_explicit_epssm="
+                                  << wrf::sdirk3::g_sdirk3_config.split_explicit_epssm << std::endl;
+                    }
 
                     acoustic::PrepInput prep;
                     prep.u_1 = u_1; prep.u_2 = u_2; prep.v_1 = v_1; prep.v_2 = v_2;
