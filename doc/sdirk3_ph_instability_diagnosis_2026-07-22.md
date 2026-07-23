@@ -51,6 +51,20 @@
 > reconstruction; `dp` must be built from the hydrostatic/EOS relation. The complete fix is genuinely
 > the deep p-ladder reformulation.
 >
+> **5d. ALL THREE available pressures tested for gradient parity (2026-07-24) — none consistent.**
+> `p_pgf` (diag_p_al, NONLINEAR EOS `p0·(rd·θ/(p0·α))^γ−pb`): p corr +1.0 e2 1%, **grad corr 0.94 e2
+> 0.36** (best but insufficient — cancellation). `p_pert_mt` (make_thermo, LINEARIZED calc_p_rho EOS)
+> and `p_pert_` (carried WRF): both corr −1.0 horizontally but **~zero vertical gradient** (dead).
+> ROOT (architectural): WRF's rk_tendency uses `grid%p` — a pressure CARRIED consistently from the
+> previous acoustic step's `calc_p_rho` (so its vertical differences are exact); the SDIRK3 port keeps
+> p as a per-stage DIAGNOSTIC (reconstructed fresh, gradient-inconsistent), and the carried `p_pert_`
+> field has a broken/2D vertical structure. ⇒ the complete :2494 fix is NOT a better per-stage
+> reconstruction (all fail) but to CARRY the 3D acoustic pressure (fix p_pert_ wiring to store the
+> full calc_p_rho `s.p` with its vertical gradient), OR an analytical `dp` from the EOS log-derivative
+> `dp=γ·P·(dθ/θ−dα/α)` (which itself faces the near-hydrostatic-residual cancellation). Both are
+> architectural/numerical units beyond a per-stage p swap. The parity harness gives the exact
+> acceptance (`grad e2 → 0`) for whichever is built.
+>
 > **6. Superseded hypotheses:** "pg_buoy_w is a double-count of advance_w thermal buoyancy" (WRONG — it is
 > WRF's legitimate :2494 vertical-PGF, just fed a broken pressure; corrected 2026-07-23) and "ρ(G)≈1.4
 > proven" (downgraded to geometric-growth evidence pending JVP/Arnoldi). Any "double-count / Mechanism

@@ -7283,6 +7283,9 @@ vertical_coefficients:
                         } else {
                             dump_t(torch::zeros_like(p_pgf));
                         }
+                        // 9F.D3c: make_thermo's LINEARIZED-EOS pressure (WRF calc_p_rho form) vs
+                        // diag_p_al's NONLINEAR-EOS p_pgf — test which gradient matches WRF's grid%p.
+                        dump_t(p_pert_mt);
                         pf.close();
                         std::cerr << "[PARITY dump] wrote port_k_slow_dump.bin (assembled coupled tendency, step1 stage1)"
                                   << std::endl;
