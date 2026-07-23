@@ -7325,8 +7325,13 @@ vertical_coefficients:
                     // rk_tendency that the acoustic loop integrates — at the FIRST se_rk==1 call
                     // (step-1 stage-1, identical em_b_wave IC). Env-gated; raw stream float32 (j,k,i).
                     static std::atomic<bool> parity_dumped{false};
+                    static std::atomic<int> parity_se1_count{0};
+                    // WRF_PARITY_STEP=N dumps at the Nth se_rk==1 (physical step N stage 1); default 1.
+                    const char* parity_step_env = std::getenv("WRF_PARITY_STEP");
+                    const int parity_step = parity_step_env ? std::atoi(parity_step_env) : 1;
+                    const int this_se1 = (se_rk == 1) ? (parity_se1_count.fetch_add(1) + 1) : -1;
                     if (se_rk == 1 && std::getenv("WRF_PARITY_RK_TEND_DUMP") != nullptr
-                        && !parity_dumped.exchange(true)) {
+                        && this_se1 == parity_step && !parity_dumped.exchange(true)) {
                         torch::NoGradGuard ng;
                         std::ofstream pf("port_k_slow_dump.bin", std::ios::binary | std::ios::trunc);
                         auto dump_t = [&](const torch::Tensor& t) {
@@ -7624,6 +7629,11 @@ vertical_coefficients:
                     U_stage = combineStateVariables(pad3u(finished.u), pad3v(finished.v),
                                                     pad3m(finished.w), pad3m(finished.ph),
                                                     pad3m(finished.t), pad2m(finished.mu));
+                    // 9F.D5c NOTE: naive split-local pressure carry (write S.p → p_pert_ at stage 3 so
+                    // the write-back propagates it to grid%p) was TESTED and did NOT fix the step-11
+                    // crash — confirming reviewer P0 #6: the pressure lifecycle needs correct s.p
+                    // SEMANTICS (coupled vs uncoupled, sign, time-level, damped/undamped), not a raw
+                    // assignment. Deferred to the dedicated lifecycle PR.
                     log_split_components("after_finish", se_rk, U_stage, U_time_n);
                     {
                         torch::NoGradGuard ng;
