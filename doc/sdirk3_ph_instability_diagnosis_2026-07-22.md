@@ -5,6 +5,30 @@ Continuation of the PR #69 `advance_w` geopotential decomposition. All measureme
 not run the live executable). Every diagnostic here is **opt-in and default-off ⇒ the baseline numerical
 path is byte-identical** (verified via `tests/numerical_fingerprint.sh` MATCH after each change).
 
+## CONSOLIDATED CONCLUSION (2026-07-23): faithful acoustic machinery + custom slow tendency is the locus
+After an exhaustive term-by-term parity pass, EVERY piece of the split-explicit acoustic machinery is
+a verified-faithful WRF port:
+- Operators: `advance_uv` (3-term PGF + non-hydro 4th + damping), `advance_mu_t` (DMDT + muave + muts +
+  mudf + ww recurrence + theta), `advance_w` (+ rhs/ww/t_2ave build), `calc_p_rho` (al/p/smdiv,
+  muts-arg confirmed) — all match `module_small_step_em.F` verbatim (modulo em_b_wave's unit factors
+  cqw=msft=1, damp_opt=0 inert).
+- Structure: `small_step_prep` coupled-perturbation setup (u"/v"/t"/w"/ph"/mu" :866-878 ↔ :243-276),
+  the u_1/u_2 time-level split, and the SSP-RK3 `dt/3,dt/2,dt` composition — all faithful.
+- The per-substep acoustic operator is STABLE (bounded oscillation, measured), and the isolated w-φ
+  Thomas is `|λ|=0.998`.
+
+Yet the assembled per-STEP map is `|λ|≈1.4`. Since the sub-step machinery is faithful+stable and the
+composition is faithful, the defect is confined to the ONE thing that is NOT a direct WRF port: the
+**custom stage slow-tendency builders** (`rhs_ph_stage`, `pg_buoy_w_stage`, `curvature_w_stage`,
+`compute_stage_tendency`, the slow-PGF `dpx_st`/`dpy_st`) — the resolved-scale `R(U)` regenerated each
+RK step. The memory records these had MEASURED discrepancies vs dyn_em (`ph_tend` 26× low; rv
+geostrophic residual 6× large). Ablating the individual slow forcings (pg_buoy_w, curvature_w, rhs_ph)
+is NULL because the error is in the tendency VALUE (a wrong-but-nonzero forcing), not its presence —
+only **matched-input dyn_em parity** of `R_port(U)` vs `R_wrf(U)` at one state can pin it. The
+`solve_em.F` `[PARITY sub]` dump hooks (:1697/:1819/:1939) are the substrate. This is the definitive
+P0-5 unit and the correct next build; the FD amplification matrix (perturb U_n, one full RK step,
+read `|λ|`+eigenvector) is the cross-check.
+
 ## LOCUS SETTLED (2026-07-23): the |λ|>1 is per-RK-STEP (slow tendency), NOT per-substep (acoustic)
 Decisive within-loop measurement: at `num_sound_steps=32`, one stage-3 acoustic loop's 32 substeps
 (FIXED forcing + FIXED operator) give `w_rms` = 12.7→47→7.8→40→0.5→35→7→31→13 — a **bounded,
