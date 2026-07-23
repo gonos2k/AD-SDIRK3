@@ -7207,9 +7207,15 @@ vertical_coefficients:
                     // advection + mu*g*w + 6th-order horizontal advection). MEASURED dyn_em ph_tend
                     // 1732 coupled vs the RHS channel's 66.95 (26x low) — the RHS's phi advection is
                     // not rk_tendency-equivalent, so build it natively like the horizontal PGF.
-                    auto ph_coupled = slow_gate(acoustic::rhs_ph_stage(
+                    auto ph_coupled_raw = acoustic::rhs_ph_stage(
                         ph_2, phb_d, u_2, v_2, predictor_ww, w_2, mut, muu, muv, msfty_d,
-                        c1f_d, c2f_d, fnm_d, fnp_d, rdnw_d, cfn_, cfn1_, rdx, rdy, g_acc));
+                        c1f_d, c2f_d, fnm_d, fnp_d, rdnw_d, cfn_, cfn1_, rdx, rdy, g_acc);
+                    // Diagnostic ablation (env-gated, default-off byte-identical): zero the SLOW phi
+                    // tendency to test whether the resolved-scale phi forcing drives the |λ|>1.
+                    static const bool ablate_rhs_ph =
+                        (std::getenv("WRF_SDIRK3_ABLATE_RHS_PH") != nullptr);
+                    if (ablate_rhs_ph) ph_coupled_raw = torch::zeros_like(ph_coupled_raw);
+                    auto ph_coupled = slow_gate(ph_coupled_raw);
                     log_split_tendency_components("KCOUPLED", se_rk, ru_coupled, rv_coupled,
                                                   rw_coupled, ph_coupled, t_coupled, mu_slow);
                     // [KCOUPLEDK] TEMP (2026-07-11, revert after parity campaign): per-LEVEL
