@@ -1369,6 +1369,12 @@ private:
     torch::Tensor cqw_;        // Moisture correction for W-momentum pressure gradient (3D)
     
     // Pressure and temperature fields (from WRF)
+    // NOTE (9F.D5, reviewer P0 #1): p_pert_ is set to grid%p in advanceZeroCopy but computeUnifiedRHS
+    // REBINDS it to compute_pressure_hydrostatic (:15352), clobbering the WRF zero-copy view and
+    // writing the hydrostatic field back to grid%p (:30458). Fixing this (immutable WRF view + a
+    // separate p_hydrostatic_ member for the v/w PGF consumers at :16014/:16552/:19794/:19886/:20315,
+    // + pressure as an explicit stage auxiliary state) is scoped to a dedicated PR — it changes the
+    // SDIRK3 baseline write-back and needs full baseline re-validation.
     torch::Tensor p_pert_;     // Perturbation pressure from WRF (3D)
     torch::Tensor t_pert_;     // Perturbation potential temperature from WRF (3D)
     torch::Tensor al_;         // Inverse density (specific volume) from WRF (3D)
