@@ -1,5 +1,42 @@
 # Split-explicit dt=600 ph-instability — measured diagnosis (2026-07-22)
 
+> ## ⏱ AUTHORITATIVE STATUS (2026-07-24, review 9F.D3) — READ THIS FIRST; supersedes all below
+>
+> **1. Current verified conclusion.** With the matched-input dyn_em parity harness now made
+> AUTHORITATIVE (pointwise, per-`tests/rk_tendency_parity_diff.py --selftest`): at step-1/rk_step-1 on
+> the identical em_b_wave IC, **5 of 6 slow-tendency channels match WRF POINTWISE** — ru/rv/ph/t/mu have
+> `e2 ≤ 2.7e-3` and `corr = 1.00000` (genuine field equality, not a max-ratio; the tool's sign-flip /
+> k-permute / one-cell-shift negative controls are all DETECTED). The **`rw` channel FAILS**: `e2 = 0.35`,
+> `corr = 0.92`, worst at levels **k=1–6 (near-surface) and k=64 (lid)** — a vertical-PGF band deficit.
+>
+> **2. Current PRODUCTION status (honest).** The split-on default currently **OMITS** WRF's legitimate
+> vertical-PGF/gravity term (`pg_buoy_w`, :2494) because it was fed a broken pressure (`p_pgf`, 6–16×
+> too large at mid/upper levels). Omitting it removed the dominant early rw distortion (per-step w-ratio
+> went from climbing-1.4-from-step-15 to a flat ~1.000 for 24 steps) — **but end-to-end dt=600 stability
+> is NOT resolved** (blowup still ~step 38), and the omission is an interim workaround toward an
+> INCOMPLETE equation, not a physically complete production fix. "primary solved" (below) overstates it.
+>
+> **3. Measured facts (survive).** epssm reaches calc_coef_w (cof ×2.98); dnw<0/rdnw>0/dnw·rdnw=−1
+> (now validated UNCONDITIONALLY, not behind debug_level); φ-denominator never collapses (nonpos=0);
+> `w_new` numerator explodes (~4.9e6) while denominator holds ~89000; net Σ DMDT ≈ roundoff (now
+> reduced in FP64 and separated from mu_tend); the acoustic operators + prep/finish + composition are
+> pointwise-faithful; `fzm≡fnm, fzp≡fnp` by WRF definition (module_advect_em.F:10688-9), so the helpers'
+> use of fnm/fnp is faithful (reviewer's fzm/fzp hypothesis REFUTED).
+>
+> **4. Still UNRESOLVED.** (a) correct pressure for :2494 so `rw` reaches pointwise parity (the "p-ladder":
+> diag_p_al vs diag_p_hypso2 vs make_thermo — compare vertical GRADIENT ∂_η p, not just p); (b) restore
+> the legitimate :2494 term to the production default once its pressure is correct (or fail-close split-on
+> until then); (c) a rigorous spectral verdict via a full one-step JVP/Arnoldi at a fixed checkpoint — the
+> `w_rms` ratio is strong geometric-growth evidence but NOT a ρ(J) proof.
+>
+> **5. Next acceptance experiment.** Per-term rw dump (advection / curvature / coriolis / vertical-PGF /
+> total) on BOTH WRF and port + pointwise parity per term; then the pressure-gradient parity `e_{∂p}(k)`.
+>
+> **6. Superseded hypotheses:** "pg_buoy_w is a double-count of advance_w thermal buoyancy" (WRONG — it is
+> WRF's legitimate :2494 vertical-PGF, just fed a broken pressure; corrected 2026-07-23) and "ρ(G)≈1.4
+> proven" (downgraded to geometric-growth evidence pending JVP/Arnoldi). Any "double-count / Mechanism
+> confirmed / primary SOLVED" wording in the older sections below is SUPERSEDED by this header.
+
 Continuation of the PR #69 `advance_w` geopotential decomposition. All measurements were run on the
 **live `em_b_wave` dt=600 executable** with `sdirk3_split_explicit=.true.` (the agent that built #69 could
 not run the live executable). Every diagnostic here is **opt-in and default-off ⇒ the baseline numerical
