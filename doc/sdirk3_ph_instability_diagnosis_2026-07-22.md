@@ -5,6 +5,35 @@ Continuation of the PR #69 `advance_w` geopotential decomposition. All measureme
 not run the live executable). Every diagnostic here is **opt-in and default-off ⇒ the baseline numerical
 path is byte-identical** (verified via `tests/numerical_fingerprint.sh` MATCH after each change).
 
+## FIX LANDED (2026-07-23) — pg_buoy_w double-count removed; primary instability resolved
+The matched-input parity harness found the root cause (below) and the fix is committed:
+`rw_coupled = rw_slow + curvature_w` (dropped `pg_buoy_w_stage`; A/B restore `WRF_SDIRK3_KEEP_PG_BUOY_W`).
+MEASURED impact:
+- **Parity restored:** rw ratio 2.63→0.896, corr 0.21→0.92; ru/rv/ph/t/mu all exact 1.000.
+- **|λ| primary instability GONE:** per-step ratio is now **1.000 (neutral) for ~24 steps** (was
+  climbing 1.0→1.4 from step 15). Baseline byte-identical (split path opt-in).
+- **Mechanism confirmed:** `pg_buoy_w_stage` re-applied the buoyancy that `advance_w` already handles
+  (acoustic buoy term :706) — a spurious slow-forcing DOUBLE-COUNT (corr 0.014 with WRF `rw_tend`),
+  inflating the frozen w-forcing 2.6× and driving the per-step w↔φ eigen-instability.
+
+**SECONDARY residual (remaining, characterized):** with pg_buoy_w gone, rw is still ~10% low
+(0.896, corr 0.92) — a `curvature_w_stage` accuracy gap, NOT a missing w-advection (at step 1 the
+balanced IC has w≈0 so w-advection≈0; WRF's rw_tend=70.75 is the CURVATURE term). WRF's w-curvature
+is `(u²+v²)/a + 2·u·Ω·cos(lat)` (ADT eqn, advance_w comment :1300); `curvature_w_stage` (1/a only)
+likely omits the `2·u·Ω·cos` Coriolis-curvature component → the 0.08 decorrelation + 10% deficit.
+This residual drives a SLOWER secondary instability (|λ| neutral to step ~24, then climbs to 1.38 by
+step 37, blowup 38) — an order of magnitude weaker onset than the primary.
+
+**Secondary investigation (measured):** the Coriolis `e`-term (`coriolis_w_stage`, added) is a faithful
+WRF port but INACTIVE for em_b_wave — it's an f-plane with `e=2Ω·cos(lat)=0` (only `f=2Ω·sin(lat)`),
+so rw is bit-identical with/without it (it will matter for real-earth 4D-Var). Per-LEVEL parity then
+localizes the true residual: port rw matches WRF at mid/upper levels (k=20–63, ratio 0.87–0.96, corr
+~0.9) but is **≈0 at the low levels (k=1–10, where WRF L2~200) and at the top (k=64, WRF=248)** — a
+NEAR-SURFACE + TOP-BOUNDARY rw deficit that the curvature reconstruction misses (WRF's curvature loop
+is `k=MAX(2,kts),ktf`; the near-surface/lid rw_tend has a boundary contribution not reproduced). This
+boundary-band deficit is the remaining secondary source; closing it (reproduce WRF's low-level + lid
+rw_tend) is the next step to drive rw parity → 1.000 and re-measure |λ|.
+
 ## ROOT CAUSE FOUND (2026-07-23) — matched-input dyn_em parity: rw slow forcing 2.6× too large
 Built the matched-input parity harness (env `WRF_PARITY_RK_TEND_DUMP`): a stock RK3 run
 (time_integration_scheme=3) dumps WRF's `rk_tendency` at step-1/rk_step-1

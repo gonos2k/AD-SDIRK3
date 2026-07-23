@@ -7205,7 +7205,25 @@ vertical_coefficients:
                     // applies (its acoustic buoy term, acoustic_substep.cpp:706). Adding it drove the
                     // per-step |λ|≈1.4 w↔φ eigen-instability; removing it makes |λ|≈1.000 neutral for
                     // ~24 steps (vs climbing from step 15). Opt-in A/B restore: WRF_SDIRK3_KEEP_PG_BUOY_W.
-                    torch::Tensor rw_coupled = rw_slow + slow_gate(curvature_w_t);
+                    // FIX2 (2026-07-23, parity): add WRF's w-momentum CORIOLIS term
+                    // (module_big_step_utilities_em.F:3843) that curvature_w_stage omits. At step-1
+                    // (balanced IC, w≈0) WRF's rw_tend is curvature+Coriolis; curvature_w alone gave
+                    // corr 0.92 / 90% — the missing e·(cosa·ru − (msftx/msfty)·sina·rv) Coriolis part
+                    // is the residual driving the SECONDARY instability. e/cosa/sina from the wired
+                    // f-plane fields (e_ = 2Ω·cos(lat)). Opt-out A/B: WRF_SDIRK3_ABLATE_CORIOLIS_W.
+                    torch::Tensor coriolis_w_t = torch::zeros_like(curvature_w_t);
+                    static const bool ablate_coriolis_w =
+                        (std::getenv("WRF_SDIRK3_ABLATE_CORIOLIS_W") != nullptr);
+                    if (!ablate_coriolis_w && e_.defined() && e_.numel() > 0 &&
+                        cosa_.defined() && sina_.defined()) {
+                        auto e_d    = align_like(e_,    U_stage).index({Slice(0, nyt), Slice(0, nxt)});
+                        auto cosa_d = align_like(cosa_, U_stage).index({Slice(0, nyt), Slice(0, nxt)});
+                        auto sina_d = align_like(sina_, U_stage).index({Slice(0, nyt), Slice(0, nxt)});
+                        coriolis_w_t = acoustic::coriolis_w_stage(
+                            u_2, v_2, muu, muv, msfuy_d, msfvx_inv_d, msftx_d, msfty_d,
+                            c1h_d, c2h_d, fnm_d, fnp_d, e_d, cosa_d, sina_d);
+                    }
+                    torch::Tensor rw_coupled = rw_slow + slow_gate(curvature_w_t) + slow_gate(coriolis_w_t);
                     static const bool keep_pg_buoy_w =
                         (std::getenv("WRF_SDIRK3_KEEP_PG_BUOY_W") != nullptr);
                     if (keep_pg_buoy_w && !ablate_pg_buoy_w) {

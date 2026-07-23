@@ -337,6 +337,46 @@ torch::Tensor curvature_w_stage(
     return torch::cat({zero_lvl, term, zero_lvl}, 1);                           // {ny,nz_w,nx}
 }
 
+// WRF w-momentum CORIOLIS term (module_big_step_utilities_em.F:3843), companion to curvature_w_stage.
+//   rw_tend += e*(cosa*avg_w(ru) - (msftx/msfty)*sina*avg_w(rv))
+// where avg_w = 0.5*(fnm(kf)*pair(kf) + fnp(kf)*pair(kf-1)) of the horizontal pair-sum of the coupled
+// momentum (ru=(c1h*muu+c2h)*u/msfuy on u-points, rv likewise on v-points). Linear in ru/rv (unlike
+// curvature's ru*u). e/cosa/sina are 2D {ny,nx}.
+torch::Tensor coriolis_w_stage(
+    const torch::Tensor& u, const torch::Tensor& v,
+    const torch::Tensor& muu, const torch::Tensor& muv,
+    const torch::Tensor& msfuy, const torch::Tensor& msfvx_inv,
+    const torch::Tensor& msftx, const torch::Tensor& msfty,
+    const torch::Tensor& c1h, const torch::Tensor& c2h,
+    const torch::Tensor& fnm, const torch::Tensor& fnp,
+    const torch::Tensor& e, const torch::Tensor& cosa, const torch::Tensor& sina) {
+    const int ny = msftx.size(0), nx = msftx.size(1);
+    const int nz = u.size(1);
+    auto mh_u = c1h.view({1, nz, 1}) * muu.unsqueeze(1) + c2h.view({1, nz, 1});
+    auto mh_v = c1h.view({1, nz, 1}) * muv.unsqueeze(1) + c2h.view({1, nz, 1});
+    auto ru = mh_u * u / msfuy.unsqueeze(1);                                    // {ny,nz,nx_u}
+    auto rv = mh_v * v * msfvx_inv.unsqueeze(1);                                // {ny_v,nz,nx}
+    auto pair_u = [&](const torch::Tensor& X) {
+        return X.index({SL(), SL(), Slice(0, nx)}) + X.index({SL(), SL(), Slice(1, nx + 1)});
+    };
+    auto pair_v = [&](const torch::Tensor& X) {
+        return X.index({Slice(0, ny), SL(), SL()}) + X.index({Slice(1, ny + 1), SL(), SL()});
+    };
+    auto to_w = [&](const torch::Tensor& S) {
+        auto fnm_i = fnm.slice(0, 1, nz).view({1, nz - 1, 1});
+        auto fnp_i = fnp.slice(0, 1, nz).view({1, nz - 1, 1});
+        return 0.5f * (fnm_i * S.index({SL(), Slice(1, nz), SL()})
+                     + fnp_i * S.index({SL(), Slice(0, nz - 1), SL()}));        // {ny,nz-1,nx}
+    };
+    auto e3    = e.unsqueeze(1);                                                // {ny,1,nx}
+    auto cosa3 = cosa.unsqueeze(1);
+    auto sina3 = sina.unsqueeze(1);
+    auto ratio = (msftx / msfty).unsqueeze(1);
+    auto term = e3 * (cosa3 * to_w(pair_u(ru)) - ratio * sina3 * to_w(pair_v(rv)));  // {ny,nz-1,nx}
+    auto zero_lvl = torch::zeros({ny, 1, nx}, u.options());
+    return torch::cat({zero_lvl, term, zero_lvl}, 1);                           // {ny,nz_w,nx}
+}
+
 // WRF rhs_ph — see header.
 torch::Tensor rhs_ph_stage(
     const torch::Tensor& ph, const torch::Tensor& phb,
