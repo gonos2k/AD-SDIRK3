@@ -120,6 +120,19 @@
 #include <iterator>   // PARITY FIX 2025-12-25: For std::begin, std::end
 #include <cstring>    // PARITY FIX 2025-12-25: For std::memcpy
 
+// review 9F.D3 P1: env-flag parsing. std::getenv(name)!=nullptr treats VAR=0 / VAR=false as TRUE,
+// a foot-gun for the diagnostic ablation flags. This accepts only affirmative values.
+namespace {
+inline bool env_flag_true(const char* name) {
+    const char* v = std::getenv(name);
+    if (v == nullptr || v[0] == '\0') return false;
+    return !(std::strcmp(v, "0") == 0 || std::strcmp(v, "false") == 0 ||
+             std::strcmp(v, "no") == 0 || std::strcmp(v, "off") == 0 ||
+             std::strcmp(v, "FALSE") == 0 || std::strcmp(v, "NO") == 0 ||
+             std::strcmp(v, "OFF") == 0);
+}
+}  // namespace
+
 // Ensure M_PI is defined (not always available on all compilers)
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -6613,6 +6626,15 @@ vertical_coefficients:
                 const float t0_ref = 300.0f;            // WRF module_model_constants t0 (physical constant)
                 const bool top_lid = wrf::sdirk3::g_sdirk3_config.split_explicit_top_lid;
 
+                // 9F.D4 ABI audit: SAVE the carried WRF grid%p (p_pert_) at split-branch ENTRY, before
+                // any compute_k_slow->computeUnifiedRHS call overwrites p_pert_ with its hydrostatic
+                // reconstruction (site A, :15324). This is the REAL perturbation pressure the ABI passed
+                // (module_implicit_sdirk3.F:1355 C_LOC(grid%p)); its vertical gradient is the non-
+                // hydrostatic one :2494 needs. Detached clone (diagnostic + candidate operand).
+                torch::Tensor p_pert_carried;
+                if (p_pert_.defined() && p_pert_.numel() > 0) {
+                    p_pert_carried = p_pert_.detach().clone();
+                }
                 torch::Tensor U_time_n = U_n.clone();
                 torch::Tensor U_stage = U_n.clone();
 
@@ -7189,9 +7211,9 @@ vertical_coefficients:
                     // SLOW w-forcing component drives the |λ|>1. curvature_w is a SPHERICAL term
                     // (1/earth_radius); em_b_wave is a Cartesian channel where it may be spurious.
                     static const bool ablate_pg_buoy_w =
-                        (std::getenv("WRF_SDIRK3_ABLATE_PG_BUOY_W") != nullptr);
+                        env_flag_true("WRF_SDIRK3_ABLATE_PG_BUOY_W");
                     static const bool ablate_curvature_w =
-                        (std::getenv("WRF_SDIRK3_ABLATE_CURVATURE_W") != nullptr);
+                        env_flag_true("WRF_SDIRK3_ABLATE_CURVATURE_W");
                     auto curvature_w_t = acoustic::curvature_w_stage(
                                             u_2, v_2, muu, muv, msfuy_d, msfvx_inv_d,
                                             msftx_d, msfty_d, c1h_d, c2h_d, fnm_d, fnp_d,
@@ -7213,7 +7235,7 @@ vertical_coefficients:
                     // f-plane fields (e_ = 2Ω·cos(lat)). Opt-out A/B: WRF_SDIRK3_ABLATE_CORIOLIS_W.
                     torch::Tensor coriolis_w_t = torch::zeros_like(curvature_w_t);
                     static const bool ablate_coriolis_w =
-                        (std::getenv("WRF_SDIRK3_ABLATE_CORIOLIS_W") != nullptr);
+                        env_flag_true("WRF_SDIRK3_ABLATE_CORIOLIS_W");
                     if (!ablate_coriolis_w && e_.defined() && e_.numel() > 0 &&
                         cosa_.defined() && sina_.defined()) {
                         auto e_d    = align_like(e_,    U_stage).index({Slice(0, nyt), Slice(0, nxt)});
@@ -7225,14 +7247,30 @@ vertical_coefficients:
                     }
                     torch::Tensor rw_coupled = rw_slow + slow_gate(curvature_w_t) + slow_gate(coriolis_w_t);
                     static const bool keep_pg_buoy_w =
-                        (std::getenv("WRF_SDIRK3_KEEP_PG_BUOY_W") != nullptr);
-                    // 9F.D3b: the :2494 vertical-PGF divides p differences; the reconstructed p_pgf
-                    // matches WRF's p to 1% but its vertical GRADIENT is 30-100% off (cancellation).
-                    // TESTED the carried p_pert_ as a difference-consistent source: it MATCHES WRF's p
-                    // horizontally (corr -1.0) but has a ~ZERO vertical gradient (pg_buoy_w(-p_pert_)
-                    // ≈ 2e-4), so it is NOT usable — the difference-consistent pressure requires a
-                    // genuine dp reconstruction from the hydrostatic/EOS relation (deep p-ladder).
-                    if (keep_pg_buoy_w && !ablate_pg_buoy_w) {
+                        env_flag_true("WRF_SDIRK3_KEEP_PG_BUOY_W");
+                    // review 9F.D3 P1: mutually-exclusive experiment flags must not be set together.
+                    TORCH_CHECK(!(keep_pg_buoy_w && ablate_pg_buoy_w),
+                        "WRF_SDIRK3_KEEP_PG_BUOY_W and WRF_SDIRK3_ABLATE_PG_BUOY_W are mutually "
+                        "exclusive; set at most one.");
+                    // 9F.D4: WRF's legitimate :2494 vertical-PGF term needs a difference-consistent
+                    // pressure. MAJOR FINDING (reviewer P0 #4 ABI audit): p_pert_ is OVERWRITTEN by a
+                    // hydrostatic reconstruction inside computeUnifiedRHS (site A, :15324); the ABI
+                    // DOES pass the real grid%p (module_implicit_sdirk3.F:1355), and p_pert_carried
+                    // (saved at split entry, pre-overwrite) == WRF grid%p EXACTLY (value AND gradient,
+                    // e2=0.0000). BUT restoring pg_buoy_w with it DESTABILIZES (rw e2 13.68, step 9):
+                    // the :2494 FORCE g·(rdn·dp − c1f·mu) is a CANCELLATION of large terms (reviewer
+                    // P0 #7), so an exact dp alone is insufficient — mu/rdn/c1f must be mutually
+                    // consistent WRF operands too. So this stays OPT-IN (WRF_SDIRK3_RESTORE_PG_BUOY_W)
+                    // pending per-term FORCE parity; default keeps the working interim (curvature+coriolis).
+                    static const bool restore_pg_buoy_w =
+                        env_flag_true("WRF_SDIRK3_RESTORE_PG_BUOY_W");
+                    if (restore_pg_buoy_w && !ablate_pg_buoy_w &&
+                        p_pert_carried.defined() && p_pert_carried.numel() > 0) {
+                        auto pg_p = strip3m(align_like(p_pert_carried, U_stage));   // exact WRF grid%p
+                        auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
+                                            pg_p, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
+                        rw_coupled = rw_coupled + slow_gate(pg_buoy_w_t);
+                    } else if (keep_pg_buoy_w && !ablate_pg_buoy_w) {
                         auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
                                             p_pgf, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
                         rw_coupled = rw_coupled + slow_gate(pg_buoy_w_t);
@@ -7248,7 +7286,7 @@ vertical_coefficients:
                     // Diagnostic ablation (env-gated, default-off byte-identical): zero the SLOW phi
                     // tendency to test whether the resolved-scale phi forcing drives the |λ|>1.
                     static const bool ablate_rhs_ph =
-                        (std::getenv("WRF_SDIRK3_ABLATE_RHS_PH") != nullptr);
+                        env_flag_true("WRF_SDIRK3_ABLATE_RHS_PH");
                     if (ablate_rhs_ph) ph_coupled_raw = torch::zeros_like(ph_coupled_raw);
                     auto ph_coupled = slow_gate(ph_coupled_raw);
                     log_split_tendency_components("KCOUPLED", se_rk, ru_coupled, rv_coupled,
@@ -7286,6 +7324,13 @@ vertical_coefficients:
                         // 9F.D3c: make_thermo's LINEARIZED-EOS pressure (WRF calc_p_rho form) vs
                         // diag_p_al's NONLINEAR-EOS p_pgf — test which gradient matches WRF's grid%p.
                         dump_t(p_pert_mt);
+                        // 9F.D4: the CARRIED grid%p saved at split entry (before computeUnifiedRHS
+                        // overwrote p_pert_ with hydrostatic) — the true ABI perturbation pressure.
+                        if (p_pert_carried.defined() && p_pert_carried.numel() > 0) {
+                            dump_t(strip3m(align_like(p_pert_carried, U_stage)));
+                        } else {
+                            dump_t(torch::zeros_like(p_pgf));
+                        }
                         pf.close();
                         std::cerr << "[PARITY dump] wrote port_k_slow_dump.bin (assembled coupled tendency, step1 stage1)"
                                   << std::endl;

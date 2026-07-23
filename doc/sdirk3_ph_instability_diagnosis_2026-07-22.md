@@ -65,10 +65,57 @@
 > architectural/numerical units beyond a per-stage p swap. The parity harness gives the exact
 > acceptance (`grad e2 → 0`) for whichever is built.
 >
+> **5e. 4th attempt (inline linearized calc_p_rho EOS) FAILED (2026-07-24) → CONFIRMS architectural.**
+> Implemented WRF's exact linearized `calc_p_rho` EOS inline at the tile (the form `grid%p` actually
+> uses) and dumped it: `p e2 = 1184`, grad e2 = 1513 — worse than p_pgf. The failure is REPRODUCTION
+> complexity: `calc_p_rho` operates on the acoustic `State` with specific coupled/uncoupled + base-vs-
+> perturbation conventions (which `mut`/`muts`, `alt`=base-α, `t_1`=base-θ, coupled `t`), and hand-
+> reproducing it from raw stage tensors at the tile silently mismatches. Per the differentiable-core
+> discipline (≈3-4 fixes fail → question the architecture), this is decisive: **do NOT reconstruct p
+> at the tile — call the acoustic module's ACTUAL `calc_p_rho` (or carry its output `s.p`) so the
+> pressure is bit-consistent with WRF's `grid%p`.** That is the single scoped next unit (reverted the
+> buggy experiment; source unchanged, byte-identical).
+>
 > **6. Superseded hypotheses:** "pg_buoy_w is a double-count of advance_w thermal buoyancy" (WRONG — it is
 > WRF's legitimate :2494 vertical-PGF, just fed a broken pressure; corrected 2026-07-23) and "ρ(G)≈1.4
 > proven" (downgraded to geometric-growth evidence pending JVP/Arnoldi). Any "double-count / Mechanism
 > confirmed / primary SOLVED" wording in the older sections below is SUPERSEDED by this header.
+
+> ## 9F.D4 — ABI PRESSURE-WIRING BUG FOUND (reviewer P0 #4 audit, 2026-07-24)
+> Auditing the raw `p_ptr`/`p_pert_` wiring BEFORE any new formula (per the reviewer) found the bug:
+> - The Fortran ABI **does** pass the real `grid%p` (`module_implicit_sdirk3.F:1355 C_LOC(grid%p)`).
+> - `advanceZeroCopy` correctly sets `p_pert_ = grid%p` at entry — **but `computeUnifiedRHS` OVERWRITES
+>   `p_pert_ = compute_pressure_hydrostatic(...)`** (a hydrostatic reconstruction, tile_unified :15324)
+>   on every RHS call. So the member `p_pert_` ("Perturbation pressure from WRF") is clobbered with a
+>   hydrostatic field — its contract is violated, and that is why earlier measurements saw a zero
+>   non-hydrostatic gradient.
+> - **Saving `p_pert_` at split-branch entry (pre-overwrite) → `p_pert_carried` == WRF `grid%p` EXACTLY:
+>   value AND vertical gradient `e2 = 0.0000, corr = 1.0000`.** The difference-consistent pressure `:2494`
+>   needs was available all along; the reconstructions (diag_p_al/make_thermo/linearized) were all
+>   unnecessary detours around a wiring bug.
+>
+> **But restoring pg_buoy_w with the exact carried p DESTABILIZES** (rw e2 13.68, blowup step 9) — which
+> confirms reviewer **P0 #7**: `:2494`’s force `g·(rdn·dp − c1f·mu)` is a CANCELLATION of large terms,
+> so an exact `dp` alone is insufficient; `mu`/`rdn`/`c1f` must also be mutually consistent WRF operands
+> (the port's `mu_2` ≠ WRF's `muf` breaks the near-hydrostatic balance → the c1f·mu term ~73000 swamps
+> the small residual). So the restoration is OPT-IN (`WRF_SDIRK3_RESTORE_PG_BUOY_W`) pending per-term
+> FORCE parity; the default keeps the working interim (curvature+coriolis, byte-identical, ~38 steps).
+> NEXT: (1) fix computeUnifiedRHS to not clobber `p_pert_` (use a local for its hydrostatic p); (2)
+> per-term `rw` FORCE parity — dump `rdn·dp`, `c1f·mu`, and the assembled `:2494` on BOTH WRF and port,
+> match each operand (esp. WRF's `muf`) so the cancellation balances; then restore as default.
+>
+> ## Review 9F.D3 P1 evidence (2026-07-24)
+> - **env-flag correctness:** the diagnostic flags used `getenv!=nullptr` (so `VAR=0` read TRUE) —
+>   replaced with `env_flag_true()` (rejects 0/false/no/off/unset) + a mutual-exclusion guard for
+>   KEEP/ABLATE. Verified: `KEEP_PG_BUOY_W=0` → false; `KEEP=1 ABLATE=1` → fail-close.
+> - **diagnostic observer-neutrality:** paired split run debug=0 vs debug=2 → BOTH fail at step 38,
+>   outcome=20 (identical physical trajectory) despite debug≥2's clones/FP64/.item()/file-I/O ⇒ the
+>   diagnostics do not perturb the physics.
+> - **pressure closure EXHAUSTED (all 4 avenues):** diag_p_al (nonlinear, grad e2 0.36 best-but-
+>   insufficient); p_pert_/p_pert_mt (hydrostatic → zero non-hydrostatic residual); inline linearized
+>   (reproduction bug e2 1184); acoustic S.p@step0 (zero-perturbation reference, not the stage p). ⇒
+>   the :2494 restoration is an architectural/numerical research unit (accurate non-hydrostatic p),
+>   not a per-stage reconstruction swap.
 
 Continuation of the PR #69 `advance_w` geopotential decomposition. All measurements were run on the
 **live `em_b_wave` dt=600 executable** with `sdirk3_split_explicit=.true.` (the agent that built #69 could
