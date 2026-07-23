@@ -5,6 +5,28 @@ Continuation of the PR #69 `advance_w` geopotential decomposition. All measureme
 not run the live executable). Every diagnostic here is **opt-in and default-off ⇒ the baseline numerical
 path is byte-identical** (verified via `tests/numerical_fingerprint.sh` MATCH after each change).
 
+## LOCUS SETTLED (2026-07-23): the |λ|>1 is per-RK-STEP (slow tendency), NOT per-substep (acoustic)
+Decisive within-loop measurement: at `num_sound_steps=32`, one stage-3 acoustic loop's 32 substeps
+(FIXED forcing + FIXED operator) give `w_rms` = 12.7→47→7.8→40→0.5→35→7→31→13 — a **bounded,
+slightly-DECAYING oscillation**, NOT growth. ⇒ the **per-substep acoustic operator is STABLE**
+(`|λ|≤1`; the acoustic wave bounces vertically with bounded amplitude). The earlier "within-loop
+growth" (n_sub=4: 20→73) was just the first quarter-cycle of this oscillation.
+
+Therefore the measured per-STEP `|λ|≈1.4` is introduced **once per RK step**, by the **slow-tendency
+regeneration + RK3 composition** — NOT the acoustic sub-stepping. This is fully consistent with every
+acoustic operator being faithful (they are) and the isolated w-φ Thomas being stable (0.998): the
+sub-step machinery is correct; the defect is in the resolved-scale (slow) forcing `R(U)` or the stage
+composition, applied once per step. The forced-steady-state reconciliation holds: within a stage,
+`x_{k+1}=G·x_k+b` with STABLE G and a large fixed `b` (the slow forcing) — the oscillation is bounded.
+
+Ablations so far (env-gated, byte-identical): slow-w components `pg_buoy_w`/`curvature_w` (incl. the
+spherical-curvature 1/a term, a spurious-forcing candidate for the Cartesian channel) have **no
+effect** on the step-39 failure ⇒ NOT the driver. Remaining slow-forcing suspects for the w↔φ
+eigenmode: `rhs_ph_stage` (the slow φ tendency) and the horizontal-PGF/advection tendencies feeding
+`ru_slow`/divergence. Next: ablate/parity-check `rhs_ph_stage` and the slow advection, then the
+per-STEP FD amplification matrix (perturb U_n, run one full RK step, read `|λ|`+eigenvector) — now
+correctly scoped to the STEP map, not the substep.
+
 ## DEFINITIVE MECHANISM (measured 2026-07-23): fixed |λ|≈1.4 w↔φ eigen-instability
 `[SPLIT-EXPLICIT AMP]` logs `w_rms`/`ph_rms` every substep. Because one stage's acoustic loop uses a
 FIXED operator/`dts`, the model itself performs **power iteration** on its dominant mode — so the

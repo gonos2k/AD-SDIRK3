@@ -7184,13 +7184,24 @@ vertical_coefficients:
                     // static residual (which shifts the discrete equilibrium, benign in WRF).
                     // (A/B 2026-07-11 measured: pg_buoy contributes only 3.7 of the 45.7
                     // first-substep w'' excess — the gap rides on the c2a/alt coefficient pair.)
-                    auto rw_coupled = rw_slow
-                                      + slow_gate(acoustic::pg_buoy_w_stage(
-                                            p_pgf, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc))
-                                      + slow_gate(acoustic::curvature_w_stage(
+                    // Diagnostic ablations (env-gated, default-off byte-identical): isolate whether a
+                    // SLOW w-forcing component drives the |λ|>1. curvature_w is a SPHERICAL term
+                    // (1/earth_radius); em_b_wave is a Cartesian channel where it may be spurious.
+                    static const bool ablate_pg_buoy_w =
+                        (std::getenv("WRF_SDIRK3_ABLATE_PG_BUOY_W") != nullptr);
+                    static const bool ablate_curvature_w =
+                        (std::getenv("WRF_SDIRK3_ABLATE_CURVATURE_W") != nullptr);
+                    auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
+                                            p_pgf, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
+                    auto curvature_w_t = acoustic::curvature_w_stage(
                                             u_2, v_2, muu, muv, msfuy_d, msfvx_inv_d,
                                             msftx_d, msfty_d, c1h_d, c2h_d, fnm_d, fnp_d,
-                                            1.0f / 6370000.0f));
+                                            1.0f / 6370000.0f);
+                    if (ablate_pg_buoy_w)   pg_buoy_w_t   = torch::zeros_like(pg_buoy_w_t);
+                    if (ablate_curvature_w) curvature_w_t = torch::zeros_like(curvature_w_t);
+                    auto rw_coupled = rw_slow
+                                      + slow_gate(pg_buoy_w_t)
+                                      + slow_gate(curvature_w_t);
                     auto t_coupled  = t_slow;
                     // ph channel: WRF's COMPLETE coupled rhs_ph at the stage state (vertical wdwn
                     // advection + mu*g*w + 6th-order horizontal advection). MEASURED dyn_em ph_tend
