@@ -5,6 +5,38 @@ Continuation of the PR #69 `advance_w` geopotential decomposition. All measureme
 not run the live executable). Every diagnostic here is **opt-in and default-off ⇒ the baseline numerical
 path is byte-identical** (verified via `tests/numerical_fingerprint.sh` MATCH after each change).
 
+## ROOT CAUSE FOUND (2026-07-23) — matched-input dyn_em parity: rw slow forcing 2.6× too large
+Built the matched-input parity harness (env `WRF_PARITY_RK_TEND_DUMP`): a stock RK3 run
+(time_integration_scheme=3) dumps WRF's `rk_tendency` at step-1/rk_step-1
+(`solve_em.F` after :1164, big-endian stream), the split run (scheme=6+split) dumps the port's
+assembled frozen forcing (`ru_coupled..ph_coupled/t_coupled/mu_slow`, tile_unified :7220) at the
+IDENTICAL step-1 IC, and `tests/rk_tendency_parity_diff.py` diffs per channel. Result:
+
+| channel | WRF max\|·\| | port max\|·\| | ratio | verdict |
+|---|---|---|---|---|
+| ru | 33.37 | 33.38 | 1.000 | ✅ |
+| rv | 82.09 | 82.09 | 1.000 | ✅ |
+| **rw** | **70.75** | **186.2** | **2.63** | ❌ 2.6× (L2 4×) |
+| ph | 1732 | 1732 | 1.000 | ✅ |
+| t  | 9.36 | 9.36 | 1.000 | ✅ |
+| mu | 0 | 0 | — | ✅ |
+
+**5 of 6 channels match WRF exactly; the `rw` (slow w-momentum) forcing is 2.6–4× too large** — and
+the measured growing eigenmode is exactly w↔φ. Component decomposition (re-dump under ablation):
+zeroing `pg_buoy_w_stage` brings rw 186→63 (≈ WRF 70.75); `curvature_w` is negligible (186→170).
+⇒ **`pg_buoy_w_stage` is a spurious/double-counted w-buoyancy forcing**: `rw_slow` (from
+computeUnifiedRHS) ALREADY contains the w pressure-gradient/buoyancy (giving ~63 ≈ WRF's 70.75), and
+the port ADDS `pg_buoy_w_stage` on top (+123), inflating the frozen slow w-forcing 2.6×. This excess
+w-forcing, regenerated each RK step, is the resolved-scale positive feedback that produces the
+per-step `|λ|≈1.4` w↔φ eigen-instability.
+
+**CAVEAT (measured):** the earlier step-count ablation of `pg_buoy_w` gave 38 steps (~baseline 39) —
+zeroing it entirely OVER-corrects (rw 63 < WRF 71, −10%) rather than matching WRF, and the blowup
+persisted; so the FIX is to make `rw` MATCH WRF (remove the double-count so rw_slow stands, or
+reconcile the ~10% residual), then RE-MEASURE `|λ|`. This is the first defect the whole campaign has
+localized to a specific term with a quantified error against the dyn_em reference — the harness did
+exactly its job.
+
 ## SYNTHESIS (2026-07-23): the |λ|>1 IS "Wall-2" (slow-RHS advection), acoustic machinery exonerated
 The custom slow tendency is `compute_k_slow` → **`computeUnifiedRHS(RhsMode::ExplicitOnly)`** — the
 SHARED slow/advective RHS used by the whole SDIRK3/ARK machinery (not a small split-only builder). So

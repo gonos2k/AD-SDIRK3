@@ -111,6 +111,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <sstream>
+#include <fstream>   // [PARITY dump] matched-input dyn_em parity binary dump
 #include <limits>
 #include <vector>
 #include <algorithm>  // PARITY FIX 2025-12-25: For std::copy, std::min
@@ -7218,6 +7219,30 @@ vertical_coefficients:
                     auto ph_coupled = slow_gate(ph_coupled_raw);
                     log_split_tendency_components("KCOUPLED", se_rk, ru_coupled, rv_coupled,
                                                   rw_coupled, ph_coupled, t_coupled, mu_slow);
+                    // [PARITY dump] matched-input dyn_em parity: dump the port's ASSEMBLED frozen
+                    // slow forcing (ru_coupled..ph_coupled, t_coupled, mu_slow) — the analog of WRF's
+                    // rk_tendency that the acoustic loop integrates — at the FIRST se_rk==1 call
+                    // (step-1 stage-1, identical em_b_wave IC). Env-gated; raw stream float32 (j,k,i).
+                    static std::atomic<bool> parity_dumped{false};
+                    if (se_rk == 1 && std::getenv("WRF_PARITY_RK_TEND_DUMP") != nullptr
+                        && !parity_dumped.exchange(true)) {
+                        torch::NoGradGuard ng;
+                        std::ofstream pf("port_k_slow_dump.bin", std::ios::binary | std::ios::trunc);
+                        auto dump_t = [&](const torch::Tensor& t) {
+                            auto c = t.detach().to(torch::kCPU).to(torch::kFloat32).contiguous();
+                            int64_t nd = c.dim();
+                            pf.write(reinterpret_cast<const char*>(&nd), sizeof(nd));
+                            for (int d = 0; d < nd; ++d) { int64_t s = c.size(d);
+                                pf.write(reinterpret_cast<const char*>(&s), sizeof(s)); }
+                            pf.write(reinterpret_cast<const char*>(c.data_ptr<float>()),
+                                     c.numel() * sizeof(float));
+                        };
+                        dump_t(ru_coupled); dump_t(rv_coupled); dump_t(rw_coupled);
+                        dump_t(ph_coupled); dump_t(t_coupled);  dump_t(mu_slow);
+                        pf.close();
+                        std::cerr << "[PARITY dump] wrote port_k_slow_dump.bin (assembled coupled tendency, step1 stage1)"
+                                  << std::endl;
+                    }
                     // [KCOUPLEDK] TEMP (2026-07-11, revert after parity campaign): per-LEVEL
                     // profiles of the two frozen forcings driving advance_w, for diffing against
                     // the Fortran [PARITY subk] dump (max-only comparisons are level-shift-blind).
