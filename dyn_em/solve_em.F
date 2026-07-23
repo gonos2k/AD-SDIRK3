@@ -1193,12 +1193,17 @@ BENCH_END(rk_tend_tim)
 ! (itimestep==1, rk_step==1) so the SDIRK3 split-explicit port's computeUnifiedRHS(ExplicitOnly)
 ! can be diffed against it on the IDENTICAL step-1 em_b_wave IC. Env-gated, raw stream binary
 ! (float32, Fortran (i,k,j) order) for an offline numpy diff. No effect unless the env var is set.
-   IF ( rk_step == 1 .AND. grid%itimestep == 1 ) THEN
+   ! 9F.D6: WRF_PARITY_RK_STAGE selects which rk_step to dump (default 1); the stage-1->2 boundary
+   ! oracle showed the stage-2 INPUT matches WRF, so a stage-2 tendency diff is now matched-input.
+   IF ( grid%itimestep == 1 ) THEN
      BLOCK
-       CHARACTER(LEN=256) :: parity_env
-       INTEGER :: parity_st, parity_u
+       CHARACTER(LEN=256) :: parity_env, parity_stage_env
+       INTEGER :: parity_st, parity_u, parity_sst, parity_rk_stage
+       parity_rk_stage = 1
+       CALL get_environment_variable("WRF_PARITY_RK_STAGE", parity_stage_env, STATUS=parity_sst)
+       IF ( parity_sst == 0 ) READ(parity_stage_env, *) parity_rk_stage
        CALL get_environment_variable("WRF_PARITY_RK_TEND_DUMP", parity_env, STATUS=parity_st)
-       IF ( parity_st == 0 ) THEN
+       IF ( parity_st == 0 .AND. rk_step == parity_rk_stage ) THEN
          OPEN(NEWUNIT=parity_u, FILE="wrf_rk_tend_dump.bin", FORM="unformatted", &
               ACCESS="stream", STATUS="replace")
          WRITE(parity_u) ims, ime, jms, jme, kms, kme

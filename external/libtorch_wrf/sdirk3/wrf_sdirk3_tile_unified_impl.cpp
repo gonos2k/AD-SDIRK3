@@ -7379,13 +7379,16 @@ vertical_coefficients:
                     // rk_tendency that the acoustic loop integrates — at the FIRST se_rk==1 call
                     // (step-1 stage-1, identical em_b_wave IC). Env-gated; raw stream float32 (j,k,i).
                     static std::atomic<bool> parity_dumped{false};
-                    static std::atomic<int> parity_se1_count{0};
-                    // WRF_PARITY_STEP=N dumps at the Nth se_rk==1 (physical step N stage 1); default 1.
+                    // WRF_PARITY_STEP=N (physical step, default 1) x WRF_PARITY_RK_STAGE=S (se_rk,
+                    // default 1) select the checkpoint. 9F.D6: stage 2 is now a matched-input probe
+                    // since the stage-1->2 boundary oracle showed the stage-2 input matches WRF.
                     const char* parity_step_env = std::getenv("WRF_PARITY_STEP");
                     const int parity_step = parity_step_env ? std::atoi(parity_step_env) : 1;
-                    const int this_se1 = (se_rk == 1) ? (parity_se1_count.fetch_add(1) + 1) : -1;
-                    if (se_rk == 1 && std::getenv("WRF_PARITY_RK_TEND_DUMP") != nullptr
-                        && this_se1 == parity_step && !parity_dumped.exchange(true)) {
+                    const char* parity_stage_env = std::getenv("WRF_PARITY_RK_STAGE");
+                    const int parity_rk_stage = parity_stage_env ? std::atoi(parity_stage_env) : 1;
+                    if (se_rk == parity_rk_stage && split_phys_step == parity_step
+                        && std::getenv("WRF_PARITY_RK_TEND_DUMP") != nullptr
+                        && !parity_dumped.exchange(true)) {
                         torch::NoGradGuard ng;
                         std::ofstream pf("port_k_slow_dump.bin", std::ios::binary | std::ios::trunc);
                         auto dump_t = [&](const torch::Tensor& t) {
