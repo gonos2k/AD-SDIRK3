@@ -5,7 +5,32 @@ Continuation of the PR #69 `advance_w` geopotential decomposition. All measureme
 not run the live executable). Every diagnostic here is **opt-in and default-off ⇒ the baseline numerical
 path is byte-identical** (verified via `tests/numerical_fingerprint.sh` MATCH after each change).
 
-## FIX LANDED (2026-07-23) — pg_buoy_w double-count removed; primary instability resolved
+## COMPLETE DIAGNOSIS (2026-07-23, supersedes "double-count" framing)
+Deeper parity (per-level, pg_buoy_w isolated) corrects the mechanism: `pg_buoy_w_stage` is NOT a
+double-count of advance_w's *thermal* buoyancy — it is the port's implementation of WRF's **:2494
+vertical-PGF/gravity term** (`(1/msfty)·g·(rdn(k)·(p(k)−p(k-1)) − c1f·mu)`, module_big_step_utilities
+_em.F:2484/2494), which IS part of WRF's `rw_tend`. But it is fed a broken pressure reconstruction
+(`p_pgf` from diag_p_al). Per-level vs WRF `rw_tend`:
+- **low levels k=1–5: corr 0.61–0.75, magnitude ~right** — it correctly captures the vertical-PGF that
+  dominates WRF's low-level rw (where curvature∝u²≈0 since the jet's surface wind is weak).
+- **mid/top k=20–64: 6–16× TOO LARGE, corr 0.29–0.4** — spurious huge vertical p_pgf gradients explode
+  the term where WRF's rw is curvature-dominated (~1007 at k=40 vs port 6027).
+
+So WRF `rw_tend` = curvature(:4463, mid-level, ~u²) + vertical-PGF(:2494, low-level+top, ~dp/dz). The
+port has curvature_w (corr 0.92 with the mid part) but its :2494 (pg_buoy_w) is right at low levels and
+6–16× too big at mid/upper. That mid/upper explosion, regenerated each RK step, drove the primary
+`|λ|≈1.4` w↔φ eigen-instability.
+
+**FIX SHIPPED (interim, correct given the broken p):** drop pg_buoy_w (rw = rw_slow + curvature_w).
+This removes the mid/upper 6–16× explosion → |λ| neutral 1.000 for ~24 steps (primary SOLVED), at the
+cost of the low-level vertical-PGF → a weaker SECONDARY (rw 0.90×, low-level/top band missing, blowup
+step 38). **COMPLETE FIX (next):** supply :2494 a CORRECT pressure so pg_buoy_w matches WRF at ALL
+levels — i.e. fix the diag_p_al / p_pgf reconstruction's mid/upper vertical gradient (the known "p-
+ladder" problem: memory records hypso-1/hypso-2/make_thermo attempts, hypso-1 was "best"). The parity
+harness (`WRF_PARITY_RK_TEND_DUMP`) is the exact fix-verify oracle: iterate the p reconstruction until
+rw ratio→1.000 and corr→1.0, then re-measure |λ|.
+
+## FIX LANDED (2026-07-23) — pg_buoy_w (broken :2494 vertical-PGF) removed; primary instability resolved
 The matched-input parity harness found the root cause (below) and the fix is committed:
 `rw_coupled = rw_slow + curvature_w` (dropped `pg_buoy_w_stage`; A/B restore `WRF_SDIRK3_KEEP_PG_BUOY_W`).
 MEASURED impact:
