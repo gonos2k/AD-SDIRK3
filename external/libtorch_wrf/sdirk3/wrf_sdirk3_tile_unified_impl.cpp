@@ -7335,10 +7335,12 @@ vertical_coefficients:
                                 TORCH_CHECK(inf.gcount() == static_cast<std::streamsize>(n * sizeof(float)),
                                     "TEACHER_PRESSURE file ", tf, " has ", inf.gcount(),
                                     " bytes, expected ", n * sizeof(float), " (shape ", pg_p.sizes(), ")");
-                                auto wp = torch::from_blob(buf.data(), pg_p.sizes(),
-                                                           torch::TensorOptions().dtype(torch::kFloat32))
-                                              .clone().to(pg_p.device(), pg_p.scalar_type());
-                                pg_p = wp;
+                                // Own the storage (no from_blob — the ratchet forbids new aliasing
+                                // views): allocate a fresh CPU tensor and copy the file bytes in.
+                                auto wp = torch::empty(pg_p.sizes(),
+                                                       torch::TensorOptions().dtype(torch::kFloat32));
+                                std::memcpy(wp.data_ptr<float>(), buf.data(), n * sizeof(float));
+                                pg_p = wp.to(pg_p.device(), pg_p.scalar_type());
                                 std::cerr << "[TEACHER-PRESSURE] injected WRF grid%p at se_rk=" << se_rk
                                           << " shape=" << pg_p.sizes() << std::endl;
                             }
