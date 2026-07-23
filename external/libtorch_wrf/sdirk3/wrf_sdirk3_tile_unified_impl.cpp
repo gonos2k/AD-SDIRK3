@@ -6902,6 +6902,13 @@ vertical_coefficients:
 
                 bool split_explicit_aborted = false;
                 int split_explicit_failed_stage = 0;
+                // 9F.D6 intervention-check trace (opt-in, default-off, byte-identical): a per-physical-
+                // step counter + env gate for the per-stage F2494 and per-substep w/ph curves. The
+                // split branch is entered once per physical step (loops se_rk 1..3 internally), so this
+                // fetch_add is the 1-based physical step index. Read-only measurement.
+                static std::atomic<int> g_split_phys_step{0};
+                const int split_phys_step = g_split_phys_step.fetch_add(1) + 1;
+                const char* substep_trace_path = std::getenv("WRF_SDIRK3_SUBSTEP_TRACE");
                 for (int se_rk = 1; se_rk <= 3; ++se_rk) {
                     const auto sched = acoustic::acoustic_schedule(se_rk, static_cast<float>(dt), num_sound_steps);
                     auto U_stage_halo = use_ad_halo ? ad_halo_exchange(U_stage) : torch::Tensor();
@@ -6993,6 +7000,26 @@ vertical_coefficients:
                     auto ph_1 = strip3m(ph_1p); auto t_1 = strip3m(t_1p); auto mu_1 = strip2m(mu_1p);
                     auto u_2 = strip3u(u_2p); auto v_2 = strip3v(v_2p); auto w_2 = strip3m(w_2p);
                     auto ph_2 = strip3m(ph_2p); auto t_2 = strip3m(t_2p); auto mu_2 = strip2m(mu_2p);
+                    // [PARITY stage] 9F.D6 boundary oracle (port side): at se_rk==2 the stage-2-input
+                    // _2 vars ARE the decoupled stage-1 output. Dump them (true dims, (j,k,i)) so a
+                    // numpy diff vs WRF's wrf_stage1_out.bin isolates stage-2-operators (boundary
+                    // matches) from small_step_finish/handoff (boundary differs). Env-gated, step-1 only.
+                    if (se_rk == 2 && split_phys_step == 1 &&
+                        std::getenv("WRF_PARITY_STAGE1_DUMP") != nullptr) {
+                        torch::NoGradGuard ng;
+                        std::ofstream sf("port_stage1_out.bin", std::ios::binary | std::ios::trunc);
+                        auto dump_s = [&](const torch::Tensor& t) {
+                            auto c = t.detach().to(torch::kCPU).to(torch::kFloat32).contiguous();
+                            int64_t nd = c.dim();
+                            sf.write(reinterpret_cast<const char*>(&nd), sizeof(nd));
+                            for (int d = 0; d < nd; ++d) { int64_t s = c.size(d);
+                                sf.write(reinterpret_cast<const char*>(&s), sizeof(s)); }
+                            sf.write(reinterpret_cast<const char*>(c.data_ptr<float>()),
+                                     c.numel() * sizeof(float));
+                        };
+                        dump_s(u_2); dump_s(v_2); dump_s(w_2);
+                        dump_s(ph_2); dump_s(t_2); dump_s(mu_2);
+                    }
                     // Channel sourcing (see comment above): u/v/theta from ExplicitOnly (their
                     // absolute horizontal PGF added natively); w from the Full RHS — its fast part
                     // is the INTERNALLY-CONSISTENT pg_buoy residual (measured 1.59e-4; WRF's
@@ -7280,6 +7307,16 @@ vertical_coefficients:
                     if (restore_pg_buoy_w && !ablate_pg_buoy_w &&
                         p_pert_carried.defined() && p_pert_carried.numel() > 0) {
                         auto pg_p = strip3m(align_like(p_pert_carried, U_stage));   // exact WRF grid%p
+                        // 9F.D6 MATERIALITY intervention (opt-in, default 1.0 => byte-identical): scale
+                        // the pressure operand fed to :2494 by a deliberate factor so ‖F_A − F_B‖ is
+                        // GUARANTEED >> roundoff. Unlike the write-back toggle (a no-op on what :2494
+                        // sees), this changes the actual :2494 force. If the crash index/trajectory is
+                        // still invariant under a materially different F2494, pressure is genuinely
+                        // non-causal for this failure mode.
+                        {
+                            const char* sc = std::getenv("WRF_SDIRK3_PG_SCALE");
+                            if (sc) { float f = std::atof(sc); if (f > 0.0f) pg_p = pg_p * f; }
+                        }
                         // P0 #6 FORCE DECOMPOSITION: the :2494 force is g/msf·(−rdn·dp − c1f·mu), a
                         // cancellation of two large arms. Log each arm's magnitude to see which fails
                         // to cancel (reviewer P0 #5: operand-by-operand, not "mu is wrong").
@@ -7299,6 +7336,23 @@ vertical_coefficients:
                         auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
                                             pg_p, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
                         rw_coupled = rw_coupled + slow_gate(pg_buoy_w_t);
+                        // 9F.D6 intervention-check: per-stage F2494 + pressure operand magnitudes so the
+                        // "materially-different intervention" test (‖F_A − F_B‖ ≫ roundoff) can be
+                        // evaluated against the trajectory-insensitivity test. Append-only, opt-in.
+                        if (substep_trace_path) {
+                            torch::NoGradGuard ng;
+                            using torch::indexing::Slice;
+                            const int nzp = pg_p.size(1);
+                            auto dp = pg_p.index({Slice(), Slice(1, nzp), Slice()})
+                                    - pg_p.index({Slice(), Slice(0, nzp - 1), Slice()});
+                            auto rms = [](const torch::Tensor& t){
+                                return t.detach().pow(2).mean().sqrt().to(torch::kCPU).item<float>(); };
+                            std::ofstream tf(substep_trace_path, std::ios::app);
+                            tf << "F2494 step=" << split_phys_step << " stage=" << se_rk
+                               << " F2494_rms=" << rms(pg_buoy_w_t)
+                               << " p_rms=" << rms(pg_p) << " dp_rms=" << rms(dp)
+                               << " rw_coupled_rms=" << rms(rw_coupled) << "\n";
+                        }
                     } else if (keep_pg_buoy_w && !ablate_pg_buoy_w) {
                         auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
                                             p_pgf, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
@@ -7325,7 +7379,15 @@ vertical_coefficients:
                     // rk_tendency that the acoustic loop integrates — at the FIRST se_rk==1 call
                     // (step-1 stage-1, identical em_b_wave IC). Env-gated; raw stream float32 (j,k,i).
                     static std::atomic<bool> parity_dumped{false};
-                    if (se_rk == 1 && std::getenv("WRF_PARITY_RK_TEND_DUMP") != nullptr
+                    // WRF_PARITY_STEP=N (physical step, default 1) x WRF_PARITY_RK_STAGE=S (se_rk,
+                    // default 1) select the checkpoint. 9F.D6: stage 2 is now a matched-input probe
+                    // since the stage-1->2 boundary oracle showed the stage-2 input matches WRF.
+                    const char* parity_step_env = std::getenv("WRF_PARITY_STEP");
+                    const int parity_step = parity_step_env ? std::atoi(parity_step_env) : 1;
+                    const char* parity_stage_env = std::getenv("WRF_PARITY_RK_STAGE");
+                    const int parity_rk_stage = parity_stage_env ? std::atoi(parity_stage_env) : 1;
+                    if (se_rk == parity_rk_stage && split_phys_step == parity_step
+                        && std::getenv("WRF_PARITY_RK_TEND_DUMP") != nullptr
                         && !parity_dumped.exchange(true)) {
                         torch::NoGradGuard ng;
                         std::ofstream pf("port_k_slow_dump.bin", std::ios::binary | std::ios::trunc);
@@ -7594,21 +7656,35 @@ vertical_coefficients:
                         } else {
                             S = acoustic::advance_substep(S, C, small_step);
                         }
-                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
+                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 || substep_trace_path) {
                             // Amplification probe (review: assembled |λ| on the EXACT live operator,
                             // not an offline reconstruction). Within one stage's acoustic loop dts &
                             // the operator are FIXED, so the per-substep ratio w_rms[k+1]/w_rms[k] IS
                             // the measured per-substep amplification |λ|_eff of the w↔ph mode. Logged
                             // EVERY substep (no window) so the ratio is computable in the fixed-operator
                             // regime; read-only, byte-identical.
+                            // 9F.D6: also emit w_max/ph_max and route to the trace file when the
+                            // intervention-check gate is set (per-substep trajectory curves, all steps).
                             torch::NoGradGuard ng;
                             auto rms = [](const torch::Tensor& t) {
                                 return t.detach().pow(2).mean().sqrt().to(torch::kCPU).item<float>();
                             };
-                            std::cerr << "[SPLIT-EXPLICIT AMP] stage=" << se_rk
-                                      << " dts=" << sched.dts << " sub=" << small_step
-                                      << " w_rms=" << rms(S.w) << " ph_rms=" << rms(S.ph)
-                                      << " t_rms=" << rms(S.t) << " mu_rms=" << rms(S.mu) << std::endl;
+                            auto amax = [](const torch::Tensor& t) {
+                                return t.detach().abs().max().to(torch::kCPU).item<float>();
+                            };
+                            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
+                                std::cerr << "[SPLIT-EXPLICIT AMP] stage=" << se_rk
+                                          << " dts=" << sched.dts << " sub=" << small_step
+                                          << " w_rms=" << rms(S.w) << " ph_rms=" << rms(S.ph)
+                                          << " t_rms=" << rms(S.t) << " mu_rms=" << rms(S.mu) << std::endl;
+                            }
+                            if (substep_trace_path) {
+                                std::ofstream tf(substep_trace_path, std::ios::app);
+                                tf << "SUB step=" << split_phys_step << " stage=" << se_rk
+                                   << " sub=" << small_step
+                                   << " w_rms=" << rms(S.w) << " w_max=" << amax(S.w)
+                                   << " ph_rms=" << rms(S.ph) << " ph_max=" << amax(S.ph) << "\n";
+                            }
                         }
                     }
 
@@ -7624,6 +7700,27 @@ vertical_coefficients:
                     U_stage = combineStateVariables(pad3u(finished.u), pad3v(finished.v),
                                                     pad3m(finished.w), pad3m(finished.ph),
                                                     pad3m(finished.t), pad2m(finished.mu));
+                    // 9F.D6 NOTE: a stage-3 S.p write into p_pert_ (to carry the evolved pressure to
+                    // grid%p) is a NO-OP on what :2494 sees — the intervention check proved variants
+                    // with/without it are BIT-IDENTICAL (relF=relW=0 all steps); p_pert_ is reassigned
+                    // before the write-back, so grid%p never actually changes. The materiality test
+                    // therefore perturbs the :2494 pressure operand directly (WRF_SDIRK3_PG_SCALE above).
+                    // 9F.D5c PRESSURE LIFECYCLE — MEASURED-REFUTED as the step-11 cause (2026-07-23).
+                    // Confirmed mechanism: in the SDIRK3 path WRF does NOT recompute grid%p after the
+                    // solve (solve_em.F:810 skips the RK loop; only mut/muts updated), so the C++
+                    // write-back (:30518→:30526→p_patch=C_LOC(grid%p)) is the SOLE source of grid%p, and
+                    // computeUnifiedRHS's hydrostatic clobber (:15391) propagates to grid%p each step.
+                    // BUT the step-11 crash (with :2494 restored) is INVARIANT to the pressure fed to
+                    // :2494: hydrostatic / carried-at-step-1 / evolved S.p (Δ=3.97 Pa RMS, verified
+                    // match=1 that the write executed) ALL crash at step 11, while OFF (no :2494) reaches
+                    // step 38. The lever is the PRESENCE of :2494 in the frozen slow rw_tend (38→11),
+                    // not grid%p quality. Since the force-parity proved the :2494-inclusive rw_tend
+                    // matches WRF's rk_tendency EXACTLY at step 1, and advance_w (:752/:769) already adds
+                    // that rw_tend + the acoustic vertical-PGF (up-lo) + buoyancy (-c1f*muave arm), the
+                    // instability is a MULTI-STEP interaction between the (correct) :2494 rw_tend and the
+                    // port's advance_w terms — NOT the pressure lifecycle. The lifecycle refactor
+                    // (reviewer P0 #1-3) is therefore NOT the dt=600 blocker; the next probe is
+                    // advance_w-vs-small_step multi-step parity with :2494 present.
                     log_split_components("after_finish", se_rk, U_stage, U_time_n);
                     {
                         torch::NoGradGuard ng;
