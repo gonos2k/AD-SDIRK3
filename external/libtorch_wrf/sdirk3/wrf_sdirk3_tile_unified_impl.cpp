@@ -7192,17 +7192,27 @@ vertical_coefficients:
                         (std::getenv("WRF_SDIRK3_ABLATE_PG_BUOY_W") != nullptr);
                     static const bool ablate_curvature_w =
                         (std::getenv("WRF_SDIRK3_ABLATE_CURVATURE_W") != nullptr);
-                    auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
-                                            p_pgf, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
                     auto curvature_w_t = acoustic::curvature_w_stage(
                                             u_2, v_2, muu, muv, msfuy_d, msfvx_inv_d,
                                             msftx_d, msfty_d, c1h_d, c2h_d, fnm_d, fnp_d,
                                             1.0f / 6370000.0f);
-                    if (ablate_pg_buoy_w)   pg_buoy_w_t   = torch::zeros_like(pg_buoy_w_t);
                     if (ablate_curvature_w) curvature_w_t = torch::zeros_like(curvature_w_t);
-                    auto rw_coupled = rw_slow
-                                      + slow_gate(pg_buoy_w_t)
-                                      + slow_gate(curvature_w_t);
+                    // FIX (2026-07-23, matched-input dyn_em parity): pg_buoy_w_stage is REMOVED from
+                    // the frozen slow w-forcing. MEASURED at step-1 stage-1 vs WRF rk_tendency:
+                    // rw_slow==0, curvature_w matches WRF's rw_tend (corr 0.92, ~90% mag), while
+                    // pg_buoy_w is UNCORRELATED with WRF (corr 0.014) and inflates rw 2.6× (max
+                    // 70.75→186) — a spurious DOUBLE-COUNT of the buoyancy that advance_w already
+                    // applies (its acoustic buoy term, acoustic_substep.cpp:706). Adding it drove the
+                    // per-step |λ|≈1.4 w↔φ eigen-instability; removing it makes |λ|≈1.000 neutral for
+                    // ~24 steps (vs climbing from step 15). Opt-in A/B restore: WRF_SDIRK3_KEEP_PG_BUOY_W.
+                    torch::Tensor rw_coupled = rw_slow + slow_gate(curvature_w_t);
+                    static const bool keep_pg_buoy_w =
+                        (std::getenv("WRF_SDIRK3_KEEP_PG_BUOY_W") != nullptr);
+                    if (keep_pg_buoy_w && !ablate_pg_buoy_w) {
+                        auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
+                                            p_pgf, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
+                        rw_coupled = rw_coupled + slow_gate(pg_buoy_w_t);
+                    }
                     auto t_coupled  = t_slow;
                     // ph channel: WRF's COMPLETE coupled rhs_ph at the stage state (vertical wdwn
                     // advection + mu*g*w + 6th-order horizontal advection). MEASURED dyn_em ph_tend
