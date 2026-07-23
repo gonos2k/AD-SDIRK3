@@ -81,6 +81,29 @@
 > proven" (downgraded to geometric-growth evidence pending JVP/Arnoldi). Any "double-count / Mechanism
 > confirmed / primary SOLVED" wording in the older sections below is SUPERSEDED by this header.
 
+> ## 9F.D4 — ABI PRESSURE-WIRING BUG FOUND (reviewer P0 #4 audit, 2026-07-24)
+> Auditing the raw `p_ptr`/`p_pert_` wiring BEFORE any new formula (per the reviewer) found the bug:
+> - The Fortran ABI **does** pass the real `grid%p` (`module_implicit_sdirk3.F:1355 C_LOC(grid%p)`).
+> - `advanceZeroCopy` correctly sets `p_pert_ = grid%p` at entry — **but `computeUnifiedRHS` OVERWRITES
+>   `p_pert_ = compute_pressure_hydrostatic(...)`** (a hydrostatic reconstruction, tile_unified :15324)
+>   on every RHS call. So the member `p_pert_` ("Perturbation pressure from WRF") is clobbered with a
+>   hydrostatic field — its contract is violated, and that is why earlier measurements saw a zero
+>   non-hydrostatic gradient.
+> - **Saving `p_pert_` at split-branch entry (pre-overwrite) → `p_pert_carried` == WRF `grid%p` EXACTLY:
+>   value AND vertical gradient `e2 = 0.0000, corr = 1.0000`.** The difference-consistent pressure `:2494`
+>   needs was available all along; the reconstructions (diag_p_al/make_thermo/linearized) were all
+>   unnecessary detours around a wiring bug.
+>
+> **But restoring pg_buoy_w with the exact carried p DESTABILIZES** (rw e2 13.68, blowup step 9) — which
+> confirms reviewer **P0 #7**: `:2494`’s force `g·(rdn·dp − c1f·mu)` is a CANCELLATION of large terms,
+> so an exact `dp` alone is insufficient; `mu`/`rdn`/`c1f` must also be mutually consistent WRF operands
+> (the port's `mu_2` ≠ WRF's `muf` breaks the near-hydrostatic balance → the c1f·mu term ~73000 swamps
+> the small residual). So the restoration is OPT-IN (`WRF_SDIRK3_RESTORE_PG_BUOY_W`) pending per-term
+> FORCE parity; the default keeps the working interim (curvature+coriolis, byte-identical, ~38 steps).
+> NEXT: (1) fix computeUnifiedRHS to not clobber `p_pert_` (use a local for its hydrostatic p); (2)
+> per-term `rw` FORCE parity — dump `rdn·dp`, `c1f·mu`, and the assembled `:2494` on BOTH WRF and port,
+> match each operand (esp. WRF's `muf`) so the cancellation balances; then restore as default.
+>
 > ## Review 9F.D3 P1 evidence (2026-07-24)
 > - **env-flag correctness:** the diagnostic flags used `getenv!=nullptr` (so `VAR=0` read TRUE) —
 >   replaced with `env_flag_true()` (rejects 0/false/no/off/unset) + a mutual-exclusion guard for
