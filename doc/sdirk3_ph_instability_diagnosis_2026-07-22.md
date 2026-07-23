@@ -5,6 +5,22 @@ Continuation of the PR #69 `advance_w` geopotential decomposition. All measureme
 not run the live executable). Every diagnostic here is **opt-in and default-off ⇒ the baseline numerical
 path is byte-identical** (verified via `tests/numerical_fingerprint.sh` MATCH after each change).
 
+## SYNTHESIS (2026-07-23): the |λ|>1 IS "Wall-2" (slow-RHS advection), acoustic machinery exonerated
+The custom slow tendency is `compute_k_slow` → **`computeUnifiedRHS(RhsMode::ExplicitOnly)`** — the
+SHARED slow/advective RHS used by the whole SDIRK3/ARK machinery (not a small split-only builder). So
+the split-explicit `|λ|≈1.4` is a property of the **resolved-scale explicit advection RHS**, which is
+exactly the previously-documented **Wall-2**: "the explicit u-momentum slow tendency (`ru` block) blows
+up as a bilinear/quadratic stage cascade; the term is horizontal advection; the tableau over-
+extrapolates the sheared-jet advective tendency at large dt." This session's contribution is to
+**definitively exonerate the acoustic machinery** (every operator + prep/finish + composition faithful;
+per-substep operator STABLE) — so Wall-2 is localized to the slow RHS, OUTSIDE the acoustic solve, and
+the two "walls" are now understood: Wall-1 = implicit indefiniteness (ARK path, precond-dead); Wall-2 =
+slow-advection over-extrapolation (split path, this result). The fix target is `computeUnifiedRHS
+(ExplicitOnly)` — either a defect vs WRF's `rk_tendency` (find via matched-input parity) or a genuine
+RK-stability limit of the explicit advection at dt=600 that WRF avoids via its specific advection
+order/limiter (compare the advection scheme + order). Definitive next unit unchanged: matched-input
+dyn_em parity of `R_port(U)=computeUnifiedRHS(ExplicitOnly)` vs WRF `rk_tendency` at one state.
+
 ## CONSOLIDATED CONCLUSION (2026-07-23): faithful acoustic machinery + custom slow tendency is the locus
 After an exhaustive term-by-term parity pass, EVERY piece of the split-explicit acoustic machinery is
 a verified-faithful WRF port:
