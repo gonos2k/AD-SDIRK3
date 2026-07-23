@@ -7280,6 +7280,22 @@ vertical_coefficients:
                     if (restore_pg_buoy_w && !ablate_pg_buoy_w &&
                         p_pert_carried.defined() && p_pert_carried.numel() > 0) {
                         auto pg_p = strip3m(align_like(p_pert_carried, U_stage));   // exact WRF grid%p
+                        // P0 #6 FORCE DECOMPOSITION: the :2494 force is g/msf·(−rdn·dp − c1f·mu), a
+                        // cancellation of two large arms. Log each arm's magnitude to see which fails
+                        // to cancel (reviewer P0 #5: operand-by-operand, not "mu is wrong").
+                        if (se_rk == 1 && std::getenv("WRF_SDIRK3_PGBUOY_DBG")) {
+                            torch::NoGradGuard ng;
+                            using torch::indexing::Slice;
+                            const int nzp = pg_p.size(1);
+                            auto dp = pg_p.index({Slice(), Slice(1, nzp), Slice()})
+                                    - pg_p.index({Slice(), Slice(0, nzp - 1), Slice()});
+                            auto arm_p = (-rdn_d.slice(0, 1, nzp).view({1, nzp - 1, 1})) * dp;   // −rdn·dp
+                            auto arm_m = (c1f_d.slice(0, 1, nzp).view({1, nzp - 1, 1})) * mu_2.unsqueeze(1);
+                            std::cerr << "[PGBUOY-ARMS] max|-rdn*dp|=" << arm_p.abs().max().item<float>()
+                                      << " max|c1f*mu|=" << arm_m.abs().max().item<float>()
+                                      << " max|arm_p - arm_m|=" << (arm_p - arm_m).abs().max().item<float>()
+                                      << " (WRF :2494 residual ~ low-level rw ~200)" << std::endl;
+                        }
                         auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
                                             pg_p, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
                         rw_coupled = rw_coupled + slow_gate(pg_buoy_w_t);

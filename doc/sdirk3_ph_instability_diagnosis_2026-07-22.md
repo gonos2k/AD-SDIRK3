@@ -81,6 +81,24 @@
 > proven" (downgraded to geometric-growth evidence pending JVP/Arnoldi). Any "double-count / Mechanism
 > confirmed / primary SOLVED" wording in the older sections below is SUPERSEDED by this header.
 
+> ## 9F.D5b — :2494 RESTORED with carried grid%p → EXACT 6-CHANNEL PARITY (2026-07-24)
+> With `WRF_SDIRK3_RESTORE_PG_BUOY_W=1` (carried grid%p fed to pg_buoy_w), the authoritative pointwise
+> tool reports **ALL 6 slow-tendency channels PASS**: `rw e2=6.6e-08 corr=1.00000` (was FAIL 0.35),
+> ru/rv/ph/t/mu `e2≤2.7e-3 corr=1.0`, negative controls all DETECTED. ⇒ the carried grid%p + the
+> (dry) pg_buoy_w formula produce the EXACT WRF `:2494`; the force arms cancel cleanly (interior
+> `|−rdn·dp|≈|c1f·mu|≈11`, residual ≈2). The earlier "restore → e2 13.68" was a STALE pre-rebuild
+> measurement (before the P1 #13 clone-gating rebuild). **This closes the force-parity question: the
+> pressure + operands are correct.**
+>
+> **BUT the run still crashes at step 11 (vs 38 without :2494) — the LIFECYCLE (reviewer P0 #3).** The
+> carried p is exact ONLY at step 1 (grid%p fresh from the IC). The hydrostatic write-back
+> (`p_pert_→grid%p`, :30458, NOT yet fixed) corrupts grid%p at every step, so at steps 2+ the carried p
+> is the hydrostatic field → :2494 is fed a WRONG pressure → the wrong :2494 destabilizes FASTER than no
+> :2494. ⇒ the fix is now unambiguous and single: **fix the pressure lifecycle (stop the clobber +
+> write the correct final pressure back to grid%p, per stage), then :2494 holds across steps and the
+> default can restore it.** This is the reviewer's P0 #1-3, now with a MEASURED go/no-go (6-channel
+> parity PASS at step 1 proves everything except the lifecycle).
+>
 > ## 9F.D4 — ABI PRESSURE-WIRING BUG FOUND (reviewer P0 #4 audit, 2026-07-24)
 > Auditing the raw `p_ptr`/`p_pert_` wiring BEFORE any new formula (per the reviewer) found the bug:
 > - The Fortran ABI **does** pass the real `grid%p` (`module_implicit_sdirk3.F:1355 C_LOC(grid%p)`).
