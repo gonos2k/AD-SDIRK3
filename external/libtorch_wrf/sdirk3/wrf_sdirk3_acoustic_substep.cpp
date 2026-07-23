@@ -337,6 +337,10 @@ torch::Tensor curvature_w_stage(
     return torch::cat({zero_lvl, term, zero_lvl}, 1);                           // {ny,nz_w,nx}
 }
 
+// NOTE (review 9F.D3, fzm/fzp vs fnm/fnp): WRF's curvature/Coriolis w-terms use fzm/fzp, but those
+// are DEFINED identically to fnm/fnp — fzm(k)=0.5·dnw(k-1)/dn(k)=fnm(k), fzp(k)=0.5·dnw(k)/dn(k)=fnp(k)
+// (module_advect_em.F:10688-9 vs module_initialize_ideal.F:733-4). So passing fnm/fnp here is faithful,
+// not a coincidence-on-idealized-grid; the two names are the same weights.
 // WRF w-momentum CORIOLIS term (module_big_step_utilities_em.F:3843), companion to curvature_w_stage.
 //   rw_tend += e*(cosa*avg_w(ru) - (msftx/msfty)*sina*avg_w(rv))
 // where avg_w = 0.5*(fnm(kf)*pair(kf) + fnp(kf)*pair(kf-1)) of the horizontal pair-sum of the coupled

@@ -7226,6 +7226,12 @@ vertical_coefficients:
                     torch::Tensor rw_coupled = rw_slow + slow_gate(curvature_w_t) + slow_gate(coriolis_w_t);
                     static const bool keep_pg_buoy_w =
                         (std::getenv("WRF_SDIRK3_KEEP_PG_BUOY_W") != nullptr);
+                    // 9F.D3b: the :2494 vertical-PGF divides p differences; the reconstructed p_pgf
+                    // matches WRF's p to 1% but its vertical GRADIENT is 30-100% off (cancellation).
+                    // TESTED the carried p_pert_ as a difference-consistent source: it MATCHES WRF's p
+                    // horizontally (corr -1.0) but has a ~ZERO vertical gradient (pg_buoy_w(-p_pert_)
+                    // ≈ 2e-4), so it is NOT usable — the difference-consistent pressure requires a
+                    // genuine dp reconstruction from the hydrostatic/EOS relation (deep p-ladder).
                     if (keep_pg_buoy_w && !ablate_pg_buoy_w) {
                         auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
                                             p_pgf, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
@@ -7267,6 +7273,19 @@ vertical_coefficients:
                         };
                         dump_t(ru_coupled); dump_t(rv_coupled); dump_t(rw_coupled);
                         dump_t(ph_coupled); dump_t(t_coupled);  dump_t(mu_slow);
+                        // review 9F.D3: the pressure operand pg_buoy_w(:2494) differences vertically —
+                        // dump p_pgf so its vertical GRADIENT can be compared to WRF's grid%p (e_∂p).
+                        dump_t(p_pgf);
+                        // 9F.D3b: also dump the CARRIED WRF perturbation pressure p_pert_ (stripped to
+                        // true dims) — candidate difference-consistent pressure for :2494.
+                        if (p_pert_.defined() && p_pert_.numel() > 0) {
+                            dump_t(strip3m(align_like(p_pert_, U_stage)));
+                        } else {
+                            dump_t(torch::zeros_like(p_pgf));
+                        }
+                        // 9F.D3c: make_thermo's LINEARIZED-EOS pressure (WRF calc_p_rho form) vs
+                        // diag_p_al's NONLINEAR-EOS p_pgf — test which gradient matches WRF's grid%p.
+                        dump_t(p_pert_mt);
                         pf.close();
                         std::cerr << "[PARITY dump] wrote port_k_slow_dump.bin (assembled coupled tendency, step1 stage1)"
                                   << std::endl;
@@ -7308,36 +7327,41 @@ vertical_coefficients:
                     // substep ACTUALLY uses (at the point of use, after the Fortran set_config
                     // pass-through), not the config-load value. cof=[.5*dts*g*(1+epssm)]^2, so
                     // max|coef.a| must change ~3x between epssm 0.1 and 0.9 IF the sweep is real.
+                    // P0-2 CONTRACT (review 9F.D3): the signed-eta invariant is validated
+                    // UNCONDITIONALLY (NOT gated on debug_level) — a production run with debug=0 must
+                    // still fail-close if dnw flips. WRF dnw=eta(k+1)-eta(k)<0; here dnw_d=-1/rdnw_d
+                    // must be NEGATIVE and rdnw_d POSITIVE with dnw_d*rdnw_d==-1. A positive dnw would
+                    // reverse DMDT and silently drift mu. Cost: 3 reductions once per RK stage.
+                    float sdmx, srmn, srecip;
+                    {
+                        torch::NoGradGuard ng;
+                        sdmx   = dnw_d.detach().max().to(torch::kCPU).item<float>();
+                        srmn   = rdnw_d.detach().min().to(torch::kCPU).item<float>();
+                        srecip = (dnw_d.detach() * rdnw_d.detach() + 1.0f)
+                                     .abs().max().to(torch::kCPU).item<float>();
+                    }
+                    TORCH_CHECK(sdmx < 0.0f && srmn > 0.0f && srecip < 1.0e-5f,
+                        "SPLIT signed-eta contract violated: dnw must be <0, rdnw >0, "
+                        "dnw*rdnw==-1 (dnw_max=", sdmx, " rdnw_min=", srmn,
+                        " |dnw*rdnw+1|=", srecip, ")");
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                         torch::NoGradGuard ng;
                         const float cof = 0.5f*sched.dts*g_acc*(1.0f+epssm);
-                        // P0-2 (review): the signed-eta-metric contract on PRODUCTION operands.
-                        // WRF dnw=eta(k+1)-eta(k)<0; here dnw_d=-1/rdnw_d must be NEGATIVE and
-                        // rdnw_d POSITIVE, with dnw_d*rdnw_d==-1. A positive dnw would flip DMDT.
+                        // P0-1: PROVE the epssm/cof the acoustic substep ACTUALLY uses at the point
+                        // of use (after the Fortran set_config pass-through). Logging only.
                         auto dmn = dnw_d.detach().min().to(torch::kCPU).item<float>();
-                        auto dmx = dnw_d.detach().max().to(torch::kCPU).item<float>();
-                        auto rmn = rdnw_d.detach().min().to(torch::kCPU).item<float>();
                         auto rmx = rdnw_d.detach().max().to(torch::kCPU).item<float>();
-                        auto recip = (dnw_d.detach() * rdnw_d.detach() + 1.0f)
-                                         .abs().max().to(torch::kCPU).item<float>();
                         std::cerr << "[SPLIT-EXPLICIT COEF] stage=" << se_rk
                                   << " epssm_effective=" << epssm
                                   << " dts=" << sched.dts
                                   << " cof=" << (cof*cof)
                                   << " max_abs_coef_a="
                                   << coef.a.detach().abs().max().to(torch::kCPU).item<float>()
-                                  << " dnw_min=" << dmn << " dnw_max=" << dmx
-                                  << " rdnw_min=" << rmn << " rdnw_max=" << rmx
-                                  << " max|dnw*rdnw+1|=" << recip
+                                  << " dnw_min=" << dmn << " dnw_max=" << sdmx
+                                  << " rdnw_min=" << srmn << " rdnw_max=" << rmx
+                                  << " max|dnw*rdnw+1|=" << srecip
                                   << " g_config.split_explicit_epssm="
                                   << wrf::sdirk3::g_sdirk3_config.split_explicit_epssm << std::endl;
-                        // P0-2 CONTRACT (review): lock the signed-eta invariant on the actual
-                        // production operands. WRF dnw<0, rdnw>0, dnw*rdnw==-1. A regression that
-                        // flips dnw would reverse DMDT and silently drift mu; fail-close here.
-                        TORCH_CHECK(dmx < 0.0f && rmn > 0.0f && recip < 1.0e-5f,
-                            "SPLIT signed-eta contract violated: dnw must be <0, rdnw >0, "
-                            "dnw*rdnw==-1 (dnw_max=", dmx, " rdnw_min=", rmn,
-                            " |dnw*rdnw+1|=", recip, ")");
                     }
 
                     acoustic::PrepInput prep;
@@ -7438,15 +7462,24 @@ vertical_coefficients:
                                 // bounded |λ|≈1 transient. This localizes WHICH channel drifts μ without
                                 // needing dyn_em. rel_imbalance normalizes the net source by the gross
                                 // |DMDT| activity so it is comparable across the run.
+                                // FIX (review P0-7): SEPARATE DMDT from mu_tend (S.mudf = DMDT + mu_tend)
+                                // and reduce in FP64 so "conservation" is a statement about DMDT itself,
+                                // not the DMDT+mu_tend sum. mu_tend is the frozen slow mass tendency.
                                 torch::NoGradGuard ng;
-                                auto mudf = S.mudf.detach();
-                                const float sum_dmdt  = mudf.sum().to(torch::kCPU).item<float>();
-                                const float sum_admdt = mudf.abs().sum().to(torch::kCPU).item<float>();
-                                const float max_admdt = mudf.abs().max().to(torch::kCPU).item<float>();
+                                auto mudf64  = S.mudf.detach().to(torch::kFloat64);
+                                auto mtend64 = (C.mu_tend.defined() && C.mu_tend.numel() > 0)
+                                                   ? C.mu_tend.detach().to(torch::kFloat64)
+                                                   : torch::zeros_like(mudf64);
+                                auto dmdt64  = mudf64 - mtend64;
+                                const double sum_dmdt  = dmdt64.sum().item<double>();
+                                const double sum_mtend = mtend64.sum().item<double>();
+                                const double sum_admdt = dmdt64.abs().sum().item<double>();
+                                const double max_admdt = dmdt64.abs().max().item<double>();
                                 std::cerr << "[SPLIT-EXPLICIT MASS] stage=" << se_rk << " sub=" << small_step
-                                          << " sum(DMDT+mu_tend)=" << sum_dmdt
+                                          << " sum(DMDT)=" << sum_dmdt
+                                          << " sum(mu_tend)=" << sum_mtend
                                           << " sum|DMDT|=" << sum_admdt
-                                          << " rel_imbalance=" << (sum_admdt > 0.0f ? std::abs(sum_dmdt) / sum_admdt : 0.0f)
+                                          << " rel_imbalance=" << (sum_admdt > 0.0 ? std::abs(sum_dmdt) / sum_admdt : 0.0)
                                           << " max|DMDT|=" << max_admdt << std::endl;
                             }
                             S = acoustic::advance_w(S, C);               log_state("after_w   ", S);

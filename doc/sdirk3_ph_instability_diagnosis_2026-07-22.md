@@ -1,5 +1,75 @@
 # Split-explicit dt=600 ph-instability — measured diagnosis (2026-07-22)
 
+> ## ⏱ AUTHORITATIVE STATUS (2026-07-24, review 9F.D3) — READ THIS FIRST; supersedes all below
+>
+> **1. Current verified conclusion.** With the matched-input dyn_em parity harness now made
+> AUTHORITATIVE (pointwise, per-`tests/rk_tendency_parity_diff.py --selftest`): at step-1/rk_step-1 on
+> the identical em_b_wave IC, **5 of 6 slow-tendency channels match WRF POINTWISE** — ru/rv/ph/t/mu have
+> `e2 ≤ 2.7e-3` and `corr = 1.00000` (genuine field equality, not a max-ratio; the tool's sign-flip /
+> k-permute / one-cell-shift negative controls are all DETECTED). The **`rw` channel FAILS**: `e2 = 0.35`,
+> `corr = 0.92`, worst at levels **k=1–6 (near-surface) and k=64 (lid)** — a vertical-PGF band deficit.
+>
+> **2. Current PRODUCTION status (honest).** The split-on default currently **OMITS** WRF's legitimate
+> vertical-PGF/gravity term (`pg_buoy_w`, :2494) because it was fed a broken pressure (`p_pgf`, 6–16×
+> too large at mid/upper levels). Omitting it removed the dominant early rw distortion (per-step w-ratio
+> went from climbing-1.4-from-step-15 to a flat ~1.000 for 24 steps) — **but end-to-end dt=600 stability
+> is NOT resolved** (blowup still ~step 38), and the omission is an interim workaround toward an
+> INCOMPLETE equation, not a physically complete production fix. "primary solved" (below) overstates it.
+>
+> **3. Measured facts (survive).** epssm reaches calc_coef_w (cof ×2.98); dnw<0/rdnw>0/dnw·rdnw=−1
+> (now validated UNCONDITIONALLY, not behind debug_level); φ-denominator never collapses (nonpos=0);
+> `w_new` numerator explodes (~4.9e6) while denominator holds ~89000; net Σ DMDT ≈ roundoff (now
+> reduced in FP64 and separated from mu_tend); the acoustic operators + prep/finish + composition are
+> pointwise-faithful; `fzm≡fnm, fzp≡fnp` by WRF definition (module_advect_em.F:10688-9), so the helpers'
+> use of fnm/fnp is faithful (reviewer's fzm/fzp hypothesis REFUTED).
+>
+> **4. Still UNRESOLVED.** (a) correct pressure for :2494 so `rw` reaches pointwise parity (the "p-ladder":
+> diag_p_al vs diag_p_hypso2 vs make_thermo — compare vertical GRADIENT ∂_η p, not just p); (b) restore
+> the legitimate :2494 term to the production default once its pressure is correct (or fail-close split-on
+> until then); (c) a rigorous spectral verdict via a full one-step JVP/Arnoldi at a fixed checkpoint — the
+> `w_rms` ratio is strong geometric-growth evidence but NOT a ρ(J) proof.
+>
+> **5. Next acceptance experiment.** Per-term rw dump (advection / curvature / coriolis / vertical-PGF /
+> total) on BOTH WRF and port + pointwise parity per term; then the pressure-gradient parity `e_{∂p}(k)`.
+>
+> **5b. PRESSURE-LADDER MEASURED (2026-07-24).** Dumped WRF `grid%p` and port `p_pgf` at step-1 and
+> compared VALUE vs vertical GRADIENT (what :2494 uses): **p value matches — corr 1.0000, e2 0.0098
+> (~1%)** — but its **vertical gradient `∂_η p`=p(k)−p(k-1) is off — corr 0.94, e2 0.36, up to 1.008 at
+> k=31**. Root: CANCELLATION. `p_pgf ≈ p` to ~1 Pa, but `dp ~ 0.3` is a small difference of large
+> near-hydrostatic values, so the 1% p error becomes 30–100% in `dp` at mid/upper levels (where `dp` is
+> smallest). pg_buoy_w = `g·rdn·dp` divides exactly those differences ⇒ the 6–16× mid/upper explosion.
+> **⇒ the complete fix is NOT a better pressure VALUE (already 1%) but a pressure whose vertical
+> DIFFERENCES match WRF** — e.g. reconstruct `dp` directly from the hydrostatic/EOS relation instead of
+> differencing a reconstructed p. Acceptance = `e_{∂p}(k) < tol` at ALL levels, then restore :2494 and
+> re-measure rw parity + |λ|.
+>
+> **5c. Carried-pressure shortcut TESTED → DEAD END (2026-07-24).** The port carries `p_pert_` ("WRF
+> perturbation pressure"), which matches WRF's `p` HORIZONTALLY (corr −1.0000, i.e. p_pert_≈−grid%p) —
+> so it looked like a free difference-consistent source. But feeding `−p_pert_` to pg_buoy_w gives
+> `max|pg_buoy_w| ≈ 2e-4` (≈0): `p_pert_` has a **~zero VERTICAL gradient** (its −1.0 correlation is a
+> horizontal-pattern match; the vertical structure is absent). ⇒ no carried field shortcuts the
+> reconstruction; `dp` must be built from the hydrostatic/EOS relation. The complete fix is genuinely
+> the deep p-ladder reformulation.
+>
+> **5d. ALL THREE available pressures tested for gradient parity (2026-07-24) — none consistent.**
+> `p_pgf` (diag_p_al, NONLINEAR EOS `p0·(rd·θ/(p0·α))^γ−pb`): p corr +1.0 e2 1%, **grad corr 0.94 e2
+> 0.36** (best but insufficient — cancellation). `p_pert_mt` (make_thermo, LINEARIZED calc_p_rho EOS)
+> and `p_pert_` (carried WRF): both corr −1.0 horizontally but **~zero vertical gradient** (dead).
+> ROOT (architectural): WRF's rk_tendency uses `grid%p` — a pressure CARRIED consistently from the
+> previous acoustic step's `calc_p_rho` (so its vertical differences are exact); the SDIRK3 port keeps
+> p as a per-stage DIAGNOSTIC (reconstructed fresh, gradient-inconsistent), and the carried `p_pert_`
+> field has a broken/2D vertical structure. ⇒ the complete :2494 fix is NOT a better per-stage
+> reconstruction (all fail) but to CARRY the 3D acoustic pressure (fix p_pert_ wiring to store the
+> full calc_p_rho `s.p` with its vertical gradient), OR an analytical `dp` from the EOS log-derivative
+> `dp=γ·P·(dθ/θ−dα/α)` (which itself faces the near-hydrostatic-residual cancellation). Both are
+> architectural/numerical units beyond a per-stage p swap. The parity harness gives the exact
+> acceptance (`grad e2 → 0`) for whichever is built.
+>
+> **6. Superseded hypotheses:** "pg_buoy_w is a double-count of advance_w thermal buoyancy" (WRONG — it is
+> WRF's legitimate :2494 vertical-PGF, just fed a broken pressure; corrected 2026-07-23) and "ρ(G)≈1.4
+> proven" (downgraded to geometric-growth evidence pending JVP/Arnoldi). Any "double-count / Mechanism
+> confirmed / primary SOLVED" wording in the older sections below is SUPERSEDED by this header.
+
 Continuation of the PR #69 `advance_w` geopotential decomposition. All measurements were run on the
 **live `em_b_wave` dt=600 executable** with `sdirk3_split_explicit=.true.` (the agent that built #69 could
 not run the live executable). Every diagnostic here is **opt-in and default-off ⇒ the baseline numerical
