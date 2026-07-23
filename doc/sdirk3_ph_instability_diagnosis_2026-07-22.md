@@ -81,6 +81,19 @@
 > proven" (downgraded to geometric-growth evidence pending JVP/Arnoldi). Any "double-count / Mechanism
 > confirmed / primary SOLVED" wording in the older sections below is SUPERSEDED by this header.
 
+> ## Review 9F.D3 P1 evidence (2026-07-24)
+> - **env-flag correctness:** the diagnostic flags used `getenv!=nullptr` (so `VAR=0` read TRUE) —
+>   replaced with `env_flag_true()` (rejects 0/false/no/off/unset) + a mutual-exclusion guard for
+>   KEEP/ABLATE. Verified: `KEEP_PG_BUOY_W=0` → false; `KEEP=1 ABLATE=1` → fail-close.
+> - **diagnostic observer-neutrality:** paired split run debug=0 vs debug=2 → BOTH fail at step 38,
+>   outcome=20 (identical physical trajectory) despite debug≥2's clones/FP64/.item()/file-I/O ⇒ the
+>   diagnostics do not perturb the physics.
+> - **pressure closure EXHAUSTED (all 4 avenues):** diag_p_al (nonlinear, grad e2 0.36 best-but-
+>   insufficient); p_pert_/p_pert_mt (hydrostatic → zero non-hydrostatic residual); inline linearized
+>   (reproduction bug e2 1184); acoustic S.p@step0 (zero-perturbation reference, not the stage p). ⇒
+>   the :2494 restoration is an architectural/numerical research unit (accurate non-hydrostatic p),
+>   not a per-stage reconstruction swap.
+
 Continuation of the PR #69 `advance_w` geopotential decomposition. All measurements were run on the
 **live `em_b_wave` dt=600 executable** with `sdirk3_split_explicit=.true.` (the agent that built #69 could
 not run the live executable). Every diagnostic here is **opt-in and default-off ⇒ the baseline numerical
