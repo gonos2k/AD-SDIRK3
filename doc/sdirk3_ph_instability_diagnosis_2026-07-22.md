@@ -32,6 +32,17 @@
 > **5. Next acceptance experiment.** Per-term rw dump (advection / curvature / coriolis / vertical-PGF /
 > total) on BOTH WRF and port + pointwise parity per term; then the pressure-gradient parity `e_{∂p}(k)`.
 >
+> **5b. PRESSURE-LADDER MEASURED (2026-07-24).** Dumped WRF `grid%p` and port `p_pgf` at step-1 and
+> compared VALUE vs vertical GRADIENT (what :2494 uses): **p value matches — corr 1.0000, e2 0.0098
+> (~1%)** — but its **vertical gradient `∂_η p`=p(k)−p(k-1) is off — corr 0.94, e2 0.36, up to 1.008 at
+> k=31**. Root: CANCELLATION. `p_pgf ≈ p` to ~1 Pa, but `dp ~ 0.3` is a small difference of large
+> near-hydrostatic values, so the 1% p error becomes 30–100% in `dp` at mid/upper levels (where `dp` is
+> smallest). pg_buoy_w = `g·rdn·dp` divides exactly those differences ⇒ the 6–16× mid/upper explosion.
+> **⇒ the complete fix is NOT a better pressure VALUE (already 1%) but a pressure whose vertical
+> DIFFERENCES match WRF** — e.g. reconstruct `dp` directly from the hydrostatic/EOS relation instead of
+> differencing a reconstructed p, or carry a difference-consistent pressure. Acceptance = `e_{∂p}(k) <
+> tol` at ALL levels, then restore :2494 and re-measure rw parity + |λ|.
+>
 > **6. Superseded hypotheses:** "pg_buoy_w is a double-count of advance_w thermal buoyancy" (WRONG — it is
 > WRF's legitimate :2494 vertical-PGF, just fed a broken pressure; corrected 2026-07-23) and "ρ(G)≈1.4
 > proven" (downgraded to geometric-growth evidence pending JVP/Arnoldi). Any "double-count / Mechanism

@@ -7267,6 +7267,9 @@ vertical_coefficients:
                         };
                         dump_t(ru_coupled); dump_t(rv_coupled); dump_t(rw_coupled);
                         dump_t(ph_coupled); dump_t(t_coupled);  dump_t(mu_slow);
+                        // review 9F.D3: the pressure operand pg_buoy_w(:2494) differences vertically —
+                        // dump p_pgf so its vertical GRADIENT can be compared to WRF's grid%p (e_∂p).
+                        dump_t(p_pgf);
                         pf.close();
                         std::cerr << "[PARITY dump] wrote port_k_slow_dump.bin (assembled coupled tendency, step1 stage1)"
                                   << std::endl;
