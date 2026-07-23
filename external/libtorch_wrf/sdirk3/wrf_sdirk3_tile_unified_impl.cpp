@@ -7226,6 +7226,12 @@ vertical_coefficients:
                     torch::Tensor rw_coupled = rw_slow + slow_gate(curvature_w_t) + slow_gate(coriolis_w_t);
                     static const bool keep_pg_buoy_w =
                         (std::getenv("WRF_SDIRK3_KEEP_PG_BUOY_W") != nullptr);
+                    // 9F.D3b: the :2494 vertical-PGF divides p differences; the reconstructed p_pgf
+                    // matches WRF's p to 1% but its vertical GRADIENT is 30-100% off (cancellation).
+                    // TESTED the carried p_pert_ as a difference-consistent source: it MATCHES WRF's p
+                    // horizontally (corr -1.0) but has a ~ZERO vertical gradient (pg_buoy_w(-p_pert_)
+                    // ≈ 2e-4), so it is NOT usable — the difference-consistent pressure requires a
+                    // genuine dp reconstruction from the hydrostatic/EOS relation (deep p-ladder).
                     if (keep_pg_buoy_w && !ablate_pg_buoy_w) {
                         auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
                                             p_pgf, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
@@ -7270,6 +7276,13 @@ vertical_coefficients:
                         // review 9F.D3: the pressure operand pg_buoy_w(:2494) differences vertically —
                         // dump p_pgf so its vertical GRADIENT can be compared to WRF's grid%p (e_∂p).
                         dump_t(p_pgf);
+                        // 9F.D3b: also dump the CARRIED WRF perturbation pressure p_pert_ (stripped to
+                        // true dims) — candidate difference-consistent pressure for :2494.
+                        if (p_pert_.defined() && p_pert_.numel() > 0) {
+                            dump_t(strip3m(align_like(p_pert_, U_stage)));
+                        } else {
+                            dump_t(torch::zeros_like(p_pgf));
+                        }
                         pf.close();
                         std::cerr << "[PARITY dump] wrote port_k_slow_dump.bin (assembled coupled tendency, step1 stage1)"
                                   << std::endl;

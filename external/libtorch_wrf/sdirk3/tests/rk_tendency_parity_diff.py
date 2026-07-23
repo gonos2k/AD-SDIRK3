@@ -34,8 +34,16 @@ def load_wrf(path):
                 raise ValueError(f"WRF dump truncated at {v}: got {a.size} want {n}")
             shp = (ni, nj) if v == "mu" else (ni, nk, nj)
             out[v] = a.astype(np.float64).reshape(shp, order="F")  # (i[,k],j)
-        if f.read():
-            raise ValueError("WRF dump has trailing bytes (format mismatch)")
+        # optional trailing 3D pressure operand(s) (grid%p, ...) for e_dp gradient analysis
+        idx = 0
+        while True:
+            a = np.fromfile(f, dtype=">f4", count=ni * nk * nj)
+            if a.size == 0:
+                break
+            if a.size != ni * nk * nj:
+                raise ValueError("WRF dump has a partial trailing array")
+            out[f"_p{idx}"] = a.astype(np.float64).reshape((ni, nk, nj), order="F")
+            idx += 1
         return out
 
 

@@ -40,8 +40,16 @@
 > smallest). pg_buoy_w = `g·rdn·dp` divides exactly those differences ⇒ the 6–16× mid/upper explosion.
 > **⇒ the complete fix is NOT a better pressure VALUE (already 1%) but a pressure whose vertical
 > DIFFERENCES match WRF** — e.g. reconstruct `dp` directly from the hydrostatic/EOS relation instead of
-> differencing a reconstructed p, or carry a difference-consistent pressure. Acceptance = `e_{∂p}(k) <
-> tol` at ALL levels, then restore :2494 and re-measure rw parity + |λ|.
+> differencing a reconstructed p. Acceptance = `e_{∂p}(k) < tol` at ALL levels, then restore :2494 and
+> re-measure rw parity + |λ|.
+>
+> **5c. Carried-pressure shortcut TESTED → DEAD END (2026-07-24).** The port carries `p_pert_` ("WRF
+> perturbation pressure"), which matches WRF's `p` HORIZONTALLY (corr −1.0000, i.e. p_pert_≈−grid%p) —
+> so it looked like a free difference-consistent source. But feeding `−p_pert_` to pg_buoy_w gives
+> `max|pg_buoy_w| ≈ 2e-4` (≈0): `p_pert_` has a **~zero VERTICAL gradient** (its −1.0 correlation is a
+> horizontal-pattern match; the vertical structure is absent). ⇒ no carried field shortcuts the
+> reconstruction; `dp` must be built from the hydrostatic/EOS relation. The complete fix is genuinely
+> the deep p-ladder reformulation.
 >
 > **6. Superseded hypotheses:** "pg_buoy_w is a double-count of advance_w thermal buoyancy" (WRONG — it is
 > WRF's legitimate :2494 vertical-PGF, just fed a broken pressure; corrected 2026-07-23) and "ρ(G)≈1.4
