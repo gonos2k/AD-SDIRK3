@@ -120,6 +120,19 @@
 #include <iterator>   // PARITY FIX 2025-12-25: For std::begin, std::end
 #include <cstring>    // PARITY FIX 2025-12-25: For std::memcpy
 
+// review 9F.D3 P1: env-flag parsing. std::getenv(name)!=nullptr treats VAR=0 / VAR=false as TRUE,
+// a foot-gun for the diagnostic ablation flags. This accepts only affirmative values.
+namespace {
+inline bool env_flag_true(const char* name) {
+    const char* v = std::getenv(name);
+    if (v == nullptr || v[0] == '\0') return false;
+    return !(std::strcmp(v, "0") == 0 || std::strcmp(v, "false") == 0 ||
+             std::strcmp(v, "no") == 0 || std::strcmp(v, "off") == 0 ||
+             std::strcmp(v, "FALSE") == 0 || std::strcmp(v, "NO") == 0 ||
+             std::strcmp(v, "OFF") == 0);
+}
+}  // namespace
+
 // Ensure M_PI is defined (not always available on all compilers)
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -7189,9 +7202,9 @@ vertical_coefficients:
                     // SLOW w-forcing component drives the |λ|>1. curvature_w is a SPHERICAL term
                     // (1/earth_radius); em_b_wave is a Cartesian channel where it may be spurious.
                     static const bool ablate_pg_buoy_w =
-                        (std::getenv("WRF_SDIRK3_ABLATE_PG_BUOY_W") != nullptr);
+                        env_flag_true("WRF_SDIRK3_ABLATE_PG_BUOY_W");
                     static const bool ablate_curvature_w =
-                        (std::getenv("WRF_SDIRK3_ABLATE_CURVATURE_W") != nullptr);
+                        env_flag_true("WRF_SDIRK3_ABLATE_CURVATURE_W");
                     auto curvature_w_t = acoustic::curvature_w_stage(
                                             u_2, v_2, muu, muv, msfuy_d, msfvx_inv_d,
                                             msftx_d, msfty_d, c1h_d, c2h_d, fnm_d, fnp_d,
@@ -7213,7 +7226,7 @@ vertical_coefficients:
                     // f-plane fields (e_ = 2Ω·cos(lat)). Opt-out A/B: WRF_SDIRK3_ABLATE_CORIOLIS_W.
                     torch::Tensor coriolis_w_t = torch::zeros_like(curvature_w_t);
                     static const bool ablate_coriolis_w =
-                        (std::getenv("WRF_SDIRK3_ABLATE_CORIOLIS_W") != nullptr);
+                        env_flag_true("WRF_SDIRK3_ABLATE_CORIOLIS_W");
                     if (!ablate_coriolis_w && e_.defined() && e_.numel() > 0 &&
                         cosa_.defined() && sina_.defined()) {
                         auto e_d    = align_like(e_,    U_stage).index({Slice(0, nyt), Slice(0, nxt)});
@@ -7225,7 +7238,11 @@ vertical_coefficients:
                     }
                     torch::Tensor rw_coupled = rw_slow + slow_gate(curvature_w_t) + slow_gate(coriolis_w_t);
                     static const bool keep_pg_buoy_w =
-                        (std::getenv("WRF_SDIRK3_KEEP_PG_BUOY_W") != nullptr);
+                        env_flag_true("WRF_SDIRK3_KEEP_PG_BUOY_W");
+                    // review 9F.D3 P1: mutually-exclusive experiment flags must not be set together.
+                    TORCH_CHECK(!(keep_pg_buoy_w && ablate_pg_buoy_w),
+                        "WRF_SDIRK3_KEEP_PG_BUOY_W and WRF_SDIRK3_ABLATE_PG_BUOY_W are mutually "
+                        "exclusive; set at most one.");
                     // 9F.D3b: the :2494 vertical-PGF divides p differences; the reconstructed p_pgf
                     // matches WRF's p to 1% but its vertical GRADIENT is 30-100% off (cancellation).
                     // TESTED the carried p_pert_ as a difference-consistent source: it MATCHES WRF's p
@@ -7248,7 +7265,7 @@ vertical_coefficients:
                     // Diagnostic ablation (env-gated, default-off byte-identical): zero the SLOW phi
                     // tendency to test whether the resolved-scale phi forcing drives the |λ|>1.
                     static const bool ablate_rhs_ph =
-                        (std::getenv("WRF_SDIRK3_ABLATE_RHS_PH") != nullptr);
+                        env_flag_true("WRF_SDIRK3_ABLATE_RHS_PH");
                     if (ablate_rhs_ph) ph_coupled_raw = torch::zeros_like(ph_coupled_raw);
                     auto ph_coupled = slow_gate(ph_coupled_raw);
                     log_split_tendency_components("KCOUPLED", se_rk, ru_coupled, rv_coupled,
