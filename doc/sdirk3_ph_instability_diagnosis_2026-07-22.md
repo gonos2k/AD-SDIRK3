@@ -65,6 +65,17 @@
 > architectural/numerical units beyond a per-stage p swap. The parity harness gives the exact
 > acceptance (`grad e2 → 0`) for whichever is built.
 >
+> **5e. 4th attempt (inline linearized calc_p_rho EOS) FAILED (2026-07-24) → CONFIRMS architectural.**
+> Implemented WRF's exact linearized `calc_p_rho` EOS inline at the tile (the form `grid%p` actually
+> uses) and dumped it: `p e2 = 1184`, grad e2 = 1513 — worse than p_pgf. The failure is REPRODUCTION
+> complexity: `calc_p_rho` operates on the acoustic `State` with specific coupled/uncoupled + base-vs-
+> perturbation conventions (which `mut`/`muts`, `alt`=base-α, `t_1`=base-θ, coupled `t`), and hand-
+> reproducing it from raw stage tensors at the tile silently mismatches. Per the differentiable-core
+> discipline (≈3-4 fixes fail → question the architecture), this is decisive: **do NOT reconstruct p
+> at the tile — call the acoustic module's ACTUAL `calc_p_rho` (or carry its output `s.p`) so the
+> pressure is bit-consistent with WRF's `grid%p`.** That is the single scoped next unit (reverted the
+> buggy experiment; source unchanged, byte-identical).
+>
 > **6. Superseded hypotheses:** "pg_buoy_w is a double-count of advance_w thermal buoyancy" (WRONG — it is
 > WRF's legitimate :2494 vertical-PGF, just fed a broken pressure; corrected 2026-07-23) and "ρ(G)≈1.4
 > proven" (downgraded to geometric-growth evidence pending JVP/Arnoldi). Any "double-count / Mechanism
