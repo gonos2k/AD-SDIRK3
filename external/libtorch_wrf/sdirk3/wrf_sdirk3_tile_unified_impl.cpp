@@ -119,17 +119,25 @@
 #include <mutex>      // v20.14r19: For std::call_once (periodic BC init)
 #include <iterator>   // PARITY FIX 2025-12-25: For std::begin, std::end
 #include <cstring>    // PARITY FIX 2025-12-25: For std::memcpy
+#include <cctype>    // 9F.D5: std::tolower for strict env-flag parsing
+#include <string>    // 9F.D5: std::string for strict env-flag parsing
 
 // review 9F.D3 P1: env-flag parsing. std::getenv(name)!=nullptr treats VAR=0 / VAR=false as TRUE,
 // a foot-gun for the diagnostic ablation flags. This accepts only affirmative values.
 namespace {
+// STRICT (review 9F.D5 P1 #12): accept ONLY affirmative tokens (1/true/yes/on, case-insensitive);
+// unset/empty/0/false/no/off → false; ANY OTHER value is a hard error (typo protection), so a
+// mis-set experiment flag fails loudly instead of silently toggling physics.
 inline bool env_flag_true(const char* name) {
     const char* v = std::getenv(name);
     if (v == nullptr || v[0] == '\0') return false;
-    return !(std::strcmp(v, "0") == 0 || std::strcmp(v, "false") == 0 ||
-             std::strcmp(v, "no") == 0 || std::strcmp(v, "off") == 0 ||
-             std::strcmp(v, "FALSE") == 0 || std::strcmp(v, "NO") == 0 ||
-             std::strcmp(v, "OFF") == 0);
+    std::string s(v);
+    for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (s == "1" || s == "true" || s == "yes" || s == "on")  return true;
+    if (s == "0" || s == "false" || s == "no" || s == "off") return false;
+    TORCH_CHECK(false, "env flag ", name, "=\"", v,
+                "\" is not a boolean (use 1/true/yes/on or 0/false/no/off)");
+    return false;
 }
 }  // namespace
 
@@ -6631,8 +6639,13 @@ vertical_coefficients:
                 // reconstruction (site A, :15324). This is the REAL perturbation pressure the ABI passed
                 // (module_implicit_sdirk3.F:1355 C_LOC(grid%p)); its vertical gradient is the non-
                 // hydrostatic one :2494 needs. Detached clone (diagnostic + candidate operand).
+                // P1 #13: only pay the full-3D clone when actually needed (parity dump or the opt-in
+                // carried-pressure restoration), not on every default split-branch entry.
+                static const bool need_p_carried =
+                    env_flag_true("WRF_SDIRK3_RESTORE_PG_BUOY_W") ||
+                    (std::getenv("WRF_PARITY_RK_TEND_DUMP") != nullptr);
                 torch::Tensor p_pert_carried;
-                if (p_pert_.defined() && p_pert_.numel() > 0) {
+                if (need_p_carried && p_pert_.defined() && p_pert_.numel() > 0) {
                     p_pert_carried = p_pert_.detach().clone();
                 }
                 torch::Tensor U_time_n = U_n.clone();
@@ -7267,6 +7280,22 @@ vertical_coefficients:
                     if (restore_pg_buoy_w && !ablate_pg_buoy_w &&
                         p_pert_carried.defined() && p_pert_carried.numel() > 0) {
                         auto pg_p = strip3m(align_like(p_pert_carried, U_stage));   // exact WRF grid%p
+                        // P0 #6 FORCE DECOMPOSITION: the :2494 force is g/msf·(−rdn·dp − c1f·mu), a
+                        // cancellation of two large arms. Log each arm's magnitude to see which fails
+                        // to cancel (reviewer P0 #5: operand-by-operand, not "mu is wrong").
+                        if (se_rk == 1 && std::getenv("WRF_SDIRK3_PGBUOY_DBG")) {
+                            torch::NoGradGuard ng;
+                            using torch::indexing::Slice;
+                            const int nzp = pg_p.size(1);
+                            auto dp = pg_p.index({Slice(), Slice(1, nzp), Slice()})
+                                    - pg_p.index({Slice(), Slice(0, nzp - 1), Slice()});
+                            auto arm_p = (-rdn_d.slice(0, 1, nzp).view({1, nzp - 1, 1})) * dp;   // −rdn·dp
+                            auto arm_m = (c1f_d.slice(0, 1, nzp).view({1, nzp - 1, 1})) * mu_2.unsqueeze(1);
+                            std::cerr << "[PGBUOY-ARMS] max|-rdn*dp|=" << arm_p.abs().max().item<float>()
+                                      << " max|c1f*mu|=" << arm_m.abs().max().item<float>()
+                                      << " max|arm_p - arm_m|=" << (arm_p - arm_m).abs().max().item<float>()
+                                      << " (WRF :2494 residual ~ low-level rw ~200)" << std::endl;
+                        }
                         auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
                                             pg_p, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
                         rw_coupled = rw_coupled + slow_gate(pg_buoy_w_t);
