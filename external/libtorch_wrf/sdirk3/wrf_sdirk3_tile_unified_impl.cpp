@@ -111,6 +111,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <sstream>
+#include <fstream>   // [PARITY dump] matched-input dyn_em parity binary dump
 #include <limits>
 #include <vector>
 #include <algorithm>  // PARITY FIX 2025-12-25: For std::copy, std::min
@@ -7184,23 +7185,92 @@ vertical_coefficients:
                     // static residual (which shifts the discrete equilibrium, benign in WRF).
                     // (A/B 2026-07-11 measured: pg_buoy contributes only 3.7 of the 45.7
                     // first-substep w'' excess — the gap rides on the c2a/alt coefficient pair.)
-                    auto rw_coupled = rw_slow
-                                      + slow_gate(acoustic::pg_buoy_w_stage(
-                                            p_pgf, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc))
-                                      + slow_gate(acoustic::curvature_w_stage(
+                    // Diagnostic ablations (env-gated, default-off byte-identical): isolate whether a
+                    // SLOW w-forcing component drives the |λ|>1. curvature_w is a SPHERICAL term
+                    // (1/earth_radius); em_b_wave is a Cartesian channel where it may be spurious.
+                    static const bool ablate_pg_buoy_w =
+                        (std::getenv("WRF_SDIRK3_ABLATE_PG_BUOY_W") != nullptr);
+                    static const bool ablate_curvature_w =
+                        (std::getenv("WRF_SDIRK3_ABLATE_CURVATURE_W") != nullptr);
+                    auto curvature_w_t = acoustic::curvature_w_stage(
                                             u_2, v_2, muu, muv, msfuy_d, msfvx_inv_d,
                                             msftx_d, msfty_d, c1h_d, c2h_d, fnm_d, fnp_d,
-                                            1.0f / 6370000.0f));
+                                            1.0f / 6370000.0f);
+                    if (ablate_curvature_w) curvature_w_t = torch::zeros_like(curvature_w_t);
+                    // FIX (2026-07-23, matched-input dyn_em parity): pg_buoy_w_stage is REMOVED from
+                    // the frozen slow w-forcing. MEASURED at step-1 stage-1 vs WRF rk_tendency:
+                    // rw_slow==0, curvature_w matches WRF's rw_tend (corr 0.92, ~90% mag), while
+                    // pg_buoy_w is UNCORRELATED with WRF (corr 0.014) and inflates rw 2.6× (max
+                    // 70.75→186) — a spurious DOUBLE-COUNT of the buoyancy that advance_w already
+                    // applies (its acoustic buoy term, acoustic_substep.cpp:706). Adding it drove the
+                    // per-step |λ|≈1.4 w↔φ eigen-instability; removing it makes |λ|≈1.000 neutral for
+                    // ~24 steps (vs climbing from step 15). Opt-in A/B restore: WRF_SDIRK3_KEEP_PG_BUOY_W.
+                    // FIX2 (2026-07-23, parity): add WRF's w-momentum CORIOLIS term
+                    // (module_big_step_utilities_em.F:3843) that curvature_w_stage omits. At step-1
+                    // (balanced IC, w≈0) WRF's rw_tend is curvature+Coriolis; curvature_w alone gave
+                    // corr 0.92 / 90% — the missing e·(cosa·ru − (msftx/msfty)·sina·rv) Coriolis part
+                    // is the residual driving the SECONDARY instability. e/cosa/sina from the wired
+                    // f-plane fields (e_ = 2Ω·cos(lat)). Opt-out A/B: WRF_SDIRK3_ABLATE_CORIOLIS_W.
+                    torch::Tensor coriolis_w_t = torch::zeros_like(curvature_w_t);
+                    static const bool ablate_coriolis_w =
+                        (std::getenv("WRF_SDIRK3_ABLATE_CORIOLIS_W") != nullptr);
+                    if (!ablate_coriolis_w && e_.defined() && e_.numel() > 0 &&
+                        cosa_.defined() && sina_.defined()) {
+                        auto e_d    = align_like(e_,    U_stage).index({Slice(0, nyt), Slice(0, nxt)});
+                        auto cosa_d = align_like(cosa_, U_stage).index({Slice(0, nyt), Slice(0, nxt)});
+                        auto sina_d = align_like(sina_, U_stage).index({Slice(0, nyt), Slice(0, nxt)});
+                        coriolis_w_t = acoustic::coriolis_w_stage(
+                            u_2, v_2, muu, muv, msfuy_d, msfvx_inv_d, msftx_d, msfty_d,
+                            c1h_d, c2h_d, fnm_d, fnp_d, e_d, cosa_d, sina_d);
+                    }
+                    torch::Tensor rw_coupled = rw_slow + slow_gate(curvature_w_t) + slow_gate(coriolis_w_t);
+                    static const bool keep_pg_buoy_w =
+                        (std::getenv("WRF_SDIRK3_KEEP_PG_BUOY_W") != nullptr);
+                    if (keep_pg_buoy_w && !ablate_pg_buoy_w) {
+                        auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
+                                            p_pgf, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
+                        rw_coupled = rw_coupled + slow_gate(pg_buoy_w_t);
+                    }
                     auto t_coupled  = t_slow;
                     // ph channel: WRF's COMPLETE coupled rhs_ph at the stage state (vertical wdwn
                     // advection + mu*g*w + 6th-order horizontal advection). MEASURED dyn_em ph_tend
                     // 1732 coupled vs the RHS channel's 66.95 (26x low) — the RHS's phi advection is
                     // not rk_tendency-equivalent, so build it natively like the horizontal PGF.
-                    auto ph_coupled = slow_gate(acoustic::rhs_ph_stage(
+                    auto ph_coupled_raw = acoustic::rhs_ph_stage(
                         ph_2, phb_d, u_2, v_2, predictor_ww, w_2, mut, muu, muv, msfty_d,
-                        c1f_d, c2f_d, fnm_d, fnp_d, rdnw_d, cfn_, cfn1_, rdx, rdy, g_acc));
+                        c1f_d, c2f_d, fnm_d, fnp_d, rdnw_d, cfn_, cfn1_, rdx, rdy, g_acc);
+                    // Diagnostic ablation (env-gated, default-off byte-identical): zero the SLOW phi
+                    // tendency to test whether the resolved-scale phi forcing drives the |λ|>1.
+                    static const bool ablate_rhs_ph =
+                        (std::getenv("WRF_SDIRK3_ABLATE_RHS_PH") != nullptr);
+                    if (ablate_rhs_ph) ph_coupled_raw = torch::zeros_like(ph_coupled_raw);
+                    auto ph_coupled = slow_gate(ph_coupled_raw);
                     log_split_tendency_components("KCOUPLED", se_rk, ru_coupled, rv_coupled,
                                                   rw_coupled, ph_coupled, t_coupled, mu_slow);
+                    // [PARITY dump] matched-input dyn_em parity: dump the port's ASSEMBLED frozen
+                    // slow forcing (ru_coupled..ph_coupled, t_coupled, mu_slow) — the analog of WRF's
+                    // rk_tendency that the acoustic loop integrates — at the FIRST se_rk==1 call
+                    // (step-1 stage-1, identical em_b_wave IC). Env-gated; raw stream float32 (j,k,i).
+                    static std::atomic<bool> parity_dumped{false};
+                    if (se_rk == 1 && std::getenv("WRF_PARITY_RK_TEND_DUMP") != nullptr
+                        && !parity_dumped.exchange(true)) {
+                        torch::NoGradGuard ng;
+                        std::ofstream pf("port_k_slow_dump.bin", std::ios::binary | std::ios::trunc);
+                        auto dump_t = [&](const torch::Tensor& t) {
+                            auto c = t.detach().to(torch::kCPU).to(torch::kFloat32).contiguous();
+                            int64_t nd = c.dim();
+                            pf.write(reinterpret_cast<const char*>(&nd), sizeof(nd));
+                            for (int d = 0; d < nd; ++d) { int64_t s = c.size(d);
+                                pf.write(reinterpret_cast<const char*>(&s), sizeof(s)); }
+                            pf.write(reinterpret_cast<const char*>(c.data_ptr<float>()),
+                                     c.numel() * sizeof(float));
+                        };
+                        dump_t(ru_coupled); dump_t(rv_coupled); dump_t(rw_coupled);
+                        dump_t(ph_coupled); dump_t(t_coupled);  dump_t(mu_slow);
+                        pf.close();
+                        std::cerr << "[PARITY dump] wrote port_k_slow_dump.bin (assembled coupled tendency, step1 stage1)"
+                                  << std::endl;
+                    }
                     // [KCOUPLEDK] TEMP (2026-07-11, revert after parity campaign): per-LEVEL
                     // profiles of the two frozen forcings driving advance_w, for diffing against
                     // the Fortran [PARITY subk] dump (max-only comparisons are level-shift-blind).
@@ -7234,6 +7304,41 @@ vertical_coefficients:
                     auto coef = acoustic::calc_coef_w(
                         c2a_ac, mut, cqw_for_coef(U_stage), c1h_d, c2h_d, c1f_d, c2f_d,
                         rdn_d, rdnw_d, sched.dts, g_acc, epssm, top_lid);
+                    // parity-debug 2026-07-22 (review P0-1): PROVE the epssm/cof the acoustic
+                    // substep ACTUALLY uses (at the point of use, after the Fortran set_config
+                    // pass-through), not the config-load value. cof=[.5*dts*g*(1+epssm)]^2, so
+                    // max|coef.a| must change ~3x between epssm 0.1 and 0.9 IF the sweep is real.
+                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                        torch::NoGradGuard ng;
+                        const float cof = 0.5f*sched.dts*g_acc*(1.0f+epssm);
+                        // P0-2 (review): the signed-eta-metric contract on PRODUCTION operands.
+                        // WRF dnw=eta(k+1)-eta(k)<0; here dnw_d=-1/rdnw_d must be NEGATIVE and
+                        // rdnw_d POSITIVE, with dnw_d*rdnw_d==-1. A positive dnw would flip DMDT.
+                        auto dmn = dnw_d.detach().min().to(torch::kCPU).item<float>();
+                        auto dmx = dnw_d.detach().max().to(torch::kCPU).item<float>();
+                        auto rmn = rdnw_d.detach().min().to(torch::kCPU).item<float>();
+                        auto rmx = rdnw_d.detach().max().to(torch::kCPU).item<float>();
+                        auto recip = (dnw_d.detach() * rdnw_d.detach() + 1.0f)
+                                         .abs().max().to(torch::kCPU).item<float>();
+                        std::cerr << "[SPLIT-EXPLICIT COEF] stage=" << se_rk
+                                  << " epssm_effective=" << epssm
+                                  << " dts=" << sched.dts
+                                  << " cof=" << (cof*cof)
+                                  << " max_abs_coef_a="
+                                  << coef.a.detach().abs().max().to(torch::kCPU).item<float>()
+                                  << " dnw_min=" << dmn << " dnw_max=" << dmx
+                                  << " rdnw_min=" << rmn << " rdnw_max=" << rmx
+                                  << " max|dnw*rdnw+1|=" << recip
+                                  << " g_config.split_explicit_epssm="
+                                  << wrf::sdirk3::g_sdirk3_config.split_explicit_epssm << std::endl;
+                        // P0-2 CONTRACT (review): lock the signed-eta invariant on the actual
+                        // production operands. WRF dnw<0, rdnw>0, dnw*rdnw==-1. A regression that
+                        // flips dnw would reverse DMDT and silently drift mu; fail-close here.
+                        TORCH_CHECK(dmx < 0.0f && rmn > 0.0f && recip < 1.0e-5f,
+                            "SPLIT signed-eta contract violated: dnw must be <0, rdnw >0, "
+                            "dnw*rdnw==-1 (dnw_max=", dmx, " rdnw_min=", rmn,
+                            " |dnw*rdnw+1|=", recip, ")");
+                    }
 
                     acoustic::PrepInput prep;
                     prep.u_1 = u_1; prep.u_2 = u_2; prep.v_1 = v_1; prep.v_2 = v_2;
@@ -7321,10 +7426,82 @@ vertical_coefficients:
                             log_state("entry     ", S);
                             S = acoustic::advance_uv(S, C);              log_state("after_uv  ", S);
                             S = acoustic::advance_mu_t(S, C);            log_state("after_mu_t", S);
+                            {
+                                // P0-4 (review): GLOBAL MASS-CONSERVATION probe. advance_mu_t sets
+                                // S.mudf = DMDT + mu_tend (acoustic_substep.cpp:572), and
+                                // mu_new = mu_old + dts*(DMDT+mu_tend). DMDT = Σ_k dnw·dvdxi is the
+                                // column-integrated horizontal-divergence mass tendency. On this closed
+                                // domain (periodic-x seam-wrapped :522, symmetric-y walls) a CONSERVATIVE
+                                // discretization telescopes to Σ_ij DMDT ≈ 0. A nonzero — and GROWING —
+                                // Σ(DMDT) is a genuine NET mass SOURCE (a non-cancelling seam/wall flux or
+                                // reference-flux divergence): the affine-drift mechanism, distinct from a
+                                // bounded |λ|≈1 transient. This localizes WHICH channel drifts μ without
+                                // needing dyn_em. rel_imbalance normalizes the net source by the gross
+                                // |DMDT| activity so it is comparable across the run.
+                                torch::NoGradGuard ng;
+                                auto mudf = S.mudf.detach();
+                                const float sum_dmdt  = mudf.sum().to(torch::kCPU).item<float>();
+                                const float sum_admdt = mudf.abs().sum().to(torch::kCPU).item<float>();
+                                const float max_admdt = mudf.abs().max().to(torch::kCPU).item<float>();
+                                std::cerr << "[SPLIT-EXPLICIT MASS] stage=" << se_rk << " sub=" << small_step
+                                          << " sum(DMDT+mu_tend)=" << sum_dmdt
+                                          << " sum|DMDT|=" << sum_admdt
+                                          << " rel_imbalance=" << (sum_admdt > 0.0f ? std::abs(sum_dmdt) / sum_admdt : 0.0f)
+                                          << " max|DMDT|=" << max_admdt << std::endl;
+                            }
                             S = acoustic::advance_w(S, C);               log_state("after_w   ", S);
+                            {
+                                // P0-3/§5/§6 (review): SEPARATE the new-w ph arm into NUMERATOR vs
+                                // DENOMINATOR. advance_w's ph update is
+                                //   ph = rhs + (0.5·dts·g·(1+eps))·w_new / mf_ts,  mf_ts = c1f·muts + c2f
+                                // (acoustic_substep.cpp ph-update :1462). A growing new-w arm can be
+                                // w_new↑ (numerator) OR mf_ts→0/negative (denominator collapse — the
+                                // review's leading ph-blowup mechanism, and the target of a production
+                                // fail-close). This measures BOTH, plus the ph-DENOMINATOR domain
+                                // (min, min|·|, non-positive & near-zero counts) that advance_w divides
+                                // by WITHOUT a guard. Distinct from column mass μ — this is c1f·muts+c2f.
+                                torch::NoGradGuard ng;
+                                const float eps = epssm;
+                                auto muts2  = S.muts.detach().unsqueeze(1);                    // {ny,1,nx}
+                                auto c1f    = C.c1f.detach().view({1, -1, 1});                 // {1,nzw,1}
+                                auto c2f    = C.c2f.detach().view({1, -1, 1});
+                                auto mf_ts  = c1f * muts2 + c2f;                               // {ny,nzw,nx} ph denom
+                                auto w_new  = S.w.detach();                                    // {ny,nzw,nx}
+                                auto num_w  = (0.5f * sched.dts * g_acc * (1.0f + eps)) * w_new;
+                                const float scale = std::max(mf_ts.abs().max().to(torch::kCPU).item<float>(), 1.0f);
+                                const float nz_thr = 64.0f * 1.1920929e-07f * scale;           // 64·eps32·scale
+                                const int64_t nonpos = (mf_ts <= 0.0f).sum().to(torch::kCPU).item<int64_t>();
+                                const int64_t nearz  = (mf_ts.abs() <= nz_thr).sum().to(torch::kCPU).item<int64_t>();
+                                std::cerr << "[SPLIT-EXPLICIT PHDENOM] stage=" << se_rk << " sub=" << small_step
+                                          << " mf_ts_min="   << mf_ts.min().to(torch::kCPU).item<float>()
+                                          << " mf_ts_minabs="<< mf_ts.abs().min().to(torch::kCPU).item<float>()
+                                          << " mf_ts_max="   << mf_ts.max().to(torch::kCPU).item<float>()
+                                          << " nonpos="      << nonpos
+                                          << " nearz="       << nearz
+                                          << " w_new_max="   << w_new.abs().max().to(torch::kCPU).item<float>()
+                                          << " num_w_max="   << num_w.abs().max().to(torch::kCPU).item<float>()
+                                          << " neww_arm_max="<< (num_w / mf_ts).abs().max().to(torch::kCPU).item<float>()
+                                          << std::endl;
+                            }
                             S = acoustic::calc_p_rho(S, C, small_step);  log_state("after_prho", S);
                         } else {
                             S = acoustic::advance_substep(S, C, small_step);
+                        }
+                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
+                            // Amplification probe (review: assembled |λ| on the EXACT live operator,
+                            // not an offline reconstruction). Within one stage's acoustic loop dts &
+                            // the operator are FIXED, so the per-substep ratio w_rms[k+1]/w_rms[k] IS
+                            // the measured per-substep amplification |λ|_eff of the w↔ph mode. Logged
+                            // EVERY substep (no window) so the ratio is computable in the fixed-operator
+                            // regime; read-only, byte-identical.
+                            torch::NoGradGuard ng;
+                            auto rms = [](const torch::Tensor& t) {
+                                return t.detach().pow(2).mean().sqrt().to(torch::kCPU).item<float>();
+                            };
+                            std::cerr << "[SPLIT-EXPLICIT AMP] stage=" << se_rk
+                                      << " dts=" << sched.dts << " sub=" << small_step
+                                      << " w_rms=" << rms(S.w) << " ph_rms=" << rms(S.ph)
+                                      << " t_rms=" << rms(S.t) << " mu_rms=" << rms(S.mu) << std::endl;
                         }
                     }
 

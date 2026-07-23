@@ -198,6 +198,18 @@ torch::Tensor curvature_w_stage(
     const torch::Tensor& c1h, const torch::Tensor& c2h,
     const torch::Tensor& fnm, const torch::Tensor& fnp, float reradius);
 
+// WRF w-momentum CORIOLIS term (module_big_step_utilities_em.F:3843):
+//   rw_tend += e*(cosa*avg_w(ru) - (msftx/msfty)*sina*avg_w(rv))
+// The companion to curvature_w_stage; both are frozen slow w-forcings in WRF's rk_tendency.
+torch::Tensor coriolis_w_stage(
+    const torch::Tensor& u, const torch::Tensor& v,
+    const torch::Tensor& muu, const torch::Tensor& muv,
+    const torch::Tensor& msfuy, const torch::Tensor& msfvx_inv,
+    const torch::Tensor& msftx, const torch::Tensor& msfty,
+    const torch::Tensor& c1h, const torch::Tensor& c2h,
+    const torch::Tensor& fnm, const torch::Tensor& fnp,
+    const torch::Tensor& e, const torch::Tensor& cosa, const torch::Tensor& sina);
+
 // --- WRF rhs_ph (module_big_step_utilities_em.F:1369-2182; dry, phi_adv_z default,
 // h_sca_adv_order=5 -> the 6th-order centered advection branch :1774+) ---
 // The COMPLETE COUPLED large-step geopotential tendency at the RK stage state:

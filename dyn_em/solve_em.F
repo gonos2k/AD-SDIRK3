@@ -1163,6 +1163,31 @@ BENCH_START(rk_tend_tim)
      !$OMP END PARALLEL DO
 BENCH_END(rk_tend_tim)
 
+! [PARITY dump] matched-input dyn_em reference: dump WRF's rk_tendency output at
+! (itimestep==1, rk_step==1) so the SDIRK3 split-explicit port's computeUnifiedRHS(ExplicitOnly)
+! can be diffed against it on the IDENTICAL step-1 em_b_wave IC. Env-gated, raw stream binary
+! (float32, Fortran (i,k,j) order) for an offline numpy diff. No effect unless the env var is set.
+   IF ( rk_step == 1 .AND. grid%itimestep == 1 ) THEN
+     BLOCK
+       CHARACTER(LEN=256) :: parity_env
+       INTEGER :: parity_st, parity_u
+       CALL get_environment_variable("WRF_PARITY_RK_TEND_DUMP", parity_env, STATUS=parity_st)
+       IF ( parity_st == 0 ) THEN
+         OPEN(NEWUNIT=parity_u, FILE="wrf_rk_tend_dump.bin", FORM="unformatted", &
+              ACCESS="stream", STATUS="replace")
+         WRITE(parity_u) ims, ime, jms, jme, kms, kme
+         WRITE(parity_u) grid%ru_tend
+         WRITE(parity_u) grid%rv_tend
+         WRITE(parity_u) rw_tend
+         WRITE(parity_u) ph_tend
+         WRITE(parity_u) t_tend
+         WRITE(parity_u) mu_tend
+         CLOSE(parity_u)
+         CALL wrf_message("[PARITY dump] wrote wrf_rk_tend_dump.bin (rk_tendency, step1 rk1)")
+       END IF
+     END BLOCK
+   END IF
+
 ! SDIRK3 block removed - integration is handled before RK loop
 
      IF (config_flags%use_adaptive_time_step) THEN
