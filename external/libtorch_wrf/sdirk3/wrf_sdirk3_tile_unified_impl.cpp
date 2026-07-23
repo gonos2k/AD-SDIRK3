@@ -7629,11 +7629,22 @@ vertical_coefficients:
                     U_stage = combineStateVariables(pad3u(finished.u), pad3v(finished.v),
                                                     pad3m(finished.w), pad3m(finished.ph),
                                                     pad3m(finished.t), pad2m(finished.mu));
-                    // 9F.D5c NOTE: naive split-local pressure carry (write S.p → p_pert_ at stage 3 so
-                    // the write-back propagates it to grid%p) was TESTED and did NOT fix the step-11
-                    // crash — confirming reviewer P0 #6: the pressure lifecycle needs correct s.p
-                    // SEMANTICS (coupled vs uncoupled, sign, time-level, damped/undamped), not a raw
-                    // assignment. Deferred to the dedicated lifecycle PR.
+                    // 9F.D5c PRESSURE LIFECYCLE — MEASURED-REFUTED as the step-11 cause (2026-07-23).
+                    // Confirmed mechanism: in the SDIRK3 path WRF does NOT recompute grid%p after the
+                    // solve (solve_em.F:810 skips the RK loop; only mut/muts updated), so the C++
+                    // write-back (:30518→:30526→p_patch=C_LOC(grid%p)) is the SOLE source of grid%p, and
+                    // computeUnifiedRHS's hydrostatic clobber (:15391) propagates to grid%p each step.
+                    // BUT the step-11 crash (with :2494 restored) is INVARIANT to the pressure fed to
+                    // :2494: hydrostatic / carried-at-step-1 / evolved S.p (Δ=3.97 Pa RMS, verified
+                    // match=1 that the write executed) ALL crash at step 11, while OFF (no :2494) reaches
+                    // step 38. The lever is the PRESENCE of :2494 in the frozen slow rw_tend (38→11),
+                    // not grid%p quality. Since the force-parity proved the :2494-inclusive rw_tend
+                    // matches WRF's rk_tendency EXACTLY at step 1, and advance_w (:752/:769) already adds
+                    // that rw_tend + the acoustic vertical-PGF (up-lo) + buoyancy (-c1f*muave arm), the
+                    // instability is a MULTI-STEP interaction between the (correct) :2494 rw_tend and the
+                    // port's advance_w terms — NOT the pressure lifecycle. The lifecycle refactor
+                    // (reviewer P0 #1-3) is therefore NOT the dt=600 blocker; the next probe is
+                    // advance_w-vs-small_step multi-step parity with :2494 present.
                     log_split_components("after_finish", se_rk, U_stage, U_time_n);
                     {
                         torch::NoGradGuard ng;
