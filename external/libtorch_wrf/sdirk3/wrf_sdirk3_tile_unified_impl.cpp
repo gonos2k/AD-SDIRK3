@@ -7000,6 +7000,26 @@ vertical_coefficients:
                     auto ph_1 = strip3m(ph_1p); auto t_1 = strip3m(t_1p); auto mu_1 = strip2m(mu_1p);
                     auto u_2 = strip3u(u_2p); auto v_2 = strip3v(v_2p); auto w_2 = strip3m(w_2p);
                     auto ph_2 = strip3m(ph_2p); auto t_2 = strip3m(t_2p); auto mu_2 = strip2m(mu_2p);
+                    // [PARITY stage] 9F.D6 boundary oracle (port side): at se_rk==2 the stage-2-input
+                    // _2 vars ARE the decoupled stage-1 output. Dump them (true dims, (j,k,i)) so a
+                    // numpy diff vs WRF's wrf_stage1_out.bin isolates stage-2-operators (boundary
+                    // matches) from small_step_finish/handoff (boundary differs). Env-gated, step-1 only.
+                    if (se_rk == 2 && split_phys_step == 1 &&
+                        std::getenv("WRF_PARITY_STAGE1_DUMP") != nullptr) {
+                        torch::NoGradGuard ng;
+                        std::ofstream sf("port_stage1_out.bin", std::ios::binary | std::ios::trunc);
+                        auto dump_s = [&](const torch::Tensor& t) {
+                            auto c = t.detach().to(torch::kCPU).to(torch::kFloat32).contiguous();
+                            int64_t nd = c.dim();
+                            sf.write(reinterpret_cast<const char*>(&nd), sizeof(nd));
+                            for (int d = 0; d < nd; ++d) { int64_t s = c.size(d);
+                                sf.write(reinterpret_cast<const char*>(&s), sizeof(s)); }
+                            sf.write(reinterpret_cast<const char*>(c.data_ptr<float>()),
+                                     c.numel() * sizeof(float));
+                        };
+                        dump_s(u_2); dump_s(v_2); dump_s(w_2);
+                        dump_s(ph_2); dump_s(t_2); dump_s(mu_2);
+                    }
                     // Channel sourcing (see comment above): u/v/theta from ExplicitOnly (their
                     // absolute horizontal PGF added natively); w from the Full RHS — its fast part
                     // is the INTERNALLY-CONSISTENT pg_buoy residual (measured 1.59e-4; WRF's

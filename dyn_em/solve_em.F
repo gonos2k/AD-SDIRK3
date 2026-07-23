@@ -824,6 +824,32 @@ SUBROUTINE solve_em ( grid , config_flags  &
    ! Traditional RK3 time integration
    Runge_Kutta_loop:  DO rk_step = 1, rk_order
 
+   ! [PARITY stage] 9F.D6 stage-1->2 boundary oracle: at rk_step==2 entry the grid _2 arrays hold
+   ! the DECOUPLED stage-1 output (= the input to stage 2). Dumping it lets the port's se_rk=1
+   ! finished state be diffed on the IDENTICAL step-1 IC, cleanly separating "stage-2 operators
+   ! diverge" (boundary matches) from "small_step_finish/handoff bug" (boundary differs). Env-gated,
+   ! raw stream (float32, Fortran (i,k,j)), no effect unless WRF_PARITY_STAGE1_DUMP is set.
+   IF ( rk_step == 2 .AND. grid%itimestep == 1 ) THEN
+     BLOCK
+       CHARACTER(LEN=256) :: pstg_env
+       INTEGER :: pstg_st, pstg_u
+       CALL get_environment_variable("WRF_PARITY_STAGE1_DUMP", pstg_env, STATUS=pstg_st)
+       IF ( pstg_st == 0 ) THEN
+         OPEN(NEWUNIT=pstg_u, FILE="wrf_stage1_out.bin", FORM="unformatted", &
+              ACCESS="stream", STATUS="replace")
+         WRITE(pstg_u) ims, ime, jms, jme, kms, kme
+         WRITE(pstg_u) grid%u_2
+         WRITE(pstg_u) grid%v_2
+         WRITE(pstg_u) grid%w_2
+         WRITE(pstg_u) grid%ph_2
+         WRITE(pstg_u) grid%t_2
+         WRITE(pstg_u) grid%mu_2
+         CLOSE(pstg_u)
+         CALL wrf_message("[PARITY stage] wrote wrf_stage1_out.bin (decoupled stage-1 output)")
+       END IF
+     END BLOCK
+   END IF
+
    !  Grid dimensions are available in grid structure
 
    !  Set the step size and number of small timesteps for
