@@ -1436,6 +1436,27 @@ BENCH_START(small_step_prep_tim)
                              grid%j_start(ij), grid%j_end(ij),                        &
                              k_start    , k_end                                       )
  
+       ! [PARITY c2a] 9F.D6 P0-3: dump WRF's small_step_prep c2a (the acoustic EOS coefficient
+       ! p'=c2a*(...)) at the selected stage, to compare with the port's c2a_ac. Env-gated.
+       IF ( grid%itimestep == 1 ) THEN
+         BLOCK
+           CHARACTER(LEN=256) :: c2a_env, c2a_stg_env
+           INTEGER :: c2a_st, c2a_u, c2a_sst, c2a_stage
+           c2a_stage = 1
+           CALL get_environment_variable("WRF_PARITY_C2A_STAGE", c2a_stg_env, STATUS=c2a_sst)
+           IF ( c2a_sst == 0 ) READ(c2a_stg_env, *) c2a_stage
+           CALL get_environment_variable("WRF_PARITY_C2A_DUMP", c2a_env, STATUS=c2a_st)
+           IF ( c2a_st == 0 .AND. rk_step == c2a_stage ) THEN
+             OPEN(NEWUNIT=c2a_u, FILE="wrf_c2a_dump.bin", FORM="unformatted", &
+                  ACCESS="stream", STATUS="replace")
+             WRITE(c2a_u) ims, ime, jms, jme, kms, kme
+             WRITE(c2a_u) c2a
+             WRITE(c2a_u) grid%alt
+             CLOSE(c2a_u)
+           END IF
+         END BLOCK
+       END IF
+
        CALL calc_p_rho( grid%al, grid%p, grid%ph_2,                 &
                         grid%alt, grid%t_2, grid%t_save, c2a, pm1,  &
                         grid%mu_2, grid%muts,                       &

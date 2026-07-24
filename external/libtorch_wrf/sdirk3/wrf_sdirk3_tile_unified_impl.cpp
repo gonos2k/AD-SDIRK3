@@ -7484,6 +7484,26 @@ vertical_coefficients:
                     // (587.3 vs 541.5) with all INPUTS at <0.1% parity.
                     auto alt_ac = alt_pgf;
                     auto c2a_ac = (cp_ / cv_) * (p_pgf + pb) / alt_ac;
+                    // 9F.D6 P0-3: dump the port's acoustic c2a_ac + alt_ac (the calc_p_rho EOS coeff
+                    // p'=c2a*(...)) to compare with WRF's small_step_prep c2a. Env-gated, default-off.
+                    if (std::getenv("WRF_PARITY_C2A_DUMP") != nullptr && split_phys_step == 1) {
+                        const char* cst = std::getenv("WRF_PARITY_C2A_STAGE");
+                        const int c2a_stage = cst ? std::atoi(cst) : 1;
+                        if (se_rk == c2a_stage) {
+                            torch::NoGradGuard ng;
+                            std::ofstream cf("port_c2a_dump.bin", std::ios::binary | std::ios::trunc);
+                            auto dump_c = [&](const torch::Tensor& t) {
+                                auto c = t.detach().to(torch::kCPU).to(torch::kFloat32).contiguous();
+                                int64_t nd = c.dim();
+                                cf.write(reinterpret_cast<const char*>(&nd), sizeof(nd));
+                                for (int d = 0; d < nd; ++d) { int64_t s = c.size(d);
+                                    cf.write(reinterpret_cast<const char*>(&s), sizeof(s)); }
+                                cf.write(reinterpret_cast<const char*>(c.data_ptr<float>()),
+                                         c.numel() * sizeof(float));
+                            };
+                            dump_c(c2a_ac); dump_c(alt_ac);
+                        }
+                    }
                     auto coef = acoustic::calc_coef_w(
                         c2a_ac, mut, cqw_for_coef(U_stage), c1h_d, c2h_d, c1f_d, c2f_d,
                         rdn_d, rdnw_d, sched.dts, g_acc, epssm, top_lid);
