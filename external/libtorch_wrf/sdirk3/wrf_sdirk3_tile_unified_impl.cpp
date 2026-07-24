@@ -7827,6 +7827,27 @@ vertical_coefficients:
                             if (S.al.defined() && S.al.numel() > 0) dump_s(S.al);   // small-step al'
                         }
                     }
+                    // 9F.D7: dump the port's COUPLED state (S.ph/S.t/S.w/S.mu) at stage END, the same
+                    // pre-decouple point WRF dumps, to find which coupled variable diverges (calc_p_rho
+                    // exonerated -> the coupled-state evolution is the locus). Strict env, default-off.
+                    if (env_flag_true("WRF_PARITY_COUPLED_DUMP") && split_phys_step == 1) {
+                        const char* cst = std::getenv("WRF_PARITY_COUPLED_STAGE");
+                        const int cpl_stage = cst ? std::atoi(cst) : 1;
+                        if (se_rk == cpl_stage) {
+                            torch::NoGradGuard ng;
+                            std::ofstream cf("port_coupled_dump.bin", std::ios::binary | std::ios::trunc);
+                            auto dump_c = [&](const torch::Tensor& t) {
+                                auto c = t.detach().to(torch::kCPU).to(torch::kFloat32).contiguous();
+                                int64_t nd = c.dim();
+                                cf.write(reinterpret_cast<const char*>(&nd), sizeof(nd));
+                                for (int d = 0; d < nd; ++d) { int64_t s = c.size(d);
+                                    cf.write(reinterpret_cast<const char*>(&s), sizeof(s)); }
+                                cf.write(reinterpret_cast<const char*>(c.data_ptr<float>()),
+                                         c.numel() * sizeof(float));
+                            };
+                            dump_c(S.ph); dump_c(S.t); dump_c(S.w); dump_c(S.mu);
+                        }
+                    }
 
                     auto finish_in = prep;
                     finish_in.muts = S.muts;

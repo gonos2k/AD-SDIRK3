@@ -2152,6 +2152,30 @@ BENCH_START(calc_mu_uv_tim)
                            k_start    , k_end               )
 BENCH_END(calc_mu_uv_tim)
 BENCH_START(small_step_finish_tim)
+       ! [PARITY coupled] 9F.D7: dump WRF's COUPLED small-step state (ph_2/t_2/mu_2/w_2) at stage END,
+       ! right BEFORE small_step_finish decouples it, vs the port's S.ph/S.t/S.mu/S.w. calc_p_rho is
+       ! exonerated (9F.D7a) so the divergence is in this coupled-state evolution. Env-gated, stage-sel.
+       IF ( grid%itimestep == 1 ) THEN
+         BLOCK
+           CHARACTER(LEN=256) :: cpl_env, cpl_stg_env
+           INTEGER :: cpl_st, cpl_u, cpl_sst, cpl_stage
+           cpl_stage = 1
+           CALL get_environment_variable("WRF_PARITY_COUPLED_STAGE", cpl_stg_env, STATUS=cpl_sst)
+           IF ( cpl_sst == 0 ) READ(cpl_stg_env, *) cpl_stage
+           CALL get_environment_variable("WRF_PARITY_COUPLED_DUMP", cpl_env, STATUS=cpl_st)
+           IF ( cpl_st == 0 .AND. rk_step == cpl_stage ) THEN
+             OPEN(NEWUNIT=cpl_u, FILE="wrf_coupled_dump.bin", FORM="unformatted", &
+                  ACCESS="stream", STATUS="replace")
+             WRITE(cpl_u) ims, ime, jms, jme, kms, kme
+             WRITE(cpl_u) grid%ph_2       ! coupled ph'
+             WRITE(cpl_u) grid%t_2        ! coupled theta'
+             WRITE(cpl_u) grid%w_2        ! coupled w'
+             WRITE(cpl_u) grid%mu_2       ! coupled mu' (2D)
+             CLOSE(cpl_u)
+           END IF
+         END BLOCK
+       END IF
+
        CALL small_step_finish( grid%u_2, grid%u_1, grid%v_2, grid%v_1, grid%w_2, grid%w_1,     &
                                grid%t_2, grid%t_1, grid%ph_2, grid%ph_1, grid%ww, ww1,    &
                                grid%mu_2, grid%mu_1,                       &
