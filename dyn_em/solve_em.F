@@ -1472,6 +1472,36 @@ BENCH_START(small_step_prep_tim)
                         grid%j_start(ij), grid%j_end(ij),           &
                         k_start    , k_end                          )
 
+       ! [PARITY prho] 9F.D7 P0-1 micro-oracle: dump WRF's calc_p_rho(step=0) INPUTS (coupled
+       ! ph_2/t_2/mu_2, t_save, muts, alt) and OUTPUTS (al,p) at the selected stage, so the port's
+       ! real acoustic::calc_p_rho can be diffed operand-by-operand at the SAME checkpoint. The
+       ! coupled small-step variables here are overwritten later, so this is the only place to see
+       ! them. Env-gated WRF_PARITY_PRHO_DUMP, stage-selectable (default 2), itimestep==1.
+       IF ( grid%itimestep == 1 ) THEN
+         BLOCK
+           CHARACTER(LEN=256) :: prho_env, prho_stg_env
+           INTEGER :: prho_st, prho_u, prho_sst, prho_stage
+           prho_stage = 2
+           CALL get_environment_variable("WRF_PARITY_PRHO_STAGE", prho_stg_env, STATUS=prho_sst)
+           IF ( prho_sst == 0 ) READ(prho_stg_env, *) prho_stage
+           CALL get_environment_variable("WRF_PARITY_PRHO_DUMP", prho_env, STATUS=prho_st)
+           IF ( prho_st == 0 .AND. rk_step == prho_stage ) THEN
+             OPEN(NEWUNIT=prho_u, FILE="wrf_prho_dump.bin", FORM="unformatted", &
+                  ACCESS="stream", STATUS="replace")
+             WRITE(prho_u) ims, ime, jms, jme, kms, kme
+             WRITE(prho_u) grid%ph_2       ! coupled small-step geopotential perturbation
+             WRITE(prho_u) grid%t_2        ! coupled small-step theta perturbation
+             WRITE(prho_u) grid%t_save     ! t_1 (reference perturbation theta)
+             WRITE(prho_u) grid%mu_2       ! coupled small-step mass perturbation (2D)
+             WRITE(prho_u) grid%muts       ! full updated column mass (2D)
+             WRITE(prho_u) grid%alt        ! full inverse density
+             WRITE(prho_u) grid%al         ! OUTPUT: al' (perturbation inverse density)
+             WRITE(prho_u) grid%p          ! OUTPUT: p' (calc_p_rho step=0)
+             CLOSE(prho_u)
+           END IF
+         END BLOCK
+       END IF
+
        IF (config_flags%non_hydrostatic) THEN
          CALL calc_coef_w( a,alpha,gamma,                    &
                            grid%mut,                         &

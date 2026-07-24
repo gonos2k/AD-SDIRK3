@@ -7607,6 +7607,57 @@ vertical_coefficients:
                     }
 
                     S = acoustic::calc_p_rho(S, C, 0);
+                    // 9F.D7 P0-2 canary + term decomposition (reviewer): at the STAGE-2 calc_p_rho(0)
+                    // (coupled perturbations nonzero, no damping yet) log each arm of al'/p' and the
+                    // t_save/(t0+t_save) semantic so the deficient input is localized WITHOUT a full
+                    // replay. §6.1: c.t_1 must be PERTURBATION theta (t0+t_1 ~ 300 K); a full-theta
+                    // c.t_1 (t0+t_1 ~ 600 K) would roughly halve the thermal arm. Opt-in strict flag.
+                    if (env_flag_true("WRF_PARITY_PDECOMP") && split_phys_step == 1 && se_rk == 2) {
+                        torch::NoGradGuard ng;
+                        using torch::indexing::Slice;
+                        const int nzp = S.p.size(1);
+                        auto v1 = [](int64_t n){ return std::vector<int64_t>{1, n, 1}; };
+                        auto M      = C.c1h.view(v1(nzp)) * S.muts.unsqueeze(1) + C.c2h.view(v1(nzp));
+                        auto c1h_mu = C.c1h.view(v1(nzp)) * S.mu.unsqueeze(1);
+                        auto dph    = S.ph.index({Slice(), Slice(1, nzp + 1), Slice()})
+                                    - S.ph.index({Slice(), Slice(0, nzp), Slice()});
+                        auto q_mu   = C.alt * c1h_mu;
+                        auto q_phi  = (-C.rdnw.view(v1(nzp))) * dph;
+                        auto al     = -1.0f / M * (q_mu + q_phi);
+                        auto N_t    = S.t - c1h_mu * C.t_1;
+                        auto T      = C.alt * N_t / (M * (C.t0 + C.t_1));
+                        auto Q      = T - al;
+                        auto p_raw  = C.c2a * Q;
+                        auto mx = [](const torch::Tensor& t){ return t.detach().abs().max().to(torch::kCPU).item<float>(); };
+                        auto mn = [](const torch::Tensor& t){ return t.detach().mean().to(torch::kCPU).item<float>(); };
+                        std::cerr << "[PDECOMP stage2 step0]"
+                                  << " max|M|=" << mx(M) << " max|alt|=" << mx(C.alt)
+                                  << " max|c1h_mu|=" << mx(c1h_mu) << " max|q_mu|=" << mx(q_mu)
+                                  << " max|dph|=" << mx(dph) << " max|q_phi|=" << mx(q_phi)
+                                  << " max|al|=" << mx(al) << " max|N_t|=" << mx(N_t)
+                                  << " max|T|=" << mx(T) << " max|Q|=" << mx(Q)
+                                  << " max|p_raw|=" << mx(p_raw)
+                                  << " | mean(t_1)=" << mn(C.t_1) << " mean(t0+t_1)=" << mn(C.t0 + C.t_1)
+                                  << std::endl;
+                    }
+                    // 9F.D7 P0-1 micro-oracle (port side): dump the calc_p_rho(step=0) INPUTS
+                    // (S.ph/S.t/C.t_1/S.mu/S.muts/C.alt) and OUTPUTS (S.al/S.p) at the SAME stage-2
+                    // checkpoint as WRF, for operand-by-operand diff. Env-gated, strict, default-off.
+                    if (env_flag_true("WRF_PARITY_PRHO_DUMP") && split_phys_step == 1 && se_rk == 2) {
+                        torch::NoGradGuard ng;
+                        std::ofstream pf("port_prho_dump.bin", std::ios::binary | std::ios::trunc);
+                        auto dump_p = [&](const torch::Tensor& t) {
+                            auto c = t.detach().to(torch::kCPU).to(torch::kFloat32).contiguous();
+                            int64_t nd = c.dim();
+                            pf.write(reinterpret_cast<const char*>(&nd), sizeof(nd));
+                            for (int d = 0; d < nd; ++d) { int64_t s = c.size(d);
+                                pf.write(reinterpret_cast<const char*>(&s), sizeof(s)); }
+                            pf.write(reinterpret_cast<const char*>(c.data_ptr<float>()),
+                                     c.numel() * sizeof(float));
+                        };
+                        dump_p(S.ph); dump_p(S.t); dump_p(C.t_1); dump_p(S.mu);
+                        dump_p(S.muts); dump_p(C.alt); dump_p(S.al); dump_p(S.p);
+                    }
                     // 9F.D6f P0-2: dump calc_p_rho(step=0) output — the pressure BEFORE any substep
                     // evolution. Comparing to the step-entry grid%p isolates formula(step0) vs substep
                     // drift. Env-gated WRF_PARITY_SP0_DUMP, stage-selectable, step-1 only, default-off.
