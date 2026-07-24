@@ -3431,6 +3431,37 @@ BENCH_END(calc_p_rho_tim)
      ENDDO
      !$OMP END PARALLEL DO
 
+     ! [PARITY prhophi] 9F.D7: dump WRF calc_p_rho_phi OPERANDS + OUTPUT (grid%p) at stage END, so the
+     ! port's diag_p_al (geometric alpha) vs WRF's calc_p_rho_phi (stored grid%alb) can be replayed
+     ! offline from the SAME operands. This is the pressure :2494 actually consumes. Env-gated.
+     IF ( grid%itimestep == 1 ) THEN
+       BLOCK
+         CHARACTER(LEN=256) :: pp_env, pp_stg_env
+         INTEGER :: pp_st, pp_u, pp_sst, pp_stage
+         pp_stage = 1
+         CALL get_environment_variable("WRF_PARITY_PRHOPHI_STAGE", pp_stg_env, STATUS=pp_sst)
+         IF ( pp_sst == 0 ) READ(pp_stg_env, *) pp_stage
+         CALL get_environment_variable("WRF_PARITY_PRHOPHI_DUMP", pp_env, STATUS=pp_st)
+         IF ( pp_st == 0 .AND. rk_step == pp_stage ) THEN
+           OPEN(NEWUNIT=pp_u, FILE="wrf_prhophi_dump.bin", FORM="unformatted", &
+                ACCESS="stream", STATUS="replace")
+           WRITE(pp_u) ims, ime, jms, jme, kms, kme
+           WRITE(pp_u) grid%ph_2       ! decoupled perturbation geopotential
+           WRITE(pp_u) grid%phb        ! base geopotential
+           WRITE(pp_u) grid%t_2        ! decoupled perturbation theta
+           WRITE(pp_u) grid%alb        ! STORED base inverse density (the crux)
+           WRITE(pp_u) grid%pb         ! base pressure
+           WRITE(pp_u) grid%mu_2       ! perturbation column mass (2D)
+           WRITE(pp_u) grid%muts       ! full column mass (2D)
+           WRITE(pp_u) grid%p          ! OUTPUT: FULL perturbation pressure (what :2494 uses)
+           WRITE(pp_u) grid%c1h        ! 1D
+           WRITE(pp_u) grid%c2h        ! 1D
+           WRITE(pp_u) grid%rdnw       ! 1D (WRF sign: negative)
+           CLOSE(pp_u)
+         END IF
+       END BLOCK
+     END IF
+
 !  Reset the boundary conditions if there is another corrector step.
 !  (rk_step < rk_order), else we'll handle it at the end of everything
 !  (after the split physics, before exiting the timestep).
