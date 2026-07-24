@@ -7762,14 +7762,18 @@ vertical_coefficients:
                         const int sp_stage = sst ? std::atoi(sst) : 1;
                         if (se_rk == sp_stage && S.p.defined() && S.p.numel() > 0) {
                             torch::NoGradGuard ng;
-                            auto c = S.p.detach().to(torch::kCPU).to(torch::kFloat32).contiguous();
                             std::ofstream sf("port_sp_dump.bin", std::ios::binary | std::ios::trunc);
-                            int64_t nd = c.dim();
-                            sf.write(reinterpret_cast<const char*>(&nd), sizeof(nd));
-                            for (int d = 0; d < nd; ++d) { int64_t s = c.size(d);
-                                sf.write(reinterpret_cast<const char*>(&s), sizeof(s)); }
-                            sf.write(reinterpret_cast<const char*>(c.data_ptr<float>()),
-                                     c.numel() * sizeof(float));
+                            auto dump_s = [&](const torch::Tensor& t) {
+                                auto c = t.detach().to(torch::kCPU).to(torch::kFloat32).contiguous();
+                                int64_t nd = c.dim();
+                                sf.write(reinterpret_cast<const char*>(&nd), sizeof(nd));
+                                for (int d = 0; d < nd; ++d) { int64_t s = c.size(d);
+                                    sf.write(reinterpret_cast<const char*>(&s), sizeof(s)); }
+                                sf.write(reinterpret_cast<const char*>(c.data_ptr<float>()),
+                                         c.numel() * sizeof(float));
+                            };
+                            dump_s(S.p);   // small-step p'
+                            if (S.al.defined() && S.al.numel() > 0) dump_s(S.al);   // small-step al'
                         }
                     }
 

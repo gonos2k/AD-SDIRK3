@@ -1214,6 +1214,7 @@ BENCH_END(rk_tend_tim)
          WRITE(parity_u) t_tend
          WRITE(parity_u) mu_tend
          WRITE(parity_u) grid%p            ! the pressure operand :2494 divides differences of
+         WRITE(parity_u) grid%al           ! 9F.D6 P0-3: small-step al' (calc_p_rho other output)
          CLOSE(parity_u)
          CALL wrf_message("[PARITY dump] wrote wrf_rk_tend_dump.bin (rk_tendency, step1 rk1)")
        END IF
