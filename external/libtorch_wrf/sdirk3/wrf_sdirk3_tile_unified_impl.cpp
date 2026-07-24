@@ -7317,6 +7317,34 @@ vertical_coefficients:
                             const char* sc = std::getenv("WRF_SDIRK3_PG_SCALE");
                             if (sc) { float f = std::atof(sc); if (f > 0.0f) pg_p = pg_p * f; }
                         }
+                        // 9F.D6e P0-1 TEACHER-FORCE: inject WRF's EXACT stage pressure (raw float32,
+                        // already in this stage's {nyt,nz,nxt} (j,k,i) layout) as the :2494 operand, to
+                        // test whether the stale-pressure mismatch closes with a SINGLE operand swap.
+                        // WRF_SDIRK3_TEACHER_PRESSURE=<file>, active only at se_rk==WRF_SDIRK3_TEACHER_STAGE
+                        // (default 2). Opt-in; no effect unless the env is set. Read-once per matching stage.
+                        {
+                            const char* tf = std::getenv("WRF_SDIRK3_TEACHER_PRESSURE");
+                            const char* ts = std::getenv("WRF_SDIRK3_TEACHER_STAGE");
+                            const int teach_stage = ts ? std::atoi(ts) : 2;
+                            if (tf && se_rk == teach_stage && split_phys_step == 1) {
+                                torch::NoGradGuard ng;
+                                const int64_t n = pg_p.numel();
+                                std::vector<float> buf(static_cast<size_t>(n));
+                                std::ifstream inf(tf, std::ios::binary);
+                                inf.read(reinterpret_cast<char*>(buf.data()), n * sizeof(float));
+                                TORCH_CHECK(inf.gcount() == static_cast<std::streamsize>(n * sizeof(float)),
+                                    "TEACHER_PRESSURE file ", tf, " has ", inf.gcount(),
+                                    " bytes, expected ", n * sizeof(float), " (shape ", pg_p.sizes(), ")");
+                                // Own the storage (no from_blob — the ratchet forbids new aliasing
+                                // views): allocate a fresh CPU tensor and copy the file bytes in.
+                                auto wp = torch::empty(pg_p.sizes(),
+                                                       torch::TensorOptions().dtype(torch::kFloat32));
+                                std::memcpy(wp.data_ptr<float>(), buf.data(), n * sizeof(float));
+                                pg_p = wp.to(pg_p.device(), pg_p.scalar_type());
+                                std::cerr << "[TEACHER-PRESSURE] injected WRF grid%p at se_rk=" << se_rk
+                                          << " shape=" << pg_p.sizes() << std::endl;
+                            }
+                        }
                         // P0 #6 FORCE DECOMPOSITION: the :2494 force is g/msf·(−rdn·dp − c1f·mu), a
                         // cancellation of two large arms. Log each arm's magnitude to see which fails
                         // to cancel (reviewer P0 #5: operand-by-operand, not "mu is wrong").
@@ -7559,6 +7587,24 @@ vertical_coefficients:
                     }
 
                     S = acoustic::calc_p_rho(S, C, 0);
+                    // 9F.D6f P0-2: dump calc_p_rho(step=0) output — the pressure BEFORE any substep
+                    // evolution. Comparing to the step-entry grid%p isolates formula(step0) vs substep
+                    // drift. Env-gated WRF_PARITY_SP0_DUMP, stage-selectable, step-1 only, default-off.
+                    if (std::getenv("WRF_PARITY_SP0_DUMP") != nullptr && split_phys_step == 1) {
+                        const char* sst = std::getenv("WRF_PARITY_SP_STAGE");
+                        const int sp_stage = sst ? std::atoi(sst) : 1;
+                        if (se_rk == sp_stage && S.p.defined() && S.p.numel() > 0) {
+                            torch::NoGradGuard ng;
+                            auto c = S.p.detach().to(torch::kCPU).to(torch::kFloat32).contiguous();
+                            std::ofstream sf("port_sp0_dump.bin", std::ios::binary | std::ios::trunc);
+                            int64_t nd = c.dim();
+                            sf.write(reinterpret_cast<const char*>(&nd), sizeof(nd));
+                            for (int d = 0; d < nd; ++d) { int64_t s = c.size(d);
+                                sf.write(reinterpret_cast<const char*>(&s), sizeof(s)); }
+                            sf.write(reinterpret_cast<const char*>(c.data_ptr<float>()),
+                                     c.numel() * sizeof(float));
+                        }
+                    }
                     for (int small_step = 1; small_step <= sched.n_sub; ++small_step) {
                         static std::atomic<int> substep_log_count{0};
                         // parity-debug 2026-07-22: log the first 8 AND every 10th substep up to
@@ -7685,6 +7731,25 @@ vertical_coefficients:
                                    << " w_rms=" << rms(S.w) << " w_max=" << amax(S.w)
                                    << " ph_rms=" << rms(S.ph) << " ph_max=" << amax(S.ph) << "\n";
                             }
+                        }
+                    }
+
+                    // 9F.D6f P0-2 micro-oracle: dump the port's stage-final acoustic pressure S.p
+                    // (the port's calc_p_rho output that SHOULD equal WRF's next-stage-entry grid%p).
+                    // Env-gated (WRF_PARITY_SP_DUMP), selectable stage/step. Read-only, default-off.
+                    if (std::getenv("WRF_PARITY_SP_DUMP") != nullptr && split_phys_step == 1) {
+                        const char* sst = std::getenv("WRF_PARITY_SP_STAGE");
+                        const int sp_stage = sst ? std::atoi(sst) : 1;
+                        if (se_rk == sp_stage && S.p.defined() && S.p.numel() > 0) {
+                            torch::NoGradGuard ng;
+                            auto c = S.p.detach().to(torch::kCPU).to(torch::kFloat32).contiguous();
+                            std::ofstream sf("port_sp_dump.bin", std::ios::binary | std::ios::trunc);
+                            int64_t nd = c.dim();
+                            sf.write(reinterpret_cast<const char*>(&nd), sizeof(nd));
+                            for (int d = 0; d < nd; ++d) { int64_t s = c.size(d);
+                                sf.write(reinterpret_cast<const char*>(&s), sizeof(s)); }
+                            sf.write(reinterpret_cast<const char*>(c.data_ptr<float>()),
+                                     c.numel() * sizeof(float));
                         }
                     }
 
