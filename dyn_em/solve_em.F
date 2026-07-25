@@ -1214,6 +1214,7 @@ BENCH_END(rk_tend_tim)
          WRITE(parity_u) t_tend
          WRITE(parity_u) mu_tend
          WRITE(parity_u) grid%p            ! the pressure operand :2494 divides differences of
+         WRITE(parity_u) grid%al           ! 9F.D6 P0-3: small-step al' (calc_p_rho other output)
          CLOSE(parity_u)
          CALL wrf_message("[PARITY dump] wrote wrf_rk_tend_dump.bin (rk_tendency, step1 rk1)")
        END IF
@@ -1436,6 +1437,27 @@ BENCH_START(small_step_prep_tim)
                              grid%j_start(ij), grid%j_end(ij),                        &
                              k_start    , k_end                                       )
  
+       ! [PARITY c2a] 9F.D6 P0-3: dump WRF's small_step_prep c2a (the acoustic EOS coefficient
+       ! p'=c2a*(...)) at the selected stage, to compare with the port's c2a_ac. Env-gated.
+       IF ( grid%itimestep == 1 ) THEN
+         BLOCK
+           CHARACTER(LEN=256) :: c2a_env, c2a_stg_env
+           INTEGER :: c2a_st, c2a_u, c2a_sst, c2a_stage
+           c2a_stage = 1
+           CALL get_environment_variable("WRF_PARITY_C2A_STAGE", c2a_stg_env, STATUS=c2a_sst)
+           IF ( c2a_sst == 0 ) READ(c2a_stg_env, *) c2a_stage
+           CALL get_environment_variable("WRF_PARITY_C2A_DUMP", c2a_env, STATUS=c2a_st)
+           IF ( c2a_st == 0 .AND. rk_step == c2a_stage ) THEN
+             OPEN(NEWUNIT=c2a_u, FILE="wrf_c2a_dump.bin", FORM="unformatted", &
+                  ACCESS="stream", STATUS="replace")
+             WRITE(c2a_u) ims, ime, jms, jme, kms, kme
+             WRITE(c2a_u) c2a
+             WRITE(c2a_u) grid%alt
+             CLOSE(c2a_u)
+           END IF
+         END BLOCK
+       END IF
+
        CALL calc_p_rho( grid%al, grid%p, grid%ph_2,                 &
                         grid%alt, grid%t_2, grid%t_save, c2a, pm1,  &
                         grid%mu_2, grid%muts,                       &
@@ -1449,6 +1471,36 @@ BENCH_START(small_step_prep_tim)
                         grid%i_start(ij), grid%i_end(ij),           &
                         grid%j_start(ij), grid%j_end(ij),           &
                         k_start    , k_end                          )
+
+       ! [PARITY prho] 9F.D7 P0-1 micro-oracle: dump WRF's calc_p_rho(step=0) INPUTS (coupled
+       ! ph_2/t_2/mu_2, t_save, muts, alt) and OUTPUTS (al,p) at the selected stage, so the port's
+       ! real acoustic::calc_p_rho can be diffed operand-by-operand at the SAME checkpoint. The
+       ! coupled small-step variables here are overwritten later, so this is the only place to see
+       ! them. Env-gated WRF_PARITY_PRHO_DUMP, stage-selectable (default 2), itimestep==1.
+       IF ( grid%itimestep == 1 ) THEN
+         BLOCK
+           CHARACTER(LEN=256) :: prho_env, prho_stg_env
+           INTEGER :: prho_st, prho_u, prho_sst, prho_stage
+           prho_stage = 2
+           CALL get_environment_variable("WRF_PARITY_PRHO_STAGE", prho_stg_env, STATUS=prho_sst)
+           IF ( prho_sst == 0 ) READ(prho_stg_env, *) prho_stage
+           CALL get_environment_variable("WRF_PARITY_PRHO_DUMP", prho_env, STATUS=prho_st)
+           IF ( prho_st == 0 .AND. rk_step == prho_stage ) THEN
+             OPEN(NEWUNIT=prho_u, FILE="wrf_prho_dump.bin", FORM="unformatted", &
+                  ACCESS="stream", STATUS="replace")
+             WRITE(prho_u) ims, ime, jms, jme, kms, kme
+             WRITE(prho_u) grid%ph_2       ! coupled small-step geopotential perturbation
+             WRITE(prho_u) grid%t_2        ! coupled small-step theta perturbation
+             WRITE(prho_u) grid%t_save     ! t_1 (reference perturbation theta)
+             WRITE(prho_u) grid%mu_2       ! coupled small-step mass perturbation (2D)
+             WRITE(prho_u) grid%muts       ! full updated column mass (2D)
+             WRITE(prho_u) grid%alt        ! full inverse density
+             WRITE(prho_u) grid%al         ! OUTPUT: al' (perturbation inverse density)
+             WRITE(prho_u) grid%p          ! OUTPUT: p' (calc_p_rho step=0)
+             CLOSE(prho_u)
+           END IF
+         END BLOCK
+       END IF
 
        IF (config_flags%non_hydrostatic) THEN
          CALL calc_coef_w( a,alpha,gamma,                    &
@@ -2100,6 +2152,30 @@ BENCH_START(calc_mu_uv_tim)
                            k_start    , k_end               )
 BENCH_END(calc_mu_uv_tim)
 BENCH_START(small_step_finish_tim)
+       ! [PARITY coupled] 9F.D7: dump WRF's COUPLED small-step state (ph_2/t_2/mu_2/w_2) at stage END,
+       ! right BEFORE small_step_finish decouples it, vs the port's S.ph/S.t/S.mu/S.w. calc_p_rho is
+       ! exonerated (9F.D7a) so the divergence is in this coupled-state evolution. Env-gated, stage-sel.
+       IF ( grid%itimestep == 1 ) THEN
+         BLOCK
+           CHARACTER(LEN=256) :: cpl_env, cpl_stg_env
+           INTEGER :: cpl_st, cpl_u, cpl_sst, cpl_stage
+           cpl_stage = 1
+           CALL get_environment_variable("WRF_PARITY_COUPLED_STAGE", cpl_stg_env, STATUS=cpl_sst)
+           IF ( cpl_sst == 0 ) READ(cpl_stg_env, *) cpl_stage
+           CALL get_environment_variable("WRF_PARITY_COUPLED_DUMP", cpl_env, STATUS=cpl_st)
+           IF ( cpl_st == 0 .AND. rk_step == cpl_stage ) THEN
+             OPEN(NEWUNIT=cpl_u, FILE="wrf_coupled_dump.bin", FORM="unformatted", &
+                  ACCESS="stream", STATUS="replace")
+             WRITE(cpl_u) ims, ime, jms, jme, kms, kme
+             WRITE(cpl_u) grid%ph_2       ! coupled ph'
+             WRITE(cpl_u) grid%t_2        ! coupled theta'
+             WRITE(cpl_u) grid%w_2        ! coupled w'
+             WRITE(cpl_u) grid%mu_2       ! coupled mu' (2D)
+             CLOSE(cpl_u)
+           END IF
+         END BLOCK
+       END IF
+
        CALL small_step_finish( grid%u_2, grid%u_1, grid%v_2, grid%v_1, grid%w_2, grid%w_1,     &
                                grid%t_2, grid%t_1, grid%ph_2, grid%ph_1, grid%ww, ww1,    &
                                grid%mu_2, grid%mu_1,                       &
@@ -3354,6 +3430,37 @@ BENCH_END(calc_p_rho_tim)
 
      ENDDO
      !$OMP END PARALLEL DO
+
+     ! [PARITY prhophi] 9F.D7: dump WRF calc_p_rho_phi OPERANDS + OUTPUT (grid%p) at stage END, so the
+     ! port's diag_p_al (geometric alpha) vs WRF's calc_p_rho_phi (stored grid%alb) can be replayed
+     ! offline from the SAME operands. This is the pressure :2494 actually consumes. Env-gated.
+     IF ( grid%itimestep == 1 ) THEN
+       BLOCK
+         CHARACTER(LEN=256) :: pp_env, pp_stg_env
+         INTEGER :: pp_st, pp_u, pp_sst, pp_stage
+         pp_stage = 1
+         CALL get_environment_variable("WRF_PARITY_PRHOPHI_STAGE", pp_stg_env, STATUS=pp_sst)
+         IF ( pp_sst == 0 ) READ(pp_stg_env, *) pp_stage
+         CALL get_environment_variable("WRF_PARITY_PRHOPHI_DUMP", pp_env, STATUS=pp_st)
+         IF ( pp_st == 0 .AND. rk_step == pp_stage ) THEN
+           OPEN(NEWUNIT=pp_u, FILE="wrf_prhophi_dump.bin", FORM="unformatted", &
+                ACCESS="stream", STATUS="replace")
+           WRITE(pp_u) ims, ime, jms, jme, kms, kme
+           WRITE(pp_u) grid%ph_2       ! decoupled perturbation geopotential
+           WRITE(pp_u) grid%phb        ! base geopotential
+           WRITE(pp_u) grid%t_2        ! decoupled perturbation theta
+           WRITE(pp_u) grid%alb        ! STORED base inverse density (the crux)
+           WRITE(pp_u) grid%pb         ! base pressure
+           WRITE(pp_u) grid%mu_2       ! perturbation column mass (2D)
+           WRITE(pp_u) grid%muts       ! full column mass (2D)
+           WRITE(pp_u) grid%p          ! OUTPUT: FULL perturbation pressure (what :2494 uses)
+           WRITE(pp_u) grid%c1h        ! 1D
+           WRITE(pp_u) grid%c2h        ! 1D
+           WRITE(pp_u) grid%rdnw       ! 1D (WRF sign: negative)
+           CLOSE(pp_u)
+         END IF
+       END BLOCK
+     END IF
 
 !  Reset the boundary conditions if there is another corrector step.
 !  (rk_step < rk_order), else we'll handle it at the end of everything
