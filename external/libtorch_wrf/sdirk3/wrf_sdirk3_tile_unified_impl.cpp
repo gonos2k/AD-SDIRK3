@@ -6643,7 +6643,7 @@ vertical_coefficients:
                 // carried-pressure restoration), not on every default split-branch entry.
                 static const bool need_p_carried =
                     env_flag_true("WRF_SDIRK3_RESTORE_PG_BUOY_W") ||
-                    (std::getenv("WRF_PARITY_RK_TEND_DUMP") != nullptr);
+                    (env_flag_true("WRF_PARITY_RK_TEND_DUMP"));
                 torch::Tensor p_pert_carried;
                 if (need_p_carried && p_pert_.defined() && p_pert_.numel() > 0) {
                     p_pert_carried = p_pert_.detach().clone();
@@ -7005,7 +7005,7 @@ vertical_coefficients:
                     // numpy diff vs WRF's wrf_stage1_out.bin isolates stage-2-operators (boundary
                     // matches) from small_step_finish/handoff (boundary differs). Env-gated, step-1 only.
                     if (se_rk == 2 && split_phys_step == 1 &&
-                        std::getenv("WRF_PARITY_STAGE1_DUMP") != nullptr) {
+                        env_flag_true("WRF_PARITY_STAGE1_DUMP")) {
                         torch::NoGradGuard ng;
                         std::ofstream sf("port_stage1_out.bin", std::ios::binary | std::ios::trunc);
                         auto dump_s = [&](const torch::Tensor& t) {
@@ -7450,7 +7450,7 @@ vertical_coefficients:
                     const char* parity_stage_env = std::getenv("WRF_PARITY_RK_STAGE");
                     const int parity_rk_stage = parity_stage_env ? std::atoi(parity_stage_env) : 1;
                     if (se_rk == parity_rk_stage && split_phys_step == parity_step
-                        && std::getenv("WRF_PARITY_RK_TEND_DUMP") != nullptr
+                        && env_flag_true("WRF_PARITY_RK_TEND_DUMP")
                         && !parity_dumped.exchange(true)) {
                         torch::NoGradGuard ng;
                         std::ofstream pf("port_k_slow_dump.bin", std::ios::binary | std::ios::trunc);
@@ -7521,7 +7521,7 @@ vertical_coefficients:
                     auto c2a_ac = (cp_ / cv_) * (p_pgf + pb) / alt_ac;
                     // 9F.D6 P0-3: dump the port's acoustic c2a_ac + alt_ac (the calc_p_rho EOS coeff
                     // p'=c2a*(...)) to compare with WRF's small_step_prep c2a. Env-gated, default-off.
-                    if (std::getenv("WRF_PARITY_C2A_DUMP") != nullptr && split_phys_step == 1) {
+                    if (env_flag_true("WRF_PARITY_C2A_DUMP") && split_phys_step == 1) {
                         const char* cst = std::getenv("WRF_PARITY_C2A_STAGE");
                         const int c2a_stage = cst ? std::atoi(cst) : 1;
                         if (se_rk == c2a_stage) {
@@ -7537,6 +7537,15 @@ vertical_coefficients:
                                          c.numel() * sizeof(float));
                             };
                             dump_c(c2a_ac); dump_c(alt_ac);
+                            // 9F.D8: the port's ANALYTIC base inverse density (grid_info_->alb,
+                            // rd*theta_b*(pb/p0)^(R/cp)/pb == WRF's init formula). Dumped so it can be
+                            // diffed against WRF's STORED grid%alb: if they agree, the review's
+                            // "restore alb authority" P0 needs no new ABI pointer at all; if they
+                            // differ, stored alb is worth plumbing. Decides that question by
+                            // measurement instead of by reading the (mislabelled) ABI.
+                            if (grid_info_ && grid_info_->alb.defined() && grid_info_->alb.numel() > 0) {
+                                dump_c(strip3m(align_like(grid_info_->alb, U_stage)));
+                            }
                         }
                     }
                     auto coef = acoustic::calc_coef_w(
@@ -7678,7 +7687,9 @@ vertical_coefficients:
                     // 9F.D7 P0-1 micro-oracle (port side): dump the calc_p_rho(step=0) INPUTS
                     // (S.ph/S.t/C.t_1/S.mu/S.muts/C.alt) and OUTPUTS (S.al/S.p) at the SAME stage-2
                     // checkpoint as WRF, for operand-by-operand diff. Env-gated, strict, default-off.
-                    if (env_flag_true("WRF_PARITY_PRHO_DUMP") && split_phys_step == 1 && se_rk == 2) {
+                    if (env_flag_true("WRF_PARITY_PRHO_DUMP") && split_phys_step == 1 &&
+                        se_rk == (std::getenv("WRF_PARITY_PRHO_STAGE")
+                                      ? std::atoi(std::getenv("WRF_PARITY_PRHO_STAGE")) : 2)) {
                         torch::NoGradGuard ng;
                         std::ofstream pf("port_prho_dump.bin", std::ios::binary | std::ios::trunc);
                         auto dump_p = [&](const torch::Tensor& t) {
@@ -7696,7 +7707,7 @@ vertical_coefficients:
                     // 9F.D6f P0-2: dump calc_p_rho(step=0) output — the pressure BEFORE any substep
                     // evolution. Comparing to the step-entry grid%p isolates formula(step0) vs substep
                     // drift. Env-gated WRF_PARITY_SP0_DUMP, stage-selectable, step-1 only, default-off.
-                    if (std::getenv("WRF_PARITY_SP0_DUMP") != nullptr && split_phys_step == 1) {
+                    if (env_flag_true("WRF_PARITY_SP0_DUMP") && split_phys_step == 1) {
                         const char* sst = std::getenv("WRF_PARITY_SP_STAGE");
                         const int sp_stage = sst ? std::atoi(sst) : 1;
                         if (se_rk == sp_stage && S.p.defined() && S.p.numel() > 0) {
@@ -7843,7 +7854,7 @@ vertical_coefficients:
                     // 9F.D6f P0-2 micro-oracle: dump the port's stage-final acoustic pressure S.p
                     // (the port's calc_p_rho output that SHOULD equal WRF's next-stage-entry grid%p).
                     // Env-gated (WRF_PARITY_SP_DUMP), selectable stage/step. Read-only, default-off.
-                    if (std::getenv("WRF_PARITY_SP_DUMP") != nullptr && split_phys_step == 1) {
+                    if (env_flag_true("WRF_PARITY_SP_DUMP") && split_phys_step == 1) {
                         const char* sst = std::getenv("WRF_PARITY_SP_STAGE");
                         const int sp_stage = sst ? std::atoi(sst) : 1;
                         if (se_rk == sp_stage && S.p.defined() && S.p.numel() > 0) {
