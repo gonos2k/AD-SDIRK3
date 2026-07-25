@@ -7129,6 +7129,36 @@ vertical_coefficients:
                     auto [p_pgf, al_pgf, alt_pgf] = acoustic::diag_p_al(
                         ph_2, phb_d, t_2, pb, mut, mu_base_d, c1h_d, c2h_d, rdnw_d,
                         p0_, rd_, cp_ / cv_, 300.0f);
+                    // 9F.D7d (MEASURED 2026-07-25): diag_p_al builds al_full GEOMETRICALLY
+                    // (|rdnw|*(dphi+dphi_b)/mh). Judged on VALUE that is fine (0.95% off WRF's
+                    // grid%p), but :2494 differences p VERTICALLY, and on the GRADIENT the geometric
+                    // form is 35% off vs 3.6% for WRF's calc_p_rho_phi form — because
+                    // p'=p0*(R(t0+th)/(p0*alpha))^(cp/cv)-pb cancels two ~1e5 Pa terms down to ~11 Pa
+                    // (~1e4 amplification), so a 1.3e-6 difference in alpha becomes 35% in dp.
+                    // WRF's hypso-1 form (module_big_step_utilities_em.F:1029) uses the ANALYTIC base
+                    // alpha, not a discrete inverse of the hydrostatic integration:
+                    //   al' = -1/M * ( alb*(c1h*mu') + rdnw*dphi )      [WRF rdnw < 0; ours is |rdnw|]
+                    //   alpha_full = al' + alb
+                    // grid_info_->alb is exactly WRF's init formula rd*theta_b*(pb/p0)^(R/cp)/pb
+                    // == (R*theta_b/p0)*(pb/p0)^(-cv/cp) (verified live: 0.8166..6.117 m^3/kg), so no
+                    // ABI change is needed. Opt-in; consumed ONLY by pg_buoy_w below so the effect is
+                    // isolated to :2494 (alt_ac/c2a_ac/horizontal-PGF keep the geometric family).
+                    torch::Tensor p_pgf_wrfalb;
+                    if (env_flag_true("WRF_SDIRK3_WRF_ALB_PGF") &&
+                        grid_info_ && grid_info_->alb.defined() && grid_info_->alb.numel() > 0) {
+                        using torch::indexing::Slice;
+                        const int nzm = t_2.size(1);
+                        auto albd = strip3m(align_like(grid_info_->alb, U_stage));
+                        auto lv   = [&](const torch::Tensor& x) { return x.view({1, nzm, 1}); };
+                        auto M    = lv(c1h_d) * mut.unsqueeze(1) + lv(c2h_d);
+                        auto mup  = (mut - mu_base_d).unsqueeze(1);              // mu' = muts - mub
+                        auto dph  = ph_2.index({Slice(), Slice(1, nzm + 1), Slice()})
+                                  - ph_2.index({Slice(), Slice(0, nzm), Slice()});
+                        auto al_p = -(albd * (lv(c1h_d) * mup) - lv(rdnw_d) * dph) / M;
+                        auto alfl = al_p + albd;
+                        auto eosw = (rd_ * (300.0f + t_2)) / (p0_ * alfl);
+                        p_pgf_wrfalb = p0_ * torch::pow(eosw.clamp_min(1e-20f), cp_ / cv_) - pb;
+                    }
                     // (pg_buoy p-source note: a hypso-2 diag_p_hypso2 route — WRF's own
                     // calc_p_rho_phi form with znw/znu/ptop reconstructed from dnw/pb/mub —
                     // was tried and MEASURED WORSE (2026-07-11, offline f64 residual 442 vs
@@ -7382,8 +7412,13 @@ vertical_coefficients:
                                << " rw_coupled_rms=" << rms(rw_coupled) << "\n";
                         }
                     } else if (keep_pg_buoy_w && !ablate_pg_buoy_w) {
+                        // 9F.D7d: with WRF_SDIRK3_WRF_ALB_PGF the per-stage pressure comes from WRF's
+                        // calc_p_rho_phi form (analytic alb) instead of diag_p_al's geometric alpha.
+                        // KEEP alone vs KEEP+WRF_ALB is therefore a clean A/B on the SAME consumer.
+                        const torch::Tensor& pg_src =
+                            p_pgf_wrfalb.defined() ? p_pgf_wrfalb : p_pgf;
                         auto pg_buoy_w_t = acoustic::pg_buoy_w_stage(
-                                            p_pgf, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
+                                            pg_src, mu_2, msfty_d, c1f_d, rdn_d, rdnw_d, g_acc);
                         rw_coupled = rw_coupled + slow_gate(pg_buoy_w_t);
                     }
                     auto t_coupled  = t_slow;
