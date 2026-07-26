@@ -5823,11 +5823,30 @@ vertical_coefficients:
                 const char* dts_env = std::getenv("WRF_SDIRK3_SLOWFLOW_DT_STABLE");
                 const float dt_stable = dts_env ? std::atof(dts_env) : 4.0f;
                 // SLOWFLOW_MODE: 0 = ExplicitOnly (slow channel only, PGF absent);
-                //                1 = Full (advection + PGF together) — tests whether
-                //                    keeping the balanced pair together + small h is
-                //                    stable (WRF-native acoustic-substep regime).
+                //                1 = RhsMode::Full.
+                //
+                // 9F.D19 CORRECTION. Mode 1's original comment claimed it tested
+                // "advection + PGF together ... the WRF-native acoustic-substep
+                // regime". It does NOT. RhsMode::Full is the ENTIRE RHS including the
+                // fast/acoustic terms, and this loop integrates it EXPLICITLY. For
+                // em_b_wave (ztop 16 km / 64 layers -> dz ~ 250 m, c_s ~ 300 m/s) the
+                // vertical acoustic CFL is dz/c_s ~ 0.83 s, so ANY h above that must
+                // blow up by elementary CFL -- which is exactly what h=4 s and h=600 s
+                // do. Read at h > 0.83 s, mode 1 measures a CFL violation and says
+                // NOTHING about balance. To test the co-integration hypothesis the
+                // sub-step must satisfy h < 0.83 s (WRF_SDIRK3_SLOWFLOW_DT_STABLE=0.5
+                // -> M=1200), or the acoustic terms must stay implicit (HEVI), which is
+                // the actual split-explicit design.
+                //
+                // STRIDE: at M=1200 the original printer emitted only m<2 and m=M-1, so
+                // 3600 RHS evaluations elapsed with no output and the run timed out
+                // before any verdict. Print every STRIDE-th sub-step instead, and stop
+                // as soon as the state goes non-finite -- there is nothing to learn
+                // after a NaN, and continuing wasted the whole budget.
                 const char* mode_env = std::getenv("WRF_SDIRK3_SLOWFLOW_MODE");
                 const int sf_mode = mode_env ? std::atoi(mode_env) : 0;
+                const char* stride_env = std::getenv("WRF_SDIRK3_SLOWFLOW_STRIDE");
+                const int sf_stride = std::max(1, stride_env ? std::atoi(stride_env) : 1000000);
                 auto slow_rhs = [&](const torch::Tensor& V) -> torch::Tensor {
                     if (sf_mode == 1) {
                         U_ref_stage_ = V.detach().clone();  // w_ref consistency
@@ -5853,11 +5872,19 @@ vertical_coefficients:
                         torch::Tensor U2 = U + (h / 2.0f) * L1;
                         torch::Tensor L2 = slow_rhs(U2);
                         U = U + h * L2;
-                        if (m < 2 || m == M - 1) {
+                        const float du = un(U - U_n);
+                        if (m < 2 || m == M - 1 || (m + 1) % sf_stride == 0) {
                             std::cerr << "[SLOWFLOW] M=" << M << " sub=" << (m + 1)
                                       << " |ks(u)|@L0=" << un(L0)
                                       << " @L1=" << un(L1) << " @L2=" << un(L2)
-                                      << " |U-Un(u)|=" << un(U - U_n) << std::endl;
+                                      << " |U-Un(u)|=" << du << std::endl;
+                        }
+                        if (!std::isfinite(du)) {
+                            std::cerr << "[SLOWFLOW] M=" << M << " ABORT at sub="
+                                      << (m + 1) << " (non-finite); h=" << h
+                                      << " vs vertical acoustic CFL ~ dz/c_s."
+                                      << std::endl;
+                            break;
                         }
                     }
                     std::cerr << "[SLOWFLOW] M=" << M << " FINAL |ks(u)|=" << un(slow_rhs(U))

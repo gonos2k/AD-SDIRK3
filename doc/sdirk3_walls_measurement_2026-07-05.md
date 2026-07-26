@@ -39,8 +39,19 @@ background) is therefore measured-**dead**; the large-step adjoint is deferred t
 Per-component + amplitude-scaling measurement:
 - The blow-up channel is the **u-momentum (`ru`) block** — ≥99.99% of ‖k_slow‖ at every stage
   (‖k_slow(u)‖: 1010 → 69294 → 8.0e5 → 5.0e10 at dt=60).
-- The term is **horizontal advection** (only active bilinear u-momentum term; PGF excluded by
-  HEVI-independence, Coriolis linear, curvature off, diffusion excluded).
+- ~~The term is **horizontal advection** (only active bilinear u-momentum term; PGF excluded by
+  HEVI-independence, Coriolis linear, curvature off, diffusion excluded).~~
+  **RETRACTED 2026-07-26 (9F.D18).** The elimination argument is sound for PGF / Coriolis /
+  curvature / diffusion — a direct per-site decomposition confirms those are 1–2 orders smaller or
+  never execute. But it cannot support the word *horizontal*: **vertical advection (u × ω) is
+  equally bilinear**, so "only active bilinear term" never separated the two. Measured directly
+  (steps 15–24, 120 RHS calls, `WRF_SDIRK3_UTERMS_TRACE`), the dominant term is **vertical**:
+  `adv_z` ‖T‖=35182 vs `adv_x` 1252 / `adv_y` 1663 (21–28×), and `adv_z` is the only term whose
+  projection onto u is consistently positive (98% of calls; `adv_y` opposes in 100%, `adv_x` is a
+  50/50 coin flip). `adv_z` is **not** defective: matched-input stage-1 parity gives total
+  `ru` e2=9.02e-04, corr=+1.00000, and `adv_z` is ~95% of that total. The vertical-advection
+  tendency is large, correct, and physical — so the problem is the **time scheme's handling** of
+  it, not the spatial operator.
 - **Bilinear/quadratic** runaway (g(ε) slope 1.2→1.8), not a linear positive-real mode.
 - HEVI-independent (baseline instability). k_slow₁=1010 is the physical initial advective tendency of
   the sheared baroclinic jet; the ARK324 explicit tableau over-extrapolates each stage seed
