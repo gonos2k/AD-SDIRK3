@@ -32,6 +32,32 @@ MODULE module_initialize_ideal
 
 CONTAINS
 
+!-------------------------------------------------------------------
+! [9F.D12] Opt-in scale factor for the b_wave initial thermal bubble.
+! Returns 1.0 unless WRF_BWAVE_PERT_SCALE is set to a positive value, so the
+! default initial condition is bit-for-bit unchanged. Used ONLY to classify the
+! dt=600 stage-3 blow-up: a linear instability grows at a rate independent of
+! the initial amplitude (failure step shifts by log(1/eps)/log(lambda)), while a
+! nonlinear cascade has an amplitude-dependent rate and a much larger shift.
+!-------------------------------------------------------------------
+  REAL FUNCTION bwave_pert_scale()
+    IMPLICIT NONE
+    CHARACTER(LEN=64) :: env_val
+    INTEGER           :: env_status, io_status
+    REAL              :: parsed
+    bwave_pert_scale = 1.0
+    CALL get_environment_variable("WRF_BWAVE_PERT_SCALE", env_val, STATUS=env_status)
+    IF ( env_status /= 0 ) RETURN
+    READ(env_val, *, IOSTAT=io_status) parsed
+    ! Fail-closed on a malformed or non-positive value rather than silently
+    ! running the default and reporting it as a scaled experiment.
+    IF ( io_status /= 0 .OR. parsed <= 0.0 ) THEN
+       CALL wrf_error_fatal( &
+         'WRF_BWAVE_PERT_SCALE must parse as a positive real' )
+    END IF
+    bwave_pert_scale = parsed
+    WRITE(0,*) '[9F.D12] b_wave initial perturbation scaled by ', parsed
+  END FUNCTION bwave_pert_scale
 
 !-------------------------------------------------------------------
 ! this is a wrapper for the solver-specific init_domain routines.
@@ -1355,7 +1381,13 @@ CONTAINS
         zrad = (zrad-htbub)/radz
         RAD=SQRT(yrad*yrad+zrad*zrad)
         IF(RAD <= 1.) THEN
-           tp = tpbub*cos(rad*piov2)*cos(rad*piov2)*cos(xrad*2*pi+pi)
+           ! [9F.D12 eps-scaling probe] Scale the b_wave initial thermal bubble by an
+           ! opt-in factor so the dt=600 stage-3 blow-up can be classified as LINEAR
+           ! (growth rate independent of initial amplitude; onset shifts by
+           ! log(1/eps)/log(lambda)) or NONLINEAR (amplitude-dependent rate; onset
+           ! shifts far more). Default 1.0 => the IC is bit-for-bit unchanged.
+           tp = bwave_pert_scale() &
+                * tpbub*cos(rad*piov2)*cos(rad*piov2)*cos(xrad*2*pi+pi)
            grid%t_1(i,k,j)=grid%t_1(i,k,j)+tp
            grid%t_2(i,k,j)=grid%t_1(i,k,j)
            qvf = 1. + rvovrd*grid%moist(i,k,j,P_QV)
