@@ -3939,6 +3939,35 @@ BENCH_END(bc_end_tim)
 !
 !**********************************************************
 
+   ! [9F.D15] Stock-WRF counterpart of the port's stage-3 u-increment diagnostic
+   ! ([SPLIT-EXPLICIT RK] ... [blocks] u=). The port measures ||U_stage - U_n|| on
+   ! the u block at stage 3; the same quantity here is ||u_2 - u_1|| at rk_step 3,
+   ! since u_1 holds the time-n state. Emitting it lets the dt-independent growth
+   ! rate sigma be compared against WRF stock over the SAME physical window, which
+   ! decides whether sigma_inf is the physical baroclinic wave or a port spatial-
+   ! operator error. Env-gated; no effect unless WRF_PARITY_USTAR_DIAG is set.
+   IF ( rk_step == rk_order ) THEN
+     BLOCK
+       CHARACTER(LEN=64) :: ud_env
+       INTEGER :: ud_st
+       REAL    :: ud_sum
+       INTEGER :: ud_i, ud_j, ud_k
+       CALL get_environment_variable("WRF_PARITY_USTAR_DIAG", ud_env, STATUS=ud_st)
+       IF ( ud_st == 0 ) THEN
+         ud_sum = 0.
+         DO ud_j = jps, MIN(jpe,jde-1)
+         DO ud_k = kps, MIN(kpe,kde-1)
+         DO ud_i = ips, MIN(ipe,ide-1)
+           ud_sum = ud_sum + (grid%u_2(ud_i,ud_k,ud_j)-grid%u_1(ud_i,ud_k,ud_j))**2
+         END DO
+         END DO
+         END DO
+         WRITE(0,'(A,I6,A,E16.8)') '[WRF-STOCK USTEP] step=', grid%itimestep, &
+              ' |u_2-u_1|=', SQRT(ud_sum)
+       END IF
+     END BLOCK
+   END IF
+
    END DO Runge_Kutta_loop
 
 #ifdef USE_SDIRK3
