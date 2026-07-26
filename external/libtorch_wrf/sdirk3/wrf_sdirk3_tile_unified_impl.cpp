@@ -7343,6 +7343,14 @@ vertical_coefficients:
                         "WRF_SDIRK3_ABLATE_UV_SLOW already zeroes both components; combining it with "
                         "ABLATE_RU_SLOW/ABLATE_RV_SLOW would silently report the same experiment "
                         "under a different name.");
+                    // 9F.D17 (review 11): the guard above missed the symmetric hole - setting BOTH
+                    // ABLATE_RU_SLOW and ABLATE_RV_SLOW is exactly ABLATE_UV_SLOW, so it would report
+                    // the drop-both experiment under the drop-one names. Same silent-duplicate class
+                    // the guard was introduced to prevent.
+                    TORCH_CHECK(!(ablate_ru_slow && ablate_rv_slow),
+                        "WRF_SDIRK3_ABLATE_RU_SLOW + ABLATE_RV_SLOW together duplicate "
+                        "ABLATE_UV_SLOW; use ABLATE_UV_SLOW so the experiment is named for what it "
+                        "actually does.");
                     auto ru_slow_a = (ablate_uv_slow || ablate_ru_slow)
                                          ? torch::zeros_like(ru_slow) : ru_slow;
                     auto rv_slow_a = (ablate_uv_slow || ablate_rv_slow)
