@@ -7174,18 +7174,45 @@ vertical_coefficients:
                                   - ph_2.index({Slice(), Slice(0, nzm), Slice()});
                         auto al_p = -(albd * (lv(c1h_d) * mup) - lv(rdnw_d) * dph) / M;
                         auto alfl = al_p + albd;
-                        auto eosw = (rd_ * (300.0f + t_2)) / (p0_ * alfl);
-                        {   // review 9F.D8 §5.3: a clamped EOS invalidates the parity reading, so
-                            // report it rather than letting a clamped run look like a clean result.
+                        // Use the module's t0 (declared with the other split-branch constants) rather
+                        // than a literal: em_b_wave happens to use 300 K, but a hardcoded constant
+                        // silently diverges from the authoritative value in any other configuration.
+                        auto eosw = (rd_ * (t0_ref + t_2)) / (p0_ * alfl);
+                        {   // review 9F.D8 §5.3 / 9F.D10 §5.2: a clamped or non-finite EOS invalidates
+                            // the reading, so refuse rather than let it look like a clean result.
+                            // NOTE: NaN fails EVERY comparison, so `eosw <= 1e-20` counts ZERO clamped
+                            // cells when the field is NaN — clamp-counting alone is blind to NaN.
+                            // The finite checks below are what actually catch it. All predicates are
+                            // stacked into ONE device->host sync instead of several .item() calls.
                             torch::NoGradGuard ng;
-                            const int64_t nclamp =
-                                (eosw.detach() <= 1e-20f).sum().to(torch::kCPU).item<int64_t>();
-                            const float alfl_min =
-                                alfl.detach().min().to(torch::kCPU).item<float>();
-                            TORCH_CHECK(nclamp == 0 && alfl_min > 0.0f,
-                                "WRF_ALB_PGF: EOS argument clamped in ", nclamp,
-                                " cells (min alpha_full=", alfl_min,
-                                "); pressure parity from this run would be meaningless.");
+                            auto ok = torch::stack({torch::isfinite(M).all(),   (M > 0).all(),
+                                                    torch::isfinite(alfl).all(),(alfl > 0).all(),
+                                                    torch::isfinite(eosw).all(),
+                                                    (eosw > 1e-20f).all()}).all();
+                            const bool eos_ok = ok.to(torch::kCPU).item<bool>();
+                            // SEVERITY SCOPE (9F.D10, found by the FailureSignature comparison):
+                            // this guard exists so a clamped/non-finite EOS cannot be misread as a
+                            // clean PARITY number, and parity dumps only happen at physical step 1.
+                            // Making it fatal for the whole run instead converted the project's
+                            // coordinated fail-close (outcome=20) into an uncaught c10::Error ->
+                            // SIGABRT at step 38, where the state is already degrading for the
+                            // pre-existing common reason. Fatal only where a measurement is at
+                            // stake; elsewhere warn once and let the existing stage gates own the
+                            // failure path.
+                            if (split_phys_step == 1) {
+                                TORCH_CHECK(eos_ok,
+                                    "WRF_ALB_PGF: EOS inputs non-finite or out of domain at step 1 "
+                                    "(requires finite M>0, alpha_full>0, eos_arg>1e-20); a parity "
+                                    "measurement from this run would be meaningless.");
+                            } else if (!eos_ok) {
+                                static std::atomic<bool> warned{false};
+                                if (!warned.exchange(true)) {
+                                    std::cerr << "[WRF_ALB_PGF] WARNING: EOS inputs left the valid "
+                                                 "domain at physical step " << split_phys_step
+                                              << " (state already degrading); deferring to the "
+                                                 "standard stage gates." << std::endl;
+                                }
+                            }
                         }
                         p_pgf_wrfalb = p0_ * torch::pow(eosw.clamp_min(1e-20f), cp_ / cv_) - pb;
                     }
@@ -7367,10 +7394,20 @@ vertical_coefficients:
                     // review 9F.D8 §5.2: WRF_ALB_PGF is consumed ONLY by the keep branch, so setting
                     // it without KEEP silently computes an unused pressure and reports the geometric
                     // result — an experiment that looks enabled but is a no-op. Fail-close instead.
-                    TORCH_CHECK(!wrf_alb_pgf || (keep_pg_buoy_w && !ablate_pg_buoy_w),
-                        "WRF_SDIRK3_WRF_ALB_PGF=1 requires WRF_SDIRK3_KEEP_PG_BUOY_W=1 (and not "
-                        "ABLATE): the WRF-alb pressure is only consumed by the keep branch, so this "
-                        "combination would be a silent no-op.");
+                    // 9F.D10 (review): RESTORE is tested BEFORE keep in the branch chain below, so
+                    // RESTORE=1 + KEEP=1 + WRF_ALB=1 previously passed this guard yet took the
+                    // RESTORE branch — computing the WRF-alb pressure and never consuming it. That is
+                    // the very silent-no-op this check exists to prevent, so RESTORE must be excluded
+                    // too. (Also reject RESTORE+KEEP outright: only one source can win, and which one
+                    // is branch-order trivia rather than something a caller should have to know.)
+                    TORCH_CHECK(!(restore_pg_buoy_w && keep_pg_buoy_w),
+                        "WRF_SDIRK3_RESTORE_PG_BUOY_W and WRF_SDIRK3_KEEP_PG_BUOY_W are mutually "
+                        "exclusive pressure sources; set exactly one.");
+                    TORCH_CHECK(!wrf_alb_pgf ||
+                                (keep_pg_buoy_w && !ablate_pg_buoy_w && !restore_pg_buoy_w),
+                        "WRF_SDIRK3_WRF_ALB_PGF=1 requires WRF_SDIRK3_KEEP_PG_BUOY_W=1 and neither "
+                        "ABLATE nor RESTORE: the WRF-alb pressure is only consumed by the keep "
+                        "branch, so any other combination would be a silent no-op.");
                     if (restore_pg_buoy_w && !ablate_pg_buoy_w &&
                         p_pert_carried.defined() && p_pert_carried.numel() > 0) {
                         auto pg_p = strip3m(align_like(p_pert_carried, U_stage));   // exact WRF grid%p
