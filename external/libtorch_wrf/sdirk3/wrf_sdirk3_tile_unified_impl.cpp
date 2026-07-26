@@ -7143,20 +7143,50 @@ vertical_coefficients:
                     // == (R*theta_b/p0)*(pb/p0)^(-cv/cp) (verified live: 0.8166..6.117 m^3/kg), so no
                     // ABI change is needed. Opt-in; consumed ONLY by pg_buoy_w below so the effect is
                     // isolated to :2494 (alt_ac/c2a_ac/horizontal-PGF keep the geometric family).
+                    static const bool wrf_alb_pgf = env_flag_true("WRF_SDIRK3_WRF_ALB_PGF");
                     torch::Tensor p_pgf_wrfalb;
-                    if (env_flag_true("WRF_SDIRK3_WRF_ALB_PGF") &&
-                        grid_info_ && grid_info_->alb.defined() && grid_info_->alb.numel() > 0) {
+                    if (wrf_alb_pgf) {
+                        // FAIL-CLOSE (review 9F.D8 §5.1): an explicitly requested experiment must
+                        // never silently fall back to the geometric pressure — that is exactly the
+                        // no-op-intervention failure mode that once inverted a causal conclusion.
+                        TORCH_CHECK(grid_info_ && grid_info_->alb.defined() &&
+                                    grid_info_->alb.numel() > 0,
+                            "WRF_SDIRK3_WRF_ALB_PGF=1 requires grid_info_->alb (base inverse "
+                            "density); it is undefined/empty, refusing to fall back silently.");
                         using torch::indexing::Slice;
                         const int nzm = t_2.size(1);
                         auto albd = strip3m(align_like(grid_info_->alb, U_stage));
+                        TORCH_CHECK(albd.sizes() == t_2.sizes(),
+                            "WRF_ALB_PGF: alb shape ", albd.sizes(), " != stage mass shape ",
+                            t_2.sizes());
                         auto lv   = [&](const torch::Tensor& x) { return x.view({1, nzm, 1}); };
                         auto M    = lv(c1h_d) * mut.unsqueeze(1) + lv(c2h_d);
-                        auto mup  = (mut - mu_base_d).unsqueeze(1);              // mu' = muts - mub
+                        // review 9F.D8 P0-1: use the DIRECT perturbation mass, as WRF's
+                        // calc_p_rho_phi does (it receives grid%mu_2 and grid%muts separately).
+                        // The previous (mut - mu_base_d) was a pure float32 ROUND-TRIP: mut is
+                        // literally mu_base_d + mu_2 (:7089), so adding ~9e4 to a ~1.4 perturbation
+                        // and subtracting it again quantizes mu' to the ULP of 9e4 (2^-7 = 0.0078) —
+                        // ~180 levels across its range, and far worse relatively where mu' is small.
+                        // That error then feeds the al' mass arm and the :2494 c1f*mu' arm, both of
+                        // which sit inside cancellations.
+                        auto mup  = mu_2.unsqueeze(1);                            // WRF grid%mu_2
                         auto dph  = ph_2.index({Slice(), Slice(1, nzm + 1), Slice()})
                                   - ph_2.index({Slice(), Slice(0, nzm), Slice()});
                         auto al_p = -(albd * (lv(c1h_d) * mup) - lv(rdnw_d) * dph) / M;
                         auto alfl = al_p + albd;
                         auto eosw = (rd_ * (300.0f + t_2)) / (p0_ * alfl);
+                        {   // review 9F.D8 §5.3: a clamped EOS invalidates the parity reading, so
+                            // report it rather than letting a clamped run look like a clean result.
+                            torch::NoGradGuard ng;
+                            const int64_t nclamp =
+                                (eosw.detach() <= 1e-20f).sum().to(torch::kCPU).item<int64_t>();
+                            const float alfl_min =
+                                alfl.detach().min().to(torch::kCPU).item<float>();
+                            TORCH_CHECK(nclamp == 0 && alfl_min > 0.0f,
+                                "WRF_ALB_PGF: EOS argument clamped in ", nclamp,
+                                " cells (min alpha_full=", alfl_min,
+                                "); pressure parity from this run would be meaningless.");
+                        }
                         p_pgf_wrfalb = p0_ * torch::pow(eosw.clamp_min(1e-20f), cp_ / cv_) - pb;
                     }
                     // (pg_buoy p-source note: a hypso-2 diag_p_hypso2 route — WRF's own
@@ -7334,6 +7364,13 @@ vertical_coefficients:
                     // pending per-term FORCE parity; default keeps the working interim (curvature+coriolis).
                     static const bool restore_pg_buoy_w =
                         env_flag_true("WRF_SDIRK3_RESTORE_PG_BUOY_W");
+                    // review 9F.D8 §5.2: WRF_ALB_PGF is consumed ONLY by the keep branch, so setting
+                    // it without KEEP silently computes an unused pressure and reports the geometric
+                    // result — an experiment that looks enabled but is a no-op. Fail-close instead.
+                    TORCH_CHECK(!wrf_alb_pgf || (keep_pg_buoy_w && !ablate_pg_buoy_w),
+                        "WRF_SDIRK3_WRF_ALB_PGF=1 requires WRF_SDIRK3_KEEP_PG_BUOY_W=1 (and not "
+                        "ABLATE): the WRF-alb pressure is only consumed by the keep branch, so this "
+                        "combination would be a silent no-op.");
                     if (restore_pg_buoy_w && !ablate_pg_buoy_w &&
                         p_pert_carried.defined() && p_pert_carried.numel() > 0) {
                         auto pg_p = strip3m(align_like(p_pert_carried, U_stage));   // exact WRF grid%p
