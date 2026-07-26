@@ -7329,11 +7329,24 @@ vertical_coefficients:
                     // load-bearing will RAISE it or shorten the run (cf. ABLATE_BUOY_W: 38->19).
                     static const bool ablate_uv_slow = env_flag_true("WRF_SDIRK3_ABLATE_UV_SLOW");
                     static const bool ablate_uv_pgf  = env_flag_true("WRF_SDIRK3_ABLATE_UV_PGF");
+                    // 9F.D14 (review): ABLATE_UV_SLOW zeroes the WHOLE ExplicitOnly u/v block, which
+                    // contains advection AND Coriolis AND curvature AND horizontal/vertical diffusion.
+                    // So it attributes to the BLOCK, not to advection. These per-component knobs
+                    // separate u from v as the next refinement; sub-term (x/y/eta advection) splitting
+                    // needs to reach inside computeUnifiedRHS and is a further step.
+                    static const bool ablate_ru_slow = env_flag_true("WRF_SDIRK3_ABLATE_RU_SLOW");
+                    static const bool ablate_rv_slow = env_flag_true("WRF_SDIRK3_ABLATE_RV_SLOW");
                     TORCH_CHECK(!(ablate_uv_slow && ablate_uv_pgf),
                         "WRF_SDIRK3_ABLATE_UV_SLOW and WRF_SDIRK3_ABLATE_UV_PGF are mutually "
                         "exclusive: ablating both leaves no u/v slow forcing to attribute.");
-                    auto ru_slow_a = ablate_uv_slow ? torch::zeros_like(ru_slow) : ru_slow;
-                    auto rv_slow_a = ablate_uv_slow ? torch::zeros_like(rv_slow) : rv_slow;
+                    TORCH_CHECK(!(ablate_uv_slow && (ablate_ru_slow || ablate_rv_slow)),
+                        "WRF_SDIRK3_ABLATE_UV_SLOW already zeroes both components; combining it with "
+                        "ABLATE_RU_SLOW/ABLATE_RV_SLOW would silently report the same experiment "
+                        "under a different name.");
+                    auto ru_slow_a = (ablate_uv_slow || ablate_ru_slow)
+                                         ? torch::zeros_like(ru_slow) : ru_slow;
+                    auto rv_slow_a = (ablate_uv_slow || ablate_rv_slow)
+                                         ? torch::zeros_like(rv_slow) : rv_slow;
                     auto dpx_a = ablate_uv_pgf ? torch::zeros_like(dpx_st) : dpx_st;
                     auto dpy_a = ablate_uv_pgf ? torch::zeros_like(dpy_st) : dpy_st;
                     auto ru_coupled = ru_slow_a - slow_gate(dpx_a);
