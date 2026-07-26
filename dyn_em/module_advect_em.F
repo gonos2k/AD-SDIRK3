@@ -215,8 +215,58 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 
    LOGICAL :: specified
 
+!  9F.D20 -- opt-in split of this routine's u-advection contribution into its
+!  HORIZONTAL and VERTICAL parts, for comparison against the port's adv_x+adv_y
+!  and adv_z.
+!
+!  WHY. 9F.D18 measured the port's adv_z at ~28x adv_x, and matched-input parity
+!  bounds the port's NET ru tendency error at 9.02e-04. That was initially read as
+!  bounding each subterm -- it does NOT. Because adv_z is 28x adv_x, an adv_x that
+!  is 100% wrong needs only a 3.47% error in adv_z to cancel in the total, so
+!  compensating per-term errors are INVISIBLE to a total comparison. This split
+!  makes the horizontal-vs-vertical cancellation testable; the total cannot.
+!
+!  Only the horizontal/vertical split is taken. x and y are interleaved in the same
+!  j-loop here (fqy accumulates into tendency(i,k,j-1) while fqx writes (i,k,j)), so
+!  separating them would mean restructuring a core numerics loop -- not worth the
+!  parity risk, and not needed: the cheap cancellation is small-behind-large, i.e.
+!  horizontal behind vertical. adv_x and adv_y are comparable (1252 vs 1663), so
+!  hiding one behind the other needs comparable relative errors, not a 28x lever.
+!
+!  Default off; snapshots are ALLOCATABLE and allocated only when tracing, so the
+!  production path allocates nothing and stays byte-identical.
+   REAL, ALLOCATABLE, DIMENSION(:,:,:) :: uterm_snap_h, uterm_snap_v
+   LOGICAL :: uterm_trace
+   LOGICAL, SAVE :: uterm_trace_s = .FALSE.
+   LOGICAL, SAVE :: uterm_init_s  = .FALSE.
+   CHARACTER(LEN=32) :: uterm_env
+   INTEGER :: uterm_st, uterm_len
+   REAL    :: uterm_nh, uterm_nv
+
    specified = .false.
    if(config_flags%specified .or. config_flags%nested) specified = .true.
+
+!  Read the env var ONCE, not on every advect_u call. The unhoisted form is the
+!  same defect that made bwave_pert_scale() re-read the environment per grid cell;
+!  advect_u is called every RK stage of every step, so a per-call getenv is a real
+!  hot-path syscall. The SAVEd pair is written under a benign race: concurrent
+!  OpenMP tiles may both perform the read, but both write the SAME deterministic
+!  value, and it is a diagnostic flag rather than state.
+   IF ( .NOT. uterm_init_s ) THEN
+      uterm_trace_s = .FALSE.
+      CALL get_environment_variable("WRF_ADVECT_U_SPLIT_TRACE", uterm_env, &
+                                    LENGTH=uterm_len, STATUS=uterm_st)
+      IF ( uterm_st == 0 .AND. uterm_len > 0 ) THEN
+         IF ( uterm_env(1:uterm_len) == '1' ) uterm_trace_s = .TRUE.
+      END IF
+      uterm_init_s = .TRUE.
+   END IF
+   uterm_trace = uterm_trace_s
+   IF ( uterm_trace ) THEN
+      ALLOCATE( uterm_snap_h(ims:ime, kms:kme, jms:jme) )
+      ALLOCATE( uterm_snap_v(ims:ime, kms:kme, jms:jme) )
+      uterm_snap_h = tendency
+   END IF
 
 !  set order for vertical and horzontal flux operators
 
@@ -1333,6 +1383,12 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 
    ENDIF
 
+
+!  9F.D20: horizontal work (incl. the radiation-BC pickup above) is complete here.
+   IF ( uterm_trace ) THEN
+      uterm_snap_h = tendency - uterm_snap_h
+      uterm_snap_v = tendency
+   END IF
 !-------------------- vertical advection
 !  ADT eqn 44 has 3rd term on RHS = -(1/my) partial d/dz (rho u w)
 !  Here we have:  - partial d/dz (u*rom) = - partial d/dz (u rho w / my)
@@ -1523,6 +1579,21 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 
    ENDIF vert_order_test
 
+
+!  9F.D20: vertical work complete. Report the two L2 norms and release.
+!  These are norms of the DELTAS, not deltas of norms -- the snapshots are
+!  differenced field-wise first, which is the only form comparable to the port's
+!  per-term |T|. Interior only (its ... ite/jts ... jte, 1..ktf) so halo garbage
+!  cannot inflate either norm.
+   IF ( uterm_trace ) THEN
+      uterm_snap_v = tendency - uterm_snap_v
+      uterm_nh = SQRT( SUM( uterm_snap_h(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1))**2 ) )
+      uterm_nv = SQRT( SUM( uterm_snap_v(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1))**2 ) )
+      WRITE(0,'(A,E16.8,A,E16.8)') '[ADVECT_U_SPLIT] |horiz|=', uterm_nh, &
+                                   ' |vert|=', uterm_nv
+      DEALLOCATE( uterm_snap_h )
+      DEALLOCATE( uterm_snap_v )
+   END IF
 END SUBROUTINE advect_u
 
 !-------------------------------------------------------------------------------

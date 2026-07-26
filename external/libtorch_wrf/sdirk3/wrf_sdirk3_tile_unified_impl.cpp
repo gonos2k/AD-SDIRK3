@@ -12372,7 +12372,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 if (!sub->empty() && adv_delta.defined()) {
                     torch::Tensor acc;
                     for (const auto& s : *sub) {
-                        acc = acc.defined() ? (acc + s.second) : s.second;
+                        // "horiz" is adv_x+adv_y, a DERIVED aggregate kept only for the
+                        // cross-model ratio. Adding it here would double-count and turn
+                        // the one closure that can genuinely fail into a guaranteed
+                        // failure -- it is reported but excluded from the sum.
+                        if (s.first != "horiz") {
+                            acc = acc.defined() ? (acc + s.second) : s.second;
+                        }
                         std::cerr << "[UTERMS]     sub " << s.first
                                   << "  |T|=" << l2(s.second)
                                   << "  max|T|=" << mx(s.second)
@@ -13720,6 +13726,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         uterm_sub("adv_x", ru_adv_x);
         uterm_sub("adv_y", ru_adv_y);
         uterm_sub("adv_z", ru_adv_z);
+        // 9F.D20: combined horizontal, to compare against WRF's advect_u split.
+        // Captured as the SUM (not |adv_x|+|adv_y|) because WRF's horizontal block
+        // accumulates x and y into one tendency, so only the sum is the same object.
+        // The cross-model comparison uses the RATIO |adv_z|/|horiz| within each model:
+        // a ratio cancels the differing index extents (port tile vs WRF its:ite
+        // interior), the coupled/decoupled convention, and any common scaling -- none
+        // of which the raw norms share, so raw norms would manufacture a discrepancy.
+        uterm_sub("horiz", ru_adv_horiz);
         uterm_site("adv");
         
         // AUTOGRAD FIX: Wrap debug block in NoGradGuard
