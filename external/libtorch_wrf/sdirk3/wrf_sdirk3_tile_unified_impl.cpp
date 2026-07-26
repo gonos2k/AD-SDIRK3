@@ -7178,43 +7178,47 @@ vertical_coefficients:
                         // than a literal: em_b_wave happens to use 300 K, but a hardcoded constant
                         // silently diverges from the authoritative value in any other configuration.
                         auto eosw = (rd_ * (t0_ref + t_2)) / (p0_ * alfl);
-                        {   // review 9F.D8 §5.3 / 9F.D10 §5.2: a clamped or non-finite EOS invalidates
-                            // the reading, so refuse rather than let it look like a clean result.
-                            // NOTE: NaN fails EVERY comparison, so `eosw <= 1e-20` counts ZERO clamped
-                            // cells when the field is NaN — clamp-counting alone is blind to NaN.
-                            // The finite checks below are what actually catch it. All predicates are
-                            // stacked into ONE device->host sync instead of several .item() calls.
+                        // WRF-COMPATIBLE FLOOR (9F.D11 §5): WRF replaces BOTH NaN and sub-floor values
+                        //   IF (eos_arg .NE. eos_arg .OR. eos_arg <= 1.0E-20) eos_arg = 1.0E-20
+                        // (module_big_step_utilities_em.F:1069/1090). torch::clamp_min PROPAGATES NaN,
+                        // so the previous clamp_min diverged from WRF precisely in the invalid regime
+                        // — a port/WRF mismatch introduced while claiming to mirror WRF's formula.
+                        // where() reproduces WRF's replacement semantics exactly.
+                        constexpr float kEosFloor = 1.0e-20f;
+                        auto eos_valid = torch::isfinite(eosw) & (eosw > kEosFloor);
+                        auto eos_safe  = torch::where(eos_valid, eosw,
+                                                      torch::full_like(eosw, kEosFloor));
+                        p_pgf_wrfalb = p0_ * torch::pow(eos_safe, cp_ / cv_) - pb;
+                        {   // Validity is a STATUS, not an exception (9F.D11 §4): throwing from here
+                            // hijacked the project's coordinated fail-close and produced SIGABRT.
+                            // Checks now span the WHOLE chain, including AFTER pow — a finite but huge
+                            // eos_arg can still overflow to Inf, which input-only checks cannot see.
+                            // One device->host sync for all predicates.
                             torch::NoGradGuard ng;
-                            auto ok = torch::stack({torch::isfinite(M).all(),   (M > 0).all(),
-                                                    torch::isfinite(alfl).all(),(alfl > 0).all(),
-                                                    torch::isfinite(eosw).all(),
-                                                    (eosw > 1e-20f).all()}).all();
-                            const bool eos_ok = ok.to(torch::kCPU).item<bool>();
-                            // SEVERITY SCOPE (9F.D10, found by the FailureSignature comparison):
-                            // this guard exists so a clamped/non-finite EOS cannot be misread as a
-                            // clean PARITY number, and parity dumps only happen at physical step 1.
-                            // Making it fatal for the whole run instead converted the project's
-                            // coordinated fail-close (outcome=20) into an uncaught c10::Error ->
-                            // SIGABRT at step 38, where the state is already degrading for the
-                            // pre-existing common reason. Fatal only where a measurement is at
-                            // stake; elsewhere warn once and let the existing stage gates own the
-                            // failure path.
-                            if (split_phys_step == 1) {
-                                TORCH_CHECK(eos_ok,
-                                    "WRF_ALB_PGF: EOS inputs non-finite or out of domain at step 1 "
-                                    "(requires finite M>0, alpha_full>0, eos_arg>1e-20); a parity "
-                                    "measurement from this run would be meaningless.");
-                            } else if (!eos_ok) {
-                                static std::atomic<bool> warned{false};
-                                if (!warned.exchange(true)) {
-                                    std::cerr << "[WRF_ALB_PGF] WARNING: EOS inputs left the valid "
-                                                 "domain at physical step " << split_phys_step
-                                              << " (state already degrading); deferring to the "
-                                                 "standard stage gates." << std::endl;
-                                }
+                            auto ok = torch::stack({torch::isfinite(M).all(),    (M > 0).all(),
+                                                    torch::isfinite(alfl).all(), (alfl > 0).all(),
+                                                    eos_valid.all(),
+                                                    torch::isfinite(p_pgf_wrfalb).all()}).all();
+                            if (!ok.to(torch::kCPU).item<bool>()) {
+                                // Step 1 carries the parity measurement, so a bad state there means the
+                                // evidence is worthless and must not be reported as a clean number.
+                                TORCH_CHECK(split_phys_step != 1,
+                                    "WRF_ALB_PGF: full-thermo state invalid at physical step 1 "
+                                    "(requires finite M>0, alpha_full>0, eos_arg>floor, finite p); "
+                                    "a parity measurement from this run would be meaningless.");
+                                // Later steps: route into the EXISTING coordinated abort rather than
+                                // throwing, so the run ends with the standard outcome=20 signature and
+                                // never advances a contaminated state.
+                                split_explicit_aborted = true;
+                                split_explicit_failed_stage = se_rk;
+                                final_update_aborted = true;
+                                U_new = U_n;
+                                std::cerr << "[WRF_ALB_PGF] invalid full-thermo state at step "
+                                          << split_phys_step << " stage " << se_rk
+                                          << "; fail-closed via the standard stage path." << std::endl;
+                                break;
                             }
                         }
-                        p_pgf_wrfalb = p0_ * torch::pow(eosw.clamp_min(1e-20f), cp_ / cv_) - pb;
                     }
                     // (pg_buoy p-source note: a hypso-2 diag_p_hypso2 route — WRF's own
                     // calc_p_rho_phi form with znw/znu/ptop reconstructed from dnw/pb/mub —
