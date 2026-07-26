@@ -231,7 +231,9 @@ The custom slow tendency is `compute_k_slow` → **`computeUnifiedRHS(RhsMode::E
 SHARED slow/advective RHS used by the whole SDIRK3/ARK machinery (not a small split-only builder). So
 the split-explicit `|λ|≈1.4` is a property of the **resolved-scale explicit advection RHS**, which is
 exactly the previously-documented **Wall-2**: "the explicit u-momentum slow tendency (`ru` block) blows
-up as a bilinear/quadratic stage cascade; the term is horizontal advection; the tableau over-
+up as a bilinear/quadratic stage cascade; the term is horizontal advection [RETRACTED 2026-07-26,
+9F.D18 — measured VERTICAL: adv_z is 21–28× adv_x/adv_y and the only consistently reinforcing term,
+and it is correct to ~0.1% at matched input; see sdirk3_walls_measurement_2026-07-05.md]; the tableau over-
 extrapolates the sheared-jet advective tendency at large dt." This session's contribution is to
 **definitively exonerate the acoustic machinery** (every operator + prep/finish + composition faithful;
 per-substep operator STABLE) — so Wall-2 is localized to the slow RHS, OUTSIDE the acoustic solve, and

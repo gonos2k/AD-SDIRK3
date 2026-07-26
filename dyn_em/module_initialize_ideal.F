@@ -41,19 +41,37 @@ CONTAINS
 ! nonlinear cascade has an amplitude-dependent rate and a much larger shift.
 !-------------------------------------------------------------------
   REAL FUNCTION bwave_pert_scale()
+    USE, INTRINSIC :: IEEE_ARITHMETIC, ONLY : IEEE_IS_FINITE
     IMPLICIT NONE
     CHARACTER(LEN=64) :: env_val
-    INTEGER           :: env_status, io_status
+    INTEGER           :: env_status, io_status, val_len
     REAL              :: parsed
+    REAL, PARAMETER   :: max_scale = 1.0E3
     bwave_pert_scale = 1.0
-    CALL get_environment_variable("WRF_BWAVE_PERT_SCALE", env_val, STATUS=env_status)
-    IF ( env_status /= 0 ) RETURN
-    READ(env_val, *, IOSTAT=io_status) parsed
-    ! Fail-closed on a malformed or non-positive value rather than silently
-    ! running the default and reporting it as a scaled experiment.
-    IF ( io_status /= 0 .OR. parsed <= 0.0 ) THEN
+    CALL get_environment_variable("WRF_BWAVE_PERT_SCALE", env_val, &
+                                  LENGTH=val_len, STATUS=env_status)
+    IF ( env_status == 1 ) RETURN          ! not set -> default, unscaled
+    ! Distinguish "unset" (status 1, handled above) from a TRUNCATED value
+    ! (status -1) or any other error: silently using the default for a truncated
+    ! value would run the baseline while reporting a scaled experiment.
+    IF ( env_status /= 0 ) THEN
        CALL wrf_error_fatal( &
-         'WRF_BWAVE_PERT_SCALE must parse as a positive real' )
+         'WRF_BWAVE_PERT_SCALE could not be read (truncated or invalid)' )
+    END IF
+    READ(env_val(1:val_len), *, IOSTAT=io_status) parsed
+    ! Fail-closed on malformed, non-finite, or out-of-range values. NOTE: NaN
+    ! fails EVERY comparison, so a bare `parsed <= 0.0` test lets NaN through -
+    ! the same blind spot found in the EOS clamp. IEEE_IS_FINITE is what
+    ! actually rejects NaN and +/-Inf.
+    IF ( io_status /= 0 ) THEN
+       CALL wrf_error_fatal('WRF_BWAVE_PERT_SCALE must parse as a real')
+    END IF
+    IF ( .NOT. IEEE_IS_FINITE(parsed) ) THEN
+       CALL wrf_error_fatal('WRF_BWAVE_PERT_SCALE must be finite (NaN/Inf rejected)')
+    END IF
+    IF ( parsed <= 0.0 .OR. parsed > max_scale ) THEN
+       CALL wrf_error_fatal( &
+         'WRF_BWAVE_PERT_SCALE must be positive and <= 1.0E3' )
     END IF
     bwave_pert_scale = parsed
     WRITE(0,*) '[9F.D12] b_wave initial perturbation scaled by ', parsed

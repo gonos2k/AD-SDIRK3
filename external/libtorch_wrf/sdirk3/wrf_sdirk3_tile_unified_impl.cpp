@@ -5823,11 +5823,30 @@ vertical_coefficients:
                 const char* dts_env = std::getenv("WRF_SDIRK3_SLOWFLOW_DT_STABLE");
                 const float dt_stable = dts_env ? std::atof(dts_env) : 4.0f;
                 // SLOWFLOW_MODE: 0 = ExplicitOnly (slow channel only, PGF absent);
-                //                1 = Full (advection + PGF together) — tests whether
-                //                    keeping the balanced pair together + small h is
-                //                    stable (WRF-native acoustic-substep regime).
+                //                1 = RhsMode::Full.
+                //
+                // 9F.D19 CORRECTION. Mode 1's original comment claimed it tested
+                // "advection + PGF together ... the WRF-native acoustic-substep
+                // regime". It does NOT. RhsMode::Full is the ENTIRE RHS including the
+                // fast/acoustic terms, and this loop integrates it EXPLICITLY. For
+                // em_b_wave (ztop 16 km / 64 layers -> dz ~ 250 m, c_s ~ 300 m/s) the
+                // vertical acoustic CFL is dz/c_s ~ 0.83 s, so ANY h above that must
+                // blow up by elementary CFL -- which is exactly what h=4 s and h=600 s
+                // do. Read at h > 0.83 s, mode 1 measures a CFL violation and says
+                // NOTHING about balance. To test the co-integration hypothesis the
+                // sub-step must satisfy h < 0.83 s (WRF_SDIRK3_SLOWFLOW_DT_STABLE=0.5
+                // -> M=1200), or the acoustic terms must stay implicit (HEVI), which is
+                // the actual split-explicit design.
+                //
+                // STRIDE: at M=1200 the original printer emitted only m<2 and m=M-1, so
+                // 3600 RHS evaluations elapsed with no output and the run timed out
+                // before any verdict. Print every STRIDE-th sub-step instead, and stop
+                // as soon as the state goes non-finite -- there is nothing to learn
+                // after a NaN, and continuing wasted the whole budget.
                 const char* mode_env = std::getenv("WRF_SDIRK3_SLOWFLOW_MODE");
                 const int sf_mode = mode_env ? std::atoi(mode_env) : 0;
+                const char* stride_env = std::getenv("WRF_SDIRK3_SLOWFLOW_STRIDE");
+                const int sf_stride = std::max(1, stride_env ? std::atoi(stride_env) : 1000000);
                 auto slow_rhs = [&](const torch::Tensor& V) -> torch::Tensor {
                     if (sf_mode == 1) {
                         U_ref_stage_ = V.detach().clone();  // w_ref consistency
@@ -5836,6 +5855,15 @@ vertical_coefficients:
                     torch::Tensor Vh = use_ad_halo ? ad_halo_exchange(V) : torch::Tensor();
                     return compute_k_slow(V, Vh);
                 };
+                // UNITS (9F.D19b). This reports the DECOUPLED u tendency, not the
+                // coupled d(mu*u)/dt. g_export_coupled_slow is set ONLY around the
+                // split driver's K_exp calls via CoupledSlowGuard, and this probe sits
+                // OUTSIDE that scope, so computeUnifiedRHS takes the decouple branch.
+                // The factor is mu ~ 1.5e5 Pa, and it is large enough to look like a
+                // behavioural change: cross-checked against 9F.D18's coupled ru_tend at
+                // the same point, 55.4051 / 3.60926e-04 = 1.535e5 = mu. Compare these
+                // numbers ONLY against other decoupled values -- a historical figure in
+                // the coupled convention will differ by ~1e5 for no physical reason.
                 auto un = [&](const torch::Tensor& K) -> float {
                     return std::get<0>(extractStateVariables(K)).norm().item<float>();
                 };
@@ -5853,11 +5881,19 @@ vertical_coefficients:
                         torch::Tensor U2 = U + (h / 2.0f) * L1;
                         torch::Tensor L2 = slow_rhs(U2);
                         U = U + h * L2;
-                        if (m < 2 || m == M - 1) {
+                        const float du = un(U - U_n);
+                        if (m < 2 || m == M - 1 || (m + 1) % sf_stride == 0) {
                             std::cerr << "[SLOWFLOW] M=" << M << " sub=" << (m + 1)
                                       << " |ks(u)|@L0=" << un(L0)
                                       << " @L1=" << un(L1) << " @L2=" << un(L2)
-                                      << " |U-Un(u)|=" << un(U - U_n) << std::endl;
+                                      << " |U-Un(u)|=" << du << std::endl;
+                        }
+                        if (!std::isfinite(du)) {
+                            std::cerr << "[SLOWFLOW] M=" << M << " ABORT at sub="
+                                      << (m + 1) << " (non-finite); h=" << h
+                                      << " vs vertical acoustic CFL ~ dz/c_s."
+                                      << std::endl;
+                            break;
                         }
                     }
                     std::cerr << "[SLOWFLOW] M=" << M << " FINAL |ks(u)|=" << un(slow_rhs(U))
@@ -7343,6 +7379,14 @@ vertical_coefficients:
                         "WRF_SDIRK3_ABLATE_UV_SLOW already zeroes both components; combining it with "
                         "ABLATE_RU_SLOW/ABLATE_RV_SLOW would silently report the same experiment "
                         "under a different name.");
+                    // 9F.D17 (review 11): the guard above missed the symmetric hole - setting BOTH
+                    // ABLATE_RU_SLOW and ABLATE_RV_SLOW is exactly ABLATE_UV_SLOW, so it would report
+                    // the drop-both experiment under the drop-one names. Same silent-duplicate class
+                    // the guard was introduced to prevent.
+                    TORCH_CHECK(!(ablate_ru_slow && ablate_rv_slow),
+                        "WRF_SDIRK3_ABLATE_RU_SLOW + ABLATE_RV_SLOW together duplicate "
+                        "ABLATE_UV_SLOW; use ABLATE_UV_SLOW so the experiment is named for what it "
+                        "actually does.");
                     auto ru_slow_a = (ablate_uv_slow || ablate_ru_slow)
                                          ? torch::zeros_like(ru_slow) : ru_slow;
                     auto rv_slow_a = (ablate_uv_slow || ablate_rv_slow)
@@ -12233,6 +12277,133 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     auto& mu_tend = mu_tend_;
     auto& ph_tend = ph_tend_;
 
+    // ===== 9F.D18 ExplicitUTerms: per-site decomposition of the u-momentum
+    // tendency, by MAGNITUDE and by KINETIC-ENERGY WORK.
+    //
+    // WHY IT EXISTS. The 2x2 ablation factorial (9F.D17) could not attribute the
+    // amplification, and the measurement showed exactly why: zeroing a term
+    // destroys a balance rather than isolating a channel, so DROP_V had the LOWEST
+    // early growth rate yet failed EARLIEST. Ablation answers "what happens without
+    // this term", never "how much does this term contribute". This probe answers
+    // the second question and perturbs NOTHING.
+    //
+    // TWO METRICS, because magnitude alone does not identify an amplifier:
+    //   |dR|   -- how big the term's contribution to ru_tend is.
+    //   W      -- sum(u * dR), the term's rate of work on the u-kinetic energy.
+    //             W > 0 FEEDS growth, W < 0 damps it. A large-|dR| term with W ~ 0
+    //             is transport, not a source; that distinction is the whole point.
+    //
+    // TWO CLOSURES, and they prove DIFFERENT things -- do not conflate them:
+    //   (a) SITE deltas telescope, so their sum equals the final ru_tend BY
+    //       CONSTRUCTION. The residual is therefore a COVERAGE check: nonzero means
+    //       an accumulation site exists that this probe does not name. It certifies
+    //       enumeration, NOT the correctness of any term.
+    //   (b) The advection sub-terms (adv_x, adv_y, adv_z) are captured as
+    //       INDEPENDENT tensors, so "sum of sub-terms vs the adv site delta" is a
+    //       genuine closure check -- one that can actually fail.
+    //
+    // SCOPE, stated so the coverage claim is not overread: this decomposes ru_tend_
+    // ONLY, up to its last mutation in this function. Divergence damping and
+    // Rayleigh damping are applied AFTER the pack, to the combined RHS tensor, and
+    // are therefore OUTSIDE this decomposition -- a clean coverage residual here
+    // says nothing about them. (applyLateralBoundaryConditions also touches a
+    // ru_tend, but it has no call site on this path, so it contributes nothing.)
+    //
+    // Default-off; every capture is detached under NoGradGuard, so it cannot reach
+    // the graph or the forward. Cost when enabled is one clone of ru_tend per site.
+    static const bool uterms_trace = env_flag_true("WRF_SDIRK3_UTERMS_TRACE");
+    // Structured bindings are not capturable by lambdas before C++20; alias first.
+    const torch::Tensor& u_for_work = u;
+    std::vector<std::pair<std::string, torch::Tensor>> uterms_site;
+    std::vector<std::pair<std::string, torch::Tensor>> uterms_sub;
+    auto uterm_site = [&](const char* label) {
+        if (!uterms_trace || !ru_tend.defined()) return;
+        torch::NoGradGuard ng;
+        uterms_site.emplace_back(label, ru_tend.detach().clone());
+    };
+    auto uterm_sub = [&](const char* label, const torch::Tensor& term) {
+        if (!uterms_trace || !term.defined()) return;
+        torch::NoGradGuard ng;
+        uterms_sub.emplace_back(label, term.detach().clone());
+    };
+    // Destructor-based emission so every exit path reports, and so a diagnostic can
+    // never abort the run (a throwing destructor would terminate).
+    struct UTermsReport {
+        const std::vector<std::pair<std::string, torch::Tensor>>* site;
+        const std::vector<std::pair<std::string, torch::Tensor>>* sub;
+        const torch::Tensor* final_ru;
+        const torch::Tensor* u;
+        bool on;
+        ~UTermsReport() {
+            if (!on || site->empty() || !final_ru->defined()) return;
+            try {
+                torch::NoGradGuard ng;
+                static std::atomic<long> call_no{0};
+                const long n = call_no.fetch_add(1) + 1;
+                auto l2 = [](const torch::Tensor& x) {
+                    return x.norm().to(torch::kCPU).item<double>();
+                };
+                auto mx = [](const torch::Tensor& x) {
+                    return x.abs().max().to(torch::kCPU).item<double>();
+                };
+                const bool have_u = u->defined() && u->sizes() == final_ru->sizes();
+                auto work = [&](const torch::Tensor& d) {
+                    return have_u ? (*u * d).sum().to(torch::kCPU).item<double>() : 0.0;
+                };
+                std::cerr << "[UTERMS] rhs=" << n << " sites=" << site->size()
+                          << (have_u ? "" : " (u-shape mismatch: W suppressed)")
+                          << std::endl;
+                torch::Tensor prev;
+                torch::Tensor adv_delta;
+                for (const auto& s : *site) {
+                    torch::Tensor d = prev.defined() ? (s.second - prev) : s.second;
+                    prev = s.second;
+                    if (s.first == "adv") adv_delta = d;
+                    std::cerr << "[UTERMS]   " << s.first
+                              << "  |dR|=" << l2(d)
+                              << "  max|dR|=" << mx(d)
+                              << "  W=" << work(d) << std::endl;
+                }
+                // (a) COVERAGE: telescoping residual must be exactly 0.
+                auto unattr = *final_ru - prev;
+                std::cerr << "[UTERMS]   unattributed |dR|=" << l2(unattr)
+                          << "   <- coverage check, must be 0" << std::endl;
+                // (b) Real closure: independent sub-terms vs the adv site delta.
+                if (!sub->empty() && adv_delta.defined()) {
+                    torch::Tensor acc;
+                    for (const auto& s : *sub) {
+                        acc = acc.defined() ? (acc + s.second) : s.second;
+                        std::cerr << "[UTERMS]     sub " << s.first
+                                  << "  |T|=" << l2(s.second)
+                                  << "  max|T|=" << mx(s.second)
+                                  << "  W=" << work(s.second) << std::endl;
+                        // K-PROFILE. A term that is huge because of a boundary defect
+                        // (bad omega at the lid/surface, a missing metric factor at k=0
+                        // or k=nz-1) piles into one or two levels; real advection is
+                        // spread through the column. This is the discriminator, and it
+                        // is why raw magnitude alone must not be reported as a verdict.
+                        if (s.second.dim() == 3) {
+                            std::cerr << "[UTERMS]       kprof " << s.first << ":";
+                            auto per_k = s.second.transpose(0, 1).reshape(
+                                {s.second.size(1), -1}).norm(2, 1).to(torch::kCPU);
+                            auto acc_k = per_k.accessor<float, 1>();
+                            for (int64_t k = 0; k < per_k.size(0); ++k) {
+                                std::cerr << " " << acc_k[k];
+                            }
+                            std::cerr << std::endl;
+                        }
+                    }
+                    const double den = l2(adv_delta);
+                    std::cerr << "[UTERMS]     adv closure |sum(sub)-d(adv)|="
+                              << l2(acc - adv_delta)
+                              << "  rel=" << (den > 0.0 ? l2(acc - adv_delta) / den : 0.0)
+                              << std::endl;
+                }
+            } catch (...) { /* a diagnostic must never take down the run */ }
+        }
+    } uterms_report{&uterms_site, &uterms_sub, &ru_tend, &u_for_work, uterms_trace};
+    uterm_site("entry");
+
     // DEBUG OUTPUT: INITIAL TENDENCIES
     // AUTOGRAD FIX: Wrap .item() calls in NoGradGuard    
     // ========================================================================
@@ -13543,6 +13714,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         
         // Add coupled momentum tendency directly (no conversion to velocity)
         ru_tend = ru_tend + ru_tend_adv;
+        // 9F.D18: the three advection components are captured INDEPENDENTLY (not as
+        // telescoping snapshots), so their sum vs the "adv" site delta is a closure
+        // check that can genuinely fail.
+        uterm_sub("adv_x", ru_adv_x);
+        uterm_sub("adv_y", ru_adv_y);
+        uterm_sub("adv_z", ru_adv_z);
+        uterm_site("adv");
         
         // AUTOGRAD FIX: Wrap debug block in NoGradGuard
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -16376,7 +16554,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
         
         ru_tend = ru_tend + u_tend_pgf;    }
-    
+    uterm_site("pgf");
+
     // --- 5.2: V-Momentum PGF ---
     {
         // Get mu at v-points (note: muv is dry air mass at v-points, not coupled)
@@ -18866,7 +19045,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 float f = wrf::sdirk3::g_sdirk3_config.coriolis_f;
                 ru_tend = ru_tend + msf_ratio_u * f * rv_at_u;            }
         }
-        
+        uterm_site("coriolis");
+
         // --- V-momentum Coriolis ---
         // rv_tend = -(msfvy/msfvx)*f*ru_at_v + e*sina*rw_at_v
         // WRF-CONSISTENT: Use coupled momentum (ru = mu*u/my) for Coriolis per Fortran L3801
@@ -19631,7 +19811,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto curv_u = vxgm_at_u * rv_at_u - u * reradius * rw_at_u;
                 ru_tend = ru_tend + curv_u;
             }
-            
+            uterm_site("curvature");
+
             // --- V-momentum curvature ---
             // PARITY FIX (2025-12-05): Proper branching like Fortran
             // Fortran: IF ((map_proj == 6) .OR. (polar)) → tan(lat) formula
@@ -20255,6 +20436,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto u_diff_h = compute_horizontal_diffusion_u_wrf(u, v, w, Kh_mom, rdx, rdy,
                                                                    msfux_, msfuy_, msftx_, msfty_, muu_2d, ph_full_for_diff);
                 ru_tend = ru_tend + u_diff_h;
+                uterm_site("hdiff");
 
                 // V-momentum horizontal diffusion
                 auto v_diff_h = compute_horizontal_diffusion_v_wrf(u, v, w, Kh_mom, rdx, rdy,
@@ -20389,6 +20571,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto defor13 = compute_defor13(u, w, rdx_tensor, rdnw_tensor);
                 auto u_diff_v = compute_vertical_diffusion_u_stress(u, defor13, Kv_mom, rho, rdnw_tensor);
                 ru_tend = ru_tend + u_diff_v;
+                uterm_site("vdiff_stress");
                 
                 // V-momentum vertical diffusion with stress tensor
                 auto rdy_tensor = torch::full({1}, rdy, options);
@@ -20773,6 +20956,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 
                 auto u_diff_v = compute_vertical_mixing_u(u, w, Kv, rdnw_tensor, rho);
                 ru_tend = ru_tend + u_diff_v;
+                uterm_site("vdiff_mixing");
 
                 auto v_diff_v = compute_vertical_mixing_v(v, w, Kv, rdnw_tensor, rho);
                 rv_tend = rv_tend + v_diff_v;
@@ -21331,6 +21515,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     const float eps_u = getAutocastAwareEps(mu_at_u_3d);
     const float eps_v = getAutocastAwareEps(mu_at_v_3d);
     const float eps_w = getAutocastAwareEps(mu_at_w_3d);
+    // 9F.D18: last mutation of ru_tend_ in this function -- everything downstream
+    // works on the PACKED RHS, not on ru_tend_. So the coverage residual measured
+    // against this snapshot is exact for ru_tend_ and only for ru_tend_.
+    uterm_site("final");
     torch::Tensor u_tend, v_tend, w_tend;
     if (g_export_coupled_slow) {
         // SPLIT-EXPLICIT D1 FIX (2026-07-11): export coupled d(mu*X)/dt directly (WRF
