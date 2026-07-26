@@ -149,6 +149,7 @@ CONTAINS
 
    REAL, PARAMETER :: htbub=8000., radbub=2000000., radz=8000., tpbub=1.0
    REAL :: piov2, tp
+   REAL :: bwave_pert_scale_once
    INTEGER :: icen, jcen
 
    REAL    :: B1, B2, B3, B4, B5, sin_arg
@@ -1365,6 +1366,13 @@ CONTAINS
   write(6,*) ' nxc, nyc for perturbation ',nxc,nyc
   write(6,*) ' delt for perturbation ',tpbub
 
+  ! [9F.D14] Read the eps scale ONCE. It was previously evaluated inside the
+  ! bubble cell loop, so a scaled run re-read the environment variable and
+  ! re-emitted the log line for EVERY cell in the bubble - inflating init cost
+  ! and log volume (and, under MPI, interleaving per-rank output) even though the
+  ! numerical value was unchanged.
+  bwave_pert_scale_once = bwave_pert_scale()
+
   DO J = jts, min(jde-1,jte)
     yrad = config_flags%dy*float(j-jde/2-1)/radbub
     DO I = its, min(ide-1,ite)
@@ -1386,7 +1394,7 @@ CONTAINS
            ! (growth rate independent of initial amplitude; onset shifts by
            ! log(1/eps)/log(lambda)) or NONLINEAR (amplitude-dependent rate; onset
            ! shifts far more). Default 1.0 => the IC is bit-for-bit unchanged.
-           tp = bwave_pert_scale() &
+           tp = bwave_pert_scale_once &
                 * tpbub*cos(rad*piov2)*cos(rad*piov2)*cos(xrad*2*pi+pi)
            grid%t_1(i,k,j)=grid%t_1(i,k,j)+tp
            grid%t_2(i,k,j)=grid%t_1(i,k,j)
