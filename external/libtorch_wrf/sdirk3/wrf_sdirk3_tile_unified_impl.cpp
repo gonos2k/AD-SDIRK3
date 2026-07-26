@@ -7319,8 +7319,25 @@ vertical_coefficients:
                     // ww predictor + the mu channel below.
                     auto mu_slow = mu_dmdt;
                     // WRF sign: ru_tend -= cqu*dpx (module_big_step_utilities_em.F:2396); cq*=1 dry.
-                    auto ru_coupled = ru_slow - slow_gate(dpx_st);
-                    auto rv_coupled = rv_slow - slow_gate(dpy_st);
+                    // 9F.D13 U-CHANNEL ABLATIONS (opt-in, default-off => byte-identical). The
+                    // lambda sweep eliminated every available w/ph term as the amplifier, leaving
+                    // the u-channel by ELIMINATION. These two knobs convert that into POSITIVE
+                    // attribution by splitting the u/v slow tendency into its two parts:
+                    //   ABLATE_UV_SLOW : drop the explicit slow part (horizontal advection etc.)
+                    //   ABLATE_UV_PGF  : drop the horizontal pressure-gradient part
+                    // Ablating a term that carries the growth must LOWER lambda; a term that is
+                    // load-bearing will RAISE it or shorten the run (cf. ABLATE_BUOY_W: 38->19).
+                    static const bool ablate_uv_slow = env_flag_true("WRF_SDIRK3_ABLATE_UV_SLOW");
+                    static const bool ablate_uv_pgf  = env_flag_true("WRF_SDIRK3_ABLATE_UV_PGF");
+                    TORCH_CHECK(!(ablate_uv_slow && ablate_uv_pgf),
+                        "WRF_SDIRK3_ABLATE_UV_SLOW and WRF_SDIRK3_ABLATE_UV_PGF are mutually "
+                        "exclusive: ablating both leaves no u/v slow forcing to attribute.");
+                    auto ru_slow_a = ablate_uv_slow ? torch::zeros_like(ru_slow) : ru_slow;
+                    auto rv_slow_a = ablate_uv_slow ? torch::zeros_like(rv_slow) : rv_slow;
+                    auto dpx_a = ablate_uv_pgf ? torch::zeros_like(dpx_st) : dpx_st;
+                    auto dpy_a = ablate_uv_pgf ? torch::zeros_like(dpy_st) : dpy_st;
+                    auto ru_coupled = ru_slow_a - slow_gate(dpx_a);
+                    auto rv_coupled = rv_slow_a - slow_gate(dpy_a);
                     // w channel: coupled ExplicitOnly slow part + WRF's earth-curvature term
                     // (rk_tendency applies it UNCONDITIONALLY) + pg_buoy_w, the LARGE-STEP
                     // vertical-PGF/buoyancy restoring term (module_em.F:740). AUDIT FIX
