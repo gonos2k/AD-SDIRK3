@@ -59,6 +59,30 @@ jobs:
           shellcheck --version | head -2
           shellcheck -S warning .github/ci/*.sh external/libtorch_wrf/sdirk3/tests/*.sh
 
+      # 9F.D21: the ONLY Fortran gate in hosted CI. The causal results of this
+      # campaign (failure step, g_eff, the ablation matrix) live in manual local
+      # runs and cannot be re-run here -- model execution is local-only by repo
+      # policy -- so the next code change could silently invert them and CI would
+      # not know. This gates the part CI can actually hold: the fail-closed
+      # contract of the perturbation-scale parser that every one of those
+      # experiments is configured through.
+      #
+      # It compiles dyn_em/bwave_pert_scale_parse.inc, the SAME source text
+      # module_initialize_ideal.F compiles, so it gates the real parser rather
+      # than a copy that would drift. gfortran only: no WRF, no torch, sub-second.
+      #
+      # No count ratchet in this YAML on purpose. The case count is asserted
+      # INSIDE the test (EXPECTED_CASES), because a YAML-side count has rotted
+      # here four times -- adding a case then needs two edits and the CI number
+      # silently lags. One file, one edit, fails loudly next to the change.
+      - name: b_wave perturbation-scale parser contract (Fortran)
+        run: |
+          set -euo pipefail
+          gfortran --version | head -1
+          gfortran -Idyn_em -std=f2008 -Wall -o /tmp/test_bwave_pert_scale \
+            external/libtorch_wrf/sdirk3/tests/test_bwave_pert_scale.f90
+          /tmp/test_bwave_pert_scale
+
       # PR 7C: the decomposition harness carries its own logic (marker /
       # exit / stage-norm / pre-refusal-solve assertions + manifest sanity).
       # --self-test exercises that logic against synthetic fixtures with no
