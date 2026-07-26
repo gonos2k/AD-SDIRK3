@@ -5855,6 +5855,15 @@ vertical_coefficients:
                     torch::Tensor Vh = use_ad_halo ? ad_halo_exchange(V) : torch::Tensor();
                     return compute_k_slow(V, Vh);
                 };
+                // UNITS (9F.D19b). This reports the DECOUPLED u tendency, not the
+                // coupled d(mu*u)/dt. g_export_coupled_slow is set ONLY around the
+                // split driver's K_exp calls via CoupledSlowGuard, and this probe sits
+                // OUTSIDE that scope, so computeUnifiedRHS takes the decouple branch.
+                // The factor is mu ~ 1.5e5 Pa, and it is large enough to look like a
+                // behavioural change: cross-checked against 9F.D18's coupled ru_tend at
+                // the same point, 55.4051 / 3.60926e-04 = 1.535e5 = mu. Compare these
+                // numbers ONLY against other decoupled values -- a historical figure in
+                // the coupled convention will differ by ~1e5 for no physical reason.
                 auto un = [&](const torch::Tensor& K) -> float {
                     return std::get<0>(extractStateVariables(K)).norm().item<float>();
                 };
