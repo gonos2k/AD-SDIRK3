@@ -22,10 +22,11 @@
 #include <torch/torch.h>
 
 #include <atomic>
+#include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <vector>
-#include <optional>
 #include <string>
 
 namespace wrf {
@@ -75,8 +76,31 @@ struct UAdvectionTerms {
 // delta. `label` names the site; the deltas sum to the final tendency by construction,
 // which makes their residual a COVERAGE check (is a site unnamed?) rather than a
 // correctness check.
+// 9F.D32 (review section 4): site IDENTITY is an enum; the string is display only.
+// `if (label == "adv")` was the same defect as the earlier `if (label != "horiz")` --
+// renaming a display string still compiles and silently disables the closure that
+// depends on it. Physics meaning must not live in text.
+enum class USlowSiteKind {
+    Entry, Advection, PressureGradient, Coriolis, Curvature,
+    HorizontalDiffusion, VerticalDiffusion, Final
+};
+
+inline const char* site_name(USlowSiteKind k) {
+    switch (k) {
+        case USlowSiteKind::Entry:               return "entry";
+        case USlowSiteKind::Advection:           return "adv";
+        case USlowSiteKind::PressureGradient:    return "pgf";
+        case USlowSiteKind::Coriolis:            return "coriolis";
+        case USlowSiteKind::Curvature:           return "curvature";
+        case USlowSiteKind::HorizontalDiffusion: return "hdiff";
+        case USlowSiteKind::VerticalDiffusion:   return "vdiff";
+        case USlowSiteKind::Final:               return "final";
+    }
+    return "unknown";
+}
+
 struct USlowSite {
-    std::string label;
+    USlowSiteKind kind;
     torch::Tensor delta;
 };
 
@@ -84,8 +108,9 @@ struct USlowSite {
 struct USlowTerms {
     UAdvectionTerms advection;
     std::vector<USlowSite> sites;   // in accumulation order
-    torch::Tensor adv_site_delta;   // the "adv" site, for the advection closure
-    torch::Tensor final_tendency;   // ru_tend at its last mutation
+    torch::Tensor adv_site_delta;       // the advection site, for the advection closure
+    torch::Tensor last_site_tendency;   // ru_tend AS CAPTURED at the last site
+    torch::Tensor final_tendency;       // ru_tend at its last mutation
     torch::Tensor u;                // for the work projection sum(u * dR)
 };
 
@@ -111,22 +136,16 @@ namespace uslow_detail {
 // Strict boolean. A diagnostic flag that silently reads as OFF for "true"/"on"/a typo
 // is the worst failure mode in this campaign: it produces a run that looks like the
 // experiment and is not.
-inline bool env_bool(const char* name, bool& out) {
+inline bool strict_env_flag(const char* name) {
     const char* v = std::getenv(name);
     if (v == nullptr || v[0] == '\0') return false;
-    std::string s(v);
-    for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    if (s == "1" || s == "true" || s == "yes" || s == "on")  { out = true;  return true; }
-    if (s == "0" || s == "false" || s == "no" || s == "off") { out = false; return true; }
+    std::string t(v);
+    for (auto& c : t) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (t == "1" || t == "true" || t == "yes" || t == "on")  return true;
+    if (t == "0" || t == "false" || t == "no" || t == "off") return false;
     TORCH_CHECK(false, "env flag ", name, "=\"", v,
                 "\" is not a boolean (use 1/true/yes/on or 0/false/no/off)");
     return false;
-}
-
-inline bool env_flag(const char* name) {
-    bool b = false;
-    env_bool(name, b);
-    return b;
 }
 
 }  // namespace uslow_detail
@@ -145,10 +164,10 @@ inline const char* uv_slow_experiment_name(UvSlowExperiment m) {
 inline ExperimentConfig ExperimentConfig::from_environment() {
     ExperimentConfig c;
 
-    const bool drop_u    = uslow_detail::env_flag("WRF_SDIRK3_ABLATE_RU_SLOW");
-    const bool drop_v    = uslow_detail::env_flag("WRF_SDIRK3_ABLATE_RV_SLOW");
-    const bool drop_both = uslow_detail::env_flag("WRF_SDIRK3_ABLATE_UV_SLOW");
-    const bool drop_pgf  = uslow_detail::env_flag("WRF_SDIRK3_ABLATE_UV_PGF");
+    const bool drop_u    = uslow_detail::strict_env_flag("WRF_SDIRK3_ABLATE_RU_SLOW");
+    const bool drop_v    = uslow_detail::strict_env_flag("WRF_SDIRK3_ABLATE_RV_SLOW");
+    const bool drop_both = uslow_detail::strict_env_flag("WRF_SDIRK3_ABLATE_UV_SLOW");
+    const bool drop_pgf  = uslow_detail::strict_env_flag("WRF_SDIRK3_ABLATE_UV_PGF");
     const int n = int(drop_u) + int(drop_v) + int(drop_both) + int(drop_pgf);
 
     // RU+RV is named explicitly because it is not a random conflict -- it IS DropBoth
@@ -161,6 +180,24 @@ inline ExperimentConfig ExperimentConfig::from_environment() {
         "select exactly ONE u/v slow experiment; got ", n, " of {ABLATE_RU_SLOW, "
         "ABLATE_RV_SLOW, ABLATE_UV_SLOW, ABLATE_UV_PGF}.");
 
+    // 9F.D32 (review section 2): stage1_substeps is READ HERE. It was previously
+    // declared on this struct and never set, while the value actually used came from
+    // a separate acoustic_schedule_options_from_env(). That split brain meant any
+    // future reader of ExperimentConfig::stage1_substeps would silently get 1 no
+    // matter what the operator set -- a dead authority that looks live.
+    if (const char* v = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS")) {
+        if (v[0] != '\0') {
+            const std::string sv(v);
+            std::size_t consumed = 0;
+            int n = 0;
+            try { n = std::stoi(sv, &consumed); } catch (const std::exception&) { consumed = 0; }
+            TORCH_CHECK(consumed == sv.size() && n >= 1 && n <= 4096,
+                "WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS must be an integer in "
+                "[1,4096] with no trailing characters; got \"", sv, "\".");
+            c.stage1_substeps = n;
+        }
+    }
+
     if (drop_u)         c.uv_slow = UvSlowExperiment::DropU;
     else if (drop_v)    c.uv_slow = UvSlowExperiment::DropV;
     else if (drop_both) c.uv_slow = UvSlowExperiment::DropBoth;
@@ -171,8 +208,8 @@ inline ExperimentConfig ExperimentConfig::from_environment() {
 
 inline DiagnosticsConfig DiagnosticsConfig::from_environment() {
     DiagnosticsConfig d;
-    d.trace_u_terms       = uslow_detail::env_flag("WRF_SDIRK3_UTERMS_TRACE");
-    d.dump_advect_u_split = uslow_detail::env_flag("WRF_SDIRK3_ADVECT_U_SPLIT_DUMP");
+    d.trace_u_terms       = uslow_detail::strict_env_flag("WRF_SDIRK3_UTERMS_TRACE");
+    d.dump_advect_u_split = uslow_detail::strict_env_flag("WRF_SDIRK3_ADVECT_U_SPLIT_DUMP");
     return d;
 }
 
@@ -197,13 +234,27 @@ inline void emit_u_slow_diagnostics(const USlowTerms& t) {
     std::cerr << "[UTERMS] rhs=" << n << " sites=" << t.sites.size()
               << (have_u ? "" : " (u-shape mismatch: W suppressed)") << std::endl;
 
-    torch::Tensor prev;
     for (const auto& s : t.sites) {
-        std::cerr << "[UTERMS]   " << s.label
+        std::cerr << "[UTERMS]   " << site_name(s.kind)
                   << "  |dR|=" << l2(s.delta)
                   << "  max|dR|=" << mx(s.delta)
                   << "  W=" << work(s.delta) << std::endl;
-        prev = s.delta;
+    }
+
+    // 9F.D32 (review section 1): COVERAGE closure, restored.
+    //
+    // The S2-A extraction dropped this check while the struct comment kept claiming
+    // it -- an invariant asserted in prose and verified by nothing, which is the
+    // worst of the three states (checked / unclaimed / claimed-but-unchecked).
+    //
+    // Compared against the last SNAPSHOT rather than a re-sum of the deltas: summing
+    // float32 deltas reintroduces order-dependent roundoff, whereas snapshot-vs-final
+    // is exactly zero when every mutation is captured. Nonzero here means a site
+    // mutates ru_tend AFTER the last capture, i.e. this probe does not name it.
+    if (t.last_site_tendency.defined()) {
+        const double cov = l2(t.final_tendency - t.last_site_tendency);
+        std::cerr << "[UTERMS]   unattributed |dR|=" << cov
+                  << "   <- coverage check, must be 0" << std::endl;
     }
 
     if (t.advection.complete() && t.adv_site_delta.defined()) {
