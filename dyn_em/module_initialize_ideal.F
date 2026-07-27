@@ -41,41 +41,62 @@ CONTAINS
 ! nonlinear cascade has an amplitude-dependent rate and a much larger shift.
 !-------------------------------------------------------------------
   REAL FUNCTION bwave_pert_scale()
-    USE, INTRINSIC :: IEEE_ARITHMETIC, ONLY : IEEE_IS_FINITE
+!   9F.D21: this is now a THIN POLICY WRAPPER. All parsing lives in
+!   inc/bwave_pert_scale_parse.inc, which is compiled verbatim into BOTH this file
+!   and the standalone hosted-CI contract test -- so the test gates the real parser
+!   instead of a copy that can drift. This wrapper keeps only what needs WRF:
+!   reading the environment, the fail-closed decision, and the log line.
     IMPLICIT NONE
-    CHARACTER(LEN=64) :: env_val
-    INTEGER           :: env_status, io_status, val_len
-    REAL              :: parsed
-    REAL, PARAMETER   :: max_scale = 1.0E3
-    bwave_pert_scale = 1.0
+    CHARACTER(LEN=64)  :: env_val, zero_val
+    CHARACTER(LEN=160) :: msg, log_line
+    INTEGER            :: env_status, val_len, zero_status, zero_len
+    REAL               :: scale
+    LOGICAL            :: ok, allow_zero
+    LOGICAL, EXTERNAL  :: wrf_dm_on_monitor
+
     CALL get_environment_variable("WRF_BWAVE_PERT_SCALE", env_val, &
                                   LENGTH=val_len, STATUS=env_status)
-    IF ( env_status == 1 ) RETURN          ! not set -> default, unscaled
-    ! Distinguish "unset" (status 1, handled above) from a TRUNCATED value
-    ! (status -1) or any other error: silently using the default for a truncated
-    ! value would run the baseline while reporting a scaled experiment.
+!   STATUS=1 is "unset" -> baseline. Any OTHER nonzero status means the value was
+!   truncated or unreadable; defaulting there would run the baseline while the
+!   operator believes a scaled experiment is running, so it must fail closed.
+    IF ( env_status == 1 ) THEN
+       bwave_pert_scale = 1.0
+       RETURN
+    END IF
     IF ( env_status /= 0 ) THEN
        CALL wrf_error_fatal( &
          'WRF_BWAVE_PERT_SCALE could not be read (truncated or invalid)' )
     END IF
-    READ(env_val(1:val_len), *, IOSTAT=io_status) parsed
-    ! Fail-closed on malformed, non-finite, or out-of-range values. NOTE: NaN
-    ! fails EVERY comparison, so a bare `parsed <= 0.0` test lets NaN through -
-    ! the same blind spot found in the EOS clamp. IEEE_IS_FINITE is what
-    ! actually rejects NaN and +/-Inf.
-    IF ( io_status /= 0 ) THEN
-       CALL wrf_error_fatal('WRF_BWAVE_PERT_SCALE must parse as a real')
+
+!   Zero-bubble control: eps=0 is needed to separate the base jet's own evolution
+!   from the bubble-seeded mode (dU = U_eps - U_0), but it must be asked for
+!   explicitly so a stray 0 cannot silently disable the perturbation.
+    allow_zero  = .FALSE.
+    CALL get_environment_variable("WRF_BWAVE_ALLOW_ZERO", zero_val, &
+                                  LENGTH=zero_len, STATUS=zero_status)
+    IF ( zero_status == 0 .AND. zero_len > 0 ) THEN
+       IF ( zero_val(1:zero_len) == '1' ) allow_zero = .TRUE.
     END IF
-    IF ( .NOT. IEEE_IS_FINITE(parsed) ) THEN
-       CALL wrf_error_fatal('WRF_BWAVE_PERT_SCALE must be finite (NaN/Inf rejected)')
+
+    CALL bwave_pert_scale_parse(env_val, val_len, allow_zero, scale, ok, msg)
+    IF ( .NOT. ok ) CALL wrf_error_fatal( TRIM(msg) )
+
+    bwave_pert_scale = scale
+!   9F.D22 (review §10.4): monitor rank only, and line-atomic via wrf_message.
+!   The previous WRITE(0,*) emitted once PER MPI RANK and, being list-directed,
+!   could interleave with other ranks mid-line -- so a 4-rank run produced four
+!   copies of the configuration banner, and a reader counting banners would
+!   miscount the experiments. One rank, one line, one record.
+    IF ( wrf_dm_on_monitor() ) THEN
+       WRITE(log_line,'(A,G14.6)') &
+          '[9F.D12] b_wave initial perturbation scaled by ', scale
+       CALL wrf_message( TRIM(log_line) )
     END IF
-    IF ( parsed <= 0.0 .OR. parsed > max_scale ) THEN
-       CALL wrf_error_fatal( &
-         'WRF_BWAVE_PERT_SCALE must be positive and <= 1.0E3' )
-    END IF
-    bwave_pert_scale = parsed
-    WRITE(0,*) '[9F.D12] b_wave initial perturbation scaled by ', parsed
   END FUNCTION bwave_pert_scale
+
+! Shared with the hosted-CI contract test; see the header of the .inc for why.
+  INCLUDE 'bwave_pert_scale_parse.inc'
+
 
 !-------------------------------------------------------------------
 ! this is a wrapper for the solver-specific init_domain routines.
