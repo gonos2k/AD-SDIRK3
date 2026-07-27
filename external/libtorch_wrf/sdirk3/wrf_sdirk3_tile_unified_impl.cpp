@@ -128,6 +128,38 @@ namespace {
 // STRICT (review 9F.D5 P1 #12): accept ONLY affirmative tokens (1/true/yes/on, case-insensitive);
 // unset/empty/0/false/no/off → false; ANY OTHER value is a hard error (typo protection), so a
 // mis-set experiment flag fails loudly instead of silently toggling physics.
+// 9F.D22 (review §11): the u/v slow-channel ablation experiments as ONE mode rather
+// than four independent booleans.
+//
+// Why the enum and not more TORCH_CHECKs. The boolean form makes illegal states
+// REPRESENTABLE and then tries to reject them afterwards -- and it kept failing to:
+// the UV+RU and UV+RV pairs were guarded, but RU+RV (which IS UV_SLOW under two other
+// names) slipped through and had to be patched separately. That is three guards
+// chasing a combinatorial space. With a single mode there is exactly one experiment
+// in flight by construction, so a silent duplicate cannot be expressed at all and the
+// downstream code has no combination to get wrong.
+//
+// The env var NAMES are kept exactly as they were: prior measurements and the review
+// tables are recorded against them, and renaming would orphan that history.
+enum class UvSlowExperiment {
+    None,      // production
+    DropU,     // WRF_SDIRK3_ABLATE_RU_SLOW
+    DropV,     // WRF_SDIRK3_ABLATE_RV_SLOW
+    DropBoth,  // WRF_SDIRK3_ABLATE_UV_SLOW
+    DropPgf    // WRF_SDIRK3_ABLATE_UV_PGF
+};
+
+inline const char* uv_slow_experiment_name(UvSlowExperiment m) {
+    switch (m) {
+        case UvSlowExperiment::DropU:    return "DropU(ABLATE_RU_SLOW)";
+        case UvSlowExperiment::DropV:    return "DropV(ABLATE_RV_SLOW)";
+        case UvSlowExperiment::DropBoth: return "DropBoth(ABLATE_UV_SLOW)";
+        case UvSlowExperiment::DropPgf:  return "DropPgf(ABLATE_UV_PGF)";
+        case UvSlowExperiment::None:     break;
+    }
+    return "None(production)";
+}
+
 inline bool env_flag_true(const char* name) {
     const char* v = std::getenv(name);
     if (v == nullptr || v[0] == '\0') return false;
@@ -138,6 +170,37 @@ inline bool env_flag_true(const char* name) {
     TORCH_CHECK(false, "env flag ", name, "=\"", v,
                 "\" is not a boolean (use 1/true/yes/on or 0/false/no/off)");
     return false;
+}
+
+// 9F.D22: resolve the requested u/v slow-channel experiment. Exactly one may be
+// selected; anything else is rejected HERE, once, instead of being carried as four
+// booleans that every downstream site has to re-check correctly.
+inline UvSlowExperiment resolve_uv_slow_experiment() {
+    const bool drop_u    = env_flag_true("WRF_SDIRK3_ABLATE_RU_SLOW");
+    const bool drop_v    = env_flag_true("WRF_SDIRK3_ABLATE_RV_SLOW");
+    const bool drop_both = env_flag_true("WRF_SDIRK3_ABLATE_UV_SLOW");
+    const bool drop_pgf  = env_flag_true("WRF_SDIRK3_ABLATE_UV_PGF");
+
+    const int n = int(drop_u) + int(drop_v) + int(drop_both) + int(drop_pgf);
+    if (n == 0) return UvSlowExperiment::None;
+
+    // RU+RV is the one case worth naming explicitly, because it is not a random
+    // conflict -- it is DropBoth spelled two other ways, and reporting it under the
+    // drop-one names is exactly the silent duplicate this design exists to prevent.
+    TORCH_CHECK(!(drop_u && drop_v && !drop_both && !drop_pgf),
+        "WRF_SDIRK3_ABLATE_RU_SLOW + ABLATE_RV_SLOW together ARE "
+        "ABLATE_UV_SLOW. Use WRF_SDIRK3_ABLATE_UV_SLOW so the run is named for the "
+        "experiment it actually performs.");
+    TORCH_CHECK(n == 1,
+        "select exactly ONE u/v slow experiment; got ", n, " of "
+        "{ABLATE_RU_SLOW, ABLATE_RV_SLOW, ABLATE_UV_SLOW, ABLATE_UV_PGF}. Combining "
+        "them either duplicates a single experiment under another name or leaves no "
+        "u/v forcing to attribute.");
+
+    if (drop_u)    return UvSlowExperiment::DropU;
+    if (drop_v)    return UvSlowExperiment::DropV;
+    if (drop_both) return UvSlowExperiment::DropBoth;
+    return UvSlowExperiment::DropPgf;
 }
 }  // namespace
 
@@ -7363,36 +7426,33 @@ vertical_coefficients:
                     //   ABLATE_UV_PGF  : drop the horizontal pressure-gradient part
                     // Ablating a term that carries the growth must LOWER lambda; a term that is
                     // load-bearing will RAISE it or shorten the run (cf. ABLATE_BUOY_W: 38->19).
-                    static const bool ablate_uv_slow = env_flag_true("WRF_SDIRK3_ABLATE_UV_SLOW");
-                    static const bool ablate_uv_pgf  = env_flag_true("WRF_SDIRK3_ABLATE_UV_PGF");
+                    // 9F.D22 (review §11): one MODE, not four booleans -- see
+                    // resolve_uv_slow_experiment(). Illegal combinations are rejected once,
+                    // at resolution, so no site below can express a silent duplicate.
                     // 9F.D14 (review): ABLATE_UV_SLOW zeroes the WHOLE ExplicitOnly u/v block, which
                     // contains advection AND Coriolis AND curvature AND horizontal/vertical diffusion.
                     // So it attributes to the BLOCK, not to advection. These per-component knobs
                     // separate u from v as the next refinement; sub-term (x/y/eta advection) splitting
                     // needs to reach inside computeUnifiedRHS and is a further step.
-                    static const bool ablate_ru_slow = env_flag_true("WRF_SDIRK3_ABLATE_RU_SLOW");
-                    static const bool ablate_rv_slow = env_flag_true("WRF_SDIRK3_ABLATE_RV_SLOW");
-                    TORCH_CHECK(!(ablate_uv_slow && ablate_uv_pgf),
-                        "WRF_SDIRK3_ABLATE_UV_SLOW and WRF_SDIRK3_ABLATE_UV_PGF are mutually "
-                        "exclusive: ablating both leaves no u/v slow forcing to attribute.");
-                    TORCH_CHECK(!(ablate_uv_slow && (ablate_ru_slow || ablate_rv_slow)),
-                        "WRF_SDIRK3_ABLATE_UV_SLOW already zeroes both components; combining it with "
-                        "ABLATE_RU_SLOW/ABLATE_RV_SLOW would silently report the same experiment "
-                        "under a different name.");
-                    // 9F.D17 (review 11): the guard above missed the symmetric hole - setting BOTH
-                    // ABLATE_RU_SLOW and ABLATE_RV_SLOW is exactly ABLATE_UV_SLOW, so it would report
-                    // the drop-both experiment under the drop-one names. Same silent-duplicate class
-                    // the guard was introduced to prevent.
-                    TORCH_CHECK(!(ablate_ru_slow && ablate_rv_slow),
-                        "WRF_SDIRK3_ABLATE_RU_SLOW + ABLATE_RV_SLOW together duplicate "
-                        "ABLATE_UV_SLOW; use ABLATE_UV_SLOW so the experiment is named for what it "
-                        "actually does.");
-                    auto ru_slow_a = (ablate_uv_slow || ablate_ru_slow)
-                                         ? torch::zeros_like(ru_slow) : ru_slow;
-                    auto rv_slow_a = (ablate_uv_slow || ablate_rv_slow)
-                                         ? torch::zeros_like(rv_slow) : rv_slow;
-                    auto dpx_a = ablate_uv_pgf ? torch::zeros_like(dpx_st) : dpx_st;
-                    auto dpy_a = ablate_uv_pgf ? torch::zeros_like(dpy_st) : dpy_st;
+                    static const UvSlowExperiment uv_exp = resolve_uv_slow_experiment();
+                    {   // announce ONCE, so a log can never be read against the wrong experiment
+                        static std::once_flag once;
+                        std::call_once(once, [] {
+                            if (uv_exp != UvSlowExperiment::None) {
+                                std::cerr << "[UV_SLOW_EXPERIMENT] "
+                                          << uv_slow_experiment_name(uv_exp) << std::endl;
+                            }
+                        });
+                    }
+                    const bool drop_ru = (uv_exp == UvSlowExperiment::DropU)
+                                      || (uv_exp == UvSlowExperiment::DropBoth);
+                    const bool drop_rv = (uv_exp == UvSlowExperiment::DropV)
+                                      || (uv_exp == UvSlowExperiment::DropBoth);
+                    const bool drop_pg = (uv_exp == UvSlowExperiment::DropPgf);
+                    auto ru_slow_a = drop_ru ? torch::zeros_like(ru_slow) : ru_slow;
+                    auto rv_slow_a = drop_rv ? torch::zeros_like(rv_slow) : rv_slow;
+                    auto dpx_a = drop_pg ? torch::zeros_like(dpx_st) : dpx_st;
+                    auto dpy_a = drop_pg ? torch::zeros_like(dpy_st) : dpy_st;
                     auto ru_coupled = ru_slow_a - slow_gate(dpx_a);
                     auto rv_coupled = rv_slow_a - slow_gate(dpy_a);
                     // w channel: coupled ExplicitOnly slow part + WRF's earth-curvature term

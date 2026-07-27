@@ -48,10 +48,11 @@ CONTAINS
 !   reading the environment, the fail-closed decision, and the log line.
     IMPLICIT NONE
     CHARACTER(LEN=64)  :: env_val, zero_val
-    CHARACTER(LEN=160) :: msg
+    CHARACTER(LEN=160) :: msg, log_line
     INTEGER            :: env_status, val_len, zero_status, zero_len
     REAL               :: scale
     LOGICAL            :: ok, allow_zero
+    LOGICAL, EXTERNAL  :: wrf_dm_on_monitor
 
     CALL get_environment_variable("WRF_BWAVE_PERT_SCALE", env_val, &
                                   LENGTH=val_len, STATUS=env_status)
@@ -81,7 +82,16 @@ CONTAINS
     IF ( .NOT. ok ) CALL wrf_error_fatal( TRIM(msg) )
 
     bwave_pert_scale = scale
-    WRITE(0,*) '[9F.D12] b_wave initial perturbation scaled by ', scale
+!   9F.D22 (review §10.4): monitor rank only, and line-atomic via wrf_message.
+!   The previous WRITE(0,*) emitted once PER MPI RANK and, being list-directed,
+!   could interleave with other ranks mid-line -- so a 4-rank run produced four
+!   copies of the configuration banner, and a reader counting banners would
+!   miscount the experiments. One rank, one line, one record.
+    IF ( wrf_dm_on_monitor() ) THEN
+       WRITE(log_line,'(A,G14.6)') &
+          '[9F.D12] b_wave initial perturbation scaled by ', scale
+       CALL wrf_message( TRIM(log_line) )
+    END IF
   END FUNCTION bwave_pert_scale
 
 ! Shared with the hosted-CI contract test; see the header of the .inc for why.
