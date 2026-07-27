@@ -244,6 +244,8 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
    REAL    :: uterm_nh, uterm_nv
    CHARACTER(LEN=160) :: uterm_line
    INTEGER, SAVE :: uterm_call_s = 0
+   INTEGER :: uterm_du, uterm_dump_call, uterm_dst, uterm_dlen
+   CHARACTER(LEN=32) :: uterm_denv
 
    specified = .false.
    if(config_flags%specified .or. config_flags%nested) specified = .true.
@@ -295,6 +297,15 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
       uterm_init_s = .TRUE.
    END IF
 !$OMP END CRITICAL(UTERM_TRACE_INIT)
+   uterm_dump_call = 2
+   CALL get_environment_variable("WRF_ADVECT_U_SPLIT_DUMP_CALL", uterm_denv, &
+                                 LENGTH=uterm_dlen, STATUS=uterm_dst)
+   IF ( uterm_dst == 0 .AND. uterm_dlen > 0 ) THEN
+      READ(uterm_denv(1:uterm_dlen), *, IOSTAT=uterm_dst) uterm_dump_call
+      IF ( uterm_dst /= 0 .OR. uterm_dump_call < 1 ) THEN
+         CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_DUMP_CALL must be a positive integer')
+      END IF
+   END IF
    uterm_trace = uterm_trace_s
    IF ( uterm_trace ) THEN
       ALLOCATE( uterm_snap_h(ims:ime, kms:kme, jms:jme) )
@@ -1634,6 +1645,23 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
          '[ADVECT_U_SPLIT] call=', uterm_call_s, ' |horiz|=', uterm_nh, &
          ' |vert|=', uterm_nv
       CALL wrf_message( TRIM(uterm_line) )
+!     9F.D26 (review section 3): norms are NOT field parity. ||PT||=||T|| for any
+!     permutation P and ||-T||=||T||, so equal magnitudes are consistent with a
+!     transposed, shifted or sign-flipped field. Dump the FIELDS so an offline diff can
+!     compute e2 / e_inf / correlation / per-level error / sign-disagreement, which is
+!     what "the operator matches" actually requires. Same header+layout as
+!     wrf_rk_tend_dump.bin so the existing loader applies.
+!     Dumped for ONE call (default the first live one, call 2 -- call 1 is all-zero) so
+!     the file is a single matched-input snapshot, not the last of many.
+      IF ( uterm_call_s == uterm_dump_call ) THEN
+         OPEN(NEWUNIT=uterm_du, FILE="wrf_advect_u_split.bin", FORM="unformatted", &
+              ACCESS="stream", STATUS="replace")
+         WRITE(uterm_du) ims, ime, jms, jme, kms, kme
+         WRITE(uterm_du) uterm_snap_h
+         WRITE(uterm_du) uterm_snap_v
+         CLOSE(uterm_du)
+         CALL wrf_message('[ADVECT_U_SPLIT] wrote wrf_advect_u_split.bin')
+      END IF
       DEALLOCATE( uterm_snap_h )
       DEALLOCATE( uterm_snap_v )
    END IF

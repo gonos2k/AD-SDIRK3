@@ -13794,6 +13794,40 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // interior), the coupled/decoupled convention, and any common scaling -- none
         // of which the raw norms share, so raw norms would manufacture a discrepancy.
         uterm_sub("horiz", ru_adv_horiz);
+        // 9F.D26 (review section 3): dump the FIELDS, not just norms. Equal norms are
+        // consistent with a permuted, shifted or sign-flipped field (||PT||=||T|| for any
+        // permutation P, ||-T||=||T||), so the 2.4%/2.6% magnitude agreement reported in
+        // 9F.D20 does NOT establish operator parity. This writes the port's horizontal
+        // and vertical u-advection so an offline diff can compute e2 / e_inf /
+        // correlation / per-level error / sign disagreement against WRF's
+        // wrf_advect_u_split.bin. One snapshot only, matching the WRF side.
+        {
+            static const bool split_dump = env_flag_true("WRF_SDIRK3_ADVECT_U_SPLIT_DUMP");
+            if (split_dump && ru_adv_horiz.defined() && ru_adv_z.defined()) {
+                torch::NoGradGuard ng;
+                // Skip calls whose tendency is still identically zero: the first RHS
+                // evaluations return an all-zero u block, and dumping one of those would
+                // compare two zero fields and report perfect parity.
+                const bool live =
+                    ru_adv_z.abs().max().to(torch::kCPU).item<double>() > 0.0;
+                static std::atomic<bool> written{false};
+                bool expect = false;
+                if (live && written.compare_exchange_strong(expect, true)) {
+                    auto h = ru_adv_horiz.detach().to(torch::kCPU).contiguous();
+                    auto z = ru_adv_z.detach().to(torch::kCPU).contiguous();
+                    std::ofstream f("port_advect_u_split.bin", std::ios::binary);
+                    const int64_t dims[3] = {h.size(0), h.size(1), h.size(2)};
+                    f.write(reinterpret_cast<const char*>(dims), sizeof(dims));
+                    f.write(reinterpret_cast<const char*>(h.data_ptr<float>()),
+                            h.numel() * sizeof(float));
+                    f.write(reinterpret_cast<const char*>(z.data_ptr<float>()),
+                            z.numel() * sizeof(float));
+                    std::cerr << "[ADVECT_U_SPLIT] port wrote port_advect_u_split.bin shape=("
+                              << dims[0] << "," << dims[1] << "," << dims[2] << ")"
+                              << std::endl;
+                }
+            }
+        }
         uterm_site("adv");
         
         // AUTOGRAD FIX: Wrap debug block in NoGradGuard
