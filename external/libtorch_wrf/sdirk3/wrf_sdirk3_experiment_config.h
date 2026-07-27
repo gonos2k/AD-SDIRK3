@@ -10,7 +10,21 @@
 // THE INVARIANT THESE TWO TYPES EXIST TO PROTECT:
 //
 //     ExperimentConfig  MAY change the trajectory.
-//     DiagnosticsConfig MUST NOT change the trajectory.
+//     DiagnosticsConfig MUST NOT change the NUMERICAL RESULT.
+//
+// 9F.D35 (review section 10): the second line used to read "MUST NOT change the
+// trajectory", which is stronger than anything the code structurally guarantees --
+// diagnostics ON does full tensor clones, GPU->CPU syncs, multi-line I/O and a binary
+// write, all of which change timing, allocation and failure surface. The contract
+// that IS meant is narrower and testable:
+//
+//     diagnostics must not mutate numerical state, alter an operand, add an RHS
+//     evaluation, or feed any result into a solver decision.
+//
+// Byte-identical fingerprint with diagnostics OFF is evidence for it but is NOT the
+// same statement: it does not exercise the ON path. A standing OFF-vs-ON contract
+// (equal RHS count, equal ordered stage-state digest, equal termination signature)
+// would close that, and does not exist yet.
 //
 // Separate types so that boundary cannot blur. This campaign has been misled in both
 // directions -- a "diagnostic" that silently changed an operand, and an "experiment"

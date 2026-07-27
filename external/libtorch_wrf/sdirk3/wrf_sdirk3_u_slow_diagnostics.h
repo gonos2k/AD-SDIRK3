@@ -94,6 +94,31 @@ struct USlowTerms {
     torch::Tensor u;                // for the work projection sum(u * dR)
 };
 
+// 9F.D35 (review section 5): a closure ALWAYS reports one of three states.
+//
+// Both closures were previously wrapped in `if (input.defined())`, so a refactor that
+// stopped supplying an input produced NO line, NO error and NO marker -- the solver
+// carried on and the log simply lacked a check nobody noticed was missing. That exact
+// "claimed but silently absent" state has now occurred TWICE in this campaign, so the
+// fix has to be structural rather than another comment.
+//
+// INVALID is deliberately distinct from FAIL: FAIL means the invariant was tested and
+// violated; INVALID means it could not be tested at all. Collapsing them would let a
+// missing input read as a passing run, which is the bug being closed.
+//
+// This does NOT abort the solver. Diagnostics must not alter the trajectory, so the
+// status is reported and left for experiment acceptance to reject.
+enum class ClosureStatus { Pass, Fail, Invalid };
+
+inline const char* closure_status_name(ClosureStatus s) {
+    switch (s) {
+        case ClosureStatus::Pass:    return "PASS";
+        case ClosureStatus::Fail:    return "FAIL";
+        case ClosureStatus::Invalid: return "INVALID";
+    }
+    return "UNKNOWN";
+}
+
 // 9F.D34 (review section 4): production and the fixture must run the SAME capture
 // code. The fixture previously hand-built a USlowTerms, so it verified only that the
 // emitter formats a well-formed input correctly -- while the regression it was written
@@ -196,12 +221,32 @@ inline void emit_u_slow_diagnostics(const USlowTerms& t) {
     // Compared against the last SNAPSHOT rather than a re-sum of the deltas: summing
     // float32 deltas reintroduces order-dependent roundoff, whereas snapshot-vs-final
     // is exactly zero when every mutation is captured.
-    if (t.last_site_tendency.defined()) {
-        const double cov = l2(t.final_tendency - t.last_site_tendency);
-        o << "[UTERMS]   post_capture_tail |dR|=" << cov
-                  << "   <- tail guard (NOT site inventory), must be 0" << "\n";
+    {
+        ClosureStatus st = ClosureStatus::Invalid;
+        const char* why = "missing_last_snapshot";
+        double cov = 0.0;
+        if (t.last_site_tendency.defined() && t.final_tendency.defined()) {
+            cov = l2(t.final_tendency - t.last_site_tendency);
+            st  = (cov == 0.0) ? ClosureStatus::Pass : ClosureStatus::Fail;
+            why = "";
+        }
+        o << "[UTERMS]   post_capture_tail status=" << closure_status_name(st)
+          << " |dR|=" << cov;
+        if (*why) o << " reason=" << why;
+        o << "   <- tail guard (NOT site inventory)\n";
     }
 
+    {
+        // Name WHICH input is missing: "INVALID" alone sends the reader hunting.
+        const char* missing =
+            !t.advection.x.defined()        ? "missing_adv_x" :
+            !t.advection.y.defined()        ? "missing_adv_y" :
+            !t.advection.vertical.defined() ? "missing_adv_z" :
+            !t.adv_site_delta.defined()     ? "missing_adv_site_delta" : "";
+        if (*missing) {
+            o << "[UTERMS]     adv_closure status=INVALID reason=" << missing << "\n";
+        }
+    }
     if (t.advection.complete() && t.adv_site_delta.defined()) {
         struct Named { const char* n; torch::Tensor v; };
         const Named additive[] = {{"adv_x", t.advection.x},
@@ -234,7 +279,9 @@ inline void emit_u_slow_diagnostics(const USlowTerms& t) {
                   << "  W=" << work(hz) << "\n";
         const double den = l2(t.adv_site_delta);
         const double res = l2(acc - t.adv_site_delta);
-        o << "[UTERMS]     adv closure |sum(additive)-d(adv)|=" << res
+        const ClosureStatus ast = (res == 0.0) ? ClosureStatus::Pass : ClosureStatus::Fail;
+        o << "[UTERMS]     adv_closure status=" << closure_status_name(ast)
+          << " |sum(additive)-d(adv)|=" << res
           << "  rel=" << (den > 0.0 ? res / den : 0.0) << "\n";
     }
 
