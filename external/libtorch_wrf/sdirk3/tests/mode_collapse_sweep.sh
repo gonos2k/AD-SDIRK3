@@ -21,12 +21,25 @@ OUT="${MODE_COLLAPSE_OUT:-$PWD/mc_out}"
 mkdir -p "$OUT"
 NL_BACKUP="$(mktemp)"
 cp namelist.input "$NL_BACKUP"
-cleanup() { cp "$NL_BACKUP" namelist.input; rm -f "$NL_BACKUP" namelist.input.tmp; }
+# 9F.D28 (review section 9.1): the previous trap restored ONLY the namelist, so a run
+# that failed mid-sweep left a SCALED-bubble wrfinput_d01 in the working directory --
+# and the next experiment would silently start from a perturbed IC it never asked for.
+# That is the same "the operand was never what the label said" failure this campaign
+# keeps hitting, so the IC is now rebuilt at baseline on every exit path.
+cleanup() {
+  cp "$NL_BACKUP" namelist.input
+  rm -f "$NL_BACKUP" namelist.input.tmp wrfinput_d01 wrfout_d01_*
+  timeout 300 ./ideal.exe >/dev/null 2>&1 || true
+  [ -f wrfinput_d01 ] && echo "baseline IC restored" || echo "WARNING: baseline IC NOT restored"
+}
 trap cleanup EXIT INT TERM
 # 2 h window = 12 steps at dt=600: inside the linear regime, well short of the
 # 6.33 h failure, so no run is contaminated by its own terminal blow-up.
 sed -i.tmp 's/^ run_days  *=.*/ run_days                            = 0,/; s/^ run_hours  *=.*/ run_hours                           = 2,/' namelist.input
 rm -f namelist.input.tmp
+# a non-matching sed is silent; without this the sweep would run the inherited window
+grep -q "^ run_hours  *= *2," namelist.input || { echo "FAIL: run_hours edit did not apply"; exit 1; }
+grep -q "^ run_days  *= *0,"  namelist.input || { echo "FAIL: run_days edit did not apply";  exit 1; }
 
 for eps in 1.0 0.5 0.25 0.125 0.0625 0.0; do
   rm -f wrfinput_d01 wrfout_d01_* rsl.error.* rsl.out.*
