@@ -24,14 +24,25 @@ import numpy as np
 
 
 class Thresholds:
-    """Every computed metric is gated. Defaults are deliberately strict: this tool
-    exists to decide operator parity, and a permissive gate that always passes is
-    worse than no gate because it reads as evidence."""
+    """ONE well-posed contract is the gate; everything else is a diagnostic.
 
-    def __init__(self, e2=1e-2, e_inf=1e-2, corr_min=0.9999,
-                 sign_max=0, per_level_e2=1e-2):
-        self.e2, self.e_inf = e2, e_inf
-        self.corr_min, self.sign_max, self.per_level_e2 = corr_min, sign_max, per_level_e2
+    9F.D29 (review section 10). The previous version gated all five computed metrics.
+    That was an over-correction of the earlier "computes five, enforces one" defect,
+    and it introduced gates that are ill-posed where the reference is small:
+      - sign_max=0 fails on a roundoff-level sign flip in a near-zero cell;
+      - per-level RELATIVE error is unstable on a level whose reference norm ~ 0;
+      - correlation is meaningless against a near-zero reference field.
+    A gate that fires on numerical noise trains the reader to ignore it, which is the
+    same end state as having no gate.
+
+    The authoritative contract is the standard cellwise mixed tolerance
+        |P_i - W_i| <= atol + rtol*|W_i|
+    which is well defined for every cell INCLUDING W_i -> 0. Global e2 is kept as a
+    secondary aggregate check. corr / sign / e_inf / worst-level are reported to
+    characterise a failure, never to decide one."""
+
+    def __init__(self, atol=1e-6, rtol=1e-3, e2=1e-2):
+        self.atol, self.rtol, self.e2 = atol, rtol, e2
 
 
 def load_wrf(path):
@@ -89,14 +100,19 @@ def stats(p, w, label, th):
     # 7.1: the verdict previously used e2 ALONE, so a large error confined to a few
     # cells was diluted by the global norm and passed. Every metric that is computed
     # is now also gated -- computing a number and not acting on it is decoration.
-    checks = {
-        "e2":            e2   <= th.e2,
-        "e_inf":         einf <= th.e_inf,
-        "corr":          corr >= th.corr_min,
-        "sign_mismatch": signdiff <= th.sign_max,
-        "per_level_e2":  per[0][0] <= th.per_level_e2,
-    }
+    # --- the contract ---
+    tol = th.atol + th.rtol * np.abs(w)
+    bad = np.abs(d) > tol
+    nbad = int(bad.sum())
+    checks = {"cellwise": nbad == 0, "e2": e2 <= th.e2}
     failed = [k for k, ok in checks.items() if not ok]
+    print(f"             cellwise |P-W| > {th.atol}+{th.rtol}|W| : {nbad}/{p.size}"
+          f"   [gate]   global e2 <= {th.e2}: {'ok' if e2 <= th.e2 else 'FAIL'}")
+    if nbad:
+        # where the contract breaks is the actionable part of a failure
+        idx = np.unravel_index(np.argmax(np.abs(d) - tol), d.shape)
+        print(f"             worst offender at (j,k,i)={idx}: "
+              f"port={p[idx]:.6g} wrf={w[idx]:.6g} |d|={abs(d[idx]):.6g}")
     if failed:
         print(f"             GATE FAIL on: {', '.join(failed)}")
     return not failed
@@ -107,9 +123,8 @@ def main():
     ap.add_argument("--wrf", required=True)
     ap.add_argument("--port", required=True)
     ap.add_argument("--tol", type=float, default=1e-2)
-    ap.add_argument("--corr-min", type=float, default=0.9999)
-    ap.add_argument("--sign-max", type=int, default=0)
-    ap.add_argument("--per-level-tol", type=float, default=1e-2)
+    ap.add_argument("--atol", type=float, default=1e-6)
+    ap.add_argument("--rtol", type=float, default=1e-3)
     a = ap.parse_args()
 
     wh, wv, whdr = load_wrf(a.wrf)
@@ -129,16 +144,14 @@ def main():
     whc = wh[j0:j0 + nj, 0:nk, i0:i0 + ni]
     wvc = wv[j0:j0 + nj, 0:nk, i0:i0 + ni]
 
-    th = Thresholds(e2=a.tol, e_inf=a.tol, corr_min=a.corr_min,
-                    sign_max=a.sign_max, per_level_e2=a.per_level_tol)
+    th = Thresholds(atol=a.atol, rtol=a.rtol, e2=a.tol)
     print("\nPOINTWISE PARITY (this is what 'the operator matches' requires):")
     okh = stats(ph, whc, "horizontal", th)
     okv = stats(pv, wvc, "vertical", th)
 
     bad = [n for n, ok in (("horizontal", okh), ("vertical", okv)) if not ok]
     print(f"\nVERDICT: {'FAIL' if bad else 'PASS'}"
-          f"  (e2<={th.e2}, einf<={th.e_inf}, corr>={th.corr_min}, "
-          f"sign<={th.sign_max}, per-level e2<={th.per_level_e2})"
+          f"  (contract: |P-W| <= {th.atol}+{th.rtol}|W| cellwise; e2 <= {th.e2})"
           + (f" -- {', '.join(bad)}" if bad else ""))
     return 1 if bad else 0
 

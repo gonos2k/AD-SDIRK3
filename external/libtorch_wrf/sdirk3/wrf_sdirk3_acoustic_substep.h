@@ -75,7 +75,25 @@ struct Const {
 // Invariant dts*n_sub == the stage fraction of dt (stage1=dt/3, stage2=dt/2, stage3=dt). Stage 1 is a
 // single acoustic step of dt/3; stages 2/3 sub-cycle at dts=dt/num_sound_steps. num_sound_steps even, >=4.
 struct AcousticSchedule { float dts; int n_sub; };
-AcousticSchedule acoustic_schedule(int rk_step, float dt, int num_sound_steps);
+// 9F.D29 (review section 7): the schedule is a PURE function of its arguments.
+//
+// It previously read WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS from the environment
+// into a function-local `static const`, which made it a function of the process
+// environment as well as its parameters -- untestable (a test cannot vary the option
+// within one process, because the static latches on first call) and surprising to
+// read. The option is now a parameter; the environment is parsed ONCE, by the caller.
+struct AcousticScheduleOptions {
+    // Stage 1 takes ONE acoustic step of dt/3 in WRF, independent of num_sound_steps.
+    // >1 subdivides it, which is what lets a dt-ladder hold stage-1 dts fixed.
+    // Diagnostic only; 1 reproduces WRF exactly.
+    int stage1_substeps = 1;
+};
+
+// Parses WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS. Call once, at solver setup.
+AcousticScheduleOptions acoustic_schedule_options_from_env();
+
+AcousticSchedule acoustic_schedule(int rk_step, float dt, int num_sound_steps,
+                                   const AcousticScheduleOptions& options = {});
 
 // staggered column-mass averages (module_small_step_em.F:200-207) ---
 // u-point mass = 0.5*(mu[i]+mu[i-1]) over x; v-point mass = 0.5*(mu[j]+mu[j-1]) over y. Column mass

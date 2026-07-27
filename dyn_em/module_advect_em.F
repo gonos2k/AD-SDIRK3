@@ -246,6 +246,8 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
    CHARACTER(LEN=160) :: uterm_line
    INTEGER, SAVE :: uterm_call_s = 0     ! shared counter (ATOMIC CAPTURE only)
    INTEGER :: uterm_call_this            ! this call's ordinal, thread-local
+   INTEGER :: uterm_nproc, uterm_myproc
+   CHARACTER(LEN=64) :: uterm_fname
    INTEGER :: uterm_du, uterm_dump_call, uterm_dst, uterm_dlen
    INTEGER, SAVE :: uterm_dump_call_s = 2
 !$OMP THREADPRIVATE(uterm_trace_s, uterm_init_s, uterm_dump_call_s)
@@ -1672,13 +1674,29 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 !     Dumped for ONE call (default the first live one, call 2 -- call 1 is all-zero) so
 !     the file is a single matched-input snapshot, not the last of many.
       IF ( uterm_call_this == uterm_dump_call ) THEN
-         OPEN(NEWUNIT=uterm_du, FILE="wrf_advect_u_split.bin", FORM="unformatted", &
+!        9F.D29 (review section 4): the dump used a FIXED filename while the call
+!        ordinal is PROCESS-LOCAL, so under MPI every rank would write its own second
+!        call to the same path -- last-writer-wins, or a partially interleaved binary,
+!        and a parity verdict computed from whichever rank happened to finish last.
+!        The comparison is single-rank by construction (it compares one tile against
+!        WRF's domain), so this fails closed rather than silently producing a file
+!        whose provenance is unknowable. The rank is also in the name, so the
+!        fail-close and the artifact agree about what was written.
+         CALL wrf_get_nproc( uterm_nproc )
+         CALL wrf_get_myproc( uterm_myproc )
+         IF ( uterm_nproc /= 1 ) THEN
+            CALL wrf_error_fatal( &
+              'WRF_ADVECT_U_SPLIT_DUMP is single-rank only: the call ordinal is '// &
+              'process-local, so multiple ranks would overwrite one dump file.')
+         END IF
+         WRITE(uterm_fname,'(A,I4.4,A)') 'wrf_advect_u_split_rank', uterm_myproc, '.bin'
+         OPEN(NEWUNIT=uterm_du, FILE=TRIM(uterm_fname), FORM="unformatted", &
               ACCESS="stream", STATUS="replace")
          WRITE(uterm_du) ims, ime, jms, jme, kms, kme
          WRITE(uterm_du) uterm_snap_h
          WRITE(uterm_du) uterm_snap_v
          CLOSE(uterm_du)
-         CALL wrf_message('[ADVECT_U_SPLIT] wrote wrf_advect_u_split.bin')
+         CALL wrf_message('[ADVECT_U_SPLIT] wrote '//TRIM(uterm_fname))
       END IF
       DEALLOCATE( uterm_snap_h )
       DEALLOCATE( uterm_snap_v )
