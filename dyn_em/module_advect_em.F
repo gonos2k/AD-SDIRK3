@@ -244,9 +244,11 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
    INTEGER, PARAMETER :: uterm_dp = KIND(1.0D0)   ! self-contained; no USE to order
    REAL(uterm_dp) :: uterm_nh, uterm_nv            ! genuinely FP64 end-to-end (section 6)
    CHARACTER(LEN=160) :: uterm_line
-   INTEGER, SAVE :: uterm_call_s = 0
+   INTEGER, SAVE :: uterm_call_s = 0     ! shared counter (ATOMIC CAPTURE only)
+   INTEGER :: uterm_call_this            ! this call's ordinal, thread-local
    INTEGER :: uterm_du, uterm_dump_call, uterm_dst, uterm_dlen
    INTEGER, SAVE :: uterm_dump_call_s = 2
+!$OMP THREADPRIVATE(uterm_trace_s, uterm_init_s, uterm_dump_call_s)
    CHARACTER(LEN=32) :: uterm_denv
 
    specified = .false.
@@ -268,7 +270,14 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 !  already produced false causal conclusions, a diagnostic that silently does nothing
 !  is the worst failure mode. Now: unset/0/false/no/off -> off; 1/true/yes/on -> on;
 !  ANYTHING else is fatal rather than quietly ignored.
-!$OMP CRITICAL(UTERM_TRACE_INIT)
+!     9F.D28 (review section 3): the CRITICAL was entered on EVERY advect_u call --
+!     only its BODY ran once, so my "it runs once, the cost is nil" comment described
+!     the initialisation, not the lock. These three are THREADPRIVATE instead: each
+!     thread performs one getenv and never takes a lock. Chosen over double-checked
+!     locking because the outer read there is itself a data race -- the exact thing
+!     section 9 of the previous review corrected me on -- and over keeping CRITICAL
+!     because a per-call lock in a physics kernel is a real cost. The values are
+!     deterministic, so per-thread initialisation cannot disagree.
    IF ( .NOT. uterm_init_s ) THEN
       uterm_trace_s = .FALSE.
       CALL get_environment_variable("WRF_ADVECT_U_SPLIT_TRACE", uterm_env, &
@@ -307,7 +316,6 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
       END IF
       uterm_init_s = .TRUE.
    END IF
-!$OMP END CRITICAL(UTERM_TRACE_INIT)
    uterm_dump_call = uterm_dump_call_s
    uterm_trace = uterm_trace_s
    IF ( uterm_trace ) THEN
@@ -1634,8 +1642,15 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 !  per-term |T|. Interior only (its ... ite/jts ... jte, 1..ktf) so halo garbage
 !  cannot inflate either norm.
    IF ( uterm_trace ) THEN
-!$OMP ATOMIC
+!     9F.D28 (review section 2): ATOMIC CAPTURE, not bare ATOMIC. Plain ATOMIC makes
+!     the INCREMENT indivisible but says nothing about the later READ, so two threads
+!     could each increment (->2, ->3) and then BOTH read 3 -- losing the call-2 dump
+!     and writing call 3 twice, with the logged ordinal not matching the tensor. The
+!     captured value is thread-local and is what this call reports and tests.
+!$OMP ATOMIC CAPTURE
       uterm_call_s = uterm_call_s + 1
+      uterm_call_this = uterm_call_s
+!$OMP END ATOMIC
       uterm_snap_v = tendency - uterm_snap_v
 !     9F.D25 (review sec 11): accumulate in DOUBLE. A conclusion quoted to 2.4% must not
 !     rest on a single-precision sum of squares over O(2e5) terms, where the running
@@ -1645,7 +1660,7 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
       uterm_nv = ( SQRT( SUM( REAL( &
          uterm_snap_v(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1)), KIND=uterm_dp )**2 ) ) )
       WRITE(uterm_line,'(A,I0,A,E24.16,A,E24.16)') &
-         '[ADVECT_U_SPLIT] call=', uterm_call_s, ' |horiz|=', uterm_nh, &
+         '[ADVECT_U_SPLIT] call=', uterm_call_this, ' |horiz|=', uterm_nh, &
          ' |vert|=', uterm_nv
       CALL wrf_message( TRIM(uterm_line) )
 !     9F.D26 (review section 3): norms are NOT field parity. ||PT||=||T|| for any
@@ -1656,7 +1671,7 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 !     wrf_rk_tend_dump.bin so the existing loader applies.
 !     Dumped for ONE call (default the first live one, call 2 -- call 1 is all-zero) so
 !     the file is a single matched-input snapshot, not the last of many.
-      IF ( uterm_call_s == uterm_dump_call ) THEN
+      IF ( uterm_call_this == uterm_dump_call ) THEN
          OPEN(NEWUNIT=uterm_du, FILE="wrf_advect_u_split.bin", FORM="unformatted", &
               ACCESS="stream", STATUS="replace")
          WRITE(uterm_du) ims, ime, jms, jme, kms, kme

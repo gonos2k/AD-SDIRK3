@@ -12398,15 +12398,20 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     };
     // Destructor-based emission so every exit path reports, and so a diagnostic can
     // never abort the run (a throwing destructor would terminate).
+    // 9F.D28 (review section 4): emission is an explicit CALL, not a destructor side
+    // effect. A destructor cannot propagate an exception, which forced a catch(...)
+    // that swallowed every diagnostic failure silently -- a probe that fails invisibly
+    // is worse than no probe, and this campaign has already been misled by
+    // instrumentation that quietly did nothing. Emitting explicitly also puts the
+    // output where a reader can see it happen instead of at an implicit scope exit.
     struct UTermsReport {
         const std::vector<std::pair<std::string, torch::Tensor>>* site;
         const UAdvectionTerms* adv;   // typed: additive vs derived is structural
         const torch::Tensor* final_ru;
         const torch::Tensor* u;
         bool on;
-        ~UTermsReport() {
+        void emit() const {
             if (!on || site->empty() || !final_ru->defined()) return;
-            try {
                 torch::NoGradGuard ng;
                 static std::atomic<long> call_no{0};
                 const long n = call_no.fetch_add(1) + 1;
@@ -12474,7 +12479,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                               << "  rel=" << (den > 0.0 ? l2(acc - adv_delta) / den : 0.0)
                               << std::endl;
                 }
-            } catch (...) { /* a diagnostic must never take down the run */ }
         }
     } uterms_report{&uterms_site, &uterms_adv, &ru_tend, &u_for_work, uterms_trace};
     uterm_site("entry");
@@ -21638,6 +21642,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // works on the PACKED RHS, not on ru_tend_. So the coverage residual measured
     // against this snapshot is exact for ru_tend_ and only for ru_tend_.
     uterm_site("final");
+    // Emit here, at the single place the decomposition is complete. The destructor
+    // form fired on every exit path including early returns; those paths have an
+    // INCOMPLETE decomposition, so what they printed was a partial record that looked
+    // like a whole one.
+    if (uterms_trace) uterms_report.emit();
     torch::Tensor u_tend, v_tend, w_tend;
     if (g_export_coupled_slow) {
         // SPLIT-EXPLICIT D1 FIX (2026-07-11): export coupled d(mu*X)/dt directly (WRF

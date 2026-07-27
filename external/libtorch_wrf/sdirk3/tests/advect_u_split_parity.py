@@ -8,11 +8,12 @@ consistent with a transposed, shifted, or sign-flipped field. This computes what
 operator parity actually requires -- e2, e_inf, correlation, per-level error, and
 sign disagreement -- on the fields themselves.
 
-Reports, and does NOT paper over, the alignment: WRF dumps its memory domain
-(ims:ime, kms:kme, jms:jme) in (i,k,j) order; the port dumps its tile in (j,k,i). The
-offset search is reported explicitly, because a correlation-maximising crop has
-previously selected a periodic-x ALIAS in this project and produced a confident wrong
-answer.
+Alignment is a DETERMINISTIC crop, not a search: WRF dumps its memory domain
+(ims:ime, kms:kme, jms:jme) in (i,k,j) order, the port dumps its tile in (j,k,i), and
+the mapping used is the physical one (i0 = 1-ims, j0 = 1-jms). There is deliberately
+no offset search here -- a correlation-maximising crop previously selected a
+periodic-x ALIAS in this project and produced a confident wrong answer. (An earlier
+version of this docstring claimed a search was "reported explicitly"; it never was.)
 
 Usage: advect_u_split_parity.py --wrf wrf_advect_u_split.bin --port port_advect_u_split.bin
 """
