@@ -104,6 +104,7 @@
 #include "wrf_sdirk3_imex_ark324_coeffs.h"
 #include "wrf_sdirk3_imex_adjoint_linear_solve.h"
 #include "wrf_sdirk3_acoustic_substep.h"
+#include "wrf_sdirk3_u_slow_diagnostics.h"
 #include "wrf_sdirk3_pressure_gradient_vectorized.h"  // FIX 2025-01-11 Round55: For invalidateAlignedTensorCache()
 #include "wrf_sdirk3_tensor_cache.h"  // OPT Pass33+: For TLS tensor view caching
 #include <iostream>
@@ -128,38 +129,9 @@ namespace {
 // STRICT (review 9F.D5 P1 #12): accept ONLY affirmative tokens (1/true/yes/on, case-insensitive);
 // unset/empty/0/false/no/off → false; ANY OTHER value is a hard error (typo protection), so a
 // mis-set experiment flag fails loudly instead of silently toggling physics.
-// 9F.D22 (review §11): the u/v slow-channel ablation experiments as ONE mode rather
-// than four independent booleans.
-//
-// Why the enum and not more TORCH_CHECKs. The boolean form makes illegal states
-// REPRESENTABLE and then tries to reject them afterwards -- and it kept failing to:
-// the UV+RU and UV+RV pairs were guarded, but RU+RV (which IS UV_SLOW under two other
-// names) slipped through and had to be patched separately. That is three guards
-// chasing a combinatorial space. With a single mode there is exactly one experiment
-// in flight by construction, so a silent duplicate cannot be expressed at all and the
-// downstream code has no combination to get wrong.
-//
-// The env var NAMES are kept exactly as they were: prior measurements and the review
-// tables are recorded against them, and renaming would orphan that history.
-enum class UvSlowExperiment {
-    None,      // production
-    DropU,     // WRF_SDIRK3_ABLATE_RU_SLOW
-    DropV,     // WRF_SDIRK3_ABLATE_RV_SLOW
-    DropBoth,  // WRF_SDIRK3_ABLATE_UV_SLOW
-    DropPgf    // WRF_SDIRK3_ABLATE_UV_PGF
-};
-
-inline const char* uv_slow_experiment_name(UvSlowExperiment m) {
-    switch (m) {
-        case UvSlowExperiment::DropU:    return "DropU(ABLATE_RU_SLOW)";
-        case UvSlowExperiment::DropV:    return "DropV(ABLATE_RV_SLOW)";
-        case UvSlowExperiment::DropBoth: return "DropBoth(ABLATE_UV_SLOW)";
-        case UvSlowExperiment::DropPgf:  return "DropPgf(ABLATE_UV_PGF)";
-        case UvSlowExperiment::None:     break;
-    }
-    return "None(production)";
-}
-
+// 9F.D30: UvSlowExperiment and its name helper moved to
+// wrf_sdirk3_u_slow_diagnostics.h, alongside ExperimentConfig, so the
+// experiment vocabulary lives with the config that selects it.
 inline bool env_flag_true(const char* name) {
     const char* v = std::getenv(name);
     if (v == nullptr || v[0] == '\0') return false;
@@ -172,36 +144,6 @@ inline bool env_flag_true(const char* name) {
     return false;
 }
 
-// 9F.D22: resolve the requested u/v slow-channel experiment. Exactly one may be
-// selected; anything else is rejected HERE, once, instead of being carried as four
-// booleans that every downstream site has to re-check correctly.
-inline UvSlowExperiment resolve_uv_slow_experiment() {
-    const bool drop_u    = env_flag_true("WRF_SDIRK3_ABLATE_RU_SLOW");
-    const bool drop_v    = env_flag_true("WRF_SDIRK3_ABLATE_RV_SLOW");
-    const bool drop_both = env_flag_true("WRF_SDIRK3_ABLATE_UV_SLOW");
-    const bool drop_pgf  = env_flag_true("WRF_SDIRK3_ABLATE_UV_PGF");
-
-    const int n = int(drop_u) + int(drop_v) + int(drop_both) + int(drop_pgf);
-    if (n == 0) return UvSlowExperiment::None;
-
-    // RU+RV is the one case worth naming explicitly, because it is not a random
-    // conflict -- it is DropBoth spelled two other ways, and reporting it under the
-    // drop-one names is exactly the silent duplicate this design exists to prevent.
-    TORCH_CHECK(!(drop_u && drop_v && !drop_both && !drop_pgf),
-        "WRF_SDIRK3_ABLATE_RU_SLOW + ABLATE_RV_SLOW together ARE "
-        "ABLATE_UV_SLOW. Use WRF_SDIRK3_ABLATE_UV_SLOW so the run is named for the "
-        "experiment it actually performs.");
-    TORCH_CHECK(n == 1,
-        "select exactly ONE u/v slow experiment; got ", n, " of "
-        "{ABLATE_RU_SLOW, ABLATE_RV_SLOW, ABLATE_UV_SLOW, ABLATE_UV_PGF}. Combining "
-        "them either duplicates a single experiment under another name or leaves no "
-        "u/v forcing to attribute.");
-
-    if (drop_u)    return UvSlowExperiment::DropU;
-    if (drop_v)    return UvSlowExperiment::DropV;
-    if (drop_both) return UvSlowExperiment::DropBoth;
-    return UvSlowExperiment::DropPgf;
-}
 }  // namespace
 
 // Ensure M_PI is defined (not always available on all compilers)
@@ -7440,21 +7382,22 @@ vertical_coefficients:
                     // So it attributes to the BLOCK, not to advection. These per-component knobs
                     // separate u from v as the next refinement; sub-term (x/y/eta advection) splitting
                     // needs to reach inside computeUnifiedRHS and is a further step.
-                    static const UvSlowExperiment uv_exp = resolve_uv_slow_experiment();
+                    static const auto exp_cfg = wrf::sdirk3::ExperimentConfig::from_environment();
+                    const auto uv_exp = exp_cfg.uv_slow;
                     {   // announce ONCE, so a log can never be read against the wrong experiment
                         static std::once_flag once;
-                        std::call_once(once, [] {
-                            if (uv_exp != UvSlowExperiment::None) {
+                        std::call_once(once, [uv_exp] {
+                            if (uv_exp != wrf::sdirk3::UvSlowExperiment::None) {
                                 std::cerr << "[UV_SLOW_EXPERIMENT] "
-                                          << uv_slow_experiment_name(uv_exp) << std::endl;
+                                          << wrf::sdirk3::uv_slow_experiment_name(uv_exp) << std::endl;
                             }
                         });
                     }
-                    const bool drop_ru = (uv_exp == UvSlowExperiment::DropU)
-                                      || (uv_exp == UvSlowExperiment::DropBoth);
-                    const bool drop_rv = (uv_exp == UvSlowExperiment::DropV)
-                                      || (uv_exp == UvSlowExperiment::DropBoth);
-                    const bool drop_pg = (uv_exp == UvSlowExperiment::DropPgf);
+                    const bool drop_ru = (uv_exp == wrf::sdirk3::UvSlowExperiment::DropU)
+                                      || (uv_exp == wrf::sdirk3::UvSlowExperiment::DropBoth);
+                    const bool drop_rv = (uv_exp == wrf::sdirk3::UvSlowExperiment::DropV)
+                                      || (uv_exp == wrf::sdirk3::UvSlowExperiment::DropBoth);
+                    const bool drop_pg = (uv_exp == wrf::sdirk3::UvSlowExperiment::DropPgf);
                     auto ru_slow_a = drop_ru ? torch::zeros_like(ru_slow) : ru_slow;
                     auto rv_slow_a = drop_rv ? torch::zeros_like(rv_slow) : rv_slow;
                     auto dpx_a = drop_pg ? torch::zeros_like(dpx_st) : dpx_st;
@@ -12377,116 +12320,24 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     //
     // Default-off; every capture is detached under NoGradGuard, so it cannot reach
     // the graph or the forward. Cost when enabled is one clone of ru_tend per site.
-    // 9F.D27 (review section 3): which advection terms are ADDITIVE and which are
-    // DERIVED is expressed by the TYPE, not by a string comparison.
-    //
-    // The closure sum previously skipped the aggregate with `if (s.first != "horiz")`.
-    // That hid a physical fact -- horizontal = x + y, so summing it double-counts -- in
-    // a label. Renaming the label still compiles and silently turns the one closure
-    // that CAN fail into one that always does. Here `horizontal()` is computed from the
-    // additive fields, so it cannot be double-counted by construction and there is no
-    // label to get wrong.
-    struct UAdvectionTerms {
-        torch::Tensor x, y, vertical;              // the additive decomposition
-        bool complete() const { return x.defined() && y.defined() && vertical.defined(); }
-        torch::Tensor horizontal() const { return x + y; }          // DERIVED
-        torch::Tensor total()      const { return x + y + vertical; }  // DERIVED
-    } uterms_adv;
-
-    static const bool uterms_trace = env_flag_true("WRF_SDIRK3_UTERMS_TRACE");
-    // Structured bindings are not capturable by lambdas before C++20; alias first.
+    // 9F.D30 (review PR S2-A): configuration reading and diagnostic OUTPUT now live
+    // in wrf_sdirk3_u_slow_diagnostics.h. This function only COLLECTS tensors it has
+    // already computed; it no longer parses the environment, formats strings, or
+    // writes to std::cerr for this probe.
+    static const auto diag_cfg = wrf::sdirk3::DiagnosticsConfig::from_environment();
+    const bool uterms_trace = diag_cfg.trace_u_terms;
+    wrf::sdirk3::USlowTerms uterms;
     const torch::Tensor& u_for_work = u;
-    std::vector<std::pair<std::string, torch::Tensor>> uterms_site;
+    torch::Tensor uterm_prev;
     auto uterm_site = [&](const char* label) {
         if (!uterms_trace || !ru_tend.defined()) return;
         torch::NoGradGuard ng;
-        uterms_site.emplace_back(label, ru_tend.detach().clone());
+        auto now = ru_tend.detach().clone();
+        auto delta = uterm_prev.defined() ? (now - uterm_prev) : now;
+        uterm_prev = now;
+        uterms.sites.push_back({label, delta});
+        if (std::string(label) == "adv") uterms.adv_site_delta = delta;
     };
-    // Destructor-based emission so every exit path reports, and so a diagnostic can
-    // never abort the run (a throwing destructor would terminate).
-    // 9F.D28 (review section 4): emission is an explicit CALL, not a destructor side
-    // effect. A destructor cannot propagate an exception, which forced a catch(...)
-    // that swallowed every diagnostic failure silently -- a probe that fails invisibly
-    // is worse than no probe, and this campaign has already been misled by
-    // instrumentation that quietly did nothing. Emitting explicitly also puts the
-    // output where a reader can see it happen instead of at an implicit scope exit.
-    struct UTermsReport {
-        const std::vector<std::pair<std::string, torch::Tensor>>* site;
-        const UAdvectionTerms* adv;   // typed: additive vs derived is structural
-        const torch::Tensor* final_ru;
-        const torch::Tensor* u;
-        bool on;
-        void emit() const {
-            if (!on || site->empty() || !final_ru->defined()) return;
-                torch::NoGradGuard ng;
-                static std::atomic<long> call_no{0};
-                const long n = call_no.fetch_add(1) + 1;
-                auto l2 = [](const torch::Tensor& x) {
-                    return x.norm().to(torch::kCPU).item<double>();
-                };
-                auto mx = [](const torch::Tensor& x) {
-                    return x.abs().max().to(torch::kCPU).item<double>();
-                };
-                const bool have_u = u->defined() && u->sizes() == final_ru->sizes();
-                auto work = [&](const torch::Tensor& d) {
-                    return have_u ? (*u * d).sum().to(torch::kCPU).item<double>() : 0.0;
-                };
-                std::cerr << "[UTERMS] rhs=" << n << " sites=" << site->size()
-                          << (have_u ? "" : " (u-shape mismatch: W suppressed)")
-                          << std::endl;
-                torch::Tensor prev;
-                torch::Tensor adv_delta;
-                for (const auto& s : *site) {
-                    torch::Tensor d = prev.defined() ? (s.second - prev) : s.second;
-                    prev = s.second;
-                    if (s.first == "adv") adv_delta = d;
-                    std::cerr << "[UTERMS]   " << s.first
-                              << "  |dR|=" << l2(d)
-                              << "  max|dR|=" << mx(d)
-                              << "  W=" << work(d) << std::endl;
-                }
-                // (a) COVERAGE: telescoping residual must be exactly 0.
-                auto unattr = *final_ru - prev;
-                std::cerr << "[UTERMS]   unattributed |dR|=" << l2(unattr)
-                          << "   <- coverage check, must be 0" << std::endl;
-                // (b) Real closure: independent sub-terms vs the adv site delta.
-                if (adv->complete() && adv_delta.defined()) {
-                    struct Named { const char* n; torch::Tensor t; };
-                    const Named additive[] = {{"adv_x", adv->x},
-                                              {"adv_y", adv->y},
-                                              {"adv_z", adv->vertical}};
-                    torch::Tensor acc;
-                    for (const auto& e : additive) {
-                        acc = acc.defined() ? (acc + e.t) : e.t;
-                        std::cerr << "[UTERMS]     sub " << e.n
-                                  << "  |T|=" << l2(e.t)
-                                  << "  max|T|=" << mx(e.t)
-                                  << "  W=" << work(e.t) << std::endl;
-                        // K-PROFILE. A term that is huge because of a boundary defect
-                        // piles into one or two levels; real advection is spread through
-                        // the column. This is the discriminator, and it is why raw
-                        // magnitude alone must not be reported as a verdict.
-                        if (e.t.dim() == 3) {
-                            std::cerr << "[UTERMS]       kprof " << e.n << ":";
-                            auto per_k = e.t.transpose(0, 1).reshape(
-                                {e.t.size(1), -1}).norm(2, 1).to(torch::kCPU);
-                            auto acc_k = per_k.accessor<float, 1>();
-                            for (int64_t k = 0; k < per_k.size(0); ++k) std::cerr << " " << acc_k[k];
-                            std::cerr << std::endl;
-                        }
-                    }
-                    // DERIVED aggregate: reported, never summed.
-                    auto hz = adv->horizontal();
-                    std::cerr << "[UTERMS]     derived horiz  |T|=" << l2(hz)
-                              << "  W=" << work(hz) << std::endl;
-                    const double den = l2(adv_delta);
-                    std::cerr << "[UTERMS]     adv closure |sum(additive)-d(adv)|="
-                              << l2(acc - adv_delta)
-                              << "  rel=" << (den > 0.0 ? l2(acc - adv_delta) / den : 0.0)
-                              << std::endl;
-                }
-        }
-    } uterms_report{&uterms_site, &uterms_adv, &ru_tend, &u_for_work, uterms_trace};
     uterm_site("entry");
 
     // DEBUG OUTPUT: INITIAL TENDENCIES
@@ -13804,9 +13655,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // check that can genuinely fail.
         if (uterms_trace) {
             torch::NoGradGuard ng;
-            uterms_adv.x        = ru_adv_x.detach().clone();
-            uterms_adv.y        = ru_adv_y.detach().clone();
-            uterms_adv.vertical = ru_adv_z.detach().clone();
+            uterms.advection.x        = ru_adv_x.detach().clone();
+            uterms.advection.y        = ru_adv_y.detach().clone();
+            uterms.advection.vertical = ru_adv_z.detach().clone();
         }
         // 9F.D20: combined horizontal, to compare against WRF's advect_u split.
         // Captured as the SUM (not |adv_x|+|adv_y|) because WRF's horizontal block
@@ -13823,7 +13674,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // correlation / per-level error / sign disagreement against WRF's
         // wrf_advect_u_split.bin. One snapshot only, matching the WRF side.
         {
-            static const bool split_dump = env_flag_true("WRF_SDIRK3_ADVECT_U_SPLIT_DUMP");
+            const bool split_dump = diag_cfg.dump_advect_u_split;
             if (split_dump && ru_adv_horiz.defined() && ru_adv_z.defined()) {
                 torch::NoGradGuard ng;
                 // Skip calls whose tendency is still identically zero: the first RHS
@@ -13843,9 +13694,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             h.numel() * sizeof(float));
                     f.write(reinterpret_cast<const char*>(z.data_ptr<float>()),
                             z.numel() * sizeof(float));
-                    std::cerr << "[ADVECT_U_SPLIT] port wrote port_advect_u_split.bin shape=("
-                              << dims[0] << "," << dims[1] << "," << dims[2] << ")"
-                              << std::endl;
+                    wrf::sdirk3::emit_split_dump_notice(dims[0], dims[1], dims[2]);
                 }
             }
         }
@@ -21652,7 +21501,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // form fired on every exit path including early returns; those paths have an
     // INCOMPLETE decomposition, so what they printed was a partial record that looked
     // like a whole one.
-    if (uterms_trace) uterms_report.emit();
+    if (uterms_trace) {
+        uterms.final_tendency = ru_tend;
+        uterms.u = u_for_work;
+        wrf::sdirk3::emit_u_slow_diagnostics(uterms);
+    }
     torch::Tensor u_tend, v_tend, w_tend;
     if (g_export_coupled_slow) {
         // SPLIT-EXPLICIT D1 FIX (2026-07-11): export coupled d(mu*X)/dt directly (WRF
