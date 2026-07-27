@@ -239,27 +239,72 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
    LOGICAL :: uterm_trace
    LOGICAL, SAVE :: uterm_trace_s = .FALSE.
    LOGICAL, SAVE :: uterm_init_s  = .FALSE.
-   CHARACTER(LEN=32) :: uterm_env
-   INTEGER :: uterm_st, uterm_len
+   CHARACTER(LEN=32) :: uterm_env, uterm_val
+   INTEGER :: uterm_st, uterm_len, uterm_i, uterm_c
    REAL    :: uterm_nh, uterm_nv
+   CHARACTER(LEN=160) :: uterm_line
+   INTEGER, SAVE :: uterm_call_s = 0
+   INTEGER :: uterm_du, uterm_dump_call, uterm_dst, uterm_dlen
+   CHARACTER(LEN=32) :: uterm_denv
 
    specified = .false.
    if(config_flags%specified .or. config_flags%nested) specified = .true.
 
-!  Read the env var ONCE, not on every advect_u call. The unhoisted form is the
-!  same defect that made bwave_pert_scale() re-read the environment per grid cell;
-!  advect_u is called every RK stage of every step, so a per-call getenv is a real
-!  hot-path syscall. The SAVEd pair is written under a benign race: concurrent
-!  OpenMP tiles may both perform the read, but both write the SAME deterministic
-!  value, and it is a diagnostic flag rather than state.
+!  9F.D25 (review sec 9 + sec 10): read the env var ONCE, under a CRITICAL section, and
+!  parse it STRICTLY.
+!
+!  sec 9 -- I previously called the unsynchronised SAVE write a "benign race" because
+!  concurrent tiles write the same value. That is wrong as stated: in the Fortran/
+!  OpenMP memory model an unsynchronised concurrent read/write is a data race
+!  regardless of the values, and a thread can observe uterm_init_s=.TRUE. without yet
+!  observing uterm_trace_s. The failure that would produce -- some tiles tracing and
+!  others not -- is exactly the kind of partial instrumentation that yields a
+!  confidently wrong measurement. CRITICAL costs nothing here: it runs once.
+!
+!  sec 10 -- the flag was ON only for the exact string '1', so "true", "yes", "on" and
+!  any typo silently selected OFF. In an investigation where no-op interventions have
+!  already produced false causal conclusions, a diagnostic that silently does nothing
+!  is the worst failure mode. Now: unset/0/false/no/off -> off; 1/true/yes/on -> on;
+!  ANYTHING else is fatal rather than quietly ignored.
+!$OMP CRITICAL(UTERM_TRACE_INIT)
    IF ( .NOT. uterm_init_s ) THEN
       uterm_trace_s = .FALSE.
       CALL get_environment_variable("WRF_ADVECT_U_SPLIT_TRACE", uterm_env, &
                                     LENGTH=uterm_len, STATUS=uterm_st)
       IF ( uterm_st == 0 .AND. uterm_len > 0 ) THEN
-         IF ( uterm_env(1:uterm_len) == '1' ) uterm_trace_s = .TRUE.
+         IF ( uterm_len > LEN(uterm_env) ) THEN
+            CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_TRACE was truncated')
+         END IF
+         uterm_val = uterm_env(1:uterm_len)
+         DO uterm_i = 1, uterm_len          ! inline lowercase; no helper to invent
+            uterm_c = IACHAR( uterm_val(uterm_i:uterm_i) )
+            IF ( uterm_c >= 65 .AND. uterm_c <= 90 ) THEN
+               uterm_val(uterm_i:uterm_i) = ACHAR( uterm_c + 32 )
+            END IF
+         END DO
+         SELECT CASE ( TRIM(uterm_val) )
+            CASE ('1','true','yes','on')
+               uterm_trace_s = .TRUE.
+            CASE ('0','false','no','off')
+               uterm_trace_s = .FALSE.
+            CASE DEFAULT
+               CALL wrf_error_fatal( &
+                 'WRF_ADVECT_U_SPLIT_TRACE must be one of 1/true/yes/on/0/false/no/off')
+         END SELECT
+      ELSE IF ( uterm_st /= 0 .AND. uterm_st /= 1 ) THEN
+         CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_TRACE could not be read')
       END IF
       uterm_init_s = .TRUE.
+   END IF
+!$OMP END CRITICAL(UTERM_TRACE_INIT)
+   uterm_dump_call = 2
+   CALL get_environment_variable("WRF_ADVECT_U_SPLIT_DUMP_CALL", uterm_denv, &
+                                 LENGTH=uterm_dlen, STATUS=uterm_dst)
+   IF ( uterm_dst == 0 .AND. uterm_dlen > 0 ) THEN
+      READ(uterm_denv(1:uterm_dlen), *, IOSTAT=uterm_dst) uterm_dump_call
+      IF ( uterm_dst /= 0 .OR. uterm_dump_call < 1 ) THEN
+         CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_DUMP_CALL must be a positive integer')
+      END IF
    END IF
    uterm_trace = uterm_trace_s
    IF ( uterm_trace ) THEN
@@ -1586,11 +1631,37 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 !  per-term |T|. Interior only (its ... ite/jts ... jte, 1..ktf) so halo garbage
 !  cannot inflate either norm.
    IF ( uterm_trace ) THEN
+!$OMP ATOMIC
+      uterm_call_s = uterm_call_s + 1
       uterm_snap_v = tendency - uterm_snap_v
-      uterm_nh = SQRT( SUM( uterm_snap_h(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1))**2 ) )
-      uterm_nv = SQRT( SUM( uterm_snap_v(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1))**2 ) )
-      WRITE(0,'(A,E16.8,A,E16.8)') '[ADVECT_U_SPLIT] |horiz|=', uterm_nh, &
-                                   ' |vert|=', uterm_nv
+!     9F.D25 (review sec 11): accumulate in DOUBLE. A conclusion quoted to 2.4% must not
+!     rest on a single-precision sum of squares over O(2e5) terms, where the running
+!     total is orders of magnitude above the increments and absorbs them.
+      uterm_nh = REAL( SQRT( SUM( REAL( &
+         uterm_snap_h(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1)), KIND=8 )**2 ) ) )
+      uterm_nv = REAL( SQRT( SUM( REAL( &
+         uterm_snap_v(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1)), KIND=8 )**2 ) ) )
+      WRITE(uterm_line,'(A,I0,A,E16.8,A,E16.8)') &
+         '[ADVECT_U_SPLIT] call=', uterm_call_s, ' |horiz|=', uterm_nh, &
+         ' |vert|=', uterm_nv
+      CALL wrf_message( TRIM(uterm_line) )
+!     9F.D26 (review section 3): norms are NOT field parity. ||PT||=||T|| for any
+!     permutation P and ||-T||=||T||, so equal magnitudes are consistent with a
+!     transposed, shifted or sign-flipped field. Dump the FIELDS so an offline diff can
+!     compute e2 / e_inf / correlation / per-level error / sign-disagreement, which is
+!     what "the operator matches" actually requires. Same header+layout as
+!     wrf_rk_tend_dump.bin so the existing loader applies.
+!     Dumped for ONE call (default the first live one, call 2 -- call 1 is all-zero) so
+!     the file is a single matched-input snapshot, not the last of many.
+      IF ( uterm_call_s == uterm_dump_call ) THEN
+         OPEN(NEWUNIT=uterm_du, FILE="wrf_advect_u_split.bin", FORM="unformatted", &
+              ACCESS="stream", STATUS="replace")
+         WRITE(uterm_du) ims, ime, jms, jme, kms, kme
+         WRITE(uterm_du) uterm_snap_h
+         WRITE(uterm_du) uterm_snap_v
+         CLOSE(uterm_du)
+         CALL wrf_message('[ADVECT_U_SPLIT] wrote wrf_advect_u_split.bin')
+      END IF
       DEALLOCATE( uterm_snap_h )
       DEALLOCATE( uterm_snap_v )
    END IF

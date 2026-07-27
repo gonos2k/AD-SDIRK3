@@ -70,4 +70,23 @@ clean:
 
 include depend.dyn_em
 
+# 9F.D25 (review section 12): Fortran INCLUDE dependencies are NOT tracked.
+#
+# depend.dyn_em carries no entry for module_initialize_ideal at all, and the WRF
+# dependency generator does not scan Fortran INCLUDE lines, so editing an included
+# file leaves the .o stale while make reports success. That was OBSERVED, not
+# theorised: after moving bwave_pert_scale_parse.inc, `compile` exited 0 against an
+# object built from the file's previous location, and it only rebuilt once the .o was
+# force-removed.
+#
+# The dangerous shape is specific and silent: the hosted CI parser contract compiles
+# the .inc DIRECTLY, so CI stays green on the NEW parser while the linked wrf.exe can
+# still contain the OLD one. Green CI would then certify a binary that does not
+# contain the code it tested.
+#
+# Declared here rather than in depend.dyn_em because that file is generated and a
+# regeneration would silently drop the line. make unions dependencies from all
+# sources, so this survives.
+module_initialize_ideal.o: bwave_pert_scale_parse.inc
+
 # DO NOT DELETE

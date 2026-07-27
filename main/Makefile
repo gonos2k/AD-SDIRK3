@@ -45,6 +45,22 @@ convert_em : convert_em.o
 	$(RANLIB) $(RLFLAGS) $(LIBWRFLIB)
 	$(LD) -o convert_em.exe $(LDFLAGS) convert_em.o $(LIBWRFLIB) $(LIB)
 
+# 9F.D25 (review section 12): Fortran INCLUDE dependencies are NOT tracked anywhere
+# in this build, so editing an included file leaves the .o stale while make reports
+# success. OBSERVED: after moving bwave_pert_scale_parse.inc, `compile` exited 0
+# against an object built from the file's old location.
+#
+# The dangerous shape is silent -- the hosted-CI parser contract compiles the .inc
+# DIRECTLY, so CI goes green on the NEW parser while the linked ideal.exe can still
+# contain the OLD one. Green CI would then certify a binary that lacks the code it
+# tested.
+#
+# It must be declared HERE, not in dyn_em/Makefile: the ideal-case object is built
+# while make runs in main/ (recipe below is commented out, so a suffix rule fires),
+# and dyn_em/Makefile is never loaded in that context. A dyn_em-side declaration was
+# tried first and measured to have NO effect.
+../dyn_$(SOLVER)/module_initialize_$(IDEAL_CASE).o: ../dyn_$(SOLVER)/bwave_pert_scale_parse.inc
+
 module_initialize : ../dyn_$(SOLVER)/module_initialize_$(IDEAL_CASE).o
 #	( cd ../dyn_$(SOLVER) ;  $(MAKE) module_initialize_$(IDEAL_CASE).o )
 
