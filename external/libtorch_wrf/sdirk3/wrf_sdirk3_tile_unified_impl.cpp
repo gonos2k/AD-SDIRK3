@@ -6954,8 +6954,10 @@ vertical_coefficients:
                     // 9F.D29 (review section 7): options parsed ONCE (function-local
                     // static initialiser), then passed explicitly, so the schedule
                     // itself is a pure function of its arguments.
+                    // 9F.D32 (review section 2): ONE authority for stage1_substeps.
                     static const auto acoustic_opts =
-                        acoustic::acoustic_schedule_options_from_env();
+                        acoustic::AcousticScheduleOptions{
+                            wrf::sdirk3::ExperimentConfig::from_environment().stage1_substeps};
                     const auto sched = acoustic::acoustic_schedule(
                         se_rk, static_cast<float>(dt), num_sound_steps, acoustic_opts);
                     auto U_stage_halo = use_ad_halo ? ad_halo_exchange(U_stage) : torch::Tensor();
@@ -12329,16 +12331,19 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     wrf::sdirk3::USlowTerms uterms;
     const torch::Tensor& u_for_work = u;
     torch::Tensor uterm_prev;
-    auto uterm_site = [&](const char* label) {
+    auto uterm_site = [&](wrf::sdirk3::USlowSiteKind kind) {
         if (!uterms_trace || !ru_tend.defined()) return;
         torch::NoGradGuard ng;
         auto now = ru_tend.detach().clone();
         auto delta = uterm_prev.defined() ? (now - uterm_prev) : now;
         uterm_prev = now;
-        uterms.sites.push_back({label, delta});
-        if (std::string(label) == "adv") uterms.adv_site_delta = delta;
+        uterms.sites.push_back({kind, delta});
+        // Kept as the SNAPSHOT, not a re-sum of deltas: snapshot-vs-final is exactly
+        // zero when every mutation is captured, with no float32 ordering roundoff.
+        uterms.last_site_tendency = now;
+        if (kind == wrf::sdirk3::USlowSiteKind::Advection) uterms.adv_site_delta = delta;
     };
-    uterm_site("entry");
+    uterm_site(wrf::sdirk3::USlowSiteKind::Entry);
 
     // DEBUG OUTPUT: INITIAL TENDENCIES
     // AUTOGRAD FIX: Wrap .item() calls in NoGradGuard    
@@ -13698,7 +13703,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 }
             }
         }
-        uterm_site("adv");
+        uterm_site(wrf::sdirk3::USlowSiteKind::Advection);
         
         // AUTOGRAD FIX: Wrap debug block in NoGradGuard
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -16532,7 +16537,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
         
         ru_tend = ru_tend + u_tend_pgf;    }
-    uterm_site("pgf");
+    uterm_site(wrf::sdirk3::USlowSiteKind::PressureGradient);
 
     // --- 5.2: V-Momentum PGF ---
     {
@@ -19023,7 +19028,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 float f = wrf::sdirk3::g_sdirk3_config.coriolis_f;
                 ru_tend = ru_tend + msf_ratio_u * f * rv_at_u;            }
         }
-        uterm_site("coriolis");
+        uterm_site(wrf::sdirk3::USlowSiteKind::Coriolis);
 
         // --- V-momentum Coriolis ---
         // rv_tend = -(msfvy/msfvx)*f*ru_at_v + e*sina*rw_at_v
@@ -19789,7 +19794,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto curv_u = vxgm_at_u * rv_at_u - u * reradius * rw_at_u;
                 ru_tend = ru_tend + curv_u;
             }
-            uterm_site("curvature");
+            uterm_site(wrf::sdirk3::USlowSiteKind::Curvature);
 
             // --- V-momentum curvature ---
             // PARITY FIX (2025-12-05): Proper branching like Fortran
@@ -20414,7 +20419,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto u_diff_h = compute_horizontal_diffusion_u_wrf(u, v, w, Kh_mom, rdx, rdy,
                                                                    msfux_, msfuy_, msftx_, msfty_, muu_2d, ph_full_for_diff);
                 ru_tend = ru_tend + u_diff_h;
-                uterm_site("hdiff");
+                uterm_site(wrf::sdirk3::USlowSiteKind::HorizontalDiffusion);
 
                 // V-momentum horizontal diffusion
                 auto v_diff_h = compute_horizontal_diffusion_v_wrf(u, v, w, Kh_mom, rdx, rdy,
@@ -20549,7 +20554,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto defor13 = compute_defor13(u, w, rdx_tensor, rdnw_tensor);
                 auto u_diff_v = compute_vertical_diffusion_u_stress(u, defor13, Kv_mom, rho, rdnw_tensor);
                 ru_tend = ru_tend + u_diff_v;
-                uterm_site("vdiff_stress");
+                uterm_site(wrf::sdirk3::USlowSiteKind::VerticalDiffusion);
                 
                 // V-momentum vertical diffusion with stress tensor
                 auto rdy_tensor = torch::full({1}, rdy, options);
@@ -20934,7 +20939,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 
                 auto u_diff_v = compute_vertical_mixing_u(u, w, Kv, rdnw_tensor, rho);
                 ru_tend = ru_tend + u_diff_v;
-                uterm_site("vdiff_mixing");
+                uterm_site(wrf::sdirk3::USlowSiteKind::VerticalDiffusion);
 
                 auto v_diff_v = compute_vertical_mixing_v(v, w, Kv, rdnw_tensor, rho);
                 rv_tend = rv_tend + v_diff_v;
@@ -21496,7 +21501,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // 9F.D18: last mutation of ru_tend_ in this function -- everything downstream
     // works on the PACKED RHS, not on ru_tend_. So the coverage residual measured
     // against this snapshot is exact for ru_tend_ and only for ru_tend_.
-    uterm_site("final");
+    uterm_site(wrf::sdirk3::USlowSiteKind::Final);
     // Emit here, at the single place the decomposition is complete. The destructor
     // form fired on every exit path including early returns; those paths have an
     // INCOMPLETE decomposition, so what they printed was a partial record that looked

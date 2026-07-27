@@ -15,7 +15,7 @@ no offset search here -- a correlation-maximising crop previously selected a
 periodic-x ALIAS in this project and produced a confident wrong answer. (An earlier
 version of this docstring claimed a search was "reported explicitly"; it never was.)
 
-Usage: advect_u_split_parity.py --wrf wrf_advect_u_split.bin --port port_advect_u_split.bin
+Usage: advect_u_split_parity.py --wrf wrf_advect_u_split_rank0000.bin --port port_advect_u_split.bin
 """
 import argparse
 import sys
