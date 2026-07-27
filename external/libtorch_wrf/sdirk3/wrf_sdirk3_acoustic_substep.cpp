@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <stdexcept>
 #include <exception>
 #include <iomanip>
 #include <iostream>
@@ -839,11 +840,22 @@ AcousticSchedule acoustic_schedule(int rk_step, float dt, int num_sound_steps) {
         static const int s1_sub = [] {
             const char* v = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS");
             if (v == nullptr || v[0] == '\0') return 1;
-            const int n = std::atoi(v);
-            TORCH_CHECK(n >= 1 && n <= 4096,
-                "WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS must be in [1,4096]; got \"",
-                v, "\". A non-numeric value would otherwise parse to 0 and silently "
-                "disable stage-1 acoustics entirely.");
+            // 9F.D27 (review section 10): std::atoi PREFIX-parses and cannot report
+            // failure, so "2junk" silently became 2 and "3.5" silently became 3 -- an
+            // experiment would then run a schedule the operator never asked for and the
+            // log would agree with the wrong intent. Require the WHOLE string to be the
+            // integer.
+            const std::string sv(v);
+            std::size_t consumed = 0;
+            int n = 0;
+            try {
+                n = std::stoi(sv, &consumed);
+            } catch (const std::exception&) {
+                consumed = 0;
+            }
+            TORCH_CHECK(consumed == sv.size() && n >= 1 && n <= 4096,
+                "WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS must be an integer in "
+                "[1,4096] with no trailing characters; got \"", sv, "\".");
             return n;
         }();
         return {dt / 3.0f / static_cast<float>(s1_sub), s1_sub};

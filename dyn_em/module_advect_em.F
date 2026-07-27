@@ -241,10 +241,12 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
    LOGICAL, SAVE :: uterm_init_s  = .FALSE.
    CHARACTER(LEN=32) :: uterm_env, uterm_val
    INTEGER :: uterm_st, uterm_len, uterm_i, uterm_c
-   REAL    :: uterm_nh, uterm_nv
+   INTEGER, PARAMETER :: uterm_dp = KIND(1.0D0)   ! self-contained; no USE to order
+   REAL(uterm_dp) :: uterm_nh, uterm_nv            ! genuinely FP64 end-to-end (section 6)
    CHARACTER(LEN=160) :: uterm_line
    INTEGER, SAVE :: uterm_call_s = 0
    INTEGER :: uterm_du, uterm_dump_call, uterm_dst, uterm_dlen
+   INTEGER, SAVE :: uterm_dump_call_s = 2
    CHARACTER(LEN=32) :: uterm_denv
 
    specified = .false.
@@ -294,18 +296,19 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
       ELSE IF ( uterm_st /= 0 .AND. uterm_st /= 1 ) THEN
          CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_TRACE could not be read')
       END IF
+      uterm_dump_call_s = 2
+      CALL get_environment_variable("WRF_ADVECT_U_SPLIT_DUMP_CALL", uterm_denv, &
+                                    LENGTH=uterm_dlen, STATUS=uterm_dst)
+      IF ( uterm_dst == 0 .AND. uterm_dlen > 0 ) THEN
+         READ(uterm_denv(1:uterm_dlen), *, IOSTAT=uterm_dst) uterm_dump_call_s
+         IF ( uterm_dst /= 0 .OR. uterm_dump_call_s < 1 ) THEN
+            CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_DUMP_CALL must be a positive integer')
+         END IF
+      END IF
       uterm_init_s = .TRUE.
    END IF
 !$OMP END CRITICAL(UTERM_TRACE_INIT)
-   uterm_dump_call = 2
-   CALL get_environment_variable("WRF_ADVECT_U_SPLIT_DUMP_CALL", uterm_denv, &
-                                 LENGTH=uterm_dlen, STATUS=uterm_dst)
-   IF ( uterm_dst == 0 .AND. uterm_dlen > 0 ) THEN
-      READ(uterm_denv(1:uterm_dlen), *, IOSTAT=uterm_dst) uterm_dump_call
-      IF ( uterm_dst /= 0 .OR. uterm_dump_call < 1 ) THEN
-         CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_DUMP_CALL must be a positive integer')
-      END IF
-   END IF
+   uterm_dump_call = uterm_dump_call_s
    uterm_trace = uterm_trace_s
    IF ( uterm_trace ) THEN
       ALLOCATE( uterm_snap_h(ims:ime, kms:kme, jms:jme) )
@@ -1637,11 +1640,11 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 !     9F.D25 (review sec 11): accumulate in DOUBLE. A conclusion quoted to 2.4% must not
 !     rest on a single-precision sum of squares over O(2e5) terms, where the running
 !     total is orders of magnitude above the increments and absorbs them.
-      uterm_nh = REAL( SQRT( SUM( REAL( &
-         uterm_snap_h(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1)), KIND=8 )**2 ) ) )
-      uterm_nv = REAL( SQRT( SUM( REAL( &
-         uterm_snap_v(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1)), KIND=8 )**2 ) ) )
-      WRITE(uterm_line,'(A,I0,A,E16.8,A,E16.8)') &
+      uterm_nh = ( SQRT( SUM( REAL( &
+         uterm_snap_h(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1)), KIND=uterm_dp )**2 ) ) )
+      uterm_nv = ( SQRT( SUM( REAL( &
+         uterm_snap_v(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1)), KIND=uterm_dp )**2 ) ) )
+      WRITE(uterm_line,'(A,I0,A,E24.16,A,E24.16)') &
          '[ADVECT_U_SPLIT] call=', uterm_call_s, ' |horiz|=', uterm_nh, &
          ' |vert|=', uterm_nv
       CALL wrf_message( TRIM(uterm_line) )
