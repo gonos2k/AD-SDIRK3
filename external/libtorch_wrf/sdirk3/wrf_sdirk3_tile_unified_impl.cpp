@@ -12331,20 +12331,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // writes to std::cerr for this probe.
     const auto& diag_cfg = diagnostics_;
     const bool uterms_trace = diag_cfg.trace_u_terms;
-    wrf::sdirk3::USlowTerms uterms;
+    // 9F.D34 (review section 4): capture goes through the SHARED helper, so the
+    // fixture exercises this exact code path rather than a hand-built stand-in.
+    wrf::sdirk3::USlowCaptureState ucap;
     const torch::Tensor& u_for_work = u;
-    torch::Tensor uterm_prev;
     auto uterm_site = [&](wrf::sdirk3::USlowSiteKind kind) {
-        if (!uterms_trace || !ru_tend.defined()) return;
-        torch::NoGradGuard ng;
-        auto now = ru_tend.detach().clone();
-        auto delta = uterm_prev.defined() ? (now - uterm_prev) : now;
-        uterm_prev = now;
-        uterms.sites.push_back({kind, delta});
-        // Kept as the SNAPSHOT, not a re-sum of deltas: snapshot-vs-final is exactly
-        // zero when every mutation is captured, with no float32 ordering roundoff.
-        uterms.last_site_tendency = now;
-        if (kind == wrf::sdirk3::USlowSiteKind::Advection) uterms.adv_site_delta = delta;
+        if (!uterms_trace) return;
+        wrf::sdirk3::capture_u_slow_site(ucap, kind, ru_tend);
     };
     uterm_site(wrf::sdirk3::USlowSiteKind::Entry);
 
@@ -13663,9 +13656,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // check that can genuinely fail.
         if (uterms_trace) {
             torch::NoGradGuard ng;
-            uterms.advection.x        = ru_adv_x.detach().clone();
-            uterms.advection.y        = ru_adv_y.detach().clone();
-            uterms.advection.vertical = ru_adv_z.detach().clone();
+            ucap.terms.advection.x        = ru_adv_x.detach().clone();
+            ucap.terms.advection.y        = ru_adv_y.detach().clone();
+            ucap.terms.advection.vertical = ru_adv_z.detach().clone();
         }
         // 9F.D20: combined horizontal, to compare against WRF's advect_u split.
         // Captured as the SUM (not |adv_x|+|adv_y|) because WRF's horizontal block
@@ -21485,9 +21478,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // INCOMPLETE decomposition, so what they printed was a partial record that looked
     // like a whole one.
     if (uterms_trace) {
-        uterms.final_tendency = ru_tend;
-        uterms.u = u_for_work;
-        wrf::sdirk3::emit_u_slow_diagnostics(uterms);
+        ucap.terms.final_tendency = ru_tend;
+        ucap.terms.u = u_for_work;
+        wrf::sdirk3::emit_u_slow_diagnostics(ucap.terms);
     }
     torch::Tensor u_tend, v_tend, w_tend;
     if (g_export_coupled_slow) {

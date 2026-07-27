@@ -94,6 +94,29 @@ struct USlowTerms {
     torch::Tensor u;                // for the work projection sum(u * dR)
 };
 
+// 9F.D34 (review section 4): production and the fixture must run the SAME capture
+// code. The fixture previously hand-built a USlowTerms, so it verified only that the
+// emitter formats a well-formed input correctly -- while the regression it was written
+// for was in the WIRING (a dropped last_site_tendency assignment). A test that cannot
+// see the wiring cannot guard the wiring.
+struct USlowCaptureState {
+    torch::Tensor previous;
+    USlowTerms terms;
+};
+
+inline void capture_u_slow_site(USlowCaptureState& st,
+                                USlowSiteKind kind,
+                                const torch::Tensor& current) {
+    if (!current.defined()) return;
+    torch::NoGradGuard ng;
+    auto snapshot = current.detach().clone();
+    auto delta = st.previous.defined() ? (snapshot - st.previous) : snapshot;
+    st.previous = snapshot;
+    st.terms.sites.push_back({kind, delta});
+    st.terms.last_site_tendency = snapshot;
+    if (kind == USlowSiteKind::Advection) st.terms.adv_site_delta = delta;
+}
+
 // Emits the u-slow decomposition. Pure observation: takes tensors, writes lines.
 // Never mutates its inputs and never influences a solver decision.
 //
@@ -107,8 +130,16 @@ struct USlowTerms {
 // Header-only ON PURPOSE. A separate .cpp would have to be added to
 // wrf_sdirk3_core_sources.txt, to CMakeLists, and to the CI exact-set install
 // contract -- three coupled edits, and the exact-set ratchet has silently rotted
-// four times in this repo. Exactly one translation unit includes this, so inline
-// costs nothing and the build system does not move at all.
+// four times in this repo.
+//
+// 9F.D34 (review section 8): an earlier version of this note claimed "exactly one
+// translation unit includes this". That is no longer true -- tests/test_u_slow_
+// closures.cpp includes it as well -- so the "inline costs nothing" argument does not
+// hold as stated. It is also true, as the review checked, that adding a .cpp costs
+// ONE line in wrf_sdirk3_core_sources.txt plus the CI "22 production sources" counter,
+// not the three coupled edits claimed earlier. Moving the implementation to a .cpp is
+// the right next step; it is deliberately NOT bundled with the closure-semantics fix
+// so that a behavioural change and a file move do not land in one commit.
 // ---------------------------------------------------------------------------
 
 
@@ -145,7 +176,18 @@ inline void emit_u_slow_diagnostics(const USlowTerms& t) {
                   << "  W=" << work(s.delta) << "\n";
     }
 
-    // 9F.D32 (review section 1): COVERAGE closure, restored.
+    // 9F.D34 (review section 3): this is a POST-CAPTURE TAIL residual, not site
+    // coverage. It was named and documented as coverage, which claims more than it
+    // checks.
+    //
+    // What it detects: ru_tend mutating AFTER the last capture.
+    // What it does NOT detect: an unnamed mutation BETWEEN two captures. If an
+    // unnamed term H lands between captures j-1 and j, then
+    //     T_j = T_{j-1} + H + P_j   =>   delta_j = H + P_j
+    // so H is absorbed into the NEXT named site's delta and this residual is still
+    // exactly 0. Proving every physical term has a named site would need each
+    // ru_tend mutation to go through a capture API -- a much larger change than
+    // naming the residual correctly, which is what is done here.
     //
     // The S2-A extraction dropped this check while the struct comment kept claiming
     // it -- an invariant asserted in prose and verified by nothing, which is the
@@ -153,12 +195,11 @@ inline void emit_u_slow_diagnostics(const USlowTerms& t) {
     //
     // Compared against the last SNAPSHOT rather than a re-sum of the deltas: summing
     // float32 deltas reintroduces order-dependent roundoff, whereas snapshot-vs-final
-    // is exactly zero when every mutation is captured. Nonzero here means a site
-    // mutates ru_tend AFTER the last capture, i.e. this probe does not name it.
+    // is exactly zero when every mutation is captured.
     if (t.last_site_tendency.defined()) {
         const double cov = l2(t.final_tendency - t.last_site_tendency);
-        o << "[UTERMS]   unattributed |dR|=" << cov
-                  << "   <- coverage check, must be 0" << "\n";
+        o << "[UTERMS]   post_capture_tail |dR|=" << cov
+                  << "   <- tail guard (NOT site inventory), must be 0" << "\n";
     }
 
     if (t.advection.complete() && t.adv_site_delta.defined()) {
