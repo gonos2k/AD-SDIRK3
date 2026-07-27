@@ -19,8 +19,6 @@ cd "$REPO/test/em_b_wave" || { echo "no test/em_b_wave under $REPO"; exit 2; }
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 OUT="${MODE_COLLAPSE_OUT:-$PWD/mc_out}"
 mkdir -p "$OUT"
-NL_BACKUP="$(mktemp)"
-cp namelist.input "$NL_BACKUP"
 # 9F.D29 (review section 9): back up the baseline IC as a FILE rather than
 # regenerating it. The 9F.D28 version had three defects, all mine:
 #   1. ideal.exe ran TWICE on a normal exit -- the loop tail rebuilt the IC and then
@@ -33,17 +31,28 @@ cp namelist.input "$NL_BACKUP"
 NL_BACKUP="$(mktemp)"
 IC_BACKUP="$(mktemp)"
 cp namelist.input "$NL_BACKUP"
-timeout 300 ./ideal.exe >/dev/null 2>&1
-[ -f wrfinput_d01 ] || { echo "FAIL: could not build the baseline IC to back up"; exit 1; }
-cp wrfinput_d01 "$IC_BACKUP"
+# 9F.D31 (review section 2.1): install the trap BEFORE the first fallible step. The
+# D29 order created both temp files, ran ideal.exe, and only THEN installed the trap,
+# so a failure in between leaked both files and left the tree modified.
 cleanup() {
-  cp "$NL_BACKUP" namelist.input
-  cp "$IC_BACKUP" wrfinput_d01
+  cp "$NL_BACKUP" namelist.input 2>/dev/null || true
+  [ -s "$IC_BACKUP" ] && cp "$IC_BACKUP" wrfinput_d01
   rm -f "$NL_BACKUP" "$IC_BACKUP" namelist.input.tmp wrfout_d01_*
 }
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+# 9F.D31 (review section 2.2): the baseline must be built from a CLEAN slate with the
+# perturbation variables explicitly unset. Without the rm, a stale wrfinput_d01 passes
+# the existence check and gets backed up as "baseline"; without the env -u, a
+# WRF_BWAVE_PERT_SCALE already exported in the caller's shell is INHERITED, so the
+# "baseline" this sweep restores to would itself be perturbed -- and every delta
+# dU = U_eps - U_0 computed against it would be wrong.
+rm -f wrfinput_d01 wrfout_d01_*
+env -u WRF_BWAVE_PERT_SCALE -u WRF_BWAVE_ALLOW_ZERO timeout 300 ./ideal.exe >/dev/null 2>&1
+[ -s wrfinput_d01 ] || { echo "FAIL: could not build the baseline IC to back up"; exit 1; }
+cp wrfinput_d01 "$IC_BACKUP"
 # 2 h window = 12 steps at dt=600: inside the linear regime, well short of the
 # 6.33 h failure, so no run is contaminated by its own terminal blow-up.
 sed -i.tmp 's/^ run_days  *=.*/ run_days                            = 0,/; s/^ run_hours  *=.*/ run_hours                           = 2,/' namelist.input
@@ -64,8 +73,18 @@ for eps in 1.0 0.5 0.25 0.125 0.0625 0.0; do
   WRF_SDIRK3_SPLIT_EXPLICIT=1 timeout 900 ./wrf.exe >/dev/null 2>&1 || rc=$?
   [ -s rsl.error.0000 ] || { echo "FAIL eps=$eps: no rsl.error.0000 (rc=$rc)"; exit 1; }
   grep -q "Timing for main" rsl.error.0000 || { echo "FAIL eps=$eps: no step records (rc=$rc)"; exit 1; }
-  f=$(ls wrfout_d01_* 2>/dev/null | head -1)
-  [ -n "$f" ] || { echo "FAIL eps=$eps: no wrfout (rc=$rc)"; exit 1; }
+  # 9F.D31 (review section 2.3): rc was captured and never enforced, so an abnormal
+  # exit that still produced some step records and a wrfout was copied in as a valid
+  # member. This window exists to measure the PRE-failure linear regime; a member that
+  # crashed is not in that regime.
+  [ "$rc" -eq 0 ] || { echo "FAIL eps=$eps: wrf.exe exited $rc"; exit 1; }
+  # 9F.D31 (review section 2.4): `ls ... | head -1` silently picks the FIRST file,
+  # which need not be the one holding the target time. Mode collapse compares the SAME
+  # instant across eps, so selecting the wrong file would corrupt the comparison
+  # rather than fail it. Require exactly one.
+  nout=$(ls wrfout_d01_* 2>/dev/null | wc -l | tr -d ' ')
+  [ "$nout" -eq 1 ] || { echo "FAIL eps=$eps: expected exactly 1 wrfout, found $nout"; exit 1; }
+  f=$(ls wrfout_d01_*)
   cp "$f" "$OUT/wrfout_eps$eps.nc"
   echo "eps=$eps steps=$(grep -c 'Timing for main' rsl.error.0000) rc=$rc out=yes"
 done
