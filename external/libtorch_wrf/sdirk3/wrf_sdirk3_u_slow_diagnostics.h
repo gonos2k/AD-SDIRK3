@@ -21,7 +21,12 @@
 
 #include <torch/torch.h>
 
+#include "wrf_sdirk3_diag_io.h"
+#include "wrf_sdirk3_experiment_config.h"
+
 #include <atomic>
+#include <fstream>
+#include <sstream>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
@@ -31,31 +36,6 @@
 
 namespace wrf {
 namespace sdirk3 {
-
-// Which u/v slow-channel ablation is in flight. Exactly one, by construction: the
-// previous four-boolean form made illegal combinations representable and then tried
-// to reject them afterwards, and kept failing to (RU+RV slipped past two guards).
-enum class UvSlowExperiment { None, DropU, DropV, DropBoth, DropPgf };
-
-
-// Settings that MAY change the trajectory.
-struct ExperimentConfig {
-    UvSlowExperiment uv_slow = UvSlowExperiment::None;
-    int stage1_substeps = 1;   // acoustic stage-1 subdivision (1 == WRF)
-
-    // Reads and VALIDATES the environment once. Rejects illegal combinations and
-    // malformed values rather than silently defaulting -- a silently-defaulted
-    // experiment reports success while running the baseline.
-    static ExperimentConfig from_environment();  // defined below
-};
-
-// Settings that MUST NOT change the trajectory.
-struct DiagnosticsConfig {
-    bool trace_u_terms = false;
-    bool dump_advect_u_split = false;
-
-    static DiagnosticsConfig from_environment();  // defined below
-};
 
 // The additive decomposition of the u advective tendency. `horizontal` and `total`
 // are DERIVED -- computed from the additive fields, never stored -- so they cannot be
@@ -131,87 +111,6 @@ struct USlowTerms {
 // costs nothing and the build system does not move at all.
 // ---------------------------------------------------------------------------
 
-namespace uslow_detail {
-
-// Strict boolean. A diagnostic flag that silently reads as OFF for "true"/"on"/a typo
-// is the worst failure mode in this campaign: it produces a run that looks like the
-// experiment and is not.
-inline bool strict_env_flag(const char* name) {
-    const char* v = std::getenv(name);
-    if (v == nullptr || v[0] == '\0') return false;
-    std::string t(v);
-    for (auto& c : t) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    if (t == "1" || t == "true" || t == "yes" || t == "on")  return true;
-    if (t == "0" || t == "false" || t == "no" || t == "off") return false;
-    TORCH_CHECK(false, "env flag ", name, "=\"", v,
-                "\" is not a boolean (use 1/true/yes/on or 0/false/no/off)");
-    return false;
-}
-
-}  // namespace uslow_detail
-
-inline const char* uv_slow_experiment_name(UvSlowExperiment m) {
-    switch (m) {
-        case UvSlowExperiment::DropU:    return "DropU(ABLATE_RU_SLOW)";
-        case UvSlowExperiment::DropV:    return "DropV(ABLATE_RV_SLOW)";
-        case UvSlowExperiment::DropBoth: return "DropBoth(ABLATE_UV_SLOW)";
-        case UvSlowExperiment::DropPgf:  return "DropPgf(ABLATE_UV_PGF)";
-        case UvSlowExperiment::None:     break;
-    }
-    return "None(production)";
-}
-
-inline ExperimentConfig ExperimentConfig::from_environment() {
-    ExperimentConfig c;
-
-    const bool drop_u    = uslow_detail::strict_env_flag("WRF_SDIRK3_ABLATE_RU_SLOW");
-    const bool drop_v    = uslow_detail::strict_env_flag("WRF_SDIRK3_ABLATE_RV_SLOW");
-    const bool drop_both = uslow_detail::strict_env_flag("WRF_SDIRK3_ABLATE_UV_SLOW");
-    const bool drop_pgf  = uslow_detail::strict_env_flag("WRF_SDIRK3_ABLATE_UV_PGF");
-    const int n = int(drop_u) + int(drop_v) + int(drop_both) + int(drop_pgf);
-
-    // RU+RV is named explicitly because it is not a random conflict -- it IS DropBoth
-    // spelled two other ways, and reporting it under the drop-one names is exactly the
-    // silent duplicate this design exists to prevent.
-    TORCH_CHECK(!(drop_u && drop_v && !drop_both && !drop_pgf),
-        "WRF_SDIRK3_ABLATE_RU_SLOW + ABLATE_RV_SLOW together ARE ABLATE_UV_SLOW. Use "
-        "WRF_SDIRK3_ABLATE_UV_SLOW so the run is named for the experiment it performs.");
-    TORCH_CHECK(n <= 1,
-        "select exactly ONE u/v slow experiment; got ", n, " of {ABLATE_RU_SLOW, "
-        "ABLATE_RV_SLOW, ABLATE_UV_SLOW, ABLATE_UV_PGF}.");
-
-    // 9F.D32 (review section 2): stage1_substeps is READ HERE. It was previously
-    // declared on this struct and never set, while the value actually used came from
-    // a separate acoustic_schedule_options_from_env(). That split brain meant any
-    // future reader of ExperimentConfig::stage1_substeps would silently get 1 no
-    // matter what the operator set -- a dead authority that looks live.
-    if (const char* v = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS")) {
-        if (v[0] != '\0') {
-            const std::string sv(v);
-            std::size_t consumed = 0;
-            int n = 0;
-            try { n = std::stoi(sv, &consumed); } catch (const std::exception&) { consumed = 0; }
-            TORCH_CHECK(consumed == sv.size() && n >= 1 && n <= 4096,
-                "WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS must be an integer in "
-                "[1,4096] with no trailing characters; got \"", sv, "\".");
-            c.stage1_substeps = n;
-        }
-    }
-
-    if (drop_u)         c.uv_slow = UvSlowExperiment::DropU;
-    else if (drop_v)    c.uv_slow = UvSlowExperiment::DropV;
-    else if (drop_both) c.uv_slow = UvSlowExperiment::DropBoth;
-    else if (drop_pgf)  c.uv_slow = UvSlowExperiment::DropPgf;
-
-    return c;
-}
-
-inline DiagnosticsConfig DiagnosticsConfig::from_environment() {
-    DiagnosticsConfig d;
-    d.trace_u_terms       = uslow_detail::strict_env_flag("WRF_SDIRK3_UTERMS_TRACE");
-    d.dump_advect_u_split = uslow_detail::strict_env_flag("WRF_SDIRK3_ADVECT_U_SPLIT_DUMP");
-    return d;
-}
 
 inline void emit_u_slow_diagnostics(const USlowTerms& t) {
     if (t.sites.empty() || !t.final_tendency.defined()) return;
@@ -231,14 +130,19 @@ inline void emit_u_slow_diagnostics(const USlowTerms& t) {
         return have_u ? (t.u * d).sum().to(torch::kCPU).item<double>() : 0.0;
     };
 
-    std::cerr << "[UTERMS] rhs=" << n << " sites=" << t.sites.size()
-              << (have_u ? "" : " (u-shape mismatch: W suppressed)") << std::endl;
+    // 9F.D33 (review section 5): the whole record is composed locally and emitted
+    // ONCE. Per-line writes let two concurrent records interleave line-by-line,
+    // which severs a header from the rows belonging to it -- and a decomposition
+    // record read with the wrong header is worse than a missing one.
+    std::ostringstream o;
+    o << "[UTERMS] rhs=" << n << " sites=" << t.sites.size()
+      << (have_u ? "" : " (u-shape mismatch: W suppressed)") << "\n";
 
     for (const auto& s : t.sites) {
-        std::cerr << "[UTERMS]   " << site_name(s.kind)
+        o << "[UTERMS]   " << site_name(s.kind)
                   << "  |dR|=" << l2(s.delta)
                   << "  max|dR|=" << mx(s.delta)
-                  << "  W=" << work(s.delta) << std::endl;
+                  << "  W=" << work(s.delta) << "\n";
     }
 
     // 9F.D32 (review section 1): COVERAGE closure, restored.
@@ -253,8 +157,8 @@ inline void emit_u_slow_diagnostics(const USlowTerms& t) {
     // mutates ru_tend AFTER the last capture, i.e. this probe does not name it.
     if (t.last_site_tendency.defined()) {
         const double cov = l2(t.final_tendency - t.last_site_tendency);
-        std::cerr << "[UTERMS]   unattributed |dR|=" << cov
-                  << "   <- coverage check, must be 0" << std::endl;
+        o << "[UTERMS]   unattributed |dR|=" << cov
+                  << "   <- coverage check, must be 0" << "\n";
     }
 
     if (t.advection.complete() && t.adv_site_delta.defined()) {
@@ -265,42 +169,73 @@ inline void emit_u_slow_diagnostics(const USlowTerms& t) {
         torch::Tensor acc;
         for (const auto& e : additive) {
             acc = acc.defined() ? (acc + e.v) : e.v;
-            std::cerr << "[UTERMS]     sub " << e.n
+            o << "[UTERMS]     sub " << e.n
                       << "  |T|=" << l2(e.v)
                       << "  max|T|=" << mx(e.v)
-                      << "  W=" << work(e.v) << std::endl;
+                      << "  W=" << work(e.v) << "\n";
             // A term that is huge because of a boundary defect piles into one or two
             // levels; real advection is spread through the column. This is the
             // discriminator, and it is why raw magnitude must not be a verdict.
             if (e.v.dim() == 3) {
-                std::cerr << "[UTERMS]       kprof " << e.n << ":";
+                o << "[UTERMS]       kprof " << e.n << ":";
                 auto per_k = e.v.transpose(0, 1)
                                  .reshape({e.v.size(1), -1})
                                  .norm(2, 1)
                                  .to(torch::kCPU);
                 auto a = per_k.accessor<float, 1>();
-                for (int64_t k = 0; k < per_k.size(0); ++k) std::cerr << " " << a[k];
-                std::cerr << std::endl;
+                for (int64_t k = 0; k < per_k.size(0); ++k) o << " " << a[k];
+                o << "\n";
             }
         }
         // DERIVED: reported, never summed.
         auto hz = t.advection.horizontal();
-        std::cerr << "[UTERMS]     derived horiz  |T|=" << l2(hz)
-                  << "  W=" << work(hz) << std::endl;
+        o << "[UTERMS]     derived horiz  |T|=" << l2(hz)
+                  << "  W=" << work(hz) << "\n";
         const double den = l2(t.adv_site_delta);
         const double res = l2(acc - t.adv_site_delta);
-        std::cerr << "[UTERMS]     adv closure |sum(additive)-d(adv)|=" << res
-                  << "  rel=" << (den > 0.0 ? res / den : 0.0) << std::endl;
+        o << "[UTERMS]     adv closure |sum(additive)-d(adv)|=" << res
+          << "  rel=" << (den > 0.0 ? res / den : 0.0) << "\n";
     }
+
+    // ONE emission for the whole record. Must be the LAST statement: every branch
+    // above only appends to the local stream, so an early exit here would compose a
+    // record and print nothing -- which is exactly what happened when this call was
+    // first placed mid-function, and what test_u_slow_closures.cpp caught.
+    emit_diag_block(o.str());
 }
 
 
 
 // Notice that the port-side advect_u split dump was written. Kept here so the numeric
 // function contains no diagnostic string formatting at all.
-inline void emit_split_dump_notice(int64_t nj, int64_t nk, int64_t ni) {
-    std::cerr << "[ADVECT_U_SPLIT] port wrote port_advect_u_split.bin shape=("
-              << nj << "," << nk << "," << ni << ")" << std::endl;
+// 9F.D33 (review section 6): the DUMP ITSELF, not just its notice. Previously only
+// the message moved out and the numeric function still did the enable test, the CPU
+// conversion, the header construction, the ofstream and the write. Moving the string
+// but leaving the I/O is not a separation.
+inline void dump_advect_u_split(const torch::Tensor& horizontal,
+                                const torch::Tensor& vertical) {
+    if (!horizontal.defined() || !vertical.defined()) return;
+    torch::NoGradGuard ng;
+    // The first RHS evaluations return an all-zero u block; dumping one of those
+    // would compare two zero fields and report perfect parity.
+    if (vertical.abs().max().to(torch::kCPU).item<double>() <= 0.0) return;
+
+    static std::atomic<bool> written{false};
+    bool expect = false;
+    if (!written.compare_exchange_strong(expect, true)) return;
+
+    auto h = horizontal.detach().to(torch::kCPU).contiguous();
+    auto v = vertical.detach().to(torch::kCPU).contiguous();
+    std::ofstream f("port_advect_u_split.bin", std::ios::binary);
+    const int64_t dims[3] = {h.size(0), h.size(1), h.size(2)};
+    f.write(reinterpret_cast<const char*>(dims), sizeof(dims));
+    f.write(reinterpret_cast<const char*>(h.data_ptr<float>()), h.numel() * sizeof(float));
+    f.write(reinterpret_cast<const char*>(v.data_ptr<float>()), v.numel() * sizeof(float));
+
+    std::ostringstream o;
+    o << "[ADVECT_U_SPLIT] port wrote port_advect_u_split.bin shape=("
+      << dims[0] << "," << dims[1] << "," << dims[2] << ")\n";
+    emit_diag_block(o.str());
 }
 
 }  // namespace sdirk3

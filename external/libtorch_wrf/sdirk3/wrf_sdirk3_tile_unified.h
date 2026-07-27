@@ -11,6 +11,7 @@
 #define WRF_SDIRK3_TILE_UNIFIED_H
 
 #include "wrf_sdirk3_torch_wrapper.h"
+#include "wrf_sdirk3_experiment_config.h"
 #include "wrf_sdirk3_tile_base.h"
 #include "wrf_sdirk3_unified_rhs.h"
 #include "wrf_sdirk3_newton_solver.h"
@@ -806,6 +807,14 @@ public:
     }
 
 private:
+    // 9F.D33 (review section 3): configuration is OBJECT STATE, read once at
+    // construction -- not a function-local static latched on the first numerical
+    // call. The lazy-static form meant F(U) was really F(U; environment at first
+    // call): two solvers in one process could not differ, a unit test could not vary
+    // the setting within a process, and restart/replay had no explicit provenance.
+    wrf::sdirk3::ExperimentConfig  experiment_;
+    wrf::sdirk3::DiagnosticsConfig diagnostics_;
+
     // Grid information (extended for advanced features)
     std::shared_ptr<wrf::sdirk3::WRFGridInfo> grid_info_;
     // Unified preconditioner (unified_rhs_ already declared above)

@@ -3109,6 +3109,11 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     const std::vector<float>& rdnw,
     int tile_id) 
     : wrf::sdirk3::TileSDIRK3Solver(nx, ny, nz, dx, dy, 0.0, tile_id) {
+    // 9F.D33 (review section 3): read configuration ONCE, here, at the setup
+    // boundary -- so the numerical path only ever reads object state.
+    experiment_  = wrf::sdirk3::ExperimentConfig::from_environment();
+    diagnostics_ = wrf::sdirk3::DiagnosticsConfig::from_environment();
+
     
     // Round 3j: validate the base dimensions BEFORE any +1 arithmetic — the
     // old code computed nx+1 first and range-checked the RESULT, which is
@@ -6955,9 +6960,8 @@ vertical_coefficients:
                     // static initialiser), then passed explicitly, so the schedule
                     // itself is a pure function of its arguments.
                     // 9F.D32 (review section 2): ONE authority for stage1_substeps.
-                    static const auto acoustic_opts =
-                        acoustic::AcousticScheduleOptions{
-                            wrf::sdirk3::ExperimentConfig::from_environment().stage1_substeps};
+                    const acoustic::AcousticScheduleOptions acoustic_opts{
+                        experiment_.stage1_substeps};
                     const auto sched = acoustic::acoustic_schedule(
                         se_rk, static_cast<float>(dt), num_sound_steps, acoustic_opts);
                     auto U_stage_halo = use_ad_halo ? ad_halo_exchange(U_stage) : torch::Tensor();
@@ -7384,8 +7388,7 @@ vertical_coefficients:
                     // So it attributes to the BLOCK, not to advection. These per-component knobs
                     // separate u from v as the next refinement; sub-term (x/y/eta advection) splitting
                     // needs to reach inside computeUnifiedRHS and is a further step.
-                    static const auto exp_cfg = wrf::sdirk3::ExperimentConfig::from_environment();
-                    const auto uv_exp = exp_cfg.uv_slow;
+                    const auto uv_exp = experiment_.uv_slow;
                     {   // announce ONCE, so a log can never be read against the wrong experiment
                         static std::once_flag once;
                         std::call_once(once, [uv_exp] {
@@ -12326,7 +12329,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // in wrf_sdirk3_u_slow_diagnostics.h. This function only COLLECTS tensors it has
     // already computed; it no longer parses the environment, formats strings, or
     // writes to std::cerr for this probe.
-    static const auto diag_cfg = wrf::sdirk3::DiagnosticsConfig::from_environment();
+    const auto& diag_cfg = diagnostics_;
     const bool uterms_trace = diag_cfg.trace_u_terms;
     wrf::sdirk3::USlowTerms uterms;
     const torch::Tensor& u_for_work = u;
@@ -13671,37 +13674,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // a ratio cancels the differing index extents (port tile vs WRF its:ite
         // interior), the coupled/decoupled convention, and any common scaling -- none
         // of which the raw norms share, so raw norms would manufacture a discrepancy.
-        // 9F.D26 (review section 3): dump the FIELDS, not just norms. Equal norms are
-        // consistent with a permuted, shifted or sign-flipped field (||PT||=||T|| for any
-        // permutation P, ||-T||=||T||), so the 2.4%/2.6% magnitude agreement reported in
-        // 9F.D20 does NOT establish operator parity. This writes the port's horizontal
-        // and vertical u-advection so an offline diff can compute e2 / e_inf /
-        // correlation / per-level error / sign disagreement against WRF's
-        // wrf_advect_u_split.bin. One snapshot only, matching the WRF side.
-        {
-            const bool split_dump = diag_cfg.dump_advect_u_split;
-            if (split_dump && ru_adv_horiz.defined() && ru_adv_z.defined()) {
-                torch::NoGradGuard ng;
-                // Skip calls whose tendency is still identically zero: the first RHS
-                // evaluations return an all-zero u block, and dumping one of those would
-                // compare two zero fields and report perfect parity.
-                const bool live =
-                    ru_adv_z.abs().max().to(torch::kCPU).item<double>() > 0.0;
-                static std::atomic<bool> written{false};
-                bool expect = false;
-                if (live && written.compare_exchange_strong(expect, true)) {
-                    auto h = ru_adv_horiz.detach().to(torch::kCPU).contiguous();
-                    auto z = ru_adv_z.detach().to(torch::kCPU).contiguous();
-                    std::ofstream f("port_advect_u_split.bin", std::ios::binary);
-                    const int64_t dims[3] = {h.size(0), h.size(1), h.size(2)};
-                    f.write(reinterpret_cast<const char*>(dims), sizeof(dims));
-                    f.write(reinterpret_cast<const char*>(h.data_ptr<float>()),
-                            h.numel() * sizeof(float));
-                    f.write(reinterpret_cast<const char*>(z.data_ptr<float>()),
-                            z.numel() * sizeof(float));
-                    wrf::sdirk3::emit_split_dump_notice(dims[0], dims[1], dims[2]);
-                }
-            }
+        // 9F.D33 (review section 6): the dump ITSELF now lives in the diagnostics
+        // header. Previously only the notice string had moved out and this function
+        // still did the enable test, CPU conversion, header construction, ofstream
+        // and write -- moving the message but keeping the I/O is not a separation.
+        if (diag_cfg.dump_advect_u_split) {
+            wrf::sdirk3::dump_advect_u_split(ru_adv_horiz, ru_adv_z);
         }
         uterm_site(wrf::sdirk3::USlowSiteKind::Advection);
         
