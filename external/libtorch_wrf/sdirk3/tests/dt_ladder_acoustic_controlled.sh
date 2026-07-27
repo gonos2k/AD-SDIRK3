@@ -1,76 +1,95 @@
 #!/usr/bin/env bash
-# 9F.D23 (review §9): large-dt ladder with the ACOUSTIC TIMESTEP CONTROLLED.
+# 9F.D25 (review section 9 + section 8): large-dt ladder with the acoustic timestep
+# controlled AT ALL THREE RK STAGES, and a fail-close harness.
 #
-# The earlier ladder varied dt with num_sound_steps fixed, so acoustic dts moved WITH
-# dt and the two effects were confounded. Two axes here:
-#   A  nss fixed at 4     -> dts = dt/4 varies   (the confounded baseline, kept as control)
-#   B  dts fixed at 37.5  -> nss = dt/37.5       (isolates the large-step effect)
-# Axis B is only reachable upward: the split guard requires nss EVEN and >= 4, so
-# holding dts constant by lowering nss at small dt is illegal; raising nss at large dt
-# is not. Hence dts=37.5 rather than the baseline 150.
+# WHY THIS WAS REWRITTEN. The 9F.D23 version had two defects, both of a class this
+# investigation has repeatedly been burned by:
+#
+#   1. It controlled the WRONG THING. Fixing dt/num_sound_steps holds stages 2 and 3
+#      constant, but acoustic_schedule() gives stage 1 ONE step of dt/3 regardless of
+#      num_sound_steps (wrf_sdirk3_acoustic_substep.cpp:822). So across the ladder
+#      stage-1 dts ran 200 / 100 / 50 s -- still a 4x dt ladder -- and at dt=600 that
+#      single 200 s step is 5.3x COARSER than the 37.5 s steps it was compared
+#      against. Stage 1 dominated the acoustic error budget and was the one axis NOT
+#      controlled. WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS now fixes it.
+#
+#   2. It was not FAIL-CLOSE. With only `set -u`, a run that died before writing could
+#      leave the PREVIOUS run's rsl.error.0000 in place, and `cp` would happily copy
+#      it -- analysing run N-1 as run N. That is exactly the "the experiment was
+#      switched on but the operand never changed" failure that has produced wrong
+#      causal conclusions here before. Now: rsl.* is cleared before every run, the
+#      namelist edit is VERIFIED to have taken, the log must exist and contain real
+#      step records, and a manifest records what actually ran.
 #
 # Growth is compared at matched PHYSICAL time, not matched step index -- a fixed step
-# window is a different physical window per dt, which is what made an earlier ladder
-# appear to change sign.
-set -u
-# Repo-relative, so this runs from any checkout. OUT is overridable.
+# window is a different physical window per dt.
+set -euo pipefail
+
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$REPO/test/em_b_wave" || { echo "no test/em_b_wave under $REPO"; exit 2; }
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 OUT="${DT_LADDER_OUT:-$PWD/dt_ladder_out}"
 mkdir -p "$OUT"
-cp namelist.input namelist.input.ladderbak
 
-run () {  # $1=dt  $2=nss  $3=tag
-  sed -i.tmp "s/^ time_step  *=.*/ time_step                           = $1,/" namelist.input
-  sed -i.tmp "s/^ run_days  *=.*/ run_days                            = 0,/"  namelist.input
-  sed -i.tmp "s/^ run_hours  *=.*/ run_hours                           = 6,/" namelist.input
+# Restore the namelist on ANY exit path, including timeout/interrupt. The previous
+# version restored only on the normal path, so an interrupted run left the case
+# configured for whatever dt was last set -- silently poisoning the next experiment.
+NL_BACKUP="$(mktemp)"
+cp namelist.input "$NL_BACKUP"
+cleanup() { cp "$NL_BACKUP" namelist.input; rm -f "$NL_BACKUP" namelist.input.tmp; }
+trap cleanup EXIT INT TERM
+
+manifest="$OUT/manifest.txt"
+{
+  echo "commit         $(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo unknown)"
+  echo "wrf.exe sha256 $(shasum -a 256 "$REPO/main/wrf.exe" | cut -d' ' -f1)"
+  echo "wrfinput       $(shasum -a 256 wrfinput_d01 | cut -d' ' -f1)"
+  echo "date           $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$manifest"
+
+run () {  # $1=dt  $2=nss  $3=stage1_substeps  $4=tag
+  local dt="$1" nss="$2" s1="$3" tag="$4"
+  sed -i.tmp "s/^ time_step  *=.*/ time_step                           = ${dt},/" namelist.input
+  sed -i.tmp "s/^ run_days  *=.*/ run_days                            = 0,/"      namelist.input
+  sed -i.tmp "s/^ run_hours  *=.*/ run_hours                           = 6,/"     namelist.input
   rm -f namelist.input.tmp
+  # A sed pattern that silently fails to match would run the PREVIOUS dt while the
+  # log is filed under the new tag. Verify the edit actually took.
+  grep -q "^ time_step  *= *${dt}," namelist.input || { echo "FAIL $tag: time_step edit did not apply"; return 1; }
+  grep -q "^ run_hours  *= *6,"     namelist.input || { echo "FAIL $tag: run_hours edit did not apply"; return 1; }
+
+  rm -f rsl.error.* rsl.out.*        # never analyse a previous run's log
+
+  local rc=0
   WRF_SDIRK3_SPLIT_EXPLICIT=1 \
-  WRF_SDIRK3_SPLIT_EXPLICIT_TIME_STEP_SOUND="$2" \
+  WRF_SDIRK3_SPLIT_EXPLICIT_TIME_STEP_SOUND="$nss" \
+  WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS="$s1" \
   WRF_SDIRK3_UTERMS_TRACE=1 \
-    timeout 1500 ./wrf.exe >/dev/null 2>&1
-  cp rsl.error.0000 "$OUT/$3.log" 2>/dev/null
-  local nsteps eff
-  nsteps=$(grep -c "Timing for main" "$OUT/$3.log" 2>/dev/null || echo 0)
-  eff=$(grep -o "time_step_sound=[0-9]*" "$OUT/$3.log" 2>/dev/null | tail -1)
-  echo "$3  dt=$1 nss_requested=$2 ($eff) steps=$nsteps  dts=$(python3 -c "print($1/$2)")"
+    timeout 2000 ./wrf.exe >/dev/null 2>&1 || rc=$?
+
+  [ -s rsl.error.0000 ]                    || { echo "FAIL $tag: no rsl.error.0000 (rc=$rc)"; return 1; }
+  grep -q "Timing for main" rsl.error.0000 || { echo "FAIL $tag: log has no step records (rc=$rc)"; return 1; }
+  cp rsl.error.0000 "$OUT/$tag.log"
+
+  local nsteps s1dts s23dts
+  nsteps=$(grep -c "Timing for main" rsl.error.0000)
+  s1dts=$(python3 -c "print(round($dt/3/$s1,3))")
+  s23dts=$(python3 -c "print(round($dt/$nss,3))")
+  printf '%-24s dt=%-4s nss=%-3s s1sub=%-3s steps=%-5s stage1_dts=%-8s stage23_dts=%-8s rc=%s\n' \
+    "$tag" "$dt" "$nss" "$s1" "$nsteps" "$s1dts" "$s23dts" "$rc" | tee -a "$manifest"
 }
 
-echo "=== axis A: nss fixed at 4 (dts varies WITH dt -- confounded control) ==="
-run 600 4  A_dt600_nss4
-run 300 4  A_dt300_nss4
-run 150 4  A_dt150_nss4
-echo "=== axis B: dts fixed at 37.5 (nss scales with dt -- isolates large-step) ==="
-run 600 16 B_dt600_nss16
-run 300 8  B_dt300_nss8
-echo "   (B_dt150 == A_dt150_nss4: dt=150,nss=4 already gives dts=37.5)"
+echo "=== axis C: ALL THREE stages held near dts ~ 37.5 s (stage 1 now controlled) ==="
+# stage-1 dts = (dt/3)/s1 -> s1 = dt/(3*37.5): 600->5.33, 300->2.67, 150->1.33.
+# Exact 37.5 is not reachable at every dt with integer substeps, so the nearest
+# integer is used and the ACHIEVED stage-1 dts is printed rather than assumed.
+run 600 16 6 C_dt600
+run 300  8 3 C_dt300
+run 150  4 2 C_dt150
 
-cp namelist.input.ladderbak namelist.input
-rm -f namelist.input.tmp
-echo "namelist restored"
+echo "=== axis B (9F.D23, stage 1 UNCONTROLLED) kept as the explicit control ==="
+run 600 16 1 B_dt600_s1uncontrolled
+run 300  8 1 B_dt300_s1uncontrolled
+run 150  4 1 B_dt150_s1uncontrolled
 
-# ---------------------------------------------------------------------------
-# MEASURED 2026-07-27 (9F.D23), split-explicit path, em_b_wave:
-#
-#   sigma_eff = d(log|adv_z|)/dt over the matched PHYSICAL window 1h-5h
-#     axis A (nss=4):   dt=600 6.99e-05 | dt=300 1.65e-04 | dt=150 1.47e-04
-#     axis B (dts=37.5): dt=600 7.40e-05 | dt=300 1.02e-04 | dt=150 1.47e-04
-#
-#   The acoustic timestep IS a real confound: at the SAME dt=300, changing only
-#   nss 4->8 moves sigma 1.65e-04 -> 1.02e-04 (-38%). An uncontrolled ladder
-#   cannot be read.
-#
-#   All three start at the same |adv_z| at 1h (~2.09e4) and fan out, so the
-#   ordering is physical, not a fitting artifact:
-#     1h/2h/3h/4h/5h  dt=600  2.09e4 2.54e4 2.97e4 3.91e4 9.57e4
-#                     dt=300  2.09e4 2.70e4 3.94e4 5.97e4 1.17e5
-#                     dt=150  2.10e4 3.36e4 6.76e4 1.15e5 1.79e5
-#   SMALLER dt grows FASTER -- the opposite of a large-step over-extrapolation.
-#
-#   Run to failure (24h target, nss=4):
-#     dt=600 -> fails step  38 = 6.33 h
-#     dt=150 -> fails step 165 = 6.88 h
-#   A 4x smaller timestep buys 9% more physical time while sigma_eff DOUBLES.
-#   Failure time is ~dt-independent; sigma_eff does not predict it.
-# ---------------------------------------------------------------------------
+echo "manifest: $manifest"

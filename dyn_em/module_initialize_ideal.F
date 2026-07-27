@@ -82,7 +82,7 @@ CONTAINS
     IF ( .NOT. ok ) CALL wrf_error_fatal( TRIM(msg) )
 
     bwave_pert_scale = scale
-!   9F.D22 (review §10.4): monitor rank only, and line-atomic via wrf_message.
+!   9F.D22 (review section 10.4): monitor rank only, and line-atomic via wrf_message.
 !   The previous WRITE(0,*) emitted once PER MPI RANK and, being list-directed,
 !   could interleave with other ranks mid-line -- so a 4-rank run produced four
 !   copies of the configuration banner, and a reader counting banners would

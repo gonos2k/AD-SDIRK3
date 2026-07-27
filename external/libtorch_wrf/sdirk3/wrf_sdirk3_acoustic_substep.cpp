@@ -821,7 +821,33 @@ State calc_p_rho(const State& s, const Const& c, int step) {
 // must run once before the first substep (solve_em.F:1352) — it is NOT part of advance_substep.
 AcousticSchedule acoustic_schedule(int rk_step, float dt, int num_sound_steps) {
     float dts = dt / static_cast<float>(num_sound_steps);       // base acoustic timestep
-    if (rk_step == 1) return {dt / 3.0f, 1};                    // single big step of dt/3
+    if (rk_step == 1) {
+        // WRF: stage 1 takes ONE acoustic step of dt/3, independent of
+        // num_sound_steps. This is the production behaviour and stays the default.
+        //
+        // 9F.D25 (review §5): that independence invalidated the 9F.D23 dt-ladder's
+        // "axis B". Fixing dt/num_sound_steps holds stages 2/3 constant but leaves
+        // stage 1 at dt/3, so across the ladder stage-1 dts ran 200 / 100 / 50 s --
+        // still a 4x dt ladder, and at dt=600 that single 200 s step is 5.3x COARSER
+        // than the 37.5 s steps it was being compared against. Stage 1 therefore
+        // dominated the acoustic error budget and was the one thing NOT controlled.
+        //
+        // WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS splits that one step into N steps
+        // of (dt/3)/N so stage-1 dts can be held fixed across a ladder. DIAGNOSTIC
+        // ONLY -- default 1 reproduces WRF exactly and is byte-identical. It is a
+        // hypothesis test, not a proposed production change.
+        static const int s1_sub = [] {
+            const char* v = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS");
+            if (v == nullptr || v[0] == '\0') return 1;
+            const int n = std::atoi(v);
+            TORCH_CHECK(n >= 1 && n <= 4096,
+                "WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS must be in [1,4096]; got \"",
+                v, "\". A non-numeric value would otherwise parse to 0 and silently "
+                "disable stage-1 acoustics entirely.");
+            return n;
+        }();
+        return {dt / 3.0f / static_cast<float>(s1_sub), s1_sub};
+    }
     if (rk_step == 2) return {dts, num_sound_steps / 2};        // dts * N/2 = dt/2
     return {dts, num_sound_steps};                              // rk_step 3: dts * N = dt
 }
