@@ -194,6 +194,15 @@ if(TARGET wrf_sdirk3)
     add_test(NAME SDIRK3_Tests COMMAND wrf_sdirk3 --test)
 endif()
 
+# 9F.D34 (review section 2): the closure fixture must actually RUN. It was added,
+# measured 7/7 by hand, and tracked via a .gitignore negation -- but never given a
+# CMake target or a CTest name, so it was not a gate at all and CI green said nothing
+# about it. That is the same "a guard exists" claim, unverified, that the fixture was
+# written to prevent.
+add_executable(test_u_slow_closures tests/test_u_slow_closures.cpp)
+target_link_libraries(test_u_slow_closures PRIVATE wrf_sdirk3::core)
+add_test(NAME U_Slow_Closures COMMAND test_u_slow_closures)
+
 add_executable(test_wrms_gate_metric tests/test_wrms_gate_metric.cpp)
 target_link_libraries(test_wrms_gate_metric PRIVATE wrf_sdirk3::core)
 add_test(NAME WRMS_Gate_Metric COMMAND test_wrms_gate_metric)
