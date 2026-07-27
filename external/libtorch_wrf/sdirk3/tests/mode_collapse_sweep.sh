@@ -21,18 +21,29 @@ OUT="${MODE_COLLAPSE_OUT:-$PWD/mc_out}"
 mkdir -p "$OUT"
 NL_BACKUP="$(mktemp)"
 cp namelist.input "$NL_BACKUP"
-# 9F.D28 (review section 9.1): the previous trap restored ONLY the namelist, so a run
-# that failed mid-sweep left a SCALED-bubble wrfinput_d01 in the working directory --
-# and the next experiment would silently start from a perturbed IC it never asked for.
-# That is the same "the operand was never what the label said" failure this campaign
-# keeps hitting, so the IC is now rebuilt at baseline on every exit path.
+# 9F.D29 (review section 9): back up the baseline IC as a FILE rather than
+# regenerating it. The 9F.D28 version had three defects, all mine:
+#   1. ideal.exe ran TWICE on a normal exit -- the loop tail rebuilt the IC and then
+#      the EXIT trap rebuilt it again.
+#   2. cleanup could run twice: an INT/TERM handler ran it, deleted $NL_BACKUP, and
+#      then the EXIT trap ran it again against a backup that no longer existed.
+#   3. `|| true` let baseline restoration FAIL silently -- the opposite of fail-close,
+#      in the one place whose whole purpose is to guarantee a clean starting state.
+# Copying a saved file is shorter, faster, deterministic, and cannot half-succeed.
+NL_BACKUP="$(mktemp)"
+IC_BACKUP="$(mktemp)"
+cp namelist.input "$NL_BACKUP"
+timeout 300 ./ideal.exe >/dev/null 2>&1
+[ -f wrfinput_d01 ] || { echo "FAIL: could not build the baseline IC to back up"; exit 1; }
+cp wrfinput_d01 "$IC_BACKUP"
 cleanup() {
   cp "$NL_BACKUP" namelist.input
-  rm -f "$NL_BACKUP" namelist.input.tmp wrfinput_d01 wrfout_d01_*
-  timeout 300 ./ideal.exe >/dev/null 2>&1 || true
-  [ -f wrfinput_d01 ] && echo "baseline IC restored" || echo "WARNING: baseline IC NOT restored"
+  cp "$IC_BACKUP" wrfinput_d01
+  rm -f "$NL_BACKUP" "$IC_BACKUP" namelist.input.tmp wrfout_d01_*
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 # 2 h window = 12 steps at dt=600: inside the linear regime, well short of the
 # 6.33 h failure, so no run is contaminated by its own terminal blow-up.
 sed -i.tmp 's/^ run_days  *=.*/ run_days                            = 0,/; s/^ run_hours  *=.*/ run_hours                           = 2,/' namelist.input
@@ -59,9 +70,6 @@ for eps in 1.0 0.5 0.25 0.125 0.0625 0.0; do
   echo "eps=$eps steps=$(grep -c 'Timing for main' rsl.error.0000) rc=$rc out=yes"
 done
 
-rm -f wrfinput_d01 wrfout_d01_*
-timeout 300 ./ideal.exe >/dev/null 2>&1
-echo "baseline IC restored: $([ -f wrfinput_d01 ] && echo yes || echo NO)"
 
 # ---------------------------------------------------------------------------
 # MEASURED 2026-07-27 (9F.D24), split-explicit, dt=600, 2 h window (12 steps):

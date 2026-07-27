@@ -7009,7 +7009,13 @@ vertical_coefficients:
                 const int split_phys_step = g_split_phys_step.fetch_add(1) + 1;
                 const char* substep_trace_path = std::getenv("WRF_SDIRK3_SUBSTEP_TRACE");
                 for (int se_rk = 1; se_rk <= 3; ++se_rk) {
-                    const auto sched = acoustic::acoustic_schedule(se_rk, static_cast<float>(dt), num_sound_steps);
+                    // 9F.D29 (review section 7): options parsed ONCE (function-local
+                    // static initialiser), then passed explicitly, so the schedule
+                    // itself is a pure function of its arguments.
+                    static const auto acoustic_opts =
+                        acoustic::acoustic_schedule_options_from_env();
+                    const auto sched = acoustic::acoustic_schedule(
+                        se_rk, static_cast<float>(dt), num_sound_steps, acoustic_opts);
                     auto U_stage_halo = use_ad_halo ? ad_halo_exchange(U_stage) : torch::Tensor();
                     // WRF rk_tendency channel sourcing (MEASURED at the balanced IC, 2026-07-10):
                     //  - u/v/theta come from the EXPLICIT channel (advection+Coriolis+curvature+
