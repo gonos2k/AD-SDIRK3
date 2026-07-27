@@ -22,6 +22,17 @@ import sys
 import numpy as np
 
 
+class Thresholds:
+    """Every computed metric is gated. Defaults are deliberately strict: this tool
+    exists to decide operator parity, and a permissive gate that always passes is
+    worse than no gate because it reads as evidence."""
+
+    def __init__(self, e2=1e-2, e_inf=1e-2, corr_min=0.9999,
+                 sign_max=0, per_level_e2=1e-2):
+        self.e2, self.e_inf = e2, e_inf
+        self.corr_min, self.sign_max, self.per_level_e2 = corr_min, sign_max, per_level_e2
+
+
 def load_wrf(path):
     with open(path, "rb") as f:
         hdr = np.fromfile(f, dtype=">i4", count=6)
@@ -48,7 +59,14 @@ def load_port(path):
     return h, v, (nj, nk, ni)
 
 
-def stats(p, w, label):
+def stats(p, w, label, th):
+    # 7.2: a NaN/Inf field would otherwise flow into every metric and produce a
+    # meaningless verdict rather than an error.
+    for nm, arr in (("port", p), ("wrf", w)):
+        if not np.isfinite(arr).all():
+            n = int((~np.isfinite(arr)).sum())
+            print(f"  {label:<10} FAIL: {nm} contains {n} non-finite values")
+            return False
     d = p - w
     nw = np.linalg.norm(w)
     e2 = np.linalg.norm(d) / max(nw, 1e-30)
@@ -67,7 +85,20 @@ def stats(p, w, label):
     per.sort(reverse=True)
     worst = "  ".join(f"k{k}:{e:.3f}" for e, k in per[:6])
     print(f"             worst per-level e2: {worst}")
-    return e2, corr
+    # 7.1: the verdict previously used e2 ALONE, so a large error confined to a few
+    # cells was diluted by the global norm and passed. Every metric that is computed
+    # is now also gated -- computing a number and not acting on it is decoration.
+    checks = {
+        "e2":            e2   <= th.e2,
+        "e_inf":         einf <= th.e_inf,
+        "corr":          corr >= th.corr_min,
+        "sign_mismatch": signdiff <= th.sign_max,
+        "per_level_e2":  per[0][0] <= th.per_level_e2,
+    }
+    failed = [k for k, ok in checks.items() if not ok]
+    if failed:
+        print(f"             GATE FAIL on: {', '.join(failed)}")
+    return not failed
 
 
 def main():
@@ -75,6 +106,9 @@ def main():
     ap.add_argument("--wrf", required=True)
     ap.add_argument("--port", required=True)
     ap.add_argument("--tol", type=float, default=1e-2)
+    ap.add_argument("--corr-min", type=float, default=0.9999)
+    ap.add_argument("--sign-max", type=int, default=0)
+    ap.add_argument("--per-level-tol", type=float, default=1e-2)
     a = ap.parse_args()
 
     wh, wv, whdr = load_wrf(a.wrf)
@@ -94,12 +128,16 @@ def main():
     whc = wh[j0:j0 + nj, 0:nk, i0:i0 + ni]
     wvc = wv[j0:j0 + nj, 0:nk, i0:i0 + ni]
 
+    th = Thresholds(e2=a.tol, e_inf=a.tol, corr_min=a.corr_min,
+                    sign_max=a.sign_max, per_level_e2=a.per_level_tol)
     print("\nPOINTWISE PARITY (this is what 'the operator matches' requires):")
-    e2h, ch = stats(ph, whc, "horizontal")
-    e2v, cv = stats(pv, wvc, "vertical")
+    okh = stats(ph, whc, "horizontal", th)
+    okv = stats(pv, wvc, "vertical", th)
 
-    bad = [n for n, e in (("horizontal", e2h), ("vertical", e2v)) if e > a.tol]
-    print(f"\nVERDICT: {'FAIL' if bad else 'PASS'} (tol e2<={a.tol})"
+    bad = [n for n, ok in (("horizontal", okh), ("vertical", okv)) if not ok]
+    print(f"\nVERDICT: {'FAIL' if bad else 'PASS'}"
+          f"  (e2<={th.e2}, einf<={th.e_inf}, corr>={th.corr_min}, "
+          f"sign<={th.sign_max}, per-level e2<={th.per_level_e2})"
           + (f" -- {', '.join(bad)}" if bad else ""))
     return 1 if bad else 0
 

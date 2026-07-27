@@ -12371,26 +12371,36 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     //
     // Default-off; every capture is detached under NoGradGuard, so it cannot reach
     // the graph or the forward. Cost when enabled is one clone of ru_tend per site.
+    // 9F.D27 (review section 3): which advection terms are ADDITIVE and which are
+    // DERIVED is expressed by the TYPE, not by a string comparison.
+    //
+    // The closure sum previously skipped the aggregate with `if (s.first != "horiz")`.
+    // That hid a physical fact -- horizontal = x + y, so summing it double-counts -- in
+    // a label. Renaming the label still compiles and silently turns the one closure
+    // that CAN fail into one that always does. Here `horizontal()` is computed from the
+    // additive fields, so it cannot be double-counted by construction and there is no
+    // label to get wrong.
+    struct UAdvectionTerms {
+        torch::Tensor x, y, vertical;              // the additive decomposition
+        bool complete() const { return x.defined() && y.defined() && vertical.defined(); }
+        torch::Tensor horizontal() const { return x + y; }          // DERIVED
+        torch::Tensor total()      const { return x + y + vertical; }  // DERIVED
+    } uterms_adv;
+
     static const bool uterms_trace = env_flag_true("WRF_SDIRK3_UTERMS_TRACE");
     // Structured bindings are not capturable by lambdas before C++20; alias first.
     const torch::Tensor& u_for_work = u;
     std::vector<std::pair<std::string, torch::Tensor>> uterms_site;
-    std::vector<std::pair<std::string, torch::Tensor>> uterms_sub;
     auto uterm_site = [&](const char* label) {
         if (!uterms_trace || !ru_tend.defined()) return;
         torch::NoGradGuard ng;
         uterms_site.emplace_back(label, ru_tend.detach().clone());
     };
-    auto uterm_sub = [&](const char* label, const torch::Tensor& term) {
-        if (!uterms_trace || !term.defined()) return;
-        torch::NoGradGuard ng;
-        uterms_sub.emplace_back(label, term.detach().clone());
-    };
     // Destructor-based emission so every exit path reports, and so a diagnostic can
     // never abort the run (a throwing destructor would terminate).
     struct UTermsReport {
         const std::vector<std::pair<std::string, torch::Tensor>>* site;
-        const std::vector<std::pair<std::string, torch::Tensor>>* sub;
+        const UAdvectionTerms* adv;   // typed: additive vs derived is structural
         const torch::Tensor* final_ru;
         const torch::Tensor* u;
         bool on;
@@ -12429,45 +12439,44 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 std::cerr << "[UTERMS]   unattributed |dR|=" << l2(unattr)
                           << "   <- coverage check, must be 0" << std::endl;
                 // (b) Real closure: independent sub-terms vs the adv site delta.
-                if (!sub->empty() && adv_delta.defined()) {
+                if (adv->complete() && adv_delta.defined()) {
+                    struct Named { const char* n; torch::Tensor t; };
+                    const Named additive[] = {{"adv_x", adv->x},
+                                              {"adv_y", adv->y},
+                                              {"adv_z", adv->vertical}};
                     torch::Tensor acc;
-                    for (const auto& s : *sub) {
-                        // "horiz" is adv_x+adv_y, a DERIVED aggregate kept only for the
-                        // cross-model ratio. Adding it here would double-count and turn
-                        // the one closure that can genuinely fail into a guaranteed
-                        // failure -- it is reported but excluded from the sum.
-                        if (s.first != "horiz") {
-                            acc = acc.defined() ? (acc + s.second) : s.second;
-                        }
-                        std::cerr << "[UTERMS]     sub " << s.first
-                                  << "  |T|=" << l2(s.second)
-                                  << "  max|T|=" << mx(s.second)
-                                  << "  W=" << work(s.second) << std::endl;
+                    for (const auto& e : additive) {
+                        acc = acc.defined() ? (acc + e.t) : e.t;
+                        std::cerr << "[UTERMS]     sub " << e.n
+                                  << "  |T|=" << l2(e.t)
+                                  << "  max|T|=" << mx(e.t)
+                                  << "  W=" << work(e.t) << std::endl;
                         // K-PROFILE. A term that is huge because of a boundary defect
-                        // (bad omega at the lid/surface, a missing metric factor at k=0
-                        // or k=nz-1) piles into one or two levels; real advection is
-                        // spread through the column. This is the discriminator, and it
-                        // is why raw magnitude alone must not be reported as a verdict.
-                        if (s.second.dim() == 3) {
-                            std::cerr << "[UTERMS]       kprof " << s.first << ":";
-                            auto per_k = s.second.transpose(0, 1).reshape(
-                                {s.second.size(1), -1}).norm(2, 1).to(torch::kCPU);
+                        // piles into one or two levels; real advection is spread through
+                        // the column. This is the discriminator, and it is why raw
+                        // magnitude alone must not be reported as a verdict.
+                        if (e.t.dim() == 3) {
+                            std::cerr << "[UTERMS]       kprof " << e.n << ":";
+                            auto per_k = e.t.transpose(0, 1).reshape(
+                                {e.t.size(1), -1}).norm(2, 1).to(torch::kCPU);
                             auto acc_k = per_k.accessor<float, 1>();
-                            for (int64_t k = 0; k < per_k.size(0); ++k) {
-                                std::cerr << " " << acc_k[k];
-                            }
+                            for (int64_t k = 0; k < per_k.size(0); ++k) std::cerr << " " << acc_k[k];
                             std::cerr << std::endl;
                         }
                     }
+                    // DERIVED aggregate: reported, never summed.
+                    auto hz = adv->horizontal();
+                    std::cerr << "[UTERMS]     derived horiz  |T|=" << l2(hz)
+                              << "  W=" << work(hz) << std::endl;
                     const double den = l2(adv_delta);
-                    std::cerr << "[UTERMS]     adv closure |sum(sub)-d(adv)|="
+                    std::cerr << "[UTERMS]     adv closure |sum(additive)-d(adv)|="
                               << l2(acc - adv_delta)
                               << "  rel=" << (den > 0.0 ? l2(acc - adv_delta) / den : 0.0)
                               << std::endl;
                 }
             } catch (...) { /* a diagnostic must never take down the run */ }
         }
-    } uterms_report{&uterms_site, &uterms_sub, &ru_tend, &u_for_work, uterms_trace};
+    } uterms_report{&uterms_site, &uterms_adv, &ru_tend, &u_for_work, uterms_trace};
     uterm_site("entry");
 
     // DEBUG OUTPUT: INITIAL TENDENCIES
@@ -13783,9 +13792,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // 9F.D18: the three advection components are captured INDEPENDENTLY (not as
         // telescoping snapshots), so their sum vs the "adv" site delta is a closure
         // check that can genuinely fail.
-        uterm_sub("adv_x", ru_adv_x);
-        uterm_sub("adv_y", ru_adv_y);
-        uterm_sub("adv_z", ru_adv_z);
+        if (uterms_trace) {
+            torch::NoGradGuard ng;
+            uterms_adv.x        = ru_adv_x.detach().clone();
+            uterms_adv.y        = ru_adv_y.detach().clone();
+            uterms_adv.vertical = ru_adv_z.detach().clone();
+        }
         // 9F.D20: combined horizontal, to compare against WRF's advect_u split.
         // Captured as the SUM (not |adv_x|+|adv_y|) because WRF's horizontal block
         // accumulates x and y into one tendency, so only the sum is the same object.
@@ -13793,7 +13805,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // a ratio cancels the differing index extents (port tile vs WRF its:ite
         // interior), the coupled/decoupled convention, and any common scaling -- none
         // of which the raw norms share, so raw norms would manufacture a discrepancy.
-        uterm_sub("horiz", ru_adv_horiz);
         // 9F.D26 (review section 3): dump the FIELDS, not just norms. Equal norms are
         // consistent with a permuted, shifted or sign-flipped field (||PT||=||T|| for any
         // permutation P, ||-T||=||T||), so the 2.4%/2.6% magnitude agreement reported in

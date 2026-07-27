@@ -8,33 +8,44 @@
 # every difference -- and it only became reachable with WRF_BWAVE_ALLOW_ZERO
 # (9F.D21). This is a much stronger test of "same linearized mode" than a
 # failure-step shift, which only reports a scalar.
-set -u
+# 9F.D27 (review section 9): fail-close, matching dt_ladder. These are the SAME
+# defects I fixed there one commit earlier and left here -- set -u only, no trap, and
+# no clearing of rsl.* between runs, so a run that died early could be analysed using
+# the PREVIOUS run's log. Fixing one harness and not its sibling is how a known defect
+# class survives.
+set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 cd "$REPO/test/em_b_wave" || { echo "no test/em_b_wave under $REPO"; exit 2; }
 export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
 OUT="${MODE_COLLAPSE_OUT:-$PWD/mc_out}"
 mkdir -p "$OUT"
-cp namelist.input namelist.input.mcbak
+NL_BACKUP="$(mktemp)"
+cp namelist.input "$NL_BACKUP"
+cleanup() { cp "$NL_BACKUP" namelist.input; rm -f "$NL_BACKUP" namelist.input.tmp; }
+trap cleanup EXIT INT TERM
 # 2 h window = 12 steps at dt=600: inside the linear regime, well short of the
 # 6.33 h failure, so no run is contaminated by its own terminal blow-up.
 sed -i.tmp 's/^ run_days  *=.*/ run_days                            = 0,/; s/^ run_hours  *=.*/ run_hours                           = 2,/' namelist.input
 rm -f namelist.input.tmp
 
 for eps in 1.0 0.5 0.25 0.125 0.0625 0.0; do
-  rm -f wrfinput_d01 wrfout_d01_*
+  rm -f wrfinput_d01 wrfout_d01_* rsl.error.* rsl.out.*
   if [ "$eps" = "0.0" ]; then
     WRF_BWAVE_PERT_SCALE=0.0 WRF_BWAVE_ALLOW_ZERO=1 timeout 300 ./ideal.exe >/dev/null 2>&1
   else
     WRF_BWAVE_PERT_SCALE="$eps" timeout 300 ./ideal.exe >/dev/null 2>&1
   fi
-  if [ ! -f wrfinput_d01 ]; then echo "eps=$eps IDEAL_FAILED"; continue; fi
-  WRF_SDIRK3_SPLIT_EXPLICIT=1 timeout 900 ./wrf.exe >/dev/null 2>&1
+  [ -f wrfinput_d01 ] || { echo "FAIL eps=$eps: ideal.exe produced no IC"; exit 1; }
+  rc=0
+  WRF_SDIRK3_SPLIT_EXPLICIT=1 timeout 900 ./wrf.exe >/dev/null 2>&1 || rc=$?
+  [ -s rsl.error.0000 ] || { echo "FAIL eps=$eps: no rsl.error.0000 (rc=$rc)"; exit 1; }
+  grep -q "Timing for main" rsl.error.0000 || { echo "FAIL eps=$eps: no step records (rc=$rc)"; exit 1; }
   f=$(ls wrfout_d01_* 2>/dev/null | head -1)
-  if [ -n "$f" ]; then cp "$f" "$OUT/wrfout_eps$eps.nc"; fi
-  echo "eps=$eps steps=$(grep -c 'Timing for main' rsl.error.0000) out=$([ -n "$f" ] && echo yes || echo NO)"
+  [ -n "$f" ] || { echo "FAIL eps=$eps: no wrfout (rc=$rc)"; exit 1; }
+  cp "$f" "$OUT/wrfout_eps$eps.nc"
+  echo "eps=$eps steps=$(grep -c 'Timing for main' rsl.error.0000) rc=$rc out=yes"
 done
 
-cp namelist.input.mcbak namelist.input; rm -f namelist.input.tmp namelist.input.mcbak
 rm -f wrfinput_d01 wrfout_d01_*
 timeout 300 ./ideal.exe >/dev/null 2>&1
 echo "baseline IC restored: $([ -f wrfinput_d01 ] && echo yes || echo NO)"
