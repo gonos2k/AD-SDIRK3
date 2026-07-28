@@ -8,6 +8,8 @@
 //   advance_mu_t / advance_w / calc_p_rho — signatures in place; bodies to follow.
 // Validation is deferred to the ASSEMBLED sub-step vs a dyn_em [PARITY substep] dump.
 #include "wrf_sdirk3_acoustic_substep.h"
+
+#include <cmath>
 #include "wrf_sdirk3_stage_history_diag.h"  // process-global line-atomic diagnostic emitter
 
 #include <cstdint>
@@ -822,6 +824,28 @@ State calc_p_rho(const State& s, const Const& c, int step) {
 // must run once before the first substep (solve_em.F:1352) — it is NOT part of advance_substep.
 AcousticSchedule acoustic_schedule(int rk_step, float dt, int num_sound_steps,
                                    const AcousticScheduleOptions& options) {
+    // 9F.D41 (review P1-4): validate BEFORE computing anything. The header documents
+    // the even / >=4 invariants; the function did not enforce them, and dts was
+    // computed on the first line, so num_sound_steps==0 divided by zero before any
+    // check could run. Each of these is a silent-wrong-answer path, not a crash:
+    //   * rk_step 0 or 4 fell through the if-chain and was treated as STAGE 3
+    //   * odd num_sound_steps makes stage 2's integer N/2 break dts*N/2 == dt/2
+    //   * stage1_substeps==0 divides by zero in the stage-1 branch below
+    //   * dt<=0 yields a non-physical schedule that still looks well-formed
+    TORCH_CHECK(rk_step >= 1 && rk_step <= 3,
+                "acoustic_schedule: rk_step must be 1..3, got ", rk_step,
+                " (an out-of-range stage silently behaved as stage 3)");
+    TORCH_CHECK(std::isfinite(dt) && dt > 0.0f,
+                "acoustic_schedule: dt must be finite and positive, got ", dt);
+    TORCH_CHECK(num_sound_steps >= 4,
+                "acoustic_schedule: num_sound_steps must be >= 4, got ", num_sound_steps);
+    TORCH_CHECK(num_sound_steps % 2 == 0,
+                "acoustic_schedule: num_sound_steps must be EVEN (stage 2 uses N/2 and "
+                "integer division would break dts*N/2 == dt/2), got ", num_sound_steps);
+    TORCH_CHECK(options.stage1_substeps >= 1,
+                "acoustic_schedule: stage1_substeps must be >= 1, got ",
+                options.stage1_substeps);
+
     const float dts = dt / static_cast<float>(num_sound_steps);
     if (rk_step == 1) {
         // WRF: stage 1 is ONE acoustic step of dt/3, independent of num_sound_steps.

@@ -16,13 +16,21 @@
 #include "wrf_sdirk3_unified_rhs_extended.h"
 #include "wrf_sdirk3_config.h"
 #include <torch/torch.h>
+#include <mutex>
 #include <iostream>
 #include <unordered_map>
 #include <cmath>
 #include <atomic>  // OPT Pass33+: For diagnostic sampling counters
 
-// Declare the global solver registry from wrf_sdirk3_interface_zerocopy.cpp
+// Declare the global solver registry from wrf_sdirk3_interface_zerocopy.cpp.
+// 9F.D41 (review P0-3): the MUTEX is declared here too. This file previously externed
+// only the map and then called find() on it unlocked, while the owning TU guards every
+// one of its own accesses (wrf_sdirk3_interface_zerocopy.cpp:140). A concurrent create
+// or destroy could rehash the map under the find, or free the solver between the find
+// and the dereference. Base-state setup is once-per-run, not a hot path, so the lock is
+// held across the whole operation -- lifecycle safety costs nothing measurable here.
 extern std::unordered_map<void*, std::unique_ptr<TileSDIRK3UnifiedSolver>> g_tile_solvers;
+extern std::mutex g_tile_solvers_mutex;
 
 namespace {
     /**
@@ -60,27 +68,45 @@ extern "C" {
 /**
  * Zero-copy version of base state setter
  * 
- * This function receives pointers to the start of WRF memory arrays and
- * creates tensor views of the tile region without any data copying.
- * 
- * Key improvements over current implementation:
- * 1. No temporary array allocation
- * 2. No data copying
- * 3. Direct tensor view creation using torch::from_blob with strides
- * 4. Maintains WRF memory layout compatibility
+ * 9F.D41 (review P0-4): THIS IS A SNAPSHOT COPY, NOT ZERO-COPY. The block here used
+ * to claim "No data copying". It does copy: each field is built with from_blob() over
+ * WRF's strided memory domain and then .contiguous() (lines ~183/241/249/257), and
+ * because the memory-domain strides differ from the tile's contiguous strides,
+ * .contiguous() materialises the whole tile. The Fortran log line claiming a saved
+ * ~5.4 MB of memory traffic was measuring an optimisation that does not happen.
+ *
+ * That is FINE -- the base state is static and copied once at initialisation -- but the
+ * documentation has to say so, because "zero-copy" also implies the caller's buffer
+ * stays live and aliased, which would be a lifetime contract this code does not have.
+ *
+ * What it actually does:
+ * 1. Builds strided views over WRF's memory domain via from_blob
+ * 2. Materialises OWNED contiguous per-tile snapshots via .contiguous()
+ * 3. Hands those snapshots to the solver; WRF's buffers are not retained
+ *
+ * The exported symbol keeps its ...__zerocopy name for ABI stability -- it is bound by
+ * name from Fortran (BIND(C)) -- so renaming it is a separate, verifiable change rather
+ * than a side effect of a documentation fix.
  * 
  * @param solver_ptr Pointer to the tile solver
  * @param pb_ptr Base state pressure at memory start (ims,kms,jms)
- * @param alb_ptr Base state inverse density at memory start (ims,kms,jms)
+ * @param t_init_ptr grid%t_init, base-state potential temperature, at memory start
+ *        (ims,kms,jms). NOT alb: see the note on setBaseState.
  * @param phb_ptr Base state geopotential at memory start (ims,kms,jms)
  * @param mub_ptr Base state column mass at memory start (ims,jms)
  * @param its,ite,jts,jte,kts,kte Tile bounds
  * @param ims,ime,jms,jme,kms,kme Memory bounds
  */
-void sdirk3_tile_set_base_state_zerocopy(
+// 9F.D41 (review P0-2): STATUS-RETURNING. The old signature was void and every failure
+// path -- null solver, null data pointer, registry miss, caught exception -- simply
+// returned. Fortran then set base_state_initialized = .TRUE. unconditionally, so a total
+// failure to initialise the base state published SUCCESS and the run continued on
+// uninitialised or stale state. Returns 1 only when every field was validated, copied
+// and handed to the solver; 0 otherwise, with nothing published.
+int sdirk3_tile_set_base_state_checked(
     void* solver_ptr,
     float* pb_ptr,      // Base state pressure (memory start)
-    float* alb_ptr,     // Base state inverse density (memory start)
+    float* t_init_ptr,     // grid%t_init -- base-state POTENTIAL TEMPERATURE (memory start)
     float* phb_ptr,     // Base state geopotential (memory start)
     float* mub_ptr,     // Base state column mass (memory start)
     int its, int ite, int jts, int jte, int kts, int kte,  // Tile bounds
@@ -121,19 +147,20 @@ void sdirk3_tile_set_base_state_zerocopy(
             std::cerr << "ERROR: NULL solver_ptr in set_base_state_zerocopy" << std::endl;
 
         }
-        return;
+        return 0;   // 9F.D41: failure, nothing published
     }
     
-    if (!pb_ptr || !alb_ptr || !phb_ptr || !mub_ptr) {
+    if (!pb_ptr || !t_init_ptr || !phb_ptr || !mub_ptr) {
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
 
             std::cerr << "ERROR: NULL data pointers in set_base_state_zerocopy" << std::endl;
 
         }
-        return;
+        return 0;   // 9F.D41: failure, nothing published
     }
     
     // Retrieve solver from registry
+    std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
     auto it = g_tile_solvers.find(solver_ptr);
     if (it == g_tile_solvers.end()) {
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -141,7 +168,7 @@ void sdirk3_tile_set_base_state_zerocopy(
             std::cerr << "ERROR: Solver not found in registry" << std::endl;
 
         }
-        return;
+        return 0;   // 9F.D41: failure, nothing published
     }
     
     auto& solver = *(it->second);
@@ -232,8 +259,8 @@ void sdirk3_tile_set_base_state_zerocopy(
         }
         
         // Base state inverse density: WRF (i,k,j) -> C++ {ny, nz, nx} for [j][k][i] access
-        auto alb_tile = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
-            alb_ptr + offset_3d,
+        auto t_init_tile = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
+            t_init_ptr + offset_3d,
             {ny, nz, nx},
             {j_stride, k_stride, i_stride},
             cpu_opts
@@ -268,7 +295,7 @@ void sdirk3_tile_set_base_state_zerocopy(
                 torch::NoGradGuard no_grad;
                 auto ranges_cpu = torch::stack({
                     pb_tile.min(), pb_tile.max(),
-                    alb_tile.min(), alb_tile.max(),
+                    t_init_tile.min(), t_init_tile.max(),
                     phb_tile.min(), phb_tile.max(),
                     mub_tile.min(), mub_tile.max()
                 }).to(torch::kCPU);
@@ -283,7 +310,7 @@ void sdirk3_tile_set_base_state_zerocopy(
 
                 // FIX Round156: Move zero check inside debug block - .item() is expensive
                 auto zeros_cpu = torch::stack({
-                    (pb_tile == 0).sum(), (alb_tile == 0).sum()
+                    (pb_tile == 0).sum(), (t_init_tile == 0).sum()
                 }).to(torch::kCPU);
                 int pb_zeros = zeros_cpu[0].item<int>();
                 int alb_zeros = zeros_cpu[1].item<int>();
@@ -302,7 +329,7 @@ void sdirk3_tile_set_base_state_zerocopy(
         // - Default dtype is Float32 (no dtype conversion in from_blob)
         solver.setBaseState(
             pb_tile.data_ptr<float>(),
-            alb_tile.data_ptr<float>(),
+            t_init_tile.data_ptr<float>(),
             phb_tile.data_ptr<float>(),
             mub_tile.data_ptr<float>()
         );
@@ -468,7 +495,33 @@ void sdirk3_tile_set_base_state_zerocopy(
             std::cerr << "ERROR in set_base_state_zerocopy: " << e.what() << std::endl;
 
         }
+        return 0;   // 9F.D41: an exception is a FAILURE, not a quiet completion
     }
+    return 1;
+}
+
+// ABI-compatible wrapper. The original void symbol is what Fortran BIND(C) resolves, so
+// it is kept; the Fortran interface is being moved to the checked form in the same
+// change. Retained (rather than deleted) so any out-of-tree caller keeps linking --
+// but note it necessarily discards the status, which is the defect above.
+extern "C" void sdirk3_tile_set_base_state_zerocopy(
+    void* solver_ptr,
+    float* pb_ptr, float* t_init_ptr, float* phb_ptr, float* mub_ptr,
+    int its, int ite, int jts, int jte, int kts, int kte,
+    int ims, int ime, int jms, int jme, int kms, int kme,
+    float* sin_alpha_x, float* sin_alpha_y,
+    float* cos_alpha_x, float* cos_alpha_y,
+    int div_damp_opt, float div_damp_coef,
+    int diff_6th_opt, float diff_6th_factor,
+    int diff_6th_slopeopt, float diff_6th_thresh,
+    int smagorinsky_opt, float c_s, float c_k)
+{
+    (void)sdirk3_tile_set_base_state_checked(
+        solver_ptr, pb_ptr, t_init_ptr, phb_ptr, mub_ptr,
+        its, ite, jts, jte, kts, kte, ims, ime, jms, jme, kms, kme,
+        sin_alpha_x, sin_alpha_y, cos_alpha_x, cos_alpha_y,
+        div_damp_opt, div_damp_coef, diff_6th_opt, diff_6th_factor,
+        diff_6th_slopeopt, diff_6th_thresh, smagorinsky_opt, c_s, c_k);
 }
 
 /**
@@ -478,7 +531,7 @@ void sdirk3_tile_set_base_state_zerocopy(
 void sdirk3_tile_set_base_state_zerocopy_v2(
     void* solver_ptr,
     float* pb_ptr,      // Base state pressure (memory start)
-    float* alb_ptr,     // Base state inverse density (memory start)
+    float* t_init_ptr,     // grid%t_init -- base-state POTENTIAL TEMPERATURE (memory start)
     float* phb_ptr,     // Base state geopotential (memory start)
     float* mub_ptr,     // Base state column mass (memory start)
     int its, int ite, int jts, int jte, int kts, int kte,  // Tile bounds
@@ -486,6 +539,7 @@ void sdirk3_tile_set_base_state_zerocopy_v2(
     int ims, int ime, int jms, int jme, int kms, int kme)  // Memory bounds
 {
     // Retrieve solver
+    std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
     auto it = g_tile_solvers.find(solver_ptr);
     if (it == g_tile_solvers.end()) {
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -501,7 +555,7 @@ void sdirk3_tile_set_base_state_zerocopy_v2(
     // Create a configuration structure for zero-copy base state
     struct BaseStateConfig {
         float* pb_ptr;
-        float* alb_ptr;
+        float* t_init_ptr;
         float* phb_ptr;
         float* mub_ptr;
         int its, ite, jts, jte, kts, kte;
@@ -509,7 +563,7 @@ void sdirk3_tile_set_base_state_zerocopy_v2(
         int ims, ime, jms, jme, kms, kme;
     };
     [[maybe_unused]] BaseStateConfig config = {
-        pb_ptr, alb_ptr, phb_ptr, mub_ptr,
+        pb_ptr, t_init_ptr, phb_ptr, mub_ptr,
         its, ite, jts, jte, kts, kte,
         ids, ide, jds, jde, kds, kde,
         ims, ime, jms, jme, kms, kme
