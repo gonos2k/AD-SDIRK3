@@ -7407,14 +7407,23 @@ vertical_coefficients:
                     // separate u from v as the next refinement; sub-term (x/y/eta advection) splitting
                     // needs to reach inside computeUnifiedRHS and is a further step.
                     const auto uv_exp = experiment_.uv_slow;
-                    {   // announce ONCE, so a log can never be read against the wrong experiment
-                        static std::once_flag once;
-                        std::call_once(once, [uv_exp] {
-                            if (uv_exp != wrf::sdirk3::UvSlowExperiment::None) {
-                                std::cerr << "[UV_SLOW_EXPERIMENT] "
-                                          << wrf::sdirk3::uv_slow_experiment_name(uv_exp) << std::endl;
-                            }
-                        });
+                    // 9F.D38 (review section 4): announce once PER SOLVER, not per process.
+                    // DiagnosticsState::experiment_announced was added in D36 but never
+                    // wired -- the call site kept a function-local std::once_flag, so the
+                    // field existed and did nothing. With a process-global latch a second
+                    // solver configured differently stayed SILENT, and the single banner
+                    // from the first solver invited reading the whole log against the wrong
+                    // experiment: precisely the misreading the announcement exists to stop.
+                    // Also routed through emit_diag_line() -- raw std::cerr here bypassed
+                    // the shared lock and could interleave with a UTERMS block.
+                    if (!diagnostics_state_.experiment_announced) {
+                        diagnostics_state_.experiment_announced = true;
+                        if (uv_exp != wrf::sdirk3::UvSlowExperiment::None) {
+                            std::ostringstream banner;
+                            banner << "[UV_SLOW_EXPERIMENT] tile=" << tile_id_ << " "
+                                   << wrf::sdirk3::uv_slow_experiment_name(uv_exp) << "\n";
+                            wrf::sdirk3::emit_diag_line(banner.str());
+                        }
                     }
                     const bool drop_ru = (uv_exp == wrf::sdirk3::UvSlowExperiment::DropU)
                                       || (uv_exp == wrf::sdirk3::UvSlowExperiment::DropBoth);
@@ -13690,7 +13699,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // still did the enable test, CPU conversion, header construction, ofstream
         // and write -- moving the message but keeping the I/O is not a separation.
         if (diag_cfg.dump_advect_u_split) {
-            wrf::sdirk3::dump_advect_u_split(diagnostics_state_, ucap.terms.advection);
+            wrf::sdirk3::dump_advect_u_split(diagnostics_state_, ucap.terms.advection,
+                                             "port_advect_u_split.bin");
         }
         uterm_site(wrf::sdirk3::USlowSiteKind::Advection);
         
