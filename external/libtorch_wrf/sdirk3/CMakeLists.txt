@@ -38,6 +38,11 @@ endif()
 # Find LibTorch
 find_package(absl CONFIG QUIET HINTS /opt/homebrew /usr/local)
 find_package(Torch REQUIRED)
+# 9F.D39: the diag-io concurrency fixture spawns std::thread; libtorch pulls pthreads
+# in transitively on this host, but relying on that is how a fixture becomes
+# host-dependent. Ask for it explicitly.
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
 # (PR 5: TORCH_CXX_FLAGS is applied target-scoped via wrf_sdirk3_build_config
 # below — the previous global CMAKE_CXX_FLAGS string append is removed.)
 
@@ -202,6 +207,23 @@ endif()
 add_executable(test_u_slow_closures tests/test_u_slow_closures.cpp)
 target_link_libraries(test_u_slow_closures PRIVATE wrf_sdirk3::core)
 add_test(NAME U_Slow_Closures COMMAND test_u_slow_closures)
+
+# 9F.D39 (review section 2): the shared diagnostic lock, verified rather than
+# asserted. Threads, so it needs Threads::Threads explicitly.
+add_executable(test_diag_io_concurrency tests/test_diag_io_concurrency.cpp)
+target_link_libraries(test_diag_io_concurrency PRIVATE wrf_sdirk3::core Threads::Threads)
+add_test(NAME Diag_IO_Concurrency COMMAND test_diag_io_concurrency)
+
+# 9F.D39 (review section 7): config replay provenance. Deliberately does NOT link
+# wrf_sdirk3::core -- the header under test is torch-free, and a fixture that pulled
+# libtorch in would stop being able to detect that property regressing.
+add_executable(test_config_provenance tests/test_config_provenance.cpp)
+add_test(NAME Config_Provenance COMMAND test_config_provenance)
+
+# 9F.D40 (review section 7): the dump write contract as a standing gate.
+add_executable(test_dump_contract tests/test_dump_contract.cpp)
+target_link_libraries(test_dump_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Dump_Contract COMMAND test_dump_contract)
 
 add_executable(test_wrms_gate_metric tests/test_wrms_gate_metric.cpp)
 target_link_libraries(test_wrms_gate_metric PRIVATE wrf_sdirk3::core)

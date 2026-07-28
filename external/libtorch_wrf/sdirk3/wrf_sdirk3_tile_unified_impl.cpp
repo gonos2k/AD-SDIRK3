@@ -122,6 +122,10 @@
 #include "wrf_sdirk3_imex_adjoint_linear_solve.h"
 #include "wrf_sdirk3_acoustic_substep.h"
 #include "wrf_sdirk3_u_slow_diagnostics.h"
+// 9F.D39: emit_diag_line() is used directly here (config provenance, UV_SLOW banner).
+// It arrived transitively before; an explicit include so a future header cleanup in
+// u_slow_diagnostics.h cannot silently break this file.
+#include "wrf_sdirk3_diag_io.h"
 #include "wrf_sdirk3_pressure_gradient_vectorized.h"  // FIX 2025-01-11 Round55: For invalidateAlignedTensorCache()
 #include "wrf_sdirk3_tensor_cache.h"  // OPT Pass33+: For TLS tensor view caching
 #include <iostream>
@@ -3131,6 +3135,24 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     : wrf::sdirk3::TileSDIRK3Solver(nx, ny, nz, dx, dy, 0.0, tile_id),
       experiment_(wrf::sdirk3::ExperimentConfig::from_environment()),
       diagnostics_(wrf::sdirk3::DiagnosticsConfig::from_environment()) {
+
+    // 9F.D39 (review section 7): emit the effective config into the evidence stream at
+    // construction, so an artifact records WHICH MODEL produced it. Both experiment
+    // fields change the trajectory and nothing in the state itself carries them; a
+    // checkpoint or adjoint replay started under different settings is integrating a
+    // different model with no in-band way to notice. The digest is the fixed-width
+    // handle for require_matching_experiment_config(); the string is what a human
+    // actually diffs. Diagnostics provenance is recorded alongside but is NOT part of
+    // any state digest -- if a diagnostics flag ever moved the trajectory, that is the
+    // bug, and it must surface as a numerical difference rather than a config message.
+    {
+        std::ostringstream prov;
+        prov << "[CONFIG PROVENANCE] tile=" << tile_id_
+             << " experiment{" << experiment_.provenance() << "}"
+             << " digest=0x" << std::hex << experiment_.digest() << std::dec
+             << " diagnostics{" << diagnostics_.provenance() << "}\n";
+        wrf::sdirk3::emit_diag_line(prov.str());
+    }
 
     
     // Round 3j: validate the base dimensions BEFORE any +1 arithmetic — the
@@ -7416,14 +7438,18 @@ vertical_coefficients:
                     // experiment: precisely the misreading the announcement exists to stop.
                     // Also routed through emit_diag_line() -- raw std::cerr here bypassed
                     // the shared lock and could interleave with a UTERMS block.
-                    if (!diagnostics_state_.experiment_announced) {
-                        diagnostics_state_.experiment_announced = true;
-                        if (uv_exp != wrf::sdirk3::UvSlowExperiment::None) {
-                            std::ostringstream banner;
-                            banner << "[UV_SLOW_EXPERIMENT] tile=" << tile_id_ << " "
-                                   << wrf::sdirk3::uv_slow_experiment_name(uv_exp) << "\n";
-                            wrf::sdirk3::emit_diag_line(banner.str());
-                        }
+                    // 9F.D40 (review section 11/14): the once-decision is now a pure
+                    // helper so a fixture can pin "once per solver, independent across
+                    // solvers". And the banner is UNCONDITIONAL on config, not gated on
+                    // uv_slow being non-default: stage1_substeps ALSO changes the
+                    // trajectory, so a run with uv_slow=none and stage1_substeps=8
+                    // previously announced nothing while integrating a different model.
+                    if (wrf::sdirk3::take_experiment_announcement(diagnostics_state_)) {
+                        std::ostringstream banner;
+                        banner << "[EXPERIMENT_CONFIG] "
+                               << diagnostic_context().provenance() << " "
+                               << experiment_.provenance() << "\n";
+                        wrf::sdirk3::emit_diag_line(banner.str());
                     }
                     const bool drop_ru = (uv_exp == wrf::sdirk3::UvSlowExperiment::DropU)
                                       || (uv_exp == wrf::sdirk3::UvSlowExperiment::DropBoth);
@@ -13699,8 +13725,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // still did the enable test, CPU conversion, header construction, ofstream
         // and write -- moving the message but keeping the I/O is not a separation.
         if (diag_cfg.dump_advect_u_split) {
-            wrf::sdirk3::dump_advect_u_split(diagnostics_state_, ucap.terms.advection,
-                                             "port_advect_u_split.bin");
+            // 9F.D40 (review section 3): a STEM, not a filename -- the context supplies
+            // solver/rank/tile/rhs so two solvers cannot write the same artifact.
+            wrf::sdirk3::dump_advect_u_split(diagnostics_state_, diagnostic_context(),
+                                             ucap.terms.advection, "port_advect_u_split");
         }
         uterm_site(wrf::sdirk3::USlowSiteKind::Advection);
         
@@ -21508,7 +21536,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     if (uterms_trace) {
         ucap.terms.final_tendency = ru_tend;
         ucap.terms.u = u_for_work;
-        wrf::sdirk3::emit_u_slow_diagnostics(diagnostics_state_, ucap.terms);
+        wrf::sdirk3::emit_u_slow_diagnostics(diagnostics_state_, diagnostic_context(),
+                                             ucap.terms);
     }
     torch::Tensor u_tend, v_tend, w_tend;
     if (g_export_coupled_slow) {

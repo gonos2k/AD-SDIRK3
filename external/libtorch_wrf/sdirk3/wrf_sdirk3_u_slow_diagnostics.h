@@ -24,16 +24,14 @@
 #include "wrf_sdirk3_diag_io.h"
 #include "wrf_sdirk3_experiment_config.h"
 
-#include <atomic>
-#include <mutex>
-#include <fstream>
-#include <sstream>
-#include <cctype>
+// 9F.D40 (review section 16): only what the DECLARATIONS need. <fstream>, <sstream>,
+// <iostream>, <cctype>, <cstdlib> and <atomic> were carried over from the header-only
+// era and now describe a dependency this file does not have -- they moved to the .cpp
+// with the code that used them.
 #include <cstdint>
-#include <cstdlib>
-#include <iostream>
-#include <vector>
+#include <mutex>
 #include <string>
+#include <vector>
 
 namespace wrf {
 namespace sdirk3 {
@@ -46,11 +44,22 @@ namespace sdirk3 {
 struct UAdvectionTerms {
     torch::Tensor x, y, vertical;
 
-    bool complete() const {
+    // 9F.D40 (review section 6): defined-ness ONLY. Kept as the cheap pre-check, but
+    // renamed from the old complete() because "complete" overclaimed: three defined
+    // tensors of mismatched shape are not a complete decomposition. x+y BROADCASTS, so
+    // {1,nz,nx} + {ny,nz,nx} silently succeeds and yields a horizontal field whose
+    // shape then matches vertical -- passing every downstream check and writing a
+    // plausible, wrong artifact. Use validate() before trusting the values.
+    bool all_defined() const {
         return x.defined() && y.defined() && vertical.defined();
     }
     torch::Tensor horizontal() const { return x + y; }
     torch::Tensor total() const { return x + y + vertical; }
+
+    // Full contract: rank, shape, dtype, device. Throws with the offending property
+    // named. Finiteness is checked separately -- it costs a reduction, so it belongs
+    // at the dump site (once) rather than on every accessor.
+    void validate() const;
 };
 
 // One accumulation site's contribution to ru_tend, captured as a telescoping snapshot
@@ -89,12 +98,60 @@ struct USlowTerms {
 // stayed function-local statics, so lifetime and ownership disagreed: a second solver
 // in one process continued the first's record numbering, could never write its own
 // dump, and a re-init never reset either.
+// 9F.D40 (review section 3/9): WHO produced this record.
+//
+// D36 moved the dump latch and the record counter from process-global statics into
+// per-solver DiagnosticsState. That was right for ownership and WRONG on its own: every
+// solver still passed the same hard-coded path, so N solvers each "successfully" wrote
+// port_advect_u_split.bin over one another, and each logged success. The process-global
+// latch had been accidentally protecting the shared filename; per-solver state removed
+// that protection without replacing it. Identity has to be explicit now.
+//
+// HONESTY ABOUT WHAT IS POPULATED. solver_id / rank / tile / rhs_generation are read
+// from real state. physical_step and rk_stage are NOT reachable here: computeUnifiedRHS
+// takes (state, RhsMode) and no step or stage is threaded to it -- only the unrelated
+// sdirk3_debug_step() entry point ever sees grid%itimestep. Rather than emit a
+// plausible-looking 0, they are kUnset and print as "unset". A fabricated 0 in an
+// evidence artifact is worse than an absent field: it reads as step zero.
+struct DiagnosticContext {
+    static constexpr int kUnset = -1;
+
+    std::uint64_t solver_id     = 0;
+    int           rank          = kUnset;
+    int           tile          = kUnset;
+    int           physical_step = kUnset;   // not plumbed yet -- see above
+    int           rk_stage      = kUnset;   // not plumbed yet -- see above
+    std::uint64_t rhs_generation = 0;
+
+    // Canonical, fixed-order, filesystem-safe. Fixed width so names sort in run order.
+    std::string filename_suffix() const;
+    // Human-readable, same fixed order, for log records.
+    std::string provenance() const;
+};
+
+// Process-wide solver identity. The COUNTER is global on purpose -- it exists precisely
+// to distinguish solvers within one process, which is the thing per-solver state cannot
+// do for itself. It is not run state and never enters a numerical path.
+std::uint64_t next_solver_id();
+
+// Best-effort MPI rank; DiagnosticContext::kUnset when MPI is unavailable or not
+// initialised. Never throws and never initialises MPI -- a diagnostic must not change
+// the process's MPI lifecycle.
+int diagnostic_mpi_rank();
+
 struct DiagnosticsState {
     std::uint64_t uterms_record = 0;
     bool split_dump_written = false;
     bool experiment_announced = false;
     std::mutex dump_mutex;
 };
+
+// 9F.D40 (review section 11): the announce-once decision as a PURE, testable helper.
+// D38 wired experiment_announced correctly but the property "each solver announces
+// exactly once, and one solver's announcement does not silence another" lived only
+// inside a call site in a 38k-line file, where no fixture could reach it.
+// Returns true exactly once per DiagnosticsState.
+bool take_experiment_announcement(DiagnosticsState& st);
 
 // 9F.D35 (review section 5): a closure ALWAYS reports one of three states.
 //
@@ -138,23 +195,15 @@ void capture_u_slow_site(USlowCaptureState& st,
 
 
 // ---------------------------------------------------------------------------
-// Header-only ON PURPOSE. A separate .cpp would have to be added to
-// wrf_sdirk3_core_sources.txt, to CMakeLists, and to the CI exact-set install
-// contract -- three coupled edits, and the exact-set ratchet has silently rotted
-// four times in this repo.
-//
-// 9F.D34 (review section 8): an earlier version of this note claimed "exactly one
-// translation unit includes this". That is no longer true -- tests/test_u_slow_
-// closures.cpp includes it as well -- so the "inline costs nothing" argument does not
-// hold as stated. It is also true, as the review checked, that adding a .cpp costs
-// ONE line in wrf_sdirk3_core_sources.txt plus the CI "22 production sources" counter,
-// not the three coupled edits claimed earlier. Moving the implementation to a .cpp is
-// the right next step; it is deliberately NOT bundled with the closure-semantics fix
-// so that a behavioural change and a file move do not land in one commit.
+// 9F.D40 (review section 16): this header DECLARES; wrf_sdirk3_u_slow_diagnostics.cpp
+// implements. The previous note here argued header-only was deliberate and that moving
+// to a .cpp was "the right next step" -- that move happened in D38, and the note
+// survived it, describing a layout the file no longer has. A comment that outlives the
+// design it describes is worse than none: it is the dependency graph told wrong.
 // ---------------------------------------------------------------------------
-
-
-void emit_u_slow_diagnostics(DiagnosticsState& st, const USlowTerms& t);
+void emit_u_slow_diagnostics(DiagnosticsState& st,
+                             const DiagnosticContext& ctx,
+                             const USlowTerms& t);
 
 
 
@@ -173,9 +222,12 @@ void emit_u_slow_diagnostics(DiagnosticsState& st, const USlowTerms& t);
 // 9F.D38: no default argument. D36 removed acoustic_schedule()'s default for the
 // same reason and CI immediately found a caller that had been relying on it -- a
 // default is exactly how an omitted argument stops being visible at the call site.
+// path_stem gets the context suffix and ".bin" appended -- callers pass a STEM, not a
+// full filename, so identity cannot be omitted at a call site.
 bool dump_advect_u_split(DiagnosticsState& st,
+                         const DiagnosticContext& ctx,
                          const UAdvectionTerms& adv,
-                         const std::string& path);
+                         const std::string& path_stem);
 
 }  // namespace sdirk3
 }  // namespace wrf

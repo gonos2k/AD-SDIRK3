@@ -40,6 +40,8 @@
 #define WRF_SDIRK3_EXPERIMENT_CONFIG_H
 
 #include <cctype>
+#include <charconv>
+#include <cstdint>
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
@@ -62,14 +64,45 @@ struct ExperimentConfig {
     // malformed values rather than silently defaulting -- a silently-defaulted
     // experiment reports success while running the baseline.
     static ExperimentConfig from_environment();  // defined below
+
+    // 9F.D39 (review section 7): replay provenance.
+    //
+    // Both fields below CHANGE THE TRAJECTORY: uv_slow ablates terms from the slow
+    // tendency, stage1_substeps subdivides the acoustic stage-1 step. So a checkpoint
+    // or adjoint replay started under a different ExperimentConfig is integrating a
+    // DIFFERENT MODEL, and nothing in the state itself records that. Making the
+    // config object state (D33) fixed the lifetime problem; it did not make the
+    // setting recoverable from an artifact after the fact.
+    //
+    // A canonical string rather than an opaque hash: it is diffable by eye, it names
+    // which field differs, and it can still be hashed when a fixed-width id is needed
+    // (see digest()). An opaque hash tells you THAT something changed, which is the
+    // less useful half.
+    std::string provenance() const;   // defined below
+    std::uint64_t digest() const;     // defined below
 };
 
-// Settings that MUST NOT change the trajectory.
+// 9F.D40 (review section 17): scoped to what is actually promised. The file header
+// already narrows this to the NUMERICAL RESULT and acknowledges that timing, allocation
+// and failure surface do change; this line still said "MUST NOT change the trajectory",
+// a stronger contract the same file had already retracted. Two contracts in one file
+// means the reader picks one, and a diagnostic that throws or reorders work is then
+// either a bug or expected depending on which line they read.
+//
+// Observation settings. They must not mutate numerical state, alter operands, add RHS
+// evaluations, or feed any solver decision. They MAY change timing, allocation and the
+// failure surface (an enabled diagnostic is allowed to fail closed).
 struct DiagnosticsConfig {
     bool trace_u_terms = false;
     bool dump_advect_u_split = false;
 
     static DiagnosticsConfig from_environment();  // defined below
+
+    // Recorded in the evidence manifest but deliberately NOT part of any state digest:
+    // if a diagnostics flag ever changed the trajectory that would be the bug, and
+    // folding it into the state digest would hide that bug behind a "configs differ"
+    // message instead of surfacing it as a numerical difference.
+    std::string provenance() const;   // defined below
 };
 
 
@@ -104,6 +137,23 @@ inline const char* uv_slow_experiment_name(UvSlowExperiment m) {
     return "None(production)";
 }
 
+// 9F.D39: STABLE token for provenance, deliberately separate from the display name
+// above. The display strings embed environment-variable spellings -- "DropU(ABLATE_RU_SLOW)"
+// -- which is useful in a log banner and WRONG in a replay digest: renaming an env var
+// would change the digest without changing behavior, so every previously recorded
+// checkpoint would spuriously fail the gate. A gate that fails for cosmetic reasons is
+// a gate people switch off. These tokens must therefore never be edited for style.
+inline const char* uv_slow_experiment_token(UvSlowExperiment m) {
+    switch (m) {
+        case UvSlowExperiment::DropU:    return "drop_u";
+        case UvSlowExperiment::DropV:    return "drop_v";
+        case UvSlowExperiment::DropBoth: return "drop_both";
+        case UvSlowExperiment::DropPgf:  return "drop_pgf";
+        case UvSlowExperiment::None:     break;
+    }
+    return "none";
+}
+
 inline ExperimentConfig ExperimentConfig::from_environment() {
     ExperimentConfig c;
 
@@ -136,10 +186,16 @@ inline ExperimentConfig ExperimentConfig::from_environment() {
     if (const char* v = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS")) {
         if (v[0] != '\0') {
             const std::string sv(v);
-            std::size_t consumed = 0;
+            // 9F.D40 (review section 18): from_chars, not stoi. stoi is not as strict as
+            // the error message claims -- it skips LEADING WHITESPACE and accepts a
+            // leading '+', so " 4" and "+4" were consumed whole and passed the
+            // consumed==size test while the message promised digits only. from_chars
+            // does neither, needs no try/catch, and builds no temporary.
             int n = 0;
-            try { n = std::stoi(sv, &consumed); } catch (const std::exception&) { consumed = 0; }
-            if (!(consumed == sv.size() && n >= 1 && n <= 4096)) {
+            const char* begin = sv.data();
+            const char* end   = sv.data() + sv.size();
+            const auto res = std::from_chars(begin, end, n);
+            if (res.ec != std::errc{} || res.ptr != end || n < 1 || n > 4096) {
                 throw std::invalid_argument(
                     "WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS must be an integer in "
                     "[1,4096] with no trailing characters; got \"" + sv + "\".");
@@ -163,6 +219,67 @@ inline DiagnosticsConfig DiagnosticsConfig::from_environment() {
     return d;
 }
 
+
+
+// --- 9F.D39 provenance (review section 7) -------------------------------------
+//
+// Canonical form: one "key=value" per setting, fixed order, no environment text.
+// Fixed order matters -- a set-like or map-ordered rendering would make two identical
+// configs produce different strings on different runs, which turns the check into
+// noise and trains people to ignore it.
+
+inline std::string ExperimentConfig::provenance() const {
+    std::string o = "uv_slow=";
+    o += uv_slow_experiment_token(uv_slow);
+    o += " stage1_substeps=";
+    o += std::to_string(stage1_substeps);
+    return o;
+}
+
+// FNV-1a over the canonical string. Not cryptographic and not meant to be -- this
+// detects accidental divergence between two runs, not a forged artifact.
+inline std::uint64_t ExperimentConfig::digest() const {
+    const std::string s = provenance();
+    std::uint64_t h = 1469598103934665603ULL;
+    for (unsigned char c : s) {
+        h ^= static_cast<std::uint64_t>(c);
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+// Replay/restart gate. FAILS CLOSED by explicit decision: a mismatch aborts rather
+// than warning.
+//
+// The reasoning is the asymmetry of the two failure modes. If this aborts a run that
+// would have been fine, the cost is a restart and an obvious message. If it merely
+// warned, an adjoint replay under the wrong linearization would produce gradients
+// that are WRONG BUT FINITE -- no NaN, no crash, nothing downstream that looks
+// abnormal. This campaign has spent months on exactly that class of silent failure,
+// and 4D-Var gradients are the worst place to add another one.
+//
+// Throws std::invalid_argument rather than TORCH_CHECK to keep this header
+// torch-free (review section 6). Names BOTH provenance strings, because "configs
+// differ" without saying which field is the message people learn to ignore.
+inline void require_matching_experiment_config(const std::string& recorded_provenance,
+                                               const ExperimentConfig& current) {
+    if (recorded_provenance == current.provenance()) return;
+    throw std::invalid_argument(
+        "SDIRK3 experiment config mismatch at restart/replay -- refusing to continue.\n"
+        "  recorded: " + recorded_provenance + "\n"
+        "  current : " + current.provenance() + "\n"
+        "Both fields change the trajectory, so the recorded artifact and this run are "
+        "not the same model. Re-run with the recorded settings, or start a new "
+        "experiment rather than resuming this one.");
+}
+
+inline std::string DiagnosticsConfig::provenance() const {
+    std::string o = "trace_u_terms=";
+    o += (trace_u_terms ? "1" : "0");
+    o += " dump_advect_u_split=";
+    o += (dump_advect_u_split ? "1" : "0");
+    return o;
+}
 
 }  // namespace sdirk3
 }  // namespace wrf

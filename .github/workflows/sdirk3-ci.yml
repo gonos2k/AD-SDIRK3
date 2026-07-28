@@ -200,7 +200,7 @@ jobs:
       - name: install ninja
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build mpich libmpich-dev
 
-      - name: production Make archive (22 TU) + exact-set contracts
+      - name: production Make archive + exact-set contracts
         run: |
           set -euo pipefail
           cd external/libtorch_wrf/sdirk3
@@ -223,7 +223,16 @@ jobs:
           # exit 0 alone does not prove AUTO-strict actually engaged:
           grep -q "ABI Header Mode: STRICT" configure.log
           grep -q "Fast pow(x,0.875): DISABLED" configure.log
-          grep -q "SDIRK3 core manifest: 23 production sources" configure.log
+          # 9F.D40 (review section 19): DERIVE the count from the manifest. It was
+          # hard-coded here and again in this job's name, and the two had already
+          # drifted apart (name said 22, assertion said 23). A ratchet that has to be
+          # edited in two places on every source addition is a ratchet that rots -- and
+          # this repo has rotted exactly this counter four times. The manifest is the
+          # single authority; CI should read it, not restate it.
+          _core_n="$(awk 'NF && $1 !~ /^#/' \
+              external/libtorch_wrf/sdirk3/wrf_sdirk3_core_sources.txt | wc -l | tr -d ' ')"
+          grep -q "SDIRK3 core manifest: ${_core_n} production sources" configure.log \
+            || { echo "FAIL: configure.log disagrees with the manifest (${_core_n} sources)"; exit 1; }
           # torch>=2.6 wheels omit the GLIBCXX macro from TORCH_CXX_FLAGS; the
           # runtime-derived value must have been resolved, not assumed:
           grep -q "SDIRK3 torch ABI: _GLIBCXX_USE_CXX11_ABI=$TORCH_ABI" configure.log

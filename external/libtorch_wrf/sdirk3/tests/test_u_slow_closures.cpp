@@ -52,7 +52,11 @@ std::string capture(const wrf::sdirk3::USlowTerms& t) {
     {
         CerrRedirect guard(buf.rdbuf());
         wrf::sdirk3::DiagnosticsState st;   // per-call state, as production now has
-        wrf::sdirk3::emit_u_slow_diagnostics(st, t);
+        // 9F.D40: a context is required now, so a record can never be emitted without
+        // saying who produced it.
+        wrf::sdirk3::DiagnosticContext ctx;
+        ctx.solver_id = 1; ctx.rank = 0; ctx.tile = 0;
+        wrf::sdirk3::emit_u_slow_diagnostics(st, ctx, t);
     }
     return buf.str();
 }

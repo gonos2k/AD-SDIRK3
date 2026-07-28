@@ -60,15 +60,49 @@ def load_wrf(path):
 
 
 def load_port(path):
+    """Read a port-side split dump.
+
+    9F.D40: schema v2 prepends a magic + provenance block, so an artifact can be
+    attributed and a stale one detected. v1 (bare dims) is still read, because a
+    reader that silently misparses an old file is worse than one that says which
+    format it saw. The magic is ASCII and v1 began with dims[0] as a little-endian
+    int64, so the two can never be confused: no plausible dimension has the byte
+    pattern of "SD3USPL".
+    """
     with open(path, "rb") as f:
-        dims = np.fromfile(f, dtype="<i8", count=3)
+        head = f.read(8)
+        if head[:7] == b"SD3USPL":
+            version = int(np.frombuffer(f.read(4), dtype="<i4")[0])
+            if version != 2:
+                raise SystemExit(f"{path}: unsupported schema version {version}")
+            rank, tile, step, stage = np.frombuffer(f.read(16), dtype="<i4")
+            solver, rhs_gen = np.frombuffer(f.read(16), dtype="<u8")
+            dims = np.frombuffer(f.read(24), dtype="<i8")
+            payload_bytes = int(np.frombuffer(f.read(8), dtype="<u8")[0])
+            prov = {
+                "schema": version, "solver": int(solver), "rank": int(rank),
+                "tile": int(tile), "step": int(step), "stage": int(stage),
+                "rhs_generation": int(rhs_gen),
+            }
+        else:
+            f.seek(0)
+            dims = np.fromfile(f, dtype="<i8", count=3)
+            payload_bytes = None
+            prov = {"schema": 1}
         if dims.size != 3:
             raise SystemExit(f"{path}: short header")
         nj, nk, ni = (int(x) for x in dims)
         n = nj * nk * ni
+        if payload_bytes is not None and payload_bytes != 2 * n * 4:
+            raise SystemExit(
+                f"{path}: payload_bytes={payload_bytes} disagrees with dims "
+                f"({nj},{nk},{ni}) -> expected {2 * n * 4}; truncated or wrong artifact"
+            )
         h = np.fromfile(f, dtype="<f4", count=n).reshape((nj, nk, ni))
         v = np.fromfile(f, dtype="<f4", count=n).reshape((nj, nk, ni))
-    return h, v, (nj, nk, ni)
+        if h.size != n or v.size != n:
+            raise SystemExit(f"{path}: short payload")
+    return h, v, (nj, nk, ni), prov
 
 
 def stats(p, w, label, th):
@@ -128,9 +162,15 @@ def main():
     a = ap.parse_args()
 
     wh, wv, whdr = load_wrf(a.wrf)
-    ph, pv, phdr = load_port(a.port)
+    ph, pv, phdr, pprov = load_port(a.port)
     print(f"WRF  hdr(ims,ime,jms,jme,kms,kme)={whdr}  array{wh.shape} (nj,nk,ni)")
     print(f"PORT shape{ph.shape} (nj,nk,ni)")
+    # 9F.D40: print WHO produced the port artifact. Without this a parity number can be
+    # reported against a stale file from an earlier run and look perfectly reasonable.
+    if pprov.get("schema", 1) >= 2:
+        print("PORT provenance: " + " ".join(f"{k}={v}" for k, v in pprov.items()))
+    else:
+        print("PORT provenance: schema v1 -- UNATTRIBUTED artifact (pre-9F.D40)")
 
     # The port tile is the physical interior; WRF's dump includes the halo. Map with
     # the KNOWN physical offset i0 = 1 - ims, j0 = 1 - jms rather than a correlation
