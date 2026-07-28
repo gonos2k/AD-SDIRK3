@@ -818,6 +818,23 @@ private:
     const wrf::sdirk3::ExperimentConfig  experiment_;
     const wrf::sdirk3::DiagnosticsConfig diagnostics_;
     wrf::sdirk3::DiagnosticsState        diagnostics_state_;
+    // 9F.D40 (review section 3): process-unique identity. Assigned at construction so
+    // every record and artifact this solver emits can be attributed to it. The counter
+    // behind it is process-global BY DESIGN -- distinguishing solvers within a process
+    // is exactly what per-solver state cannot do for itself.
+    const std::uint64_t                  solver_id_ = wrf::sdirk3::next_solver_id();
+    const int                            diag_rank_ = wrf::sdirk3::diagnostic_mpi_rank();
+
+    // Context for this solver's diagnostic records. physical_step / rk_stage stay unset:
+    // computeUnifiedRHS receives (state, RhsMode) and neither is threaded to it today.
+    wrf::sdirk3::DiagnosticContext diagnostic_context() const {
+        wrf::sdirk3::DiagnosticContext c;
+        c.solver_id      = solver_id_;
+        c.rank           = diag_rank_;
+        c.tile           = tile_id_;
+        c.rhs_generation = diagnostics_state_.uterms_record;
+        return c;
+    }
 
     // Grid information (extended for advanced features)
     std::shared_ptr<wrf::sdirk3::WRFGridInfo> grid_info_;

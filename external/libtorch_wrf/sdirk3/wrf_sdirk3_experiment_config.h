@@ -40,6 +40,7 @@
 #define WRF_SDIRK3_EXPERIMENT_CONFIG_H
 
 #include <cctype>
+#include <charconv>
 #include <cstdint>
 #include <cstdlib>
 #include <stdexcept>
@@ -81,7 +82,16 @@ struct ExperimentConfig {
     std::uint64_t digest() const;     // defined below
 };
 
-// Settings that MUST NOT change the trajectory.
+// 9F.D40 (review section 17): scoped to what is actually promised. The file header
+// already narrows this to the NUMERICAL RESULT and acknowledges that timing, allocation
+// and failure surface do change; this line still said "MUST NOT change the trajectory",
+// a stronger contract the same file had already retracted. Two contracts in one file
+// means the reader picks one, and a diagnostic that throws or reorders work is then
+// either a bug or expected depending on which line they read.
+//
+// Observation settings. They must not mutate numerical state, alter operands, add RHS
+// evaluations, or feed any solver decision. They MAY change timing, allocation and the
+// failure surface (an enabled diagnostic is allowed to fail closed).
 struct DiagnosticsConfig {
     bool trace_u_terms = false;
     bool dump_advect_u_split = false;
@@ -176,10 +186,16 @@ inline ExperimentConfig ExperimentConfig::from_environment() {
     if (const char* v = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS")) {
         if (v[0] != '\0') {
             const std::string sv(v);
-            std::size_t consumed = 0;
+            // 9F.D40 (review section 18): from_chars, not stoi. stoi is not as strict as
+            // the error message claims -- it skips LEADING WHITESPACE and accepts a
+            // leading '+', so " 4" and "+4" were consumed whole and passed the
+            // consumed==size test while the message promised digits only. from_chars
+            // does neither, needs no try/catch, and builds no temporary.
             int n = 0;
-            try { n = std::stoi(sv, &consumed); } catch (const std::exception&) { consumed = 0; }
-            if (!(consumed == sv.size() && n >= 1 && n <= 4096)) {
+            const char* begin = sv.data();
+            const char* end   = sv.data() + sv.size();
+            const auto res = std::from_chars(begin, end, n);
+            if (res.ec != std::errc{} || res.ptr != end || n < 1 || n > 4096) {
                 throw std::invalid_argument(
                     "WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS must be an integer in "
                     "[1,4096] with no trailing characters; got \"" + sv + "\".");

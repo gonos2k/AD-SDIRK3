@@ -119,7 +119,30 @@ int main() {
               "diagnostics state does NOT enter the experiment digest");
     }
 
-    constexpr int expected_checks = 12;
+    // --- 9F.D40 section 18: the strict integer parser is actually strict ---
+    // stoi skips leading whitespace and accepts '+', so " 4" and "+4" used to be
+    // accepted while the error message promised digits only. These pin the fix.
+    {
+        struct Case { const char* v; bool ok; const char* what; };
+        const Case cases[] = {
+            {"4",    true,  "plain digits accepted"},
+            {" 4",   false, "LEADING SPACE rejected (stoi would have accepted)"},
+            {"+4",   false, "leading '+' rejected (stoi would have accepted)"},
+            {"4x",   false, "trailing garbage rejected"},
+            {"0",    false, "below range rejected"},
+            {"99999",false, "above range rejected"},
+        };
+        for (const auto& c : cases) {
+            setenv("WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS", c.v, 1);
+            bool threw = false;
+            try { (void)ExperimentConfig::from_environment(); }
+            catch (const std::invalid_argument&) { threw = true; }
+            check(threw == !c.ok, c.what);
+        }
+        unsetenv("WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS");
+    }
+
+    constexpr int expected_checks = 18;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

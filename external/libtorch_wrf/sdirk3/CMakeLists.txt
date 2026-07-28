@@ -220,6 +220,11 @@ add_test(NAME Diag_IO_Concurrency COMMAND test_diag_io_concurrency)
 add_executable(test_config_provenance tests/test_config_provenance.cpp)
 add_test(NAME Config_Provenance COMMAND test_config_provenance)
 
+# 9F.D40 (review section 7): the dump write contract as a standing gate.
+add_executable(test_dump_contract tests/test_dump_contract.cpp)
+target_link_libraries(test_dump_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Dump_Contract COMMAND test_dump_contract)
+
 add_executable(test_wrms_gate_metric tests/test_wrms_gate_metric.cpp)
 target_link_libraries(test_wrms_gate_metric PRIVATE wrf_sdirk3::core)
 add_test(NAME WRMS_Gate_Metric COMMAND test_wrms_gate_metric)
