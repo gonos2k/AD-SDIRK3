@@ -52,10 +52,26 @@
 // reports a spurious sign inversion.
 //
 // CODE INTERNAL (positive magnitudes, per the above):
-//   - rdnw_ > 0  (stored as positive, matching WRF)
-//   - rdn_  > 0  (stored as positive, matching WRF)
+//   - rdnw_ > 0  (magnitude; WRF's own value is NEGATIVE)
+//   - rdn_  > 0  (magnitude; WRF's own value is NEGATIVE)
 //   - dnw_  > 0  (positive, derived from rdnw_)
-//   - rdzw  = rdnw > 0  (direct use, no negation needed)
+//   - rdzw  = rdnw_ > 0  (magnitude; operators apply the eta sign themselves)
+//
+// 9F.D41 (review P1-3): these four lines used to read "stored as positive, MATCHING
+// WRF" and "direct use, NO NEGATION NEEDED". Both were false, and they contradicted
+// the corrected authority block directly above them -- D37 fixed the top of this
+// comment and left its own sub-list saying the opposite.
+//   * "matching WRF" is backwards: WRF's rdnw/rdn are negative (znw decreases with k),
+//     which is exactly why extraction takes abs(). Storing |rdnw| does not MATCH WRF,
+//     it DIFFERS from WRF by a sign, deliberately.
+//   * "no negation needed" is contradicted by the acoustic kernel, which re-applies
+//     the sign explicitly at four sites -- wrf_sdirk3_acoustic_substep.cpp:133, :410,
+//     :533, :542 all compute with (-rdnw). The negation is not absent; it moved from
+//     the stored value into the operators that need it.
+//
+// So the single contract is: STORAGE is a magnitude, ORIENTATION is the operator's
+// job. A reader who believed either retracted line would either re-introduce a sign at
+// extraction (double-negating the acoustic terms) or drop the operator's (-rdnw).
 //
 // STORAGE:
 //   - rdnw input: rdnw_[k] = |rdnw[k]|  (ensure positive)
@@ -3802,7 +3818,9 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     // CRITICAL: Update vertical grid coefficients from WRF at each timestep
     // WRF passes these via C_LOC(grid%rdnw(kms)) etc. - must use current values
     if (rdnw && nz > 0) {
-        // WRF-COMPLIANT REFACTOR 2025-12-25: Store POSITIVE rdnw (matching WRF standard).
+        // 9F.D41 (review P1-3): store the MAGNITUDE. Not "matching WRF standard" --
+        // WRF's rdnw is NEGATIVE (znw decreases with k); this deliberately DIFFERS by a
+        // sign, and the operators re-apply orientation where they need it.
         // Use signature for fast O(1) change detection.
         // SIGNATURE NaN FIX 2025-12-25: Use isfinite check to prevent NaN propagation.
         // If NaN is in input, signature would be NaN causing sig_changed=true every call.
@@ -4047,7 +4065,8 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         }
 
         // PARITY FIX 2025-12-25: Compute signature from NORMALIZED values.
-        // WRF-COMPLIANT REFACTOR 2025-12-25: Store POSITIVE rdn (matching WRF standard).
+        // 9F.D41 (review P1-3): store the MAGNITUDE. WRF's rdn is NEGATIVE; see the
+        // vertical-metric authority block at the top of this file.
         // RDN[0] BOUNDARY FIX 2025-12-25: Exclude k=0 from signature - WRF rdn(1) is undefined.
         // Use signature for fast O(1) change detection.
         // SIGNATURE NaN FIX 2025-12-25: Use isfinite check to prevent NaN propagation.
@@ -4349,7 +4368,9 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     }
 
     // CRITICAL: Compute rdzw from rdnw for U/V-momentum vertical advection
-    // WRF-COMPLIANT REFACTOR 2025-12-25: rdzw = rdnw (both positive, no negation needed).
+    // 9F.D41 (review P1-3): rdzw = |rdnw|. "No negation needed" was false -- the acoustic
+    // kernel applies (-rdnw) explicitly at wrf_sdirk3_acoustic_substep.cpp:133/:410/:533/:542.
+    // The negation did not disappear; it moved into the operators.
     //   - WRF standard: rdnw > 0 (positive, rdnw = 1/dnw)
     //   - Code now matches WRF: rdnw > 0, rdzw = rdnw
     if (rdnw && nz > 0) {

@@ -337,8 +337,16 @@ MODULE module_implicit_sdirk3
       END SUBROUTINE sdirk3_tile_set_base_state
       
       ! Zero-copy base state setter (extended version with advanced dynamics parameters)
-      SUBROUTINE sdirk3_tile_set_base_state_zerocopy(solver_ptr, &
-                    pb_ptr, alb_ptr, phb_ptr, mub_ptr, &
+      ! 9F.D41 (review P0-2): CHECKED. Returns 1 only when every field was validated,
+      ! copied and handed to the solver; 0 on any failure with nothing published. The
+      ! old SUBROUTINE form could not report failure, so the caller set
+      ! base_state_initialized = .TRUE. unconditionally and a total failure published
+      ! SUCCESS.
+      ! 9F.D41 (review P0-1): alb_ptr -> t_init_ptr. It is grid%t_init, base-state
+      ! POTENTIAL TEMPERATURE; the solver uses it as theta (t_full = t_pert + th_base)
+      ! and DERIVES alb from it. Calling it alb inverted the dependency.
+      INTEGER(C_INT) FUNCTION sdirk3_tile_set_base_state_checked(solver_ptr, &
+                    pb_ptr, t_init_ptr, phb_ptr, mub_ptr, &
                     its, ite, jts, jte, kts, kte, &
                     ims, ime, jms, jme, kms, kme, &
                     sin_alpha_x, sin_alpha_y, &
@@ -347,10 +355,10 @@ MODULE module_implicit_sdirk3
                     diff_6th_opt, diff_6th_factor, &
                     diff_6th_slopeopt, diff_6th_thresh, &
                     smagorinsky_opt, c_s, c_k) &
-         BIND(C, name="sdirk3_tile_set_base_state_zerocopy")
+         BIND(C, name="sdirk3_tile_set_base_state_checked")
          USE, INTRINSIC :: ISO_C_BINDING
          TYPE(C_PTR), VALUE :: solver_ptr
-         TYPE(C_PTR), VALUE :: pb_ptr, alb_ptr, phb_ptr, mub_ptr
+         TYPE(C_PTR), VALUE :: pb_ptr, t_init_ptr, phb_ptr, mub_ptr
          INTEGER(C_INT), VALUE :: its, ite, jts, jte, kts, kte
          INTEGER(C_INT), VALUE :: ims, ime, jms, jme, kms, kme
          TYPE(C_PTR), VALUE :: sin_alpha_x, sin_alpha_y
@@ -359,7 +367,7 @@ MODULE module_implicit_sdirk3
          INTEGER(C_INT), VALUE :: diff_6th_slopeopt, smagorinsky_opt
          REAL(C_FLOAT), VALUE :: div_damp_coef, diff_6th_factor
          REAL(C_FLOAT), VALUE :: diff_6th_thresh, c_s, c_k
-      END SUBROUTINE sdirk3_tile_set_base_state_zerocopy
+      END FUNCTION sdirk3_tile_set_base_state_checked
 
       ! PR 7B (3b-3 P1): checked halo freshness publication. Returns 1 on
       ! success (serial/no-exchange notify is a true no-op), 0 when the
@@ -695,166 +703,80 @@ CONTAINS
       INTEGER :: zero_count
       INTEGER :: nx, ny, nz
       INTEGER :: kde_consistent  ! For WRF-consistent kde
+      ! 9F.D41 (review P0-2): status from the checked base-state setter.
+      INTEGER(C_INT) :: base_state_status
       CHARACTER(LEN=256) :: message
       
       ! Contiguous arrays for tile data
       REAL, DIMENSION(:,:,:), ALLOCATABLE, TARGET :: pb_tile, alb_tile, phb_tile
       REAL, DIMENSION(:,:), ALLOCATABLE, TARGET :: mub_tile
       
-      WRITE(0,*) '=== INSIDE set_base_state_sdirk3 entry ==='
-      CALL FLUSH(0)
 
       IF (.NOT. sdirk3_initialized) THEN
-         WRITE(0,*) '=== SDIRK3 NOT initialized, returning ==='
-         CALL FLUSH(0)
          CALL wrf_debug(1, "SDIRK3: Solvers not initialized, skipping base state setup")
          RETURN
       END IF
 
-      WRITE(0,*) '=== SDIRK3 IS initialized, checking base_state ==='
-      CALL FLUSH(0)
 
       IF (.NOT. base_state_initialized) THEN
-         WRITE(0,*) '=== Setting base state for all tiles ==='
-         CALL FLUSH(0)
          CALL wrf_debug(1, "SDIRK3: Setting base state for all tiles")
 
-         WRITE(0,*) '=== About to call SIZE(grid%pb, 2) ==='
-         CALL FLUSH(0)
 
          ! Use actual pb array dimension for consistency
          kde_consistent = SIZE(grid%pb, 2)
 
-         WRITE(0,*) '=== kde_consistent = ', kde_consistent
-         CALL FLUSH(0)
          WRITE(message, '(A,I0,A,I0,A)') "SDIRK3 set_base_state: kde from pb array=", kde_consistent, &
               " (passed kde=", kde, ")"
          CALL wrf_debug(1, message)
          
-         WRITE(0,*) '=== Checking solver arrays, num_tiles = ', grid%num_tiles
-         CALL FLUSH(0)
-         WRITE(0,*) '=== solver_valid allocated = ', ALLOCATED(solver_valid)
-         CALL FLUSH(0)
-         WRITE(0,*) '=== tile_solvers allocated = ', ALLOCATED(tile_solvers)
-         CALL FLUSH(0)
 
          IF (ALLOCATED(solver_valid)) THEN
-            WRITE(0,*) '=== solver_valid bounds: ', LBOUND(solver_valid,1), ' to ', UBOUND(solver_valid,1)
-            CALL FLUSH(0)
          END IF
          IF (ALLOCATED(tile_solvers)) THEN
-            WRITE(0,*) '=== tile_solvers bounds: ', LBOUND(tile_solvers,1), ' to ', UBOUND(tile_solvers,1)
-            CALL FLUSH(0)
          END IF
 
          ! Debug: Check solver status
          DO ij = 1, grid%num_tiles
-            WRITE(0,*) '=== Checking tile ', ij
-            CALL FLUSH(0)
             IF (ij >= LBOUND(solver_valid,1) .AND. ij <= UBOUND(solver_valid,1)) THEN
-               WRITE(0,*) '=== solver_valid(', ij, ') = ', solver_valid(ij)
-               CALL FLUSH(0)
             ELSE
-               WRITE(0,*) '=== ERROR: ij out of bounds!'
-               CALL FLUSH(0)
             END IF
-            WRITE(0,*) '=== About to check C_ASSOCIATED for tile_solvers(', ij, ')'
-            CALL FLUSH(0)
-            WRITE(0,*) '=== C_ASSOCIATED result = ', C_ASSOCIATED(tile_solvers(ij))
-            CALL FLUSH(0)
-            WRITE(0,*) '=== About to write message ==='
-            CALL FLUSH(0)
             WRITE(message, '(A,I0,A,L1,A,L1)') "Tile ", ij, " solver_valid=", solver_valid(ij), &
                  " C_ASSOCIATED=", C_ASSOCIATED(tile_solvers(ij))
-            WRITE(0,*) '=== Message written ==='
-            CALL FLUSH(0)
             CALL wrf_debug(1, message)
-            WRITE(0,*) '=== wrf_debug called ==='
-            CALL FLUSH(0)
          END DO
-         WRITE(0,*) '=== Exited first DO loop ==='
-         CALL FLUSH(0)
 
-         WRITE(0,*) '=== Starting second DO loop, num_tiles = ', grid%num_tiles
-         CALL FLUSH(0)
 
          ! Remove OpenMP for debugging
          DO ij = 1, grid%num_tiles
-            WRITE(0,*) '=== Second loop, ij = ', ij
-            CALL FLUSH(0)
             WRITE(message, '(A,I0,A)') "SDIRK3: Processing tile ", ij, " for base state"
             CALL wrf_debug(1, message)
 
-            WRITE(0,*) '=== Checking solver_valid(', ij, ') in second loop'
-            CALL FLUSH(0)
 
             IF (solver_valid(ij)) THEN
-               WRITE(0,*) '=== solver_valid is TRUE for tile ', ij
-               CALL FLUSH(0)
                ! Get tile bounds
-               WRITE(0,*) '=== About to get i_start for ij = ', ij
-               CALL FLUSH(0)
                its = grid%i_start(ij)
-               WRITE(0,*) '=== its = ', its
-               CALL FLUSH(0)
                ite = grid%i_end(ij)
-               WRITE(0,*) '=== ite = ', ite
-               CALL FLUSH(0)
                jts = grid%j_start(ij)
-               WRITE(0,*) '=== jts = ', jts
-               CALL FLUSH(0)
                jte = grid%j_end(ij)
-               WRITE(0,*) '=== jte = ', jte
-               CALL FLUSH(0)
                kts = kds
-               WRITE(0,*) '=== kts = ', kts
-               CALL FLUSH(0)
                kte = kde_consistent-1  ! Use WRF-consistent kde
-               WRITE(0,*) '=== kte = ', kte
-               CALL FLUSH(0)
 
-               WRITE(0,*) '=== About to write kte message ==='
-               CALL FLUSH(0)
 
                ! Debug: Check if kte gets modified
                WRITE(message, '(A,I0,A,I0,A,I0)') "SDIRK3 DEBUG: kde_consistent=", kde_consistent, ", kte calculated as kde_consistent-1=", kte, &
                     ", actual pb levels=", SIZE(grid%pb,2)
 
-               WRITE(0,*) '=== Wrote kte message ==='
-               CALL FLUSH(0)
-               WRITE(0,*) '=== About to call wrf_debug ==='
-               CALL FLUSH(0)
                CALL wrf_debug(1, message)
-               WRITE(0,*) '=== wrf_debug done ==='
-               CALL FLUSH(0)
 
                ! Check actual data dimensions
-               WRITE(0,*) '=== About to check pb bounds ==='
-               CALL FLUSH(0)
-               WRITE(0,*) '=== pb LBOUND(1) = ', LBOUND(grid%pb,1)
-               CALL FLUSH(0)
-               WRITE(0,*) '=== pb UBOUND(1) = ', UBOUND(grid%pb,1)
-               CALL FLUSH(0)
-               WRITE(0,*) '=== pb LBOUND(2) = ', LBOUND(grid%pb,2)
-               CALL FLUSH(0)
-               WRITE(0,*) '=== pb UBOUND(2) = ', UBOUND(grid%pb,2)
-               CALL FLUSH(0)
-               WRITE(0,*) '=== pb bounds: (', LBOUND(grid%pb,1), ':', UBOUND(grid%pb,1), ',', &
-                    LBOUND(grid%pb,2), ':', UBOUND(grid%pb,2), ',', &
-                    LBOUND(grid%pb,3), ':', UBOUND(grid%pb,3), ')'
-               CALL FLUSH(0)
-               WRITE(0,*) '=== tile: its/ite/jts/jte/kts/kte = ', its, ite, jts, jte, kts, kte
-               CALL FLUSH(0)
-               WRITE(0,*) '=== memory: ims/ime/jms/jme/kms/kme = ', ims, ime, jms, jme, kms, kme
-               CALL FLUSH(0)
                
-               WRITE(0,*) '=== About to call sdirk3_tile_set_base_state_zerocopy ==='
-               CALL FLUSH(0)
                ! Zero-copy base state initialization with extended dynamics parameters
                ! Pass base addresses and indices - no allocation or copying needed
-               CALL sdirk3_tile_set_base_state_zerocopy(tile_solvers(ij), &
+               ! 9F.D41: status is inspected below; a failure is fatal, so
+               ! base_state_initialized can never publish over a failed init.
+               base_state_status = sdirk3_tile_set_base_state_checked(tile_solvers(ij), &
                     C_LOC(grid%pb(ims,kms,jms)), &    ! Base state pressure (memory start)
-                    C_LOC(grid%t_init(ims,kms,jms)), &! Base state theta perturbation (memory start)
+                    C_LOC(grid%t_init(ims,kms,jms)), &! grid%t_init: base-state POTENTIAL TEMPERATURE
                     C_LOC(grid%phb(ims,kms,jms)), &   ! Base state geopotential (memory start)
                     C_LOC(grid%mub(ims,jms)), &       ! Base state column mass (memory start)
                     its, ite, jts, jte, kts, kte, &   ! Tile bounds
@@ -866,23 +788,32 @@ CONTAINS
                     config_flags%diff_6th_slopeopt, REAL(config_flags%diff_6th_thresh, C_FLOAT), &  ! Slope damping
                     config_flags%km_opt, REAL(config_flags%c_s, C_FLOAT), REAL(config_flags%c_k, C_FLOAT))  ! Smagorinsky
                
-               ! Optional: Add debug output to verify zero-copy operation
-               IF (wrf_dm_on_monitor()) THEN
-                  WRITE(message, '(A,I0,A)') "SDIRK3: Base state set using zero-copy for tile ", ij, &
-                       " (saved ~5.4 MB memory traffic)"
-                  CALL wrf_debug(1, message)
+               ! 9F.D41 (review P0-2): FAIL FAST. A failed base state is not survivable --
+               ! every later step integrates against it -- so abort rather than continue
+               ! on uninitialised or stale state.
+               IF (base_state_status /= 1_C_INT) THEN
+                  WRITE(message, '(A,I0)') &
+                       "SDIRK3: FATAL - base state initialization FAILED for tile ", ij
+                  CALL wrf_error_fatal(message)
                END IF
-                    
-               WRITE(message, '(A,I0)') "SDIRK3: Returned from set_base_state for tile ", ij
+               ! 9F.D41 (review P0-4): the old line claimed "zero-copy ... saved ~5.4 MB
+               ! memory traffic". The C++ side builds strided views and then
+               ! .contiguous(), which materialises an owned per-tile snapshot, so that
+               ! saving never happened.
+               WRITE(message, '(A,I0)') "SDIRK3: base state snapshot taken for tile ", ij
                CALL wrf_debug(1, message)
             ELSE
-               WRITE(message, '(A,I0)') "SDIRK3: WARNING - solver not valid for tile ", ij
-               CALL wrf_debug(1, message)
+               ! 9F.D41: also fatal. This warned and then fell through to publishing
+               ! success, leaving that tile's base state unset for the entire run.
+               WRITE(message, '(A,I0)') "SDIRK3: FATAL - no valid solver for tile ", ij
+               CALL wrf_error_fatal(message)
             END IF
          END DO
-         
+
+         ! 9F.D41 (review P0-2): published only after EVERY tile succeeded. Any failure
+         ! above is fatal, so reaching this line means the transaction completed.
          base_state_initialized = .TRUE.
-         CALL wrf_debug(1, "SDIRK3: Base state set for all tiles")
+         CALL wrf_debug(1, "SDIRK3: Base state initialized for all tiles")
       END IF
       
    END SUBROUTINE set_base_state_sdirk3
