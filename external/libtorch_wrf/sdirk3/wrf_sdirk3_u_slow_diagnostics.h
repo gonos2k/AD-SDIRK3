@@ -2,7 +2,7 @@
 //
 // 9F.D30 (review PR S2-A). This exists to get configuration reading and diagnostic
 // output OUT of computeUnifiedRHS. Deliberately minimal, per the review's own
-// guidance: two config structs, one typed data carrier, one free function. No
+// guidance: typed data carriers plus free functions, minimal and concrete. No
 // observer hierarchy, no virtual interfaces, no registry -- those would be
 // over-design for a single diagnostic.
 //
@@ -25,6 +25,7 @@
 #include "wrf_sdirk3_experiment_config.h"
 
 #include <atomic>
+#include <mutex>
 #include <fstream>
 #include <sstream>
 #include <cctype>
@@ -53,9 +54,10 @@ struct UAdvectionTerms {
 };
 
 // One accumulation site's contribution to ru_tend, captured as a telescoping snapshot
-// delta. `label` names the site; the deltas sum to the final tendency by construction,
-// which makes their residual a COVERAGE check (is a site unnamed?) rather than a
-// correctness check.
+// delta. `kind` (NOT a string) identifies the site. NOTE the residual computed from
+// these is a POST-CAPTURE TAIL guard, not site inventory -- an unnamed mutation
+// between two captures is absorbed into the next site's delta. See the tail-guard
+// comment in the emitter.
 // 9F.D32 (review section 4): site IDENTITY is an enum; the string is display only.
 // `if (label == "adv")` was the same defect as the earlier `if (label != "horiz")` --
 // renaming a display string still compiles and silently disables the closure that
@@ -93,6 +95,43 @@ struct USlowTerms {
     torch::Tensor final_tendency;       // ru_tend at its last mutation
     torch::Tensor u;                // for the work projection sum(u * dR)
 };
+
+// 9F.D36 (review section 4): mutable diagnostic state belongs to the SOLVER, not the
+// process. Config became per-solver in D33 while the record counter and the dump latch
+// stayed function-local statics, so lifetime and ownership disagreed: a second solver
+// in one process continued the first's record numbering, could never write its own
+// dump, and a re-init never reset either.
+struct DiagnosticsState {
+    std::uint64_t uterms_record = 0;
+    bool split_dump_written = false;
+    bool experiment_announced = false;
+    std::mutex dump_mutex;
+};
+
+// 9F.D35 (review section 5): a closure ALWAYS reports one of three states.
+//
+// Both closures were previously wrapped in `if (input.defined())`, so a refactor that
+// stopped supplying an input produced NO line, NO error and NO marker -- the solver
+// carried on and the log simply lacked a check nobody noticed was missing. That exact
+// "claimed but silently absent" state has now occurred TWICE in this campaign, so the
+// fix has to be structural rather than another comment.
+//
+// INVALID is deliberately distinct from FAIL: FAIL means the invariant was tested and
+// violated; INVALID means it could not be tested at all. Collapsing them would let a
+// missing input read as a passing run, which is the bug being closed.
+//
+// This does NOT abort the solver. Diagnostics must not alter the trajectory, so the
+// status is reported and left for experiment acceptance to reject.
+enum class ClosureStatus { Pass, Fail, Invalid };
+
+inline const char* closure_status_name(ClosureStatus s) {
+    switch (s) {
+        case ClosureStatus::Pass:    return "PASS";
+        case ClosureStatus::Fail:    return "FAIL";
+        case ClosureStatus::Invalid: return "INVALID";
+    }
+    return "UNKNOWN";
+}
 
 // 9F.D34 (review section 4): production and the fixture must run the SAME capture
 // code. The fixture previously hand-built a USlowTerms, so it verified only that the
@@ -143,12 +182,19 @@ inline void capture_u_slow_site(USlowCaptureState& st,
 // ---------------------------------------------------------------------------
 
 
-inline void emit_u_slow_diagnostics(const USlowTerms& t) {
-    if (t.sites.empty() || !t.final_tendency.defined()) return;
-
+inline void emit_u_slow_diagnostics(DiagnosticsState& st, const USlowTerms& t) {
     torch::NoGradGuard ng;
-    static std::atomic<long> call_no{0};
-    const long n = call_no.fetch_add(1) + 1;
+    // 9F.D36 (review section 10): an incomplete input is REPORTED, not skipped.
+    // Returning silently is how a diagnostic ends up switched on and doing
+    // nothing -- the failure this campaign keeps re-encountering.
+    if (t.sites.empty() || !t.final_tendency.defined()) {
+        std::ostringstream bad;
+        bad << "[UTERMS] status=INVALID reason="
+            << (t.sites.empty() ? "no_sites" : "missing_final_tendency") << "\n";
+        emit_diag_block(bad.str());
+        return;
+    }
+    const std::uint64_t n = ++st.uterms_record;
 
     auto l2 = [](const torch::Tensor& x) {
         return x.norm().to(torch::kCPU).item<double>();
@@ -196,12 +242,32 @@ inline void emit_u_slow_diagnostics(const USlowTerms& t) {
     // Compared against the last SNAPSHOT rather than a re-sum of the deltas: summing
     // float32 deltas reintroduces order-dependent roundoff, whereas snapshot-vs-final
     // is exactly zero when every mutation is captured.
-    if (t.last_site_tendency.defined()) {
-        const double cov = l2(t.final_tendency - t.last_site_tendency);
-        o << "[UTERMS]   post_capture_tail |dR|=" << cov
-                  << "   <- tail guard (NOT site inventory), must be 0" << "\n";
+    {
+        ClosureStatus st = ClosureStatus::Invalid;
+        const char* why = "missing_last_snapshot";
+        double cov = 0.0;
+        if (t.last_site_tendency.defined() && t.final_tendency.defined()) {
+            cov = l2(t.final_tendency - t.last_site_tendency);
+            st  = (cov == 0.0) ? ClosureStatus::Pass : ClosureStatus::Fail;
+            why = "";
+        }
+        o << "[UTERMS]   post_capture_tail status=" << closure_status_name(st)
+          << " |dR|=" << cov;
+        if (*why) o << " reason=" << why;
+        o << "   <- tail guard (NOT site inventory)\n";
     }
 
+    {
+        // Name WHICH input is missing: "INVALID" alone sends the reader hunting.
+        const char* missing =
+            !t.advection.x.defined()        ? "missing_adv_x" :
+            !t.advection.y.defined()        ? "missing_adv_y" :
+            !t.advection.vertical.defined() ? "missing_adv_z" :
+            !t.adv_site_delta.defined()     ? "missing_adv_site_delta" : "";
+        if (*missing) {
+            o << "[UTERMS]     adv_closure status=INVALID reason=" << missing << "\n";
+        }
+    }
     if (t.advection.complete() && t.adv_site_delta.defined()) {
         struct Named { const char* n; torch::Tensor v; };
         const Named additive[] = {{"adv_x", t.advection.x},
@@ -234,7 +300,9 @@ inline void emit_u_slow_diagnostics(const USlowTerms& t) {
                   << "  W=" << work(hz) << "\n";
         const double den = l2(t.adv_site_delta);
         const double res = l2(acc - t.adv_site_delta);
-        o << "[UTERMS]     adv closure |sum(additive)-d(adv)|=" << res
+        const ClosureStatus ast = (res == 0.0) ? ClosureStatus::Pass : ClosureStatus::Fail;
+        o << "[UTERMS]     adv_closure status=" << closure_status_name(ast)
+          << " |sum(additive)-d(adv)|=" << res
           << "  rel=" << (den > 0.0 ? res / den : 0.0) << "\n";
     }
 
@@ -253,30 +321,52 @@ inline void emit_u_slow_diagnostics(const USlowTerms& t) {
 // the message moved out and the numeric function still did the enable test, the CPU
 // conversion, the header construction, the ofstream and the write. Moving the string
 // but leaving the I/O is not a separation.
-inline void dump_advect_u_split(const torch::Tensor& horizontal,
-                                const torch::Tensor& vertical) {
-    if (!horizontal.defined() || !vertical.defined()) return;
+// 9F.D36 (review section 3): FAIL-CLOSE. The previous version set the "already
+// written" latch BEFORE any file operation, never checked is_open/good/flush/close,
+// and emitted "port wrote ..." before the ofstream destructor ran. A failed or
+// truncated write therefore produced a SUCCESS record and simultaneously blocked any
+// retry -- a fabricated evidence record, which is the failure class this campaign
+// exists to eliminate. The latch is now published only after a verified write.
+inline bool dump_advect_u_split(DiagnosticsState& st,
+                                const UAdvectionTerms& adv,
+                                const std::string& path = "port_advect_u_split.bin") {
+    if (!adv.complete()) return false;
     torch::NoGradGuard ng;
-    // The first RHS evaluations return an all-zero u block; dumping one of those
-    // would compare two zero fields and report perfect parity.
-    if (vertical.abs().max().to(torch::kCPU).item<double>() <= 0.0) return;
+    // The first RHS evaluations return an all-zero u block; dumping one of those would
+    // compare two zero fields and report perfect parity.
+    if (adv.vertical.abs().max().to(torch::kCPU).item<double>() <= 0.0) return false;
 
-    static std::atomic<bool> written{false};
-    bool expect = false;
-    if (!written.compare_exchange_strong(expect, true)) return;
+    std::lock_guard<std::mutex> lock(st.dump_mutex);
+    if (st.split_dump_written) return false;
 
-    auto h = horizontal.detach().to(torch::kCPU).contiguous();
-    auto v = vertical.detach().to(torch::kCPU).contiguous();
-    std::ofstream f("port_advect_u_split.bin", std::ios::binary);
-    const int64_t dims[3] = {h.size(0), h.size(1), h.size(2)};
+    auto horizontal = adv.horizontal();
+    // section 9: the file format is float32 and the reader assumes 3-D; convert and
+    // check EXPLICITLY rather than relying on the caller's dtype happening to match.
+    TORCH_CHECK(horizontal.dim() == 3 && adv.vertical.dim() == 3,
+                "advect_u split dump expects 3-D fields");
+    TORCH_CHECK(horizontal.sizes() == adv.vertical.sizes(),
+                "advect_u split dump: horizontal/vertical shape mismatch");
+    auto hh = horizontal.detach().to(torch::kCPU, torch::kFloat32).contiguous();
+    auto vv = adv.vertical.detach().to(torch::kCPU, torch::kFloat32).contiguous();
+
+    std::ofstream f(path, std::ios::binary | std::ios::trunc);
+    TORCH_CHECK(f.is_open(), "advect_u split dump: cannot open ", path);
+    const int64_t dims[3] = {hh.size(0), hh.size(1), hh.size(2)};
     f.write(reinterpret_cast<const char*>(dims), sizeof(dims));
-    f.write(reinterpret_cast<const char*>(h.data_ptr<float>()), h.numel() * sizeof(float));
-    f.write(reinterpret_cast<const char*>(v.data_ptr<float>()), v.numel() * sizeof(float));
+    f.write(reinterpret_cast<const char*>(hh.data_ptr<float>()), hh.numel() * sizeof(float));
+    f.write(reinterpret_cast<const char*>(vv.data_ptr<float>()), vv.numel() * sizeof(float));
+    f.flush();
+    TORCH_CHECK(f.good(), "advect_u split dump: write failed for ", path);
+    f.close();
+    TORCH_CHECK(f.good(), "advect_u split dump: close failed for ", path);
+
+    st.split_dump_written = true;   // publish ONLY after a verified write
 
     std::ostringstream o;
-    o << "[ADVECT_U_SPLIT] port wrote port_advect_u_split.bin shape=("
+    o << "[ADVECT_U_SPLIT] port wrote " << path << " shape=("
       << dims[0] << "," << dims[1] << "," << dims[2] << ")\n";
     emit_diag_block(o.str());
+    return true;
 }
 
 }  // namespace sdirk3

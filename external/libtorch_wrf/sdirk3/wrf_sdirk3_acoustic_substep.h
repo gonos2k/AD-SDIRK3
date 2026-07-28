@@ -89,11 +89,14 @@ struct AcousticScheduleOptions {
     int stage1_substeps = 1;
 };
 
-// Parses WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS. Call once, at solver setup.
-AcousticScheduleOptions acoustic_schedule_options_from_env();
+// 9F.D36 (review section 5): the duplicate environment authority is GONE.
+// acoustic_schedule_options_from_env() survived as public API after ExperimentConfig
+// became the source of truth, so a future caller could still pick the second reader
+// and silently diverge. The default argument is removed for the same reason: omitting
+// the options compiled fine and quietly ran stage1_substeps=1.
 
 AcousticSchedule acoustic_schedule(int rk_step, float dt, int num_sound_steps,
-                                   const AcousticScheduleOptions& options = {});
+                                   const AcousticScheduleOptions& options);
 
 // staggered column-mass averages (module_small_step_em.F:200-207) ---
 // u-point mass = 0.5*(mu[i]+mu[i-1]) over x; v-point mass = 0.5*(mu[j]+mu[j-1]) over y. Column mass

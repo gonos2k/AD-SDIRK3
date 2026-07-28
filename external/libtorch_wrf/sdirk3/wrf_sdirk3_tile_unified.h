@@ -12,6 +12,7 @@
 
 #include "wrf_sdirk3_torch_wrapper.h"
 #include "wrf_sdirk3_experiment_config.h"
+#include "wrf_sdirk3_u_slow_diagnostics.h"
 #include "wrf_sdirk3_tile_base.h"
 #include "wrf_sdirk3_unified_rhs.h"
 #include "wrf_sdirk3_newton_solver.h"
@@ -812,8 +813,11 @@ private:
     // call. The lazy-static form meant F(U) was really F(U; environment at first
     // call): two solvers in one process could not differ, a unit test could not vary
     // the setting within a process, and restart/replay had no explicit provenance.
-    wrf::sdirk3::ExperimentConfig  experiment_;
-    wrf::sdirk3::DiagnosticsConfig diagnostics_;
+    // 9F.D36 (review section 7): const, so 'read once at construction' is enforced
+    // by the type rather than by convention.
+    const wrf::sdirk3::ExperimentConfig  experiment_;
+    const wrf::sdirk3::DiagnosticsConfig diagnostics_;
+    wrf::sdirk3::DiagnosticsState        diagnostics_state_;
 
     // Grid information (extended for advanced features)
     std::shared_ptr<wrf::sdirk3::WRFGridInfo> grid_info_;

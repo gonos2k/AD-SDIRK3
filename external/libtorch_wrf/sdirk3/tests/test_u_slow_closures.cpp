@@ -14,6 +14,7 @@
 
 #include "../wrf_sdirk3_u_slow_diagnostics.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -22,19 +23,37 @@
 namespace {
 
 int failures = 0;
+int check_count = 0;
 
 void check(bool ok, const char* what) {
+    ++check_count;
     std::cout << (ok ? "  ok   " : "  FAIL ") << what << std::endl;
     if (!ok) ++failures;
 }
 
 // Capture what the emitter writes so the assertions are about OBSERVED output, not
 // about internal state the emitter might not actually report.
+// 9F.D35 (review section 12): RAII restore. The manual save/restore leaked the
+// redirection if the emitter threw -- every SUBSEQUENT test would then write into a
+// dead buffer and its assertions would read empty output, i.e. one throw would
+// silently corrupt the rest of the run rather than failing one case.
+class CerrRedirect {
+ public:
+    explicit CerrRedirect(std::streambuf* to) : old_(std::cerr.rdbuf(to)) {}
+    ~CerrRedirect() { std::cerr.rdbuf(old_); }
+    CerrRedirect(const CerrRedirect&) = delete;
+    CerrRedirect& operator=(const CerrRedirect&) = delete;
+ private:
+    std::streambuf* old_;
+};
+
 std::string capture(const wrf::sdirk3::USlowTerms& t) {
     std::ostringstream buf;
-    auto* old = std::cerr.rdbuf(buf.rdbuf());
-    wrf::sdirk3::emit_u_slow_diagnostics(t);
-    std::cerr.rdbuf(old);
+    {
+        CerrRedirect guard(buf.rdbuf());
+        wrf::sdirk3::DiagnosticsState st;   // per-call state, as production now has
+        wrf::sdirk3::emit_u_slow_diagnostics(st, t);
+    }
     return buf.str();
 }
 
@@ -52,8 +71,16 @@ double number_after(const std::string& out, const char* key) {
     return v;
 }
 
+// Anchor on the tail LABEL, then read the value that follows it. A bare "|dR|=" search
+// would match the first SITE line instead -- which silently reads a different quantity
+// and was exactly the mistake made when this parser was first adapted to the status
+// format.
 double coverage_from(const std::string& out) {
-    return number_after(out, "post_capture_tail |dR|=");
+    const auto p = out.find("post_capture_tail status=");
+    if (p == std::string::npos) return -1.0;          // not reported at all
+    const auto q = out.find("|dR|=", p);
+    if (q == std::string::npos) return -2.0;
+    return number_after(out.substr(q), "|dR|=");
 }
 
 double adv_closure_from(const std::string& out) {
@@ -103,8 +130,10 @@ int main() {
         t.final_tendency = t.final_tendency + torch::full_like(t.final_tendency, 0.25f);
         const auto out = capture(t);
         const double cov = coverage_from(out);
-        check(cov > 0.0, "unnamed post-capture mutation -> coverage closure NONZERO");
-        check(cov > 0.0, "tail guard is actually REPORTED (regression guard)");
+        // section 11: these were the SAME condition twice. Split into the two distinct
+        // properties: that the guard is reported at all, and that it detects the change.
+        check(cov != -1.0, "tail guard is REPORTED (regression guard)");
+        check(std::isfinite(cov) && cov > 0.0, "post-capture mutation is DETECTED");
     }
 
     // --- advection closure must reject a dropped subterm ---
@@ -149,6 +178,36 @@ int main() {
         check(coverage_from(out) == 0.0,
               "KNOWN LIMIT: unnamed mutation BETWEEN captures is NOT detected");
     }
+
+    // --- section 5: a missing closure input must be reported, never silently absent ---
+    {
+        using namespace wrf::sdirk3;
+        auto st = make_consistent();
+        st.terms.last_site_tendency = torch::Tensor();   // drop the tail input
+        const auto out = capture(st.terms);
+        check(out.find("post_capture_tail status=INVALID") != std::string::npos,
+              "missing tail input -> reported INVALID, not omitted");
+        check(out.find("reason=missing_last_snapshot") != std::string::npos,
+              "INVALID names the missing input");
+    }
+    {
+        using namespace wrf::sdirk3;
+        auto st = make_consistent();
+        st.terms.advection.y = torch::Tensor();          // drop an advection component
+        const auto out = capture(st.terms);
+        check(out.find("adv_closure status=INVALID reason=missing_adv_y") != std::string::npos,
+              "missing adv_y -> adv closure reported INVALID with the component named");
+    }
+
+    // section 11: case-count ratchet, so a deleted assertion fails loudly instead of
+    // silently shrinking the suite. Held IN the test (one edit) rather than in CI YAML,
+    // where such counters have rotted repeatedly in this repo.
+    constexpr int expected_checks = 11;
+    const bool count_ok = (check_count == expected_checks);
+    std::cout << (count_ok ? "  ok   " : "  FAIL ")
+              << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
+              << std::endl;
+    if (!count_ok) ++failures;
 
     if (failures == 0) {
         std::cout << "U_SLOW_CLOSURES: PASS" << std::endl;
