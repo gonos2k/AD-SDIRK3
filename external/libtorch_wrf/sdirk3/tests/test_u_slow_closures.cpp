@@ -199,10 +199,49 @@ int main() {
               "missing adv_y -> adv closure reported INVALID with the component named");
     }
 
+    // --- 9F.D38 section 10: capture FAILS CLOSED on an undefined tendency ---
+    // Built to violate, like every other case here: the old code returned silently,
+    // so this fixture would have passed against it only if it asserted the wrong
+    // thing. It asserts the throw.
+    {
+        using namespace wrf::sdirk3;
+        USlowCaptureState st;
+        bool threw = false;
+        try {
+            capture_u_slow_site(st, USlowSiteKind::Entry, torch::Tensor());
+        } catch (const std::exception&) {
+            threw = true;
+        }
+        check(threw, "undefined tendency at capture -> THROWS (not silent)");
+        check(st.terms.sites.empty(), "failed capture recorded no site");
+    }
+
+    // --- 9F.D38 section 9: the k-profile must survive a non-float32 state ---
+    // accessor<float,1> on a float64 tensor throws, and it would throw ONLY with the
+    // diagnostic enabled. This pins the dtype conversion rather than the dtype.
+    {
+        using namespace wrf::sdirk3;
+        const auto f64 = torch::TensorOptions().dtype(torch::kFloat64);
+        auto x = torch::randn({4, 3, 5}, f64);
+        torch::Tensor ru = torch::zeros({4, 3, 5}, f64);
+        USlowCaptureState st;
+        capture_u_slow_site(st, USlowSiteKind::Entry, ru);
+        ru = ru + x;
+        capture_u_slow_site(st, USlowSiteKind::Advection, ru);
+        st.terms.advection = {x, torch::zeros_like(x), torch::zeros_like(x)};
+        st.terms.final_tendency = ru;
+        st.terms.u = torch::randn({4, 3, 5}, f64);
+        bool threw = false;
+        std::string out;
+        try { out = capture(st.terms); } catch (const std::exception&) { threw = true; }
+        check(!threw, "float64 state -> emitter does not throw");
+        check(out.find("kprof") != std::string::npos, "float64 state -> kprof still emitted");
+    }
+
     // section 11: case-count ratchet, so a deleted assertion fails loudly instead of
     // silently shrinking the suite. Held IN the test (one edit) rather than in CI YAML,
     // where such counters have rotted repeatedly in this repo.
-    constexpr int expected_checks = 11;
+    constexpr int expected_checks = 15;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -223,7 +223,7 @@ jobs:
           # exit 0 alone does not prove AUTO-strict actually engaged:
           grep -q "ABI Header Mode: STRICT" configure.log
           grep -q "Fast pow(x,0.875): DISABLED" configure.log
-          grep -q "SDIRK3 core manifest: 22 production sources" configure.log
+          grep -q "SDIRK3 core manifest: 23 production sources" configure.log
           # torch>=2.6 wheels omit the GLIBCXX macro from TORCH_CXX_FLAGS; the
           # runtime-derived value must have been resolved, not assumed:
           grep -q "SDIRK3 torch ABI: _GLIBCXX_USE_CXX11_ABI=$TORCH_ABI" configure.log
