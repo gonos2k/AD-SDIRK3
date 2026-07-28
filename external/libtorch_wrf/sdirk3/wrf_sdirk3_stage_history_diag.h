@@ -53,6 +53,8 @@
 #include <string>
 #include <vector>
 
+#include "wrf_sdirk3_diag_io.h"
+
 namespace wrf {
 namespace sdirk3 {
 
@@ -64,10 +66,13 @@ namespace sdirk3 {
 // NEWTON_DIAG / FGMRES_DIAG emit_stage_diag pattern. The mutex is a function-local
 // static inside an inline function, so there is exactly ONE instance across every
 // translation unit that includes this header.
+// 9F.D36 (review section 2): forwards to the SHARED lock in wrf_sdirk3_diag_io.h.
+// This held its own static mutex while the u-slow emitter used a different one, and
+// two mutexes do not protect one std::cerr -- a UTERMS block and a stage-history line
+// could still interleave. "Two functions, one mutex" was true inside the new header
+// and false repository-wide, which is the claim that mattered.
 inline void emit_sdirk3_diag_line(const std::string& line) {
-    static std::mutex mtx;
-    std::lock_guard<std::mutex> lock(mtx);
-    std::cerr << line;
+    emit_diag_line(line);
 }
 
 // PR 9F.1: SUCCESS-line TRANSACTION.

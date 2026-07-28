@@ -3107,12 +3107,13 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     const std::vector<float>& rdx,
     const std::vector<float>& rdy,
     const std::vector<float>& rdnw,
-    int tile_id) 
-    : wrf::sdirk3::TileSDIRK3Solver(nx, ny, nz, dx, dy, 0.0, tile_id) {
-    // 9F.D33 (review section 3): read configuration ONCE, here, at the setup
-    // boundary -- so the numerical path only ever reads object state.
-    experiment_  = wrf::sdirk3::ExperimentConfig::from_environment();
-    diagnostics_ = wrf::sdirk3::DiagnosticsConfig::from_environment();
+    int tile_id)
+    // 9F.D36 (review section 7): const config, initialised in the member init list so
+    // "read once at construction" is enforced by the type, not by convention. Order
+    // follows declaration order: base class, then members.
+    : wrf::sdirk3::TileSDIRK3Solver(nx, ny, nz, dx, dy, 0.0, tile_id),
+      experiment_(wrf::sdirk3::ExperimentConfig::from_environment()),
+      diagnostics_(wrf::sdirk3::DiagnosticsConfig::from_environment()) {
 
     
     // Round 3j: validate the base dimensions BEFORE any +1 arithmetic — the
@@ -13672,7 +13673,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // still did the enable test, CPU conversion, header construction, ofstream
         // and write -- moving the message but keeping the I/O is not a separation.
         if (diag_cfg.dump_advect_u_split) {
-            wrf::sdirk3::dump_advect_u_split(ru_adv_horiz, ru_adv_z);
+            wrf::sdirk3::dump_advect_u_split(diagnostics_state_, ucap.terms.advection);
         }
         uterm_site(wrf::sdirk3::USlowSiteKind::Advection);
         
@@ -21480,7 +21481,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     if (uterms_trace) {
         ucap.terms.final_tendency = ru_tend;
         ucap.terms.u = u_for_work;
-        wrf::sdirk3::emit_u_slow_diagnostics(ucap.terms);
+        wrf::sdirk3::emit_u_slow_diagnostics(diagnostics_state_, ucap.terms);
     }
     torch::Tensor u_tend, v_tend, w_tend;
     if (g_export_coupled_slow) {

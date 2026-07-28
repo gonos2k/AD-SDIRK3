@@ -14,6 +14,7 @@
 
 #include "../wrf_sdirk3_u_slow_diagnostics.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
@@ -22,8 +23,10 @@
 namespace {
 
 int failures = 0;
+int check_count = 0;
 
 void check(bool ok, const char* what) {
+    ++check_count;
     std::cout << (ok ? "  ok   " : "  FAIL ") << what << std::endl;
     if (!ok) ++failures;
 }
@@ -48,7 +51,8 @@ std::string capture(const wrf::sdirk3::USlowTerms& t) {
     std::ostringstream buf;
     {
         CerrRedirect guard(buf.rdbuf());
-        wrf::sdirk3::emit_u_slow_diagnostics(t);
+        wrf::sdirk3::DiagnosticsState st;   // per-call state, as production now has
+        wrf::sdirk3::emit_u_slow_diagnostics(st, t);
     }
     return buf.str();
 }
@@ -126,8 +130,10 @@ int main() {
         t.final_tendency = t.final_tendency + torch::full_like(t.final_tendency, 0.25f);
         const auto out = capture(t);
         const double cov = coverage_from(out);
-        check(cov > 0.0, "unnamed post-capture mutation -> coverage closure NONZERO");
-        check(cov > 0.0, "tail guard is actually REPORTED (regression guard)");
+        // section 11: these were the SAME condition twice. Split into the two distinct
+        // properties: that the guard is reported at all, and that it detects the change.
+        check(cov != -1.0, "tail guard is REPORTED (regression guard)");
+        check(std::isfinite(cov) && cov > 0.0, "post-capture mutation is DETECTED");
     }
 
     // --- advection closure must reject a dropped subterm ---
@@ -192,6 +198,16 @@ int main() {
         check(out.find("adv_closure status=INVALID reason=missing_adv_y") != std::string::npos,
               "missing adv_y -> adv closure reported INVALID with the component named");
     }
+
+    // section 11: case-count ratchet, so a deleted assertion fails loudly instead of
+    // silently shrinking the suite. Held IN the test (one edit) rather than in CI YAML,
+    // where such counters have rotted repeatedly in this repo.
+    constexpr int expected_checks = 11;
+    const bool count_ok = (check_count == expected_checks);
+    std::cout << (count_ok ? "  ok   " : "  FAIL ")
+              << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
+              << std::endl;
+    if (!count_ok) ++failures;
 
     if (failures == 0) {
         std::cout << "U_SLOW_CLOSURES: PASS" << std::endl;

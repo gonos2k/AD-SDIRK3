@@ -820,28 +820,6 @@ State calc_p_rho(const State& s, const Const& c, int step) {
 // 1-BASED: every loop substep applies divergence damping (calc_p_rho step>=1). The pressure INIT
 // (calc_p_rho with step=0, which sets pm1 and does NOT damp) is a SEPARATE pre-loop call the caller
 // must run once before the first substep (solve_em.F:1352) — it is NOT part of advance_substep.
-AcousticScheduleOptions acoustic_schedule_options_from_env() {
-    AcousticScheduleOptions o;
-    const char* v = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS");
-    if (v == nullptr || v[0] == '\0') return o;
-    // std::atoi PREFIX-parses and cannot report failure, so "2junk" became 2 and
-    // "3.5" became 3 -- a run would then use a schedule nobody asked for while the
-    // log agreed with the wrong intent. Require the WHOLE string to be the integer.
-    const std::string sv(v);
-    std::size_t consumed = 0;
-    int n = 0;
-    try {
-        n = std::stoi(sv, &consumed);
-    } catch (const std::exception&) {
-        consumed = 0;
-    }
-    TORCH_CHECK(consumed == sv.size() && n >= 1 && n <= 4096,
-        "WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS must be an integer in [1,4096] "
-        "with no trailing characters; got \"", sv, "\".");
-    o.stage1_substeps = n;
-    return o;
-}
-
 AcousticSchedule acoustic_schedule(int rk_step, float dt, int num_sound_steps,
                                    const AcousticScheduleOptions& options) {
     const float dts = dt / static_cast<float>(num_sound_steps);

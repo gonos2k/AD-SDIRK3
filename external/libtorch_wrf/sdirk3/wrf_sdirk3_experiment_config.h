@@ -1,5 +1,11 @@
 // wrf_sdirk3_experiment_config.h -- what an experiment selects, and what a
-// diagnostic observes. TORCH-FREE ON PURPOSE.
+// diagnostic observes. DEPENDENCY-FREE ON PURPOSE (standard C++ only).
+//
+// 9F.D36 (review section 6): this claimed "TORCH-FREE" while including
+// <c10/util/Exception.h> for TORCH_CHECK -- torch::Tensor-free, but not
+// LibTorch-free, so the parser could not be compiled or tested standalone. It
+// now throws std::invalid_argument and includes only standard headers, which
+// makes the claim true and the header independently testable.
 //
 // 9F.D33 (review section 7). These types are needed as SOLVER MEMBERS, so the solver
 // header must see them. Putting them in the diagnostics header would have dragged
@@ -32,8 +38,6 @@
 
 #ifndef WRF_SDIRK3_EXPERIMENT_CONFIG_H
 #define WRF_SDIRK3_EXPERIMENT_CONFIG_H
-
-#include <c10/util/Exception.h>
 
 #include <cctype>
 #include <cstdlib>
@@ -81,8 +85,9 @@ inline bool strict_env_flag(const char* name) {
     for (auto& c : t) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     if (t == "1" || t == "true" || t == "yes" || t == "on")  return true;
     if (t == "0" || t == "false" || t == "no" || t == "off") return false;
-    TORCH_CHECK(false, "env flag ", name, "=\"", v,
-                "\" is not a boolean (use 1/true/yes/on or 0/false/no/off)");
+    throw std::invalid_argument(
+        std::string("env flag ") + name + "=\"" + v +
+        "\" is not a boolean (use 1/true/yes/on or 0/false/no/off)");
     return false;
 }
 
@@ -111,12 +116,17 @@ inline ExperimentConfig ExperimentConfig::from_environment() {
     // RU+RV is named explicitly because it is not a random conflict -- it IS DropBoth
     // spelled two other ways, and reporting it under the drop-one names is exactly the
     // silent duplicate this design exists to prevent.
-    TORCH_CHECK(!(drop_u && drop_v && !drop_both && !drop_pgf),
-        "WRF_SDIRK3_ABLATE_RU_SLOW + ABLATE_RV_SLOW together ARE ABLATE_UV_SLOW. Use "
-        "WRF_SDIRK3_ABLATE_UV_SLOW so the run is named for the experiment it performs.");
-    TORCH_CHECK(n <= 1,
-        "select exactly ONE u/v slow experiment; got ", n, " of {ABLATE_RU_SLOW, "
-        "ABLATE_RV_SLOW, ABLATE_UV_SLOW, ABLATE_UV_PGF}.");
+    if (drop_u && drop_v && !drop_both && !drop_pgf) {
+        throw std::invalid_argument(
+            "WRF_SDIRK3_ABLATE_RU_SLOW + ABLATE_RV_SLOW together ARE ABLATE_UV_SLOW. "
+            "Use WRF_SDIRK3_ABLATE_UV_SLOW so the run is named for the experiment it "
+            "performs.");
+    }
+    if (n > 1) {
+        throw std::invalid_argument(
+            "select exactly ONE u/v slow experiment; got " + std::to_string(n) +
+            " of {ABLATE_RU_SLOW, ABLATE_RV_SLOW, ABLATE_UV_SLOW, ABLATE_UV_PGF}.");
+    }
 
     // 9F.D32 (review section 2): stage1_substeps is READ HERE. It was previously
     // declared on this struct and never set, while the value actually used came from
@@ -129,9 +139,11 @@ inline ExperimentConfig ExperimentConfig::from_environment() {
             std::size_t consumed = 0;
             int n = 0;
             try { n = std::stoi(sv, &consumed); } catch (const std::exception&) { consumed = 0; }
-            TORCH_CHECK(consumed == sv.size() && n >= 1 && n <= 4096,
-                "WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS must be an integer in "
-                "[1,4096] with no trailing characters; got \"", sv, "\".");
+            if (!(consumed == sv.size() && n >= 1 && n <= 4096)) {
+                throw std::invalid_argument(
+                    "WRF_SDIRK3_SPLIT_EXPLICIT_STAGE1_SUBSTEPS must be an integer in "
+                    "[1,4096] with no trailing characters; got \"" + sv + "\".");
+            }
             c.stage1_substeps = n;
         }
     }
