@@ -413,9 +413,20 @@ public:
     void advanceZeroCopy(const wrf::sdirk3::ZeroCopyConfig& config, 
                         int rk_step, float dt);
     
-    // Set base state for perturbation calculations
-    // Note: th_base is actually alb (inverse density) from WRF
-    void setBaseState(const float* p_base, const float* alb_base,
+    // Set base state for perturbation calculations.
+    //
+    // 9F.D41 (review P0-1): the note here used to read "th_base is actually alb
+    // (inverse density) from WRF". That is FALSE, and it was the most dangerous
+    // comment in this interface: a reader who believed it would wire grid%alb and
+    // silently change the thermodynamics.
+    //
+    // TRACED. Fortran passes C_LOC(grid%t_init) (module_implicit_sdirk3.F:857) and the
+    // solver consumes it as POTENTIAL TEMPERATURE:
+    //     t_full = t_pert + th_base_                 (impl :6547)
+    //     alb    = rd_ * th_base_ / p_base_          (impl :6556)
+    // alb is DERIVED from it, so calling the input alb inverted the direction of the
+    // dependency. The numerics were and are correct; only the naming lied.
+    void setBaseState(const float* p_base, const float* t_init_base,
                      const float* ph_base, const float* mu_base);
 
     // Compute 3D vertical metrics from geopotential for horizontal diffusion

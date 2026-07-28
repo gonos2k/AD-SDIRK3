@@ -1156,7 +1156,7 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
  * Set base state for zerocopy solver (original interface)
  *
  * @param solver_ptr Solver handle
- * @param pb_ptr,alb_ptr,phb_ptr,mub_ptr Base state arrays at memory start
+ * @param pb_ptr,t_init_ptr,phb_ptr,mub_ptr Base state arrays at memory start
  * @param its,ite,jts,jte,kts,kte Tile bounds
  * @param ims,ime,jms,jme,kms,kme Memory bounds
  * @param sin_alpha_x/y,cos_alpha_x/y Terrain slope angles
@@ -1164,9 +1164,24 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
  * @param diff_6th_opt,diff_6th_factor,diff_6th_slopeopt,diff_6th_thresh 6th-order diffusion
  * @param smagorinsky_opt,c_s,c_k Smagorinsky diffusion
  */
+// 9F.D41 (review P0-2): status-returning form. Returns 1 on full success, 0 on any
+// failure with nothing published. Prefer this over the void form below, which cannot
+// report failure and whose caller therefore could not avoid publishing a false success.
+int sdirk3_tile_set_base_state_checked(
+    void* solver_ptr,
+    float* pb_ptr, float* t_init_ptr, float* phb_ptr, float* mub_ptr,
+    int its, int ite, int jts, int jte, int kts, int kte,
+    int ims, int ime, int jms, int jme, int kms, int kme,
+    float* sin_alpha_x, float* sin_alpha_y,
+    float* cos_alpha_x, float* cos_alpha_y,
+    int div_damp_opt, float div_damp_coef,
+    int diff_6th_opt, float diff_6th_factor,
+    int diff_6th_slopeopt, float diff_6th_thresh,
+    int smagorinsky_opt, float c_s, float c_k);
+
 void sdirk3_tile_set_base_state_zerocopy(
     void* solver_ptr,
-    float* pb_ptr, float* alb_ptr, float* phb_ptr, float* mub_ptr,
+    float* pb_ptr, float* t_init_ptr, float* phb_ptr, float* mub_ptr,
     int its, int ite, int jts, int jte, int kts, int kte,
     int ims, int ime, int jms, int jme, int kms, int kme,
     float* sin_alpha_x, float* sin_alpha_y,
@@ -1183,7 +1198,7 @@ void sdirk3_tile_set_base_state_zerocopy(
  */
 void sdirk3_tile_set_base_state_zerocopy_v2(
     void* solver_ptr,
-    float* pb_ptr, float* alb_ptr, float* phb_ptr, float* mub_ptr,
+    float* pb_ptr, float* t_init_ptr, float* phb_ptr, float* mub_ptr,
     float* theta_base_ptr,
     int its, int ite, int jts, int jte, int kts, int kte,
     int ims, int ime, int jms, int jme, int kms, int kme,
