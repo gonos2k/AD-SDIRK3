@@ -1,7 +1,9 @@
 Acoustic_Substep_AD
+Config_Provenance
 Core_Archive_MakeParity
 Core_Archive_Manifest
 Core_Full_Object_Link
+Diag_IO_Concurrency
 FGMRES_Contract
 Geometry_Contract_Matrix
 MPI_Halo_Contract_np1
