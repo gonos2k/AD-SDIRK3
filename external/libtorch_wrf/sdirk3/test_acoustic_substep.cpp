@@ -174,7 +174,14 @@ static bool roundtrip_check() {
 // RK3 acoustic schedule: dts*n_sub must equal the stage fraction of dt (dt/3, dt/2, dt).
 static bool schedule_check() {
     const float dt = 12.0f; const int N = 4;
-    auto s1 = acoustic_schedule(1, dt, N), s2 = acoustic_schedule(2, dt, N), s3 = acoustic_schedule(3, dt, N);
+    // 9F.D37: options are explicit now -- the default argument was removed in D36 so a
+    // caller cannot silently get stage1_substeps=1 by omission. That removal broke THIS
+    // file, which local `./compile` never builds (it compiles the model, not the CMake
+    // test targets), so CI caught it and my local verification did not.
+    const AcousticScheduleOptions opts{/*stage1_substeps=*/1};
+    auto s1 = acoustic_schedule(1, dt, N, opts);
+    auto s2 = acoustic_schedule(2, dt, N, opts);
+    auto s3 = acoustic_schedule(3, dt, N, opts);
     bool ok = s1.n_sub == 1 && std::abs(s1.dts * s1.n_sub - dt / 3.0f) < 1e-4f
            && s2.n_sub == 2 && std::abs(s2.dts * s2.n_sub - dt / 2.0f) < 1e-4f
            && s3.n_sub == 4 && std::abs(s3.dts * s3.n_sub - dt)        < 1e-4f;

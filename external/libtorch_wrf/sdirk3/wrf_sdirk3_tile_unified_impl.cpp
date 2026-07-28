@@ -23,18 +23,35 @@
 // =========================================================================
 //
 // =========================================================================
-// SIGN CONVENTION DOCUMENTATION (WRF-COMPLIANT REFACTOR 2025-12-25)
+// VERTICAL METRIC SIGN CONVENTION (9F.D37 -- traced against WRF, not assumed)
 // =========================================================================
-// This code follows WRF STANDARD sign convention for vertical metrics:
+// CORRECTED 9F.D37. This block previously asserted "WRF STANDARD (ALL
+// POSITIVE)" and listed WRF's dnw/rdnw/rdn as positive. That was WRONG about
+// WRF, and it was never checked -- the same claimed-but-unverified class the
+// closure fixtures exist to catch. The CODE was and is correct; only this
+// comment was false, which is worse than no comment: it invites a "fix" that
+// would flip signs already handled at extraction.
 //
-// WRF STANDARD (ALL POSITIVE):
-//   - dnw  = eta(k+1) - eta(k) > 0  (positive layer thickness in eta coords)
-//   - rdnw = 1/dnw > 0              (positive reciprocal)
-//   - dn   = 0.5*(dnw(k) + dnw(k-1)) > 0  (mass-level spacing)
-//   - rdn  = 1/dn > 0               (positive reciprocal)
-//   - rdzw = rdnw > 0               (same as rdnw, used in vertical ops)
+// TRACED (dyn_em/module_initialize_ideal.F, set_physical_bc / eta setup):
+//   znw(k) = 1 - (k-1)/(kde-1)   DECREASES with k (1 at surface -> 0 at top).
+//   Therefore in WRF Fortran:
+//   - dnw  = znw(k+1) - znw(k) < 0   NEGATIVE (numerically dnw(1) = -0.01562)
+//   - rdnw = 1/dnw               < 0   NEGATIVE
+//   - dn, rdn                    < 0   NEGATIVE (same construction)
 //
-// CODE INTERNAL (matches WRF):
+// C++ INTERNAL: positive MAGNITUDES.
+//   The conversion happens once, at the extraction boundary, via
+//   safe_abs_or_eps() (21 call sites) -- not scattered through the operators.
+//   Downstream code may therefore assume rdnw_ > 0, rdn_ > 0, dnw_ > 0.
+//   The eta-direction sign is carried by the operator stencils instead, which
+//   is why the extraction-point abs() is not a sign bug.
+//
+// CONSEQUENCE FOR ANY FUTURE PARITY WORK: when comparing a C++ vertical term
+// against its Fortran counterpart, the Fortran value carries the negative
+// metric and the C++ value does not. A term-by-term diff that ignores this
+// reports a spurious sign inversion.
+//
+// CODE INTERNAL (positive magnitudes, per the above):
 //   - rdnw_ > 0  (stored as positive, matching WRF)
 //   - rdn_  > 0  (stored as positive, matching WRF)
 //   - dnw_  > 0  (positive, derived from rdnw_)
