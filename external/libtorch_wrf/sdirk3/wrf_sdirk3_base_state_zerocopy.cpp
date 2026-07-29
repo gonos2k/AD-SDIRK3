@@ -2,7 +2,9 @@
  * @file wrf_sdirk3_base_state_zerocopy.cpp
  * @brief Zero-copy implementation for base state initialization
  *
- * This file provides an efficient zero-copy interface for setting base state
+ * 9F.D46 (review P1 section 11): this is the base-state SNAPSHOT interface. The
+ * exported symbol keeps its ...__zerocopy name for ABI stability, but nothing inside
+ * is zero-copy -- see the snapshot note on the entry point below.
  * variables, eliminating the need for temporary array allocation and data copying
  * that exists in the current implementation.
  *
@@ -47,20 +49,11 @@ namespace {
      * Helper function to compute 3D array index for Fortran memory layout
      * Fortran order: (i,k,j) with i varying fastest
      */
-    // 9F.D44 (review P0 section 5): widen FIRST. The return type was already int64_t,
-    // but every operand was int, so the two products were evaluated in 32-bit and only
-    // the result was widened -- signed overflow (UB) for a large enough memory domain,
-    // producing a negative or wrapped offset that then feeds from_blob(). The cast has
-    // to be on the operands, not the return.
-    inline int64_t index_3d(int i, int k, int j,
-                           int ims, int kms, int jms,
-                           int ime, int kme) {
-        const int64_t ni = static_cast<int64_t>(ime) - ims + 1;
-        const int64_t nk = static_cast<int64_t>(kme) - kms + 1;
-        return (static_cast<int64_t>(j) - jms) * nk * ni +
-               (static_cast<int64_t>(k) - kms) * ni +
-               (static_cast<int64_t>(i) - ims);
-    }
+    // 9F.D46: index_3d and index_2d DELETED. Both computed their products in int and
+    // widened only at the return; make_base_state_layout() now does that arithmetic once
+    // in int64 with overflow checks. Removed rather than fixed in place, because an
+    // unused-but-wrong helper is an invitation -- D45 left index_2d defined and it was
+    // still being called.
 
     // 9F.D44 (review P0 section 5): geometry is validated BEFORE any pointer arithmetic.
     // The checked entry point verified only that the pointers were non-null and the
@@ -90,9 +83,6 @@ namespace {
      * Helper function to compute 2D array index for Fortran memory layout
      * Fortran order: (i,j) with i varying fastest
      */
-    inline int64_t index_2d(int i, int j, int ims, int jms, int ime) {
-        return (j - jms) * (ime - ims + 1) + (i - ims);
-    }
 
     // =========================================================================
     // OPT Pass33+: DIAGNOSTIC SAMPLING COUNTERS
@@ -142,8 +132,25 @@ extern "C" {
 // path -- null solver, null data pointer, registry miss, caught exception -- simply
 // returned. Fortran then set base_state_initialized = .TRUE. unconditionally, so a total
 // failure to initialise the base state published SUCCESS and the run continued on
-// uninitialised or stale state. Returns 1 only when every field was validated, copied
-// and handed to the solver; 0 otherwise, with nothing published.
+// uninitialised or stale state.
+//
+// EXACT CONTRACT (9F.D46, review P1 section 5 -- the previous wording OVERCLAIMED).
+//   Returns 1 only when every field was validated, copied and handed to the solver.
+//   Returns 0 on any failure, and on 0 the FORTRAN SUCCESS FLAG IS NOT PUBLISHED.
+//   SOLVER-INTERNAL ROLLBACK IS NOT GUARANTEED.
+//
+// The old text said "0 otherwise, with nothing published" -- true of the Fortran flag,
+// false of the solver. solver.setBaseState() mutates before
+// grid_ext->initializeTerrainSlope() (defined out-of-line, constructs tensors) which can
+// throw, so a failure can return 0 with some solver fields already updated.
+//
+// Why that is ACCEPTED rather than given a rollback: the only in-tree caller treats 0 as
+// wrf_error_fatal, so a partially updated solver is never integrated against. A
+// transaction layer would be machinery protecting a path that already terminates. What
+// was wrong was the CLAIM -- an overclaimed contract is worse than an honest narrow one,
+// because the next reader builds on it. If a future caller ever wants to CONTINUE after
+// a 0, the ordering must change first: all validation and snapshot construction before
+// the first mutation.
 int sdirk3_tile_set_base_state_checked(
     void* solver_ptr,
     float* pb_ptr,      // Base state pressure (memory start)
@@ -312,7 +319,9 @@ int sdirk3_tile_set_base_state_checked(
             }
         }
         
-        // Base state inverse density: WRF (i,k,j) -> C++ {ny, nz, nx} for [j][k][i] access
+        // grid%t_init, base-state POTENTIAL TEMPERATURE: WRF (i,k,j) -> C++ {ny,nz,nx}
+        // for [j][k][i] access. 9F.D46: was labelled "inverse density" -- what the D41
+        // rename corrected everywhere except this comment and the logs below.
         auto t_init_tile = torch::from_blob(  // LINT_EXCEPTION: CPU opts above
             t_init_ptr + offset_3d,
             {ny, nz, nx},
@@ -355,7 +364,7 @@ int sdirk3_tile_set_base_state_checked(
                 }).to(torch::kCPU);
                 std::cerr << "  pb range: [" << ranges_cpu[0].item<float>()
                       << ", " << ranges_cpu[1].item<float>() << "]" << std::endl;
-                std::cerr << "  alb range: [" << ranges_cpu[2].item<float>()
+                std::cerr << "  t_init range: [" << ranges_cpu[2].item<float>()
                       << ", " << ranges_cpu[3].item<float>() << "]" << std::endl;
                 std::cerr << "  phb range: [" << ranges_cpu[4].item<float>()
                       << ", " << ranges_cpu[5].item<float>() << "]" << std::endl;
@@ -367,10 +376,10 @@ int sdirk3_tile_set_base_state_checked(
                     (pb_tile == 0).sum(), (t_init_tile == 0).sum()
                 }).to(torch::kCPU);
                 int pb_zeros = zeros_cpu[0].item<int>();
-                int alb_zeros = zeros_cpu[1].item<int>();
-                if (pb_zeros > 0 || alb_zeros > 0) {
+                int t_init_zeros = zeros_cpu[1].item<int>();
+                if (pb_zeros > 0 || t_init_zeros > 0) {
                     std::cerr << "WARNING: Found zeros - pb: " << pb_zeros
-                          << ", alb: " << alb_zeros << std::endl;
+                          << ", t_init: " << t_init_zeros << std::endl;
                 }
             }
         }
@@ -391,33 +400,53 @@ int sdirk3_tile_set_base_state_checked(
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
 
         
-            std::cerr << "  Base state set successfully (zero-copy)" << std::endl;
+            std::cerr << "  Base state snapshot initialized" << std::endl;
 
         
         }
         
-        // Set extended dynamics parameters if available
-        // Get the solver's grid info and try to cast to extended version
+        // 9F.D46 (review P1 section 6): the old shape was
+        //     auto grid_ext = std::static_pointer_cast<WRFGridInfoExtended>(grid_info);
+        //     if (grid_ext) { ... } else { "advanced features disabled" }
+        // which READS as a runtime type check and is not one. static_pointer_cast does no
+        // checking at all, so `if (grid_ext)` only tested whether the ORIGINAL pointer was
+        // null -- and the else branch advertised a fallback unreachable by a wrong type.
+        //
+        // TRACED, and it settles which of the two possible designs applies:
+        //   * WRFGridInfoExtended is the ONLY type ever constructed for this member
+        //     (wrf_sdirk3_tile_unified_impl.cpp:3497 is the sole construction site), and
+        //   * WRFGridInfo has no virtual members, so dynamic_pointer_cast is not even
+        //     available -- there is no polymorphism to dispatch on.
+        // The invariant is "always Extended", so it is asserted rather than pretended-at,
+        // and the dead fallback is gone.
         auto grid_info = solver.getGridInfo();
+        TORCH_CHECK(grid_info != nullptr,
+                    "base-state: solver has no grid info; extended dynamics parameters "
+                    "cannot be applied");
         auto grid_ext = std::static_pointer_cast<wrf::sdirk3::WRFGridInfoExtended>(grid_info);
-        
-        if (grid_ext) {
+        {
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
 
                 std::cerr << "  Setting extended dynamics parameters..." << std::endl;
 
             }
             
-            // Set terrain slope arrays if provided (zero-copy)
+            // Set terrain slope arrays if provided (snapshot, like the base state)
             if (sin_alpha_x && sin_alpha_y && cos_alpha_x && cos_alpha_y) {
                 if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
 
-                    std::cerr << "  Initializing terrain slope arrays (zero-copy)..." << std::endl;
+                    std::cerr << "  Initializing terrain slope snapshot..." << std::endl;
 
                 }
                 
                 // Calculate 2D offset for terrain slope arrays (at mass points)
-                int64_t offset_2d = index_2d(its, jts, ims, jms, ime);
+                // 9F.D46: the layout's offset, not a second computation. This line
+                // still called index_2d -- the 32-bit-multiply helper D45 was supposed to
+                // have retired. D44 fixed index_3d and missed two siblings; D45
+                // consolidated the main offsets and missed THIS call, twelve lines from
+                // its own fix. Three partial passes on one defect is what deleting the
+                // helpers prevents.
+                const int64_t offset_2d = layout.offset_2d;
                 
                 // Create tensor views for terrain slope arrays
                 // WRF (i,j) -> C++ {ny, nx} for [j][i] access
@@ -534,12 +563,6 @@ int sdirk3_tile_set_base_state_checked(
                           << " deg, max_y=" << max_slope_y << " deg" << std::endl;
 
                 }
-            }
-        } else {
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-
-                std::cerr << "  WARNING: Extended grid info not available, advanced features disabled" << std::endl;
-
             }
         }
         
