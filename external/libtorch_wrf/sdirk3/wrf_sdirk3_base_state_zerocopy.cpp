@@ -21,6 +21,7 @@
 // style problem. Including the header makes the compiler the gate, permanently.
 #include "wrf_sdirk3_interface.h"
 
+#include "wrf_sdirk3_base_state_layout.h"
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_unified_rhs_extended.h"
 #include "wrf_sdirk3_config.h"
@@ -199,6 +200,14 @@ int sdirk3_tile_set_base_state_checked(
         return 0;   // 9F.D41: failure, nothing published
     }
     
+    // 9F.D45 (review section 2): the exception boundary starts HERE, not at tensor
+    // creation. D44 added a TORCH_CHECK-based geometry validator and placed it before
+    // the old try, so invalid bounds threw a c10::Error straight out through
+    // extern "C" -- breaking the very checked-return contract D41 introduced, and
+    // ending the process rather than returning 0. Everything that can throw is inside:
+    // the lock, the layout arithmetic, the tensor views, and the solver mutation.
+    try {
+
     // Retrieve solver from registry
     std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
     auto it = g_tile_solvers.find(solver_ptr);
@@ -213,34 +222,35 @@ int sdirk3_tile_set_base_state_checked(
     
     auto& solver = *(it->second);
     
-    // Calculate dimensions
-    int nx = ite - its + 1;
-    int ny = jte - jts + 1;
-    int nz = kte - kts + 1;
-    
-    // Calculate strides for WRF memory layout
-    // WRF uses Fortran ordering: (i,k,j) with i varying fastest
-    int64_t i_stride = 1;
-    int64_t k_stride = (ime - ims + 1);
-    int64_t j_stride = (ime - ims + 1) * (kme - kms + 1);
-    
-    // For 2D arrays: (i,j) with i varying fastest
-    int64_t i_stride_2d = 1;
-    int64_t j_stride_2d = (ime - ims + 1);
-    
-    // 9F.D44 (review P0 section 5): validate before ANY offset arithmetic.
-    validate_base_state_geometry(its, ite, jts, jte, kts, kte,
-                                 ims, ime, jms, jme, kms, kme);
+    // 9F.D45 (review sections 2 and 3): ALL geometry in one 64-bit, overflow-checked
+    // place. D44 fixed index_3d's 32-bit multiply and left index_2d and j_stride with
+    // the identical defect two lines away -- fixing one instance of a pattern without
+    // grepping for its siblings. There is now nothing here left to half-fix.
+    //
+    // make_base_state_layout throws std::invalid_argument; this whole body runs inside
+    // the try below, so an invalid geometry returns 0 instead of propagating out
+    // through the C ABI (which is what D44's TORCH_CHECK-before-try actually did).
+    const auto layout = wrf::sdirk3::make_base_state_layout(
+        its, ite, jts, jte, kts, kte, ims, ime, jms, jme, kms, kme);
 
-    // Calculate offset to tile start within memory array
-    int64_t offset_3d = index_3d(its, kts, jts, ims, kms, jms, ime, kme);
-    int64_t offset_2d = index_2d(its, jts, ims, jms, ime);
+    const int64_t nx = layout.nx;
+    const int64_t ny = layout.ny;
+    const int64_t nz = layout.nz;
+
+    const int64_t i_stride    = 1;
+    const int64_t k_stride    = layout.stride_k;
+    const int64_t j_stride    = layout.stride_j;
+    const int64_t i_stride_2d = 1;
+    const int64_t j_stride_2d = layout.stride_j_2d;
+
+    const int64_t offset_3d = layout.offset_3d;
+    const int64_t offset_2d = layout.offset_2d;
     
     // Create tensor views without copying data
     // WRF Fortran arrays use (i,k,j) ordering -> C++ tensors use {ny, nz, nx} shape
     // This allows [j][k][i] access pattern which maintains memory contiguity
     
-    try {
+    {
         // Base state pressure: WRF (i,k,j) -> C++ {ny, nz, nx} for [j][k][i] access
         // This maintains consistency with the rest of SDIRK3 code
         // FIX 2025-12-31 Batch35 Issue 1: Explicit CPU device for host pointer from_blob
@@ -533,13 +543,22 @@ int sdirk3_tile_set_base_state_checked(
             }
         }
         
+    }   // end tensor-construction block
+
     } catch (const std::exception& e) {
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-
-            std::cerr << "ERROR in set_base_state_zerocopy: " << e.what() << std::endl;
-
-        }
+        // 9F.D45: reported UNCONDITIONALLY. This was gated on debug_level >= 2, so a
+        // base-state failure returned 0 with no message on a default run -- the caller
+        // aborts, but with nothing saying why. A hard failure is exactly the thing that
+        // must not depend on a diagnostic level being raised in advance.
+        std::cerr << "SDIRK3 base-state initialization FAILED: " << e.what() << std::endl;
         return 0;   // 9F.D41: an exception is a FAILURE, not a quiet completion
+    } catch (...) {
+        // 9F.D45 (review section 2): a C ABI must not let ANYTHING escape, including
+        // exceptions that do not derive from std::exception. Without this, the
+        // checked-return contract holds only for the subset of throws we anticipated.
+        std::cerr << "SDIRK3 base-state initialization FAILED: unknown exception"
+                  << std::endl;
+        return 0;
     }
     return 1;
 }
