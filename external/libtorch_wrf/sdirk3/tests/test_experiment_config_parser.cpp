@@ -169,6 +169,62 @@ int main() {
         }
     }
 
+    // --- 9F.D46 (review section 10): DiagnosticsConfig WIRING, not just its defaults ---
+    // The only diagnostics assertion in this file was "both false when unset", and every
+    // token case set an EXPERIMENT variable. So a typo in either diagnostics variable
+    // name, or the two fields wired to each other's variable, passed the whole suite --
+    // because unset-is-false holds for a misspelled name too. These pin WHICH variable
+    // drives WHICH field, independently.
+    {
+        clear_env();
+        setenv("WRF_SDIRK3_UTERMS_TRACE", "on", 1);
+        const auto d = DiagnosticsConfig::from_environment();
+        check(d.trace_u_terms && !d.dump_advect_u_split,
+              "UTERMS_TRACE drives trace_u_terms ONLY (not dump)");
+    }
+    {
+        clear_env();
+        setenv("WRF_SDIRK3_ADVECT_U_SPLIT_DUMP", "TRUE", 1);
+        const auto d = DiagnosticsConfig::from_environment();
+        check(!d.trace_u_terms && d.dump_advect_u_split,
+              "ADVECT_U_SPLIT_DUMP drives dump_advect_u_split ONLY (not trace)");
+    }
+    {
+        clear_env();
+        setenv("WRF_SDIRK3_UTERMS_TRACE", "1", 1);
+        setenv("WRF_SDIRK3_ADVECT_U_SPLIT_DUMP", "1", 1);
+        const auto d = DiagnosticsConfig::from_environment();
+        check(d.trace_u_terms && d.dump_advect_u_split,
+              "both diagnostics enabled together (neither masks the other)");
+    }
+    // Diagnostics flags are strict too: a diagnostic that silently reads as OFF for a
+    // typo produces a run reported as instrumented that measured nothing.
+    {
+        struct C { const char* var; const char* val; };
+        const C bad[] = {
+            {"WRF_SDIRK3_UTERMS_TRACE",        "maybe"},
+            {"WRF_SDIRK3_ADVECT_U_SPLIT_DUMP", "2"},
+        };
+        for (const auto& c : bad) {
+            clear_env();
+            setenv(c.var, c.val, 1);
+            bool threw = false;
+            try { (void)DiagnosticsConfig::from_environment(); }
+            catch (const std::invalid_argument&) { threw = true; }
+            check(threw, std::string("invalid diagnostics token ") + c.var + "=" +
+                         c.val + " REJECTED");
+        }
+    }
+    // Provenance must move when the config moves, or an evidence artifact can record a
+    // diagnostics state it was not produced under.
+    {
+        clear_env();
+        const std::string off = DiagnosticsConfig::from_environment().provenance();
+        setenv("WRF_SDIRK3_UTERMS_TRACE", "yes", 1);
+        const std::string on = DiagnosticsConfig::from_environment().provenance();
+        check(off != on, "diagnostics provenance changes with the config");
+    }
+
     // --- re-parsing reflects a CHANGED environment ---
     // This is the property that makes config object state rather than a latched
     // global: two solvers in one process must be able to differ, and a test must be
@@ -187,7 +243,7 @@ int main() {
 
     clear_env();
 
-    constexpr int expected_checks = 42;
+    constexpr int expected_checks = 48;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
