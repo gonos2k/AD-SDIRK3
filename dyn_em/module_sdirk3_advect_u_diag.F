@@ -53,10 +53,20 @@ MODULE module_sdirk3_advect_u_diag
    INTEGER, SAVE :: call_counter_s = 0
 
    ! Per-call state. Caller-declared, so nothing is shared implicitly.
+!  9F.D46 (review P1 section 8): the hooks must run in order, and the type now says so.
+!  snap_v is ALLOCATED by begin() but first WRITTEN by horizontal_done(); finish() reads
+!  it. A refactor that dropped the middle hook would compute the vertical field from
+!  uninitialised memory -- a plausible-looking wrong artifact, not a crash. One integer
+!  makes that unrepresentable; no state machine required.
+   INTEGER, PARAMETER, PUBLIC :: DIAG_IDLE            = 0
+   INTEGER, PARAMETER, PUBLIC :: DIAG_BEGUN           = 1
+   INTEGER, PARAMETER, PUBLIC :: DIAG_HORIZONTAL_DONE = 2
+
    TYPE advect_u_diag_type
       LOGICAL :: trace = .FALSE.
       INTEGER :: dump_call = 2
       INTEGER :: call_this = 0
+      INTEGER :: phase = DIAG_IDLE
       REAL, ALLOCATABLE, DIMENSION(:,:,:) :: snap_h, snap_v
    END TYPE advect_u_diag_type
 
@@ -95,10 +105,37 @@ CONTAINS
          CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_TRACE could not be read')
       END IF
 
+!     9F.D46 (review P1 section 7): every non-zero STATUS is handled. The old test was
+!     IF ( dst == 0 .AND. dlen > 0 ), so a TRUNCATION or any other read error fell through
+!     the whole block and silently kept the default of 2 -- an operator asking for call 7
+!     would get call 2 recorded, with nothing said. The TRACE variable directly above
+!     already failed closed on exactly these statuses; that inconsistency is what hid it.
       cfg_dump_call_s = 2
       CALL get_environment_variable("WRF_ADVECT_U_SPLIT_DUMP_CALL", denv, &
                                     LENGTH=dlen, STATUS=dst)
-      IF ( dst == 0 .AND. dlen > 0 ) THEN
+      IF ( dst == 1 ) THEN
+!        Not set. Keep the default -- the only silent path here, and the correct one.
+         CONTINUE
+      ELSE IF ( dst /= 0 ) THEN
+         CALL wrf_error_fatal( &
+           'WRF_ADVECT_U_SPLIT_DUMP_CALL could not be read (get_environment_variable status /= 0/1)')
+      ELSE IF ( dlen > LEN(denv) ) THEN
+         CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_DUMP_CALL was truncated')
+      ELSE IF ( dlen == 0 ) THEN
+!        Present but empty: treated as unset, matching the TRACE variable's behaviour.
+         CONTINUE
+      ELSE
+!        9F.D46: digits ONLY, whole string. A list-directed READ is not strict -- it stops
+!        at the first non-numeric character, so "2junk" and "3.5" would be accepted as 2
+!        and 3, silently dumping a different call than the one requested.
+         DO i = 1, dlen
+            c = IACHAR( denv(i:i) )
+            IF ( c < 48 .OR. c > 57 ) THEN
+               CALL wrf_error_fatal( &
+                 'WRF_ADVECT_U_SPLIT_DUMP_CALL must be digits only, got "'// &
+                 TRIM(denv(1:dlen))//'"')
+            END IF
+         END DO
          READ(denv(1:dlen), *, IOSTAT=dst) cfg_dump_call_s
          IF ( dst /= 0 .OR. cfg_dump_call_s < 1 ) THEN
             CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_DUMP_CALL must be a positive integer')
@@ -121,6 +158,13 @@ CONTAINS
       diag%dump_call = cfg_dump_call_s
       IF ( .NOT. diag%trace ) RETURN          ! default path stops here
 
+!     9F.D46 (section 8): IDLE -> BEGUN. A second begin() without an intervening finish()
+!     would leak the previous allocation and silently restart the measurement.
+      IF ( diag%phase /= DIAG_IDLE ) THEN
+         CALL wrf_error_fatal('advect_u_diag_begin called out of order (expected IDLE)')
+      END IF
+      diag%phase = DIAG_BEGUN
+
       ALLOCATE( diag%snap_h(ims:ime, kms:kme, jms:jme) )
       ALLOCATE( diag%snap_v(ims:ime, kms:kme, jms:jme) )
       diag%snap_h = tendency
@@ -136,8 +180,13 @@ CONTAINS
       REAL, DIMENSION(ims:ime, kms:kme, jms:jme), INTENT(IN) :: tendency
 
       IF ( .NOT. diag%trace ) RETURN
+      IF ( diag%phase /= DIAG_BEGUN ) THEN
+         CALL wrf_error_fatal( &
+           'advect_u_diag_horizontal_done called out of order (expected BEGUN)')
+      END IF
       diag%snap_h = tendency - diag%snap_h
       diag%snap_v = tendency
+      diag%phase = DIAG_HORIZONTAL_DONE
    END SUBROUTINE advect_u_diag_horizontal_done
 
 !-----------------------------------------------------------------------
@@ -156,9 +205,19 @@ CONTAINS
       REAL(dp)           :: nh, nv
       CHARACTER(LEN=160) :: line
       CHARACTER(LEN=64)  :: fname
+      CHARACTER(LEN=72)  :: tmpname
       INTEGER            :: du, nproc, myproc, ios
 
       IF ( .NOT. diag%trace ) RETURN
+
+!     9F.D46 (section 8): HORIZONTAL_DONE -> IDLE. Arriving straight from BEGUN means
+!     snap_v was allocated but never written, so the vertical norm and the dumped vertical
+!     field would both come from uninitialised memory.
+      IF ( diag%phase /= DIAG_HORIZONTAL_DONE ) THEN
+         CALL wrf_error_fatal( &
+           'advect_u_diag_finish called out of order (expected HORIZONTAL_DONE -- was '// &
+           'advect_u_diag_horizontal_done skipped?)')
+      END IF
 
 !     9F.D28 (review section 2): ATOMIC CAPTURE, not bare ATOMIC. Plain ATOMIC makes the
 !     INCREMENT indivisible but says nothing about the later READ, so two threads could
@@ -206,31 +265,46 @@ CONTAINS
 !        reads as current evidence, and the success message was emitted regardless.
 !        The message now follows a verified CLOSE, so it reports a completed artifact
 !        rather than an attempted one.
+!        9F.D46 (review P1 section 9): write to a TEMPORARY name and publish by rename
+!        only after a verified close. STATUS="replace" on the final name meant a process
+!        killed mid-write left a truncated file called wrf_advect_u_split_rankNNNN.bin --
+!        and a later run whose dump target was never reached would let the parity tool
+!        read that fragment as the current result. The C++ side already does this; the two
+!        artifacts of one comparison should not have different publication guarantees.
          WRITE(fname,'(A,I4.4,A)') 'wrf_advect_u_split_rank', myproc, '.bin'
-         OPEN(NEWUNIT=du, FILE=TRIM(fname), FORM="unformatted", &
+         tmpname = TRIM(fname)//'.tmp'
+         OPEN(NEWUNIT=du, FILE=TRIM(tmpname), FORM="unformatted", &
               ACCESS="stream", STATUS="replace", IOSTAT=ios)
          IF ( ios /= 0 ) CALL wrf_error_fatal( &
-              '[ADVECT_U_SPLIT] cannot open '//TRIM(fname))
+              '[ADVECT_U_SPLIT] cannot open '//TRIM(tmpname))
 
          WRITE(du, IOSTAT=ios) ims, ime, jms, jme, kms, kme
          IF ( ios /= 0 ) CALL wrf_error_fatal( &
-              '[ADVECT_U_SPLIT] header write failed for '//TRIM(fname))
+              '[ADVECT_U_SPLIT] header write failed for '//TRIM(tmpname))
          WRITE(du, IOSTAT=ios) diag%snap_h
          IF ( ios /= 0 ) CALL wrf_error_fatal( &
-              '[ADVECT_U_SPLIT] horizontal field write failed for '//TRIM(fname))
+              '[ADVECT_U_SPLIT] horizontal field write failed for '//TRIM(tmpname))
          WRITE(du, IOSTAT=ios) diag%snap_v
          IF ( ios /= 0 ) CALL wrf_error_fatal( &
-              '[ADVECT_U_SPLIT] vertical field write failed for '//TRIM(fname))
+              '[ADVECT_U_SPLIT] vertical field write failed for '//TRIM(tmpname))
 
          CLOSE(du, IOSTAT=ios)
          IF ( ios /= 0 ) CALL wrf_error_fatal( &
-              '[ADVECT_U_SPLIT] close failed for '//TRIM(fname))
+              '[ADVECT_U_SPLIT] close failed for '//TRIM(tmpname))
 
+!        Publish. RENAME is a GNU extension; the status is CHECKED rather than assumed so
+!        a platform without it fails loudly instead of leaving only the .tmp behind.
+         CALL RENAME( TRIM(tmpname), TRIM(fname), ios )
+         IF ( ios /= 0 ) CALL wrf_error_fatal( &
+              '[ADVECT_U_SPLIT] could not publish '//TRIM(tmpname)//' -> '//TRIM(fname))
+
+!        Only now does the final name exist, and only with a complete artifact behind it.
          CALL wrf_message('[ADVECT_U_SPLIT] wrote '//TRIM(fname))
       END IF
 
       DEALLOCATE( diag%snap_h )
       DEALLOCATE( diag%snap_v )
+      diag%phase = DIAG_IDLE
    END SUBROUTINE advect_u_diag_finish
 
 END MODULE module_sdirk3_advect_u_diag
