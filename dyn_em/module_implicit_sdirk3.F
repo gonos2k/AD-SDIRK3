@@ -698,19 +698,18 @@ CONTAINS
       INTEGER, INTENT(IN) :: ids, ide, jds, jde, kds, kde
       INTEGER, INTENT(IN) :: ims, ime, jms, jme, kms, kme
       
-      INTEGER :: ij, i, j, k
+      ! 9F.D46 (review P1 section 11): i, j, k, zero_count, nx, ny, nz and the four
+      ! *_tile allocatables were declared and never used -- each appeared exactly once in
+      ! this subroutine, at its own declaration. The allocatables were the worst of them:
+      ! they described a copy-into-temporaries design this routine no longer has (the C++
+      ! side takes the snapshot), so they implied data flow that does not exist.
+      INTEGER :: ij
       INTEGER :: its, ite, jts, jte, kts, kte
-      INTEGER :: zero_count
-      INTEGER :: nx, ny, nz
       INTEGER :: kde_consistent  ! For WRF-consistent kde
       ! 9F.D41 (review P0-2): status from the checked base-state setter.
       INTEGER(C_INT) :: base_state_status
       CHARACTER(LEN=256) :: message
-      
-      ! Contiguous arrays for tile data
-      REAL, DIMENSION(:,:,:), ALLOCATABLE, TARGET :: pb_tile, alb_tile, phb_tile
-      REAL, DIMENSION(:,:), ALLOCATABLE, TARGET :: mub_tile
-      
+
 
       IF (.NOT. sdirk3_initialized) THEN
          CALL wrf_debug(1, "SDIRK3: Solvers not initialized, skipping base state setup")
