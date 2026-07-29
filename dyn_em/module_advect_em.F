@@ -118,6 +118,11 @@ MODULE module_advect_em
   USE module_bc
   USE module_model_constants
   USE module_wrf_error
+  ! 9F.D42 (review P1-1): the advect_u split diagnostic lives in its own module now.
+  USE module_sdirk3_advect_u_diag, ONLY : advect_u_diag_type,           &
+                                          advect_u_diag_begin,          &
+                                          advect_u_diag_horizontal_done,&
+                                          advect_u_diag_finish
 
 CONTAINS
 
@@ -235,23 +240,11 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 !
 !  Default off; snapshots are ALLOCATABLE and allocated only when tracing, so the
 !  production path allocates nothing and stays byte-identical.
-   REAL, ALLOCATABLE, DIMENSION(:,:,:) :: uterm_snap_h, uterm_snap_v
-   LOGICAL :: uterm_trace
-   LOGICAL, SAVE :: uterm_trace_s = .FALSE.
-   LOGICAL, SAVE :: uterm_init_s  = .FALSE.
-   CHARACTER(LEN=32) :: uterm_env, uterm_val
-   INTEGER :: uterm_st, uterm_len, uterm_i, uterm_c
-   INTEGER, PARAMETER :: uterm_dp = KIND(1.0D0)   ! self-contained; no USE to order
-   REAL(uterm_dp) :: uterm_nh, uterm_nv            ! genuinely FP64 end-to-end (section 6)
-   CHARACTER(LEN=160) :: uterm_line
-   INTEGER, SAVE :: uterm_call_s = 0     ! shared counter (ATOMIC CAPTURE only)
-   INTEGER :: uterm_call_this            ! this call's ordinal, thread-local
-   INTEGER :: uterm_nproc, uterm_myproc
-   CHARACTER(LEN=64) :: uterm_fname
-   INTEGER :: uterm_du, uterm_dump_call, uterm_dst, uterm_dlen
-   INTEGER, SAVE :: uterm_dump_call_s = 2
-!$OMP THREADPRIVATE(uterm_trace_s, uterm_init_s, uterm_dump_call_s)
-   CHARACTER(LEN=32) :: uterm_denv
+   ! 9F.D42 (review P1-1): the split diagnostic's state is ONE caller-declared object
+   ! now. This block previously held 17 declarations -- allocatables, THREADPRIVATE
+   ! SAVEs, a shared counter, parse scratch, an FP64 kind, filename and unit -- all
+   ! interleaved with the advection routine's own variables.
+   TYPE(advect_u_diag_type) :: uterm_diag
 
    specified = .false.
    if(config_flags%specified .or. config_flags%nested) specified = .true.
@@ -262,10 +255,13 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 !  sec 9 -- I previously called the unsynchronised SAVE write a "benign race" because
 !  concurrent tiles write the same value. That is wrong as stated: in the Fortran/
 !  OpenMP memory model an unsynchronised concurrent read/write is a data race
-!  regardless of the values, and a thread can observe uterm_init_s=.TRUE. without yet
-!  observing uterm_trace_s. The failure that would produce -- some tiles tracing and
-!  others not -- is exactly the kind of partial instrumentation that yields a
-!  confidently wrong measurement. CRITICAL costs nothing here: it runs once.
+!  regardless of the values, and a thread can observe the init flag as .TRUE. without
+!  yet observing the trace flag. The failure that would produce -- some tiles tracing
+!  and others not -- is exactly the kind of partial instrumentation that yields a
+!  confidently wrong measurement.
+!  9F.D42: this reasoning still holds, but the state it describes now lives in
+!  module_sdirk3_advect_u_diag (cfg_trace_s / cfg_init_s, THREADPRIVATE there). Kept
+!  here because it records WHY the flags are per-thread rather than shared.
 !
 !  sec 10 -- the flag was ON only for the exact string '1', so "true", "yes", "on" and
 !  any typo silently selected OFF. In an investigation where no-op interventions have
@@ -280,51 +276,10 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 !     section 9 of the previous review corrected me on -- and over keeping CRITICAL
 !     because a per-call lock in a physics kernel is a real cost. The values are
 !     deterministic, so per-thread initialisation cannot disagree.
-   IF ( .NOT. uterm_init_s ) THEN
-      uterm_trace_s = .FALSE.
-      CALL get_environment_variable("WRF_ADVECT_U_SPLIT_TRACE", uterm_env, &
-                                    LENGTH=uterm_len, STATUS=uterm_st)
-      IF ( uterm_st == 0 .AND. uterm_len > 0 ) THEN
-         IF ( uterm_len > LEN(uterm_env) ) THEN
-            CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_TRACE was truncated')
-         END IF
-         uterm_val = uterm_env(1:uterm_len)
-         DO uterm_i = 1, uterm_len          ! inline lowercase; no helper to invent
-            uterm_c = IACHAR( uterm_val(uterm_i:uterm_i) )
-            IF ( uterm_c >= 65 .AND. uterm_c <= 90 ) THEN
-               uterm_val(uterm_i:uterm_i) = ACHAR( uterm_c + 32 )
-            END IF
-         END DO
-         SELECT CASE ( TRIM(uterm_val) )
-            CASE ('1','true','yes','on')
-               uterm_trace_s = .TRUE.
-            CASE ('0','false','no','off')
-               uterm_trace_s = .FALSE.
-            CASE DEFAULT
-               CALL wrf_error_fatal( &
-                 'WRF_ADVECT_U_SPLIT_TRACE must be one of 1/true/yes/on/0/false/no/off')
-         END SELECT
-      ELSE IF ( uterm_st /= 0 .AND. uterm_st /= 1 ) THEN
-         CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_TRACE could not be read')
-      END IF
-      uterm_dump_call_s = 2
-      CALL get_environment_variable("WRF_ADVECT_U_SPLIT_DUMP_CALL", uterm_denv, &
-                                    LENGTH=uterm_dlen, STATUS=uterm_dst)
-      IF ( uterm_dst == 0 .AND. uterm_dlen > 0 ) THEN
-         READ(uterm_denv(1:uterm_dlen), *, IOSTAT=uterm_dst) uterm_dump_call_s
-         IF ( uterm_dst /= 0 .OR. uterm_dump_call_s < 1 ) THEN
-            CALL wrf_error_fatal('WRF_ADVECT_U_SPLIT_DUMP_CALL must be a positive integer')
-         END IF
-      END IF
-      uterm_init_s = .TRUE.
-   END IF
-   uterm_dump_call = uterm_dump_call_s
-   uterm_trace = uterm_trace_s
-   IF ( uterm_trace ) THEN
-      ALLOCATE( uterm_snap_h(ims:ime, kms:kme, jms:jme) )
-      ALLOCATE( uterm_snap_v(ims:ime, kms:kme, jms:jme) )
-      uterm_snap_h = tendency
-   END IF
+   ! 9F.D42 (review P1-1): 44 lines of environment parsing, hand-rolled lowercase,
+   ! dump-call parsing and allocation used to sit here, before the advection scheme was
+   ! even selected.
+   CALL advect_u_diag_begin( uterm_diag, tendency, ims, ime, jms, jme, kms, kme )
 
 !  set order for vertical and horzontal flux operators
 
@@ -1443,10 +1398,8 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 
 
 !  9F.D20: horizontal work (incl. the radiation-BC pickup above) is complete here.
-   IF ( uterm_trace ) THEN
-      uterm_snap_h = tendency - uterm_snap_h
-      uterm_snap_v = tendency
-   END IF
+   CALL advect_u_diag_horizontal_done( uterm_diag, tendency, &
+                                       ims, ime, jms, jme, kms, kme )
 !-------------------- vertical advection
 !  ADT eqn 44 has 3rd term on RHS = -(1/my) partial d/dz (rho u w)
 !  Here we have:  - partial d/dz (u*rom) = - partial d/dz (u rho w / my)
@@ -1643,64 +1596,13 @@ SUBROUTINE advect_u   ( u, u_old, tendency,            &
 !  differenced field-wise first, which is the only form comparable to the port's
 !  per-term |T|. Interior only (its ... ite/jts ... jte, 1..ktf) so halo garbage
 !  cannot inflate either norm.
-   IF ( uterm_trace ) THEN
-!     9F.D28 (review section 2): ATOMIC CAPTURE, not bare ATOMIC. Plain ATOMIC makes
-!     the INCREMENT indivisible but says nothing about the later READ, so two threads
-!     could each increment (->2, ->3) and then BOTH read 3 -- losing the call-2 dump
-!     and writing call 3 twice, with the logged ordinal not matching the tensor. The
-!     captured value is thread-local and is what this call reports and tests.
-!$OMP ATOMIC CAPTURE
-      uterm_call_s = uterm_call_s + 1
-      uterm_call_this = uterm_call_s
-!$OMP END ATOMIC
-      uterm_snap_v = tendency - uterm_snap_v
-!     9F.D25 (review sec 11): accumulate in DOUBLE. A conclusion quoted to 2.4% must not
-!     rest on a single-precision sum of squares over O(2e5) terms, where the running
-!     total is orders of magnitude above the increments and absorbs them.
-      uterm_nh = ( SQRT( SUM( REAL( &
-         uterm_snap_h(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1)), KIND=uterm_dp )**2 ) ) )
-      uterm_nv = ( SQRT( SUM( REAL( &
-         uterm_snap_v(its:MIN(ite,ide-1), 1:ktf, jts:MIN(jte,jde-1)), KIND=uterm_dp )**2 ) ) )
-      WRITE(uterm_line,'(A,I0,A,E24.16,A,E24.16)') &
-         '[ADVECT_U_SPLIT] call=', uterm_call_this, ' |horiz|=', uterm_nh, &
-         ' |vert|=', uterm_nv
-      CALL wrf_message( TRIM(uterm_line) )
-!     9F.D26 (review section 3): norms are NOT field parity. ||PT||=||T|| for any
-!     permutation P and ||-T||=||T||, so equal magnitudes are consistent with a
-!     transposed, shifted or sign-flipped field. Dump the FIELDS so an offline diff can
-!     compute e2 / e_inf / correlation / per-level error / sign-disagreement, which is
-!     what "the operator matches" actually requires. Same header+layout as
-!     wrf_rk_tend_dump.bin so the existing loader applies.
-!     Dumped for ONE call (default the first live one, call 2 -- call 1 is all-zero) so
-!     the file is a single matched-input snapshot, not the last of many.
-      IF ( uterm_call_this == uterm_dump_call ) THEN
-!        9F.D29 (review section 4): the dump used a FIXED filename while the call
-!        ordinal is PROCESS-LOCAL, so under MPI every rank would write its own second
-!        call to the same path -- last-writer-wins, or a partially interleaved binary,
-!        and a parity verdict computed from whichever rank happened to finish last.
-!        The comparison is single-rank by construction (it compares one tile against
-!        WRF's domain), so this fails closed rather than silently producing a file
-!        whose provenance is unknowable. The rank is also in the name, so the
-!        fail-close and the artifact agree about what was written.
-         CALL wrf_get_nproc( uterm_nproc )
-         CALL wrf_get_myproc( uterm_myproc )
-         IF ( uterm_nproc /= 1 ) THEN
-            CALL wrf_error_fatal( &
-              'WRF_ADVECT_U_SPLIT_DUMP is single-rank only: the call ordinal is '// &
-              'process-local, so multiple ranks would overwrite one dump file.')
-         END IF
-         WRITE(uterm_fname,'(A,I4.4,A)') 'wrf_advect_u_split_rank', uterm_myproc, '.bin'
-         OPEN(NEWUNIT=uterm_du, FILE=TRIM(uterm_fname), FORM="unformatted", &
-              ACCESS="stream", STATUS="replace")
-         WRITE(uterm_du) ims, ime, jms, jme, kms, kme
-         WRITE(uterm_du) uterm_snap_h
-         WRITE(uterm_du) uterm_snap_v
-         CLOSE(uterm_du)
-         CALL wrf_message('[ADVECT_U_SPLIT] wrote '//TRIM(uterm_fname))
-      END IF
-      DEALLOCATE( uterm_snap_h )
-      DEALLOCATE( uterm_snap_v )
-   END IF
+   ! 9F.D42 (review P1-1/P1-2): the atomic ordinal, FP64 reductions, norm formatting,
+   ! MPI topology query and binary open/write/close lived here -- ~57 lines of evidence
+   ! plumbing at the end of an advection routine. The I/O is now IOSTAT-checked.
+   CALL advect_u_diag_finish( uterm_diag, tendency, &
+                              ids, ide, jds, jde, &
+                              ims, ime, jms, jme, kms, kme, &
+                              its, ite, jts, jte, ktf )
 END SUBROUTINE advect_u
 
 !-------------------------------------------------------------------------------
