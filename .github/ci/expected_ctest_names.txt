@@ -1,5 +1,7 @@
 Acoustic_Schedule_Invalid_Matrix
 Acoustic_Substep_AD
+Base_State_Checked_ABI
+Base_State_Layout_Contract
 Config_Provenance
 Core_Archive_MakeParity
 Core_Archive_Manifest

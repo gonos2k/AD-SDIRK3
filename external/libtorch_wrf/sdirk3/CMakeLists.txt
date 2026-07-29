@@ -249,6 +249,18 @@ add_executable(test_acoustic_schedule_matrix tests/test_acoustic_schedule_matrix
 target_link_libraries(test_acoustic_schedule_matrix PRIVATE wrf_sdirk3::core)
 add_test(NAME Acoustic_Schedule_Invalid_Matrix COMMAND test_acoustic_schedule_matrix)
 
+# 9F.D45 (review sections 3/4): pure-integer tile geometry. No torch link -- the header
+# is torch-free so the INT_MAX-adjacent cases cost nothing to run.
+add_executable(test_base_state_layout tests/test_base_state_layout.cpp)
+add_test(NAME Base_State_Layout_Contract COMMAND test_base_state_layout)
+
+# 9F.D45 (review section 4): the C-boundary return contract. Links core, because the
+# point is to call the REAL exported symbol -- a helper that throws and an ABI that
+# converts throws into a status code are different claims.
+add_executable(test_base_state_checked_abi tests/test_base_state_checked_abi.cpp)
+target_link_libraries(test_base_state_checked_abi PRIVATE wrf_sdirk3::core)
+add_test(NAME Base_State_Checked_ABI COMMAND test_base_state_checked_abi)
+
 # Raw map-factor verification regression matrix (external review round 3c):
 # per-array TT/TF/FT/FF existence, NaN/Inf/non-unit fail-closed, first/last-row
 # coverage, and the stride canary that reproduces the old mem_nx+1 layout bug.
