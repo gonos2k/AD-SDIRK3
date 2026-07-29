@@ -12,6 +12,15 @@
  * This aligns with tile_unified_impl.cpp policy for performance consistency.
  */
 
+// 9F.D44 (review P0 section 4): include the PUBLIC interface header. This file defines
+// extern "C" symbols that wrf_sdirk3_interface.h declares, and it did not include that
+// header -- so a declaration and its definition could disagree and still compile. They
+// did: sdirk3_tile_set_base_state_zerocopy_v2's 6th parameter is `float* theta_base_ptr`
+// in the header and `int its` in the definition. Any caller compiled against the header
+// would pass arguments the definition reinterprets; that is undefined behaviour, not a
+// style problem. Including the header makes the compiler the gate, permanently.
+#include "wrf_sdirk3_interface.h"
+
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_unified_rhs_extended.h"
 #include "wrf_sdirk3_config.h"
@@ -37,12 +46,43 @@ namespace {
      * Helper function to compute 3D array index for Fortran memory layout
      * Fortran order: (i,k,j) with i varying fastest
      */
+    // 9F.D44 (review P0 section 5): widen FIRST. The return type was already int64_t,
+    // but every operand was int, so the two products were evaluated in 32-bit and only
+    // the result was widened -- signed overflow (UB) for a large enough memory domain,
+    // producing a negative or wrapped offset that then feeds from_blob(). The cast has
+    // to be on the operands, not the return.
     inline int64_t index_3d(int i, int k, int j,
                            int ims, int kms, int jms,
                            int ime, int kme) {
-        return (j - jms) * (kme - kms + 1) * (ime - ims + 1) +
-               (k - kms) * (ime - ims + 1) +
-               (i - ims);
+        const int64_t ni = static_cast<int64_t>(ime) - ims + 1;
+        const int64_t nk = static_cast<int64_t>(kme) - kms + 1;
+        return (static_cast<int64_t>(j) - jms) * nk * ni +
+               (static_cast<int64_t>(k) - kms) * ni +
+               (static_cast<int64_t>(i) - ims);
+    }
+
+    // 9F.D44 (review P0 section 5): geometry is validated BEFORE any pointer arithmetic.
+    // The checked entry point verified only that the pointers were non-null and the
+    // solver was in the registry, then computed offsets and handed them to from_blob().
+    // A tile outside its memory domain, an inverted bound, or a phb w-level past kme
+    // produced an out-of-range view -- reading memory the caller never owned, with no
+    // error anywhere. These are cheap integer comparisons on a once-per-run path.
+    inline void validate_base_state_geometry(
+        int its, int ite, int jts, int jte, int kts, int kte,
+        int ims, int ime, int jms, int jme, int kms, int kme) {
+        TORCH_CHECK(ims <= its && its <= ite && ite <= ime,
+                    "base-state geometry: i tile [", its, ",", ite,
+                    "] outside memory [", ims, ",", ime, "]");
+        TORCH_CHECK(jms <= jts && jts <= jte && jte <= jme,
+                    "base-state geometry: j tile [", jts, ",", jte,
+                    "] outside memory [", jms, ",", jme, "]");
+        TORCH_CHECK(kms <= kts && kts <= kte && kte <= kme,
+                    "base-state geometry: k tile [", kts, ",", kte,
+                    "] outside memory [", kms, ",", kme, "]");
+        // phb lives on w-levels: one MORE than the mass levels this tile spans.
+        TORCH_CHECK(kte + 1 <= kme,
+                    "base-state geometry: phb w-level kte+1=", kte + 1,
+                    " exceeds memory kme=", kme);
     }
 
     /**
@@ -188,6 +228,10 @@ int sdirk3_tile_set_base_state_checked(
     int64_t i_stride_2d = 1;
     int64_t j_stride_2d = (ime - ims + 1);
     
+    // 9F.D44 (review P0 section 5): validate before ANY offset arithmetic.
+    validate_base_state_geometry(its, ite, jts, jte, kts, kte,
+                                 ims, ime, jms, jme, kms, kme);
+
     // Calculate offset to tile start within memory array
     int64_t offset_3d = index_3d(its, kts, jts, ims, kms, jms, ime, kme);
     int64_t offset_2d = index_2d(its, jts, ims, jms, ime);
@@ -516,64 +560,64 @@ extern "C" void sdirk3_tile_set_base_state_zerocopy(
     int diff_6th_slopeopt, float diff_6th_thresh,
     int smagorinsky_opt, float c_s, float c_k)
 {
-    (void)sdirk3_tile_set_base_state_checked(
+    // 9F.D44 (review P0 section 8): do NOT discard the status. D41 made the in-tree
+    // Fortran path safe by switching it to the checked entry point, but this wrapper
+    // kept swallowing the result -- so for any out-of-tree caller still bound to the
+    // old symbol, the original defect was fully intact: failure -> status dropped ->
+    // caller proceeds as if the base state were set. Aborting here is the only honest
+    // option, because a void ABI has no way to say "no".
+    const int ok = sdirk3_tile_set_base_state_checked(
         solver_ptr, pb_ptr, t_init_ptr, phb_ptr, mub_ptr,
         its, ite, jts, jte, kts, kte, ims, ime, jms, jme, kms, kme,
         sin_alpha_x, sin_alpha_y, cos_alpha_x, cos_alpha_y,
         div_damp_opt, div_damp_coef, diff_6th_opt, diff_6th_factor,
         diff_6th_slopeopt, diff_6th_thresh, smagorinsky_opt, c_s, c_k);
+    if (ok != 1) {
+        wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+            "sdirk3_tile_set_base_state_zerocopy",
+            "base-state initialization FAILED and this deprecated void entry point "
+            "cannot report it. Use sdirk3_tile_set_base_state_checked, which returns "
+            "1 on success and 0 on failure.");
+    }
 }
 
 /**
  * Alternative implementation that passes indices instead of creating tensors
  * This version lets the solver create tensors internally with proper layout
  */
+// 9F.D44 (review P0 section 4): EXACT public signature, and it FAILS CLOSED.
+//
+// What was here: a definition whose 6th parameter was `int its` while the public header
+// declared `float* theta_base_ptr`, a body that assembled a local [[maybe_unused]]
+// BaseStateConfig, and the one line that would have used it commented out --
+//     // solver.setBaseStateZeroCopy(config);
+// So the symbol was simultaneously (a) ABI-incompatible with its own declaration and
+// (b) a silent no-op. A caller compiled against the header would pass a pointer where
+// an int was read, and then continue believing the base state had been set. Nothing in
+// this tree calls it, which is the only reason it never detonated.
+//
+// It is NOT quietly deleted: the symbol may be in an export list or a downstream build.
+// Keeping it with the correct signature and an abort means a caller gets a loud,
+// immediate failure naming the supported entry point, instead of silent wrong physics.
 void sdirk3_tile_set_base_state_zerocopy_v2(
-    void* solver_ptr,
-    float* pb_ptr,      // Base state pressure (memory start)
-    float* t_init_ptr,     // grid%t_init -- base-state POTENTIAL TEMPERATURE (memory start)
-    float* phb_ptr,     // Base state geopotential (memory start)
-    float* mub_ptr,     // Base state column mass (memory start)
-    int its, int ite, int jts, int jte, int kts, int kte,  // Tile bounds
-    int ids, int ide, int jds, int jde, int kds, int kde,  // Domain bounds
-    int ims, int ime, int jms, int jme, int kms, int kme)  // Memory bounds
+    void* /*solver_ptr*/,
+    float* /*pb_ptr*/, float* /*t_init_ptr*/, float* /*phb_ptr*/, float* /*mub_ptr*/,
+    float* /*theta_base_ptr*/,
+    int /*its*/, int /*ite*/, int /*jts*/, int /*jte*/, int /*kts*/, int /*kte*/,
+    int /*ims*/, int /*ime*/, int /*jms*/, int /*jme*/, int /*kms*/, int /*kme*/,
+    float* /*sin_alpha_x*/, float* /*sin_alpha_y*/,
+    float* /*cos_alpha_x*/, float* /*cos_alpha_y*/,
+    int /*div_damp_opt*/, float /*div_damp_coef*/,
+    int /*diff_6th_opt*/, float /*diff_6th_factor*/,
+    int /*diff_6th_slopeopt*/, float /*diff_6th_thresh*/,
+    int /*smagorinsky_opt*/, float /*c_s*/, float /*c_k*/)
 {
-    // Retrieve solver
-    std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
-    auto it = g_tile_solvers.find(solver_ptr);
-    if (it == g_tile_solvers.end()) {
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-
-            std::cerr << "ERROR: Solver not found in registry" << std::endl;
-
-        }
-        return;
-    }
-    
-    [[maybe_unused]] auto& solver = *(it->second);
-
-    // Create a configuration structure for zero-copy base state
-    struct BaseStateConfig {
-        float* pb_ptr;
-        float* t_init_ptr;
-        float* phb_ptr;
-        float* mub_ptr;
-        int its, ite, jts, jte, kts, kte;
-        int ids, ide, jds, jde, kds, kde;
-        int ims, ime, jms, jme, kms, kme;
-    };
-    [[maybe_unused]] BaseStateConfig config = {
-        pb_ptr, t_init_ptr, phb_ptr, mub_ptr,
-        its, ite, jts, jte, kts, kte,
-        ids, ide, jds, jde, kds, kde,
-        ims, ime, jms, jme, kms, kme
-    };
-    
-    // Let solver handle tensor creation with proper memory layout
-    // This approach is cleaner but requires modifying the solver interface
-    // solver.setBaseStateZeroCopy(config);
-    
-    // For now, use the first implementation
+    wrf::sdirk3::mpi_safety::abort_c_abi_exception(
+        "sdirk3_tile_set_base_state_zerocopy_v2",
+        "unsupported: this entry point never set any solver state (its only mutating "
+        "call was commented out) and its declaration disagreed with its definition. "
+        "Use sdirk3_tile_set_base_state_checked, which validates its inputs and "
+        "reports success or failure.");
 }
 
 } // extern "C"

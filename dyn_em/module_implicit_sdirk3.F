@@ -730,20 +730,28 @@ CONTAINS
          CALL wrf_debug(1, message)
          
 
-         IF (ALLOCATED(solver_valid)) THEN
+         ! 9F.D44 (review P0 section 7): these were EMPTY IF blocks -- three of them --
+         ! left behind when D41 removed the WRITE(0,*) statements that were their only
+         ! bodies. My statement-aware removal correctly took the writes and did not
+         ! notice it had emptied their enclosing conditionals. The result read as
+         ! allocation and bounds validation and validated nothing, while the very next
+         ! lines indexed solver_valid(ij) and tile_solvers(ij) regardless -- the exact
+         ! looks-checked-but-isn't shape this campaign exists to remove, introduced by
+         ! a cleanup meant to reduce it.
+         !
+         ! Now they check, and fail closed. A partially initialised module reaching an
+         ! array index would abort inside Fortran before ever reaching the checked C++
+         ! entry point, where the error would at least have been reportable.
+         IF (.NOT. ALLOCATED(solver_valid) .OR. .NOT. ALLOCATED(tile_solvers)) THEN
+            CALL wrf_error_fatal("SDIRK3 base state: tile solver arrays are not allocated")
          END IF
-         IF (ALLOCATED(tile_solvers)) THEN
+         IF (SIZE(solver_valid) < grid%num_tiles .OR. &
+             SIZE(tile_solvers) < grid%num_tiles) THEN
+            WRITE(message, '(A,I0,A,I0,A,I0)') &
+                 "SDIRK3 base state: tile arrays undersized -- num_tiles=", grid%num_tiles, &
+                 " solver_valid=", SIZE(solver_valid), " tile_solvers=", SIZE(tile_solvers)
+            CALL wrf_error_fatal(message)
          END IF
-
-         ! Debug: Check solver status
-         DO ij = 1, grid%num_tiles
-            IF (ij >= LBOUND(solver_valid,1) .AND. ij <= UBOUND(solver_valid,1)) THEN
-            ELSE
-            END IF
-            WRITE(message, '(A,I0,A,L1,A,L1)') "Tile ", ij, " solver_valid=", solver_valid(ij), &
-                 " C_ASSOCIATED=", C_ASSOCIATED(tile_solvers(ij))
-            CALL wrf_debug(1, message)
-         END DO
 
 
          ! Remove OpenMP for debugging

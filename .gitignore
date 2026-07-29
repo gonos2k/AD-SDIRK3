@@ -128,6 +128,7 @@ external/libtorch_wrf/sdirk3/tests/test_*
 !external/libtorch_wrf/sdirk3/tests/test_diag_io_concurrency.cpp
 !external/libtorch_wrf/sdirk3/tests/test_config_provenance.cpp
 !external/libtorch_wrf/sdirk3/tests/test_dump_contract.cpp
+!external/libtorch_wrf/sdirk3/tests/test_acoustic_schedule_matrix.cpp
 !external/libtorch_wrf/sdirk3/test_wdamp_tangent_contract.cpp
 !external/libtorch_wrf/sdirk3/test_wdamp_preconditioner_policy_contract.cpp
 !external/libtorch_wrf/sdirk3/test_rw_term_capture_contract.cpp
