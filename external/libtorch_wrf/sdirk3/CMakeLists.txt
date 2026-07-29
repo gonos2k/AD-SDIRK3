@@ -237,6 +237,12 @@ add_executable(test_acoustic_substep test_acoustic_substep.cpp)
 target_link_libraries(test_acoustic_substep PRIVATE wrf_sdirk3::core)
 add_test(NAME Acoustic_Substep_AD COMMAND test_acoustic_substep)
 
+# 9F.D44 (review section 9): the INVALID-input matrix. Acoustic_Substep_AD covers the
+# happy path only, so nothing would fail if D41's guards were removed.
+add_executable(test_acoustic_schedule_matrix tests/test_acoustic_schedule_matrix.cpp)
+target_link_libraries(test_acoustic_schedule_matrix PRIVATE wrf_sdirk3::core)
+add_test(NAME Acoustic_Schedule_Invalid_Matrix COMMAND test_acoustic_schedule_matrix)
+
 # Raw map-factor verification regression matrix (external review round 3c):
 # per-array TT/TF/FT/FF existence, NaN/Inf/non-unit fail-closed, first/last-row
 # coverage, and the stride canary that reproduces the old mem_nx+1 layout bug.
