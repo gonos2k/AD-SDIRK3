@@ -7,6 +7,7 @@ RM      =       rm -f
 
 MODULES =                 		\
         module_advect_em.o   		\
+        module_sdirk3_advect_u_diag.o	\
         module_ieva_em.o            \
 	  module_diffusion_em.o  		\
 	  module_small_step_em.o 		\
@@ -88,5 +89,12 @@ include depend.dyn_em
 # regeneration would silently drop the line. make unions dependencies from all
 # sources, so this survives.
 module_initialize_ideal.o: bwave_pert_scale_parse.inc
+
+# 9F.D42 (review P1-1): module_advect_em USEs module_sdirk3_advect_u_diag, so the .mod
+# must exist first. Declared here for the same reason as the line above -- depend.dyn_em
+# is generated, and a regeneration that missed this would fail with "Cannot open module
+# file", or worse, succeed against a stale .mod. make unions dependencies from all
+# sources, so declaring it here is additive and survives regeneration.
+module_advect_em.o: module_sdirk3_advect_u_diag.o
 
 # DO NOT DELETE
