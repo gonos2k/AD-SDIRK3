@@ -220,6 +220,12 @@ add_test(NAME Diag_IO_Concurrency COMMAND test_diag_io_concurrency)
 add_executable(test_config_provenance tests/test_config_provenance.cpp)
 add_test(NAME Config_Provenance COMMAND test_config_provenance)
 
+# 9F.D43 (review P1-6): the environment parser's own contract. Like the header under
+# test, this links NO torch -- a fixture that pulled libtorch in could no longer detect
+# the torch-free property regressing.
+add_executable(test_experiment_config_parser tests/test_experiment_config_parser.cpp)
+add_test(NAME Experiment_Config_Parser COMMAND test_experiment_config_parser)
+
 # 9F.D40 (review section 7): the dump write contract as a standing gate.
 add_executable(test_dump_contract tests/test_dump_contract.cpp)
 target_link_libraries(test_dump_contract PRIVATE wrf_sdirk3::core)
