@@ -254,6 +254,11 @@ add_test(NAME Acoustic_Schedule_Invalid_Matrix COMMAND test_acoustic_schedule_ma
 add_executable(test_base_state_layout tests/test_base_state_layout.cpp)
 add_test(NAME Base_State_Layout_Contract COMMAND test_base_state_layout)
 
+# 9F.D48 (review section 3): discrete hydrostatic balance, with the sign-convention
+# negative control built in. No torch -- pure integer/float identity.
+add_executable(test_hydrostatic_balance tests/test_hydrostatic_balance.cpp)
+add_test(NAME Hydrostatic_Balance_Contract COMMAND test_hydrostatic_balance)
+
 # 9F.D45 (review section 4): the C-boundary return contract. Links core, because the
 # point is to call the REAL exported symbol -- a helper that throws and an ABI that
 # converts throws into a status code are different claims.

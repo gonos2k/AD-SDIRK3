@@ -41,7 +41,10 @@
 //
 // C++ INTERNAL: positive MAGNITUDES.
 //   The conversion happens once, at the extraction boundary, via
-//   safe_abs_or_eps() (21 call sites) -- not scattered through the operators.
+//   require_metric_magnitude() (15 call sites) -- not scattered through the operators.
+//   9F.D48: it FAILS CLOSED on NaN/Inf/zero; it used to substitute eps=1e-10, which
+//   for a RECIPROCAL metric asserts a layer 1e10 thick -- invalid input disguised as
+//   a valid-but-extreme atmosphere.
 //   Downstream code may therefore assume rdnw_ > 0, rdn_ > 0, dnw_ > 0.
 //   The eta-direction sign is carried by the operator stencils instead, which
 //   is why the extraction-point abs() is not a sign bug.
@@ -196,10 +199,28 @@ using torch::indexing::Slice;
 // v20.14r27o: Central sign conversion for WRF→C++ grid metrics.
 // WRF Fortran stores rdnw/rdn as NEGATIVE (eta decreasing 1→0).
 // C++ stores as POSITIVE (absolute thickness reciprocals).
-// Returns |v| if finite, eps if NaN/Inf. Applied at extraction point only.
+// 9F.D48 (review section 4): FAILS CLOSED on a non-finite or zero metric.
+//
+// This used to return eps = 1e-10 for NaN/Inf, which is worse than propagating the NaN.
+// These are RECIPROCAL metrics: substituting 1e-10 for a broken rdnw silently asserts a
+// layer 1e10 units thick. Invalid input was thereby disguised as a valid-but-extreme
+// atmosphere -- and an extreme atmosphere produces plausible-looking output, whereas a
+// NaN at least announces itself. Zero is rejected for the same reason: 1/0 is not a
+// thickness either.
+//
+// The name kept the "or_eps" shape for one commit's worth of diff clarity and is now
+// wrong, so it is renamed with it: this converts a WRF-signed metric to the magnitude
+// the C++ side stores, and refuses anything that is not a metric.
 namespace {
-inline float safe_abs_or_eps(float v, float eps = 1e-10f) {
-    return std::isfinite(v) ? std::abs(v) : eps;
+inline float require_metric_magnitude(float signed_value, const char* what) {
+    if (!std::isfinite(signed_value) || signed_value == 0.0f) {
+        std::ostringstream oss;
+        oss << "SDIRK3 vertical metric " << what << " is not usable: got "
+            << signed_value << " (expected a finite non-zero reciprocal metric; WRF "
+            << "stores these NEGATIVE and C++ keeps the magnitude)";
+        throw std::invalid_argument(oss.str());
+    }
+    return std::abs(signed_value);
 }
 
 struct IdentityTransposePreconditioner {
@@ -3250,7 +3271,7 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
             has_negative = true;
         }
         // Use unified helper: abs for finite, eps (1e-10f) for NaN/Inf
-        rdnw_[k] = safe_abs_or_eps(val);
+        rdnw_[k] = require_metric_magnitude(val, "rdnw/rdn");
     }
     if (has_nan_inf && wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
         std::cerr << "WARNING: rdnw input (constructor) contains NaN/Inf - replaced with 1e-10f" << std::endl;
@@ -3833,13 +3854,14 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         // If NaN is in input, signature would be NaN causing sig_changed=true every call.
         // SIGNATURE CONSISTENCY FIX 2025-12-25: Use 1e-10f (same as storage fallback) to ensure
         // signature matches stored values. Previously used 0.0f which caused mismatch.
-        // SAFE_ABS CONSOLIDATION 2025-12-26: Use file-scope safe_abs_or_eps helper.
-        float new_signature = safe_abs_or_eps(rdnw[0]);  // First (positive)
+        // SAFE_ABS CONSOLIDATION 2025-12-26: use the file-scope metric helper
+        // (9F.D48: now require_metric_magnitude, which fails closed).
+        float new_signature = require_metric_magnitude(rdnw[0], "rdnw/rdn");  // First (positive)
         if (nz > 1) {
-            new_signature += safe_abs_or_eps(rdnw[nz / 4]);        // 1/4 position
-            new_signature += safe_abs_or_eps(rdnw[nz / 2]);        // Middle (1/2)
-            new_signature += safe_abs_or_eps(rdnw[(3 * nz) / 4]);  // 3/4 position
-            new_signature += safe_abs_or_eps(rdnw[nz - 1]);        // Last
+            new_signature += require_metric_magnitude(rdnw[nz / 4], "rdnw/rdn");        // 1/4 position
+            new_signature += require_metric_magnitude(rdnw[nz / 2], "rdnw/rdn");        // Middle (1/2)
+            new_signature += require_metric_magnitude(rdnw[(3 * nz) / 4], "rdnw");  // 3/4 position
+            new_signature += require_metric_magnitude(rdnw[nz - 1], "rdnw/rdn");        // Last
         }
 
         bool size_changed = (rdnw_.size() != static_cast<size_t>(nz));
@@ -3853,9 +3875,10 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         bool do_full_verify = (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) || do_periodic_full_verify;
         if (do_full_verify && !size_changed && !sig_changed && !rdnw_.empty()) {
             for (int k = 0; k < nz && !values_changed; ++k) {
-                // FIX 2025-12-28 Issue 5 (batch 4): Use safe_abs_or_eps for NaN/Inf safety
+                // FIX 2025-12-28 Issue 5 (batch 4): metric helper for NaN/Inf safety
+                // (9F.D48: rejects them rather than substituting an epsilon)
                 // Raw std::abs(NaN) returns NaN, causing comparison issues
-                float positive = safe_abs_or_eps(rdnw[k]);
+                float positive = require_metric_magnitude(rdnw[k], "rdnw/rdn");
                 // FIX 2025-12-28 Issue 5 (batch 4): Handle NaN comparison properly
                 // NaN != NaN is true, but we want consistent cache behavior
                 // If either is NaN, force cache invalidation
@@ -3893,7 +3916,7 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
                 if (rdnw[unique_samples[i]] < 0.0f) ++negative_count;
             }
             // v20.14r27o: WRF rdnw IS negative (znw decreases 1→0, dnw<0, rdnw=1/dnw<0).
-            // C++ stores as positive via safe_abs_or_eps at extraction. Not an anomaly.
+            // C++ stores as positive via require_metric_magnitude at extraction. Not an anomaly.
             if (negative_count > 0 && wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                 std::cerr << "NOTE: rdnw input has " << negative_count << "/" << sample_count
                          << " negative samples (expected: WRF eta decreasing). Stored as |rdnw|." << std::endl;
@@ -3976,9 +3999,9 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             // v20.14r27o: Sign convention — WRF Fortran stores rdnw < 0
             // (because znw decreases 1→0, so dnw = znw(k+1)-znw(k) < 0, rdnw = 1/dnw < 0).
             // C++ stores as POSITIVE (absolute thickness reciprocals) for all equations.
-            // Conversion: safe_abs_or_eps at this single extraction point.
+            // Conversion: require_metric_magnitude at this single extraction point.
             for (int k = 0; k < nz; ++k) {
-                rdnw_[k] = safe_abs_or_eps(rdnw[k]);
+                rdnw_[k] = require_metric_magnitude(rdnw[k], "rdnw/rdn");
             }
             rdnw_signature_ = new_signature;
             ++rdnw_epoch_vec_;
@@ -4080,17 +4103,18 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         // If NaN is in input, signature would be NaN causing sig_changed=true every call.
         // SIGNATURE CONSISTENCY FIX 2025-12-25: Use 1e-10f (same as storage fallback) to ensure
         // signature matches stored values. Previously used 0.0f which caused mismatch.
-        // SAFE_ABS CONSOLIDATION 2025-12-26: Use file-scope safe_abs_or_eps helper.
+        // SAFE_ABS CONSOLIDATION 2025-12-26: use the file-scope metric helper
+        // (9F.D48: now require_metric_magnitude, which fails closed).
         float new_signature = 0.0f;  // k=0 excluded (undefined in WRF Fortran rdn(1))
         if (nz > 1) {
             // Only use k>=1 indices for signature (k=0 is boundary, may be garbage)
             int idx1 = std::max(1, nz / 4);
             int idx2 = std::max(1, nz / 2);
             int idx3 = std::max(1, (3 * nz) / 4);
-            new_signature += safe_abs_or_eps(rdn[idx1]);          // 1/4 position (or k=1 if small)
-            new_signature += safe_abs_or_eps(rdn[idx2]);          // Middle (1/2)
-            new_signature += safe_abs_or_eps(rdn[idx3]);          // 3/4 position
-            new_signature += safe_abs_or_eps(rdn[nz - 1]);        // Last
+            new_signature += require_metric_magnitude(rdn[idx1], "rdnw/rdn");          // 1/4 position (or k=1 if small)
+            new_signature += require_metric_magnitude(rdn[idx2], "rdnw/rdn");          // Middle (1/2)
+            new_signature += require_metric_magnitude(rdn[idx3], "rdnw/rdn");          // 3/4 position
+            new_signature += require_metric_magnitude(rdn[nz - 1], "rdnw/rdn");        // Last
         }
 
         bool size_changed = (rdn_.size() != static_cast<size_t>(nz));
@@ -4138,7 +4162,7 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
                 if (rdn[unique_samples[i]] < 0.0f) ++negative_count;
             }
             // v20.14r27o: WRF rdn IS negative (same reason as rdnw — eta decreasing).
-            // C++ stores as positive via safe_abs_or_eps at extraction. Not an anomaly.
+            // C++ stores as positive via require_metric_magnitude at extraction. Not an anomaly.
             if (negative_count > 0 && wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                 std::cerr << "NOTE: rdn input has " << negative_count << "/" << sample_count
                          << " negative samples (expected: WRF eta decreasing). Stored as |rdn|." << std::endl;
@@ -4223,7 +4247,7 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             // k=0: forced 0.0f (WRF Fortran rdn(1) undefined/uninitialized).
             rdn_[0] = 0.0f;
             for (int k = 1; k < nz; ++k) {
-                rdn_[k] = safe_abs_or_eps(rdn[k]);
+                rdn_[k] = require_metric_magnitude(rdn[k], "rdnw/rdn");
             }
             rdn_signature_ = new_signature;
             ++rdn_epoch_vec_;  // PARITY FIX 2025-12-20: Use vec-specific epoch
@@ -37390,7 +37414,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_w_wrf(
         }
         for (int k = 0; k < nz_w; ++k) {
             float rdn_k = rdn_ref_w;  // Default fallback (positive)
-            // v20.14r27o: rdn_ already stored positive by safe_abs_or_eps at extraction.
+            // v20.14r27o: rdn_ already stored positive by require_metric_magnitude at extraction.
             // No redundant abs() needed here.
             if (rdn_ptr && k < rdn_numel && rdn_ptr[k] > 1e-10f) {
                 rdn_k = rdn_ptr[k];
