@@ -445,6 +445,13 @@ torch::Tensor compute_pressure_hydrostatic(
     const torch::Tensor& rdn,
     float rd, float cv, float cp, float p0, float p1000mb);
 
+// 9F.D47: shared base-state EOS -- see wrf_hydrostatic_pressure.cpp for the measurement
+// that motivated it (rd*theta/p is high by 1/Pi: +38% mean, +87% at model top).
+torch::Tensor compute_inverse_density(
+    const torch::Tensor& theta,
+    const torch::Tensor& pressure,
+    float rd, float cv, float cp, float p1000mb);
+
 torch::Tensor compute_inverse_density_hydrostatic(
     const torch::Tensor& t_full,
     const torch::Tensor& p_full,
@@ -6574,7 +6581,9 @@ vertical_coefficients:
                             t_full_se, mu_full_se, mu_base_, p_base_, mu_base_, c1h_, c2h_,
                             rdnw_se, rdn_se, rd_, cv_, cp_, p0_, 100000.0f);
                         torch::Tensor p_full_se = p_pert_se + p_base_;                 // (pb + p)
-                        torch::Tensor alb_se = rd_ * th_base_ / p_base_;
+                        // 9F.D47: Exner-correct base EOS (was rd*th/p, high by 1/Pi).
+                        torch::Tensor alb_se = wrf::sdirk3::compute_inverse_density(
+                            th_base_, p_base_, rd_, cv_, cp_, 100000.0f);
                         torch::Tensor al_se = wrf::sdirk3::compute_inverse_density_hydrostatic(
                             t_full_se, p_full_se, p_base_, th_base_, alb_se, rd_, cv_, cp_, 100000.0f);
                         torch::Tensor alt_se = al_se + alb_se;                          // 1/rho
@@ -6822,7 +6831,9 @@ vertical_coefficients:
                         theta_full, mu_full, mu_base_d, p_base_d, mu_base_d, c1h_d, c2h_d,
                         rdnw_d, rdn_d, rd_, cv_, cp_, p0_, 100000.0f);
                     auto p_full = p_pert + p_base_d;
-                    auto alb = rd_ * th_base_d / p_base_d;
+                    // 9F.D47: Exner-correct base EOS (was rd*th/p, high by 1/Pi).
+                    auto alb = wrf::sdirk3::compute_inverse_density(
+                        th_base_d, p_base_d, rd_, cv_, cp_, 100000.0f);
                     auto al_pert = wrf::sdirk3::compute_inverse_density_hydrostatic(
                         theta_full, p_full, p_base_d, th_base_d, alb, rd_, cv_, cp_, 100000.0f);
                     auto alt = al_pert + alb;
@@ -16029,7 +16040,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             }
             
             // Compute base state inverse density: alb = rd * th_base / p_base
-            torch::Tensor alb_mass = rd_ * th_base_ / p_base_;
+            // 9F.D47: Exner-correct base EOS (was rd*th/p, high by 1/Pi). This one
+            // CANCELLED in alt (helper subtracts it, caller adds it back) but the
+            // perturbation `al` it produces is used ALONE against dpb, where it does not.
+            torch::Tensor alb_mass = wrf::sdirk3::compute_inverse_density(
+                th_base_, p_base_, rd_, cv_, cp_, 100000.0f);
             
             // Compute inverse densities at mass points using WRF formula
             auto al = wrf::sdirk3::compute_inverse_density_hydrostatic(
@@ -16703,8 +16718,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             }
 
             // Compute inverse densities
-            auto al_base = rd_ * th_base_at_v / p_base_at_v;
-            auto al_full = rd_ * t_full_at_v / p_full_at_v;  // Use full t, not perturbation
+            // 9F.D47: THE LIVE ONE. V-momentum used these inline non-Exner forms and
+            // assigned alt DIRECTLY, so unlike U-momentum (which gets alt from the
+            // correct helper) there was no cancellation: alt was high by 1/Pi, up to
+            // +87% at model top, and it multiplies dp_pert_dy in the pressure gradient.
+            // The same physical quantity was computed two different ways in one function.
+            auto al_base = wrf::sdirk3::compute_inverse_density(
+                th_base_at_v, p_base_at_v, rd_, cv_, cp_, 100000.0f);
+            auto al_full = wrf::sdirk3::compute_inverse_density(
+                t_full_at_v, p_full_at_v, rd_, cv_, cp_, 100000.0f);
             auto al_pert = al_full - al_base;
             
             auto alt = al_full;
@@ -17462,7 +17484,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // Use full computation if base state is available
                 // Note: This is a simplified version, the full computation is done earlier in pressure section
                 auto p_full_approx = p_base_ + torch::zeros_like(p_base_);  // Approximate full pressure
-                alt = rd_ * t_full / p_full_approx;
+                // 9F.D47: Exner-correct even on the simplified buoyancy path -- an
+                // approximation in the PRESSURE argument is deliberate; a wrong EOS is not.
+                alt = wrf::sdirk3::compute_inverse_density(
+                    t_full, p_full_approx, rd_, cv_, cp_, 100000.0f);
             } else {
                 // Fallback: use a typical value for inverse density
                 alt = torch::full_like(t_full, 1.0f);  // ~1 m³/kg for typical atmosphere
