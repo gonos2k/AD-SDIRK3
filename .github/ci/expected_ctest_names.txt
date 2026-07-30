@@ -11,6 +11,7 @@ Dump_Contract
 Experiment_Config_Parser
 FGMRES_Contract
 Geometry_Contract_Matrix
+Hydrostatic_Balance_Contract
 MPI_Halo_Contract_np1
 MPI_Halo_Contract_np2
 MPI_Halo_Contract_np4

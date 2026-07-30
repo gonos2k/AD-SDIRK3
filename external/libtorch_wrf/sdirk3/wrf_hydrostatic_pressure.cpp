@@ -145,6 +145,32 @@ torch::Tensor compute_pressure_hydrostatic(
 }
 
 // Compute inverse density (specific volume) using WRF's approach
+// 9F.D47: the base-state EOS, as ONE function.
+//
+// MEASURED DEFECT. Six sites computed base/full inverse density inline as
+//     alpha = rd * theta / p
+// which omits the Exner factor. WRF's authority (dyn_em/start_em.F:636) is
+//     alb = (r_d/p1000mb) * (t_init + t0) * (pb/p1000mb)**cvpm
+// and since cvpm = -cv/cp = R_d/cp - 1, that expression IS R_d*theta*Pi/p. Verified
+// against the em_b_wave wrfinput_d01: this formula reproduces WRF's stored ALB to
+// 0.000e+00 relative error, while rd*theta/p is HIGH by a factor 1/Pi --
+//     k=0  (984 hPa) 1.005      k=32 (342 hPa) 1.358
+//     k=16 (584 hPa) 1.166      k=63 (111 hPa) 1.875
+// i.e. +38% mean, +87% at model top.
+//
+// WHY A SHARED FUNCTION RATHER THAN SIX CORRECTIONS. A 2026-07-06 bugfix already found
+// this error class (see the cvpm note below: "alt 0.4976 vs 2.4525"), corrected
+// compute_inverse_density_hydrostatic, and left the six inline copies. Correcting copies
+// is what produced the defect; there is now one place to be wrong.
+torch::Tensor compute_inverse_density(
+    const torch::Tensor& theta,     // potential temperature (ABSOLUTE, i.e. t_init + t0)
+    const torch::Tensor& pressure,  // pressure at the same points
+    float rd, float cv, float cp, float p1000mb)
+{
+    const float cvpm = -cv / cp;    // = R_d/cp - 1; WRF share/module_model_constants.F:26
+    return (rd / p1000mb) * theta * torch::pow(pressure / p1000mb, cvpm);
+}
+
 torch::Tensor compute_inverse_density_hydrostatic(
     const torch::Tensor& theta_full,    // Full potential temperature
     const torch::Tensor& p_full,        // Full pressure

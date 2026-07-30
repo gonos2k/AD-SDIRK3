@@ -215,6 +215,24 @@ int sdirk3_tile_set_base_state_checked(
     // the lock, the layout arithmetic, the tensor views, and the solver mutation.
     try {
 
+    // 9F.D48 (review section 5): GEOMETRY IS VALIDATED BEFORE THE REGISTRY LOOKUP.
+    //
+    // It used to run after, which made Base_State_Checked_ABI unable to test what it
+    // claimed: every invalid-geometry case in that fixture used an unregistered solver,
+    // so the 0 it asserted came from the registry miss and the layout code was never
+    // reached. The fixture even documented that ambiguity instead of removing it -- an
+    // acknowledged blind spot is still a blind spot.
+    //
+    // Validating first is also better on its own terms: a malformed tile is rejected
+    // without taking the registry mutex at all, so bad input cannot contend for a lock
+    // it has no business holding.
+    //
+    // make_base_state_layout throws std::invalid_argument; the whole body is inside this
+    // try, so invalid geometry returns 0 rather than propagating out through the C ABI
+    // (which is exactly what D44's TORCH_CHECK-before-try did).
+    const auto layout = wrf::sdirk3::make_base_state_layout(
+        its, ite, jts, jte, kts, kte, ims, ime, jms, jme, kms, kme);
+
     // Retrieve solver from registry
     std::lock_guard<std::mutex> registry_lock(g_tile_solvers_mutex);
     auto it = g_tile_solvers.find(solver_ptr);
@@ -226,19 +244,8 @@ int sdirk3_tile_set_base_state_checked(
         }
         return 0;   // 9F.D41: failure, nothing published
     }
-    
+
     auto& solver = *(it->second);
-    
-    // 9F.D45 (review sections 2 and 3): ALL geometry in one 64-bit, overflow-checked
-    // place. D44 fixed index_3d's 32-bit multiply and left index_2d and j_stride with
-    // the identical defect two lines away -- fixing one instance of a pattern without
-    // grepping for its siblings. There is now nothing here left to half-fix.
-    //
-    // make_base_state_layout throws std::invalid_argument; this whole body runs inside
-    // the try below, so an invalid geometry returns 0 instead of propagating out
-    // through the C ABI (which is what D44's TORCH_CHECK-before-try actually did).
-    const auto layout = wrf::sdirk3::make_base_state_layout(
-        its, ite, jts, jte, kts, kte, ims, ime, jms, jme, kms, kme);
 
     const int64_t nx = layout.nx;
     const int64_t ny = layout.ny;

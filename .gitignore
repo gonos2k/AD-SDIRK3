@@ -131,6 +131,7 @@ external/libtorch_wrf/sdirk3/tests/test_*
 !external/libtorch_wrf/sdirk3/tests/test_acoustic_schedule_matrix.cpp
 !external/libtorch_wrf/sdirk3/tests/test_experiment_config_parser.cpp
 !external/libtorch_wrf/sdirk3/tests/test_base_state_layout.cpp
+!external/libtorch_wrf/sdirk3/tests/test_hydrostatic_balance.cpp
 !external/libtorch_wrf/sdirk3/tests/test_base_state_checked_abi.cpp
 !external/libtorch_wrf/sdirk3/test_wdamp_tangent_contract.cpp
 !external/libtorch_wrf/sdirk3/test_wdamp_preconditioner_policy_contract.cpp
