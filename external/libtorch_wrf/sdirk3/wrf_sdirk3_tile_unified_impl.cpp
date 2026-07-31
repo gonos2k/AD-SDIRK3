@@ -11726,6 +11726,82 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 }
             }
 
+            // ---- 9F.D56: the SAME sweep at the JET state, which is where it fails ----
+            //
+            // D55's matrix is at REST, and said so: the dt=600 failure is state-dependent
+            // -- the solve converges from rest and fails from the jet -- so a rest-state
+            // matrix is a baseline, not a diagnosis. This repeats it about the ACTUAL
+            // incoming state U, which at the first RHS call IS the b_wave jet.
+            //
+            //     R_jet[r][c] = max| F_r(U + delta_c) - F_r(U) | * dt / scale_r
+            //
+            // Same scales, same seeded kicks, same normalisation as D55, so the two
+            // matrices are read side by side and the DIFFERENCE is the state dependence.
+            // A full-scale kick is used rather than an infinitesimal one, matching D55 --
+            // this is a finite response, not a Jacobian, and at the jet the RHS is
+            // nonlinear so the distinction is real. Stated rather than blurred.
+            if (rest_env[0] == '3') {
+                const int64_t su = int64_t(ny_)*nz_*nx_u_, sv = int64_t(ny_v_)*nz_*nx_,
+                              sw = int64_t(ny_)*nz_w_*nx_, sph = int64_t(ny_)*nz_w_*nx_,
+                              st = int64_t(ny_)*nz_*nx_,   smu = int64_t(ny_)*nx_;
+                const int64_t off[6] = {0, su, su+sv, su+sv+sw, su+sv+sw+sph,
+                                        su+sv+sw+sph+st};
+                const int64_t len[6] = {su, sv, sw, sph, st, smu};
+                const float scale[6] = {10.0f, 10.0f, 0.1f, 1.0e3f, 1.0f, 1.0e2f};
+                const float dt_ref = (dt_stage_ > 0.0f) ? dt_stage_ : 600.0f;
+                std::cerr << "SDIRK3_JET_JACOBIAN base=|U|_max=" << U.abs().max().item<float>()
+                          << " dt_ref=" << dt_ref
+                          << "  (entry = max|F_r(U+d_c)-F_r(U)|*dt/scale_r)" << std::endl;
+                for (int m = 0; m < 3; ++m) {
+                    torch::Tensor F0;
+                    try { F0 = computeUnifiedRHS(U, modes[m]); }
+                    catch (const std::exception& e) {
+                        std::cerr << "SDIRK3_JET_JACOBIAN mode=" << mode_name[m]
+                                  << " BASE THREW: " << e.what() << std::endl;
+                        continue;
+                    }
+                    auto p0 = extractStateVariables(F0);
+                    const torch::Tensor b0[6] = {
+                        std::get<0>(p0), std::get<1>(p0), std::get<2>(p0),
+                        std::get<3>(p0), std::get<4>(p0), std::get<5>(p0)};
+                    { std::ostringstream br;
+                      br << "SDIRK3_JET_JACOBIAN mode=" << mode_name[m] << " BASE";
+                      for (int r = 0; r < 6; ++r)
+                          br << " " << chan[r] << "="
+                             << (b0[r].defined() && b0[r].numel() > 0
+                                     ? b0[r].abs().max().item<float>() * dt_ref / scale[r] : 0.0f);
+                      std::cerr << br.str() << std::endl; }
+                    for (int c = 0; c < 6; ++c) {
+                        torch::manual_seed(20260731 + c);   // SAME kicks as the rest sweep
+                        auto Uc = U.clone();
+                        Uc.narrow(0, off[c], len[c]) +=
+                            torch::randn({len[c]}, U.options()) * scale[c];
+                        torch::Tensor Fc;
+                        try { Fc = computeUnifiedRHS(Uc, modes[m]); }
+                        catch (const std::exception& e) {
+                            std::cerr << "SDIRK3_JET_JACOBIAN mode=" << mode_name[m]
+                                      << " kick=" << chan[c] << " THREW: " << e.what()
+                                      << std::endl;
+                            continue;
+                        }
+                        auto pc = extractStateVariables(Fc);
+                        const torch::Tensor rc[6] = {
+                            std::get<0>(pc), std::get<1>(pc), std::get<2>(pc),
+                            std::get<3>(pc), std::get<4>(pc), std::get<5>(pc)};
+                        std::ostringstream row;
+                        row << "SDIRK3_JET_JACOBIAN mode=" << mode_name[m]
+                            << " kick=" << chan[c];
+                        for (int r = 0; r < 6; ++r) {
+                            float v = 0.0f;
+                            if (rc[r].defined() && rc[r].numel() > 0 && b0[r].defined())
+                                v = (rc[r] - b0[r]).abs().max().item<float>();
+                            row << " " << chan[r] << "=" << (v * dt_ref / scale[r]);
+                        }
+                        std::cerr << row.str() << std::endl;
+                    }
+                }
+            }
+
             rest_in_progress = false;
         }
     }
