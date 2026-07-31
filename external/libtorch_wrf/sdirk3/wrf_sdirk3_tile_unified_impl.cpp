@@ -17445,13 +17445,42 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // uninitialized in dry dynamics. Replace NaN with 0 (dry assumption).
             // v20.9: Also sanitize Inf values (belt-and-suspenders for garbage data).
             {
-                auto bad_mask = cqw_at_w.isnan() | cqw_at_w.isinf();
+                // 9F.D53 (review section 5): the BOUNDARY may be undefined; the INTERIOR
+                // may not.
+                //
+                // This replaced every non-finite cqw with 0, i.e. with DRY. At the vertical
+                // boundaries that is defensible -- cqw is interpolated to w-levels and the
+                // outermost values have no two mass levels to average, so they are
+                // undefined rather than wrong, and em_b_wave is dry anyway. In the INTERIOR
+                // it silently rewrites "the thermodynamics broke" as "there is no water
+                // vapour here", which is a different atmosphere that integrates happily.
+                //
+                // The dry case is unaffected: a dry run has cqw = 0 everywhere and no
+                // non-finite interior values, so this path never fires. It exists for the
+                // moist extension, where the old behaviour would have been silent.
                 torch::NoGradGuard no_grad;
+                auto bad_mask = cqw_at_w.isnan() | cqw_at_w.isinf();
                 if (bad_mask.any().item<bool>()) {
+                    const int64_t nk = cqw_at_w.size(1);
+                    if (nk > 2) {
+                        auto interior_bad = bad_mask.slice(1, 1, nk - 1);
+                        if (interior_bad.any().item<bool>()) {
+                            std::ostringstream oss;
+                            oss << "SDIRK3 W-PGF: cqw has "
+                                << interior_bad.sum().item<int64_t>()
+                                << " non-finite values in the INTERIOR (k=1.." << (nk - 2)
+                                << "). Refusing to replace them with 0: that would recast a "
+                                << "thermodynamic failure as a dry column, which integrates "
+                                << "without complaint and is not the same atmosphere. "
+                                << "Non-finite values at the k=0 / k=" << (nk - 1)
+                                << " boundaries are accepted and set dry.";
+                            throw std::invalid_argument(oss.str());
+                        }
+                    }
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                         std::cerr << "[SDIRK3] W-PGF: cqw_at_w has "
                                   << bad_mask.sum().item<int64_t>()
-                                  << " NaN/Inf values, replacing with 0 (dry)" << std::endl;
+                                  << " non-finite BOUNDARY values, setting dry" << std::endl;
                     }
                     cqw_at_w = torch::where(bad_mask, torch::zeros_like(cqw_at_w), cqw_at_w);
                 }
@@ -17460,47 +17489,42 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // WRF formula: cq1 = 1/(1+cqw), cq2 = cqw*cq1
             auto cq1 = 1.0f / (1.0f + cqw_at_w);  // Transform for vertical pressure gradient
             auto cq2 = cqw_at_w * cq1;  // Second moisture correction term
-            // Compute inverse density (alt) for temperature buoyancy
-            // Use simplified calculation: alt = rd * t / p
-            // This approximation is sufficient for the buoyancy calculation
-            torch::Tensor alt;  // WRF: alt = total inverse density
-            if (p_base_.defined() && p_base_.numel() > 0 && th_base_.defined() && th_base_.numel() > 0) {
-                // Use full computation if base state is available
-                // Note: This is a simplified version, the full computation is done earlier in pressure section
-                auto p_full_approx = p_base_ + torch::zeros_like(p_base_);  // Approximate full pressure
-                // 9F.D47: Exner-correct even on the simplified buoyancy path -- an
-                // approximation in the PRESSURE argument is deliberate; a wrong EOS is not.
-                alt = wrf::sdirk3::compute_inverse_density(
-                    t_full, p_full_approx, rd_, cv_, cp_, 100000.0f);
-            } else {
-                // Fallback: use a typical value for inverse density
-                alt = torch::full_like(t_full, 1.0f);  // ~1 m³/kg for typical atmosphere
-            }
-            
-            // Interpolate inverse density (alt) to w-points for temperature buoyancy
-            torch::Tensor alt_w;
-            if (!alt_w_work_.defined() || (alt_w_work_.size(0) != ny_) || (alt_w_work_.size(1) != nz_w_) || (alt_w_work_.size(2) != nx_)) {
-                alt_w_work_ = torch::zeros({ny_, nz_w_, nx_}, w.options());
-            } else {
-                alt_w_work_.zero_();  // Zero existing tensor in-place
-            }
-            alt_w = alt_w_work_;
-            
-            // Interpolate alt from mass points to w-points
-            // PERF FIX 2026-01-31: Prealloc+copy_ replaces vector<Tensor>+cat.
-            // alt_w already allocated/zeroed above via alt_w_work_.
-            // Bottom boundary: first mass level
-            alt_w.slice(1, 0, 1).copy_(alt.slice(1, 0, 1));
-            // Interior: average adjacent mass levels (k=1..nz_w-2)
-            if (nz_w_ > 2) {
-                int64_t n_interior = nz_w_ - 2;
-                alt_w.slice(1, 1, 1 + n_interior).copy_(
-                    0.5f * (alt.slice(1, 0, n_interior) + alt.slice(1, 1, n_interior + 1))
-                );
-            }
-            // Top boundary: last mass level
-            alt_w.slice(1, nz_w_ - 1, nz_w_).copy_(alt.slice(1, nz_ - 1, nz_));
-            
+            // 9F.D53 (review section 4): the W-PGF specific volume was DEAD, and is deleted.
+            //
+            // The review is right that this block evaluated the EOS at the BASE pressure and
+            // called the result "approximate full pressure" --
+            //     auto p_full_approx = p_base_ + torch::zeros_like(p_base_);
+            // where the added zero names the missing term and then adds nothing. D47 had
+            // corrected the EOS here and left the argument alone, so the formula became
+            // right while its input stayed wrong.
+            //
+            // Before changing the argument, MEASURED whether it mattered. It does not:
+            //   - the block DOES execute (one-shot probe, first RHS call)
+            //   - |p'|_max = 10.7 Pa against |p_b|_mean = 41461 Pa, so p'/p = 2.6e-4,
+            //     giving a 7.8e-05 relative change in alt -- well above float32 eps
+            //   - and yet scaling alt by 1.5x AND by 10x left the numerical fingerprint
+            //     BIT-IDENTICAL (aabc6dbd, three runs)
+            // because alt fed only alt_w, and alt_w was written and NEVER READ. The whole
+            // computation -- EOS call, w-level interpolation, the alt_w_work_ scratch
+            // buffer -- was dead.
+            //
+            // It is dead for a reason worth recording rather than rediscovering: WRF's
+            // pg_buoy_w does not use specific volume at all. The live rw tendency below
+            // (:17729) is WRF's own form,
+            //     cq1*rdn(k)*(p(i,k,j)-p(i,k-1,j)) - c1f(k)*muf - cq2*(c1f(k)*mubf+c2f(k))
+            // in which the vertical PGF and buoyancy are carried by pressure differences
+            // and column mass. alt is a leftover from an earlier formulation.
+            //
+            // Deleting beats fixing here. A corrected-but-inert computation is worse than
+            // none: it reads as the live thermodynamics, so the next person to look either
+            // repeats this measurement or, worse, wires it up and gets a double-counted
+            // buoyancy. cq1/cq2 above ARE live and keep their fail-close.
+            //
+            // If a specific-volume buoyancy is ever needed, compute it from
+            // p_base_ + p_pert_mass -- the same state the horizontal PGF uses -- never from
+            // p_base_ alone, because W-PGF and buoyancy nearly cancel and feeding them
+            // different thermodynamic states makes the residual an energy source.
+
             // Interpolate potential temperature (t) to w-points for temperature buoyancy
             torch::Tensor t_w;
             if (!t_w_work_.defined() || (t_w_work_.size(0) != ny_) || (t_w_work_.size(1) != nz_w_) || (t_w_work_.size(2) != nx_)) {
