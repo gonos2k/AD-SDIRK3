@@ -1,5 +1,6 @@
 Acoustic_Schedule_Invalid_Matrix
 Acoustic_Substep_AD
+Base_EOS_Contract
 Base_State_Checked_ABI
 Base_State_Layout_Contract
 Config_Provenance
@@ -29,3 +30,4 @@ WRMS_Gate_Metric
 WW_CP_Parity_Contract
 Trust_Model_Contract
 U_Slow_Closures
+Hydrostatic_Pressure_Orientation_Contract

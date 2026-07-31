@@ -437,51 +437,10 @@ inline float stage_metric_global_max_mpi(float value) {
 //     return true;
 // }(); - unused static variable
 
-// Forward declarations for hydrostatic pressure functions
-namespace wrf {
-namespace sdirk3 {
-// Vector-based overload (legacy, causes CPU round-trips)
-torch::Tensor compute_pressure_hydrostatic(
-    const torch::Tensor& t_full,
-    const torch::Tensor& mu_full,
-    const torch::Tensor& mu_base,
-    const torch::Tensor& p_base,
-    const torch::Tensor& muts,
-    const std::vector<float>& c1h,
-    const std::vector<float>& c2h,
-    const std::vector<float>& rdnw,
-    const std::vector<float>& rdn,
-    float rd, float cv, float cp, float p0, float p1000mb);
-
-// PARITY FIX 2025-12-13: Tensor-based overload to avoid CPU round-trips in PGF
-torch::Tensor compute_pressure_hydrostatic(
-    const torch::Tensor& t_full,
-    const torch::Tensor& mu_full,
-    const torch::Tensor& mu_base,
-    const torch::Tensor& p_base,
-    const torch::Tensor& muts,
-    const torch::Tensor& c1h,
-    const torch::Tensor& c2h,
-    const torch::Tensor& rdnw,
-    const torch::Tensor& rdn,
-    float rd, float cv, float cp, float p0, float p1000mb);
-
-// 9F.D47: shared base-state EOS -- see wrf_hydrostatic_pressure.cpp for the measurement
-// that motivated it (rd*theta/p is high by 1/Pi: +38% mean, +87% at model top).
-torch::Tensor compute_inverse_density(
-    const torch::Tensor& theta,
-    const torch::Tensor& pressure,
-    float rd, float cv, float cp, float p1000mb);
-
-torch::Tensor compute_inverse_density_hydrostatic(
-    const torch::Tensor& t_full,
-    const torch::Tensor& p_full,
-    const torch::Tensor& p_base,
-    const torch::Tensor& th_base,
-    const torch::Tensor& alb,
-    float rd, float cv, float cp, float p1000mb);
-} // namespace sdirk3
-} // namespace wrf
+// 9F.D49 (review section 2): these were forward-declared here, so a signature could
+// drift from its definition and still link -- the same weakness that hid the
+// zerocopy_v2 mismatch until D44 added the missing include. Now shared.
+#include "wrf_hydrostatic_pressure.h"
 
 // FIX 2025-12-28: Namespace-scope epoch for msf 3D cache invalidation.
 // This allows external callers (via invalidateMsf3DCache()) to force cache refresh
