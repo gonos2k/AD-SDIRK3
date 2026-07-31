@@ -11565,6 +11565,99 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
     }
 
+    // 9F.D54 (review section 7): the PRODUCTION well-balanced measurement.
+    //
+    // Every balance contract so far has been synthetic. Hydrostatic_Balance_Contract
+    // builds a column, inverts R_H = 0 to get phb, and then checks the same algebra it
+    // just used; Hydrostatic_Pressure_Orientation_Contract calls one production helper in
+    // isolation. Neither answers the question that matters: does a RESTING atmosphere,
+    // pushed through the WHOLE assembled RHS -- EOS, pressure integration, U/V/W PGF,
+    // buoyancy, metric interpolation, boundaries -- stay at rest?
+    //
+    // The fixture is free here, and that is the point. The packed state is
+    // [u, v, w, ph, t, mu] and every component is a PERTURBATION from the base state, so
+    // the resting atmosphere is EXACTLY the zero vector. No column to construct, no
+    // balance to invert, nothing to get wrong in the fixture itself. F(0) must be 0.
+    //
+    // It asserts on FIELDS rather than solver telemetry, deliberately. D53 measured that
+    // the numerical fingerprint is blind to a 10x change in a quantity it does not
+    // record, so "fingerprint MATCH" cannot stand in for "the dynamics are unchanged".
+    // Per-channel max|F| can.
+    //
+    // Opt-in and once-only, so the default path stays byte-identical. The re-entrancy
+    // guard matters: this calls computeUnifiedRHS, which is the function it lives in.
+    if (const char* rest_env = std::getenv("WRF_SDIRK3_REST_BALANCE")) {
+        static std::atomic<bool> rest_done{false};
+        static thread_local bool rest_in_progress = false;
+        bool expected_flag = false;
+        if (rest_env[0] != '0' && !rest_in_progress &&
+            rest_done.compare_exchange_strong(expected_flag, true)) {
+            rest_in_progress = true;
+            torch::NoGradGuard no_grad;   // .item() below, and no graph wanted for a probe
+            // A rest state ALONE cannot validate itself. F(0) = 0 exactly is what a
+            // correct perturbation-form RHS gives -- WRF writes the PGF in terms of p'
+            // and al', so the base-state parts are removed analytically and balance is
+            // STRUCTURAL, not a float cancellation -- but it is also what a probe that
+            // measures nothing gives, and what an RHS with an early-out for a zero input
+            // gives. The three are indistinguishable from the rest case alone.
+            //
+            // So each rest measurement is paired with a PERTURBED control at the same
+            // scale the model actually carries. The control must come back NON-zero. If
+            // both are zero, the finding is about this probe, not about the dynamics.
+            auto U_rest = torch::zeros_like(U);
+            auto gen = at::detail::createCPUGenerator(20260731);
+            auto U_pert = torch::empty_like(U);
+            { torch::NoGradGuard ng2; U_pert.copy_(torch::randn(U.sizes(), U.options()) * 1.0e-3f); }
+            const char* mode_name[] = {"Full", "ExplicitOnly", "ImplicitOnly"};
+            const RhsMode modes[] = {RhsMode::Full, RhsMode::ExplicitOnly,
+                                     RhsMode::ImplicitOnly};
+            const char* chan[] = {"ru", "rv", "rw", "rph", "rt", "rmu"};
+            for (int m = 0; m < 3; ++m) {
+                torch::Tensor F;
+                try {
+                    F = computeUnifiedRHS(U_rest, modes[m]);
+                } catch (const std::exception& e) {
+                    std::cerr << "SDIRK3_REST_BALANCE mode=" << mode_name[m]
+                              << " THREW: " << e.what() << std::endl;
+                    continue;
+                }
+                auto parts = extractStateVariables(F);
+                const torch::Tensor comp[] = {
+                    std::get<0>(parts), std::get<1>(parts), std::get<2>(parts),
+                    std::get<3>(parts), std::get<4>(parts), std::get<5>(parts)};
+                std::ostringstream oss;
+                oss << "SDIRK3_REST_BALANCE mode=" << mode_name[m];
+                for (int c = 0; c < 6; ++c) {
+                    oss << " " << chan[c] << "_max="
+                        << (comp[c].defined() && comp[c].numel() > 0
+                                ? comp[c].abs().max().item<float>() : 0.0f);
+                }
+                oss << " |F|_max=" << F.abs().max().item<float>()
+                    << " |F|_l2=" << F.norm().item<float>();
+                // the paired control: same mode, perturbed state, must be NON-zero
+                try {
+                    auto Fp = computeUnifiedRHS(U_pert, modes[m]);
+                    auto pp = extractStateVariables(Fp);
+                    const torch::Tensor pc[] = {
+                        std::get<0>(pp), std::get<1>(pp), std::get<2>(pp),
+                        std::get<3>(pp), std::get<4>(pp), std::get<5>(pp)};
+                    oss << " | CONTROL_pert1e-3 |F|_max=" << Fp.abs().max().item<float>();
+                    // per channel, because an aggregate cannot say WHICH one is stiff --
+                    // the mistake this campaign already made once with update_norm.
+                    for (int c = 0; c < 6; ++c) {
+                        oss << " c_" << chan[c] << "="
+                            << (pc[c].defined() && pc[c].numel() > 0
+                                    ? pc[c].abs().max().item<float>() : 0.0f);
+                    }
+                } catch (const std::exception& e) {
+                    oss << " CONTROL_THREW=" << e.what();
+                }
+                std::cerr << oss.str() << std::endl;
+            }
+            rest_in_progress = false;
+        }
+    }
+
     // PR 9F.1: count this RHS evaluation. Placed AFTER the full-halo redirect so a
     // delegated call is counted exactly once (the full-halo path re-enters here with
     // the interior state). Emission is opt-in (WRF_SDIRK3_RHS_COUNT) and is what lets
