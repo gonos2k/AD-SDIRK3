@@ -4,8 +4,41 @@
 #include <torch/torch.h>
 #include <vector>
 
+// 9F.D49: include our own header so declaration/definition drift is a compile error.
+#include "wrf_hydrostatic_pressure.h"
+
 namespace wrf {
 namespace sdirk3 {
+
+// 9F.D50 (review section 3): THE ETA ORIENTATION, APPLIED HERE.
+//
+// This file transcribes WRF's calc_p_rho_phi line for line:
+//     p(i,ktf,j) = -0.5*(c1(k)*mu(i,j))/rdnw(k)                       (:1117)
+//     p(i,k,j)   =  p(i,k+1,j) - (c1(k)*mu(i,j))/rdn(k+1)             (:1187)
+// WRF's rdnw and rdn are NEGATIVE (eta decreases with k), so both minus signs are
+// really pluses: mu' > 0 raises the perturbation pressure, and integrating downward
+// raises it further. That is the physics -- more column mass, more pressure.
+//
+// But this solver does NOT store WRF's sign. Every path into getRdnwTensor() /
+// getRdnTensor() takes a magnitude: the constructor runs require_metric_magnitude()
+// (tile_unified_impl.cpp:3233, :4209) and the grid path applies .abs() (:2576). The
+// convention block at the top of that file states the obligation plainly -- "the
+// eta-direction sign is carried by the operator stencils instead". This operator
+// lives in a DIFFERENT FILE and never took it up, so it consumed |rdnw| with WRF's
+// signed algebra and returned p' with the sign inverted.
+//
+// The signature is the same one Hydrostatic_Balance_Contract already pins for the
+// balance residual: not a small degradation, an exact factor -1.
+// Hydrostatic_Pressure_Orientation_Contract measures it on this function directly --
+// the balance test could not, because it never called production code.
+//
+// ORIENTATION is the named constant below rather than a flipped literal so that the
+// convention is greppable and so the WRF line it descends from stays readable.
+namespace {
+// Multiplies WRF's signed-metric algebra to convert it to the magnitude convention.
+// WRF: rdnw < 0. Here: rdnw > 0. Dividing by |rdnw| instead of rdnw negates.
+constexpr float kEtaOrientation = -1.0f;
+}  // namespace
 
 // Compute pressure using WRF's hydrostatic integration
 // Following calc_p_rho_phi from module_big_step_utilities_em.F
@@ -31,9 +64,14 @@ torch::Tensor compute_pressure_hydrostatic(
     int nz = theta_full.size(1);  // k dimension
     int nx = theta_full.size(2);  // i dimension
     
-    // Constants
-    [[maybe_unused]] float cvpm = cv / cp;
-    [[maybe_unused]] float r_d = rd;
+    // 9F.D49: two dead constants removed, one of them actively dangerous.
+    //     [[maybe_unused]] float cvpm = cv / cp;   <- POSITIVE, i.e. the WRONG SIGN
+    //     [[maybe_unused]] float r_d  = rd;
+    // cvpm must be -cv/cp. A positive exponent is exactly the defect the 2026-07-06
+    // bugfix removed ("alt 0.4976 vs 2.4525, ~5x too small"), left sitting unused in a
+    // neighbouring function where the next person to need an exponent would find it
+    // first. An unused-but-wrong constant is the same trap as an unused-but-wrong
+    // helper; the campaign has now been bitten by that shape four times.
     
     // PARITY FIX 2025-12-11: Device/dtype alignment for GPU runs.
     // from_blob wraps host memory - cannot create CUDA tensor from host pointer.
@@ -66,7 +104,8 @@ torch::Tensor compute_pressure_hydrostatic(
         // p(i,k,j) = - 0.5*((c1(k)*mu(i,j))+qf1*(c1(k)*muts(i,j)+c2(k)))/rdnw(k)/qf2
         // For dry dynamics, qf1=0, qf2=1
         // FIX 2025-12-26: Use copy_() for in-place modification (select=... rebinds temporary)
-        p_pert.select(1, k).copy_(-0.5f * (c1k * mu_pert) / rdnwk);  // select dimension 1 for k in [j,k,i] layout
+        // 9F.D50: kEtaOrientation converts WRF's signed-metric algebra to |rdnw|.
+        p_pert.select(1, k).copy_(kEtaOrientation * -0.5f * (c1k * mu_pert) / rdnwk);  // select dimension 1 for k in [j,k,i] layout
     }
     
     // Integrate down from top to bottom
@@ -80,7 +119,7 @@ torch::Tensor compute_pressure_hydrostatic(
         // p(i,k,j) = p(i,k+1,j) - ((c1(k)*mu(i,j)) + qf1*(c1(k)*muts(i,j)+c2(k)))/qf2/rdn(k+1)
         // For dry dynamics, qf1=0, qf2=1
         // FIX 2025-12-26: Use copy_() for in-place modification (select=... rebinds temporary)
-        p_pert.select(1, k).copy_(p_pert.select(1, k+1) - (c1k * mu_pert) / rdnk1);  // select dimension 1 for k in [j,k,i] layout
+        p_pert.select(1, k).copy_(p_pert.select(1, k+1) - kEtaOrientation * (c1k * mu_pert) / rdnk1);  // select dimension 1 for k in [j,k,i] layout
     }
     
     // Return perturbation pressure
@@ -130,7 +169,8 @@ torch::Tensor compute_pressure_hydrostatic(
         auto c1k = c1h_tensor[k].unsqueeze(0).unsqueeze(0).expand({ny, nx});
         auto rdnwk = rdnw_tensor[k].unsqueeze(0).unsqueeze(0).expand({ny, nx});
         // FIX 2025-12-26: Use copy_() for in-place modification (select=... rebinds temporary)
-        p_pert.select(1, k).copy_(-0.5f * (c1k * mu_pert) / rdnwk);
+        // 9F.D50: kEtaOrientation converts WRF's signed-metric algebra to |rdnw|.
+        p_pert.select(1, k).copy_(kEtaOrientation * -0.5f * (c1k * mu_pert) / rdnwk);
     }
 
     // Integrate down from top to bottom
@@ -138,7 +178,7 @@ torch::Tensor compute_pressure_hydrostatic(
         auto c1k = c1h_tensor[kk].unsqueeze(0).unsqueeze(0).expand({ny, nx});
         auto rdnk1 = rdn_tensor[kk+1].unsqueeze(0).unsqueeze(0).expand({ny, nx});
         // FIX 2025-12-26: Use copy_() for in-place modification (select=... rebinds temporary)
-        p_pert.select(1, kk).copy_(p_pert.select(1, kk+1) - (c1k * mu_pert) / rdnk1);
+        p_pert.select(1, kk).copy_(p_pert.select(1, kk+1) - kEtaOrientation * (c1k * mu_pert) / rdnk1);
     }
 
     return p_pert;
@@ -167,8 +207,23 @@ torch::Tensor compute_inverse_density(
     const torch::Tensor& pressure,  // pressure at the same points
     float rd, float cv, float cp, float p1000mb)
 {
-    const float cvpm = -cv / cp;    // = R_d/cp - 1; WRF share/module_model_constants.F:26
-    return (rd / p1000mb) * theta * torch::pow(pressure / p1000mb, cvpm);
+    // 9F.D49 (review section 7): the SCALARS are formed in double, deliberately.
+    //
+    // They arrive as float, so `-cv/cp` in float rounds the exponent at ~1e-7 relative.
+    // That exponent then multiplies log(p/p0) ~ -2.3, and Base_EOS_Contract MEASURED the
+    // consequence on a 950->100 hPa column: a float64 tensor came back at rel = 2.8e-08
+    // from the closed form -- float accuracy out of a double-precision path. Forming the
+    // scalars in double takes it to ~1e-16.
+    //
+    // This does NOT move the float32 model path, which is why byte-identity still holds.
+    // torch treats a C++ double as a WRAPPED number: it never promotes the tensor's
+    // dtype, it is cast down to it. And the correctly-rounded double quotient cast to
+    // float is the same float as dividing in float, both being correctly rounded
+    // (IEEE-754 5.4). Asserted by the fingerprint, not by this argument alone.
+    const double cvpm  = -static_cast<double>(cv) / static_cast<double>(cp);  // = R_d/cp - 1;
+                                       // WRF share/module_model_constants.F:26
+    const double coeff = static_cast<double>(rd) / static_cast<double>(p1000mb);
+    return coeff * theta * torch::pow(pressure / static_cast<double>(p1000mb), cvpm);
 }
 
 torch::Tensor compute_inverse_density_hydrostatic(
@@ -182,19 +237,23 @@ torch::Tensor compute_inverse_density_hydrostatic(
     float cp,                           // Specific heat at constant pressure
     float p1000mb)                      // Reference pressure (1000 mb)
 {
-    // BUGFIX 2026-07-06: WRF's cvpm is NEGATIVE (-cv/cp), share/module_model_constants.F:26.
-    // The previous `cv/cp` (positive exponent) made the inverse density ~5x too small
-    // (measured vs dyn_em: alt 0.4976 vs 2.4525) — an inverse-EOS sign error shared by
-    // computeUnifiedRHS. Formula matches WRF calc_p_rho_phi (module_big_step_utilities_em.F:1119).
-    float cvpm = -cv / cp;
-
-    // WRF formula: al = (r_d/p1000mb)*(t+t0)*(((p+pb)/p1000mb)**cvpm) - alb
-    // Note: theta_full = t + t0 (full potential temperature)
-    auto pi = torch::pow(p_full / p1000mb, cvpm);
-    auto al_full = (rd / p1000mb) * theta_full * pi;
-    auto al_pert = al_full - alb;
-    
-    return al_pert;
+    // 9F.D49 (review section 2): CALLS the shared EOS instead of restating it.
+    //
+    // D47 added compute_inverse_density() to end exactly this duplication and then left
+    // this function -- three lines below it, in the same file -- reimplementing the same
+    // formula. The D47 commit message claimed "there is one place left to be wrong";
+    // that was false, there were two. Fourth instance of this pattern in the campaign,
+    // and the first where the duplicate and its replacement were adjacent.
+    //
+    // The 2026-07-06 note this replaces is kept because it records WHY the exponent is
+    // negative: cvpm = -cv/cp (share/module_model_constants.F:26). A previous `cv/cp`
+    // made the inverse density ~5x too small (measured vs dyn_em: alt 0.4976 vs 2.4525).
+    // That reasoning now lives with the single implementation.
+    //
+    // theta_full is the FULL potential temperature (t + t0), matching WRF's
+    // calc_p_rho_phi (module_big_step_utilities_em.F:1119):
+    //     al = (r_d/p1000mb)*(t+t0)*(((p+pb)/p1000mb)**cvpm) - alb
+    return compute_inverse_density(theta_full, p_full, rd, cv, cp, p1000mb) - alb;
 }
 
 } // namespace sdirk3

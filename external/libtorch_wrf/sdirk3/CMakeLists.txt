@@ -259,6 +259,19 @@ add_test(NAME Base_State_Layout_Contract COMMAND test_base_state_layout)
 add_executable(test_hydrostatic_balance tests/test_hydrostatic_balance.cpp)
 add_test(NAME Hydrostatic_Balance_Contract COMMAND test_hydrostatic_balance)
 
+# 9F.D49 (review section 1): the EOS forward value AND its tangent. Links core because
+# it exercises the real helper through autograd.
+add_executable(test_base_eos_contract tests/test_base_eos_contract.cpp)
+target_link_libraries(test_base_eos_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Base_EOS_Contract COMMAND test_base_eos_contract)
+
+# 9F.D50 (review section 3): the PRODUCTION hydrostatic pressure integrator's eta
+# orientation. Links core so it calls the real compute_pressure_hydrostatic -- the D48
+# balance contract could not catch this defect because it used a synthetic helper.
+add_executable(test_hydrostatic_pressure_orientation tests/test_hydrostatic_pressure_orientation.cpp)
+target_link_libraries(test_hydrostatic_pressure_orientation PRIVATE wrf_sdirk3::core)
+add_test(NAME Hydrostatic_Pressure_Orientation_Contract COMMAND test_hydrostatic_pressure_orientation)
+
 # 9F.D45 (review section 4): the C-boundary return contract. Links core, because the
 # point is to call the REAL exported symbol -- a helper that throws and an ABI that
 # converts throws into a status code are different claims.
