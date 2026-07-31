@@ -85,7 +85,13 @@
 // USAGE:
 //   - rdzw = rdnw (direct, no negation)
 //   - dnw = 1/rdnw (direct, positive result)
-//   - All vertical derivatives use positive rdnw/rdn directly
+//   - Vertical operators consume the MAGNITUDE and must supply the eta orientation
+//     THEMSELVES. This line used to read "All vertical derivatives use positive
+//     rdnw/rdn directly", which is the opposite instruction and is how the hydrostatic
+//     pressure integrator came to divide by |rdnw| in an algebra written for WRF's
+//     negative rdnw, returning p' negated (fixed 9F.D50, kEtaOrientation in
+//     wrf_hydrostatic_pressure.cpp; pinned by Hydrostatic_Pressure_Orientation_Contract).
+//     Left as written, this comment would license removing that fix.
 // =========================================================================
 //
 // =========================================================================
@@ -2678,13 +2684,30 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnwTensor(
                     ztop = std::max(z_top_min, max_cached / g_val);
                 }
             }
-            // PARITY FIX 2025-12-23: Guard against ztop<=0 when z_top_min=0 and max_cached<=0.
-            // This prevents nz/ztop from becoming inf/NaN.
-            if (ztop <= 0.0f) ztop = z_top_default;
-            float rdnw_fallback = static_cast<float>(nz) / ztop;  // Positive
-            // PERF FIX: Store as float32
-            cache = torch::full({nz}, rdnw_fallback,
-                                    torch::TensorOptions().device(device).dtype(cache_dtype));
+            // 9F.D52 (review section 3.4): THIS FALLBACK WAS DIMENSIONALLY WRONG.
+            //
+            // ztop comes from max(ph_base)/g, i.e. METRES. rdnw is 1/(delta eta) and eta is
+            // WRF's DIMENSIONLESS mass coordinate running 1 -> 0, so rdnw is dimensionless
+            // too. nz/ztop has units of m^-1. It is not a wrong value of the right quantity;
+            // it is a different quantity.
+            //
+            // The size of the error is not subtle. For nz=64 and ztop=16000 m it yields
+            // 0.004, against a true uniform-grid rdnw of 64 -- a factor 1.6e4 -- and it
+            // enters the pressure recurrence as c1*mu'/rdnw, so p' comes out 1.6e4 times
+            // too large with units of Pa*m.
+            //
+            // A dimensionally-correct uniform fallback exists (a uniform eta grid has
+            // delta eta = 1/nz, so rdnw = nz, with no ztop involved at all). It is still
+            // not written here, because inventing grid geometry is the defect regardless of
+            // whether the invention has the right units: this branch is reached only when
+            // rdnw, dnw AND rdn are all absent, which is a broken base state, not a grid
+            // whose metric can be guessed. Same policy as wrf_sdirk3_metric_policy.h.
+            (void)ztop; (void)z_top_default;
+            throw std::invalid_argument(
+                "SDIRK3 vertical metric: no usable rdnw source (grid rdnw, rdnw vector, "
+                "grid dnw and grid rdn are all absent). Refusing to synthesise one from "
+                "nz/ztop: that expression has units of m^-1 while rdnw = 1/(delta eta) is "
+                "dimensionless, and for nz=64, ztop=16 km it is wrong by a factor 1.6e4.");
         }
         // Update cache tracking (source epoch already captures the right epoch)
         // PARITY FIX 2025-12-21: Update device-specific cache tracking variables.
