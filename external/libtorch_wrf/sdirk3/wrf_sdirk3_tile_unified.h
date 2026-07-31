@@ -1508,7 +1508,6 @@ private:
     torch::Tensor cqu_at_u_work_;    // Working memory for moisture correction U
     torch::Tensor cqv_at_v_work_;    // Working memory for moisture correction V
     torch::Tensor cqw_at_w_work_;    // Working memory for moisture correction W
-    torch::Tensor alt_w_work_;       // Working memory for inverse density at W-points
     torch::Tensor t_w_work_;         // Working memory for potential temperature at W-points (WRF naming)
     
     // Zero-copy optimization: Pre-allocated Coriolis tensors
