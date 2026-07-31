@@ -5404,6 +5404,68 @@ vertical_coefficients:
                                              << res.linearity_spread[c][r];
                 std::cerr << o.str() << std::endl;
             }
+
+            // 9F.D59 (review sections 10, 12): LEADING SINGULAR AMPLIFICATION.
+            //
+            // The coupling matrix above reports entries. For a NON-NORMAL operator the
+            // entries -- and the eigenvalues -- do not bound the transient response: the
+            // instrument's own fixture is a matrix with every eigenvalue 1 and
+            // sigma_max = 100.01. So an operator can look state-invariant entry by entry
+            // and still have a leading singular direction that is not. That is exactly the
+            // gap left by the coupling matrix, and it is the reason this is measured
+            // rather than argued from the entries.
+            //
+            // J.v comes from central differences; J^T.w from AD reverse mode through the
+            // production RHS. The VJP is also the 4D-Var adjoint path, so this is the
+            // first time it is exercised across the WHOLE RHS rather than one helper. If
+            // it cannot run, that is a finding about the project's goal, not a probe
+            // failure -- and it is reported as such rather than silently degraded to
+            // something that returns numbers.
+            {
+                auto jvp = [&](const torch::Tensor& v) {
+                    const double e = 1.0e-3;
+                    return (computeUnifiedRHS(base + e * v, wrf::sdirk3::RhsMode::Full)
+                          - computeUnifiedRHS(base - e * v, wrf::sdirk3::RhsMode::Full))
+                           / (2.0 * e);
+                };
+                bool vjp_ok = true;
+                std::string vjp_err;
+                auto vjp = [&](const torch::Tensor& w) -> torch::Tensor {
+                    try {
+                        torch::AutoGradMode enable(true);
+                        auto Ug = base.detach().clone().set_requires_grad(true);
+                        auto F = computeUnifiedRHS(Ug, wrf::sdirk3::RhsMode::Full);
+                        auto g = torch::autograd::grad({F}, {Ug}, {w.detach()},
+                                                       /*retain_graph=*/false,
+                                                       /*create_graph=*/false,
+                                                       /*allow_unused=*/true);
+                        if (!g.empty() && g[0].defined()) return g[0];
+                        vjp_ok = false; vjp_err = "grad returned undefined";
+                    } catch (const std::exception& e) {
+                        vjp_ok = false; vjp_err = e.what();
+                    }
+                    return torch::zeros_like(base);
+                };
+                auto sig = power_iterate_sigma_max(jvp, vjp, base, spec, 30, 1e-3);
+                if (!vjp_ok) {
+                    std::cerr << "SDIRK3_SIGMA VJP_FAILED: " << vjp_err
+                              << " -- sigma_max NOT reported, because a zero adjoint would "
+                                 "read as 'the operator does nothing'" << std::endl;
+                } else {
+                    std::ostringstream o;
+                    o << "SDIRK3_SIGMA base=" << (at_rest ? "rest" : "jet")
+                      << " sigma_max=" << sig.sigma_max
+                      << " converged=" << (sig.converged ? 1 : 0)
+                      << " iters=" << sig.iterates.size() << " blockweight";
+                    for (int r = 0; r < 6; ++r) o << " " << nm[r] << "="
+                                                  << sig.block_weight[r];
+                    std::cerr << o.str() << std::endl;
+                    std::ostringstream h;
+                    h << "SDIRK3_SIGMA_HISTORY";
+                    for (double x : sig.iterates) h << " " << x;
+                    std::cerr << h.str() << std::endl;
+                }
+            }
         }
     }
     

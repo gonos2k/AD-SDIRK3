@@ -189,6 +189,90 @@ inline ResponseResult measure_response(
     return out;
 }
 
+
+// ---------------------------------------------------------------------------------------
+// LEADING SINGULAR AMPLIFICATION (review sections 10 and 12).
+//
+// For a NON-NORMAL operator the eigenvalues do not bound the transient response: a matrix
+// with every eigenvalue 1 can amplify by 100 in a single application. That is the whole
+// reason this is worth measuring rather than inferring from the coupling matrix -- every
+// individual entry can be state-invariant while the leading singular direction is not.
+//
+//     sigma_max = max_v |S_F^-1 J S_U v| / |v|
+//
+// computed by power iteration on (S_F^-1 J S_U)^T (S_F^-1 J S_U), matrix-free: J.v from
+// the caller's JVP (central differences or forward AD) and J^T.w from its VJP.
+//
+// The scaling is the same S_U / S_F the response matrix uses, and for the same reason: an
+// unscaled sigma_max on a state whose blocks differ by 1e5 in units measures the unit
+// choice. It is applied as S_F^-1 J S_U so that v lives in scaled state space and the
+// block decomposition of the leading right singular vector is directly readable.
+struct SigmaResult {
+    double sigma_max = 0.0;
+    std::vector<double> iterates;          // per-iteration estimate, to show convergence
+    std::vector<double> block_weight;      // fraction of |v|^2 in each channel
+    bool converged = false;
+};
+
+inline SigmaResult power_iterate_sigma_max(
+    const std::function<torch::Tensor(const torch::Tensor&)>& jvp,   // v -> J.v
+    const std::function<torch::Tensor(const torch::Tensor&)>& vjp,   // w -> J^T.w
+    const torch::Tensor& like,
+    const ProbeSpec& spec,
+    int iters = 20,
+    double tol = 1e-4)
+{
+    // NO blanket NoGradGuard here, deliberately. The caller's vjp is an AD reverse pass
+    // and needs to BUILD a graph; a guard around this whole function would silently
+    // disable it and the VJP would return zeros -- which looks like "the adjoint says the
+    // operator does nothing" rather than like a bug. Each .item() gets its own guard
+    // instead, which is what the project rule actually requires.
+    SigmaResult out;
+    const int nc = static_cast<int>(spec.channels.size());
+
+    // diagonal scalings, as vectors over the packed layout
+    auto s_u = torch::ones_like(like), s_f = torch::ones_like(like);
+    for (int c = 0; c < nc; ++c) {
+        s_u.narrow(0, spec.channels[c].offset, spec.channels[c].length)
+            .fill_(spec.channels[c].state_scale);
+        s_f.narrow(0, spec.channels[c].offset, spec.channels[c].length)
+            .fill_(spec.channels[c].tendency_scale);
+    }
+
+    auto gen = at::detail::createCPUGenerator(spec.seed);
+    auto v = torch::randn(like.numel(), gen,
+                          torch::TensorOptions().dtype(like.dtype())).to(like.device());
+    v = v / v.norm().clamp_min(1e-300);
+
+    double prev = 0.0;
+    for (int it = 0; it < iters; ++it) {
+        auto Av  = jvp(s_u * v) / s_f;                 // S_F^-1 J S_U v
+        double sigma;
+        { torch::NoGradGuard ng; sigma = Av.norm().item<double>(); }   // |v| = 1
+        out.iterates.push_back(sigma);
+        auto AtAv = s_u * vjp(Av.detach() / s_f);       // S_U J^T S_F^-1 (S_F^-1 J S_U v)
+        double n;
+        { torch::NoGradGuard ng; n = AtAv.norm().item<double>(); }
+        if (!(n > 0.0) || !std::isfinite(n)) break;
+        v = AtAv.detach() / n;
+        if (it > 0 && std::abs(sigma - prev) <= tol * std::max(sigma, 1e-300)) {
+            out.converged = true;
+            out.sigma_max = sigma;
+            break;
+        }
+        prev = sigma;
+        out.sigma_max = sigma;
+    }
+
+    torch::NoGradGuard ng_final;
+    const double vn2 = v.pow(2).sum().item<double>();
+    for (int c = 0; c < nc; ++c) {
+        auto blk = v.narrow(0, spec.channels[c].offset, spec.channels[c].length);
+        out.block_weight.push_back(vn2 > 0.0 ? blk.pow(2).sum().item<double>() / vn2 : 0.0);
+    }
+    return out;
+}
+
 }  // namespace probe
 }  // namespace sdirk3
 }  // namespace wrf

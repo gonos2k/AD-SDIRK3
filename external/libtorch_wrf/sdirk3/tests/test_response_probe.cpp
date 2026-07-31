@@ -212,7 +212,63 @@ int main() {
               "and argmax locates it exactly (index " + std::to_string(r.rows[0].argmax[0]) + ")");
     }
 
-    constexpr int expected_checks = 13;
+    // === LEADING SINGULAR AMPLIFICATION, on a matrix whose answer is known ===
+    // The fixture is the point: A = [[1, 100], [0, 1]] repeated blockwise. EVERY eigenvalue
+    // is 1, and sigma_max = 100.0100 -- a two-order gap between what the spectrum says and
+    // what the operator actually does in one application. That gap is precisely why the
+    // review asks for singular values rather than eigenvalues on a non-normal system, and
+    // an instrument that cannot reproduce it here cannot be trusted to find it in the core.
+    {
+        using wrf::sdirk3::probe::power_iterate_sigma_max;
+        // block-diagonal copies of [[1,100],[0,1]] acting on (a_i, b_i) pairs
+        auto A  = [&](const torch::Tensor& x) {
+            auto y = x.clone();
+            y.narrow(0, 0, NA).add_(100.0 * x.narrow(0, NA, NB));
+            return y;
+        };
+        auto At = [&](const torch::Tensor& x) {           // exact transpose
+            auto y = x.clone();
+            y.narrow(0, NA, NB).add_(100.0 * x.narrow(0, 0, NA));
+            return y;
+        };
+        auto spec = two_channel(1.0, 1.0, 1.0, 1.0);
+        spec.seed = 7;
+        auto r = power_iterate_sigma_max(A, At, U, spec, 200, 1e-12);
+
+        const double exact = 0.5 * (std::sqrt(100.0 * 100.0 + 4.0) + 100.0);  // ~100.0100
+        const double rel = std::abs(r.sigma_max - exact) / exact;
+        check(rel < 1e-6, "sigma_max of a NON-NORMAL block (all eigenvalues 1) is recovered "
+                          "as " + sci(r.sigma_max) + " vs exact " + sci(exact) +
+                          " (rel " + sci(rel) + ")");
+        check(r.sigma_max > 50.0,
+              "and it is ~100x the spectral radius of 1, which is the entire reason "
+              "eigenvalues cannot be used here");
+        check(r.converged, "the power iteration converged rather than hitting the cap");
+        // the amplifying direction lives in channel b: A maps b into a with gain 100
+        check(r.block_weight[1] > 0.9,
+              "the leading right singular vector is concentrated in the channel that DRIVES "
+              "the amplification (b weight " + sci(r.block_weight[1]) + ")");
+    }
+
+    // --- scaling must move sigma_max the way the algebra says ---
+    // Halving the driving channel's state_scale halves its contribution, so sigma_max must
+    // halve too. Without this, a wrong scale would silently rescale the headline number.
+    {
+        using wrf::sdirk3::probe::power_iterate_sigma_max;
+        auto A  = [&](const torch::Tensor& x) {
+            auto y = x.clone(); y.narrow(0, 0, NA).add_(100.0 * x.narrow(0, NA, NB)); return y; };
+        auto At = [&](const torch::Tensor& x) {
+            auto y = x.clone(); y.narrow(0, NA, NB).add_(100.0 * x.narrow(0, 0, NA)); return y; };
+        auto s1 = two_channel(1.0, 1.0, 1.0, 1.0); s1.seed = 7;
+        auto s2 = two_channel(1.0, 1.0, 0.5, 1.0); s2.seed = 7;   // b state_scale halved
+        const double a = power_iterate_sigma_max(A, At, U, s1, 200, 1e-12).sigma_max;
+        const double b = power_iterate_sigma_max(A, At, U, s2, 200, 1e-12).sigma_max;
+        check(std::abs(b / a - 0.5) < 1e-3,
+              "halving the driving channel's state_scale halves sigma_max (" + sci(b / a) +
+              "), so the scaling enters where it is meant to");
+    }
+
+    constexpr int expected_checks = 18;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
