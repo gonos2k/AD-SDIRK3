@@ -135,6 +135,7 @@ external/libtorch_wrf/sdirk3/tests/test_*
 !external/libtorch_wrf/sdirk3/tests/test_base_eos_contract.cpp
 !external/libtorch_wrf/sdirk3/tests/test_hydrostatic_pressure_orientation.cpp
 !external/libtorch_wrf/sdirk3/tests/test_metric_policy.cpp
+!external/libtorch_wrf/sdirk3/tests/test_ad_tangent_contract.cpp
 !external/libtorch_wrf/sdirk3/tests/test_base_state_checked_abi.cpp
 !external/libtorch_wrf/sdirk3/test_wdamp_tangent_contract.cpp
 !external/libtorch_wrf/sdirk3/test_wdamp_preconditioner_policy_contract.cpp
