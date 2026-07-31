@@ -156,7 +156,27 @@ int main() {
               "but the RELATIVE residual stays small, which is why it is the contract");
     }
 
-    constexpr int expected_checks = 10;
+    // --- a DEGENERATE scale must not read as perfect balance (review section 7) ---
+    // mean_term == 0 with a non-zero residual is alb == 0 or mub == 0: not an atmosphere.
+    // The helper used to return relative = 0 for it, i.e. the best possible score for the
+    // worst possible input. Same class as substituting eps for a broken metric -- invalid
+    // input disguised as a good number.
+    {
+        auto c = make_balanced_column<double>();
+        std::vector<double> alb_zero(c.alb.size(), 0.0);          // no scale left
+        const auto R = hydrostatic_residual<double>(c.rdnw, c.phb, alb_zero, c.c1h, c.c2h, c.mub);
+        check(std::isinf(R.relative) && R.relative > 0.0,
+              "alb == 0 with a non-zero residual gives +infinity, not 0");
+        check(R.mean_abs > 0.0, "and the residual really is non-zero, so the case is real");
+
+        // the genuinely trivial case still reports 0
+        std::vector<double> phb_flat(c.phb.size(), 0.0);
+        const auto R0 = hydrostatic_residual<double>(c.rdnw, phb_flat, alb_zero, c.c1h, c.c2h, c.mub);
+        check(R0.relative == 0.0,
+              "but 0/0 -- nothing to balance and nothing unbalanced -- still reports 0");
+    }
+
+    constexpr int expected_checks = 13;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
