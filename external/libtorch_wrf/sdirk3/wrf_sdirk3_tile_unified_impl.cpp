@@ -11654,6 +11654,78 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 }
                 std::cerr << oss.str() << std::endl;
             }
+            // ---- 9F.D55 (review section 12): the SCALED channel-response matrix ----
+            //
+            // D54's control used a UNIFORM 1e-3 across every channel, and said so: the
+            // components carry different units and scales (mu ~ 1e5 Pa, w ~ m/s,
+            // ph ~ m^2/s^2), so cross-channel ratios from it are not physically
+            // meaningful. This makes them meaningful.
+            //
+            // Perturb ONE channel at a time by that channel's OWN characteristic scale,
+            // and report each response as a fraction of the RESPONDING channel's scale
+            // per timestep:
+            //
+            //     R[r][c] = max|F_r| * dt / scale_r ,   for a perturbation scale_c in c
+            //
+            // which reads directly as "a one-scale perturbation in c moves r by R of r's
+            // own scale in one step". R ~ 1 is a normal coupling; R >> 1 is stiffness,
+            // and the entry names WHICH coupling rather than leaving a norm to be
+            // attributed by argument -- the failure this campaign has had to undo twice.
+            //
+            // Scales are b_wave-appropriate and deliberately round; they set the units of
+            // the answer, not its structure, and are printed so the reader can rescale.
+            if (rest_env[0] == '2') {
+                const int64_t su = int64_t(ny_)*nz_*nx_u_, sv = int64_t(ny_v_)*nz_*nx_,
+                              sw = int64_t(ny_)*nz_w_*nx_, sph = int64_t(ny_)*nz_w_*nx_,
+                              st = int64_t(ny_)*nz_*nx_,   smu = int64_t(ny_)*nx_;
+                const int64_t off[6] = {0, su, su+sv, su+sv+sw, su+sv+sw+sph,
+                                        su+sv+sw+sph+st};
+                const int64_t len[6] = {su, sv, sw, sph, st, smu};
+                // u,v [m/s] | w [m/s] | ph [m^2/s^2] | theta [K] | mu [Pa]
+                const float scale[6] = {10.0f, 10.0f, 0.1f, 1.0e3f, 1.0f, 1.0e2f};
+                const float dt_ref = (dt_stage_ > 0.0f) ? dt_stage_ : 600.0f;
+                std::cerr << "SDIRK3_REST_JACOBIAN scales u=10 v=10 w=0.1 ph=1e3 t=1 "
+                          << "mu=1e2 dt_ref=" << dt_ref
+                          << "  (entry = max|F_r|*dt/scale_r for a scale_c kick in c)"
+                          << std::endl;
+                for (int m = 0; m < 3; ++m) {
+                    for (int c = 0; c < 6; ++c) {
+                        // SPATIALLY VARYING, not fill_(). A uniform kick has zero
+                        // gradient everywhere, so every term that sees only derivatives
+                        // returns zero and the row reads as "this channel influences
+                        // nothing". The first run of this sweep did exactly that: the ph
+                        // and t rows came back identically zero, which is a property of
+                        // the fixture, not of the dynamics. Seeded, so the matrix is
+                        // reproducible run to run.
+                        torch::manual_seed(20260731 + c);
+                        auto Uc = torch::zeros_like(U);
+                        Uc.narrow(0, off[c], len[c]).copy_(
+                            torch::randn({len[c]}, U.options()) * scale[c]);
+                        torch::Tensor Fc;
+                        try { Fc = computeUnifiedRHS(Uc, modes[m]); }
+                        catch (const std::exception& e) {
+                            std::cerr << "SDIRK3_REST_JACOBIAN mode=" << mode_name[m]
+                                      << " kick=" << chan[c] << " THREW: " << e.what()
+                                      << std::endl;
+                            continue;
+                        }
+                        auto pr = extractStateVariables(Fc);
+                        const torch::Tensor rc[6] = {
+                            std::get<0>(pr), std::get<1>(pr), std::get<2>(pr),
+                            std::get<3>(pr), std::get<4>(pr), std::get<5>(pr)};
+                        std::ostringstream row;
+                        row << "SDIRK3_REST_JACOBIAN mode=" << mode_name[m]
+                            << " kick=" << chan[c];
+                        for (int r = 0; r < 6; ++r) {
+                            const float v = (rc[r].defined() && rc[r].numel() > 0)
+                                ? rc[r].abs().max().item<float>() : 0.0f;
+                            row << " " << chan[r] << "=" << (v * dt_ref / scale[r]);
+                        }
+                        std::cerr << row.str() << std::endl;
+                    }
+                }
+            }
+
             rest_in_progress = false;
         }
     }
