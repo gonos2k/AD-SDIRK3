@@ -278,6 +278,12 @@ add_executable(test_metric_policy tests/test_metric_policy.cpp)
 target_link_libraries(test_metric_policy PRIVATE wrf_sdirk3::core)
 add_test(NAME Metric_Policy_Contract COMMAND test_metric_policy)
 
+# 9F.D52 (review section 6): FORWARD-mode tangents and the forward/reverse duality, for
+# the EOS and the pressure integrator. The prior tests used reverse mode and called it JVP.
+add_executable(test_ad_tangent_contract tests/test_ad_tangent_contract.cpp)
+target_link_libraries(test_ad_tangent_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME AD_Tangent_Contract COMMAND test_ad_tangent_contract)
+
 # 9F.D45 (review section 4): the C-boundary return contract. Links core, because the
 # point is to call the REAL exported symbol -- a helper that throws and an ABI that
 # converts throws into a status code are different claims.
