@@ -119,6 +119,7 @@
 // =========================================================================
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
+#include "wrf_sdirk3_metric_policy.h"
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
@@ -195,33 +196,13 @@ inline bool env_flag_true(const char* name) {
 using torch::indexing::Slice;
 
 // SAFE_ABS HELPER 2025-12-26: File-scope inline helper for NaN/Inf-safe absolute value.
-// Used by rdnw/rdn signature calculation and value normalization.
-// v20.14r27o: Central sign conversion for WRF→C++ grid metrics.
-// WRF Fortran stores rdnw/rdn as NEGATIVE (eta decreasing 1→0).
-// C++ stores as POSITIVE (absolute thickness reciprocals).
-// 9F.D48 (review section 4): FAILS CLOSED on a non-finite or zero metric.
-//
-// This used to return eps = 1e-10 for NaN/Inf, which is worse than propagating the NaN.
-// These are RECIPROCAL metrics: substituting 1e-10 for a broken rdnw silently asserts a
-// layer 1e10 units thick. Invalid input was thereby disguised as a valid-but-extreme
-// atmosphere -- and an extreme atmosphere produces plausible-looking output, whereas a
-// NaN at least announces itself. Zero is rejected for the same reason: 1/0 is not a
-// thickness either.
-//
-// The name kept the "or_eps" shape for one commit's worth of diff clarity and is now
-// wrong, so it is renamed with it: this converts a WRF-signed metric to the magnitude
-// the C++ side stores, and refuses anything that is not a metric.
+// 9F.D51 (review section 4): the metric policy moved to wrf_sdirk3_metric_policy.h so a
+// contract test can call the REAL functions. It previously lived in an anonymous namespace
+// here, which meant Metric_Policy_Contract could not have existed -- the fail-close was an
+// assertion in a comment. See that header for the sign convention and the eps rationale.
 namespace {
-inline float require_metric_magnitude(float signed_value, const char* what) {
-    if (!std::isfinite(signed_value) || signed_value == 0.0f) {
-        std::ostringstream oss;
-        oss << "SDIRK3 vertical metric " << what << " is not usable: got "
-            << signed_value << " (expected a finite non-zero reciprocal metric; WRF "
-            << "stores these NEGATIVE and C++ keeps the magnitude)";
-        throw std::invalid_argument(oss.str());
-    }
-    return std::abs(signed_value);
-}
+using wrf::sdirk3::require_metric_magnitude;
+using wrf::sdirk3::require_metric_magnitude_tensor;
 
 struct IdentityTransposePreconditioner {
     void set_alpha(double) {}
@@ -2571,10 +2552,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnwTensor(
             // GRID NAN/INF FIX 2025-12-26: Replace NaN/Inf with eps before abs().
             // torch::nan_to_num replaces nan with 0, posinf/neginf with large values.
             // Use where(isfinite, abs(x), eps) for consistent eps fallback.
-            constexpr float eps = 1e-10f;
-            auto finite_mask = torch::isfinite(rdnw_grid);
-            auto normalized = torch::where(finite_mask, rdnw_grid.abs(),
-                                           torch::full_like(rdnw_grid, eps));
+            // 9F.D51 (review section 4): fail closed, like the scalar path since D48.
+            auto normalized = require_metric_magnitude_tensor(rdnw_grid, "grid rdnw");
             cache = normalized.to(device, cache_dtype, /*non_blocking=*/true);
         }
         // Priority 2: rdnw_ vector (when grid not stale but grid_info_->rdnw unavailable)
@@ -2636,23 +2615,24 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnwTensor(
             }
             // GRID NAN/INF FIX 2025-12-26: Handle NaN/Inf before abs() to prevent NaN propagation.
             // Use where(isfinite, abs(x), eps) to replace non-finite with eps.
-            auto finite_mask = torch::isfinite(dnw_dev);
-            auto dnw_abs = torch::where(finite_mask, dnw_dev.abs(),
-                                        torch::full_like(dnw_dev, eps));
-            auto dnw_safe = torch::where(dnw_abs < eps,
-                                         torch::full_like(dnw_dev, eps),
-                                         dnw_abs);
-            cache = 1.0f / dnw_safe;  // Positive rdnw
+            // 9F.D51 (review section 4): fail closed. The old form also clamped |dnw| < eps
+            // UP to eps, so a near-zero layer became a 1e10-thick one on the reciprocal --
+            // the clamp was doing more damage than the NaN substitution.
+            (void)eps;
+            auto dnw_abs = require_metric_magnitude_tensor(dnw_dev, "grid dnw");
+            cache = 1.0f / dnw_abs;  // Positive rdnw
         }
         // Priority 4: use rdn as fallback
         // v20.14r27o: WRF Fortran rdn < 0. Convert to positive at extraction.
         else if (current_src_type == 4) {
             // Convert to positive via abs() and replace NaN/Inf with eps.
+            // 9F.D51 (review section 4): fail closed, skipping the k=0 sentinel (WRF's
+            // rdn(1) is undefined). The reviewer asks for this whole rdn-as-rdnw fallback
+            // to be DELETED in production; that is a larger change than a policy sweep, so
+            // it is flagged rather than done here.
             auto rdn_grid = grid_info_->rdn;
-            constexpr float eps = 1e-10f;
-            auto finite_mask = torch::isfinite(rdn_grid);
-            auto normalized = torch::where(finite_mask, rdn_grid.abs(),
-                                           torch::full_like(rdn_grid, eps));
+            auto normalized = require_metric_magnitude_tensor(rdn_grid, "grid rdn (as rdnw)",
+                                                              /*skip_leading=*/1);
             cache = normalized.to(device, cache_dtype, /*non_blocking=*/true);
         }
         // Fallback: physical estimate using +nz/ztop (positive)
@@ -2957,10 +2937,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnTensor(
             }
         }
         // GRID NAN/INF FIX 2025-12-26: Replace NaN/Inf with eps before abs().
-        constexpr float eps = 1e-10f;
-        auto finite_mask = torch::isfinite(rdn_grid);
-        auto normalized = torch::where(finite_mask, rdn_grid.abs(),
-                                       torch::full_like(rdn_grid, eps));
+        // 9F.D51 (review section 4): fail closed; k=0 is the WRF rdn sentinel, forced to
+        // 0 a few lines below and therefore excluded from the non-zero check.
+        auto normalized = require_metric_magnitude_tensor(rdn_grid, "grid rdn",
+                                                          /*skip_leading=*/1);
         if (rdn_grid.numel() > 1) {
             source_tensor = normalized.clone();
         } else {
@@ -3019,13 +2999,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnTensor(
         // PARITY FIX 2025-12-25: Use getAutocastAwareEps for consistent FP16/autocast handling
         const float eps = getAutocastAwareEps(dn);
         // GRID NAN/INF FIX 2025-12-26: Handle NaN/Inf before abs() to prevent NaN propagation.
-        auto finite_mask = torch::isfinite(dn);
-        auto dn_abs = torch::where(finite_mask, dn.abs(), torch::full_like(dn, eps));
+        // 9F.D51 (review section 4): fail closed; k=0 is the WRF rdn sentinel.
+        (void)eps;
+        auto dn_abs = require_metric_magnitude_tensor(dn, "grid dn", /*skip_leading=*/1);
         // WRF-COMPLIANT: rdn = 1/|dn| > 0
-        auto safe_dn = torch::where(dn_abs < eps,
-                                    torch::full_like(dn, eps),
-                                    dn_abs);
-        source_tensor = 1.0f / safe_dn;  // Always positive rdn
+        source_tensor = 1.0f / dn_abs;  // Always positive rdn
         // PARITY FIX 2025-12-20: WRF boundary convention requires rdn[0] = 0.
         // k=0 is special boundary, set to 0.
         if (source_tensor.numel() > 0) {
@@ -35711,11 +35689,10 @@ void TileSDIRK3UnifiedSolver::ensureDivergenceCache(
     // v20.14r27o: WRF Fortran rdnw < 0 (eta decreasing). Convert to positive at extraction.
     else if (grid_info_ && grid_info_->rdnw.defined() && grid_info_->rdnw.numel() > 0) {
         // Convert to positive via abs() and replace NaN/Inf with eps
-        constexpr float eps = 1e-10f;
+        // 9F.D51 (review section 4): fail closed. This is a SECOND copy of the priority-1
+        // logic in getRdnwTensor; the sweep covers both (fix one, sweep all).
         auto rdnw_grid = grid_info_->rdnw;
-        auto finite_mask = torch::isfinite(rdnw_grid);
-        auto normalized = torch::where(finite_mask, rdnw_grid.abs(),
-                                       torch::full_like(rdnw_grid, eps));
+        auto normalized = require_metric_magnitude_tensor(rdnw_grid, "grid rdnw");
         rdnw_source = normalized.to(device, dtype, /*non_blocking=*/true);
     }
     // Priority 2: member vector rdnw_
@@ -35744,11 +35721,10 @@ void TileSDIRK3UnifiedSolver::ensureDivergenceCache(
     // v20.14r27o: WRF Fortran rdn < 0 (eta decreasing). Convert to positive at extraction.
     else if (grid_info_ && grid_info_->rdn.defined() && grid_info_->rdn.numel() > 0) {
         // Convert to positive via abs() and replace NaN/Inf with eps
-        constexpr float eps = 1e-10f;
+        // 9F.D51 (review section 4): fail closed; k=0 is the WRF rdn sentinel.
         auto rdn_grid = grid_info_->rdn;
-        auto finite_mask = torch::isfinite(rdn_grid);
-        auto normalized = torch::where(finite_mask, rdn_grid.abs(),
-                                       torch::full_like(rdn_grid, eps));
+        auto normalized = require_metric_magnitude_tensor(rdn_grid, "grid rdn (as rdnw)",
+                                                          /*skip_leading=*/1);
         rdnw_source = normalized.to(device, dtype, /*non_blocking=*/true);
     }
     // No tensor source - leave rdnw_source undefined

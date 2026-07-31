@@ -272,6 +272,12 @@ add_executable(test_hydrostatic_pressure_orientation tests/test_hydrostatic_pres
 target_link_libraries(test_hydrostatic_pressure_orientation PRIVATE wrf_sdirk3::core)
 add_test(NAME Hydrostatic_Pressure_Orientation_Contract COMMAND test_hydrostatic_pressure_orientation)
 
+# 9F.D51 (review section 4): the vertical-metric fail-close policy. Header-only, so this
+# links torch but not core -- it calls the REAL policy functions the seven swept sites use.
+add_executable(test_metric_policy tests/test_metric_policy.cpp)
+target_link_libraries(test_metric_policy PRIVATE wrf_sdirk3::core)
+add_test(NAME Metric_Policy_Contract COMMAND test_metric_policy)
+
 # 9F.D45 (review section 4): the C-boundary return contract. Links core, because the
 # point is to call the REAL exported symbol -- a helper that throws and an ABI that
 # converts throws into a status code are different claims.
