@@ -30,6 +30,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <vector>
 
 namespace wrf {
@@ -79,7 +80,25 @@ HydrostaticResidual<T> hydrostatic_residual(
     out.rms       = std::sqrt(sum_sq / n);
     out.mean_abs  = sum_abs / n;
     out.mean_term = sum_term / n;
-    out.relative  = (out.mean_term > T(0)) ? out.mean_abs / out.mean_term : T(0);
+    // 9F.D51 (review section 7): a degenerate scale is not a zero residual.
+    //
+    // This used to return 0 whenever mean_term == 0, which reads as PERFECT BALANCE. But
+    // mean_term == 0 with a non-zero residual is the opposite: a state whose natural scale
+    // vanished while the equation still fails, i.e. alb == 0 or mub == 0 -- not an
+    // atmosphere. Reporting that as 0.0 is the same class of defect as substituting
+    // eps=1e-10 for a broken metric (see wrf_sdirk3_metric_policy.h): invalid input
+    // disguised as a good number, and this one disguises it as the BEST possible number.
+    //
+    //   mean_term > 0                  -> mean_abs / mean_term
+    //   mean_term == 0, mean_abs == 0  -> 0        (genuinely trivial: nothing to balance)
+    //   mean_term == 0, mean_abs  > 0  -> infinity (degenerate: fails every bound)
+    if (out.mean_term > T(0)) {
+        out.relative = out.mean_abs / out.mean_term;
+    } else if (out.mean_abs == T(0)) {
+        out.relative = T(0);
+    } else {
+        out.relative = std::numeric_limits<T>::infinity();
+    }
     return out;
 }
 

@@ -31,3 +31,4 @@ WW_CP_Parity_Contract
 Trust_Model_Contract
 U_Slow_Closures
 Hydrostatic_Pressure_Orientation_Contract
+Metric_Policy_Contract
