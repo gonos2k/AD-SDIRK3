@@ -62,6 +62,18 @@ inline float require_metric_magnitude(float signed_value, const char* what) {
 // skip_leading exists for rdn/dn: WRF's rdn(1) is undefined, so k=0 is an explicit boundary
 // sentinel that this code sets to 0 on purpose and must not judge as a zero metric. rdnw
 // and dnw are defined at every level and pass skip_leading = 0.
+//
+// 9F.D57 -- READ THIS BEFORE USING skip_leading. The skipped elements are NOT validated
+// AND ARE STILL RETURNED, as |x|. So a caller passing skip_leading = 1 gets back a tensor
+// whose element 0 may be zero, NaN or garbage, and is responsible for overwriting it.
+// getRdnTensor does exactly that (index_put_({0}, 0.0f) a few lines after each call).
+//
+// This asymmetry caused a real defect. The rdn-as-rdnw fallback called with
+// skip_leading = 1 and used the result directly as rdnw, so WRF's undefined rdn(1) --
+// deliberately zeroed here -- became rdnw[0] = 0, a zero reciprocal metric in a slot rdnw
+// requires to be non-zero. The fallback is deleted (D57), but the trap is a property of
+// this signature, so it is named here and asserted in Metric_Policy_Contract rather than
+// left for the next caller to rediscover.
 inline torch::Tensor require_metric_magnitude_tensor(const torch::Tensor& metric,
                                                      const char* what,
                                                      int64_t skip_leading = 0) {

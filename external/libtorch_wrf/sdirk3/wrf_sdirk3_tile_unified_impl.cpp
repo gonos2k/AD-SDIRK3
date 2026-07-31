@@ -2632,14 +2632,28 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnwTensor(
         // v20.14r27o: WRF Fortran rdn < 0. Convert to positive at extraction.
         else if (current_src_type == 4) {
             // Convert to positive via abs() and replace NaN/Inf with eps.
-            // 9F.D51 (review section 4): fail closed, skipping the k=0 sentinel (WRF's
-            // rdn(1) is undefined). The reviewer asks for this whole rdn-as-rdnw fallback
-            // to be DELETED in production; that is a larger change than a policy sweep, so
-            // it is flagged rather than done here.
-            auto rdn_grid = grid_info_->rdn;
-            auto normalized = require_metric_magnitude_tensor(rdn_grid, "grid rdn (as rdnw)",
-                                                              /*skip_leading=*/1);
-            cache = normalized.to(device, cache_dtype, /*non_blocking=*/true);
+            // 9F.D57 (review sections 3.1 + 3.2): the cross-stagger fallback is DELETED.
+            //
+            // rdnw and rdn are metrics of DIFFERENT staggers:
+            //     rdnw_k = 1/(eta_w,k+1 - eta_w,k)      (full-level spacing)
+            //     rdn_k  = 1/(eta_m,k   - eta_m,k-1)    (mass-level spacing)
+            // On a uniform eta grid they coincide, which is exactly why this survived; on
+            // a STRETCHED grid they do not, and substituting one for the other is not a
+            // data fallback but a different discrete operator, feeding the hydrostatic
+            // pressure integration, the vertical PGF, the acoustic coefficients and the
+            // geopotential tendency.
+            //
+            // It also carried the sentinel leak the review found independently: the policy
+            // helper validated rdn[1:] via skip_leading=1 but RETURNED abs() of the whole
+            // tensor, so WRF's undefined rdn(1) -- which this code deliberately sets to 0 --
+            // came back as rdnw[0] = 0, a zero reciprocal metric in a slot rdnw requires to
+            // be non-zero. Deleting the fallback removes the leak at its root rather than
+            // patching the helper to paper over a conversion that should not happen.
+            throw std::invalid_argument(
+                "SDIRK3 vertical metric: rdnw is unavailable and grid rdn will NOT be "
+                "substituted for it. rdn and rdnw are different staggers (mass-level vs "
+                "full-level eta spacing); they coincide only on a uniform grid, and rdn(1) "
+                "is undefined in WRF. Supply rdnw, the rdnw vector, or dnw.");
         }
         // Fallback: physical estimate using +nz/ztop (positive)
         // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw = nz/ztop (positive).
@@ -2722,6 +2736,36 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnwTensor(
         // PARITY FIX 2025-12-20: Cache padded tensor directly to avoid repeated rebuilds.
         // If source has fewer elements than nz, pad now and store padded version.
         if (cache.numel() < nz) {
+            // 9F.D57 (review section 3.4). The review asks for padding to be forbidden --
+            // a short metric is a malformed grid, and repeating the last layer's thickness
+            // disguises it as a valid one, the same shape as substituting eps.
+            //
+            // FORBIDDING IT OUTRIGHT ABORTS THE MODEL. Measured, not predicted:
+            //     "source supplies 64 levels but nz = 65"
+            // rdnw is defined on the nz_ MASS levels, and four call sites ask for it on the
+            // nz_w_ = nz_+1 W levels (:15247, :15512, :15679, :15736). So the common case
+            // is not a malformed grid at all -- it is a STAGGER MISMATCH IN THE CALLER, and
+            // the pad is silently standing in for a mass-to-w extension.
+            //
+            // So: allow EXACTLY the one-level stagger extension, preserving existing
+            // behaviour byte-for-byte, and fail closed on everything else, which is the
+            // genuinely malformed case the review is aiming at.
+            //
+            // WHAT IS STILL UNRESOLVED, and is flagged rather than quietly kept: repeating
+            // the last mass-level value is not obviously the right extension to the top w
+            // level. WRF has rdzw for w-level work. Whether these four callers should use
+            // rdnw at all is a correctness question this commit does not settle -- it only
+            // stops the pad from covering for arbitrary length mismatches as well.
+            if (cache.numel() != nz - 1) {
+                std::ostringstream oss;
+                oss << "SDIRK3 vertical metric: source supplies " << cache.numel()
+                    << " levels but nz = " << nz << ", a shortfall of "
+                    << (nz - cache.numel()) << ". Only the single-level mass->w stagger "
+                    << "extension (nz_w = nz+1) is allowed; a larger shortfall is a "
+                    << "malformed grid, and padding it would integrate without complaint "
+                    << "while describing a different atmosphere.";
+                throw std::invalid_argument(oss.str());
+            }
             auto last = cache.index({-1});
             auto pad_count = nz - cache.numel();
             auto pad = last.expand({pad_count});
@@ -35768,11 +35812,11 @@ void TileSDIRK3UnifiedSolver::ensureDivergenceCache(
     // v20.14r27o: WRF Fortran rdn < 0 (eta decreasing). Convert to positive at extraction.
     else if (grid_info_ && grid_info_->rdn.defined() && grid_info_->rdn.numel() > 0) {
         // Convert to positive via abs() and replace NaN/Inf with eps
-        // 9F.D51 (review section 4): fail closed; k=0 is the WRF rdn sentinel.
-        auto rdn_grid = grid_info_->rdn;
-        auto normalized = require_metric_magnitude_tensor(rdn_grid, "grid rdn (as rdnw)",
-                                                          /*skip_leading=*/1);
-        rdnw_source = normalized.to(device, dtype, /*non_blocking=*/true);
+        // 9F.D57 (review sections 3.1 + 3.2): deleted here too -- this was the SECOND
+        // copy of the cross-stagger fallback. See the primary site in getRdnwTensor.
+        throw std::invalid_argument(
+            "SDIRK3 vertical metric: rdnw is unavailable and grid rdn will NOT be "
+            "substituted for it (different stagger; rdn(1) undefined in WRF).");
     }
     // No tensor source - leave rdnw_source undefined
 
