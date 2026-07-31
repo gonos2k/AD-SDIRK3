@@ -126,6 +126,7 @@
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_metric_policy.h"
+#include "wrf_sdirk3_response_probe.h"
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
@@ -5330,6 +5331,81 @@ vertical_coefficients:
     
     // Pack current state with staggered dimensions
     torch::Tensor U_n = packState(u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
+
+    // 9F.D58 (review sections 6, 11): the response measurement, hooked HERE rather than
+    // inside computeUnifiedRHS. The review's objection to D54-D56 was structural, not
+    // stylistic: a probe that recursively calls the function it is measuring is not an
+    // observer. From this point the RHS calls are ordinary calls, so there is no
+    // re-entrancy into a function mid-execution, no recursion guard to get wrong, and no
+    // exception-safety hole. It still adds RHS evaluations, which is why it is opt-in and
+    // once-only and why the run it produces is a MEASUREMENT run, not a production run.
+    //
+    // THE SCALES ARE SOURCE-VERIFIED, because guessing them is what invalidated D55/D56.
+    // The packed state holds UNCOUPLED components, but the tendencies do not all match:
+    //   ru, rv, rw, rt  COUPLED   -- the damping terms add c1h_mu_c2h * (field - ref) to
+    //                               them (:22293, :22113), and :20544 divides ru_tend by
+    //                               mu_typical to recover a velocity tendency
+    //   rph             UNCOUPLED -- :21787 explicitly divides by mut, "convert ph_tend
+    //                               from mass-weighted to physical tendency"
+    //   rmu             UNCOUPLED -- mu is already a mass
+    // so tendency_scale = mu_ref * state_scale for the first group and state_scale for the
+    // second. Dividing a coupled tendency by an uncoupled scale is exactly the ~1e5 error
+    // that made me withdraw the D56 reading.
+    if (const char* rp = std::getenv("WRF_SDIRK3_RESPONSE_PROBE")) {
+        static std::atomic<bool> done{false};
+        bool expected_flag = false;
+        if (rp[0] != '0' && done.compare_exchange_strong(expected_flag, true)) {
+            torch::NoGradGuard no_grad;
+            using namespace wrf::sdirk3::probe;
+
+            double mu_ref = 1.0e5;
+            if (mu_base_.defined() && mu_base_.numel() > 0)
+                mu_ref = mu_base_.abs().mean().item<double>();
+
+            const int64_t su = int64_t(ny_)*nz_*nx_u_, sv = int64_t(ny_v_)*nz_*nx_,
+                          sw = int64_t(ny_)*nz_w_*nx_, sph = int64_t(ny_)*nz_w_*nx_,
+                          st = int64_t(ny_)*nz_*nx_,   smu = int64_t(ny_)*nx_;
+            const double ss[6]  = {10.0, 10.0, 0.1, 1.0e3, 1.0, 10.0};
+            const double cpl[6] = {mu_ref, mu_ref, mu_ref, 1.0, mu_ref, 1.0};
+            const char* nm[6]   = {"ru", "rv", "rw", "rph", "rt", "rmu"};
+            const int64_t off[6] = {0, su, su+sv, su+sv+sw, su+sv+sw+sph, su+sv+sw+sph+st};
+            const int64_t len[6] = {su, sv, sw, sph, st, smu};
+
+            ProbeSpec spec;
+            for (int c = 0; c < 6; ++c)
+                spec.channels.push_back(ChannelSpec{nm[c], off[c], len[c], ss[c],
+                                                    cpl[c] * ss[c]});
+            spec.amplitudes = {0.25, 0.5, 1.0};
+            spec.seed = 20260801;
+            spec.central = true;
+            spec.dt = (dt_stage_ > 0.0f) ? double(dt_stage_) : 600.0;
+
+            const bool at_rest = (rp[0] == 'r');
+            auto base = at_rest ? torch::zeros_like(U_n) : U_n;
+
+            std::cerr << "SDIRK3_RESPONSE base=" << (at_rest ? "rest" : "jet")
+                      << " mu_ref=" << mu_ref << " dt=" << spec.dt
+                      << "  (gain = rms response in units of the responding channel's own"
+                      << " scale, per dt, per unit kick)" << std::endl;
+            auto rhs_fn = [&](const torch::Tensor& X) {
+                return computeUnifiedRHS(X, wrf::sdirk3::RhsMode::Full);
+            };
+            auto res = measure_response(rhs_fn, base, spec);
+            for (const auto& row : res.rows) {
+                std::ostringstream o;
+                o << "SDIRK3_RESPONSE kick=" << row.kicked << " amp=" << row.amplitude;
+                for (int r = 0; r < 6; ++r) o << " " << nm[r] << "=" << row.gain_rms[r];
+                std::cerr << o.str() << std::endl;
+            }
+            for (int c = 0; c < 6; ++c) {
+                std::ostringstream o;
+                o << "SDIRK3_RESPONSE_LINEARITY kick=" << nm[c];
+                for (int r = 0; r < 6; ++r) o << " " << nm[r] << "="
+                                             << res.linearity_spread[c][r];
+                std::cerr << o.str() << std::endl;
+            }
+        }
+    }
     
     // Pack tendency vector from WRF with staggered dimensions
     torch::Tensor F_phys = packState(ru_tend, rv_tend, rw_tend, 
