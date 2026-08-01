@@ -290,6 +290,12 @@ add_executable(test_response_probe tests/test_response_probe.cpp)
 target_link_libraries(test_response_probe PRIVATE wrf_sdirk3::core)
 add_test(NAME Response_Probe_Contract COMMAND test_response_probe)
 
+# 9F.D63 (review P0-C): the implicit-stage tangent/adjoint by the implicit function theorem,
+# validated against a system whose Jacobian is known in closed form.
+add_executable(test_implicit_diff tests/test_implicit_diff.cpp)
+target_link_libraries(test_implicit_diff PRIVATE wrf_sdirk3::core)
+add_test(NAME Implicit_Diff_Contract COMMAND test_implicit_diff)
+
 # 9F.D45 (review section 4): the C-boundary return contract. Links core, because the
 # point is to call the REAL exported symbol -- a helper that throws and an ABI that
 # converts throws into a status code are different claims.
