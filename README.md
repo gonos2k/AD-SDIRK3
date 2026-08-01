@@ -59,10 +59,21 @@ proven byte-identical.
 - **Implicit-stage differentiation is an algebra contract, not production.** The implicit
   function theorem forms (`dK/dU = A^-1 J`, adjoint `J^T A^-T`) are pinned against closed-form
   Jacobians but are **not wired** into the stage solve.
-- **The 4D-Var adjoint replay does not converge.** Localised: the RHS is differentiable, the
+- **The 4D-Var adjoint replay does not converge.** Localised: the RHS is differentiable and the
   transpose operator is correct (rel 1.198e-06), but the transpose solve runs with an *identity*
-  preconditioner and stalls at rel_error ~0.997 at every dt from 600 down to 20. The vertical
-  preconditioner is **not symmetric** (rel 2.18e-02), so `M^-T` must be built rather than reused.
+  preconditioner and stalls at rel_error ~0.997 at every dt from 600 down to 20.
+
+  The vertical preconditioner is not Euclidean self-adjoint in one probe (rel 2.18e-02) and is
+  exactly linear (`M(2v) - 2M(v)` = 0). It is **not** established that `M^-T` is required: for
+  an *equation-level* `A^T` solve any adequate preconditioner will do, since convergence is
+  judged on the true residual `|b - A^T lambda| / |b|`. The order to try is (i) frozen existing
+  `M^-1` as a general right preconditioner for `A^T`, (ii) flexible per-iteration
+  preconditioning, and only then (iii) a genuine `M^-T`. An exact `M^-T` is needed for an
+  *algorithmic* transpose pairing, which is not what this path requires.
+
+  The self-adjointness probe also calls a stateful `apply()` twice in sequence, so it cannot yet
+  separate true asymmetry from state change between calls; a repeatability and call-order
+  contract is needed before the 2.18e-02 is read as a property of the operator.
 - **No multi-step well-balancedness, geostrophic/thermal-wind balance, mass/energy/PV budgets,
   or formal temporal-order verification.**
 - Support boundary: **dry, single-rank, single-tile, idealised map factors.** MPI halo primitives
