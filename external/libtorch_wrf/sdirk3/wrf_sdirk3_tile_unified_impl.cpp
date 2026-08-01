@@ -5394,7 +5394,13 @@ vertical_coefficients:
                                         torch::TensorOptions().dtype(U->dtype()));
                 lam = (lam / lam.norm().clamp_min(1e-300)).to(U->device());
 
-                const float dtv = 600.0f, gam = 0.435866521508459f;
+                // dt is env-settable so the adjoint can be walked down the SAME ladder
+                // the forward solve was: if the transpose solve stagnates at 600 and
+                // converges at 60, the adjoint is blocked by the forward's wall rather
+                // than by anything specific to the adjoint.
+                float dtv = 600.0f;
+                if (const char* d = std::getenv("WRF_SDIRK3_ADJOINT_DT")) dtv = std::atof(d);
+                const float gam = 0.435866521508459f;
                 // Each mode in its OWN try, so a failure in one still reports the other.
                 // Bundling them would have hidden which of the two broke.
                 torch::Tensor legacy, eqlev;
@@ -38808,6 +38814,102 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             auto fast_operator = [&](const torch::Tensor& y) -> torch::Tensor {
                 return computeUnifiedRHS(y, wrf::sdirk3::RhsMode::ImplicitOnly);
             };
+
+            // 9F.D68: WHY the replay cannot form J^T -- localised rather than guessed.
+            //
+            // D66's driver established that runAdjointReplay dies with "element 0 of
+            // tensors does not require grad": computeUnifiedRHS(y, ImplicitOnly) comes back
+            // with NO grad_fn, so compute_vjp_reverse_mode has nothing to differentiate.
+            // But D59 obtained a VJP through the SAME call at the step level, so the
+            // absence is configuration-dependent and worth isolating instead of assuming.
+            //
+            // Three candidates, and this distinguishes them in one run:
+            //   (a) grad mode is off here          -> GradMode::is_enabled() says so
+            //   (b) it is mode-specific            -> compare Full / Explicit / Implicit
+            //   (c) the RHS reads the FROZEN reference state (U_ref_stage_, w_ref) instead
+            //       of its argument, so the output genuinely does not depend on y
+            // (c) is the interesting one: it would mean the fast operator is constant in
+            // its argument by construction, which no amount of adjoint plumbing can fix.
+            if (std::getenv("WRF_SDIRK3_RHS_GRAD_PROBE")) {
+                static std::atomic<bool> gp_done{false};
+                bool gp_expected = false;
+                if (gp_done.compare_exchange_strong(gp_expected, true)) {
+                    std::cerr << "SDIRK3_RHS_GRAD_PROBE grad_mode="
+                              << (torch::GradMode::is_enabled() ? 1 : 0) << std::endl << std::flush;
+                    const wrf::sdirk3::RhsMode modes[3] = {
+                        wrf::sdirk3::RhsMode::Full,
+                        wrf::sdirk3::RhsMode::ExplicitOnly,
+                        wrf::sdirk3::RhsMode::ImplicitOnly};
+                    const char* mn[3] = {"Full", "ExplicitOnly", "ImplicitOnly"};
+                    for (int m = 0; m < 3; ++m) {
+                        try {
+                            torch::AutoGradMode on(true);
+                            auto y = linearization_point.detach().clone().set_requires_grad(true);
+                            auto f = computeUnifiedRHS(y, modes[m]);
+                            std::cerr << "SDIRK3_RHS_GRAD_PROBE mode=" << mn[m]
+                                      << " requires_grad=" << (f.requires_grad() ? 1 : 0)
+                                      << " has_grad_fn=" << (f.grad_fn() ? 1 : 0);
+                            if (f.requires_grad() && f.grad_fn()) {
+                                auto w = torch::ones_like(f);
+                                auto g = torch::autograd::grad({f}, {y}, {w}, false, false, true);
+                                if (!g.empty() && g[0].defined()) {
+                                    torch::NoGradGuard ng;
+                                    std::cerr << " |J^T 1|=" << g[0].norm().item<double>()
+                                              << " nonzero=" << (g[0].abs().sum().item<double>() > 0 ? 1 : 0);
+                                } else {
+                                    std::cerr << " grad=UNDEFINED";
+                                }
+                            }
+                            std::cerr << std::endl << std::flush;
+                        } catch (const std::exception& e) {
+                            std::cerr << "SDIRK3_RHS_GRAD_PROBE mode=" << mn[m]
+                                      << " THREW: " << e.what() << std::endl << std::flush;
+                        }
+                    }
+
+                    // 9F.D70 (review section 5): <A v, w> == <v, A^T w> on the PRODUCTION
+                    // operators. The transpose solve makes essentially no progress at ANY
+                    // dt -- rel_error 0.9973 at 600/200/60/20 and 1.1998 at dt=5, i.e.
+                    // WORSE than the zero guess. A conditioning wall would vary with alpha;
+                    // this does not. That is the signature of the transpose operator not
+                    // being the transpose, and this is the check that decides it.
+                    //
+                    //   A v   = v - alpha * J v      forward, central difference
+                    //   A^T w = w - alpha * J^T w    adjoint, reverse AD
+                    try {
+                        torch::AutoGradMode on(true);
+                        auto gen2 = at::detail::createCPUGenerator(20260801);
+                        auto v = torch::randn(linearization_point.numel(), gen2,
+                                              torch::TensorOptions().dtype(linearization_point.dtype()))
+                                     .to(linearization_point.device());
+                        auto w = torch::randn(linearization_point.numel(), gen2,
+                                              torch::TensorOptions().dtype(linearization_point.dtype()))
+                                     .to(linearization_point.device());
+                        const double eps = 1.0e-3;
+                        auto Jv = (fast_operator(linearization_point + eps * v)
+                                 - fast_operator(linearization_point - eps * v)) / (2.0 * eps);
+                        auto Av = v - alpha * Jv;
+
+                        auto yq = linearization_point.detach().clone().set_requires_grad(true);
+                        auto fq = computeUnifiedRHS(yq, wrf::sdirk3::RhsMode::ImplicitOnly);
+                        auto gq = torch::autograd::grad({fq}, {yq}, {w.detach()}, false, false, true);
+                        TORCH_CHECK(!gq.empty() && gq[0].defined(), "no J^T available");
+                        auto Atw = w - alpha * gq[0];
+
+                        torch::NoGradGuard ng;
+                        const double lhs = (Av * w).sum().item<double>();
+                        const double rhs = (v * Atw).sum().item<double>();
+                        const double den = std::max(std::abs(lhs), std::abs(rhs));
+                        std::cerr << "SDIRK3_TRANSPOSE_IDENTITY alpha=" << alpha
+                                  << " <Av,w>=" << lhs << " <v,ATw>=" << rhs
+                                  << " rel=" << (den > 0 ? std::abs(lhs - rhs) / den : 0.0)
+                                  << std::endl << std::flush;
+                    } catch (const std::exception& e) {
+                        std::cerr << "SDIRK3_TRANSPOSE_IDENTITY THREW: " << e.what()
+                                  << std::endl << std::flush;
+                    }
+                }
+            }
 
             lambda = wrf::sdirk3::solve_transpose_linear_system_gmres(
                 fast_operator,
