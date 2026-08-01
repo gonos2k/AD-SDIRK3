@@ -16010,13 +16010,31 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw > 0 (WRF standard), no abs() needed
                 // WRF vertical advection (wdwn = rdnw(k-1)*(ph(k)-ph(k-1))) uses positive rdnw directly
                 // Pad to nz_w_ if needed
-                int rdnw_numel = static_cast<int>(rdnw_for_scale.numel());
-                if (rdnw_numel >= nz_w_) {
-                    vert_deriv_scale = rdnw_for_scale.slice(0, 0, nz_w_).to(options.device(), options.dtype().toScalarType());
-                } else {
-                    vert_deriv_scale = torch::zeros({nz_w_}, options);
-                    vert_deriv_scale.slice(0, 0, rdnw_numel).copy_(rdnw_for_scale.to(options.device(), options.dtype().toScalarType()));
-                }
+                // 9F.D67 (review P0-1): the length branch below was DEAD after D62.
+                //
+                // D62 changed this caller from nz_w_ to nz_ but left the consumption
+                // condition alone. getRdnwTensor now returns EXACTLY nz_ (it slices when
+                // longer and throws when shorter), and nz_w_ = nz_+1, so
+                //     rdnw_numel >= nz_w_   <=>   nz_ >= nz_+1
+                // is always false. The `if` arm could not execute and the `else` arm did
+                // all the work.
+                //
+                // Behaviour was unaffected -- which is why the fingerprint matched and why
+                // nothing caught it. Before D62 the padded array made the condition true
+                // and it sliced [rdnw..., pad]; after D62 it zero-fills to [rdnw..., 0].
+                // The two differ ONLY at index nz_, and the consumer reads at most
+                // nz_w_-2 = nz_-1. A dead branch whose deadness is invisible in the output
+                // is exactly the shape that survives review, so it is removed rather than
+                // left to be re-derived.
+                //
+                // vert_deriv_scale stays nz_w_ long because its consumers slice it that
+                // way; index nz_ is deliberately zero and deliberately never read.
+                TORCH_CHECK(rdnw_for_scale.numel() == nz_,
+                            "vert_deriv_scale: expected exactly nz_=", nz_,
+                            " mass-level rdnw values, got ", rdnw_for_scale.numel());
+                vert_deriv_scale = torch::zeros({nz_w_}, options);
+                vert_deriv_scale.slice(0, 0, nz_).copy_(
+                    rdnw_for_scale.to(options.device(), options.dtype().toScalarType()));
             } else {
                 vert_deriv_scale = torch::zeros({nz_w_}, options);
             }
@@ -16065,13 +16083,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // 9F.D62 (review P0-A): nz_, not nz_w_ -- same reason as the site above.
                 torch::Tensor rdnw_fallback = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
                 if (rdnw_fallback.defined() && rdnw_fallback.numel() > 0) {
-                    int rdnw_numel = static_cast<int>(rdnw_fallback.numel());
-                    if (rdnw_numel >= nz_w_) {
-                        vert_deriv_scale = rdnw_fallback.slice(0, 0, nz_w_).to(options.device(), options.dtype().toScalarType());
-                    } else {
-                        vert_deriv_scale = torch::zeros({nz_w_}, options);
-                        vert_deriv_scale.slice(0, 0, rdnw_numel).copy_(rdnw_fallback.to(options.device(), options.dtype().toScalarType()));
-                    }
+                    // 9F.D67 (review P0-1): the SAME dead branch, in the dz-fallback twin.
+                    // D62 fixed the caller here too and left this condition, so both copies
+                    // carried it. That makes five times in this campaign that a block was
+                    // corrected in one place and its twin left behind; the grep for the
+                    // condition, not for the caller, is what finds them.
+                    TORCH_CHECK(rdnw_fallback.numel() == nz_,
+                                "vert_deriv_scale (dz fallback): expected exactly nz_=", nz_,
+                                " mass-level rdnw values, got ", rdnw_fallback.numel());
+                    vert_deriv_scale = torch::zeros({nz_w_}, options);
+                    vert_deriv_scale.slice(0, 0, nz_).copy_(
+                        rdnw_fallback.to(options.device(), options.dtype().toScalarType()));
                 } else {
                     vert_deriv_scale = torch::zeros({nz_w_}, options);
                 }
