@@ -15,9 +15,21 @@
 // cp/cv = 1.4 exactly. A forward-only check cannot see that, and D47 shipped with only a
 // forward measurement. Verified symbolically before this test was written.
 //
-// Structure: analytic Jacobian <- AD JVP -> finite differences, in float32 and float64,
-// plus a negative control that the OLD formula fails. Three independent routes to the
-// same derivative, because agreement between two of them proves less than it looks.
+// Structure: analytic Jacobian <- REVERSE-mode AD -> finite differences, in float32 and
+// float64, plus a negative control that the OLD formula fails. Three independent routes to
+// the same derivative, because agreement between two of them proves less than it looks.
+//
+// 9F.D52 CORRECTION (review section 6). This header used to say "AD JVP". It is not one.
+// torch::autograd::grad({a.sum()}, {x}) is REVERSE mode with an all-ones cotangent -- a
+// VJP. For a pointwise diagonal operator that recovers the diagonal, so the numbers below
+// are right and the checks are real, but the label was wrong and it hid three gaps:
+// LibTorch's forward-mode dual path was never entered, the direction was always the
+// implicit all-ones one rather than an arbitrary mixed (dtheta, dp), and the
+// forward/reverse dot-product identity was never checked. In a project whose GMRES matvec
+// IS a forward JVP, calling the adjoint path "JVP" is not a naming slip.
+//
+// AD_Tangent_Contract now covers all three, for this helper and for the pressure
+// integrator. What remains here is the reverse-mode and FD evidence, correctly named.
 
 #include "../wrf_hydrostatic_pressure.h"
 
@@ -100,18 +112,18 @@ int main() {
                            "cv=cp-R_d both hold (rel=" + sci(rel) + ")");
     }
 
-    // --- ANALYTIC vs AD: d(alpha)/d(theta) = alpha/theta ---
+    // --- ANALYTIC vs REVERSE-mode AD: d(alpha)/d(theta) = alpha/theta ---
     {
         auto th = th64.clone().requires_grad_(true);
         auto a  = compute_inverse_density(th, p64, RD, CV, CP, P1000);
         auto g  = torch::autograd::grad({a.sum()}, {th})[0];
         auto analytic = compute_inverse_density(th64, p64, RD, CV, CP, P1000) / th64;
         const double rel = ((g - analytic).abs() / analytic.abs()).max().item<double>();
-        check(rel < 1e-12, "AD d(alpha)/d(theta) == alpha/theta (rel=" +
+        check(rel < 1e-12, "reverse-mode d(alpha)/d(theta) == alpha/theta (rel=" +
                            sci(rel) + ")");
     }
 
-    // --- ANALYTIC vs AD: d(alpha)/d(p) = cvpm * alpha/p ---
+    // --- ANALYTIC vs REVERSE-mode AD: d(alpha)/d(p) = cvpm * alpha/p ---
     // This is the one the old formula gets wrong, so it carries the weight here.
     {
         auto p = p64.clone().requires_grad_(true);
@@ -120,7 +132,7 @@ int main() {
         const double cvpm = -static_cast<double>(CV) / static_cast<double>(CP);
         auto analytic = cvpm * compute_inverse_density(th64, p64, RD, CV, CP, P1000) / p64;
         const double rel = ((g - analytic).abs() / analytic.abs()).max().item<double>();
-        check(rel < 1e-12, "AD d(alpha)/d(p) == cvpm*alpha/p (rel=" +
+        check(rel < 1e-12, "reverse-mode d(alpha)/d(p) == cvpm*alpha/p (rel=" +
                            sci(rel) + ")");
         check((g < 0).all().item<bool>(),
               "and it is NEGATIVE: alpha falls as pressure rises");
@@ -128,8 +140,8 @@ int main() {
 
     // --- FINITE DIFFERENCES: a third, independent route ---
     // Central differences in float64 with a relative step. Agreement between analytic and
-    // AD alone would not distinguish "both right" from "both wrong in the same way",
-    // since AD differentiates the same expression the analytic form was derived from.
+    // reverse-mode AD alone would not distinguish "both right" from "both wrong in the
+    // same way", since AD differentiates the same expression the analytic form came from.
     {
         const double eps = 1e-6;
         auto p_hi = p64 * (1.0 + eps);

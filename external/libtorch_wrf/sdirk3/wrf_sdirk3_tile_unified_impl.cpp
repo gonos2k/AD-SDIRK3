@@ -85,7 +85,13 @@
 // USAGE:
 //   - rdzw = rdnw (direct, no negation)
 //   - dnw = 1/rdnw (direct, positive result)
-//   - All vertical derivatives use positive rdnw/rdn directly
+//   - Vertical operators consume the MAGNITUDE and must supply the eta orientation
+//     THEMSELVES. This line used to read "All vertical derivatives use positive
+//     rdnw/rdn directly", which is the opposite instruction and is how the hydrostatic
+//     pressure integrator came to divide by |rdnw| in an algebra written for WRF's
+//     negative rdnw, returning p' negated (fixed 9F.D50, kEtaOrientation in
+//     wrf_hydrostatic_pressure.cpp; pinned by Hydrostatic_Pressure_Orientation_Contract).
+//     Left as written, this comment would license removing that fix.
 // =========================================================================
 //
 // =========================================================================
@@ -120,6 +126,7 @@
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_metric_policy.h"
+#include "wrf_sdirk3_response_probe.h"
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
@@ -2626,14 +2633,28 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnwTensor(
         // v20.14r27o: WRF Fortran rdn < 0. Convert to positive at extraction.
         else if (current_src_type == 4) {
             // Convert to positive via abs() and replace NaN/Inf with eps.
-            // 9F.D51 (review section 4): fail closed, skipping the k=0 sentinel (WRF's
-            // rdn(1) is undefined). The reviewer asks for this whole rdn-as-rdnw fallback
-            // to be DELETED in production; that is a larger change than a policy sweep, so
-            // it is flagged rather than done here.
-            auto rdn_grid = grid_info_->rdn;
-            auto normalized = require_metric_magnitude_tensor(rdn_grid, "grid rdn (as rdnw)",
-                                                              /*skip_leading=*/1);
-            cache = normalized.to(device, cache_dtype, /*non_blocking=*/true);
+            // 9F.D57 (review sections 3.1 + 3.2): the cross-stagger fallback is DELETED.
+            //
+            // rdnw and rdn are metrics of DIFFERENT staggers:
+            //     rdnw_k = 1/(eta_w,k+1 - eta_w,k)      (full-level spacing)
+            //     rdn_k  = 1/(eta_m,k   - eta_m,k-1)    (mass-level spacing)
+            // On a uniform eta grid they coincide, which is exactly why this survived; on
+            // a STRETCHED grid they do not, and substituting one for the other is not a
+            // data fallback but a different discrete operator, feeding the hydrostatic
+            // pressure integration, the vertical PGF, the acoustic coefficients and the
+            // geopotential tendency.
+            //
+            // It also carried the sentinel leak the review found independently: the policy
+            // helper validated rdn[1:] via skip_leading=1 but RETURNED abs() of the whole
+            // tensor, so WRF's undefined rdn(1) -- which this code deliberately sets to 0 --
+            // came back as rdnw[0] = 0, a zero reciprocal metric in a slot rdnw requires to
+            // be non-zero. Deleting the fallback removes the leak at its root rather than
+            // patching the helper to paper over a conversion that should not happen.
+            throw std::invalid_argument(
+                "SDIRK3 vertical metric: rdnw is unavailable and grid rdn will NOT be "
+                "substituted for it. rdn and rdnw are different staggers (mass-level vs "
+                "full-level eta spacing); they coincide only on a uniform grid, and rdn(1) "
+                "is undefined in WRF. Supply rdnw, the rdnw vector, or dnw.");
         }
         // Fallback: physical estimate using +nz/ztop (positive)
         // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw = nz/ztop (positive).
@@ -2678,13 +2699,30 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnwTensor(
                     ztop = std::max(z_top_min, max_cached / g_val);
                 }
             }
-            // PARITY FIX 2025-12-23: Guard against ztop<=0 when z_top_min=0 and max_cached<=0.
-            // This prevents nz/ztop from becoming inf/NaN.
-            if (ztop <= 0.0f) ztop = z_top_default;
-            float rdnw_fallback = static_cast<float>(nz) / ztop;  // Positive
-            // PERF FIX: Store as float32
-            cache = torch::full({nz}, rdnw_fallback,
-                                    torch::TensorOptions().device(device).dtype(cache_dtype));
+            // 9F.D52 (review section 3.4): THIS FALLBACK WAS DIMENSIONALLY WRONG.
+            //
+            // ztop comes from max(ph_base)/g, i.e. METRES. rdnw is 1/(delta eta) and eta is
+            // WRF's DIMENSIONLESS mass coordinate running 1 -> 0, so rdnw is dimensionless
+            // too. nz/ztop has units of m^-1. It is not a wrong value of the right quantity;
+            // it is a different quantity.
+            //
+            // The size of the error is not subtle. For nz=64 and ztop=16000 m it yields
+            // 0.004, against a true uniform-grid rdnw of 64 -- a factor 1.6e4 -- and it
+            // enters the pressure recurrence as c1*mu'/rdnw, so p' comes out 1.6e4 times
+            // too large with units of Pa*m.
+            //
+            // A dimensionally-correct uniform fallback exists (a uniform eta grid has
+            // delta eta = 1/nz, so rdnw = nz, with no ztop involved at all). It is still
+            // not written here, because inventing grid geometry is the defect regardless of
+            // whether the invention has the right units: this branch is reached only when
+            // rdnw, dnw AND rdn are all absent, which is a broken base state, not a grid
+            // whose metric can be guessed. Same policy as wrf_sdirk3_metric_policy.h.
+            (void)ztop; (void)z_top_default;
+            throw std::invalid_argument(
+                "SDIRK3 vertical metric: no usable rdnw source (grid rdnw, rdnw vector, "
+                "grid dnw and grid rdn are all absent). Refusing to synthesise one from "
+                "nz/ztop: that expression has units of m^-1 while rdnw = 1/(delta eta) is "
+                "dimensionless, and for nz=64, ztop=16 km it is wrong by a factor 1.6e4.");
         }
         // Update cache tracking (source epoch already captures the right epoch)
         // PARITY FIX 2025-12-21: Update device-specific cache tracking variables.
@@ -2699,6 +2737,36 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnwTensor(
         // PARITY FIX 2025-12-20: Cache padded tensor directly to avoid repeated rebuilds.
         // If source has fewer elements than nz, pad now and store padded version.
         if (cache.numel() < nz) {
+            // 9F.D57 (review section 3.4). The review asks for padding to be forbidden --
+            // a short metric is a malformed grid, and repeating the last layer's thickness
+            // disguises it as a valid one, the same shape as substituting eps.
+            //
+            // FORBIDDING IT OUTRIGHT ABORTS THE MODEL. Measured, not predicted:
+            //     "source supplies 64 levels but nz = 65"
+            // rdnw is defined on the nz_ MASS levels, and four call sites ask for it on the
+            // nz_w_ = nz_+1 W levels (:15247, :15512, :15679, :15736). So the common case
+            // is not a malformed grid at all -- it is a STAGGER MISMATCH IN THE CALLER, and
+            // the pad is silently standing in for a mass-to-w extension.
+            //
+            // So: allow EXACTLY the one-level stagger extension, preserving existing
+            // behaviour byte-for-byte, and fail closed on everything else, which is the
+            // genuinely malformed case the review is aiming at.
+            //
+            // WHAT IS STILL UNRESOLVED, and is flagged rather than quietly kept: repeating
+            // the last mass-level value is not obviously the right extension to the top w
+            // level. WRF has rdzw for w-level work. Whether these four callers should use
+            // rdnw at all is a correctness question this commit does not settle -- it only
+            // stops the pad from covering for arbitrary length mismatches as well.
+            if (cache.numel() != nz - 1) {
+                std::ostringstream oss;
+                oss << "SDIRK3 vertical metric: source supplies " << cache.numel()
+                    << " levels but nz = " << nz << ", a shortfall of "
+                    << (nz - cache.numel()) << ". Only the single-level mass->w stagger "
+                    << "extension (nz_w = nz+1) is allowed; a larger shortfall is a "
+                    << "malformed grid, and padding it would integrate without complaint "
+                    << "while describing a different atmosphere.";
+                throw std::invalid_argument(oss.str());
+            }
             auto last = cache.index({-1});
             auto pad_count = nz - cache.numel();
             auto pad = last.expand({pad_count});
@@ -5263,6 +5331,179 @@ vertical_coefficients:
     
     // Pack current state with staggered dimensions
     torch::Tensor U_n = packState(u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
+
+    // 9F.D58 (review sections 6, 11): the response measurement, hooked HERE rather than
+    // inside computeUnifiedRHS. The review's objection to D54-D56 was structural, not
+    // stylistic: a probe that recursively calls the function it is measuring is not an
+    // observer. From this point the RHS calls are ordinary calls, so there is no
+    // re-entrancy into a function mid-execution, no recursion guard to get wrong, and no
+    // exception-safety hole. It still adds RHS evaluations, which is why it is opt-in and
+    // once-only and why the run it produces is a MEASUREMENT run, not a production run.
+    //
+    // THE SCALES ARE SOURCE-VERIFIED, because guessing them is what invalidated D55/D56.
+    // The packed state holds UNCOUPLED components, but the tendencies do not all match:
+    //   ru, rv, rw, rt  COUPLED   -- the damping terms add c1h_mu_c2h * (field - ref) to
+    //                               them (:22293, :22113), and :20544 divides ru_tend by
+    //                               mu_typical to recover a velocity tendency
+    //   rph             UNCOUPLED -- :21787 explicitly divides by mut, "convert ph_tend
+    //                               from mass-weighted to physical tendency"
+    //   rmu             UNCOUPLED -- mu is already a mass
+    // so tendency_scale = mu_ref * state_scale for the first group and state_scale for the
+    // second. Dividing a coupled tendency by an uncoupled scale is exactly the ~1e5 error
+    // that made me withdraw the D56 reading.
+    if (const char* rp = std::getenv("WRF_SDIRK3_RESPONSE_PROBE")) {
+        static std::atomic<bool> done{false};
+        bool expected_flag = false;
+        if (rp[0] != '0' && done.compare_exchange_strong(expected_flag, true)) {
+            torch::NoGradGuard no_grad;
+            using namespace wrf::sdirk3::probe;
+
+            double mu_ref = 1.0e5;
+            if (mu_base_.defined() && mu_base_.numel() > 0)
+                mu_ref = mu_base_.abs().mean().item<double>();
+
+            const int64_t su = int64_t(ny_)*nz_*nx_u_, sv = int64_t(ny_v_)*nz_*nx_,
+                          sw = int64_t(ny_)*nz_w_*nx_, sph = int64_t(ny_)*nz_w_*nx_,
+                          st = int64_t(ny_)*nz_*nx_,   smu = int64_t(ny_)*nx_;
+            const double ss[6]  = {10.0, 10.0, 0.1, 1.0e3, 1.0, 10.0};
+            const double cpl[6] = {mu_ref, mu_ref, mu_ref, 1.0, mu_ref, 1.0};
+            const char* nm[6]   = {"ru", "rv", "rw", "rph", "rt", "rmu"};
+            const int64_t off[6] = {0, su, su+sv, su+sv+sw, su+sv+sw+sph, su+sv+sw+sph+st};
+            const int64_t len[6] = {su, sv, sw, sph, st, smu};
+
+            ProbeSpec spec;
+            for (int c = 0; c < 6; ++c)
+                spec.channels.push_back(ChannelSpec{nm[c], off[c], len[c], ss[c],
+                                                    cpl[c] * ss[c]});
+            spec.amplitudes = {0.25, 0.5, 1.0};
+            spec.seed = 20260801;
+            spec.central = true;
+            spec.dt = (dt_stage_ > 0.0f) ? double(dt_stage_) : 600.0;
+
+            const bool at_rest = (rp[0] == 'r');
+            // 9F.D61: a BASE SCALE, to test whether the explicit channel's state
+            // dependence is a finding or a tautology.
+            //
+            // sigma_max(ExplicitOnly) went 1.2e-09 -> 1.0e-04 between U=0 and U=jet, and I
+            // reported the 8.6e4 as a localisation. But the explicit channel is advective,
+            // u.grad(u) vanishes IDENTICALLY at u=0, so "grows from ~0" is what the algebra
+            // guarantees, not a discovery -- the same shape as the mu-invariance that the
+            // previous adversarial pass deflated.
+            //
+            // The discriminator is the SCALING, not the endpoints. Linearising u.grad(u)
+            // about a state U gives a Jacobian LINEAR in U, so sigma_explicit must be
+            // proportional to the base amplitude. If it is, the 8.6e4 is bookkeeping. If it
+            // grows faster, something beyond advection is involved and the localisation
+            // survives.
+            double base_scale = 1.0;
+            if (const char* bs = std::getenv("WRF_SDIRK3_PROBE_BASE_SCALE"))
+                base_scale = std::atof(bs);
+            auto base = at_rest ? torch::zeros_like(U_n) : (U_n * base_scale);
+
+            std::cerr << "SDIRK3_RESPONSE base=" << (at_rest ? "rest" : "jet")
+                      << " base_scale=" << base_scale
+                      << " mu_ref=" << mu_ref << " dt=" << spec.dt
+                      << "  (gain = rms response in units of the responding channel's own"
+                      << " scale, per dt, per unit kick)" << std::endl;
+            auto rhs_fn = [&](const torch::Tensor& X) {
+                return computeUnifiedRHS(X, wrf::sdirk3::RhsMode::Full);
+            };
+            auto res = measure_response(rhs_fn, base, spec);
+            for (const auto& row : res.rows) {
+                std::ostringstream o;
+                o << "SDIRK3_RESPONSE kick=" << row.kicked << " amp=" << row.amplitude;
+                for (int r = 0; r < 6; ++r) o << " " << nm[r] << "=" << row.gain_rms[r];
+                std::cerr << o.str() << std::endl;
+            }
+            for (int c = 0; c < 6; ++c) {
+                std::ostringstream o;
+                o << "SDIRK3_RESPONSE_LINEARITY kick=" << nm[c];
+                for (int r = 0; r < 6; ++r) o << " " << nm[r] << "="
+                                             << res.linearity_spread[c][r];
+                std::cerr << o.str() << std::endl;
+            }
+
+            // 9F.D59 (review sections 10, 12): LEADING SINGULAR AMPLIFICATION.
+            //
+            // The coupling matrix above reports entries. For a NON-NORMAL operator the
+            // entries -- and the eigenvalues -- do not bound the transient response: the
+            // instrument's own fixture is a matrix with every eigenvalue 1 and
+            // sigma_max = 100.01. So an operator can look state-invariant entry by entry
+            // and still have a leading singular direction that is not. That is exactly the
+            // gap left by the coupling matrix, and it is the reason this is measured
+            // rather than argued from the entries.
+            //
+            // J.v comes from central differences; J^T.w from AD reverse mode through the
+            // production RHS. The VJP is also the 4D-Var adjoint path, so this is the
+            // first time it is exercised across the WHOLE RHS rather than one helper. If
+            // it cannot run, that is a finding about the project's goal, not a probe
+            // failure -- and it is reported as such rather than silently degraded to
+            // something that returns numbers.
+            //
+            // 9F.D60: PER MODE, because the Full number is masked. sigma_max(Full) came out
+            // state-invariant with its leading direction 100% in w -- i.e. it is the
+            // acoustic w->mu coupling, which lives in the IMPLICIT channel. Any state
+            // dependence in the explicit channel is five orders smaller and cannot show
+            // through it. Splitting on RhsMode removes the mask, and it is the measurement
+            // that decides the reading offered after D59: that what changes with the jet is
+            // what the EXPLICIT channel hands the solve, not the implicit operator.
+            const wrf::sdirk3::RhsMode sig_modes[3] = {
+                wrf::sdirk3::RhsMode::Full,
+                wrf::sdirk3::RhsMode::ExplicitOnly,
+                wrf::sdirk3::RhsMode::ImplicitOnly};
+            const char* sig_mode_name[3] = {"Full", "ExplicitOnly", "ImplicitOnly"};
+            for (int sm = 0; sm < 3; ++sm)
+            {
+                const auto this_mode = sig_modes[sm];
+                auto jvp = [&](const torch::Tensor& v) {
+                    const double e = 1.0e-3;
+                    return (computeUnifiedRHS(base + e * v, this_mode)
+                          - computeUnifiedRHS(base - e * v, this_mode))
+                           / (2.0 * e);
+                };
+                bool vjp_ok = true;
+                std::string vjp_err;
+                auto vjp = [&](const torch::Tensor& w) -> torch::Tensor {
+                    try {
+                        torch::AutoGradMode enable(true);
+                        auto Ug = base.detach().clone().set_requires_grad(true);
+                        auto F = computeUnifiedRHS(Ug, this_mode);
+                        auto g = torch::autograd::grad({F}, {Ug}, {w.detach()},
+                                                       /*retain_graph=*/false,
+                                                       /*create_graph=*/false,
+                                                       /*allow_unused=*/true);
+                        if (!g.empty() && g[0].defined()) return g[0];
+                        vjp_ok = false; vjp_err = "grad returned undefined";
+                    } catch (const std::exception& e) {
+                        vjp_ok = false; vjp_err = e.what();
+                    }
+                    return torch::zeros_like(base);
+                };
+                auto sig = power_iterate_sigma_max(jvp, vjp, base, spec, 30, 1e-3);
+                if (!vjp_ok) {
+                    std::cerr << "SDIRK3_SIGMA mode=" << sig_mode_name[sm]
+                              << " VJP_FAILED: " << vjp_err
+                              << " -- sigma_max NOT reported, because a zero adjoint would "
+                                 "read as 'the operator does nothing'" << std::endl;
+                } else {
+                    std::ostringstream o;
+                    o << "SDIRK3_SIGMA base=" << (at_rest ? "rest" : "jet")
+                      << " base_scale=" << base_scale
+                      << " mode=" << sig_mode_name[sm]
+                      << " sigma_max=" << sig.sigma_max
+                      << " converged=" << (sig.converged ? 1 : 0)
+                      << " iters=" << sig.iterates.size() << " blockweight";
+                    for (int r = 0; r < 6; ++r) o << " " << nm[r] << "="
+                                                  << sig.block_weight[r];
+                    std::cerr << o.str() << std::endl;
+                    std::ostringstream h;
+                    h << "SDIRK3_SIGMA_HISTORY mode=" << sig_mode_name[sm];
+                    for (double x : sig.iterates) h << " " << x;
+                    std::cerr << h.str() << std::endl;
+                }
+            }
+        }
+    }
     
     // Pack tendency vector from WRF with staggered dimensions
     torch::Tensor F_phys = packState(ru_tend, rv_tend, rw_tend, 
@@ -17422,13 +17663,42 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // uninitialized in dry dynamics. Replace NaN with 0 (dry assumption).
             // v20.9: Also sanitize Inf values (belt-and-suspenders for garbage data).
             {
-                auto bad_mask = cqw_at_w.isnan() | cqw_at_w.isinf();
+                // 9F.D53 (review section 5): the BOUNDARY may be undefined; the INTERIOR
+                // may not.
+                //
+                // This replaced every non-finite cqw with 0, i.e. with DRY. At the vertical
+                // boundaries that is defensible -- cqw is interpolated to w-levels and the
+                // outermost values have no two mass levels to average, so they are
+                // undefined rather than wrong, and em_b_wave is dry anyway. In the INTERIOR
+                // it silently rewrites "the thermodynamics broke" as "there is no water
+                // vapour here", which is a different atmosphere that integrates happily.
+                //
+                // The dry case is unaffected: a dry run has cqw = 0 everywhere and no
+                // non-finite interior values, so this path never fires. It exists for the
+                // moist extension, where the old behaviour would have been silent.
                 torch::NoGradGuard no_grad;
+                auto bad_mask = cqw_at_w.isnan() | cqw_at_w.isinf();
                 if (bad_mask.any().item<bool>()) {
+                    const int64_t nk = cqw_at_w.size(1);
+                    if (nk > 2) {
+                        auto interior_bad = bad_mask.slice(1, 1, nk - 1);
+                        if (interior_bad.any().item<bool>()) {
+                            std::ostringstream oss;
+                            oss << "SDIRK3 W-PGF: cqw has "
+                                << interior_bad.sum().item<int64_t>()
+                                << " non-finite values in the INTERIOR (k=1.." << (nk - 2)
+                                << "). Refusing to replace them with 0: that would recast a "
+                                << "thermodynamic failure as a dry column, which integrates "
+                                << "without complaint and is not the same atmosphere. "
+                                << "Non-finite values at the k=0 / k=" << (nk - 1)
+                                << " boundaries are accepted and set dry.";
+                            throw std::invalid_argument(oss.str());
+                        }
+                    }
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                         std::cerr << "[SDIRK3] W-PGF: cqw_at_w has "
                                   << bad_mask.sum().item<int64_t>()
-                                  << " NaN/Inf values, replacing with 0 (dry)" << std::endl;
+                                  << " non-finite BOUNDARY values, setting dry" << std::endl;
                     }
                     cqw_at_w = torch::where(bad_mask, torch::zeros_like(cqw_at_w), cqw_at_w);
                 }
@@ -17437,47 +17707,42 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // WRF formula: cq1 = 1/(1+cqw), cq2 = cqw*cq1
             auto cq1 = 1.0f / (1.0f + cqw_at_w);  // Transform for vertical pressure gradient
             auto cq2 = cqw_at_w * cq1;  // Second moisture correction term
-            // Compute inverse density (alt) for temperature buoyancy
-            // Use simplified calculation: alt = rd * t / p
-            // This approximation is sufficient for the buoyancy calculation
-            torch::Tensor alt;  // WRF: alt = total inverse density
-            if (p_base_.defined() && p_base_.numel() > 0 && th_base_.defined() && th_base_.numel() > 0) {
-                // Use full computation if base state is available
-                // Note: This is a simplified version, the full computation is done earlier in pressure section
-                auto p_full_approx = p_base_ + torch::zeros_like(p_base_);  // Approximate full pressure
-                // 9F.D47: Exner-correct even on the simplified buoyancy path -- an
-                // approximation in the PRESSURE argument is deliberate; a wrong EOS is not.
-                alt = wrf::sdirk3::compute_inverse_density(
-                    t_full, p_full_approx, rd_, cv_, cp_, 100000.0f);
-            } else {
-                // Fallback: use a typical value for inverse density
-                alt = torch::full_like(t_full, 1.0f);  // ~1 m³/kg for typical atmosphere
-            }
-            
-            // Interpolate inverse density (alt) to w-points for temperature buoyancy
-            torch::Tensor alt_w;
-            if (!alt_w_work_.defined() || (alt_w_work_.size(0) != ny_) || (alt_w_work_.size(1) != nz_w_) || (alt_w_work_.size(2) != nx_)) {
-                alt_w_work_ = torch::zeros({ny_, nz_w_, nx_}, w.options());
-            } else {
-                alt_w_work_.zero_();  // Zero existing tensor in-place
-            }
-            alt_w = alt_w_work_;
-            
-            // Interpolate alt from mass points to w-points
-            // PERF FIX 2026-01-31: Prealloc+copy_ replaces vector<Tensor>+cat.
-            // alt_w already allocated/zeroed above via alt_w_work_.
-            // Bottom boundary: first mass level
-            alt_w.slice(1, 0, 1).copy_(alt.slice(1, 0, 1));
-            // Interior: average adjacent mass levels (k=1..nz_w-2)
-            if (nz_w_ > 2) {
-                int64_t n_interior = nz_w_ - 2;
-                alt_w.slice(1, 1, 1 + n_interior).copy_(
-                    0.5f * (alt.slice(1, 0, n_interior) + alt.slice(1, 1, n_interior + 1))
-                );
-            }
-            // Top boundary: last mass level
-            alt_w.slice(1, nz_w_ - 1, nz_w_).copy_(alt.slice(1, nz_ - 1, nz_));
-            
+            // 9F.D53 (review section 4): the W-PGF specific volume was DEAD, and is deleted.
+            //
+            // The review is right that this block evaluated the EOS at the BASE pressure and
+            // called the result "approximate full pressure" --
+            //     auto p_full_approx = p_base_ + torch::zeros_like(p_base_);
+            // where the added zero names the missing term and then adds nothing. D47 had
+            // corrected the EOS here and left the argument alone, so the formula became
+            // right while its input stayed wrong.
+            //
+            // Before changing the argument, MEASURED whether it mattered. It does not:
+            //   - the block DOES execute (one-shot probe, first RHS call)
+            //   - |p'|_max = 10.7 Pa against |p_b|_mean = 41461 Pa, so p'/p = 2.6e-4,
+            //     giving a 7.8e-05 relative change in alt -- well above float32 eps
+            //   - and yet scaling alt by 1.5x AND by 10x left the numerical fingerprint
+            //     BIT-IDENTICAL (aabc6dbd, three runs)
+            // because alt fed only alt_w, and alt_w was written and NEVER READ. The whole
+            // computation -- EOS call, w-level interpolation, the alt_w_work_ scratch
+            // buffer -- was dead.
+            //
+            // It is dead for a reason worth recording rather than rediscovering: WRF's
+            // pg_buoy_w does not use specific volume at all. The live rw tendency below
+            // (:17729) is WRF's own form,
+            //     cq1*rdn(k)*(p(i,k,j)-p(i,k-1,j)) - c1f(k)*muf - cq2*(c1f(k)*mubf+c2f(k))
+            // in which the vertical PGF and buoyancy are carried by pressure differences
+            // and column mass. alt is a leftover from an earlier formulation.
+            //
+            // Deleting beats fixing here. A corrected-but-inert computation is worse than
+            // none: it reads as the live thermodynamics, so the next person to look either
+            // repeats this measurement or, worse, wires it up and gets a double-counted
+            // buoyancy. cq1/cq2 above ARE live and keep their fail-close.
+            //
+            // If a specific-volume buoyancy is ever needed, compute it from
+            // p_base_ + p_pert_mass -- the same state the horizontal PGF uses -- never from
+            // p_base_ alone, because W-PGF and buoyancy nearly cancel and feeding them
+            // different thermodynamic states makes the residual an energy source.
+
             // Interpolate potential temperature (t) to w-points for temperature buoyancy
             torch::Tensor t_w;
             if (!t_w_work_.defined() || (t_w_work_.size(0) != ny_) || (t_w_work_.size(1) != nz_w_) || (t_w_work_.size(2) != nx_)) {
@@ -35721,11 +35986,11 @@ void TileSDIRK3UnifiedSolver::ensureDivergenceCache(
     // v20.14r27o: WRF Fortran rdn < 0 (eta decreasing). Convert to positive at extraction.
     else if (grid_info_ && grid_info_->rdn.defined() && grid_info_->rdn.numel() > 0) {
         // Convert to positive via abs() and replace NaN/Inf with eps
-        // 9F.D51 (review section 4): fail closed; k=0 is the WRF rdn sentinel.
-        auto rdn_grid = grid_info_->rdn;
-        auto normalized = require_metric_magnitude_tensor(rdn_grid, "grid rdn (as rdnw)",
-                                                          /*skip_leading=*/1);
-        rdnw_source = normalized.to(device, dtype, /*non_blocking=*/true);
+        // 9F.D57 (review sections 3.1 + 3.2): deleted here too -- this was the SECOND
+        // copy of the cross-stagger fallback. See the primary site in getRdnwTensor.
+        throw std::invalid_argument(
+            "SDIRK3 vertical metric: rdnw is unavailable and grid rdn will NOT be "
+            "substituted for it (different stagger; rdn(1) undefined in WRF).");
     }
     // No tensor source - leave rdnw_source undefined
 

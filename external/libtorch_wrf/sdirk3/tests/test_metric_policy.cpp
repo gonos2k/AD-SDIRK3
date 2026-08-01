@@ -159,7 +159,25 @@ int main() {
               "own memory, so abs_() in place would corrupt Fortran's array");
     }
 
-    constexpr int expected_checks = 12;
+    // --- 9F.D57: skip_leading RETURNS the skipped elements, unvalidated ---
+    // This is the trap behind the review's section-3.2 finding, made explicit. A caller
+    // that passes skip_leading and then USES element 0 as a metric gets whatever was
+    // there. getRdnTensor overwrites it; the deleted rdn-as-rdnw fallback did not, and
+    // shipped rdnw[0] = 0. Asserting the behaviour means the next person reads it here
+    // instead of deriving it from a wrong answer.
+    {
+        const float kN = std::numeric_limits<float>::quiet_NaN();
+        auto out = require_metric_magnitude_tensor(col({kN, -8.0f, -16.0f}), "rdn",
+                                                   /*skip_leading=*/1);
+        check(std::isnan(out[0].item<float>()),
+              "skip_leading does NOT clean the skipped element -- a NaN at k=0 survives "
+              "into the RETURN value, so the caller must overwrite it");
+        check(out[1].item<float>() == 8.0f,
+              "while the validated tail is converted normally, which is why this is a "
+              "trap rather than an obvious bug");
+    }
+
+    constexpr int expected_checks = 14;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
