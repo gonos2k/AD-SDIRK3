@@ -211,7 +211,62 @@ int main() {
               "a licence to skip it");
     }
 
-    constexpr int expected_checks = 9;
+    // === THE SDIRK SPECIALISATION, against the same closed-form machinery ===
+    // R(K,U) = K - F(U + dt*gamma*K)  =>  R_K = I - dt*gamma*J,  R_U = -J.
+    // These are the operators the wiring will bind to FGMRES and the RHS JVP, so the
+    // algebra gets a reference to fail against before any critical-path surgery.
+    {
+        using wrf::sdirk3::implicit_diff::sdirk_stage_tangent;
+        using wrf::sdirk3::implicit_diff::sdirk_stage_adjoint;
+
+        const double dt_gamma = 0.35;
+        const auto J = make_RU();                       // stand-in for dF/dY, non-symmetric
+        const auto I = torch::eye(N, opts);
+        const auto A = I - dt_gamma * J;                // = R_K
+        const auto A_inv = torch::linalg_inv(A);
+        const auto J_stage_exact = A_inv.matmul(J);     // dK/dU = A^-1 J
+
+        auto solve_A   = [&](const torch::Tensor& r) { return A_inv.mv(r); };
+        auto solve_A_T = [&](const torch::Tensor& r) { return A_inv.t().mv(r); };
+        auto applyJ    = [&](const torch::Tensor& v) { return J.mv(v); };
+        auto applyJ_T  = [&](const torch::Tensor& v) { return J.t().mv(v); };
+
+        auto dK = sdirk_stage_tangent(solve_A, applyJ, dU);
+        const double rel_t =
+            ((dK - J_stage_exact.mv(dU)).abs().max() / J_stage_exact.mv(dU).abs().max()).item<double>();
+        check(rel_t < 1e-12, "sdirk_stage_tangent == A^-1 J dU (rel=" + sci(rel_t) + ")");
+
+        auto Ubar = sdirk_stage_adjoint(solve_A_T, applyJ_T, Kbar);
+        const double rel_a =
+            ((Ubar - J_stage_exact.t().mv(Kbar)).abs().max() /
+             J_stage_exact.t().mv(Kbar).abs().max()).item<double>();
+        check(rel_a < 1e-12, "sdirk_stage_adjoint == (A^-1 J)^T Kbar (rel=" + sci(rel_a) + ")");
+
+        const double lhs = (dK * Kbar).sum().item<double>();
+        const double rhs = (dU * Ubar).sum().item<double>();
+        check(std::abs(lhs - rhs) / std::abs(lhs) < 1e-12,
+              "and the SDIRK pair satisfies the dot-product identity too");
+
+        // R_U = -J, NOT -I. Reading "U enters linearly" off the residual shape gives
+        // dK/dU = A^-1, which is wrong by a whole factor of J.
+        auto wrong_RU = solve_A(dU);                    // what R_U = -I would give
+        const double rel_wrong =
+            ((wrong_RU - dK).abs().max() / dK.abs().max()).item<double>();
+        check(rel_wrong > 0.1,
+              "treating R_U as -I instead of -J gives a materially different tangent (rel=" +
+              sci(rel_wrong) + ") -- U enters through F, so its derivative carries J");
+
+        // the adjoint order: J^T A^-T, not J^T A^-1. Identical only if A is symmetric.
+        auto wrong_order = applyJ_T(solve_A(Kbar));
+        const double rel_order =
+            ((wrong_order - Ubar).abs().max() / Ubar.abs().max()).item<double>();
+        check(rel_order > 1e-2,
+              "and using A^-1 where A^-T is required differs by " + sci(rel_order) +
+              " -- self-consistent-looking, and wrong because A = I - dt*gamma*J is not "
+              "symmetric");
+    }
+
+    constexpr int expected_checks = 14;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

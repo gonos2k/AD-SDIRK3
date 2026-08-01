@@ -73,6 +73,51 @@ inline torch::Tensor stage_adjoint(const LinearSolve& solve_RK_transpose,
     return -apply_RU_transpose(solve_RK_transpose(Kbar));
 }
 
+
+// ---------------------------------------------------------------------------------------
+// THE SDIRK SPECIALISATION.
+//
+// The generic formulas above take R_K and R_U as given. For this solver they are not
+// arbitrary -- the stage residual is (newton_solver.cpp:4649)
+//
+//     R(K, U) = K - F(U + dt*gamma*K)
+//
+// so, differentiating at the converged root with J = dF/dY evaluated at Y = U + dt*gamma*K,
+//
+//     R_K = I - dt*gamma*J        <- EXACTLY the operator FGMRES already inverts
+//     R_U = -J
+//
+// and therefore
+//
+//     dK/dU   =  A^{-1} J          with A = I - dt*gamma*J
+//     (dK/dU)^T =  J^T A^{-T}
+//
+// Two things are worth stating because they are where a wiring bug would hide.
+//
+// FIRST, R_U is -J, NOT -I. It is tempting to read "U enters R linearly" from the shape of
+// the residual and write R_U = -I, which would give dK/dU = A^{-1} and is wrong by a whole
+// factor of J. U enters through F, so its derivative carries J.
+//
+// SECOND, the ORDER differs between the tangent and the adjoint, and they are not
+// transposes of each other written the same way round: the tangent applies J and THEN
+// solves, the adjoint solves and THEN applies J^T. Getting this backwards produces
+// J^T A^{-1} rather than J^T A^{-T}, which is self-consistent-looking and wrong unless A
+// is symmetric -- and A = I - dt*gamma*J is not, since J is not.
+//
+// Both are asserted in Implicit_Diff_Contract against a closed-form J, so the wiring has a
+// reference to fail against rather than a comment to agree with.
+inline torch::Tensor sdirk_stage_tangent(const LinearSolve& solve_A,      // A^{-1}
+                                         const ApplyOperator& apply_J,    // J
+                                         const torch::Tensor& dU) {
+    return solve_A(apply_J(dU));            // A^{-1} J dU
+}
+
+inline torch::Tensor sdirk_stage_adjoint(const LinearSolve& solve_A_transpose,  // A^{-T}
+                                         const ApplyOperator& apply_J_transpose, // J^T
+                                         const torch::Tensor& Kbar) {
+    return apply_J_transpose(solve_A_transpose(Kbar));   // J^T A^{-T} Kbar
+}
+
 }  // namespace implicit_diff
 }  // namespace sdirk3
 }  // namespace wrf
