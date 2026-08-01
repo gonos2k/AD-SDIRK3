@@ -127,6 +127,57 @@
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_metric_policy.h"
 #include "wrf_sdirk3_response_probe.h"
+
+// 9F.D75 (review section 7): STRICT parsing for the diagnostic environment variables.
+//
+// The probes I added read them loosely:
+//     env && env[0] != '0'        -> "false", "no", "off", "garbage" all mean ON
+//     std::atof(env)              -> "abc" -> 0, "600junk" -> 600, "NaN" -> NaN
+// with no finiteness or positivity check on the numeric one.
+//
+// This repo had already eliminated that defect class in ExperimentConfig and in
+// ProbeSpec's validator, and I reintroduced it in the newest code. A diagnostic that
+// silently turns ON because someone wrote WRF_SDIRK3_ADJOINT_DRIVER=false, or that runs a
+// dt=NaN adjoint because of a typo, produces output that is read as a measurement.
+namespace {
+
+// Accepts only an explicit affirmative or negative; anything else is rejected loudly
+// rather than guessed.
+inline bool probe_env_enabled(const char* name) {
+    const char* v = std::getenv(name);
+    if (!v || !*v) return false;
+    std::string s(v);
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+    if (s=="1"||s=="true"||s=="yes"||s=="on"||s=="t"||s=="y")   return true;
+    if (s=="0"||s=="false"||s=="no"||s=="off"||s=="f"||s=="n")  return false;
+    throw std::invalid_argument(
+        std::string("SDIRK3 diagnostic env ") + name + " = '" + v +
+        "' is not a boolean. Refusing to guess: a probe that turns on because the value "
+        "was unrecognised produces output that is read as a measurement.");
+}
+
+// Same discipline for the numeric one: the WHOLE string must parse, and the result must
+// be finite and positive.
+inline double probe_env_positive_double(const char* name, double fallback) {
+    const char* v = std::getenv(name);
+    if (!v || !*v) return fallback;
+    try {
+        std::size_t used = 0;
+        const double d = std::stod(std::string(v), &used);
+        if (used != std::string(v).size())
+            throw std::invalid_argument("trailing characters");
+        if (!std::isfinite(d) || !(d > 0.0))
+            throw std::invalid_argument("must be finite and > 0");
+        return d;
+    } catch (const std::exception& e) {
+        throw std::invalid_argument(
+            std::string("SDIRK3 diagnostic env ") + name + " = '" + v + "' is not usable ("
+            + e.what() + "). Refusing to substitute a default.");
+    }
+}
+
+}  // namespace
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
@@ -5398,8 +5449,8 @@ vertical_coefficients:
                 // the forward solve was: if the transpose solve stagnates at 600 and
                 // converges at 60, the adjoint is blocked by the forward's wall rather
                 // than by anything specific to the adjoint.
-                float dtv = 600.0f;
-                if (const char* d = std::getenv("WRF_SDIRK3_ADJOINT_DT")) dtv = std::atof(d);
+                const float dtv = static_cast<float>(
+                    probe_env_positive_double("WRF_SDIRK3_ADJOINT_DT", 600.0));
                 const float gam = 0.435866521508459f;
                 // Each mode in its OWN try, so a failure in one still reports the other.
                 // Bundling them would have hidden which of the two broke.
@@ -5450,10 +5501,9 @@ vertical_coefficients:
     };
     static std::atomic<bool> adj_driver_done{false};
     bool adj_expected = false;
-    const char* adj_env = std::getenv("WRF_SDIRK3_ADJOINT_DRIVER");
     AdjointDriverAtExit adjoint_driver{
         this, &U_n,
-        adj_env && adj_env[0] != '0' &&
+        probe_env_enabled("WRF_SDIRK3_ADJOINT_DRIVER") &&
             adj_driver_done.compare_exchange_strong(adj_expected, true)};
 
     // 9F.D58 (review sections 6, 11): the response measurement, hooked HERE rather than
@@ -5519,9 +5569,8 @@ vertical_coefficients:
             // proportional to the base amplitude. If it is, the 8.6e4 is bookkeeping. If it
             // grows faster, something beyond advection is involved and the localisation
             // survives.
-            double base_scale = 1.0;
-            if (const char* bs = std::getenv("WRF_SDIRK3_PROBE_BASE_SCALE"))
-                base_scale = std::atof(bs);
+            const double base_scale =
+                probe_env_positive_double("WRF_SDIRK3_PROBE_BASE_SCALE", 1.0);
             auto base = at_rest ? torch::zeros_like(U_n) : (U_n * base_scale);
 
             std::cerr << "SDIRK3_RESPONSE base=" << (at_rest ? "rest" : "jet")
@@ -16041,6 +16090,22 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 vert_deriv_scale = torch::zeros({nz_w_}, options);
                 vert_deriv_scale.slice(0, 0, nz_).copy_(
                     rdnw_for_scale.to(options.device(), options.dtype().toScalarType()));
+                // 9F.D75 (review section 2): make the unused top slot a CANARY.
+                //
+                // D62 argued, and the fingerprint agreed, that index nz_ is never read --
+                // the consumer stops at nz_w_-2 = nz_-1. But a ZERO sentinel is a weak
+                // test of that claim: if something did read it, zero would contribute
+                // nothing to a sum and little to a product, so the claim would survive its
+                // own violation. NaN cannot be read without the result announcing it.
+                //
+                // Opt-in, because it is a deliberate poison: default stays 0 so production
+                // is unchanged, and the fingerprint under the canary is the actual
+                // evidence that the slot is dead.
+                if (probe_env_enabled("WRF_SDIRK3_METRIC_TOP_CANARY")) {
+                    vert_deriv_scale.index_put_(
+                        {nz_w_ - 1},
+                        std::numeric_limits<float>::quiet_NaN());
+                }
             } else {
                 vert_deriv_scale = torch::zeros({nz_w_}, options);
             }
@@ -38830,7 +38895,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             //       of its argument, so the output genuinely does not depend on y
             // (c) is the interesting one: it would mean the fast operator is constant in
             // its argument by construction, which no amount of adjoint plumbing can fix.
-            if (std::getenv("WRF_SDIRK3_RHS_GRAD_PROBE")) {
+            if (probe_env_enabled("WRF_SDIRK3_RHS_GRAD_PROBE")) {
                 static std::atomic<bool> gp_done{false};
                 bool gp_expected = false;
                 if (gp_done.compare_exchange_strong(gp_expected, true)) {
