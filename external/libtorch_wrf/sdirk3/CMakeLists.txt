@@ -284,6 +284,12 @@ add_executable(test_ad_tangent_contract tests/test_ad_tangent_contract.cpp)
 target_link_libraries(test_ad_tangent_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME AD_Tangent_Contract COMMAND test_ad_tangent_contract)
 
+# 9F.D58 (review sections 6, 11): the response probe as a TESTABLE instrument, validated
+# against operators whose Jacobian is known exactly.
+add_executable(test_response_probe tests/test_response_probe.cpp)
+target_link_libraries(test_response_probe PRIVATE wrf_sdirk3::core)
+add_test(NAME Response_Probe_Contract COMMAND test_response_probe)
+
 # 9F.D45 (review section 4): the C-boundary return contract. Links core, because the
 # point is to call the REAL exported symbol -- a helper that throws and an ABI that
 # converts throws into a status code are different claims.
