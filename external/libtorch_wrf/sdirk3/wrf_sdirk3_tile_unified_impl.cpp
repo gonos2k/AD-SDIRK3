@@ -38908,6 +38908,50 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                         std::cerr << "SDIRK3_TRANSPOSE_IDENTITY THREW: " << e.what()
                                   << std::endl << std::flush;
                     }
+
+                    // 9F.D71 (review section 5): IS THE PRECONDITIONER SYMMETRIC?
+                    //
+                    // The adjoint's blocker is now known: the transpose solve runs with
+                    // IdentityTransposePreconditioner, i.e. no M at all, against an
+                    // operator the forward solve cannot invert without one. The size of
+                    // the remaining work turns entirely on one question -- if M is
+                    // symmetric then M^{-T} = M^{-1} and the existing preconditioner can
+                    // simply be used in the transpose solve; if it is not, a genuine
+                    // transpose has to be built and verified.
+                    //
+                    // Measured, not assumed, by the review's own identity:
+                    //     <M^-1 v, w>  ==  <v, M^-1 w>      iff M^{-1} is symmetric
+                    // A one-line answer to a question that otherwise sizes at "unknown".
+                    if (unified_precond_) {
+                        try {
+                            torch::NoGradGuard ng;
+                            auto gen3 = at::detail::createCPUGenerator(20260802);
+                            auto opts_p = linearization_point.options();
+                            auto v = torch::randn(linearization_point.numel(), gen3,
+                                                  torch::TensorOptions().dtype(opts_p.dtype()))
+                                         .to(opts_p.device());
+                            auto w = torch::randn(linearization_point.numel(), gen3,
+                                                  torch::TensorOptions().dtype(opts_p.dtype()))
+                                         .to(opts_p.device());
+                            auto Mv = unified_precond_->apply(v);
+                            auto Mw = unified_precond_->apply(w);
+                            const double lhs = (Mv * w).sum().item<double>();
+                            const double rhs = (v * Mw).sum().item<double>();
+                            const double den = std::max(std::abs(lhs), std::abs(rhs));
+                            const double rel = den > 0 ? std::abs(lhs - rhs) / den : 0.0;
+                            std::cerr << "SDIRK3_PRECOND_SYMMETRY <Mv,w>=" << lhs
+                                      << " <v,Mw>=" << rhs << " rel=" << rel
+                                      << (rel < 1e-5 ? "  SYMMETRIC: M^-T = M^-1, reuse it"
+                                                     : "  NOT symmetric: a real M^-T is required")
+                                      << std::endl << std::flush;
+                        } catch (const std::exception& e) {
+                            std::cerr << "SDIRK3_PRECOND_SYMMETRY THREW: " << e.what()
+                                      << std::endl << std::flush;
+                        }
+                    } else {
+                        std::cerr << "SDIRK3_PRECOND_SYMMETRY: no preconditioner_ on this "
+                                     "solver -- cannot test" << std::endl << std::flush;
+                    }
                 }
             }
 
