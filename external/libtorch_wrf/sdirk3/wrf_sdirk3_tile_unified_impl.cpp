@@ -38932,6 +38932,106 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                         }
                     }
 
+                    // 9F.D76 (review section 6): does F depend on the FROZEN CONTEXT?
+                    //
+                    // The review asks whether the production residual really has
+                    // R_U = -J, or whether frozen operands add a -F_C * C_U term. The
+                    // obvious test -- FD on R(K, U +- eps*v) -- is CIRCULAR here: calling
+                    // computeUnifiedRHS with a perturbed ARGUMENT leaves U_ref_stage_,
+                    // w_ref and the frozen slow tendency untouched, so it measures
+                    // dF/dY at frozen context by construction and would agree with -J
+                    // whether or not the context matters.
+                    //
+                    // The non-circular question is whether F_C is non-zero at all: hold
+                    // the ARGUMENT fixed and change the CONTEXT. If the output moves, then
+                    // F depends on state that the step map derives from U_n, and
+                    // R_U = -J is incomplete for the full step even though it is exact for
+                    // a single frozen-context RHS call.
+                    try {
+                        torch::NoGradGuard ng;
+                        auto Y0 = linearization_point.detach().clone();
+                        const auto saved_ref = U_ref_stage_;
+
+                        U_ref_stage_ = Y0.clone();
+                        auto F_ctx1 = computeUnifiedRHS(Y0, wrf::sdirk3::RhsMode::ImplicitOnly)
+                                          .detach().clone();
+
+                        auto gen4 = at::detail::createCPUGenerator(20260803);
+                        auto pert = torch::randn(Y0.numel(), gen4,
+                                                 torch::TensorOptions().dtype(Y0.dtype()))
+                                        .to(Y0.device());
+                        // a 1% context change, i.e. a plausible stage-to-stage difference
+                        U_ref_stage_ = (Y0 + 0.01 * Y0.norm() / pert.norm().clamp_min(1e-30)
+                                             * pert).clone();
+                        auto F_ctx2 = computeUnifiedRHS(Y0, wrf::sdirk3::RhsMode::ImplicitOnly)
+                                          .detach().clone();
+
+                        U_ref_stage_ = saved_ref;   // restore before anything else runs
+
+                        // POSITIVE CONTROL, across all three modes. A bare rel=0 is
+                        // indistinguishable from a probe that measured nothing -- this
+                        // session has already been caught by an exact zero twice (the
+                        // uniform-kick response matrix, and F(0)=0 before it had a
+                        // control). If ImplicitOnly is insensitive but Full or
+                        // ExplicitOnly is NOT, the probe works and the insensitivity is a
+                        // property of the mode. If ALL THREE are exactly zero, the finding
+                        // is about this probe, not about the RHS.
+                        {
+                            const wrf::sdirk3::RhsMode ms[3] = {
+                                wrf::sdirk3::RhsMode::Full,
+                                wrf::sdirk3::RhsMode::ExplicitOnly,
+                                wrf::sdirk3::RhsMode::ImplicitOnly};
+                            const char* mns[3] = {"Full", "ExplicitOnly", "ImplicitOnly"};
+                            for (int mm = 0; mm < 3; ++mm) {
+                                U_ref_stage_ = Y0.clone();
+                                auto a1 = computeUnifiedRHS(Y0, ms[mm]).detach().clone();
+                                U_ref_stage_ = (Y0 + 0.01 * Y0.norm()
+                                                / pert.norm().clamp_min(1e-30) * pert).clone();
+                                auto a2 = computeUnifiedRHS(Y0, ms[mm]).detach().clone();
+                                const double dd = (a2 - a1).norm().item<double>();
+                                const double nn = a1.norm().item<double>();
+                                std::cerr << "SDIRK3_FROZEN_CONTEXT_MODE " << mns[mm]
+                                          << " rel=" << (nn > 0 ? dd / nn : 0.0)
+                                          << std::endl << std::flush;
+                            }
+                            U_ref_stage_ = saved_ref;
+                        }
+
+                        const double d = (F_ctx2 - F_ctx1).norm().item<double>();
+                        const double n = F_ctx1.norm().item<double>();
+                        const double rel = n > 0 ? d / n : 0.0;
+                        // The verdict is CONDITIONAL, and the condition is printed with
+                        // it. U_ref_stage_ has exactly one consumption path (:12152): its
+                        // w component becomes w_ref, which enters as
+                        //     omega = mu * (blend*w + (1 - blend)*w_ref)
+                        // so at the default omega_w_blend = 1.0 the reference is
+                        // multiplied by ZERO and the RHS cannot depend on it. That is why
+                        // all three modes measure exactly 0 -- the probe is working, the
+                        // dependence is switched off.
+                        //
+                        // Reporting "R_U = -J is complete" without the blend value would
+                        // turn a configuration-dependent result into an unconditional one,
+                        // and anyone setting blend < 1 would silently invalidate the
+                        // implicit-differentiation shortcut.
+                        const float blend = wrf::sdirk3::g_sdirk3_config.omega_w_blend;
+                        std::cerr << "SDIRK3_FROZEN_CONTEXT_SENSITIVITY same-argument, "
+                                  << "1% context change: rel=" << rel
+                                  << " omega_w_blend=" << blend
+                                  << (rel < 1e-12
+                                        ? (blend >= 1.0f
+                                             ? "  no dependence, AND blend=1 switches the "
+                                               "only path off -- R_U = -J holds HERE, "
+                                               "conditional on blend"
+                                             : "  no dependence even though blend<1 -- the "
+                                               "reference path is inert for another reason")
+                                        : "  F DEPENDS on the frozen context: R_U = -J is "
+                                          "incomplete (a -F_C C_U term exists)")
+                                  << std::endl << std::flush;
+                    } catch (const std::exception& e) {
+                        std::cerr << "SDIRK3_FROZEN_CONTEXT_SENSITIVITY THREW: " << e.what()
+                                  << std::endl << std::flush;
+                    }
+
                     // 9F.D70 (review section 5): <A v, w> == <v, A^T w> on the PRODUCTION
                     // operators. The transpose solve makes essentially no progress at ANY
                     // dt -- rel_error 0.9973 at 600/200/60/20 and 1.1998 at dt=5, i.e.
