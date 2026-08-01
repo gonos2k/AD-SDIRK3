@@ -5381,9 +5381,27 @@ vertical_coefficients:
             spec.dt = (dt_stage_ > 0.0f) ? double(dt_stage_) : 600.0;
 
             const bool at_rest = (rp[0] == 'r');
-            auto base = at_rest ? torch::zeros_like(U_n) : U_n;
+            // 9F.D61: a BASE SCALE, to test whether the explicit channel's state
+            // dependence is a finding or a tautology.
+            //
+            // sigma_max(ExplicitOnly) went 1.2e-09 -> 1.0e-04 between U=0 and U=jet, and I
+            // reported the 8.6e4 as a localisation. But the explicit channel is advective,
+            // u.grad(u) vanishes IDENTICALLY at u=0, so "grows from ~0" is what the algebra
+            // guarantees, not a discovery -- the same shape as the mu-invariance that the
+            // previous adversarial pass deflated.
+            //
+            // The discriminator is the SCALING, not the endpoints. Linearising u.grad(u)
+            // about a state U gives a Jacobian LINEAR in U, so sigma_explicit must be
+            // proportional to the base amplitude. If it is, the 8.6e4 is bookkeeping. If it
+            // grows faster, something beyond advection is involved and the localisation
+            // survives.
+            double base_scale = 1.0;
+            if (const char* bs = std::getenv("WRF_SDIRK3_PROBE_BASE_SCALE"))
+                base_scale = std::atof(bs);
+            auto base = at_rest ? torch::zeros_like(U_n) : (U_n * base_scale);
 
             std::cerr << "SDIRK3_RESPONSE base=" << (at_rest ? "rest" : "jet")
+                      << " base_scale=" << base_scale
                       << " mu_ref=" << mu_ref << " dt=" << spec.dt
                       << "  (gain = rms response in units of the responding channel's own"
                       << " scale, per dt, per unit kick)" << std::endl;
@@ -5470,6 +5488,7 @@ vertical_coefficients:
                 } else {
                     std::ostringstream o;
                     o << "SDIRK3_SIGMA base=" << (at_rest ? "rest" : "jet")
+                      << " base_scale=" << base_scale
                       << " mode=" << sig_mode_name[sm]
                       << " sigma_max=" << sig.sigma_max
                       << " converged=" << (sig.converged ? 1 : 0)
