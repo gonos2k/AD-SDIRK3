@@ -5421,11 +5421,26 @@ vertical_coefficients:
             // it cannot run, that is a finding about the project's goal, not a probe
             // failure -- and it is reported as such rather than silently degraded to
             // something that returns numbers.
+            //
+            // 9F.D60: PER MODE, because the Full number is masked. sigma_max(Full) came out
+            // state-invariant with its leading direction 100% in w -- i.e. it is the
+            // acoustic w->mu coupling, which lives in the IMPLICIT channel. Any state
+            // dependence in the explicit channel is five orders smaller and cannot show
+            // through it. Splitting on RhsMode removes the mask, and it is the measurement
+            // that decides the reading offered after D59: that what changes with the jet is
+            // what the EXPLICIT channel hands the solve, not the implicit operator.
+            const wrf::sdirk3::RhsMode sig_modes[3] = {
+                wrf::sdirk3::RhsMode::Full,
+                wrf::sdirk3::RhsMode::ExplicitOnly,
+                wrf::sdirk3::RhsMode::ImplicitOnly};
+            const char* sig_mode_name[3] = {"Full", "ExplicitOnly", "ImplicitOnly"};
+            for (int sm = 0; sm < 3; ++sm)
             {
+                const auto this_mode = sig_modes[sm];
                 auto jvp = [&](const torch::Tensor& v) {
                     const double e = 1.0e-3;
-                    return (computeUnifiedRHS(base + e * v, wrf::sdirk3::RhsMode::Full)
-                          - computeUnifiedRHS(base - e * v, wrf::sdirk3::RhsMode::Full))
+                    return (computeUnifiedRHS(base + e * v, this_mode)
+                          - computeUnifiedRHS(base - e * v, this_mode))
                            / (2.0 * e);
                 };
                 bool vjp_ok = true;
@@ -5434,7 +5449,7 @@ vertical_coefficients:
                     try {
                         torch::AutoGradMode enable(true);
                         auto Ug = base.detach().clone().set_requires_grad(true);
-                        auto F = computeUnifiedRHS(Ug, wrf::sdirk3::RhsMode::Full);
+                        auto F = computeUnifiedRHS(Ug, this_mode);
                         auto g = torch::autograd::grad({F}, {Ug}, {w.detach()},
                                                        /*retain_graph=*/false,
                                                        /*create_graph=*/false,
@@ -5448,12 +5463,14 @@ vertical_coefficients:
                 };
                 auto sig = power_iterate_sigma_max(jvp, vjp, base, spec, 30, 1e-3);
                 if (!vjp_ok) {
-                    std::cerr << "SDIRK3_SIGMA VJP_FAILED: " << vjp_err
+                    std::cerr << "SDIRK3_SIGMA mode=" << sig_mode_name[sm]
+                              << " VJP_FAILED: " << vjp_err
                               << " -- sigma_max NOT reported, because a zero adjoint would "
                                  "read as 'the operator does nothing'" << std::endl;
                 } else {
                     std::ostringstream o;
                     o << "SDIRK3_SIGMA base=" << (at_rest ? "rest" : "jet")
+                      << " mode=" << sig_mode_name[sm]
                       << " sigma_max=" << sig.sigma_max
                       << " converged=" << (sig.converged ? 1 : 0)
                       << " iters=" << sig.iterates.size() << " blockweight";
@@ -5461,7 +5478,7 @@ vertical_coefficients:
                                                   << sig.block_weight[r];
                     std::cerr << o.str() << std::endl;
                     std::ostringstream h;
-                    h << "SDIRK3_SIGMA_HISTORY";
+                    h << "SDIRK3_SIGMA_HISTORY mode=" << sig_mode_name[sm];
                     for (double x : sig.iterates) h << " " << x;
                     std::cerr << h.str() << std::endl;
                 }
