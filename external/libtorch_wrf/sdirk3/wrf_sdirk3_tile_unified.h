@@ -739,7 +739,14 @@ public:
                                    float gamma,
                                    int gmres_restart = 15,
                                    int gmres_max_iterations = 80,
-                                   float gmres_tolerance = 1e-5f);
+                                   float gmres_tolerance = 1e-5f,
+                                   // 9F.D65: -1 = take the mode from WRF_SDIRK3_STAGE_ADJOINT
+                                   // (preserving the existing entry points), 0 = legacy
+                                   // A^{-T} only, 1 = equation-level J^T A^{-T}. An explicit
+                                   // parameter so the driver can call BOTH ways in one
+                                   // process and difference them, which setenv-juggling
+                                   // mid-run could not do honestly.
+                                   int stage_adjoint_mode = -1);
 
     // PARITY FIX 2025-12-13: Getters for accumulated moist scalar tendencies (vertical diffusion)
     // Returns tendencies accumulated from vertical diffusion (moist_tendf in WRF)

@@ -5342,6 +5342,114 @@ vertical_coefficients:
     // Pack current state with staggered dimensions
     torch::Tensor U_n = packState(u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
 
+    // 9F.D66: THE ADJOINT DRIVER.
+    //
+    // runAdjointReplay is unreachable from em_b_wave -- it is entered through
+    // sdirk3_run_4dvar_adjoint_loop, which a forward-only case never calls. So the
+    // question D64 raised (does the missing J^T matter on the REAL operator, or only on a
+    // closed-form fixture?) had no production number. This gives it one.
+    //
+    // Runs AFTER the step, so the forward has recorded checkpoints, and calls the replay
+    // TWICE in the same process with the mode passed explicitly -- legacy A^{-T} against
+    // equation-level J^T A^{-T}. Same checkpoints, same terminal lambda, same solver: the
+    // only difference is the operator, which is what makes the comparison mean anything.
+    //
+    // Requires WRF_SDIRK3_SAVE_TRAJECTORY=1, and says so rather than silently reporting
+    // nothing -- an adjoint driver that quietly finds no checkpoints and prints a clean
+    // "no difference" is worse than one that fails.
+    struct AdjointDriverAtExit {
+        TileSDIRK3UnifiedSolver* self;
+        const torch::Tensor* U;
+        bool armed;
+        ~AdjointDriverAtExit() {
+            if (!armed) return;
+            // Entry marker + explicit flushes. The previous iteration produced NO output
+            // at all while the process terminated on an autograd error, which left it
+            // ambiguous whether the destructor ran, whether the catch fired, or whether
+            // std::cerr was simply lost when the process died. A marker that is flushed
+            // immediately answers that before anything else can go wrong.
+            std::cerr << "SDIRK3_ADJOINT_DRIVER: entered" << std::endl << std::flush;
+            try {
+                // NO blanket NoGradGuard. solve_transpose_linear_system_gmres forms A^T w
+                // through a VJP, so a guard around this whole block disables it and the
+                // replay dies with "element 0 of tensors does not require grad".
+                //
+                // This is the SECOND time in this campaign: the same guard broke
+                // power_iterate_sigma_max in D59, the fix was recorded, and it was then
+                // repeated here. The rule that actually holds is narrower than "wrap
+                // diagnostics in NoGradGuard" -- it is "guard each .item(), and nothing
+                // that calls back into an operator which may need a graph".
+                auto ck = self->getSavedTrajectory();
+                std::cerr << "SDIRK3_ADJOINT_DRIVER: checkpoints=" << ck.size()
+                          << std::endl << std::flush;
+                if (ck.empty()) {
+                    std::cerr << "SDIRK3_ADJOINT_DRIVER: no checkpoints -- set "
+                                 "WRF_SDIRK3_SAVE_TRAJECTORY=1. Refusing to report a "
+                                 "difference of zero from an adjoint that never ran."
+                              << std::endl;
+                    return;
+                }
+                auto gen = at::detail::createCPUGenerator(20260801);
+                auto lam = torch::randn(U->numel(), gen,
+                                        torch::TensorOptions().dtype(U->dtype()));
+                lam = (lam / lam.norm().clamp_min(1e-300)).to(U->device());
+
+                const float dtv = 600.0f, gam = 0.435866521508459f;
+                // Each mode in its OWN try, so a failure in one still reports the other.
+                // Bundling them would have hidden which of the two broke.
+                torch::Tensor legacy, eqlev;
+                try {
+                    legacy = self->runAdjointReplay(lam, dtv, gam, 10, 40, 1e-5f, 0);
+                    std::cerr << "SDIRK3_ADJOINT_DRIVER legacy ok |lam|="
+                              << [&]{ torch::NoGradGuard g; return legacy.norm().item<double>(); }()
+                              << std::endl << std::flush;
+                } catch (const std::exception& e) {
+                    std::cerr << "SDIRK3_ADJOINT_DRIVER legacy FAILED: " << e.what()
+                              << std::endl << std::flush;
+                }
+                try {
+                    eqlev = self->runAdjointReplay(lam, dtv, gam, 10, 40, 1e-5f, 1);
+                    std::cerr << "SDIRK3_ADJOINT_DRIVER equation-level ok |lam|="
+                              << [&]{ torch::NoGradGuard g; return eqlev.norm().item<double>(); }()
+                              << std::endl << std::flush;
+                } catch (const std::exception& e) {
+                    std::cerr << "SDIRK3_ADJOINT_DRIVER equation-level FAILED: " << e.what()
+                              << std::endl << std::flush;
+                }
+                if (!legacy.defined() || !eqlev.defined()) return;
+
+                torch::NoGradGuard ng_report;   // only around the .item() reads
+                const double nl = legacy.norm().item<double>();
+                const double ne = eqlev.norm().item<double>();
+                const double dot = (legacy * eqlev).sum().item<double>();
+                const double cosang = (nl > 0 && ne > 0) ? dot / (nl * ne) : 0.0;
+                const double reldiff = (nl > 0)
+                    ? (eqlev - legacy).norm().item<double>() / nl : 0.0;
+                std::cerr << "SDIRK3_ADJOINT_DRIVER checkpoints=" << ck.size()
+                          << " |lam_legacy|=" << nl
+                          << " |lam_eq|=" << ne
+                          << " ratio=" << (nl > 0 ? ne / nl : 0.0)
+                          << " cos=" << cosang
+                          << " reldiff=" << reldiff << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: " << e.what() << std::endl;
+            } catch (...) {
+                // A destructor that lets anything escape during unwinding calls
+                // std::terminate, and the first run of this driver did exactly that: the
+                // model died with "uncaught exception" and reported nothing at all, which
+                // is the worst possible outcome for a diagnostic.
+                std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: non-std exception" << std::endl;
+            }
+        }
+    };
+    static std::atomic<bool> adj_driver_done{false};
+    bool adj_expected = false;
+    const char* adj_env = std::getenv("WRF_SDIRK3_ADJOINT_DRIVER");
+    AdjointDriverAtExit adjoint_driver{
+        this, &U_n,
+        adj_env && adj_env[0] != '0' &&
+            adj_driver_done.compare_exchange_strong(adj_expected, true)};
+
     // 9F.D58 (review sections 6, 11): the response measurement, hooked HERE rather than
     // inside computeUnifiedRHS. The review's objection to D54-D56 was structural, not
     // stylistic: a probe that recursively calls the function it is measuring is not an
@@ -38627,7 +38735,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     float gamma,
     int gmres_restart,
     int gmres_max_iterations,
-    float gmres_tolerance) {
+    float gmres_tolerance,
+    int stage_adjoint_mode) {
 
     TORCH_CHECK(lambda_terminal.defined(), "runAdjointReplay: lambda_terminal must be defined");
 
@@ -38705,8 +38814,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             //
             // Default OFF, so the legacy path is byte-identical and the difference is a
             // MEASUREMENT rather than a silent change to what the adjoint means.
-            if (const char* sa = std::getenv("WRF_SDIRK3_STAGE_ADJOINT")) {
-                if (sa[0] == 'e') {   // 'eq' -- equation-level
+            bool use_equation_level = false;
+            if (stage_adjoint_mode >= 0) {
+                use_equation_level = (stage_adjoint_mode == 1);
+            } else if (const char* sa = std::getenv("WRF_SDIRK3_STAGE_ADJOINT")) {
+                use_equation_level = (sa[0] == 'e');
+            }
+            {
+                if (use_equation_level) {
                     torch::AutoGradMode enable(true);
                     auto Y = linearization_point.detach().clone().set_requires_grad(true);
                     auto Ffast = computeUnifiedRHS(Y, wrf::sdirk3::RhsMode::ImplicitOnly);
