@@ -22,18 +22,25 @@
 
 #include <torch/torch.h>
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <functional>
 #include <limits>
 #include <vector>
 #include <stdexcept>
+#include <sstream>
+#include <iomanip>
 #include <string>
 
 namespace {
 
 int failures = 0;
 int check_count = 0;
+
+std::string sci(double v) {
+    std::ostringstream o; o << std::scientific << std::setprecision(3) << v; return o.str();
+}
 
 void check(bool ok, const std::string& what) {
     ++check_count;
@@ -177,7 +184,63 @@ int main() {
               "trap rather than an obvious bug");
     }
 
-    constexpr int expected_checks = 14;
+    // === 9F.D62 (review P0-A): the STRETCHED grid, where rdnw != rdn ===
+    // The review's point, as a fixture. On a UNIFORM eta grid the two staggers coincide,
+    // which is why a cross-stagger substitution survived here for so long and why an
+    // acceptance test built on a uniform grid would have certified the defect. A stretched
+    // grid separates them, and this pins BOTH facts: that they differ when they should,
+    // and that they agree on a uniform grid, which is the reason the bug was invisible.
+    {
+        constexpr int NK = 32;
+        // znw: full (w) levels, 1 -> 0, STRETCHED (quadratic spacing, thin layers aloft)
+        std::vector<double> znw(NK + 1);
+        for (int k = 0; k <= NK; ++k) {
+            const double x = double(k) / double(NK);
+            znw[k] = 1.0 - x * x;                 // non-uniform on purpose
+        }
+        // rdnw_k = 1/(znw[k+1]-znw[k])            mass-layer thickness
+        // rdn_k  = 1/(zm[k]-zm[k-1])              mass-POINT spacing, zm = midpoints
+        std::vector<double> zm(NK), rdnw(NK), rdn(NK, 0.0);
+        for (int k = 0; k < NK; ++k) {
+            zm[k]   = 0.5 * (znw[k] + znw[k + 1]);
+            rdnw[k] = 1.0 / (znw[k + 1] - znw[k]);
+        }
+        for (int k = 1; k < NK; ++k) rdn[k] = 1.0 / (zm[k] - zm[k - 1]);
+
+        double worst = 0.0;
+        for (int k = 1; k < NK; ++k)
+            worst = std::max(worst, std::abs(rdn[k] - rdnw[k]) / std::abs(rdnw[k]));
+        check(worst > 0.05,
+              "on a STRETCHED eta grid rdn and rdnw differ by up to " + sci(worst) +
+              " -- so substituting one for the other is DETECTABLE, and the fallback "
+              "deleted in D57 was not a harmless data fallback");
+
+        // ...and on a uniform grid they coincide, which is why it hid
+        std::vector<double> u_znw(NK + 1), u_zm(NK), u_rdnw(NK), u_rdn(NK, 0.0);
+        for (int k = 0; k <= NK; ++k) u_znw[k] = 1.0 - double(k) / double(NK);
+        for (int k = 0; k < NK; ++k) {
+            u_zm[k]   = 0.5 * (u_znw[k] + u_znw[k + 1]);
+            u_rdnw[k] = 1.0 / (u_znw[k + 1] - u_znw[k]);
+        }
+        for (int k = 1; k < NK; ++k) u_rdn[k] = 1.0 / (u_zm[k] - u_zm[k - 1]);
+        double u_worst = 0.0;
+        for (int k = 1; k < NK; ++k)
+            u_worst = std::max(u_worst, std::abs(u_rdn[k] - u_rdnw[k]) / std::abs(u_rdnw[k]));
+        check(u_worst < 1e-12,
+              "while on a UNIFORM grid they agree to " + sci(u_worst) +
+              " -- which is exactly why an acceptance test on a uniform grid would have "
+              "certified the cross-stagger substitution as correct");
+
+        // the sign convention survives stretching: WRF stores these NEGATIVE
+        auto signed_rdnw = torch::empty({NK}, torch::TensorOptions().dtype(torch::kFloat64));
+        for (int k = 0; k < NK; ++k) signed_rdnw[k] = -std::abs(rdnw[k]);
+        auto mag = require_metric_magnitude_tensor(signed_rdnw, "rdnw (stretched)");
+        check(mag.min().item<double>() > 0.0 &&
+                  std::abs(mag[NK - 1].item<double>() - std::abs(rdnw[NK - 1])) < 1e-12,
+              "and a stretched WRF-signed rdnw converts to magnitudes without loss");
+    }
+
+    constexpr int expected_checks = 17;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

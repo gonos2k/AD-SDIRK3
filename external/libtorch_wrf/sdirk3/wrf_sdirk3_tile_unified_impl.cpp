@@ -2757,20 +2757,25 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnwTensor(
             // level. WRF has rdzw for w-level work. Whether these four callers should use
             // rdnw at all is a correctness question this commit does not settle -- it only
             // stops the pad from covering for arbitrary length mismatches as well.
-            if (cache.numel() != nz - 1) {
+            // 9F.D62 (review P0-A): the stagger carve-out is GONE, because the callers
+            // that needed it are fixed. D57 measured that forbidding the pad aborted the
+            // model -- "source supplies 64 levels but nz = 65" -- and concluded the pad was
+            // standing in for a mass->w extension. It was, but the extension was never
+            // legitimate: rdnw is a mass-level metric, WRF reads it only at mass indices,
+            // and the consumer never touched the invented slot. The defect was in the four
+            // CALLERS asking for nz_w_, not in the metric. Fixing them lets this fail closed
+            // unconditionally, which is what the review asked for in the first place.
+            {
                 std::ostringstream oss;
-                oss << "SDIRK3 vertical metric: source supplies " << cache.numel()
-                    << " levels but nz = " << nz << ", a shortfall of "
-                    << (nz - cache.numel()) << ". Only the single-level mass->w stagger "
-                    << "extension (nz_w = nz+1) is allowed; a larger shortfall is a "
-                    << "malformed grid, and padding it would integrate without complaint "
-                    << "while describing a different atmosphere.";
+                oss << "SDIRK3 vertical metric rdnw: source supplies " << cache.numel()
+                    << " levels but nz = " << nz << " was requested. rdnw is a MASS-level "
+                    << "metric (WRF: wdwn is DIMENSION(kts:kte) and reads rdnw(k-1), "
+                    << "module_big_step_utilities_em.F:1421,1470), so a request for more "
+                    << "levels than the source has is a CALLER error. Refusing to pad by "
+                    << "repeating the last value: the padded column integrates without "
+                    << "complaint while describing a different atmosphere.";
                 throw std::invalid_argument(oss.str());
             }
-            auto last = cache.index({-1});
-            auto pad_count = nz - cache.numel();
-            auto pad = last.expand({pad_count});
-            cache = torch::cat({cache, pad}, 0).contiguous();
         } else if (cache.numel() > nz) {
             // Slice to exact nz and cache the sliced version
             cache = cache.slice(0, 0, nz).contiguous();
@@ -3114,13 +3119,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::getRdnTensor(
     // PERF FIX: Move to target device but keep as float32
     cache = source_tensor.to(device, cache_dtype, /*non_blocking=*/true).contiguous();
 
-    // Pad if needed (extend last value)
+    // 9F.D62 (review P0-A): getRdnTensor's own pad, swept for the same reason as
+    // getRdnwTensor's. This was the SECOND copy -- the campaign has now been bitten four
+    // times by fixing one instance of a block and leaving its twin. Repeating the last
+    // layer's metric over missing levels disguises a malformed grid as a valid one, and
+    // the padded column integrates perfectly happily, which is what makes it dangerous.
     if (cache.numel() < nz) {
-        torch::NoGradGuard no_grad;
-        auto last = cache.index({-1});
-        auto pad_count = nz - cache.numel();
-        auto pad = last.expand({pad_count});
-        cache = torch::cat({cache, pad}, 0).contiguous();
+        std::ostringstream oss;
+        oss << "SDIRK3 vertical metric rdn: source supplies " << cache.numel()
+            << " levels but nz = " << nz << " was requested. Refusing to pad by repeating "
+            << "the last value -- a short metric is a malformed grid or a caller asking at "
+            << "the wrong stagger, and both should be visible rather than smoothed over.";
+        throw std::invalid_argument(oss.str());
     } else if (cache.numel() > nz) {
         cache = cache.slice(0, 0, nz).contiguous();
     }
@@ -15440,7 +15450,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // This prevents boundary processing from being skipped due to near-zero values.
             constexpr float rdnw_eps = 1e-10f;
             // PERF FIX 2025-12-28: Rename to _cpu suffix for CPU tensor from getRdnwTensor
-            torch::Tensor rdnw_for_top_cpu = getRdnwTensor(torch::kCPU, torch::kFloat32, nz_w_);
+            // 9F.D62 (review P0-A): request nz_, NOT nz_w_. rdnw is a MASS-level metric
+            // and WRF never reads it at the top w level -- see the block comment at the
+            // vert_deriv_scale site. Asking for nz_w_ is what forced getRdnwTensor to
+            // invent an extra level by repeating the last value.
+            torch::Tensor rdnw_for_top_cpu = getRdnwTensor(torch::kCPU, torch::kFloat32, nz_);
             if (rdnw_for_top_cpu.defined() && rdnw_for_top_cpu.numel() > k_below) {
                 torch::NoGradGuard no_grad;
                 // PERF FIX 2025-12-28: Pre-extract indexed elements with _cpu suffix
@@ -15705,7 +15719,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // matching the clamp logic in getRdnwTensor's dnw->rdnw conversion.
             constexpr float rdnw_eps_y = 1e-10f;
             // PERF FIX 2025-12-28: Rename to _cpu suffix for CPU tensor from getRdnwTensor
-            torch::Tensor rdnw_for_top_y_cpu = getRdnwTensor(torch::kCPU, torch::kFloat32, nz_w_);
+            // 9F.D62 (review P0-A): request nz_, NOT nz_w_. rdnw is a MASS-level metric
+            // and WRF never reads it at the top w level -- see the block comment at the
+            // vert_deriv_scale site. Asking for nz_w_ is what forced getRdnwTensor to
+            // invent an extra level by repeating the last value.
+            torch::Tensor rdnw_for_top_y_cpu = getRdnwTensor(torch::kCPU, torch::kFloat32, nz_);
             if (rdnw_for_top_y_cpu.defined() && rdnw_for_top_y_cpu.numel() > k_below_y) {
                 torch::NoGradGuard no_grad;
                 // PERF FIX 2025-12-28: Pre-extract indexed elements with _cpu suffix
@@ -15872,7 +15890,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         if (wrf::sdirk3::g_sdirk3_config.ph_use_rdnw_not_rdzw) {
             // FORTRAN PARITY: Use rdnw (1/dη) like Fortran
             // PARITY FIX 2025-12-20: Use getRdnwTensor() fallback chain instead of rdnw_ vector.
-            torch::Tensor rdnw_for_scale = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_w_);
+            // 9F.D62 (review P0-A): nz_, not nz_w_. WRF's authority
+            // (module_big_step_utilities_em.F:1421,1470) declares
+            //     REAL, DIMENSION(its:ite,kts:kte) :: wdwn        <- MASS levels
+            //     wdwn(i,k) = rdnw(k-1)*(ph(i,k,j)-ph(i,k-1,j)+...)
+            // so rdnw is read at MASS indices only. And the consumer below reads
+            // vert_deriv_scale at most at index nz_w_-2 = nz_-1: the top w slot the pad
+            // used to invent is NEVER READ. Requesting nz_ removes the need for it.
+            torch::Tensor rdnw_for_scale = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
             if (rdnw_for_scale.defined() && rdnw_for_scale.numel() > 0) {
                 // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw > 0 (WRF standard), no abs() needed
                 // WRF vertical advection (wdwn = rdnw(k-1)*(ph(k)-ph(k-1))) uses positive rdnw directly
@@ -15929,7 +15954,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     std::cerr << "WARNING: grid_info_->dz not initialized, falling back to rdnw for vert_deriv_scale"
                               << " (this warning will not repeat)" << std::endl;
                 }
-                torch::Tensor rdnw_fallback = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_w_);
+                // 9F.D62 (review P0-A): nz_, not nz_w_ -- same reason as the site above.
+                torch::Tensor rdnw_fallback = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
                 if (rdnw_fallback.defined() && rdnw_fallback.numel() > 0) {
                     int rdnw_numel = static_cast<int>(rdnw_fallback.numel());
                     if (rdnw_numel >= nz_w_) {
