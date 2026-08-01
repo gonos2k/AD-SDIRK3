@@ -38687,6 +38687,49 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                 std::max(1, gmres_restart),
                 std::max(1, gmres_max_iterations),
                 std::max(1e-8f, gmres_tolerance));
+
+            // 9F.D64 (review P0-C): the EQUATION-LEVEL stage adjoint, opt-in.
+            //
+            // The solve above is A^{-T} with A = I - dt*gamma*J_fast, and that is the whole
+            // of the legacy replay: lambda <- (A^{-T})^n lambda_terminal. That is the exact
+            // adjoint of a ONE-STAGE BACKWARD-EULER map U_{n+1} = U_n + dt*gamma*F(U_{n+1}),
+            // which is what "ImplicitOnly transpose" means here. It is NOT the adjoint of
+            // the SDIRK stage this solver actually takes.
+            //
+            // For the real stage residual R(K,U) = K - F(U + dt*gamma*K)
+            // (newton_solver.cpp:4649), the implicit function theorem gives
+            //     dK/dU = A^{-1} J        and        (dK/dU)^T = J^T A^{-T}
+            // so the stage adjoint needs a J^T AFTER the transpose solve. Omitting it is
+            // exactly the R_U = -I mistake that Implicit_Diff_Contract measures at 57% on a
+            // closed-form fixture -- self-consistent-looking, and wrong by a factor of J.
+            //
+            // Default OFF, so the legacy path is byte-identical and the difference is a
+            // MEASUREMENT rather than a silent change to what the adjoint means.
+            if (const char* sa = std::getenv("WRF_SDIRK3_STAGE_ADJOINT")) {
+                if (sa[0] == 'e') {   // 'eq' -- equation-level
+                    torch::AutoGradMode enable(true);
+                    auto Y = linearization_point.detach().clone().set_requires_grad(true);
+                    auto Ffast = computeUnifiedRHS(Y, wrf::sdirk3::RhsMode::ImplicitOnly);
+                    auto g = torch::autograd::grad({Ffast}, {Y}, {lambda.detach()},
+                                                   /*retain_graph=*/false,
+                                                   /*create_graph=*/false,
+                                                   /*allow_unused=*/true);
+                    TORCH_CHECK(!g.empty() && g[0].defined(),
+                                "runAdjointReplay: equation-level stage adjoint needs J^T, "
+                                "but the reverse pass returned nothing. Refusing to fall "
+                                "back to the A^{-T}-only form, which would silently be the "
+                                "legacy answer under a flag requesting a different one.");
+                    torch::NoGradGuard ng;
+                    const double before = lambda.norm().item<double>();
+                    lambda = g[0].detach();
+                    const double after = lambda.norm().item<double>();
+                    std::cerr << "SDIRK3_STAGE_ADJOINT eq: applied J^T after A^{-T}"
+                              << "  |A^-T lam|=" << before
+                              << "  |J^T A^-T lam|=" << after
+                              << "  ratio=" << (before > 0.0 ? after / before : 0.0)
+                              << std::endl;
+                }
+            }
         }
     } catch (...) {
         dt_stage_ = dt_prev;
