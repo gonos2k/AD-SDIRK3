@@ -18,6 +18,7 @@
 #include <torch/torch.h>
 
 #include <cmath>
+#include <limits>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -268,7 +269,55 @@ int main() {
               "), so the scaling enters where it is meant to");
     }
 
-    constexpr int expected_checks = 18;
+    // === 9F.D72 (review section 15.4): a bad ProbeSpec must be REJECTED ===
+    // Each of these previously produced a plausible number instead of an error. That is
+    // worse in a probe than in the solver: a wrong solver value eventually shows up in a
+    // trajectory, whereas a wrong PROBE value is read as a measurement and written into a
+    // report. Every case below is asserted to throw, because "it returns something" was
+    // the old behaviour and is indistinguishable from success.
+    {
+        auto F = [](const torch::Tensor& x) { return 2.0 * x; };
+        auto threw = [&](ProbeSpec sp) {
+            try { measure_response(F, U, sp); } catch (const std::invalid_argument&) { return true; }
+            catch (...) { return false; }
+            return false;
+        };
+        auto base = [&]{ return two_channel(1.0, 1.0, 1.0, 1.0); };
+
+        { auto sp = base(); sp.channels[0].state_scale = 0.0;
+          check(threw(sp), "a ZERO state_scale is rejected (it used to divide by a "
+                           "substituted 1.0 and report a plausible gain)"); }
+        { auto sp = base(); sp.channels[1].tendency_scale = -1.0;
+          check(threw(sp), "a NEGATIVE tendency_scale is rejected"); }
+        { auto sp = base();
+          sp.channels[0].state_scale = std::numeric_limits<double>::quiet_NaN();
+          check(threw(sp), "a NaN scale is rejected"); }
+        { auto sp = base(); sp.amplitudes = {0.5, 0.0, 1.0};
+          check(threw(sp), "a ZERO amplitude is rejected (it used to divide by 1.0, "
+                           "silently reporting an un-normalised response)"); }
+        { auto sp = base(); sp.dt = -1.0;
+          check(threw(sp), "a negative dt is rejected"); }
+
+        // Structural errors, which are the ones that look most like success: the numbers
+        // come out per-channel and entirely reasonable.
+        { auto sp = base(); sp.channels[1].offset = NA - 2;      // overlaps channel a
+          check(threw(sp), "OVERLAPPING channels are rejected -- overlap still yields "
+                           "per-channel numbers that look fine"); }
+        { auto sp = base(); sp.channels[1].length = NB - 3;      // leaves a gap
+          check(threw(sp), "channels that do not COVER the packed state are rejected"); }
+        { auto sp = base(); sp.channels[1].length = NB + 5;      // runs past the end
+          check(threw(sp), "a channel running past the packed state is rejected"); }
+
+        // ...and the valid spec still works, so the validator is not simply refusing
+        // everything -- a check every one of the above would also pass.
+        { auto sp = base();
+          bool ok = true;
+          try { measure_response(F, U, sp); } catch (...) { ok = false; }
+          check(ok, "while a VALID spec is still accepted, so the validator discriminates "
+                    "rather than just refusing"); }
+    }
+
+    constexpr int expected_checks = 27;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

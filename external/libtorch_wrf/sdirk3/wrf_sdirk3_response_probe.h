@@ -92,6 +92,62 @@ struct ResponseResult {
     std::vector<std::string> channel_names;
 };
 
+// 9F.D72 (review section 15.4): REJECT a bad ProbeSpec, do not repair it.
+//
+// The measurement code below used `s > 0 ? s : 1.0` and `a > 0 ? a : 1.0`, which turns a
+// misconfigured diagnostic into a plausible number. That is precisely the class this
+// campaign has spent itself eliminating elsewhere -- eps for a broken metric, "a typical
+// atmosphere" for a missing base state, dry for a NaN moisture -- and I reproduced it in
+// the instrument built to catch such things.
+//
+// It is worse in a probe than in the solver. A wrong solver value eventually shows up in
+// a trajectory; a wrong PROBE value is read as a measurement and written into a report.
+//
+// So the spec is validated up front and the silent fallbacks are gone. Coverage and
+// overlap are checked too: a channel table that leaves a gap or double-counts a region
+// still produces per-channel numbers that look entirely reasonable.
+inline void validate_probe_spec(const ProbeSpec& spec, int64_t state_numel) {
+    auto fail = [](const std::string& why) {
+        throw std::invalid_argument("SDIRK3 ProbeSpec is not usable: " + why +
+            ". Refusing to substitute a default -- a misconfigured probe returns numbers "
+            "that are read as measurements.");
+    };
+    if (spec.channels.empty()) fail("no channels");
+    if (!(spec.dt > 0.0) || !std::isfinite(spec.dt))
+        fail("dt = " + std::to_string(spec.dt) + " (must be finite and > 0)");
+    if (spec.amplitudes.empty()) fail("no amplitudes");
+    for (double a : spec.amplitudes)
+        if (!(a > 0.0) || !std::isfinite(a))
+            fail("amplitude " + std::to_string(a) + " (must be finite and > 0)");
+
+    int64_t covered = 0;
+    for (size_t c = 0; c < spec.channels.size(); ++c) {
+        const auto& ch = spec.channels[c];
+        if (ch.length <= 0) fail("channel '" + ch.name + "' has length " +
+                                 std::to_string(ch.length));
+        if (ch.offset < 0) fail("channel '" + ch.name + "' has negative offset");
+        if (ch.offset > state_numel - ch.length)
+            fail("channel '" + ch.name + "' runs past the packed state (offset " +
+                 std::to_string(ch.offset) + " + length " + std::to_string(ch.length) +
+                 " > " + std::to_string(state_numel) + ")");
+        if (!(ch.state_scale > 0.0) || !std::isfinite(ch.state_scale))
+            fail("channel '" + ch.name + "' state_scale = " +
+                 std::to_string(ch.state_scale));
+        if (!(ch.tendency_scale > 0.0) || !std::isfinite(ch.tendency_scale))
+            fail("channel '" + ch.name + "' tendency_scale = " +
+                 std::to_string(ch.tendency_scale));
+        for (size_t d = 0; d < c; ++d) {
+            const auto& o = spec.channels[d];
+            if (ch.offset < o.offset + o.length && o.offset < ch.offset + ch.length)
+                fail("channels '" + ch.name + "' and '" + o.name + "' overlap");
+        }
+        covered += ch.length;
+    }
+    if (covered != state_numel)
+        fail("channels cover " + std::to_string(covered) + " of " +
+             std::to_string(state_numel) + " packed-state elements");
+}
+
 namespace detail {
 
 inline double quantile_abs(const torch::Tensor& t, double q) {
@@ -110,6 +166,7 @@ inline ResponseResult measure_response(
     const torch::Tensor& U,
     const ProbeSpec& spec)
 {
+    validate_probe_spec(spec, U.numel());
     torch::NoGradGuard no_grad;
     const int nc = static_cast<int>(spec.channels.size());
 
@@ -158,8 +215,9 @@ inline ResponseResult measure_response(
             row.amplitude = a;
             for (int r = 0; r < nc; ++r) {
                 auto d = slice_of(diff, r).to(torch::kFloat64);
-                const double s = spec.channels[r].tendency_scale;
-                const double f = spec.dt / (s > 0.0 ? s : 1.0);
+                // validate_probe_spec has already rejected a non-positive scale, so no
+                // silent fallback is needed or wanted here.
+                const double f = spec.dt / spec.channels[r].tendency_scale;
                 const double mx = d.numel() ? d.abs().max().item<double>() : 0.0;
                 row.max_abs.push_back(mx * f);
                 row.rms.push_back(d.numel() ? d.pow(2).mean().sqrt().item<double>() * f : 0.0);
@@ -167,7 +225,7 @@ inline ResponseResult measure_response(
                 row.argmax.push_back(d.numel() ? d.abs().argmax().item<int64_t>() : -1);
                 const double rms_v = d.numel()
                     ? d.pow(2).mean().sqrt().item<double>() * f : 0.0;
-                const double g = rms_v / (a > 0.0 ? a : 1.0);
+                const double g = rms_v / a;
                 row.gain_rms.push_back(g);
                 norm_resp[c][r].push_back(g);
             }
@@ -222,6 +280,7 @@ inline SigmaResult power_iterate_sigma_max(
     int iters = 20,
     double tol = 1e-4)
 {
+    validate_probe_spec(spec, like.numel());
     // NO blanket NoGradGuard here, deliberately. The caller's vjp is an AD reverse pass
     // and needs to BUILD a graph; a guard around this whole function would silently
     // disable it and the VJP would return zeros -- which looks like "the adjoint says the

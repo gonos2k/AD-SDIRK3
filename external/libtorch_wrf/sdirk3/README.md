@@ -37,7 +37,7 @@ active investigation (see the repository root `README.md` and `doc/`).
 | `wrf_sdirk3_unified_preconditioner.cpp` | Vertical preconditioner (M) |
 | `wrf_sdirk3_config.h` | Config knobs, `effective_imex_split_mode()` |
 | `wrf_sdirk3_jvp_autograd.{cpp,h}`, `wrf_sdirk3_jvp_fwad_or_fd.h` | JVP (forward-mode dual + counted FD fallback) |
-| `wrf_sdirk3_interface_zerocopy.cpp` | Struct-based zero-copy C ABI for the Fortran bridge |
+| `wrf_sdirk3_interface_zerocopy.cpp` | Struct-based C ABI for the Fortran bridge. NOTE: the *base-state* path materialises OWNED contiguous per-tile snapshots via `.contiguous()` — the `zerocopy` in the symbol name is historical and does not describe it |
 | `wrf_sdirk3_halo_exchange.cpp`, `wrf_sdirk3_ad_halo_exchange.cpp` | MPI halo primitive (forward + adjoint) with lifecycle/freshness contracts |
 | `wrf_sdirk3_mpi_safety.h`, `wrf_sdirk3_mpi_safety_impl.cpp` | MPI fail-close contracts: baseline thread, single-flight scope, freshness guard |
 | `jvp_bridge.F90` | Fortran↔C++ AD bridge |
@@ -191,7 +191,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 21-test CTest inventory** (pinned by
+The CMake tree registers an **exact 37-test CTest inventory** (pinned by
 `.github/ci/expected_ctest_names.txt`; any drift fails hosted CI):
 
 - 15 core contracts (geometry matrix, MSF stats, VJP semantics, FGMRES

@@ -5394,7 +5394,13 @@ vertical_coefficients:
                                         torch::TensorOptions().dtype(U->dtype()));
                 lam = (lam / lam.norm().clamp_min(1e-300)).to(U->device());
 
-                const float dtv = 600.0f, gam = 0.435866521508459f;
+                // dt is env-settable so the adjoint can be walked down the SAME ladder
+                // the forward solve was: if the transpose solve stagnates at 600 and
+                // converges at 60, the adjoint is blocked by the forward's wall rather
+                // than by anything specific to the adjoint.
+                float dtv = 600.0f;
+                if (const char* d = std::getenv("WRF_SDIRK3_ADJOINT_DT")) dtv = std::atof(d);
+                const float gam = 0.435866521508459f;
                 // Each mode in its OWN try, so a failure in one still reports the other.
                 // Bundling them would have hidden which of the two broke.
                 torch::Tensor legacy, eqlev;
@@ -16010,13 +16016,31 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw > 0 (WRF standard), no abs() needed
                 // WRF vertical advection (wdwn = rdnw(k-1)*(ph(k)-ph(k-1))) uses positive rdnw directly
                 // Pad to nz_w_ if needed
-                int rdnw_numel = static_cast<int>(rdnw_for_scale.numel());
-                if (rdnw_numel >= nz_w_) {
-                    vert_deriv_scale = rdnw_for_scale.slice(0, 0, nz_w_).to(options.device(), options.dtype().toScalarType());
-                } else {
-                    vert_deriv_scale = torch::zeros({nz_w_}, options);
-                    vert_deriv_scale.slice(0, 0, rdnw_numel).copy_(rdnw_for_scale.to(options.device(), options.dtype().toScalarType()));
-                }
+                // 9F.D67 (review P0-1): the length branch below was DEAD after D62.
+                //
+                // D62 changed this caller from nz_w_ to nz_ but left the consumption
+                // condition alone. getRdnwTensor now returns EXACTLY nz_ (it slices when
+                // longer and throws when shorter), and nz_w_ = nz_+1, so
+                //     rdnw_numel >= nz_w_   <=>   nz_ >= nz_+1
+                // is always false. The `if` arm could not execute and the `else` arm did
+                // all the work.
+                //
+                // Behaviour was unaffected -- which is why the fingerprint matched and why
+                // nothing caught it. Before D62 the padded array made the condition true
+                // and it sliced [rdnw..., pad]; after D62 it zero-fills to [rdnw..., 0].
+                // The two differ ONLY at index nz_, and the consumer reads at most
+                // nz_w_-2 = nz_-1. A dead branch whose deadness is invisible in the output
+                // is exactly the shape that survives review, so it is removed rather than
+                // left to be re-derived.
+                //
+                // vert_deriv_scale stays nz_w_ long because its consumers slice it that
+                // way; index nz_ is deliberately zero and deliberately never read.
+                TORCH_CHECK(rdnw_for_scale.numel() == nz_,
+                            "vert_deriv_scale: expected exactly nz_=", nz_,
+                            " mass-level rdnw values, got ", rdnw_for_scale.numel());
+                vert_deriv_scale = torch::zeros({nz_w_}, options);
+                vert_deriv_scale.slice(0, 0, nz_).copy_(
+                    rdnw_for_scale.to(options.device(), options.dtype().toScalarType()));
             } else {
                 vert_deriv_scale = torch::zeros({nz_w_}, options);
             }
@@ -16065,13 +16089,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // 9F.D62 (review P0-A): nz_, not nz_w_ -- same reason as the site above.
                 torch::Tensor rdnw_fallback = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
                 if (rdnw_fallback.defined() && rdnw_fallback.numel() > 0) {
-                    int rdnw_numel = static_cast<int>(rdnw_fallback.numel());
-                    if (rdnw_numel >= nz_w_) {
-                        vert_deriv_scale = rdnw_fallback.slice(0, 0, nz_w_).to(options.device(), options.dtype().toScalarType());
-                    } else {
-                        vert_deriv_scale = torch::zeros({nz_w_}, options);
-                        vert_deriv_scale.slice(0, 0, rdnw_numel).copy_(rdnw_fallback.to(options.device(), options.dtype().toScalarType()));
-                    }
+                    // 9F.D67 (review P0-1): the SAME dead branch, in the dz-fallback twin.
+                    // D62 fixed the caller here too and left this condition, so both copies
+                    // carried it. That makes five times in this campaign that a block was
+                    // corrected in one place and its twin left behind; the grep for the
+                    // condition, not for the caller, is what finds them.
+                    TORCH_CHECK(rdnw_fallback.numel() == nz_,
+                                "vert_deriv_scale (dz fallback): expected exactly nz_=", nz_,
+                                " mass-level rdnw values, got ", rdnw_fallback.numel());
+                    vert_deriv_scale = torch::zeros({nz_w_}, options);
+                    vert_deriv_scale.slice(0, 0, nz_).copy_(
+                        rdnw_fallback.to(options.device(), options.dtype().toScalarType()));
                 } else {
                     vert_deriv_scale = torch::zeros({nz_w_}, options);
                 }
@@ -38786,6 +38814,146 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             auto fast_operator = [&](const torch::Tensor& y) -> torch::Tensor {
                 return computeUnifiedRHS(y, wrf::sdirk3::RhsMode::ImplicitOnly);
             };
+
+            // 9F.D68: WHY the replay cannot form J^T -- localised rather than guessed.
+            //
+            // D66's driver established that runAdjointReplay dies with "element 0 of
+            // tensors does not require grad": computeUnifiedRHS(y, ImplicitOnly) comes back
+            // with NO grad_fn, so compute_vjp_reverse_mode has nothing to differentiate.
+            // But D59 obtained a VJP through the SAME call at the step level, so the
+            // absence is configuration-dependent and worth isolating instead of assuming.
+            //
+            // Three candidates, and this distinguishes them in one run:
+            //   (a) grad mode is off here          -> GradMode::is_enabled() says so
+            //   (b) it is mode-specific            -> compare Full / Explicit / Implicit
+            //   (c) the RHS reads the FROZEN reference state (U_ref_stage_, w_ref) instead
+            //       of its argument, so the output genuinely does not depend on y
+            // (c) is the interesting one: it would mean the fast operator is constant in
+            // its argument by construction, which no amount of adjoint plumbing can fix.
+            if (std::getenv("WRF_SDIRK3_RHS_GRAD_PROBE")) {
+                static std::atomic<bool> gp_done{false};
+                bool gp_expected = false;
+                if (gp_done.compare_exchange_strong(gp_expected, true)) {
+                    std::cerr << "SDIRK3_RHS_GRAD_PROBE grad_mode="
+                              << (torch::GradMode::is_enabled() ? 1 : 0) << std::endl << std::flush;
+                    const wrf::sdirk3::RhsMode modes[3] = {
+                        wrf::sdirk3::RhsMode::Full,
+                        wrf::sdirk3::RhsMode::ExplicitOnly,
+                        wrf::sdirk3::RhsMode::ImplicitOnly};
+                    const char* mn[3] = {"Full", "ExplicitOnly", "ImplicitOnly"};
+                    for (int m = 0; m < 3; ++m) {
+                        try {
+                            torch::AutoGradMode on(true);
+                            auto y = linearization_point.detach().clone().set_requires_grad(true);
+                            auto f = computeUnifiedRHS(y, modes[m]);
+                            std::cerr << "SDIRK3_RHS_GRAD_PROBE mode=" << mn[m]
+                                      << " requires_grad=" << (f.requires_grad() ? 1 : 0)
+                                      << " has_grad_fn=" << (f.grad_fn() ? 1 : 0);
+                            if (f.requires_grad() && f.grad_fn()) {
+                                auto w = torch::ones_like(f);
+                                auto g = torch::autograd::grad({f}, {y}, {w}, false, false, true);
+                                if (!g.empty() && g[0].defined()) {
+                                    torch::NoGradGuard ng;
+                                    std::cerr << " |J^T 1|=" << g[0].norm().item<double>()
+                                              << " nonzero=" << (g[0].abs().sum().item<double>() > 0 ? 1 : 0);
+                                } else {
+                                    std::cerr << " grad=UNDEFINED";
+                                }
+                            }
+                            std::cerr << std::endl << std::flush;
+                        } catch (const std::exception& e) {
+                            std::cerr << "SDIRK3_RHS_GRAD_PROBE mode=" << mn[m]
+                                      << " THREW: " << e.what() << std::endl << std::flush;
+                        }
+                    }
+
+                    // 9F.D70 (review section 5): <A v, w> == <v, A^T w> on the PRODUCTION
+                    // operators. The transpose solve makes essentially no progress at ANY
+                    // dt -- rel_error 0.9973 at 600/200/60/20 and 1.1998 at dt=5, i.e.
+                    // WORSE than the zero guess. A conditioning wall would vary with alpha;
+                    // this does not. That is the signature of the transpose operator not
+                    // being the transpose, and this is the check that decides it.
+                    //
+                    //   A v   = v - alpha * J v      forward, central difference
+                    //   A^T w = w - alpha * J^T w    adjoint, reverse AD
+                    try {
+                        torch::AutoGradMode on(true);
+                        auto gen2 = at::detail::createCPUGenerator(20260801);
+                        auto v = torch::randn(linearization_point.numel(), gen2,
+                                              torch::TensorOptions().dtype(linearization_point.dtype()))
+                                     .to(linearization_point.device());
+                        auto w = torch::randn(linearization_point.numel(), gen2,
+                                              torch::TensorOptions().dtype(linearization_point.dtype()))
+                                     .to(linearization_point.device());
+                        const double eps = 1.0e-3;
+                        auto Jv = (fast_operator(linearization_point + eps * v)
+                                 - fast_operator(linearization_point - eps * v)) / (2.0 * eps);
+                        auto Av = v - alpha * Jv;
+
+                        auto yq = linearization_point.detach().clone().set_requires_grad(true);
+                        auto fq = computeUnifiedRHS(yq, wrf::sdirk3::RhsMode::ImplicitOnly);
+                        auto gq = torch::autograd::grad({fq}, {yq}, {w.detach()}, false, false, true);
+                        TORCH_CHECK(!gq.empty() && gq[0].defined(), "no J^T available");
+                        auto Atw = w - alpha * gq[0];
+
+                        torch::NoGradGuard ng;
+                        const double lhs = (Av * w).sum().item<double>();
+                        const double rhs = (v * Atw).sum().item<double>();
+                        const double den = std::max(std::abs(lhs), std::abs(rhs));
+                        std::cerr << "SDIRK3_TRANSPOSE_IDENTITY alpha=" << alpha
+                                  << " <Av,w>=" << lhs << " <v,ATw>=" << rhs
+                                  << " rel=" << (den > 0 ? std::abs(lhs - rhs) / den : 0.0)
+                                  << std::endl << std::flush;
+                    } catch (const std::exception& e) {
+                        std::cerr << "SDIRK3_TRANSPOSE_IDENTITY THREW: " << e.what()
+                                  << std::endl << std::flush;
+                    }
+
+                    // 9F.D71 (review section 5): IS THE PRECONDITIONER SYMMETRIC?
+                    //
+                    // The adjoint's blocker is now known: the transpose solve runs with
+                    // IdentityTransposePreconditioner, i.e. no M at all, against an
+                    // operator the forward solve cannot invert without one. The size of
+                    // the remaining work turns entirely on one question -- if M is
+                    // symmetric then M^{-T} = M^{-1} and the existing preconditioner can
+                    // simply be used in the transpose solve; if it is not, a genuine
+                    // transpose has to be built and verified.
+                    //
+                    // Measured, not assumed, by the review's own identity:
+                    //     <M^-1 v, w>  ==  <v, M^-1 w>      iff M^{-1} is symmetric
+                    // A one-line answer to a question that otherwise sizes at "unknown".
+                    if (unified_precond_) {
+                        try {
+                            torch::NoGradGuard ng;
+                            auto gen3 = at::detail::createCPUGenerator(20260802);
+                            auto opts_p = linearization_point.options();
+                            auto v = torch::randn(linearization_point.numel(), gen3,
+                                                  torch::TensorOptions().dtype(opts_p.dtype()))
+                                         .to(opts_p.device());
+                            auto w = torch::randn(linearization_point.numel(), gen3,
+                                                  torch::TensorOptions().dtype(opts_p.dtype()))
+                                         .to(opts_p.device());
+                            auto Mv = unified_precond_->apply(v);
+                            auto Mw = unified_precond_->apply(w);
+                            const double lhs = (Mv * w).sum().item<double>();
+                            const double rhs = (v * Mw).sum().item<double>();
+                            const double den = std::max(std::abs(lhs), std::abs(rhs));
+                            const double rel = den > 0 ? std::abs(lhs - rhs) / den : 0.0;
+                            std::cerr << "SDIRK3_PRECOND_SYMMETRY <Mv,w>=" << lhs
+                                      << " <v,Mw>=" << rhs << " rel=" << rel
+                                      << (rel < 1e-5 ? "  SYMMETRIC: M^-T = M^-1, reuse it"
+                                                     : "  NOT symmetric: a real M^-T is required")
+                                      << std::endl << std::flush;
+                        } catch (const std::exception& e) {
+                            std::cerr << "SDIRK3_PRECOND_SYMMETRY THREW: " << e.what()
+                                      << std::endl << std::flush;
+                        }
+                    } else {
+                        std::cerr << "SDIRK3_PRECOND_SYMMETRY: no preconditioner_ on this "
+                                     "solver -- cannot test" << std::endl << std::flush;
+                    }
+                }
+            }
 
             lambda = wrf::sdirk3::solve_transpose_linear_system_gmres(
                 fast_operator,

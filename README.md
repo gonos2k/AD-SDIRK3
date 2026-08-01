@@ -18,33 +18,71 @@ HVP via double-backward is a design goal). The goal is a differentiable dynamica
 ## Status
 
 The model **builds and runs** (`main/wrf.exe`, `main/ideal.exe`,
-`external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a`). The stock-RK3 baseline is validated. The
-differentiable implicit solve converges at small timesteps; making it converge and remain stable at
-the **operational timestep dt=600** on `em_b_wave` is the active investigation.
+`external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a`). The stock-RK3 baseline is validated.
+The differentiable implicit solve converges at small timesteps; making it converge and remain
+stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
+it is **unresolved**.
 
-**Evidence status (post-FGMRES rediagnosis, 2026-07):** prior *pre-FGMRES* campaigns measured two
-candidate wall structures, summarized below. The current post-FGMRES run
-(`doc/sdirk3_stage3_postfgmres_classification_2026-07-16.md`) **confirms the proximate stage-4
-linear failure** at dt=600 but has **not yet re-established the operator spectrum, the operand
-composition, or the dt-dependence at the current head** — configuration equivalence with the
-pre-FGMRES records is unproven, so the walls below are **prior measurements / current leading
-hypotheses**, not currently re-confirmed facts.
+Verification is an **exact 37-test CTest inventory** pinned by
+`.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
+deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
+proven byte-identical.
 
-- **Wall-1 (prior measurement, 2026-06/07) — implicit indefiniteness at large dt (≥~80, incl.
-  600).** The pre-FGMRES campaign measured the fast acoustic operator `A = I − dt·γ·J_fast` as
-  *intrinsically indefinite* — its Ritz/numerical-range spectrum straddled the origin, and it is
-  ~linear, so no smooth linearization background removed the indefiniteness; by Sylvester's law no
-  SPD preconditioner reached dt=600, and the preconditioner track was judged measured-dead. This is
-  the same stiffness that motivates WRF's split-explicit acoustic sub-stepping. The large-step
-  adjoint was therefore deferred to a WRFPLUS-style TL/AD coupling.
-- **Wall-2 (prior measurement, 2026-07) — explicit advection cascade at small dt (≤~70).** The
-  pre-FGMRES campaign measured the explicit **u-momentum** slow tendency blowing up in a
-  super-exponential stage cascade (≥99.99% in the `ru` block; a **bilinear/quadratic** runaway
-  confirmed by amplitude-scaling; HEVI-independent), attributed to the ARK324 explicit tableau
-  over-extrapolating the sheared jet's advective tendency at large dt. The fix under development is
-  to **sub-cycle the explicit slow tendency** (WRF-native split-explicit style), keeping the SDIRK
-  implicit machinery intact. Whether the post-FGMRES stage-4 operand blowup is this physical
-  over-extrapolation or a construction defect is not yet determined at the current head.
+### What is measured
+
+- **Base-state EOS and hydrostatic pressure.** WRF's Exner form
+  `alpha = (R_d/p0)*theta*(p/p0)^(-cv/cp)` is a single authority, contract-tested forward *and*
+  in its tangent. The pressure integrator's eta orientation is pinned against WRF's own algebra
+  by a contract that calls the production helper.
+- **Vertical metric.** One fail-close policy across every source; no eps substitution, no
+  cross-stagger `rdn`→`rdnw` fallback, no length padding. Verified on a *stretched* eta grid,
+  where the staggers differ by 5e-01 — on a uniform grid they agree to 0, which is where this
+  class of defect hides.
+- **Well-balancedness.** The assembled production RHS returns **exactly zero** in every channel
+  and every `RhsMode` at zero perturbation, paired with a non-zero control so the measurement
+  cannot be confused with a dead probe.
+- **The RHS Jacobian shows nothing anomalous at the first RHS base point.** Its implicit part is
+  state-invariant to six digits (predictably: the coefficient is `mu`, which moves 0.01% between
+  rest and jet); its explicit part is proportional to base-state amplitude with a measured
+  power-law exponent of **1.00031**, which is what a bilinear advective operator must do. The
+  leading singular direction is the acoustic `w` mode.
+- **AD.** Forward-mode duals, reverse-mode VJPs and the `<Jv,w> == <v,J^T w>` identity hold on
+  the EOS and the pressure integrator; the reverse pass runs through the whole production RHS.
+  Production `J_FD` and `J_AD^T` agree to **1.198e-06**.
+
+### What is NOT measured, and matters
+
+- **The full timestep map `DG` is unmeasured.** All Jacobian analysis above is of the RHS `F`.
+  Stability is governed by `DG`, which additionally contains the ARK stage composition, the
+  implicit resolvents and the acoustic substep maps. `DF` behaving normally does **not** bound
+  `DG`.
+- **Implicit-stage differentiation is an algebra contract, not production.** The implicit
+  function theorem forms (`dK/dU = A^-1 J`, adjoint `J^T A^-T`) are pinned against closed-form
+  Jacobians but are **not wired** into the stage solve.
+- **The 4D-Var adjoint replay does not converge.** Localised: the RHS is differentiable, the
+  transpose operator is correct (rel 1.198e-06), but the transpose solve runs with an *identity*
+  preconditioner and stalls at rel_error ~0.997 at every dt from 600 down to 20. The vertical
+  preconditioner is **not symmetric** (rel 2.18e-02), so `M^-T` must be built rather than reused.
+- **No multi-step well-balancedness, geostrophic/thermal-wind balance, mass/energy/PV budgets,
+  or formal temporal-order verification.**
+- Support boundary: **dry, single-rank, single-tile, idealised map factors.** MPI halo primitives
+  are contract-tested; the integrated multi-rank SDIRK solve is not supported.
+
+### On the earlier "Wall-1 / Wall-2" framing
+
+Prior *pre-FGMRES* campaigns described two candidate walls. Treat both as **historical**:
+
+- **Wall-1** (implicit indefiniteness at large dt) is a prior measurement that has **not** been
+  re-established at the current head.
+- **Wall-2** (explicit u-momentum cascade) had its apparent corroboration **withdrawn**
+  (2026-08-01): the supporting figure came from a response matrix that divided a *coupled*
+  tendency by an *uncoupled* scale, inflating it by ~1e5. Correctly normalised, the entry
+  inverts. See `doc/` and the project memory for the audit trail.
+
+The current honest position is that EOS, pressure orientation, the vertical metric and the
+first-state RHS Jacobian have each been examined and found sound, which makes the remaining
+candidates the **stage composition, the implicit stage solve, explicit–implicit
+non-commutativity, and stage intermediate states** — none of which is measured yet.
 
 ## Build & run
 
@@ -92,7 +130,7 @@ with a stable marker **before** any communicator/halo state mutation or solve:
 - **AD halo + multi-tile** — refused pre-solve with `SDIRK3_MPI_MULTI_TILE_UNSUPPORTED`.
 - **MPI halo primitive** — verified independently of the solver at np=1/2/4: forward, adjoint,
   packed AD+BC transpose, and the runtime fail-close contracts
-  (`MPI_Halo_Contract_np{1,2,4}` + `MPI_Runtime_Contract_np{1,2,4}` in the 21-test CTest suite).
+  (`MPI_Halo_Contract_np{1,2,4}` + `MPI_Runtime_Contract_np{1,2,4}` in the 37-test CTest suite).
 - **Decomposition evidence** — the SDIRK3 decomposition fail-close matrix
   (`.github/ci/run_decomposition_matrix.sh`, 4 cases) was produced by direct local-machine
   execution; it is *not* a full-WRF decomposition validation and does not include a stock-RK3
