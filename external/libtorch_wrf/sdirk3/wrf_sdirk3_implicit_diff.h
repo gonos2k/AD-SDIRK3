@@ -118,6 +118,79 @@ inline torch::Tensor sdirk_stage_adjoint(const LinearSolve& solve_A_transpose,  
     return apply_J_transpose(solve_A_transpose(Kbar));   // J^T A^{-T} Kbar
 }
 
+
+// ---------------------------------------------------------------------------------------
+// TWO PULLBACKS, NOT TWO CANDIDATE ANSWERS (review section 4).
+//
+// D64 framed the choice as "legacy A^{-T}" versus "correct J^T A^{-T}", with the first
+// missing a J^T. That framing was WRONG, and the algebra says so cleanly.
+//
+// The stage produces TWO outputs from U, and they have different derivatives:
+//
+//     stage STATE      Y = U + alpha*K(U)
+//     stage TENDENCY   K = K(U)
+//
+// With dK/dU = A^{-1}J and A = I - alpha*J,
+//
+//     dY/dU = I + alpha*A^{-1}J
+//           = A^{-1}(A + alpha*J)
+//           = A^{-1}(I - alpha*J + alpha*J)
+//           = A^{-1}                                    <- exactly, no approximation
+//
+// so the two pullbacks are
+//
+//     stage-STATE cotangent Ybar     ->  Ubar = A^{-T} Ybar
+//     stage-TENDENCY cotangent Kbar  ->  Ubar = J^T A^{-T} Kbar
+//
+// BOTH ARE CORRECT. Which one applies is determined by which cotangent the caller holds,
+// and applying the tendency map to a state cotangent silently mixes two different
+// quantities -- the kind of error that produces a plausible gradient and a 4D-Var
+// minimiser that optimises something other than the objective.
+//
+// This matters for runAdjointReplay: its argument is named lambda_terminal, its saved
+// trajectory is packed STATE tensors, and there is no Kbar, stage index or Butcher
+// coefficient anywhere in the signature. By that evidence it carries a STATE cotangent,
+// for which A^{-T} alone is right -- so the "legacy" path was not missing a J^T; it was
+// being handed a different cotangent than D64 assumed.
+//
+// The enum exists so the choice is made in the type system rather than by an int whose
+// out-of-range values quietly fall through to one of the two.
+enum class StageCotangent {
+    State,      // Ybar: pullback is A^{-T}
+    Tendency    // Kbar: pullback is J^T A^{-T}
+};
+
+// Ubar = A^{-T} Ybar   -- for a stage-STATE cotangent.
+inline torch::Tensor stage_state_pullback(const LinearSolve& solve_A_transpose,
+                                          const torch::Tensor& Ybar) {
+    return solve_A_transpose(Ybar);
+}
+
+// Ubar = J^T A^{-T} Kbar   -- for a stage-TENDENCY cotangent.
+inline torch::Tensor stage_tendency_pullback(const LinearSolve& solve_A_transpose,
+                                             const ApplyOperator& apply_J_transpose,
+                                             const torch::Tensor& Kbar) {
+    return apply_J_transpose(solve_A_transpose(Kbar));
+}
+
+// Dispatch, so a caller that carries the kind alongside the vector cannot apply the wrong
+// map by passing the wrong integer.
+inline torch::Tensor stage_pullback(StageCotangent kind,
+                                    const LinearSolve& solve_A_transpose,
+                                    const ApplyOperator& apply_J_transpose,
+                                    const torch::Tensor& cotangent) {
+    switch (kind) {
+        case StageCotangent::State:
+            return stage_state_pullback(solve_A_transpose, cotangent);
+        case StageCotangent::Tendency:
+            return stage_tendency_pullback(solve_A_transpose, apply_J_transpose, cotangent);
+    }
+    throw std::invalid_argument(
+        "SDIRK3 stage_pullback: unknown StageCotangent. Refusing to default to either map "
+        "-- they are pullbacks of different quantities, and guessing produces a plausible "
+        "gradient for the wrong objective.");
+}
+
 }  // namespace implicit_diff
 }  // namespace sdirk3
 }  // namespace wrf

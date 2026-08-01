@@ -266,7 +266,66 @@ int main() {
               "symmetric");
     }
 
-    constexpr int expected_checks = 14;
+    // === TWO PULLBACKS (review section 4), and the identity that makes both correct ===
+    {
+        using wrf::sdirk3::implicit_diff::stage_state_pullback;
+        using wrf::sdirk3::implicit_diff::stage_tendency_pullback;
+        using wrf::sdirk3::implicit_diff::stage_pullback;
+        using wrf::sdirk3::implicit_diff::StageCotangent;
+
+        const double dt_gamma = 0.35;
+        const auto J = make_RU();
+        const auto I = torch::eye(N, opts);
+        const auto A = I - dt_gamma * J;
+        const auto A_inv = torch::linalg_inv(A);
+
+        // dY/dU = I + alpha*A^-1 J, and this must equal A^-1 EXACTLY:
+        //   A^-1(A + alpha J) = A^-1(I - alpha J + alpha J) = A^-1
+        auto dYdU_expanded = I + dt_gamma * A_inv.matmul(J);
+        const double rel_id =
+            ((dYdU_expanded - A_inv).abs().max() / A_inv.abs().max()).item<double>();
+        check(rel_id < 1e-12,
+              "dY/dU = I + alpha*A^-1 J equals A^-1 EXACTLY (rel=" + sci(rel_id) +
+              ") -- so A^-T is the correct pullback for a stage-STATE cotangent, and the "
+              "'legacy' path was not missing a J^T, it was being handed a different "
+              "cotangent");
+
+        auto solve_A_T = [&](const torch::Tensor& r) { return A_inv.t().mv(r); };
+        auto applyJ_T  = [&](const torch::Tensor& r) { return J.t().mv(r); };
+
+        // state pullback == (dY/dU)^T applied to Ybar
+        auto Ybar = torch::randn({N}, opts);
+        auto got_state = stage_state_pullback(solve_A_T, Ybar);
+        const double rel_s = ((got_state - A_inv.t().mv(Ybar)).abs().max()
+                              / A_inv.t().mv(Ybar).abs().max()).item<double>();
+        check(rel_s < 1e-12, "stage_state_pullback == A^-T Ybar (rel=" + sci(rel_s) + ")");
+
+        // tendency pullback == (A^-1 J)^T applied to Kbar
+        auto got_tend = stage_tendency_pullback(solve_A_T, applyJ_T, Kbar);
+        auto want_tend = A_inv.matmul(J).t().mv(Kbar);
+        const double rel_k = ((got_tend - want_tend).abs().max()
+                              / want_tend.abs().max()).item<double>();
+        check(rel_k < 1e-12, "stage_tendency_pullback == (A^-1 J)^T Kbar (rel=" +
+                             sci(rel_k) + ")");
+
+        // THE POINT: they are materially different maps, so applying one to the other's
+        // cotangent is a silent error, not a small one.
+        auto wrong = stage_tendency_pullback(solve_A_T, applyJ_T, Ybar);   // tendency map
+        const double rel_mix = ((wrong - got_state).abs().max()
+                                / got_state.abs().max()).item<double>();
+        check(rel_mix > 0.1,
+              "applying the TENDENCY map to a STATE cotangent differs by " + sci(rel_mix) +
+              " -- they are pullbacks of different quantities, not competing answers");
+
+        // dispatch agrees with the named functions
+        check(torch::allclose(stage_pullback(StageCotangent::State, solve_A_T, applyJ_T, Ybar),
+                              got_state) &&
+              torch::allclose(stage_pullback(StageCotangent::Tendency, solve_A_T, applyJ_T, Kbar),
+                              got_tend),
+              "and the typed dispatch selects the same map as the named functions");
+    }
+
+    constexpr int expected_checks = 19;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
