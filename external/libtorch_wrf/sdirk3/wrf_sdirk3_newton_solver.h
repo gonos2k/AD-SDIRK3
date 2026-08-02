@@ -2,6 +2,7 @@
 #define WRF_SDIRK3_NEWTON_SOLVER_H
 
 #include <torch/torch.h>
+#include "wrf_sdirk3_state_layout.h"   // 9F.D93: THE packed-state layout
 #include <functional>
 #include <memory>
 #include <vector>
@@ -358,8 +359,10 @@ private:
 /**
  * Krylov subspace methods
  */
-// Forward declaration for GMRES per-block diagnostics (defined in newton_solver.cpp)
-struct StateLayout;
+// 9F.D93: StateLayout is a COMPLETE type now (wrf_sdirk3_state_layout.h), included at the
+// top of this header. It used to be forward-declared here and defined in newton_solver.cpp,
+// which made it unusable outside that one translation unit -- the reason five other places
+// grew their own copy of the block arithmetic.
 
 // PR 9A: detached clones of the actual Krylov basis of one solve, exported
 // for the opt-in directional consistency checker: V = Arnoldi basis, Z = the
