@@ -38747,11 +38747,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
 
                     auto M = [&](const torch::Tensor& x) { return unified_precond_->apply(x); };
 
-                    // The CLAIMED transpose: the SAME apply_transpose_ad the A^T solve is
+                    // The CLAIMED transpose: the SAME apply_inverse_transpose the A^T solve is
                     // wired to (9F.D84). Measuring one implementation and shipping another
                     // would make this contract decorative.
                     auto M_transpose = [&](const torch::Tensor& cot) {
-                        return unified_precond_->apply_transpose_ad(cot);
+                        return unified_precond_->apply_inverse_transpose(cot);
                     };
 
                     std::cerr << tp::probe_transpose(M, M_transpose,
@@ -38880,7 +38880,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                 wrf::sdirk3::UnifiedPreconditioner* M = nullptr;
                 void set_alpha(double) {}
                 torch::Tensor apply_transpose(const torch::Tensor& r) const {
-                    return M->apply_transpose_ad(r);   // throws rather than returning r
+                    return M->apply_inverse_transpose(r);   // throws rather than returning r
                 }
             };
 

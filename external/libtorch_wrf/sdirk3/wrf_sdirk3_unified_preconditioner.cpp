@@ -1934,26 +1934,22 @@ void UnifiedPreconditioner::initialize_horizontal_smoother() {
 
 // 9F.D84: M^T v as the VJP of apply(). See the header for why it lives here and why it
 // fails closed.
-torch::Tensor UnifiedPreconditioner::apply_transpose_ad(const torch::Tensor& cotangent) {
+torch::Tensor UnifiedPreconditioner::apply_inverse_transpose(const torch::Tensor& cotangent) {
     torch::AutoGradMode grad_on(true);
 
-    // Restored on every exit INCLUDING a throw, so a failed transpose cannot leave the
-    // production forward path grad-enabled.
-    struct ScopedGradFlag {
-        UnifiedPreconditioner* self;
-        bool saved;
-        ~ScopedGradFlag() noexcept { self->set_grad_enabled_for_transpose(saved); }
-    } restore{this, grad_enabled_for_transpose_};
-    set_grad_enabled_for_transpose(true);
+    // 9F.D90: no flag to set, and nothing to restore. The policy travels down the call chain
+    // as an argument, so a concurrent forward apply() is unaffected by definition rather
+    // than by RAII discipline.
 
     // apply() is a fixed LINEAR operator (measured in D78: repeatability 0, call-order 0,
     // additivity 2.3e-07, homogeneity 0), so the VJP does not depend on where it is
     // evaluated and the cotangent itself is a valid linearization point.
     auto x = cotangent.detach().clone().set_requires_grad(true);
-    auto Mx = apply(x);
+    auto Mx = apply_impl(x, GradPolicy::Track);
     if (!Mx.requires_grad() || !Mx.grad_fn()) {
         throw std::runtime_error(
-            "SDIRK3 apply_transpose_ad: apply() recorded no graph, so there is no transpose "
+            "SDIRK3 apply_inverse_transpose: apply() recorded no graph, so there is no "
+            "transpose "
             "to return. Refusing to fall back to the identity -- that is indistinguishable "
             "from a correct transpose at the call site and silently unpreconditions the "
             "solve.");
@@ -1964,12 +1960,18 @@ torch::Tensor UnifiedPreconditioner::apply_transpose_ad(const torch::Tensor& cot
                                        /*allow_unused=*/true);
     if (grads.empty() || !grads[0].defined()) {
         throw std::runtime_error(
-            "SDIRK3 apply_transpose_ad: the VJP returned an undefined gradient.");
+            "SDIRK3 apply_inverse_transpose: the VJP returned an undefined gradient.");
     }
     return grads[0];
 }
 
 torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
+    // Production forward. Grad stays off, exactly as it always has.
+    return apply_impl(residual, GradPolicy::Disabled);
+}
+
+torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
+                                                GradPolicy policy) {
     PROFILE_SCOPE("preconditioner_apply");
 
     // FIX 2026-02-03: Entry log gated on debug_level >= 1
@@ -2010,7 +2012,7 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
     // this campaign has been bitten five times by sweeping a change across sibling sites
     // without checking which ones mattered.
     c10::optional<torch::NoGradGuard> no_grad;
-    if (!grad_enabled_for_transpose_) no_grad.emplace();
+    if (policy == GradPolicy::Disabled) no_grad.emplace();
 
     torch::Tensor z = residual.clone();
 
@@ -2233,7 +2235,7 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
             // accident, and losing it silently is a regression this campaign has already
             // paid for twice.
             c10::optional<torch::NoGradGuard> no_grad;
-            if (!grad_enabled_for_transpose_) no_grad.emplace();
+            if (policy == GradPolicy::Disabled) no_grad.emplace();
 
             // DEBUG 2026-02-05: Track crash location (gated v20.14)
             if (apply_call_count <= 3 && current_debug_level >= 1) {
@@ -3271,7 +3273,7 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
             // v20.14 r47: Pass Phase 2 params (nullptr when inactive).
             solve_coupled_w_theta_batched(w_block, theta_block, nz, nz_w,
                 phase2_active_this_call ? &phase2_phi_block_3d : nullptr,
-                phase2_phi_diag_ptr, phase2_A_eff_ptr, nz_w);
+                phase2_phi_diag_ptr, phase2_A_eff_ptr, nz_w, policy);
 
             // v20.14 r47: Write back-substituted Φ to z
             if (phase2_active_this_call) {
@@ -3631,7 +3633,7 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
 
     // Original 4D implementation with enhanced coupling
     // Step 1: ENHANCED vertical implicit solve (handles stiff acoustic-gravity modes)
-    z = apply_enhanced_vertical_solve(z);
+    z = apply_enhanced_vertical_solve(z, policy);
 
     // Step 2: Horizontal smoothing (handles horizontal acoustic modes)
     z = apply_horizontal_smoothing(z);
@@ -3675,7 +3677,8 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
     return z;
 }
 
-torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::Tensor& r) {
+torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::Tensor& r,
+                                                                   GradPolicy policy) {
     // Handle 1D state vector case
     if (r.dim() == 1) {
         // For 1D, use simplified diagonal scaling (already handled in apply())
@@ -3738,7 +3741,8 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
                 }
             }
         }
-        solve_coupled_w_theta_batched(w_block_4d, theta_block_4d, nz_4d, nz_w_4d);
+        solve_coupled_w_theta_batched(w_block_4d, theta_block_4d, nz_4d, nz_w_4d,
+                                      nullptr, nullptr, nullptr, 0, policy);
         result[2].copy_(w_block_4d.permute({1, 0, 2}));
         result[4].copy_(theta_block_4d.permute({1, 0, 2}));
     }
@@ -4469,7 +4473,8 @@ void UnifiedPreconditioner::solve_coupled_w_theta_batched(
     torch::Tensor* phi_block,
     const float* phi_diag,
     const float* A_eff,
-    int phase2_nz_w) {
+    int phase2_nz_w,
+    GradPolicy policy) {
 
     // 9F.D83: conditional, same pattern as the top-level guard and the 4x4 Schur block.
     // This covers the w/theta rows -- the remaining 39.6% of the state vector after D82.
@@ -4482,7 +4487,7 @@ void UnifiedPreconditioner::solve_coupled_w_theta_batched(
     // it is measured rather than assumed: the probe reports THREW if it does, and the
     // out-of-place rewrite (per-level slabs + stack) is only worth its risk if it must.
     c10::optional<torch::NoGradGuard> no_grad;
-    if (!grad_enabled_for_transpose_) no_grad.emplace();
+    if (policy == GradPolicy::Disabled) no_grad.emplace();
 
     // Ensure coefficient cache is up-to-date (reuse column solver's cache logic)
     // Call column solver once with dummy data to prime the cache if needed
