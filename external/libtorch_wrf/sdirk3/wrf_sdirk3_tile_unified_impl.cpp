@@ -38605,42 +38605,27 @@ bool TileSDIRK3UnifiedSolver::runAdjointDriverProbe(const torch::Tensor& U_n) {
         const float dtv = static_cast<float>(
             probe_env_positive_double("WRF_SDIRK3_ADJOINT_DT", 600.0));
         const float gam = 0.435866521508459f;
-        // Each mode in its OWN try, so a failure in one still reports the other.
-        // Bundling them would have hidden which of the two broke.
-        torch::Tensor legacy, eqlev;
-        try {
-            legacy = runAdjointReplay(lam, dtv, gam, 10, 40, 1e-5f, 0);
-            std::cerr << "SDIRK3_ADJOINT_DRIVER legacy ok |lam|="
-                      << [&]{ torch::NoGradGuard g; return legacy.norm().item<double>(); }()
-                      << std::endl << std::flush;
-        } catch (const std::exception& e) {
-            std::cerr << "SDIRK3_ADJOINT_DRIVER legacy FAILED: " << e.what()
-                      << std::endl << std::flush;
+        // 9F.D88 (review section 4): the two-mode comparison is DELETED.
+        //
+        // It ran the replay twice on the SAME random lambda -- once as A^{-T} and once as
+        // J^T A^{-T} -- and reported their norm ratio, cosine and relative difference as if
+        // one were a candidate answer for the other. They are pullbacks of DIFFERENT stage
+        // outputs (state vs tendency), so evaluating two different functions at the same
+        // input and differencing them measures nothing. It produced numbers for weeks.
+        //
+        // The driver now exercises ONE map, named by its cotangent kind. What it reports is
+        // whether the replay runs and what it returns -- not a comparison it cannot make.
+        auto lambda_out = runAdjointReplay(
+            lam, dtv, gam, 10, 40, 1e-5f,
+            wrf::sdirk3::implicit_diff::StageCotangent::State);
+        {
+            torch::NoGradGuard ng_report;   // only around the .item() reads
+            std::cerr << "SDIRK3_ADJOINT_DRIVER checkpoints=" << ck.size()
+                      << " kind=State"
+                      << " |lambda_in|=" << lam.norm().item<double>()
+                      << " |lambda_out|=" << lambda_out.norm().item<double>()
+                      << std::endl;
         }
-        try {
-            eqlev = runAdjointReplay(lam, dtv, gam, 10, 40, 1e-5f, 1);
-            std::cerr << "SDIRK3_ADJOINT_DRIVER equation-level ok |lam|="
-                      << [&]{ torch::NoGradGuard g; return eqlev.norm().item<double>(); }()
-                      << std::endl << std::flush;
-        } catch (const std::exception& e) {
-            std::cerr << "SDIRK3_ADJOINT_DRIVER equation-level FAILED: " << e.what()
-                      << std::endl << std::flush;
-        }
-        if (!legacy.defined() || !eqlev.defined()) return false;
-
-        torch::NoGradGuard ng_report;   // only around the .item() reads
-        const double nl = legacy.norm().item<double>();
-        const double ne = eqlev.norm().item<double>();
-        const double dot = (legacy * eqlev).sum().item<double>();
-        const double cosang = (nl > 0 && ne > 0) ? dot / (nl * ne) : 0.0;
-        const double reldiff = (nl > 0)
-            ? (eqlev - legacy).norm().item<double>() / nl : 0.0;
-        std::cerr << "SDIRK3_ADJOINT_DRIVER checkpoints=" << ck.size()
-                  << " |lam_legacy|=" << nl
-                  << " |lam_eq|=" << ne
-                  << " ratio=" << (nl > 0 ? ne / nl : 0.0)
-                  << " cos=" << cosang
-                  << " reldiff=" << reldiff << std::endl;
         return true;    // reported a real measurement -> the attempt is consumed
     } catch (const std::exception& e) {
         std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: " << e.what() << std::endl;
@@ -38662,7 +38647,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     int gmres_restart,
     int gmres_max_iterations,
     float gmres_tolerance,
-    int stage_adjoint_mode) {
+    wrf::sdirk3::implicit_diff::StageCotangent cotangent_kind) {
 
     TORCH_CHECK(lambda_terminal.defined(), "runAdjointReplay: lambda_terminal must be defined");
 
@@ -38888,12 +38873,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             //
             // Default OFF, so the legacy path is byte-identical and the difference is a
             // MEASUREMENT rather than a silent change to what the adjoint means.
-            bool use_equation_level = false;
-            if (stage_adjoint_mode >= 0) {
-                use_equation_level = (stage_adjoint_mode == 1);
-            } else if (const char* sa = std::getenv("WRF_SDIRK3_STAGE_ADJOINT")) {
-                use_equation_level = (sa[0] == 'e');
-            }
+            // 9F.D88 (review section 4): the map is chosen by the COTANGENT KIND, from the
+            // type system. The int mode and its WRF_SDIRK3_STAGE_ADJOINT fallback are gone:
+            // an env var cannot know which quantity the caller is holding, and defaulting
+            // when it is unset silently picks one of two different maps.
+            const bool use_equation_level =
+                (cotangent_kind ==
+                 wrf::sdirk3::implicit_diff::StageCotangent::Tendency);
             {
                 if (use_equation_level) {
                     torch::AutoGradMode enable(true);
