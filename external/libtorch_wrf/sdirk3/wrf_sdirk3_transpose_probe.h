@@ -31,8 +31,10 @@
 // perfectly good linear operator. Nothing in the numbers announces it.
 //
 // So identity is checked EXPLICITLY and reported as its own verdict, not folded into an
-// error magnitude. `transpose_error` is meaningless when `transpose_is_identity` is set,
-// and summary() says SEVERED rather than printing a rel that invites the D80 misreading.
+// error magnitude. But it is only ever a REASON, never the evidence: the bilinear identity
+// <Mv,w> == <v,M^Tw> is what decides, because an exact transpose can leave a probe direction
+// fixed (review section 7 -- see the counterexample on transpose_is_identity). SEVERED
+// therefore requires a FAILED identity as well as identity-looking behaviour.
 //
 // The caller passes the claimed transpose as a plain operator, so this header knows nothing
 // about autograd or the solver -- which is what lets Transpose_Probe_Contract run it
@@ -82,24 +84,38 @@ struct TransposeReport {
     // the margin of is a predicate you cannot debug.
     double transpose_identity_residual = 0;  // max|M^Tw - w| / max|w|
     double forward_identity_residual = 0;    // max|Mw   - w| / max|w|
-    double transpose_error = 0;              // |<Mv,w> - <v,M^Tw>| / max(|.|). Meaningless
-                                             // when the transpose is severed.
+    double transpose_error = 0;              // |<Mv,w> - <v,M^Tw>| / max(|.|). THE verdict:
+                                             // this is the definition of a transpose, so it
+                                             // decides, and SEVERED requires it to fail.
     std::string threw;                       // non-empty if the claimed transpose threw
 
-    // Severed: the claimed transpose returns its input, while M itself does not.
+    // Severed: the claimed transpose returns its input, while M itself does not, AND it
+    // fails the transpose identity.
     //
-    // The comparison is RELATIVE TO THE FORWARD, not against an absolute tolerance, and the
-    // production measurement is why. There the claimed transpose reproduced its input to
-    // 8.8e-05 while M moved the same vector by 1.21 -- severed, but not bit-exactly, so an
-    // absolute bar tight enough to mean "identity" (1e-6) did not fire and a bar loose
-    // enough to fire (1e-3) would be a number picked to make the answer come out. The
-    // scale-free statement is the honest one: this operator is four orders of magnitude
-    // closer to doing nothing than M is.
+    // THAT LAST CLAUSE IS LOAD-BEARING (review section 7). Without it this has a
+    // mathematical false positive, by counterexample:
     //
-    // forward_identity_residual > tol is the guard that keeps a genuinely-identity M from
-    // being accused: if M really is the identity, returning w is the correct transpose.
-    bool transpose_is_identity(double frac = 0.01, double tol = 1e-6) const {
+    //     P = [[1,1],[0,2]],  w = (1,-1)^T   =>   P^T w = w   but   P w = (0,-2) != w
+    //
+    // An EXACT transpose can leave a particular direction fixed while the forward does not.
+    // Identity-looking behaviour on one probe direction is a HINT about why a transpose is
+    // wrong; it is not evidence that it is wrong. The bilinear identity
+    // <Mv,w> == <v,M^Tw> IS the definition, so it decides, and the identity residual only
+    // explains the failure it has already established.
+    //
+    // The forward/transpose comparison is RELATIVE, not an absolute tolerance, and the
+    // production measurement is why: the claimed transpose reproduced its input to 8.8e-05
+    // while M moved the same vector by 1.21. An absolute bar tight enough to mean
+    // "identity" (1e-6) did not fire, and one loose enough to fire (1e-3) would be a number
+    // picked to make the answer come out.
+    //
+    // forward_identity_residual > tol keeps a genuinely-identity M from being accused: if M
+    // really is the identity, returning w is the CORRECT transpose.
+    bool transpose_is_identity(double frac = 0.01,
+                               double tol = 1e-6,
+                               double bilinear_tol = 1e-5) const {
         return transpose_supplied && threw.empty() &&
+               transpose_error > bilinear_tol &&        // it must actually BE wrong
                forward_identity_residual > tol &&
                transpose_identity_residual < frac * forward_identity_residual;
     }
@@ -222,7 +238,10 @@ inline std::string TransposeReport::summary(const std::string& what) const {
       << " additivity=" << additivity
       << " gain=" << forward_gain;
 
-    if (symmetry == 0.0) {
+    // Tolerance, not ==0.0 (review section 7): in float32 over ~1e6 elements the bilinear
+    // reduction floor is ~1e-5, so an exact comparison never fires on a genuinely
+    // self-adjoint operator and quietly withholds a true finding.
+    if (symmetry <= 1e-5) {
         o << "  M IS SELF-ADJOINT: reuse M^-1 as M^-T";
     } else if (!forward_is_fixed_linear()) {
         o << "  M IS NOT A FIXED LINEAR OPERATOR: no transpose exists";
@@ -238,16 +257,16 @@ inline std::string TransposeReport::summary(const std::string& what) const {
     }
     o << " identity_residual=" << transpose_identity_residual
       << " forward_identity_residual=" << forward_identity_residual;
+    o << " transpose_error=" << transpose_error;
     if (transpose_is_identity()) {
-        // Deliberately no transpose_error here: printing one is what let D80 read a severed
-        // graph as a 52%-accurate transpose.
-        o << "  TRANSPOSE SEVERED: it returned its own input, while M did not. The graph"
-             " recorded nothing; this is not a transpose of M, and its error is not a"
-             " distance from one.";
+        // transpose_error IS printed here now, because SEVERED requires it to be large --
+        // it is the evidence, not a distance-to-correct. D80 misread 0.5223 as "52%
+        // accurate"; the guard against that is the verdict word, not hiding the number.
+        o << "  TRANSPOSE SEVERED: it fails the transpose identity AND returns its own"
+             " input while M does not. The graph recorded nothing.";
         return o.str();
     }
-    o << " transpose_error=" << transpose_error
-      << (transpose_error < 1e-5 ? "  TRANSPOSE VERIFIED" : "  TRANSPOSE WRONG");
+    o << (transpose_error < 1e-5 ? "  TRANSPOSE VERIFIED" : "  TRANSPOSE WRONG");
     return o.str();
 }
 

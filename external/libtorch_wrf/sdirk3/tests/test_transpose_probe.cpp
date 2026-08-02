@@ -90,8 +90,11 @@ int main() {
         check(r.forward_identity_residual > 1e-6,
               "severed: forward is NOT the identity -- what discriminates");
         check(mentions(summary_of(r), "TRANSPOSE SEVERED"), "severed: summary says SEVERED");
-        check(!mentions(summary_of(r), "transpose_error="),
-              "severed: summary prints NO rel (the D80 misreading)");
+        check(mentions(summary_of(r), "transpose_error="),
+              "severed: summary DOES print the rel -- it is now the evidence, since SEVERED "
+              "requires a failed bilinear identity");
+        check(r.transpose_error > 1e-5,
+              "severed: the bilinear identity actually FAILS (" + sci(r.transpose_error) + ")");
         check(r.forward_is_fixed_linear(),
               "severed: forward properties still all pass -- why rel alone cannot catch it");
     }
@@ -236,7 +239,45 @@ int main() {
         }
     }
 
-    constexpr int expected_checks = 45;
+    // ------- 11. REVIEW SECTION 7: an EXACT transpose that looks like identity on a probe
+    // direction must NOT be called severed. Counterexample from the review, verified:
+    //
+    //     P = [[1,1],[0,2]],  w = (1,-1)^T  =>  P^T w = w  exactly,  P w = (0,-2) != w
+    //
+    // The earlier criterion (identity-looking + forward-not-identity) reported SEVERED here,
+    // a FALSE POSITIVE on a perfectly correct transpose. The bilinear identity is the
+    // definition and must decide.
+    {
+        auto B = torch::zeros({2, 2}, opts());
+        B.index_put_({0, 0}, 1.0); B.index_put_({0, 1}, 1.0);
+        B.index_put_({1, 0}, 0.0); B.index_put_({1, 1}, 2.0);
+        auto fwd = [&](const torch::Tensor& x) { return B.mv(x); };
+        auto tr  = [&](const torch::Tensor& x) { return B.t().mv(x); };
+
+        // w = (1,-1) is the fixed direction of B^T; drive the probe onto it exactly.
+        auto w_fixed = torch::tensor({1.0, -1.0}, opts());
+        auto r_manual = probe::TransposeReport{};
+        r_manual.transpose_supplied = true;
+        r_manual.transpose_identity_residual =
+            probe::detail::rel_max(tr(w_fixed) - w_fixed, w_fixed);
+        r_manual.forward_identity_residual =
+            probe::detail::rel_max(fwd(w_fixed) - w_fixed, w_fixed);
+        auto v_any = torch::tensor({0.3, 0.7}, opts());
+        r_manual.transpose_error = probe::detail::rel_scalar(
+            probe::detail::dot(fwd(v_any), w_fixed),
+            probe::detail::dot(v_any, tr(w_fixed)));
+
+        check(r_manual.transpose_identity_residual == 0.0,
+              "sec7: P^T leaves w fixed EXACTLY (the trap)");
+        check(r_manual.forward_identity_residual > 1e-6,
+              "sec7: P does NOT leave w fixed (the other half of the trap)");
+        check(r_manual.transpose_error <= 1e-5,
+              "sec7: bilinear identity HOLDS (" + sci(r_manual.transpose_error) + ")");
+        check(!r_manual.transpose_is_identity(),
+              "sec7: NOT reported severed -- the bilinear clause vetoes the false positive");
+    }
+
+    constexpr int expected_checks = 50;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

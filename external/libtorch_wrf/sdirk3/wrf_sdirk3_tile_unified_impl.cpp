@@ -38709,6 +38709,38 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             // Keep replay in the same state basis as the forward stage reference.
             U_ref_stage_ = linearization_point.clone();
 
+            // 9F.D87 (review section 3): REBUILD the preconditioner for THIS replay's alpha
+            // and state. Without this the transpose solve is preconditioned by an operator
+            // built for a DIFFERENT problem, and D84's dt-ladder was exactly that.
+            //
+            // update() is called once per forward step (unifiedStep, :5577) with the
+            // FORWARD dt. runAdjointReplay never called it, and set_alpha() is a no-op in
+            // all three transpose-preconditioner wrappers, so nothing re-derived the
+            // coefficients. With WRF_SDIRK3_ADJOINT_DT=5 against a namelist dt of 600 that
+            // is alpha = 2.18 solved against a preconditioner built for alpha = 261.5 --
+            // a 120x mismatch. The horizontal smoothing factor alone carries dt*gamma*cs^2.
+            //
+            // So "a correct M^-T does not help" was measured against the exact transpose of
+            // the WRONG preconditioner. The AD transpose was faithful to what it was given;
+            // what it was given did not match A.
+            //
+            // Safe for the forward path: unifiedStep re-updates at the top of every step,
+            // and the replay only runs after one has completed.
+            if (unified_precond_) {
+                unified_precond_->update(linearization_point, dt, gamma);
+                static std::atomic<bool> prov_said{false};
+                bool prov_expected = false;
+                if (prov_said.compare_exchange_strong(prov_expected, true)) {
+                    torch::NoGradGuard no_grad;
+                    std::cerr << "SDIRK3_ADJOINT_PRECOND_PROVENANCE"
+                              << " dt=" << dt << " gamma=" << gamma
+                              << " alpha=" << (static_cast<double>(dt) *
+                                               static_cast<double>(gamma))
+                              << " |Y_lin|=" << linearization_point.norm().item<double>()
+                              << "  (rebuilt for THIS replay)" << std::endl << std::flush;
+                }
+            }
+
             auto fast_operator = [&](const torch::Tensor& y) -> torch::Tensor {
                 return computeUnifiedRHS(y, wrf::sdirk3::RhsMode::ImplicitOnly);
             };
