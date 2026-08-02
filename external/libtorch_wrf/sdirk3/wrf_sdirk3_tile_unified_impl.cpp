@@ -38733,6 +38733,38 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                 bool prov_expected = false;
                 if (prov_said.compare_exchange_strong(prov_expected, true)) {
                     torch::NoGradGuard no_grad;
+                // 9F.D94 (review section 4): BIND THE CHECKPOINT'S MASS STATE.
+                //
+                // MEASURED to matter before wiring, which is the review's own contract:
+                // holding shape/dt/gamma fixed and changing only mu moves P(v) by 8.0e-04
+                // per 1000 Pa (~1% of mu). So P is genuinely state-dependent and the replay
+                // must bind, rather than inheriting whatever the forward step left.
+                //
+                // Small, though: 8e-04 against a transpose solve stuck at rel_true 0.9973.
+                // This closes a correctness gap; it is NOT a candidate explanation for the
+                // non-convergence, and should not be reported as one.
+                //
+                // Ranges from the shared StateLayout (D93), the same one production uses at
+                // newton_solver.cpp:4311 -- not a local copy of the offsets.
+                {
+                    const auto lay = wrf::sdirk3::StateLayout::from_grid_dims(
+                        nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
+                    const auto& mu_blk = lay.blocks.back();
+                    const int64_t ny64 = ny_, nx64 = nx_;
+                    if (lay.is_valid() && lay.total_size == linearization_point.numel() &&
+                        mu_blk.name == "mu" && mu_blk.size == ny64 * nx64) {
+                        torch::NoGradGuard ng_bind;
+                        auto mu_pert = linearization_point
+                                           .slice(0, mu_blk.start, mu_blk.start + mu_blk.size)
+                                           .reshape({ny64, nx64}).clone();
+                        // STAGE INDEX IS A KNOWN GAP. The packed checkpoint records no ARK
+                        // stage, so this passes 1. If the measured stage1_vs_stage3 above is
+                        // nonzero, that guess is itself an error and only the stage tape
+                        // (review section 7) can remove it. Stated rather than hidden.
+                        unified_precond_->set_stage_state(mu_pert, 1);
+                    }
+                }
+
                     std::cerr << "SDIRK3_ADJOINT_PRECOND_PROVENANCE"
                               << " dt=" << dt << " gamma=" << gamma
                               << " alpha=" << (static_cast<double>(dt) *
@@ -38819,6 +38851,69 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                               << std::endl << std::flush;
                                 }
                             }
+                        }
+                    }
+
+                    // 9F.D94 (review section 4, the standing contract): IS THE
+                    // PRECONDITIONER ACTUALLY STATE-DEPENDENT?
+                    //
+                    // The review's test, run before wiring anything: hold shape, dt and gamma
+                    // fixed and change only the mass state. If the design is state-dependent,
+                    // P(Y_a)v != P(Y_b)v. If it does not move, then either P is effectively
+                    // state-independent or the binding is broken -- and in EITHER case
+                    // update(state,...) is the wrong API, because it takes a state it ignores.
+                    //
+                    // Measure before wiring: if P does not respond to mu_pert at all, then
+                    // "the preconditioner is not matched to the checkpoint state" is a defect
+                    // in the API's honesty rather than in the numerics, and extracting mu_pert
+                    // would buy nothing.
+                    //
+                    // Production binds this per Newton stage from the same StateLayout
+                    // (newton_solver.cpp:4311), so the forward re-establishes it next step.
+                    {
+                        const auto layout = wrf::sdirk3::StateLayout::from_grid_dims(
+                            nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
+                        const auto& mu_blk = layout.blocks.back();   // "mu", 2-D, last
+                        const int64_t ny64 = ny_, nx64 = nx_;
+                        if (mu_blk.name == "mu" && mu_blk.size == ny64 * nx64) {
+                            torch::NoGradGuard ng_probe;
+                            auto v_probe = torch::randn(linearization_point.numel(),
+                                                        linearization_point.options());
+                            auto z_before = unified_precond_->apply(v_probe);
+
+                            auto mu_a = linearization_point
+                                            .slice(0, mu_blk.start, mu_blk.start + mu_blk.size)
+                                            .reshape({ny64, nx64}).clone();
+                            unified_precond_->set_stage_state(mu_a, 1);
+                            auto z_a = unified_precond_->apply(v_probe);
+
+                            // +1000 Pa on the column mass: physically large, ~1% of mu.
+                            auto mu_b = mu_a + 1000.0f;
+                            unified_precond_->set_stage_state(mu_b, 1);
+                            auto z_b = unified_precond_->apply(v_probe);
+
+                            auto rel = [](const torch::Tensor& x, const torch::Tensor& y) {
+                                return ((x - y).norm() / y.norm().clamp_min(1e-30))
+                                    .item<double>();
+                            };
+                            // Does the STAGE INDEX matter? The checkpoint carries no stage,
+                            // so if it does, binding with a guessed stage is its own error.
+                            unified_precond_->set_stage_state(mu_a, 1);
+                            auto z_s1 = unified_precond_->apply(v_probe);
+                            unified_precond_->set_stage_state(mu_a, 3);
+                            auto z_s3 = unified_precond_->apply(v_probe);
+
+                            const double d_bind = rel(z_a, z_before);
+                            const double d_state = rel(z_b, z_a);
+                            std::cerr << "SDIRK3_PRECOND_STATE_DEPENDENCE"
+                                      << " bind_changed=" << d_bind
+                                      << " dmu_1000Pa_changed=" << d_state
+                                      << " stage1_vs_stage3=" << rel(z_s3, z_s1)
+                                      << (d_state > 1e-9
+                                              ? "  STATE-DEPENDENT: the replay MUST bind mu_pert"
+                                              : "  NO RESPONSE: P ignores mu_pert here, so"
+                                                " update(state,...) takes a state it cannot use")
+                                      << std::endl << std::flush;
                         }
                     }
 
