@@ -11,8 +11,10 @@ HVP via double-backward is a design goal). The goal is a differentiable dynamica
   earlier fixed-preconditioner GMRES was replaced during the full-repo review) with Eisenstat–Walker
   adaptive forcing, a vertical preconditioner, and a trust-region fallback. `A·v = v − dt·γ·J·v` is
   a JVP; the 4D-Var gradient is a VJP.
-- **Zero-copy interface:** Fortran `(i,k,j)` column-major maps to C++ `(j,k,i)` row-major with no
-  data copy — layout `{nj,nk,ni}`, strides `{ni*nk, ni, 1}`.
+- **Zero-copy interface (prognostic arrays):** Fortran `(i,k,j)` column-major maps to C++
+  `(j,k,i)` row-major with no data copy — layout `{nj,nk,ni}`, strides `{ni*nk, ni, 1}`.
+  **Base-state initialisation is not zero-copy**: it materialises owned contiguous per-tile
+  snapshots via `.contiguous()`. The `zerocopy` in those symbol names is historical.
 - Cross-platform CPU / CUDA / MPS.
 
 ## Status
@@ -35,12 +37,17 @@ proven byte-identical.
   in its tangent. The pressure integrator's eta orientation is pinned against WRF's own algebra
   by a contract that calls the production helper.
 - **Vertical metric.** One fail-close policy across every source; no eps substitution, no
-  cross-stagger `rdn`→`rdnw` fallback, no length padding. Verified on a *stretched* eta grid,
+  cross-stagger `rdn`→`rdnw` fallback, and no source-metric padding. One unused consumer
+  slot remains (`vert_deriv_scale` is `nz_w` long while only `0..nz-1` is read); it is
+  canary-tested with NaN on the measured path, and the `dz`-fallback twin is not yet
+  covered. Verified on a *stretched* eta grid,
   where the staggers differ by 5e-01 — on a uniform grid they agree to 0, which is where this
   class of defect hides.
-- **Well-balancedness.** The assembled production RHS returns **exactly zero** in every channel
-  and every `RhsMode` at zero perturbation, paired with a non-zero control so the measurement
-  cannot be confused with a dead probe.
+- **Instantaneous perturbation equilibrium.** The assembled production RHS returns **exactly
+  zero** in every channel and every `RhsMode` at zero perturbation, paired with a non-zero
+  control so the measurement cannot be confused with a dead probe. This is *not*
+  well-balancedness: `F(U) = 1000U` also satisfies `F(0) = 0`. Multi-step rest preservation
+  (1 / 10 / 100 steps, with mass, energy and hydrostatic-residual drift) is **not** measured.
 - **The RHS Jacobian shows nothing anomalous at the first RHS base point.** Its implicit part is
   state-invariant to six digits (predictably: the coefficient is `mu`, which moves 0.01% between
   rest and jet); its explicit part is proportional to base-state amplitude with a measured

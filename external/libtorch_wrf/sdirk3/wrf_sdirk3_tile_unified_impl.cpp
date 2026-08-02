@@ -5414,6 +5414,15 @@ vertical_coefficients:
         bool armed;
         ~AdjointDriverAtExit() {
             if (!armed) return;
+            // Claim the attempt here, and RELEASE it if we leave by exception, so a failed
+            // replay does not silently consume the only try.
+            static std::atomic<bool> adj_ran{false};
+            bool adj_expected = false;
+            if (!adj_ran.compare_exchange_strong(adj_expected, true)) return;
+            struct ReleaseOnThrow {
+                std::atomic<bool>& flag; bool ok = false;
+                ~ReleaseOnThrow() noexcept { if (!ok) flag.store(false); }
+            } release{adj_ran};
             // Entry marker + explicit flushes. The previous iteration produced NO output
             // at all while the process terminated on an autograd error, which left it
             // ambiguous whether the destructor ran, whether the catch fired, or whether
@@ -5482,6 +5491,7 @@ vertical_coefficients:
                 const double cosang = (nl > 0 && ne > 0) ? dot / (nl * ne) : 0.0;
                 const double reldiff = (nl > 0)
                     ? (eqlev - legacy).norm().item<double>() / nl : 0.0;
+                release.ok = true;   // a completed probe consumes the attempt
                 std::cerr << "SDIRK3_ADJOINT_DRIVER checkpoints=" << ck.size()
                           << " |lam_legacy|=" << nl
                           << " |lam_eq|=" << ne
@@ -5499,12 +5509,12 @@ vertical_coefficients:
             }
         }
     };
-    static std::atomic<bool> adj_driver_done{false};
-    bool adj_expected = false;
+    // 9F.D77 (review section 10): the one-shot latch is published only AFTER the probe
+    // completes. It used to be claimed in the constructor, so a replay that THREW consumed
+    // the process's single attempt and could never be retried -- the failure mode that
+    // matters most, made unobservable exactly when it occurred.
     AdjointDriverAtExit adjoint_driver{
-        this, &U_n,
-        probe_env_enabled("WRF_SDIRK3_ADJOINT_DRIVER") &&
-            adj_driver_done.compare_exchange_strong(adj_expected, true)};
+        this, &U_n, probe_env_enabled("WRF_SDIRK3_ADJOINT_DRIVER")};
 
     // 9F.D58 (review sections 6, 11): the response measurement, hooked HERE rather than
     // inside computeUnifiedRHS. The review's objection to D54-D56 was structural, not
@@ -38950,7 +38960,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                     try {
                         torch::NoGradGuard ng;
                         auto Y0 = linearization_point.detach().clone();
-                        const auto saved_ref = U_ref_stage_;
+                        // 9F.D77 (review section 4.2): restore U_ref_stage_ on EVERY exit.
+                        // The previous form restored it with a plain assignment after the
+                        // second RHS call, so an exception in that call jumped to the catch
+                        // and left the solver's reference state PERTURBED -- an opt-in
+                        // diagnostic silently corrupting production state, which is the
+                        // one thing a probe must never do.
+                        struct ScopedTensorRestore {
+                            torch::Tensor& target;
+                            torch::Tensor saved;
+                            ScopedTensorRestore(torch::Tensor& t) : target(t), saved(t) {}
+                            ~ScopedTensorRestore() noexcept { target = saved; }
+                        } restore_ref{U_ref_stage_};
 
                         U_ref_stage_ = Y0.clone();
                         auto F_ctx1 = computeUnifiedRHS(Y0, wrf::sdirk3::RhsMode::ImplicitOnly)
@@ -38965,8 +38986,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                              * pert).clone();
                         auto F_ctx2 = computeUnifiedRHS(Y0, wrf::sdirk3::RhsMode::ImplicitOnly)
                                           .detach().clone();
-
-                        U_ref_stage_ = saved_ref;   // restore before anything else runs
 
                         // POSITIVE CONTROL, across all three modes. A bare rel=0 is
                         // indistinguishable from a probe that measured nothing -- this
@@ -38994,7 +39013,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                           << " rel=" << (nn > 0 ? dd / nn : 0.0)
                                           << std::endl << std::flush;
                             }
-                            U_ref_stage_ = saved_ref;
                         }
 
                         const double d = (F_ctx2 - F_ctx1).norm().item<double>();
