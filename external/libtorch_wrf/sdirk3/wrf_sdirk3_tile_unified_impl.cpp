@@ -5406,21 +5406,37 @@ vertical_coefficients:
         bool armed;
         ~AdjointDriverAtExit() {
             if (!armed) return;
-            // A destructor that lets anything escape during unwinding calls
-            // std::terminate, and the first run of this driver did exactly that.
+            // Claim the attempt here, and RELEASE it if we leave by exception, so a failed
+            // replay does not silently consume the only try. (9F.D77, review section 10.)
+            static std::atomic<bool> adj_ran{false};
+            bool adj_expected = false;
+            if (!adj_ran.compare_exchange_strong(adj_expected, true)) return;
+            struct ReleaseOnThrow {
+                std::atomic<bool>& flag; bool ok = false;
+                ~ReleaseOnThrow() noexcept { if (!ok) flag.store(false); }
+            } release{adj_ran};
+
+            // A destructor that lets anything escape during unwinding calls std::terminate,
+            // and the first run of this driver did exactly that. 9F.D81 moved the body to
+            // runAdjointDriverProbe; the latch above and this net are all that stay here.
             try {
-                self->runAdjointDriverProbe(*U);
+                // Only a COMPLETED probe consumes the attempt. The member returns false when
+                // it found no checkpoints or bailed before reporting, which RELEASES the
+                // latch -- the D77 semantics, preserved across the extraction.
+                release.ok = self->runAdjointDriverProbe(*U);
+            } catch (const std::exception& e) {
+                std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: " << e.what() << std::endl;
             } catch (...) {
                 std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: non-std exception" << std::endl;
             }
         }
     };
-    static std::atomic<bool> adj_driver_done{false};
-    bool adj_expected = false;
+    // 9F.D77 (review section 10): the one-shot latch is published only AFTER the probe
+    // completes. It used to be claimed in the constructor, so a replay that THREW consumed
+    // the process's single attempt and could never be retried -- the failure mode that
+    // matters most, made unobservable exactly when it occurred.
     AdjointDriverAtExit adjoint_driver{
-        this, &U_n,
-        probe_env_enabled("WRF_SDIRK3_ADJOINT_DRIVER") &&
-            adj_driver_done.compare_exchange_strong(adj_expected, true)};
+        this, &U_n, probe_env_enabled("WRF_SDIRK3_ADJOINT_DRIVER")};
 
     
     // Pack tendency vector from WRF with staggered dimensions
@@ -38552,7 +38568,7 @@ int64_t TileSDIRK3UnifiedSolver::getStateVectorSize() const {
 // 9F.D81: the adjoint driver body, moved out of unifiedStep. Opt-in via
 // WRF_SDIRK3_ADJOINT_DRIVER; unifiedStep keeps only the RAII shim that fires it at
 // scope exit, because the replay needs the forward's checkpoints to exist.
-void TileSDIRK3UnifiedSolver::runAdjointDriverProbe(const torch::Tensor& U_n) {
+bool TileSDIRK3UnifiedSolver::runAdjointDriverProbe(const torch::Tensor& U_n) {
     // Entry marker + explicit flushes. An earlier iteration produced NO output at all
     // while the process died on an autograd error, which left it ambiguous whether the
     // driver had even run.
@@ -38575,7 +38591,7 @@ void TileSDIRK3UnifiedSolver::runAdjointDriverProbe(const torch::Tensor& U_n) {
                          "WRF_SDIRK3_SAVE_TRAJECTORY=1. Refusing to report a "
                          "difference of zero from an adjoint that never ran."
                       << std::endl;
-            return;
+            return false;   // no measurement -> do not consume the one-shot attempt
         }
         auto gen = at::detail::createCPUGenerator(20260801);
         auto lam = torch::randn(U_n.numel(), gen,
@@ -38610,7 +38626,7 @@ void TileSDIRK3UnifiedSolver::runAdjointDriverProbe(const torch::Tensor& U_n) {
             std::cerr << "SDIRK3_ADJOINT_DRIVER equation-level FAILED: " << e.what()
                       << std::endl << std::flush;
         }
-        if (!legacy.defined() || !eqlev.defined()) return;
+        if (!legacy.defined() || !eqlev.defined()) return false;
 
         torch::NoGradGuard ng_report;   // only around the .item() reads
         const double nl = legacy.norm().item<double>();
@@ -38625,6 +38641,7 @@ void TileSDIRK3UnifiedSolver::runAdjointDriverProbe(const torch::Tensor& U_n) {
                   << " ratio=" << (nl > 0 ? ne / nl : 0.0)
                   << " cos=" << cosang
                   << " reldiff=" << reldiff << std::endl;
+        return true;    // reported a real measurement -> the attempt is consumed
     } catch (const std::exception& e) {
         std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: " << e.what() << std::endl;
     } catch (...) {
@@ -38635,6 +38652,7 @@ void TileSDIRK3UnifiedSolver::runAdjointDriverProbe(const torch::Tensor& U_n) {
         // guarantees no terminate, this one is the one that still prints.
         std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: non-std exception" << std::endl;
     }
+    return false;   // any path that did not report leaves the attempt retryable
 }
 
 torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
