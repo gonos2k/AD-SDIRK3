@@ -106,7 +106,10 @@ struct TransposeReport {
         return linearity <= tol && repeatability <= tol && additivity <= tol;
     }
 
-    std::string summary() const;
+    // `what` names the operator under test, so two probes in one run are distinguishable
+    // in the log. The same instrument is pointed at the preconditioner AND at the transpose
+    // OPERATOR (9F.D85) -- forward properties are the question in both cases.
+    std::string summary(const std::string& what = "SDIRK3_TRANSPOSE_PROBE") const;
 };
 
 namespace detail {
@@ -139,7 +142,22 @@ inline TransposeReport probe_transpose(const LinearOp& M,
                                        int64_t n,
                                        torch::TensorOptions opts,
                                        uint64_t seed) {
-    torch::NoGradGuard no_grad;
+    // NO blanket NoGradGuard here, deliberately. 9F.D85.
+    //
+    // The reductions below already guard themselves (detail::dot, detail::rel_max), which is
+    // the whole of what the project rule asks for: guard each .item(), and nothing that calls
+    // back into an operator which may need a graph.
+    //
+    // A guard at this level does exactly the forbidden thing -- M and M_transpose are the
+    // CALLER'S operators, and an operator whose job is to build a VJP dies under it. It cost
+    // a rebuild here: the preconditioner probe survived only because apply_transpose_ad
+    // forces AutoGradMode(true) and overrode the guard, so the defect stayed invisible until
+    // the same instrument was pointed at an operator that does not.
+    //
+    // FOURTH occurrence of this pattern in the campaign (D59 power_iterate_sigma_max, D66 the
+    // adjoint driver, D80's reading of it, now here) -- and this time in the instrument
+    // written to prevent exactly that class of error. Grad_Required_Operator below is the
+    // fixture that fails if anyone reintroduces it.
     TransposeReport r;
 
     auto gen = at::detail::createCPUGenerator(seed);
@@ -182,9 +200,9 @@ inline TransposeReport probe_transpose(const LinearOp& M,
     return r;
 }
 
-inline std::string TransposeReport::summary() const {
+inline std::string TransposeReport::summary(const std::string& what) const {
     std::ostringstream o;
-    o << "SDIRK3_TRANSPOSE_PROBE"
+    o << what
       << " symmetry=" << symmetry
       << " linearity=" << linearity
       << " repeatability=" << repeatability

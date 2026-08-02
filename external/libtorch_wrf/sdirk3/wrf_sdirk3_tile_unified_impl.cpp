@@ -38725,6 +38725,32 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                                      20260802)
                                      .summary()
                               << std::endl << std::flush;
+
+                    // 9F.D85: the same instrument, pointed at the OPERATOR instead of the
+                    // preconditioner.
+                    //
+                    // D84 measured rel_error = 1.199798 > 1 for the IDENTITY-preconditioned
+                    // transpose solve at dt=5. With x0 = 0 and M = I, GMRES minimises
+                    // ||b - A^T x|| over a Krylov space CONTAINING x = 0, so ||r|| <= ||b||
+                    // is guaranteed. Above 1 is not a slow solve -- it contradicts the
+                    // minimisation property, so something the solve assumes is false.
+                    //
+                    // The leading candidate is that A^T is not a FIXED operator across
+                    // calls: operator_transpose runs a full forward computeUnifiedRHS per
+                    // matvec, and any cache, epoch counter or RNG state in there makes the
+                    // Arnoldi basis inconsistent, which breaks the guarantee. repeatability
+                    // answers that directly, and additivity/linearity catch the milder
+                    // version where it is deterministic but not linear.
+                    auto op_transpose = [&](const torch::Tensor& v) {
+                        return v - alpha * wrf::sdirk3::compute_vjp_reverse_mode(
+                                               fast_operator, linearization_point, v);
+                    };
+                    std::cerr << tp::probe_transpose(op_transpose, {},
+                                                     linearization_point.numel(),
+                                                     linearization_point.options(),
+                                                     20260803)
+                                     .summary("SDIRK3_ADJOINT_OPERATOR")
+                              << std::endl << std::flush;
                 }
             }
 

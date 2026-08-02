@@ -197,7 +197,46 @@ int main() {
         check(mentions(summary_of(r), "TRANSPOSE SEVERED"), "near-identity: summary SEVERED");
     }
 
-    constexpr int expected_checks = 41;
+    // ------------- 10. THE PROBE MUST NOT DISABLE GRAD FOR THE OPERATORS IT IS GIVEN.
+    // 9F.D85. probe_transpose held a blanket NoGradGuard, so any operator that itself needs
+    // autograd -- e.g. one that forms a VJP -- died inside it with "element 0 of tensors
+    // does not require grad". It stayed invisible because the preconditioner's transpose
+    // forces AutoGradMode(true) internally and overrode the guard.
+    //
+    // This fixture is an operator that WORKS ONLY IF grad is enabled. It fails loudly if the
+    // guard ever comes back.
+    {
+        auto grad_required = [&](const torch::Tensor& x) {
+            auto xg = x.detach().clone().set_requires_grad(true);
+            auto y = A.mv(xg).pow(2).sum();
+            auto g = torch::autograd::grad({y}, {xg}, {}, false, false, false);
+            return g[0];   // = 2 A^T A x -- linear, and needs autograd to exist at all
+        };
+        bool threw = false;
+        probe::TransposeReport r;
+        try {
+            r = probe::probe_transpose(grad_required, {}, N, opts(), SEED);
+        } catch (const std::exception&) { threw = true; }
+        check(!threw, "grad-required operator: probe did NOT disable its autograd");
+        check(!threw && r.linearity <= 1e-9,
+              "grad-required operator: measured linear (2 A^T A is linear)");
+        check(!threw && r.repeatability <= 1e-9,
+              "grad-required operator: measured repeatable");
+
+        // And prove the fixture is SENSITIVE rather than merely passing: with grad disabled
+        // in the surrounding scope -- which is what the removed blanket guard did -- the same
+        // operator MUST throw. A fixture nobody has seen fail is an assertion, not a test.
+        {
+            torch::NoGradGuard no_grad;
+            bool threw_guarded = false;
+            try { probe::probe_transpose(grad_required, {}, N, opts(), SEED); }
+            catch (const std::exception&) { threw_guarded = true; }
+            check(threw_guarded,
+                  "grad-required fixture IS sensitive: it throws when grad is disabled");
+        }
+    }
+
+    constexpr int expected_checks = 45;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
