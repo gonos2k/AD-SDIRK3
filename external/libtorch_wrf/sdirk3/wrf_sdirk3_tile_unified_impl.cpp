@@ -126,7 +126,7 @@
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_metric_policy.h"
-#include "wrf_sdirk3_response_probe.h"
+#include "wrf_sdirk3_transpose_probe.h"
 
 // 9F.D75 (review section 7): STRICT parsing for the diagnostic environment variables.
 //
@@ -5393,108 +5393,24 @@ vertical_coefficients:
     // Pack current state with staggered dimensions
     torch::Tensor U_n = packState(u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
 
-    // 9F.D66: THE ADJOINT DRIVER.
+    // 9F.D66/D81: the adjoint driver, opt-in via WRF_SDIRK3_ADJOINT_DRIVER.
     //
     // runAdjointReplay is unreachable from em_b_wave -- it is entered through
-    // sdirk3_run_4dvar_adjoint_loop, which a forward-only case never calls. So the
-    // question D64 raised (does the missing J^T matter on the REAL operator, or only on a
-    // closed-form fixture?) had no production number. This gives it one.
-    //
-    // Runs AFTER the step, so the forward has recorded checkpoints, and calls the replay
-    // TWICE in the same process with the mode passed explicitly -- legacy A^{-T} against
-    // equation-level J^T A^{-T}. Same checkpoints, same terminal lambda, same solver: the
-    // only difference is the operator, which is what makes the comparison mean anything.
-    //
-    // Requires WRF_SDIRK3_SAVE_TRAJECTORY=1, and says so rather than silently reporting
-    // nothing -- an adjoint driver that quietly finds no checkpoints and prints a clean
-    // "no difference" is worse than one that fails.
+    // sdirk3_run_4dvar_adjoint_loop, which a forward-only case never calls -- so this is
+    // the only way to get a production number out of it. It must run AFTER the step, once
+    // the forward has recorded checkpoints, hence RAII at scope exit. The body lives in
+    // runAdjointDriverProbe; a timestep is no place for 100 lines of diagnostic.
     struct AdjointDriverAtExit {
         TileSDIRK3UnifiedSolver* self;
         const torch::Tensor* U;
         bool armed;
         ~AdjointDriverAtExit() {
             if (!armed) return;
-            // Entry marker + explicit flushes. The previous iteration produced NO output
-            // at all while the process terminated on an autograd error, which left it
-            // ambiguous whether the destructor ran, whether the catch fired, or whether
-            // std::cerr was simply lost when the process died. A marker that is flushed
-            // immediately answers that before anything else can go wrong.
-            std::cerr << "SDIRK3_ADJOINT_DRIVER: entered" << std::endl << std::flush;
+            // A destructor that lets anything escape during unwinding calls
+            // std::terminate, and the first run of this driver did exactly that.
             try {
-                // NO blanket NoGradGuard. solve_transpose_linear_system_gmres forms A^T w
-                // through a VJP, so a guard around this whole block disables it and the
-                // replay dies with "element 0 of tensors does not require grad".
-                //
-                // This is the SECOND time in this campaign: the same guard broke
-                // power_iterate_sigma_max in D59, the fix was recorded, and it was then
-                // repeated here. The rule that actually holds is narrower than "wrap
-                // diagnostics in NoGradGuard" -- it is "guard each .item(), and nothing
-                // that calls back into an operator which may need a graph".
-                auto ck = self->getSavedTrajectory();
-                std::cerr << "SDIRK3_ADJOINT_DRIVER: checkpoints=" << ck.size()
-                          << std::endl << std::flush;
-                if (ck.empty()) {
-                    std::cerr << "SDIRK3_ADJOINT_DRIVER: no checkpoints -- set "
-                                 "WRF_SDIRK3_SAVE_TRAJECTORY=1. Refusing to report a "
-                                 "difference of zero from an adjoint that never ran."
-                              << std::endl;
-                    return;
-                }
-                auto gen = at::detail::createCPUGenerator(20260801);
-                auto lam = torch::randn(U->numel(), gen,
-                                        torch::TensorOptions().dtype(U->dtype()));
-                lam = (lam / lam.norm().clamp_min(1e-300)).to(U->device());
-
-                // dt is env-settable so the adjoint can be walked down the SAME ladder
-                // the forward solve was: if the transpose solve stagnates at 600 and
-                // converges at 60, the adjoint is blocked by the forward's wall rather
-                // than by anything specific to the adjoint.
-                const float dtv = static_cast<float>(
-                    probe_env_positive_double("WRF_SDIRK3_ADJOINT_DT", 600.0));
-                const float gam = 0.435866521508459f;
-                // Each mode in its OWN try, so a failure in one still reports the other.
-                // Bundling them would have hidden which of the two broke.
-                torch::Tensor legacy, eqlev;
-                try {
-                    legacy = self->runAdjointReplay(lam, dtv, gam, 10, 40, 1e-5f, 0);
-                    std::cerr << "SDIRK3_ADJOINT_DRIVER legacy ok |lam|="
-                              << [&]{ torch::NoGradGuard g; return legacy.norm().item<double>(); }()
-                              << std::endl << std::flush;
-                } catch (const std::exception& e) {
-                    std::cerr << "SDIRK3_ADJOINT_DRIVER legacy FAILED: " << e.what()
-                              << std::endl << std::flush;
-                }
-                try {
-                    eqlev = self->runAdjointReplay(lam, dtv, gam, 10, 40, 1e-5f, 1);
-                    std::cerr << "SDIRK3_ADJOINT_DRIVER equation-level ok |lam|="
-                              << [&]{ torch::NoGradGuard g; return eqlev.norm().item<double>(); }()
-                              << std::endl << std::flush;
-                } catch (const std::exception& e) {
-                    std::cerr << "SDIRK3_ADJOINT_DRIVER equation-level FAILED: " << e.what()
-                              << std::endl << std::flush;
-                }
-                if (!legacy.defined() || !eqlev.defined()) return;
-
-                torch::NoGradGuard ng_report;   // only around the .item() reads
-                const double nl = legacy.norm().item<double>();
-                const double ne = eqlev.norm().item<double>();
-                const double dot = (legacy * eqlev).sum().item<double>();
-                const double cosang = (nl > 0 && ne > 0) ? dot / (nl * ne) : 0.0;
-                const double reldiff = (nl > 0)
-                    ? (eqlev - legacy).norm().item<double>() / nl : 0.0;
-                std::cerr << "SDIRK3_ADJOINT_DRIVER checkpoints=" << ck.size()
-                          << " |lam_legacy|=" << nl
-                          << " |lam_eq|=" << ne
-                          << " ratio=" << (nl > 0 ? ne / nl : 0.0)
-                          << " cos=" << cosang
-                          << " reldiff=" << reldiff << std::endl;
-            } catch (const std::exception& e) {
-                std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: " << e.what() << std::endl;
+                self->runAdjointDriverProbe(*U);
             } catch (...) {
-                // A destructor that lets anything escape during unwinding calls
-                // std::terminate, and the first run of this driver did exactly that: the
-                // model died with "uncaught exception" and reported nothing at all, which
-                // is the worst possible outcome for a diagnostic.
                 std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: non-std exception" << std::endl;
             }
         }
@@ -5506,177 +5422,6 @@ vertical_coefficients:
         probe_env_enabled("WRF_SDIRK3_ADJOINT_DRIVER") &&
             adj_driver_done.compare_exchange_strong(adj_expected, true)};
 
-    // 9F.D58 (review sections 6, 11): the response measurement, hooked HERE rather than
-    // inside computeUnifiedRHS. The review's objection to D54-D56 was structural, not
-    // stylistic: a probe that recursively calls the function it is measuring is not an
-    // observer. From this point the RHS calls are ordinary calls, so there is no
-    // re-entrancy into a function mid-execution, no recursion guard to get wrong, and no
-    // exception-safety hole. It still adds RHS evaluations, which is why it is opt-in and
-    // once-only and why the run it produces is a MEASUREMENT run, not a production run.
-    //
-    // THE SCALES ARE SOURCE-VERIFIED, because guessing them is what invalidated D55/D56.
-    // The packed state holds UNCOUPLED components, but the tendencies do not all match:
-    //   ru, rv, rw, rt  COUPLED   -- the damping terms add c1h_mu_c2h * (field - ref) to
-    //                               them (:22293, :22113), and :20544 divides ru_tend by
-    //                               mu_typical to recover a velocity tendency
-    //   rph             UNCOUPLED -- :21787 explicitly divides by mut, "convert ph_tend
-    //                               from mass-weighted to physical tendency"
-    //   rmu             UNCOUPLED -- mu is already a mass
-    // so tendency_scale = mu_ref * state_scale for the first group and state_scale for the
-    // second. Dividing a coupled tendency by an uncoupled scale is exactly the ~1e5 error
-    // that made me withdraw the D56 reading.
-    if (const char* rp = std::getenv("WRF_SDIRK3_RESPONSE_PROBE")) {
-        static std::atomic<bool> done{false};
-        bool expected_flag = false;
-        if (rp[0] != '0' && done.compare_exchange_strong(expected_flag, true)) {
-            torch::NoGradGuard no_grad;
-            using namespace wrf::sdirk3::probe;
-
-            double mu_ref = 1.0e5;
-            if (mu_base_.defined() && mu_base_.numel() > 0)
-                mu_ref = mu_base_.abs().mean().item<double>();
-
-            const int64_t su = int64_t(ny_)*nz_*nx_u_, sv = int64_t(ny_v_)*nz_*nx_,
-                          sw = int64_t(ny_)*nz_w_*nx_, sph = int64_t(ny_)*nz_w_*nx_,
-                          st = int64_t(ny_)*nz_*nx_,   smu = int64_t(ny_)*nx_;
-            const double ss[6]  = {10.0, 10.0, 0.1, 1.0e3, 1.0, 10.0};
-            const double cpl[6] = {mu_ref, mu_ref, mu_ref, 1.0, mu_ref, 1.0};
-            const char* nm[6]   = {"ru", "rv", "rw", "rph", "rt", "rmu"};
-            const int64_t off[6] = {0, su, su+sv, su+sv+sw, su+sv+sw+sph, su+sv+sw+sph+st};
-            const int64_t len[6] = {su, sv, sw, sph, st, smu};
-
-            ProbeSpec spec;
-            for (int c = 0; c < 6; ++c)
-                spec.channels.push_back(ChannelSpec{nm[c], off[c], len[c], ss[c],
-                                                    cpl[c] * ss[c]});
-            spec.amplitudes = {0.25, 0.5, 1.0};
-            spec.seed = 20260801;
-            spec.central = true;
-            spec.dt = (dt_stage_ > 0.0f) ? double(dt_stage_) : 600.0;
-
-            const bool at_rest = (rp[0] == 'r');
-            // 9F.D61: a BASE SCALE, to test whether the explicit channel's state
-            // dependence is a finding or a tautology.
-            //
-            // sigma_max(ExplicitOnly) went 1.2e-09 -> 1.0e-04 between U=0 and U=jet, and I
-            // reported the 8.6e4 as a localisation. But the explicit channel is advective,
-            // u.grad(u) vanishes IDENTICALLY at u=0, so "grows from ~0" is what the algebra
-            // guarantees, not a discovery -- the same shape as the mu-invariance that the
-            // previous adversarial pass deflated.
-            //
-            // The discriminator is the SCALING, not the endpoints. Linearising u.grad(u)
-            // about a state U gives a Jacobian LINEAR in U, so sigma_explicit must be
-            // proportional to the base amplitude. If it is, the 8.6e4 is bookkeeping. If it
-            // grows faster, something beyond advection is involved and the localisation
-            // survives.
-            const double base_scale =
-                probe_env_positive_double("WRF_SDIRK3_PROBE_BASE_SCALE", 1.0);
-            auto base = at_rest ? torch::zeros_like(U_n) : (U_n * base_scale);
-
-            std::cerr << "SDIRK3_RESPONSE base=" << (at_rest ? "rest" : "jet")
-                      << " base_scale=" << base_scale
-                      << " mu_ref=" << mu_ref << " dt=" << spec.dt
-                      << "  (gain = rms response in units of the responding channel's own"
-                      << " scale, per dt, per unit kick)" << std::endl;
-            auto rhs_fn = [&](const torch::Tensor& X) {
-                return computeUnifiedRHS(X, wrf::sdirk3::RhsMode::Full);
-            };
-            auto res = measure_response(rhs_fn, base, spec);
-            for (const auto& row : res.rows) {
-                std::ostringstream o;
-                o << "SDIRK3_RESPONSE kick=" << row.kicked << " amp=" << row.amplitude;
-                for (int r = 0; r < 6; ++r) o << " " << nm[r] << "=" << row.gain_rms[r];
-                std::cerr << o.str() << std::endl;
-            }
-            for (int c = 0; c < 6; ++c) {
-                std::ostringstream o;
-                o << "SDIRK3_RESPONSE_LINEARITY kick=" << nm[c];
-                for (int r = 0; r < 6; ++r) o << " " << nm[r] << "="
-                                             << res.linearity_spread[c][r];
-                std::cerr << o.str() << std::endl;
-            }
-
-            // 9F.D59 (review sections 10, 12): LEADING SINGULAR AMPLIFICATION.
-            //
-            // The coupling matrix above reports entries. For a NON-NORMAL operator the
-            // entries -- and the eigenvalues -- do not bound the transient response: the
-            // instrument's own fixture is a matrix with every eigenvalue 1 and
-            // sigma_max = 100.01. So an operator can look state-invariant entry by entry
-            // and still have a leading singular direction that is not. That is exactly the
-            // gap left by the coupling matrix, and it is the reason this is measured
-            // rather than argued from the entries.
-            //
-            // J.v comes from central differences; J^T.w from AD reverse mode through the
-            // production RHS. The VJP is also the 4D-Var adjoint path, so this is the
-            // first time it is exercised across the WHOLE RHS rather than one helper. If
-            // it cannot run, that is a finding about the project's goal, not a probe
-            // failure -- and it is reported as such rather than silently degraded to
-            // something that returns numbers.
-            //
-            // 9F.D60: PER MODE, because the Full number is masked. sigma_max(Full) came out
-            // state-invariant with its leading direction 100% in w -- i.e. it is the
-            // acoustic w->mu coupling, which lives in the IMPLICIT channel. Any state
-            // dependence in the explicit channel is five orders smaller and cannot show
-            // through it. Splitting on RhsMode removes the mask, and it is the measurement
-            // that decides the reading offered after D59: that what changes with the jet is
-            // what the EXPLICIT channel hands the solve, not the implicit operator.
-            const wrf::sdirk3::RhsMode sig_modes[3] = {
-                wrf::sdirk3::RhsMode::Full,
-                wrf::sdirk3::RhsMode::ExplicitOnly,
-                wrf::sdirk3::RhsMode::ImplicitOnly};
-            const char* sig_mode_name[3] = {"Full", "ExplicitOnly", "ImplicitOnly"};
-            for (int sm = 0; sm < 3; ++sm)
-            {
-                const auto this_mode = sig_modes[sm];
-                auto jvp = [&](const torch::Tensor& v) {
-                    const double e = 1.0e-3;
-                    return (computeUnifiedRHS(base + e * v, this_mode)
-                          - computeUnifiedRHS(base - e * v, this_mode))
-                           / (2.0 * e);
-                };
-                bool vjp_ok = true;
-                std::string vjp_err;
-                auto vjp = [&](const torch::Tensor& w) -> torch::Tensor {
-                    try {
-                        torch::AutoGradMode enable(true);
-                        auto Ug = base.detach().clone().set_requires_grad(true);
-                        auto F = computeUnifiedRHS(Ug, this_mode);
-                        auto g = torch::autograd::grad({F}, {Ug}, {w.detach()},
-                                                       /*retain_graph=*/false,
-                                                       /*create_graph=*/false,
-                                                       /*allow_unused=*/true);
-                        if (!g.empty() && g[0].defined()) return g[0];
-                        vjp_ok = false; vjp_err = "grad returned undefined";
-                    } catch (const std::exception& e) {
-                        vjp_ok = false; vjp_err = e.what();
-                    }
-                    return torch::zeros_like(base);
-                };
-                auto sig = power_iterate_sigma_max(jvp, vjp, base, spec, 30, 1e-3);
-                if (!vjp_ok) {
-                    std::cerr << "SDIRK3_SIGMA mode=" << sig_mode_name[sm]
-                              << " VJP_FAILED: " << vjp_err
-                              << " -- sigma_max NOT reported, because a zero adjoint would "
-                                 "read as 'the operator does nothing'" << std::endl;
-                } else {
-                    std::ostringstream o;
-                    o << "SDIRK3_SIGMA base=" << (at_rest ? "rest" : "jet")
-                      << " base_scale=" << base_scale
-                      << " mode=" << sig_mode_name[sm]
-                      << " sigma_max=" << sig.sigma_max
-                      << " converged=" << (sig.converged ? 1 : 0)
-                      << " iters=" << sig.iterates.size() << " blockweight";
-                    for (int r = 0; r < 6; ++r) o << " " << nm[r] << "="
-                                                  << sig.block_weight[r];
-                    std::cerr << o.str() << std::endl;
-                    std::ostringstream h;
-                    h << "SDIRK3_SIGMA_HISTORY mode=" << sig_mode_name[sm];
-                    for (double x : sig.iterates) h << " " << x;
-                    std::cerr << h.str() << std::endl;
-                }
-            }
-        }
-    }
     
     // Pack tendency vector from WRF with staggered dimensions
     torch::Tensor F_phys = packState(ru_tend, rv_tend, rw_tend, 
@@ -16090,22 +15835,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 vert_deriv_scale = torch::zeros({nz_w_}, options);
                 vert_deriv_scale.slice(0, 0, nz_).copy_(
                     rdnw_for_scale.to(options.device(), options.dtype().toScalarType()));
-                // 9F.D75 (review section 2): make the unused top slot a CANARY.
-                //
-                // D62 argued, and the fingerprint agreed, that index nz_ is never read --
-                // the consumer stops at nz_w_-2 = nz_-1. But a ZERO sentinel is a weak
-                // test of that claim: if something did read it, zero would contribute
-                // nothing to a sum and little to a product, so the claim would survive its
-                // own violation. NaN cannot be read without the result announcing it.
-                //
-                // Opt-in, because it is a deliberate poison: default stays 0 so production
-                // is unchanged, and the fingerprint under the canary is the actual
-                // evidence that the slot is dead.
-                if (probe_env_enabled("WRF_SDIRK3_METRIC_TOP_CANARY")) {
-                    vert_deriv_scale.index_put_(
-                        {nz_w_ - 1},
-                        std::numeric_limits<float>::quiet_NaN());
-                }
             } else {
                 vert_deriv_scale = torch::zeros({nz_w_}, options);
             }
@@ -38799,9 +38528,6 @@ void TileSDIRK3UnifiedSolver::setStaggeredDimensions(int nx_u, int ny_v, int nz_
     // FIX 2025-12-28: Invalidate msf 3D cache when staggered dimensions change
     wrf::sdirk3::invalidateMsf3DCache();
 
-    // Always output for debugging during troubleshooting
-    std::cerr << "[SDIRK3] Addresses: &nx_u_=" << &nx_u_
-              << ", &ny_v_=" << &ny_v_ << ", &nz_w_=" << &nz_w_ << std::endl;
 }
 
 int64_t TileSDIRK3UnifiedSolver::getStateVectorSize() const {
@@ -38820,6 +38546,95 @@ int64_t TileSDIRK3UnifiedSolver::getStateVectorSize() const {
     const int64_t size_mu = nx * ny;
 
     return size_u + size_v + size_w + size_ph + size_t + size_mu;
+}
+
+
+// 9F.D81: the adjoint driver body, moved out of unifiedStep. Opt-in via
+// WRF_SDIRK3_ADJOINT_DRIVER; unifiedStep keeps only the RAII shim that fires it at
+// scope exit, because the replay needs the forward's checkpoints to exist.
+void TileSDIRK3UnifiedSolver::runAdjointDriverProbe(const torch::Tensor& U_n) {
+    // Entry marker + explicit flushes. An earlier iteration produced NO output at all
+    // while the process died on an autograd error, which left it ambiguous whether the
+    // driver had even run.
+    std::cerr << "SDIRK3_ADJOINT_DRIVER: entered" << std::endl << std::flush;
+    try {
+        // NO blanket NoGradGuard. solve_transpose_linear_system_gmres forms A^T w
+        // through a VJP, so a guard around this whole block disables it and the
+        // replay dies with "element 0 of tensors does not require grad".
+        //
+        // This is the SECOND time in this campaign: the same guard broke
+        // power_iterate_sigma_max in D59, the fix was recorded, and it was then
+        // repeated here. The rule that actually holds is narrower than "wrap
+        // diagnostics in NoGradGuard" -- it is "guard each .item(), and nothing
+        // that calls back into an operator which may need a graph".
+        auto ck = getSavedTrajectory();
+        std::cerr << "SDIRK3_ADJOINT_DRIVER: checkpoints=" << ck.size()
+                  << std::endl << std::flush;
+        if (ck.empty()) {
+            std::cerr << "SDIRK3_ADJOINT_DRIVER: no checkpoints -- set "
+                         "WRF_SDIRK3_SAVE_TRAJECTORY=1. Refusing to report a "
+                         "difference of zero from an adjoint that never ran."
+                      << std::endl;
+            return;
+        }
+        auto gen = at::detail::createCPUGenerator(20260801);
+        auto lam = torch::randn(U_n.numel(), gen,
+                                torch::TensorOptions().dtype(U_n.dtype()));
+        lam = (lam / lam.norm().clamp_min(1e-300)).to(U_n.device());
+
+        // dt is env-settable so the adjoint can be walked down the SAME ladder
+        // the forward solve was: if the transpose solve stagnates at 600 and
+        // converges at 60, the adjoint is blocked by the forward's wall rather
+        // than by anything specific to the adjoint.
+        const float dtv = static_cast<float>(
+            probe_env_positive_double("WRF_SDIRK3_ADJOINT_DT", 600.0));
+        const float gam = 0.435866521508459f;
+        // Each mode in its OWN try, so a failure in one still reports the other.
+        // Bundling them would have hidden which of the two broke.
+        torch::Tensor legacy, eqlev;
+        try {
+            legacy = runAdjointReplay(lam, dtv, gam, 10, 40, 1e-5f, 0);
+            std::cerr << "SDIRK3_ADJOINT_DRIVER legacy ok |lam|="
+                      << [&]{ torch::NoGradGuard g; return legacy.norm().item<double>(); }()
+                      << std::endl << std::flush;
+        } catch (const std::exception& e) {
+            std::cerr << "SDIRK3_ADJOINT_DRIVER legacy FAILED: " << e.what()
+                      << std::endl << std::flush;
+        }
+        try {
+            eqlev = runAdjointReplay(lam, dtv, gam, 10, 40, 1e-5f, 1);
+            std::cerr << "SDIRK3_ADJOINT_DRIVER equation-level ok |lam|="
+                      << [&]{ torch::NoGradGuard g; return eqlev.norm().item<double>(); }()
+                      << std::endl << std::flush;
+        } catch (const std::exception& e) {
+            std::cerr << "SDIRK3_ADJOINT_DRIVER equation-level FAILED: " << e.what()
+                      << std::endl << std::flush;
+        }
+        if (!legacy.defined() || !eqlev.defined()) return;
+
+        torch::NoGradGuard ng_report;   // only around the .item() reads
+        const double nl = legacy.norm().item<double>();
+        const double ne = eqlev.norm().item<double>();
+        const double dot = (legacy * eqlev).sum().item<double>();
+        const double cosang = (nl > 0 && ne > 0) ? dot / (nl * ne) : 0.0;
+        const double reldiff = (nl > 0)
+            ? (eqlev - legacy).norm().item<double>() / nl : 0.0;
+        std::cerr << "SDIRK3_ADJOINT_DRIVER checkpoints=" << ck.size()
+                  << " |lam_legacy|=" << nl
+                  << " |lam_eq|=" << ne
+                  << " ratio=" << (nl > 0 ? ne / nl : 0.0)
+                  << " cos=" << cosang
+                  << " reldiff=" << reldiff << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: " << e.what() << std::endl;
+    } catch (...) {
+        // Caught here AND in the RAII shim that calls this. This runs during unwinding,
+        // where an escaping exception calls std::terminate -- the first run of this driver
+        // did exactly that and the model died reporting nothing at all, the worst possible
+        // outcome for a diagnostic. Both nets are kept: the shim's is the one that
+        // guarantees no terminate, this one is the one that still prints.
+        std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: non-std exception" << std::endl;
+    }
 }
 
 torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
@@ -38880,359 +38695,58 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                 return computeUnifiedRHS(y, wrf::sdirk3::RhsMode::ImplicitOnly);
             };
 
-            // 9F.D68: WHY the replay cannot form J^T -- localised rather than guessed.
+            // 9F.D81: the preconditioner transpose contract, as an EXTRACTED instrument
+            // (wrf_sdirk3_transpose_probe.h, validated by Transpose_Probe_Contract).
             //
-            // D66's driver established that runAdjointReplay dies with "element 0 of
-            // tensors does not require grad": computeUnifiedRHS(y, ImplicitOnly) comes back
-            // with NO grad_fn, so compute_vjp_reverse_mode has nothing to differentiate.
-            // But D59 obtained a VJP through the SAME call at the step level, so the
-            // absence is configuration-dependent and worth isolating instead of assuming.
-            //
-            // Three candidates, and this distinguishes them in one run:
-            //   (a) grad mode is off here          -> GradMode::is_enabled() says so
-            //   (b) it is mode-specific            -> compare Full / Explicit / Implicit
-            //   (c) the RHS reads the FROZEN reference state (U_ref_stage_, w_ref) instead
-            //       of its argument, so the output genuinely does not depend on y
-            // (c) is the interesting one: it would mean the fast operator is constant in
-            // its argument by construction, which no amount of adjoint plumbing can fix.
-            if (probe_env_enabled("WRF_SDIRK3_RHS_GRAD_PROBE")) {
-                static std::atomic<bool> gp_done{false};
-                bool gp_expected = false;
-                if (gp_done.compare_exchange_strong(gp_expected, true)) {
-                    std::cerr << "SDIRK3_RHS_GRAD_PROBE grad_mode="
-                              << (torch::GradMode::is_enabled() ? 1 : 0) << std::endl << std::flush;
-                    const wrf::sdirk3::RhsMode modes[3] = {
-                        wrf::sdirk3::RhsMode::Full,
-                        wrf::sdirk3::RhsMode::ExplicitOnly,
-                        wrf::sdirk3::RhsMode::ImplicitOnly};
-                    const char* mn[3] = {"Full", "ExplicitOnly", "ImplicitOnly"};
-                    for (int m = 0; m < 3; ++m) {
-                        try {
-                            torch::AutoGradMode on(true);
-                            auto y = linearization_point.detach().clone().set_requires_grad(true);
-                            auto f = computeUnifiedRHS(y, modes[m]);
-                            std::cerr << "SDIRK3_RHS_GRAD_PROBE mode=" << mn[m]
-                                      << " requires_grad=" << (f.requires_grad() ? 1 : 0)
-                                      << " has_grad_fn=" << (f.grad_fn() ? 1 : 0);
-                            if (f.requires_grad() && f.grad_fn()) {
-                                auto w = torch::ones_like(f);
-                                auto g = torch::autograd::grad({f}, {y}, {w}, false, false, true);
-                                if (!g.empty() && g[0].defined()) {
-                                    torch::NoGradGuard ng;
-                                    std::cerr << " |J^T 1|=" << g[0].norm().item<double>()
-                                              << " nonzero=" << (g[0].abs().sum().item<double>() > 0 ? 1 : 0);
-                                } else {
-                                    std::cerr << " grad=UNDEFINED";
-                                }
-                            }
-                            std::cerr << std::endl << std::flush;
-                        } catch (const std::exception& e) {
-                            std::cerr << "SDIRK3_RHS_GRAD_PROBE mode=" << mn[m]
-                                      << " THREW: " << e.what() << std::endl << std::flush;
-                        }
-                    }
+            // This replaces 355 lines that D68-D80 accreted here. An instrument buried in
+            // the operator it measures cannot be run against a known answer, and that is
+            // precisely how D80 read a SEVERED autograd VJP -- one that had recorded
+            // nothing and returned its own input -- as a transpose that was 52% correct.
+            // The contract now carries a deliberately severed operator, so that failure is
+            // caught in a second instead of a week.
+            if (unified_precond_ && probe_env_enabled("WRF_SDIRK3_RHS_GRAD_PROBE")) {
+                static std::atomic<bool> tp_done{false};
+                bool tp_expected = false;
+                if (tp_done.compare_exchange_strong(tp_expected, true)) {
+                    namespace tp = wrf::sdirk3::transpose_probe;
 
-                    // 9F.D76 (review section 6): does F depend on the FROZEN CONTEXT?
-                    //
-                    // The review asks whether the production residual really has
-                    // R_U = -J, or whether frozen operands add a -F_C * C_U term. The
-                    // obvious test -- FD on R(K, U +- eps*v) -- is CIRCULAR here: calling
-                    // computeUnifiedRHS with a perturbed ARGUMENT leaves U_ref_stage_,
-                    // w_ref and the frozen slow tendency untouched, so it measures
-                    // dF/dY at frozen context by construction and would agree with -J
-                    // whether or not the context matters.
-                    //
-                    // The non-circular question is whether F_C is non-zero at all: hold
-                    // the ARGUMENT fixed and change the CONTEXT. If the output moves, then
-                    // F depends on state that the step map derives from U_n, and
-                    // R_U = -J is incomplete for the full step even though it is exact for
-                    // a single frozen-context RHS call.
-                    try {
-                        torch::NoGradGuard ng;
-                        auto Y0 = linearization_point.detach().clone();
-                        const auto saved_ref = U_ref_stage_;
+                    auto M = [&](const torch::Tensor& x) { return unified_precond_->apply(x); };
 
-                        U_ref_stage_ = Y0.clone();
-                        auto F_ctx1 = computeUnifiedRHS(Y0, wrf::sdirk3::RhsMode::ImplicitOnly)
-                                          .detach().clone();
-
-                        auto gen4 = at::detail::createCPUGenerator(20260803);
-                        auto pert = torch::randn(Y0.numel(), gen4,
-                                                 torch::TensorOptions().dtype(Y0.dtype()))
-                                        .to(Y0.device());
-                        // a 1% context change, i.e. a plausible stage-to-stage difference
-                        U_ref_stage_ = (Y0 + 0.01 * Y0.norm() / pert.norm().clamp_min(1e-30)
-                                             * pert).clone();
-                        auto F_ctx2 = computeUnifiedRHS(Y0, wrf::sdirk3::RhsMode::ImplicitOnly)
-                                          .detach().clone();
-
-                        U_ref_stage_ = saved_ref;   // restore before anything else runs
-
-                        // POSITIVE CONTROL, across all three modes. A bare rel=0 is
-                        // indistinguishable from a probe that measured nothing -- this
-                        // session has already been caught by an exact zero twice (the
-                        // uniform-kick response matrix, and F(0)=0 before it had a
-                        // control). If ImplicitOnly is insensitive but Full or
-                        // ExplicitOnly is NOT, the probe works and the insensitivity is a
-                        // property of the mode. If ALL THREE are exactly zero, the finding
-                        // is about this probe, not about the RHS.
-                        {
-                            const wrf::sdirk3::RhsMode ms[3] = {
-                                wrf::sdirk3::RhsMode::Full,
-                                wrf::sdirk3::RhsMode::ExplicitOnly,
-                                wrf::sdirk3::RhsMode::ImplicitOnly};
-                            const char* mns[3] = {"Full", "ExplicitOnly", "ImplicitOnly"};
-                            for (int mm = 0; mm < 3; ++mm) {
-                                U_ref_stage_ = Y0.clone();
-                                auto a1 = computeUnifiedRHS(Y0, ms[mm]).detach().clone();
-                                U_ref_stage_ = (Y0 + 0.01 * Y0.norm()
-                                                / pert.norm().clamp_min(1e-30) * pert).clone();
-                                auto a2 = computeUnifiedRHS(Y0, ms[mm]).detach().clone();
-                                const double dd = (a2 - a1).norm().item<double>();
-                                const double nn = a1.norm().item<double>();
-                                std::cerr << "SDIRK3_FROZEN_CONTEXT_MODE " << mns[mm]
-                                          << " rel=" << (nn > 0 ? dd / nn : 0.0)
-                                          << std::endl << std::flush;
-                            }
-                            U_ref_stage_ = saved_ref;
-                        }
-
-                        const double d = (F_ctx2 - F_ctx1).norm().item<double>();
-                        const double n = F_ctx1.norm().item<double>();
-                        const double rel = n > 0 ? d / n : 0.0;
-                        // The verdict is CONDITIONAL, and the condition is printed with
-                        // it. U_ref_stage_ has exactly one consumption path (:12152): its
-                        // w component becomes w_ref, which enters as
-                        //     omega = mu * (blend*w + (1 - blend)*w_ref)
-                        // so at the default omega_w_blend = 1.0 the reference is
-                        // multiplied by ZERO and the RHS cannot depend on it. That is why
-                        // all three modes measure exactly 0 -- the probe is working, the
-                        // dependence is switched off.
-                        //
-                        // Reporting "R_U = -J is complete" without the blend value would
-                        // turn a configuration-dependent result into an unconditional one,
-                        // and anyone setting blend < 1 would silently invalidate the
-                        // implicit-differentiation shortcut.
-                        const float blend = wrf::sdirk3::g_sdirk3_config.omega_w_blend;
-                        std::cerr << "SDIRK3_FROZEN_CONTEXT_SENSITIVITY same-argument, "
-                                  << "1% context change: rel=" << rel
-                                  << " omega_w_blend=" << blend
-                                  << (rel < 1e-12
-                                        ? (blend >= 1.0f
-                                             ? "  no dependence, AND blend=1 switches the "
-                                               "only path off -- R_U = -J holds HERE, "
-                                               "conditional on blend"
-                                             : "  no dependence even though blend<1 -- the "
-                                               "reference path is inert for another reason")
-                                        : "  F DEPENDS on the frozen context: R_U = -J is "
-                                          "incomplete (a -F_C C_U term exists)")
-                                  << std::endl << std::flush;
-                    } catch (const std::exception& e) {
-                        std::cerr << "SDIRK3_FROZEN_CONTEXT_SENSITIVITY THREW: " << e.what()
-                                  << std::endl << std::flush;
-                    }
-
-                    // 9F.D70 (review section 5): <A v, w> == <v, A^T w> on the PRODUCTION
-                    // operators. The transpose solve makes essentially no progress at ANY
-                    // dt -- rel_error 0.9973 at 600/200/60/20 and 1.1998 at dt=5, i.e.
-                    // WORSE than the zero guess. A conditioning wall would vary with alpha;
-                    // this does not. That is the signature of the transpose operator not
-                    // being the transpose, and this is the check that decides it.
-                    //
-                    //   A v   = v - alpha * J v      forward, central difference
-                    //   A^T w = w - alpha * J^T w    adjoint, reverse AD
-                    try {
+                    // The CLAIMED transpose: autograd's VJP of the same operator. It is
+                    // evaluated at the cotangent itself, which is legitimate only because M
+                    // is linear -- and the report measures that separately, so a nonlinear M
+                    // makes summary() refuse to call this a transpose at all.
+                    auto M_transpose = [&](const torch::Tensor& cot) -> torch::Tensor {
                         torch::AutoGradMode on(true);
-                        auto gen2 = at::detail::createCPUGenerator(20260801);
-                        auto v = torch::randn(linearization_point.numel(), gen2,
-                                              torch::TensorOptions().dtype(linearization_point.dtype()))
-                                     .to(linearization_point.device());
-                        auto w = torch::randn(linearization_point.numel(), gen2,
-                                              torch::TensorOptions().dtype(linearization_point.dtype()))
-                                     .to(linearization_point.device());
-                        const double eps = 1.0e-3;
-                        auto Jv = (fast_operator(linearization_point + eps * v)
-                                 - fast_operator(linearization_point - eps * v)) / (2.0 * eps);
-                        auto Av = v - alpha * Jv;
-
-                        auto yq = linearization_point.detach().clone().set_requires_grad(true);
-                        auto fq = computeUnifiedRHS(yq, wrf::sdirk3::RhsMode::ImplicitOnly);
-                        auto gq = torch::autograd::grad({fq}, {yq}, {w.detach()}, false, false, true);
-                        TORCH_CHECK(!gq.empty() && gq[0].defined(), "no J^T available");
-                        auto Atw = w - alpha * gq[0];
-
-                        torch::NoGradGuard ng;
-                        const double lhs = (Av * w).sum().item<double>();
-                        const double rhs = (v * Atw).sum().item<double>();
-                        const double den = std::max(std::abs(lhs), std::abs(rhs));
-                        std::cerr << "SDIRK3_TRANSPOSE_IDENTITY alpha=" << alpha
-                                  << " <Av,w>=" << lhs << " <v,ATw>=" << rhs
-                                  << " rel=" << (den > 0 ? std::abs(lhs - rhs) / den : 0.0)
-                                  << std::endl << std::flush;
-                    } catch (const std::exception& e) {
-                        std::cerr << "SDIRK3_TRANSPOSE_IDENTITY THREW: " << e.what()
-                                  << std::endl << std::flush;
-                    }
-
-                    // 9F.D71 (review section 5): IS THE PRECONDITIONER SYMMETRIC?
-                    //
-                    // The adjoint's blocker is now known: the transpose solve runs with
-                    // IdentityTransposePreconditioner, i.e. no M at all, against an
-                    // operator the forward solve cannot invert without one. The size of
-                    // the remaining work turns entirely on one question -- if M is
-                    // symmetric then M^{-T} = M^{-1} and the existing preconditioner can
-                    // simply be used in the transpose solve; if it is not, a genuine
-                    // transpose has to be built and verified.
-                    //
-                    // Measured, not assumed, by the review's own identity:
-                    //     <M^-1 v, w>  ==  <v, M^-1 w>      iff M^{-1} is symmetric
-                    // A one-line answer to a question that otherwise sizes at "unknown".
-                    if (unified_precond_) {
-                        try {
-                            torch::NoGradGuard ng;
-                            auto gen3 = at::detail::createCPUGenerator(20260802);
-                            auto opts_p = linearization_point.options();
-                            auto v = torch::randn(linearization_point.numel(), gen3,
-                                                  torch::TensorOptions().dtype(opts_p.dtype()))
-                                         .to(opts_p.device());
-                            auto w = torch::randn(linearization_point.numel(), gen3,
-                                                  torch::TensorOptions().dtype(opts_p.dtype()))
-                                         .to(opts_p.device());
-                            auto Mv = unified_precond_->apply(v);
-                            auto Mw = unified_precond_->apply(w);
-                            const double lhs = (Mv * w).sum().item<double>();
-                            const double rhs = (v * Mw).sum().item<double>();
-                            const double den = std::max(std::abs(lhs), std::abs(rhs));
-                            const double rel = den > 0 ? std::abs(lhs - rhs) / den : 0.0;
-                            std::cerr << "SDIRK3_PRECOND_SYMMETRY <Mv,w>=" << lhs
-                                      << " <v,Mw>=" << rhs << " rel=" << rel
-                                      << (rel < 1e-5 ? "  SYMMETRIC: M^-T = M^-1, reuse it"
-                                                     : "  NOT symmetric: a real M^-T is required")
-                                      << std::endl << std::flush;
-                            // 9F.D78 (review sections 9 and 8.2): IS apply() A FIXED
-                            // LINEAR OPERATOR AT ALL?
-                            //
-                            // The 2.18e-02 asymmetry was obtained by calling a STATEFUL
-                            // apply() twice in sequence -- Mv then Mw -- and the review is
-                            // right that such a measurement cannot distinguish
-                            //     a genuinely non-self-adjoint operator
-                            // from
-                            //     an operator whose internal state moved between the two
-                            //     calls (residual ratio, Newton index, adaptive caps,
-                            //     generation counters, caches -- all instance members).
-                            // Until that is settled the asymmetry means nothing, and
-                            // neither would an M^{-T} built on the strength of it.
-                            //
-                            // CALL ORDER is the sharp test. Homogeneity was already
-                            // measured (M(2v) - 2M(v) = 0 exactly) and is necessary but
-                            // NOT sufficient: a stateful operator can be homogeneous
-                            // within any single call and still drift between calls.
-                            {
-                                auto Mv_again = unified_precond_->apply(v);
-                                const double rep = ((Mv_again - Mv).abs().max()
-                                        / Mv.abs().max().clamp_min(1e-30)).item<double>();
-
-                                auto Mw_first  = unified_precond_->apply(w);   // reversed
-                                auto Mv_second = unified_precond_->apply(v);
-                                const double ord_v = ((Mv_second - Mv).abs().max()
-                                        / Mv.abs().max().clamp_min(1e-30)).item<double>();
-                                const double ord_w = ((Mw_first - Mw).abs().max()
-                                        / Mw.abs().max().clamp_min(1e-30)).item<double>();
-
-                                auto Mvw = unified_precond_->apply(v + w);
-                                const double add = ((Mvw - (Mv + Mw)).abs().max()
-                                        / (Mv + Mw).abs().max().clamp_min(1e-30)).item<double>();
-
-                                const bool fixed_linear = (rep < 1e-6) && (ord_v < 1e-6)
-                                                       && (ord_w < 1e-6) && (add < 1e-5);
-                                std::cerr << "SDIRK3_PRECOND_OPERATOR repeat=" << rep
-                                          << " order_v=" << ord_v << " order_w=" << ord_w
-                                          << " additivity=" << add
-                                          << (fixed_linear
-                                                ? "  FIXED LINEAR: the asymmetry IS a "
-                                                  "property of the operator"
-                                                : "  STATEFUL or NONLINEAR: the asymmetry is "
-                                                  "NOT interpretable, and neither would an "
-                                                  "M^-T built from it be")
-                                          << std::endl << std::flush;
+                        struct ScopedGradFlag {
+                            wrf::sdirk3::UnifiedPreconditioner* M;
+                            bool saved;
+                            ~ScopedGradFlag() noexcept {
+                                if (M) M->set_grad_enabled_for_transpose(saved);
                             }
+                        } gf{unified_precond_.get(),
+                             unified_precond_->grad_enabled_for_transpose()};
+                        unified_precond_->set_grad_enabled_for_transpose(true);
 
-                            // 9F.D73: can M^-T be obtained by AD instead of by hand?
-                            //
-                            // apply() is ~1650 lines of block-Thomas, blends, W<->phi
-                            // coupling and boundary handling. Hand-deriving its exact
-                            // transpose is the kind of work where being subtly wrong is
-                            // worse than not doing it at all, because a wrong transpose is
-                            // self-consistent-looking -- the D63 fixture measures exactly
-                            // that failure at 82%.
-                            //
-                            // If M^-1 is LINEAR in its argument (as a preconditioner must
-                            // be) and differentiable, then its VJP IS its transpose,
-                            // exactly and by construction, with nothing to derive. Two
-                            // preconditions, both measurable here:
-                            //   LINEARITY:  M(2v) == 2 M(v)
-                            //   AD:         the VJP exists and satisfies
-                            //               <M v, w> == <v, M^T w>
-                            // apply() runs under NoGradGuard deliberately ("prevent graph
-                            // pollution"), which is right for the forward path; the
-                            // question is whether a separately grad-enabled call works.
-                            {
-                                auto M2v = unified_precond_->apply(2.0f * v);
-                                const double lin = ((M2v - 2.0f * Mv).abs().max()
-                                                    / Mv.abs().max().clamp_min(1e-30)).item<double>();
-                                std::cerr << "SDIRK3_PRECOND_LINEARITY M(2v)-2M(v) rel="
-                                          << lin
-                                          << (lin < 1e-5 ? "  LINEAR: a transpose is well-defined"
-                                                         : "  NONLINEAR: M has no transpose")
-                                          << std::endl << std::flush;
-                            }
-                            try {
-                                torch::AutoGradMode on(true);
-                                // 9F.D80: ask the preconditioner for a graph. Default off,
-                                // restored unconditionally so a throw cannot leave the
-                                // production path grad-enabled.
-                                struct ScopedGradFlag {
-                                    wrf::sdirk3::UnifiedPreconditioner* M;
-                                    bool saved;
-                                    ~ScopedGradFlag() noexcept {
-                                        if (M) M->set_grad_enabled_for_transpose(saved);
-                                    }
-                                } gf{unified_precond_.get(),
-                                     unified_precond_->grad_enabled_for_transpose()};
-                                unified_precond_->set_grad_enabled_for_transpose(true);
-
-                                auto vg = v.detach().clone().set_requires_grad(true);
-                                auto Mvg = unified_precond_->apply(vg);
-                                std::cerr << "SDIRK3_PRECOND_AD requires_grad="
-                                          << (Mvg.requires_grad() ? 1 : 0)
-                                          << " has_grad_fn=" << (Mvg.grad_fn() ? 1 : 0);
-                                if (Mvg.requires_grad() && Mvg.grad_fn()) {
-                                    auto gM = torch::autograd::grad({Mvg}, {vg}, {w.detach()},
-                                                                    false, false, true);
-                                    if (!gM.empty() && gM[0].defined()) {
-                                        torch::NoGradGuard ng2;
-                                        const double l2 = (Mv * w).sum().item<double>();
-                                        const double r2 = (v * gM[0]).sum().item<double>();
-                                        const double d2 = std::max(std::abs(l2), std::abs(r2));
-                                        std::cerr << " <Mv,w>=" << l2 << " <v,M^Tw>=" << r2
-                                                  << " rel=" << (d2 > 0 ? std::abs(l2 - r2) / d2 : 0.0);
-                                    } else {
-                                        std::cerr << " grad=UNDEFINED";
-                                    }
-                                }
-                                std::cerr << std::endl << std::flush;
-                            } catch (const std::exception& e) {
-                                std::cerr << "SDIRK3_PRECOND_AD THREW: " << e.what()
-                                          << std::endl << std::flush;
-                            }
-                        } catch (const std::exception& e) {
-                            std::cerr << "SDIRK3_PRECOND_SYMMETRY THREW: " << e.what()
-                                      << std::endl << std::flush;
+                        auto xg = cot.detach().clone().set_requires_grad(true);
+                        auto Mx = unified_precond_->apply(xg);
+                        if (!Mx.requires_grad() || !Mx.grad_fn()) {
+                            throw std::runtime_error("apply() recorded no graph");
                         }
-                    } else {
-                        std::cerr << "SDIRK3_PRECOND_SYMMETRY: no preconditioner_ on this "
-                                     "solver -- cannot test" << std::endl << std::flush;
-                    }
+                        auto g = torch::autograd::grad({Mx}, {xg}, {cot.detach()},
+                                                       false, false, true);
+                        if (g.empty() || !g[0].defined()) {
+                            throw std::runtime_error("VJP returned an undefined gradient");
+                        }
+                        return g[0];
+                    };
+
+                    std::cerr << tp::probe_transpose(M, M_transpose,
+                                                     linearization_point.numel(),
+                                                     linearization_point.options(),
+                                                     20260802)
+                                     .summary()
+                              << std::endl << std::flush;
                 }
             }
 
