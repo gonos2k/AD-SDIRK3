@@ -39127,6 +39127,109 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                       << (rel < 1e-5 ? "  SYMMETRIC: M^-T = M^-1, reuse it"
                                                      : "  NOT symmetric: a real M^-T is required")
                                       << std::endl << std::flush;
+                            // 9F.D78 (review sections 9 and 8.2): IS apply() A FIXED
+                            // LINEAR OPERATOR AT ALL?
+                            //
+                            // The 2.18e-02 asymmetry was obtained by calling a STATEFUL
+                            // apply() twice in sequence -- Mv then Mw -- and the review is
+                            // right that such a measurement cannot distinguish
+                            //     a genuinely non-self-adjoint operator
+                            // from
+                            //     an operator whose internal state moved between the two
+                            //     calls (residual ratio, Newton index, adaptive caps,
+                            //     generation counters, caches -- all instance members).
+                            // Until that is settled the asymmetry means nothing, and
+                            // neither would an M^{-T} built on the strength of it.
+                            //
+                            // CALL ORDER is the sharp test. Homogeneity was already
+                            // measured (M(2v) - 2M(v) = 0 exactly) and is necessary but
+                            // NOT sufficient: a stateful operator can be homogeneous
+                            // within any single call and still drift between calls.
+                            {
+                                auto Mv_again = unified_precond_->apply(v);
+                                const double rep = ((Mv_again - Mv).abs().max()
+                                        / Mv.abs().max().clamp_min(1e-30)).item<double>();
+
+                                auto Mw_first  = unified_precond_->apply(w);   // reversed
+                                auto Mv_second = unified_precond_->apply(v);
+                                const double ord_v = ((Mv_second - Mv).abs().max()
+                                        / Mv.abs().max().clamp_min(1e-30)).item<double>();
+                                const double ord_w = ((Mw_first - Mw).abs().max()
+                                        / Mw.abs().max().clamp_min(1e-30)).item<double>();
+
+                                auto Mvw = unified_precond_->apply(v + w);
+                                const double add = ((Mvw - (Mv + Mw)).abs().max()
+                                        / (Mv + Mw).abs().max().clamp_min(1e-30)).item<double>();
+
+                                const bool fixed_linear = (rep < 1e-6) && (ord_v < 1e-6)
+                                                       && (ord_w < 1e-6) && (add < 1e-5);
+                                std::cerr << "SDIRK3_PRECOND_OPERATOR repeat=" << rep
+                                          << " order_v=" << ord_v << " order_w=" << ord_w
+                                          << " additivity=" << add
+                                          << (fixed_linear
+                                                ? "  FIXED LINEAR: the asymmetry IS a "
+                                                  "property of the operator"
+                                                : "  STATEFUL or NONLINEAR: the asymmetry is "
+                                                  "NOT interpretable, and neither would an "
+                                                  "M^-T built from it be")
+                                          << std::endl << std::flush;
+                            }
+
+                            // 9F.D73: can M^-T be obtained by AD instead of by hand?
+                            //
+                            // apply() is ~1650 lines of block-Thomas, blends, W<->phi
+                            // coupling and boundary handling. Hand-deriving its exact
+                            // transpose is the kind of work where being subtly wrong is
+                            // worse than not doing it at all, because a wrong transpose is
+                            // self-consistent-looking -- the D63 fixture measures exactly
+                            // that failure at 82%.
+                            //
+                            // If M^-1 is LINEAR in its argument (as a preconditioner must
+                            // be) and differentiable, then its VJP IS its transpose,
+                            // exactly and by construction, with nothing to derive. Two
+                            // preconditions, both measurable here:
+                            //   LINEARITY:  M(2v) == 2 M(v)
+                            //   AD:         the VJP exists and satisfies
+                            //               <M v, w> == <v, M^T w>
+                            // apply() runs under NoGradGuard deliberately ("prevent graph
+                            // pollution"), which is right for the forward path; the
+                            // question is whether a separately grad-enabled call works.
+                            {
+                                auto M2v = unified_precond_->apply(2.0f * v);
+                                const double lin = ((M2v - 2.0f * Mv).abs().max()
+                                                    / Mv.abs().max().clamp_min(1e-30)).item<double>();
+                                std::cerr << "SDIRK3_PRECOND_LINEARITY M(2v)-2M(v) rel="
+                                          << lin
+                                          << (lin < 1e-5 ? "  LINEAR: a transpose is well-defined"
+                                                         : "  NONLINEAR: M has no transpose")
+                                          << std::endl << std::flush;
+                            }
+                            try {
+                                torch::AutoGradMode on(true);
+                                auto vg = v.detach().clone().set_requires_grad(true);
+                                auto Mvg = unified_precond_->apply(vg);
+                                std::cerr << "SDIRK3_PRECOND_AD requires_grad="
+                                          << (Mvg.requires_grad() ? 1 : 0)
+                                          << " has_grad_fn=" << (Mvg.grad_fn() ? 1 : 0);
+                                if (Mvg.requires_grad() && Mvg.grad_fn()) {
+                                    auto gM = torch::autograd::grad({Mvg}, {vg}, {w.detach()},
+                                                                    false, false, true);
+                                    if (!gM.empty() && gM[0].defined()) {
+                                        torch::NoGradGuard ng2;
+                                        const double l2 = (Mv * w).sum().item<double>();
+                                        const double r2 = (v * gM[0]).sum().item<double>();
+                                        const double d2 = std::max(std::abs(l2), std::abs(r2));
+                                        std::cerr << " <Mv,w>=" << l2 << " <v,M^Tw>=" << r2
+                                                  << " rel=" << (d2 > 0 ? std::abs(l2 - r2) / d2 : 0.0);
+                                    } else {
+                                        std::cerr << " grad=UNDEFINED";
+                                    }
+                                }
+                                std::cerr << std::endl << std::flush;
+                            } catch (const std::exception& e) {
+                                std::cerr << "SDIRK3_PRECOND_AD THREW: " << e.what()
+                                          << std::endl << std::flush;
+                            }
                         } catch (const std::exception& e) {
                             std::cerr << "SDIRK3_PRECOND_SYMMETRY THREW: " << e.what()
                                       << std::endl << std::flush;
