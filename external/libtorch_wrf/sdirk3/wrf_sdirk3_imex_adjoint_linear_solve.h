@@ -68,6 +68,39 @@ torch::Tensor solve_transpose_linear_system_gmres(
         nullptr,
         false,
         false);
+
+    // 9F.D87 (review section 6): report the TRUE, UNPRECONDITIONED residual.
+    //
+    // solve_gmres is handed rhs_left = P^T b and left_operator = P^T A^T, so its rel_error
+    // is ||P^T(b - A^T x)|| / ||P^T b|| -- the PRECONDITIONED norm. With the identity
+    // preconditioner that coincides with the physical residual; with any real P it does
+    // not. Comparing rel_error ACROSS preconditioners therefore compares different norms,
+    // and the D84 dt-ladder did exactly that: its identity column was a true residual and
+    // its M^-T column was not, so the two were never comparable.
+    //
+    // One extra operator application against the 400 in the solve. The verdict has to be
+    // made on the same physical quantity for every preconditioner or it is not a comparison.
+    {
+        // operator_transpose forms a VJP, so it MUST NOT be inside a NoGradGuard. Only the
+        // reductions below are guarded.
+        //
+        // I wrapped this whole block in a guard first, and it died with "element 0 of
+        // tensors does not require grad" -- the FIFTH occurrence of that pattern in this
+        // campaign (D59 power_iterate_sigma_max, D66 the adjoint driver, D80's misreading,
+        // D85 the probe itself, now here), and the second within one session, minutes after
+        // fixing it in the probe. The reflex to open a diagnostic with NoGradGuard is the
+        // bug; the rule is "guard each .item(), and NOTHING that calls back into an operator
+        // which may need a graph".
+        auto r_phys = rhs - operator_transpose(gmres.x);
+        torch::NoGradGuard no_grad;
+        const double rel_true =
+            (r_phys.norm() / rhs.norm().clamp_min(1e-30)).template item<double>();
+        std::cerr << "SDIRK3_TRANSPOSE_TRUE_RESIDUAL rel_true=" << rel_true
+                  << " rel_preconditioned=" << gmres.rel_error
+                  << " |x|=" << gmres.x.norm().template item<double>()
+                  << std::endl << std::flush;
+    }
+
     // ADJOINT FAIL-CLOSE (full-repo review P1-2): the forward solver fail-closes
     // on non-convergence, but this transpose solve previously returned gmres.x
     // UNCONDITIONALLY — a stalled/broken-down adjoint solve produced a

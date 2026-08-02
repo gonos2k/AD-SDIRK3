@@ -955,7 +955,13 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
             gamma,
             gmres_restart,
             gmres_max_iter,
-            gmres_tol);
+            gmres_tol,
+            // 9F.D88: lambda_terminal arrives as a packed STATE vector from Fortran, with
+            // no Kbar, stage index or Butcher coefficient anywhere in the ABI. By that
+            // evidence it is a stage-STATE cotangent, for which A^{-T} alone is the correct
+            // pullback. Stated explicitly because the type now requires it -- a caller that
+            // cannot say which cotangent it holds cannot be given a correct gradient.
+            wrf::sdirk3::implicit_diff::StageCotangent::State);
 
         auto lambda_cpu = lambda_initial_tensor.detach().to(torch::kCPU, torch::kFloat32).contiguous();
         std::memcpy(

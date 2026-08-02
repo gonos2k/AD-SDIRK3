@@ -38605,42 +38605,27 @@ bool TileSDIRK3UnifiedSolver::runAdjointDriverProbe(const torch::Tensor& U_n) {
         const float dtv = static_cast<float>(
             probe_env_positive_double("WRF_SDIRK3_ADJOINT_DT", 600.0));
         const float gam = 0.435866521508459f;
-        // Each mode in its OWN try, so a failure in one still reports the other.
-        // Bundling them would have hidden which of the two broke.
-        torch::Tensor legacy, eqlev;
-        try {
-            legacy = runAdjointReplay(lam, dtv, gam, 10, 40, 1e-5f, 0);
-            std::cerr << "SDIRK3_ADJOINT_DRIVER legacy ok |lam|="
-                      << [&]{ torch::NoGradGuard g; return legacy.norm().item<double>(); }()
-                      << std::endl << std::flush;
-        } catch (const std::exception& e) {
-            std::cerr << "SDIRK3_ADJOINT_DRIVER legacy FAILED: " << e.what()
-                      << std::endl << std::flush;
+        // 9F.D88 (review section 4): the two-mode comparison is DELETED.
+        //
+        // It ran the replay twice on the SAME random lambda -- once as A^{-T} and once as
+        // J^T A^{-T} -- and reported their norm ratio, cosine and relative difference as if
+        // one were a candidate answer for the other. They are pullbacks of DIFFERENT stage
+        // outputs (state vs tendency), so evaluating two different functions at the same
+        // input and differencing them measures nothing. It produced numbers for weeks.
+        //
+        // The driver now exercises ONE map, named by its cotangent kind. What it reports is
+        // whether the replay runs and what it returns -- not a comparison it cannot make.
+        auto lambda_out = runAdjointReplay(
+            lam, dtv, gam, 10, 40, 1e-5f,
+            wrf::sdirk3::implicit_diff::StageCotangent::State);
+        {
+            torch::NoGradGuard ng_report;   // only around the .item() reads
+            std::cerr << "SDIRK3_ADJOINT_DRIVER checkpoints=" << ck.size()
+                      << " kind=State"
+                      << " |lambda_in|=" << lam.norm().item<double>()
+                      << " |lambda_out|=" << lambda_out.norm().item<double>()
+                      << std::endl;
         }
-        try {
-            eqlev = runAdjointReplay(lam, dtv, gam, 10, 40, 1e-5f, 1);
-            std::cerr << "SDIRK3_ADJOINT_DRIVER equation-level ok |lam|="
-                      << [&]{ torch::NoGradGuard g; return eqlev.norm().item<double>(); }()
-                      << std::endl << std::flush;
-        } catch (const std::exception& e) {
-            std::cerr << "SDIRK3_ADJOINT_DRIVER equation-level FAILED: " << e.what()
-                      << std::endl << std::flush;
-        }
-        if (!legacy.defined() || !eqlev.defined()) return false;
-
-        torch::NoGradGuard ng_report;   // only around the .item() reads
-        const double nl = legacy.norm().item<double>();
-        const double ne = eqlev.norm().item<double>();
-        const double dot = (legacy * eqlev).sum().item<double>();
-        const double cosang = (nl > 0 && ne > 0) ? dot / (nl * ne) : 0.0;
-        const double reldiff = (nl > 0)
-            ? (eqlev - legacy).norm().item<double>() / nl : 0.0;
-        std::cerr << "SDIRK3_ADJOINT_DRIVER checkpoints=" << ck.size()
-                  << " |lam_legacy|=" << nl
-                  << " |lam_eq|=" << ne
-                  << " ratio=" << (nl > 0 ? ne / nl : 0.0)
-                  << " cos=" << cosang
-                  << " reldiff=" << reldiff << std::endl;
         return true;    // reported a real measurement -> the attempt is consumed
     } catch (const std::exception& e) {
         std::cerr << "SDIRK3_ADJOINT_DRIVER FAILED: " << e.what() << std::endl;
@@ -38662,7 +38647,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     int gmres_restart,
     int gmres_max_iterations,
     float gmres_tolerance,
-    int stage_adjoint_mode) {
+    wrf::sdirk3::implicit_diff::StageCotangent cotangent_kind) {
 
     TORCH_CHECK(lambda_terminal.defined(), "runAdjointReplay: lambda_terminal must be defined");
 
@@ -38709,6 +38694,38 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             // Keep replay in the same state basis as the forward stage reference.
             U_ref_stage_ = linearization_point.clone();
 
+            // 9F.D87 (review section 3): REBUILD the preconditioner for THIS replay's alpha
+            // and state. Without this the transpose solve is preconditioned by an operator
+            // built for a DIFFERENT problem, and D84's dt-ladder was exactly that.
+            //
+            // update() is called once per forward step (unifiedStep, :5577) with the
+            // FORWARD dt. runAdjointReplay never called it, and set_alpha() is a no-op in
+            // all three transpose-preconditioner wrappers, so nothing re-derived the
+            // coefficients. With WRF_SDIRK3_ADJOINT_DT=5 against a namelist dt of 600 that
+            // is alpha = 2.18 solved against a preconditioner built for alpha = 261.5 --
+            // a 120x mismatch. The horizontal smoothing factor alone carries dt*gamma*cs^2.
+            //
+            // So "a correct M^-T does not help" was measured against the exact transpose of
+            // the WRONG preconditioner. The AD transpose was faithful to what it was given;
+            // what it was given did not match A.
+            //
+            // Safe for the forward path: unifiedStep re-updates at the top of every step,
+            // and the replay only runs after one has completed.
+            if (unified_precond_) {
+                unified_precond_->update(linearization_point, dt, gamma);
+                static std::atomic<bool> prov_said{false};
+                bool prov_expected = false;
+                if (prov_said.compare_exchange_strong(prov_expected, true)) {
+                    torch::NoGradGuard no_grad;
+                    std::cerr << "SDIRK3_ADJOINT_PRECOND_PROVENANCE"
+                              << " dt=" << dt << " gamma=" << gamma
+                              << " alpha=" << (static_cast<double>(dt) *
+                                               static_cast<double>(gamma))
+                              << " |Y_lin|=" << linearization_point.norm().item<double>()
+                              << "  (rebuilt for THIS replay)" << std::endl << std::flush;
+                }
+            }
+
             auto fast_operator = [&](const torch::Tensor& y) -> torch::Tensor {
                 return computeUnifiedRHS(y, wrf::sdirk3::RhsMode::ImplicitOnly);
             };
@@ -38730,11 +38747,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
 
                     auto M = [&](const torch::Tensor& x) { return unified_precond_->apply(x); };
 
-                    // The CLAIMED transpose: the SAME apply_transpose_ad the A^T solve is
+                    // The CLAIMED transpose: the SAME apply_inverse_transpose the A^T solve is
                     // wired to (9F.D84). Measuring one implementation and shipping another
                     // would make this contract decorative.
                     auto M_transpose = [&](const torch::Tensor& cot) {
-                        return unified_precond_->apply_transpose_ad(cot);
+                        return unified_precond_->apply_inverse_transpose(cot);
                     };
 
                     std::cerr << tp::probe_transpose(M, M_transpose,
@@ -38743,6 +38760,58 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                                      20260802)
                                      .summary()
                               << std::endl << std::flush;
+
+                    // 9F.D89 (review section 8): BLOCK-LOCAL and MULTI-SEED, because the
+                    // 1.5e-07 above rests on ONE global random direction and a global dot
+                    // product can dilute a block-local defect. A severed w-theta path would
+                    // sit under the phi block's O(1e4) contribution and never show.
+                    //
+                    // The block table is duplicated arithmetic (the same six sizes appear in
+                    // four other places in this file), so it is GUARDED: if the sizes do not
+                    // sum to numel the sweep refuses rather than silently probing the wrong
+                    // ranges. That check is what makes the local copy safe.
+                    {
+                        const int64_t n = linearization_point.numel();
+                        const int64_t nx = nx_, ny = ny_, nz = nz_;
+                        const int64_t nxu = nx_u_, nyv = ny_v_, nzw = nz_w_;
+                        const std::pair<const char*, int64_t> blk[6] = {
+                            {"ru", ny * nz * nxu}, {"rv", nyv * nz * nx},
+                            {"rw", ny * nzw * nx}, {"ph", ny * nzw * nx},
+                            {"t",  ny * nz * nx},  {"mu", ny * nx}};
+                        int64_t sum = 0;
+                        for (const auto& b : blk) sum += b.second;
+                        if (sum != n) {
+                            std::cerr << "SDIRK3_TRANSPOSE_BLOCKWISE SKIPPED: block sizes "
+                                      << sum << " != state " << n
+                                      << " -- refusing to probe the wrong ranges"
+                                      << std::endl << std::flush;
+                        } else {
+                            auto opts_b = linearization_point.options();
+                            for (uint64_t seed : {20260901u, 20260902u}) {
+                                auto g = at::detail::createCPUGenerator(seed);
+                                auto w_g = torch::randn(n, g,
+                                              torch::TensorOptions().dtype(opts_b.dtype()))
+                                              .to(opts_b.device());
+                                int64_t off = 0;
+                                for (const auto& b : blk) {
+                                    auto v_b = torch::zeros(n, opts_b);
+                                    auto piece = torch::randn(b.second, g,
+                                                    torch::TensorOptions().dtype(opts_b.dtype()))
+                                                    .to(opts_b.device());
+                                    v_b.slice(0, off, off + b.second).copy_(piece);
+                                    const double e = tp::transpose_error_on(
+                                        M, M_transpose, v_b, w_g);
+                                    std::cerr << "SDIRK3_TRANSPOSE_BLOCKWISE seed=" << seed
+                                              << " block=" << b.first
+                                              << " n=" << b.second
+                                              << " transpose_error=" << e
+                                              << (e < 1e-5 ? "  OK" : "  WRONG")
+                                              << std::endl << std::flush;
+                                    off += b.second;
+                                }
+                            }
+                        }
+                    }
 
                     // 9F.D85: the same instrument, pointed at the OPERATOR instead of the
                     // preconditioner.
@@ -38811,7 +38880,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                 wrf::sdirk3::UnifiedPreconditioner* M = nullptr;
                 void set_alpha(double) {}
                 torch::Tensor apply_transpose(const torch::Tensor& r) const {
-                    return M->apply_transpose_ad(r);   // throws rather than returning r
+                    return M->apply_inverse_transpose(r);   // throws rather than returning r
                 }
             };
 
@@ -38856,12 +38925,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             //
             // Default OFF, so the legacy path is byte-identical and the difference is a
             // MEASUREMENT rather than a silent change to what the adjoint means.
-            bool use_equation_level = false;
-            if (stage_adjoint_mode >= 0) {
-                use_equation_level = (stage_adjoint_mode == 1);
-            } else if (const char* sa = std::getenv("WRF_SDIRK3_STAGE_ADJOINT")) {
-                use_equation_level = (sa[0] == 'e');
-            }
+            // 9F.D88 (review section 4): the map is chosen by the COTANGENT KIND, from the
+            // type system. The int mode and its WRF_SDIRK3_STAGE_ADJOINT fallback are gone:
+            // an env var cannot know which quantity the caller is holding, and defaulting
+            // when it is unset silently picks one of two different maps.
+            const bool use_equation_level =
+                (cotangent_kind ==
+                 wrf::sdirk3::implicit_diff::StageCotangent::Tendency);
             {
                 if (use_equation_level) {
                     torch::AutoGradMode enable(true);

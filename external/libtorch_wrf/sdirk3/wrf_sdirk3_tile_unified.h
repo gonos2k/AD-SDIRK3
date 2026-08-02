@@ -17,6 +17,7 @@
 #include "wrf_sdirk3_unified_rhs.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_sdirk3_unified_preconditioner.h"
+#include "wrf_sdirk3_implicit_diff.h"   // StageCotangent
 #include "wrf_tile_boundary_optimizer.h"
 #include "wrf_sdirk3_metric_utils.h"  // FIX 2025-12-29: For invalidateStaticMetricCaches()
 #include "wrf_sdirk3_pressure_gradient_vectorized.h"  // FIX 2025-01-11 Round58: For pg_detail::invalidateAllCaches()
@@ -737,16 +738,22 @@ public:
     torch::Tensor runAdjointReplay(const torch::Tensor& lambda_terminal,
                                    float dt,
                                    float gamma,
-                                   int gmres_restart = 15,
-                                   int gmres_max_iterations = 80,
-                                   float gmres_tolerance = 1e-5f,
-                                   // 9F.D65: -1 = take the mode from WRF_SDIRK3_STAGE_ADJOINT
-                                   // (preserving the existing entry points), 0 = legacy
-                                   // A^{-T} only, 1 = equation-level J^T A^{-T}. An explicit
-                                   // parameter so the driver can call BOTH ways in one
-                                   // process and difference them, which setenv-juggling
-                                   // mid-run could not do honestly.
-                                   int stage_adjoint_mode = -1);
+                                   int gmres_restart,
+                                   int gmres_max_iterations,
+                                   float gmres_tolerance,
+                                   // 9F.D88 (review section 4): WHICH COTANGENT the caller
+                                   // holds, in the type system rather than as an int whose
+                                   // out-of-range values fall through to one of two maps.
+                                   //
+                                   //   State    -> Ubar = A^{-T} Ybar
+                                   //   Tendency -> Ubar = J^T A^{-T} Kbar
+                                   //
+                                   // These are pullbacks of DIFFERENT outputs of the stage,
+                                   // not rival answers for the same one, so there is no
+                                   // sensible default and no "-1 = ask the environment".
+                                   // Required, because a caller that cannot say which
+                                   // cotangent it holds cannot be given a correct gradient.
+                                   wrf::sdirk3::implicit_diff::StageCotangent cotangent_kind);
 
     // 9F.D81: the opt-in adjoint driver (WRF_SDIRK3_ADJOINT_DRIVER), moved OUT of
     // unifiedStep. It ran runAdjointReplay twice and differenced the two stage-adjoint
