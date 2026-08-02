@@ -303,6 +303,19 @@ add_executable(test_transpose_probe tests/test_transpose_probe.cpp)
 target_link_libraries(test_transpose_probe PRIVATE wrf_sdirk3::core)
 add_test(NAME Transpose_Probe_Contract COMMAND test_transpose_probe)
 
+# 9F.D93 (review section 8.3): ONE packed-state layout, and its ORDER is contract. A guard
+# that only checks the SUM cannot see rw and ph swapped -- they are the same size.
+add_executable(test_state_layout tests/test_state_layout.cpp)
+target_link_libraries(test_state_layout PRIVATE wrf_sdirk3_build_config)
+add_test(NAME State_Layout_Contract COMMAND test_state_layout)
+
+# 9F.D91 (review P0-1): the transpose solve must judge on the PHYSICAL residual, not the
+# preconditioned one. Carries a deliberately residual-shrinking preconditioner -- the false
+# success that the old gate would have accepted.
+add_executable(test_adjoint_solve_authority tests/test_adjoint_solve_authority.cpp)
+target_link_libraries(test_adjoint_solve_authority PRIVATE wrf_sdirk3::core)
+add_test(NAME Adjoint_Solve_Authority_Contract COMMAND test_adjoint_solve_authority)
+
 # 9F.D45 (review section 4): the C-boundary return contract. Links core, because the
 # point is to call the REAL exported symbol -- a helper that throws and an ABI that
 # converts throws into a status code are different claims.

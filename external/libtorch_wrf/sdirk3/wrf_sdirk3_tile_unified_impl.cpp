@@ -38694,9 +38694,25 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             // Keep replay in the same state basis as the forward stage reference.
             U_ref_stage_ = linearization_point.clone();
 
-            // 9F.D87 (review section 3): REBUILD the preconditioner for THIS replay's alpha
-            // and state. Without this the transpose solve is preconditioned by an operator
-            // built for a DIFFERENT problem, and D84's dt-ladder was exactly that.
+            // 9F.D87 (review section 3): rebuild the preconditioner for THIS replay's alpha.
+            // Without this the transpose solve is preconditioned by an operator built for a
+            // DIFFERENT problem, and D84's dt-ladder was exactly that.
+            //
+            // 9F.D91 CORRECTION (review P0-2): D87 said "alpha AND STATE". The state half was
+            // WRONG. update(state, dt, gamma) DOES NOT READ `state` -- across its 140-line
+            // body the identifier appears only in the signature, in a debug string about
+            // BASE-state generation, and in one comment. What it rebuilds on is dt/gamma plus
+            // base-state / metric / config generation counters.
+            //
+            // So this call makes the preconditioner match the replay's ALPHA, which is what
+            // D84 needed and is measured (261.5 / 26.15 / 2.179 at dt 600/60/5). It does NOT
+            // make it match the checkpoint STATE. Stage-state adaptation lives in a separate
+            // path, set_stage_state(mu_pert, stage), which this replay never calls -- so the
+            // preconditioner is still built around the forward step's stage state.
+            //
+            // The unused `state` parameter is what made D87 believe otherwise. Extracting
+            // mu_pert from the packed checkpoint and splitting the API into
+            // update_time_coefficients() / bind_stage_state() is the real fix and is open.
             //
             // update() is called once per forward step (unifiedStep, :5577) with the
             // FORWARD dt. runAdjointReplay never called it, and set_alpha() is a no-op in
@@ -38762,28 +38778,23 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                               << std::endl << std::flush;
 
                     // 9F.D89 (review section 8): BLOCK-LOCAL and MULTI-SEED, because the
-                    // 1.5e-07 above rests on ONE global random direction and a global dot
-                    // product can dilute a block-local defect. A severed w-theta path would
-                    // sit under the phi block's O(1e4) contribution and never show.
+                    // global figure above rests on ONE random direction and a global dot
+                    // product can dilute a block-local defect -- a severed w-theta path
+                    // would sit under the phi block's O(1e4) contribution and never show.
                     //
-                    // The block table is duplicated arithmetic (the same six sizes appear in
-                    // four other places in this file), so it is GUARDED: if the sizes do not
-                    // sum to numel the sweep refuses rather than silently probing the wrong
-                    // ranges. That check is what makes the local copy safe.
+                    // 9F.D93 (review section 8.3): the block ranges now come from THE shared
+                    // StateLayout. D89 carried a local copy of the six sizes guarded only by
+                    // a sum check, and as the review notes a correct total is not evidence of
+                    // a correct ORDER -- swap two equal-sized blocks (rw and ph are both
+                    // ny*nz_w*nx here) and the sum is unchanged. The authority knows the
+                    // order; a local copy only knows the arithmetic.
                     {
+                        const auto layout = wrf::sdirk3::StateLayout::from_grid_dims(
+                            nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
                         const int64_t n = linearization_point.numel();
-                        const int64_t nx = nx_, ny = ny_, nz = nz_;
-                        const int64_t nxu = nx_u_, nyv = ny_v_, nzw = nz_w_;
-                        const std::pair<const char*, int64_t> blk[6] = {
-                            {"ru", ny * nz * nxu}, {"rv", nyv * nz * nx},
-                            {"rw", ny * nzw * nx}, {"ph", ny * nzw * nx},
-                            {"t",  ny * nz * nx},  {"mu", ny * nx}};
-                        int64_t sum = 0;
-                        for (const auto& b : blk) sum += b.second;
-                        if (sum != n) {
-                            std::cerr << "SDIRK3_TRANSPOSE_BLOCKWISE SKIPPED: block sizes "
-                                      << sum << " != state " << n
-                                      << " -- refusing to probe the wrong ranges"
+                        if (!layout.is_valid() || layout.total_size != n) {
+                            std::cerr << "SDIRK3_TRANSPOSE_BLOCKWISE SKIPPED: layout "
+                                      << layout.total_size << " != state " << n
                                       << std::endl << std::flush;
                         } else {
                             auto opts_b = linearization_point.options();
@@ -38792,22 +38803,20 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                 auto w_g = torch::randn(n, g,
                                               torch::TensorOptions().dtype(opts_b.dtype()))
                                               .to(opts_b.device());
-                                int64_t off = 0;
-                                for (const auto& b : blk) {
+                                for (const auto& b : layout.blocks) {
                                     auto v_b = torch::zeros(n, opts_b);
-                                    auto piece = torch::randn(b.second, g,
+                                    auto piece = torch::randn(b.size, g,
                                                     torch::TensorOptions().dtype(opts_b.dtype()))
                                                     .to(opts_b.device());
-                                    v_b.slice(0, off, off + b.second).copy_(piece);
+                                    v_b.slice(0, b.start, b.start + b.size).copy_(piece);
                                     const double e = tp::transpose_error_on(
                                         M, M_transpose, v_b, w_g);
                                     std::cerr << "SDIRK3_TRANSPOSE_BLOCKWISE seed=" << seed
-                                              << " block=" << b.first
-                                              << " n=" << b.second
+                                              << " block=" << b.name
+                                              << " n=" << b.size
                                               << " transpose_error=" << e
                                               << (e < 1e-5 ? "  OK" : "  WRONG")
                                               << std::endl << std::flush;
-                                    off += b.second;
                                 }
                             }
                         }

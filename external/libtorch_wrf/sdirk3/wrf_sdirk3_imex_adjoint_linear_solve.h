@@ -4,6 +4,7 @@
 #include <torch/torch.h>
 
 #include <functional>
+#include <limits>
 
 #include "wrf_sdirk3_newton_solver.h"
 
@@ -69,6 +70,9 @@ torch::Tensor solve_transpose_linear_system_gmres(
         false,
         false);
 
+    // 9F.D91 (review P0-1): the PHYSICAL residual is the stopping authority.
+    double rel_true = std::numeric_limits<double>::infinity();
+
     // 9F.D87 (review section 6): report the TRUE, UNPRECONDITIONED residual.
     //
     // solve_gmres is handed rhs_left = P^T b and left_operator = P^T A^T, so its rel_error
@@ -93,8 +97,7 @@ torch::Tensor solve_transpose_linear_system_gmres(
         // which may need a graph".
         auto r_phys = rhs - operator_transpose(gmres.x);
         torch::NoGradGuard no_grad;
-        const double rel_true =
-            (r_phys.norm() / rhs.norm().clamp_min(1e-30)).template item<double>();
+        rel_true = (r_phys.norm() / rhs.norm().clamp_min(1e-30)).template item<double>();
         std::cerr << "SDIRK3_TRANSPOSE_TRUE_RESIDUAL rel_true=" << rel_true
                   << " rel_preconditioned=" << gmres.rel_error
                   << " |x|=" << gmres.x.norm().template item<double>()
@@ -109,11 +112,29 @@ torch::Tensor solve_transpose_linear_system_gmres(
     // A wrong gradient is strictly worse than no gradient: refuse instead. The
     // throw propagates through runAdjointReplay (catch/restore/rethrow) -> the
     // C wrapper (-1) -> Fortran (ierr stays 1), the already-verified error chain.
-    if (!gmres.success || !(gmres.rel_error <= gmres_tolerance)) {
+    // 9F.D91 (review P0-1): JUDGE ON THE PHYSICAL RESIDUAL.
+    //
+    // D87 computed rel_true and only PRINTED it; the gate still read gmres.rel_error, which
+    // is ||P^T(b - A^T x)|| / ||P^T b||. A preconditioner that shrinks the residual along
+    // some direction makes that ratio small while the physical residual stays O(1):
+    //
+    //     A = I,  b = (1,1)^T,  x = (1,0)^T   =>   rel_true = 1/sqrt(2) ~ 0.707
+    //     P^T = diag(1, 1e-6)                 =>   rel_precond ~ 1e-6   "converged"
+    //
+    // That is a FALSE SUCCESS returning a 70%-wrong gradient, and the comment directly below
+    // is the reason it matters: a wrong gradient is strictly worse than no gradient. The
+    // preconditioned residual describes the Krylov iteration; only the physical one
+    // describes the equation the caller asked to solve.
+    //
+    // gmres.success is kept as a NECESSARY condition -- it also covers breakdown and NaN
+    // paths -- but it is no longer sufficient, and gmres.rel_error is now diagnostic only.
+    const bool physical_ok = std::isfinite(rel_true) && rel_true <= gmres_tolerance;
+    if (!gmres.success || !physical_ok) {
         throw std::runtime_error(
             std::string("sdirk3 adjoint transpose solve did not converge (") +
             "success=" + (gmres.success ? "true" : "false") +
-            ", rel_error=" + std::to_string(gmres.rel_error) +
+            ", rel_true=" + std::to_string(rel_true) +
+            ", rel_preconditioned=" + std::to_string(gmres.rel_error) +
             ", tol=" + std::to_string(gmres_tolerance) +
             ", iterations=" + std::to_string(gmres.iterations) +
             ", msg=" + gmres.message +
