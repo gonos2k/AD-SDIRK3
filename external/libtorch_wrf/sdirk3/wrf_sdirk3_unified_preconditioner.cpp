@@ -1932,6 +1932,43 @@ void UnifiedPreconditioner::initialize_horizontal_smoother() {
     horizontal_smooth_factor_ = h_smooth / (dx * dx + dy * dy);
 }
 
+// 9F.D84: M^T v as the VJP of apply(). See the header for why it lives here and why it
+// fails closed.
+torch::Tensor UnifiedPreconditioner::apply_transpose_ad(const torch::Tensor& cotangent) {
+    torch::AutoGradMode grad_on(true);
+
+    // Restored on every exit INCLUDING a throw, so a failed transpose cannot leave the
+    // production forward path grad-enabled.
+    struct ScopedGradFlag {
+        UnifiedPreconditioner* self;
+        bool saved;
+        ~ScopedGradFlag() noexcept { self->set_grad_enabled_for_transpose(saved); }
+    } restore{this, grad_enabled_for_transpose_};
+    set_grad_enabled_for_transpose(true);
+
+    // apply() is a fixed LINEAR operator (measured in D78: repeatability 0, call-order 0,
+    // additivity 2.3e-07, homogeneity 0), so the VJP does not depend on where it is
+    // evaluated and the cotangent itself is a valid linearization point.
+    auto x = cotangent.detach().clone().set_requires_grad(true);
+    auto Mx = apply(x);
+    if (!Mx.requires_grad() || !Mx.grad_fn()) {
+        throw std::runtime_error(
+            "SDIRK3 apply_transpose_ad: apply() recorded no graph, so there is no transpose "
+            "to return. Refusing to fall back to the identity -- that is indistinguishable "
+            "from a correct transpose at the call site and silently unpreconditions the "
+            "solve.");
+    }
+    auto grads = torch::autograd::grad({Mx}, {x}, {cotangent.detach()},
+                                       /*retain_graph=*/false,
+                                       /*create_graph=*/false,
+                                       /*allow_unused=*/true);
+    if (grads.empty() || !grads[0].defined()) {
+        throw std::runtime_error(
+            "SDIRK3 apply_transpose_ad: the VJP returned an undefined gradient.");
+    }
+    return grads[0];
+}
+
 torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
     PROFILE_SCOPE("preconditioner_apply");
 
@@ -1949,8 +1986,31 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
     // Apply ENHANCED unified preconditioner M^{-1} to residual
     // Strategy: Approximate (I - dt*gamma*J_unified)^{-1} with acoustic-gravity coupling
 
-    // CRITICAL: Disable autograd to prevent graph pollution during preconditioning
-    torch::NoGradGuard no_grad;
+    // CRITICAL: Disable autograd to prevent graph pollution during preconditioning.
+    //
+    // 9F.D80: conditional, so M^T can be obtained by AD instead of hand-derived.
+    //
+    // The default is unchanged and this guard is still active on every production call --
+    // the preconditioner has no business building a graph during a Newton solve, and that
+    // is why the guard exists. But it also means apply() cannot produce a VJP even when one
+    // is wanted, and D73 measured exactly that: requires_grad=0, has_grad_fn=0.
+    //
+    // Why a VJP is the right way to get M^T here: D78 measured apply() to be a FIXED LINEAR
+    // operator -- repeatable (0), call-order invariant (0), additive (2.3e-07), homogeneous
+    // (0) -- so its VJP IS its transpose, exactly and by construction, with none of the
+    // 1650 lines of block-Thomas, blends and boundary handling hand-transposed. A
+    // hand-derived transpose is where being subtly wrong is worse than not doing it at all,
+    // because a wrong transpose is self-consistent-looking (Implicit_Diff_Contract measures
+    // that failure at 82%).
+    //
+    // Only the TOP-LEVEL guard is made conditional here. The 19 guards in diagnostic blocks
+    // wrap .item() calls and must stay unconditional -- that is where the project rule
+    // actually applies. Whether the remaining compute-path guards also need it is decided
+    // by measurement (does a grad_fn appear?), not by editing all of them speculatively:
+    // this campaign has been bitten five times by sweeping a change across sibling sites
+    // without checking which ones mattered.
+    c10::optional<torch::NoGradGuard> no_grad;
+    if (!grad_enabled_for_transpose_) no_grad.emplace();
 
     torch::Tensor z = residual.clone();
 
@@ -2161,7 +2221,19 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
             // === 4×4 BATCHED SCHUR COMPLEMENT (v20) ===
             // Mirrors the batched 4D path (apply_enhanced_vertical_solve, lines 2070-2195)
             // adapted for the 1D packed layout with stagger handling.
-            torch::NoGradGuard no_grad;
+            //
+            // 9F.D82: conditional, for the same reason as the top-level guard at :1975.
+            // D81 MEASURED that the VJP of apply() returns its own input (identity_residual
+            // 8.79e-05 against a forward that moves the same vector by 1.21) -- autograd was
+            // recording nothing, because THIS guard covers the entire Schur solve, and the
+            // u/v/phi/mu blocks it writes are ~60% of the state vector.
+            //
+            // Every .item() this guard used to cover now carries its OWN local guard. The
+            // project rule is "guard each .item()"; a blanket scope was doing that job by
+            // accident, and losing it silently is a regression this campaign has already
+            // paid for twice.
+            c10::optional<torch::NoGradGuard> no_grad;
+            if (!grad_enabled_for_transpose_) no_grad.emplace();
 
             // DEBUG 2026-02-05: Track crash location (gated v20.14)
             if (apply_call_count <= 3 && current_debug_level >= 1) {
@@ -2183,15 +2255,27 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
             auto r_phi_top_saved = z.slice(0, phi_offset, phi_offset + size_phi)
                 .reshape({ny, nz_w, nx}).select(1, nz).clone();  // [ny, nx]
 
-            // Extract interior (mass-point) blocks for coupling
+            // Extract interior (mass-point) blocks for coupling.
+            //
+            // 9F.D82: .clone(), NOT .contiguous(). These are read here and z is overwritten
+            // below (:2502-2533), so under autograd they are saved-for-backward tensors that
+            // then get modified in place -- the classic "a variable needed for gradient has
+            // been modified by an inplace operation".
+            //
+            // .contiguous() does not protect against that, because it is a NO-OP whenever the
+            // view already happens to be contiguous, and then the result ALIASES z. Two of
+            // these four are exactly that case: r_v_3d slices the OUTERMOST dim, and r_mu_2d
+            // is a plain reshape of a contiguous slice. The other two survive only because
+            // nx_u > nx and nz_w > nz make their slices non-contiguous -- i.e. correctness
+            // resting on grid geometry. All four clone, so the guarantee is unconditional.
             auto r_u_3d = z.slice(0, u_offset, u_offset + size_u)
-                           .reshape({ny, nz, nx_u}).slice(2, 0, nx).contiguous();  // [ny, nz, nx]
+                           .reshape({ny, nz, nx_u}).slice(2, 0, nx).clone();  // [ny, nz, nx]
             auto r_v_3d = z.slice(0, v_offset, v_offset + size_v)
-                           .reshape({ny_v, nz, nx}).slice(0, 0, ny).contiguous();  // [ny, nz, nx]
+                           .reshape({ny_v, nz, nx}).slice(0, 0, ny).clone();  // [ny, nz, nx]
             auto r_phi_mass = z.slice(0, phi_offset, phi_offset + size_phi)
-                               .reshape({ny, nz_w, nx}).slice(1, 0, nz).contiguous();  // [ny, nz, nx]
+                               .reshape({ny, nz_w, nx}).slice(1, 0, nz).clone();  // [ny, nz, nx]
             auto r_mu_2d = z.slice(0, mu_offset, mu_offset + size_mu)
-                            .reshape({ny, nx}).contiguous();  // [ny, nx]
+                            .reshape({ny, nx}).clone();  // [ny, nx]
 
             // DEBUG 2026-02-05: Track crash location (gated v20.14)
             if (apply_call_count <= 3 && current_debug_level >= 1) {
@@ -2239,6 +2323,10 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
                     (mu_base_cached_numel != grid_info_->mu_base.numel()) ||
                     !mu_base_cpu_cached.defined();
                 if (need_rebuild) {
+                    // 9F.D82: this is a static thread_local. Building it under grad mode
+                    // would let a graph outlive the call and leak into the NEXT one; it is
+                    // coefficient-only, so it never belongs on the tape.
+                    torch::NoGradGuard no_grad_cache;
                     mu_base_cpu_cached = grid_info_->mu_base.to(torch::kCPU, torch::kFloat32).contiguous();
                     mu_base_cached_gen = coefficient_generation_;
                     mu_base_cached_ptr = grid_info_->mu_base.data_ptr();
@@ -2247,6 +2335,7 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
             }
             // v20.5 Fix 4: Guard mu_base inversion — clamp >= 1.0 Pa
             {
+                torch::NoGradGuard no_grad_clamp;   // 9F.D82: was covered by the block guard
                 auto needs_clamp = mu_base_cpu_cached < 1.0f;
                 if (needs_clamp.any().item<bool>()) {
                     static thread_local bool mu_base_clamp_warned = false;
@@ -2318,6 +2407,7 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
             // One-shot sign verification vs 4D path coefficients (debug_level >= 2)
             static thread_local bool signs_verified = false;
             if (!signs_verified && current_debug_level >= 2 && C_phi_mu_.defined()) {
+                torch::NoGradGuard no_grad_signs;   // 9F.D82: was covered by the block guard
                 float C_phi_mu_0 = C_phi_mu_.accessor<float, 1>()[0];
                 float computed = A_phi_mu_base / mu_base_cpu_cached.mean().item<float>();
                 std::cerr << "[PRECOND 4x4 SIGN CHECK] C_phi_mu_[0]=" << C_phi_mu_0
@@ -2511,6 +2601,11 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
 
             // Diagnostic: block norms (gated at debug_level >= 1)
             if (current_debug_level >= 1 && do_diag_sample) {
+                // 9F.D82: these read z, which is now GRAD-TRACKED on the transpose path --
+                // the one place in this block where the lost blanket guard would have been
+                // an actual .item()-on-a-live-graph violation rather than a formality. It
+                // also fires on the hot path at the operational debug_level=1.
+                torch::NoGradGuard no_grad_norms;
                 float u_norm = z.slice(0, u_offset, u_offset+size_u).norm().item<float>();
                 float v_norm = z.slice(0, v_offset, v_offset+size_v).norm().item<float>();
                 float phi_norm = z.slice(0, phi_offset, phi_offset+size_phi).norm().item<float>();
@@ -4376,7 +4471,18 @@ void UnifiedPreconditioner::solve_coupled_w_theta_batched(
     const float* A_eff,
     int phase2_nz_w) {
 
-    torch::NoGradGuard no_grad;
+    // 9F.D83: conditional, same pattern as the top-level guard and the 4x4 Schur block.
+    // This covers the w/theta rows -- the remaining 39.6% of the state vector after D82.
+    //
+    // The Thomas sweeps below are in-place recurrences (d_prime_w.select(1,k) is written
+    // from d_prime_w.select(1,k-1)), which is the shape that classically throws
+    // "a variable needed for gradient has been modified by an inplace operation". Whether
+    // it throws HERE is a question about which backward nodes save their input, and the
+    // ones in this loop -- sub_, and multiply/divide by float scalars -- save nothing. So
+    // it is measured rather than assumed: the probe reports THREW if it does, and the
+    // out-of-place rewrite (per-level slabs + stack) is only worth its risk if it must.
+    c10::optional<torch::NoGradGuard> no_grad;
+    if (!grad_enabled_for_transpose_) no_grad.emplace();
 
     // Ensure coefficient cache is up-to-date (reuse column solver's cache logic)
     // Call column solver once with dummy data to prime the cache if needed

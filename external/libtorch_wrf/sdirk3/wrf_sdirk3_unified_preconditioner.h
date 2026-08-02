@@ -68,6 +68,26 @@ public:
      * @return Preconditioned residual
      */
     torch::Tensor apply(const torch::Tensor& residual) override;
+
+    // 9F.D80: opt-in grad-enabled apply(), so M^T can be taken as the VJP of M.
+    // Default false: every production call keeps the NoGradGuard it has always had.
+    // Setting this is a DELIBERATE act for a transpose measurement, not a mode.
+    void set_grad_enabled_for_transpose(bool on) { grad_enabled_for_transpose_ = on; }
+    bool grad_enabled_for_transpose() const { return grad_enabled_for_transpose_; }
+
+    // 9F.D84: M^T v, as the VJP of apply(). VERIFIED at 1.54e-07 in a live em_b_wave run
+    // (D83) once the 4x4 Schur and w-theta guards stopped severing the graph.
+    //
+    // It lives here rather than at the two call sites because it owns the grad flag above:
+    // setting, restoring-on-throw and checking the flag is exactly the dance that must not
+    // be copy-pasted, and duplicating it is how one copy drifts.
+    //
+    // FAIL-CLOSED. If no graph was recorded, or the VJP comes back undefined, this THROWS
+    // rather than returning its input. Returning the input is precisely the D80 failure --
+    // a severed VJP is the identity, which is a valid linear operator, so a caller cannot
+    // tell it from a real transpose and a preconditioned solve would silently become an
+    // unpreconditioned one.
+    torch::Tensor apply_transpose_ad(const torch::Tensor& cotangent);
     
     /**
      * Update preconditioner if parameters change
@@ -214,6 +234,7 @@ private:
     float uv_vertical_fraction_cached_ = 0.01f;  // v20.14r37: track for tuning_changed
     int cached_coupling_scale_ = -1;  // v20.14 r46: detect coupling_scale change
     float cached_dw_nosboost_floor_ = 0.1f;  // v20.14 r46h: detect dw_floor change for cache invalidation
+    bool grad_enabled_for_transpose_ = false;   // 9F.D80, see setter
     int no_correction_count_ = 0;    // v20.14 r46h: count apply() calls with no W←Φ correction
     float s_phi_phi_max_dev_ = 1.0f;  // v20.14 r46: S_ΦΦ/D_Φ deviation for phi-feedback guard
                                       // Sentinel 1.0 > 0.1 threshold → phi-feedback auto-disabled

@@ -748,6 +748,15 @@ public:
                                    // mid-run could not do honestly.
                                    int stage_adjoint_mode = -1);
 
+    // 9F.D81: the opt-in adjoint driver (WRF_SDIRK3_ADJOINT_DRIVER), moved OUT of
+    // unifiedStep. It ran runAdjointReplay twice and differenced the two stage-adjoint
+    // modes; that is a diagnostic, and 100 lines of it had no business sitting inside the
+    // timestep. unifiedStep now holds only the RAII shim that fires this at scope exit.
+    // Returns TRUE only if it completed and reported a measurement. The caller's one-shot
+    // latch consumes the process's single attempt on true and RELEASES it on false (9F.D77):
+    // a run that found no checkpoints, or bailed before reporting, must remain retryable.
+    bool runAdjointDriverProbe(const torch::Tensor& U_n);
+
     // PARITY FIX 2025-12-13: Getters for accumulated moist scalar tendencies (vertical diffusion)
     // Returns tendencies accumulated from vertical diffusion (moist_tendf in WRF)
     torch::Tensor getQvTendency() const { return qv_tend_; }

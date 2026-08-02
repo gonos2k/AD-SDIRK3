@@ -296,6 +296,13 @@ add_executable(test_implicit_diff tests/test_implicit_diff.cpp)
 target_link_libraries(test_implicit_diff PRIVATE wrf_sdirk3::core)
 add_test(NAME Implicit_Diff_Contract COMMAND test_implicit_diff)
 
+# 9F.D81: is a claimed transpose actually a transpose? Includes a deliberately SEVERED
+# operator -- the D80 failure, where an autograd VJP that had recorded nothing returned its
+# own input and was read as a half-correct transpose rather than as no transpose at all.
+add_executable(test_transpose_probe tests/test_transpose_probe.cpp)
+target_link_libraries(test_transpose_probe PRIVATE wrf_sdirk3::core)
+add_test(NAME Transpose_Probe_Contract COMMAND test_transpose_probe)
+
 # 9F.D45 (review section 4): the C-boundary return contract. Links core, because the
 # point is to call the REAL exported symbol -- a helper that throws and an ABI that
 # converts throws into a status code are different claims.
