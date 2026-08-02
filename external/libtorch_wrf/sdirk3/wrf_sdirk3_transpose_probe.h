@@ -159,6 +159,19 @@ inline double rel_scalar(double a, double b) {
 
 }  // namespace detail
 
+// The bilinear identity on CALLER-SUPPLIED directions.
+//
+// 9F.D89 (review section 8): probe_transpose draws ONE global random pair, and a global dot
+// product can dilute a block-local defect -- a severed w-theta path, say, hidden under the
+// phi block's O(1e4) contribution. A caller that knows its own layout can aim the directions
+// at one block at a time; this header still does not need to know what a block is.
+inline double transpose_error_on(const LinearOp& M,
+                                 const LinearOp& M_transpose,
+                                 const torch::Tensor& v,
+                                 const torch::Tensor& w) {
+    return detail::rel_scalar(detail::dot(M(v), w), detail::dot(v, M_transpose(w)));
+}
+
 // M            -- the forward operator, as production calls it.
 // M_transpose  -- the claimed transpose. Pass an empty std::function to measure only the
 //                 forward properties.

@@ -38761,6 +38761,58 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                      .summary()
                               << std::endl << std::flush;
 
+                    // 9F.D89 (review section 8): BLOCK-LOCAL and MULTI-SEED, because the
+                    // 1.5e-07 above rests on ONE global random direction and a global dot
+                    // product can dilute a block-local defect. A severed w-theta path would
+                    // sit under the phi block's O(1e4) contribution and never show.
+                    //
+                    // The block table is duplicated arithmetic (the same six sizes appear in
+                    // four other places in this file), so it is GUARDED: if the sizes do not
+                    // sum to numel the sweep refuses rather than silently probing the wrong
+                    // ranges. That check is what makes the local copy safe.
+                    {
+                        const int64_t n = linearization_point.numel();
+                        const int64_t nx = nx_, ny = ny_, nz = nz_;
+                        const int64_t nxu = nx_u_, nyv = ny_v_, nzw = nz_w_;
+                        const std::pair<const char*, int64_t> blk[6] = {
+                            {"ru", ny * nz * nxu}, {"rv", nyv * nz * nx},
+                            {"rw", ny * nzw * nx}, {"ph", ny * nzw * nx},
+                            {"t",  ny * nz * nx},  {"mu", ny * nx}};
+                        int64_t sum = 0;
+                        for (const auto& b : blk) sum += b.second;
+                        if (sum != n) {
+                            std::cerr << "SDIRK3_TRANSPOSE_BLOCKWISE SKIPPED: block sizes "
+                                      << sum << " != state " << n
+                                      << " -- refusing to probe the wrong ranges"
+                                      << std::endl << std::flush;
+                        } else {
+                            auto opts_b = linearization_point.options();
+                            for (uint64_t seed : {20260901u, 20260902u}) {
+                                auto g = at::detail::createCPUGenerator(seed);
+                                auto w_g = torch::randn(n, g,
+                                              torch::TensorOptions().dtype(opts_b.dtype()))
+                                              .to(opts_b.device());
+                                int64_t off = 0;
+                                for (const auto& b : blk) {
+                                    auto v_b = torch::zeros(n, opts_b);
+                                    auto piece = torch::randn(b.second, g,
+                                                    torch::TensorOptions().dtype(opts_b.dtype()))
+                                                    .to(opts_b.device());
+                                    v_b.slice(0, off, off + b.second).copy_(piece);
+                                    const double e = tp::transpose_error_on(
+                                        M, M_transpose, v_b, w_g);
+                                    std::cerr << "SDIRK3_TRANSPOSE_BLOCKWISE seed=" << seed
+                                              << " block=" << b.first
+                                              << " n=" << b.second
+                                              << " transpose_error=" << e
+                                              << (e < 1e-5 ? "  OK" : "  WRONG")
+                                              << std::endl << std::flush;
+                                    off += b.second;
+                                }
+                            }
+                        }
+                    }
+
                     // 9F.D85: the same instrument, pointed at the OPERATOR instead of the
                     // preconditioner.
                     //
