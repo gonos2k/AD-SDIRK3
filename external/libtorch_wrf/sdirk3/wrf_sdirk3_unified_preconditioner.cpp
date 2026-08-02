@@ -4434,7 +4434,18 @@ void UnifiedPreconditioner::solve_coupled_w_theta_batched(
     const float* A_eff,
     int phase2_nz_w) {
 
-    torch::NoGradGuard no_grad;
+    // 9F.D83: conditional, same pattern as the top-level guard and the 4x4 Schur block.
+    // This covers the w/theta rows -- the remaining 39.6% of the state vector after D82.
+    //
+    // The Thomas sweeps below are in-place recurrences (d_prime_w.select(1,k) is written
+    // from d_prime_w.select(1,k-1)), which is the shape that classically throws
+    // "a variable needed for gradient has been modified by an inplace operation". Whether
+    // it throws HERE is a question about which backward nodes save their input, and the
+    // ones in this loop -- sub_, and multiply/divide by float scalars -- save nothing. So
+    // it is measured rather than assumed: the probe reports THREW if it does, and the
+    // out-of-place rewrite (per-level slabs + stack) is only worth its risk if it must.
+    c10::optional<torch::NoGradGuard> no_grad;
+    if (!grad_enabled_for_transpose_) no_grad.emplace();
 
     // Ensure coefficient cache is up-to-date (reuse column solver's cache logic)
     // Call column solver once with dummy data to prime the cache if needed
