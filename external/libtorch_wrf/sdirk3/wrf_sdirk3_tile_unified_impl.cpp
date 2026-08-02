@@ -39188,6 +39188,19 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                             }
                             try {
                                 torch::AutoGradMode on(true);
+                                // 9F.D80: ask the preconditioner for a graph. Default off,
+                                // restored unconditionally so a throw cannot leave the
+                                // production path grad-enabled.
+                                struct ScopedGradFlag {
+                                    wrf::sdirk3::UnifiedPreconditioner* M;
+                                    bool saved;
+                                    ~ScopedGradFlag() noexcept {
+                                        if (M) M->set_grad_enabled_for_transpose(saved);
+                                    }
+                                } gf{unified_precond_.get(),
+                                     unified_precond_->grad_enabled_for_transpose()};
+                                unified_precond_->set_grad_enabled_for_transpose(true);
+
                                 auto vg = v.detach().clone().set_requires_grad(true);
                                 auto Mvg = unified_precond_->apply(vg);
                                 std::cerr << "SDIRK3_PRECOND_AD requires_grad="
@@ -39223,15 +39236,54 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                 }
             }
 
-            lambda = wrf::sdirk3::solve_transpose_linear_system_gmres(
-                fast_operator,
-                linearization_point,
-                lambda,
-                alpha,
-                preconditioner,
-                std::max(1, gmres_restart),
-                std::max(1, gmres_max_iterations),
-                std::max(1e-8f, gmres_tolerance));
+            // 9F.D79 (review section 8): use the EXISTING M^{-1} as a general right
+            // preconditioner for the A^T solve, before building any M^{-T}.
+            //
+            // The review's numerical-linear-algebra point: an EQUATION-LEVEL A^T solve does
+            // not need the algorithmic transpose of the forward preconditioner. Any adequate
+            // operator will do, because
+            //     A^T M^{-1} y = b,   lambda = M^{-1} y
+            // and convergence is judged on the TRUE residual |b - A^T lambda| / |b|. An
+            // exact M^{-T} is required only for an algorithmic transpose pairing, which is
+            // not what this path is.
+            //
+            // D78 is what makes "frozen" a defensible word here rather than a hope: apply()
+            // was measured to be repeatable (0), call-order invariant (0), additive
+            // (2.3e-07) and homogeneous (0), so it IS a fixed linear operator despite its
+            // stateful-looking internals. Passing it into a Krylov solve is therefore sound.
+            //
+            // Opt-in, so the identity-preconditioned baseline stays reproducible: the
+            // comparison is the measurement, and overwriting the baseline would destroy it.
+            struct FrozenMTransposePreconditioner {
+                wrf::sdirk3::UnifiedPreconditioner* M = nullptr;
+                void set_alpha(double) {}
+                torch::Tensor apply_transpose(const torch::Tensor& r) const {
+                    return M ? M->apply(r) : r;
+                }
+            };
+
+            if (probe_env_enabled("WRF_SDIRK3_ADJOINT_FROZEN_M") && unified_precond_) {
+                FrozenMTransposePreconditioner frozen_m{unified_precond_.get()};
+                lambda = wrf::sdirk3::solve_transpose_linear_system_gmres(
+                    fast_operator,
+                    linearization_point,
+                    lambda,
+                    alpha,
+                    frozen_m,
+                    std::max(1, gmres_restart),
+                    std::max(1, gmres_max_iterations),
+                    std::max(1e-8f, gmres_tolerance));
+            } else {
+                lambda = wrf::sdirk3::solve_transpose_linear_system_gmres(
+                    fast_operator,
+                    linearization_point,
+                    lambda,
+                    alpha,
+                    preconditioner,
+                    std::max(1, gmres_restart),
+                    std::max(1, gmres_max_iterations),
+                    std::max(1e-8f, gmres_tolerance));
+            }
 
             // 9F.D64 (review P0-C): the EQUATION-LEVEL stage adjoint, opt-in.
             //

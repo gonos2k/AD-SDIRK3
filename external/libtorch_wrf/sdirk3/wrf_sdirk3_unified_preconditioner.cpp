@@ -1949,8 +1949,31 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
     // Apply ENHANCED unified preconditioner M^{-1} to residual
     // Strategy: Approximate (I - dt*gamma*J_unified)^{-1} with acoustic-gravity coupling
 
-    // CRITICAL: Disable autograd to prevent graph pollution during preconditioning
-    torch::NoGradGuard no_grad;
+    // CRITICAL: Disable autograd to prevent graph pollution during preconditioning.
+    //
+    // 9F.D80: conditional, so M^T can be obtained by AD instead of hand-derived.
+    //
+    // The default is unchanged and this guard is still active on every production call --
+    // the preconditioner has no business building a graph during a Newton solve, and that
+    // is why the guard exists. But it also means apply() cannot produce a VJP even when one
+    // is wanted, and D73 measured exactly that: requires_grad=0, has_grad_fn=0.
+    //
+    // Why a VJP is the right way to get M^T here: D78 measured apply() to be a FIXED LINEAR
+    // operator -- repeatable (0), call-order invariant (0), additive (2.3e-07), homogeneous
+    // (0) -- so its VJP IS its transpose, exactly and by construction, with none of the
+    // 1650 lines of block-Thomas, blends and boundary handling hand-transposed. A
+    // hand-derived transpose is where being subtly wrong is worse than not doing it at all,
+    // because a wrong transpose is self-consistent-looking (Implicit_Diff_Contract measures
+    // that failure at 82%).
+    //
+    // Only the TOP-LEVEL guard is made conditional here. The 19 guards in diagnostic blocks
+    // wrap .item() calls and must stay unconditional -- that is where the project rule
+    // actually applies. Whether the remaining compute-path guards also need it is decided
+    // by measurement (does a grad_fn appear?), not by editing all of them speculatively:
+    // this campaign has been bitten five times by sweeping a change across sibling sites
+    // without checking which ones mattered.
+    c10::optional<torch::NoGradGuard> no_grad;
+    if (!grad_enabled_for_transpose_) no_grad.emplace();
 
     torch::Tensor z = residual.clone();
 
