@@ -38712,33 +38712,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
 
                     auto M = [&](const torch::Tensor& x) { return unified_precond_->apply(x); };
 
-                    // The CLAIMED transpose: autograd's VJP of the same operator. It is
-                    // evaluated at the cotangent itself, which is legitimate only because M
-                    // is linear -- and the report measures that separately, so a nonlinear M
-                    // makes summary() refuse to call this a transpose at all.
-                    auto M_transpose = [&](const torch::Tensor& cot) -> torch::Tensor {
-                        torch::AutoGradMode on(true);
-                        struct ScopedGradFlag {
-                            wrf::sdirk3::UnifiedPreconditioner* M;
-                            bool saved;
-                            ~ScopedGradFlag() noexcept {
-                                if (M) M->set_grad_enabled_for_transpose(saved);
-                            }
-                        } gf{unified_precond_.get(),
-                             unified_precond_->grad_enabled_for_transpose()};
-                        unified_precond_->set_grad_enabled_for_transpose(true);
-
-                        auto xg = cot.detach().clone().set_requires_grad(true);
-                        auto Mx = unified_precond_->apply(xg);
-                        if (!Mx.requires_grad() || !Mx.grad_fn()) {
-                            throw std::runtime_error("apply() recorded no graph");
-                        }
-                        auto g = torch::autograd::grad({Mx}, {xg}, {cot.detach()},
-                                                       false, false, true);
-                        if (g.empty() || !g[0].defined()) {
-                            throw std::runtime_error("VJP returned an undefined gradient");
-                        }
-                        return g[0];
+                    // The CLAIMED transpose: the SAME apply_transpose_ad the A^T solve is
+                    // wired to (9F.D84). Measuring one implementation and shipping another
+                    // would make this contract decorative.
+                    auto M_transpose = [&](const torch::Tensor& cot) {
+                        return unified_precond_->apply_transpose_ad(cot);
                     };
 
                     std::cerr << tp::probe_transpose(M, M_transpose,
@@ -38776,27 +38754,45 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                 }
             };
 
-            if (probe_env_enabled("WRF_SDIRK3_ADJOINT_FROZEN_M") && unified_precond_) {
+            // 9F.D84: the REAL M^{-T}, as the VJP of apply(). D83 verified it at 1.54e-07
+            // in a live run once the 4x4 Schur and w-theta guards stopped severing the
+            // graph -- so for the first time this solve can be given the transpose of the
+            // operator it is actually preconditioned by, rather than M itself (D79,
+            // measured not to help) or the identity (the standing baseline).
+            //
+            // Costs one forward apply() plus a backward per matvec. That is the price of
+            // not hand-deriving and maintaining a second operator, and it is measured
+            // before it is optimised.
+            struct AdTransposePreconditioner {
+                wrf::sdirk3::UnifiedPreconditioner* M = nullptr;
+                void set_alpha(double) {}
+                torch::Tensor apply_transpose(const torch::Tensor& r) const {
+                    return M->apply_transpose_ad(r);   // throws rather than returning r
+                }
+            };
+
+            // One call site, three preconditioners. Triplicating the solve is how the
+            // arguments to one copy drift from the others.
+            auto run_transpose_solve = [&](auto& precond) {
+                return wrf::sdirk3::solve_transpose_linear_system_gmres(
+                    fast_operator,
+                    linearization_point,
+                    lambda,
+                    alpha,
+                    precond,
+                    std::max(1, gmres_restart),
+                    std::max(1, gmres_max_iterations),
+                    std::max(1e-8f, gmres_tolerance));
+            };
+
+            if (probe_env_enabled("WRF_SDIRK3_ADJOINT_AD_MT") && unified_precond_) {
+                AdTransposePreconditioner ad_mt{unified_precond_.get()};
+                lambda = run_transpose_solve(ad_mt);
+            } else if (probe_env_enabled("WRF_SDIRK3_ADJOINT_FROZEN_M") && unified_precond_) {
                 FrozenMTransposePreconditioner frozen_m{unified_precond_.get()};
-                lambda = wrf::sdirk3::solve_transpose_linear_system_gmres(
-                    fast_operator,
-                    linearization_point,
-                    lambda,
-                    alpha,
-                    frozen_m,
-                    std::max(1, gmres_restart),
-                    std::max(1, gmres_max_iterations),
-                    std::max(1e-8f, gmres_tolerance));
+                lambda = run_transpose_solve(frozen_m);
             } else {
-                lambda = wrf::sdirk3::solve_transpose_linear_system_gmres(
-                    fast_operator,
-                    linearization_point,
-                    lambda,
-                    alpha,
-                    preconditioner,
-                    std::max(1, gmres_restart),
-                    std::max(1, gmres_max_iterations),
-                    std::max(1e-8f, gmres_tolerance));
+                lambda = run_transpose_solve(preconditioner);
             }
 
             // 9F.D64 (review P0-C): the EQUATION-LEVEL stage adjoint, opt-in.

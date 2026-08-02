@@ -1932,6 +1932,43 @@ void UnifiedPreconditioner::initialize_horizontal_smoother() {
     horizontal_smooth_factor_ = h_smooth / (dx * dx + dy * dy);
 }
 
+// 9F.D84: M^T v as the VJP of apply(). See the header for why it lives here and why it
+// fails closed.
+torch::Tensor UnifiedPreconditioner::apply_transpose_ad(const torch::Tensor& cotangent) {
+    torch::AutoGradMode grad_on(true);
+
+    // Restored on every exit INCLUDING a throw, so a failed transpose cannot leave the
+    // production forward path grad-enabled.
+    struct ScopedGradFlag {
+        UnifiedPreconditioner* self;
+        bool saved;
+        ~ScopedGradFlag() noexcept { self->set_grad_enabled_for_transpose(saved); }
+    } restore{this, grad_enabled_for_transpose_};
+    set_grad_enabled_for_transpose(true);
+
+    // apply() is a fixed LINEAR operator (measured in D78: repeatability 0, call-order 0,
+    // additivity 2.3e-07, homogeneity 0), so the VJP does not depend on where it is
+    // evaluated and the cotangent itself is a valid linearization point.
+    auto x = cotangent.detach().clone().set_requires_grad(true);
+    auto Mx = apply(x);
+    if (!Mx.requires_grad() || !Mx.grad_fn()) {
+        throw std::runtime_error(
+            "SDIRK3 apply_transpose_ad: apply() recorded no graph, so there is no transpose "
+            "to return. Refusing to fall back to the identity -- that is indistinguishable "
+            "from a correct transpose at the call site and silently unpreconditions the "
+            "solve.");
+    }
+    auto grads = torch::autograd::grad({Mx}, {x}, {cotangent.detach()},
+                                       /*retain_graph=*/false,
+                                       /*create_graph=*/false,
+                                       /*allow_unused=*/true);
+    if (grads.empty() || !grads[0].defined()) {
+        throw std::runtime_error(
+            "SDIRK3 apply_transpose_ad: the VJP returned an undefined gradient.");
+    }
+    return grads[0];
+}
+
 torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
     PROFILE_SCOPE("preconditioner_apply");
 
