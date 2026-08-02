@@ -63,7 +63,14 @@ struct TransposeReport {
     double symmetry = 0;        // |<Mv,w> - <v,Mw>| / max(|.|). 0 => M^T = M, reuse it.
     double linearity = 0;       // max|M(2v) - 2M(v)| / max|M(v)|. Nonzero => no transpose.
     double repeatability = 0;   // max|M(v) - M(v)| on a second call. Nonzero => stateful.
-    double additivity = 0;      // max|M(v+w) - M(v) - M(w)| / max|M(v)|.
+    double additivity = 0;      // max|M(v+w) - M(v) - M(w)| / max|M(v)|
+
+    // ||Mv|| / ||v|| on a random unit-ish direction. A LOWER bound on ||M||, and the number
+    // that turns a solver's ||x|| into a statement about conditioning: if a solve returns
+    // ||x|| >> ||b|| while ||b - Mx|| ~ ||b||, then sigma_min(M) <= (||b||+||r||)/||x||, and
+    // gain/that ratio is a lower bound on the condition number. Measured here so the
+    // argument does not depend on a sigma_max carried over from another session.
+    double forward_gain = 0;
 
     // --- the CLAIMED transpose.
     bool   transpose_supplied = false;
@@ -124,6 +131,11 @@ inline double dot(const torch::Tensor& a, const torch::Tensor& b) {
     return (a * b).sum().template item<double>();
 }
 
+inline double norm_of(const torch::Tensor& t) {
+    torch::NoGradGuard no_grad;
+    return t.norm().template item<double>();
+}
+
 inline double rel_scalar(double a, double b) {
     const double den = std::max(std::abs(a), std::abs(b));
     return den > 0 ? std::abs(a - b) / den : 0.0;
@@ -171,6 +183,7 @@ inline TransposeReport probe_transpose(const LinearOp& M,
     const auto Mv = M(v);
     const auto Mw = M(w);
 
+    r.forward_gain = detail::norm_of(Mv) / std::max(detail::norm_of(v), 1e-300);
     r.symmetry = detail::rel_scalar(detail::dot(Mv, w), detail::dot(v, Mw));
     r.repeatability = detail::rel_max(M(v) - Mv, Mv);
     r.linearity = detail::rel_max(M(2.0 * v) - 2.0 * Mv, Mv);
@@ -206,7 +219,8 @@ inline std::string TransposeReport::summary(const std::string& what) const {
       << " symmetry=" << symmetry
       << " linearity=" << linearity
       << " repeatability=" << repeatability
-      << " additivity=" << additivity;
+      << " additivity=" << additivity
+      << " gain=" << forward_gain;
 
     if (symmetry == 0.0) {
         o << "  M IS SELF-ADJOINT: reuse M^-1 as M^-T";
