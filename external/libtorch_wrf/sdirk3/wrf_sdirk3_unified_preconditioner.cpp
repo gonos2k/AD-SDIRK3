@@ -2184,7 +2184,19 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
             // === 4×4 BATCHED SCHUR COMPLEMENT (v20) ===
             // Mirrors the batched 4D path (apply_enhanced_vertical_solve, lines 2070-2195)
             // adapted for the 1D packed layout with stagger handling.
-            torch::NoGradGuard no_grad;
+            //
+            // 9F.D82: conditional, for the same reason as the top-level guard at :1975.
+            // D81 MEASURED that the VJP of apply() returns its own input (identity_residual
+            // 8.79e-05 against a forward that moves the same vector by 1.21) -- autograd was
+            // recording nothing, because THIS guard covers the entire Schur solve, and the
+            // u/v/phi/mu blocks it writes are ~60% of the state vector.
+            //
+            // Every .item() this guard used to cover now carries its OWN local guard. The
+            // project rule is "guard each .item()"; a blanket scope was doing that job by
+            // accident, and losing it silently is a regression this campaign has already
+            // paid for twice.
+            c10::optional<torch::NoGradGuard> no_grad;
+            if (!grad_enabled_for_transpose_) no_grad.emplace();
 
             // DEBUG 2026-02-05: Track crash location (gated v20.14)
             if (apply_call_count <= 3 && current_debug_level >= 1) {
@@ -2206,15 +2218,27 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
             auto r_phi_top_saved = z.slice(0, phi_offset, phi_offset + size_phi)
                 .reshape({ny, nz_w, nx}).select(1, nz).clone();  // [ny, nx]
 
-            // Extract interior (mass-point) blocks for coupling
+            // Extract interior (mass-point) blocks for coupling.
+            //
+            // 9F.D82: .clone(), NOT .contiguous(). These are read here and z is overwritten
+            // below (:2502-2533), so under autograd they are saved-for-backward tensors that
+            // then get modified in place -- the classic "a variable needed for gradient has
+            // been modified by an inplace operation".
+            //
+            // .contiguous() does not protect against that, because it is a NO-OP whenever the
+            // view already happens to be contiguous, and then the result ALIASES z. Two of
+            // these four are exactly that case: r_v_3d slices the OUTERMOST dim, and r_mu_2d
+            // is a plain reshape of a contiguous slice. The other two survive only because
+            // nx_u > nx and nz_w > nz make their slices non-contiguous -- i.e. correctness
+            // resting on grid geometry. All four clone, so the guarantee is unconditional.
             auto r_u_3d = z.slice(0, u_offset, u_offset + size_u)
-                           .reshape({ny, nz, nx_u}).slice(2, 0, nx).contiguous();  // [ny, nz, nx]
+                           .reshape({ny, nz, nx_u}).slice(2, 0, nx).clone();  // [ny, nz, nx]
             auto r_v_3d = z.slice(0, v_offset, v_offset + size_v)
-                           .reshape({ny_v, nz, nx}).slice(0, 0, ny).contiguous();  // [ny, nz, nx]
+                           .reshape({ny_v, nz, nx}).slice(0, 0, ny).clone();  // [ny, nz, nx]
             auto r_phi_mass = z.slice(0, phi_offset, phi_offset + size_phi)
-                               .reshape({ny, nz_w, nx}).slice(1, 0, nz).contiguous();  // [ny, nz, nx]
+                               .reshape({ny, nz_w, nx}).slice(1, 0, nz).clone();  // [ny, nz, nx]
             auto r_mu_2d = z.slice(0, mu_offset, mu_offset + size_mu)
-                            .reshape({ny, nx}).contiguous();  // [ny, nx]
+                            .reshape({ny, nx}).clone();  // [ny, nx]
 
             // DEBUG 2026-02-05: Track crash location (gated v20.14)
             if (apply_call_count <= 3 && current_debug_level >= 1) {
@@ -2262,6 +2286,10 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
                     (mu_base_cached_numel != grid_info_->mu_base.numel()) ||
                     !mu_base_cpu_cached.defined();
                 if (need_rebuild) {
+                    // 9F.D82: this is a static thread_local. Building it under grad mode
+                    // would let a graph outlive the call and leak into the NEXT one; it is
+                    // coefficient-only, so it never belongs on the tape.
+                    torch::NoGradGuard no_grad_cache;
                     mu_base_cpu_cached = grid_info_->mu_base.to(torch::kCPU, torch::kFloat32).contiguous();
                     mu_base_cached_gen = coefficient_generation_;
                     mu_base_cached_ptr = grid_info_->mu_base.data_ptr();
@@ -2270,6 +2298,7 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
             }
             // v20.5 Fix 4: Guard mu_base inversion — clamp >= 1.0 Pa
             {
+                torch::NoGradGuard no_grad_clamp;   // 9F.D82: was covered by the block guard
                 auto needs_clamp = mu_base_cpu_cached < 1.0f;
                 if (needs_clamp.any().item<bool>()) {
                     static thread_local bool mu_base_clamp_warned = false;
@@ -2341,6 +2370,7 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
             // One-shot sign verification vs 4D path coefficients (debug_level >= 2)
             static thread_local bool signs_verified = false;
             if (!signs_verified && current_debug_level >= 2 && C_phi_mu_.defined()) {
+                torch::NoGradGuard no_grad_signs;   // 9F.D82: was covered by the block guard
                 float C_phi_mu_0 = C_phi_mu_.accessor<float, 1>()[0];
                 float computed = A_phi_mu_base / mu_base_cpu_cached.mean().item<float>();
                 std::cerr << "[PRECOND 4x4 SIGN CHECK] C_phi_mu_[0]=" << C_phi_mu_0
@@ -2534,6 +2564,11 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
 
             // Diagnostic: block norms (gated at debug_level >= 1)
             if (current_debug_level >= 1 && do_diag_sample) {
+                // 9F.D82: these read z, which is now GRAD-TRACKED on the transpose path --
+                // the one place in this block where the lost blanket guard would have been
+                // an actual .item()-on-a-live-graph violation rather than a formality. It
+                // also fires on the hot path at the operational debug_level=1.
+                torch::NoGradGuard no_grad_norms;
                 float u_norm = z.slice(0, u_offset, u_offset+size_u).norm().item<float>();
                 float v_norm = z.slice(0, v_offset, v_offset+size_v).norm().item<float>();
                 float phi_norm = z.slice(0, phi_offset, phi_offset+size_phi).norm().item<float>();
