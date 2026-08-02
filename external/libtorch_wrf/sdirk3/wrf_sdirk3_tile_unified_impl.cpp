@@ -39188,6 +39188,19 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                             }
                             try {
                                 torch::AutoGradMode on(true);
+                                // 9F.D80: ask the preconditioner for a graph. Default off,
+                                // restored unconditionally so a throw cannot leave the
+                                // production path grad-enabled.
+                                struct ScopedGradFlag {
+                                    wrf::sdirk3::UnifiedPreconditioner* M;
+                                    bool saved;
+                                    ~ScopedGradFlag() noexcept {
+                                        if (M) M->set_grad_enabled_for_transpose(saved);
+                                    }
+                                } gf{unified_precond_.get(),
+                                     unified_precond_->grad_enabled_for_transpose()};
+                                unified_precond_->set_grad_enabled_for_transpose(true);
+
                                 auto vg = v.detach().clone().set_requires_grad(true);
                                 auto Mvg = unified_precond_->apply(vg);
                                 std::cerr << "SDIRK3_PRECOND_AD requires_grad="

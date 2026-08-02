@@ -68,6 +68,12 @@ public:
      * @return Preconditioned residual
      */
     torch::Tensor apply(const torch::Tensor& residual) override;
+
+    // 9F.D80: opt-in grad-enabled apply(), so M^T can be taken as the VJP of M.
+    // Default false: every production call keeps the NoGradGuard it has always had.
+    // Setting this is a DELIBERATE act for a transpose measurement, not a mode.
+    void set_grad_enabled_for_transpose(bool on) { grad_enabled_for_transpose_ = on; }
+    bool grad_enabled_for_transpose() const { return grad_enabled_for_transpose_; }
     
     /**
      * Update preconditioner if parameters change
@@ -214,6 +220,7 @@ private:
     float uv_vertical_fraction_cached_ = 0.01f;  // v20.14r37: track for tuning_changed
     int cached_coupling_scale_ = -1;  // v20.14 r46: detect coupling_scale change
     float cached_dw_nosboost_floor_ = 0.1f;  // v20.14 r46h: detect dw_floor change for cache invalidation
+    bool grad_enabled_for_transpose_ = false;   // 9F.D80, see setter
     int no_correction_count_ = 0;    // v20.14 r46h: count apply() calls with no W←Φ correction
     float s_phi_phi_max_dev_ = 1.0f;  // v20.14 r46: S_ΦΦ/D_Φ deviation for phi-feedback guard
                                       // Sentinel 1.0 > 0.1 threshold → phi-feedback auto-disabled
