@@ -5152,8 +5152,32 @@ void UnifiedPreconditioner::set_stage_state(const torch::Tensor& mu_pert, int st
     float mu_pert_norm = mu_pert_matched.norm().item<float>();
     float mu_change_ratio = mu_pert_norm / std::max(mu_base_norm, 1.0f);
 
+    // 9F.D108 (review section 5): trigger on the CHANGE SINCE THE LAST BIND, not on the
+    // absolute size of mu'.
+    //
+    // The old criterion asked "is ||mu'|| > 5% of ||mu_base||?", which is a question about
+    // one state, not about whether the coefficients are stale. The review's counterexample:
+    //   mu'_A = +0.04*mu_b, mu'_B = -0.04*mu_b
+    // Each is under 5%, so no rebuild fires -- while the change BETWEEN the two checkpoints
+    // is 0.08*mu_b. In a reverse replay that is exactly the sequence being walked, so the
+    // coefficients can be stale for the state they are being applied to.
+    //
+    // Both are now checked: the absolute test is kept (a large perturbation still warrants a
+    // rebuild on its own) and the delta test is added.
+    float mu_delta_ratio = 0.0f;
+    if (mu_pert_last_bound_.defined() &&
+        mu_pert_last_bound_.sizes() == mu_pert_matched.sizes()) {
+        torch::NoGradGuard no_grad;
+        mu_delta_ratio = (mu_pert_matched - mu_pert_last_bound_).norm().item<float>() /
+                         std::max(mu_base_norm, 1.0f);
+    } else {
+        mu_delta_ratio = mu_change_ratio;   // first bind: no previous state to differ from
+    }
+    mu_pert_last_bound_ = mu_pert_matched.detach().clone();
+
     bool stage_changed = (stage != current_stage_);
-    bool mu_changed_significantly = (mu_change_ratio > 0.05f);  // 5% threshold
+    bool mu_changed_significantly =
+        (mu_change_ratio > 0.05f) || (mu_delta_ratio > 0.05f);
 
     // Always update mu_full_stage_ so inv_mu0 stays current,
     // even for small changes that don't warrant full recomputation.

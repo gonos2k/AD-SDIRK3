@@ -262,6 +262,10 @@ private:
     // 9F.D102: increments on every set_stage_state, so a receipt can prove THIS bind
     // happened. coefficient_generation cannot: a small state change updates
     // mu_full_stage_ without triggering a coefficient rebuild.
+    // 9F.D108 (review section 5): the previously bound mu_pert, so the recompute trigger can
+    // ask "how much did this CHANGE?" rather than "how big is it?". Two checkpoints can each
+    // be under the absolute threshold while differing by twice it.
+    torch::Tensor mu_pert_last_bound_;
     uint64_t stage_state_generation_ = 0;
     mutable float condition_estimate_ = 1.0f;
 
