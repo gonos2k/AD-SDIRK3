@@ -64,6 +64,11 @@ struct ShrinkingPreconditioner {
     }
 };
 
+struct IdentityPreconditioner {
+    void set_alpha(double) {}
+    torch::Tensor apply_transpose(const torch::Tensor& r) const { return r.clone(); }
+};
+
 // Parses both residuals out of the refusal message. The refusal is the observable, so the
 // numbers that justify it have to travel with it.
 struct Refusal { bool threw = false; double rel_true = -1, rel_precond = -1; };
@@ -291,7 +296,48 @@ int main() {
               "no blocks measured -> Fatal (silence is not convergence)");
     }
 
-    constexpr int expected_checks = 34;
+    // ========= 9F.D101 (review P0-A): THE POSITIVE SOLVE CONTROL, at last =================
+    //
+    // A^T = I - alpha*J^T with J = I and alpha = 0.5 is exactly 0.5*I. From x0 = 0:
+    //   v1 = b/|b| ;  w = A^T v1 = 0.5 v1 ;  h11 = 0.5 ;  w - h11 v1 = 0  ->  h21 = 0
+    // That is a HAPPY BREAKDOWN at j = 1, and the 1-D Krylov space already contains the exact
+    // solution: y = |b|/0.5, x = 2b, residual 0.
+    //
+    // It used to return |x| = 0. I attributed that to solve_gmres assuming WRF-shaped state
+    // and wrote "an 8-element toy never converges under ANY preconditioner" into this file as
+    // if it were a harness limitation. IT WAS NOT. It was a defect: the breakdown path broke
+    // out before the Givens reduction and then a `j <= 2` branch returned the initial guess.
+    // The review caught the rationalisation by doing the arithmetic.
+    //
+    // This is the positive control whose absence I flagged twice as unavoidable.
+    {
+        IdentityPreconditioner ident;
+        auto lin = torch::zeros({N}, opts());
+        auto rhs = torch::ones({N}, opts());
+        bool threw = false;
+        torch::Tensor x;
+        try {
+            x = wrf::sdirk3::solve_transpose_linear_system_gmres(
+                fast_operator, lin, rhs, /*alpha=*/0.5, ident,
+                /*gmres_restart=*/10, /*gmres_max_iterations=*/10,
+                /*gmres_tolerance=*/1e-5f);
+        } catch (const std::exception&) { threw = true; }
+
+        check(!threw, "0.5I: the solve SUCCEEDS (happy breakdown is convergence)");
+        if (!threw && x.defined()) {
+            const double err =
+                (x - 2.0 * rhs).norm().item<double>() / (2.0 * rhs).norm().item<double>();
+            check(err < 1e-5, "0.5I: recovers x = 2b exactly (rel err " + sci(err) + ")");
+            const double res =
+                (rhs - 0.5 * x).norm().item<double>() / rhs.norm().item<double>();
+            check(res < 1e-5, "0.5I: physical residual ~ 0 (" + sci(res) + ")");
+        } else {
+            check(false, "0.5I: recovers x = 2b");
+            check(false, "0.5I: physical residual ~ 0");
+        }
+    }
+
+    constexpr int expected_checks = 37;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

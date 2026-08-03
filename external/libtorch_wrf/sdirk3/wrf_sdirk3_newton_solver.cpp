@@ -1560,6 +1560,30 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 std::cerr << "[GMRES TIMING] Breakdown check j=" << j << ": " << breakdown_check_ms << " ms" << std::endl;
             }
 
+            // 9F.D101 (review P0-A): the Givens reduction for the CURRENT column, shared by
+            // the breakdown path and the normal path so the two cannot drift apart.
+            auto reduce_current_column = [&]() {
+                for (int i = 0; i < j; ++i) {
+                    auto h_i_j = H[i][j].clone();
+                    auto h_ip1_j = H[i + 1][j].clone();
+                    H[i][j] = cs[i] * h_i_j + sn[i] * h_ip1_j;
+                    H[i + 1][j] = -sn[i] * h_i_j + cs[i] * h_ip1_j;
+                }
+                auto h_j_t = H[j][j];
+                auto h_jp1_t = H[j + 1][j];
+                auto r_g = torch::sqrt(h_j_t * h_j_t + h_jp1_t * h_jp1_t);
+                auto r_g_safe = torch::where(r_g > 1e-8f, r_g, eps_safe);
+                auto safe_mask = (r_g > 1e-8f);
+                cs[j] = torch::where(safe_mask, h_j_t / r_g_safe, one_tensor);
+                sn[j] = torch::where(safe_mask, h_jp1_t / r_g_safe, zero_tensor);
+                H[j][j] = r_g;
+                H[j + 1][j] = 0.0f;
+                auto s_j = s[j].clone();
+                auto s_jp1 = s[j + 1].clone();
+                s[j] = cs[j] * s_j + sn[j] * s_jp1;
+                s[j + 1] = -sn[j] * s_j + cs[j] * s_jp1;
+            };
+
             if (is_breakdown) {
                 breakdown_occurred = true;  // Track for numerical stability handling
                 if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
@@ -1575,43 +1599,26 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                     std::cerr << "[ARNOLDI] Breakdown at j=" << j
                               << " — extracting best available solution" << std::endl;
                 }
+                // 9F.D101 (review P0-A): COMPLETE THE REDUCTION, then leave.
+                //
+                // The old code broke out BEFORE the Givens block, so this column was never
+                // rotated and the back-substitution below then operated on an H that was not
+                // upper-triangular. And h_{j+1,j} = 0 is precisely the case where the Krylov
+                // space ALREADY CONTAINS the solution -- with a zero subdiagonal the new
+                // rotation is the identity, so reducing here is correct and costs nothing.
+                //
+                // What must NOT run is V.push_back(w / H[j+1][j]) below: that divides by ~0.
+                // Skipping the BASIS VECTOR is the right response to breakdown; skipping the
+                // CORRECTION was the defect.
+                reduce_current_column();
                 j++;
-                break;  // Exit Arnoldi loop with current best solution (NOT marked converged)
+                break;  // no new basis vector, but the projected system is now solvable
             }
             
             V.push_back(w / H[j + 1][j]);
             
-            // AUTOGRAD FIX: Apply Givens rotations using tensor operations
-            for (int i = 0; i < j; ++i) {
-                auto h_i_j = H[i][j].clone();
-                auto h_ip1_j = H[i + 1][j].clone();
-                H[i][j] = cs[i] * h_i_j + sn[i] * h_ip1_j;
-                H[i + 1][j] = -sn[i] * h_i_j + cs[i] * h_ip1_j;
-            }
-            
-            // Compute new Givens rotation using tensor operations
-            auto h_j_tensor = H[j][j];
-            auto h_jp1_tensor = H[j + 1][j];
-            auto r_givens_tensor = torch::sqrt(h_j_tensor * h_j_tensor + h_jp1_tensor * h_jp1_tensor);
-            // AUTOGRAD FIX: Keep r_givens as tensor to preserve gradient flow
-            // DEVICE-AWARE: Use pre-created eps_safe constant on correct device
-            auto r_givens_safe = torch::where(r_givens_tensor > 1e-8f, r_givens_tensor, eps_safe);
-
-            // PERFORMANCE FIX: Keep cs/sn as tensors to avoid .item() syncs (was causing 12 syncs per iteration!)
-            // DEVICE-AWARE: Use pre-created constants on correct device (no CPU-GPU sync)
-            auto safe_mask = (r_givens_tensor > 1e-8f);
-            cs[j] = torch::where(safe_mask, h_j_tensor / r_givens_safe, one_tensor);
-            sn[j] = torch::where(safe_mask, h_jp1_tensor / r_givens_safe, zero_tensor);
-            
-            // Apply new Givens rotation
-            H[j][j] = r_givens_tensor;
-            H[j + 1][j] = 0.0f;
-            
-            // AUTOGRAD FIX: Apply to RHS vector using tensor operations
-            auto s_j = s[j].clone();
-            auto s_jp1 = s[j + 1].clone();
-            s[j] = cs[j] * s_j + sn[j] * s_jp1;
-            s[j + 1] = -sn[j] * s_j + cs[j] * s_jp1;
+            // 9F.D101: the SAME reduction the breakdown path uses -- one implementation.
+            reduce_current_column();
 
             // v20.14r48: PERFORMANCE — Periodic true residual check (replaces hess_est-based).
             // Old: hess_est < 3*tol triggers expensive A(x_trial) check → JVP/Arnoldi ~1.6.
@@ -1836,47 +1843,18 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         // When j <= 2, the Krylov subspace is too small for reliable solution
         // CRITICAL FIX 2026-01-28: Return success ONLY if residual actually converged!
         // Previous bug: Always returned success=true, allowing Newton to accept unconverged solution.
-        if (breakdown_occurred && j <= 2) {
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                std::cerr << "[GMRES] Early breakdown with j=" << j
-                          << ", checking if residual converged..." << std::endl;
-            }
-            // Return x as-is — x hasn't been updated in this restart cycle.
-            // FIX 2026-01-31: Reuse r_true instead of recomputing b - A(x) (saves 1 JVP).
-            // r_true was computed at cycle start and x hasn't changed (update is after j-loop).
-            auto r_final = r_true;
-            // FIX 2026-01-28: Apply halo zeroing consistently for error calculation
-            auto r_final_inner = r_final.clone();
-            zero_halo_regions(r_final_inner, halo_width, periodic_x, periodic_y);
-
-            // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
-            // v20.14 r50: Use unscaled bnorm for return value (trust-region compatibility)
-            auto error_final = safe_tensor_norm(r_final_inner) / bnorm_unscaled;
-            float r_norm = guarded_item<float>(safe_tensor_norm(r_final_inner));
-            float error_val = guarded_item<float>(error_final);
-
-            // CRITICAL FIX 2026-01-28: Only report success if actually converged
-            bool actually_converged = (error_val < tol);
-
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                std::cerr << "[GMRES] Returning solution: ||x|| = "
-                          << guarded_item<float>(x.norm())
-                          << ", ||r_true|| = " << r_norm
-                          << ", error = " << error_val
-                          << ", converged = " << (actually_converged ? "YES" : "NO") << std::endl;
-            }
-            // v20.14r37: Include current restart's j in the total count.
-            // total_arnoldi_iters only accumulates at end of restart (line ~1065),
-            // so early return here would under-count by j Arnoldi vectors.
-            WRFNewtonKrylovSolver::GMRESResult res{
-                    x, actually_converged, total_arnoldi_iters + j, r_norm,
-                    error_val,
-                    actually_converged ? "Early breakdown, already converged"
-                                       : "Early breakdown, NOT converged",
-                    r_final.detach().clone(), iter, true, false};
-            res.termination_reason = KTR::HappyBreakdown;
-            return res;
-        }
+        // 9F.D101 (review P0-A): the "j <= 2 -> return x as-is" branch is DELETED.
+        //
+        // It returned the INITIAL GUESS and the cycle-start residual, discarding the
+        // exact Krylov correction, with the comment "x hasn't been updated in this
+        // restart cycle". For a HAPPY breakdown that correction is the exact solution:
+        // A = 0.5I breaks down at j = 1 and must give x = 2b in one step. It returned
+        // x = 0, and I previously mis-attributed that to a "WRF-shaped harness"
+        // limitation in a test comment. It was this branch.
+        //
+        // With the column now properly reduced above, the normal back-substitution and
+        // solution update below handle a breakdown column correctly, so there is
+        // nothing left for a special case to protect against.
 
         // Solve least squares problem with diagonal check
         torch::Tensor y = torch::zeros({j}, x.options());
@@ -2748,6 +2726,30 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 std::cerr << "[GMRES TIMING] Breakdown check j=" << j << ": " << breakdown_check_ms << " ms" << std::endl;
             }
 
+            // 9F.D101 (review P0-A): the Givens reduction for the CURRENT column, shared by
+            // the breakdown path and the normal path so the two cannot drift apart.
+            auto reduce_current_column = [&]() {
+                for (int i = 0; i < j; ++i) {
+                    auto h_i_j = H[i][j].clone();
+                    auto h_ip1_j = H[i + 1][j].clone();
+                    H[i][j] = cs[i] * h_i_j + sn[i] * h_ip1_j;
+                    H[i + 1][j] = -sn[i] * h_i_j + cs[i] * h_ip1_j;
+                }
+                auto h_j_t = H[j][j];
+                auto h_jp1_t = H[j + 1][j];
+                auto r_g = torch::sqrt(h_j_t * h_j_t + h_jp1_t * h_jp1_t);
+                auto r_g_safe = torch::where(r_g > 1e-8f, r_g, eps_safe);
+                auto safe_mask = (r_g > 1e-8f);
+                cs[j] = torch::where(safe_mask, h_j_t / r_g_safe, one_tensor);
+                sn[j] = torch::where(safe_mask, h_jp1_t / r_g_safe, zero_tensor);
+                H[j][j] = r_g;
+                H[j + 1][j] = 0.0f;
+                auto s_j = s[j].clone();
+                auto s_jp1 = s[j + 1].clone();
+                s[j] = cs[j] * s_j + sn[j] * s_jp1;
+                s[j + 1] = -sn[j] * s_j + cs[j] * s_jp1;
+            };
+
             if (is_breakdown) {
                 breakdown_occurred = true;  // Track for numerical stability handling
                 if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
@@ -2763,44 +2765,27 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                     std::cerr << "[ARNOLDI] Breakdown at j=" << j
                               << " — extracting best available solution" << std::endl;
                 }
+                // 9F.D101 (review P0-A): COMPLETE THE REDUCTION, then leave.
+                //
+                // The old code broke out BEFORE the Givens block, so this column was never
+                // rotated and the back-substitution below then operated on an H that was not
+                // upper-triangular. And h_{j+1,j} = 0 is precisely the case where the Krylov
+                // space ALREADY CONTAINS the solution -- with a zero subdiagonal the new
+                // rotation is the identity, so reducing here is correct and costs nothing.
+                //
+                // What must NOT run is V.push_back(w / H[j+1][j]) below: that divides by ~0.
+                // Skipping the BASIS VECTOR is the right response to breakdown; skipping the
+                // CORRECTION was the defect.
+                reduce_current_column();
                 j++;
-                break;  // Exit Arnoldi loop with current best solution (NOT marked converged)
+                break;  // no new basis vector, but the projected system is now solvable
             }
             
             V.push_back(w / H[j + 1][j]);
         if (basis_capture) capture_basis_vector(basis_capture->V, V.back());
             
-            // AUTOGRAD FIX: Apply Givens rotations using tensor operations
-            for (int i = 0; i < j; ++i) {
-                auto h_i_j = H[i][j].clone();
-                auto h_ip1_j = H[i + 1][j].clone();
-                H[i][j] = cs[i] * h_i_j + sn[i] * h_ip1_j;
-                H[i + 1][j] = -sn[i] * h_i_j + cs[i] * h_ip1_j;
-            }
-            
-            // Compute new Givens rotation using tensor operations
-            auto h_j_tensor = H[j][j];
-            auto h_jp1_tensor = H[j + 1][j];
-            auto r_givens_tensor = torch::sqrt(h_j_tensor * h_j_tensor + h_jp1_tensor * h_jp1_tensor);
-            // AUTOGRAD FIX: Keep r_givens as tensor to preserve gradient flow
-            // DEVICE-AWARE: Use pre-created eps_safe constant on correct device
-            auto r_givens_safe = torch::where(r_givens_tensor > 1e-8f, r_givens_tensor, eps_safe);
-
-            // PERFORMANCE FIX: Keep cs/sn as tensors to avoid .item() syncs (was causing 12 syncs per iteration!)
-            // DEVICE-AWARE: Use pre-created constants on correct device (no CPU-GPU sync)
-            auto safe_mask = (r_givens_tensor > 1e-8f);
-            cs[j] = torch::where(safe_mask, h_j_tensor / r_givens_safe, one_tensor);
-            sn[j] = torch::where(safe_mask, h_jp1_tensor / r_givens_safe, zero_tensor);
-            
-            // Apply new Givens rotation
-            H[j][j] = r_givens_tensor;
-            H[j + 1][j] = 0.0f;
-            
-            // AUTOGRAD FIX: Apply to RHS vector using tensor operations
-            auto s_j = s[j].clone();
-            auto s_jp1 = s[j + 1].clone();
-            s[j] = cs[j] * s_j + sn[j] * s_jp1;
-            s[j + 1] = -sn[j] * s_j + cs[j] * s_jp1;
+            // 9F.D101: the SAME reduction the breakdown path uses -- one implementation.
+            reduce_current_column();
 
             // v20.14r48: PERFORMANCE — Periodic true residual check (replaces hess_est-based).
             // Old: hess_est < 3*tol triggers expensive A(x_trial) check → JVP/Arnoldi ~1.6.
@@ -3025,47 +3010,18 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // When j <= 2, the Krylov subspace is too small for reliable solution
         // CRITICAL FIX 2026-01-28: Return success ONLY if residual actually converged!
         // Previous bug: Always returned success=true, allowing Newton to accept unconverged solution.
-        if (breakdown_occurred && j <= 2) {
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                std::cerr << "[GMRES] Early breakdown with j=" << j
-                          << ", checking if residual converged..." << std::endl;
-            }
-            // Return x as-is — x hasn't been updated in this restart cycle.
-            // FIX 2026-01-31: Reuse r_true instead of recomputing b - A(x) (saves 1 JVP).
-            // r_true was computed at cycle start and x hasn't changed (update is after j-loop).
-            auto r_final = r_true;
-            // FIX 2026-01-28: Apply halo zeroing consistently for error calculation
-            auto r_final_inner = r_final.clone();
-            zero_halo_regions(r_final_inner, halo_width, periodic_x, periodic_y);
-
-            // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
-            // v20.14 r50: Use unscaled bnorm for return value (trust-region compatibility)
-            auto error_final = safe_tensor_norm(r_final_inner) / bnorm_unscaled;
-            float r_norm = guarded_item<float>(safe_tensor_norm(r_final_inner));
-            float error_val = guarded_item<float>(error_final);
-
-            // CRITICAL FIX 2026-01-28: Only report success if actually converged
-            bool actually_converged = (error_val < tol);
-
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                std::cerr << "[GMRES] Returning solution: ||x|| = "
-                          << guarded_item<float>(x.norm())
-                          << ", ||r_true|| = " << r_norm
-                          << ", error = " << error_val
-                          << ", converged = " << (actually_converged ? "YES" : "NO") << std::endl;
-            }
-            // v20.14r37: Include current restart's j in the total count.
-            // total_arnoldi_iters only accumulates at end of restart (line ~1065),
-            // so early return here would under-count by j Arnoldi vectors.
-            WRFNewtonKrylovSolver::GMRESResult res{
-                    x, actually_converged, total_arnoldi_iters + j, r_norm,
-                    error_val,
-                    actually_converged ? "Early breakdown, already converged"
-                                       : "Early breakdown, NOT converged",
-                    r_final.detach().clone(), iter, true, false};
-            res.termination_reason = KTR::HappyBreakdown;
-            return res;
-        }
+        // 9F.D101 (review P0-A): the "j <= 2 -> return x as-is" branch is DELETED.
+        //
+        // It returned the INITIAL GUESS and the cycle-start residual, discarding the
+        // exact Krylov correction, with the comment "x hasn't been updated in this
+        // restart cycle". For a HAPPY breakdown that correction is the exact solution:
+        // A = 0.5I breaks down at j = 1 and must give x = 2b in one step. It returned
+        // x = 0, and I previously mis-attributed that to a "WRF-shaped harness"
+        // limitation in a test comment. It was this branch.
+        //
+        // With the column now properly reduced above, the normal back-substitution and
+        // solution update below handle a breakdown column correctly, so there is
+        // nothing left for a special case to protect against.
 
         // Solve least squares problem with diagonal check
         torch::Tensor y = torch::zeros({j}, x.options());
