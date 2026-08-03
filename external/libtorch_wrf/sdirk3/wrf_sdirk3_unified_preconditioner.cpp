@@ -5040,13 +5040,44 @@ UnifiedPreconditioner::bind_stage_state_or_throw(const torch::Tensor& mu_pert, i
                 "bind_stage_state_or_throw: current_stage_ is ", current_stage_,
                 " after binding stage ", stage);
 
+    // 9F.D102 (review section 4): verify the FIELD, pointwise, against what it must equal.
+    //
+    // D98 checked the MEAN was finite. mu_prime is a perturbation whose positive and negative
+    // regions largely cancel, so a stale field from another checkpoint shares a mean to
+    // several digits and passes. Compare against mu_base + mu_pert element by element.
+    const auto expected = grid_info_->mu_base + mu_pert.to(grid_info_->mu_base.options());
+    TORCH_CHECK(mu_full_stage_.sizes() == expected.sizes(),
+                "bind_stage_state_or_throw: mu_full_stage_ shape ", mu_full_stage_.sizes(),
+                " != mu_base + mu_pert ", expected.sizes());
+    TORCH_CHECK(mu_full_stage_.isfinite().all().item<bool>(),
+                "bind_stage_state_or_throw: bound mu_full contains non-finite entries");
+
+    const double max_err = (mu_full_stage_ - expected).abs().max().item<double>();
+    const double scale = expected.abs().max().item<double>();
+    TORCH_CHECK(max_err <= 1e-6 * std::max(scale, 1.0),
+                "bind_stage_state_or_throw: bound mu_full differs from mu_base + mu_pert by ",
+                max_err, " (scale ", scale, ") -- the field bound is not this checkpoint's");
+
+    // THE PHYSICAL CONSTRAINT. The 4x4 Schur path forms 1/mu_full couplings, so a single
+    // non-positive cell flips a coefficient's sign and injects a local singularity. A mean of
+    // 8.9e4 Pa hides that completely.
+    const double mu_min = mu_full_stage_.min().item<double>();
+    TORCH_CHECK(mu_min > 0.0,
+                "bind_stage_state_or_throw: min(mu_full) = ", mu_min,
+                " <= 0 -- column mass must be positive; 1/mu_full couplings would be "
+                "sign-flipped or singular there");
+
     StageBindingReceipt r;
     r.stage = current_stage_;
     r.mu_full_mean = mu_full_stage_.mean().item<double>();
+    r.mu_full_min = mu_min;
+    r.mu_full_max = mu_full_stage_.max().item<double>();
+    r.max_binding_error = max_err;
     r.mu_numel = mu_full_stage_.numel();
+    r.stage_state_generation = stage_state_generation_;
     r.coefficient_generation = static_cast<uint64_t>(coefficient_generation_);
     TORCH_CHECK(std::isfinite(r.mu_full_mean),
-                "bind_stage_state_or_throw: bound mu_full is not finite");
+                "bind_stage_state_or_throw: bound mu_full mean is not finite");
     return r;
 }
 
@@ -5113,6 +5144,7 @@ void UnifiedPreconditioner::set_stage_state(const torch::Tensor& mu_pert, int st
     // even for small changes that don't warrant full recomputation.
     mu_full_stage_ = mu_full_2d.clone();
     current_stage_ = stage;
+    ++stage_state_generation_;   // 9F.D102: evidence that THIS bind ran
 
     // v20.14r27t: Compute mu scale correction for GS sweep alignment with 4x4 path.
     // mc_k was built from mu_representative (mub.mean()), but 4x4 uses mu_full_stage_.

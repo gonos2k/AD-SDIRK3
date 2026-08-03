@@ -38793,6 +38793,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                   << " stage=" << receipt.stage
                                   << " mu_numel=" << receipt.mu_numel
                                   << " mu_full_mean=" << receipt.mu_full_mean
+                                  << " mu_min=" << receipt.mu_full_min
+                                  << " mu_max=" << receipt.mu_full_max
+                                  << " bind_err=" << receipt.max_binding_error
+                                  << " stage_gen=" << receipt.stage_state_generation
                                   << " coeff_gen=" << receipt.coefficient_generation
                                   << "  (verified read-back; logged once)"
                                   << std::endl << std::flush;

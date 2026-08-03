@@ -146,10 +146,29 @@ public:
     // D95 made the mu EXTRACTION fail-closed and stopped there, so the binding was still
     // fail-open one call deeper. This closes it: verified by a RECEIPT read back from the
     // preconditioner, not by trusting that the setter did something.
+    // 9F.D102 (review section 4): the receipt proves the FIELD, not a summary of it.
+    //
+    // D98's receipt checked mu_full_stage_ was defined, had the right numel, that
+    // current_stage_ matched, and that the MEAN was finite. A stale field from another
+    // checkpoint passes all four: mu_prime is a perturbation whose positive and negative
+    // regions largely cancel, so two different checkpoints can share a mean to several
+    // digits. The setter itself avoids the mean for exactly this reason and uses ||mu'||_2.
+    //
+    // So the receipt now compares POINTWISE against mu_base + mu_pert, and enforces the
+    // physical constraint the preconditioner depends on: mu_full > 0 everywhere. The 4x4
+    // Schur path forms 1/mu_full couplings, so one non-positive cell flips a coefficient's
+    // sign and injects a local singularity -- invisible to any mean.
     struct StageBindingReceipt {
         int stage = -1;
-        double mu_full_mean = 0.0;     // read back AFTER binding
+        double mu_full_mean = 0.0;
+        double mu_full_min = 0.0;      // the physical constraint lives here, not in the mean
+        double mu_full_max = 0.0;
+        double max_binding_error = 0.0;  // max |mu_full_stage_ - (mu_base + mu_pert)|
         int64_t mu_numel = 0;
+        // DISTINCT counters: a small state change updates mu_full_stage_ without triggering a
+        // coefficient rebuild, so coefficient_generation is not evidence that THIS state was
+        // bound. stage_state_generation increments on every bind.
+        uint64_t stage_state_generation = 0;
         uint64_t coefficient_generation = 0;
     };
     StageBindingReceipt bind_stage_state_or_throw(const torch::Tensor& mu_pert, int stage);
@@ -240,6 +259,10 @@ private:
     int n_smooth_iters_ = 3;
     
     // Condition number estimate
+    // 9F.D102: increments on every set_stage_state, so a receipt can prove THIS bind
+    // happened. coefficient_generation cannot: a small state change updates
+    // mu_full_stage_ without triggering a coefficient rebuild.
+    uint64_t stage_state_generation_ = 0;
     mutable float condition_estimate_ = 1.0f;
 
     // v20.3: Newton residual ratio for adaptive α
