@@ -24,6 +24,8 @@
 #ifndef WRF_SDIRK3_STATE_LAYOUT_H
 #define WRF_SDIRK3_STATE_LAYOUT_H
 
+#include <torch/torch.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -114,6 +116,36 @@ struct StateLayout {
         return computed == total_size;
     }
 };
+
+// 9F.D95 (review sections 4 and 6): extract the mu block of a packed state as a 2-D
+// {ny, nx} tensor, or THROW.
+//
+// Fail-closed on purpose. D94 measured that the preconditioner genuinely depends on the mass
+// state, so a layout that does not match is NOT a reason to skip the binding and continue --
+// it means the adjoint would run against a preconditioner bound to the wrong state, and a
+// wrong gradient is worse than no gradient. D94's version silently did nothing when its
+// shape checks failed, which is the fail-OPEN form of the same code.
+inline torch::Tensor extract_mu_pert_2d(const StateLayout& layout,
+                                        const torch::Tensor& packed_state,
+                                        int64_t ny, int64_t nx) {
+    TORCH_CHECK(layout.is_valid(),
+                "extract_mu_pert_2d: packed-state layout is invalid");
+    TORCH_CHECK(packed_state.dim() == 1,
+                "extract_mu_pert_2d: expected a 1-D packed state, got dim ",
+                packed_state.dim());
+    TORCH_CHECK(layout.total_size == packed_state.numel(),
+                "extract_mu_pert_2d: layout total ", layout.total_size,
+                " != state numel ", packed_state.numel());
+    TORCH_CHECK(!layout.blocks.empty(), "extract_mu_pert_2d: layout has no blocks");
+    const auto& mu = layout.blocks.back();
+    TORCH_CHECK(mu.name == "mu",
+                "extract_mu_pert_2d: last block is '", mu.name, "', expected 'mu'");
+    TORCH_CHECK(ny > 0 && nx > 0,
+                "extract_mu_pert_2d: non-positive grid dims ny=", ny, " nx=", nx);
+    TORCH_CHECK(mu.size == ny * nx,
+                "extract_mu_pert_2d: mu block size ", mu.size, " != ny*nx = ", ny * nx);
+    return packed_state.slice(0, mu.start, mu.start + mu.size).reshape({ny, nx}).clone();
+}
 
 }  // namespace sdirk3
 }  // namespace wrf

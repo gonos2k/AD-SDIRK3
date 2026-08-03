@@ -12,6 +12,8 @@
 
 #include "../wrf_sdirk3_state_layout.h"
 
+#include <torch/torch.h>
+
 #include <cstdint>
 #include <iostream>
 #include <sstream>
@@ -107,7 +109,41 @@ int main() {
                   ") without overflow");
     }
 
-    constexpr int expected_checks = 17;
+    // ------- 7. THE CHECKED mu EXTRACTOR: fail-CLOSED, because P depends on the mass state.
+    // D94 shipped the fail-OPEN form -- shape checks that silently skipped the binding and
+    // let the adjoint run against a preconditioner bound to the wrong state.
+    {
+        auto opts = torch::TensorOptions().dtype(torch::kFloat32);
+        auto state = torch::arange(static_cast<double>(L.total_size), opts);
+
+        auto mu = wrf::sdirk3::extract_mu_pert_2d(L, state, NY, NX);
+        check(mu.dim() == 2 && mu.size(0) == NY && mu.size(1) == NX,
+              "extract: returns a 2-D {ny, nx} tensor");
+        const auto& mu_blk = L.blocks.back();
+        check(mu.flatten()[0].item<double>() == static_cast<double>(mu_blk.start),
+              "extract: takes the mu block, not some other slice");
+        // A clone, so binding cannot alias the caller's checkpoint.
+        state.index_put_({mu_blk.start}, -12345.0f);
+        check(mu.flatten()[0].item<double>() != -12345.0,
+              "extract: returns a CLONE -- binding cannot alias the checkpoint");
+
+        auto throws = [&](const std::function<void()>& f) {
+            try { f(); return false; } catch (const std::exception&) { return true; }
+        };
+        check(throws([&]{ wrf::sdirk3::extract_mu_pert_2d(L, state, NY + 1, NX); }),
+              "extract: THROWS on ny mismatch (fail-closed, not silently skipped)");
+        check(throws([&]{ auto short_state = torch::zeros({L.total_size - 1}, opts);
+                          wrf::sdirk3::extract_mu_pert_2d(L, short_state, NY, NX); }),
+              "extract: THROWS when the state size disagrees with the layout");
+        check(throws([&]{ auto bad = L; bad.blocks.back().name = "not_mu";
+                          wrf::sdirk3::extract_mu_pert_2d(bad, state, NY, NX); }),
+              "extract: THROWS when the last block is not mu");
+        check(throws([&]{ auto twod = torch::zeros({NY, NX}, opts);
+                          wrf::sdirk3::extract_mu_pert_2d(L, twod, NY, NX); }),
+              "extract: THROWS on a non-1-D packed state");
+    }
+
+    constexpr int expected_checks = 24;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
