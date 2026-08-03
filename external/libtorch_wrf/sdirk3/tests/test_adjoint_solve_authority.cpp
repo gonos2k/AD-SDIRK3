@@ -24,6 +24,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -191,7 +192,43 @@ int main() {
               "verdicts stringify, so a refusal can name which one fired");
     }
 
-    constexpr int expected_checks = 21;
+    // ============ 9F.D99 (review section 6): PER-CHECKPOINT ORDER, WITHOUT A LIVE RUN ======
+    //
+    // The D94 defect -- per-checkpoint work sitting inside a one-shot latch -- survived
+    // because only ONE checkpoint is reachable (the model fail-closes on step 1 at dt=600),
+    // which makes the one-shot and per-checkpoint forms observationally identical in every
+    // run that can be performed. The review's point is that the ORDER is a pure property of
+    // the checkpoint COUNT, so a standing contract needs no live run at all.
+    //
+    // This exercises n = 3, a length the model itself cannot currently reach. And it is the
+    // SAME function production consumes -- runAdjointReplay takes its visit order from here
+    // -- so a green result is evidence about the code that runs, not about a re-implemented
+    // loop.
+    {
+        using wrf::sdirk3::reverse_visit_order;
+
+        const auto three = reverse_visit_order(3);
+        check(three.size() == 3, "three checkpoints -> three visits (one per checkpoint)");
+        check(three.size() == 3 && three[0] == 2 && three[1] == 1 && three[2] == 0,
+              "visited in REVERSE: 2, 1, 0 -- an adjoint runs backwards in time");
+
+        // Every index exactly once: no checkpoint skipped, none visited twice.
+        {
+            const auto ten = reverse_visit_order(10);
+            std::vector<int> seen(10, 0);
+            for (size_t k : ten) { if (k < 10) ++seen[k]; }
+            bool once = ten.size() == 10;
+            for (int c : seen) if (c != 1) once = false;
+            check(once, "ten checkpoints: every index visited EXACTLY once");
+        }
+
+        check(reverse_visit_order(1).size() == 1 && reverse_visit_order(1)[0] == 0,
+              "single checkpoint -> one visit (the only regime currently reachable)");
+        check(reverse_visit_order(0).empty(),
+              "zero checkpoints -> no visits, and no underflow on the unsigned countdown");
+    }
+
+    constexpr int expected_checks = 26;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

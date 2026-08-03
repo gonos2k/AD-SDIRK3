@@ -4,6 +4,7 @@
 #include <torch/torch.h>
 
 #include <functional>
+#include <vector>
 #include <cmath>
 #include <limits>
 
@@ -29,6 +30,27 @@ inline torch::Tensor compute_vjp_reverse_mode(
         /*create_graph=*/false,
         /*allow_unused=*/false);
     return gradients[0];
+}
+
+// 9F.D99 (review section 6): the reverse visit order, as a pure testable function.
+//
+// The D94 defect was that per-checkpoint work sat inside a one-shot latch, so it ran on the
+// FIRST visited checkpoint only. It survived because the reachable regime has exactly ONE
+// checkpoint (the model fail-closes on step 1 at dt=600), which makes the one-shot and
+// per-checkpoint forms observationally identical in every run that can be performed.
+//
+// The review's point is that a standing contract does NOT need a live dt=600 run: the ORDER
+// is a pure property of the checkpoint count. So the replay's loop now takes its order from
+// here, and the contract exercises it at n = 3 -- a length the model itself cannot yet reach.
+//
+// Deliberately NOT a copy of the loop for a test to inspect: production consumes this, so a
+// green contract is evidence about the code that runs. Testing a re-implemented loop would
+// only prove the re-implementation.
+inline std::vector<size_t> reverse_visit_order(size_t n_checkpoints) {
+    std::vector<size_t> order;
+    order.reserve(n_checkpoints);
+    for (size_t k = n_checkpoints; k-- > 0;) order.push_back(k);
+    return order;
 }
 
 // 9F.D97 (review section 9): the convergence decision as a PURE FUNCTION.
