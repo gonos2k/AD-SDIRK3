@@ -14,7 +14,9 @@
 
 #include <torch/torch.h>
 
+#include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -143,7 +145,61 @@ int main() {
               "extract: THROWS on a non-1-D packed state");
     }
 
-    constexpr int expected_checks = 24;
+    // ---- 8. MUTATION TESTS: is_valid() must actually REJECT, not merely accept (D96).
+    // PRODUCTION gates on is_valid() -- extract_mu_pert_2d calls it first -- while the order
+    // and contiguity assertions above live only here. Before D96 is_valid() summed sizes and
+    // nothing else, so every mutation below except the last one PASSED it. A validator nobody
+    // has watched say "no" is an unproven validator.
+    {
+        auto mutate = [&](const std::function<void(wrf::sdirk3::StateLayout&)>& f) {
+            auto m = L; f(m); return m.is_valid();
+        };
+
+        check(!mutate([](auto& m){ std::swap(m.blocks[2], m.blocks[3]); }),
+              "REJECTS rw/ph swapped -- the case a sum check is blind to");
+        check(!mutate([](auto& m){ m.blocks[4].name = "theta"; }),
+              "REJECTS a renamed block (names are part of the contract)");
+        check(!mutate([&](auto& m){ m.blocks.pop_back(); m.total_size -= L.blocks[5].size; }),
+              "REJECTS a layout with five blocks even though the total still adds up");
+        check(!mutate([](auto& m){ m.blocks[3].start += 1; m.blocks[4].start += 1; }),
+              "REJECTS a gap between blocks");
+        check(!mutate([](auto& m){ m.blocks[1].start -= 1; }),
+              "REJECTS overlapping blocks");
+        check(!mutate([&](auto& m){ m.blocks[5].size = -m.blocks[5].size;
+                                    m.total_size -= 2 * L.blocks[5].size; }),
+              "REJECTS a negative block size even if the sum is consistent");
+        check(!mutate([](auto& m){ m.total_size += 1; }),
+              "REJECTS a total that disagrees with the blocks");
+        check(mutate([](auto&){}), "ACCEPTS the unmutated layout (not vacuously strict)");
+
+        // A default-constructed layout must be invalid, because the fail-closed diagnostic
+        // path in newton_solver.cpp relies on exactly that.
+        wrf::sdirk3::StateLayout empty;
+        check(!empty.is_valid(), "REJECTS a default-constructed (empty) layout");
+        check(empty.total_size == 0 && !empty.is_exact,
+              "default-constructed layout is well-defined, not indeterminate");
+    }
+
+    // ---- 9. from_grid_dims refuses bad input rather than producing a plausible layout.
+    {
+        auto throws = [&](const std::function<void()>& f) {
+            try { f(); return false; } catch (const std::exception&) { return true; }
+        };
+        check(throws([]{ wrf::sdirk3::StateLayout::from_grid_dims(0, NY, NZ, NXU, NYV, NZW); }),
+              "from_grid_dims THROWS on a zero dimension");
+        check(throws([]{ wrf::sdirk3::StateLayout::from_grid_dims(NX, -1, NZ, NXU, NYV, NZW); }),
+              "from_grid_dims THROWS on a negative dimension");
+        // int64 overflow must be refused, not wrapped into a plausible-looking layout.
+        // 2e6 does NOT overflow -- 2e6^3 = 8.0e18 < int64max 9.22e18 -- and the first version
+        // of this check used it, asserting an overflow that never happened. Pointing the
+        // assertion the right way is what caught it. 3e6^3 = 2.7e19 genuinely wraps.
+        const int big = 3000000;
+        check(throws([&]{ wrf::sdirk3::StateLayout::from_grid_dims(
+                  big, big, big, big, big, big); }),
+              "from_grid_dims THROWS on int64 overflow instead of wrapping");
+    }
+
+    constexpr int expected_checks = 37;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
