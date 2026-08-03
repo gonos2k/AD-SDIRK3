@@ -5,6 +5,8 @@
 
 #include <functional>
 #include <vector>
+#include "wrf_sdirk3_state_layout.h"
+
 #include <cmath>
 #include <limits>
 
@@ -126,6 +128,76 @@ inline SolveVerdict assess_adjoint_solve(double residual_norm,
     return SolveVerdict::Continue;
 }
 
+// 9F.D100: the layout for a packed adjoint vector. The solver's grid dims are not visible
+// from this header, so the caller registers the layout once and this returns it. Empty (and
+// therefore invalid) when unset, which makes the block gate fall back to the global test
+// rather than guess boundaries -- the same refusal-to-guess as D96.
+inline StateLayout& adjoint_residual_layout_slot() {
+    static StateLayout slot;
+    return slot;
+}
+inline void set_adjoint_residual_layout(const StateLayout& layout) {
+    adjoint_residual_layout_slot() = layout;
+}
+inline StateLayout layout_for_adjoint_residual(int64_t numel) {
+    const StateLayout& slot = adjoint_residual_layout_slot();
+    if (slot.is_valid() && slot.total_size == numel) return slot;
+    return StateLayout{};   // invalid -> caller falls back to the global gate
+}
+
+// 9F.D100 (review section 7): the BLOCK-WISE gate, max_q rho_q <= 1.
+//
+// assess_adjoint_solve above judges one GLOBAL ratio ||r||/||b||. That is the right authority
+// (physical, not preconditioned) measured in the wrong norm: the packed vector concatenates
+// coupled momentum, geopotential, potential temperature and column mass, with block sizes
+// from 3,321 (mu) to 217,728 (ru). A global L2 is dominated by the large blocks, so mu could
+// be essentially 100% wrong and move the global ratio by well under a percent.
+//
+// This campaign has already been bitten by exactly that masking: sigma_max(J) looked
+// state-invariant until it was split by RhsMode, because a dominant channel was hiding one
+// five orders below it. A gradient is only usable if EVERY block is usable, so every block
+// gets its own mixed tolerance and the worst one decides.
+//
+// STRICTER THAN THE GLOBAL TEST, deliberately, and in the safe direction: it can refuse a
+// gradient the global test would accept, never accept one the global test would refuse. For
+// a fail-close gate whose whole premise is that a wrong gradient is worse than no gradient,
+// that is the correct way to be wrong.
+struct BlockResidual {
+    std::string name;
+    double residual_norm = 0.0;
+    double rhs_norm = 0.0;
+};
+
+inline SolveVerdict assess_adjoint_solve_blockwise(const std::vector<BlockResidual>& blocks,
+                                                   bool krylov_breakdown,
+                                                   double rtol,
+                                                   double atol = 0.0) {
+    if (blocks.empty()) return SolveVerdict::Fatal;   // nothing measured is not convergence
+
+    SolveVerdict worst = SolveVerdict::Converged;
+    for (const auto& b : blocks) {
+        const SolveVerdict v =
+            assess_adjoint_solve(b.residual_norm, b.rhs_norm, krylov_breakdown, rtol, atol);
+        if (v == SolveVerdict::Fatal) return SolveVerdict::Fatal;   // Fatal short-circuits
+        if (v == SolveVerdict::Continue) worst = SolveVerdict::Continue;
+    }
+    return worst;
+}
+
+// The worst block, for telemetry: which variable is holding the solve back. Returns an empty
+// name when there are no blocks.
+inline BlockResidual worst_block(const std::vector<BlockResidual>& blocks, double atol = 0.0) {
+    BlockResidual worst;
+    double worst_ratio = -1.0;
+    for (const auto& b : blocks) {
+        const double bar = atol + b.rhs_norm;      // rtol factored out: compares like for like
+        const double ratio = bar > 0.0 ? b.residual_norm / bar
+                                       : (b.residual_norm > 0.0 ? 1e300 : 0.0);
+        if (ratio > worst_ratio) { worst_ratio = ratio; worst = b; }
+    }
+    return worst;
+}
+
 inline const char* to_string(SolveVerdict v) {
     switch (v) {
         case SolveVerdict::Converged: return "Converged";
@@ -178,6 +250,7 @@ torch::Tensor solve_transpose_linear_system_gmres(
     // 9F.D91 (review P0-1): the PHYSICAL residual is the stopping authority.
     double rel_true = std::numeric_limits<double>::infinity();
     double r_phys_norm_cached = std::numeric_limits<double>::infinity();
+    std::vector<BlockResidual> block_residuals;
 
     // 9F.D87 (review section 6): report the TRUE, UNPRECONDITIONED residual.
     //
@@ -204,11 +277,35 @@ torch::Tensor solve_transpose_linear_system_gmres(
         auto r_phys = rhs - operator_transpose(gmres.x);
         torch::NoGradGuard no_grad;
         r_phys_norm_cached = r_phys.norm().template item<double>();
+
+        // 9F.D100 (review section 7): per-block norms, taken here because r_phys is in scope.
+        // Blocks come from THE shared StateLayout (D93), never a local copy of the offsets.
+        const auto layout = layout_for_adjoint_residual(rhs.numel());
+        if (layout.is_valid() && layout.total_size == rhs.numel()) {
+            for (const auto& blk : layout.blocks) {
+                BlockResidual br;
+                br.name = blk.name;
+                br.residual_norm =
+                    r_phys.slice(0, blk.start, blk.start + blk.size).norm().template item<double>();
+                br.rhs_norm =
+                    rhs.slice(0, blk.start, blk.start + blk.size).norm().template item<double>();
+                block_residuals.push_back(br);
+            }
+        }
         rel_true = (r_phys.norm() / rhs.norm().clamp_min(1e-30)).template item<double>();
         std::cerr << "SDIRK3_TRANSPOSE_TRUE_RESIDUAL rel_true=" << rel_true
                   << " rel_preconditioned=" << gmres.rel_error
-                  << " |x|=" << gmres.x.norm().template item<double>()
-                  << std::endl << std::flush;
+                  << " |x|=" << gmres.x.norm().template item<double>();
+        if (!block_residuals.empty()) {
+            const auto w = worst_block(block_residuals);
+            std::cerr << " worst_block=" << w.name
+                      << " (|r_q|=" << w.residual_norm << ", |b_q|=" << w.rhs_norm << ")";
+            for (const auto& b : block_residuals) {
+                std::cerr << " " << b.name << "="
+                          << (b.rhs_norm > 0 ? b.residual_norm / b.rhs_norm : -1.0);
+            }
+        }
+        std::cerr << std::endl << std::flush;
     }
 
     // ADJOINT FAIL-CLOSE (full-repo review P1-2): the forward solver fail-closes
@@ -261,9 +358,19 @@ torch::Tensor solve_transpose_linear_system_gmres(
         res_norm_phys = r_phys_norm_cached;
         rhs_norm_phys = rhs.norm().template item<double>();
     }
-    const SolveVerdict verdict = assess_adjoint_solve(
-        res_norm_phys, rhs_norm_phys, /*krylov_breakdown=*/gmres.breakdown,
-        /*rtol=*/static_cast<double>(gmres_tolerance));
+    // 9F.D100 (review section 7): judge per BLOCK, and let the worst one decide.
+    //
+    // The global ratio is kept as telemetry, but it cannot be the gate: mu is 3,321 of
+    // 1,080,491 entries, so it can be ~100% wrong while the global ratio barely moves.
+    // Blocks come from THE shared StateLayout (D93), not a local copy of the offsets.
+    const SolveVerdict verdict =
+        block_residuals.empty()
+            ? assess_adjoint_solve(res_norm_phys, rhs_norm_phys,
+                                   /*krylov_breakdown=*/gmres.breakdown,
+                                   /*rtol=*/static_cast<double>(gmres_tolerance))
+            : assess_adjoint_solve_blockwise(block_residuals,
+                                             /*krylov_breakdown=*/gmres.breakdown,
+                                             /*rtol=*/static_cast<double>(gmres_tolerance));
     if (verdict != SolveVerdict::Converged) {
         throw std::runtime_error(
             std::string("sdirk3 adjoint transpose solve did not converge (") +

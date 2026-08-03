@@ -38685,6 +38685,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
         // a bind counter below asserts one bind per checkpoint. Together they close the
         // regression window on D94 -- per-checkpoint work drifting back inside a one-shot --
         // which no live run can currently detect, because only ONE checkpoint is reachable.
+        // 9F.D100 (review section 7): register the packed-state layout so the transpose
+        // solve can gate per BLOCK instead of on one global mixed-unit ratio. The header
+        // cannot see the solver's grid dims; if this is never called it falls back to the
+        // global test rather than guessing boundaries.
+        wrf::sdirk3::set_adjoint_residual_layout(
+            wrf::sdirk3::StateLayout::from_grid_dims(nx_, ny_, nz_, nx_u_, ny_v_, nz_w_));
+
         size_t binds_performed = 0;
         const auto visit_order = wrf::sdirk3::reverse_visit_order(checkpoints.size());
         for (size_t visit_idx : visit_order) {
