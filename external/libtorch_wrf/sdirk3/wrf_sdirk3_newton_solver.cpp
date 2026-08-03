@@ -7353,7 +7353,20 @@ public:
                             if (layout_initialized_) {
                                 layout = cached_layout_;
                             } else {
-                                layout = StateLayout::infer_from_size(U_eval.numel());
+                                // 9F.D96 (review section 10): NO heuristic fallback. This is a PER-BLOCK
+                                // diagnostic -- it attributes residuals to NAMED variables -- and
+                                // infer_from_size() guessed the boundaries from hard-coded percentages
+                                // (20.2%, 19.9%, ...). A per-block report against guessed boundaries
+                                // labels rv values as ru: confidently wrong, and worse for debugging
+                                // than no report. Leave the layout EMPTY so the consumer loop below
+                                // iterates nothing, and say so once.
+                                static std::atomic<bool> warned_no_layout{false};
+                                bool expected_no_layout = false;
+                                if (warned_no_layout.compare_exchange_strong(expected_no_layout, true)) {
+                                    std::cerr << "[JVP CHECK] per-block analysis SKIPPED: no exact "
+                                                 "StateLayout (refusing to guess block boundaries)"
+                                              << std::endl;
+                                }
                             }
 
                             auto U_cpu = U_eval.detach().to(torch::kCPU).contiguous();
@@ -7439,7 +7452,20 @@ public:
                             if (layout_initialized_) {
                                 layout = cached_layout_;
                             } else {
-                                layout = StateLayout::infer_from_size(U_eval.numel());
+                                // 9F.D96 (review section 10): NO heuristic fallback. This is a PER-BLOCK
+                                // diagnostic -- it attributes residuals to NAMED variables -- and
+                                // infer_from_size() guessed the boundaries from hard-coded percentages
+                                // (20.2%, 19.9%, ...). A per-block report against guessed boundaries
+                                // labels rv values as ru: confidently wrong, and worse for debugging
+                                // than no report. Leave the layout EMPTY so the consumer loop below
+                                // iterates nothing, and say so once.
+                                static std::atomic<bool> warned_no_layout{false};
+                                bool expected_no_layout = false;
+                                if (warned_no_layout.compare_exchange_strong(expected_no_layout, true)) {
+                                    std::cerr << "[JVP CHECK] per-block analysis SKIPPED: no exact "
+                                                 "StateLayout (refusing to guess block boundaries)"
+                                              << std::endl;
+                                }
                             }
                             for (const auto& blk : layout.blocks) {
                                 auto ad_blk = ad_cpu.slice(0, blk.start, blk.start + blk.size);
@@ -7516,7 +7542,20 @@ public:
                             if (layout_initialized_) {
                                 layout = cached_layout_;
                             } else {
-                                layout = StateLayout::infer_from_size(v_r.numel());
+                                // 9F.D96 (review section 10): NO heuristic fallback. This is a PER-BLOCK
+                                // diagnostic -- it attributes residuals to NAMED variables -- and
+                                // infer_from_size() guessed the boundaries from hard-coded percentages
+                                // (20.2%, 19.9%, ...). A per-block report against guessed boundaries
+                                // labels rv values as ru: confidently wrong, and worse for debugging
+                                // than no report. Leave the layout EMPTY so the consumer loop below
+                                // iterates nothing, and say so once.
+                                static std::atomic<bool> warned_no_layout{false};
+                                bool expected_no_layout = false;
+                                if (warned_no_layout.compare_exchange_strong(expected_no_layout, true)) {
+                                    std::cerr << "[JVP CHECK] per-block analysis SKIPPED: no exact "
+                                                 "StateLayout (refusing to guess block boundaries)"
+                                              << std::endl;
+                                }
                             }
                             for (const auto& blk : layout.blocks) {
                                 auto Av_blk = Av_cpu.slice(0, blk.start, blk.start + blk.size);

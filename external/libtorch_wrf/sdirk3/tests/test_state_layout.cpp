@@ -12,7 +12,11 @@
 
 #include "../wrf_sdirk3_state_layout.h"
 
+#include <torch/torch.h>
+
+#include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -107,7 +111,95 @@ int main() {
                   ") without overflow");
     }
 
-    constexpr int expected_checks = 17;
+    // ------- 7. THE CHECKED mu EXTRACTOR: fail-CLOSED, because P depends on the mass state.
+    // D94 shipped the fail-OPEN form -- shape checks that silently skipped the binding and
+    // let the adjoint run against a preconditioner bound to the wrong state.
+    {
+        auto opts = torch::TensorOptions().dtype(torch::kFloat32);
+        auto state = torch::arange(static_cast<double>(L.total_size), opts);
+
+        auto mu = wrf::sdirk3::extract_mu_pert_2d(L, state, NY, NX);
+        check(mu.dim() == 2 && mu.size(0) == NY && mu.size(1) == NX,
+              "extract: returns a 2-D {ny, nx} tensor");
+        const auto& mu_blk = L.blocks.back();
+        check(mu.flatten()[0].item<double>() == static_cast<double>(mu_blk.start),
+              "extract: takes the mu block, not some other slice");
+        // A clone, so binding cannot alias the caller's checkpoint.
+        state.index_put_({mu_blk.start}, -12345.0f);
+        check(mu.flatten()[0].item<double>() != -12345.0,
+              "extract: returns a CLONE -- binding cannot alias the checkpoint");
+
+        auto throws = [&](const std::function<void()>& f) {
+            try { f(); return false; } catch (const std::exception&) { return true; }
+        };
+        check(throws([&]{ wrf::sdirk3::extract_mu_pert_2d(L, state, NY + 1, NX); }),
+              "extract: THROWS on ny mismatch (fail-closed, not silently skipped)");
+        check(throws([&]{ auto short_state = torch::zeros({L.total_size - 1}, opts);
+                          wrf::sdirk3::extract_mu_pert_2d(L, short_state, NY, NX); }),
+              "extract: THROWS when the state size disagrees with the layout");
+        check(throws([&]{ auto bad = L; bad.blocks.back().name = "not_mu";
+                          wrf::sdirk3::extract_mu_pert_2d(bad, state, NY, NX); }),
+              "extract: THROWS when the last block is not mu");
+        check(throws([&]{ auto twod = torch::zeros({NY, NX}, opts);
+                          wrf::sdirk3::extract_mu_pert_2d(L, twod, NY, NX); }),
+              "extract: THROWS on a non-1-D packed state");
+    }
+
+    // ---- 8. MUTATION TESTS: is_valid() must actually REJECT, not merely accept (D96).
+    // PRODUCTION gates on is_valid() -- extract_mu_pert_2d calls it first -- while the order
+    // and contiguity assertions above live only here. Before D96 is_valid() summed sizes and
+    // nothing else, so every mutation below except the last one PASSED it. A validator nobody
+    // has watched say "no" is an unproven validator.
+    {
+        auto mutate = [&](const std::function<void(wrf::sdirk3::StateLayout&)>& f) {
+            auto m = L; f(m); return m.is_valid();
+        };
+
+        check(!mutate([](auto& m){ std::swap(m.blocks[2], m.blocks[3]); }),
+              "REJECTS rw/ph swapped -- the case a sum check is blind to");
+        check(!mutate([](auto& m){ m.blocks[4].name = "theta"; }),
+              "REJECTS a renamed block (names are part of the contract)");
+        check(!mutate([&](auto& m){ m.blocks.pop_back(); m.total_size -= L.blocks[5].size; }),
+              "REJECTS a layout with five blocks even though the total still adds up");
+        check(!mutate([](auto& m){ m.blocks[3].start += 1; m.blocks[4].start += 1; }),
+              "REJECTS a gap between blocks");
+        check(!mutate([](auto& m){ m.blocks[1].start -= 1; }),
+              "REJECTS overlapping blocks");
+        check(!mutate([&](auto& m){ m.blocks[5].size = -m.blocks[5].size;
+                                    m.total_size -= 2 * L.blocks[5].size; }),
+              "REJECTS a negative block size even if the sum is consistent");
+        check(!mutate([](auto& m){ m.total_size += 1; }),
+              "REJECTS a total that disagrees with the blocks");
+        check(mutate([](auto&){}), "ACCEPTS the unmutated layout (not vacuously strict)");
+
+        // A default-constructed layout must be invalid, because the fail-closed diagnostic
+        // path in newton_solver.cpp relies on exactly that.
+        wrf::sdirk3::StateLayout empty;
+        check(!empty.is_valid(), "REJECTS a default-constructed (empty) layout");
+        check(empty.total_size == 0 && !empty.is_exact,
+              "default-constructed layout is well-defined, not indeterminate");
+    }
+
+    // ---- 9. from_grid_dims refuses bad input rather than producing a plausible layout.
+    {
+        auto throws = [&](const std::function<void()>& f) {
+            try { f(); return false; } catch (const std::exception&) { return true; }
+        };
+        check(throws([]{ wrf::sdirk3::StateLayout::from_grid_dims(0, NY, NZ, NXU, NYV, NZW); }),
+              "from_grid_dims THROWS on a zero dimension");
+        check(throws([]{ wrf::sdirk3::StateLayout::from_grid_dims(NX, -1, NZ, NXU, NYV, NZW); }),
+              "from_grid_dims THROWS on a negative dimension");
+        // int64 overflow must be refused, not wrapped into a plausible-looking layout.
+        // 2e6 does NOT overflow -- 2e6^3 = 8.0e18 < int64max 9.22e18 -- and the first version
+        // of this check used it, asserting an overflow that never happened. Pointing the
+        // assertion the right way is what caught it. 3e6^3 = 2.7e19 genuinely wraps.
+        const int big = 3000000;
+        check(throws([&]{ wrf::sdirk3::StateLayout::from_grid_dims(
+                  big, big, big, big, big, big); }),
+              "from_grid_dims THROWS on int64 overflow instead of wrapping");
+    }
+
+    constexpr int expected_checks = 37;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

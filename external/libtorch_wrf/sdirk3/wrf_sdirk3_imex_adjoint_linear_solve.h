@@ -4,6 +4,7 @@
 #include <torch/torch.h>
 
 #include <functional>
+#include <cmath>
 #include <limits>
 
 #include "wrf_sdirk3_newton_solver.h"
@@ -28,6 +29,67 @@ inline torch::Tensor compute_vjp_reverse_mode(
         /*create_graph=*/false,
         /*allow_unused=*/false);
     return gradients[0];
+}
+
+// 9F.D97 (review section 9): the convergence decision as a PURE FUNCTION.
+//
+// WHAT IT DELIBERATELY DOES NOT TAKE: the preconditioned residual. D91 moved the authority to
+// the physical residual by editing an `if`; a later edit could move it back. Here the
+// preconditioned residual is not a parameter, so it CANNOT be given authority -- the
+// signature enforces the policy that a comment previously asked for.
+//
+// Being pure is what makes the positive side testable at all. The negative control
+// (Adjoint_Solve_Authority_Contract) proves the solve will not return a WRONG answer, but it
+// has no positive case: solve_gmres assumes WRF-shaped state, so a toy never converges under
+// any preconditioner. That gap was real -- an implementation that threw on EVERY solve would
+// have passed. A pure decision function needs no harness, so "can it say Converged?" becomes
+// a testable question.
+enum class SolveVerdict {
+    Converged,   // the physical residual meets the tolerance -- safe to return a gradient
+    Continue,    // not converged, but nothing is broken; more iterations could still help
+    Fatal        // NaN/Inf residual, or Krylov breakdown -- more iterations cannot help
+};
+
+// MIXED ABSOLUTE/RELATIVE TOLERANCE (review section 8): ||r|| <= atol + rtol*||b||.
+//
+// A pure relative test is unstable as ||b|| -> 0, where the exact answer is x = 0 and any
+// tiny residual is correct; the old form divided by max(||b||, 1e-30) and produced a huge
+// ratio for a residual that was fine. The degenerate case is handled explicitly rather than
+// by a magic floor.
+//
+// atol DEFAULTS TO 0, which reproduces the current pure-relative behaviour exactly. That is
+// the conservative choice for this campaign (opt-in, no behaviour change), not necessarily
+// the right long-run one: a 4D-Var driver that feeds near-zero cotangents will want a real
+// atol, and picking it is a physical decision about how small a gradient component is
+// negligible -- not something this function should invent.
+inline SolveVerdict assess_adjoint_solve(double residual_norm,
+                                         double rhs_norm,
+                                         bool krylov_breakdown,
+                                         double rtol,
+                                         double atol = 0.0) {
+    // Fatal first: a non-finite residual is not a small residual, and no budget helps.
+    if (!std::isfinite(residual_norm) || !std::isfinite(rhs_norm)) return SolveVerdict::Fatal;
+    if (residual_norm < 0.0 || rhs_norm < 0.0) return SolveVerdict::Fatal;
+    if (krylov_breakdown) return SolveVerdict::Fatal;
+
+    const double bar = atol + rtol * rhs_norm;
+    if (residual_norm <= bar) return SolveVerdict::Converged;
+
+    // ||b|| == 0: the exact solution is x = 0. Only an exactly-zero residual (or one within
+    // atol) is convergence; anything else means the operator moved a vector it should not
+    // have, which more iterations will not fix.
+    if (rhs_norm == 0.0) return SolveVerdict::Fatal;
+
+    return SolveVerdict::Continue;
+}
+
+inline const char* to_string(SolveVerdict v) {
+    switch (v) {
+        case SolveVerdict::Converged: return "Converged";
+        case SolveVerdict::Continue:  return "Continue";
+        case SolveVerdict::Fatal:     return "Fatal";
+    }
+    return "Unknown";
 }
 
 // Solves (I - alpha * J^T) x = rhs with left preconditioning by P^{-T}.
@@ -128,11 +190,32 @@ torch::Tensor solve_transpose_linear_system_gmres(
     //
     // gmres.success is kept as a NECESSARY condition -- it also covers breakdown and NaN
     // paths -- but it is no longer sufficient, and gmres.rel_error is now diagnostic only.
-    const bool physical_ok = std::isfinite(rel_true) && rel_true <= gmres_tolerance;
-    if (!gmres.success || !physical_ok) {
+    // 9F.D97: the decision comes from the pure function above, so the policy lives in one
+    // testable place instead of in this `if`.
+    //
+    // BREAKDOWN IS gmres.breakdown, NOT !gmres.success. The first wiring passed the latter,
+    // and the live run promptly reported verdict=Fatal for a solve that had merely run out of
+    // budget ("GMRES max iterations reached"). Budget exhaustion is precisely the Continue
+    // case -- more iterations could still help -- and calling it Fatal is the conflation the
+    // review warned about: "fatal breakdown과 단순 내부 criterion failure를 구분해야 한다".
+    //
+    // Behaviourally both verdicts throw today, so this changes no outcome. It changes what
+    // the verdict MEANS, which is the whole point of having one: a restart-boundary callback
+    // must be able to tell "keep going" from "stop".
+    //
+    // NanRetryExhausted needs no special case -- a NaN residual is caught by the finiteness
+    // test inside assess_adjoint_solve.
+    const double rhs_norm_phys =
+        [&]{ torch::NoGradGuard g; return rhs.norm().template item<double>(); }();
+    const double res_norm_phys = rel_true * std::max(rhs_norm_phys, 1e-30);
+    const SolveVerdict verdict = assess_adjoint_solve(
+        res_norm_phys, rhs_norm_phys, /*krylov_breakdown=*/gmres.breakdown,
+        /*rtol=*/static_cast<double>(gmres_tolerance));
+    if (verdict != SolveVerdict::Converged) {
         throw std::runtime_error(
             std::string("sdirk3 adjoint transpose solve did not converge (") +
-            "success=" + (gmres.success ? "true" : "false") +
+            "verdict=" + to_string(verdict) +
+            ", success=" + (gmres.success ? "true" : "false") +
             ", rel_true=" + std::to_string(rel_true) +
             ", rel_preconditioned=" + std::to_string(gmres.rel_error) +
             ", tol=" + std::to_string(gmres_tolerance) +

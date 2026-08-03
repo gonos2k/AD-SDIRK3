@@ -18,7 +18,9 @@
 
 #include <torch/torch.h>
 
+#include <cmath>
 #include <iomanip>
+#include <limits>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -124,7 +126,64 @@ int main() {
               "milder shrink (1e-3): still refused, still a disagreement");
     }
 
-    constexpr int expected_checks = 5;
+    // ================= 9F.D97 (review section 9): THE PURE DECISION FUNCTION =================
+    //
+    // The negative control above proves the solve will not return a WRONG answer. It has no
+    // positive case, because solve_gmres assumes WRF-shaped state and a toy never converges
+    // under any preconditioner -- so an implementation that threw on EVERY solve would have
+    // passed it. That gap is real, and a pure function closes it: "can it say Converged?" is
+    // testable with no harness at all.
+    {
+        using wrf::sdirk3::SolveVerdict;
+        using wrf::sdirk3::assess_adjoint_solve;
+        const double rtol = 1e-5;
+
+        // --- the review's matrix, row by row.
+        check(assess_adjoint_solve(1e-9, 1.0, false, rtol) == SolveVerdict::Converged,
+              "matrix: true residual small -> Converged (the POSITIVE case, previously untestable)");
+        check(assess_adjoint_solve(0.707, 1.0, false, rtol) == SolveVerdict::Continue,
+              "matrix: true residual large -> NOT converged, regardless of any preconditioned value");
+        check(assess_adjoint_solve(0.0, 1.0, false, rtol) == SolveVerdict::Converged,
+              "matrix: exactly zero residual -> Converged");
+        check(assess_adjoint_solve(std::nan(""), 1.0, false, rtol) == SolveVerdict::Fatal,
+              "matrix: NaN residual -> Fatal (not 'small')");
+        check(assess_adjoint_solve(std::numeric_limits<double>::infinity(), 1.0, false, rtol)
+                  == SolveVerdict::Fatal,
+              "matrix: Inf residual -> Fatal");
+        check(assess_adjoint_solve(1e-9, std::nan(""), false, rtol) == SolveVerdict::Fatal,
+              "matrix: NaN rhs -> Fatal");
+        check(assess_adjoint_solve(1e-9, 1.0, true, rtol) == SolveVerdict::Fatal,
+              "matrix: Krylov breakdown -> Fatal even with a small residual");
+        check(assess_adjoint_solve(0.5, 1.0, true, rtol) == SolveVerdict::Fatal,
+              "matrix: breakdown outranks Continue");
+
+        // --- near-zero rhs: the case a pure relative test cannot express.
+        check(assess_adjoint_solve(1e-12, 0.0, false, rtol, /*atol=*/1e-10)
+                  == SolveVerdict::Converged,
+              "near-zero rhs + small ABSOLUTE residual -> Converged (needs atol)");
+        check(assess_adjoint_solve(1e-3, 0.0, false, rtol, /*atol=*/1e-10)
+                  == SolveVerdict::Fatal,
+              "near-zero rhs + large residual -> Fatal, not Continue (iterating cannot help)");
+        check(assess_adjoint_solve(0.0, 0.0, false, rtol) == SolveVerdict::Converged,
+              "zero rhs and zero residual -> Converged even at atol=0");
+
+        // --- mixed tolerance behaves as atol + rtol*||b||.
+        check(assess_adjoint_solve(2e-5, 1.0, false, rtol, /*atol=*/1e-4)
+                  == SolveVerdict::Converged,
+              "mixed tolerance: atol admits what rtol alone would reject");
+        check(assess_adjoint_solve(2e-5, 1.0, false, rtol, /*atol=*/0.0)
+                  == SolveVerdict::Continue,
+              "mixed tolerance: atol=0 reproduces the pure-relative bar (no silent loosening)");
+        check(assess_adjoint_solve(1e-5, 1.0, false, rtol) == SolveVerdict::Converged,
+              "boundary: residual exactly at rtol*||b|| is accepted");
+
+        // --- the signature itself is the guarantee.
+        check(std::string("Converged") == to_string(SolveVerdict::Converged) &&
+              std::string("Fatal") == to_string(SolveVerdict::Fatal),
+              "verdicts stringify, so a refusal can name which one fired");
+    }
+
+    constexpr int expected_checks = 20;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

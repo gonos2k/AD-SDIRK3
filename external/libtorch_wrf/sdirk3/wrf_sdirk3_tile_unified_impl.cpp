@@ -38729,48 +38729,55 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             // and the replay only runs after one has completed.
             if (unified_precond_) {
                 unified_precond_->update(linearization_point, dt, gamma);
+
+                // 9F.D95 (review section 4): BIND EVERY CHECKPOINT, AND FAIL CLOSED.
+                //
+                // D94 put this binding INSIDE the one-shot provenance block, so it ran on the
+                // FIRST checkpoint only and every earlier checkpoint silently reused that
+                // first preconditioner state. Worse, prov_said is a function-local static, so
+                // it is PROCESS-wide: a second solver instance would never bind at all.
+                //
+                // That is not a missing log line, it is a missing preconditioner state
+                // update -- exactly the partial-sweep shape this campaign keeps producing,
+                // and I introduced it while fixing something else. The binding is
+                // unconditional now; only the LOG is one-shot.
+                //
+                // FAIL-CLOSED, per the review: D94 measured that P genuinely depends on the
+                // mass state, so a layout that does not match is not a reason to skip the
+                // binding and continue -- it means the adjoint would run against a
+                // preconditioner bound to the wrong state, and a wrong gradient is worse
+                // than no gradient. The old form silently did nothing when the shape checks
+                // failed.
+                {
+                    const auto lay = wrf::sdirk3::StateLayout::from_grid_dims(
+                        nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
+                    const int64_t ny64 = ny_, nx64 = nx_;
+                    torch::NoGradGuard ng_bind;
+                    // Checked extraction lives in the layout header so it can be a standing
+                    // contract; the replay only says WHEN to bind, not how to find mu.
+                    auto mu_pert = wrf::sdirk3::extract_mu_pert_2d(
+                        lay, linearization_point, ny64, nx64);
+                    // STAGE INDEX IS A KNOWN GAP. The packed checkpoint records no ARK stage,
+                    // so this passes 1. D94 MEASURED stage1_vs_stage3 = 0 in this
+                    // configuration, so the guess is currently harmless -- but that is a
+                    // statement about one config, not about the design: current_stage_ does
+                    // gate stage-dependent policy elsewhere in the preconditioner. Only the
+                    // stage tape can remove the guess.
+                    unified_precond_->set_stage_state(mu_pert, 1);
+                }
+
+                // The LOG is one-shot; the binding above is not.
                 static std::atomic<bool> prov_said{false};
                 bool prov_expected = false;
                 if (prov_said.compare_exchange_strong(prov_expected, true)) {
                     torch::NoGradGuard no_grad;
-                // 9F.D94 (review section 4): BIND THE CHECKPOINT'S MASS STATE.
-                //
-                // MEASURED to matter before wiring, which is the review's own contract:
-                // holding shape/dt/gamma fixed and changing only mu moves P(v) by 8.0e-04
-                // per 1000 Pa (~1% of mu). So P is genuinely state-dependent and the replay
-                // must bind, rather than inheriting whatever the forward step left.
-                //
-                // Small, though: 8e-04 against a transpose solve stuck at rel_true 0.9973.
-                // This closes a correctness gap; it is NOT a candidate explanation for the
-                // non-convergence, and should not be reported as one.
-                //
-                // Ranges from the shared StateLayout (D93), the same one production uses at
-                // newton_solver.cpp:4311 -- not a local copy of the offsets.
-                {
-                    const auto lay = wrf::sdirk3::StateLayout::from_grid_dims(
-                        nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
-                    const auto& mu_blk = lay.blocks.back();
-                    const int64_t ny64 = ny_, nx64 = nx_;
-                    if (lay.is_valid() && lay.total_size == linearization_point.numel() &&
-                        mu_blk.name == "mu" && mu_blk.size == ny64 * nx64) {
-                        torch::NoGradGuard ng_bind;
-                        auto mu_pert = linearization_point
-                                           .slice(0, mu_blk.start, mu_blk.start + mu_blk.size)
-                                           .reshape({ny64, nx64}).clone();
-                        // STAGE INDEX IS A KNOWN GAP. The packed checkpoint records no ARK
-                        // stage, so this passes 1. If the measured stage1_vs_stage3 above is
-                        // nonzero, that guess is itself an error and only the stage tape
-                        // (review section 7) can remove it. Stated rather than hidden.
-                        unified_precond_->set_stage_state(mu_pert, 1);
-                    }
-                }
-
                     std::cerr << "SDIRK3_ADJOINT_PRECOND_PROVENANCE"
                               << " dt=" << dt << " gamma=" << gamma
                               << " alpha=" << (static_cast<double>(dt) *
                                                static_cast<double>(gamma))
                               << " |Y_lin|=" << linearization_point.norm().item<double>()
-                              << "  (rebuilt for THIS replay)" << std::endl << std::flush;
+                              << "  (bound per checkpoint; this line logged once)"
+                              << std::endl << std::flush;
                 }
             }
 
