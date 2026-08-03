@@ -24,6 +24,7 @@
  */
 
 #include "wrf_sdirk3_unified_preconditioner.h"
+#include "wrf_sdirk3_state_layout.h"
 #include "wrf_sdirk3_unified_rhs.h"
 #include "wrf_sdirk3_config.h"
 #include "wrf_sdirk3_wdamp_preconditioner_policy.h"  // PR 9D: W-damping precond policy
@@ -2074,13 +2075,27 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
         int ny_v = (grid_info_->ny_v > 0) ? grid_info_->ny_v : ny;
         int nz_w = (grid_info_->nz_w > 0) ? grid_info_->nz_w : (nz + 1);
 
-        // FIX Round192: Use int64_t to prevent overflow on large grids (nx*ny*nz > 2^31)
-        int64_t size_u = static_cast<int64_t>(nx_u) * ny * nz;
-        int64_t size_v = static_cast<int64_t>(nx) * ny_v * nz;
-        int64_t size_w = static_cast<int64_t>(nx) * ny * nz_w;
-        int64_t size_phi = static_cast<int64_t>(nx) * ny * nz_w;
-        int64_t size_t = static_cast<int64_t>(nx) * ny * nz;
-        int64_t size_mu = static_cast<int64_t>(nx) * ny;
+        // 9F.D107 (review section 8.2): sizes come from THE shared StateLayout.
+        //
+        // These six were computed here by hand while the adjoint extractor and the transpose
+        // probe used StateLayout, so two descriptions of the same packing coexisted. The
+        // review's point is that they can silently DIVERGE: mu would then be extracted at the
+        // layout's offset and interpreted by the preconditioner at a different one. Deriving
+        // them removes the possibility rather than documenting it.
+        //
+        // The local names are kept so the rest of this function is untouched, and
+        // from_grid_dims carries the overflow-checked arithmetic (D96/D98) these raw
+        // multiplications lacked.
+        const auto packed_layout =
+            wrf::sdirk3::StateLayout::from_grid_dims(nx, ny, nz, nx_u, ny_v, nz_w);
+        TORCH_CHECK(packed_layout.is_valid() && packed_layout.is_exact,
+                    "UnifiedPreconditioner: packed-state layout is not a valid exact layout");
+        int64_t size_u   = packed_layout.blocks[0].size;
+        int64_t size_v   = packed_layout.blocks[1].size;
+        int64_t size_w   = packed_layout.blocks[2].size;
+        int64_t size_phi = packed_layout.blocks[3].size;
+        int64_t size_t   = packed_layout.blocks[4].size;
+        int64_t size_mu  = packed_layout.blocks[5].size;
 
         // DIAGNOSTIC: Print detailed sizes and offsets to understand 1D packing
         static bool sizes_printed = false;
@@ -2126,13 +2141,13 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
             std::cerr << "[PRECOND DEBUG STEP 1] Passed size/device checks" << std::endl;
         }
 
-        // Block offsets in packed 1D state vector [U, V, W, PHI, T, MU]
-        int64_t u_offset = 0;
-        int64_t v_offset = size_u;
-        int64_t w_offset_1d = size_u + size_v;
-        int64_t phi_offset = w_offset_1d + size_w;
-        int64_t t_offset = phi_offset + size_phi;
-        int64_t mu_offset = t_offset + size_t;
+        // 9F.D107: offsets from the same authority, so ordering cannot drift either.
+        int64_t u_offset    = packed_layout.blocks[0].start;
+        int64_t v_offset    = packed_layout.blocks[1].start;
+        int64_t w_offset_1d = packed_layout.blocks[2].start;
+        int64_t phi_offset  = packed_layout.blocks[3].start;
+        int64_t t_offset    = packed_layout.blocks[4].start;
+        int64_t mu_offset   = packed_layout.blocks[5].start;
 
         // === COEFFICIENT CACHE (shared by both 3×3 and 4×4 paths) ===
         static thread_local std::vector<float> D_u_cache, D_v_cache;
