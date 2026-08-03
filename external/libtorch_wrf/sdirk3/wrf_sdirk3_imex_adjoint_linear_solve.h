@@ -241,26 +241,55 @@ torch::Tensor solve_transpose_linear_system_gmres(
     auto rhs_left = preconditioner.apply_transpose(rhs);
     auto x0 = torch::zeros_like(rhs);
 
-    auto gmres = krylov_methods::solve_gmres(
-        left_operator,
-        rhs_left,
-        x0,
-        /*stage_id=*/0,
-        /*ru_share_hint=*/0.0f,
-        gmres_restart,
-        gmres_tolerance,
-        gmres_max_iterations,
-        nullptr,
-        nullptr,
-        nullptr,
-        false,
-        false);
-
     // 9F.D91 (review P0-1): the PHYSICAL residual is the stopping authority.
+    // Declared outside the outer loop: each pass overwrites them, and the values after the
+    // loop are the ones the verdict was made on.
     double rel_true = std::numeric_limits<double>::infinity();
     double r_phys_norm_cached = std::numeric_limits<double>::infinity();
     double rhs_norm_cached = 0.0;
     std::vector<BlockResidual> block_residuals;
+
+    // 9F.D106 (review section 7): CONTINUE NOW ACTUALLY CONTINUES.
+    //
+    // D97 introduced the Continue verdict and D98 made it mean something, but the wrapper
+    // still threw on anything that was not Converged -- so behaviourally Continue == Fatal
+    // and a solve that stopped on the PRECONDITIONED criterion never spent its remaining
+    // budget against the PHYSICAL one. That is the review's policy, implemented:
+    //
+    //   physical passes                      -> return
+    //   preconditioned passed, physical did not, budget remains -> continue
+    //   Fatal (NaN, real breakdown, bad tolerances)             -> throw immediately
+    //   budget exhausted, physical still failing                -> fail-close
+    //
+    // Each outer pass restarts solve_gmres FROM THE CURRENT ITERATE, so nothing already
+    // achieved is discarded.
+    WRFNewtonKrylovSolver::GMRESResult gmres;
+    torch::Tensor x_current = x0;
+    int budget_left = std::max(1, gmres_max_iterations);
+    SolveVerdict verdict = SolveVerdict::Continue;
+    int outer_passes = 0;
+
+    while (budget_left > 0) {
+        ++outer_passes;
+        gmres = krylov_methods::solve_gmres(
+            left_operator,
+            rhs_left,
+            x_current,
+            /*stage_id=*/0,
+            /*ru_share_hint=*/0.0f,
+            gmres_restart,
+            gmres_tolerance,
+            budget_left,
+            nullptr,
+            nullptr,
+            nullptr,
+            false,
+            false);
+        x_current = gmres.x;
+        // Always consume at least one, so a solver that reports 0 iterations cannot spin.
+        budget_left -= std::max(1, gmres.iterations);
+        block_residuals.clear();   // each pass re-measures; never accumulate across passes
+
 
     // 9F.D87 (review section 6): report the TRUE, UNPRECONDITIONED residual.
     //
@@ -384,7 +413,7 @@ torch::Tensor solve_transpose_linear_system_gmres(
     // The global ratio is kept as telemetry, but it cannot be the gate: mu is 3,321 of
     // 1,080,491 entries, so it can be ~100% wrong while the global ratio barely moves.
     // Blocks come from THE shared StateLayout (D93), not a local copy of the offsets.
-    const SolveVerdict verdict =
+    verdict =
         block_residuals.empty()
             ? assess_adjoint_solve(res_norm_phys, rhs_norm_phys,
                                    /*krylov_breakdown=*/gmres.breakdown,
@@ -392,6 +421,9 @@ torch::Tensor solve_transpose_linear_system_gmres(
             : assess_adjoint_solve_blockwise(block_residuals,
                                              /*krylov_breakdown=*/gmres.breakdown,
                                              /*rtol=*/static_cast<double>(gmres_tolerance));
+
+        if (verdict != SolveVerdict::Continue) break;   // Converged or Fatal: done deciding
+    }   // outer budget loop
     if (verdict != SolveVerdict::Converged) {
         throw std::runtime_error(
             std::string("sdirk3 adjoint transpose solve did not converge (") +
@@ -400,6 +432,7 @@ torch::Tensor solve_transpose_linear_system_gmres(
             ", rel_true=" + std::to_string(rel_true) +
             ", rel_preconditioned=" + std::to_string(gmres.rel_error) +
             ", tol=" + std::to_string(gmres_tolerance) +
+            ", outer_passes=" + std::to_string(outer_passes) +
             ", iterations=" + std::to_string(gmres.iterations) +
             ", msg=" + gmres.message +
             ") — refusing to return a partially-converged adjoint");
