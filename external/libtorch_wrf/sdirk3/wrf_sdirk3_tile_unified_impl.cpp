@@ -38681,8 +38681,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     IdentityTransposePreconditioner preconditioner;
 
     try {
-        for (auto it = checkpoints.rbegin(); it != checkpoints.rend(); ++it) {
-            auto linearization_point = it->reshape({-1}).detach().clone();
+        // 9F.D99 (review section 6): the order comes from a pure, unit-tested function, and
+        // a bind counter below asserts one bind per checkpoint. Together they close the
+        // regression window on D94 -- per-checkpoint work drifting back inside a one-shot --
+        // which no live run can currently detect, because only ONE checkpoint is reachable.
+        size_t binds_performed = 0;
+        const auto visit_order = wrf::sdirk3::reverse_visit_order(checkpoints.size());
+        for (size_t visit_idx : visit_order) {
+            const auto& checkpoint_ref = checkpoints[visit_idx];
+            auto linearization_point = checkpoint_ref.reshape({-1}).detach().clone();
             TORCH_CHECK(linearization_point.numel() == state_size,
                         "runAdjointReplay: checkpoint size mismatch (got ",
                         linearization_point.numel(), ", expected ", state_size, ")");
@@ -38763,7 +38770,26 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                     // statement about one config, not about the design: current_stage_ does
                     // gate stage-dependent policy elsewhere in the preconditioner. Only the
                     // stage tape can remove the guess.
-                    unified_precond_->set_stage_state(mu_pert, 1);
+                    // 9F.D98 (review section 5): the CHECKED bind. set_stage_state() returns
+                    // silently on five internal failures, so D95's fail-closed extraction was
+                    // still fail-OPEN one call deeper -- extraction could succeed and the bind
+                    // be skipped, leaving the replay preconditioned by the wrong mass state.
+                    // The receipt is read back FROM the preconditioner, so this verifies the
+                    // bind took rather than assuming the setter did something.
+                    const auto receipt =
+                        unified_precond_->bind_stage_state_or_throw(mu_pert, 1);
+                    ++binds_performed;
+                    static std::atomic<bool> bind_said{false};
+                    bool bind_expected = false;
+                    if (bind_said.compare_exchange_strong(bind_expected, true)) {
+                        std::cerr << "SDIRK3_ADJOINT_BIND_RECEIPT"
+                                  << " stage=" << receipt.stage
+                                  << " mu_numel=" << receipt.mu_numel
+                                  << " mu_full_mean=" << receipt.mu_full_mean
+                                  << " coeff_gen=" << receipt.coefficient_generation
+                                  << "  (verified read-back; logged once)"
+                                  << std::endl << std::flush;
+                    }
                 }
 
                 // The LOG is one-shot; the binding above is not.
@@ -39068,6 +39094,25 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                               << std::endl;
                 }
             }
+        }
+
+        // 9F.D99 (review section 6): ONE BIND PER CHECKPOINT, enforced at runtime.
+        //
+        // D94 put the bind inside a one-shot latch and it bound only the first visited
+        // checkpoint. This makes that state unreachable: if the bind ever drifts back behind
+        // a condition, the count disagrees and the replay refuses instead of quietly
+        // returning a gradient computed against the wrong mass state.
+        //
+        // HONEST LIMIT: with a single checkpoint -- the only regime currently reachable,
+        // since the model fail-closes on step 1 at dt=600 -- 1 == 1 holds for the one-shot
+        // form too, so this check is SILENT exactly where the bug lived. That is why the
+        // ORDER is unit-tested at n=3 separately. This invariant is what starts working the
+        // moment the forward runs long enough to produce a second checkpoint.
+        if (unified_precond_) {
+            TORCH_CHECK(binds_performed == checkpoints.size(),
+                        "runAdjointReplay: bound the preconditioner ", binds_performed,
+                        " time(s) for ", checkpoints.size(), " checkpoints -- every "
+                        "checkpoint must bind its own mass state");
         }
     } catch (...) {
         dt_stage_ = dt_prev;
