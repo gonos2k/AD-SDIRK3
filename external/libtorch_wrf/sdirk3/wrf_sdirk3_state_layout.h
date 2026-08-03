@@ -44,6 +44,17 @@ inline int64_t checked_mul(int64_t a, int64_t b, const char* what) {
                 "StateLayout: int64 overflow computing ", what);
     return a * b;
 }
+// 9F.D98 (review section 11): addition that refuses to overflow. checked_mul alone was half
+// the job -- each block can be individually representable while the SUM is not. Five 3-D
+// blocks of 4e18 each are fine one at a time and wrap when added, and the D96 overflow
+// fixture only exercised a single multiplication, so that case was untested as well as
+// unchecked.
+inline int64_t checked_add(int64_t a, int64_t b, const char* what) {
+    TORCH_CHECK(a >= 0 && b >= 0, "StateLayout: negative size in ", what);
+    TORCH_CHECK(a <= (std::numeric_limits<int64_t>::max)() - b,
+                "StateLayout: int64 overflow accumulating ", what);
+    return a + b;
+}
 }  // namespace layout_detail
 
 struct StateLayout {
@@ -82,15 +93,26 @@ struct StateLayout {
         int64_t size_t  = checked_mul(checked_mul(ny64, nz64, "t"), nx64, "t");
         int64_t size_mu = checked_mul(ny64, nx64, "mu");
 
-        layout.total_size = size_u + size_v + size_w + size_ph + size_t + size_mu;
+        using layout_detail::checked_add;
+        layout.total_size = checked_add(
+            checked_add(checked_add(checked_add(checked_add(
+                size_u, size_v, "total"), size_w, "total"), size_ph, "total"),
+                size_t, "total"), size_mu, "total");
 
+        // Offsets accumulate through the same checked addition, so a layout can never be
+        // built with a wrapped start.
+        const int64_t off_v  = checked_add(0, size_u, "offset");
+        const int64_t off_w  = checked_add(off_v, size_v, "offset");
+        const int64_t off_ph = checked_add(off_w, size_w, "offset");
+        const int64_t off_t  = checked_add(off_ph, size_ph, "offset");
+        const int64_t off_mu = checked_add(off_t, size_t, "offset");
         layout.blocks = {
-            {"ru", 0, size_u},
-            {"rv", size_u, size_v},
-            {"rw", size_u + size_v, size_w},
-            {"ph", size_u + size_v + size_w, size_ph},
-            {"t",  size_u + size_v + size_w + size_ph, size_t},
-            {"mu", size_u + size_v + size_w + size_ph + size_t, size_mu}
+            {"ru", 0,      size_u},
+            {"rv", off_v,  size_v},
+            {"rw", off_w,  size_w},
+            {"ph", off_ph, size_ph},
+            {"t",  off_t,  size_t},
+            {"mu", off_mu, size_mu}
         };
 
         return layout;
@@ -149,8 +171,9 @@ inline torch::Tensor extract_mu_pert_2d(const StateLayout& layout,
                 "extract_mu_pert_2d: last block is '", mu.name, "', expected 'mu'");
     TORCH_CHECK(ny > 0 && nx > 0,
                 "extract_mu_pert_2d: non-positive grid dims ny=", ny, " nx=", nx);
-    TORCH_CHECK(mu.size == ny * nx,
-                "extract_mu_pert_2d: mu block size ", mu.size, " != ny*nx = ", ny * nx);
+    const int64_t mu_expected = layout_detail::checked_mul(ny, nx, "mu (ny*nx)");
+    TORCH_CHECK(mu.size == mu_expected,
+                "extract_mu_pert_2d: mu block size ", mu.size, " != ny*nx = ", mu_expected);
     return packed_state.slice(0, mu.start, mu.start + mu.size).reshape({ny, nx}).clone();
 }
 

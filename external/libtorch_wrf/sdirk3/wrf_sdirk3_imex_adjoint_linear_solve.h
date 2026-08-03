@@ -67,17 +67,38 @@ inline SolveVerdict assess_adjoint_solve(double residual_norm,
                                          bool krylov_breakdown,
                                          double rtol,
                                          double atol = 0.0) {
-    // Fatal first: a non-finite residual is not a small residual, and no budget helps.
+    // Only genuinely unusable inputs are Fatal before the residual is even read: a
+    // non-finite residual is not a small residual, and no budget helps.
     if (!std::isfinite(residual_norm) || !std::isfinite(rhs_norm)) return SolveVerdict::Fatal;
     if (residual_norm < 0.0 || rhs_norm < 0.0) return SolveVerdict::Fatal;
-    if (krylov_breakdown) return SolveVerdict::Fatal;
 
+    // 9F.D98 (review section 4): THE RESIDUAL IS READ BEFORE breakdown.
+    //
+    // D97 tested krylov_breakdown FIRST and returned Fatal, which rejects a HAPPY BREAKDOWN
+    // -- and happy breakdown is the BEST outcome a Krylov method has. h_{j+1,j} = 0 means
+    // the Krylov subspace is invariant and already contains the exact solution; GMRES stops
+    // early because it is DONE, not because it failed.
+    //
+    // The solver cannot distinguish them for us: solve_gmres returns breakdown = true for
+    // both "Early breakdown, already converged" and "Early breakdown, NOT converged"
+    // (newton_solver.cpp:1875). The residual is what separates them, so the residual must be
+    // consulted first.
+    //
+    // This was an AVAILABILITY defect, not a correctness one -- it could not return a wrong
+    // gradient, but it could permanently refuse a right one. And my own contract row
+    // ("breakdown -> Fatal even with a small residual") PINNED it as if it were the spec: the
+    // test was derived from what I had written rather than from what GMRES means.
     const double bar = atol + rtol * rhs_norm;
     if (residual_norm <= bar) return SolveVerdict::Converged;
 
-    // ||b|| == 0: the exact solution is x = 0. Only an exactly-zero residual (or one within
-    // atol) is convergence; anything else means the operator moved a vector it should not
-    // have, which more iterations will not fix.
+    // Past here the residual is too large, so breakdown is the real thing: the subspace is
+    // invariant and does NOT contain an acceptable solution. Restarting explores the same
+    // space again, so more budget cannot help.
+    if (krylov_breakdown) return SolveVerdict::Fatal;
+
+    // ||b|| == 0: the exact solution is x = 0. Only a residual within atol is convergence;
+    // anything else means the operator moved a vector it should not have, which more
+    // iterations will not fix.
     if (rhs_norm == 0.0) return SolveVerdict::Fatal;
 
     return SolveVerdict::Continue;
@@ -134,6 +155,7 @@ torch::Tensor solve_transpose_linear_system_gmres(
 
     // 9F.D91 (review P0-1): the PHYSICAL residual is the stopping authority.
     double rel_true = std::numeric_limits<double>::infinity();
+    double r_phys_norm_cached = std::numeric_limits<double>::infinity();
 
     // 9F.D87 (review section 6): report the TRUE, UNPRECONDITIONED residual.
     //
@@ -159,6 +181,7 @@ torch::Tensor solve_transpose_linear_system_gmres(
         // which may need a graph".
         auto r_phys = rhs - operator_transpose(gmres.x);
         torch::NoGradGuard no_grad;
+        r_phys_norm_cached = r_phys.norm().template item<double>();
         rel_true = (r_phys.norm() / rhs.norm().clamp_min(1e-30)).template item<double>();
         std::cerr << "SDIRK3_TRANSPOSE_TRUE_RESIDUAL rel_true=" << rel_true
                   << " rel_preconditioned=" << gmres.rel_error
@@ -205,9 +228,17 @@ torch::Tensor solve_transpose_linear_system_gmres(
     //
     // NanRetryExhausted needs no special case -- a NaN residual is caught by the finiteness
     // test inside assess_adjoint_solve.
-    const double rhs_norm_phys =
-        [&]{ torch::NoGradGuard g; return rhs.norm().template item<double>(); }();
-    const double res_norm_phys = rel_true * std::max(rhs_norm_phys, 1e-30);
+    // 9F.D98 (review section 10): take both norms DIRECTLY. D97 reconstructed the residual
+    // norm as rel_true * max(rhs_norm, 1e-30) -- algebraically the same in the normal range,
+    // but it round-trips through a ratio that was itself clamped, which is an unnecessary
+    // underflow/overflow path exactly where rhs -> 0 and the mixed tolerance matters most.
+    // r_phys is already in hand.
+    double res_norm_phys = 0.0, rhs_norm_phys = 0.0;
+    {
+        torch::NoGradGuard g;
+        res_norm_phys = r_phys_norm_cached;
+        rhs_norm_phys = rhs.norm().template item<double>();
+    }
     const SolveVerdict verdict = assess_adjoint_solve(
         res_norm_phys, rhs_norm_phys, /*krylov_breakdown=*/gmres.breakdown,
         /*rtol=*/static_cast<double>(gmres_tolerance));

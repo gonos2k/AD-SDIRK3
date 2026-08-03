@@ -132,6 +132,28 @@ public:
      */
     void set_stage_state(const torch::Tensor& mu_pert, int stage);
 
+    // 9F.D98 (review section 5): the CHECKED binding, for callers that cannot proceed
+    // without it.
+    //
+    // set_stage_state() above returns silently on five internal failures (undefined or
+    // non-2D mu_pert, missing grid_info_, missing or non-2D mu_base, shape mismatch),
+    // logging and continuing. That is tolerable for the production forward, which re-binds
+    // every Newton stage. It is NOT tolerable for the adjoint replay: D94 measured that P
+    // genuinely depends on the mass state, so a skipped bind means the transpose solve runs
+    // against a preconditioner carrying the WRONG state, and a wrong gradient is worse than
+    // no gradient.
+    //
+    // D95 made the mu EXTRACTION fail-closed and stopped there, so the binding was still
+    // fail-open one call deeper. This closes it: verified by a RECEIPT read back from the
+    // preconditioner, not by trusting that the setter did something.
+    struct StageBindingReceipt {
+        int stage = -1;
+        double mu_full_mean = 0.0;     // read back AFTER binding
+        int64_t mu_numel = 0;
+        uint64_t coefficient_generation = 0;
+    };
+    StageBindingReceipt bind_stage_state_or_throw(const torch::Tensor& mu_pert, int stage);
+
     /**
      * v20.14: Set theta acoustic factor (for adaptive tuning).
      * Updates the instance-local cached value and immediately triggers

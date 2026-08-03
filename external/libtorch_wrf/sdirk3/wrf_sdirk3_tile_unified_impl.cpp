@@ -38763,7 +38763,25 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                     // statement about one config, not about the design: current_stage_ does
                     // gate stage-dependent policy elsewhere in the preconditioner. Only the
                     // stage tape can remove the guess.
-                    unified_precond_->set_stage_state(mu_pert, 1);
+                    // 9F.D98 (review section 5): the CHECKED bind. set_stage_state() returns
+                    // silently on five internal failures, so D95's fail-closed extraction was
+                    // still fail-OPEN one call deeper -- extraction could succeed and the bind
+                    // be skipped, leaving the replay preconditioned by the wrong mass state.
+                    // The receipt is read back FROM the preconditioner, so this verifies the
+                    // bind took rather than assuming the setter did something.
+                    const auto receipt =
+                        unified_precond_->bind_stage_state_or_throw(mu_pert, 1);
+                    static std::atomic<bool> bind_said{false};
+                    bool bind_expected = false;
+                    if (bind_said.compare_exchange_strong(bind_expected, true)) {
+                        std::cerr << "SDIRK3_ADJOINT_BIND_RECEIPT"
+                                  << " stage=" << receipt.stage
+                                  << " mu_numel=" << receipt.mu_numel
+                                  << " mu_full_mean=" << receipt.mu_full_mean
+                                  << " coeff_gen=" << receipt.coefficient_generation
+                                  << "  (verified read-back; logged once)"
+                                  << std::endl << std::flush;
+                    }
                 }
 
                 // The LOG is one-shot; the binding above is not.

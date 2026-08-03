@@ -152,10 +152,18 @@ int main() {
               "matrix: Inf residual -> Fatal");
         check(assess_adjoint_solve(1e-9, std::nan(""), false, rtol) == SolveVerdict::Fatal,
               "matrix: NaN rhs -> Fatal");
-        check(assess_adjoint_solve(1e-9, 1.0, true, rtol) == SolveVerdict::Fatal,
-              "matrix: Krylov breakdown -> Fatal even with a small residual");
+        // 9F.D98 (review section 4): THESE TWO ROWS USED TO PIN THE DEFECT.
+        // D97 asserted "breakdown -> Fatal even with a small residual", which is exactly
+        // backwards: a HAPPY breakdown (h_{j+1,j} = 0 with the residual already under
+        // tolerance) is the BEST outcome GMRES has -- the Krylov subspace is invariant and
+        // contains the solution. solve_gmres reports breakdown = true for both the converged
+        // and non-converged early exits, so only the residual separates them.
+        check(assess_adjoint_solve(1e-9, 1.0, true, rtol) == SolveVerdict::Converged,
+              "HAPPY breakdown (small residual) -> Converged, not Fatal");
         check(assess_adjoint_solve(0.5, 1.0, true, rtol) == SolveVerdict::Fatal,
-              "matrix: breakdown outranks Continue");
+              "breakdown with a LARGE residual -> Fatal (invariant subspace, no solution)");
+        check(assess_adjoint_solve(0.5, 1.0, false, rtol) == SolveVerdict::Continue,
+              "same large residual WITHOUT breakdown -> Continue (budget could still help)");
 
         // --- near-zero rhs: the case a pure relative test cannot express.
         check(assess_adjoint_solve(1e-12, 0.0, false, rtol, /*atol=*/1e-10)
@@ -183,7 +191,7 @@ int main() {
               "verdicts stringify, so a refusal can name which one fired");
     }
 
-    constexpr int expected_checks = 20;
+    constexpr int expected_checks = 21;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

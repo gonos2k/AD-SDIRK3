@@ -196,10 +196,19 @@ int main() {
         const int big = 3000000;
         check(throws([&]{ wrf::sdirk3::StateLayout::from_grid_dims(
                   big, big, big, big, big, big); }),
-              "from_grid_dims THROWS on int64 overflow instead of wrapping");
+              "from_grid_dims THROWS on int64 MULTIPLICATION overflow");
+
+        // 9F.D98 (review section 11): the SUM can overflow while every individual block is
+        // representable -- checked_mul alone was half the job, and the D96 fixture above only
+        // exercised a single multiplication, so this case was untested as well as unchecked.
+        // 1.6e6^3 = 4.096e18 fits; five such blocks total 2.05e19 and do not.
+        const int sum_ovf = 1600000;
+        check(throws([&]{ wrf::sdirk3::StateLayout::from_grid_dims(
+                  sum_ovf, sum_ovf, sum_ovf, sum_ovf, sum_ovf, sum_ovf); }),
+              "from_grid_dims THROWS when the SUM overflows though each block fits");
     }
 
-    constexpr int expected_checks = 37;
+    constexpr int expected_checks = 38;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

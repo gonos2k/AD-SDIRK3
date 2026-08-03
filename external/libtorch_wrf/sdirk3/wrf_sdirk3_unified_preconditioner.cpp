@@ -5009,6 +5009,47 @@ void UnifiedPreconditioner::update(const torch::Tensor& state, float dt, float g
  * v20.5: Changed to accept mu_pert (perturbation) and compute mu_full internally
  * using grid_info_->mu_base. This allows Newton solver to pass state directly.
  */
+// 9F.D98 (review section 5): bind, then VERIFY, then report. See the header for why the
+// adjoint replay cannot use the fail-open setter.
+UnifiedPreconditioner::StageBindingReceipt
+UnifiedPreconditioner::bind_stage_state_or_throw(const torch::Tensor& mu_pert, int stage) {
+    torch::NoGradGuard no_grad;
+
+    // Pre-conditions the setter would only log about.
+    TORCH_CHECK(mu_pert.defined() && mu_pert.dim() == 2,
+                "bind_stage_state_or_throw: mu_pert must be a defined 2-D (j,i) tensor, got dim ",
+                mu_pert.defined() ? mu_pert.dim() : -1);
+    TORCH_CHECK(grid_info_ != nullptr,
+                "bind_stage_state_or_throw: no grid_info_, cannot form mu_full");
+    TORCH_CHECK(grid_info_->mu_base.defined() && grid_info_->mu_base.dim() == 2,
+                "bind_stage_state_or_throw: mu_base missing or not 2-D");
+    TORCH_CHECK(grid_info_->mu_base.sizes() == mu_pert.sizes(),
+                "bind_stage_state_or_throw: mu_base/mu_pert shape mismatch");
+
+    set_stage_state(mu_pert, stage);
+
+    // VERIFY, rather than assume. set_stage_state has interior early-returns; the only
+    // trustworthy evidence that the bind took is state read back from the object.
+    TORCH_CHECK(mu_full_stage_.defined(),
+                "bind_stage_state_or_throw: mu_full_stage_ is undefined after binding -- the "
+                "setter returned without binding");
+    TORCH_CHECK(mu_full_stage_.numel() == mu_pert.numel(),
+                "bind_stage_state_or_throw: mu_full_stage_ has ", mu_full_stage_.numel(),
+                " elements, expected ", mu_pert.numel());
+    TORCH_CHECK(current_stage_ == stage,
+                "bind_stage_state_or_throw: current_stage_ is ", current_stage_,
+                " after binding stage ", stage);
+
+    StageBindingReceipt r;
+    r.stage = current_stage_;
+    r.mu_full_mean = mu_full_stage_.mean().item<double>();
+    r.mu_numel = mu_full_stage_.numel();
+    r.coefficient_generation = static_cast<uint64_t>(coefficient_generation_);
+    TORCH_CHECK(std::isfinite(r.mu_full_mean),
+                "bind_stage_state_or_throw: bound mu_full is not finite");
+    return r;
+}
+
 void UnifiedPreconditioner::set_stage_state(const torch::Tensor& mu_pert, int stage) {
     torch::NoGradGuard no_grad;
 
