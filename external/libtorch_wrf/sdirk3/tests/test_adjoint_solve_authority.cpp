@@ -228,7 +228,70 @@ int main() {
               "zero checkpoints -> no visits, and no underflow on the unsigned countdown");
     }
 
-    constexpr int expected_checks = 26;
+    // ============ 9F.D100 (review section 7): THE BLOCK-WISE GATE, max_q rho_q <= 1 ========
+    //
+    // The centrepiece is THE MASKING CASE. mu is 3,321 of 1,080,491 entries, so it can be
+    // essentially 100% wrong while the GLOBAL ratio stays far under tolerance. This campaign
+    // has been bitten by that shape before -- sigma_max(J) looked state-invariant until it
+    // was split by RhsMode, because a dominant channel hid one five orders below it.
+    {
+        using wrf::sdirk3::BlockResidual;
+        using wrf::sdirk3::SolveVerdict;
+        using wrf::sdirk3::assess_adjoint_solve;
+        using wrf::sdirk3::assess_adjoint_solve_blockwise;
+        using wrf::sdirk3::worst_block;
+        const double rtol = 1e-5;
+
+        // mu carries a SMALL rhs of its own (it is a perturbation field, orders below the
+        // coupled momenta) and is 180% wrong. That is what makes the masking real: the first
+        // version of this fixture used |b_mu| = 3.0e2, which made the global ratio 2.1e-3 --
+        // above tolerance, so the global gate refused too and the test proved nothing. The
+        // assertion failing is what caught it.
+        std::vector<BlockResidual> masked = {
+            {"ru", 1e-6, 1.0e5}, {"rv", 1e-6, 1.0e5}, {"rw", 1e-6, 1.0e4},
+            {"ph", 1e-6, 1.0e4}, {"t",  1e-6, 1.0e2}, {"mu", 0.9,  0.5},
+        };
+
+        // The global view: sum in quadrature, exactly what the old gate measured.
+        double gr = 0.0, gb = 0.0;
+        for (const auto& b : masked) { gr += b.residual_norm * b.residual_norm;
+                                       gb += b.rhs_norm * b.rhs_norm; }
+        gr = std::sqrt(gr); gb = std::sqrt(gb);
+
+        check(assess_adjoint_solve(gr, gb, false, rtol) == SolveVerdict::Converged,
+              "MASKING: the GLOBAL gate calls it converged (rel=" +
+                  sci(gr / gb) + ") while mu is 100% wrong");
+        check(assess_adjoint_solve_blockwise(masked, false, rtol) == SolveVerdict::Continue,
+              "MASKING: the BLOCK gate refuses -- max_q rho_q > 1");
+        check(worst_block(masked).name == "mu",
+              "MASKING: telemetry names mu as the block holding the solve back");
+
+        // Not vacuously strict: all blocks good -> Converged.
+        std::vector<BlockResidual> all_good = {
+            {"ru", 1e-7, 1.0e5}, {"rv", 1e-7, 1.0e5}, {"rw", 1e-7, 1.0e4},
+            {"ph", 1e-7, 1.0e4}, {"t",  1e-7, 1.0e2}, {"mu", 1e-7, 3.0e2},
+        };
+        check(assess_adjoint_solve_blockwise(all_good, false, rtol) == SolveVerdict::Converged,
+              "all blocks within tolerance -> Converged (the gate is not simply strict)");
+
+        // Fatal short-circuits: one NaN block condemns the whole solve.
+        auto with_nan = all_good;
+        with_nan[3].residual_norm = std::nan("");
+        check(assess_adjoint_solve_blockwise(with_nan, false, rtol) == SolveVerdict::Fatal,
+              "one NaN block -> Fatal, not merely Continue");
+
+        // Happy breakdown still wins when EVERY block is converged.
+        check(assess_adjoint_solve_blockwise(all_good, true, rtol) == SolveVerdict::Converged,
+              "happy breakdown with all blocks converged -> Converged (D98 holds per block)");
+        check(assess_adjoint_solve_blockwise(masked, true, rtol) == SolveVerdict::Fatal,
+              "breakdown with an unconverged block -> Fatal");
+
+        // An empty block list is not convergence.
+        check(assess_adjoint_solve_blockwise({}, false, rtol) == SolveVerdict::Fatal,
+              "no blocks measured -> Fatal (silence is not convergence)");
+    }
+
+    constexpr int expected_checks = 34;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
