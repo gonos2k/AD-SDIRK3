@@ -38853,6 +38853,27 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                      .summary()
                               << std::endl << std::flush;
 
+                    // 9F.D105 (review section 3): IS P^T ITSELF A FIXED LINEAR OPERATOR?
+                    //
+                    // The transpose solve calls solve_gmres, which reconstructs corrections
+                    // as M^{-1}(sum y_i V_i) rather than sum y_i Z_i. That is exact ONLY for
+                    // a fixed linear preconditioner. (solve_fgmres, used by the FORWARD, does
+                    // store Z_j = M_j^{-1}V_j -- newton_solver.cpp:2401 -- so the review's
+                    // "not really FGMRES" applies to the transpose path specifically, not to
+                    // the codebase.)
+                    //
+                    // D78 measured that the FORWARD apply() is fixed and linear. It never
+                    // measured apply_inverse_transpose, which runs autograd on every call --
+                    // and autograd nondeterminism would invalidate the fixed reconstruction
+                    // the transpose solve depends on. Pointing the same instrument at P^T as
+                    // a FORWARD operator answers exactly that.
+                    std::cerr << tp::probe_transpose(M_transpose, {},
+                                                     linearization_point.numel(),
+                                                     linearization_point.options(),
+                                                     20260904)
+                                     .summary("SDIRK3_PT_IS_FIXED_LINEAR")
+                              << std::endl << std::flush;
+
                     // 9F.D89 (review section 8): BLOCK-LOCAL and MULTI-SEED, because the
                     // global figure above rests on ONE random direction and a global dot
                     // product can dilute a block-local defect -- a severed w-theta path

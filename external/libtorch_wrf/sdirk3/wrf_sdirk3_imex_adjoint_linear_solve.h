@@ -91,6 +91,13 @@ inline SolveVerdict assess_adjoint_solve(double residual_norm,
                                          bool krylov_breakdown,
                                          double rtol,
                                          double atol = 0.0) {
+    // 9F.D103 (review section 6): VALIDATE THE TOLERANCES. This gate exists to refuse wrong
+    // gradients, and an unvalidated rtol can switch it off entirely: rtol = Inf makes
+    // bar = atol + Inf*||b|| = Inf, so EVERY finite residual returns Converged. A negative
+    // rtol is equally meaningless. Neither is a tolerance, so neither gets to be one.
+    if (!std::isfinite(rtol) || !std::isfinite(atol)) return SolveVerdict::Fatal;
+    if (rtol < 0.0 || atol < 0.0) return SolveVerdict::Fatal;
+
     // Only genuinely unusable inputs are Fatal before the residual is even read: a
     // non-finite residual is not a small residual, and no budget helps.
     if (!std::isfinite(residual_norm) || !std::isfinite(rhs_norm)) return SolveVerdict::Fatal;
@@ -113,6 +120,8 @@ inline SolveVerdict assess_adjoint_solve(double residual_norm,
     // ("breakdown -> Fatal even with a small residual") PINNED it as if it were the spec: the
     // test was derived from what I had written rather than from what GMRES means.
     const double bar = atol + rtol * rhs_norm;
+    // An overflowed bar admits everything, which is the same fail-open shape as rtol = Inf.
+    if (!std::isfinite(bar)) return SolveVerdict::Fatal;
     if (residual_norm <= bar) return SolveVerdict::Converged;
 
     // Past here the residual is too large, so breakdown is the real thing: the subspace is
@@ -250,6 +259,7 @@ torch::Tensor solve_transpose_linear_system_gmres(
     // 9F.D91 (review P0-1): the PHYSICAL residual is the stopping authority.
     double rel_true = std::numeric_limits<double>::infinity();
     double r_phys_norm_cached = std::numeric_limits<double>::infinity();
+    double rhs_norm_cached = 0.0;
     std::vector<BlockResidual> block_residuals;
 
     // 9F.D87 (review section 6): report the TRUE, UNPRECONDITIONED residual.
@@ -276,7 +286,17 @@ torch::Tensor solve_transpose_linear_system_gmres(
         // which may need a graph".
         auto r_phys = rhs - operator_transpose(gmres.x);
         torch::NoGradGuard no_grad;
-        r_phys_norm_cached = r_phys.norm().template item<double>();
+        // 9F.D103 (review section 6): ONE FP64 reduction, reused everywhere.
+        //
+        // .item<double>() converts the FINAL SCALAR; it does not make the accumulation FP64.
+        // Over ~1e6 elements a float32 norm carries ~1e-4 relative error -- an order of
+        // magnitude LARGER than the 1e-5 tolerance it is being compared against, and
+        // reduction order differs across platforms and devices. Recomputing the norm at each
+        // use also let the logged rel_true drift from the value the verdict used.
+        auto r64 = r_phys.detach().to(torch::kFloat64);
+        auto b64 = rhs.detach().to(torch::kFloat64);
+        r_phys_norm_cached = r64.norm().template item<double>();
+        rhs_norm_cached = b64.norm().template item<double>();
 
         // 9F.D100 (review section 7): per-block norms, taken here because r_phys is in scope.
         // Blocks come from THE shared StateLayout (D93), never a local copy of the offsets.
@@ -286,13 +306,15 @@ torch::Tensor solve_transpose_linear_system_gmres(
                 BlockResidual br;
                 br.name = blk.name;
                 br.residual_norm =
-                    r_phys.slice(0, blk.start, blk.start + blk.size).norm().template item<double>();
+                    r64.slice(0, blk.start, blk.start + blk.size).norm().template item<double>();
                 br.rhs_norm =
-                    rhs.slice(0, blk.start, blk.start + blk.size).norm().template item<double>();
+                    b64.slice(0, blk.start, blk.start + blk.size).norm().template item<double>();
                 block_residuals.push_back(br);
             }
         }
-        rel_true = (r_phys.norm() / rhs.norm().clamp_min(1e-30)).template item<double>();
+        rel_true = rhs_norm_cached > 0.0
+                       ? r_phys_norm_cached / rhs_norm_cached
+                       : std::numeric_limits<double>::infinity();
         std::cerr << "SDIRK3_TRANSPOSE_TRUE_RESIDUAL rel_true=" << rel_true
                   << " rel_preconditioned=" << gmres.rel_error
                   << " |x|=" << gmres.x.norm().template item<double>();
@@ -352,12 +374,11 @@ torch::Tensor solve_transpose_linear_system_gmres(
     // but it round-trips through a ratio that was itself clamped, which is an unnecessary
     // underflow/overflow path exactly where rhs -> 0 and the mixed tolerance matters most.
     // r_phys is already in hand.
-    double res_norm_phys = 0.0, rhs_norm_phys = 0.0;
-    {
-        torch::NoGradGuard g;
-        res_norm_phys = r_phys_norm_cached;
-        rhs_norm_phys = rhs.norm().template item<double>();
-    }
+    // The SAME two numbers feed the log, the verdict, the exception message and the block
+    // report. Recomputing any of them is how a refusal ends up citing a residual that is not
+    // the one it judged.
+    const double res_norm_phys = r_phys_norm_cached;
+    const double rhs_norm_phys = rhs_norm_cached;
     // 9F.D100 (review section 7): judge per BLOCK, and let the worst one decide.
     //
     // The global ratio is kept as telemetry, but it cannot be the gate: mu is 3,321 of

@@ -159,6 +159,13 @@ inline torch::Tensor extract_mu_pert_2d(const StateLayout& layout,
                                         int64_t ny, int64_t nx) {
     TORCH_CHECK(layout.is_valid(),
                 "extract_mu_pert_2d: packed-state layout is invalid");
+    // 9F.D104 (review section 8.1): require an EXACT grid-derived layout. is_valid() checks
+    // structure, which a hand-built or estimated layout can satisfy while still describing
+    // the wrong grid. The heuristic path is gone, but nothing stopped a future one from
+    // being structurally plausible -- so the provenance flag is now part of the contract.
+    TORCH_CHECK(layout.is_exact,
+                "extract_mu_pert_2d: layout is structurally valid but NOT grid-derived; "
+                "mu extraction requires an exact layout");
     TORCH_CHECK(packed_state.dim() == 1,
                 "extract_mu_pert_2d: expected a 1-D packed state, got dim ",
                 packed_state.dim());

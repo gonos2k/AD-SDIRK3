@@ -337,7 +337,34 @@ int main() {
         }
     }
 
-    constexpr int expected_checks = 37;
+    // ===== 9F.D103 (review section 6): THE TOLERANCES ARE VALIDATED =====================
+    // This gate exists to refuse wrong gradients, and an unvalidated rtol switches it off:
+    // rtol = Inf makes bar = Inf, so every finite residual "converges". Fail-OPEN, in the one
+    // place that must fail closed.
+    {
+        using wrf::sdirk3::SolveVerdict;
+        using wrf::sdirk3::assess_adjoint_solve;
+        const double inf = std::numeric_limits<double>::infinity();
+
+        check(assess_adjoint_solve(1e9, 1.0, false, inf) == SolveVerdict::Fatal,
+              "rtol = Inf -> Fatal (it used to accept a residual of 1e9)");
+        check(assess_adjoint_solve(1e9, 1.0, false, 1e-5, inf) == SolveVerdict::Fatal,
+              "atol = Inf -> Fatal");
+        check(assess_adjoint_solve(1e9, 1.0, false, std::nan("")) == SolveVerdict::Fatal,
+              "rtol = NaN -> Fatal");
+        check(assess_adjoint_solve(1.0, 1.0, false, -1.0) == SolveVerdict::Fatal,
+              "negative rtol -> Fatal (a negative tolerance is not a tolerance)");
+        check(assess_adjoint_solve(1.0, 1.0, false, 1e-5, -1.0) == SolveVerdict::Fatal,
+              "negative atol -> Fatal");
+        // Overflowed bar admits everything -- same fail-open shape as rtol = Inf.
+        check(assess_adjoint_solve(1e9, 1e300, false, 1e300) == SolveVerdict::Fatal,
+              "bar overflows to Inf -> Fatal, not silent acceptance");
+        // Still not vacuously strict.
+        check(assess_adjoint_solve(1e-9, 1.0, false, 1e-5, 0.0) == SolveVerdict::Converged,
+              "ordinary finite tolerances still converge");
+    }
+
+    constexpr int expected_checks = 44;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

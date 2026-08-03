@@ -208,7 +208,20 @@ int main() {
               "from_grid_dims THROWS when the SUM overflows though each block fits");
     }
 
-    constexpr int expected_checks = 38;
+    // 9F.D104 (review section 8.1): is_exact is part of the extraction contract.
+    {
+        auto opts_e = torch::TensorOptions().dtype(torch::kFloat32);
+        auto state = torch::zeros({L.total_size}, opts_e);
+        auto not_exact = L;
+        not_exact.is_exact = false;          // structurally identical, provenance unknown
+        check(not_exact.is_valid(), "a non-exact layout can still be structurally VALID");
+        bool threw = false;
+        try { wrf::sdirk3::extract_mu_pert_2d(not_exact, state, NY, NX); }
+        catch (const std::exception&) { threw = true; }
+        check(threw, "extract REFUSES a structurally-valid but non-grid-derived layout");
+    }
+
+    constexpr int expected_checks = 40;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
