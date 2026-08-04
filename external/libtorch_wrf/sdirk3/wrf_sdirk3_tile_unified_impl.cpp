@@ -11415,6 +11415,40 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                         fast_guard_applied = true;
                     }
                 }
+                // 9F.D111: PER-BLOCK decomposition of the stage residual that actually
+                // aborts the run.
+                //
+                // The gate reports one scalar, rel_R_full = 9.946e+04 at dt=600 and 3.253e+03
+                // at dt=20, and a single number cannot say WHICH variable is diverging. The
+                // same treatment split the transpose residual from "nothing happens" (0.9973)
+                // into ru/rv/ph/t frozen at exactly 1.0 with mu solved to 0.18 -- an
+                // asymmetry no scalar could show.
+                //
+                // NOTE ON THE NAME: in this branch (imex mode >= 2, the operational ARK324)
+                // the vector is R_fast = K_fast - F_fast, the IMPLICIT-ONLY residual, and it
+                // is then stored in last_stage_rel_R_full_. The gate message therefore prints
+                // "rel_R_full" for a FAST residual. Reported here under its real name.
+                //
+                // Opt-in and read-only: default off, no effect on any value.
+                if (probe_env_enabled("WRF_SDIRK3_STAGE_RESID_BLOCKS")) {
+                    torch::NoGradGuard ng_blk;
+                    const auto lay = wrf::sdirk3::StateLayout::from_grid_dims(
+                        nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
+                    if (lay.is_valid() && lay.total_size == R_fast_vec.numel()) {
+                        std::cerr << "SDIRK3_STAGE_RESID_BLOCKS stage=" << stage;
+                        for (const auto& b : lay.blocks) {
+                            auto rq = R_fast_vec.slice(0, b.start, b.start + b.size);
+                            auto kq = K_fast_cpu.slice(0, b.start, b.start + b.size);
+                            const double sq = std::sqrt(static_cast<double>(b.size));
+                            const double rn = rq.norm().item<double>() / sq;   // scaled RMS
+                            const double kn = kq.norm().item<double>() / sq;
+                            std::cerr << " " << b.name << "=" << (kn > 0 ? rn / kn : -1.0)
+                                      << "(|R|=" << rn << ",|K|=" << kn << ")";
+                        }
+                        std::cerr << std::endl << std::flush;
+                    }
+                }
+
                 float fast_resid_unscaled = R_fast_vec.norm().item<float>();
                 // GR5 FIX 2026-02-16: Use scaled RMS (consistent with Mode 1 and Newton solver)
                 float sqrt_N_mode2 = std::sqrt(static_cast<float>(R_fast_vec.numel()));
