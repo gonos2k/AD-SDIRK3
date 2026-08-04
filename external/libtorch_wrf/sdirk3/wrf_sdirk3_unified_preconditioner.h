@@ -146,13 +146,73 @@ public:
     // D95 made the mu EXTRACTION fail-closed and stopped there, so the binding was still
     // fail-open one call deeper. This closes it: verified by a RECEIPT read back from the
     // preconditioner, not by trusting that the setter did something.
+    // 9F.D102 (review section 4): the receipt proves the FIELD, not a summary of it.
+    //
+    // D98's receipt checked mu_full_stage_ was defined, had the right numel, that
+    // current_stage_ matched, and that the MEAN was finite. A stale field from another
+    // checkpoint passes all four: mu_prime is a perturbation whose positive and negative
+    // regions largely cancel, so two different checkpoints can share a mean to several
+    // digits. The setter itself avoids the mean for exactly this reason and uses ||mu'||_2.
+    //
+    // So the receipt now compares POINTWISE against mu_base + mu_pert, and enforces the
+    // physical constraint the preconditioner depends on: mu_full > 0 everywhere. The 4x4
+    // Schur path forms 1/mu_full couplings, so one non-positive cell flips a coefficient's
+    // sign and injects a local singularity -- invisible to any mean.
     struct StageBindingReceipt {
         int stage = -1;
-        double mu_full_mean = 0.0;     // read back AFTER binding
+        double mu_full_mean = 0.0;
+        double mu_full_min = 0.0;      // the physical constraint lives here, not in the mean
+        double mu_full_max = 0.0;
+        double max_binding_error = 0.0;  // max |mu_full_stage_ - (mu_base + mu_pert)|
         int64_t mu_numel = 0;
+        // DISTINCT counters: a small state change updates mu_full_stage_ without triggering a
+        // coefficient rebuild, so coefficient_generation is not evidence that THIS state was
+        // bound. stage_state_generation increments on every bind.
+        uint64_t stage_state_generation = 0;
         uint64_t coefficient_generation = 0;
     };
     StageBindingReceipt bind_stage_state_or_throw(const torch::Tensor& mu_pert, int stage);
+
+    // 9F.D109 (review section 9): snapshot/restore of the stage state the adjoint replay
+    // mutates, so a replay cannot leave the PRODUCTION preconditioner bound to whichever
+    // checkpoint it happened to visit last.
+    //
+    // Not a full replay-dedicated instance (the review's preferred structure) -- this is the
+    // isolation GUARANTEE without the factory. It is what makes a digest-equality contract
+    // possible on both the normal and the exception path, which is the property that was
+    // missing: "the next forward step re-updates" is not a rollback.
+    struct StageStateSnapshot {
+        torch::Tensor mu_full_stage;
+        torch::Tensor mu_pert_last_bound;
+        int current_stage = -1;
+        float mu_scale_correction = 1.0f;
+    };
+    StageStateSnapshot snapshot_stage_state() const {
+        StageStateSnapshot s;
+        if (mu_full_stage_.defined()) s.mu_full_stage = mu_full_stage_.detach().clone();
+        if (mu_pert_last_bound_.defined())
+            s.mu_pert_last_bound = mu_pert_last_bound_.detach().clone();
+        s.current_stage = current_stage_;
+        s.mu_scale_correction = mu_scale_correction_;
+        return s;
+    }
+    void restore_stage_state(const StageStateSnapshot& s) {
+        mu_full_stage_ = s.mu_full_stage;
+        mu_pert_last_bound_ = s.mu_pert_last_bound;
+        current_stage_ = s.current_stage;
+        mu_scale_correction_ = s.mu_scale_correction;
+    }
+    // Digest of exactly the fields above, for the isolation contract. Deliberately includes
+    // mu_full_stage's VALUES, not just its shape -- the whole failure mode is a field from
+    // the wrong checkpoint, which has identical shape.
+    double stage_state_digest() const {
+        torch::NoGradGuard g;
+        double d = static_cast<double>(current_stage_) * 1e6
+                 + static_cast<double>(mu_scale_correction_) * 1e3;
+        if (mu_full_stage_.defined())
+            d += mu_full_stage_.to(torch::kFloat64).abs().sum().item<double>();
+        return d;
+    }
 
     /**
      * v20.14: Set theta acoustic factor (for adaptive tuning).
@@ -240,6 +300,14 @@ private:
     int n_smooth_iters_ = 3;
     
     // Condition number estimate
+    // 9F.D102: increments on every set_stage_state, so a receipt can prove THIS bind
+    // happened. coefficient_generation cannot: a small state change updates
+    // mu_full_stage_ without triggering a coefficient rebuild.
+    // 9F.D108 (review section 5): the previously bound mu_pert, so the recompute trigger can
+    // ask "how much did this CHANGE?" rather than "how big is it?". Two checkpoints can each
+    // be under the absolute threshold while differing by twice it.
+    torch::Tensor mu_pert_last_bound_;
+    uint64_t stage_state_generation_ = 0;
     mutable float condition_estimate_ = 1.0f;
 
     // v20.3: Newton residual ratio for adaptive α

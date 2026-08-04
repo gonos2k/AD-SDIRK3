@@ -64,6 +64,11 @@ struct ShrinkingPreconditioner {
     }
 };
 
+struct IdentityPreconditioner {
+    void set_alpha(double) {}
+    torch::Tensor apply_transpose(const torch::Tensor& r) const { return r.clone(); }
+};
+
 // Parses both residuals out of the refusal message. The refusal is the observable, so the
 // numbers that justify it have to travel with it.
 struct Refusal { bool threw = false; double rel_true = -1, rel_precond = -1; };
@@ -228,7 +233,138 @@ int main() {
               "zero checkpoints -> no visits, and no underflow on the unsigned countdown");
     }
 
-    constexpr int expected_checks = 26;
+    // ============ 9F.D100 (review section 7): THE BLOCK-WISE GATE, max_q rho_q <= 1 ========
+    //
+    // The centrepiece is THE MASKING CASE. mu is 3,321 of 1,080,491 entries, so it can be
+    // essentially 100% wrong while the GLOBAL ratio stays far under tolerance. This campaign
+    // has been bitten by that shape before -- sigma_max(J) looked state-invariant until it
+    // was split by RhsMode, because a dominant channel hid one five orders below it.
+    {
+        using wrf::sdirk3::BlockResidual;
+        using wrf::sdirk3::SolveVerdict;
+        using wrf::sdirk3::assess_adjoint_solve;
+        using wrf::sdirk3::assess_adjoint_solve_blockwise;
+        using wrf::sdirk3::worst_block;
+        const double rtol = 1e-5;
+
+        // mu carries a SMALL rhs of its own (it is a perturbation field, orders below the
+        // coupled momenta) and is 180% wrong. That is what makes the masking real: the first
+        // version of this fixture used |b_mu| = 3.0e2, which made the global ratio 2.1e-3 --
+        // above tolerance, so the global gate refused too and the test proved nothing. The
+        // assertion failing is what caught it.
+        std::vector<BlockResidual> masked = {
+            {"ru", 1e-6, 1.0e5}, {"rv", 1e-6, 1.0e5}, {"rw", 1e-6, 1.0e4},
+            {"ph", 1e-6, 1.0e4}, {"t",  1e-6, 1.0e2}, {"mu", 0.9,  0.5},
+        };
+
+        // The global view: sum in quadrature, exactly what the old gate measured.
+        double gr = 0.0, gb = 0.0;
+        for (const auto& b : masked) { gr += b.residual_norm * b.residual_norm;
+                                       gb += b.rhs_norm * b.rhs_norm; }
+        gr = std::sqrt(gr); gb = std::sqrt(gb);
+
+        check(assess_adjoint_solve(gr, gb, false, rtol) == SolveVerdict::Converged,
+              "MASKING: the GLOBAL gate calls it converged (rel=" +
+                  sci(gr / gb) + ") while mu is 100% wrong");
+        check(assess_adjoint_solve_blockwise(masked, false, rtol) == SolveVerdict::Continue,
+              "MASKING: the BLOCK gate refuses -- max_q rho_q > 1");
+        check(worst_block(masked).name == "mu",
+              "MASKING: telemetry names mu as the block holding the solve back");
+
+        // Not vacuously strict: all blocks good -> Converged.
+        std::vector<BlockResidual> all_good = {
+            {"ru", 1e-7, 1.0e5}, {"rv", 1e-7, 1.0e5}, {"rw", 1e-7, 1.0e4},
+            {"ph", 1e-7, 1.0e4}, {"t",  1e-7, 1.0e2}, {"mu", 1e-7, 3.0e2},
+        };
+        check(assess_adjoint_solve_blockwise(all_good, false, rtol) == SolveVerdict::Converged,
+              "all blocks within tolerance -> Converged (the gate is not simply strict)");
+
+        // Fatal short-circuits: one NaN block condemns the whole solve.
+        auto with_nan = all_good;
+        with_nan[3].residual_norm = std::nan("");
+        check(assess_adjoint_solve_blockwise(with_nan, false, rtol) == SolveVerdict::Fatal,
+              "one NaN block -> Fatal, not merely Continue");
+
+        // Happy breakdown still wins when EVERY block is converged.
+        check(assess_adjoint_solve_blockwise(all_good, true, rtol) == SolveVerdict::Converged,
+              "happy breakdown with all blocks converged -> Converged (D98 holds per block)");
+        check(assess_adjoint_solve_blockwise(masked, true, rtol) == SolveVerdict::Fatal,
+              "breakdown with an unconverged block -> Fatal");
+
+        // An empty block list is not convergence.
+        check(assess_adjoint_solve_blockwise({}, false, rtol) == SolveVerdict::Fatal,
+              "no blocks measured -> Fatal (silence is not convergence)");
+    }
+
+    // ========= 9F.D101 (review P0-A): THE POSITIVE SOLVE CONTROL, at last =================
+    //
+    // A^T = I - alpha*J^T with J = I and alpha = 0.5 is exactly 0.5*I. From x0 = 0:
+    //   v1 = b/|b| ;  w = A^T v1 = 0.5 v1 ;  h11 = 0.5 ;  w - h11 v1 = 0  ->  h21 = 0
+    // That is a HAPPY BREAKDOWN at j = 1, and the 1-D Krylov space already contains the exact
+    // solution: y = |b|/0.5, x = 2b, residual 0.
+    //
+    // It used to return |x| = 0. I attributed that to solve_gmres assuming WRF-shaped state
+    // and wrote "an 8-element toy never converges under ANY preconditioner" into this file as
+    // if it were a harness limitation. IT WAS NOT. It was a defect: the breakdown path broke
+    // out before the Givens reduction and then a `j <= 2` branch returned the initial guess.
+    // The review caught the rationalisation by doing the arithmetic.
+    //
+    // This is the positive control whose absence I flagged twice as unavoidable.
+    {
+        IdentityPreconditioner ident;
+        auto lin = torch::zeros({N}, opts());
+        auto rhs = torch::ones({N}, opts());
+        bool threw = false;
+        torch::Tensor x;
+        try {
+            x = wrf::sdirk3::solve_transpose_linear_system_gmres(
+                fast_operator, lin, rhs, /*alpha=*/0.5, ident,
+                /*gmres_restart=*/10, /*gmres_max_iterations=*/10,
+                /*gmres_tolerance=*/1e-5f);
+        } catch (const std::exception&) { threw = true; }
+
+        check(!threw, "0.5I: the solve SUCCEEDS (happy breakdown is convergence)");
+        if (!threw && x.defined()) {
+            const double err =
+                (x - 2.0 * rhs).norm().item<double>() / (2.0 * rhs).norm().item<double>();
+            check(err < 1e-5, "0.5I: recovers x = 2b exactly (rel err " + sci(err) + ")");
+            const double res =
+                (rhs - 0.5 * x).norm().item<double>() / rhs.norm().item<double>();
+            check(res < 1e-5, "0.5I: physical residual ~ 0 (" + sci(res) + ")");
+        } else {
+            check(false, "0.5I: recovers x = 2b");
+            check(false, "0.5I: physical residual ~ 0");
+        }
+    }
+
+    // ===== 9F.D103 (review section 6): THE TOLERANCES ARE VALIDATED =====================
+    // This gate exists to refuse wrong gradients, and an unvalidated rtol switches it off:
+    // rtol = Inf makes bar = Inf, so every finite residual "converges". Fail-OPEN, in the one
+    // place that must fail closed.
+    {
+        using wrf::sdirk3::SolveVerdict;
+        using wrf::sdirk3::assess_adjoint_solve;
+        const double inf = std::numeric_limits<double>::infinity();
+
+        check(assess_adjoint_solve(1e9, 1.0, false, inf) == SolveVerdict::Fatal,
+              "rtol = Inf -> Fatal (it used to accept a residual of 1e9)");
+        check(assess_adjoint_solve(1e9, 1.0, false, 1e-5, inf) == SolveVerdict::Fatal,
+              "atol = Inf -> Fatal");
+        check(assess_adjoint_solve(1e9, 1.0, false, std::nan("")) == SolveVerdict::Fatal,
+              "rtol = NaN -> Fatal");
+        check(assess_adjoint_solve(1.0, 1.0, false, -1.0) == SolveVerdict::Fatal,
+              "negative rtol -> Fatal (a negative tolerance is not a tolerance)");
+        check(assess_adjoint_solve(1.0, 1.0, false, 1e-5, -1.0) == SolveVerdict::Fatal,
+              "negative atol -> Fatal");
+        // Overflowed bar admits everything -- same fail-open shape as rtol = Inf.
+        check(assess_adjoint_solve(1e9, 1e300, false, 1e300) == SolveVerdict::Fatal,
+              "bar overflows to Inf -> Fatal, not silent acceptance");
+        // Still not vacuously strict.
+        check(assess_adjoint_solve(1e-9, 1.0, false, 1e-5, 0.0) == SolveVerdict::Converged,
+              "ordinary finite tolerances still converge");
+    }
+
+    constexpr int expected_checks = 44;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -38677,6 +38677,47 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     const float dt_prev = dt_stage_;
     dt_stage_ = dt;
 
+    // 9F.D109 (review section 9): RESTORE THE PRODUCTION STATE ON EVERY EXIT.
+    //
+    // The replay mutates U_ref_stage_ and, now that it binds every checkpoint, the
+    // preconditioner's stage state too -- leaving production bound to whichever checkpoint
+    // the reverse walk visited last. dt_stage_ was already restored on both paths; these were
+    // not. "The next forward step re-updates" is not a rollback: it is a hope that nothing
+    // reads the state in between, and it says nothing about the exception path.
+    //
+    // RAII, so the normal return and every throw restore identically, and a digest check
+    // makes the restoration VERIFIABLE rather than asserted. The digest covers mu_full's
+    // VALUES, not just its shape -- the failure mode is a field from the wrong checkpoint,
+    // which has identical shape.
+    struct ReplayStateGuard {
+        TileSDIRK3UnifiedSolver* self;
+        wrf::sdirk3::UnifiedPreconditioner* precond;
+        torch::Tensor saved_u_ref;
+        wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot saved_stage;
+        double saved_digest = 0.0;
+        ~ReplayStateGuard() noexcept {
+            try {
+                self->U_ref_stage_ = saved_u_ref;
+                if (precond) {
+                    precond->restore_stage_state(saved_stage);
+                    const double now = precond->stage_state_digest();
+                    if (!(std::abs(now - saved_digest) <=
+                          1e-9 * std::max(1.0, std::abs(saved_digest)))) {
+                        std::cerr << "SDIRK3_REPLAY_ISOLATION VIOLATED: preconditioner stage "
+                                     "state digest " << now << " != " << saved_digest
+                                  << " after restore" << std::endl << std::flush;
+                    }
+                }
+            } catch (...) {
+                std::cerr << "SDIRK3_REPLAY_ISOLATION: restore threw" << std::endl;
+            }
+        }
+    } replay_guard{this, unified_precond_.get(),
+                   U_ref_stage_.defined() ? U_ref_stage_.detach().clone() : torch::Tensor{},
+                   unified_precond_ ? unified_precond_->snapshot_stage_state()
+                                    : wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot{},
+                   unified_precond_ ? unified_precond_->stage_state_digest() : 0.0};
+
     const double alpha = static_cast<double>(dt) * static_cast<double>(gamma);
     IdentityTransposePreconditioner preconditioner;
 
@@ -38685,6 +38726,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
         // a bind counter below asserts one bind per checkpoint. Together they close the
         // regression window on D94 -- per-checkpoint work drifting back inside a one-shot --
         // which no live run can currently detect, because only ONE checkpoint is reachable.
+        // 9F.D100 (review section 7): register the packed-state layout so the transpose
+        // solve can gate per BLOCK instead of on one global mixed-unit ratio. The header
+        // cannot see the solver's grid dims; if this is never called it falls back to the
+        // global test rather than guessing boundaries.
+        wrf::sdirk3::set_adjoint_residual_layout(
+            wrf::sdirk3::StateLayout::from_grid_dims(nx_, ny_, nz_, nx_u_, ny_v_, nz_w_));
+
         size_t binds_performed = 0;
         const auto visit_order = wrf::sdirk3::reverse_visit_order(checkpoints.size());
         for (size_t visit_idx : visit_order) {
@@ -38786,6 +38834,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                   << " stage=" << receipt.stage
                                   << " mu_numel=" << receipt.mu_numel
                                   << " mu_full_mean=" << receipt.mu_full_mean
+                                  << " mu_min=" << receipt.mu_full_min
+                                  << " mu_max=" << receipt.mu_full_max
+                                  << " bind_err=" << receipt.max_binding_error
+                                  << " stage_gen=" << receipt.stage_state_generation
                                   << " coeff_gen=" << receipt.coefficient_generation
                                   << "  (verified read-back; logged once)"
                                   << std::endl << std::flush;
@@ -38840,6 +38892,27 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                                      linearization_point.options(),
                                                      20260802)
                                      .summary()
+                              << std::endl << std::flush;
+
+                    // 9F.D105 (review section 3): IS P^T ITSELF A FIXED LINEAR OPERATOR?
+                    //
+                    // The transpose solve calls solve_gmres, which reconstructs corrections
+                    // as M^{-1}(sum y_i V_i) rather than sum y_i Z_i. That is exact ONLY for
+                    // a fixed linear preconditioner. (solve_fgmres, used by the FORWARD, does
+                    // store Z_j = M_j^{-1}V_j -- newton_solver.cpp:2401 -- so the review's
+                    // "not really FGMRES" applies to the transpose path specifically, not to
+                    // the codebase.)
+                    //
+                    // D78 measured that the FORWARD apply() is fixed and linear. It never
+                    // measured apply_inverse_transpose, which runs autograd on every call --
+                    // and autograd nondeterminism would invalidate the fixed reconstruction
+                    // the transpose solve depends on. Pointing the same instrument at P^T as
+                    // a FORWARD operator answers exactly that.
+                    std::cerr << tp::probe_transpose(M_transpose, {},
+                                                     linearization_point.numel(),
+                                                     linearization_point.options(),
+                                                     20260904)
+                                     .summary("SDIRK3_PT_IS_FIXED_LINEAR")
                               << std::endl << std::flush;
 
                     // 9F.D89 (review section 8): BLOCK-LOCAL and MULTI-SEED, because the
