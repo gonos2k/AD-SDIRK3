@@ -6483,6 +6483,88 @@ public:
                 }
             }
 
+            // 9F.D119: NUMERICAL RANGE of the operator GMRES actually iterates.
+            //
+            // The measurement that killed the preconditioner track was a Ritz spectrum showing
+            // A_fast straddling the origin. It was taken on an operator built from Omega = mu*w,
+            // which D117/D118 established is not WRF's Omega at all. This re-asks the question
+            // on whatever operator is currently configured, so the two can be compared directly.
+            //
+            // Rayleigh quotients, not eigenvalues, and deliberately so. For a NON-NORMAL operator
+            // -- which this is -- the quantity that governs GMRES is the field of values, i.e.
+            // the spectrum of the symmetric part (A+A^T)/2, and eigenvalues can mislead in both
+            // directions. q(v) = <v,Av>/<v,v> samples exactly that field.
+            //
+            // ASYMMETRIC EVIDENCE, and the output says so: ONE negative q PROVES the numerical
+            // range straddles the origin, hence that no SPD preconditioner can fix it (and the
+            // sampled v is a witness). All-positive over N samples is EVIDENCE OF NOTHING
+            // stronger than "N random directions missed it" -- random vectors concentrate, and a
+            // narrow negative cone is easy to miss. Do not read a clean run as a definiteness
+            // proof.
+            //
+            // Opt-in, read-only, once per stage.
+            {
+                static const bool numrange_on = [](){
+                    const char* e = std::getenv("WRF_SDIRK3_NUMRANGE_PROBE");
+                    return e && *e && std::string(e) != "0" && std::string(e) != "false";
+                }();
+                static std::atomic<int> numrange_done{-1};
+                int prev = numrange_done.load();
+                if (numrange_on && newton_iter == 0 && prev != stage &&
+                    numrange_done.compare_exchange_strong(prev, stage) && gmres_op) {
+                    const int n_samp = 24;
+                    double q_min = std::numeric_limits<double>::infinity();
+                    double q_max = -std::numeric_limits<double>::infinity();
+                    int n_neg = 0, n_ok = 0;
+                    double qp_min = std::numeric_limits<double>::infinity();
+                    int np_neg = 0, np_ok = 0;
+                    for (int sidx = 0; sidx < n_samp; ++sidx) {
+                        torch::Tensor v;
+                        {   // seeded per sample so the run is reproducible
+                            torch::NoGradGuard ng_seed;
+                            v = torch::randn_like(R).detach();
+                        }
+                        // The operator is called OUTSIDE any grad guard: gmres_op is a JVP and a
+                        // blanket NoGradGuard around it kills the very graph it needs. Only the
+                        // reductions below are guarded. This exact mistake has been made in this
+                        // repo five times.
+                        torch::Tensor Av, MAv;
+                        bool threw = false;
+                        try {
+                            Av = gmres_op(v);
+                            if (gmres_M_inv) MAv = gmres_M_inv(Av);
+                        } catch (...) { threw = true; }
+                        if (threw || !Av.defined()) continue;
+                        torch::NoGradGuard ng_red;
+                        double vv = v.dot(v).to(torch::kCPU).item<double>();
+                        if (!(vv > 0.0)) continue;
+                        double q = v.dot(Av).to(torch::kCPU).item<double>() / vv;
+                        if (std::isfinite(q)) {
+                            ++n_ok; q_min = std::min(q_min, q); q_max = std::max(q_max, q);
+                            if (q < 0.0) ++n_neg;
+                        }
+                        if (MAv.defined()) {
+                            double qp = v.dot(MAv).to(torch::kCPU).item<double>() / vv;
+                            if (std::isfinite(qp)) {
+                                ++np_ok; qp_min = std::min(qp_min, qp);
+                                if (qp < 0.0) ++np_neg;
+                            }
+                        }
+                    }
+                    std::cerr << "SDIRK3_NUMRANGE stage=" << stage
+                              << " samples=" << n_ok << "/" << n_samp
+                              << " A: q_min=" << q_min << " q_max=" << q_max
+                              << " neg=" << n_neg;
+                    if (np_ok > 0) {
+                        std::cerr << " | M^-1A: q_min=" << qp_min << " neg=" << np_neg
+                                  << "/" << np_ok;
+                    }
+                    std::cerr << "  (neg>0 PROVES the numerical range straddles 0 -> no SPD"
+                                 " preconditioner suffices; neg==0 proves NOTHING)"
+                              << std::endl << std::flush;
+                }
+            }
+
             try {
                 // FIX 2026-01-29: Detach R before GMRES to prevent dual tangent propagation.
                 // Apply scaling to RHS. v20.14r26: No halo mask on RHS — GMRES solves full system.
