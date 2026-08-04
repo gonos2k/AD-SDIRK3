@@ -157,6 +157,44 @@ inline bool probe_env_enabled(const char* name) {
         "was unrecognised produces output that is read as a measurement.");
 }
 
+// 9F.D115: ARMING, so a probe reports the evaluation we are asking about.
+//
+// D113's mu trace was one-shot per RhsMode. That is strictly better than one-shot globally,
+// but it still reports whichever ImplicitOnly call happened to run FIRST -- and the residual
+// that aborts the step is a LATER ImplicitOnly call, at a different state, in a different
+// stage. The two numbers disagreed by five orders of magnitude and I could not say whether
+// that was a physics defect or two different questions, because the probe was never pinned
+// to the evaluation whose output I was trying to explain.
+//
+// A "first call wins" probe answers "what does this code do somewhere?". Arming answers
+// "what does this code do HERE?" -- which is the only form that can settle a contradiction
+// between an instrument and the quantity it is supposed to explain.
+//
+// The arming site names the evaluation; the probe fires only while armed and reports the
+// tag. Nothing is armed by default, so an un-armed run prints nothing rather than printing
+// an unattributable number.
+struct ArmedProbe {
+    std::atomic<bool> armed{false};
+    std::atomic<int>  tag_stage{-1};
+};
+inline ArmedProbe& mu_div_probe() { static ArmedProbe p; return p; }
+
+// RAII so an early return or a throw inside the evaluation cannot leave the probe armed and
+// have it fire on some unrelated later call -- exactly the mis-attribution this exists to
+// prevent.
+class ArmProbeFor {
+public:
+    ArmProbeFor(ArmedProbe& p, int stage) : p_(p) {
+        p_.tag_stage.store(stage);
+        p_.armed.store(true);
+    }
+    ~ArmProbeFor() { p_.armed.store(false); p_.tag_stage.store(-1); }
+    ArmProbeFor(const ArmProbeFor&) = delete;
+    ArmProbeFor& operator=(const ArmProbeFor&) = delete;
+private:
+    ArmedProbe& p_;
+};
+
 // Same discipline for the numeric one: the WHOLE string must parse, and the result must
 // be finite and positive.
 inline double probe_env_positive_double(const char* name, double fallback) {
@@ -11392,7 +11430,35 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
 
             if (split_mode >= 2) {
                 // Mode>=2: K is fast-only. R_fast is the meaningful convergence metric.
-                auto F_fast_final = computeUnifiedRHS(U_new, RhsMode::ImplicitOnly).detach().to(torch::kCPU);
+                //
+                // 9F.D115: THIS is the evaluation whose mu component I have been trying to
+                // explain -- |F|_mu here is the number the residual decomposition reports.
+                // Arm the mu divergence trace across exactly this call so the trace and the
+                // residual describe the same evaluation. Un-armed elsewhere, so no other
+                // call can answer in its place.
+                const bool arm_mu_trace = probe_env_enabled("WRF_SDIRK3_MU_DIV_TRACE");
+                torch::Tensor F_fast_final;
+                {
+                    std::unique_ptr<ArmProbeFor> arm;
+                    if (arm_mu_trace) arm.reset(new ArmProbeFor(mu_div_probe(), stage));
+                    F_fast_final = computeUnifiedRHS(U_new, RhsMode::ImplicitOnly)
+                                       .detach().to(torch::kCPU);
+                }
+                if (arm_mu_trace) {
+                    torch::NoGradGuard ng_fmu;
+                    const auto lay_f = wrf::sdirk3::StateLayout::from_grid_dims(
+                        nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
+                    if (lay_f.is_valid() && lay_f.total_size == F_fast_final.numel()) {
+                        const auto& mb = lay_f.blocks.back();
+                        auto fm = F_fast_final.slice(0, mb.start, mb.start + mb.size);
+                        std::cerr << "SDIRK3_MU_DIV_TRACE_F stage=" << stage
+                                  << " |F|_mu=" << (fm.norm().item<double>() /
+                                                    std::sqrt((double)mb.size))
+                                  << " max|F|_mu=" << fm.abs().max().item<double>()
+                                  << "  (same evaluation as the trace above)"
+                                  << std::endl << std::flush;
+                    }
+                }
                 auto K_fast_cpu = k.detach().to(torch::kCPU);
                 bool fast_guard_applied = false;
                 if (wrf::sdirk3::g_sdirk3_config.mode3_retry_nan_sanitize) {
@@ -15118,19 +15184,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     ? t.detach().norm().item<double>() / std::sqrt((double)t.numel())
                     : 0.0;
             };
-            // ONE-SHOT PER MODE, not one-shot globally. The first version fired once for the
-            // whole run and therefore reported whichever RhsMode happened to be evaluated
-            // first -- which need not be the ImplicitOnly (fast) call whose residual is the
-            // one that aborts the step. Reporting a number from the wrong mode as though it
-            // characterised another is the same class of error as reading a scalar that
-            // aggregates blocks.
-            static std::atomic<bool> said_full{false}, said_imp{false}, said_exp{false};
-            std::atomic<bool>& said =
-                (mode == wrf::sdirk3::RhsMode::ImplicitOnly) ? said_imp
-                : (mode == wrf::sdirk3::RhsMode::ExplicitOnly) ? said_exp : said_full;
-            bool exp0 = false;
-            if (said.compare_exchange_strong(exp0, true)) {
+            // 9F.D115: fires only while ARMED, and the armed site names the evaluation.
+            //
+            // D113 fired one-shot per RhsMode. It therefore reported the FIRST ImplicitOnly
+            // call, while the residual that aborts the step comes from a LATER ImplicitOnly
+            // call at a different state in a different stage. I then compared the two and
+            // recorded a five-order contradiction -- but a probe pinned to a different
+            // evaluation cannot contradict anything. It was answering another question.
+            //
+            // Now it reports the evaluation the caller asked about, or nothing.
+            if (mu_div_probe().armed.load()) {
                 std::cerr << "SDIRK3_MU_DIV_TRACE"
+                          << " stage=" << mu_div_probe().tag_stage.load()
                           << " mode=" << (mode == wrf::sdirk3::RhsMode::ImplicitOnly ? "Implicit"
                                         : mode == wrf::sdirk3::RhsMode::ExplicitOnly ? "Explicit"
                                         : "Full")
@@ -15139,6 +15204,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                           << " div_z=" << rms(div_z)
                           << " sum=" << rms(hevi_mu_div)
                           << " mu_tend_before=" << rms(mu_tend)
+                          // The value that actually reaches the packed RHS mu slot: the only
+                          // later writes are the two skipped under mu_tend_fortran_parity.
+                          // Printing it here makes the trace directly comparable to the
+                          // |F|_mu the residual decomposition reports, instead of leaving a
+                          // gap for me to reason across.
+                          << " mu_tend_after=" << rms(mu_tend - hevi_mu_div)
                           << "  (Pa/s RMS; physical mass divergence is O(10))"
                           << std::endl << std::flush;
             }
