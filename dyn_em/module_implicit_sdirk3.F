@@ -1980,6 +1980,9 @@ CONTAINS
       config_name = "wrf_omega_ww_cp"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_wrf_omega_ww_cp))
 
+      config_name = "mass_coordinate_mode"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_int(config_name, config_flags%sdirk3_mass_coordinate_mode)
+
       ! Split-explicit acoustic-loop parameters: pass-throughs of EXISTING WRF namelist values
       ! (no new Registry entries). Consumed by the C++ split-explicit branch only when
       ! sdirk3_split_explicit is ON; C++ defaults match em_b_wave so unset = no behavior change.

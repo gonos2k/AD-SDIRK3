@@ -526,6 +526,65 @@ struct SDIRK3Config {
     // Set via env WRF_SDIRK3_WRF_OMEGA_WW_CP or namelist sdirk3_wrf_omega_ww_cp.
     bool wrf_omega_ww_cp = false;
 
+    // 9F.D122 (review section 4): ONE authority for the mass-coordinate scheme.
+    //
+    // wrf_omega_ww_cp and mu_horizontal_div_only shipped as two independent booleans, which
+    // makes four states expressible where only two are schemes. The two mixed states are not
+    // independent physics options -- they are INCOMPLETE intermediates:
+    //
+    //   Omega ON  / mu-horiz OFF : Omega is right but the column-mass equation still carries a
+    //                              vertical term advance_mu_t does not have
+    //   Omega OFF / mu-horiz ON  : the mass equation is right but ph vertical advection and the
+    //                              mu divergence still ride on Omega = mu*w
+    //
+    // Two booleans cannot say that. A mode can, and it makes a partial state a DELIBERATE
+    // diagnostic choice rather than something a namelist typo produces silently.
+    //
+    // The diagnostic modes are kept because they earned their place: measuring the Omega
+    // correction ALONE is what showed it carries the whole effect (all six blocks collapse
+    // before the mu term is touched). Removing them would remove that measurement.
+    //
+    // Default Legacy = no behavior change (repo guardrail).
+    // Set via env WRF_SDIRK3_MASS_COORDINATE_MODE or namelist sdirk3_mass_coordinate_mode.
+    enum class MassCoordinateMode : int {
+        Legacy              = 0,  // Omega = mu*w; mu tendency keeps the vertical term
+        WRFParity           = 1,  // calc_ww_cp Omega + horizontal-only mu  <- the WRF scheme
+        DiagnosticOmegaOnly = 2,  // measurement only: incomplete
+        DiagnosticMuOnly    = 3,  // measurement only: incomplete
+    };
+    int mass_coordinate_mode = 0;
+
+    // The mode is the authority; the two booleans are the legacy wire format and are honoured
+    // ONLY while the mode is Legacy, so an explicit mode can never be silently overridden by a
+    // stale namelist boolean.
+    bool effective_wrf_omega_ww_cp() const {
+        switch (static_cast<MassCoordinateMode>(mass_coordinate_mode)) {
+            case MassCoordinateMode::WRFParity:
+            case MassCoordinateMode::DiagnosticOmegaOnly: return true;
+            case MassCoordinateMode::DiagnosticMuOnly:    return false;
+            case MassCoordinateMode::Legacy:
+            default:                                      return wrf_omega_ww_cp;
+        }
+    }
+    bool effective_mu_horizontal_div_only() const {
+        switch (static_cast<MassCoordinateMode>(mass_coordinate_mode)) {
+            case MassCoordinateMode::WRFParity:
+            case MassCoordinateMode::DiagnosticMuOnly:    return true;
+            case MassCoordinateMode::DiagnosticOmegaOnly: return false;
+            case MassCoordinateMode::Legacy:
+            default:                                      return mu_horizontal_div_only;
+        }
+    }
+    const char* mass_coordinate_mode_name() const {
+        switch (static_cast<MassCoordinateMode>(mass_coordinate_mode)) {
+            case MassCoordinateMode::WRFParity:           return "WRFParity";
+            case MassCoordinateMode::DiagnosticOmegaOnly: return "DiagnosticOmegaOnly";
+            case MassCoordinateMode::DiagnosticMuOnly:    return "DiagnosticMuOnly";
+            case MassCoordinateMode::Legacy:              return "Legacy";
+            default:                                      return "INVALID";
+        }
+    }
+
     // Split-explicit acoustic-loop parameters: pass-throughs of EXISTING WRF namelist values
     // (time_step_sound, epssm, smdiv, emdiv, top_lid) — no new Registry entries. Consumed ONLY
     // when split_explicit is ON; defaults match the em_b_wave namelist, so unset = current
