@@ -177,7 +177,11 @@ struct ArmedProbe {
     std::atomic<bool> armed{false};
     std::atomic<int>  tag_stage{-1};
 };
-inline ArmedProbe& mu_div_probe() { static ArmedProbe p; return p; }
+// One arm covers THE stage-residual evaluation. Each trace site additionally gates on its
+// own env var, so arming does not turn every probe on -- it only says WHICH call is being
+// asked about. The env check is a function-local static: probe_env_enabled() calls getenv,
+// and these sites sit in the RHS hot path.
+inline ArmedProbe& residual_eval_probe() { static ArmedProbe p; return p; }
 
 // RAII so an early return or a throw inside the evaluation cannot leave the probe armed and
 // have it fire on some unrelated later call -- exactly the mis-attribution this exists to
@@ -11436,26 +11440,32 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 // Arm the mu divergence trace across exactly this call so the trace and the
                 // residual describe the same evaluation. Un-armed elsewhere, so no other
                 // call can answer in its place.
-                const bool arm_mu_trace = probe_env_enabled("WRF_SDIRK3_MU_DIV_TRACE");
+                static const bool arm_any =
+                    probe_env_enabled("WRF_SDIRK3_MU_DIV_TRACE") ||
+                    probe_env_enabled("WRF_SDIRK3_PH_TERMS_TRACE");
                 torch::Tensor F_fast_final;
                 {
                     std::unique_ptr<ArmProbeFor> arm;
-                    if (arm_mu_trace) arm.reset(new ArmProbeFor(mu_div_probe(), stage));
+                    if (arm_any) arm.reset(new ArmProbeFor(residual_eval_probe(), stage));
                     F_fast_final = computeUnifiedRHS(U_new, RhsMode::ImplicitOnly)
                                        .detach().to(torch::kCPU);
                 }
-                if (arm_mu_trace) {
+                if (arm_any) {
+                    // Report EVERY block's |F| on this evaluation, not just the one block I
+                    // happen to be investigating. D115 reported |F|_mu alone; the next question
+                    // was immediately "then what is ph", and the answer needed another rebuild.
                     torch::NoGradGuard ng_fmu;
                     const auto lay_f = wrf::sdirk3::StateLayout::from_grid_dims(
                         nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
                     if (lay_f.is_valid() && lay_f.total_size == F_fast_final.numel()) {
-                        const auto& mb = lay_f.blocks.back();
-                        auto fm = F_fast_final.slice(0, mb.start, mb.start + mb.size);
-                        std::cerr << "SDIRK3_MU_DIV_TRACE_F stage=" << stage
-                                  << " |F|_mu=" << (fm.norm().item<double>() /
-                                                    std::sqrt((double)mb.size))
-                                  << " max|F|_mu=" << fm.abs().max().item<double>()
-                                  << "  (same evaluation as the trace above)"
+                        std::cerr << "SDIRK3_RESID_EVAL_F stage=" << stage;
+                        for (const auto& b : lay_f.blocks) {
+                            auto fb = F_fast_final.slice(0, b.start, b.start + b.size);
+                            std::cerr << " " << b.name << "="
+                                      << (fb.norm().item<double>() / std::sqrt((double)b.size))
+                                      << "(max=" << fb.abs().max().item<double>() << ")";
+                        }
+                        std::cerr << "  (same evaluation as the traces above)"
                                   << std::endl << std::flush;
                     }
                 }
@@ -15200,7 +15210,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         //
         // Split them: a single term being responsible is a different bug from all three
         // being uniformly large. Opt-in, read-only.
-        if (probe_env_enabled("WRF_SDIRK3_MU_DIV_TRACE")) {
+        static const bool mu_div_trace_on = probe_env_enabled("WRF_SDIRK3_MU_DIV_TRACE");
+        if (mu_div_trace_on) {
             torch::NoGradGuard ng_mu;
             auto rms = [](const torch::Tensor& t) {
                 return t.numel() > 0
@@ -15216,9 +15227,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // evaluation cannot contradict anything. It was answering another question.
             //
             // Now it reports the evaluation the caller asked about, or nothing.
-            if (mu_div_probe().armed.load()) {
+            if (residual_eval_probe().armed.load()) {
                 std::cerr << "SDIRK3_MU_DIV_TRACE"
-                          << " stage=" << mu_div_probe().tag_stage.load()
+                          << " stage=" << residual_eval_probe().tag_stage.load()
                           << " mode=" << (mode == wrf::sdirk3::RhsMode::ImplicitOnly ? "Implicit"
                                         : mode == wrf::sdirk3::RhsMode::ExplicitOnly ? "Explicit"
                                         : "Full")
@@ -16286,6 +16297,41 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
 
         ph_tend = ph_tend + buoyancy_term;
+
+        // 9F.D117: per-term decomposition of the ph channel, on the ARMED evaluation.
+        //
+        // With the spurious mu div_z gone (D116) ph is the entire stage-2 residual. WRF's
+        // rhs_ph has FOUR terms and this assembly mirrors them one-for-one:
+        //
+        //     mu/my d(phi)/dt = -(1/my) mx mu u dphi/dx      <- ph_tend_x_adv
+        //                       -(1/my) my mu v dphi/dy      <- ph_tend_y_adv
+        //                       - omega dphi/d_eta           <- ph_tend_z_adv
+        //                       + mu g w / my                <- buoyancy_term
+        //
+        // Unlike the mass equation, the vertical term here is LEGITIMATE -- rhs_ph really does
+        // carry -omega*dphi/d_eta. So the div_z argument does NOT transfer, and which term (if
+        // any) is anomalous has to be measured rather than assumed from the mu result.
+        //
+        // Note this is the COUPLED tendency (mu/my * dphi/dt); the decoupling by mu/my happens
+        // later, and rhs_ph's own comment says WRF defers it to advance_w the same way.
+        // Opt-in, read-only.
+        static const bool ph_terms_trace_on = probe_env_enabled("WRF_SDIRK3_PH_TERMS_TRACE");
+        if (ph_terms_trace_on && residual_eval_probe().armed.load()) {
+            torch::NoGradGuard ng_ph;
+            auto rms_ph = [](const torch::Tensor& t) {
+                return t.numel() > 0
+                    ? t.detach().norm().item<double>() / std::sqrt((double)t.numel())
+                    : 0.0;
+            };
+            std::cerr << "SDIRK3_PH_TERMS_TRACE stage=" << residual_eval_probe().tag_stage.load()
+                      << " x_adv=" << rms_ph(ph_tend_x_adv)
+                      << " y_adv=" << rms_ph(ph_tend_y_adv)
+                      << " z_adv=" << rms_ph(ph_tend_z_adv)
+                      << " buoy=" << rms_ph(buoyancy_term)
+                      << " coupled_total=" << rms_ph(ph_tend)
+                      << "  (coupled mu/my*dphi/dt; decoupled by mu/my downstream)"
+                      << std::endl << std::flush;
+        }
     }
     
     // ========================================================================
