@@ -490,6 +490,42 @@ struct SDIRK3Config {
     // when ON. Set via env WRF_SDIRK3_SPLIT_EXPLICIT or namelist sdirk3_split_explicit.
     bool split_explicit = false;
 
+    // 9F.D116: restrict the mu tendency to the HORIZONTAL mass divergence -- advance_mu_t parity.
+    //
+    // WRF's mass equation (dyn_em/module_small_step_em.F, advance_mu_t) is
+    //     DMDT(i) = DMDT(i) + dnw(k)*dvdxi(i,k)        ! dvdxi HORIZONTAL divergence only
+    // with the stated boundary condition "ww=0 at both". The vertical mass flux therefore
+    // telescopes to zero over the column and cannot change the column total; omega is
+    // DIAGNOSED from those same partial sums, never fed back into the mass tendency.
+    //
+    // This core's mu channel adds div_z = sum_k (Omega_{k+1}-Omega_k)*rdnw_k, which has no
+    // counterpart in that equation and is weighted by rdnw = 1/dnw -- the RECIPROCAL of the
+    // dnw weighting div_x/div_y carry. Measured at stage 2, dt=600, em_b_wave: div_z is 100%
+    // of the mu tendency (7.382e+06 against div_x=1.2e-03, div_y=5.7e-02), and the stage-2 mu
+    // residual is that same number.
+    //
+    // When TRUE, div_z is dropped from the mu channel. Under HEVI the mass tendency then
+    // becomes wholly explicit, which is what a horizontal-only divergence implies.
+    // Default FALSE = OPT-IN, no behavior change (repo guardrail).
+    // Set via env WRF_SDIRK3_MU_HORIZONTAL_DIV_ONLY or namelist sdirk3_mu_horizontal_div_only.
+    bool mu_horizontal_div_only = false;
+
+    // 9F.D118: use WRF's calc_ww_cp Omega in the core RHS.
+    //
+    // The core aliases Omega := rom = mu*w on the belief that "Omega is alias for rom in
+    // WRF". It is not: rom = mu_d*w is the COUPLED VERTICAL MOMENTUM (the rw prognostic),
+    // while ww/Omega is mu*d(eta)/dt -- a running vertical integral of the HORIZONTAL mass
+    // divergence, exactly zero at both boundaries (dyn_em calc_ww_cp). Different units,
+    // different inputs, different boundary behaviour; mu*w is zero only while w is, which is
+    // exactly the measured "stage 1 clean, stages 2-3 wrong" signature.
+    //
+    // When TRUE, the mu div_z and ph z_adv terms use compute_wrf_ww_cp (the complete audited
+    // recurrence, PR 9C.1, parity-contracted in the test suite) instead of mu*w. Missing map
+    // factors fail CLOSED -- supplying a different quantity is how mu*w survived here.
+    // Default FALSE = OPT-IN, no behavior change (repo guardrail).
+    // Set via env WRF_SDIRK3_WRF_OMEGA_WW_CP or namelist sdirk3_wrf_omega_ww_cp.
+    bool wrf_omega_ww_cp = false;
+
     // Split-explicit acoustic-loop parameters: pass-throughs of EXISTING WRF namelist values
     // (time_step_sound, epssm, smdiv, emdiv, top_lid) — no new Registry entries. Consumed ONLY
     // when split_explicit is ON; defaults match the em_b_wave namelist, so unset = current

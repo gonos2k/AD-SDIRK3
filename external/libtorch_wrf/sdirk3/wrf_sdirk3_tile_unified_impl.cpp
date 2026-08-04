@@ -157,6 +157,48 @@ inline bool probe_env_enabled(const char* name) {
         "was unrecognised produces output that is read as a measurement.");
 }
 
+// 9F.D115: ARMING, so a probe reports the evaluation we are asking about.
+//
+// D113's mu trace was one-shot per RhsMode. That is strictly better than one-shot globally,
+// but it still reports whichever ImplicitOnly call happened to run FIRST -- and the residual
+// that aborts the step is a LATER ImplicitOnly call, at a different state, in a different
+// stage. The two numbers disagreed by five orders of magnitude and I could not say whether
+// that was a physics defect or two different questions, because the probe was never pinned
+// to the evaluation whose output I was trying to explain.
+//
+// A "first call wins" probe answers "what does this code do somewhere?". Arming answers
+// "what does this code do HERE?" -- which is the only form that can settle a contradiction
+// between an instrument and the quantity it is supposed to explain.
+//
+// The arming site names the evaluation; the probe fires only while armed and reports the
+// tag. Nothing is armed by default, so an un-armed run prints nothing rather than printing
+// an unattributable number.
+struct ArmedProbe {
+    std::atomic<bool> armed{false};
+    std::atomic<int>  tag_stage{-1};
+};
+// One arm covers THE stage-residual evaluation. Each trace site additionally gates on its
+// own env var, so arming does not turn every probe on -- it only says WHICH call is being
+// asked about. The env check is a function-local static: probe_env_enabled() calls getenv,
+// and these sites sit in the RHS hot path.
+inline ArmedProbe& residual_eval_probe() { static ArmedProbe p; return p; }
+
+// RAII so an early return or a throw inside the evaluation cannot leave the probe armed and
+// have it fire on some unrelated later call -- exactly the mis-attribution this exists to
+// prevent.
+class ArmProbeFor {
+public:
+    ArmProbeFor(ArmedProbe& p, int stage) : p_(p) {
+        p_.tag_stage.store(stage);
+        p_.armed.store(true);
+    }
+    ~ArmProbeFor() { p_.armed.store(false); p_.tag_stage.store(-1); }
+    ArmProbeFor(const ArmProbeFor&) = delete;
+    ArmProbeFor& operator=(const ArmProbeFor&) = delete;
+private:
+    ArmedProbe& p_;
+};
+
 // Same discipline for the numeric one: the WHOLE string must parse, and the result must
 // be finite and positive.
 inline double probe_env_positive_double(const char* name, double fallback) {
@@ -5632,9 +5674,16 @@ vertical_coefficients:
             const bool tile_covers_patch =
                 its_ <= ids_ && ite_ >= ide_ - 1 &&
                 jts_ <= jds_ && jte_ >= jde_ - 1;
-            wdamp_contract_ = wrf::sdirk3::resolve_wdamp_runtime_contract(
+            // 9F.D118: the core RHS's Omega now needs this contract too, so resolve it when
+            // EITHER consumer is on. Previously it was gated on W-damping alone, and the
+            // omega knob hit an inactive contract and fail-closed with a W-damping marker --
+            // correct behaviour, wrong subsystem named.
+            const bool wdamp_on =
                 wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
-                    wrf::sdirk3::g_sdirk3_config.implicit_wdamp,
+                wrf::sdirk3::g_sdirk3_config.implicit_wdamp;
+            const bool wwcp_on = wrf::sdirk3::g_sdirk3_config.wrf_omega_ww_cp;
+            wdamp_contract_ = wrf::sdirk3::resolve_wdamp_runtime_contract(
+                wdamp_on || wwcp_on,
                 nprocx_, nprocy_, tile_covers_patch,
                 config_flags_periodic_x_, config_flags_symmetric_xs_,
                 config_flags_symmetric_xe_, config_flags_open_xs_,
@@ -5642,7 +5691,9 @@ vertical_coefficients:
                 config_flags_symmetric_ys_, config_flags_symmetric_ye_,
                 config_flags_open_ys_, config_flags_open_ye_,
                 config_flags_specified_, config_flags_nested_,
-                config_flags_polar_);
+                config_flags_polar_,
+                wdamp_on ? (wwcp_on ? "W-damping + calc_ww_cp Omega" : "W-damping")
+                         : "calc_ww_cp Omega (sdirk3_wrf_omega_ww_cp)");
         }
         // ===== SHARED PRIORITY MAPPING (identical in stage loop + solveImplicitStage) =====
         int split_mode = wrf::sdirk3::g_sdirk3_config.imex_split_mode;
@@ -11392,7 +11443,41 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
 
             if (split_mode >= 2) {
                 // Mode>=2: K is fast-only. R_fast is the meaningful convergence metric.
-                auto F_fast_final = computeUnifiedRHS(U_new, RhsMode::ImplicitOnly).detach().to(torch::kCPU);
+                //
+                // 9F.D115: THIS is the evaluation whose mu component I have been trying to
+                // explain -- |F|_mu here is the number the residual decomposition reports.
+                // Arm the mu divergence trace across exactly this call so the trace and the
+                // residual describe the same evaluation. Un-armed elsewhere, so no other
+                // call can answer in its place.
+                static const bool arm_any =
+                    probe_env_enabled("WRF_SDIRK3_MU_DIV_TRACE") ||
+                    probe_env_enabled("WRF_SDIRK3_PH_TERMS_TRACE");
+                torch::Tensor F_fast_final;
+                {
+                    std::unique_ptr<ArmProbeFor> arm;
+                    if (arm_any) arm.reset(new ArmProbeFor(residual_eval_probe(), stage));
+                    F_fast_final = computeUnifiedRHS(U_new, RhsMode::ImplicitOnly)
+                                       .detach().to(torch::kCPU);
+                }
+                if (arm_any) {
+                    // Report EVERY block's |F| on this evaluation, not just the one block I
+                    // happen to be investigating. D115 reported |F|_mu alone; the next question
+                    // was immediately "then what is ph", and the answer needed another rebuild.
+                    torch::NoGradGuard ng_fmu;
+                    const auto lay_f = wrf::sdirk3::StateLayout::from_grid_dims(
+                        nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
+                    if (lay_f.is_valid() && lay_f.total_size == F_fast_final.numel()) {
+                        std::cerr << "SDIRK3_RESID_EVAL_F stage=" << stage;
+                        for (const auto& b : lay_f.blocks) {
+                            auto fb = F_fast_final.slice(0, b.start, b.start + b.size);
+                            std::cerr << " " << b.name << "="
+                                      << (fb.norm().item<double>() / std::sqrt((double)b.size))
+                                      << "(max=" << fb.abs().max().item<double>() << ")";
+                        }
+                        std::cerr << "  (same evaluation as the traces above)"
+                                  << std::endl << std::flush;
+                    }
+                }
                 auto K_fast_cpu = k.detach().to(torch::kCPU);
                 bool fast_guard_applied = false;
                 if (wrf::sdirk3::g_sdirk3_config.mode3_retry_nan_sanitize) {
@@ -12217,6 +12302,65 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             std::cerr << "WARNING: mu_full has negative values (min=" << mu_full_min << ")" << std::endl;
         }
     }
+
+    // 9F.D118: WRF's Omega, for the sites that have been using mu*w.
+    //
+    // The core RHS aliases `Omega = rom` where `rom = mu_full * w`, on the stated belief
+    // that "Omega is alias for rom in WRF". It is not. In WRF `rom = mu_d*w` is the COUPLED
+    // VERTICAL MOMENTUM (the rw prognostic); ww/Omega is mu*d(eta)/dt, produced by
+    // calc_ww_cp as a running vertical integral of the HORIZONTAL mass divergence:
+    //
+    //     ww(i,1,j) = 0. ;  ww(i,kte,j) = 0.
+    //     ww(i,k,j) = ww(i,k-1,j) - dnw(k-1)*c1h(k-1)*dmdt(i) - divv(i,k-1)
+    //
+    // Different units (Pa/s vs Pa*m/s), different inputs (u,v,mu vs w), and EXACTLY ZERO at
+    // both boundaries by construction rather than by a mask. That last property is why the
+    // measured signature is "stage 1 clean, stages 2-3 wrong": mu*w is only zero while w is.
+    //
+    // compute_wrf_ww_cp is the complete audited recurrence (PR 9C.1) with a parity contract
+    // in the test suite. It already serves the W-damping path; the core RHS never adopted it,
+    // which is the open "production 배선" item from that PR. Memoised because both consumer
+    // sites (mu div_z, ph z_adv) are in this same evaluation and it is not free.
+    //
+    // Opt-in. When off, nothing here is evaluated and the mu*w sites are untouched.
+    torch::Tensor wrf_ww_cp_memo;
+    auto wrf_ww_cp = [&]() -> torch::Tensor {
+        if (wrf_ww_cp_memo.defined()) return wrf_ww_cp_memo;
+        const int64_t ny_o = mu_full.size(0);
+        const int64_t nx_o = mu_full.size(1);
+        const int64_t nxu_o = u.size(2);
+        const int64_t nyv_o = v.size(0);
+        // The user asked for WRF's Omega; supplying a different quantity because a map
+        // factor was missing would be fail-open, and fail-open is how mu*w survived here in
+        // the first place. Same contract the W-damping path enforces.
+        const bool geom_ok =
+            c1h_.defined() && c1h_.numel() >= nz_ &&
+            c2h_.defined() && c2h_.numel() >= nz_ &&
+            mu_base_.defined() && mu_base_.numel() == ny_o * nx_o &&
+            msftx_.defined() && msftx_.dim() == 2 &&
+            msftx_.size(0) == ny_o && msftx_.size(1) == nx_o &&
+            msfuy_.defined() && msfuy_.dim() == 2 &&
+            msfuy_.size(0) == ny_o && msfuy_.size(1) == nxu_o &&
+            msfvx_.defined() && msfvx_.dim() == 2 &&
+            msfvx_.size(0) == nyv_o && msfvx_.size(1) == nx_o;
+        if (!geom_ok) {
+            wrf::sdirk3::wdamp_geometry_fail(
+                "SDIRK3_WWCP_PARITY_GEOMETRY_UNSUPPORTED: sdirk3_wrf_omega_ww_cp requires "
+                "the complete calc_ww_cp coefficient and map-factor contract "
+                "(c1h/c2h, mu_base, msftx/msfuy/msfvx on their staggers)");
+        }
+        auto dev = u.device();
+        auto dtp = u.scalar_type();
+        auto dnw_t = -torch::reciprocal(getRdnwTensor(dev, dtp, nz_));
+        wrf_ww_cp_memo = wrf::sdirk3::compute_wrf_ww_cp(
+            u, v, mu, mu_base_.to(dev, dtp).reshape({ny_o, nx_o}),
+            c1h_.to(dev, dtp).slice(0, 0, nz_), c2h_.to(dev, dtp).slice(0, 0, nz_),
+            dnw_t, rdx, rdy,
+            msftx_.to(dev, dtp), msfuy_.to(dev, dtp),
+            torch::reciprocal(msfvx_.to(dev, dtp)),
+            wdamp_contract_.x_policy, wdamp_contract_.y_policy);
+        return wrf_ww_cp_memo;
+    };
 
     // GRADIENT FIX: Compute mu_full safety check unconditionally (no control-flow .item())
     // The torch::where() operation below is differentiable regardless of the condition
@@ -14683,8 +14827,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // JVP FIX: Blend reference and current state for omega to prevent zero-flux linearization
         float blend_mu = wrf::sdirk3::g_sdirk3_config.omega_w_blend;
         auto w_blended_mu = blend_mu * w + (1.0f - blend_mu) * w_ref;
-        auto rom = mu_full.unsqueeze(1).expand({-1, w_ref.size(1), -1}) * w_blended_mu;
-        auto& Omega = rom;  // Omega is alias for rom in WRF
+        // 9F.D118: `Omega is alias for rom in WRF` was FALSE and is the root defect --
+        // rom = mu_d*w is the coupled vertical MOMENTUM (rw), while WRF's ww/Omega is
+        // mu*d(eta)/dt from calc_ww_cp. Opt-in substitution of the audited recurrence.
+        auto rom = wrf::sdirk3::g_sdirk3_config.wrf_omega_ww_cp
+                       ? wrf_ww_cp()
+                       : (mu_full.unsqueeze(1).expand({-1, w_ref.size(1), -1}) * w_blended_mu);
+        auto& Omega = rom;
 
         // ============================================================================
         // ISSUE #1 FIX: Enforce kinematic BC Ω=0 at k=0 (η=0) and k=nz_w-1 (η=1)
@@ -15107,6 +15256,76 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         torch::Tensor hevi_mu_div = div_x + div_y + div_z;            // full (baseline + Full pass)
         if (hevi_pure_implicit)      hevi_mu_div = div_z;             // ImplicitOnly: vertical only
         else if (hevi_pure_explicit) hevi_mu_div = div_x + div_y;    // ExplicitOnly: horizontal only
+
+        // 9F.D116: advance_mu_t parity -- the mu tendency is HORIZONTAL divergence only.
+        //
+        //     DMDT(i) = DMDT(i) + dnw(k)*dvdxi(i,k)     ! dyn_em, dvdxi HORIZONTAL only
+        //     !  BCs are ww=0 at both
+        //
+        // With ww=0 at both boundaries the vertical mass flux telescopes to zero over the
+        // column and cannot change the column total, so WRF's mass equation has no vertical
+        // term; omega is DIAGNOSED from those partial sums, never fed back. div_z here is
+        // sum_k (Omega_{k+1}-Omega_k)*rdnw_k, weighted by the RECIPROCAL of the dnw weighting
+        // div_x/div_y carry, and measures as 100% of the mu tendency at stage 2 (7.382e+06
+        // against 1.2e-03 and 5.7e-02).
+        //
+        // Under HEVI the mass tendency becomes wholly EXPLICIT, which is what a
+        // horizontal-only divergence implies: the ImplicitOnly pass contributes nothing to mu.
+        // Opt-in; when off this branch is not taken and the expression above is unchanged.
+        if (wrf::sdirk3::g_sdirk3_config.mu_horizontal_div_only) {
+            if (hevi_pure_implicit) {
+                hevi_mu_div = torch::zeros_like(div_x);
+            } else {
+                hevi_mu_div = div_x + div_y;
+            }
+        }
+        // 9F.D113: WHERE DOES THE 7.4e6 mu TENDENCY COME FROM?
+        //
+        // D112 measured the mu component of the RHS at |F| = 7.382e6 (scaled RMS, dt=600).
+        // For mu ~ 8.9e4 Pa, V ~ 30 m/s and dx ~ 100 km the mass divergence should be
+        // O(10) Pa/s -- so the measured value is five to six orders too large. mu_tend is
+        // assembled here and nowhere else, so div_x/div_y/div_z are the whole source.
+        //
+        // Split them: a single term being responsible is a different bug from all three
+        // being uniformly large. Opt-in, read-only.
+        static const bool mu_div_trace_on = probe_env_enabled("WRF_SDIRK3_MU_DIV_TRACE");
+        if (mu_div_trace_on) {
+            torch::NoGradGuard ng_mu;
+            auto rms = [](const torch::Tensor& t) {
+                return t.numel() > 0
+                    ? t.detach().norm().item<double>() / std::sqrt((double)t.numel())
+                    : 0.0;
+            };
+            // 9F.D115: fires only while ARMED, and the armed site names the evaluation.
+            //
+            // D113 fired one-shot per RhsMode. It therefore reported the FIRST ImplicitOnly
+            // call, while the residual that aborts the step comes from a LATER ImplicitOnly
+            // call at a different state in a different stage. I then compared the two and
+            // recorded a five-order contradiction -- but a probe pinned to a different
+            // evaluation cannot contradict anything. It was answering another question.
+            //
+            // Now it reports the evaluation the caller asked about, or nothing.
+            if (residual_eval_probe().armed.load()) {
+                std::cerr << "SDIRK3_MU_DIV_TRACE"
+                          << " stage=" << residual_eval_probe().tag_stage.load()
+                          << " mode=" << (mode == wrf::sdirk3::RhsMode::ImplicitOnly ? "Implicit"
+                                        : mode == wrf::sdirk3::RhsMode::ExplicitOnly ? "Explicit"
+                                        : "Full")
+                          << " div_x=" << rms(div_x)
+                          << " div_y=" << rms(div_y)
+                          << " div_z=" << rms(div_z)
+                          << " sum=" << rms(hevi_mu_div)
+                          << " mu_tend_before=" << rms(mu_tend)
+                          // The value that actually reaches the packed RHS mu slot: the only
+                          // later writes are the two skipped under mu_tend_fortran_parity.
+                          // Printing it here makes the trace directly comparable to the
+                          // |F|_mu the residual decomposition reports, instead of leaving a
+                          // gap for me to reason across.
+                          << " mu_tend_after=" << rms(mu_tend - hevi_mu_div)
+                          << "  (Pa/s RMS; physical mass divergence is O(10))"
+                          << std::endl << std::flush;
+            }
+        }
         mu_tend = mu_tend - hevi_mu_div;
 
         // FORTRAN PARITY (2025-12-05): Guard mean-subtract and clamp with config flag
@@ -15990,7 +16209,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // JVP FIX: Blend reference and current state for omega to prevent zero-flux linearization
         float blend = wrf::sdirk3::g_sdirk3_config.omega_w_blend;
         auto w_blended = blend * w + (1.0f - blend) * w_ref;
-        auto omega = (mu_3d / msfty_3d) * w_blended;
+        // 9F.D118: same substitution as the mu channel. rhs_ph's -omega*dphi/d_eta is a
+        // LEGITIMATE term (unlike the mass equation's div_z); what was wrong is omega.
+        auto omega = wrf::sdirk3::g_sdirk3_config.wrf_omega_ww_cp
+                         ? wrf_ww_cp()
+                         : ((mu_3d / msfty_3d) * w_blended);
 
         // DIAGNOSTIC: Check omega and wdwn values
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -16156,6 +16379,41 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
 
         ph_tend = ph_tend + buoyancy_term;
+
+        // 9F.D117: per-term decomposition of the ph channel, on the ARMED evaluation.
+        //
+        // With the spurious mu div_z gone (D116) ph is the entire stage-2 residual. WRF's
+        // rhs_ph has FOUR terms and this assembly mirrors them one-for-one:
+        //
+        //     mu/my d(phi)/dt = -(1/my) mx mu u dphi/dx      <- ph_tend_x_adv
+        //                       -(1/my) my mu v dphi/dy      <- ph_tend_y_adv
+        //                       - omega dphi/d_eta           <- ph_tend_z_adv
+        //                       + mu g w / my                <- buoyancy_term
+        //
+        // Unlike the mass equation, the vertical term here is LEGITIMATE -- rhs_ph really does
+        // carry -omega*dphi/d_eta. So the div_z argument does NOT transfer, and which term (if
+        // any) is anomalous has to be measured rather than assumed from the mu result.
+        //
+        // Note this is the COUPLED tendency (mu/my * dphi/dt); the decoupling by mu/my happens
+        // later, and rhs_ph's own comment says WRF defers it to advance_w the same way.
+        // Opt-in, read-only.
+        static const bool ph_terms_trace_on = probe_env_enabled("WRF_SDIRK3_PH_TERMS_TRACE");
+        if (ph_terms_trace_on && residual_eval_probe().armed.load()) {
+            torch::NoGradGuard ng_ph;
+            auto rms_ph = [](const torch::Tensor& t) {
+                return t.numel() > 0
+                    ? t.detach().norm().item<double>() / std::sqrt((double)t.numel())
+                    : 0.0;
+            };
+            std::cerr << "SDIRK3_PH_TERMS_TRACE stage=" << residual_eval_probe().tag_stage.load()
+                      << " x_adv=" << rms_ph(ph_tend_x_adv)
+                      << " y_adv=" << rms_ph(ph_tend_y_adv)
+                      << " z_adv=" << rms_ph(ph_tend_z_adv)
+                      << " buoy=" << rms_ph(buoyancy_term)
+                      << " coupled_total=" << rms_ph(ph_tend)
+                      << "  (coupled mu/my*dphi/dt; decoupled by mu/my downstream)"
+                      << std::endl << std::flush;
+        }
     }
     
     // ========================================================================
