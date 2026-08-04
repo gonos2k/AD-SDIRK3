@@ -6565,6 +6565,65 @@ public:
                 }
             }
 
+            // 9F.D120: WHICH BLOCK does the preconditioner suppress?
+            //
+            // Measured at stage 2/3 with the corrected operator: |K|_ph is ~1300x BELOW the
+            // |F|_ph it must converge to when M is on, and the right order when M is off. That
+            // says M suppresses the ph correction, but not WHERE or BY HOW MUCH.
+            //
+            // So probe M directly on block-structured vectors, the way the operator/precond
+            // guidance says to: put a random vector in ONE block, zero elsewhere, apply M^-1,
+            // and report (a) the gain in that block, ||z_q||/||v_q||, and (b) the leakage into
+            // every other block. A block whose gain is ~0 is annihilated; a block whose gain is
+            // enormous is amplified. Both are visible, and the leakage row shows the coupling M
+            // actually models rather than the one it is documented to.
+            //
+            // This is the M^-1 A e_k ~ e_k check specialised to blocks, and it needs no
+            // reference solution -- it is a property of M alone.
+            {
+                static const bool blockgain_on = [](){
+                    const char* e = std::getenv("WRF_SDIRK3_PRECOND_BLOCK_GAIN");
+                    return e && *e && std::string(e) != "0" && std::string(e) != "false";
+                }();
+                static std::atomic<int> bg_done{-1};
+                int bprev = bg_done.load();
+                if (blockgain_on && newton_iter == 0 && bprev != stage &&
+                    bg_done.compare_exchange_strong(bprev, stage) && gmres_M_inv &&
+                    cached_layout_.is_valid() &&
+                    cached_layout_.total_size == R.numel()) {
+                    for (const auto& blk : cached_layout_.blocks) {
+                        torch::Tensor v;
+                        {
+                            torch::NoGradGuard ng_bg;
+                            v = torch::zeros_like(R);
+                            v.slice(0, blk.start, blk.start + blk.size)
+                                .copy_(torch::randn({blk.size}, R.options()));
+                            v = v.detach();
+                        }
+                        // Outside any grad guard: M^-1 may build a graph.
+                        torch::Tensor z;
+                        try { z = gmres_M_inv(v); } catch (...) { continue; }
+                        if (!z.defined()) continue;
+                        torch::NoGradGuard ng_bg2;
+                        double vin = v.slice(0, blk.start, blk.start + blk.size)
+                                       .norm().to(torch::kCPU).item<double>();
+                        if (!(vin > 0.0)) continue;
+                        std::cerr << "SDIRK3_PRECOND_BLOCK_GAIN stage=" << stage
+                                  << " in=" << blk.name
+                                  << " gain=" << (z.slice(0, blk.start, blk.start + blk.size)
+                                                    .norm().to(torch::kCPU).item<double>() / vin)
+                                  << " leak:";
+                        for (const auto& ob : cached_layout_.blocks) {
+                            if (ob.name == blk.name) continue;
+                            std::cerr << " " << ob.name << "="
+                                      << (z.slice(0, ob.start, ob.start + ob.size)
+                                            .norm().to(torch::kCPU).item<double>() / vin);
+                        }
+                        std::cerr << std::endl << std::flush;
+                    }
+                }
+            }
+
             try {
                 // FIX 2026-01-29: Detach R before GMRES to prevent dual tangent propagation.
                 // Apply scaling to RHS. v20.14r26: No halo mask on RHS — GMRES solves full system.
