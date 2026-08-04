@@ -364,7 +364,43 @@ int main() {
               "ordinary finite tolerances still converge");
     }
 
-    constexpr int expected_checks = 44;
+    // ===== 9F.D114 (review section 9): A ZERO-RHS *BLOCK* IS NOT FATAL ====================
+    // Fatal-on-zero-rhs is right for the WHOLE system (b = 0 => x = 0). It is wrong per
+    // block: in a coupled system a block can have b_q = 0 and carry a legitimate nonzero
+    // residual through coupling, which further iterations reduce. The review's example:
+    //     A = [[1,1],[1,2]], b = (1,0)^T  -- b_2 = 0, r_2 != 0 at intermediate iterates.
+    {
+        using wrf::sdirk3::BlockResidual;
+        using wrf::sdirk3::SolveVerdict;
+        using wrf::sdirk3::assess_adjoint_solve;
+        using wrf::sdirk3::assess_adjoint_solve_blockwise;
+        const double rtol = 1e-5;
+
+        std::vector<BlockResidual> coupled = {
+            {"ru", 1e-9, 1.0},     // fine
+            {"mu", 0.3,  0.0},     // zero RHS, nonzero residual via coupling
+        };
+        check(assess_adjoint_solve_blockwise(coupled, false, rtol) == SolveVerdict::Continue,
+              "zero-RHS block with a residual -> Continue, NOT Fatal (coupling is legitimate)");
+        check(assess_adjoint_solve(0.3, 0.0, false, rtol) == SolveVerdict::Fatal,
+              "the WHOLE-system rule is unchanged: b=0 with a residual is still Fatal");
+
+        std::vector<BlockResidual> settled = {
+            {"ru", 1e-9, 1.0},
+            {"mu", 0.0,  0.0},     // zero RHS, zero residual
+        };
+        check(assess_adjoint_solve_blockwise(settled, false, rtol) == SolveVerdict::Converged,
+              "zero-RHS block that IS zero -> Converged");
+
+        std::vector<BlockResidual> nan_blk = {
+            {"ru", 1e-9, 1.0},
+            {"mu", std::nan(""), 0.0},
+        };
+        check(assess_adjoint_solve_blockwise(nan_blk, false, rtol) == SolveVerdict::Fatal,
+              "zero-RHS block with a NaN residual is STILL Fatal");
+    }
+
+    constexpr int expected_checks = 48;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

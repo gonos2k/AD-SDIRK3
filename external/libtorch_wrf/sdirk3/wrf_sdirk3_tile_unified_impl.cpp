@@ -15102,6 +15102,47 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         torch::Tensor hevi_mu_div = div_x + div_y + div_z;            // full (baseline + Full pass)
         if (hevi_pure_implicit)      hevi_mu_div = div_z;             // ImplicitOnly: vertical only
         else if (hevi_pure_explicit) hevi_mu_div = div_x + div_y;    // ExplicitOnly: horizontal only
+        // 9F.D113: WHERE DOES THE 7.4e6 mu TENDENCY COME FROM?
+        //
+        // D112 measured the mu component of the RHS at |F| = 7.382e6 (scaled RMS, dt=600).
+        // For mu ~ 8.9e4 Pa, V ~ 30 m/s and dx ~ 100 km the mass divergence should be
+        // O(10) Pa/s -- so the measured value is five to six orders too large. mu_tend is
+        // assembled here and nowhere else, so div_x/div_y/div_z are the whole source.
+        //
+        // Split them: a single term being responsible is a different bug from all three
+        // being uniformly large. Opt-in, read-only.
+        if (probe_env_enabled("WRF_SDIRK3_MU_DIV_TRACE")) {
+            torch::NoGradGuard ng_mu;
+            auto rms = [](const torch::Tensor& t) {
+                return t.numel() > 0
+                    ? t.detach().norm().item<double>() / std::sqrt((double)t.numel())
+                    : 0.0;
+            };
+            // ONE-SHOT PER MODE, not one-shot globally. The first version fired once for the
+            // whole run and therefore reported whichever RhsMode happened to be evaluated
+            // first -- which need not be the ImplicitOnly (fast) call whose residual is the
+            // one that aborts the step. Reporting a number from the wrong mode as though it
+            // characterised another is the same class of error as reading a scalar that
+            // aggregates blocks.
+            static std::atomic<bool> said_full{false}, said_imp{false}, said_exp{false};
+            std::atomic<bool>& said =
+                (mode == wrf::sdirk3::RhsMode::ImplicitOnly) ? said_imp
+                : (mode == wrf::sdirk3::RhsMode::ExplicitOnly) ? said_exp : said_full;
+            bool exp0 = false;
+            if (said.compare_exchange_strong(exp0, true)) {
+                std::cerr << "SDIRK3_MU_DIV_TRACE"
+                          << " mode=" << (mode == wrf::sdirk3::RhsMode::ImplicitOnly ? "Implicit"
+                                        : mode == wrf::sdirk3::RhsMode::ExplicitOnly ? "Explicit"
+                                        : "Full")
+                          << " div_x=" << rms(div_x)
+                          << " div_y=" << rms(div_y)
+                          << " div_z=" << rms(div_z)
+                          << " sum=" << rms(hevi_mu_div)
+                          << " mu_tend_before=" << rms(mu_tend)
+                          << "  (Pa/s RMS; physical mass divergence is O(10))"
+                          << std::endl << std::flush;
+            }
+        }
         mu_tend = mu_tend - hevi_mu_div;
 
         // FORTRAN PARITY (2025-12-05): Guard mean-subtract and clamp with config flag

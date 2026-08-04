@@ -185,6 +185,26 @@ inline SolveVerdict assess_adjoint_solve_blockwise(const std::vector<BlockResidu
 
     SolveVerdict worst = SolveVerdict::Converged;
     for (const auto& b : blocks) {
+        // 9F.D114 (review section 9): A ZERO-RHS *BLOCK* IS NOT FATAL.
+        //
+        // assess_adjoint_solve treats rhs_norm == 0 as Fatal, which is right for the WHOLE
+        // system (b = 0 means x = 0, so a large residual cannot be fixed by iterating). It is
+        // WRONG per block: in a coupled system a block can have b_q = 0 and still carry a
+        // legitimate nonzero residual through coupling, and further Krylov iterations reduce
+        // it. The review's example:
+        //
+        //     A = [[1,1],[1,2]], b = (1,0)^T   -- b_2 = 0, yet r_2 != 0 at intermediate
+        //                                          iterates and converges normally.
+        //
+        // So a zero-RHS block is judged on the ABSOLUTE tolerance alone and can only reach
+        // Continue, never Fatal. Genuine Fatals (non-finite, breakdown, bad tolerances) still
+        // come from assess_adjoint_solve on the other blocks.
+        if (b.rhs_norm == 0.0) {
+            if (!std::isfinite(b.residual_norm) || b.residual_norm < 0.0)
+                return SolveVerdict::Fatal;
+            if (b.residual_norm > atol) worst = SolveVerdict::Continue;
+            continue;
+        }
         const SolveVerdict v =
             assess_adjoint_solve(b.residual_norm, b.rhs_norm, krylov_breakdown, rtol, atol);
         if (v == SolveVerdict::Fatal) return SolveVerdict::Fatal;   // Fatal short-circuits
@@ -286,8 +306,21 @@ torch::Tensor solve_transpose_linear_system_gmres(
             false,
             false);
         x_current = gmres.x;
-        // Always consume at least one, so a solver that reports 0 iterations cannot spin.
-        budget_left -= std::max(1, gmres.iterations);
+        // 9F.D114 (review section 10): SUBTRACT RESTART CYCLES, NOT ARNOLDI VECTORS.
+        //
+        // solve_gmres's max_iter bounds the OUTER restart loop
+        // (`for (int iter = 0; iter < max_iter; ++iter)`), while gmres.iterations returns
+        // total_arnoldi_iters -- the vector count. newton_solver.cpp:1041 makes the factor
+        // explicit: total_arnoldi_iters < max_iter * restart.
+        //
+        // D106 passed budget_left as max_iter (restarts, correct) and then subtracted
+        // gmres.iterations (vectors, WRONG). With restart=10 and budget 40, one call returns
+        // 400 and budget_left becomes -360, so the loop could never run twice.
+        //
+        // I MEASURED outer_passes=1 and reported it as the correct outcome -- "the budget was
+        // consumed in one call". That was a rationalisation of this unit bug: the budget was
+        // 40 restarts and I subtracted 400 vectors. gmres.restarts is the matching unit.
+        budget_left -= std::max(1, gmres.restarts);
         block_residuals.clear();   // each pass re-measures; never accumulate across passes
 
 
