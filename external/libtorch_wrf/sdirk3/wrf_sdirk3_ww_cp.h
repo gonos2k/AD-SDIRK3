@@ -70,53 +70,60 @@ struct WdampRuntimeContract {
     WWCPBoundaryPolicy y_policy = WWCPBoundaryPolicy::Unsupported;
 };
 
+// 9F.D118: `requester` names WHO needs this contract in the failure marker.
+//
+// The topology/boundary constraint is a property of calc_ww_cp, not of W-damping -- W-damping
+// was simply its first consumer. Once the core RHS's Omega also needs it, a marker that says
+// "enabled W-damping" while W-damping is OFF sends the next reader to the wrong subsystem.
+// Defaulted, so every existing caller and the contract test keep their exact text.
 inline WdampRuntimeContract resolve_wdamp_runtime_contract(
-    bool w_damping_enabled,
+    bool contract_required,
     int nprocx, int nprocy,
     bool tile_covers_patch,
     bool periodic_x, bool symmetric_xs, bool symmetric_xe,
     bool open_xs, bool open_xe,
     bool periodic_y, bool symmetric_ys, bool symmetric_ye,
     bool open_ys, bool open_ye,
-    bool specified, bool nested, bool polar) {
-    if (!w_damping_enabled) {
+    bool specified, bool nested, bool polar,
+    const char* requester = "W-damping") {
+    const std::string who = std::string("enabled ") + requester;
+    if (!contract_required) {
         return {};  // inactive: no constraint on topology or boundaries
     }
     if (nprocx * nprocy != 1) {
         wdamp_geometry_fail(
-            "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: enabled W-damping on "
-            "a multi-rank decomposition — patch edges are internal seams "
+            std::string("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: ") + who +
+            " on a multi-rank decomposition — patch edges are internal seams "
             "with no authoritative mass halo (HaloProvided is not "
             "implemented)");
     }
     if (!tile_covers_patch) {
         wdamp_geometry_fail(
-            "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: enabled W-damping on "
-            "an internal tile — this tile does not cover the rank patch, so "
+            std::string("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: ") + who +
+            " on an internal tile — this tile does not cover the rank patch, so "
             "its edges are internal multi-tile seams, not physical "
             "boundaries");
     }
     if (specified || nested || polar) {
         wdamp_geometry_fail(
-            "SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: enabled W-damping "
-            "with specified/nested/polar boundaries — no authoritative mass "
+            std::string("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: ") + who +
+            " with specified/nested/polar boundaries — no authoritative mass "
             "halo policy exists for them");
     }
-    const auto axis = [](bool open_s, bool open_e, bool periodic, bool sym_s,
-                         bool sym_e, const char* name) {
+    const auto axis = [&who](bool open_s, bool open_e, bool periodic, bool sym_s,
+                             bool sym_e, const char* name) {
         if (open_s || open_e) {
             wdamp_geometry_fail(
-                std::string("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: "
-                            "enabled W-damping with an open ") +
+                std::string("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: ") +
+                who + " with an open " +
                 name + "-boundary (takes priority over any periodic/"
                 "symmetric flag also set)");
         }
         if (periodic) return WWCPBoundaryPolicy::Periodic;
         if (sym_s && sym_e) return WWCPBoundaryPolicy::SymmetricReplicate;
         wdamp_geometry_fail(
-            std::string("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: enabled "
-                        "W-damping ") +
-            name + "-boundary is neither periodic nor two-sided symmetric");
+            std::string("SDIRK3_WDAMP_PARITY_GEOMETRY_UNSUPPORTED: ") + who +
+            " " + name + "-boundary is neither periodic nor two-sided symmetric");
     };
     WdampRuntimeContract c;
     c.active = true;

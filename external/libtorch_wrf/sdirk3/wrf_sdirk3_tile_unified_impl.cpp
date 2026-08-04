@@ -5674,9 +5674,16 @@ vertical_coefficients:
             const bool tile_covers_patch =
                 its_ <= ids_ && ite_ >= ide_ - 1 &&
                 jts_ <= jds_ && jte_ >= jde_ - 1;
-            wdamp_contract_ = wrf::sdirk3::resolve_wdamp_runtime_contract(
+            // 9F.D118: the core RHS's Omega now needs this contract too, so resolve it when
+            // EITHER consumer is on. Previously it was gated on W-damping alone, and the
+            // omega knob hit an inactive contract and fail-closed with a W-damping marker --
+            // correct behaviour, wrong subsystem named.
+            const bool wdamp_on =
                 wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
-                    wrf::sdirk3::g_sdirk3_config.implicit_wdamp,
+                wrf::sdirk3::g_sdirk3_config.implicit_wdamp;
+            const bool wwcp_on = wrf::sdirk3::g_sdirk3_config.wrf_omega_ww_cp;
+            wdamp_contract_ = wrf::sdirk3::resolve_wdamp_runtime_contract(
+                wdamp_on || wwcp_on,
                 nprocx_, nprocy_, tile_covers_patch,
                 config_flags_periodic_x_, config_flags_symmetric_xs_,
                 config_flags_symmetric_xe_, config_flags_open_xs_,
@@ -5684,7 +5691,9 @@ vertical_coefficients:
                 config_flags_symmetric_ys_, config_flags_symmetric_ye_,
                 config_flags_open_ys_, config_flags_open_ye_,
                 config_flags_specified_, config_flags_nested_,
-                config_flags_polar_);
+                config_flags_polar_,
+                wdamp_on ? (wwcp_on ? "W-damping + calc_ww_cp Omega" : "W-damping")
+                         : "calc_ww_cp Omega (sdirk3_wrf_omega_ww_cp)");
         }
         // ===== SHARED PRIORITY MAPPING (identical in stage loop + solveImplicitStage) =====
         int split_mode = wrf::sdirk3::g_sdirk3_config.imex_split_mode;
@@ -12289,6 +12298,65 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
     }
 
+    // 9F.D118: WRF's Omega, for the sites that have been using mu*w.
+    //
+    // The core RHS aliases `Omega = rom` where `rom = mu_full * w`, on the stated belief
+    // that "Omega is alias for rom in WRF". It is not. In WRF `rom = mu_d*w` is the COUPLED
+    // VERTICAL MOMENTUM (the rw prognostic); ww/Omega is mu*d(eta)/dt, produced by
+    // calc_ww_cp as a running vertical integral of the HORIZONTAL mass divergence:
+    //
+    //     ww(i,1,j) = 0. ;  ww(i,kte,j) = 0.
+    //     ww(i,k,j) = ww(i,k-1,j) - dnw(k-1)*c1h(k-1)*dmdt(i) - divv(i,k-1)
+    //
+    // Different units (Pa/s vs Pa*m/s), different inputs (u,v,mu vs w), and EXACTLY ZERO at
+    // both boundaries by construction rather than by a mask. That last property is why the
+    // measured signature is "stage 1 clean, stages 2-3 wrong": mu*w is only zero while w is.
+    //
+    // compute_wrf_ww_cp is the complete audited recurrence (PR 9C.1) with a parity contract
+    // in the test suite. It already serves the W-damping path; the core RHS never adopted it,
+    // which is the open "production 배선" item from that PR. Memoised because both consumer
+    // sites (mu div_z, ph z_adv) are in this same evaluation and it is not free.
+    //
+    // Opt-in. When off, nothing here is evaluated and the mu*w sites are untouched.
+    torch::Tensor wrf_ww_cp_memo;
+    auto wrf_ww_cp = [&]() -> torch::Tensor {
+        if (wrf_ww_cp_memo.defined()) return wrf_ww_cp_memo;
+        const int64_t ny_o = mu_full.size(0);
+        const int64_t nx_o = mu_full.size(1);
+        const int64_t nxu_o = u.size(2);
+        const int64_t nyv_o = v.size(0);
+        // The user asked for WRF's Omega; supplying a different quantity because a map
+        // factor was missing would be fail-open, and fail-open is how mu*w survived here in
+        // the first place. Same contract the W-damping path enforces.
+        const bool geom_ok =
+            c1h_.defined() && c1h_.numel() >= nz_ &&
+            c2h_.defined() && c2h_.numel() >= nz_ &&
+            mu_base_.defined() && mu_base_.numel() == ny_o * nx_o &&
+            msftx_.defined() && msftx_.dim() == 2 &&
+            msftx_.size(0) == ny_o && msftx_.size(1) == nx_o &&
+            msfuy_.defined() && msfuy_.dim() == 2 &&
+            msfuy_.size(0) == ny_o && msfuy_.size(1) == nxu_o &&
+            msfvx_.defined() && msfvx_.dim() == 2 &&
+            msfvx_.size(0) == nyv_o && msfvx_.size(1) == nx_o;
+        if (!geom_ok) {
+            wrf::sdirk3::wdamp_geometry_fail(
+                "SDIRK3_WWCP_PARITY_GEOMETRY_UNSUPPORTED: sdirk3_wrf_omega_ww_cp requires "
+                "the complete calc_ww_cp coefficient and map-factor contract "
+                "(c1h/c2h, mu_base, msftx/msfuy/msfvx on their staggers)");
+        }
+        auto dev = u.device();
+        auto dtp = u.scalar_type();
+        auto dnw_t = -torch::reciprocal(getRdnwTensor(dev, dtp, nz_));
+        wrf_ww_cp_memo = wrf::sdirk3::compute_wrf_ww_cp(
+            u, v, mu, mu_base_.to(dev, dtp).reshape({ny_o, nx_o}),
+            c1h_.to(dev, dtp).slice(0, 0, nz_), c2h_.to(dev, dtp).slice(0, 0, nz_),
+            dnw_t, rdx, rdy,
+            msftx_.to(dev, dtp), msfuy_.to(dev, dtp),
+            torch::reciprocal(msfvx_.to(dev, dtp)),
+            wdamp_contract_.x_policy, wdamp_contract_.y_policy);
+        return wrf_ww_cp_memo;
+    };
+
     // GRADIENT FIX: Compute mu_full safety check unconditionally (no control-flow .item())
     // The torch::where() operation below is differentiable regardless of the condition
     float mu_min = 1000.0f;  // Minimum safe column mass (kg/m^2)
@@ -14754,8 +14822,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // JVP FIX: Blend reference and current state for omega to prevent zero-flux linearization
         float blend_mu = wrf::sdirk3::g_sdirk3_config.omega_w_blend;
         auto w_blended_mu = blend_mu * w + (1.0f - blend_mu) * w_ref;
-        auto rom = mu_full.unsqueeze(1).expand({-1, w_ref.size(1), -1}) * w_blended_mu;
-        auto& Omega = rom;  // Omega is alias for rom in WRF
+        // 9F.D118: `Omega is alias for rom in WRF` was FALSE and is the root defect --
+        // rom = mu_d*w is the coupled vertical MOMENTUM (rw), while WRF's ww/Omega is
+        // mu*d(eta)/dt from calc_ww_cp. Opt-in substitution of the audited recurrence.
+        auto rom = wrf::sdirk3::g_sdirk3_config.wrf_omega_ww_cp
+                       ? wrf_ww_cp()
+                       : (mu_full.unsqueeze(1).expand({-1, w_ref.size(1), -1}) * w_blended_mu);
+        auto& Omega = rom;
 
         // ============================================================================
         // ISSUE #1 FIX: Enforce kinematic BC Ω=0 at k=0 (η=0) and k=nz_w-1 (η=1)
@@ -16131,7 +16204,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // JVP FIX: Blend reference and current state for omega to prevent zero-flux linearization
         float blend = wrf::sdirk3::g_sdirk3_config.omega_w_blend;
         auto w_blended = blend * w + (1.0f - blend) * w_ref;
-        auto omega = (mu_3d / msfty_3d) * w_blended;
+        // 9F.D118: same substitution as the mu channel. rhs_ph's -omega*dphi/d_eta is a
+        // LEGITIMATE term (unlike the mass equation's div_z); what was wrong is omega.
+        auto omega = wrf::sdirk3::g_sdirk3_config.wrf_omega_ww_cp
+                         ? wrf_ww_cp()
+                         : ((mu_3d / msfty_3d) * w_blended);
 
         // DIAGNOSTIC: Check omega and wdwn values
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {

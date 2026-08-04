@@ -510,6 +510,22 @@ struct SDIRK3Config {
     // Set via env WRF_SDIRK3_MU_HORIZONTAL_DIV_ONLY or namelist sdirk3_mu_horizontal_div_only.
     bool mu_horizontal_div_only = false;
 
+    // 9F.D118: use WRF's calc_ww_cp Omega in the core RHS.
+    //
+    // The core aliases Omega := rom = mu*w on the belief that "Omega is alias for rom in
+    // WRF". It is not: rom = mu_d*w is the COUPLED VERTICAL MOMENTUM (the rw prognostic),
+    // while ww/Omega is mu*d(eta)/dt -- a running vertical integral of the HORIZONTAL mass
+    // divergence, exactly zero at both boundaries (dyn_em calc_ww_cp). Different units,
+    // different inputs, different boundary behaviour; mu*w is zero only while w is, which is
+    // exactly the measured "stage 1 clean, stages 2-3 wrong" signature.
+    //
+    // When TRUE, the mu div_z and ph z_adv terms use compute_wrf_ww_cp (the complete audited
+    // recurrence, PR 9C.1, parity-contracted in the test suite) instead of mu*w. Missing map
+    // factors fail CLOSED -- supplying a different quantity is how mu*w survived here.
+    // Default FALSE = OPT-IN, no behavior change (repo guardrail).
+    // Set via env WRF_SDIRK3_WRF_OMEGA_WW_CP or namelist sdirk3_wrf_omega_ww_cp.
+    bool wrf_omega_ww_cp = false;
+
     // Split-explicit acoustic-loop parameters: pass-throughs of EXISTING WRF namelist values
     // (time_step_sound, epssm, smdiv, emdiv, top_lid) — no new Registry entries. Consumed ONLY
     // when split_explicit is ON; defaults match the em_b_wave namelist, so unset = current

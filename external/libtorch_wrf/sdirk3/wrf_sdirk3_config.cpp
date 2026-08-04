@@ -382,6 +382,8 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 split_explicit = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_mu_horizontal_div_only" || key == "mu_horizontal_div_only") {
                 mu_horizontal_div_only = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_wrf_omega_ww_cp" || key == "wrf_omega_ww_cp") {
+                wrf_omega_ww_cp = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_split_explicit_time_step_sound" || key == "split_explicit_time_step_sound") {
                 split_explicit_time_step_sound = std::clamp(std::atoi(value.c_str()), 0, 1000);
             } else if (key == "sdirk3_split_explicit_epssm" || key == "split_explicit_epssm") {
@@ -1680,6 +1682,11 @@ void SDIRK3Config::load_from_env() {
         std::cerr << "[CONFIG ENV] mu_horizontal_div_only = "
                   << (mu_horizontal_div_only ? "true" : "false") << std::endl;
     }
+    if ((env_val = std::getenv("WRF_SDIRK3_WRF_OMEGA_WW_CP"))) {
+        wrf_omega_ww_cp = parse_bool_env(env_val);
+        std::cerr << "[CONFIG ENV] wrf_omega_ww_cp = "
+                  << (wrf_omega_ww_cp ? "true" : "false") << std::endl;
+    }
     if ((env_val = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_TIME_STEP_SOUND"))) {
         split_explicit_time_step_sound = std::clamp(std::atoi(env_val), 0, 1000);
         std::cerr << "[CONFIG ENV] split_explicit_time_step_sound = " << split_explicit_time_step_sound << std::endl;
@@ -1907,6 +1914,11 @@ void SDIRK3Config::load_from_env() {
               << (mu_horizontal_div_only
                       ? "ON (mu tendency = horizontal divergence only, advance_mu_t parity)"
                       : "off (mu tendency also carries the omega*rdnw column sum div_z)")
+              << std::endl;
+    std::cerr << "[CONFIG EFFECTIVE] wrf_omega_ww_cp="
+              << (wrf_omega_ww_cp
+                      ? "ON (Omega = mu*d(eta)/dt via calc_ww_cp)"
+                      : "off (Omega = rom = mu*w, the coupled vertical momentum)")
               << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] split_explicit="
               << (split_explicit ? "ON (WIP RK3 + acoustic-substep core)" : "off (ARK324 implicit)")
@@ -2598,6 +2610,8 @@ void SDIRK3Config::print() const {
     std::cout << "  split_explicit = " << (split_explicit ? "true" : "false") << std::endl;
     std::cout << "  mu_horizontal_div_only = "
               << (mu_horizontal_div_only ? "true" : "false") << std::endl;
+    std::cout << "  wrf_omega_ww_cp = "
+              << (wrf_omega_ww_cp ? "true" : "false") << std::endl;
     std::cout << "  split_explicit acoustic: time_step_sound = " << split_explicit_time_step_sound
               << ", epssm = " << split_explicit_epssm
               << ", smdiv = " << split_explicit_smdiv
@@ -3170,6 +3184,10 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
         g_sdirk3_config.mu_horizontal_div_only = (value != 0);
         std::cerr << "[CONFIG] mu_horizontal_div_only = "
                   << (g_sdirk3_config.mu_horizontal_div_only ? "true" : "false") << std::endl;
+    } else if (key == "wrf_omega_ww_cp") {
+        g_sdirk3_config.wrf_omega_ww_cp = (value != 0);
+        std::cerr << "[CONFIG] wrf_omega_ww_cp = "
+                  << (g_sdirk3_config.wrf_omega_ww_cp ? "true" : "false") << std::endl;
     } else if (key == "split_explicit") {
         g_sdirk3_config.split_explicit = (value != 0);
         std::cerr << "[CONFIG] split_explicit = "
@@ -3948,6 +3966,10 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
         g_sdirk3_config.mu_horizontal_div_only = (value != 0);
         std::cerr << "[CONFIG] mu_horizontal_div_only = "
                   << (g_sdirk3_config.mu_horizontal_div_only ? "true" : "false") << std::endl;
+    } else if (key == "wrf_omega_ww_cp") {
+        g_sdirk3_config.wrf_omega_ww_cp = (value != 0);
+        std::cerr << "[CONFIG] wrf_omega_ww_cp = "
+                  << (g_sdirk3_config.wrf_omega_ww_cp ? "true" : "false") << std::endl;
     } else if (key == "split_explicit") {
         g_sdirk3_config.split_explicit = (value != 0);
         std::cerr << "[CONFIG] split_explicit = "
