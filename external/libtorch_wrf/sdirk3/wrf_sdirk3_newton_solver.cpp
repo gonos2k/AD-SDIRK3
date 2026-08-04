@@ -6663,8 +6663,16 @@ public:
                             v = v.detach();
                         }
                         // Outside any grad guard: M^-1 may build a graph.
-                        torch::Tensor z;
-                        try { z = gmres_M_inv(v); } catch (...) { continue; }
+                        torch::Tensor z, Az;
+                        try {
+                            z = gmres_M_inv(v);
+                            // 9F.D124 (review 13): the judgement quantity is NOT the M^-1 gain.
+                            // A preconditioner approximates A^-1, not I, so a small gain can be
+                            // exactly right for a stiff row -- my "486x suppression" reading
+                            // assumed otherwise. What matters is how close A M^-1 is to the
+                            // identity, in the RIGHT-preconditioned order production uses.
+                            if (gmres_op) Az = gmres_op(z);
+                        } catch (...) { continue; }
                         if (!z.defined()) continue;
                         torch::NoGradGuard ng_bg2;
                         double vin = v.slice(0, blk.start, blk.start + blk.size)
@@ -6673,8 +6681,20 @@ public:
                         std::cerr << "SDIRK3_PRECOND_BLOCK_GAIN stage=" << stage
                                   << " in=" << blk.name
                                   << " gain=" << (z.slice(0, blk.start, blk.start + blk.size)
-                                                    .norm().to(torch::kCPU).item<double>() / vin)
-                                  << " leak:";
+                                                    .norm().to(torch::kCPU).item<double>() / vin);
+                        if (Az.defined()) {
+                            // ||(A M^-1 v_q - v_q)|| restricted to block q, over ||v_q||.
+                            // ~0 means A M^-1 acts as the identity on this block, which is what
+                            // GMRES needs. Large means the preconditioner does not invert this
+                            // row, whatever its gain happens to be.
+                            auto d = Az - v;
+                            std::cerr << " AMinv_id_err="
+                                      << (d.slice(0, blk.start, blk.start + blk.size)
+                                            .norm().to(torch::kCPU).item<double>() / vin)
+                                      << " AMinv_id_err_total="
+                                      << (d.norm().to(torch::kCPU).item<double>() / vin);
+                        }
+                        std::cerr << " leak:";
                         for (const auto& ob : cached_layout_.blocks) {
                             if (ob.name == blk.name) continue;
                             std::cerr << " " << ob.name << "="
