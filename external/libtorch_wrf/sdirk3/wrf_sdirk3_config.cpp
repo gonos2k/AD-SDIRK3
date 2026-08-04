@@ -384,6 +384,17 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 mu_horizontal_div_only = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_wrf_omega_ww_cp" || key == "wrf_omega_ww_cp") {
                 wrf_omega_ww_cp = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_mass_coordinate_mode" || key == "mass_coordinate_mode") {
+                int parsed = std::stoi(value);
+                if (parsed < 0 || parsed > 3) {
+                    // Fail LOUD, not clamped: silently demoting an explicit WRF-parity request
+                    // to Legacy would run the wrong physics under the right name.
+                    throw std::invalid_argument(
+                        "sdirk3_mass_coordinate_mode=" + std::to_string(parsed) +
+                        " is not a valid mode (0=Legacy, 1=WRFParity, 2=DiagnosticOmegaOnly, "
+                        "3=DiagnosticMuOnly)");
+                }
+                mass_coordinate_mode = parsed;
             } else if (key == "sdirk3_split_explicit_time_step_sound" || key == "split_explicit_time_step_sound") {
                 split_explicit_time_step_sound = std::clamp(std::atoi(value.c_str()), 0, 1000);
             } else if (key == "sdirk3_split_explicit_epssm" || key == "split_explicit_epssm") {
@@ -1687,6 +1698,18 @@ void SDIRK3Config::load_from_env() {
         std::cerr << "[CONFIG ENV] wrf_omega_ww_cp = "
                   << (wrf_omega_ww_cp ? "true" : "false") << std::endl;
     }
+    if ((env_val = std::getenv("WRF_SDIRK3_MASS_COORDINATE_MODE"))) {
+        int parsed = std::atoi(env_val);
+        if (parsed < 0 || parsed > 3) {
+            throw std::invalid_argument(
+                std::string("WRF_SDIRK3_MASS_COORDINATE_MODE=") + env_val +
+                " is not a valid mode (0=Legacy, 1=WRFParity, 2=DiagnosticOmegaOnly, "
+                "3=DiagnosticMuOnly)");
+        }
+        mass_coordinate_mode = parsed;
+        std::cerr << "[CONFIG ENV] mass_coordinate_mode = " << mass_coordinate_mode
+                  << " (" << mass_coordinate_mode_name() << ")" << std::endl;
+    }
     if ((env_val = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_TIME_STEP_SOUND"))) {
         split_explicit_time_step_sound = std::clamp(std::atoi(env_val), 0, 1000);
         std::cerr << "[CONFIG ENV] split_explicit_time_step_sound = " << split_explicit_time_step_sound << std::endl;
@@ -1915,10 +1938,23 @@ void SDIRK3Config::load_from_env() {
                       ? "ON (mu tendency = horizontal divergence only, advance_mu_t parity)"
                       : "off (mu tendency also carries the omega*rdnw column sum div_z)")
               << std::endl;
-    std::cerr << "[CONFIG EFFECTIVE] wrf_omega_ww_cp="
+    std::cerr << "[CONFIG EFFECTIVE] mass_coordinate_mode=" << mass_coordinate_mode
+              << " (" << mass_coordinate_mode_name() << ")"
+              << " -> omega_ww_cp=" << (effective_wrf_omega_ww_cp() ? "ON" : "off")
+              << ", mu_horizontal_div_only="
+              << (effective_mu_horizontal_div_only() ? "ON" : "off");
+    if (static_cast<MassCoordinateMode>(mass_coordinate_mode) ==
+            MassCoordinateMode::DiagnosticOmegaOnly ||
+        static_cast<MassCoordinateMode>(mass_coordinate_mode) ==
+            MassCoordinateMode::DiagnosticMuOnly) {
+        std::cerr << "  [INCOMPLETE INTERMEDIATE -- measurement only, not a WRF-parity scheme]";
+    }
+    std::cerr << std::endl;
+    std::cerr << "[CONFIG EFFECTIVE] wrf_omega_ww_cp(raw)="
               << (wrf_omega_ww_cp
                       ? "ON (Omega = mu*d(eta)/dt via calc_ww_cp)"
                       : "off (Omega = rom = mu*w, the coupled vertical momentum)")
+              << (mass_coordinate_mode != 0 ? "  [IGNORED: mode is the authority]" : "")
               << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] split_explicit="
               << (split_explicit ? "ON (WIP RK3 + acoustic-substep core)" : "off (ARK324 implicit)")
@@ -2612,6 +2648,8 @@ void SDIRK3Config::print() const {
               << (mu_horizontal_div_only ? "true" : "false") << std::endl;
     std::cout << "  wrf_omega_ww_cp = "
               << (wrf_omega_ww_cp ? "true" : "false") << std::endl;
+    std::cout << "  mass_coordinate_mode = " << mass_coordinate_mode
+              << " (" << mass_coordinate_mode_name() << ")" << std::endl;
     std::cout << "  split_explicit acoustic: time_step_sound = " << split_explicit_time_step_sound
               << ", epssm = " << split_explicit_epssm
               << ", smdiv = " << split_explicit_smdiv
@@ -3267,6 +3305,16 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
                       << (value < 0 ? " (clamped from negative)" : "") << std::endl;
         }
     // IMEX post-solve split mode (2026-02-01)
+    } else if (key == "mass_coordinate_mode") {
+        if (value < 0 || value > 3) {
+            throw std::invalid_argument(
+                "mass_coordinate_mode=" + std::to_string(value) +
+                " is not a valid mode (0=Legacy, 1=WRFParity, 2=DiagnosticOmegaOnly, "
+                "3=DiagnosticMuOnly)");
+        }
+        g_sdirk3_config.mass_coordinate_mode = value;
+        std::cerr << "[CONFIG] mass_coordinate_mode = " << value << " ("
+                  << g_sdirk3_config.mass_coordinate_mode_name() << ")" << std::endl;
     } else if (key == "imex_split_mode") {
         if (value < 0 || value > 3) {
             std::cerr << "[CONFIG WARNING] imex_split_mode=" << value

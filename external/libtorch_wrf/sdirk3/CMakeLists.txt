@@ -309,6 +309,14 @@ add_executable(test_state_layout tests/test_state_layout.cpp)
 target_link_libraries(test_state_layout PRIVATE wrf_sdirk3_build_config)
 add_test(NAME State_Layout_Contract COMMAND test_state_layout)
 
+# 9F.D122 (review section 4): ONE authority for the mass-coordinate scheme. Two independent
+# booleans make a half-applied WRF parity reachable by a single typo; the mode makes a partial
+# state a deliberate diagnostic choice. The mutation cases are the point -- they assert the
+# authority actually rejects the alternatives.
+add_executable(test_mass_coordinate_mode tests/test_mass_coordinate_mode.cpp)
+target_link_libraries(test_mass_coordinate_mode PRIVATE wrf_sdirk3_build_config)
+add_test(NAME Mass_Coordinate_Mode_Contract COMMAND test_mass_coordinate_mode)
+
 # 9F.D91 (review P0-1): the transpose solve must judge on the PHYSICAL residual, not the
 # preconditioned one. Carries a deliberately residual-shrinking preconditioner -- the false
 # success that the old gate would have accepted.

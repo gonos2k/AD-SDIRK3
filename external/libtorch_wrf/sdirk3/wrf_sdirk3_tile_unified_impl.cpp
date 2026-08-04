@@ -5681,7 +5681,7 @@ vertical_coefficients:
             const bool wdamp_on =
                 wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
                 wrf::sdirk3::g_sdirk3_config.implicit_wdamp;
-            const bool wwcp_on = wrf::sdirk3::g_sdirk3_config.wrf_omega_ww_cp;
+            const bool wwcp_on = wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp();
             wdamp_contract_ = wrf::sdirk3::resolve_wdamp_runtime_contract(
                 wdamp_on || wwcp_on,
                 nprocx_, nprocy_, tile_covers_patch,
@@ -14825,7 +14825,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // 9F.D118: `Omega is alias for rom in WRF` was FALSE and is the root defect --
         // rom = mu_d*w is the coupled vertical MOMENTUM (rw), while WRF's ww/Omega is
         // mu*d(eta)/dt from calc_ww_cp. Opt-in substitution of the audited recurrence.
-        auto rom = wrf::sdirk3::g_sdirk3_config.wrf_omega_ww_cp
+        auto rom = wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp()
                        ? wrf_ww_cp()
                        : (mu_full.unsqueeze(1).expand({-1, w_ref.size(1), -1}) * w_blended_mu);
         auto& Omega = rom;
@@ -15267,7 +15267,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // Under HEVI the mass tendency becomes wholly EXPLICIT, which is what a
         // horizontal-only divergence implies: the ImplicitOnly pass contributes nothing to mu.
         // Opt-in; when off this branch is not taken and the expression above is unchanged.
-        if (wrf::sdirk3::g_sdirk3_config.mu_horizontal_div_only) {
+        if (wrf::sdirk3::g_sdirk3_config.effective_mu_horizontal_div_only()) {
             if (hevi_pure_implicit) {
                 hevi_mu_div = torch::zeros_like(div_x);
             } else {
@@ -16206,7 +16206,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         auto w_blended = blend * w + (1.0f - blend) * w_ref;
         // 9F.D118: same substitution as the mu channel. rhs_ph's -omega*dphi/d_eta is a
         // LEGITIMATE term (unlike the mass equation's div_z); what was wrong is omega.
-        auto omega = wrf::sdirk3::g_sdirk3_config.wrf_omega_ww_cp
+        auto omega = wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp()
                          ? wrf_ww_cp()
                          : ((mu_3d / msfty_3d) * w_blended);
 
