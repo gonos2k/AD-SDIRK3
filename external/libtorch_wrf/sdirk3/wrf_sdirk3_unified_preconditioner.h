@@ -173,6 +173,47 @@ public:
     };
     StageBindingReceipt bind_stage_state_or_throw(const torch::Tensor& mu_pert, int stage);
 
+    // 9F.D109 (review section 9): snapshot/restore of the stage state the adjoint replay
+    // mutates, so a replay cannot leave the PRODUCTION preconditioner bound to whichever
+    // checkpoint it happened to visit last.
+    //
+    // Not a full replay-dedicated instance (the review's preferred structure) -- this is the
+    // isolation GUARANTEE without the factory. It is what makes a digest-equality contract
+    // possible on both the normal and the exception path, which is the property that was
+    // missing: "the next forward step re-updates" is not a rollback.
+    struct StageStateSnapshot {
+        torch::Tensor mu_full_stage;
+        torch::Tensor mu_pert_last_bound;
+        int current_stage = -1;
+        float mu_scale_correction = 1.0f;
+    };
+    StageStateSnapshot snapshot_stage_state() const {
+        StageStateSnapshot s;
+        if (mu_full_stage_.defined()) s.mu_full_stage = mu_full_stage_.detach().clone();
+        if (mu_pert_last_bound_.defined())
+            s.mu_pert_last_bound = mu_pert_last_bound_.detach().clone();
+        s.current_stage = current_stage_;
+        s.mu_scale_correction = mu_scale_correction_;
+        return s;
+    }
+    void restore_stage_state(const StageStateSnapshot& s) {
+        mu_full_stage_ = s.mu_full_stage;
+        mu_pert_last_bound_ = s.mu_pert_last_bound;
+        current_stage_ = s.current_stage;
+        mu_scale_correction_ = s.mu_scale_correction;
+    }
+    // Digest of exactly the fields above, for the isolation contract. Deliberately includes
+    // mu_full_stage's VALUES, not just its shape -- the whole failure mode is a field from
+    // the wrong checkpoint, which has identical shape.
+    double stage_state_digest() const {
+        torch::NoGradGuard g;
+        double d = static_cast<double>(current_stage_) * 1e6
+                 + static_cast<double>(mu_scale_correction_) * 1e3;
+        if (mu_full_stage_.defined())
+            d += mu_full_stage_.to(torch::kFloat64).abs().sum().item<double>();
+        return d;
+    }
+
     /**
      * v20.14: Set theta acoustic factor (for adaptive tuning).
      * Updates the instance-local cached value and immediately triggers

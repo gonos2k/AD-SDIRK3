@@ -38677,6 +38677,47 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     const float dt_prev = dt_stage_;
     dt_stage_ = dt;
 
+    // 9F.D109 (review section 9): RESTORE THE PRODUCTION STATE ON EVERY EXIT.
+    //
+    // The replay mutates U_ref_stage_ and, now that it binds every checkpoint, the
+    // preconditioner's stage state too -- leaving production bound to whichever checkpoint
+    // the reverse walk visited last. dt_stage_ was already restored on both paths; these were
+    // not. "The next forward step re-updates" is not a rollback: it is a hope that nothing
+    // reads the state in between, and it says nothing about the exception path.
+    //
+    // RAII, so the normal return and every throw restore identically, and a digest check
+    // makes the restoration VERIFIABLE rather than asserted. The digest covers mu_full's
+    // VALUES, not just its shape -- the failure mode is a field from the wrong checkpoint,
+    // which has identical shape.
+    struct ReplayStateGuard {
+        TileSDIRK3UnifiedSolver* self;
+        wrf::sdirk3::UnifiedPreconditioner* precond;
+        torch::Tensor saved_u_ref;
+        wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot saved_stage;
+        double saved_digest = 0.0;
+        ~ReplayStateGuard() noexcept {
+            try {
+                self->U_ref_stage_ = saved_u_ref;
+                if (precond) {
+                    precond->restore_stage_state(saved_stage);
+                    const double now = precond->stage_state_digest();
+                    if (!(std::abs(now - saved_digest) <=
+                          1e-9 * std::max(1.0, std::abs(saved_digest)))) {
+                        std::cerr << "SDIRK3_REPLAY_ISOLATION VIOLATED: preconditioner stage "
+                                     "state digest " << now << " != " << saved_digest
+                                  << " after restore" << std::endl << std::flush;
+                    }
+                }
+            } catch (...) {
+                std::cerr << "SDIRK3_REPLAY_ISOLATION: restore threw" << std::endl;
+            }
+        }
+    } replay_guard{this, unified_precond_.get(),
+                   U_ref_stage_.defined() ? U_ref_stage_.detach().clone() : torch::Tensor{},
+                   unified_precond_ ? unified_precond_->snapshot_stage_state()
+                                    : wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot{},
+                   unified_precond_ ? unified_precond_->stage_state_digest() : 0.0};
+
     const double alpha = static_cast<double>(dt) * static_cast<double>(gamma);
     IdentityTransposePreconditioner preconditioner;
 
