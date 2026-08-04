@@ -1974,6 +1974,9 @@ CONTAINS
       config_name = "split_explicit"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_split_explicit))
 
+      config_name = "mu_horizontal_div_only"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_mu_horizontal_div_only))
+
       ! Split-explicit acoustic-loop parameters: pass-throughs of EXISTING WRF namelist values
       ! (no new Registry entries). Consumed by the C++ split-explicit branch only when
       ! sdirk3_split_explicit is ON; C++ defaults match em_b_wave so unset = no behavior change.

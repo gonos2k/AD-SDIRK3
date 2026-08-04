@@ -380,6 +380,8 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 hevi_split = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_split_explicit" || key == "split_explicit") {
                 split_explicit = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_mu_horizontal_div_only" || key == "mu_horizontal_div_only") {
+                mu_horizontal_div_only = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_split_explicit_time_step_sound" || key == "split_explicit_time_step_sound") {
                 split_explicit_time_step_sound = std::clamp(std::atoi(value.c_str()), 0, 1000);
             } else if (key == "sdirk3_split_explicit_epssm" || key == "split_explicit_epssm") {
@@ -1673,6 +1675,11 @@ void SDIRK3Config::load_from_env() {
         split_explicit = parse_bool_env(env_val);
         std::cerr << "[CONFIG ENV] split_explicit = " << (split_explicit ? "true" : "false") << std::endl;
     }
+    if ((env_val = std::getenv("WRF_SDIRK3_MU_HORIZONTAL_DIV_ONLY"))) {
+        mu_horizontal_div_only = parse_bool_env(env_val);
+        std::cerr << "[CONFIG ENV] mu_horizontal_div_only = "
+                  << (mu_horizontal_div_only ? "true" : "false") << std::endl;
+    }
     if ((env_val = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_TIME_STEP_SOUND"))) {
         split_explicit_time_step_sound = std::clamp(std::atoi(env_val), 0, 1000);
         std::cerr << "[CONFIG ENV] split_explicit_time_step_sound = " << split_explicit_time_step_sound << std::endl;
@@ -1895,6 +1902,11 @@ void SDIRK3Config::load_from_env() {
               << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] hevi_split="
               << (hevi_split ? "ON (horizontal-acoustic explicit, vertical implicit)" : "off (full implicit)")
+              << std::endl;
+    std::cerr << "[CONFIG EFFECTIVE] mu_horizontal_div_only="
+              << (mu_horizontal_div_only
+                      ? "ON (mu tendency = horizontal divergence only, advance_mu_t parity)"
+                      : "off (mu tendency also carries the omega*rdnw column sum div_z)")
               << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] split_explicit="
               << (split_explicit ? "ON (WIP RK3 + acoustic-substep core)" : "off (ARK324 implicit)")
@@ -2584,6 +2596,8 @@ void SDIRK3Config::print() const {
     std::cout << "  stage_require_convergence = " << (stage_require_convergence ? "true" : "false") << std::endl;
     std::cout << "  hevi_split = " << (hevi_split ? "true" : "false") << std::endl;
     std::cout << "  split_explicit = " << (split_explicit ? "true" : "false") << std::endl;
+    std::cout << "  mu_horizontal_div_only = "
+              << (mu_horizontal_div_only ? "true" : "false") << std::endl;
     std::cout << "  split_explicit acoustic: time_step_sound = " << split_explicit_time_step_sound
               << ", epssm = " << split_explicit_epssm
               << ", smdiv = " << split_explicit_smdiv
@@ -3152,6 +3166,10 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
         g_sdirk3_config.hevi_split = (value != 0);
         std::cerr << "[CONFIG] hevi_split = "
                   << (g_sdirk3_config.hevi_split ? "true" : "false") << std::endl;
+    } else if (key == "mu_horizontal_div_only") {
+        g_sdirk3_config.mu_horizontal_div_only = (value != 0);
+        std::cerr << "[CONFIG] mu_horizontal_div_only = "
+                  << (g_sdirk3_config.mu_horizontal_div_only ? "true" : "false") << std::endl;
     } else if (key == "split_explicit") {
         g_sdirk3_config.split_explicit = (value != 0);
         std::cerr << "[CONFIG] split_explicit = "
@@ -3926,6 +3944,10 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
         g_sdirk3_config.hevi_split = (value != 0);
         std::cerr << "[CONFIG] hevi_split = "
                   << (g_sdirk3_config.hevi_split ? "true" : "false") << std::endl;
+    } else if (key == "mu_horizontal_div_only") {
+        g_sdirk3_config.mu_horizontal_div_only = (value != 0);
+        std::cerr << "[CONFIG] mu_horizontal_div_only = "
+                  << (g_sdirk3_config.mu_horizontal_div_only ? "true" : "false") << std::endl;
     } else if (key == "split_explicit") {
         g_sdirk3_config.split_explicit = (value != 0);
         std::cerr << "[CONFIG] split_explicit = "

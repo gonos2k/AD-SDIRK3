@@ -15168,6 +15168,29 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         torch::Tensor hevi_mu_div = div_x + div_y + div_z;            // full (baseline + Full pass)
         if (hevi_pure_implicit)      hevi_mu_div = div_z;             // ImplicitOnly: vertical only
         else if (hevi_pure_explicit) hevi_mu_div = div_x + div_y;    // ExplicitOnly: horizontal only
+
+        // 9F.D116: advance_mu_t parity -- the mu tendency is HORIZONTAL divergence only.
+        //
+        //     DMDT(i) = DMDT(i) + dnw(k)*dvdxi(i,k)     ! dyn_em, dvdxi HORIZONTAL only
+        //     !  BCs are ww=0 at both
+        //
+        // With ww=0 at both boundaries the vertical mass flux telescopes to zero over the
+        // column and cannot change the column total, so WRF's mass equation has no vertical
+        // term; omega is DIAGNOSED from those partial sums, never fed back. div_z here is
+        // sum_k (Omega_{k+1}-Omega_k)*rdnw_k, weighted by the RECIPROCAL of the dnw weighting
+        // div_x/div_y carry, and measures as 100% of the mu tendency at stage 2 (7.382e+06
+        // against 1.2e-03 and 5.7e-02).
+        //
+        // Under HEVI the mass tendency becomes wholly EXPLICIT, which is what a
+        // horizontal-only divergence implies: the ImplicitOnly pass contributes nothing to mu.
+        // Opt-in; when off this branch is not taken and the expression above is unchanged.
+        if (wrf::sdirk3::g_sdirk3_config.mu_horizontal_div_only) {
+            if (hevi_pure_implicit) {
+                hevi_mu_div = torch::zeros_like(div_x);
+            } else {
+                hevi_mu_div = div_x + div_y;
+            }
+        }
         // 9F.D113: WHERE DOES THE 7.4e6 mu TENDENCY COME FROM?
         //
         // D112 measured the mu component of the RHS at |F| = 7.382e6 (scaled RMS, dt=600).
