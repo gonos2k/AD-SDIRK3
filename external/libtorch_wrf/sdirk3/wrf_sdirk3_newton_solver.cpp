@@ -3389,6 +3389,13 @@ public:
     // PERFORMANCE: Cache StateLayout to avoid recomputation in every JVP call
     // Computed once at solver construction from grid dimensions
     StateLayout cached_layout_;
+
+    // 9F.D121 (review 9.4): probe latches are per-SOLVER, not process-global. A file-scope
+    // static latches across every solver, tile and configuration in the process, so the second
+    // solver's stage 2 is silently never measured and the first one's numbers get read as
+    // though they described it.
+    int probe_numrange_stage_ = -1;
+    int probe_blockgain_stage_ = -1;
     bool layout_initialized_ = false;
 
     // Block diagonal scaling for GMRES conditioning
@@ -6508,19 +6515,37 @@ public:
                     const char* e = std::getenv("WRF_SDIRK3_NUMRANGE_PROBE");
                     return e && *e && std::string(e) != "0" && std::string(e) != "false";
                 }();
-                static std::atomic<int> numrange_done{-1};
-                int prev = numrange_done.load();
-                if (numrange_on && newton_iter == 0 && prev != stage &&
-                    numrange_done.compare_exchange_strong(prev, stage) && gmres_op) {
+                if (numrange_on && newton_iter == 0 && probe_numrange_stage_ != stage &&
+                    gmres_op) {
+                    probe_numrange_stage_ = stage;
+                    // 9F.D121 (review 9.1): the previous comment here said "seeded per sample so
+                    // the run is reproducible" above a bare randn_like with no generator. The
+                    // comment asserted a property the code did not have -- the samples came from
+                    // the global RNG and depended on call order. Pin the seed, and restore the
+                    // caller's seed afterwards so the probe does not shift the solver's stream.
+                    // NOTE what this does and does not do: it restores the SEED, not the full
+                    // philox offset, so it is not a bitwise restore of generator state.
+                    const uint64_t probe_seed = 0x5D1BC3ULL + static_cast<uint64_t>(stage);
+                    const uint64_t caller_seed =
+                        at::detail::getDefaultCPUGenerator().current_seed();
+                    torch::manual_seed(probe_seed);
                     const int n_samp = 24;
                     double q_min = std::numeric_limits<double>::infinity();
                     double q_max = -std::numeric_limits<double>::infinity();
                     int n_neg = 0, n_ok = 0;
-                    double qp_min = std::numeric_limits<double>::infinity();
-                    int np_neg = 0, np_ok = 0;
+                    // 9F.D121 (review 9.2): production FGMRES is RIGHT-preconditioned -- the file
+                    // states it outright ("Right-preconditioning minimizes ||b - A*M^-1*z||").
+                    // The Arnoldi operator is therefore A*M^-1, and the previous probe measured
+                    // M^-1*A while its comment claimed to be measuring "the operator GMRES
+                    // actually iterates". Different operator, same two factors. Both are reported
+                    // now, and the production one is labelled.
+                    double qr_min = std::numeric_limits<double>::infinity();  // A*M^-1 (production)
+                    int nr_neg = 0, nr_ok = 0;
+                    double ql_min = std::numeric_limits<double>::infinity();  // M^-1*A
+                    int nl_neg = 0, nl_ok = 0;
                     for (int sidx = 0; sidx < n_samp; ++sidx) {
                         torch::Tensor v;
-                        {   // seeded per sample so the run is reproducible
+                        {
                             torch::NoGradGuard ng_seed;
                             v = torch::randn_like(R).detach();
                         }
@@ -6528,11 +6553,14 @@ public:
                         // blanket NoGradGuard around it kills the very graph it needs. Only the
                         // reductions below are guarded. This exact mistake has been made in this
                         // repo five times.
-                        torch::Tensor Av, MAv;
+                        torch::Tensor Av, MAv, AMv;
                         bool threw = false;
                         try {
                             Av = gmres_op(v);
-                            if (gmres_M_inv) MAv = gmres_M_inv(Av);
+                            if (gmres_M_inv) {
+                                MAv = gmres_M_inv(Av);          // M^-1 A
+                                AMv = gmres_op(gmres_M_inv(v)); // A M^-1  <- production order
+                            }
                         } catch (...) { threw = true; }
                         if (threw || !Av.defined()) continue;
                         torch::NoGradGuard ng_red;
@@ -6544,10 +6572,17 @@ public:
                             if (q < 0.0) ++n_neg;
                         }
                         if (MAv.defined()) {
-                            double qp = v.dot(MAv).to(torch::kCPU).item<double>() / vv;
-                            if (std::isfinite(qp)) {
-                                ++np_ok; qp_min = std::min(qp_min, qp);
-                                if (qp < 0.0) ++np_neg;
+                            double ql = v.dot(MAv).to(torch::kCPU).item<double>() / vv;
+                            if (std::isfinite(ql)) {
+                                ++nl_ok; ql_min = std::min(ql_min, ql);
+                                if (ql < 0.0) ++nl_neg;
+                            }
+                        }
+                        if (AMv.defined()) {
+                            double qr = v.dot(AMv).to(torch::kCPU).item<double>() / vv;
+                            if (std::isfinite(qr)) {
+                                ++nr_ok; qr_min = std::min(qr_min, qr);
+                                if (qr < 0.0) ++nr_neg;
                             }
                         }
                     }
@@ -6555,13 +6590,32 @@ public:
                               << " samples=" << n_ok << "/" << n_samp
                               << " A: q_min=" << q_min << " q_max=" << q_max
                               << " neg=" << n_neg;
-                    if (np_ok > 0) {
-                        std::cerr << " | M^-1A: q_min=" << qp_min << " neg=" << np_neg
-                                  << "/" << np_ok;
+                    if (nr_ok > 0) {
+                        std::cerr << " | AM^-1(production): q_min=" << qr_min
+                                  << " neg=" << nr_neg << "/" << nr_ok;
                     }
-                    std::cerr << "  (neg>0 PROVES the numerical range straddles 0 -> no SPD"
-                                 " preconditioner suffices; neg==0 proves NOTHING)"
+                    if (nl_ok > 0) {
+                        std::cerr << " | M^-1A: q_min=" << ql_min << " neg=" << nl_neg
+                                  << "/" << nl_ok;
+                    }
+                    // 9F.D121 (review 10, 10.1): both previous claims were too strong.
+                    //
+                    // q(v) = v'Av/v'v sees ONLY the symmetric part, so q clustered near 1 does
+                    // NOT mean well-conditioned. Counterexample: A = I + bK with K skew-symmetric
+                    // gives v'Kv = 0 for every real v, hence q == 1 EXACTLY for any b, however
+                    // large -- while the singular values and the non-normality are nothing like
+                    // 1. It says the symmetric part's scale is ~1. Nothing about conditioning,
+                    // non-normality, GMRES convergence, or step stability follows.
+                    //
+                    // And a negative q is a witness that the UNPRECONDITIONED symmetric part is
+                    // indefinite in the current coordinates. It does not by itself exclude every
+                    // one-sided SPD preconditioner.
+                    std::cerr << "  (q sees only the SYMMETRIC part: q~1 does NOT imply"
+                                 " well-conditioned -- I+bK with K skew gives q==1 for any b."
+                                 " neg>0 witnesses an indefinite symmetric part in these"
+                                 " coordinates; neg==0 proves NOTHING)"
                               << std::endl << std::flush;
+                    torch::manual_seed(caller_seed);
                 }
             }
 
@@ -6585,12 +6639,13 @@ public:
                     const char* e = std::getenv("WRF_SDIRK3_PRECOND_BLOCK_GAIN");
                     return e && *e && std::string(e) != "0" && std::string(e) != "false";
                 }();
-                static std::atomic<int> bg_done{-1};
-                int bprev = bg_done.load();
-                if (blockgain_on && newton_iter == 0 && bprev != stage &&
-                    bg_done.compare_exchange_strong(bprev, stage) && gmres_M_inv &&
-                    cached_layout_.is_valid() &&
+                if (blockgain_on && newton_iter == 0 && probe_blockgain_stage_ != stage &&
+                    gmres_M_inv && cached_layout_.is_valid() &&
                     cached_layout_.total_size == R.numel()) {
+                    probe_blockgain_stage_ = stage;
+                    const uint64_t bg_caller_seed =
+                        at::detail::getDefaultCPUGenerator().current_seed();
+                    torch::manual_seed(0x810C6A1ULL + static_cast<uint64_t>(stage));
                     for (const auto& blk : cached_layout_.blocks) {
                         torch::Tensor v;
                         {
@@ -6621,6 +6676,7 @@ public:
                         }
                         std::cerr << std::endl << std::flush;
                     }
+                    torch::manual_seed(bg_caller_seed);
                 }
             }
 
