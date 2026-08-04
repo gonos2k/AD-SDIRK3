@@ -11442,8 +11442,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                             const double sq = std::sqrt(static_cast<double>(b.size));
                             const double rn = rq.norm().item<double>() / sq;   // scaled RMS
                             const double kn = kq.norm().item<double>() / sq;
+                            // F too: R = K - F, and inferring |F| from |R| and |K| is the
+                            // kind of step that has been wrong repeatedly in this campaign.
+                            auto fq = F_fast_final.slice(0, b.start, b.start + b.size);
+                            const double fn = fq.norm().item<double>() / sq;
                             std::cerr << " " << b.name << "=" << (kn > 0 ? rn / kn : -1.0)
-                                      << "(|R|=" << rn << ",|K|=" << kn << ")";
+                                      << "(|R|=" << rn << ",|K|=" << kn
+                                      << ",|F|=" << fn << ")";
                         }
                         std::cerr << std::endl << std::flush;
                     }
