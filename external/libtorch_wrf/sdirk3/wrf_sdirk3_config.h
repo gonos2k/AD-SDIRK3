@@ -2,6 +2,13 @@
 #define WRF_SDIRK3_CONFIG_H
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
+#include <cstddef>    // std::size_t in parse_mode_strict; same libstdc++ caveat
+#include <stdexcept>  // 9F.D127: same reason -- parse_mode_strict/assert_mode_valid throw
+                      // std::invalid_argument and std::logic_error. libc++ (macOS) pulls these
+                      // in transitively via <string>, libstdc++ does not, so D123 built clean
+                      // locally and failed on core-linux. The line above already warned about
+                      // exactly this and I still shipped it: a local build is not a portability
+                      // check for a HEADER, because whichever TU includes it first hides the gap.
 #include <string>
 
 namespace wrf {
