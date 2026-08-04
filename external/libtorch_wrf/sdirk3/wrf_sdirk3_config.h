@@ -554,6 +554,58 @@ struct SDIRK3Config {
     };
     int mass_coordinate_mode = 0;
 
+    // 9F.D123 (review 3.1/3.2/5): ONE strict parser, and a fail-CLOSED resolution.
+    //
+    // Three fail-open holes shipped in D122, all mine:
+    //   * the env path used atoi(), so "wrf" -> 0 and "1junk" -> 1. Mode 0 is not a safe
+    //     default, it is the KNOWN-WRONG physics -- a typo ran Omega = mu*w silently.
+    //   * the namelist path used stoi() without checking the consumed length, so "1abc"
+    //     parsed as 1.
+    //   * the accessors' default branch fell back to the raw legacy booleans, so a value
+    //     outside 0..3 resolved to whatever those happened to be instead of failing.
+    //
+    // A validator that cannot say "no" is not a validator. This one rejects.
+    static int parse_mode_strict(const std::string& text) {
+        // Trim surrounding blanks, then require the ENTIRE remainder to be the number.
+        const auto b = text.find_first_not_of(" \t\r\n");
+        if (b == std::string::npos) {
+            throw std::invalid_argument(
+                "mass_coordinate_mode is empty; expected exactly 0, 1, 2 or 3");
+        }
+        const auto e = text.find_last_not_of(" \t\r\n");
+        const std::string body = text.substr(b, e - b + 1);
+        std::size_t consumed = 0;
+        int parsed = 0;
+        try {
+            parsed = std::stoi(body, &consumed);
+        } catch (const std::exception&) {
+            throw std::invalid_argument(
+                "mass_coordinate_mode='" + text + "' is not an integer; expected 0, 1, 2 or 3");
+        }
+        if (consumed != body.size()) {
+            throw std::invalid_argument(
+                "mass_coordinate_mode='" + text + "' has trailing characters; expected exactly "
+                "0, 1, 2 or 3 (a partially-parsed value would select physics silently)");
+        }
+        if (parsed < 0 || parsed > 3) {
+            throw std::invalid_argument(
+                "mass_coordinate_mode=" + std::to_string(parsed) +
+                " is out of range; expected 0=Legacy, 1=WRFParity, 2=DiagnosticOmegaOnly, "
+                "3=DiagnosticMuOnly");
+        }
+        return parsed;
+    }
+
+    void assert_mode_valid() const {
+        if (mass_coordinate_mode < 0 || mass_coordinate_mode > 3) {
+            throw std::logic_error(
+                "mass_coordinate_mode=" + std::to_string(mass_coordinate_mode) +
+                " is not a declared MassCoordinateMode; refusing to resolve it to the legacy "
+                "booleans (that is how a corrupted value would run Omega = mu*w under the name "
+                "of a parity mode)");
+        }
+    }
+
     // The mode is the authority; the two booleans are the legacy wire format and are honoured
     // ONLY while the mode is Legacy, so an explicit mode can never be silently overridden by a
     // stale namelist boolean.
@@ -562,8 +614,8 @@ struct SDIRK3Config {
             case MassCoordinateMode::WRFParity:
             case MassCoordinateMode::DiagnosticOmegaOnly: return true;
             case MassCoordinateMode::DiagnosticMuOnly:    return false;
-            case MassCoordinateMode::Legacy:
-            default:                                      return wrf_omega_ww_cp;
+            case MassCoordinateMode::Legacy:              return wrf_omega_ww_cp;
+            default:                                      assert_mode_valid(); return false;
         }
     }
     bool effective_mu_horizontal_div_only() const {
@@ -571,8 +623,8 @@ struct SDIRK3Config {
             case MassCoordinateMode::WRFParity:
             case MassCoordinateMode::DiagnosticMuOnly:    return true;
             case MassCoordinateMode::DiagnosticOmegaOnly: return false;
-            case MassCoordinateMode::Legacy:
-            default:                                      return mu_horizontal_div_only;
+            case MassCoordinateMode::Legacy:              return mu_horizontal_div_only;
+            default:                                      assert_mode_valid(); return false;
         }
     }
     const char* mass_coordinate_mode_name() const {

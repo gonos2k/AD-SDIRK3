@@ -56,6 +56,7 @@
 #include "wrf_sdirk3_stage_history_diag.h"  // PR 9F P2: shared emit_sdirk3_diag_line
 #include "wrf_sdirk3_unified_preconditioner.h"  // v20.5: For set_stage_state()
 #include <torch/torch.h>
+#include <ATen/CPUGeneratorImpl.h>
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -6525,10 +6526,14 @@ public:
                     // caller's seed afterwards so the probe does not shift the solver's stream.
                     // NOTE what this does and does not do: it restores the SEED, not the full
                     // philox offset, so it is not a bitwise restore of generator state.
-                    const uint64_t probe_seed = 0x5D1BC3ULL + static_cast<uint64_t>(stage);
-                    const uint64_t caller_seed =
-                        at::detail::getDefaultCPUGenerator().current_seed();
-                    torch::manual_seed(probe_seed);
+                    // 9F.D123 (review 14): D121 saved current_seed() and called manual_seed()
+                    // to restore it. That is NOT a restore -- reseeding REWINDS the stream to
+                    // position 0, so a caller that had already drawn N samples silently starts
+                    // over. My own comment admitted it did not restore the offset and I shipped
+                    // it anyway; rewinding is strictly worse than leaving the stream alone.
+                    // Use a probe-LOCAL generator and never touch the global one.
+                    auto probe_gen = at::detail::createCPUGenerator(
+                        0x5D1BC3ULL + static_cast<uint64_t>(stage));
                     const int n_samp = 24;
                     double q_min = std::numeric_limits<double>::infinity();
                     double q_max = -std::numeric_limits<double>::infinity();
@@ -6547,7 +6552,9 @@ public:
                         torch::Tensor v;
                         {
                             torch::NoGradGuard ng_seed;
-                            v = torch::randn_like(R).detach();
+                            v = torch::randn(R.sizes(), probe_gen,
+                                             R.options().device(torch::kCPU))
+                                    .to(R.device(), R.scalar_type()).detach();
                         }
                         // The operator is called OUTSIDE any grad guard: gmres_op is a JVP and a
                         // blanket NoGradGuard around it kills the very graph it needs. Only the
@@ -6615,7 +6622,6 @@ public:
                                  " neg>0 witnesses an indefinite symmetric part in these"
                                  " coordinates; neg==0 proves NOTHING)"
                               << std::endl << std::flush;
-                    torch::manual_seed(caller_seed);
                 }
             }
 
@@ -6643,16 +6649,17 @@ public:
                     gmres_M_inv && cached_layout_.is_valid() &&
                     cached_layout_.total_size == R.numel()) {
                     probe_blockgain_stage_ = stage;
-                    const uint64_t bg_caller_seed =
-                        at::detail::getDefaultCPUGenerator().current_seed();
-                    torch::manual_seed(0x810C6A1ULL + static_cast<uint64_t>(stage));
+                    auto bg_gen = at::detail::createCPUGenerator(
+                        0x810C6A1ULL + static_cast<uint64_t>(stage));
                     for (const auto& blk : cached_layout_.blocks) {
                         torch::Tensor v;
                         {
                             torch::NoGradGuard ng_bg;
                             v = torch::zeros_like(R);
                             v.slice(0, blk.start, blk.start + blk.size)
-                                .copy_(torch::randn({blk.size}, R.options()));
+                                .copy_(torch::randn({blk.size}, bg_gen,
+                                                    R.options().device(torch::kCPU))
+                                           .to(R.device(), R.scalar_type()));
                             v = v.detach();
                         }
                         // Outside any grad guard: M^-1 may build a graph.
@@ -6676,7 +6683,6 @@ public:
                         }
                         std::cerr << std::endl << std::flush;
                     }
-                    torch::manual_seed(bg_caller_seed);
                 }
             }
 
