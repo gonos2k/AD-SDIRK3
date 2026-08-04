@@ -6663,7 +6663,7 @@ public:
                             v = v.detach();
                         }
                         // Outside any grad guard: M^-1 may build a graph.
-                        torch::Tensor z, Az;
+                        torch::Tensor z, Az, Av_only;
                         try {
                             z = gmres_M_inv(v);
                             // 9F.D124 (review 13): the judgement quantity is NOT the M^-1 gain.
@@ -6672,6 +6672,10 @@ public:
                             // assumed otherwise. What matters is how close A M^-1 is to the
                             // identity, in the RIGHT-preconditioned order production uses.
                             if (gmres_op) Az = gmres_op(z);
+                            // 9F.D125: A ALONE on the same block vector. This is what separates
+                            // "M's row is wrong" from "A's row is degenerate". If A v_q keeps the
+                            // block (gain ~1) while A M^-1 v_q loses it, the defect is M.
+                            if (gmres_op) Av_only = gmres_op(v);
                         } catch (...) { continue; }
                         if (!z.defined()) continue;
                         torch::NoGradGuard ng_bg2;
@@ -6688,11 +6692,22 @@ public:
                             // GMRES needs. Large means the preconditioner does not invert this
                             // row, whatever its gain happens to be.
                             auto d = Az - v;
+                            // ||A M^-1 v_q|| itself, so "annihilates" stops being an inference
+                            // from err~1 and becomes a direct reading.
+                            std::cerr << " AMinv_norm="
+                                      << (Az.norm().to(torch::kCPU).item<double>() / vin);
                             std::cerr << " AMinv_id_err="
                                       << (d.slice(0, blk.start, blk.start + blk.size)
                                             .norm().to(torch::kCPU).item<double>() / vin)
                                       << " AMinv_id_err_total="
                                       << (d.norm().to(torch::kCPU).item<double>() / vin);
+                        }
+                        if (Av_only.defined()) {
+                            std::cerr << " A_gain="
+                                      << (Av_only.slice(0, blk.start, blk.start + blk.size)
+                                            .norm().to(torch::kCPU).item<double>() / vin)
+                                      << " A_norm_total="
+                                      << (Av_only.norm().to(torch::kCPU).item<double>() / vin);
                         }
                         std::cerr << " leak:";
                         for (const auto& ob : cached_layout_.blocks) {
