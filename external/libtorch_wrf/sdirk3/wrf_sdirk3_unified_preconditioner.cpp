@@ -37,6 +37,9 @@
 #include <algorithm>  // std::min
 #include <unordered_map>
 #include <atomic>
+#include <tuple>
+#include <set>
+#include <mutex>
 #include <cstdlib>   // std::getenv in the D126 mu_coeff probe
 #ifdef USE_CUDA
 #include <c10/cuda/CUDAFunctions.h>  // FIX 2025-12-31 Batch41: For c10::cuda::current_device()
@@ -2562,10 +2565,27 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
             // The probe not firing is what caught it. Reading a plausible code path is not
             // evidence it is the one that runs.
             {
-                static std::atomic<bool> said_mu_schur{false};
-                bool e0 = false;
-                if (std::getenv("WRF_SDIRK3_PRECOND_MU_COEFF") &&
-                    said_mu_schur.compare_exchange_strong(e0, true)) {
+                // 9F.D134 (review 11.2): keyed on the scope being measured, not process-global.
+                // I fixed exactly this for the numerical-range probe (D121, per-solver latch)
+                // and then reintroduced it here with a function-local static -- so only the
+                // FIRST solver/tile/stage/configuration in the process would ever print, and a
+                // later run's numbers would be read off an earlier solver's output. Second
+                // occurrence of the same defect, so the key is now explicit rather than implied.
+                bool first_for_this_scope = false;
+                if (std::getenv("WRF_SDIRK3_PRECOND_MU_COEFF")) {
+                    // One slot, not a set: report when the scope CHANGES. Bounded by
+                    // construction, and the CAS makes it exactly-once per transition even if
+                    // several tiles reach here at once.
+                    const uint64_t key = diag_scope_key(
+                        static_cast<int>(wrf::sdirk3::g_sdirk3_config.mass_coordinate_mode),
+                        static_cast<int>(nz), coefficient_generation_);
+                    uint64_t prev = diag_mu_schur_key_.load(std::memory_order_relaxed);
+                    first_for_this_scope =
+                        (prev != key) &&
+                        diag_mu_schur_key_.compare_exchange_strong(
+                            prev, key, std::memory_order_relaxed);
+                }
+                if (first_for_this_scope) {
                     torch::NoGradGuard ng_mu;
                     auto m0 = [](const torch::Tensor& t) {
                         return t.numel() > 0 ? t.abs().mean().item<double>() : 0.0;
