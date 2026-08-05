@@ -317,6 +317,13 @@ add_executable(test_mass_coordinate_mode tests/test_mass_coordinate_mode.cpp)
 target_link_libraries(test_mass_coordinate_mode PRIVATE wrf_sdirk3_build_config)
 add_test(NAME Mass_Coordinate_Mode_Contract COMMAND test_mass_coordinate_mode)
 
+# 9F.D140 (review 13.3): the mu<->phi coupling has ONE source and the asymmetry is REACHABLE.
+# Deliberately does NOT pin the two directions as equal -- ratifying today's value would make
+# the defect a requirement. It pins the structure that makes the fix possible.
+add_executable(test_mu_phi_coupling tests/test_mu_phi_coupling.cpp)
+target_link_libraries(test_mu_phi_coupling PRIVATE wrf_sdirk3::core)
+add_test(NAME MuPhi_Coupling_Structure_Contract COMMAND test_mu_phi_coupling)
+
 # 9F.D91 (review P0-1): the transpose solve must judge on the PHYSICAL residual, not the
 # preconditioned one. Carries a deliberately residual-shrinking preconditioner -- the false
 # success that the old gate would have accepted.

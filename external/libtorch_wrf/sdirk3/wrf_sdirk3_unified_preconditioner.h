@@ -42,6 +42,47 @@ class PhysicsConfig;
  * force them back in. Coefficients sourced from g_sdirk3_config (not
  * PhysicsConfig) for RHS/precond consistency.
  */
+// 9F.D139 (review 5.3 / 12.1): ONE place decides the mu<->phi direct coupling.
+//
+// Three paths -- packed 1D 4x4, the 4D enhanced solve, and the scalar reference -- each built
+// this coupling themselves, and all three used the SAME scalar for both directions:
+//
+//     packed :2455/:2543/:2546   S_mu_phi_base = S_phi_mu_base = A_phi_mu_base
+//     4D     :3977/:3998/:4000   likewise
+//     scalar :5847               float A_mu_phi = A_phi_mu;  // "SYMMETRIC per design"
+//
+// So the measured S_mu_phi == S_phi_mu == 339.367 is what the construction guarantees, not
+// something the operator was observed to do -- and fixing one path would silently break parity
+// with the other two. A struct with two NAMED fields makes the asymmetry representable and
+// makes any future change land in every path at once.
+//
+// The two are still equal here, so this commit is byte-identical by construction. What changes
+// is that they are now separable: under the corrected mass equation the mu tendency is the
+// horizontal divergence of (mu*u, mu*v) and carries no direct phi dependence, so a_mu_phi is
+// the term expected to go to zero -- while a_phi_mu (vertical hydrostatic phi <- mu) stays.
+// Note that a_mu_phi = 0 does NOT make S_mu_phi zero: the Schur complement over (u,v) still
+// carries phi -> u,v -> mu unless HEVI has removed those blocks too.
+struct MuPhiDirectCoupling {
+    float a_mu_phi;   // mu row, phi column
+    float a_phi_mu;   // phi row, mu column  (vertical hydrostatic)
+};
+
+// THE decision, in one expression: given the vertical hydrostatic phi<-mu coefficient, what is
+// the mu<-phi one? Today the answer is "the same", which is what the three paths already did.
+// When the re-derivation makes it 0 under the corrected mass equation, this is the only line
+// that changes, and every path follows.
+inline float mu_phi_from_phi_mu(float a_phi_mu) {
+    // Deliberately still symmetric: changing it is a NUMERICS change and belongs behind the
+    // re-derivation (units authority -> dimensionless I - hJ builder -> asymmetric Schur),
+    // not in the commit that merely stops the three paths from disagreeing about it.
+    return a_phi_mu;
+}
+
+inline MuPhiDirectCoupling mu_phi_direct_coupling(float dt_gamma, float c2) {
+    const float a_phi_mu = dt_gamma * c2;   // vertical hydrostatic
+    return MuPhiDirectCoupling{mu_phi_from_phi_mu(a_phi_mu), a_phi_mu};
+}
+
 class UnifiedPreconditioner : public WRFPreconditioner {
 public:
     /**
