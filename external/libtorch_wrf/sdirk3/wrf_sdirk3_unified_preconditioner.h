@@ -42,41 +42,18 @@ class PhysicsConfig;
  * force them back in. Coefficients sourced from g_sdirk3_config (not
  * PhysicsConfig) for RHS/precond consistency.
  */
-// 9F.D139 (review 5.3 / 12.1): ONE place decides the mu<->phi direct coupling.
-//
-// Three paths -- packed 1D 4x4, the 4D enhanced solve, and the scalar reference -- each built
-// this coupling themselves, and all three used the SAME scalar for both directions:
-//
-//     packed :2455/:2543/:2546   S_mu_phi_base = S_phi_mu_base = A_phi_mu_base
-//     4D     :3977/:3998/:4000   likewise
-//     scalar :5847               float A_mu_phi = A_phi_mu;  // "SYMMETRIC per design"
-//
-// So the measured S_mu_phi == S_phi_mu == 339.367 is what the construction guarantees, not
-// something the operator was observed to do -- and fixing one path would silently break parity
-// with the other two. A struct with two NAMED fields makes the asymmetry representable and
-// makes any future change land in every path at once.
-//
-// The two are still equal here, so this commit is byte-identical by construction. What changes
-// is that they are now separable: under the corrected mass equation the mu tendency is the
-// horizontal divergence of (mu*u, mu*v) and carries no direct phi dependence, so a_mu_phi is
-// the term expected to go to zero -- while a_phi_mu (vertical hydrostatic phi <- mu) stays.
-// Note that a_mu_phi = 0 does NOT make S_mu_phi zero: the Schur complement over (u,v) still
-// carries phi -> u,v -> mu unless HEVI has removed those blocks too.
+// mu<->phi direct coupling, in one place so the three solve paths cannot diverge.
+// Today both directions are the hydrostatic coefficient; the corrected mass equation implies
+// a_mu_phi should be 0 (the mu row has no phi dependence), which is a numerics change pending
+// the coefficient re-derivation. Note a_mu_phi = 0 does NOT zero S_mu_phi: the Schur complement
+// over (u,v) still carries phi -> u,v -> mu unless HEVI removes those blocks too.
 struct MuPhiDirectCoupling {
     float a_mu_phi;   // mu row, phi column
     float a_phi_mu;   // phi row, mu column  (vertical hydrostatic)
 };
 
-// THE decision, in one expression: given the vertical hydrostatic phi<-mu coefficient, what is
-// the mu<-phi one? Today the answer is "the same", which is what the three paths already did.
-// When the re-derivation makes it 0 under the corrected mass equation, this is the only line
-// that changes, and every path follows.
-inline float mu_phi_from_phi_mu(float a_phi_mu) {
-    // Deliberately still symmetric: changing it is a NUMERICS change and belongs behind the
-    // re-derivation (units authority -> dimensionless I - hJ builder -> asymmetric Schur),
-    // not in the commit that merely stops the three paths from disagreeing about it.
-    return a_phi_mu;
-}
+// The one line that changes when the asymmetry is derived.
+inline float mu_phi_from_phi_mu(float a_phi_mu) { return a_phi_mu; }
 
 inline MuPhiDirectCoupling mu_phi_direct_coupling(float dt_gamma, float c2) {
     const float a_phi_mu = dt_gamma * c2;   // vertical hydrostatic
@@ -362,25 +339,9 @@ private:
     // Incremented whenever coefficients change (update, initialize_acoustic_gravity_solver)
     uint64_t coefficient_generation_ = 0;
 
-    // 9F.D137 (Codex stop-review, 3rd pass): O(1), race-free, and bounded by construction.
-    //
-    // Four attempts, each fixing the stated problem and creating the next:
-    //   D134   process-global static set     -> only the FIRST solver ever printed
-    //   D135   keyed on `this`               -> a recycled address collides with a dead instance
-    //   D135b  keyed on a monotonic id       -> ids never repeat, the global set grows forever
-    //   D136   member set                    -> reclaimed with the solver, BUT
-    //                                           coefficient_generation_ advances during a run,
-    //                                           so it still grows -- just more slowly -- and
-    //                                           moving it onto the object let me drop the mutex
-    //                                           while apply() still runs under tile parallelism.
-    //                                           I called that "fewer moving parts"; one of the
-    //                                           parts I removed was load-bearing.
-    //
-    // Every attempt tried to REMEMBER A SET of scopes. A diagnostic does not need that. It needs
-    // to speak when the scope it is describing CHANGES, which is one slot, not a container:
-    // O(1) forever, no allocation on the hot path, and a single atomic CAS makes it exactly-once
-    // per transition under any thread interleaving. Unbounded growth and the data race are both
-    // unrepresentable rather than guarded against.
+    // Diagnostic latch: one slot, so it reports when the measured scope CHANGES.
+    // O(1) and race-free by construction -- a set here would grow with coefficient_generation_
+    // and would need a lock, since apply() runs under tile parallelism.
     static uint64_t diag_scope_key(int mode, int nz, uint64_t generation) {
         return (static_cast<uint64_t>(mode & 0xFF) << 56) |
                (static_cast<uint64_t>(nz & 0xFFFF) << 40) |
