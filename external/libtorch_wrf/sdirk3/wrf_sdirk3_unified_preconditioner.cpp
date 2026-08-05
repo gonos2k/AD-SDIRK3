@@ -2572,14 +2572,16 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                 // later run's numbers would be read off an earlier solver's output. Second
                 // occurrence of the same defect, so the key is now explicit rather than implied.
                 static std::mutex said_mu_mutex;
-                static std::set<std::tuple<const void*, int, int, int>> said_mu_keys;
+                static std::set<std::tuple<uint64_t, int, int, uint64_t>> said_mu_keys;
                 bool first_for_this_scope = false;
                 if (std::getenv("WRF_SDIRK3_PRECOND_MU_COEFF")) {
+                    // instance_id_, not `this`: a freed solver's address can be reused, and
+                    // the recycled pointer would collide with the dead instance's key.
                     const auto key = std::make_tuple(
-                        static_cast<const void*>(this),
+                        instance_id_,
                         static_cast<int>(wrf::sdirk3::g_sdirk3_config.mass_coordinate_mode),
                         static_cast<int>(nz),
-                        static_cast<int>(coefficient_generation_));
+                        coefficient_generation_);
                     std::lock_guard<std::mutex> lk(said_mu_mutex);
                     first_for_this_scope = said_mu_keys.insert(key).second;
                 }

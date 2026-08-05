@@ -319,6 +319,21 @@ private:
     // Incremented whenever coefficients change (update, initialize_acoustic_gravity_solver)
     uint64_t coefficient_generation_ = 0;
 
+    // 9F.D135 (Codex stop-review): a STABLE instance identity for diagnostic latches.
+    //
+    // D134 keyed the mu-Schur latch on `this`. A pointer is not an identity across lifetimes:
+    // free one solver, allocate the next, and the allocator can hand back the same address --
+    // the new solver then collides with the dead one's key and its probe silently never fires.
+    // That is the same "reports the wrong instance" failure the per-solver latch was meant to
+    // fix, just moved from process-global to address-reuse.
+    //
+    // A monotonic counter cannot be recycled, so the key is unique for the life of the process.
+    static uint64_t next_instance_id_() {
+        static std::atomic<uint64_t> counter{0};
+        return counter.fetch_add(1, std::memory_order_relaxed) + 1;
+    }
+    const uint64_t instance_id_ = next_instance_id_();
+
     // v20.5: Cached per-k coefficients for Φ-W GS correction
     std::vector<float> momentum_coupling_k_cached_;   // [nz_w], from initialize_acoustic_gravity_solver
     std::vector<float> dz_effective_cached_;           // [nz], from initialize_acoustic_gravity_solver
