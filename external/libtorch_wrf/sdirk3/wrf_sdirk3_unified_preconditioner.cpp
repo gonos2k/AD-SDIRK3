@@ -1396,14 +1396,16 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     float dx_actual = grid_info_->dx;
     float dy_actual = grid_info_->dy;
 
-    // Extract the REAL column-mass pressure from grid_info_->mub (Pa; measured 89083.9, D142)
+    // Extract the column-mass pressure from grid_info_->mub (Pa per Registry.EM_COMMON:300)
     // mub is 2D base state column mass (kg/m²), O(10⁵) not 1.225!
     // FIX 2025-12-30 Batch29 Issue 1: Reuse cached mub.mean() instead of recomputing
-    // Column-mass pressure from mub. MEASURED 89083.9 Pa on em_b_wave (uniform, flat base
-    // state); previously named rho_avg with a 1.225 fallback, which is air density.
-    float mu_column_pa = 88000.0f;  // Pa; matches :865. Measured 89083.9 on em_b_wave.
+    // Column-mass pressure from mub. Registry.EM_COMMON:300 declares mub as "base state dry air
+    // mass in column", units Pa -- that is the authority for the unit. The probe below only
+    // measures MAGNITUDE (89083.9 on em_b_wave), which corroborates it and rules out the 1.225
+    // this fallback used to hold: that is air density, wrong by 7e+04 and in another dimension.
+    float mu_column_pa = 88000.0f;  // Pa per Registry; magnitude 89083.9 measured on em_b_wave.
 
-    // Reports what mub actually holds, so its units are a measurement not a comment.
+    // Reports mub's MAGNITUDE. Units come from the Registry declaration, not from this number.
     if (grid_info_ && grid_info_->mub.defined() && grid_info_->mub.numel() > 0) {
         static const bool mub_units_probe_on = [](){
             const char* v = std::getenv("WRF_SDIRK3_MUB_UNITS_PROBE");
@@ -1423,8 +1425,8 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
                       << " min=" << m.min().item<double>()
                       << " max=" << m.max().item<double>()
                       << " numel=" << m.numel()
-                      << "  (~1e+05 => column-mass PRESSURE [Pa], the 1.225 fallback is wrong;"
-                         " ~1 => the Pa comment is wrong)"
+                      << "  (magnitude only; Registry.EM_COMMON:300 declares mub in Pa."
+                         " ~1e+05 is consistent with that, ~1 would not be)"
                       << std::endl << std::flush;
         }
     }
