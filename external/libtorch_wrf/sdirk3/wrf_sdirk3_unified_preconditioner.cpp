@@ -37,6 +37,8 @@
 #include <algorithm>  // std::min
 #include <unordered_map>
 #include <atomic>
+#include <string>
+#include <cctype>
 #include <tuple>
 #include <set>
 #include <mutex>
@@ -1501,6 +1503,33 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         // was effectively Jacobi. Without it: off-diag ≈ -209, diag ≈ 523 (ratio 0.4) →
         // proper tridiagonal capturing full vertical acoustic column structure.
         if (k < nz-1) {
+            // 9F.D138 (review 4.1) -- DIMENSIONALLY INVALID, verified, NOT fixed here.
+            //
+            //     [c_s^2] = m^2 s^-2      [N2_k] = s^-2      (N2 = (g/theta) dtheta/dz, :785)
+            //
+            // These cannot be added. After the * dz^-2 below, the acoustic part becomes
+            // c_s^2/dz^2 [s^-2], which is a correct rate^2, while the gravity part becomes
+            // N^2/dz^2 [m^-2 s^-2], which is not a rate at all. The standard vertical
+            // acoustic-gravity relation is
+            //
+            //     omega^2 = c_s^2 k_z^2 + N^2   ->   c_s^2/dz^2 + N^2
+            //
+            // i.e. only the ACOUSTIC term carries dz^-2.
+            //
+            // Magnitude, so the size of the error is on record: c_s^2 = 1.156e+05 against
+            // N2 <= 1e-03 (clamped at :787), so N2 is ~1e-08 of the sum today. Under the
+            // correct grouping it would be N^2 / (c_s^2/dz^2) = 1e-04 / 1.85 ~ 5e-05 -- still
+            // small here, but FOUR ORDERS larger than what this line gives it. So the gravity
+            // coupling is effectively absent from the preconditioner rather than merely
+            // mis-scaled.
+            //
+            // NOT corrected in this commit, deliberately. The review's point is that this is one
+            // symptom of a coefficient system that mixes first- and second-order-in-h terms
+            // (direct diagonals carry c_s^2/dz^2 while a Schur round-trip carries the same
+            // stiffness again), and that patching individual numbers on top of that can make
+            // other blocks worse. The order is: units authority -> dimensionless I - hJ builder
+            // -> asymmetric Schur -> HEVI identity row -> path parity. This note exists so the
+            // defect is not rediscovered as new.
             float combined_factor = c_s * c_s + N2_k;
             float w_coupling_val = -dt_ * gamma_ * 0.5f * combined_factor * dz_coupling_inv2;
             vertical_upper_w_ptr[k] = w_coupling_val;
@@ -2479,7 +2508,13 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                     // Per-level deviation count (Finding r46e#3: diagnostic for localization)
                     auto dev_3d = (ratio_3d - 1.0f).abs();
                     // Per-level max deviation: collapse (ny,nx) → (nz,)
-                    auto dev_per_level = std::get<0>(dev_3d.reshape({ny * nx, nz}).max(0));
+                    // 9F.D138 (review 9): dev_3d is [ny, nz, nx] and row-major, so index =
+                    // ((y*nz)+z)*nx + x. reshape({ny*nx, nz}) reinterprets that buffer, and the
+                    // trailing axis mixes z with x -- it is not the level axis. The comment said
+                    // "collapse (ny,nx) -> (nz,)" and the code did something else, so every
+                    // per-level number and every bad_levels index derived from it was wrong.
+                    // amax over the two spatial axes says what was meant.
+                    auto dev_per_level = dev_3d.amax({0, 2});
                     int bad_levels = 0;
                     auto dev_ptr = dev_per_level.data_ptr<float>();
                     for (int kk = 0; kk < nz; ++kk) {
@@ -2572,18 +2607,40 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                 // later run's numbers would be read off an earlier solver's output. Second
                 // occurrence of the same defect, so the key is now explicit rather than implied.
                 bool first_for_this_scope = false;
-                if (std::getenv("WRF_SDIRK3_PRECOND_MU_COEFF")) {
+                // 9F.D138 (review 8): strict boolean, not mere presence. `=0` and `=false`
+                // used to ENABLE this probe, so a user disabling it got output anyway and would
+                // reasonably read it as the result of the experiment they thought they had
+                // turned off. The repo already has one strict parser for exactly this.
+                static const bool mu_coeff_probe_on = [](){
+                    const char* v = std::getenv("WRF_SDIRK3_PRECOND_MU_COEFF");
+                    if (!v || !*v) return false;
+                    std::string t(v);
+                    std::transform(t.begin(), t.end(), t.begin(),
+                                   [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+                    return t=="1"||t=="true"||t=="yes"||t=="on"||t=="t"||t=="y";
+                }();
+                if (mu_coeff_probe_on) {
                     // One slot, not a set: report when the scope CHANGES. Bounded by
                     // construction, and the CAS makes it exactly-once per transition even if
                     // several tiles reach here at once.
                     const uint64_t key = diag_scope_key(
                         static_cast<int>(wrf::sdirk3::g_sdirk3_config.mass_coordinate_mode),
                         static_cast<int>(nz), coefficient_generation_);
-                    uint64_t prev = diag_mu_schur_key_.load(std::memory_order_relaxed);
-                    first_for_this_scope =
-                        (prev != key) &&
-                        diag_mu_schur_key_.compare_exchange_strong(
-                            prev, key, std::memory_order_relaxed);
+                    // 9F.D138 (review 7.2): CAS LOOP, not a single attempt. With one try, two
+                    // threads arriving with DIFFERENT keys race: the loser's compare_exchange
+                    // fails and it never retries, so its transition is lost permanently rather
+                    // than merely delayed. Exactly-once held for identical keys and silently
+                    // failed for competing ones -- the case that matters here, since different
+                    // tiles are what arrive concurrently.
+                    uint64_t seen = diag_mu_schur_key_.load(std::memory_order_relaxed);
+                    while (seen != key) {
+                        if (diag_mu_schur_key_.compare_exchange_weak(
+                                seen, key, std::memory_order_relaxed,
+                                std::memory_order_relaxed)) {
+                            first_for_this_scope = true;
+                            break;
+                        }
+                    }
                 }
                 if (first_for_this_scope) {
                     torch::NoGradGuard ng_mu;
