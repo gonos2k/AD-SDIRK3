@@ -1457,10 +1457,15 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     float H_y = 1.0f / dy_actual;
     // DIMENSIONALLY INVALID: [h*mu0*H^2] = s*Pa*m^-2 = kg m^-3 s^-1, not dimensionless.
     //
-    // The term equals |C_mu_u|*H, i.e. the outbound leg mu->u with a bare H substituted for the
-    // return leg. The real round trip is |C_mu_u|*|C_u_mu| = h^2*c_s^2*H^2, which IS
-    // dimensionless and which the Schur complement already forms -- so the missing factor is
-    // h*c_s^2/mu0 (= 339.4 here, the same quantity as S_mu_phi), not c_s^2/mu0.
+    // Naming here follows the file's convention C_ab = row a, column b (see C_u_phi, "Phi -> u"):
+    //   C_mu_u = -h*mu0*H          u -> mu   (mass equation's dependence on u)
+    //   C_u_mu = -h*(c_s^2/mu0)*H  mu -> u   (pressure gradient)
+    //
+    // The term equals |C_mu_u|*H: the u -> mu leg with a BARE H where the mu -> u leg belongs.
+    // Substituting the real leg gives |C_mu_u|*|C_u_mu| = h^2*c_s^2*H^2, dimensionless and
+    // already formed by the Schur complement, so the missing factor is h*c_s^2/mu0, not
+    // c_s^2/mu0. That evaluates to 339.4, numerically equal to the measured S_mu_phi (339.367)
+    // because both are the same expression h*c_s^2/mu0 -- they are not the same coupling.
     //
     // Magnitude at dt=600/100km: this term 4.7e-03 vs the round trip 1.58. Small, but it grows
     // as 1/dx while the round trip is ~fixed at constant acoustic CFL.
