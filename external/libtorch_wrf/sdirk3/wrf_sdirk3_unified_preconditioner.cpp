@@ -2573,15 +2573,17 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                 // occurrence of the same defect, so the key is now explicit rather than implied.
                 bool first_for_this_scope = false;
                 if (std::getenv("WRF_SDIRK3_PRECOND_MU_COEFF")) {
-                    // Member, not a process-global map: reclaimed with the solver, so it can
-                    // neither collide across lifetimes nor accumulate. No instance identity is
-                    // needed because the container already belongs to the instance.
+                    // One slot, not a set: report when the scope CHANGES. Bounded by
+                    // construction, and the CAS makes it exactly-once per transition even if
+                    // several tiles reach here at once.
+                    const uint64_t key = diag_scope_key(
+                        static_cast<int>(wrf::sdirk3::g_sdirk3_config.mass_coordinate_mode),
+                        static_cast<int>(nz), coefficient_generation_);
+                    uint64_t prev = diag_mu_schur_key_.load(std::memory_order_relaxed);
                     first_for_this_scope =
-                        diag_mu_schur_seen_.insert(std::make_tuple(
-                            static_cast<int>(
-                                wrf::sdirk3::g_sdirk3_config.mass_coordinate_mode),
-                            static_cast<int>(nz),
-                            coefficient_generation_)).second;
+                        (prev != key) &&
+                        diag_mu_schur_key_.compare_exchange_strong(
+                            prev, key, std::memory_order_relaxed);
                 }
                 if (first_for_this_scope) {
                     torch::NoGradGuard ng_mu;

@@ -321,21 +321,31 @@ private:
     // Incremented whenever coefficients change (update, initialize_acoustic_gravity_solver)
     uint64_t coefficient_generation_ = 0;
 
-    // 9F.D136 (Codex stop-review, 2nd pass): PER-SOLVER latch state lives ON the solver.
+    // 9F.D137 (Codex stop-review, 3rd pass): O(1), race-free, and bounded by construction.
     //
-    // The chain of fixes here is instructive, because each one solved the stated problem and
-    // introduced the next:
-    //   D134  process-global static  -> only the first solver in the process ever printed
-    //   D135  keyed on `this`        -> a recycled address collides with a dead instance
-    //   D135b keyed on a monotonic id -> ids never repeat, so the global set grows FOREVER
+    // Four attempts, each fixing the stated problem and creating the next:
+    //   D134   process-global static set     -> only the FIRST solver ever printed
+    //   D135   keyed on `this`               -> a recycled address collides with a dead instance
+    //   D135b  keyed on a monotonic id       -> ids never repeat, the global set grows forever
+    //   D136   member set                    -> reclaimed with the solver, BUT
+    //                                           coefficient_generation_ advances during a run,
+    //                                           so it still grows -- just more slowly -- and
+    //                                           moving it onto the object let me drop the mutex
+    //                                           while apply() still runs under tile parallelism.
+    //                                           I called that "fewer moving parts"; one of the
+    //                                           parts I removed was load-bearing.
     //
-    // Each of those treated "which instance is this" as a lookup problem. It is not: the latch
-    // is per-solver state, so it belongs to the solver. As a member it is reclaimed with the
-    // object, cannot collide, cannot grow across lifetimes, and needs no identity at all --
-    // the three failure modes above are unreachable rather than handled.
-    //
-    // Keyed on what still varies WITHIN one solver: config mode, grid, coefficient generation.
-    std::set<std::tuple<int, int, uint64_t>> diag_mu_schur_seen_;
+    // Every attempt tried to REMEMBER A SET of scopes. A diagnostic does not need that. It needs
+    // to speak when the scope it is describing CHANGES, which is one slot, not a container:
+    // O(1) forever, no allocation on the hot path, and a single atomic CAS makes it exactly-once
+    // per transition under any thread interleaving. Unbounded growth and the data race are both
+    // unrepresentable rather than guarded against.
+    static uint64_t diag_scope_key(int mode, int nz, uint64_t generation) {
+        return (static_cast<uint64_t>(mode & 0xFF) << 56) |
+               (static_cast<uint64_t>(nz & 0xFFFF) << 40) |
+               (generation & 0xFFFFFFFFFFULL);
+    }
+    std::atomic<uint64_t> diag_mu_schur_key_{~0ULL};
 
     // v20.5: Cached per-k coefficients for Φ-W GS correction
     std::vector<float> momentum_coupling_k_cached_;   // [nz_w], from initialize_acoustic_gravity_solver
