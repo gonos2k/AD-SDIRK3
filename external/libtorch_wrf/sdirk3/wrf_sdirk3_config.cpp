@@ -795,6 +795,24 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 newton_gmres_quality_threshold = std::clamp(std::stof(value), 0.5f, 1.0f);
             }
             } catch (const std::exception& e) {
+                // 9F.D130 (review 3.1): a malformed PHYSICS-AUTHORITY key must not be a warning.
+                //
+                // D123 made parse_mode_strict reject "1junk". This catch then swallowed the
+                // rejection, printed a warning, and CONTINUED -- leaving mass_coordinate_mode at
+                // Legacy, which is the known-wrong Omega = mu*w path. So the strict parser was
+                // defeated by its own caller: the value was refused and the run proceeded on the
+                // physics the user was trying to leave. That is worse than the atoi() it
+                // replaced, because it now looks handled.
+                //
+                // Ordinary tuning knobs keep the warning -- skipping a malformed
+                // gmres_restart is recoverable. Selecting the wrong mass-coordinate scheme is
+                // not, so it fails closed with the stable marker.
+                if (key == "sdirk3_mass_coordinate_mode" || key == "mass_coordinate_mode") {
+                    wrf::sdirk3::abort_c_abi_fail(
+                        std::string("SDIRK3_CONFIG_INVALID_MODE: namelist ") + key + "=" +
+                        value + " -- " + e.what() +
+                        " (refusing to continue on the previous mass-coordinate scheme)");
+                }
                 std::cerr << "[CONFIG WARNING] Skipping malformed namelist entry '"
                           << key << "=" << value << "': " << e.what() << std::endl;
             }
@@ -4034,7 +4052,16 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
     }
 }
 
+// 9F.D130 (review 3.2): this is an extern "C" entry point, so NOTHING may unwind out of it.
+//
+// D123's strict parser throws, and load_from_env() has no catch of its own -- so a malformed
+// WRF_SDIRK3_MASS_COORDINATE_MODE would have propagated a C++ exception across the C/Fortran
+// boundary. In the mpif90-linked executable that is std::terminate, not a coordinated WRF abort.
+// The repo already measured that, which is why wrf_sdirk3_contract_fail.h exists.
+//
+// Every exception is converted here: fail-close with the stable marker, never unwind.
 void wrf_sdirk3_load_config_from_namelist(const char* filename) {
+  try {
     if (!filename) { std::cerr << "[CONFIG] load_config_from_namelist: null filename" << std::endl; return; }
     // v20.14r17: Reject if workers already started (init-only function).
     if (warnIfWorkersStarted("__load_config_from_namelist__")) return;
@@ -4077,6 +4104,12 @@ void wrf_sdirk3_load_config_from_namelist(const char* filename) {
             std::abort();
         }
     }
+  } catch (const std::exception& e) {
+    wrf::sdirk3::abort_c_abi_fail(
+        std::string("SDIRK3_CONFIG_LOAD_FAILED: ") + e.what());
+  } catch (...) {
+    wrf::sdirk3::abort_c_abi_fail("SDIRK3_CONFIG_LOAD_FAILED: unknown exception");
+  }
 }
 
 void wrf_sdirk3_print_config() {

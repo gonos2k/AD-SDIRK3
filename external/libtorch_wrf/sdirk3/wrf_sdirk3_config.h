@@ -24,7 +24,15 @@ struct SDIRK3Config {
     // Newton-Krylov solver parameters
     int max_newton_iter = 50;  // Increased for stiff problems (was 4)
     float newton_tol = 0.2f;     // Scaled-RMS norm: ||S⁻¹R||/√N < 0.2 (per-DOF, grid-size independent)
-    float newton_rtol = 0.01f;   // Relative criterion: converge when ||R||/||R₀|| < 1%
+    // 9F.D130: THIS DEFAULT IS NOT WHAT A WRF RUN USES. Registry.EM_COMMON and
+    // Registry.SDIRK3_options both declare sdirk3_newton_rtol with default 1.e-10, and
+    // module_implicit_sdirk3.F pushes it in via set_config_float -- so every WRF run gets
+    // 1e-10, eight orders from the 0.01 written here. Measured in-run:
+    //     [Newton] ... atol=0.001, rtol=1e-10*0.447006=4.47006e-11 => effective_tol=0.001
+    // A reader of this header would reasonably conclude the relative criterion is active at 1%
+    // and attribute a residual plateau to it. It is not active. Kept as the standalone default
+    // (offline tests construct SDIRK3Config directly) but no longer silently misleading.
+    float newton_rtol = 0.01f;   // Relative criterion: max(atol, rtol*||R0||); see note above
     
     // GMRES parameters
     // FIX (2025-12-04): Reduced budget for realistic inexact Newton

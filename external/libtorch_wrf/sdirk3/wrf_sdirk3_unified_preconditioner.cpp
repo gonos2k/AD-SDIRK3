@@ -2553,6 +2553,44 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                 S_mu_mu_signs * SING_EPS);
 
             // Step 3: Solve μ
+            // 9F.D128: the mu row's gain is 1/S_mu_mu, and the block probe measured it at
+            // 6.53e-05 => S_mu_mu ~ 15300. Print the parts so that stops being an inference.
+            //
+            // D126 put this probe on the LEGACY 3x3 branch (:2637) after reading its
+            // mu_coeff = D_mu - sum(level_coupling) and reasoning about the Schur sum. That
+            // branch is precond_acoustic_4x4 == 0 and the default is 1 -- it never executes.
+            // The probe not firing is what caught it. Reading a plausible code path is not
+            // evidence it is the one that runs.
+            {
+                static std::atomic<bool> said_mu_schur{false};
+                bool e0 = false;
+                if (std::getenv("WRF_SDIRK3_PRECOND_MU_COEFF") &&
+                    said_mu_schur.compare_exchange_strong(e0, true)) {
+                    torch::NoGradGuard ng_mu;
+                    auto m0 = [](const torch::Tensor& t) {
+                        return t.numel() > 0 ? t.abs().mean().item<double>() : 0.0;
+                    };
+                    std::cerr << "SDIRK3_PRECOND_MU_SCHUR"
+                              << " S_mu_mu_base=" << S_mu_mu_scalar_cache
+                              << " schur_diag_corr_mean=" << m0(schur_diag_corr)
+                              // 9F.D129: the three factors of the Schur term. Under the
+                              // CORRECTED mass equation the mu tendency is the horizontal
+                              // divergence of (mu*u, mu*v) -- it does not depend on phi at all,
+                              // so S_mu_phi should be ~0 and this whole correction should
+                              // vanish. A large S_mu_phi would mean M still models the coupling
+                              // the OLD mass equation had through Omega = mu*w (mu -> w -> phi),
+                              // which the Omega fix removed from the operator but not from M.
+                              << " S_mu_phi=" << m0(S_mu_phi)
+                              << " S_phi_mu=" << m0(S_phi_mu)
+                              << " inv_S_phi_phi=" << m0(inv_S_phi_phi)
+                              << " S_mu_mu_reduced_mean=" << m0(S_mu_mu_reduced)
+                              << " S_mu_mu_safe_mean=" << m0(S_mu_mu_safe)
+                              << " implied_gain=" << (m0(S_mu_mu_safe) != 0.0
+                                                          ? 1.0 / m0(S_mu_mu_safe) : 0.0)
+                              << "  (mu gain is 1/S_mu_mu; block probe measured 6.53e-05)"
+                              << std::endl << std::flush;
+                }
+            }
             auto delta_mu = r_mu_reduced / S_mu_mu_safe;               // [ny, nx]
 
             // Step 4: Back-substitute Φ (mass levels k=0..nz-1)
@@ -2672,26 +2710,6 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                         μ_rhs -= level_coupling_rhs * damping;
                     }
 
-                    // 9F.D126: the mu row's gain is 1/μ_coeff, and the block probe measured it
-                    // at 6.53e-05 => μ_coeff ~ 15300. D_μ = 1 + dt*gamma*rho*(Hx^2+Hy^2) should be
-                    // ~1 on this grid, so the Schur sum must be supplying the rest. That was an
-                    // INFERENCE from source plus one number; print both so it becomes a reading.
-                    {
-                        static std::atomic<bool> said_mu_coeff{false};
-                        bool e0 = false;
-                        if (std::getenv("WRF_SDIRK3_PRECOND_MU_COEFF") &&
-                            said_mu_coeff.compare_exchange_strong(e0, true)) {
-                            std::cerr << "SDIRK3_PRECOND_MU_COEFF"
-                                      << " D_mu=" << D_μ
-                                      << " mu_coeff=" << μ_coeff
-                                      << " schur_sum=" << (D_μ - μ_coeff)
-                                      << " gain=" << (μ_coeff != 0.0f ? 1.0f / μ_coeff : 0.0f)
-                                      << " nz=" << nz
-                                      << "  (gain is what the block probe measures; schur_sum is"
-                                         " D_mu - mu_coeff, i.e. what the level loop removed)"
-                                      << std::endl << std::flush;
-                        }
-                    }
                     float μ_solution;
                     if (std::abs(μ_coeff) < 1e-12f) {
                         μ_solution = r_μ / D_μ;
