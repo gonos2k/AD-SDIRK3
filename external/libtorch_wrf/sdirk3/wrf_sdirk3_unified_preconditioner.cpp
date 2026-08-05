@@ -2452,7 +2452,8 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
             float A_v_phi_base = hevi_pc ? 0.0f : dt_gamma * H_y;
             float A_phi_u_base = hevi_pc ? 0.0f : dt_gamma * c2 * H_x;
             float A_phi_v_base = hevi_pc ? 0.0f : dt_gamma * c2 * H_y;
-            float A_phi_mu_base = dt_gamma * c2;
+            const auto muphi = wrf::sdirk3::mu_phi_direct_coupling(dt_gamma, c2);
+            float A_phi_mu_base = muphi.a_phi_mu;
 
             // One-shot sign verification vs 4D path coefficients (debug_level >= 2)
             static thread_local bool signs_verified = false;
@@ -2540,7 +2541,7 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
             }
 
             // Cross-coupling: S_mu_phi, S_phi_mu (factored with inv_mu0)
-            auto S_mu_phi_base = torch::full({nz}, A_phi_mu_base, opts_cpu)
+            auto S_mu_phi_base = torch::full({nz}, muphi.a_mu_phi, opts_cpu)
                 - c_mu_u_t * A_u_phi_base / diag_u_t
                 - c_mu_v_t * A_v_phi_base / diag_v_t;                // [nz]
             auto S_phi_mu_base = torch::full({nz}, A_phi_mu_base, opts_cpu)
@@ -3974,7 +3975,8 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
         float A_v_phi_base = hevi_pc ? 0.0f : dt_gamma * H_y;
         float A_phi_u_base = hevi_pc ? 0.0f : dt_gamma * c2 * H_x;
         float A_phi_v_base = hevi_pc ? 0.0f : dt_gamma * c2 * H_y;
-        float A_phi_mu_base = dt_gamma * c2;
+        const auto muphi4 = wrf::sdirk3::mu_phi_direct_coupling(dt_gamma, c2);
+        float A_phi_mu_base = muphi4.a_phi_mu;
 
         // ====== STEP 1: Eliminate U, V from μ and Φ equations ======
         // r_mu_mod[k,j,i] = -(A_mu_u[k]*r_u[k,j,i]/D_u[k] + A_mu_v[k]*r_v[k,j,i]/D_v[k])
@@ -3995,7 +3997,7 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
 
         // Factored Schur coupling: S_mu_phi = inv_mu0 * base[k], S_phi_mu = inv_mu0 * base[k]
         auto options_cpu = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
-        auto S_mu_phi_base = torch::full({nz}, A_phi_mu_base, options_cpu)
+        auto S_mu_phi_base = torch::full({nz}, muphi4.a_mu_phi, options_cpu)
             - c_mu_u * A_u_phi_base / diag_u - c_mu_v * A_v_phi_base / diag_v;
         auto S_phi_mu_base = torch::full({nz}, A_phi_mu_base, options_cpu)
             - A_phi_u_base * c_u_mu / diag_u - A_phi_v_base * c_v_mu / diag_v;
@@ -5844,7 +5846,8 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
         float A_phi_u = dt_gamma * (c2 / mu_0_local) * H_x;     // Divergence sensing: U → Φ
         float A_phi_v = dt_gamma * (c2 / mu_0_local) * H_y;     // Divergence sensing: V → Φ
         float A_phi_mu = dt_gamma * (c2 / mu_0_local);           // Hydrostatic balance: μ → Φ
-        float A_mu_phi = A_phi_mu;  // SYMMETRIC per design (A_μΦ = A_Φμ)
+        // 9F.D139: the shared decision, so this path cannot drift from the other two.
+        float A_mu_phi = wrf::sdirk3::mu_phi_from_phi_mu(A_phi_mu);
 
         // Get residuals from pre-copied CPU data
         float r_u_k = r_u_ptr[k];
