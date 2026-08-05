@@ -1397,7 +1397,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     float dy_actual = grid_info_->dy;
 
     // Extract the column-mass pressure from grid_info_->mub (Pa per Registry.EM_COMMON:300)
-    // mub is 2D base state column mass (kg/m²), O(10⁵) not 1.225!
+    // mub is 2D base-state dry column mass, pressure-equivalent [Pa], O(10^5).
     // FIX 2025-12-30 Batch29 Issue 1: Reuse cached mub.mean() instead of recomputing
     // Column-mass pressure from mub. Registry.EM_COMMON:300 declares mub as "base state dry air
     // mass in column", units Pa -- that is the authority for the unit. The probe below only
@@ -1437,7 +1437,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         // FIX Round163: Gate diagnostic log with debug_level >= 2
         if (g_sdirk3_config.debug_level >= 2) {
             std::cerr << "UnifiedPreconditioner: Using actual column-mass pressure mu = "
-                      << mu_column_pa << " Pa (not 1.225 -- that was air density, D142)" << std::endl;
+                      << mu_column_pa << " Pa" << std::endl;
         }
     } else {
         // FIX Round163: Use WARN_ONCE pattern for fallback warning
@@ -1445,7 +1445,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         // temporary init state, overwritten by actual base-state mu from WRF.
         static bool warned_mub_fallback = false;
         if (!warned_mub_fallback && g_sdirk3_config.debug_level >= 2) {
-            std::cerr << "[PRECOND INIT] mub not yet set, using temporary ρ₀=1.225 fallback (will be updated)" << std::endl;
+            std::cerr << "[PRECOND INIT] mub not yet set; provisional mu=88000 Pa (replaced at base-state refresh)" << std::endl;
             warned_mub_fallback = true;
         }
     }
@@ -1455,6 +1455,13 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     // Fill all nz entries with same scalar for accessor compatibility
     float H_x = 1.0f / dx_actual;
     float H_y = 1.0f / dy_actual;
+    // DIMENSIONALLY INVALID: [h*mu0*H^2] = s*Pa*m^-2 = kg m^-3 s^-1, not dimensionless.
+    // This is ONE LEG of the acoustic round trip; the return leg C_u_mu = -h*(c_s^2/mu0)*H
+    // supplies the missing c_s^2/mu0, and the product C_mu_u*C_u_mu = h^2*c_s^2*H^2 IS
+    // dimensionless -- so the Schur complement already contains this stiffness. Magnitude at
+    // dt=600/100km: this term 4.7e-03 vs the legitimate round trip 1.58, but it grows as 1/dx.
+    // Left as-is pending the coefficient re-derivation; what D_mu should be needs J_mu_mu from
+    // a live basis JVP, not a guess.
     float D_mu_value = 1.0f + dt_ * gamma_ * mu_column_pa * (H_x * H_x + H_y * H_y);
     vertical_diag_mu_.fill_(D_mu_value);  // Replicate scalar across all levels
     
@@ -1643,7 +1650,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
 
     // Use averaged μ₀ for initialization (will use per-column μ₀ at solve time)
     // FIX 2025-12-30 Batch29 Issue 1: Use ScalarMeanCache for mu_base.mean()
-    float mu_0_avg = mu_column_pa;  // Rough estimate: column mass ~ column density
+    float mu_0_avg = mu_column_pa;  // column mass, pressure-equivalent [Pa]
     // BUG #15 FIX: Check tensor is actually initialized before calling methods
     // .defined() returns true even for uninitialized tensors!
     if (grid_info_->mu_base.defined() && grid_info_->mu_base.numel() > 0 && grid_info_->mu_base.dim() > 0) {
@@ -1652,7 +1659,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
                 grid_info_->mu_base, g_scalar_mean_cache.mu_base_entry, "mu_base");
             // FIX Round164: Gate diagnostic log with debug_level >= 2
             if (g_sdirk3_config.debug_level >= 2) {
-                std::cerr << "Phase 4.1: Using actual μ₀_avg = " << mu_0_avg << " kg/m² for Φ coefficients" << std::endl;
+                std::cerr << "Phase 4.1: Using actual mu0_avg = " << mu_0_avg << " Pa for Phi coefficients" << std::endl;
             }
         } catch (const c10::Error& e) {
             // FIX Round164: Add WARN_ONCE for mu_base error
