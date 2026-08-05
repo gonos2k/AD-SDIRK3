@@ -6712,9 +6712,16 @@ public:
                                 auto vq = v.slice(0, blk.start, blk.start + blk.size);
                                 auto aq = Av_only.slice(0, blk.start, blk.start + blk.size);
                                 double vv = vq.dot(vq).to(torch::kCPU).item<double>();
+                                double an = aq.norm().to(torch::kCPU).item<double>();
                                 if (vv > 0.0) {
-                                    std::cerr << " A_qq="
-                                              << (vq.dot(aq).to(torch::kCPU).item<double>() / vv);
+                                    double vav = vq.dot(aq).to(torch::kCPU).item<double>();
+                                    std::cerr << " A_qq=" << (vav / vv);
+                                    // cos between (Av)_q and v_q. Near 1 means a scalar diagonal
+                                    // can model this block; near 0 means A rotates it out of its
+                                    // own direction and no diagonal will, whatever its value.
+                                    if (an > 0.0) {
+                                        std::cerr << " cos=" << (vav / (std::sqrt(vv) * an));
+                                    }
                                 }
                             }
                             std::cerr << " A_gain="

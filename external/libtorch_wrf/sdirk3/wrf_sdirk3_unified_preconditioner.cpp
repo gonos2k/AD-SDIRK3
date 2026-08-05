@@ -1307,6 +1307,10 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         float dz_inv2 = 1.0f / (dz_phi * dz_phi);
 
         // Geopotential coupled to pressure through hydrostatic relation
+        // MEASURED (block probe, stage 2, dt=600): A_phi_phi = 0.841 but cos((Av)_ph, v_ph) =
+        // 0.312 -- A rotates this block ~72 deg out of its own direction. So a scalar diagonal
+        // is the wrong FORM here, not just the wrong value; 485 vs the 1.189 the diagonal would
+        // need is secondary. Every other block has cos >= 0.94, where a diagonal is sound.
         vertical_diag_phi_ptr[k] = 1.0f + dt_ * gamma_ * c_s * c_s * dz_inv2;
     }
     
