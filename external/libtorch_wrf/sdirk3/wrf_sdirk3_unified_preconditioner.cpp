@@ -1470,7 +1470,10 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     // Magnitude at dt=600/100km: this term 4.7e-03 vs the round trip 1.58. Small, but it grows
     // as 1/dx while the round trip is ~fixed at constant acoustic CFL.
     //
-    // Left as-is: what D_mu should be needs J_mu_mu from a live basis JVP, not a guess.
+    // MEASURED (WRF_SDIRK3_PRECOND_BLOCK_GAIN, stage 2, dt=600, WRFParity): the signed
+    // in-block quadratic form of A = I - h*J gives A_mu_mu = 0.9511, so h*J_mu_mu = +0.049 and
+    // the diagonal should be BELOW 1. This line gives 1.00466 -- wrong sign of deviation and
+    // ~10x the magnitude. Left as-is pending the coefficient re-derivation.
     float D_mu_value = 1.0f + dt_ * gamma_ * mu_column_pa * (H_x * H_x + H_y * H_y);
     vertical_diag_mu_.fill_(D_mu_value);  // Replicate scalar across all levels
     

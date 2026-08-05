@@ -6703,6 +6703,20 @@ public:
                                       << (d.norm().to(torch::kCPU).item<double>() / vin);
                         }
                         if (Av_only.defined()) {
+                            // Signed in-block Rayleigh quotient = the block's diagonal of
+                            // A = I - h*J. A_qq ~ 1 means J_qq ~ 0, i.e. the block has no direct
+                            // self-coupling and its preconditioner diagonal should be 1.
+                            // A_gain below is a NORM ratio and cannot show sign or cancellation.
+                            {
+                                torch::NoGradGuard ng_rq;
+                                auto vq = v.slice(0, blk.start, blk.start + blk.size);
+                                auto aq = Av_only.slice(0, blk.start, blk.start + blk.size);
+                                double vv = vq.dot(vq).to(torch::kCPU).item<double>();
+                                if (vv > 0.0) {
+                                    std::cerr << " A_qq="
+                                              << (vq.dot(aq).to(torch::kCPU).item<double>() / vv);
+                                }
+                            }
                             std::cerr << " A_gain="
                                       << (Av_only.slice(0, blk.start, blk.start + blk.size)
                                             .norm().to(torch::kCPU).item<double>() / vin)
