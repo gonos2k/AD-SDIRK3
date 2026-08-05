@@ -1400,7 +1400,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     float dx_actual = grid_info_->dx;
     float dy_actual = grid_info_->dy;
 
-    // CRITICAL FIX: Extract REAL column mass density from grid_info_->mub
+    // Extract the REAL column-mass pressure from grid_info_->mub (Pa; measured 89083.9, D142)
     // mub is 2D base state column mass (kg/m²), O(10⁵) not 1.225!
     // FIX 2025-12-30 Batch29 Issue 1: Reuse cached mub.mean() instead of recomputing
     // 9F.D141 (review 10) -- VERIFIED UNITS CONTRADICTION. Same tensor, two identities.
@@ -1409,7 +1409,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     // sites disagree about what mub IS:
     //
     //     :865   mu_representative = 88000.0f   "~8.8e+04 Pa"          column mass pressure
-    //     here   rho_avg           = 1.225f     "column mass density"  kg m^-3 (air density)
+    //     here   rho_avg (as it was)    = 1.225f     "column mass density"  kg m^-3 (air density)
     //
     // They cannot both be right about the same field, and 1.225 is not a column-mass value in
     // any unit -- it is sea-level AIR DENSITY, a different physical quantity. When mub IS
@@ -1423,15 +1423,52 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     // Recorded because the review is right that a units authority has to precede any
     // coefficient re-derivation: without it, "fix the dt_gamma factor here" silently breaks the
     // block that read the same symbol with the other meaning.
-    float rho_avg = 1.225f;  // Fallback if mub not available -- SEE ABOVE, unit disputed
+    // 9F.D142: MEASURED, so the dispute above is closed. WRF_SDIRK3_MUB_UNITS_PROBE on
+    // em_b_wave reports mub mean=min=max=89083.9 over 3321 points -- column-mass PRESSURE in Pa,
+    // uniform for this flat base state. So :865's "~8.8e+04 Pa" is right and the name and
+    // fallback here were wrong: 1.225 is air density and is off by 7.3e+04.
+    //
+    // Renamed to say what it holds. The fallback now matches the quantity instead of a value
+    // from a different physical dimension -- it only applies before WRF sets the base state, but
+    // "temporary" is exactly when a 7e+04 error is hardest to see.
+    float mu_column_pa = 88000.0f;  // Pa; matches :865. Measured 89083.9 on em_b_wave.
+
+    // 9F.D142: the dispute above is EMPIRICAL, not a matter of interpretation. Whatever the two
+    // comments claim, the tensor holds one set of numbers. Print them once and the question is
+    // closed: ~1e+05 means column-mass pressure in Pa and the 1.225 fallback is wrong by ~7e+04;
+    // ~1 means the Pa comment is wrong instead. Opt-in, read-only.
+    if (grid_info_ && grid_info_->mub.defined() && grid_info_->mub.numel() > 0) {
+        static const bool mub_units_probe_on = [](){
+            const char* v = std::getenv("WRF_SDIRK3_MUB_UNITS_PROBE");
+            if (!v || !*v) return false;
+            std::string t(v);
+            std::transform(t.begin(), t.end(), t.begin(),
+                           [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+            return t=="1"||t=="true"||t=="yes"||t=="on"||t=="t"||t=="y";
+        }();
+        static std::atomic<bool> mub_said{false};
+        bool m0 = false;
+        if (mub_units_probe_on && mub_said.compare_exchange_strong(m0, true)) {
+            torch::NoGradGuard ng_mub;
+            auto m = grid_info_->mub.detach().to(torch::kCPU).to(torch::kFloat64);
+            std::cerr << "SDIRK3_MUB_UNITS"
+                      << " mean=" << m.mean().item<double>()
+                      << " min=" << m.min().item<double>()
+                      << " max=" << m.max().item<double>()
+                      << " numel=" << m.numel()
+                      << "  (~1e+05 => column-mass PRESSURE [Pa], the 1.225 fallback is wrong;"
+                         " ~1 => the Pa comment is wrong)"
+                      << std::endl << std::flush;
+        }
+    }
     if (grid_info_->mub.defined() && grid_info_->mub.numel() > 0) {
         // Reuse the same cache entry as mu_representative (same tensor, same mean)
-        rho_avg = g_scalar_mean_cache.get_or_compute_mean(
+        mu_column_pa = g_scalar_mean_cache.get_or_compute_mean(
             grid_info_->mub, g_scalar_mean_cache.mub_entry, "mub");
         // FIX Round163: Gate diagnostic log with debug_level >= 2
         if (g_sdirk3_config.debug_level >= 2) {
-            std::cerr << "UnifiedPreconditioner: Using actual column mass density ρ_avg = "
-                      << rho_avg << " kg/m² (not 1.225!)" << std::endl;
+            std::cerr << "UnifiedPreconditioner: Using actual column-mass pressure mu = "
+                      << mu_column_pa << " Pa (not 1.225 -- that was air density, D142)" << std::endl;
         }
     } else {
         // FIX Round163: Use WARN_ONCE pattern for fallback warning
@@ -1449,7 +1486,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     // Fill all nz entries with same scalar for accessor compatibility
     float H_x = 1.0f / dx_actual;
     float H_y = 1.0f / dy_actual;
-    float D_mu_value = 1.0f + dt_ * gamma_ * rho_avg * (H_x * H_x + H_y * H_y);
+    float D_mu_value = 1.0f + dt_ * gamma_ * mu_column_pa * (H_x * H_x + H_y * H_y);
     vertical_diag_mu_.fill_(D_mu_value);  // Replicate scalar across all levels
     
     // === OFF-DIAGONAL COUPLING TERMS ===
@@ -1617,10 +1654,10 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
             C_mu_u_ptr[k] = 0.0f;
             C_mu_v_ptr[k] = 0.0f;
         } else {
-            C_u_mu_ptr[k] = -dt_gamma * (c_squared / rho_avg) * H_x;
-            C_v_mu_ptr[k] = -dt_gamma * (c_squared / rho_avg) * H_y;
-            C_mu_u_ptr[k] = -dt_gamma * rho_avg * H_x;
-            C_mu_v_ptr[k] = -dt_gamma * rho_avg * H_y;
+            C_u_mu_ptr[k] = -dt_gamma * (c_squared / mu_column_pa) * H_x;
+            C_v_mu_ptr[k] = -dt_gamma * (c_squared / mu_column_pa) * H_y;
+            C_mu_u_ptr[k] = -dt_gamma * mu_column_pa * H_x;
+            C_mu_v_ptr[k] = -dt_gamma * mu_column_pa * H_y;
         }
     }
 
@@ -1660,7 +1697,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
 
     // Use averaged μ₀ for initialization (will use per-column μ₀ at solve time)
     // FIX 2025-12-30 Batch29 Issue 1: Use ScalarMeanCache for mu_base.mean()
-    float mu_0_avg = rho_avg;  // Rough estimate: column mass ~ column density
+    float mu_0_avg = mu_column_pa;  // Rough estimate: column mass ~ column density
     // BUG #15 FIX: Check tensor is actually initialized before calling methods
     // .defined() returns true even for uninitialized tensors!
     if (grid_info_->mu_base.defined() && grid_info_->mu_base.numel() > 0 && grid_info_->mu_base.dim() > 0) {
