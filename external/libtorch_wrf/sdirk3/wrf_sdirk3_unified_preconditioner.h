@@ -3,6 +3,8 @@
 
 #include <torch/torch.h>
 #include <memory>
+#include <set>
+#include <tuple>
 #include <cstdint>
 #include <atomic>  // OPT Pass33+: For diagnostic sampling counter
 #include <limits>  // PR 9D: sentinel NaN for the W-damping policy signature
@@ -319,20 +321,21 @@ private:
     // Incremented whenever coefficients change (update, initialize_acoustic_gravity_solver)
     uint64_t coefficient_generation_ = 0;
 
-    // 9F.D135 (Codex stop-review): a STABLE instance identity for diagnostic latches.
+    // 9F.D136 (Codex stop-review, 2nd pass): PER-SOLVER latch state lives ON the solver.
     //
-    // D134 keyed the mu-Schur latch on `this`. A pointer is not an identity across lifetimes:
-    // free one solver, allocate the next, and the allocator can hand back the same address --
-    // the new solver then collides with the dead one's key and its probe silently never fires.
-    // That is the same "reports the wrong instance" failure the per-solver latch was meant to
-    // fix, just moved from process-global to address-reuse.
+    // The chain of fixes here is instructive, because each one solved the stated problem and
+    // introduced the next:
+    //   D134  process-global static  -> only the first solver in the process ever printed
+    //   D135  keyed on `this`        -> a recycled address collides with a dead instance
+    //   D135b keyed on a monotonic id -> ids never repeat, so the global set grows FOREVER
     //
-    // A monotonic counter cannot be recycled, so the key is unique for the life of the process.
-    static uint64_t next_instance_id_() {
-        static std::atomic<uint64_t> counter{0};
-        return counter.fetch_add(1, std::memory_order_relaxed) + 1;
-    }
-    const uint64_t instance_id_ = next_instance_id_();
+    // Each of those treated "which instance is this" as a lookup problem. It is not: the latch
+    // is per-solver state, so it belongs to the solver. As a member it is reclaimed with the
+    // object, cannot collide, cannot grow across lifetimes, and needs no identity at all --
+    // the three failure modes above are unreachable rather than handled.
+    //
+    // Keyed on what still varies WITHIN one solver: config mode, grid, coefficient generation.
+    std::set<std::tuple<int, int, uint64_t>> diag_mu_schur_seen_;
 
     // v20.5: Cached per-k coefficients for Φ-W GS correction
     std::vector<float> momentum_coupling_k_cached_;   // [nz_w], from initialize_acoustic_gravity_solver
