@@ -1307,15 +1307,11 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         float dz_inv2 = 1.0f / (dz_phi * dz_phi);
 
         // Geopotential coupled to pressure through hydrostatic relation
-        // MEASURED (block probe, stage 2, dt=600), by direction class:
-        //   broadband random   A_qq 0.84   cos 0.31   -- A rotates it ~72 deg
-        //   horizontally uniform (any vertical profile)  A_qq 1.0   cos 1.0  -- A is the identity
-        // So the rotation comes from HORIZONTAL structure; vertically structured but
-        // horizontally uniform fields have no horizontal gradient and A leaves them alone.
-        // A scalar diagonal is therefore a poor model for the directions GMRES actually visits,
-        // but this does not by itself settle what form replaces it -- no horizontally-varying
-        // vertically-structured direction has been probed. 485 vs the ~1.19 the diagonal would
-        // need is a separate, additional problem.
+        // MEASURED (block probe, stage 2, dt=600), three random directions:
+        //   A_phi_phi ~ 0.84, cos((Av)_ph, v_ph) ~ 0.31 -- A rotates broadband ph substantially,
+        //   so this diagonal is at best a partial model of the block. Whether a diagonal can
+        //   work for the directions GMRES visits is NOT settled: only random directions were
+        //   probed. Separately, the diagonal would need ~1.19 and holds 485.
         vertical_diag_phi_ptr[k] = 1.0f + dt_ * gamma_ * c_s * c_s * dz_inv2;
     }
     

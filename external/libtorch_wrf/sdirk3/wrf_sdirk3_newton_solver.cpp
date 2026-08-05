@@ -6651,37 +6651,20 @@ public:
                     probe_blockgain_stage_ = stage;
                     auto bg_gen = at::detail::createCPUGenerator(
                         0x810C6A1ULL + static_cast<uint64_t>(stage));
-                    // Several DIRECTION CLASSES, not one random draw. A random block vector is
-                    // broadband and dominated by high vertical wavenumber, so a low cosine on it
-                    // says A rotates THAT direction -- not that no diagonal suits any direction.
-                    // Smooth and single-level profiles probe the vertical structure separately.
-                    struct Dir { const char* name; int kind; };
-                    const Dir dirs[] = {{"rand", 0}, {"rand2", 1},
-                                        {"const_z", 2}, {"alt_z", 3}, {"one_lvl", 4}};
-                    const int64_t nx_d = options_.nx > 0 ? options_.nx : 1;
+                    // Several random draws, so a single unlucky direction cannot carry a
+                    // conclusion. Structured directions are NOT offered here: the obvious ones
+                    // (uniform, alternating-in-z, single-level) are horizontally uniform, which
+                    // is a null space of the horizontal terms -- they return cos = 1 for a
+                    // trivial reason and say nothing about vertical structure.
+                    const char* dir_names[] = {"rand1", "rand2", "rand3"};
                     for (const auto& blk : cached_layout_.blocks) {
-                      // levels this block spans, from its own size (mu is 2-D: nlev = 1)
-                      const int64_t nlev_d =
-                          (nx_d > 0 && blk.size % nx_d == 0)
-                              ? std::max<int64_t>(1, options_.nz_w > 0 ? options_.nz_w : 1) : 1;
-                      for (const auto& dir : dirs) {
+                      for (const char* dir_name : dir_names) {
                         torch::Tensor v;
                         {
                             torch::NoGradGuard ng_bg;
                             v = torch::zeros_like(R);
-                            auto opt_cpu = R.options().device(torch::kCPU);
-                            torch::Tensor bv;
-                            if (dir.kind <= 1) {
-                                bv = torch::randn({blk.size}, bg_gen, opt_cpu);
-                            } else {
-                                // z index of each element: block memory is [ny][nlev][nx].
-                                auto idx = torch::arange(blk.size, opt_cpu);
-                                auto z = (idx.div(nx_d, "floor")).remainder(nlev_d);
-                                if (dir.kind == 2)      bv = torch::ones({blk.size}, opt_cpu);
-                                else if (dir.kind == 3) bv = (z.remainder(2) * 2 - 1).to(torch::kFloat32);
-                                else                    bv = (z == nlev_d / 2).to(torch::kFloat32);
-                            }
-                            if (bv.norm().item<double>() == 0.0) continue;
+                            auto bv = torch::randn({blk.size}, bg_gen,
+                                                   R.options().device(torch::kCPU));
                             v.slice(0, blk.start, blk.start + blk.size)
                                 .copy_(bv.to(R.device(), R.scalar_type()));
                             v = v.detach();
@@ -6707,7 +6690,7 @@ public:
                                        .norm().to(torch::kCPU).item<double>();
                         if (!(vin > 0.0)) continue;
                         std::cerr << "SDIRK3_PRECOND_BLOCK_GAIN stage=" << stage
-                                  << " in=" << blk.name << " dir=" << dir.name
+                                  << " in=" << blk.name << " dir=" << dir_name
                                   << " gain=" << (z.slice(0, blk.start, blk.start + blk.size)
                                                     .norm().to(torch::kCPU).item<double>() / vin);
                         if (Az.defined()) {
