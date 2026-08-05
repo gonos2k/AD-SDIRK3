@@ -6731,6 +6731,20 @@ public:
                                     }
                                 }
                             }
+                            // A's OFF-DIAGONAL row: ||(A v_q)_p|| / ||v_q|| for p != q. With v
+                            // supported only on q this is |A_pq| in norm, measured on the live
+                            // operator -- so A_mu_phi and A_phi_mu can be compared directly
+                            // instead of assumed equal.
+                            {
+                                torch::NoGradGuard ng_row;
+                                std::cerr << " Arow:";
+                                for (const auto& ob : cached_layout_.blocks) {
+                                    if (ob.name == blk.name) continue;
+                                    std::cerr << " " << ob.name << "="
+                                              << (Av_only.slice(0, ob.start, ob.start + ob.size)
+                                                    .norm().to(torch::kCPU).item<double>() / vin);
+                                }
+                            }
                             std::cerr << " A_gain="
                                       << (Av_only.slice(0, blk.start, blk.start + blk.size)
                                             .norm().to(torch::kCPU).item<double>() / vin)

@@ -43,10 +43,14 @@ class PhysicsConfig;
  * PhysicsConfig) for RHS/precond consistency.
  */
 // mu<->phi direct coupling, in one place so the three solve paths cannot diverge.
-// Today both directions are the hydrostatic coefficient; the corrected mass equation implies
-// a_mu_phi should be 0 (the mu row has no phi dependence), which is a numerics change pending
-// the coefficient re-derivation. Note a_mu_phi = 0 does NOT zero S_mu_phi: the Schur complement
-// over (u,v) still carries phi -> u,v -> mu unless HEVI removes those blocks too.
+//
+// MEASURED on the live operator (block probe, stage 2, dt=600, WRFParity): perturbing ph gives
+// no mu response and perturbing mu gives a clear ph response --
+//     A_mu_phi = 0        A_phi_mu = 0.689
+// so the operator is ASYMMETRIC in exactly the direction the corrected mass equation implies.
+// Both fields here still hold the hydrostatic coefficient, which is a numerics change pending
+// the re-derivation. Note a_mu_phi = 0 does NOT zero S_mu_phi: the Schur complement over (u,v)
+// still carries phi -> u,v -> mu unless HEVI removes those blocks too.
 struct MuPhiDirectCoupling {
     float a_mu_phi;   // mu row, phi column
     float a_phi_mu;   // phi row, mu column  (vertical hydrostatic)
