@@ -1180,6 +1180,12 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
             std::cerr << "  Preconditioning strength: 1/diagonal = " << (1.0f / diag_val) << "x" << std::endl;
         }
 
+        // MEASURED (block probe, stage 2, dt=600): A acts as the EXACT identity on rw in-block
+        // -- A_qq = 1.0, cos = 1.0, A_gain = 1.0 across seeds -- yet M's rw gain is 0.205, a
+        // 4.9x suppression. Unlike ph (cos 0.32) there is no non-normality caveat and unlike mu
+        // no sign error: a diagonal is the right form and the value should be 1. A also scatters
+        // rw hard into other blocks (whole-vector norm 340), but that is the w->phi coupling and
+        // does not change what this diagonal should be.
         vertical_diag_w_ptr[k] = diag_val;
     }
     vertical_diag_w_ptr[0] = 1.0f;   // Bottom boundary
