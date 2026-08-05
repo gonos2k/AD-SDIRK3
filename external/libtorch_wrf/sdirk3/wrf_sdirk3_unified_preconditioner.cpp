@@ -862,10 +862,6 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
 
     // 1. Column mass μ: Use mean of base state mub (2D field)
     // FIX 2025-12-30 Batch29 Issue 1: Use ScalarMeanCache to avoid repeated reductions
-    // 9F.D141 (review 10): this and :1402 read the SAME grid_info_->mub and name it
-    // differently -- "Pa" here, "column mass density kg/m^2" with a 1.225 fallback there. See
-    // the note at that site. One of the two is wrong; which one is a units-authority question,
-    // not something to settle by picking whichever makes a local formula look right.
     float mu_representative = 88000.0f;  // Default fallback for em_b_wave (~8.8×10⁴ Pa)
     if (grid_info_->mub.defined() && grid_info_->mub.numel() > 0) {
         mu_representative = g_scalar_mean_cache.get_or_compute_mean(
@@ -1400,38 +1396,48 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     float dx_actual = grid_info_->dx;
     float dy_actual = grid_info_->dy;
 
-    // CRITICAL FIX: Extract REAL column mass density from grid_info_->mub
+    // Extract the column-mass pressure from grid_info_->mub (Pa per Registry.EM_COMMON:300)
     // mub is 2D base state column mass (kg/m²), O(10⁵) not 1.225!
     // FIX 2025-12-30 Batch29 Issue 1: Reuse cached mub.mean() instead of recomputing
-    // 9F.D141 (review 10) -- VERIFIED UNITS CONTRADICTION. Same tensor, two identities.
-    //
-    // This reads grid_info_->mub through g_scalar_mean_cache, and so does :865, but the two
-    // sites disagree about what mub IS:
-    //
-    //     :865   mu_representative = 88000.0f   "~8.8e+04 Pa"          column mass pressure
-    //     here   rho_avg           = 1.225f     "column mass density"  kg m^-3 (air density)
-    //
-    // They cannot both be right about the same field, and 1.225 is not a column-mass value in
-    // any unit -- it is sea-level AIR DENSITY, a different physical quantity. When mub IS
-    // defined both sites receive the same number, so whichever name is wrong makes the formula
-    // built on it wrong by ~7e+04; when mub is absent (early init) this fallback is wrong by
-    // that factor outright.
-    //
-    // Effect on D_mu below is small either way at this resolution -- with H^2 ~ 2e-10 and
-    // dt*gamma ~ 261.5, mub-as-Pa gives 1 + 4.6e-03 and 1.225 gives 1 + 6.4e-08, both ~1 -- so
-    // this is not the cause of the measured mu suppression (that is schur_diag_corr, D129).
-    // Recorded because the review is right that a units authority has to precede any
-    // coefficient re-derivation: without it, "fix the dt_gamma factor here" silently breaks the
-    // block that read the same symbol with the other meaning.
-    float rho_avg = 1.225f;  // Fallback if mub not available -- SEE ABOVE, unit disputed
+    // Column-mass pressure from mub. Registry.EM_COMMON:300 declares mub as "base state dry air
+    // mass in column", units Pa -- that is the authority for the unit. The probe below only
+    // measures MAGNITUDE (89083.9 on em_b_wave), which corroborates it and rules out the 1.225
+    // this fallback used to hold: that is air density, wrong by 7e+04 and in another dimension.
+    float mu_column_pa = 88000.0f;  // Pa per Registry; magnitude 89083.9 measured on em_b_wave.
+
+    // Reports mub's MAGNITUDE. Units come from the Registry declaration, not from this number.
+    if (grid_info_ && grid_info_->mub.defined() && grid_info_->mub.numel() > 0) {
+        static const bool mub_units_probe_on = [](){
+            const char* v = std::getenv("WRF_SDIRK3_MUB_UNITS_PROBE");
+            if (!v || !*v) return false;
+            std::string t(v);
+            std::transform(t.begin(), t.end(), t.begin(),
+                           [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+            return t=="1"||t=="true"||t=="yes"||t=="on"||t=="t"||t=="y";
+        }();
+        static std::atomic<bool> mub_said{false};
+        bool m0 = false;
+        if (mub_units_probe_on && mub_said.compare_exchange_strong(m0, true)) {
+            torch::NoGradGuard ng_mub;
+            auto m = grid_info_->mub.detach().to(torch::kCPU).to(torch::kFloat64);
+            std::cerr << "SDIRK3_MUB_UNITS"
+                      << " mean=" << m.mean().item<double>()
+                      << " min=" << m.min().item<double>()
+                      << " max=" << m.max().item<double>()
+                      << " numel=" << m.numel()
+                      << "  (magnitude only; Registry.EM_COMMON:300 declares mub in Pa."
+                         " ~1e+05 is consistent with that, ~1 would not be)"
+                      << std::endl << std::flush;
+        }
+    }
     if (grid_info_->mub.defined() && grid_info_->mub.numel() > 0) {
         // Reuse the same cache entry as mu_representative (same tensor, same mean)
-        rho_avg = g_scalar_mean_cache.get_or_compute_mean(
+        mu_column_pa = g_scalar_mean_cache.get_or_compute_mean(
             grid_info_->mub, g_scalar_mean_cache.mub_entry, "mub");
         // FIX Round163: Gate diagnostic log with debug_level >= 2
         if (g_sdirk3_config.debug_level >= 2) {
-            std::cerr << "UnifiedPreconditioner: Using actual column mass density ρ_avg = "
-                      << rho_avg << " kg/m² (not 1.225!)" << std::endl;
+            std::cerr << "UnifiedPreconditioner: Using actual column-mass pressure mu = "
+                      << mu_column_pa << " Pa (not 1.225 -- that was air density, D142)" << std::endl;
         }
     } else {
         // FIX Round163: Use WARN_ONCE pattern for fallback warning
@@ -1449,7 +1455,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     // Fill all nz entries with same scalar for accessor compatibility
     float H_x = 1.0f / dx_actual;
     float H_y = 1.0f / dy_actual;
-    float D_mu_value = 1.0f + dt_ * gamma_ * rho_avg * (H_x * H_x + H_y * H_y);
+    float D_mu_value = 1.0f + dt_ * gamma_ * mu_column_pa * (H_x * H_x + H_y * H_y);
     vertical_diag_mu_.fill_(D_mu_value);  // Replicate scalar across all levels
     
     // === OFF-DIAGONAL COUPLING TERMS ===
@@ -1527,33 +1533,10 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         // was effectively Jacobi. Without it: off-diag ≈ -209, diag ≈ 523 (ratio 0.4) →
         // proper tridiagonal capturing full vertical acoustic column structure.
         if (k < nz-1) {
-            // 9F.D138 (review 4.1) -- DIMENSIONALLY INVALID, verified, NOT fixed here.
-            //
-            //     [c_s^2] = m^2 s^-2      [N2_k] = s^-2      (N2 = (g/theta) dtheta/dz, :785)
-            //
-            // These cannot be added. After the * dz^-2 below, the acoustic part becomes
-            // c_s^2/dz^2 [s^-2], which is a correct rate^2, while the gravity part becomes
-            // N^2/dz^2 [m^-2 s^-2], which is not a rate at all. The standard vertical
-            // acoustic-gravity relation is
-            //
-            //     omega^2 = c_s^2 k_z^2 + N^2   ->   c_s^2/dz^2 + N^2
-            //
-            // i.e. only the ACOUSTIC term carries dz^-2.
-            //
-            // Magnitude, so the size of the error is on record: c_s^2 = 1.156e+05 against
-            // N2 <= 1e-03 (clamped at :787), so N2 is ~1e-08 of the sum today. Under the
-            // correct grouping it would be N^2 / (c_s^2/dz^2) = 1e-04 / 1.85 ~ 5e-05 -- still
-            // small here, but FOUR ORDERS larger than what this line gives it. So the gravity
-            // coupling is effectively absent from the preconditioner rather than merely
-            // mis-scaled.
-            //
-            // NOT corrected in this commit, deliberately. The review's point is that this is one
-            // symptom of a coefficient system that mixes first- and second-order-in-h terms
-            // (direct diagonals carry c_s^2/dz^2 while a Schur round-trip carries the same
-            // stiffness again), and that patching individual numbers on top of that can make
-            // other blocks worse. The order is: units authority -> dimensionless I - hJ builder
-            // -> asymmetric Schur -> HEVI identity row -> path parity. This note exists so the
-            // defect is not rediscovered as new.
+            // DIMENSIONALLY INVALID: [c_s^2] = m^2 s^-2 but [N2_k] = s^-2. Correct form is
+            // omega^2 = c_s^2/dz^2 + N^2 -- only the acoustic term carries dz^-2. Today N2 <= 1e-3
+            // against c_s^2 = 1.156e+05, so gravity contributes ~1e-08 of the sum instead of
+            // ~5e-05. Left as-is: patching it alone unbalances the blocks that share these terms.
             float combined_factor = c_s * c_s + N2_k;
             float w_coupling_val = -dt_ * gamma_ * 0.5f * combined_factor * dz_coupling_inv2;
             vertical_upper_w_ptr[k] = w_coupling_val;
@@ -1617,10 +1600,10 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
             C_mu_u_ptr[k] = 0.0f;
             C_mu_v_ptr[k] = 0.0f;
         } else {
-            C_u_mu_ptr[k] = -dt_gamma * (c_squared / rho_avg) * H_x;
-            C_v_mu_ptr[k] = -dt_gamma * (c_squared / rho_avg) * H_y;
-            C_mu_u_ptr[k] = -dt_gamma * rho_avg * H_x;
-            C_mu_v_ptr[k] = -dt_gamma * rho_avg * H_y;
+            C_u_mu_ptr[k] = -dt_gamma * (c_squared / mu_column_pa) * H_x;
+            C_v_mu_ptr[k] = -dt_gamma * (c_squared / mu_column_pa) * H_y;
+            C_mu_u_ptr[k] = -dt_gamma * mu_column_pa * H_x;
+            C_mu_v_ptr[k] = -dt_gamma * mu_column_pa * H_y;
         }
     }
 
@@ -1660,7 +1643,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
 
     // Use averaged μ₀ for initialization (will use per-column μ₀ at solve time)
     // FIX 2025-12-30 Batch29 Issue 1: Use ScalarMeanCache for mu_base.mean()
-    float mu_0_avg = rho_avg;  // Rough estimate: column mass ~ column density
+    float mu_0_avg = mu_column_pa;  // Rough estimate: column mass ~ column density
     // BUG #15 FIX: Check tensor is actually initialized before calling methods
     // .defined() returns true even for uninitialized tensors!
     if (grid_info_->mu_base.defined() && grid_info_->mu_base.numel() > 0 && grid_info_->mu_base.dim() > 0) {
@@ -2533,7 +2516,7 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                     // Per-level deviation count (Finding r46e#3: diagnostic for localization)
                     auto dev_3d = (ratio_3d - 1.0f).abs();
                     // Per-level max deviation: collapse (ny,nx) → (nz,)
-                    // 9F.D138 (review 9): dev_3d is [ny, nz, nx] and row-major, so index =
+                    // dev_3d is [ny, nz, nx] and row-major, so index =
                     // ((y*nz)+z)*nx + x. reshape({ny*nx, nz}) reinterprets that buffer, and the
                     // trailing axis mixes z with x -- it is not the level axis. The comment said
                     // "collapse (ny,nx) -> (nz,)" and the code did something else, so every
@@ -2632,10 +2615,7 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                 // later run's numbers would be read off an earlier solver's output. Second
                 // occurrence of the same defect, so the key is now explicit rather than implied.
                 bool first_for_this_scope = false;
-                // 9F.D138 (review 8): strict boolean, not mere presence. `=0` and `=false`
-                // used to ENABLE this probe, so a user disabling it got output anyway and would
-                // reasonably read it as the result of the experiment they thought they had
-                // turned off. The repo already has one strict parser for exactly this.
+                // Strict boolean: mere presence would let `=0` and `=false` enable the probe.
                 static const bool mu_coeff_probe_on = [](){
                     const char* v = std::getenv("WRF_SDIRK3_PRECOND_MU_COEFF");
                     if (!v || !*v) return false;
@@ -2651,12 +2631,7 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                     const uint64_t key = diag_scope_key(
                         static_cast<int>(wrf::sdirk3::g_sdirk3_config.mass_coordinate_mode),
                         static_cast<int>(nz), coefficient_generation_);
-                    // 9F.D138 (review 7.2): CAS LOOP, not a single attempt. With one try, two
-                    // threads arriving with DIFFERENT keys race: the loser's compare_exchange
-                    // fails and it never retries, so its transition is lost permanently rather
-                    // than merely delayed. Exactly-once held for identical keys and silently
-                    // failed for competing ones -- the case that matters here, since different
-                    // tiles are what arrive concurrently.
+                    // Loop, not a single CAS: competing keys must retry or a transition is lost.
                     uint64_t seen = diag_mu_schur_key_.load(std::memory_order_relaxed);
                     while (seen != key) {
                         if (diag_mu_schur_key_.compare_exchange_weak(
@@ -5870,7 +5845,7 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
         float A_phi_u = dt_gamma * (c2 / mu_0_local) * H_x;     // Divergence sensing: U → Φ
         float A_phi_v = dt_gamma * (c2 / mu_0_local) * H_y;     // Divergence sensing: V → Φ
         float A_phi_mu = dt_gamma * (c2 / mu_0_local);           // Hydrostatic balance: μ → Φ
-        // 9F.D139: the shared decision, so this path cannot drift from the other two.
+        // the shared decision, so this path cannot drift from the other two.
         float A_mu_phi = wrf::sdirk3::mu_phi_from_phi_mu(A_phi_mu);
 
         // Get residuals from pre-copied CPU data
