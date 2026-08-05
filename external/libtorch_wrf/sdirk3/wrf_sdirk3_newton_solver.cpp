@@ -56,6 +56,7 @@
 #include "wrf_sdirk3_stage_history_diag.h"  // PR 9F P2: shared emit_sdirk3_diag_line
 #include "wrf_sdirk3_unified_preconditioner.h"  // v20.5: For set_stage_state()
 #include <torch/torch.h>
+#include <ATen/CPUGeneratorImpl.h>
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -6525,10 +6526,14 @@ public:
                     // caller's seed afterwards so the probe does not shift the solver's stream.
                     // NOTE what this does and does not do: it restores the SEED, not the full
                     // philox offset, so it is not a bitwise restore of generator state.
-                    const uint64_t probe_seed = 0x5D1BC3ULL + static_cast<uint64_t>(stage);
-                    const uint64_t caller_seed =
-                        at::detail::getDefaultCPUGenerator().current_seed();
-                    torch::manual_seed(probe_seed);
+                    // 9F.D123 (review 14): D121 saved current_seed() and called manual_seed()
+                    // to restore it. That is NOT a restore -- reseeding REWINDS the stream to
+                    // position 0, so a caller that had already drawn N samples silently starts
+                    // over. My own comment admitted it did not restore the offset and I shipped
+                    // it anyway; rewinding is strictly worse than leaving the stream alone.
+                    // Use a probe-LOCAL generator and never touch the global one.
+                    auto probe_gen = at::detail::createCPUGenerator(
+                        0x5D1BC3ULL + static_cast<uint64_t>(stage));
                     const int n_samp = 24;
                     double q_min = std::numeric_limits<double>::infinity();
                     double q_max = -std::numeric_limits<double>::infinity();
@@ -6547,7 +6552,9 @@ public:
                         torch::Tensor v;
                         {
                             torch::NoGradGuard ng_seed;
-                            v = torch::randn_like(R).detach();
+                            v = torch::randn(R.sizes(), probe_gen,
+                                             R.options().device(torch::kCPU))
+                                    .to(R.device(), R.scalar_type()).detach();
                         }
                         // The operator is called OUTSIDE any grad guard: gmres_op is a JVP and a
                         // blanket NoGradGuard around it kills the very graph it needs. Only the
@@ -6615,7 +6622,6 @@ public:
                                  " neg>0 witnesses an indefinite symmetric part in these"
                                  " coordinates; neg==0 proves NOTHING)"
                               << std::endl << std::flush;
-                    torch::manual_seed(caller_seed);
                 }
             }
 
@@ -6643,21 +6649,34 @@ public:
                     gmres_M_inv && cached_layout_.is_valid() &&
                     cached_layout_.total_size == R.numel()) {
                     probe_blockgain_stage_ = stage;
-                    const uint64_t bg_caller_seed =
-                        at::detail::getDefaultCPUGenerator().current_seed();
-                    torch::manual_seed(0x810C6A1ULL + static_cast<uint64_t>(stage));
+                    auto bg_gen = at::detail::createCPUGenerator(
+                        0x810C6A1ULL + static_cast<uint64_t>(stage));
                     for (const auto& blk : cached_layout_.blocks) {
                         torch::Tensor v;
                         {
                             torch::NoGradGuard ng_bg;
                             v = torch::zeros_like(R);
                             v.slice(0, blk.start, blk.start + blk.size)
-                                .copy_(torch::randn({blk.size}, R.options()));
+                                .copy_(torch::randn({blk.size}, bg_gen,
+                                                    R.options().device(torch::kCPU))
+                                           .to(R.device(), R.scalar_type()));
                             v = v.detach();
                         }
                         // Outside any grad guard: M^-1 may build a graph.
-                        torch::Tensor z;
-                        try { z = gmres_M_inv(v); } catch (...) { continue; }
+                        torch::Tensor z, Az, Av_only;
+                        try {
+                            z = gmres_M_inv(v);
+                            // 9F.D124 (review 13): the judgement quantity is NOT the M^-1 gain.
+                            // A preconditioner approximates A^-1, not I, so a small gain can be
+                            // exactly right for a stiff row -- my "486x suppression" reading
+                            // assumed otherwise. What matters is how close A M^-1 is to the
+                            // identity, in the RIGHT-preconditioned order production uses.
+                            if (gmres_op) Az = gmres_op(z);
+                            // 9F.D125: A ALONE on the same block vector. This is what separates
+                            // "M's row is wrong" from "A's row is degenerate". If A v_q keeps the
+                            // block (gain ~1) while A M^-1 v_q loses it, the defect is M.
+                            if (gmres_op) Av_only = gmres_op(v);
+                        } catch (...) { continue; }
                         if (!z.defined()) continue;
                         torch::NoGradGuard ng_bg2;
                         double vin = v.slice(0, blk.start, blk.start + blk.size)
@@ -6666,8 +6685,31 @@ public:
                         std::cerr << "SDIRK3_PRECOND_BLOCK_GAIN stage=" << stage
                                   << " in=" << blk.name
                                   << " gain=" << (z.slice(0, blk.start, blk.start + blk.size)
-                                                    .norm().to(torch::kCPU).item<double>() / vin)
-                                  << " leak:";
+                                                    .norm().to(torch::kCPU).item<double>() / vin);
+                        if (Az.defined()) {
+                            // ||(A M^-1 v_q - v_q)|| restricted to block q, over ||v_q||.
+                            // ~0 means A M^-1 acts as the identity on this block, which is what
+                            // GMRES needs. Large means the preconditioner does not invert this
+                            // row, whatever its gain happens to be.
+                            auto d = Az - v;
+                            // ||A M^-1 v_q|| itself, so "annihilates" stops being an inference
+                            // from err~1 and becomes a direct reading.
+                            std::cerr << " AMinv_norm="
+                                      << (Az.norm().to(torch::kCPU).item<double>() / vin);
+                            std::cerr << " AMinv_id_err="
+                                      << (d.slice(0, blk.start, blk.start + blk.size)
+                                            .norm().to(torch::kCPU).item<double>() / vin)
+                                      << " AMinv_id_err_total="
+                                      << (d.norm().to(torch::kCPU).item<double>() / vin);
+                        }
+                        if (Av_only.defined()) {
+                            std::cerr << " A_gain="
+                                      << (Av_only.slice(0, blk.start, blk.start + blk.size)
+                                            .norm().to(torch::kCPU).item<double>() / vin)
+                                      << " A_norm_total="
+                                      << (Av_only.norm().to(torch::kCPU).item<double>() / vin);
+                        }
+                        std::cerr << " leak:";
                         for (const auto& ob : cached_layout_.blocks) {
                             if (ob.name == blk.name) continue;
                             std::cerr << " " << ob.name << "="
@@ -6676,7 +6718,6 @@ public:
                         }
                         std::cerr << std::endl << std::flush;
                     }
-                    torch::manual_seed(bg_caller_seed);
                 }
             }
 

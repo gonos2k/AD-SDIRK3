@@ -37,6 +37,7 @@
 #include <algorithm>  // std::min
 #include <unordered_map>
 #include <atomic>
+#include <cstdlib>   // std::getenv in the D126 mu_coeff probe
 #ifdef USE_CUDA
 #include <c10/cuda/CUDAFunctions.h>  // FIX 2025-12-31 Batch41: For c10::cuda::current_device()
 #endif
@@ -2671,6 +2672,26 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                         μ_rhs -= level_coupling_rhs * damping;
                     }
 
+                    // 9F.D126: the mu row's gain is 1/μ_coeff, and the block probe measured it
+                    // at 6.53e-05 => μ_coeff ~ 15300. D_μ = 1 + dt*gamma*rho*(Hx^2+Hy^2) should be
+                    // ~1 on this grid, so the Schur sum must be supplying the rest. That was an
+                    // INFERENCE from source plus one number; print both so it becomes a reading.
+                    {
+                        static std::atomic<bool> said_mu_coeff{false};
+                        bool e0 = false;
+                        if (std::getenv("WRF_SDIRK3_PRECOND_MU_COEFF") &&
+                            said_mu_coeff.compare_exchange_strong(e0, true)) {
+                            std::cerr << "SDIRK3_PRECOND_MU_COEFF"
+                                      << " D_mu=" << D_μ
+                                      << " mu_coeff=" << μ_coeff
+                                      << " schur_sum=" << (D_μ - μ_coeff)
+                                      << " gain=" << (μ_coeff != 0.0f ? 1.0f / μ_coeff : 0.0f)
+                                      << " nz=" << nz
+                                      << "  (gain is what the block probe measures; schur_sum is"
+                                         " D_mu - mu_coeff, i.e. what the level loop removed)"
+                                      << std::endl << std::flush;
+                        }
+                    }
                     float μ_solution;
                     if (std::abs(μ_coeff) < 1e-12f) {
                         μ_solution = r_μ / D_μ;

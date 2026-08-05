@@ -1,5 +1,6 @@
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_config.h"
+#include "wrf_sdirk3_contract_fail.h"
 #include "wrf_config_flags.h"  // For set_ad_strict_mode()
 #include "wrf_sdirk3_metric_utils.h"  // FIX 2025-12-29: For setMovingNestMode()
 #include "wrf_sdirk3_validation_enhanced.h"  // FIX 2025-12-31 Batch41 Issue 4: Validation policy integration
@@ -385,16 +386,9 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
             } else if (key == "sdirk3_wrf_omega_ww_cp" || key == "wrf_omega_ww_cp") {
                 wrf_omega_ww_cp = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_mass_coordinate_mode" || key == "mass_coordinate_mode") {
-                int parsed = std::stoi(value);
-                if (parsed < 0 || parsed > 3) {
-                    // Fail LOUD, not clamped: silently demoting an explicit WRF-parity request
-                    // to Legacy would run the wrong physics under the right name.
-                    throw std::invalid_argument(
-                        "sdirk3_mass_coordinate_mode=" + std::to_string(parsed) +
-                        " is not a valid mode (0=Legacy, 1=WRFParity, 2=DiagnosticOmegaOnly, "
-                        "3=DiagnosticMuOnly)");
-                }
-                mass_coordinate_mode = parsed;
+                // 9F.D123 (review 3.2): stoi() without a consumed-length check accepted
+                // "1abc" as 1. Whole-string or reject.
+                mass_coordinate_mode = parse_mode_strict(value);
             } else if (key == "sdirk3_split_explicit_time_step_sound" || key == "split_explicit_time_step_sound") {
                 split_explicit_time_step_sound = std::clamp(std::atoi(value.c_str()), 0, 1000);
             } else if (key == "sdirk3_split_explicit_epssm" || key == "split_explicit_epssm") {
@@ -1699,14 +1693,9 @@ void SDIRK3Config::load_from_env() {
                   << (wrf_omega_ww_cp ? "true" : "false") << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_MASS_COORDINATE_MODE"))) {
-        int parsed = std::atoi(env_val);
-        if (parsed < 0 || parsed > 3) {
-            throw std::invalid_argument(
-                std::string("WRF_SDIRK3_MASS_COORDINATE_MODE=") + env_val +
-                " is not a valid mode (0=Legacy, 1=WRFParity, 2=DiagnosticOmegaOnly, "
-                "3=DiagnosticMuOnly)");
-        }
-        mass_coordinate_mode = parsed;
+        // 9F.D123 (review 3.1): atoi() mapped "wrf" to 0 and "1junk" to 1. Mode 0 is the
+        // KNOWN-WRONG physics, so a typo ran Omega = mu*w silently. Strict, whole-string.
+        mass_coordinate_mode = parse_mode_strict(std::string(env_val));
         std::cerr << "[CONFIG ENV] mass_coordinate_mode = " << mass_coordinate_mode
                   << " (" << mass_coordinate_mode_name() << ")" << std::endl;
     }
@@ -3306,9 +3295,14 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
         }
     // IMEX post-solve split mode (2026-02-01)
     } else if (key == "mass_coordinate_mode") {
+        // 9F.D123 (review 4): this function lives inside extern "C". Throwing here unwinds
+        // across a C/Fortran ABI boundary, which is undefined -- in the mpif90-linked
+        // executable it is std::terminate, not a coordinated WRF abort. Route to the same
+        // fail-close handler the base-state and W-damping contracts already use, so an invalid
+        // mode ends in the stable marker instead of an ABI-dependent crash.
         if (value < 0 || value > 3) {
-            throw std::invalid_argument(
-                "mass_coordinate_mode=" + std::to_string(value) +
+            wrf::sdirk3::wdamp_input_fail(
+                "SDIRK3_CONFIG_INVALID_MODE: mass_coordinate_mode=" + std::to_string(value) +
                 " is not a valid mode (0=Legacy, 1=WRFParity, 2=DiagnosticOmegaOnly, "
                 "3=DiagnosticMuOnly)");
         }
