@@ -1456,12 +1456,16 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     float H_x = 1.0f / dx_actual;
     float H_y = 1.0f / dy_actual;
     // DIMENSIONALLY INVALID: [h*mu0*H^2] = s*Pa*m^-2 = kg m^-3 s^-1, not dimensionless.
-    // This is ONE LEG of the acoustic round trip; the return leg C_u_mu = -h*(c_s^2/mu0)*H
-    // supplies the missing c_s^2/mu0, and the product C_mu_u*C_u_mu = h^2*c_s^2*H^2 IS
-    // dimensionless -- so the Schur complement already contains this stiffness. Magnitude at
-    // dt=600/100km: this term 4.7e-03 vs the legitimate round trip 1.58, but it grows as 1/dx.
-    // Left as-is pending the coefficient re-derivation; what D_mu should be needs J_mu_mu from
-    // a live basis JVP, not a guess.
+    //
+    // The term equals |C_mu_u|*H, i.e. the outbound leg mu->u with a bare H substituted for the
+    // return leg. The real round trip is |C_mu_u|*|C_u_mu| = h^2*c_s^2*H^2, which IS
+    // dimensionless and which the Schur complement already forms -- so the missing factor is
+    // h*c_s^2/mu0 (= 339.4 here, the same quantity as S_mu_phi), not c_s^2/mu0.
+    //
+    // Magnitude at dt=600/100km: this term 4.7e-03 vs the round trip 1.58. Small, but it grows
+    // as 1/dx while the round trip is ~fixed at constant acoustic CFL.
+    //
+    // Left as-is: what D_mu should be needs J_mu_mu from a live basis JVP, not a guess.
     float D_mu_value = 1.0f + dt_ * gamma_ * mu_column_pa * (H_x * H_x + H_y * H_y);
     vertical_diag_mu_.fill_(D_mu_value);  // Replicate scalar across all levels
     
