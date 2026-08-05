@@ -862,6 +862,10 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
 
     // 1. Column mass μ: Use mean of base state mub (2D field)
     // FIX 2025-12-30 Batch29 Issue 1: Use ScalarMeanCache to avoid repeated reductions
+    // 9F.D141 (review 10): this and :1402 read the SAME grid_info_->mub and name it
+    // differently -- "Pa" here, "column mass density kg/m^2" with a 1.225 fallback there. See
+    // the note at that site. One of the two is wrong; which one is a units-authority question,
+    // not something to settle by picking whichever makes a local formula look right.
     float mu_representative = 88000.0f;  // Default fallback for em_b_wave (~8.8×10⁴ Pa)
     if (grid_info_->mub.defined() && grid_info_->mub.numel() > 0) {
         mu_representative = g_scalar_mean_cache.get_or_compute_mean(
@@ -1399,7 +1403,27 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     // CRITICAL FIX: Extract REAL column mass density from grid_info_->mub
     // mub is 2D base state column mass (kg/m²), O(10⁵) not 1.225!
     // FIX 2025-12-30 Batch29 Issue 1: Reuse cached mub.mean() instead of recomputing
-    float rho_avg = 1.225f;  // Fallback if mub not available
+    // 9F.D141 (review 10) -- VERIFIED UNITS CONTRADICTION. Same tensor, two identities.
+    //
+    // This reads grid_info_->mub through g_scalar_mean_cache, and so does :865, but the two
+    // sites disagree about what mub IS:
+    //
+    //     :865   mu_representative = 88000.0f   "~8.8e+04 Pa"          column mass pressure
+    //     here   rho_avg           = 1.225f     "column mass density"  kg m^-3 (air density)
+    //
+    // They cannot both be right about the same field, and 1.225 is not a column-mass value in
+    // any unit -- it is sea-level AIR DENSITY, a different physical quantity. When mub IS
+    // defined both sites receive the same number, so whichever name is wrong makes the formula
+    // built on it wrong by ~7e+04; when mub is absent (early init) this fallback is wrong by
+    // that factor outright.
+    //
+    // Effect on D_mu below is small either way at this resolution -- with H^2 ~ 2e-10 and
+    // dt*gamma ~ 261.5, mub-as-Pa gives 1 + 4.6e-03 and 1.225 gives 1 + 6.4e-08, both ~1 -- so
+    // this is not the cause of the measured mu suppression (that is schur_diag_corr, D129).
+    // Recorded because the review is right that a units authority has to precede any
+    // coefficient re-derivation: without it, "fix the dt_gamma factor here" silently breaks the
+    // block that read the same symbol with the other meaning.
+    float rho_avg = 1.225f;  // Fallback if mub not available -- SEE ABOVE, unit disputed
     if (grid_info_->mub.defined() && grid_info_->mub.numel() > 0) {
         // Reuse the same cache entry as mu_representative (same tensor, same mean)
         rho_avg = g_scalar_mean_cache.get_or_compute_mean(
