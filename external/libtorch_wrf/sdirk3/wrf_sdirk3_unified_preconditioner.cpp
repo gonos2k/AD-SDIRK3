@@ -2573,6 +2573,16 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                     std::cerr << "SDIRK3_PRECOND_MU_SCHUR"
                               << " S_mu_mu_base=" << S_mu_mu_scalar_cache
                               << " schur_diag_corr_mean=" << m0(schur_diag_corr)
+                              // 9F.D129: the three factors of the Schur term. Under the
+                              // CORRECTED mass equation the mu tendency is the horizontal
+                              // divergence of (mu*u, mu*v) -- it does not depend on phi at all,
+                              // so S_mu_phi should be ~0 and this whole correction should
+                              // vanish. A large S_mu_phi would mean M still models the coupling
+                              // the OLD mass equation had through Omega = mu*w (mu -> w -> phi),
+                              // which the Omega fix removed from the operator but not from M.
+                              << " S_mu_phi=" << m0(S_mu_phi)
+                              << " S_phi_mu=" << m0(S_phi_mu)
+                              << " inv_S_phi_phi=" << m0(inv_S_phi_phi)
                               << " S_mu_mu_reduced_mean=" << m0(S_mu_mu_reduced)
                               << " S_mu_mu_safe_mean=" << m0(S_mu_mu_safe)
                               << " implied_gain=" << (m0(S_mu_mu_safe) != 0.0
