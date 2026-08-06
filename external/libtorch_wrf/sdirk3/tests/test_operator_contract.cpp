@@ -15,6 +15,7 @@
 
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <iostream>
 #include <string>
 
@@ -37,6 +38,7 @@ wrf::sdirk3::LinearizationSnapshot make_snapshot() {
     s.dt = 600.0;
     s.gamma = 0.4358665215;
     s.ark_stage = 2;
+    s.scale = wrf::sdirk3::ResidualScale::unscaled();   // an unset scale is now REFUSED
     s.rhs_generation = 7;               // deliberately DISTINCT and nonzero: two default zeros
     s.preconditioner_generation = 11;   // would satisfy the receipt by accident, and equal
     return s;                           // values could not catch a swapped pair.
@@ -296,13 +298,13 @@ int main() {
 
         auto all_active = snap;      // default domain: every block implicit
         auto r_all = evaluate_directional_right_preconditioner_defect(all_active, bA(all_active, A_into_mu), bP(all_active, Pinv), dir);
-        check(r_all.inactive_leakage < 1e-12 && r_all.active_error > 0.1,
+        check(r_all.inactive_output_defect < 1e-12 && r_all.active_error > 0.1,
               "with every block active, the whole defect is ACTIVE and nothing leaks");
 
         auto hevi = snap;
         hevi.active = wrf::sdirk3::ImplicitActiveDomain::hevi_vertical_fast();   // mu explicit
         auto r_hevi = evaluate_directional_right_preconditioner_defect(hevi, bA(hevi, A_into_mu), bP(hevi, Pinv), dir);
-        check(r_hevi.active_error < 1e-12 && r_hevi.inactive_leakage > 0.1,
+        check(r_hevi.active_error < 1e-12 && r_hevi.inactive_output_defect > 0.1,
               "under HEVI the SAME defect is LEAKAGE -- the domain changes the diagnosis");
         check(std::abs(r_hevi.global_error - r_all.global_error) < 1e-12,
               "the global error is identical: the domain re-attributes, it does not rescale");
@@ -310,7 +312,7 @@ int main() {
         // The blocks partition the vector, so this identity is exact. If a block were dropped
         // from the partition the two parts would no longer reconstruct the whole.
         for (const auto* r : {&r_all, &r_hevi}) {
-            check(std::abs(std::hypot(r->active_error, r->inactive_leakage) - r->global_error) < 1e-12,
+            check(std::abs(std::hypot(r->active_error, r->inactive_output_defect) - r->global_error) < 1e-12,
                   "active^2 + leakage^2 == global^2 -- the partition is exhaustive");
         }
     }
@@ -408,7 +410,10 @@ int main() {
     {
         wrf::sdirk3::LinearOperator A = [](const torch::Tensor& v) { return v; };
         wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v; };
-        check(wrf::sdirk3::StateScale::unscaled().is_valid(), "the unscaled S is valid");
+        check(wrf::sdirk3::ResidualScale::unscaled().is_valid(), "the unscaled S is valid");
+        check(!wrf::sdirk3::ResidualScale{}.is_valid(),
+              "a DEFAULT-constructed scale is INVALID -- forgetting to set one is refused, which "
+              "is what separates it from deliberately measuring unscaled");
         for (double bad_s : {0.0, -1.0, std::numeric_limits<double>::quiet_NaN()}) {
             auto s_bad = snap;
             s_bad.scale.block_scale[0] = bad_s;
@@ -419,13 +424,100 @@ int main() {
         }
     }
 
+    // ------------------------------ 6f. a receipt of zero is what "no receipt" leaves behind
+    // 0 == 0 compares equal, so the generation check passed for exactly the callers who supplied
+    // no generation at all. is_valid() now refuses them.
+    {
+        wrf::sdirk3::LinearOperator A = [](const torch::Tensor& v) { return v; };
+        wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v; };
+        for (int which = 0; which < 2; ++which) {
+            auto s0 = snap;
+            (which == 0 ? s0.rhs_generation : s0.preconditioner_generation) = 0;
+            check(!s0.is_valid() &&
+                  !evaluate_directional_right_preconditioner_defect(
+                       s0, bA(s0, A), bP(s0, Pinv), rand_in("ph")).ok,
+                  "a ZERO generation receipt is refused (matching operators cannot rescue it)");
+        }
+
+        // inf passes `> 0.0`, so the old dt/gamma guard admitted it.
+        for (int which = 0; which < 2; ++which) {
+            auto sinf = snap;
+            (which == 0 ? sinf.dt : sinf.gamma) = std::numeric_limits<double>::infinity();
+            check(!sinf.is_valid(), "a NON-FINITE dt or gamma is refused (inf is positive)");
+        }
+    }
+
+    // ------------------------- 6g. the direction's shape and dtype, not just its element count
+    {
+        wrf::sdirk3::LinearOperator A = [](const torch::Tensor& v) { return v; };
+        wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v; };
+
+        // [1, N] has the right numel; its block slices along dim 0 would be EMPTY.
+        auto two_d = rand_in("ph").reshape({1, snap.layout.total_size});
+        check(!evaluate_directional_right_preconditioner_defect(
+                   snap, bA(snap, A), bP(snap, Pinv), two_d).ok,
+              "a [1, N] direction is refused -- numel alone does not make it packed");
+
+        auto ints = torch::zeros({snap.layout.total_size}, torch::kLong);
+        check(!evaluate_directional_right_preconditioner_defect(
+                   snap, bA(snap, A), bP(snap, Pinv), ints).ok,
+              "a NON-FLOATING direction is refused");
+    }
+
+    // --------------- 6h. the direction must live in the domain the implicit solve owns
+    {
+        wrf::sdirk3::LinearOperator A = [](const torch::Tensor& v) { return v; };
+        wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v; };
+        auto hevi = snap;
+        hevi.active = wrf::sdirk3::ImplicitActiveDomain::hevi_vertical_fast();   // mu explicit
+
+        const auto mu_dir = rand_in("mu");
+        check(!evaluate_directional_right_preconditioner_defect(
+                   hevi, bA(hevi, A), bP(hevi, Pinv), mu_dir).ok,
+              "under HEVI a mu direction is REFUSED -- the solve never visits it");
+        // Control: the identical direction under the full domain is a legitimate question.
+        check(evaluate_directional_right_preconditioner_defect(
+                  snap, bA(snap, A), bP(snap, Pinv), mu_dir).ok,
+              "the SAME direction is accepted when mu is active -- the domain is what refuses it");
+    }
+
+    // ------------------------------- 6i. purity: the probe must not change what it measures
+    // These arrive as std::function. `const Tensor&` binds the HANDLE, not the storage, so
+    // v.add_() compiles -- which is exactly why this needs checking rather than trusting.
+    {
+        wrf::sdirk3::LinearOperator ident = [](const torch::Tensor& v) { return v.clone(); };
+        wrf::sdirk3::LinearOperator writes_through = [](const torch::Tensor& v) {
+            v.add_(1.0);           // compiles on a const Tensor& -- the handle is const, not the data
+            return v.clone();
+        };
+        check(!evaluate_directional_right_preconditioner_defect(
+                   snap, bA(snap, ident), bP(snap, writes_through), rand_in("ph")).ok,
+              "a preconditioner that WRITES THROUGH its input is refused");
+        check(!evaluate_directional_right_preconditioner_defect(
+                   snap, bA(snap, writes_through), bP(snap, ident), rand_in("ph")).ok,
+              "an operator A that writes through its input is refused too");
+
+        // A fallback latch / refinement counter / lazy allocation answers differently the second
+        // time. A number that cannot be reproduced is not a measurement.
+        auto calls = std::make_shared<int>(0);
+        wrf::sdirk3::LinearOperator stateful = [calls](const torch::Tensor& v) {
+            return v * static_cast<double>(++(*calls));
+        };
+        check(!evaluate_directional_right_preconditioner_defect(
+                   snap, bA(snap, ident), bP(snap, stateful), rand_in("ph")).ok,
+              "a STATEFUL operator is refused -- the second call disagrees with the first");
+        check(evaluate_directional_right_preconditioner_defect(
+                  snap, bA(snap, ident), bP(snap, ident), rand_in("ph")).ok,
+              "a pure, repeatable pair is still accepted (the refusals are not blanket)");
+    }
+
     // --------------------------------------------- 7. h is dt*gamma, stated once
     {
         check(std::abs(snap.h() - 600.0 * 0.4358665215) < 1e-12,
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 45;
+    constexpr int expected_checks = 58;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

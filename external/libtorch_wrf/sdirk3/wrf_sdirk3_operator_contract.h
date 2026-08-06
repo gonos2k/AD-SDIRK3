@@ -70,16 +70,26 @@ struct ImplicitActiveDomain {
     }
 };
 
-// Per-block scale S. The state mixes units -- ru is kg m^-2 s^-1, ph is m^2 s^-2, mu is Pa --
-// so a plain Euclidean defect is dominated by whichever block carries the biggest numbers, and
-// switching Pa to hPa would change the "error" with no physics changing. Measuring
-// S^-1(A P^-1 v - v) against S^-1 v makes the number a property of the OPERATOR.
+// Per-block scale S for the RESIDUAL space.
+//
+// The blocks carry different units -- the packed state is the VELOCITY basis (see
+// wrf_sdirk3_state_layout.h: "ru/rv/rw" is a legacy misnomer for u/v/w in m s^-1), while mu is Pa
+// and ph is m^2 s^-2. A plain Euclidean defect is therefore dominated by whichever block carries
+// the biggest numbers, and switching Pa to hPa would change the "error" with no physics changing.
+//
+// RESIDUAL, not state: with right preconditioning A maps unknowns to residuals and P^-1 maps back,
+// so the composite A P^-1 acts on the residual space, and S_R^-1 (A P^-1) S_R is what the scaled
+// defect measures. Naming it for the state would invite filling it with state units.
 //
 // A unit change is a conjugation: in new units Atilde = D^-1 A D, vtilde = D^-1 v. With
 // Stilde = D^-1 S the D's cancel exactly, so the scaled defect is invariant -- not approximately,
 // identically.
-struct StateScale {
-    std::array<double, 6> block_scale{{1.0, 1.0, 1.0, 1.0, 1.0, 1.0}};
+struct ResidualScale {
+    // Default is ZEROS, which is_valid() rejects. That is the whole point: a caller who forgets
+    // to set a scale is REFUSED, while a caller who means to measure in raw storage units says so
+    // with unscaled(). An all-ones default made those two cases indistinguishable, so the named
+    // constructor documented a decision the type did not require anyone to make.
+    std::array<double, 6> block_scale{};
 
     bool is_valid() const {
         for (double s : block_scale) {
@@ -88,21 +98,29 @@ struct StateScale {
         return true;
     }
 
-    // Named, so measuring in raw storage units is a DECISION and not a default nobody noticed.
-    static StateScale unscaled() { return StateScale{}; }
+    static ResidualScale unscaled() {
+        ResidualScale s;
+        s.block_scale.fill(1.0);
+        return s;
+    }
 };
 
 // S^-1 as a vector over the full state, for elementwise weighting.
 inline torch::Tensor inverse_scale_vector(const StateLayout& layout,
-                                          const StateScale& scale,
+                                          const ResidualScale& scale,
                                           const torch::Tensor& like)
 {
     torch::NoGradGuard no_grad;
     auto sinv = torch::ones_like(like);
     for (std::size_t i = 0; i < layout.blocks.size() && i < scale.block_scale.size(); ++i) {
         const auto& b = layout.blocks[i];
-        sinv.slice(0, b.start, b.start + b.size).fill_(1.0 / scale.block_scale[i]);
+        // 1/s is finite in double but need not be in the TENSOR's dtype: a scale below ~1e-38
+        // overflows to inf in float32, and inf weights turn the defect into NaN downstream.
+        // Returning an undefined tensor makes the caller refuse rather than report that NaN.
+        const double inv = 1.0 / scale.block_scale[i];
+        sinv.slice(0, b.start, b.start + b.size).fill_(inv);
     }
+    if (!torch::isfinite(sinv).all().item<bool>()) return torch::Tensor{};
     return sinv;
 }
 
@@ -110,7 +128,7 @@ inline torch::Tensor inverse_scale_vector(const StateLayout& layout,
 struct LinearizationSnapshot {
     StateLayout layout;
     ImplicitActiveDomain active;
-    StateScale scale;             // frozen HERE, so the number carries the units it was taken in
+    ResidualScale scale;          // frozen HERE, so the number carries the units it was taken in
 
     double dt = 0.0;
     double gamma = 0.0;
@@ -124,7 +142,13 @@ struct LinearizationSnapshot {
     uint64_t preconditioner_generation = 0;
 
     bool is_valid() const {
-        return layout.is_valid() && scale.is_valid() && dt > 0.0 && gamma > 0.0;
+        // isfinite on dt/gamma because inf passes `> 0.0`, and generations because a receipt of
+        // zero is what a caller who never set one leaves behind -- 0 == 0 compared equal, so the
+        // receipt check passed for exactly the callers who supplied no receipt.
+        return layout.is_valid() && scale.is_valid()
+            && std::isfinite(dt) && dt > 0.0
+            && std::isfinite(gamma) && gamma > 0.0
+            && rhs_generation != 0 && preconditioner_generation != 0;
     }
 };
 
@@ -152,13 +176,16 @@ struct DirectionalDefectReport {
     double global_error = 0.0;                      // || A P^-1 v - v || / || v ||
     std::array<double, 6> output_block_error{};     // per-block share of that residual
 
-    // Defect in the blocks the implicit solve OWNS, versus what leaked into blocks it does not.
-    // These are different failures: the first is a wrong inverse, the second is M polluting a
-    // channel the explicit side is integrating. The blocks partition the vector, so
-    // active_error^2 + inactive_leakage^2 == global_error^2 -- if that identity breaks, a block
-    // was dropped from the partition.
+    // Defect in the blocks the implicit solve OWNS, versus what landed in blocks it does not.
+    //
+    // The second is NOT attributable to the preconditioner alone, which is why it is no longer
+    // called "leakage": it contains A's own split-ownership error, P^-1's cross-block leakage,
+    // and their composition. Separating those needs an A-only probe alongside this one.
+    //
+    // The blocks partition the vector, so active_error^2 + inactive_output_defect^2 ==
+    // global_error^2 -- if that identity breaks, a block was dropped from the partition.
     double active_error = 0.0;
-    double inactive_leakage = 0.0;
+    double inactive_output_defect = 0.0;
 
     bool ok = false;
 
@@ -196,6 +223,9 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
         apply_A.generation != snapshot.rhs_generation ||
         apply_P_inverse.generation != snapshot.preconditioner_generation ||
         !direction.defined() ||
+        // numel alone admits [1, N], whose block slices along dim 0 would be empty and whose
+        // scale weighting would land on the wrong axis. The packed state is 1-D by contract.
+        direction.dim() != 1 || !direction.is_floating_point() ||
         direction.numel() != snapshot.layout.total_size ||
         !operator_output_is_usable(direction, direction)) {
         return rep;   // ok stays false; callers must not read the numbers
@@ -205,20 +235,51 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     // it must not build a graph, and it must not free or pollute buffers a live adjoint owns.
     torch::NoGradGuard no_grad;
 
+    // The direction must live in the subspace the implicit solve OWNS. Asking how well P^-1
+    // inverts A along a block the explicit side integrates has no answer -- the solve never
+    // visits that direction -- and scoring it anyway produces a number about nothing.
+    for (const auto& b : snapshot.layout.blocks) {
+        if (snapshot.active.by_name(b.name)) continue;
+        const double bn =
+            direction.slice(0, b.start, b.start + b.size).norm().to(torch::kCPU).item<double>();
+        if (bn > 0.0) return rep;
+    }
+
+    // Purity. These arrive as std::function; nothing stops one from writing through its argument
+    // or carrying state (a fallback latch, a refinement counter, a lazy allocation). Both would
+    // make this probe an observer that changes the solve it is measuring.
+    const auto direction_before = direction.clone();
     const auto z = apply_P_inverse(direction);
     if (!operator_output_is_usable(z, direction)) return rep;
+    if (!direction.equal(direction_before)) return rep;   // P^-1 wrote through its input
+
+    const auto z_before = z.clone();
     const auto az = apply_A(z);
     if (!operator_output_is_usable(az, direction)) return rep;
+    if (!z.equal(z_before)) return rep;                   // A wrote through its input
+
+    // Repeatability: a stateful operator answers differently the second time, and a number that
+    // cannot be reproduced is not a measurement.
+    const auto z2 = apply_P_inverse(direction);
+    if (!z2.defined() || !z2.equal(z)) return rep;
+    const auto az2 = apply_A(z2);
+    if (!az2.defined() || !az2.equal(az)) return rep;
 
     // Everything below is measured in SCALED coordinates. With the default unscaled S this is
     // elementwise multiplication by ones, so the numbers are exactly what they were before.
     const auto sinv = inverse_scale_vector(snapshot.layout, snapshot.scale, direction);
-    const auto err = (az - direction) * sinv;
-    const auto v_s = direction * sinv;
+    if (!sinv.defined()) return rep;
+
+    // Reductions in FP64. Element-wise finiteness does NOT make the norm finite: an FP32 L2 norm
+    // overflows to inf on a large vector, and inf/inf is a NaN this would have reported as a
+    // number. Promoting costs one copy on a diagnostic path and removes the whole failure mode.
+    const auto err = ((az - direction) * sinv).to(torch::kFloat64);
+    const auto v_s = (direction * sinv).to(torch::kFloat64);
     const double vn = v_s.norm().to(torch::kCPU).item<double>();
-    if (!(vn > 0.0)) return rep;
+    if (!std::isfinite(vn) || !(vn > 0.0)) return rep;
 
     rep.global_error = err.norm().to(torch::kCPU).item<double>() / vn;
+    if (!std::isfinite(rep.global_error)) return rep;
     double active_sq = 0.0, inactive_sq = 0.0;
     for (std::size_t i = 0; i < snapshot.layout.blocks.size() &&
                             i < rep.output_block_error.size(); ++i) {
@@ -229,7 +290,7 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
         (snapshot.active.by_name(b.name) ? active_sq : inactive_sq) += e * e;
     }
     rep.active_error = std::sqrt(active_sq);
-    rep.inactive_leakage = std::sqrt(inactive_sq);
+    rep.inactive_output_defect = std::sqrt(inactive_sq);
 
     // Which block the direction lives on, so the error can be attributed. Left empty when the
     // direction spans more than one block -- in_block_error then refuses rather than guessing.
