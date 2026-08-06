@@ -31,6 +31,61 @@ namespace sdirk3 {
 
 using LinearOperator = std::function<torch::Tensor(const torch::Tensor&)>;
 
+// WHICH linearization this is. Not a counter -- an identity.
+//
+// Two independent counters (one for A, one for P^-1) cannot tell "the same linearization" from
+// "two different solvers that happen to both be at 7". Every field below has a real producer in
+// this codebase, which is why this is an identity and not a wish list:
+//
+//   stage_state_generation, coefficient_generation  <- UnifiedPreconditioner::StageBindingReceipt
+//   mass_coordinate_mode, imex_split_mode, hevi_split <- SDIRK3Config
+//   physical_step, ark_stage, newton_iteration      <- the Newton driver
+//
+// The two generations are DISTINCT on purpose, and production already learned why: a small state
+// change updates mu_full_stage_ without triggering a coefficient rebuild, so coefficient_generation
+// is not evidence that THIS state was bound. StageBindingReceipt says so in its own comment; the
+// contract's earlier single "preconditioner_generation" had discarded that distinction.
+//
+// solver_id is a monotonic id, never a `this` pointer: addresses are recycled, and this project
+// has already shipped one latch keyed on a recycled address.
+struct LinearizationToken {
+    uint64_t solver_id = 0;
+    uint64_t stage_state_generation = 0;
+    uint64_t coefficient_generation = 0;
+    uint64_t rhs_generation = 0;
+    uint64_t scale_generation = 0;
+
+    int physical_step = -1;
+    int ark_stage = -1;
+    int newton_iteration = -1;
+
+    int mass_coordinate_mode = -1;
+    int imex_split_mode = -1;
+    bool hevi_split = false;
+
+    // Zero and negative are what an unset field leaves behind, so they are refused -- the same
+    // hole the generation receipt had before it required nonzero.
+    bool is_valid() const {
+        return solver_id != 0 && stage_state_generation != 0 && coefficient_generation != 0
+            && rhs_generation != 0 && scale_generation != 0
+            && physical_step >= 0 && ark_stage >= 0 && newton_iteration >= 0
+            && mass_coordinate_mode >= 0 && imex_split_mode >= 0;
+    }
+
+    bool operator==(const LinearizationToken& o) const {
+        return solver_id == o.solver_id
+            && stage_state_generation == o.stage_state_generation
+            && coefficient_generation == o.coefficient_generation
+            && rhs_generation == o.rhs_generation
+            && scale_generation == o.scale_generation
+            && physical_step == o.physical_step && ark_stage == o.ark_stage
+            && newton_iteration == o.newton_iteration
+            && mass_coordinate_mode == o.mass_coordinate_mode
+            && imex_split_mode == o.imex_split_mode && hevi_split == o.hevi_split;
+    }
+    bool operator!=(const LinearizationToken& o) const { return !(*this == o); }
+};
+
 // An operator together with the linearization it was captured at. A bare std::function pair
 // cannot detect that A came from one generation and M^-1 from another, and a report that mixes
 // them measures nothing -- so the generation travels WITH the operator and the evaluator refuses
@@ -38,7 +93,7 @@ using LinearOperator = std::function<torch::Tensor(const torch::Tensor&)>;
 // this, nothing compared them to anything.
 struct BoundLinearOperator {
     LinearOperator apply;
-    uint64_t generation = 0;
+    LinearizationToken token;
 
     // Repeatability proves the operator RETURNED the same thing twice. It does not prove the
     // operator did not CHANGE while doing so: a fallback latch, a refinement counter, a cache
@@ -115,16 +170,23 @@ struct ResidualScale {
     // constructor documented a decision the type did not require anyone to make.
     std::array<double, 6> block_scale{};
 
+    // Matched against the token's scale_generation, so a scale frozen at one stage cannot be used
+    // to weight a defect measured at another. A scale is part of the linearization, not a
+    // free-floating preference.
+    uint64_t generation = 0;
+
     bool is_valid() const {
+        if (generation == 0) return false;
         for (double s : block_scale) {
             if (!(s > 0.0) || !std::isfinite(s)) return false;
         }
         return true;
     }
 
-    static ResidualScale unscaled() {
+    static ResidualScale unscaled(uint64_t generation) {
         ResidualScale s;
         s.block_scale.fill(1.0);
+        s.generation = generation;
         return s;
     }
 };
@@ -154,25 +216,20 @@ struct LinearizationSnapshot {
     ImplicitActiveDomain active;
     ResidualScale scale;          // frozen HERE, so the number carries the units it was taken in
 
+    LinearizationToken token;
+
     double dt = 0.0;
     double gamma = 0.0;
     double h() const { return dt * gamma; }
 
-    int physical_step = -1;
-    int ark_stage = -1;
-    int newton_iteration = -1;
-
-    uint64_t rhs_generation = 0;
-    uint64_t preconditioner_generation = 0;
-
     bool is_valid() const {
-        // isfinite on dt/gamma because inf passes `> 0.0`, and generations because a receipt of
-        // zero is what a caller who never set one leaves behind -- 0 == 0 compared equal, so the
-        // receipt check passed for exactly the callers who supplied no receipt.
-        return layout.is_valid() && scale.is_valid()
+        // isfinite on dt/gamma because inf passes `> 0.0`. The token carries the rest: its
+        // is_valid() refuses the unset-field values, and requiring the scale's generation to
+        // match binds the weighting to the same linearization as the operators.
+        return layout.is_valid() && scale.is_valid() && token.is_valid()
+            && scale.generation == token.scale_generation
             && std::isfinite(dt) && dt > 0.0
-            && std::isfinite(gamma) && gamma > 0.0
-            && rhs_generation != 0 && preconditioner_generation != 0;
+            && std::isfinite(gamma) && gamma > 0.0;
     }
 };
 
@@ -252,8 +309,7 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     DirectionalDefectReport rep;
     if (!snapshot.is_valid() || !apply_A || !apply_P_inverse ||
         !apply_A.has_purity_evidence() || !apply_P_inverse.has_purity_evidence() ||
-        apply_A.generation != snapshot.rhs_generation ||
-        apply_P_inverse.generation != snapshot.preconditioner_generation ||
+        apply_A.token != snapshot.token || apply_P_inverse.token != snapshot.token ||
         !direction.defined() ||
         // numel alone admits [1, N], whose block slices along dim 0 would be empty and whose
         // scale weighting would land on the wrong axis. The packed state is 1-D by contract.

@@ -15,7 +15,10 @@
 
 #include <cmath>
 #include <limits>
+#include <functional>
 #include <memory>
+#include <utility>
+#include <vector>
 #include <iostream>
 #include <string>
 
@@ -37,11 +40,21 @@ wrf::sdirk3::LinearizationSnapshot make_snapshot() {
     s.layout = wrf::sdirk3::StateLayout::from_grid_dims(NX, NY, NZ, NXU, NYV, NZW);
     s.dt = 600.0;
     s.gamma = 0.4358665215;
-    s.ark_stage = 2;
-    s.scale = wrf::sdirk3::ResidualScale::unscaled();   // an unset scale is now REFUSED
-    s.rhs_generation = 7;               // deliberately DISTINCT and nonzero: two default zeros
-    s.preconditioner_generation = 11;   // would satisfy the receipt by accident, and equal
-    return s;                           // values could not catch a swapped pair.
+    // Every field DISTINCT and nonzero on purpose. Shared or default values would let a
+    // field-mismatch test pass by coincidence rather than by the check.
+    s.token.solver_id = 3;
+    s.token.stage_state_generation = 5;
+    s.token.coefficient_generation = 7;
+    s.token.rhs_generation = 11;
+    s.token.scale_generation = 13;
+    s.token.physical_step = 2;
+    s.token.ark_stage = 2;
+    s.token.newton_iteration = 1;
+    s.token.mass_coordinate_mode = 1;
+    s.token.imex_split_mode = 3;
+    s.token.hevi_split = false;
+    s.scale = wrf::sdirk3::ResidualScale::unscaled(s.token.scale_generation);
+    return s;
 }
 
 }  // namespace
@@ -62,10 +75,10 @@ int main() {
     // These fixtures are genuinely stateless, so they DECLARE it. Supplying neither a digest nor
     // a declaration is refused -- see case 6j.
     auto bA = [](const wrf::sdirk3::LinearizationSnapshot& sn, wrf::sdirk3::LinearOperator f) {
-        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.rhs_generation, {}, true};
+        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.token, {}, true};
     };
     auto bP = [](const wrf::sdirk3::LinearizationSnapshot& sn, wrf::sdirk3::LinearOperator f) {
-        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.preconditioner_generation, {}, true};
+        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.token, {}, true};
     };
 
     // A FIXED seed on a LOCAL generator. The global RNG made every case measure a different
@@ -319,36 +332,65 @@ int main() {
         }
     }
 
-    // ------------------- 6c. the generation receipt: A and M^-1 from the SAME linearization
-    // rhs_generation and preconditioner_generation sat in the snapshot with nothing comparing
-    // them to anything -- declared but unenforced. Mixing an A from one linearization with an
-    // M^-1 from another produces a number that describes no operator pair that ever existed.
+    // ---------- 6c. ONE token: A, P^-1 and the scale must come from the SAME linearization
+    // Two independent counters could not tell "the same linearization" from "two solvers that
+    // both happen to be at 7". Every field below has a real producer -- the two generations come
+    // from UnifiedPreconditioner::StageBindingReceipt, which already documents why they must stay
+    // distinct; the modes from SDIRK3Config; the stage counters from the Newton driver.
     {
         wrf::sdirk3::LinearOperator A = [](const torch::Tensor& v) { return 3.0 * v; };
         wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v / 3.0; };
         const auto dir = rand_in("ph");
         using wrf::sdirk3::BoundLinearOperator;
+        using wrf::sdirk3::LinearizationToken;
 
-        // Control FIRST: correctly bound, this scores. Without it the refusals below could all
-        // be a blanket rejection and read as passes.
+        // Control FIRST: correctly bound, this scores. Without it every refusal below could be a
+        // blanket rejection reading as a pass.
         check(evaluate_directional_right_preconditioner_defect(
                   snap, bA(snap, A), bP(snap, Pinv), dir).ok,
-              "correctly-bound operators are accepted (the refusals below are not blanket)");
+              "operators sharing the snapshot's token are accepted (refusals are not blanket)");
 
-        check(!evaluate_directional_right_preconditioner_defect(
-                  snap, BoundLinearOperator{A, snap.rhs_generation + 1}, bP(snap, Pinv), dir).ok,
-              "A from a DIFFERENT rhs generation is refused");
-        check(!evaluate_directional_right_preconditioner_defect(
-                  snap, bA(snap, A),
-                  BoundLinearOperator{Pinv, snap.preconditioner_generation + 1}, dir).ok,
-              "M^-1 from a DIFFERENT preconditioner generation is refused");
+        // EVERY field is load-bearing. Perturb one at a time; each must be refused on its own.
+        const std::vector<std::pair<const char*, std::function<void(LinearizationToken&)>>> bump = {
+            {"solver_id",              [](LinearizationToken& t){ ++t.solver_id; }},
+            {"stage_state_generation", [](LinearizationToken& t){ ++t.stage_state_generation; }},
+            {"coefficient_generation", [](LinearizationToken& t){ ++t.coefficient_generation; }},
+            {"rhs_generation",         [](LinearizationToken& t){ ++t.rhs_generation; }},
+            {"scale_generation",       [](LinearizationToken& t){ ++t.scale_generation; }},
+            {"physical_step",          [](LinearizationToken& t){ ++t.physical_step; }},
+            {"ark_stage",              [](LinearizationToken& t){ ++t.ark_stage; }},
+            {"newton_iteration",       [](LinearizationToken& t){ ++t.newton_iteration; }},
+            {"mass_coordinate_mode",   [](LinearizationToken& t){ ++t.mass_coordinate_mode; }},
+            {"imex_split_mode",        [](LinearizationToken& t){ ++t.imex_split_mode; }},
+            {"hevi_split",             [](LinearizationToken& t){ t.hevi_split = !t.hevi_split; }},
+        };
+        bool every_field_bites = true;
+        for (const auto& kv : bump) {
+            auto drifted = snap.token;
+            kv.second(drifted);
+            const bool a_refused = !evaluate_directional_right_preconditioner_defect(
+                snap, BoundLinearOperator{A, drifted, {}, true}, bP(snap, Pinv), dir).ok;
+            const bool p_refused = !evaluate_directional_right_preconditioner_defect(
+                snap, bA(snap, A), BoundLinearOperator{Pinv, drifted, {}, true}, dir).ok;
+            if (!a_refused || !p_refused) {
+                std::cout << "    field with no teeth: " << kv.first << std::endl;
+                every_field_bites = false;
+            }
+        }
+        check(every_field_bites,
+              "EVERY token field is load-bearing -- perturbing any one, on either operator, is refused");
 
-        // The two generations differ, so a swapped pair is a detectable error rather than a
-        // coincidence that happens to match.
-        check(!evaluate_directional_right_preconditioner_defect(
-                  snap, BoundLinearOperator{A, snap.preconditioner_generation},
-                  BoundLinearOperator{Pinv, snap.rhs_generation}, dir).ok,
-              "SWAPPED receipts are refused (the two generations are distinct on purpose)");
+        // A scale frozen at a different stage cannot weight this defect.
+        {
+            auto mixed = snap;
+            mixed.scale = wrf::sdirk3::ResidualScale::unscaled(snap.token.scale_generation + 1);
+            check(!mixed.is_valid(),
+                  "a scale from a DIFFERENT generation makes the snapshot invalid");
+        }
+
+        // An unset token is the state a caller who supplied nothing leaves behind.
+        check(!LinearizationToken{}.is_valid(),
+              "a default-constructed token is INVALID (zero and -1 are what 'unset' looks like)");
 
         check(!evaluate_directional_right_preconditioner_defect(
                   snap, BoundLinearOperator{}, bP(snap, Pinv), dir).ok,
@@ -412,7 +454,7 @@ int main() {
     {
         wrf::sdirk3::LinearOperator A = [](const torch::Tensor& v) { return v; };
         wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v; };
-        check(wrf::sdirk3::ResidualScale::unscaled().is_valid(), "the unscaled S is valid");
+        check(wrf::sdirk3::ResidualScale::unscaled(13).is_valid(), "the unscaled S is valid");
         check(!wrf::sdirk3::ResidualScale{}.is_valid(),
               "a DEFAULT-constructed scale is INVALID -- forgetting to set one is refused, which "
               "is what separates it from deliberately measuring unscaled");
@@ -434,11 +476,11 @@ int main() {
         wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v; };
         for (int which = 0; which < 2; ++which) {
             auto s0 = snap;
-            (which == 0 ? s0.rhs_generation : s0.preconditioner_generation) = 0;
+            (which == 0 ? s0.token.rhs_generation : s0.token.coefficient_generation) = 0;
             check(!s0.is_valid() &&
                   !evaluate_directional_right_preconditioner_defect(
                        s0, bA(s0, A), bP(s0, Pinv), rand_in("ph")).ok,
-                  "a ZERO generation receipt is refused (matching operators cannot rescue it)");
+                  "a ZERO generation inside the token is refused (matching operators cannot rescue it)");
         }
 
         // inf passes `> 0.0`, so the old dt/gamma guard admitted it.
@@ -533,8 +575,8 @@ int main() {
         // WITH a digest the mutation is caught.
         check(!evaluate_directional_right_preconditioner_defect(
                    snap,
-                   BoundLinearOperator{ident, snap.rhs_generation, zero_digest, false},
-                   BoundLinearOperator{hidden, snap.preconditioner_generation, digest, false},
+                   BoundLinearOperator{ident, snap.token, zero_digest, false},
+                   BoundLinearOperator{hidden, snap.token, digest, false},
                    dir).ok,
               "an operator that CHANGES ITSELF while returning identical output is refused");
 
@@ -543,8 +585,8 @@ int main() {
         *calls = 0;
         auto declared = evaluate_directional_right_preconditioner_defect(
             snap,
-            BoundLinearOperator{ident, snap.rhs_generation, {}, true},
-            BoundLinearOperator{hidden, snap.preconditioner_generation, {}, true},
+            BoundLinearOperator{ident, snap.token, {}, true},
+            BoundLinearOperator{hidden, snap.token, {}, true},
             dir);
         check(declared.ok && !declared.state_digest_unchanged,
               "a DECLARED-stateless operator is scored, but state_digest_unchanged is FALSE");
@@ -552,8 +594,8 @@ int main() {
         // A genuinely pure pair: nothing to move, so the digest does not move.
         auto verified = evaluate_directional_right_preconditioner_defect(
             snap,
-            BoundLinearOperator{ident, snap.rhs_generation, zero_digest, false},
-            BoundLinearOperator{ident, snap.preconditioner_generation, zero_digest, false},
+            BoundLinearOperator{ident, snap.token, zero_digest, false},
+            BoundLinearOperator{ident, snap.token, zero_digest, false},
             dir);
         check(verified.ok && verified.state_digest_unchanged,
               "two digest-carrying pure operators report state_digest_unchanged TRUE");
@@ -567,8 +609,8 @@ int main() {
         auto blind_digest = []() { return uint64_t{42}; };   // watches nothing
         auto blind = evaluate_directional_right_preconditioner_defect(
             snap,
-            BoundLinearOperator{ident, snap.rhs_generation, blind_digest, false},
-            BoundLinearOperator{hidden, snap.preconditioner_generation, blind_digest, false},
+            BoundLinearOperator{ident, snap.token, blind_digest, false},
+            BoundLinearOperator{hidden, snap.token, blind_digest, false},
             dir);
         check(blind.ok && blind.state_digest_unchanged && *calls > 0,
               "a BLIND digest lets a mutating operator through with the flag set -- the flag "
@@ -584,16 +626,16 @@ int main() {
         auto toggle_digest = [toggle]() { return static_cast<uint64_t>(*toggle); };
         check(!evaluate_directional_right_preconditioner_defect(
                    snap,
-                   BoundLinearOperator{ident, snap.rhs_generation, zero_digest, false},
-                   BoundLinearOperator{toggling, snap.preconditioner_generation, toggle_digest, false},
+                   BoundLinearOperator{ident, snap.token, zero_digest, false},
+                   BoundLinearOperator{toggling, snap.token, toggle_digest, false},
                    dir).ok,
               "state that CHANGES AND UNWINDS is caught -- a before/after pair would miss it");
 
         // Neither digest nor declaration: silence must not read as verified.
         check(!evaluate_directional_right_preconditioner_defect(
                    snap,
-                   BoundLinearOperator{ident, snap.rhs_generation},
-                   BoundLinearOperator{ident, snap.preconditioner_generation},
+                   BoundLinearOperator{ident, snap.token},
+                   BoundLinearOperator{ident, snap.token},
                    dir).ok,
               "an operator supplying NEITHER a digest nor a declaration is refused");
     }
