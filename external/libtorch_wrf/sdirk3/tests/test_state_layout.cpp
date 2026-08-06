@@ -221,7 +221,44 @@ int main() {
         check(threw, "extract REFUSES a structurally-valid but non-grid-derived layout");
     }
 
-    constexpr int expected_checks = 40;
+    // ---- 10. the momentum BASIS is declared, and it disagrees with the block names.
+    // Registry.EM_COMMON declares u as "x-wind component" [m s-1] and ru as "mu-coupled u"
+    // [Pa m s-1]; module_implicit_sdirk3.F passes grid%u_2. So the packed state is VELOCITY
+    // while these blocks are named ru/rv/rw. Pinned here because the basis decides the units of
+    // every coupling coefficient -- dF_mu/du ~ mu*H for velocity, ~H for coupled momentum -- and
+    // a reader who trusts the name derives the wrong preconditioner.
+    {
+        check(L.momentum_basis == wrf::sdirk3::MomentumBasis::Velocity,
+              "the packed state's momentum basis is VELOCITY (Registry), not coupled momentum");
+        check(L.blocks[0].name == "ru",
+              "the first block is still NAMED ru -- the name contradicts the basis, on purpose");
+
+        // A declared basis that nothing rejects is decoration. These assert the refusal.
+        auto coupled = L;
+        coupled.momentum_basis = wrf::sdirk3::MomentumBasis::CoupledMomentum;
+        bool threw_req = false;
+        try { wrf::sdirk3::require_velocity_basis(coupled, "test"); }
+        catch (const std::exception&) { threw_req = true; }
+        check(threw_req, "require_velocity_basis REJECTS a CoupledMomentum layout");
+
+        // The narrow helper only guards callers who remember it. is_valid() is the gate every
+        // consumer already passes, so the invariant lives there and this asserts it does.
+        check(!coupled.is_valid(),
+              "is_valid() REJECTS a CoupledMomentum layout -- all 16 existing gates enforce it");
+
+        auto opts_b = torch::TensorOptions().dtype(torch::kFloat32);
+        auto st_b = torch::zeros({L.total_size}, opts_b);
+        bool threw_ex = false;
+        try { wrf::sdirk3::extract_mu_pert_2d(coupled, st_b, NY, NX); }
+        catch (const std::exception&) { threw_ex = true; }
+        check(threw_ex, "extract REFUSES a CoupledMomentum layout, so the field is load-bearing");
+
+        check(wrf::sdirk3::StateLayout::from_grid_dims(NX, NY, NZ, NXU, NYV, NZW).momentum_basis
+                  == wrf::sdirk3::MomentumBasis::Velocity,
+              "from_grid_dims STATES the basis rather than inheriting the member default");
+    }
+
+    constexpr int expected_checks = 46;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

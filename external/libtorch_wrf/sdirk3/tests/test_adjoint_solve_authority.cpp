@@ -400,7 +400,42 @@ int main() {
               "zero-RHS block with a NaN residual is STILL Fatal");
     }
 
-    constexpr int expected_checks = 48;
+        // A wrong basis must not buy WEAKER gating. layout_for_adjoint_residual returns an invalid
+    // layout when the slot is unusable and the caller then falls back to the global norm, so an
+    // installed-but-invalid layout would silently coarsen the adjoint gate. The setter refuses.
+    {
+        auto good = wrf::sdirk3::StateLayout::from_grid_dims(41, 81, 64, 42, 82, 65);
+        bool ok_accepted = true;
+        try { wrf::sdirk3::set_adjoint_residual_layout(good); }
+        catch (const std::exception&) { ok_accepted = false; }
+        check(ok_accepted, "a valid velocity-basis layout is accepted by the adjoint setter");
+
+        auto coupled = good;
+        coupled.momentum_basis = wrf::sdirk3::MomentumBasis::CoupledMomentum;
+        bool threw = false;
+        try { wrf::sdirk3::set_adjoint_residual_layout(coupled); }
+        catch (const std::exception&) { threw = true; }
+        check(threw, "the adjoint setter REFUSES a CoupledMomentum layout instead of degrading");
+
+        wrf::sdirk3::StateLayout empty;
+        bool threw_empty = false;
+        try { wrf::sdirk3::set_adjoint_residual_layout(empty); }
+        catch (const std::exception&) { threw_empty = true; }
+        check(threw_empty, "an empty layout is refused too -- the slot holds only valid layouts");
+
+        // Structure is not provenance. A hand-built layout can be structurally perfect and still
+        // describe the wrong grid, which is why extract_mu_pert_2d has required is_exact since
+        // D104; the adjoint gate gets the same standard.
+        auto not_exact = good;
+        not_exact.is_exact = false;
+        check(not_exact.is_valid(), "the fixture is structurally VALID, so the next check is about provenance alone");
+        bool threw_prov = false;
+        try { wrf::sdirk3::set_adjoint_residual_layout(not_exact); }
+        catch (const std::exception&) { threw_prov = true; }
+        check(threw_prov, "a structurally-valid but NON-grid-derived layout is refused");
+    }
+
+constexpr int expected_checks = 53;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -145,7 +145,28 @@ inline StateLayout& adjoint_residual_layout_slot() {
     static StateLayout slot;
     return slot;
 }
+// FAIL-CLOSED at the setter, because the reader cannot tell the two failures apart.
+//
+// layout_for_adjoint_residual returns an invalid layout when the slot is unusable, and the
+// caller then silently skips the per-block decomposition and gates on the global norm instead.
+// That fallback is correct for "no layout installed yet" and WRONG for "a layout was installed
+// and it is bad": a CoupledMomentum layout now fails is_valid(), so it would degrade the adjoint
+// gate to a coarser check with no error anywhere -- the wrong basis silently buying weaker
+// gating. Refusing here keeps the slot holding only valid layouts, so the fallback means what it
+// says.
 inline void set_adjoint_residual_layout(const StateLayout& layout) {
+    TORCH_CHECK(layout.is_valid(),
+                "set_adjoint_residual_layout: refusing an invalid layout. The adjoint's per-block "
+                "gate degrades silently to a global norm when the slot is unusable, so an invalid "
+                "layout here would weaken the gate rather than report anything. A CoupledMomentum "
+                "basis fails is_valid() for this core.");
+    // is_valid() is structure; is_exact is PROVENANCE. extract_mu_pert_2d has required both since
+    // D104 for the same reason -- a hand-built layout can be structurally plausible and still
+    // describe the wrong grid -- and the adjoint gate has no more business trusting one than mu
+    // extraction does.
+    TORCH_CHECK(layout.is_exact,
+                "set_adjoint_residual_layout: layout is structurally valid but NOT grid-derived; "
+                "the adjoint's per-block gate requires an exact layout");
     adjoint_residual_layout_slot() = layout;
 }
 inline StateLayout layout_for_adjoint_residual(int64_t numel) {

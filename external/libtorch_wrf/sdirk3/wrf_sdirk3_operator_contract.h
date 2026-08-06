@@ -20,6 +20,7 @@
 #include <torch/torch.h>
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <stdexcept>
@@ -77,18 +78,45 @@ struct LinearizationSnapshot {
     }
 };
 
-// eps_q and where the error lands. output_block_error[i] follows layout.blocks order.
-struct PreconditionerQualityReport {
+// An operator handed to this file is a std::function -- there is nothing stopping it from
+// returning the wrong shape, dtype, device, or a NaN. And `A P^-1 v - v` BROADCASTS, so a
+// wrong-shaped return does not throw: it produces a plausible number from a broken operator.
+// Refuse instead.
+inline bool operator_output_is_usable(const torch::Tensor& out, const torch::Tensor& like) {
+    torch::NoGradGuard no_grad;
+    return out.defined()
+        && out.sizes() == like.sizes()
+        && out.scalar_type() == like.scalar_type()
+        && out.device() == like.device()
+        && torch::isfinite(out).all().item<bool>();
+}
+
+// eps_q and where the error lands, FOR ONE DIRECTION. output_block_error[i] follows
+// layout.blocks order.
+//
+// The name says "directional" and "defect" because both were overclaimed before: this is not a
+// verdict on the preconditioner (one direction can be lucky), and larger is worse (a "quality"
+// reads as larger-is-better).
+struct DirectionalDefectReport {
     std::string input_block;
     double global_error = 0.0;                      // || A P^-1 v - v || / || v ||
     std::array<double, 6> output_block_error{};     // per-block share of that residual
+
+    // Defect in the blocks the implicit solve OWNS, versus what leaked into blocks it does not.
+    // These are different failures: the first is a wrong inverse, the second is M polluting a
+    // channel the explicit side is integrating. The blocks partition the vector, so
+    // active_error^2 + inactive_leakage^2 == global_error^2 -- if that identity breaks, a block
+    // was dropped from the partition.
+    double active_error = 0.0;
+    double inactive_leakage = 0.0;
+
     bool ok = false;
 
     // Error concentrated OUTSIDE the input block means the cross-block model is wrong, which a
     // scalar per-block number cannot distinguish from a bad in-block inverse.
     //
     // THROWS when the direction was not supported on exactly one block. The first version
-    // returned 0.0 in that case, and since evaluate_right_preconditioner never set input_block,
+    // returned 0.0 in that case, and since the evaluator never set input_block,
     // it returned 0.0 ALWAYS -- so every attribution assertion written against it passed
     // vacuously. An unanswerable query must not produce a plausible number.
     double in_block_error(const StateLayout& layout) const {
@@ -105,23 +133,25 @@ struct PreconditionerQualityReport {
     }
 };
 
-// THE judgement. Pure: takes the operators as arguments, returns a value, touches nothing.
-inline PreconditionerQualityReport evaluate_right_preconditioner(
+// THE judgement, in one direction. Pure: takes the operators as arguments, returns a value,
+// touches nothing.
+inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     const LinearizationSnapshot& snapshot,
     const LinearOperator& apply_A,
     const LinearOperator& apply_P_inverse,
     const torch::Tensor& direction)
 {
-    PreconditionerQualityReport rep;
+    DirectionalDefectReport rep;
     if (!snapshot.is_valid() || !direction.defined() ||
-        direction.numel() != snapshot.layout.total_size) {
+        direction.numel() != snapshot.layout.total_size ||
+        !operator_output_is_usable(direction, direction)) {
         return rep;   // ok stays false; callers must not read the numbers
     }
 
     const auto z = apply_P_inverse(direction);
-    if (!z.defined()) return rep;
+    if (!operator_output_is_usable(z, direction)) return rep;
     const auto az = apply_A(z);
-    if (!az.defined()) return rep;
+    if (!operator_output_is_usable(az, direction)) return rep;
 
     torch::NoGradGuard no_grad;
     const auto err = az - direction;
@@ -129,12 +159,17 @@ inline PreconditionerQualityReport evaluate_right_preconditioner(
     if (!(vn > 0.0)) return rep;
 
     rep.global_error = err.norm().to(torch::kCPU).item<double>() / vn;
+    double active_sq = 0.0, inactive_sq = 0.0;
     for (std::size_t i = 0; i < snapshot.layout.blocks.size() &&
                             i < rep.output_block_error.size(); ++i) {
         const auto& b = snapshot.layout.blocks[i];
-        rep.output_block_error[i] =
+        const double e =
             err.slice(0, b.start, b.start + b.size).norm().to(torch::kCPU).item<double>() / vn;
+        rep.output_block_error[i] = e;
+        (snapshot.active.by_name(b.name) ? active_sq : inactive_sq) += e * e;
     }
+    rep.active_error = std::sqrt(active_sq);
+    rep.inactive_leakage = std::sqrt(inactive_sq);
 
     // Which block the direction lives on, so the error can be attributed. Left empty when the
     // direction spans more than one block -- in_block_error then refuses rather than guessing.

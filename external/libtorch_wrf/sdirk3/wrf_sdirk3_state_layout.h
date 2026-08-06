@@ -57,6 +57,21 @@ inline int64_t checked_add(int64_t a, int64_t b, const char* what) {
 }
 }  // namespace layout_detail
 
+// What the first three packed blocks actually hold.
+//
+// SETTLED BY THE REGISTRY, not by the names in this file:
+//     Registry.EM_COMMON:158  u   "x-wind component"  "m s-1"       <- VELOCITY
+//     Registry.EM_COMMON:160  ru  "mu-coupled u"      "Pa m s-1"    <- coupled momentum
+// and module_implicit_sdirk3.F passes grid%u_2, i.e. the velocity. The packed STATE is therefore
+// velocity, and the block names "ru/rv/rw" below are a legacy misnomer for it.
+//
+// This is not cosmetic. The basis sets the units of every coupling coefficient: for a velocity
+// basis dF_mu/du ~ mu*H, for a coupled-momentum basis dF_mu/dU ~ H. Reading one as the other
+// changes the preconditioner formula, so the basis must be stated rather than inferred from a
+// name. Renaming the blocks is a wide change and has not been done; this records which one is
+// true so nobody derives coefficients from the label.
+enum class MomentumBasis { Velocity, CoupledMomentum };
+
 struct StateLayout {
     struct Block {
         std::string name;
@@ -68,7 +83,10 @@ struct StateLayout {
     // is_valid() == false rather than reading an indeterminate total_size. The fail-closed
     // diagnostic path in newton_solver.cpp depends on exactly that.
     int64_t total_size = 0;
-    bool is_exact = false;   // true only when computed from grid dims
+    bool is_exact = false;
+
+    // Velocity, per the Registry declarations above. The block names say otherwise.
+    MomentumBasis momentum_basis = MomentumBasis::Velocity;   // true only when computed from grid dims
 
     // Compute exact layout from grid dimensions
     // Layout: ru (ny*nz*nx_u), rv (ny_v*nz*nx), rw (ny*nz_w*nx),
@@ -78,6 +96,9 @@ struct StateLayout {
                                       int nx_u, int ny_v, int nz_w) {
         StateLayout layout;
         layout.is_exact = true;
+        // Stated, not inherited from the member default: a layout's basis is a property of how
+        // it was built, and every consumer's coefficient units follow from it.
+        layout.momentum_basis = MomentumBasis::Velocity;
 
         int64_t nx64 = nx, ny64 = ny, nz64 = nz;
         int64_t nx_u64 = nx_u, ny_v64 = ny_v, nz_w64 = nz_w;
@@ -132,6 +153,13 @@ struct StateLayout {
         static const char* kExpected[6] = {"ru", "rv", "rw", "ph", "t", "mu"};
         if (blocks.size() != 6) return false;
         if (total_size < 0) return false;
+        // The basis belongs HERE, not in one narrow helper. is_valid() is the gate every
+        // consumer already passes through -- solver, RHS, preconditioner, operator contract --
+        // whereas a dedicated check only guards whoever remembers to call it. This core's
+        // coefficients assume dF_mu/du ~ mu*H; a CoupledMomentum layout makes that ~H and
+        // changes every coupling coefficient by a factor of mu, so it is not a valid layout for
+        // this core rather than merely an unsupported option.
+        if (momentum_basis != MomentumBasis::Velocity) return false;
 
         int64_t expected_start = 0;
         for (size_t i = 0; i < blocks.size(); ++i) {
@@ -154,9 +182,21 @@ struct StateLayout {
 // it means the adjoint would run against a preconditioner bound to the wrong state, and a
 // wrong gradient is worse than no gradient. D94's version silently did nothing when its
 // shape checks failed, which is the fail-OPEN form of the same code.
+// Every coefficient in this core assumes the velocity basis -- dF_mu/du ~ mu*H, not ~H. A layout
+// declaring CoupledMomentum would silently change those units by a factor of mu (~8.9e+04), so
+// consumers refuse it rather than proceeding on the wrong one. Without this the basis field is
+// decoration: recorded, and unable to stop the mistake it exists to name.
+inline void require_velocity_basis(const StateLayout& layout, const char* who) {
+    TORCH_CHECK(layout.momentum_basis == MomentumBasis::Velocity,
+                who, ": this core's coefficients assume the VELOCITY momentum basis "
+                "(Registry.EM_COMMON declares u in m s-1); a CoupledMomentum layout would change "
+                "every coupling coefficient by a factor of mu");
+}
+
 inline torch::Tensor extract_mu_pert_2d(const StateLayout& layout,
                                         const torch::Tensor& packed_state,
                                         int64_t ny, int64_t nx) {
+    require_velocity_basis(layout, "extract_mu_pert_2d");
     TORCH_CHECK(layout.is_valid(),
                 "extract_mu_pert_2d: packed-state layout is invalid");
     // 9F.D104 (review section 8.1): require an EXACT grid-derived layout. is_valid() checks
