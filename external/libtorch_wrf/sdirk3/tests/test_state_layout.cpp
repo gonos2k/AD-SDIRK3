@@ -241,6 +241,11 @@ int main() {
         catch (const std::exception&) { threw_req = true; }
         check(threw_req, "require_velocity_basis REJECTS a CoupledMomentum layout");
 
+        // The narrow helper only guards callers who remember it. is_valid() is the gate every
+        // consumer already passes, so the invariant lives there and this asserts it does.
+        check(!coupled.is_valid(),
+              "is_valid() REJECTS a CoupledMomentum layout -- all 16 existing gates enforce it");
+
         auto opts_b = torch::TensorOptions().dtype(torch::kFloat32);
         auto st_b = torch::zeros({L.total_size}, opts_b);
         bool threw_ex = false;
@@ -253,7 +258,7 @@ int main() {
               "from_grid_dims STATES the basis rather than inheriting the member default");
     }
 
-    constexpr int expected_checks = 45;
+    constexpr int expected_checks = 46;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

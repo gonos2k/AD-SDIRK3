@@ -153,6 +153,13 @@ struct StateLayout {
         static const char* kExpected[6] = {"ru", "rv", "rw", "ph", "t", "mu"};
         if (blocks.size() != 6) return false;
         if (total_size < 0) return false;
+        // The basis belongs HERE, not in one narrow helper. is_valid() is the gate every
+        // consumer already passes through -- solver, RHS, preconditioner, operator contract --
+        // whereas a dedicated check only guards whoever remembers to call it. This core's
+        // coefficients assume dF_mu/du ~ mu*H; a CoupledMomentum layout makes that ~H and
+        // changes every coupling coefficient by a factor of mu, so it is not a valid layout for
+        // this core rather than merely an unsupported option.
+        if (momentum_basis != MomentumBasis::Velocity) return false;
 
         int64_t expected_start = 0;
         for (size_t i = 0; i < blocks.size(); ++i) {
