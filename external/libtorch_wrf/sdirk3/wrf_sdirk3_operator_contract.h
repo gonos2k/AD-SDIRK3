@@ -40,6 +40,23 @@ struct BoundLinearOperator {
     LinearOperator apply;
     uint64_t generation = 0;
 
+    // Repeatability proves the operator RETURNED the same thing twice. It does not prove the
+    // operator did not CHANGE while doing so: a fallback latch, a refinement counter, a cache
+    // generation or a lazy allocation can all advance while the output is bit-identical. A probe
+    // that mutates the solver it measures is an observer effect, and this project has paid for
+    // one before.
+    //
+    // So one of these must be supplied, and the report says which was used:
+    //   state_digest set    -> purity is MEASURED (compared before and after every call)
+    //   declared_stateless  -> purity is ASSERTED by the caller and NOT measured
+    // Supplying neither is refused. "Nothing said" must not read as "verified".
+    std::function<uint64_t()> state_digest;
+    bool declared_stateless = false;
+
+    bool has_purity_evidence() const {
+        return static_cast<bool>(state_digest) || declared_stateless;
+    }
+
     torch::Tensor operator()(const torch::Tensor& v) const { return apply(v); }
     explicit operator bool() const { return static_cast<bool>(apply); }
 };
@@ -187,6 +204,10 @@ struct DirectionalDefectReport {
     double active_error = 0.0;
     double inactive_output_defect = 0.0;
 
+    // false when either operator only DECLARED itself stateless. The number is still usable; it
+    // just rests on an assertion rather than a measurement, and a reader must be able to tell.
+    bool purity_verified = false;
+
     bool ok = false;
 
     // Error concentrated OUTSIDE the input block means the cross-block model is wrong, which a
@@ -220,6 +241,7 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
 {
     DirectionalDefectReport rep;
     if (!snapshot.is_valid() || !apply_A || !apply_P_inverse ||
+        !apply_A.has_purity_evidence() || !apply_P_inverse.has_purity_evidence() ||
         apply_A.generation != snapshot.rhs_generation ||
         apply_P_inverse.generation != snapshot.preconditioner_generation ||
         !direction.defined() ||
@@ -245,9 +267,20 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
         if (bn > 0.0) return rep;
     }
 
-    // Purity. These arrive as std::function; nothing stops one from writing through its argument
-    // or carrying state (a fallback latch, a refinement counter, a lazy allocation). Both would
-    // make this probe an observer that changes the solve it is measuring.
+    // Purity, in three independent senses -- they fail differently and each needs its own check.
+    //
+    //   1. write-through : the operator mutated its ARGUMENT
+    //   2. repeatability : the operator RETURNED something different the second time
+    //   3. state purity  : the operator CHANGED ITSELF, returning the same thing either way
+    //
+    // (3) is invisible to (1) and (2). An operator that increments a counter and returns a clone
+    // passes both and still moves the solver underneath the measurement.
+    const auto digest_of = [](const BoundLinearOperator& op) -> uint64_t {
+        return op.state_digest ? op.state_digest() : 0ULL;
+    };
+    const uint64_t a_digest_before = digest_of(apply_A);
+    const uint64_t p_digest_before = digest_of(apply_P_inverse);
+
     const auto direction_before = direction.clone();
     const auto z = apply_P_inverse(direction);
     if (!operator_output_is_usable(z, direction)) return rep;
@@ -258,23 +291,37 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     if (!operator_output_is_usable(az, direction)) return rep;
     if (!z.equal(z_before)) return rep;                   // A wrote through its input
 
-    // Repeatability: a stateful operator answers differently the second time, and a number that
-    // cannot be reproduced is not a measurement.
+    // Second application. Its outputs get the SAME validator as the first -- checking only
+    // equality would let a second call return a wrong-dtype or non-finite tensor unremarked, so
+    // long as it matched.
+    //
+    // Equality here is EXACT. That is the strongest contract and the right one while every caller
+    // is a deterministic CPU operator; a live GPU adapter with atomic reductions is where this
+    // must become a dtype-aware tolerance, and that belongs with the adapter that needs it.
     const auto z2 = apply_P_inverse(direction);
-    if (!z2.defined() || !z2.equal(z)) return rep;
+    if (!operator_output_is_usable(z2, direction) || !z2.equal(z)) return rep;
     const auto az2 = apply_A(z2);
-    if (!az2.defined() || !az2.equal(az)) return rep;
+    if (!operator_output_is_usable(az2, direction) || !az2.equal(az)) return rep;
+
+    if (digest_of(apply_A) != a_digest_before) return rep;            // A changed ITSELF
+    if (digest_of(apply_P_inverse) != p_digest_before) return rep;    // P^-1 changed ITSELF
+    rep.purity_verified =
+        static_cast<bool>(apply_A.state_digest) && static_cast<bool>(apply_P_inverse.state_digest);
 
     // Everything below is measured in SCALED coordinates. With the default unscaled S this is
     // elementwise multiplication by ones, so the numbers are exactly what they were before.
     const auto sinv = inverse_scale_vector(snapshot.layout, snapshot.scale, direction);
     if (!sinv.defined()) return rep;
 
-    // Reductions in FP64. Element-wise finiteness does NOT make the norm finite: an FP32 L2 norm
-    // overflows to inf on a large vector, and inf/inf is a NaN this would have reported as a
-    // number. Promoting costs one copy on a diagnostic path and removes the whole failure mode.
-    const auto err = ((az - direction) * sinv).to(torch::kFloat64);
-    const auto v_s = (direction * sinv).to(torch::kFloat64);
+    // FP64 for the ARITHMETIC, not only the reduction. Casting the result of
+    // `(az - direction) * sinv` would promote a number whose cancellation, overflow and
+    // underflow had already happened in the source dtype -- the promotion has to come first to
+    // mean anything. Element-wise finiteness also does not make a REDUCTION finite: an FP32 L2
+    // norm overflows to inf, and inf/inf is a NaN this would have reported as a number.
+    const auto v64 = direction.to(torch::kFloat64);
+    const auto sinv64 = sinv.to(torch::kFloat64);
+    const auto err = (az.to(torch::kFloat64) - v64) * sinv64;
+    const auto v_s = v64 * sinv64;
     const double vn = v_s.norm().to(torch::kCPU).item<double>();
     if (!std::isfinite(vn) || !(vn > 0.0)) return rep;
 

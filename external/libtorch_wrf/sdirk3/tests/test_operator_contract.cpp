@@ -59,11 +59,13 @@ int main() {
     // Each operator is bound at the generation of the snapshot it is scored against -- including
     // the invalid-snapshot case, which must fail for INVALIDITY, not for a receipt mismatch it
     // would otherwise trip first.
+    // These fixtures are genuinely stateless, so they DECLARE it. Supplying neither a digest nor
+    // a declaration is refused -- see case 6j.
     auto bA = [](const wrf::sdirk3::LinearizationSnapshot& sn, wrf::sdirk3::LinearOperator f) {
-        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.rhs_generation};
+        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.rhs_generation, {}, true};
     };
     auto bP = [](const wrf::sdirk3::LinearizationSnapshot& sn, wrf::sdirk3::LinearOperator f) {
-        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.preconditioner_generation};
+        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.preconditioner_generation, {}, true};
     };
 
     // A FIXED seed on a LOCAL generator. The global RNG made every case measure a different
@@ -511,13 +513,67 @@ int main() {
               "a pure, repeatable pair is still accepted (the refusals are not blanket)");
     }
 
+    // ------------- 6j. the mutation that returns the SAME answer -- what repeatability misses
+    // Measured before this case existed: an operator that increments a counter and returns a
+    // clone was ACCEPTED with ok=true while its counter went 0 -> 2. Write-through and
+    // repeatability both pass, because neither asks whether the OPERATOR changed.
+    {
+        using wrf::sdirk3::BoundLinearOperator;
+        auto calls = std::make_shared<int>(0);
+        wrf::sdirk3::LinearOperator hidden = [calls](const torch::Tensor& v) {
+            ++(*calls);              // internal state moves
+            return v.clone();        // output is identical every time
+        };
+        wrf::sdirk3::LinearOperator ident = [](const torch::Tensor& v) { return v.clone(); };
+        auto digest = [calls]() { return static_cast<uint64_t>(*calls); };
+        auto zero_digest = []() { return uint64_t{0}; };
+
+        const auto dir = rand_in("ph");
+
+        // WITH a digest the mutation is caught.
+        check(!evaluate_directional_right_preconditioner_defect(
+                   snap,
+                   BoundLinearOperator{ident, snap.rhs_generation, zero_digest, false},
+                   BoundLinearOperator{hidden, snap.preconditioner_generation, digest, false},
+                   dir).ok,
+              "an operator that CHANGES ITSELF while returning identical output is refused");
+
+        // The same mutant that only DECLARES itself stateless is accepted -- and the report says
+        // the purity was not measured, so no reader can mistake the two.
+        *calls = 0;
+        auto declared = evaluate_directional_right_preconditioner_defect(
+            snap,
+            BoundLinearOperator{ident, snap.rhs_generation, {}, true},
+            BoundLinearOperator{hidden, snap.preconditioner_generation, {}, true},
+            dir);
+        check(declared.ok && !declared.purity_verified,
+              "a DECLARED-stateless operator is scored, but purity_verified is FALSE");
+
+        // A genuinely pure pair with digests reports purity as measured.
+        auto verified = evaluate_directional_right_preconditioner_defect(
+            snap,
+            BoundLinearOperator{ident, snap.rhs_generation, zero_digest, false},
+            BoundLinearOperator{ident, snap.preconditioner_generation, zero_digest, false},
+            dir);
+        check(verified.ok && verified.purity_verified,
+              "two digest-carrying pure operators report purity_verified TRUE");
+
+        // Neither digest nor declaration: silence must not read as verified.
+        check(!evaluate_directional_right_preconditioner_defect(
+                   snap,
+                   BoundLinearOperator{ident, snap.rhs_generation},
+                   BoundLinearOperator{ident, snap.preconditioner_generation},
+                   dir).ok,
+              "an operator supplying NEITHER a digest nor a declaration is refused");
+    }
+
     // --------------------------------------------- 7. h is dt*gamma, stated once
     {
         check(std::abs(snap.h() - 600.0 * 0.4358665215) < 1e-12,
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 58;
+    constexpr int expected_checks = 62;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

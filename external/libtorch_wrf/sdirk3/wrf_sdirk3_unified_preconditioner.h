@@ -46,8 +46,14 @@ class PhysicsConfig;
 //
 // MEASURED on the live operator (block probe, stage 2, dt=600, WRFParity): perturbing ph gives
 // no mu response and perturbing mu gives a clear ph response --
-//     A_mu_phi = 0        A_phi_mu = 0.689
+//     A_mu_ph = 0 (exactly)      A_ph_mu = 0.0696 .. 0.0717  (three random directions)
 // so the operator is ASYMMETRIC in exactly the direction the corrected mass equation implies.
+//
+// The magnitude above REPLACES an earlier 0.689 recorded here. That value does not reproduce --
+// it is ~10x larger -- and it was stored without the mode/stage/build it came from, so the
+// discrepancy is unexplained rather than refuted. The re-measurement was taken after the probe's
+// off-diagonal label was corrected from "Arow" to Acol[in=q]: the old label named the entries by
+// the INPUT block, which reads A_mu_ph as A_ph_mu. Direction was unaffected; magnitude is open.
 // Both fields here still hold the hydrostatic coefficient, which is a numerics change pending
 // the re-derivation. Note a_mu_phi = 0 does NOT zero S_mu_phi: the Schur complement over (u,v)
 // still carries phi -> u,v -> mu unless HEVI removes those blocks too.
@@ -311,7 +317,15 @@ private:
     torch::Tensor C_phi_u_;   // Divergence effect: u → Φ  (c²/μ₀ scaling)
     torch::Tensor C_phi_v_;   // Divergence effect: v → Φ  (c²/μ₀ scaling)
     torch::Tensor C_phi_mu_;  // Hydrostatic balance: μ → Φ  (c² scaling)
-    // NOTE: A_μΦ = A_Φμ (symmetric) for stable Schur complement
+    // This ONE member is used as the authority for BOTH directions, on the rationale that
+    // A_μΦ = A_Φμ keeps the Schur complement stable. The live operator contradicts that: see the
+    // measurement at the top of this file, where A_mu_ph is exactly 0 while A_ph_mu is not. The
+    // symmetry is therefore an assumption of the preconditioner, not a property of the operator
+    // it approximates -- and modelling a coupling the operator does not have is the same class of
+    // defect as the Omega fix removed from the RHS.
+    //
+    // Splitting it is a NUMERICS change and is deliberately not made here; MuPhiDirectCoupling
+    // already gives the two directions independent fields so the fix has somewhere to land.
 
     // Brunt-Väisälä frequency squared at each level
     torch::Tensor N_squared_;
