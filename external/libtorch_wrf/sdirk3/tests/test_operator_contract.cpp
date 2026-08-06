@@ -121,9 +121,11 @@ int main() {
         check(r_diag.global_error > r_exact.global_error * 1e6,
               "the metric separates them by orders, so it cannot be read either way");
 
-        // And it says WHERE: a ph input under the diagonal leaves its error in mu.
-        check(r_diag.in_block_error(snap.layout) < r_diag.global_error,
-              "error is not confined to the input block -- cross-block model is what failed");
+        // in_block_error <= global_error is true for ANY norm decomposition, so comparing them
+        // proves nothing. Assert the SHARE instead: under the diagonal the ph input's error is
+        // mostly in mu, so the in-block part is a small fraction of the total.
+        check(r_diag.in_block_error(snap.layout) < 0.5 * r_diag.global_error,
+              "the diagonal's error is mostly OUTSIDE ph -- the cross-block model is what failed");
     }
 
     // ------------------------------------------ 4. it reports WHERE the error lands
@@ -131,8 +133,8 @@ int main() {
         int mu_s = -1, mu_n = 0;
         for (const auto& b : snap.layout.blocks) if (b.name == "mu") { mu_s = b.start; mu_n = b.size; }
         // A leaves everything alone except it writes ph input into mu.
-        int ph_s = -1;
-        for (const auto& b : snap.layout.blocks) if (b.name == "ph") ph_s = b.start;
+        int ph_s = -1, ph_n = 0;
+        for (const auto& b : snap.layout.blocks) if (b.name == "ph") { ph_s = b.start; ph_n = b.size; }
         auto A = [&](const torch::Tensor& v) {
             auto out = v.clone();
             out.slice(0, mu_s, mu_s + mu_n) += 2.0 * v.slice(0, ph_s, ph_s + mu_n);
@@ -146,7 +148,48 @@ int main() {
         }
         check(mu_err > 0.1, "leakage into mu is reported in mu's slot");
         check(r.in_block_error(snap.layout) < 1e-12,
-              "the input block itself is clean, so the two are distinguishable");
+              "ph itself is clean here, so in-block and leakage are separable");
+
+        // The check above is 0 BY CONSTRUCTION -- A never touches ph -- so it would also pass if
+        // in_block_error always returned 0. Pin a case where it must return a KNOWN NONZERO
+        // value: scale ph by 3 with P = I, so the whole error is in ph at exactly ratio 2.
+        auto A_ph_only = [&](const torch::Tensor& v) {
+            auto out = v.clone();
+            out.slice(0, ph_s, ph_s + ph_n) *= 3.0;   // the WHOLE ph block, not mu_n of it
+            return out;
+        };
+        auto r2 = evaluate_right_preconditioner(snap, A_ph_only, Pinv, rand_in("ph"));
+        check(std::abs(r2.in_block_error(snap.layout) - 2.0) < 1e-9,
+              "in_block_error returns the INPUT block's own value (exactly 2 here), not 0");
+        check(std::abs(r2.in_block_error(snap.layout) - r2.global_error) < 1e-9,
+              "with the error confined to ph, in-block equals global");
+
+        // And it must select the named block, not simply the first or the largest: same operator,
+        // a mu direction, which A leaves untouched -> in-block is 0 while global is 0 too.
+        auto r3 = evaluate_right_preconditioner(snap, A_ph_only, Pinv, rand_in("mu"));
+        check(r3.ok && r3.global_error < 1e-12 && r3.in_block_error(snap.layout) < 1e-12,
+              "a mu direction through a ph-only operator is clean in both");
+    }
+
+    // --- 4b. an unattributable direction must REFUSE, not return 0
+    // This is the case that was missing: evaluate_right_preconditioner never set input_block, so
+    // in_block_error returned 0.0 for every report and every attribution assertion passed
+    // vacuously. A multi-block direction has no single input block, and saying so is the only
+    // honest answer.
+    {
+        auto A = [](const torch::Tensor& v) { return 3.0 * v; };
+        auto Pinv = [](const torch::Tensor& v) { return v; };
+        auto two_blocks = rand_in("ph") + rand_in("mu");
+        auto r = evaluate_right_preconditioner(snap, A, Pinv, two_blocks);
+        check(r.ok && r.input_block.empty(),
+              "a two-block direction is scored but has NO input block");
+        bool threw = false;
+        try { (void)r.in_block_error(snap.layout); }
+        catch (const std::exception&) { threw = true; }
+        check(threw, "in_block_error THROWS when there is nothing to attribute to");
+
+        auto single = evaluate_right_preconditioner(snap, A, Pinv, rand_in("t"));
+        check(single.input_block == "t", "a single-block direction names its block");
     }
 
     // --------------------------------------- 5. invalid input is refused, not scored
@@ -187,7 +230,7 @@ int main() {
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 18;
+    constexpr int expected_checks = 24;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
