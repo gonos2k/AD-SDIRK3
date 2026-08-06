@@ -163,3 +163,8 @@ tools/registry
 # OS/editor noise
 .DS_Store
 *.swp
+
+# Compiler-generated header dependencies. The Makefile creates these with -MMD and deletes
+# them in `clean`, and they embed absolute local toolchain paths, so tracking them makes
+# `make clean` delete tracked files and buries reviews under ~210k lines of machine output.
+*.d

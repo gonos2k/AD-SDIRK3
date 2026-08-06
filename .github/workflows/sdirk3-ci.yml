@@ -32,6 +32,20 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
+      - name: no tracked build artifacts
+        run: |
+          set -euo pipefail
+          # 23 compiler-generated *.d files were tracked, 209,925 lines carrying absolute local
+          # toolchain paths. The Makefile creates them with -MMD and deletes them in `clean`, so
+          # tracking them made `make clean` delete tracked files and buried every review.
+          tracked="$(git ls-files '*.d' '*.o' '*.a' '*.so' '*.mod')"
+          if [ -n "${tracked}" ]; then
+            echo "Tracked build artifacts are forbidden:"
+            printf '%s\n' "${tracked}"
+            exit 1
+          fi
+          echo "no tracked build artifacts"
+
       - name: workflow supply-chain policy (SHA pins, event rules, permissions)
         run: |
           set -euo pipefail

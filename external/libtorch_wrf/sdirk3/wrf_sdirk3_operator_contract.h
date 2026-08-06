@@ -86,11 +86,22 @@ struct PreconditionerQualityReport {
 
     // Error concentrated OUTSIDE the input block means the cross-block model is wrong, which a
     // scalar per-block number cannot distinguish from a bad in-block inverse.
+    //
+    // THROWS when the direction was not supported on exactly one block. The first version
+    // returned 0.0 in that case, and since evaluate_right_preconditioner never set input_block,
+    // it returned 0.0 ALWAYS -- so every attribution assertion written against it passed
+    // vacuously. An unanswerable query must not produce a plausible number.
     double in_block_error(const StateLayout& layout) const {
+        if (input_block.empty()) {
+            throw std::logic_error(
+                "in_block_error: the direction was not supported on exactly one block, so there "
+                "is no input block to attribute to");
+        }
         for (std::size_t i = 0; i < layout.blocks.size() && i < output_block_error.size(); ++i) {
             if (layout.blocks[i].name == input_block) return output_block_error[i];
         }
-        return 0.0;
+        throw std::logic_error("in_block_error: input_block '" + input_block +
+                               "' is not in this layout");
     }
 };
 
@@ -124,6 +135,17 @@ inline PreconditionerQualityReport evaluate_right_preconditioner(
         rep.output_block_error[i] =
             err.slice(0, b.start, b.start + b.size).norm().to(torch::kCPU).item<double>() / vn;
     }
+
+    // Which block the direction lives on, so the error can be attributed. Left empty when the
+    // direction spans more than one block -- in_block_error then refuses rather than guessing.
+    int n_support = 0;
+    for (const auto& b : snapshot.layout.blocks) {
+        const double bn =
+            direction.slice(0, b.start, b.start + b.size).norm().to(torch::kCPU).item<double>();
+        if (bn > 0.0) { ++n_support; rep.input_block = b.name; }
+    }
+    if (n_support != 1) rep.input_block.clear();
+
     rep.ok = true;
     return rep;
 }
