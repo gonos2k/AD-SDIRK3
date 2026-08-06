@@ -221,7 +221,20 @@ int main() {
         check(threw, "extract REFUSES a structurally-valid but non-grid-derived layout");
     }
 
-    constexpr int expected_checks = 40;
+    // ---- 10. the momentum BASIS is declared, and it disagrees with the block names.
+    // Registry.EM_COMMON declares u as "x-wind component" [m s-1] and ru as "mu-coupled u"
+    // [Pa m s-1]; module_implicit_sdirk3.F passes grid%u_2. So the packed state is VELOCITY
+    // while these blocks are named ru/rv/rw. Pinned here because the basis decides the units of
+    // every coupling coefficient -- dF_mu/du ~ mu*H for velocity, ~H for coupled momentum -- and
+    // a reader who trusts the name derives the wrong preconditioner.
+    {
+        check(L.momentum_basis == wrf::sdirk3::MomentumBasis::Velocity,
+              "the packed state's momentum basis is VELOCITY (Registry), not coupled momentum");
+        check(L.blocks[0].name == "ru",
+              "the first block is still NAMED ru -- the name contradicts the basis, on purpose");
+    }
+
+    constexpr int expected_checks = 42;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

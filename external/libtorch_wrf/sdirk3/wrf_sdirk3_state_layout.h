@@ -57,6 +57,21 @@ inline int64_t checked_add(int64_t a, int64_t b, const char* what) {
 }
 }  // namespace layout_detail
 
+// What the first three packed blocks actually hold.
+//
+// SETTLED BY THE REGISTRY, not by the names in this file:
+//     Registry.EM_COMMON:158  u   "x-wind component"  "m s-1"       <- VELOCITY
+//     Registry.EM_COMMON:160  ru  "mu-coupled u"      "Pa m s-1"    <- coupled momentum
+// and module_implicit_sdirk3.F passes grid%u_2, i.e. the velocity. The packed STATE is therefore
+// velocity, and the block names "ru/rv/rw" below are a legacy misnomer for it.
+//
+// This is not cosmetic. The basis sets the units of every coupling coefficient: for a velocity
+// basis dF_mu/du ~ mu*H, for a coupled-momentum basis dF_mu/dU ~ H. Reading one as the other
+// changes the preconditioner formula, so the basis must be stated rather than inferred from a
+// name. Renaming the blocks is a wide change and has not been done; this records which one is
+// true so nobody derives coefficients from the label.
+enum class MomentumBasis { Velocity, CoupledMomentum };
+
 struct StateLayout {
     struct Block {
         std::string name;
@@ -68,7 +83,10 @@ struct StateLayout {
     // is_valid() == false rather than reading an indeterminate total_size. The fail-closed
     // diagnostic path in newton_solver.cpp depends on exactly that.
     int64_t total_size = 0;
-    bool is_exact = false;   // true only when computed from grid dims
+    bool is_exact = false;
+
+    // Velocity, per the Registry declarations above. The block names say otherwise.
+    MomentumBasis momentum_basis = MomentumBasis::Velocity;   // true only when computed from grid dims
 
     // Compute exact layout from grid dimensions
     // Layout: ru (ny*nz*nx_u), rv (ny_v*nz*nx), rw (ny*nz_w*nx),
