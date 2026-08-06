@@ -74,6 +74,21 @@ jobs:
           fi
           echo "no tracked self-declared generated files"
 
+      - name: README ctest count matches the pinned inventory
+        run: |
+          set -euo pipefail
+          # The README states an EXACT count as a verification claim, and it had drifted to 40
+          # while the pinned inventory and the suite were both at 43. A claim about coverage that
+          # nothing checks is how it drifted silently; deriving it from the file it cites is how
+          # it stops.
+          pinned="$(grep -vc '^#' .github/ci/expected_ctest_names.txt)"
+          stated="$(grep -oE '[0-9]+-test CTest' README.md | grep -oE '^[0-9]+' | sort -u)"
+          if [ "$(printf '%s\n' "${stated}" | wc -l)" -ne 1 ] || [ "${stated}" != "${pinned}" ]; then
+            echo "README claims '${stated}-test' but the pinned inventory has ${pinned}"
+            exit 1
+          fi
+          echo "README and pinned inventory agree: ${pinned} tests"
+
       - name: workflow supply-chain policy (SHA pins, event rules, permissions)
         run: |
           set -euo pipefail
