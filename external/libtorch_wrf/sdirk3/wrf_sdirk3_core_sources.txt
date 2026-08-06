@@ -6,6 +6,7 @@
 # by both build systems' fail-close manifest validation.
 
 wrf_sdirk3_globals.cpp
+wrf_sdirk3_operator_contract.cpp
 wrf_sdirk3_tile_unified_interface.cpp
 wrf_sdirk3_interface_zerocopy.cpp
 wrf_sdirk3_zero_copy_interface.cpp

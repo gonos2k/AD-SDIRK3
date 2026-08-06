@@ -6733,16 +6733,20 @@ public:
                                     }
                                 }
                             }
-                            // A's OFF-DIAGONAL row: ||(A v_q)_p|| / ||v_q|| for p != q. With v
-                            // supported only on q this is |A_pq| in norm, measured on the live
-                            // operator -- so A_mu_phi and A_phi_mu can be compared directly
-                            // instead of assumed equal.
+                            // A's OFF-DIAGONAL COLUMN: ||(A v_q)_p|| / ||v_q|| for p != q. With v
+                            // supported only on q, holding the INPUT fixed and reading the output
+                            // across p gives ||A_pq|| -- the entries of COLUMN q.
+                            //
+                            // This said "row", which SWAPS the two indices: input ph / output mu
+                            // is A_mu_ph, but read as ph's row it becomes A_ph_mu -- the exact
+                            // pair this probe exists to compare. Each entry now prints its full
+                            // name, so the index order cannot be reconstructed wrongly.
                             {
-                                torch::NoGradGuard ng_row;
-                                std::cerr << " Arow:";
+                                torch::NoGradGuard ng_col;
+                                std::cerr << " Acol[in=" << blk.name << "]:";
                                 for (const auto& ob : cached_layout_.blocks) {
                                     if (ob.name == blk.name) continue;
-                                    std::cerr << " " << ob.name << "="
+                                    std::cerr << " A_" << ob.name << "_" << blk.name << "="
                                               << (Av_only.slice(0, ob.start, ob.start + ob.size)
                                                     .norm().to(torch::kCPU).item<double>() / vin);
                                 }
