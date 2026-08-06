@@ -31,6 +31,19 @@ namespace sdirk3 {
 
 using LinearOperator = std::function<torch::Tensor(const torch::Tensor&)>;
 
+// An operator together with the linearization it was captured at. A bare std::function pair
+// cannot detect that A came from one generation and M^-1 from another, and a report that mixes
+// them measures nothing -- so the generation travels WITH the operator and the evaluator refuses
+// a mismatch. The snapshot already declared rhs_generation and preconditioner_generation; until
+// this, nothing compared them to anything.
+struct BoundLinearOperator {
+    LinearOperator apply;
+    uint64_t generation = 0;
+
+    torch::Tensor operator()(const torch::Tensor& v) const { return apply(v); }
+    explicit operator bool() const { return static_cast<bool>(apply); }
+};
+
 // Which blocks the implicit solve actually owns. One authority, shared by the Newton unknown,
 // the ImplicitOnly RHS, the residual gate, the JVP/VJP and the preconditioner -- when these
 // disagree about a block, the stage residual contains a row nothing is solving.
@@ -57,10 +70,47 @@ struct ImplicitActiveDomain {
     }
 };
 
+// Per-block scale S. The state mixes units -- ru is kg m^-2 s^-1, ph is m^2 s^-2, mu is Pa --
+// so a plain Euclidean defect is dominated by whichever block carries the biggest numbers, and
+// switching Pa to hPa would change the "error" with no physics changing. Measuring
+// S^-1(A P^-1 v - v) against S^-1 v makes the number a property of the OPERATOR.
+//
+// A unit change is a conjugation: in new units Atilde = D^-1 A D, vtilde = D^-1 v. With
+// Stilde = D^-1 S the D's cancel exactly, so the scaled defect is invariant -- not approximately,
+// identically.
+struct StateScale {
+    std::array<double, 6> block_scale{{1.0, 1.0, 1.0, 1.0, 1.0, 1.0}};
+
+    bool is_valid() const {
+        for (double s : block_scale) {
+            if (!(s > 0.0) || !std::isfinite(s)) return false;
+        }
+        return true;
+    }
+
+    // Named, so measuring in raw storage units is a DECISION and not a default nobody noticed.
+    static StateScale unscaled() { return StateScale{}; }
+};
+
+// S^-1 as a vector over the full state, for elementwise weighting.
+inline torch::Tensor inverse_scale_vector(const StateLayout& layout,
+                                          const StateScale& scale,
+                                          const torch::Tensor& like)
+{
+    torch::NoGradGuard no_grad;
+    auto sinv = torch::ones_like(like);
+    for (std::size_t i = 0; i < layout.blocks.size() && i < scale.block_scale.size(); ++i) {
+        const auto& b = layout.blocks[i];
+        sinv.slice(0, b.start, b.start + b.size).fill_(1.0 / scale.block_scale[i]);
+    }
+    return sinv;
+}
+
 // Everything a probe needs to be reproducible, and to say which evaluation it describes.
 struct LinearizationSnapshot {
     StateLayout layout;
     ImplicitActiveDomain active;
+    StateScale scale;             // frozen HERE, so the number carries the units it was taken in
 
     double dt = 0.0;
     double gamma = 0.0;
@@ -74,7 +124,7 @@ struct LinearizationSnapshot {
     uint64_t preconditioner_generation = 0;
 
     bool is_valid() const {
-        return layout.is_valid() && dt > 0.0 && gamma > 0.0;
+        return layout.is_valid() && scale.is_valid() && dt > 0.0 && gamma > 0.0;
     }
 };
 
@@ -137,25 +187,35 @@ struct DirectionalDefectReport {
 // touches nothing.
 inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     const LinearizationSnapshot& snapshot,
-    const LinearOperator& apply_A,
-    const LinearOperator& apply_P_inverse,
+    const BoundLinearOperator& apply_A,
+    const BoundLinearOperator& apply_P_inverse,
     const torch::Tensor& direction)
 {
     DirectionalDefectReport rep;
-    if (!snapshot.is_valid() || !direction.defined() ||
+    if (!snapshot.is_valid() || !apply_A || !apply_P_inverse ||
+        apply_A.generation != snapshot.rhs_generation ||
+        apply_P_inverse.generation != snapshot.preconditioner_generation ||
+        !direction.defined() ||
         direction.numel() != snapshot.layout.total_size ||
         !operator_output_is_usable(direction, direction)) {
         return rep;   // ok stays false; callers must not read the numbers
     }
+
+    // The guard wraps the OPERATOR CALLS, not just the reductions below. This is a diagnostic:
+    // it must not build a graph, and it must not free or pollute buffers a live adjoint owns.
+    torch::NoGradGuard no_grad;
 
     const auto z = apply_P_inverse(direction);
     if (!operator_output_is_usable(z, direction)) return rep;
     const auto az = apply_A(z);
     if (!operator_output_is_usable(az, direction)) return rep;
 
-    torch::NoGradGuard no_grad;
-    const auto err = az - direction;
-    const double vn = direction.norm().to(torch::kCPU).item<double>();
+    // Everything below is measured in SCALED coordinates. With the default unscaled S this is
+    // elementwise multiplication by ones, so the numbers are exactly what they were before.
+    const auto sinv = inverse_scale_vector(snapshot.layout, snapshot.scale, direction);
+    const auto err = (az - direction) * sinv;
+    const auto v_s = direction * sinv;
+    const double vn = v_s.norm().to(torch::kCPU).item<double>();
     if (!(vn > 0.0)) return rep;
 
     rep.global_error = err.norm().to(torch::kCPU).item<double>() / vn;
@@ -173,6 +233,8 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
 
     // Which block the direction lives on, so the error can be attributed. Left empty when the
     // direction spans more than one block -- in_block_error then refuses rather than guessing.
+    // Support is a property of the direction itself; a positive diagonal scale cannot create or
+    // destroy it, so this reads the physical vector.
     int n_support = 0;
     for (const auto& b : snapshot.layout.blocks) {
         const double bn =

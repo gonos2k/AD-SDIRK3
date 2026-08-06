@@ -37,7 +37,9 @@ wrf::sdirk3::LinearizationSnapshot make_snapshot() {
     s.dt = 600.0;
     s.gamma = 0.4358665215;
     s.ark_stage = 2;
-    return s;
+    s.rhs_generation = 7;               // deliberately DISTINCT and nonzero: two default zeros
+    s.preconditioner_generation = 11;   // would satisfy the receipt by accident, and equal
+    return s;                           // values could not catch a swapped pair.
 }
 
 }  // namespace
@@ -51,6 +53,16 @@ int main() {
 
     using wrf::sdirk3::evaluate_directional_right_preconditioner_defect;
     using wrf::sdirk3::block_direction;
+
+    // Each operator is bound at the generation of the snapshot it is scored against -- including
+    // the invalid-snapshot case, which must fail for INVALIDITY, not for a receipt mismatch it
+    // would otherwise trip first.
+    auto bA = [](const wrf::sdirk3::LinearizationSnapshot& sn, wrf::sdirk3::LinearOperator f) {
+        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.rhs_generation};
+    };
+    auto bP = [](const wrf::sdirk3::LinearizationSnapshot& sn, wrf::sdirk3::LinearOperator f) {
+        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.preconditioner_generation};
+    };
 
     // A FIXED seed on a LOCAL generator. The global RNG made every case measure a different
     // direction each run, so a failure could not be re-run -- and a probe you cannot re-run is
@@ -70,7 +82,7 @@ int main() {
     {
         auto A = [](const torch::Tensor& v) { return 3.0 * v; };
         auto Pinv = [](const torch::Tensor& v) { return v / 3.0; };
-        auto r = evaluate_directional_right_preconditioner_defect(snap, A, Pinv, rand_in("ph"));
+        auto r = evaluate_directional_right_preconditioner_defect(snap, bA(snap, A), bP(snap, Pinv), rand_in("ph"));
         check(r.ok, "report is marked ok for a valid direction");
         check(r.global_error < 1e-12, "exact inverse of a scaling gives ~0 error");
     }
@@ -79,7 +91,7 @@ int main() {
     {
         auto A = [](const torch::Tensor& v) { return 3.0 * v; };
         auto Pinv = [](const torch::Tensor& v) { return v; };
-        auto r = evaluate_directional_right_preconditioner_defect(snap, A, Pinv, rand_in("ph"));
+        auto r = evaluate_directional_right_preconditioner_defect(snap, bA(snap, A), bP(snap, Pinv), rand_in("ph"));
         check(std::abs(r.global_error - 2.0) < 1e-9,
               "P = I against A = 3I gives exactly ||3v - v||/||v|| = 2");
     }
@@ -118,8 +130,8 @@ int main() {
         auto Pinv_diag = [](const torch::Tensor& v) { return v; };
 
         auto dir = rand_in("ph");
-        auto r_exact = evaluate_directional_right_preconditioner_defect(snap, A, Pinv_exact, dir);
-        auto r_diag  = evaluate_directional_right_preconditioner_defect(snap, A, Pinv_diag,  dir);
+        auto r_exact = evaluate_directional_right_preconditioner_defect(snap, bA(snap, A), bP(snap, Pinv_exact), dir);
+        auto r_diag  = evaluate_directional_right_preconditioner_defect(snap, bA(snap, A), bP(snap, Pinv_diag),  dir);
 
         check(r_exact.global_error < 1e-12,
               "coupled: the EXACT inverse scores ~0 even though its ph gain is 1/(1-cd), not 1");
@@ -148,7 +160,7 @@ int main() {
             return out;
         };
         auto Pinv = [](const torch::Tensor& v) { return v; };
-        auto r = evaluate_directional_right_preconditioner_defect(snap, A, Pinv, rand_in("ph"));
+        auto r = evaluate_directional_right_preconditioner_defect(snap, bA(snap, A), bP(snap, Pinv), rand_in("ph"));
         double mu_err = 0.0;
         for (std::size_t i = 0; i < snap.layout.blocks.size(); ++i) {
             if (snap.layout.blocks[i].name == "mu") mu_err = r.output_block_error[i];
@@ -165,7 +177,7 @@ int main() {
             out.slice(0, ph_s, ph_s + ph_n) *= 3.0;   // the WHOLE ph block, not mu_n of it
             return out;
         };
-        auto r2 = evaluate_directional_right_preconditioner_defect(snap, A_ph_only, Pinv, rand_in("ph"));
+        auto r2 = evaluate_directional_right_preconditioner_defect(snap, bA(snap, A_ph_only), bP(snap, Pinv), rand_in("ph"));
         check(std::abs(r2.in_block_error(snap.layout) - 2.0) < 1e-9,
               "in_block_error returns the INPUT block's own value (exactly 2 here), not 0");
         check(std::abs(r2.in_block_error(snap.layout) - r2.global_error) < 1e-9,
@@ -173,7 +185,7 @@ int main() {
 
         // And it must select the named block, not simply the first or the largest: same operator,
         // a mu direction, which A leaves untouched -> in-block is 0 while global is 0 too.
-        auto r3 = evaluate_directional_right_preconditioner_defect(snap, A_ph_only, Pinv, rand_in("mu"));
+        auto r3 = evaluate_directional_right_preconditioner_defect(snap, bA(snap, A_ph_only), bP(snap, Pinv), rand_in("mu"));
         check(r3.ok && r3.global_error < 1e-12 && r3.in_block_error(snap.layout) < 1e-12,
               "a mu direction through a ph-only operator is clean in both");
     }
@@ -187,7 +199,7 @@ int main() {
         auto A = [](const torch::Tensor& v) { return 3.0 * v; };
         auto Pinv = [](const torch::Tensor& v) { return v; };
         auto two_blocks = rand_in("ph") + rand_in("mu");
-        auto r = evaluate_directional_right_preconditioner_defect(snap, A, Pinv, two_blocks);
+        auto r = evaluate_directional_right_preconditioner_defect(snap, bA(snap, A), bP(snap, Pinv), two_blocks);
         check(r.ok && r.input_block.empty(),
               "a two-block direction is scored but has NO input block");
         bool threw = false;
@@ -195,7 +207,7 @@ int main() {
         catch (const std::exception&) { threw = true; }
         check(threw, "in_block_error THROWS when there is nothing to attribute to");
 
-        auto single = evaluate_directional_right_preconditioner_defect(snap, A, Pinv, rand_in("t"));
+        auto single = evaluate_directional_right_preconditioner_defect(snap, bA(snap, A), bP(snap, Pinv), rand_in("t"));
         check(single.input_block == "t", "a single-block direction names its block");
     }
 
@@ -204,12 +216,12 @@ int main() {
         auto A = [](const torch::Tensor& v) { return v; };
         auto Pinv = [](const torch::Tensor& v) { return v; };
         auto wrong = torch::randn({snap.layout.total_size - 1}, opts);
-        check(!evaluate_directional_right_preconditioner_defect(snap, A, Pinv, wrong).ok,
+        check(!evaluate_directional_right_preconditioner_defect(snap, bA(snap, A), bP(snap, Pinv), wrong).ok,
               "a mis-sized direction returns ok=false rather than a number");
 
         wrf::sdirk3::LinearizationSnapshot bad;   // dt = gamma = 0
         check(!bad.is_valid(), "a default snapshot is invalid");
-        check(!evaluate_directional_right_preconditioner_defect(bad, A, Pinv, rand_in("ph")).ok,
+        check(!evaluate_directional_right_preconditioner_defect(bad, bA(bad, A), bP(bad, Pinv), rand_in("ph")).ok,
               "an invalid snapshot returns ok=false");
     }
 
@@ -239,7 +251,7 @@ int main() {
         auto dir = rand_in("ph");
 
         auto A_wrong_shape = [](const torch::Tensor&) { return torch::ones({1}, torch::kFloat64); };
-        auto r_shape = evaluate_directional_right_preconditioner_defect(snap, A_wrong_shape, Pinv, dir);
+        auto r_shape = evaluate_directional_right_preconditioner_defect(snap, bA(snap, A_wrong_shape), bP(snap, Pinv), dir);
         check(!r_shape.ok, "an operator returning the WRONG SHAPE is refused, not broadcast");
 
         auto A_nan = [](const torch::Tensor& v) {
@@ -247,16 +259,16 @@ int main() {
             out.index_put_({0}, std::numeric_limits<double>::quiet_NaN());
             return out;
         };
-        check(!evaluate_directional_right_preconditioner_defect(snap, A_nan, Pinv, dir).ok,
+        check(!evaluate_directional_right_preconditioner_defect(snap, bA(snap, A_nan), bP(snap, Pinv), dir).ok,
               "a NON-FINITE operator result is refused");
 
         auto A_wrong_dtype = [](const torch::Tensor& v) { return v.to(torch::kFloat32); };
-        check(!evaluate_directional_right_preconditioner_defect(snap, A_wrong_dtype, Pinv, dir).ok,
+        check(!evaluate_directional_right_preconditioner_defect(snap, bA(snap, A_wrong_dtype), bP(snap, Pinv), dir).ok,
               "a DTYPE change is refused (silent precision loss is not a measurement)");
 
         auto Pinv_wrong = [](const torch::Tensor&) { return torch::ones({3}, torch::kFloat64); };
         auto A_ok = [](const torch::Tensor& v) { return v; };
-        check(!evaluate_directional_right_preconditioner_defect(snap, A_ok, Pinv_wrong, dir).ok,
+        check(!evaluate_directional_right_preconditioner_defect(snap, bA(snap, A_ok), bP(snap, Pinv_wrong), dir).ok,
               "the PRECONDITIONER's output is validated too, not just A's");
     }
 
@@ -283,13 +295,13 @@ int main() {
         const auto dir = rand_in("ph");
 
         auto all_active = snap;      // default domain: every block implicit
-        auto r_all = evaluate_directional_right_preconditioner_defect(all_active, A_into_mu, Pinv, dir);
+        auto r_all = evaluate_directional_right_preconditioner_defect(all_active, bA(all_active, A_into_mu), bP(all_active, Pinv), dir);
         check(r_all.inactive_leakage < 1e-12 && r_all.active_error > 0.1,
               "with every block active, the whole defect is ACTIVE and nothing leaks");
 
         auto hevi = snap;
         hevi.active = wrf::sdirk3::ImplicitActiveDomain::hevi_vertical_fast();   // mu explicit
-        auto r_hevi = evaluate_directional_right_preconditioner_defect(hevi, A_into_mu, Pinv, dir);
+        auto r_hevi = evaluate_directional_right_preconditioner_defect(hevi, bA(hevi, A_into_mu), bP(hevi, Pinv), dir);
         check(r_hevi.active_error < 1e-12 && r_hevi.inactive_leakage > 0.1,
               "under HEVI the SAME defect is LEAKAGE -- the domain changes the diagnosis");
         check(std::abs(r_hevi.global_error - r_all.global_error) < 1e-12,
@@ -303,13 +315,117 @@ int main() {
         }
     }
 
+    // ------------------- 6c. the generation receipt: A and M^-1 from the SAME linearization
+    // rhs_generation and preconditioner_generation sat in the snapshot with nothing comparing
+    // them to anything -- declared but unenforced. Mixing an A from one linearization with an
+    // M^-1 from another produces a number that describes no operator pair that ever existed.
+    {
+        wrf::sdirk3::LinearOperator A = [](const torch::Tensor& v) { return 3.0 * v; };
+        wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v / 3.0; };
+        const auto dir = rand_in("ph");
+        using wrf::sdirk3::BoundLinearOperator;
+
+        // Control FIRST: correctly bound, this scores. Without it the refusals below could all
+        // be a blanket rejection and read as passes.
+        check(evaluate_directional_right_preconditioner_defect(
+                  snap, bA(snap, A), bP(snap, Pinv), dir).ok,
+              "correctly-bound operators are accepted (the refusals below are not blanket)");
+
+        check(!evaluate_directional_right_preconditioner_defect(
+                  snap, BoundLinearOperator{A, snap.rhs_generation + 1}, bP(snap, Pinv), dir).ok,
+              "A from a DIFFERENT rhs generation is refused");
+        check(!evaluate_directional_right_preconditioner_defect(
+                  snap, bA(snap, A),
+                  BoundLinearOperator{Pinv, snap.preconditioner_generation + 1}, dir).ok,
+              "M^-1 from a DIFFERENT preconditioner generation is refused");
+
+        // The two generations differ, so a swapped pair is a detectable error rather than a
+        // coincidence that happens to match.
+        check(!evaluate_directional_right_preconditioner_defect(
+                  snap, BoundLinearOperator{A, snap.preconditioner_generation},
+                  BoundLinearOperator{Pinv, snap.rhs_generation}, dir).ok,
+              "SWAPPED receipts are refused (the two generations are distinct on purpose)");
+
+        check(!evaluate_directional_right_preconditioner_defect(
+                  snap, BoundLinearOperator{}, bP(snap, Pinv), dir).ok,
+              "an EMPTY operator is refused rather than called");
+    }
+
+    // ------- 6d. the defect belongs to the OPERATOR, not to the units the state is stored in
+    // Change mu's units by c (Pa -> hPa is c = 100). Nothing physical moves: the stored value
+    // becomes D^-1 v and the operator becomes D^-1 A D. Under the scale S~ = D^-1 S the D's
+    // cancel exactly, so the scaled defect must be IDENTICAL -- and under the unscaled S it must
+    // NOT be, or the invariance below would be a property of the operator rather than of S.
+    {
+        const double c = 100.0;
+        int mu_i = -1, ph_s = -1, mu_s = -1, n = 0;
+        for (std::size_t i = 0; i < snap.layout.blocks.size(); ++i) {
+            const auto& b = snap.layout.blocks[i];
+            if (b.name == "ph") ph_s = b.start;
+            if (b.name == "mu") { mu_i = static_cast<int>(i); mu_s = b.start; n = b.size; }
+        }
+
+        auto D = torch::ones({snap.layout.total_size}, opts);
+        D.slice(0, mu_s, mu_s + n).fill_(c);
+        auto Dinv = 1.0 / D;
+
+        // ph and mu are COUPLED, so the unit change is actually felt. A block-diagonal operator
+        // would come out invariant for reasons that have nothing to do with the scale.
+        wrf::sdirk3::LinearOperator A = [&](const torch::Tensor& v) {
+            auto out = v.clone();
+            out.slice(0, mu_s, mu_s + n) += 0.50 * v.slice(0, ph_s, ph_s + n);
+            out.slice(0, ph_s, ph_s + n) += 0.25 * v.slice(0, mu_s, mu_s + n);
+            return out;
+        };
+        wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v; };
+
+        // The same operator and direction, expressed in the new units.
+        wrf::sdirk3::LinearOperator A_u = [&](const torch::Tensor& v) { return Dinv * A(D * v); };
+        wrf::sdirk3::LinearOperator Pinv_u = [&](const torch::Tensor& v) { return Dinv * Pinv(D * v); };
+        const auto dir = rand_in("ph");
+        const auto dir_u = Dinv * dir;
+
+        auto snap_u = snap;
+        snap_u.scale.block_scale[mu_i] = 1.0 / c;      // S~ = D^-1 S
+
+        const double base = evaluate_directional_right_preconditioner_defect(
+                                snap, bA(snap, A), bP(snap, Pinv), dir).global_error;
+        const double rescaled = evaluate_directional_right_preconditioner_defect(
+                                snap_u, bA(snap_u, A_u), bP(snap_u, Pinv_u), dir_u).global_error;
+        check(base > 1e-6, "the baseline defect is nonzero, so invariance is not invariance of 0");
+        check(std::abs(rescaled - base) < 1e-12,
+              "a UNIT CHANGE leaves the scaled defect identical -- it measures the operator");
+
+        // The control. Same unit change, scale left unscaled: the number MUST move, or the check
+        // above proves nothing about S.
+        const double unscaled_after = evaluate_directional_right_preconditioner_defect(
+                                          snap, bA(snap, A_u), bP(snap, Pinv_u), dir_u).global_error;
+        check(std::abs(unscaled_after - base) > 1e-3,
+              "with an UNSCALED S the same unit change moves the number -- the scale is load-bearing");
+    }
+
+    // ---------------------------- 6e. an unusable scale is refused, not silently ignored
+    {
+        wrf::sdirk3::LinearOperator A = [](const torch::Tensor& v) { return v; };
+        wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v; };
+        check(wrf::sdirk3::StateScale::unscaled().is_valid(), "the unscaled S is valid");
+        for (double bad_s : {0.0, -1.0, std::numeric_limits<double>::quiet_NaN()}) {
+            auto s_bad = snap;
+            s_bad.scale.block_scale[0] = bad_s;
+            check(!s_bad.is_valid() &&
+                  !evaluate_directional_right_preconditioner_defect(
+                       s_bad, bA(s_bad, A), bP(s_bad, Pinv), rand_in("ph")).ok,
+                  "a non-positive or non-finite scale makes the snapshot invalid and is refused");
+        }
+    }
+
     // --------------------------------------------- 7. h is dt*gamma, stated once
     {
         check(std::abs(snap.h() - 600.0 * 0.4358665215) < 1e-12,
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 33;
+    constexpr int expected_checks = 45;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
