@@ -29,6 +29,7 @@ Metric_Policy_Contract
 MuPhi_Coupling_Structure_Contract
 RW_Term_Capture_Contract
 Response_Probe_Contract
+Right_Preconditioner_Quality_Contract
 Stage_Operand_Decomposition_Contract
 State_Layout_Contract
 Transpose_Probe_Contract

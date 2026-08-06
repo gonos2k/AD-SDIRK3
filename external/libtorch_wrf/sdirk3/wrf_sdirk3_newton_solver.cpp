@@ -6710,10 +6710,13 @@ public:
                                       << (d.norm().to(torch::kCPU).item<double>() / vin);
                         }
                         if (Av_only.defined()) {
-                            // Signed in-block Rayleigh quotient = the block's diagonal of
-                            // A = I - h*J. A_qq ~ 1 means J_qq ~ 0, i.e. the block has no direct
-                            // self-coupling and its preconditioner diagonal should be 1.
-                            // A_gain below is a NORM ratio and cannot show sign or cancellation.
+                            // Directional summaries of P_q A E_q. rayleigh_q is the Rayleigh
+                            // quotient v'A_qq v / v'v for THIS v -- not the block operator, not
+                            // an eigenvalue, and NOT a preconditioner target: for a coupled
+                            // Schur preconditioner A_qq = 1 does not imply (A^-1)_qq = 1.
+                            // alignment_cosine near 0 says v is not an eigendirection of A_qq;
+                            // it does not establish non-normality (diag(1,100) is symmetric and
+                            // rotates generic vectors just as well).
                             {
                                 torch::NoGradGuard ng_rq;
                                 auto vq = v.slice(0, blk.start, blk.start + blk.size);
@@ -6722,13 +6725,26 @@ public:
                                 double an = aq.norm().to(torch::kCPU).item<double>();
                                 if (vv > 0.0) {
                                     double vav = vq.dot(aq).to(torch::kCPU).item<double>();
-                                    std::cerr << " A_qq=" << (vav / vv);
-                                    // cos between (Av)_q and v_q. Near 1 means a scalar diagonal
-                                    // can model this block; near 0 means A rotates it out of its
-                                    // own direction and no diagonal will, whatever its value.
+                                    std::cerr << " rayleigh_q=" << (vav / vv);
+                                    // cos between (Av)_q and v_q, for this direction only.
                                     if (an > 0.0) {
-                                        std::cerr << " cos=" << (vav / (std::sqrt(vv) * an));
+                                        std::cerr << " alignment_cosine="
+                                                  << (vav / (std::sqrt(vv) * an));
                                     }
+                                }
+                            }
+                            // A's OFF-DIAGONAL row: ||(A v_q)_p|| / ||v_q|| for p != q. With v
+                            // supported only on q this is |A_pq| in norm, measured on the live
+                            // operator -- so A_mu_phi and A_phi_mu can be compared directly
+                            // instead of assumed equal.
+                            {
+                                torch::NoGradGuard ng_row;
+                                std::cerr << " Arow:";
+                                for (const auto& ob : cached_layout_.blocks) {
+                                    if (ob.name == blk.name) continue;
+                                    std::cerr << " " << ob.name << "="
+                                              << (Av_only.slice(0, ob.start, ob.start + ob.size)
+                                                    .norm().to(torch::kCPU).item<double>() / vin);
                                 }
                             }
                             std::cerr << " A_gain="
