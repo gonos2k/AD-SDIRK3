@@ -546,17 +546,48 @@ int main() {
             BoundLinearOperator{ident, snap.rhs_generation, {}, true},
             BoundLinearOperator{hidden, snap.preconditioner_generation, {}, true},
             dir);
-        check(declared.ok && !declared.purity_verified,
-              "a DECLARED-stateless operator is scored, but purity_verified is FALSE");
+        check(declared.ok && !declared.state_digest_unchanged,
+              "a DECLARED-stateless operator is scored, but state_digest_unchanged is FALSE");
 
-        // A genuinely pure pair with digests reports purity as measured.
+        // A genuinely pure pair: nothing to move, so the digest does not move.
         auto verified = evaluate_directional_right_preconditioner_defect(
             snap,
             BoundLinearOperator{ident, snap.rhs_generation, zero_digest, false},
             BoundLinearOperator{ident, snap.preconditioner_generation, zero_digest, false},
             dir);
-        check(verified.ok && verified.purity_verified,
-              "two digest-carrying pure operators report purity_verified TRUE");
+        check(verified.ok && verified.state_digest_unchanged,
+              "two digest-carrying pure operators report state_digest_unchanged TRUE");
+
+        // THE LIMIT, pinned so nobody reads the flag as proof of purity. A digest that ignores
+        // the operator never moves, so a mutating operator paired with one is ACCEPTED with the
+        // flag set. From inside the evaluator that is indistinguishable from a faithful digest
+        // whose state did not change -- which is exactly why the field is named for the
+        // observation ("digest unchanged") and not for the conclusion ("purity verified").
+        *calls = 0;
+        auto blind_digest = []() { return uint64_t{42}; };   // watches nothing
+        auto blind = evaluate_directional_right_preconditioner_defect(
+            snap,
+            BoundLinearOperator{ident, snap.rhs_generation, blind_digest, false},
+            BoundLinearOperator{hidden, snap.preconditioner_generation, blind_digest, false},
+            dir);
+        check(blind.ok && blind.state_digest_unchanged && *calls > 0,
+              "a BLIND digest lets a mutating operator through with the flag set -- the flag "
+              "reports the digest, not purity");
+
+        // State that advances and UNWINDS returns to its initial value, so a before/after pair
+        // sees nothing. Sampling after every application is what catches it.
+        auto toggle = std::make_shared<int>(0);
+        wrf::sdirk3::LinearOperator toggling = [toggle](const torch::Tensor& v) {
+            *toggle = 1 - *toggle;      // 0 -> 1 -> 0 across the two applications
+            return v.clone();
+        };
+        auto toggle_digest = [toggle]() { return static_cast<uint64_t>(*toggle); };
+        check(!evaluate_directional_right_preconditioner_defect(
+                   snap,
+                   BoundLinearOperator{ident, snap.rhs_generation, zero_digest, false},
+                   BoundLinearOperator{toggling, snap.preconditioner_generation, toggle_digest, false},
+                   dir).ok,
+              "state that CHANGES AND UNWINDS is caught -- a before/after pair would miss it");
 
         // Neither digest nor declaration: silence must not read as verified.
         check(!evaluate_directional_right_preconditioner_defect(
@@ -573,7 +604,7 @@ int main() {
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 62;
+    constexpr int expected_checks = 64;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

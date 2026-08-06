@@ -47,9 +47,16 @@ struct BoundLinearOperator {
     // one before.
     //
     // So one of these must be supplied, and the report says which was used:
-    //   state_digest set    -> purity is MEASURED (compared before and after every call)
-    //   declared_stateless  -> purity is ASSERTED by the caller and NOT measured
-    // Supplying neither is refused. "Nothing said" must not read as "verified".
+    //   state_digest set    -> the digest is SAMPLED around every call and must not move
+    //   declared_stateless  -> purity is ASSERTED by the caller and nothing is sampled
+    // Supplying neither is refused. "Nothing said" must not read as "checked".
+    //
+    // LIMIT, stated because the previous version overstated this. A digest is a CALLER'S CLAIM
+    // about what it observes. A digest that ignores the operator entirely -- `[]{ return 0; }` --
+    // never moves, so it passes, and from inside this function it is indistinguishable from a
+    // faithful digest whose state simply did not change. The contract therefore reports that the
+    // digest DID NOT MOVE; it cannot report that the operator is pure, and the field is named for
+    // the former.
     std::function<uint64_t()> state_digest;
     bool declared_stateless = false;
 
@@ -204,9 +211,12 @@ struct DirectionalDefectReport {
     double active_error = 0.0;
     double inactive_output_defect = 0.0;
 
-    // false when either operator only DECLARED itself stateless. The number is still usable; it
-    // just rests on an assertion rather than a measurement, and a reader must be able to tell.
-    bool purity_verified = false;
+    // True when BOTH operators supplied a state digest and none of the samples moved.
+    //
+    // NOT a proof of purity: a digest is the caller's claim about what it watches, and a constant
+    // digest reads exactly like a faithful one here. The name says what was observed -- an earlier
+    // version called this purity_verified, which asserted more than the check can deliver.
+    bool state_digest_unchanged = false;
 
     bool ok = false;
 
@@ -280,14 +290,25 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     };
     const uint64_t a_digest_before = digest_of(apply_A);
     const uint64_t p_digest_before = digest_of(apply_P_inverse);
+    bool digests_held = true;
+    // Sampled after EVERY application, not once at the end: state that advances on the first call
+    // and unwinds on the second returns to its initial value, and a before/after pair cannot see
+    // that at all.
+    const auto sample_digests = [&]() {
+        digests_held = digests_held
+            && digest_of(apply_A) == a_digest_before
+            && digest_of(apply_P_inverse) == p_digest_before;
+    };
 
     const auto direction_before = direction.clone();
     const auto z = apply_P_inverse(direction);
+    sample_digests();
     if (!operator_output_is_usable(z, direction)) return rep;
     if (!direction.equal(direction_before)) return rep;   // P^-1 wrote through its input
 
     const auto z_before = z.clone();
     const auto az = apply_A(z);
+    sample_digests();
     if (!operator_output_is_usable(az, direction)) return rep;
     if (!z.equal(z_before)) return rep;                   // A wrote through its input
 
@@ -299,13 +320,14 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     // is a deterministic CPU operator; a live GPU adapter with atomic reductions is where this
     // must become a dtype-aware tolerance, and that belongs with the adapter that needs it.
     const auto z2 = apply_P_inverse(direction);
+    sample_digests();
     if (!operator_output_is_usable(z2, direction) || !z2.equal(z)) return rep;
     const auto az2 = apply_A(z2);
+    sample_digests();
     if (!operator_output_is_usable(az2, direction) || !az2.equal(az)) return rep;
 
-    if (digest_of(apply_A) != a_digest_before) return rep;            // A changed ITSELF
-    if (digest_of(apply_P_inverse) != p_digest_before) return rep;    // P^-1 changed ITSELF
-    rep.purity_verified =
+    if (!digests_held) return rep;                        // an operator changed ITSELF
+    rep.state_digest_unchanged =
         static_cast<bool>(apply_A.state_digest) && static_cast<bool>(apply_P_inverse.state_digest);
 
     // Everything below is measured in SCALED coordinates. With the default unscaled S this is
