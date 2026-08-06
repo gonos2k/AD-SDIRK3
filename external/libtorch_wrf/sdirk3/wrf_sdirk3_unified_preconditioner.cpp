@@ -1180,12 +1180,10 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
             std::cerr << "  Preconditioning strength: 1/diagonal = " << (1.0f / diag_val) << "x" << std::endl;
         }
 
-        // MEASURED (block probe, stage 2, dt=600): A acts as the EXACT identity on rw in-block
-        // -- A_qq = 1.0, cos = 1.0, A_gain = 1.0 across seeds -- yet M's rw gain is 0.205, a
-        // 4.9x suppression. Unlike ph (cos 0.32) there is no non-normality caveat and unlike mu
-        // no sign error: a diagonal is the right form and the value should be 1. A also scatters
-        // rw hard into other blocks (whole-vector norm 340), but that is the w->phi coupling and
-        // does not change what this diagonal should be.
+        // This is a SCHUR-REDUCED diagonal, not raw A_ww: the w<->phi round trip has already
+        // been eliminated into it. So it cannot be compared against a directional summary of
+        // A_ww -- for a coupled system A_qq = 1 does not imply (A^-1)_qq = 1. Judge it only by
+        // ||A P^-1 v - v|| / ||v||.
         vertical_diag_w_ptr[k] = diag_val;
     }
     vertical_diag_w_ptr[0] = 1.0f;   // Bottom boundary
@@ -1313,11 +1311,10 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         float dz_inv2 = 1.0f / (dz_phi * dz_phi);
 
         // Geopotential coupled to pressure through hydrostatic relation
-        // MEASURED (block probe, stage 2, dt=600), three random directions:
-        //   A_phi_phi ~ 0.84, cos((Av)_ph, v_ph) ~ 0.31 -- A rotates broadband ph substantially,
-        //   so this diagonal is at best a partial model of the block. Whether a diagonal can
-        //   work for the directions GMRES visits is NOT settled: only random directions were
-        //   probed. Separately, the diagonal would need ~1.19 and holds 485.
+        // DIMENSIONALLY INVALID: [h*c_s^2/dz^2] = s^-1, not dimensionless. Acoustic stiffness
+        // belongs in the w<->phi round trip as h^2*J_phi_w*J_w_phi, produced by the Schur
+        // elimination -- not added to a raw first-order diagonal. Left pending the
+        // re-derivation; the target value is NOT 1/rayleigh_q.
         vertical_diag_phi_ptr[k] = 1.0f + dt_ * gamma_ * c_s * c_s * dz_inv2;
     }
     
@@ -1481,10 +1478,9 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     // Magnitude at dt=600/100km: this term 4.7e-03 vs the round trip 1.58. Small, but it grows
     // as 1/dx while the round trip is ~fixed at constant acoustic CFL.
     //
-    // MEASURED (WRF_SDIRK3_PRECOND_BLOCK_GAIN, stage 2, dt=600, WRFParity): the signed
-    // in-block quadratic form of A = I - h*J gives A_mu_mu = 0.9511, so h*J_mu_mu = +0.049 and
-    // the diagonal should be BELOW 1. This line gives 1.00466 -- wrong sign of deviation and
-    // ~10x the magnitude. Left as-is pending the coefficient re-derivation.
+    // Left as-is pending the coefficient re-derivation. The directional summaries
+    // (rayleigh_mu ~ 0.95) are NOT a target for this coefficient: mu's solve is Schur-reduced,
+    // so the raw diagonal and the effective inverse gain are different quantities.
     float D_mu_value = 1.0f + dt_ * gamma_ * mu_column_pa * (H_x * H_x + H_y * H_y);
     vertical_diag_mu_.fill_(D_mu_value);  // Replicate scalar across all levels
     
