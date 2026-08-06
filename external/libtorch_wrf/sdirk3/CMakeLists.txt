@@ -324,6 +324,14 @@ add_executable(test_mu_phi_coupling tests/test_mu_phi_coupling.cpp)
 target_link_libraries(test_mu_phi_coupling PRIVATE wrf_sdirk3::core)
 add_test(NAME MuPhi_Coupling_Structure_Contract COMMAND test_mu_phi_coupling)
 
+# The right-preconditioner judgement ||A P^-1 v - v||/||v||, plus the active-domain authority.
+# Its decisive case is a coupled 2x2 where A_qq = 1 but (A^-1)_qq = 1/(1-cd): the exact inverse
+# scores zero and the "1/A_qq" diagonal scores badly, so the metric rejects the reasoning that
+# produced three retracted conclusions.
+add_executable(test_operator_contract tests/test_operator_contract.cpp)
+target_link_libraries(test_operator_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Right_Preconditioner_Quality_Contract COMMAND test_operator_contract)
+
 # 9F.D91 (review P0-1): the transpose solve must judge on the PHYSICAL residual, not the
 # preconditioned one. Carries a deliberately residual-shrinking preconditioner -- the false
 # success that the old gate would have accepted.
