@@ -160,6 +160,13 @@ inline void set_adjoint_residual_layout(const StateLayout& layout) {
                 "gate degrades silently to a global norm when the slot is unusable, so an invalid "
                 "layout here would weaken the gate rather than report anything. A CoupledMomentum "
                 "basis fails is_valid() for this core.");
+    // is_valid() is structure; is_exact is PROVENANCE. extract_mu_pert_2d has required both since
+    // D104 for the same reason -- a hand-built layout can be structurally plausible and still
+    // describe the wrong grid -- and the adjoint gate has no more business trusting one than mu
+    // extraction does.
+    TORCH_CHECK(layout.is_exact,
+                "set_adjoint_residual_layout: layout is structurally valid but NOT grid-derived; "
+                "the adjoint's per-block gate requires an exact layout");
     adjoint_residual_layout_slot() = layout;
 }
 inline StateLayout layout_for_adjoint_residual(int64_t numel) {
