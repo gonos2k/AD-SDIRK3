@@ -96,6 +96,9 @@ struct StateLayout {
                                       int nx_u, int ny_v, int nz_w) {
         StateLayout layout;
         layout.is_exact = true;
+        // Stated, not inherited from the member default: a layout's basis is a property of how
+        // it was built, and every consumer's coefficient units follow from it.
+        layout.momentum_basis = MomentumBasis::Velocity;
 
         int64_t nx64 = nx, ny64 = ny, nz64 = nz;
         int64_t nx_u64 = nx_u, ny_v64 = ny_v, nz_w64 = nz_w;
@@ -172,9 +175,21 @@ struct StateLayout {
 // it means the adjoint would run against a preconditioner bound to the wrong state, and a
 // wrong gradient is worse than no gradient. D94's version silently did nothing when its
 // shape checks failed, which is the fail-OPEN form of the same code.
+// Every coefficient in this core assumes the velocity basis -- dF_mu/du ~ mu*H, not ~H. A layout
+// declaring CoupledMomentum would silently change those units by a factor of mu (~8.9e+04), so
+// consumers refuse it rather than proceeding on the wrong one. Without this the basis field is
+// decoration: recorded, and unable to stop the mistake it exists to name.
+inline void require_velocity_basis(const StateLayout& layout, const char* who) {
+    TORCH_CHECK(layout.momentum_basis == MomentumBasis::Velocity,
+                who, ": this core's coefficients assume the VELOCITY momentum basis "
+                "(Registry.EM_COMMON declares u in m s-1); a CoupledMomentum layout would change "
+                "every coupling coefficient by a factor of mu");
+}
+
 inline torch::Tensor extract_mu_pert_2d(const StateLayout& layout,
                                         const torch::Tensor& packed_state,
                                         int64_t ny, int64_t nx) {
+    require_velocity_basis(layout, "extract_mu_pert_2d");
     TORCH_CHECK(layout.is_valid(),
                 "extract_mu_pert_2d: packed-state layout is invalid");
     // 9F.D104 (review section 8.1): require an EXACT grid-derived layout. is_valid() checks

@@ -232,9 +232,28 @@ int main() {
               "the packed state's momentum basis is VELOCITY (Registry), not coupled momentum");
         check(L.blocks[0].name == "ru",
               "the first block is still NAMED ru -- the name contradicts the basis, on purpose");
+
+        // A declared basis that nothing rejects is decoration. These assert the refusal.
+        auto coupled = L;
+        coupled.momentum_basis = wrf::sdirk3::MomentumBasis::CoupledMomentum;
+        bool threw_req = false;
+        try { wrf::sdirk3::require_velocity_basis(coupled, "test"); }
+        catch (const std::exception&) { threw_req = true; }
+        check(threw_req, "require_velocity_basis REJECTS a CoupledMomentum layout");
+
+        auto opts_b = torch::TensorOptions().dtype(torch::kFloat32);
+        auto st_b = torch::zeros({L.total_size}, opts_b);
+        bool threw_ex = false;
+        try { wrf::sdirk3::extract_mu_pert_2d(coupled, st_b, NY, NX); }
+        catch (const std::exception&) { threw_ex = true; }
+        check(threw_ex, "extract REFUSES a CoupledMomentum layout, so the field is load-bearing");
+
+        check(wrf::sdirk3::StateLayout::from_grid_dims(NX, NY, NZ, NXU, NYV, NZW).momentum_basis
+                  == wrf::sdirk3::MomentumBasis::Velocity,
+              "from_grid_dims STATES the basis rather than inheriting the member default");
     }
 
-    constexpr int expected_checks = 42;
+    constexpr int expected_checks = 45;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
