@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <utility>
 #include <stdexcept>
 
 namespace wrf {
@@ -36,6 +37,22 @@ struct WRMSNormConfig {
 
 namespace detail {
 
+// THE error-weight formula, in one place. Everything that asks "is this residual small?" must
+// weight it the same way, or the stage gate and any diagnostic that judges the same vector will
+// disagree about the answer.
+inline torch::Tensor block_error_weights(const torch::Tensor& y_block,
+                                         float atol,
+                                         const WRMSNormConfig& cfg) {
+    const float rtol = std::max(cfg.rtol, 0.0f);
+    const float floor = std::max(cfg.floor, 0.0f);
+    const float atol_eff = std::max(atol, 0.0f);
+    auto ewt = rtol * torch::abs(y_block) + atol_eff;
+    if (floor > 0.0f) {
+        ewt = torch::clamp_min(ewt, floor);
+    }
+    return ewt;
+}
+
 inline torch::Tensor wrms_block_sum(const torch::Tensor& v,
                                     const torch::Tensor& y_ref,
                                     int64_t offset,
@@ -47,14 +64,7 @@ inline torch::Tensor wrms_block_sum(const torch::Tensor& v,
     }
     const auto v_block = v.slice(0, offset, offset + size);
     const auto y_block = y_ref.slice(0, offset, offset + size);
-    const float rtol = std::max(cfg.rtol, 0.0f);
-    const float floor = std::max(cfg.floor, 0.0f);
-    const float atol_eff = std::max(atol, 0.0f);
-    auto ewt = rtol * torch::abs(y_block) + atol_eff;
-    if (floor > 0.0f) {
-        ewt = torch::clamp_min(ewt, floor);
-    }
-    const auto scaled = v_block / ewt;
+    const auto scaled = v_block / block_error_weights(y_block, atol, cfg);
     return (scaled * scaled).sum();
 }
 
@@ -93,6 +103,37 @@ inline torch::Tensor wrms_norm_packed(const torch::Tensor& v,
 
     const auto denom = torch::full({}, static_cast<double>(std::max<int64_t>(v.numel(), 1)), v.options());
     return torch::sqrt(sum_sq / denom);
+}
+
+// The same weights as a VECTOR, so a diagnostic can weight a residual exactly the way the stage
+// gate does instead of approximating it with one number per block. Built from the identical
+// per-block formula above, so the two cannot drift apart.
+inline torch::Tensor error_weights_packed(const torch::Tensor& y_ref,
+                                          const PackedBlockSizes& blocks,
+                                          const WRMSNormConfig& cfg) {
+    if (!y_ref.defined()) {
+        throw std::invalid_argument("error_weights_packed: y_ref must be defined");
+    }
+    if (y_ref.dim() != 1) {
+        throw std::invalid_argument("error_weights_packed: expected a 1D packed tensor");
+    }
+    if (blocks.total() != y_ref.numel()) {
+        throw std::invalid_argument("error_weights_packed: block sizes do not match tensor size");
+    }
+    auto ewt = torch::empty_like(y_ref);
+    int64_t offset = 0;
+    const std::pair<int64_t, float> spec[] = {
+        {blocks.u, cfg.atol_u}, {blocks.v, cfg.atol_v}, {blocks.w, cfg.atol_w},
+        {blocks.ph, cfg.atol_ph}, {blocks.t, cfg.atol_t}, {blocks.mu, cfg.atol_mu},
+    };
+    for (const auto& s : spec) {
+        if (s.first <= 0) continue;
+        ewt.slice(0, offset, offset + s.first)
+           .copy_(detail::block_error_weights(y_ref.slice(0, offset, offset + s.first),
+                                              s.second, cfg));
+        offset += s.first;
+    }
+    return ewt;
 }
 
 inline torch::Tensor wrms_growth_packed(const torch::Tensor& r_now,

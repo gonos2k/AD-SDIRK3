@@ -8,6 +8,7 @@
 // the reasoning that was wrong.
 
 #include "../wrf_sdirk3_operator_contract.h"
+#include "../wrf_sdirk3_wrms_norm.h"
 
 #include <torch/torch.h>
 
@@ -640,13 +641,79 @@ int main() {
               "an operator supplying NEITHER a digest nor a declaration is refused");
     }
 
+    // ------ 6k. the contract and the PRODUCTION stage gate must mean the same thing by "small"
+    // Six block scalars cannot express the weighting production actually uses: ewt is
+    // rtol*|y_ref| + atol POINTWISE, so it varies within a block by orders across a profile. A
+    // defect the contract called small could be large in the metric that decides the step.
+    //
+    // Under the frozen error weights the two are not merely close, they are EQUAL:
+    //     wrms_norm(x) = ||x/ewt||_2 / sqrt(N)
+    //     global_error = ||err/ewt||_2 / ||v/ewt||_2   -> the sqrt(N) cancels
+    // so this fails the moment either formula drifts from the other.
+    {
+        wrf::sdirk3::PackedBlockSizes pb;
+        int64_t* slot[6] = {&pb.u, &pb.v, &pb.w, &pb.ph, &pb.t, &pb.mu};
+        for (std::size_t i = 0; i < snap.layout.blocks.size() && i < 6; ++i) {
+            *slot[i] = snap.layout.blocks[i].size;
+        }
+        const wrf::sdirk3::WRMSNormConfig cfg;
+
+        // A reference state with a WIDE dynamic range, so ewt genuinely varies inside each block.
+        // A uniform y_ref would make block scalars accidentally sufficient and prove nothing.
+        const auto y_ref = torch::exp(6.0 * torch::randn({snap.layout.total_size}, gen, opts));
+        const auto ewt = wrf::sdirk3::error_weights_packed(y_ref, pb, cfg);
+        check((ewt.max() / ewt.min()).item<double>() > 100.0,
+              "the fixture's error weights span orders -- block scalars could not represent them");
+
+        auto weighted = snap;
+        weighted.scale = wrf::sdirk3::ResidualScale::from_error_weights(
+            ewt, snap.token.scale_generation);
+        check(weighted.is_valid(), "a frozen error-weight scale is a valid scale");
+
+        // A couples ph into mu, so the defect is not confined to the input block.
+        int ph_s = -1, mu_s = -1, n = 0;
+        for (const auto& b : snap.layout.blocks) {
+            if (b.name == "ph") ph_s = b.start;
+            if (b.name == "mu") { mu_s = b.start; n = b.size; }
+        }
+        wrf::sdirk3::LinearOperator A = [&](const torch::Tensor& x) {
+            auto out = x.clone();
+            out.slice(0, mu_s, mu_s + n) += 0.5 * x.slice(0, ph_s, ph_s + n);
+            return out;
+        };
+        wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& x) { return x.clone(); };
+
+        const auto v = rand_in("ph");
+        const auto r = evaluate_directional_right_preconditioner_defect(
+            weighted, bA(weighted, A), bP(weighted, Pinv), v);
+        check(r.ok, "the defect is scored under the production error weights");
+
+        // Independently, through production's own function.
+        const auto err = A(Pinv(v)) - v;
+        const double expected =
+            (wrf::sdirk3::wrms_norm_packed(err, y_ref, pb, cfg) /
+             wrf::sdirk3::wrms_norm_packed(v, y_ref, pb, cfg)).item<double>();
+        check(expected > 1e-6, "the reference ratio is nonzero, so the match is not a match of 0");
+        check(std::abs(r.global_error - expected) < 1e-9,
+              "the contract's defect EQUALS wrms(err)/wrms(v) -- one weighting, not two");
+
+        // The weights are part of the linearization: a set sized for another grid is refused
+        // rather than broadcast to fit.
+        auto wrong = weighted;
+        wrong.scale = wrf::sdirk3::ResidualScale::from_error_weights(
+            ewt.slice(0, 0, ewt.numel() - 1), snap.token.scale_generation);
+        check(!evaluate_directional_right_preconditioner_defect(
+                   wrong, bA(wrong, A), bP(wrong, Pinv), v).ok,
+              "error weights sized for a DIFFERENT grid are refused");
+    }
+
     // --------------------------------------------- 7. h is dt*gamma, stated once
     {
         check(std::abs(snap.h() - 600.0 * 0.4358665215) < 1e-12,
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 64;
+    constexpr int expected_checks = 70;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

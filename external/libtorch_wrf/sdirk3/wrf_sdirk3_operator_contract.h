@@ -163,12 +163,30 @@ struct ImplicitActiveDomain {
 // A unit change is a conjugation: in new units Atilde = D^-1 A D, vtilde = D^-1 v. With
 // Stilde = D^-1 S the D's cancel exactly, so the scaled defect is invariant -- not approximately,
 // identically.
+// Which weighting this scale carries. Both values have a real producer, which is why this is an
+// enum and not a hopeful abstraction: SyntheticUniform is what the contract's own unit-conversion
+// algebra uses, and FrozenErrorWeights is the per-element ewt production's stage gate already
+// computes.
+enum class ScalePolicy {
+    SyntheticUniform,     // one positive scalar per block
+    FrozenErrorWeights,   // per-element ewt, frozen at this linearization
+};
+
 struct ResidualScale {
-    // Default is ZEROS, which is_valid() rejects. That is the whole point: a caller who forgets
-    // to set a scale is REFUSED, while a caller who means to measure in raw storage units says so
-    // with unscaled(). An all-ones default made those two cases indistinguishable, so the named
-    // constructor documented a decision the type did not require anyone to make.
+    ScalePolicy policy = ScalePolicy::SyntheticUniform;
+
+    // SyntheticUniform. Default is ZEROS, which is_valid() rejects. That is the whole point: a
+    // caller who forgets to set a scale is REFUSED, while a caller who means to measure in raw
+    // storage units says so with unscaled(). An all-ones default made those two cases
+    // indistinguishable, so the named constructor documented a decision the type did not require
+    // anyone to make.
     std::array<double, 6> block_scale{};
+
+    // FrozenErrorWeights. The SAME vector production weights residuals by --
+    // error_weights_packed() in wrf_sdirk3_wrms_norm.h -- so this contract and the stage gate
+    // cannot disagree about what "small" means. Six block scalars cannot express it: ewt is
+    // rtol*|y_ref| + atol pointwise, so it varies within a block by orders across a profile.
+    torch::Tensor weights;
 
     // Matched against the token's scale_generation, so a scale frozen at one stage cannot be used
     // to weight a defect measured at another. A scale is part of the linearization, not a
@@ -177,6 +195,13 @@ struct ResidualScale {
 
     bool is_valid() const {
         if (generation == 0) return false;
+        if (policy == ScalePolicy::FrozenErrorWeights) {
+            torch::NoGradGuard no_grad;
+            return weights.defined() && weights.dim() == 1 && weights.is_floating_point()
+                && weights.numel() > 0
+                && torch::isfinite(weights).all().item<bool>()
+                && (weights > 0).all().item<bool>();
+        }
         for (double s : block_scale) {
             if (!(s > 0.0) || !std::isfinite(s)) return false;
         }
@@ -185,7 +210,16 @@ struct ResidualScale {
 
     static ResidualScale unscaled(uint64_t generation) {
         ResidualScale s;
+        s.policy = ScalePolicy::SyntheticUniform;
         s.block_scale.fill(1.0);
+        s.generation = generation;
+        return s;
+    }
+
+    static ResidualScale from_error_weights(torch::Tensor ewt, uint64_t generation) {
+        ResidualScale s;
+        s.policy = ScalePolicy::FrozenErrorWeights;
+        s.weights = std::move(ewt);
         s.generation = generation;
         return s;
     }
@@ -197,6 +231,13 @@ inline torch::Tensor inverse_scale_vector(const StateLayout& layout,
                                           const torch::Tensor& like)
 {
     torch::NoGradGuard no_grad;
+    if (scale.policy == ScalePolicy::FrozenErrorWeights) {
+        // Frozen at another grid is a mismatch, not something to broadcast around.
+        if (scale.weights.numel() != like.numel()) return torch::Tensor{};
+        auto w = 1.0 / scale.weights.to(like.options());
+        if (!torch::isfinite(w).all().item<bool>()) return torch::Tensor{};
+        return w;
+    }
     auto sinv = torch::ones_like(like);
     for (std::size_t i = 0; i < layout.blocks.size() && i < scale.block_scale.size(); ++i) {
         const auto& b = layout.blocks[i];
