@@ -389,6 +389,21 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     const auto sinv = inverse_scale_vector(snapshot.layout, snapshot.scale, direction);
     if (!sinv.defined()) return rep;
 
+    // ||S^-1 v|| too. It depends on the SCALE AND THE DIRECTION ONLY -- no operator is involved --
+    // so its check never belonged after execution, and leaving one sibling behind is how the size
+    // mismatch above hid in the first place. Everything computable without an operator is settled
+    // here.
+    //
+    // Reachable, not theoretical: weights of 1e300 are finite and positive (is_valid passes) and
+    // 1/w = 1e-300 is finite (the vector builds), yet the SQUARES underflow inside the norm, so
+    // ||S^-1 v|| is exactly 0 and the defect has no denominator. That scale annihilates the
+    // direction, and it used to cost four operator applications to find out.
+    const auto v64 = direction.to(torch::kFloat64);
+    const auto sinv64 = sinv.to(torch::kFloat64);
+    const auto v_s = v64 * sinv64;
+    const double vn = v_s.norm().to(torch::kCPU).item<double>();
+    if (!std::isfinite(vn) || !(vn > 0.0)) return rep;
+
     // Purity, in three independent senses -- they fail differently and each needs its own check.
     //
     //   1. write-through : the operator mutated its ARGUMENT
@@ -449,12 +464,7 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     // underflow had already happened in the source dtype -- the promotion has to come first to
     // mean anything. Element-wise finiteness also does not make a REDUCTION finite: an FP32 L2
     // norm overflows to inf, and inf/inf is a NaN this would have reported as a number.
-    const auto v64 = direction.to(torch::kFloat64);
-    const auto sinv64 = sinv.to(torch::kFloat64);
     const auto err = (az.to(torch::kFloat64) - v64) * sinv64;
-    const auto v_s = v64 * sinv64;
-    const double vn = v_s.norm().to(torch::kCPU).item<double>();
-    if (!std::isfinite(vn) || !(vn > 0.0)) return rep;
 
     rep.global_error = err.norm().to(torch::kCPU).item<double>() / vn;
     if (!std::isfinite(rep.global_error)) return rep;

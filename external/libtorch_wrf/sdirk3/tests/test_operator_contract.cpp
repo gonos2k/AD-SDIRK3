@@ -718,12 +718,30 @@ int main() {
             check(*calls == 0,
                   "and refused with ZERO operator calls -- an unanswerable query costs nothing");
 
-            // Control, so the counter above is not passing because the operators are never
+            // A scale that ANNIHILATES the direction. Weights of 1e300 are finite and positive,
+            // so is_valid() passes, and 1/w = 1e-300 is finite, so the weight vector builds --
+            // but the squares underflow inside the norm, leaving ||S^-1 v|| exactly 0 and the
+            // defect with no denominator. Measured before this case existed: that was discovered
+            // AFTER four operator applications, because the denominator check sat past them even
+            // though it needs no operator at all.
+            *calls = 0;
+            auto annihilating = weighted;
+            annihilating.scale = wrf::sdirk3::ResidualScale::from_error_weights(
+                torch::full({snap.layout.total_size}, 1e300, opts), snap.token.scale_generation);
+            check(annihilating.scale.is_valid(),
+                  "the annihilating scale PASSES is_valid -- finite and positive, so the refusal "
+                  "has to come from somewhere else");
+            check(!evaluate_directional_right_preconditioner_defect(
+                       annihilating, bA(annihilating, counted), bP(annihilating, counted), v).ok
+                  && *calls == 0,
+                  "a scale that annihilates the direction is refused with ZERO operator calls");
+
+            // Control, so the counters above are not passing because the operators are never
             // called at all.
             *calls = 0;
             check(evaluate_directional_right_preconditioner_defect(
                       weighted, bA(weighted, counted), bP(weighted, counted), v).ok && *calls > 0,
-                  "a well-formed query DOES call them (the zero above is the refusal, not inertia)");
+                  "a well-formed query DOES call them (the zeros above are refusals, not inertia)");
         }
 
         // FROZEN means frozen. A Tensor is a handle, so storing the caller's would leave them
@@ -752,7 +770,7 @@ int main() {
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 73;
+    constexpr int expected_checks = 75;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
