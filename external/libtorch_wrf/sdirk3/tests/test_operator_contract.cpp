@@ -8,6 +8,7 @@
 // the reasoning that was wrong.
 
 #include "../wrf_sdirk3_operator_contract.h"
+#include "../wrf_sdirk3_wrms_norm.h"
 
 #include <torch/torch.h>
 
@@ -15,7 +16,10 @@
 
 #include <cmath>
 #include <limits>
+#include <functional>
 #include <memory>
+#include <utility>
+#include <vector>
 #include <iostream>
 #include <string>
 
@@ -37,11 +41,21 @@ wrf::sdirk3::LinearizationSnapshot make_snapshot() {
     s.layout = wrf::sdirk3::StateLayout::from_grid_dims(NX, NY, NZ, NXU, NYV, NZW);
     s.dt = 600.0;
     s.gamma = 0.4358665215;
-    s.ark_stage = 2;
-    s.scale = wrf::sdirk3::ResidualScale::unscaled();   // an unset scale is now REFUSED
-    s.rhs_generation = 7;               // deliberately DISTINCT and nonzero: two default zeros
-    s.preconditioner_generation = 11;   // would satisfy the receipt by accident, and equal
-    return s;                           // values could not catch a swapped pair.
+    // Every field DISTINCT and nonzero on purpose. Shared or default values would let a
+    // field-mismatch test pass by coincidence rather than by the check.
+    s.token.solver_id = 3;
+    s.token.stage_state_generation = 5;
+    s.token.coefficient_generation = 7;
+    s.token.rhs_generation = 11;
+    s.token.scale_generation = 13;
+    s.token.physical_step = 2;
+    s.token.ark_stage = 2;
+    s.token.newton_iteration = 1;
+    s.token.mass_coordinate_mode = 1;
+    s.token.imex_split_mode = 3;
+    s.token.hevi_split = false;
+    s.scale = wrf::sdirk3::ResidualScale::unscaled(s.token.scale_generation);
+    return s;
 }
 
 }  // namespace
@@ -62,10 +76,10 @@ int main() {
     // These fixtures are genuinely stateless, so they DECLARE it. Supplying neither a digest nor
     // a declaration is refused -- see case 6j.
     auto bA = [](const wrf::sdirk3::LinearizationSnapshot& sn, wrf::sdirk3::LinearOperator f) {
-        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.rhs_generation, {}, true};
+        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.token, {}, true};
     };
     auto bP = [](const wrf::sdirk3::LinearizationSnapshot& sn, wrf::sdirk3::LinearOperator f) {
-        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.preconditioner_generation, {}, true};
+        return wrf::sdirk3::BoundLinearOperator{std::move(f), sn.token, {}, true};
     };
 
     // A FIXED seed on a LOCAL generator. The global RNG made every case measure a different
@@ -319,36 +333,65 @@ int main() {
         }
     }
 
-    // ------------------- 6c. the generation receipt: A and M^-1 from the SAME linearization
-    // rhs_generation and preconditioner_generation sat in the snapshot with nothing comparing
-    // them to anything -- declared but unenforced. Mixing an A from one linearization with an
-    // M^-1 from another produces a number that describes no operator pair that ever existed.
+    // ---------- 6c. ONE token: A, P^-1 and the scale must come from the SAME linearization
+    // Two independent counters could not tell "the same linearization" from "two solvers that
+    // both happen to be at 7". Every field below has a real producer -- the two generations come
+    // from UnifiedPreconditioner::StageBindingReceipt, which already documents why they must stay
+    // distinct; the modes from SDIRK3Config; the stage counters from the Newton driver.
     {
         wrf::sdirk3::LinearOperator A = [](const torch::Tensor& v) { return 3.0 * v; };
         wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v / 3.0; };
         const auto dir = rand_in("ph");
         using wrf::sdirk3::BoundLinearOperator;
+        using wrf::sdirk3::LinearizationToken;
 
-        // Control FIRST: correctly bound, this scores. Without it the refusals below could all
-        // be a blanket rejection and read as passes.
+        // Control FIRST: correctly bound, this scores. Without it every refusal below could be a
+        // blanket rejection reading as a pass.
         check(evaluate_directional_right_preconditioner_defect(
                   snap, bA(snap, A), bP(snap, Pinv), dir).ok,
-              "correctly-bound operators are accepted (the refusals below are not blanket)");
+              "operators sharing the snapshot's token are accepted (refusals are not blanket)");
 
-        check(!evaluate_directional_right_preconditioner_defect(
-                  snap, BoundLinearOperator{A, snap.rhs_generation + 1}, bP(snap, Pinv), dir).ok,
-              "A from a DIFFERENT rhs generation is refused");
-        check(!evaluate_directional_right_preconditioner_defect(
-                  snap, bA(snap, A),
-                  BoundLinearOperator{Pinv, snap.preconditioner_generation + 1}, dir).ok,
-              "M^-1 from a DIFFERENT preconditioner generation is refused");
+        // EVERY field is load-bearing. Perturb one at a time; each must be refused on its own.
+        const std::vector<std::pair<const char*, std::function<void(LinearizationToken&)>>> bump = {
+            {"solver_id",              [](LinearizationToken& t){ ++t.solver_id; }},
+            {"stage_state_generation", [](LinearizationToken& t){ ++t.stage_state_generation; }},
+            {"coefficient_generation", [](LinearizationToken& t){ ++t.coefficient_generation; }},
+            {"rhs_generation",         [](LinearizationToken& t){ ++t.rhs_generation; }},
+            {"scale_generation",       [](LinearizationToken& t){ ++t.scale_generation; }},
+            {"physical_step",          [](LinearizationToken& t){ ++t.physical_step; }},
+            {"ark_stage",              [](LinearizationToken& t){ ++t.ark_stage; }},
+            {"newton_iteration",       [](LinearizationToken& t){ ++t.newton_iteration; }},
+            {"mass_coordinate_mode",   [](LinearizationToken& t){ ++t.mass_coordinate_mode; }},
+            {"imex_split_mode",        [](LinearizationToken& t){ ++t.imex_split_mode; }},
+            {"hevi_split",             [](LinearizationToken& t){ t.hevi_split = !t.hevi_split; }},
+        };
+        bool every_field_bites = true;
+        for (const auto& kv : bump) {
+            auto drifted = snap.token;
+            kv.second(drifted);
+            const bool a_refused = !evaluate_directional_right_preconditioner_defect(
+                snap, BoundLinearOperator{A, drifted, {}, true}, bP(snap, Pinv), dir).ok;
+            const bool p_refused = !evaluate_directional_right_preconditioner_defect(
+                snap, bA(snap, A), BoundLinearOperator{Pinv, drifted, {}, true}, dir).ok;
+            if (!a_refused || !p_refused) {
+                std::cout << "    field with no teeth: " << kv.first << std::endl;
+                every_field_bites = false;
+            }
+        }
+        check(every_field_bites,
+              "EVERY token field is load-bearing -- perturbing any one, on either operator, is refused");
 
-        // The two generations differ, so a swapped pair is a detectable error rather than a
-        // coincidence that happens to match.
-        check(!evaluate_directional_right_preconditioner_defect(
-                  snap, BoundLinearOperator{A, snap.preconditioner_generation},
-                  BoundLinearOperator{Pinv, snap.rhs_generation}, dir).ok,
-              "SWAPPED receipts are refused (the two generations are distinct on purpose)");
+        // A scale frozen at a different stage cannot weight this defect.
+        {
+            auto mixed = snap;
+            mixed.scale = wrf::sdirk3::ResidualScale::unscaled(snap.token.scale_generation + 1);
+            check(!mixed.is_valid(),
+                  "a scale from a DIFFERENT generation makes the snapshot invalid");
+        }
+
+        // An unset token is the state a caller who supplied nothing leaves behind.
+        check(!LinearizationToken{}.is_valid(),
+              "a default-constructed token is INVALID (zero and -1 are what 'unset' looks like)");
 
         check(!evaluate_directional_right_preconditioner_defect(
                   snap, BoundLinearOperator{}, bP(snap, Pinv), dir).ok,
@@ -412,7 +455,7 @@ int main() {
     {
         wrf::sdirk3::LinearOperator A = [](const torch::Tensor& v) { return v; };
         wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v; };
-        check(wrf::sdirk3::ResidualScale::unscaled().is_valid(), "the unscaled S is valid");
+        check(wrf::sdirk3::ResidualScale::unscaled(13).is_valid(), "the unscaled S is valid");
         check(!wrf::sdirk3::ResidualScale{}.is_valid(),
               "a DEFAULT-constructed scale is INVALID -- forgetting to set one is refused, which "
               "is what separates it from deliberately measuring unscaled");
@@ -434,11 +477,11 @@ int main() {
         wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& v) { return v; };
         for (int which = 0; which < 2; ++which) {
             auto s0 = snap;
-            (which == 0 ? s0.rhs_generation : s0.preconditioner_generation) = 0;
+            (which == 0 ? s0.token.rhs_generation : s0.token.coefficient_generation) = 0;
             check(!s0.is_valid() &&
                   !evaluate_directional_right_preconditioner_defect(
                        s0, bA(s0, A), bP(s0, Pinv), rand_in("ph")).ok,
-                  "a ZERO generation receipt is refused (matching operators cannot rescue it)");
+                  "a ZERO generation inside the token is refused (matching operators cannot rescue it)");
         }
 
         // inf passes `> 0.0`, so the old dt/gamma guard admitted it.
@@ -533,8 +576,8 @@ int main() {
         // WITH a digest the mutation is caught.
         check(!evaluate_directional_right_preconditioner_defect(
                    snap,
-                   BoundLinearOperator{ident, snap.rhs_generation, zero_digest, false},
-                   BoundLinearOperator{hidden, snap.preconditioner_generation, digest, false},
+                   BoundLinearOperator{ident, snap.token, zero_digest, false},
+                   BoundLinearOperator{hidden, snap.token, digest, false},
                    dir).ok,
               "an operator that CHANGES ITSELF while returning identical output is refused");
 
@@ -543,28 +586,182 @@ int main() {
         *calls = 0;
         auto declared = evaluate_directional_right_preconditioner_defect(
             snap,
-            BoundLinearOperator{ident, snap.rhs_generation, {}, true},
-            BoundLinearOperator{hidden, snap.preconditioner_generation, {}, true},
+            BoundLinearOperator{ident, snap.token, {}, true},
+            BoundLinearOperator{hidden, snap.token, {}, true},
             dir);
-        check(declared.ok && !declared.purity_verified,
-              "a DECLARED-stateless operator is scored, but purity_verified is FALSE");
+        check(declared.ok && !declared.state_digest_unchanged,
+              "a DECLARED-stateless operator is scored, but state_digest_unchanged is FALSE");
 
-        // A genuinely pure pair with digests reports purity as measured.
+        // A genuinely pure pair: nothing to move, so the digest does not move.
         auto verified = evaluate_directional_right_preconditioner_defect(
             snap,
-            BoundLinearOperator{ident, snap.rhs_generation, zero_digest, false},
-            BoundLinearOperator{ident, snap.preconditioner_generation, zero_digest, false},
+            BoundLinearOperator{ident, snap.token, zero_digest, false},
+            BoundLinearOperator{ident, snap.token, zero_digest, false},
             dir);
-        check(verified.ok && verified.purity_verified,
-              "two digest-carrying pure operators report purity_verified TRUE");
+        check(verified.ok && verified.state_digest_unchanged,
+              "two digest-carrying pure operators report state_digest_unchanged TRUE");
+
+        // THE LIMIT, pinned so nobody reads the flag as proof of purity. A digest that ignores
+        // the operator never moves, so a mutating operator paired with one is ACCEPTED with the
+        // flag set. From inside the evaluator that is indistinguishable from a faithful digest
+        // whose state did not change -- which is exactly why the field is named for the
+        // observation ("digest unchanged") and not for the conclusion ("purity verified").
+        *calls = 0;
+        auto blind_digest = []() { return uint64_t{42}; };   // watches nothing
+        auto blind = evaluate_directional_right_preconditioner_defect(
+            snap,
+            BoundLinearOperator{ident, snap.token, blind_digest, false},
+            BoundLinearOperator{hidden, snap.token, blind_digest, false},
+            dir);
+        check(blind.ok && blind.state_digest_unchanged && *calls > 0,
+              "a BLIND digest lets a mutating operator through with the flag set -- the flag "
+              "reports the digest, not purity");
+
+        // State that advances and UNWINDS returns to its initial value, so a before/after pair
+        // sees nothing. Sampling after every application is what catches it.
+        auto toggle = std::make_shared<int>(0);
+        wrf::sdirk3::LinearOperator toggling = [toggle](const torch::Tensor& v) {
+            *toggle = 1 - *toggle;      // 0 -> 1 -> 0 across the two applications
+            return v.clone();
+        };
+        auto toggle_digest = [toggle]() { return static_cast<uint64_t>(*toggle); };
+        check(!evaluate_directional_right_preconditioner_defect(
+                   snap,
+                   BoundLinearOperator{ident, snap.token, zero_digest, false},
+                   BoundLinearOperator{toggling, snap.token, toggle_digest, false},
+                   dir).ok,
+              "state that CHANGES AND UNWINDS is caught -- a before/after pair would miss it");
 
         // Neither digest nor declaration: silence must not read as verified.
         check(!evaluate_directional_right_preconditioner_defect(
                    snap,
-                   BoundLinearOperator{ident, snap.rhs_generation},
-                   BoundLinearOperator{ident, snap.preconditioner_generation},
+                   BoundLinearOperator{ident, snap.token},
+                   BoundLinearOperator{ident, snap.token},
                    dir).ok,
               "an operator supplying NEITHER a digest nor a declaration is refused");
+    }
+
+    // ------ 6k. the contract and the PRODUCTION stage gate must mean the same thing by "small"
+    // Six block scalars cannot express the weighting production actually uses: ewt is
+    // rtol*|y_ref| + atol POINTWISE, so it varies within a block by orders across a profile. A
+    // defect the contract called small could be large in the metric that decides the step.
+    //
+    // Under the frozen error weights the two are not merely close, they are EQUAL:
+    //     wrms_norm(x) = ||x/ewt||_2 / sqrt(N)
+    //     global_error = ||err/ewt||_2 / ||v/ewt||_2   -> the sqrt(N) cancels
+    // so this fails the moment either formula drifts from the other.
+    {
+        wrf::sdirk3::PackedBlockSizes pb;
+        int64_t* slot[6] = {&pb.u, &pb.v, &pb.w, &pb.ph, &pb.t, &pb.mu};
+        for (std::size_t i = 0; i < snap.layout.blocks.size() && i < 6; ++i) {
+            *slot[i] = snap.layout.blocks[i].size;
+        }
+        const wrf::sdirk3::WRMSNormConfig cfg;
+
+        // A reference state with a WIDE dynamic range, so ewt genuinely varies inside each block.
+        // A uniform y_ref would make block scalars accidentally sufficient and prove nothing.
+        const auto y_ref = torch::exp(6.0 * torch::randn({snap.layout.total_size}, gen, opts));
+        const auto ewt = wrf::sdirk3::error_weights_packed(y_ref, pb, cfg);
+        check((ewt.max() / ewt.min()).item<double>() > 100.0,
+              "the fixture's error weights span orders -- block scalars could not represent them");
+
+        auto weighted = snap;
+        weighted.scale = wrf::sdirk3::ResidualScale::from_error_weights(
+            ewt, snap.token.scale_generation);
+        check(weighted.is_valid(), "a frozen error-weight scale is a valid scale");
+
+        // A couples ph into mu, so the defect is not confined to the input block.
+        int ph_s = -1, mu_s = -1, n = 0;
+        for (const auto& b : snap.layout.blocks) {
+            if (b.name == "ph") ph_s = b.start;
+            if (b.name == "mu") { mu_s = b.start; n = b.size; }
+        }
+        wrf::sdirk3::LinearOperator A = [&](const torch::Tensor& x) {
+            auto out = x.clone();
+            out.slice(0, mu_s, mu_s + n) += 0.5 * x.slice(0, ph_s, ph_s + n);
+            return out;
+        };
+        wrf::sdirk3::LinearOperator Pinv = [](const torch::Tensor& x) { return x.clone(); };
+
+        const auto v = rand_in("ph");
+        const auto r = evaluate_directional_right_preconditioner_defect(
+            weighted, bA(weighted, A), bP(weighted, Pinv), v);
+        check(r.ok, "the defect is scored under the production error weights");
+
+        // Independently, through production's own function.
+        const auto err = A(Pinv(v)) - v;
+        const double expected =
+            (wrf::sdirk3::wrms_norm_packed(err, y_ref, pb, cfg) /
+             wrf::sdirk3::wrms_norm_packed(v, y_ref, pb, cfg)).item<double>();
+        check(expected > 1e-6, "the reference ratio is nonzero, so the match is not a match of 0");
+        check(std::abs(r.global_error - expected) < 1e-9,
+              "the contract's defect EQUALS wrms(err)/wrms(v) -- one weighting, not two");
+
+        // The weights are part of the linearization: a set sized for another grid is refused
+        // rather than broadcast to fit -- and refused BEFORE the operators run. The size match
+        // used to be discovered inside inverse_scale_vector, which is reached only after four
+        // applications, so an unanswerable query perturbed a live solver four times first.
+        // Counting the calls is what makes "before execution" a measurement instead of a claim.
+        {
+            auto calls = std::make_shared<int>(0);
+            wrf::sdirk3::LinearOperator counted = [calls](const torch::Tensor& x) {
+                ++(*calls);
+                return x.clone();
+            };
+
+            auto wrong = weighted;
+            wrong.scale = wrf::sdirk3::ResidualScale::from_error_weights(
+                ewt.slice(0, 0, ewt.numel() - 1), snap.token.scale_generation);
+            check(!evaluate_directional_right_preconditioner_defect(
+                       wrong, bA(wrong, counted), bP(wrong, counted), v).ok,
+                  "error weights sized for a DIFFERENT grid are refused");
+            check(*calls == 0,
+                  "and refused with ZERO operator calls -- an unanswerable query costs nothing");
+
+            // A scale that ANNIHILATES the direction. Weights of 1e300 are finite and positive,
+            // so is_valid() passes, and 1/w = 1e-300 is finite, so the weight vector builds --
+            // but the squares underflow inside the norm, leaving ||S^-1 v|| exactly 0 and the
+            // defect with no denominator. Measured before this case existed: that was discovered
+            // AFTER four operator applications, because the denominator check sat past them even
+            // though it needs no operator at all.
+            *calls = 0;
+            auto annihilating = weighted;
+            annihilating.scale = wrf::sdirk3::ResidualScale::from_error_weights(
+                torch::full({snap.layout.total_size}, 1e300, opts), snap.token.scale_generation);
+            check(annihilating.scale.is_valid(),
+                  "the annihilating scale PASSES is_valid -- finite and positive, so the refusal "
+                  "has to come from somewhere else");
+            check(!evaluate_directional_right_preconditioner_defect(
+                       annihilating, bA(annihilating, counted), bP(annihilating, counted), v).ok
+                  && *calls == 0,
+                  "a scale that annihilates the direction is refused with ZERO operator calls");
+
+            // Control, so the counters above are not passing because the operators are never
+            // called at all.
+            *calls = 0;
+            check(evaluate_directional_right_preconditioner_defect(
+                      weighted, bA(weighted, counted), bP(weighted, counted), v).ok && *calls > 0,
+                  "a well-formed query DOES call them (the zeros above are refusals, not inertia)");
+        }
+
+        // FROZEN means frozen. A Tensor is a handle, so storing the caller's would leave them
+        // holding the same storage; from_error_weights takes a private copy, and mutating the
+        // caller's tensor afterwards cannot move the number.
+        {
+            auto mutable_ewt = ewt.clone();
+            auto frozen = weighted;
+            frozen.scale = wrf::sdirk3::ResidualScale::from_error_weights(
+                mutable_ewt, snap.token.scale_generation);
+            const double before = evaluate_directional_right_preconditioner_defect(
+                frozen, bA(frozen, A), bP(frozen, Pinv), v).global_error;
+
+            mutable_ewt.mul_(1000.0);      // the caller changes what it handed over
+            const double after = evaluate_directional_right_preconditioner_defect(
+                frozen, bA(frozen, A), bP(frozen, Pinv), v).global_error;
+
+            check(before > 1e-6 && std::abs(after - before) < 1e-12,
+                  "mutating the caller's weights AFTER freezing does not move the defect");
+        }
     }
 
     // --------------------------------------------- 7. h is dt*gamma, stated once
@@ -573,7 +770,7 @@ int main() {
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 62;
+    constexpr int expected_checks = 75;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -31,6 +31,61 @@ namespace sdirk3 {
 
 using LinearOperator = std::function<torch::Tensor(const torch::Tensor&)>;
 
+// WHICH linearization this is. Not a counter -- an identity.
+//
+// Two independent counters (one for A, one for P^-1) cannot tell "the same linearization" from
+// "two different solvers that happen to both be at 7". Every field below has a real producer in
+// this codebase, which is why this is an identity and not a wish list:
+//
+//   stage_state_generation, coefficient_generation  <- UnifiedPreconditioner::StageBindingReceipt
+//   mass_coordinate_mode, imex_split_mode, hevi_split <- SDIRK3Config
+//   physical_step, ark_stage, newton_iteration      <- the Newton driver
+//
+// The two generations are DISTINCT on purpose, and production already learned why: a small state
+// change updates mu_full_stage_ without triggering a coefficient rebuild, so coefficient_generation
+// is not evidence that THIS state was bound. StageBindingReceipt says so in its own comment; the
+// contract's earlier single "preconditioner_generation" had discarded that distinction.
+//
+// solver_id is a monotonic id, never a `this` pointer: addresses are recycled, and this project
+// has already shipped one latch keyed on a recycled address.
+struct LinearizationToken {
+    uint64_t solver_id = 0;
+    uint64_t stage_state_generation = 0;
+    uint64_t coefficient_generation = 0;
+    uint64_t rhs_generation = 0;
+    uint64_t scale_generation = 0;
+
+    int physical_step = -1;
+    int ark_stage = -1;
+    int newton_iteration = -1;
+
+    int mass_coordinate_mode = -1;
+    int imex_split_mode = -1;
+    bool hevi_split = false;
+
+    // Zero and negative are what an unset field leaves behind, so they are refused -- the same
+    // hole the generation receipt had before it required nonzero.
+    bool is_valid() const {
+        return solver_id != 0 && stage_state_generation != 0 && coefficient_generation != 0
+            && rhs_generation != 0 && scale_generation != 0
+            && physical_step >= 0 && ark_stage >= 0 && newton_iteration >= 0
+            && mass_coordinate_mode >= 0 && imex_split_mode >= 0;
+    }
+
+    bool operator==(const LinearizationToken& o) const {
+        return solver_id == o.solver_id
+            && stage_state_generation == o.stage_state_generation
+            && coefficient_generation == o.coefficient_generation
+            && rhs_generation == o.rhs_generation
+            && scale_generation == o.scale_generation
+            && physical_step == o.physical_step && ark_stage == o.ark_stage
+            && newton_iteration == o.newton_iteration
+            && mass_coordinate_mode == o.mass_coordinate_mode
+            && imex_split_mode == o.imex_split_mode && hevi_split == o.hevi_split;
+    }
+    bool operator!=(const LinearizationToken& o) const { return !(*this == o); }
+};
+
 // An operator together with the linearization it was captured at. A bare std::function pair
 // cannot detect that A came from one generation and M^-1 from another, and a report that mixes
 // them measures nothing -- so the generation travels WITH the operator and the evaluator refuses
@@ -38,7 +93,7 @@ using LinearOperator = std::function<torch::Tensor(const torch::Tensor&)>;
 // this, nothing compared them to anything.
 struct BoundLinearOperator {
     LinearOperator apply;
-    uint64_t generation = 0;
+    LinearizationToken token;
 
     // Repeatability proves the operator RETURNED the same thing twice. It does not prove the
     // operator did not CHANGE while doing so: a fallback latch, a refinement counter, a cache
@@ -47,9 +102,16 @@ struct BoundLinearOperator {
     // one before.
     //
     // So one of these must be supplied, and the report says which was used:
-    //   state_digest set    -> purity is MEASURED (compared before and after every call)
-    //   declared_stateless  -> purity is ASSERTED by the caller and NOT measured
-    // Supplying neither is refused. "Nothing said" must not read as "verified".
+    //   state_digest set    -> the digest is SAMPLED around every call and must not move
+    //   declared_stateless  -> purity is ASSERTED by the caller and nothing is sampled
+    // Supplying neither is refused. "Nothing said" must not read as "checked".
+    //
+    // LIMIT, stated because the previous version overstated this. A digest is a CALLER'S CLAIM
+    // about what it observes. A digest that ignores the operator entirely -- `[]{ return 0; }` --
+    // never moves, so it passes, and from inside this function it is indistinguishable from a
+    // faithful digest whose state simply did not change. The contract therefore reports that the
+    // digest DID NOT MOVE; it cannot report that the operator is pure, and the field is named for
+    // the former.
     std::function<uint64_t()> state_digest;
     bool declared_stateless = false;
 
@@ -101,23 +163,72 @@ struct ImplicitActiveDomain {
 // A unit change is a conjugation: in new units Atilde = D^-1 A D, vtilde = D^-1 v. With
 // Stilde = D^-1 S the D's cancel exactly, so the scaled defect is invariant -- not approximately,
 // identically.
+// Which weighting this scale carries. Both values have a real producer, which is why this is an
+// enum and not a hopeful abstraction: SyntheticUniform is what the contract's own unit-conversion
+// algebra uses, and FrozenErrorWeights is the per-element ewt production's stage gate already
+// computes.
+enum class ScalePolicy {
+    SyntheticUniform,     // one positive scalar per block
+    FrozenErrorWeights,   // per-element ewt, frozen at this linearization
+};
+
 struct ResidualScale {
-    // Default is ZEROS, which is_valid() rejects. That is the whole point: a caller who forgets
-    // to set a scale is REFUSED, while a caller who means to measure in raw storage units says so
-    // with unscaled(). An all-ones default made those two cases indistinguishable, so the named
-    // constructor documented a decision the type did not require anyone to make.
+    ScalePolicy policy = ScalePolicy::SyntheticUniform;
+
+    // SyntheticUniform. Default is ZEROS, which is_valid() rejects. That is the whole point: a
+    // caller who forgets to set a scale is REFUSED, while a caller who means to measure in raw
+    // storage units says so with unscaled(). An all-ones default made those two cases
+    // indistinguishable, so the named constructor documented a decision the type did not require
+    // anyone to make.
     std::array<double, 6> block_scale{};
 
+    // FrozenErrorWeights. The SAME vector production weights residuals by --
+    // error_weights_packed() in wrf_sdirk3_wrms_norm.h -- so this contract and the stage gate
+    // cannot disagree about what "small" means. Six block scalars cannot express it: ewt is
+    // rtol*|y_ref| + atol pointwise, so it varies within a block by orders across a profile.
+    torch::Tensor weights;
+
+    // Matched against the token's scale_generation, so a scale frozen at one stage cannot be used
+    // to weight a defect measured at another. A scale is part of the linearization, not a
+    // free-floating preference.
+    uint64_t generation = 0;
+
     bool is_valid() const {
+        if (generation == 0) return false;
+        if (policy == ScalePolicy::FrozenErrorWeights) {
+            torch::NoGradGuard no_grad;
+            return weights.defined() && weights.dim() == 1 && weights.is_floating_point()
+                && weights.numel() > 0
+                && torch::isfinite(weights).all().item<bool>()
+                && (weights > 0).all().item<bool>();
+        }
         for (double s : block_scale) {
             if (!(s > 0.0) || !std::isfinite(s)) return false;
         }
         return true;
     }
 
-    static ResidualScale unscaled() {
+    static ResidualScale unscaled(uint64_t generation) {
         ResidualScale s;
+        s.policy = ScalePolicy::SyntheticUniform;
         s.block_scale.fill(1.0);
+        s.generation = generation;
+        return s;
+    }
+
+    static ResidualScale from_error_weights(const torch::Tensor& ewt, uint64_t generation) {
+        ResidualScale s;
+        s.policy = ScalePolicy::FrozenErrorWeights;
+        // A PRIVATE copy, so "frozen" is a property and not a name. A Tensor is a handle: storing
+        // the caller's handle leaves them holding the same storage, free to mutate it after the
+        // freeze and between validation and use. detach() because a scale must carry no graph --
+        // ewt is built from the state, and a weighting that stays graph-connected would keep that
+        // graph alive and let a diagnostic contribute gradient.
+        if (ewt.defined()) {
+            torch::NoGradGuard no_grad;
+            s.weights = ewt.detach().clone();
+        }
+        s.generation = generation;
         return s;
     }
 };
@@ -128,6 +239,13 @@ inline torch::Tensor inverse_scale_vector(const StateLayout& layout,
                                           const torch::Tensor& like)
 {
     torch::NoGradGuard no_grad;
+    if (scale.policy == ScalePolicy::FrozenErrorWeights) {
+        // Frozen at another grid is a mismatch, not something to broadcast around.
+        if (scale.weights.numel() != like.numel()) return torch::Tensor{};
+        auto w = 1.0 / scale.weights.to(like.options());
+        if (!torch::isfinite(w).all().item<bool>()) return torch::Tensor{};
+        return w;
+    }
     auto sinv = torch::ones_like(like);
     for (std::size_t i = 0; i < layout.blocks.size() && i < scale.block_scale.size(); ++i) {
         const auto& b = layout.blocks[i];
@@ -147,25 +265,20 @@ struct LinearizationSnapshot {
     ImplicitActiveDomain active;
     ResidualScale scale;          // frozen HERE, so the number carries the units it was taken in
 
+    LinearizationToken token;
+
     double dt = 0.0;
     double gamma = 0.0;
     double h() const { return dt * gamma; }
 
-    int physical_step = -1;
-    int ark_stage = -1;
-    int newton_iteration = -1;
-
-    uint64_t rhs_generation = 0;
-    uint64_t preconditioner_generation = 0;
-
     bool is_valid() const {
-        // isfinite on dt/gamma because inf passes `> 0.0`, and generations because a receipt of
-        // zero is what a caller who never set one leaves behind -- 0 == 0 compared equal, so the
-        // receipt check passed for exactly the callers who supplied no receipt.
-        return layout.is_valid() && scale.is_valid()
+        // isfinite on dt/gamma because inf passes `> 0.0`. The token carries the rest: its
+        // is_valid() refuses the unset-field values, and requiring the scale's generation to
+        // match binds the weighting to the same linearization as the operators.
+        return layout.is_valid() && scale.is_valid() && token.is_valid()
+            && scale.generation == token.scale_generation
             && std::isfinite(dt) && dt > 0.0
-            && std::isfinite(gamma) && gamma > 0.0
-            && rhs_generation != 0 && preconditioner_generation != 0;
+            && std::isfinite(gamma) && gamma > 0.0;
     }
 };
 
@@ -204,9 +317,12 @@ struct DirectionalDefectReport {
     double active_error = 0.0;
     double inactive_output_defect = 0.0;
 
-    // false when either operator only DECLARED itself stateless. The number is still usable; it
-    // just rests on an assertion rather than a measurement, and a reader must be able to tell.
-    bool purity_verified = false;
+    // True when BOTH operators supplied a state digest and none of the samples moved.
+    //
+    // NOT a proof of purity: a digest is the caller's claim about what it watches, and a constant
+    // digest reads exactly like a faithful one here. The name says what was observed -- an earlier
+    // version called this purity_verified, which asserted more than the check can deliver.
+    bool state_digest_unchanged = false;
 
     bool ok = false;
 
@@ -242,8 +358,7 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     DirectionalDefectReport rep;
     if (!snapshot.is_valid() || !apply_A || !apply_P_inverse ||
         !apply_A.has_purity_evidence() || !apply_P_inverse.has_purity_evidence() ||
-        apply_A.generation != snapshot.rhs_generation ||
-        apply_P_inverse.generation != snapshot.preconditioner_generation ||
+        apply_A.token != snapshot.token || apply_P_inverse.token != snapshot.token ||
         !direction.defined() ||
         // numel alone admits [1, N], whose block slices along dim 0 would be empty and whose
         // scale weighting would land on the wrong axis. The packed state is 1-D by contract.
@@ -267,6 +382,28 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
         if (bn > 0.0) return rep;
     }
 
+    // The weighting is built BEFORE any operator runs. Its size match against this direction was
+    // previously discovered inside inverse_scale_vector, which is called after four applications
+    // -- so a scale frozen for a different grid perturbed a live solver four times before the
+    // query was judged unanswerable. Refusing an unanswerable query must cost nothing.
+    const auto sinv = inverse_scale_vector(snapshot.layout, snapshot.scale, direction);
+    if (!sinv.defined()) return rep;
+
+    // ||S^-1 v|| too. It depends on the SCALE AND THE DIRECTION ONLY -- no operator is involved --
+    // so its check never belonged after execution, and leaving one sibling behind is how the size
+    // mismatch above hid in the first place. Everything computable without an operator is settled
+    // here.
+    //
+    // Reachable, not theoretical: weights of 1e300 are finite and positive (is_valid passes) and
+    // 1/w = 1e-300 is finite (the vector builds), yet the SQUARES underflow inside the norm, so
+    // ||S^-1 v|| is exactly 0 and the defect has no denominator. That scale annihilates the
+    // direction, and it used to cost four operator applications to find out.
+    const auto v64 = direction.to(torch::kFloat64);
+    const auto sinv64 = sinv.to(torch::kFloat64);
+    const auto v_s = v64 * sinv64;
+    const double vn = v_s.norm().to(torch::kCPU).item<double>();
+    if (!std::isfinite(vn) || !(vn > 0.0)) return rep;
+
     // Purity, in three independent senses -- they fail differently and each needs its own check.
     //
     //   1. write-through : the operator mutated its ARGUMENT
@@ -280,14 +417,25 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     };
     const uint64_t a_digest_before = digest_of(apply_A);
     const uint64_t p_digest_before = digest_of(apply_P_inverse);
+    bool digests_held = true;
+    // Sampled after EVERY application, not once at the end: state that advances on the first call
+    // and unwinds on the second returns to its initial value, and a before/after pair cannot see
+    // that at all.
+    const auto sample_digests = [&]() {
+        digests_held = digests_held
+            && digest_of(apply_A) == a_digest_before
+            && digest_of(apply_P_inverse) == p_digest_before;
+    };
 
     const auto direction_before = direction.clone();
     const auto z = apply_P_inverse(direction);
+    sample_digests();
     if (!operator_output_is_usable(z, direction)) return rep;
     if (!direction.equal(direction_before)) return rep;   // P^-1 wrote through its input
 
     const auto z_before = z.clone();
     const auto az = apply_A(z);
+    sample_digests();
     if (!operator_output_is_usable(az, direction)) return rep;
     if (!z.equal(z_before)) return rep;                   // A wrote through its input
 
@@ -299,31 +447,24 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
     // is a deterministic CPU operator; a live GPU adapter with atomic reductions is where this
     // must become a dtype-aware tolerance, and that belongs with the adapter that needs it.
     const auto z2 = apply_P_inverse(direction);
+    sample_digests();
     if (!operator_output_is_usable(z2, direction) || !z2.equal(z)) return rep;
     const auto az2 = apply_A(z2);
+    sample_digests();
     if (!operator_output_is_usable(az2, direction) || !az2.equal(az)) return rep;
 
-    if (digest_of(apply_A) != a_digest_before) return rep;            // A changed ITSELF
-    if (digest_of(apply_P_inverse) != p_digest_before) return rep;    // P^-1 changed ITSELF
-    rep.purity_verified =
+    if (!digests_held) return rep;                        // an operator changed ITSELF
+    rep.state_digest_unchanged =
         static_cast<bool>(apply_A.state_digest) && static_cast<bool>(apply_P_inverse.state_digest);
 
     // Everything below is measured in SCALED coordinates. With the default unscaled S this is
     // elementwise multiplication by ones, so the numbers are exactly what they were before.
-    const auto sinv = inverse_scale_vector(snapshot.layout, snapshot.scale, direction);
-    if (!sinv.defined()) return rep;
-
     // FP64 for the ARITHMETIC, not only the reduction. Casting the result of
     // `(az - direction) * sinv` would promote a number whose cancellation, overflow and
     // underflow had already happened in the source dtype -- the promotion has to come first to
     // mean anything. Element-wise finiteness also does not make a REDUCTION finite: an FP32 L2
     // norm overflows to inf, and inf/inf is a NaN this would have reported as a number.
-    const auto v64 = direction.to(torch::kFloat64);
-    const auto sinv64 = sinv.to(torch::kFloat64);
     const auto err = (az.to(torch::kFloat64) - v64) * sinv64;
-    const auto v_s = v64 * sinv64;
-    const double vn = v_s.norm().to(torch::kCPU).item<double>();
-    if (!std::isfinite(vn) || !(vn > 0.0)) return rep;
 
     rep.global_error = err.norm().to(torch::kCPU).item<double>() / vn;
     if (!std::isfinite(rep.global_error)) return rep;
