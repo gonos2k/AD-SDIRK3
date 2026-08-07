@@ -698,13 +698,52 @@ int main() {
               "the contract's defect EQUALS wrms(err)/wrms(v) -- one weighting, not two");
 
         // The weights are part of the linearization: a set sized for another grid is refused
-        // rather than broadcast to fit.
-        auto wrong = weighted;
-        wrong.scale = wrf::sdirk3::ResidualScale::from_error_weights(
-            ewt.slice(0, 0, ewt.numel() - 1), snap.token.scale_generation);
-        check(!evaluate_directional_right_preconditioner_defect(
-                   wrong, bA(wrong, A), bP(wrong, Pinv), v).ok,
-              "error weights sized for a DIFFERENT grid are refused");
+        // rather than broadcast to fit -- and refused BEFORE the operators run. The size match
+        // used to be discovered inside inverse_scale_vector, which is reached only after four
+        // applications, so an unanswerable query perturbed a live solver four times first.
+        // Counting the calls is what makes "before execution" a measurement instead of a claim.
+        {
+            auto calls = std::make_shared<int>(0);
+            wrf::sdirk3::LinearOperator counted = [calls](const torch::Tensor& x) {
+                ++(*calls);
+                return x.clone();
+            };
+
+            auto wrong = weighted;
+            wrong.scale = wrf::sdirk3::ResidualScale::from_error_weights(
+                ewt.slice(0, 0, ewt.numel() - 1), snap.token.scale_generation);
+            check(!evaluate_directional_right_preconditioner_defect(
+                       wrong, bA(wrong, counted), bP(wrong, counted), v).ok,
+                  "error weights sized for a DIFFERENT grid are refused");
+            check(*calls == 0,
+                  "and refused with ZERO operator calls -- an unanswerable query costs nothing");
+
+            // Control, so the counter above is not passing because the operators are never
+            // called at all.
+            *calls = 0;
+            check(evaluate_directional_right_preconditioner_defect(
+                      weighted, bA(weighted, counted), bP(weighted, counted), v).ok && *calls > 0,
+                  "a well-formed query DOES call them (the zero above is the refusal, not inertia)");
+        }
+
+        // FROZEN means frozen. A Tensor is a handle, so storing the caller's would leave them
+        // holding the same storage; from_error_weights takes a private copy, and mutating the
+        // caller's tensor afterwards cannot move the number.
+        {
+            auto mutable_ewt = ewt.clone();
+            auto frozen = weighted;
+            frozen.scale = wrf::sdirk3::ResidualScale::from_error_weights(
+                mutable_ewt, snap.token.scale_generation);
+            const double before = evaluate_directional_right_preconditioner_defect(
+                frozen, bA(frozen, A), bP(frozen, Pinv), v).global_error;
+
+            mutable_ewt.mul_(1000.0);      // the caller changes what it handed over
+            const double after = evaluate_directional_right_preconditioner_defect(
+                frozen, bA(frozen, A), bP(frozen, Pinv), v).global_error;
+
+            check(before > 1e-6 && std::abs(after - before) < 1e-12,
+                  "mutating the caller's weights AFTER freezing does not move the defect");
+        }
     }
 
     // --------------------------------------------- 7. h is dt*gamma, stated once
@@ -713,7 +752,7 @@ int main() {
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 70;
+    constexpr int expected_checks = 73;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

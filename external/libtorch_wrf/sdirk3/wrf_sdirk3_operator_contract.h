@@ -216,10 +216,18 @@ struct ResidualScale {
         return s;
     }
 
-    static ResidualScale from_error_weights(torch::Tensor ewt, uint64_t generation) {
+    static ResidualScale from_error_weights(const torch::Tensor& ewt, uint64_t generation) {
         ResidualScale s;
         s.policy = ScalePolicy::FrozenErrorWeights;
-        s.weights = std::move(ewt);
+        // A PRIVATE copy, so "frozen" is a property and not a name. A Tensor is a handle: storing
+        // the caller's handle leaves them holding the same storage, free to mutate it after the
+        // freeze and between validation and use. detach() because a scale must carry no graph --
+        // ewt is built from the state, and a weighting that stays graph-connected would keep that
+        // graph alive and let a diagnostic contribute gradient.
+        if (ewt.defined()) {
+            torch::NoGradGuard no_grad;
+            s.weights = ewt.detach().clone();
+        }
         s.generation = generation;
         return s;
     }
@@ -374,6 +382,13 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
         if (bn > 0.0) return rep;
     }
 
+    // The weighting is built BEFORE any operator runs. Its size match against this direction was
+    // previously discovered inside inverse_scale_vector, which is called after four applications
+    // -- so a scale frozen for a different grid perturbed a live solver four times before the
+    // query was judged unanswerable. Refusing an unanswerable query must cost nothing.
+    const auto sinv = inverse_scale_vector(snapshot.layout, snapshot.scale, direction);
+    if (!sinv.defined()) return rep;
+
     // Purity, in three independent senses -- they fail differently and each needs its own check.
     //
     //   1. write-through : the operator mutated its ARGUMENT
@@ -429,9 +444,6 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
 
     // Everything below is measured in SCALED coordinates. With the default unscaled S this is
     // elementwise multiplication by ones, so the numbers are exactly what they were before.
-    const auto sinv = inverse_scale_vector(snapshot.layout, snapshot.scale, direction);
-    if (!sinv.defined()) return rep;
-
     // FP64 for the ARITHMETIC, not only the reduction. Casting the result of
     // `(az - direction) * sinv` would promote a number whose cancellation, overflow and
     // underflow had already happened in the source dtype -- the promotion has to come first to
