@@ -267,7 +267,19 @@ public:
      * Get condition number estimate (for diagnostics)
      */
     float estimate_condition_number() const { return condition_estimate_; }
-    
+
+    // The two counters that identify WHICH linearization this preconditioner currently is.
+    // Read-only, and DISTINCT for the reason StageBindingReceipt already documents: a small state
+    // change updates mu_full_stage_ without triggering a coefficient rebuild, so
+    // coefficient_generation is not evidence that this state was bound.
+    //
+    // They serve two purposes for a diagnostic that judges A*P^-1: identity (an A and an M^-1 must
+    // come from the same linearization) and purity (a probe must not advance them). The second is
+    // what makes a faithful state digest possible -- these move exactly when this object rebinds
+    // or rebuilds, so a digest over them is a real witness rather than a constant that cannot fail.
+    uint64_t stage_state_generation() const { return stage_state_generation_; }
+    uint64_t coefficient_generation() const { return coefficient_generation_; }
+
 private:
     // Grid and physics info
     std::shared_ptr<WRFGridInfo> grid_info_;
