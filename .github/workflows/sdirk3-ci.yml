@@ -74,6 +74,27 @@ jobs:
           fi
           echo "no tracked self-declared generated files"
 
+      - name: every test source on disk is tracked
+        run: |
+          set -euo pipefail
+          # The inverse of the artifact gate above. A broad `tests/test_*` ignore rule aimed at the
+          # extensionless compiled binaries also matched test_*.cpp, and the defence was a
+          # hand-maintained list of per-file negations -- so a new contract could build, link and
+          # pass locally while never reaching CI or a reviewer. Silent, and invisible to every
+          # green check. This asserts the property directly instead of trusting the patterns.
+          untracked=""
+          for f in external/libtorch_wrf/sdirk3/test_*.cpp \
+                   external/libtorch_wrf/sdirk3/tests/test_*.cpp; do
+            [ -e "${f}" ] || continue
+            git ls-files --error-unmatch "${f}" >/dev/null 2>&1 || untracked="${untracked}${f}"$'\n'
+          done
+          if [ -n "${untracked}" ]; then
+            echo "Test SOURCES exist on disk but are not tracked (a .gitignore rule is eating them):"
+            printf '%s' "${untracked}"
+            exit 1
+          fi
+          echo "all test sources are tracked"
+
       - name: README ctest count matches the pinned inventory
         run: |
           set -euo pipefail

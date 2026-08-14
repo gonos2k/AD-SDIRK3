@@ -231,6 +231,22 @@ public:
         mu_pert_last_bound_ = s.mu_pert_last_bound;
         current_stage_ = s.current_stage;
         mu_scale_correction_ = s.mu_scale_correction;
+        // A RESTORE IS A BINDING EVENT, so it takes a fresh generation.
+        //
+        // Without this the counter is not a faithful identity across rollback: a replay binds
+        // checkpoints (counter G -> G+k, state S'), then restore puts the state back to S and
+        // leaves the counter at G+k. One value, G+k, then denotes S' during the replay and S
+        // after it -- two different linearizations comparing EQUAL, which is the one thing an
+        // identity must never do.
+        //
+        // Restoring the counter to G instead would be worse: G+1..G+k were already issued, so
+        // they would be handed out again for unrelated binds. Minting a new value keeps it
+        // monotonic and keeps every value bound to exactly one state.
+        //
+        // Safe for numerics by inspection: this counter gates no cache. It is written at bind
+        // (wrf_sdirk3_unified_preconditioner.cpp:5329, "evidence that THIS bind ran"), read into
+        // StageBindingReceipt, and read by the accessor above. Nothing branches on its value.
+        ++stage_state_generation_;
     }
     // Digest of exactly the fields above, for the isolation contract. Deliberately includes
     // mu_full_stage's VALUES, not just its shape -- the whole failure mode is a field from
