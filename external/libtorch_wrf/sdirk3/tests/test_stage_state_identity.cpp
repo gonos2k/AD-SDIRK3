@@ -82,13 +82,25 @@ int main() {
               "restore " + std::to_string(i + 1) + " is strictly greater and never reused");
     }
 
-    // 4. The two counters are DISTINCT, which is why StageBindingReceipt carries both. A restore
-    //    rebinds state without rebuilding coefficients, so it must not disturb the coefficient
-    //    counter -- otherwise every rollback would look like a coefficient change.
+    // 4. KNOWN GAP, kept VISIBLE on purpose. My first version of this case asserted that a
+    //    restore leaves coefficient_generation alone and called that correct -- "rebinding is not
+    //    rebuilding". That endorsed a defect.
+    //
+    //    The acoustic/gravity coefficients are DERIVED from mu_full_stage_
+    //    (wrf_sdirk3_unified_preconditioner.cpp:2436 and :3966 build inv_mu0 from it) and are
+    //    rebuilt by update() -> initialize_acoustic_gravity_solver(), which is on the adjoint
+    //    replay path. StageStateSnapshot carries none of them, so a restore puts the stage fields
+    //    back while the coefficients stay bound to the replay checkpoint.
+    //
+    //    So the assertion stands but its REASON inverts: restore must not touch this counter
+    //    because resetting it would MASK the rebuild, and the replay guard needs the drift to
+    //    remain visible in order to report it. Restoring the coefficients themselves is a
+    //    separate design decision about what the replay contract promises.
     const uint64_t c_before = P.coefficient_generation();
     P.restore_stage_state(snap);
     check(P.coefficient_generation() == c_before,
-          "a restore does NOT touch coefficient_generation -- rebinding is not rebuilding");
+          "a restore does not MASK coefficient drift -- the counter stays visible so the replay "
+          "guard can report coefficients left bound to the wrong checkpoint");
 
     constexpr int expected_checks = 8;
     const bool count_ok = (check_count == expected_checks);
