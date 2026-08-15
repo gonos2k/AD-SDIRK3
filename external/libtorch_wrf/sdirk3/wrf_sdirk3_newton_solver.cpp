@@ -3945,15 +3945,21 @@ public:
     // iteration, which is nothing next to a Krylov solve but is not free, and the default path
     // must not pay for a diagnostic.
     const wrf::sdirk3::FrozenStageWeights* newton_weights_for(
-        const torch::Tensor& stage_base, const torch::Tensor& K,
-        float dt, float gamma, int stage, int newton_iter) const {
+        const torch::Tensor& U_eval, int stage, int newton_iter) const {
         const auto* handed = stage_weights_for(stage);
         if (!handed || !layout_initialized_) return nullptr;
-        if (!stage_base.defined() || !K.defined()) return nullptr;
+        if (!U_eval.defined()) return nullptr;
 
         torch::NoGradGuard ng;
-        const auto Y_n = stage_base.detach() +
-                         static_cast<double>(dt) * static_cast<double>(gamma) * K.detach();
+        // THE state the operator is linearized at, taken FROM the solver rather than rebuilt.
+        //
+        // The first version recomputed U_stage + dt*gamma*K here. That formula is correct today
+        // -- it is literally the definition at :4794 -- but a reconstruction guarantees nothing,
+        // it only coincides. A later term, coefficient or clamp in U_eval would leave this copy
+        // silently describing a state the JVP was never linearized at, and the probe would report
+        // weights for it. Same authority-duplication as the packed block sizes, next_solver_id
+        // and the boolean spellings, and the same fix: use the one value, do not restate it.
+        const auto& Y_n = U_eval;
 
         wrf::sdirk3::StageIdentity ident = handed->stage;
         ident.point = wrf::sdirk3::WeightingPoint::NewtonLinearization;
@@ -7299,7 +7305,7 @@ public:
                           // Weighted at the Newton linearization point when the probe is on;
                           // the stage-entry capture is the fallback and is labelled as such.
                           apinv_probe_armed()
-                              ? newton_weights_for(U_n, K, dt, gamma, stage, newton_iter)
+                              ? newton_weights_for(U_eval, stage, newton_iter)
                               : nullptr,
                           // S, so a physically-weighted defect is computed on physical vectors.
                           // Null when scaling is off, where S = I.
