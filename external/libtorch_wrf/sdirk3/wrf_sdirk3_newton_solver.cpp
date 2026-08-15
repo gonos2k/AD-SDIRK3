@@ -2588,9 +2588,25 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             // source dtype -- the same defect closed in the synthetic contract and reintroduced
             // here on the live path.
             {
+                // Uses THE project spelling authority, not a local rule. Presence alone armed
+                // this for =0 and =false; the replacement accepted only "1", which is worse in a
+                // different way -- WRF_SDIRK3_APINV_DEFECT=true is valid for every other flag in
+                // this codebase and would have silently done nothing, which is indistinguishable
+                // from a broken probe.
                 const char* apinv_env = std::getenv("WRF_SDIRK3_APINV_DEFECT");
-                // STRICT: presence alone turned this on for =0, =false and empty.
-                const bool apinv_on = apinv_env && std::strcmp(apinv_env, "1") == 0;
+                bool apinv_on = false;
+                if (apinv_env) {
+                    const auto parsed = wrf::sdirk3::parse_bool_text(apinv_env);
+                    apinv_on = (parsed == wrf::sdirk3::BoolText::True);
+                    if (parsed == wrf::sdirk3::BoolText::Unrecognized) {
+                        static std::atomic<bool> warned{false};
+                        if (!warned.exchange(true)) {
+                            std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_APINV_DEFECT='" << apinv_env
+                                      << "' is not a recognised boolean; the A*P^-1 defect probe "
+                                         "stays OFF. Use 1/true/.true./t/yes." << std::endl;
+                        }
+                    }
+                }
                 if (apinv_on) {
                     static std::atomic<bool> said{false};
                     if (!said.exchange(true)) {

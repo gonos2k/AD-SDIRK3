@@ -32,11 +32,9 @@ static char safe_tolower(char c) { return static_cast<char>(std::tolower(static_
 
 // Shared Fortran-style bool parser for both env and namelist paths.
 static bool parse_fortran_bool_value(const std::string& input) {
-    std::string lv(input);
-    while (!lv.empty() && lv.front() == '.') lv.erase(lv.begin());
-    while (!lv.empty() && lv.back() == '.') lv.pop_back();
-    std::transform(lv.begin(), lv.end(), lv.begin(), safe_tolower);
-    return (lv == "1" || lv == "true" || lv == "t" || lv == "yes");
+    // Delegates to THE spelling authority in the header, so the namelist path, the env path and
+    // any diagnostic gate cannot drift apart on what "true" means.
+    return wrf::sdirk3::parse_bool_text(input) == wrf::sdirk3::BoolText::True;
 }
 
 // v20.14 r47c-fix2: File-scope bool parser for env vars.
