@@ -64,13 +64,34 @@ struct LinearizationToken {
     int imex_split_mode = -1;
     bool hevi_split = false;
 
+    // Which RHS the operator was formed from (the RhsMode enum in wrf_sdirk3_tile_unified.h,
+    // carried as an int so this header keeps its light dependencies -- the same way the two modes
+    // above are), the time coefficient it was formed with, and WHICH PARTITION of the state:
+    // two layouts can share a total size and cut it differently.
+    int rhs_mode = -1;
+    double h = 0.0;                    // dt * gamma
+    uint64_t layout_digest = 0;
+
+    // DELIBERATELY OPTIONAL, and the only field that is. With flexible preconditioning P_j varies
+    // per FGMRES iteration, so an operator judged at iteration j is not the one at iteration k --
+    // but a token can also identify a whole solve, and -1 says so. It is still compared, so the
+    // two kinds never test equal.
+    int krylov_iteration = -1;
+
+    // NOT ADDED: OperatorKind and StageUnknownForm. The review asks for them and the argument is
+    // sound, but no such enum exists in this codebase -- inventing the values here would shape an
+    // identity by guesswork, which is the objection that kept the sampled-max aggregator and the
+    // first ScalePolicy out. They belong with whatever first needs to distinguish those cases.
+
     // Zero and negative are what an unset field leaves behind, so they are refused -- the same
     // hole the generation receipt had before it required nonzero.
     bool is_valid() const {
         return solver_id != 0 && stage_state_generation != 0 && coefficient_generation != 0
             && rhs_generation != 0 && scale_generation != 0
             && physical_step >= 0 && ark_stage >= 0 && newton_iteration >= 0
-            && mass_coordinate_mode >= 0 && imex_split_mode >= 0;
+            && mass_coordinate_mode >= 0 && imex_split_mode >= 0
+            && rhs_mode >= 0 && layout_digest != 0
+            && std::isfinite(h) && h > 0.0;
     }
 
     bool operator==(const LinearizationToken& o) const {
@@ -82,7 +103,9 @@ struct LinearizationToken {
             && physical_step == o.physical_step && ark_stage == o.ark_stage
             && newton_iteration == o.newton_iteration
             && mass_coordinate_mode == o.mass_coordinate_mode
-            && imex_split_mode == o.imex_split_mode && hevi_split == o.hevi_split;
+            && imex_split_mode == o.imex_split_mode && hevi_split == o.hevi_split
+            && rhs_mode == o.rhs_mode && layout_digest == o.layout_digest
+            && h == o.h && krylov_iteration == o.krylov_iteration;
     }
     bool operator!=(const LinearizationToken& o) const { return !(*this == o); }
 };

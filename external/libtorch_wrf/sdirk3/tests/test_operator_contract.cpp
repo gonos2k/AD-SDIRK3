@@ -54,6 +54,10 @@ wrf::sdirk3::LinearizationSnapshot make_snapshot() {
     s.token.mass_coordinate_mode = 1;
     s.token.imex_split_mode = 3;
     s.token.hevi_split = false;
+    s.token.rhs_mode = 2;
+    s.token.h = 600.0 * 0.4358665215;
+    s.token.layout_digest = wrf::sdirk3::layout_digest(s.layout);
+    s.token.krylov_iteration = -1;      // a whole-solve token, not one FGMRES iteration
     s.scale = wrf::sdirk3::ResidualScale::unscaled(s.token.scale_generation);
     return s;
 }
@@ -364,6 +368,10 @@ int main() {
             {"mass_coordinate_mode",   [](LinearizationToken& t){ ++t.mass_coordinate_mode; }},
             {"imex_split_mode",        [](LinearizationToken& t){ ++t.imex_split_mode; }},
             {"hevi_split",             [](LinearizationToken& t){ t.hevi_split = !t.hevi_split; }},
+            {"rhs_mode",               [](LinearizationToken& t){ ++t.rhs_mode; }},
+            {"h",                      [](LinearizationToken& t){ t.h *= 2.0; }},
+            {"layout_digest",          [](LinearizationToken& t){ ++t.layout_digest; }},
+            {"krylov_iteration",       [](LinearizationToken& t){ ++t.krylov_iteration; }},
         };
         bool every_field_bites = true;
         for (const auto& kv : bump) {
@@ -856,13 +864,33 @@ int main() {
         check(threw_unset, "an unset mode throws rather than guessing a domain");
     }
 
+    // ---- 6n. the layout digest distinguishes PARTITIONS, not just sizes
+    {
+        // Same total size, different cut. A digest over the total alone would call these equal,
+        // and an operator formed against one partition is not the operator formed against the
+        // other.
+        const auto a = wrf::sdirk3::StateLayout::from_grid_dims(NX, NY, NZ, NXU, NYV, NZW);
+        const auto b = wrf::sdirk3::StateLayout::from_grid_dims(NY, NX, NZ, NYV, NXU, NZW);
+        check(wrf::sdirk3::layout_digest(a) == wrf::sdirk3::layout_digest(a),
+              "the layout digest is deterministic");
+        if (a.total_size == b.total_size) {
+            check(wrf::sdirk3::layout_digest(a) != wrf::sdirk3::layout_digest(b),
+                  "two layouts with the SAME total but different blocks digest differently");
+        } else {
+            check(wrf::sdirk3::layout_digest(a) != wrf::sdirk3::layout_digest(b),
+                  "different layouts digest differently");
+        }
+        check(wrf::sdirk3::layout_digest(a) != 0,
+              "the digest is never 0, which is what 'unset' means in the token");
+    }
+
     // --------------------------------------------- 7. h is dt*gamma, stated once
     {
         check(std::abs(snap.h() - 600.0 * 0.4358665215) < 1e-12,
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 89;
+    constexpr int expected_checks = 92;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
