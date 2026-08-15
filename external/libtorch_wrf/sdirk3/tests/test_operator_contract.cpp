@@ -780,7 +780,7 @@ int main() {
 
         StageIdentity ident;
         ident.solver_id = 4;
-        ident.stage_state_generation = 9;
+        ident.capture_seq = 9;
         ident.ark_stage = 2;
         check(ident.is_valid(), "a fully-set stage identity is valid");
         check(!StageIdentity{}.is_valid(),
@@ -807,10 +807,10 @@ int main() {
         // STAMPED: ARK stage 2 recurs at every physical step, so the ark_stage alone would accept
         // a weighting frozen many steps ago. The bind generation separates them.
         StageIdentity later = ident;
-        later.stage_state_generation += 1;          // same solver, same ARK stage, later bind
+        later.capture_seq += 1;                     // same solver, same ARK stage, later capture
         check(!w.usable(later),
-              "a weighting from an EARLIER bind is refused at the same ARK stage -- step 1 stage 2 "
-              "is not step 100 stage 2");
+              "a weighting from an EARLIER capture is refused at the same ARK stage -- step 1 "
+              "stage 2 is not step 100 stage 2");
 
         StageIdentity other_solver = ident;
         other_solver.solver_id += 1;
@@ -831,7 +831,7 @@ int main() {
         const wrf::sdirk3::WRMSNormConfig cfg;
 
         StageIdentity entry;
-        entry.solver_id = 4; entry.stage_state_generation = 9; entry.ark_stage = 2;
+        entry.solver_id = 4; entry.capture_seq = 9; entry.ark_stage = 2;
         entry.point = WeightingPoint::StageEntry;
         StageIdentity accept = entry;
         accept.point = WeightingPoint::StageAcceptance;

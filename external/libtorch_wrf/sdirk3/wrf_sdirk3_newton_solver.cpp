@@ -2199,7 +2199,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     const torch::Tensor* halo_mask,
     bool periodic_x,
     bool periodic_y,
-    KrylovBasisCapture* basis_capture) {
+    KrylovBasisCapture* basis_capture,
+    const wrf::sdirk3::FrozenStageWeights* stage_weights) {
     
     torch::Tensor x = x0.clone();
 
@@ -2543,6 +2544,45 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             // and capture the actual operator output the solve used.
             if (basis_capture) basis_capture->arnoldi_call_active = true;
             torch::Tensor w = A(v_precond);
+
+            // THE JUDGEMENT, from the triplet FGMRES already has.
+            //
+            //     v_j = V[j],  z_j = M^-1 v_j,  w_j = A z_j
+            //     eps_j = ||W (A z_j - v_j)|| / ||W v_j||,   W = diag(1/ewt)
+            //
+            // Taken from the quantities in hand rather than by calling A and M^-1 again on a
+            // random probe direction. Not merely cheaper: re-calling them would advance the
+            // preconditioner's counters, fallback latches and caches -- the observer effect this
+            // contract spends most of its checks guarding against -- and it would measure a
+            // direction the solve never visits. This measures the ACTUAL variable P_j^-1 on the
+            // ACTUAL Krylov direction, so a stagnating iteration is named rather than sampled.
+            //
+            // Weighted by the stage gate's own error weights, so "small" here means what it means
+            // to the gate. Opt-in, and silent when no weights were handed over.
+            if (std::getenv("WRF_SDIRK3_APINV_DEFECT")) {
+                static std::atomic<bool> said{false};
+                if (!said.exchange(true)) {
+                    std::cerr << "SDIRK3_APINV_DEFECT_ARMED stage=" << stage_id
+                              << " have_weights=" << (stage_weights ? 1 : 0)
+                              << " have_layout=" << (layout ? 1 : 0) << std::endl;
+                }
+            }
+            if (stage_weights && layout && std::getenv("WRF_SDIRK3_APINV_DEFECT")) {
+                torch::NoGradGuard ng_defect;
+                const auto sinv = wrf::sdirk3::inverse_scale_vector(
+                    *layout, stage_weights->scale, V[j]);
+                if (sinv.defined()) {
+                    const auto sv = (V[j] * sinv).to(torch::kFloat64);
+                    const double vn = sv.norm().to(torch::kCPU).item<double>();
+                    if (std::isfinite(vn) && vn > 0.0) {
+                        const auto d = ((w - V[j]) * sinv).to(torch::kFloat64);
+                        const double eps = d.norm().to(torch::kCPU).item<double>() / vn;
+                        std::cerr << "SDIRK3_APINV_DEFECT stage=" << stage_id
+                                  << " krylov_iter=" << j
+                                  << " eps=" << eps << std::endl;
+                    }
+                }
+            }
             if (basis_capture) {
                 basis_capture->arnoldi_call_active = false;
                 capture_basis_vector(basis_capture->A_Z, w);
@@ -3783,6 +3823,25 @@ public:
             return R_work.norm().to(torch::kCPU).item<float>() / sqrt_N;
         }
     }
+
+    // The stage weighting, but only when it was frozen for the stage now being solved. A
+    // weighting from an earlier bind describes a different linearization, and handing it over
+    // would weight this defect by another stage's error weights -- which is precisely what
+    // StageIdentity exists to prevent.
+    const wrf::sdirk3::FrozenStageWeights* stage_weights_for(int stage) const {
+        wrf::sdirk3::StageIdentity now;
+        now.solver_id = solver_id_;
+        now.capture_seq = stage_weights_.stage.capture_seq;   // whatever was handed over
+        now.ark_stage = stage;
+        now.point = wrf::sdirk3::WeightingPoint::StageEntry;
+        if (!stage_weights_.usable(now)) return nullptr;
+        // Each capture serves exactly ONE solve. A leftover -- from a previous stage, or from
+        // this stage in a previous step -- is refused because its sequence was already consumed.
+        if (stage_weights_.stage.capture_seq == consumed_weight_seq_) return nullptr;
+        consumed_weight_seq_ = stage_weights_.stage.capture_seq;
+        return &stage_weights_;
+    }
+    mutable uint64_t consumed_weight_seq_ = 0;
 
     WRFNewtonKrylovSolver::NewtonResult solve_stage_impl(
         const torch::Tensor& U_n,
@@ -7091,7 +7150,11 @@ public:
                           halo_mask_initialized_ ? &halo_mask_ : nullptr,
                           options_.periodic_x,
                           options_.periodic_y,
-                          jvp_check_this_iter ? &jvp_check_basis : nullptr)
+                          jvp_check_this_iter ? &jvp_check_basis : nullptr,
+                          // Handed over only if the weighting was frozen for THIS stage. The
+                          // identity check stays here, where the stage identity is known, rather
+                          // than inside the Krylov solve which would have to be told it.
+                          stage_weights_for(stage))
                     : krylov_methods::solve_gmres(
                           gmres_op,
                           gmres_rhs,
@@ -9257,6 +9320,10 @@ sdirk3::WRFNewtonKrylovSolver::ConvergenceStats sdirk3::WRFNewtonKrylovSolver::g
     s.defect_newton_iter = pImpl->diag_final_newton_iter_;
     s.defect_retry_generation = pImpl->diag_retry_generation_;
     return s;
+}
+
+std::uint64_t sdirk3::WRFNewtonKrylovSolver::solver_id() const {
+    return pImpl->solver_id_;
 }
 
 void sdirk3::WRFNewtonKrylovSolver::set_stage_weights(

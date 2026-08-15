@@ -5,6 +5,7 @@
 #include "wrf_sdirk3_state_layout.h"   // 9F.D93: THE packed-state layout
 #include "wrf_sdirk3_operator_contract.h"  // FrozenStageWeights: the stage gate's weighting
 #include <functional>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -266,6 +267,12 @@ public:
     // weighting frozen for one stage is refused for another.
     void set_stage_weights(wrf::sdirk3::FrozenStageWeights weights);
 
+    // This solver's process-unique id. A stage weighting is stamped with the id of the solver it
+    // is FOR, not the object that built it: the caller has its own id from the same counter, so
+    // stamping that one produced an identity that was correct for the producer and never matched
+    // the consumer -- the probe stayed silent until this was measured.
+    std::uint64_t solver_id() const;
+
     /**
      * Get convergence statistics
      */
@@ -449,7 +456,12 @@ namespace krylov_methods {
         const torch::Tensor* halo_mask = nullptr,
         bool periodic_x = false,
         bool periodic_y = false,
-        KrylovBasisCapture* basis_capture = nullptr
+        KrylovBasisCapture* basis_capture = nullptr,
+        // The stage gate's frozen weighting, for the opt-in A*P_j^-1 defect readout. DEFAULTED:
+        // this is a diagnostic input, and existing callers -- including the standalone FGMRES
+        // contract test, which links against this symbol directly -- must keep compiling and
+        // linking untouched.
+        const wrf::sdirk3::FrozenStageWeights* stage_weights = nullptr
     );
     
     /**

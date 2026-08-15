@@ -11239,10 +11239,16 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     // during the solve can only see the pre-stage state, so that is the reference here. Same
     // rule, earlier reference -- not bit-identical to the gate's own numbers, and this comment
     // exists so nobody later reads it as if it were.
-    if (newton_solver_ && unified_precond_) {
+    if (newton_solver_) {
         wrf::sdirk3::StageIdentity ident;
-        ident.solver_id = solver_id_;
-        ident.stage_state_generation = unified_precond_->stage_state_generation();
+        // The CONSUMER's id. This tile has its own from the same process-wide counter, and
+        // stamping that produced an identity correct for the producer and never equal to the
+        // one the solver checks -- the probe stayed silent until that was measured.
+        ident.solver_id = newton_solver_->solver_id();
+        // A fresh capture sequence per stage, from the process-wide monotonic counter that
+        // already exists. NOT the preconditioner's bind generation: the bind happens inside
+        // solve_stage and moves that counter, so a value stamped here could never match at use.
+        ident.capture_seq = wrf::sdirk3::next_solver_id();
         ident.ark_stage = stage;
         // STATED, not defaulted: U_stage is the state the solve STARTS from, so this is the
         // Newton-linearization metric. The convergence gate weights by U_new instead, and the two

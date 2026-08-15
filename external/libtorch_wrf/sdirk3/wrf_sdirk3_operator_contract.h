@@ -348,16 +348,29 @@ enum class WeightingPoint { StageEntry, StageAcceptance };
 
 struct StageIdentity {
     uint64_t solver_id = 0;
-    uint64_t stage_state_generation = 0;
+
+    // A MONOTONIC capture sequence, not the preconditioner's bind generation.
+    //
+    // The bind generation was the obvious choice and it does not work: the caller stamps the
+    // identity BEFORE solve_stage, and the stage bind inside the solve increments that counter --
+    // so the stamped value never equalled the value at use, and the check could never pass.
+    // Measured by running it: the probe produced zero output. A guard that cannot pass is as
+    // useless as one that always passes.
+    //
+    // A capture sequence is what the check actually needs. It distinguishes a leftover from a
+    // previous stage AND from the same stage of a previous step, and the consumer marks it used,
+    // so one capture serves exactly one solve.
+    uint64_t capture_seq = 0;
+
     int ark_stage = -1;
     WeightingPoint point = WeightingPoint::StageEntry;
 
     bool is_valid() const {
-        return solver_id != 0 && stage_state_generation != 0 && ark_stage >= 0;
+        return solver_id != 0 && capture_seq != 0 && ark_stage >= 0;
     }
     bool operator==(const StageIdentity& o) const {
         return solver_id == o.solver_id
-            && stage_state_generation == o.stage_state_generation
+            && capture_seq == o.capture_seq
             && ark_stage == o.ark_stage
             && point == o.point;
     }
@@ -393,7 +406,7 @@ inline FrozenStageWeights capture_stage_weights(const torch::Tensor& y_ref,
     if (flat.numel() != layout.total_size) return w;
     w.scale = ResidualScale::from_error_weights(
         error_weights_packed(flat, to_packed_block_sizes(layout), cfg),
-        stage.stage_state_generation);
+        stage.capture_seq);
     w.stage = stage;
     return w;
 }
