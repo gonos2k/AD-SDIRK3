@@ -35,6 +35,24 @@ struct WRMSNormConfig {
     float floor = 1.0e-12f;
 };
 
+// Everything error_weights_packed() needs, carried together so a diagnostic can build the SAME
+// weights the stage gate uses instead of approximating them. y_ref is held BY VALUE -- a Tensor is
+// a handle, so this is cheap and it keeps the referenced data alive, which a raw pointer would not.
+//
+// Stage-stamped on purpose. A weight source frozen for one stage must not silently weight another
+// stage's defect; usable() makes the caller name the stage it is asking about, the same discipline
+// the linearization token applies to generations.
+struct ResidualWeightSource {
+    torch::Tensor y_ref;
+    PackedBlockSizes blocks;
+    WRMSNormConfig cfg;
+    int stage = -1;
+
+    bool usable(int for_stage) const {
+        return y_ref.defined() && stage == for_stage && blocks.total() == y_ref.numel();
+    }
+};
+
 namespace detail {
 
 // THE error-weight formula, in one place. Everything that asks "is this residual small?" must
