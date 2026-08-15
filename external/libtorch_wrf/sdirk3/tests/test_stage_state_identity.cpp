@@ -308,7 +308,38 @@ int main() {
               "PRESERVED, not silently unified along with the consistency fix");
     }
 
-    constexpr int expected_checks = 27;
+    // 9. THE MU-IDENTITY GATE, over the full mode matrix. The predicate lives in ONE place
+    //    (SDIRK3Config::hevi_mu_identity_active) shared by the packed and 4D paths, so pinning it
+    //    here pins both. The matrix is the review's: identity ONLY under HEVI + the corrected
+    //    mass equation; legacy keeps div_z implicit (F_mu_I != 0), partial diagnostic modes have
+    //    unestablished mu-row ownership -- and my first gate admitted all of them.
+    {
+        auto& cfg = wrf::sdirk3::g_sdirk3_config;
+        const auto saved_hevi = cfg.hevi_split;
+        const auto saved_mode = cfg.mass_coordinate_mode;
+        const auto saved_imex = cfg.imex_split_mode;
+
+        struct Case { bool hevi; int mass; int imex; bool expect; const char* what; };
+        const Case cases[] = {
+            {true,  1, 3, true,  "WRFParity + HEVI + ARK324: identity ACTIVE"},
+            {false, 1, 3, false, "WRFParity, no HEVI: general Schur path"},
+            {true,  0, 3, false, "Legacy + HEVI: div_z stays implicit, identity FORBIDDEN"},
+            {true,  2, 3, false, "DiagnosticOmegaOnly + HEVI: no identity (partial mode)"},
+            {true,  3, 3, true,  "DiagnosticMuOnly + HEVI: mu row IS horizontal-only here"},
+            {false, 0, 3, false, "Legacy, no HEVI: baseline"},
+        };
+        for (const auto& c : cases) {
+            cfg.hevi_split = c.hevi;
+            cfg.mass_coordinate_mode = c.mass;
+            cfg.imex_split_mode = c.imex;
+            check(cfg.hevi_mu_identity_active() == c.expect, c.what);
+        }
+        cfg.hevi_split = saved_hevi;
+        cfg.mass_coordinate_mode = saved_mode;
+        cfg.imex_split_mode = saved_imex;
+    }
+
+    constexpr int expected_checks = 33;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

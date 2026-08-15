@@ -405,6 +405,11 @@ struct FrozenStageWeights {
     ResidualScale scale;
     StageIdentity stage;
 
+    // Which Newton iteration this capture was taken at. -1 for a stage-entry capture; the
+    // NewtonLinearization re-capture stamps the live index so the emitted record can attribute a
+    // Krylov trajectory to its Newton step.
+    int newton_iter = -1;
+
     // The config the weights were built with, kept so a consumer can re-capture at a DIFFERENT
     // reference state without inventing its own rules. The reference state is deliberately NOT
     // kept -- holding it was the freeze defect -- but the config is a small value and losing it
@@ -492,6 +497,22 @@ struct DirectionalDefectReport {
     // global_error^2 -- if that identity breaks, a block was dropped from the partition.
     double active_error = 0.0;
     double inactive_output_defect = 0.0;
+
+    // The identity defect DECOMPOSED, because eps alone cannot judge Krylov difficulty:
+    // B = cI has global_error = |c-1| -- arbitrarily large -- and GMRES solves cI x = b in ONE
+    // step, its minimal polynomial having degree 1. What actually costs Krylov directions is the
+    // part no scalar removes.
+    //
+    //   gain_alpha   = <v,Bv>_W / <v,v>_W            the best scalar multiple of v
+    //   shape_defect = ||W(Bv - alpha v)|| / ||Wv||  the remainder after removing it
+    //   cosine       = <v,Bv>_W / (||Wv|| ||WBv||)
+    //
+    // A pure gain error (alpha != 1, shape ~ 0, cos ~ 1) is one Krylov direction; a large shape
+    // defect is rotation into other blocks. global_error stays as the identity defect -- the
+    // right TARGET for A P^-1 ~ I -- but not, by itself, the verdict.
+    double gain_alpha = 0.0;
+    double shape_defect = 0.0;
+    double cosine = 0.0;
 
     // True when BOTH operators supplied a state digest and none of the samples moved.
     //
@@ -644,6 +665,18 @@ inline DirectionalDefectReport evaluate_directional_right_preconditioner_defect(
 
     rep.global_error = err.norm().to(torch::kCPU).item<double>() / vn;
     if (!std::isfinite(rep.global_error)) return rep;
+
+    {
+        // Weighted decomposition of B = A P^-1 along this direction (see the field comments).
+        const auto bw = az.to(torch::kFloat64) * sinv64;
+        const double vv = v_s.dot(v_s).to(torch::kCPU).item<double>();
+        const double vb = v_s.dot(bw).to(torch::kCPU).item<double>();
+        rep.gain_alpha = vb / vv;
+        rep.shape_defect =
+            (bw - rep.gain_alpha * v_s).norm().to(torch::kCPU).item<double>() / vn;
+        const double bn = bw.norm().to(torch::kCPU).item<double>();
+        rep.cosine = (bn > 0.0) ? vb / (vn * bn) : 0.0;
+    }
     double active_sq = 0.0, inactive_sq = 0.0;
     for (std::size_t i = 0; i < snapshot.layout.blocks.size() &&
                             i < rep.output_block_error.size(); ++i) {

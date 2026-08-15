@@ -5617,8 +5617,6 @@ vertical_coefficients:
     // Update preconditioner with current timestep
     if (unified_precond_) {
         unified_precond_->update(U_n, dt, gamma_);
-        precond_forward_dt_ = dt;                              // what the coefficients now
-        precond_forward_gamma_ = static_cast<float>(gamma_);   // correspond to -- BOTH halves of h
     }
     
     // Monitor energy/mass before stages
@@ -39048,85 +39046,62 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
         TileSDIRK3UnifiedSolver* self;
         wrf::sdirk3::UnifiedPreconditioner* precond;
         torch::Tensor saved_u_ref;
-        wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot saved_stage;
-        uint64_t saved_digest = 0;
-        float forward_dt = 0.0f;
-        float forward_gamma = 0.0f;
-        bool restored = false;
+        uint64_t saved_fingerprint = 0;
+        uint64_t saved_coeff_gen = 0;
+        uint64_t saved_stage_gen = 0;
+        bool verified = false;
 
-        // The success path calls THIS, before the replay returns, so a failed restore fails the
-        // replay rather than being logged from a noexcept destructor and discovered at the next
-        // apply(). The destructor keeps the same restoration as a safety net for the exception
-        // paths, where throwing again is not an option.
-        void restore_or_throw() {
-            restored = true;
+        // VERIFY, do not restore. The replay owns its preconditioner now, so the production
+        // instance must come out of a replay UNTOUCHED -- and the previous guard's own restore
+        // path was the last remaining writer: restore_stage_state() bumps the stage generation
+        // and sets coefficients_stale_, and the rebuild moved the coefficient generation. A guard
+        // that mutates the object to "protect" it is the observer effect wearing a seatbelt.
+        //
+        // What the replay genuinely mutates on `self` is U_ref_stage_; that is restored. For the
+        // preconditioner, equality of the fingerprint and both generations is REQUIRED: a
+        // mismatch means some replay-side code still reaches the production instance, which is a
+        // hole in the isolation, not a condition to repair silently.
+        void verify_or_throw() {
+            verified = true;
             self->U_ref_stage_ = saved_u_ref;
             if (!precond) return;
-            precond->restore_stage_state(saved_stage);
-            const uint64_t now = precond->stage_state_fingerprint();
-            TORCH_CHECK(now == saved_digest,
-                        "runAdjointReplay: stage state fingerprint mismatch after restore (",
-                        now, " != ", saved_digest, ")");
-            TORCH_CHECK(forward_dt > 0.0f && forward_gamma > 0.0f,
-                        "runAdjointReplay: no forward time coefficient recorded (dt=",
-                        forward_dt, ", gamma=", forward_gamma,
-                        ") -- cannot rebuild the coefficients the caller had");
-            precond->update(saved_u_ref, forward_dt, forward_gamma);
+            TORCH_CHECK(precond->stage_state_fingerprint() == saved_fingerprint,
+                        "runAdjointReplay: the PRODUCTION preconditioner's stage state changed "
+                        "across the replay -- replay isolation has a hole");
+            TORCH_CHECK(precond->coefficient_generation() == saved_coeff_gen &&
+                        precond->stage_state_generation() == saved_stage_gen,
+                        "runAdjointReplay: the PRODUCTION preconditioner's generations moved "
+                        "across the replay (coeff ", precond->coefficient_generation(), " vs ",
+                        saved_coeff_gen, ", stage ", precond->stage_state_generation(), " vs ",
+                        saved_stage_gen, ") -- replay isolation has a hole");
             TORCH_CHECK(!precond->coefficients_stale(),
-                        "runAdjointReplay: coefficients still stale after restore+rebuild");
+                        "runAdjointReplay: production coefficients are stale after a replay that "
+                        "must not have touched them");
         }
 
         ~ReplayStateGuard() noexcept {
-            if (restored) return;   // the success path already ran restore_or_throw()
+            if (verified) return;
+            // Exception path: restore what the replay mutates on `self`, and REPORT (cannot
+            // throw here) if the production preconditioner was touched.
             try {
                 self->U_ref_stage_ = saved_u_ref;
-                if (precond) {
-                    precond->restore_stage_state(saved_stage);
-                    // EXACT: a rollback either restores the state or it does not. The tolerance
-                    // here existed because the old digest was a floating summary sum; the
-                    // fingerprint is over raw bits and covers every restored field, including
-                    // mu_pert_last_bound, which the summary omitted entirely.
-                    const uint64_t now = precond->stage_state_fingerprint();
-                    if (now != saved_digest) {
-                        std::cerr << "SDIRK3_REPLAY_ISOLATION VIOLATED: preconditioner stage "
-                                     "state digest " << now << " != " << saved_digest
-                                  << " after restore" << std::endl << std::flush;
-                    }
-                    // AND REBUILD THE COEFFICIENTS, here, rather than leaving the object
-                    // fail-closed for whoever calls update() next.
-                    //
-                    // Restoring the stage fields is not enough: the acoustic/gravity coefficients
-                    // are derived from them (:2436, :3966 build inv_mu0 from mu_full_stage_), and
-                    // this replay also called update() with ITS OWN alpha, so after the restore
-                    // the coefficients match neither the caller's state nor the caller's dt.
-                    //
-                    // update(state, dt, gamma) does NOT read `state` (9F.D91, verified across its
-                    // body) -- it rebuilds on dt/gamma plus the generation counters, and reads the
-                    // stage state from mu_full_stage_, which has just been restored. So rebuilding
-                    // with the FORWARD dt is what puts the operator back.
-                    //
-                    // Previously this only reported the drift and returned; the recovery depended
-                    // on a later update() firing, and any apply() before that threw.
-                    if (forward_dt > 0.0f && forward_gamma > 0.0f) {
-                        precond->update(saved_u_ref, forward_dt, forward_gamma);
-                    }
-                    if (precond->coefficients_stale()) {
-                        std::cerr << "SDIRK3_REPLAY_ISOLATION VIOLATED: coefficients still stale "
-                                     "after restore -- the rebuild did not run (forward_dt="
-                                  << forward_dt << ")" << std::endl << std::flush;
-                    }
+                if (precond &&
+                    (precond->stage_state_fingerprint() != saved_fingerprint ||
+                     precond->coefficient_generation() != saved_coeff_gen ||
+                     precond->stage_state_generation() != saved_stage_gen)) {
+                    std::cerr << "SDIRK3_REPLAY_ISOLATION VIOLATED: production preconditioner "
+                                 "state moved across an exception-path replay" << std::endl
+                              << std::flush;
                 }
             } catch (...) {
-                std::cerr << "SDIRK3_REPLAY_ISOLATION: restore threw" << std::endl;
+                std::cerr << "SDIRK3_REPLAY_ISOLATION: verification threw" << std::endl;
             }
         }
     } replay_guard{this, unified_precond_.get(),
                    U_ref_stage_.defined() ? U_ref_stage_.detach().clone() : torch::Tensor{},
-                   unified_precond_ ? unified_precond_->snapshot_stage_state()
-                                    : wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot{},
                    unified_precond_ ? unified_precond_->stage_state_fingerprint() : 0,
-                   precond_forward_dt_,
-                   precond_forward_gamma_};
+                   unified_precond_ ? unified_precond_->coefficient_generation() : 0,
+                   unified_precond_ ? unified_precond_->stage_state_generation() : 0};
 
     const double alpha = static_cast<double>(dt) * static_cast<double>(gamma);
     IdentityTransposePreconditioner preconditioner;
@@ -39625,6 +39600,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     }
 
     dt_stage_ = dt_prev;
-    replay_guard.restore_or_throw();
+    replay_guard.verify_or_throw();
     return lambda;
 }

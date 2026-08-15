@@ -60,11 +60,19 @@ inline torch::Tensor wrms_block_sum(const torch::Tensor& v,
                                     float atol,
                                     const WRMSNormConfig& cfg) {
     if (size <= 0) {
-        return torch::zeros({}, v.options());
+        return torch::zeros({}, torch::TensorOptions()
+                                    .dtype(torch::kFloat64).device(v.device()));
     }
-    const auto v_block = v.slice(0, offset, offset + size);
+    // The DECISION reduction runs in FP64 regardless of the input dtype. An FP32 square-and-sum
+    // over a large packed field can overflow, lose small blocks entirely, and change with
+    // summation order -- and this norm gates convergence, so those are not rounding niceties but
+    // different DECISIONS on different hardware. The live A*P^-1 probe already promotes before
+    // its arithmetic for the same reason; the gate deserves the same standard as the diagnostic.
+    // Element division happens after promotion too, so a large |v|/small ewt ratio cannot
+    // overflow in float32 on the way in.
+    const auto v_block = v.slice(0, offset, offset + size).to(torch::kFloat64);
     const auto y_block = y_ref.slice(0, offset, offset + size);
-    const auto scaled = v_block / block_error_weights(y_block, atol, cfg);
+    const auto scaled = v_block / block_error_weights(y_block, atol, cfg).to(torch::kFloat64);
     return (scaled * scaled).sum();
 }
 
@@ -88,7 +96,8 @@ inline torch::Tensor wrms_norm_packed(const torch::Tensor& v,
     }
 
     int64_t offset = 0;
-    auto sum_sq = torch::zeros({}, v.options());
+    auto sum_sq = torch::zeros({}, torch::TensorOptions()
+                                       .dtype(torch::kFloat64).device(v.device()));
     sum_sq = sum_sq + detail::wrms_block_sum(v, y_ref, offset, blocks.u, cfg.atol_u, cfg);
     offset += blocks.u;
     sum_sq = sum_sq + detail::wrms_block_sum(v, y_ref, offset, blocks.v, cfg.atol_v, cfg);
@@ -101,7 +110,8 @@ inline torch::Tensor wrms_norm_packed(const torch::Tensor& v,
     offset += blocks.t;
     sum_sq = sum_sq + detail::wrms_block_sum(v, y_ref, offset, blocks.mu, cfg.atol_mu, cfg);
 
-    const auto denom = torch::full({}, static_cast<double>(std::max<int64_t>(v.numel(), 1)), v.options());
+    const auto denom = torch::full({}, static_cast<double>(std::max<int64_t>(v.numel(), 1)),
+                                   sum_sq.options());
     return torch::sqrt(sum_sq / denom);
 }
 

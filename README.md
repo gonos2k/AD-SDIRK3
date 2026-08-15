@@ -87,20 +87,25 @@ proven byte-identical.
 - **Built since, so this list stays honest in both directions:**
   - a **live `A P_j^-1` probe** reads the actual FGMRES triplet (`v_j`, `P_j^-1 v_j`,
     `A P_j^-1 v_j`) at zero extra operator calls, in both scaled-Krylov and physical-WRMS
-    coordinates — opt-in via `WRF_SDIRK3_APINV_DEFECT=1`. **Interpretation incomplete**: the
-    identity defect is a target, not a conditioning verdict (`B = cI` has an arbitrarily large
-    one and is a one-step GMRES solve), so gain / shape-defect / cosine belong in the same record
-    before any coefficient is judged by it.
-  - the **adjoint replay owns its preconditioner**, and a guard *verifies* the production instance
-    is untouched instead of restoring it. **Cleanup incomplete**: a receipt-equality contract
-    pinning strict no-write isolation is not yet in place.
+    coordinates, with per-direction **gain / shape-defect / cosine** — opt-in via
+    `WRF_SDIRK3_APINV_DEFECT=1`. The identity defect is a *target*, not a conditioning verdict:
+    `B = cI` has an arbitrarily large one and is a one-step GMRES solve, which the contract pins
+    as a case, so shape-defect is what actually costs Krylov directions.
+  - the **adjoint replay owns its preconditioner** — a replay-local instance built from the same
+    constructor inputs, and a guard *verifies* (fingerprint + generation equality) that the
+    production instance is untouched across the replay rather than restoring it. **Cleanup
+    incomplete**: a receipt-equality contract pinning strict no-write isolation is not yet in
+    place.
 - **Not built yet, stated so the gap is not read as done:**
   - the **correct raw block diagonals** `A_qq = I - h·J_qq^direct`. The shipped `phi` and `mu`
     diagonals are dimensionally invalid (the source says so at both sites), but the replacement
     values are **not** established — a dimensional argument cannot supply them, and the
     Schur-reduced round trips are already computed elsewhere, so moving them into the raw
-    diagonal would double-count. See `AcousticGravity_Shadow_Contract`.
+    diagonal would double-count. Two individually-derived corrections were also measured to
+    **anti-combine**, so the block must be derived together. See `AcousticGravity_Shadow_Contract`.
   - the **full ARK adjoint** and the **full-timestep `DG`/`DG^T`**
+  - the **acoustic–gravity coefficient re-derivation** (`D_mu`, `D_phi`, `c_s^2+N^2`,
+    direct/Schur double-count, theta–W)
 - **No multi-step well-balancedness, geostrophic/thermal-wind balance, mass/energy/PV budgets,
   or formal temporal-order verification.**
 - Support boundary: **dry, single-rank, single-tile, idealised map factors.** MPI halo primitives

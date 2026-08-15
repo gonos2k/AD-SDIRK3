@@ -1470,17 +1470,6 @@ private:
     // SDIRK stage timestep (stored from advanceZeroCopy for use in RHS computation)
     float dt_stage_ = 0.0f;    // Current SDIRK stage timestep
 
-    // The TIME COEFFICIENT the production preconditioner's coefficients were last built for.
-    // Recorded because update(state, dt, gamma) rebuilds on dt/gamma (9F.D91: it does NOT read
-    // `state`), so this is what a replay must restore the coefficients WITH -- the replay updates
-    // with its own alpha, which is not necessarily the forward one.
-    //
-    // BOTH halves. h = dt*gamma is the coefficient authority, and the first version recorded only
-    // dt, taking gamma from the class constant at rebuild time. That works while gamma is a
-    // compile-time constant and breaks the moment it is not (an adaptive ARK tableau, an
-    // alternative scheme) -- an identity contract must not lean on an implicit constant.
-    float precond_forward_dt_ = 0.0f;
-    float precond_forward_gamma_ = 0.0f;
 
     // External driving fields for boundary nudging
     torch::Tensor u_ext_;      // External u-field (staggered)
