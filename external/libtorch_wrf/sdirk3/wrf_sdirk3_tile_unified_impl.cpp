@@ -6352,7 +6352,7 @@ vertical_coefficients:
                     constexpr float catastrophic_scaled_threshold = 5.0f;
                     const float catastrophic_abs_floor = wrf::sdirk3::g_sdirk3_config.catastrophic_abs_floor;
                     const float growth_cap = wrf::sdirk3::g_sdirk3_config.stage_gate_growth_cap;
-                    float growth = stage_gate_growth_value();
+                    double growth = stage_gate_growth_value();
                     bool catastrophic = (last_stage_residual_ > catastrophic_scaled_threshold) ||
                                         (growth > growth_cap &&
                                          last_stage_R_full_norm_ > catastrophic_abs_floor) ||
@@ -6475,7 +6475,7 @@ vertical_coefficients:
                     constexpr float catastrophic_scaled_threshold = 5.0f;
                     const float catastrophic_abs_floor = wrf::sdirk3::g_sdirk3_config.catastrophic_abs_floor;
                     const float growth_cap = wrf::sdirk3::g_sdirk3_config.stage_gate_growth_cap;
-                    const float growth = stage_gate_growth_value();
+                    const double growth = stage_gate_growth_value();
                     const bool catastrophic = (last_stage_residual_ > catastrophic_scaled_threshold) ||
                         (growth > growth_cap && last_stage_R_full_norm_ > catastrophic_abs_floor) ||
                         stage_is_stagnation() ||
@@ -6561,7 +6561,7 @@ vertical_coefficients:
                     constexpr float catastrophic_scaled_threshold = 5.0f;
                     const float catastrophic_abs_floor = wrf::sdirk3::g_sdirk3_config.catastrophic_abs_floor;
                     const float growth_cap = wrf::sdirk3::g_sdirk3_config.stage_gate_growth_cap;
-                    const float growth = stage_gate_growth_value();
+                    const double growth = stage_gate_growth_value();
                     const bool catastrophic = (last_stage_residual_ > catastrophic_scaled_threshold) ||
                         (growth > growth_cap && last_stage_R_full_norm_ > catastrophic_abs_floor) ||
                         stage_is_stagnation() ||
@@ -8508,7 +8508,7 @@ vertical_coefficients:
                 constexpr float catastrophic_scaled_threshold = 5.0f;
                 const float catastrophic_abs_floor = wrf::sdirk3::g_sdirk3_config.catastrophic_abs_floor;
                 const float growth_cap = wrf::sdirk3::g_sdirk3_config.stage_gate_growth_cap;
-                float growth = stage_gate_growth_value();
+                double growth = stage_gate_growth_value();
                 bool non_finite = !std::isfinite(last_stage_residual_) ||
                                   !std::isfinite(last_stage_rel_R_full_) ||
                                   !std::isfinite(last_stage_R_full_norm_) ||
@@ -9664,7 +9664,7 @@ vertical_coefficients:
                 constexpr float catastrophic_scaled_threshold = 5.0f;
                 const float catastrophic_abs_floor = wrf::sdirk3::g_sdirk3_config.catastrophic_abs_floor;
                 const float growth_cap = wrf::sdirk3::g_sdirk3_config.stage_gate_growth_cap;
-                float growth = stage_gate_growth_value();
+                double growth = stage_gate_growth_value();
                 bool catastrophic = (last_stage_residual_ > catastrophic_scaled_threshold) ||
                                     (growth > growth_cap &&
                                      last_stage_R_full_norm_ > catastrophic_abs_floor) ||
@@ -9774,7 +9774,7 @@ vertical_coefficients:
                 constexpr float catastrophic_scaled_threshold = 5.0f;
                 const float catastrophic_abs_floor = wrf::sdirk3::g_sdirk3_config.catastrophic_abs_floor;
                 const float growth_cap = wrf::sdirk3::g_sdirk3_config.stage_gate_growth_cap;
-                float growth = stage_gate_growth_value();
+                double growth = stage_gate_growth_value();
                 bool catastrophic = (last_stage_residual_ > catastrophic_scaled_threshold) ||
                                     (growth > growth_cap &&
                                      last_stage_R_full_norm_ > catastrophic_abs_floor) ||
@@ -9871,7 +9871,7 @@ vertical_coefficients:
                 constexpr float catastrophic_scaled_threshold = 5.0f;
                 const float catastrophic_abs_floor = wrf::sdirk3::g_sdirk3_config.catastrophic_abs_floor;
                 const float growth_cap = wrf::sdirk3::g_sdirk3_config.stage_gate_growth_cap;
-                float growth = stage_gate_growth_value();
+                double growth = stage_gate_growth_value();
                 bool catastrophic = (last_stage_residual_ > catastrophic_scaled_threshold) ||
                                     (growth > growth_cap &&
                                      last_stage_R_full_norm_ > catastrophic_abs_floor) ||
@@ -11823,7 +11823,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
             const float rho_gate_current = last_stage_rel_R_full_;
             const float rho_gate_raw = last_stage_rel_R_full_raw_;
             const float rho_gate_abs_scaled = last_stage_R_full_norm_;
-            float gate_metric_value = last_stage_wrms_growth_;
+            double gate_metric_value = last_stage_wrms_growth_;   // telemetry, but printed at
+                                                                  // the precision the gate used
             if (gate_metric_mode == 1) {
                 gate_metric_value = rho_gate_abs_scaled;
             } else if (gate_metric_mode == 2) {
