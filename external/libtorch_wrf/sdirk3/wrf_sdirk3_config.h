@@ -10,6 +10,8 @@
                       // exactly this and I still shipped it: a local build is not a portability
                       // check for a HEADER, because whichever TU includes it first hides the gap.
 #include <string>
+#include <algorithm>  // std::transform in parse_bool_text; libstdc++ does not provide it
+#include <cctype>     // std::tolower, same reason. THIRD time in this header: see the note above.
 
 namespace wrf {
 namespace sdirk3 {
