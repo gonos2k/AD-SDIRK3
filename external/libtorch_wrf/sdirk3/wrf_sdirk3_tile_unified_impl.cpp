@@ -39128,6 +39128,28 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     const double alpha = static_cast<double>(dt) * static_cast<double>(gamma);
     IdentityTransposePreconditioner preconditioner;
 
+    // A REPLAY-OWNED preconditioner, so the replay never mutates the production one.
+    //
+    // Every prior increment made the shared-instance lifecycle safer -- snapshot, fingerprint,
+    // stale flag, rebuild-on-restore -- and every review answered that true isolation is a
+    // separate instance, not a better rollback. It is constructible: the production instance
+    // receives NOTHING beyond its constructor (grid_info_, a locally-built PhysicsConfig with
+    // enabled=false, dt, gamma -- see :3724), so the same inputs build an equivalent twin, and
+    // the replay's update()/bind/set_stage_state calls configure IT rather than the caller's.
+    //
+    // The guard above still restores U_ref_stage_, which the replay genuinely mutates on `self`.
+    // Its preconditioner half remains armed as a belt-and-braces check: with the replay no longer
+    // touching the production instance, the fingerprint comparison must now be an exact no-op,
+    // and a violation report from it means this isolation has a hole.
+    std::unique_ptr<wrf::sdirk3::UnifiedPreconditioner> replay_precond_owned;
+    if (unified_precond_) {
+        auto replay_physics = std::make_shared<wrf::sdirk3::PhysicsConfig>();
+        replay_physics->enabled = false;   // same as production: physics handled externally
+        replay_precond_owned = std::make_unique<wrf::sdirk3::UnifiedPreconditioner>(
+            grid_info_, replay_physics, dt, gamma);
+    }
+    wrf::sdirk3::UnifiedPreconditioner* const replay_precond = replay_precond_owned.get();
+
     try {
         // 9F.D99 (review section 6): the order comes from a pure, unit-tested function, and
         // a bind counter below asserts one bind per checkpoint. Together they close the
@@ -39189,8 +39211,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             //
             // Safe for the forward path: unifiedStep re-updates at the top of every step,
             // and the replay only runs after one has completed.
-            if (unified_precond_) {
-                unified_precond_->update(linearization_point, dt, gamma);
+            if (replay_precond) {
+                replay_precond->update(linearization_point, dt, gamma);
 
                 // 9F.D95 (review section 4): BIND EVERY CHECKPOINT, AND FAIL CLOSED.
                 //
@@ -39232,7 +39254,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                     // The receipt is read back FROM the preconditioner, so this verifies the
                     // bind took rather than assuming the setter did something.
                     const auto receipt =
-                        unified_precond_->bind_stage_state_or_throw(mu_pert, 1);
+                        replay_precond->bind_stage_state_or_throw(mu_pert, 1);
                     ++binds_performed;
                     static std::atomic<bool> bind_said{false};
                     bool bind_expected = false;
@@ -39279,19 +39301,19 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             // nothing and returned its own input -- as a transpose that was 52% correct.
             // The contract now carries a deliberately severed operator, so that failure is
             // caught in a second instead of a week.
-            if (unified_precond_ && probe_env_enabled("WRF_SDIRK3_RHS_GRAD_PROBE")) {
+            if (replay_precond && probe_env_enabled("WRF_SDIRK3_RHS_GRAD_PROBE")) {
                 static std::atomic<bool> tp_done{false};
                 bool tp_expected = false;
                 if (tp_done.compare_exchange_strong(tp_expected, true)) {
                     namespace tp = wrf::sdirk3::transpose_probe;
 
-                    auto M = [&](const torch::Tensor& x) { return unified_precond_->apply(x); };
+                    auto M = [&](const torch::Tensor& x) { return replay_precond->apply(x); };
 
                     // The CLAIMED transpose: the SAME apply_inverse_transpose the A^T solve is
                     // wired to (9F.D84). Measuring one implementation and shipping another
                     // would make this contract decorative.
                     auto M_transpose = [&](const torch::Tensor& cot) {
-                        return unified_precond_->apply_inverse_transpose(cot);
+                        return replay_precond->apply_inverse_transpose(cot);
                     };
 
                     std::cerr << tp::probe_transpose(M, M_transpose,
@@ -39392,18 +39414,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                             torch::NoGradGuard ng_probe;
                             auto v_probe = torch::randn(linearization_point.numel(),
                                                         linearization_point.options());
-                            auto z_before = unified_precond_->apply(v_probe);
+                            auto z_before = replay_precond->apply(v_probe);
 
                             auto mu_a = linearization_point
                                             .slice(0, mu_blk.start, mu_blk.start + mu_blk.size)
                                             .reshape({ny64, nx64}).clone();
-                            unified_precond_->set_stage_state(mu_a, 1);
-                            auto z_a = unified_precond_->apply(v_probe);
+                            replay_precond->set_stage_state(mu_a, 1);
+                            auto z_a = replay_precond->apply(v_probe);
 
                             // +1000 Pa on the column mass: physically large, ~1% of mu.
                             auto mu_b = mu_a + 1000.0f;
-                            unified_precond_->set_stage_state(mu_b, 1);
-                            auto z_b = unified_precond_->apply(v_probe);
+                            replay_precond->set_stage_state(mu_b, 1);
+                            auto z_b = replay_precond->apply(v_probe);
 
                             auto rel = [](const torch::Tensor& x, const torch::Tensor& y) {
                                 return ((x - y).norm() / y.norm().clamp_min(1e-30))
@@ -39411,10 +39433,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                             };
                             // Does the STAGE INDEX matter? The checkpoint carries no stage,
                             // so if it does, binding with a guessed stage is its own error.
-                            unified_precond_->set_stage_state(mu_a, 1);
-                            auto z_s1 = unified_precond_->apply(v_probe);
-                            unified_precond_->set_stage_state(mu_a, 3);
-                            auto z_s3 = unified_precond_->apply(v_probe);
+                            replay_precond->set_stage_state(mu_a, 1);
+                            auto z_s1 = replay_precond->apply(v_probe);
+                            replay_precond->set_stage_state(mu_a, 3);
+                            auto z_s3 = replay_precond->apply(v_probe);
 
                             const double d_bind = rel(z_a, z_before);
                             const double d_state = rel(z_b, z_a);
@@ -39515,11 +39537,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                     std::max(1e-8f, gmres_tolerance));
             };
 
-            if (probe_env_enabled("WRF_SDIRK3_ADJOINT_AD_MT") && unified_precond_) {
-                AdTransposePreconditioner ad_mt{unified_precond_.get()};
+            if (probe_env_enabled("WRF_SDIRK3_ADJOINT_AD_MT") && replay_precond) {
+                AdTransposePreconditioner ad_mt{replay_precond};
                 lambda = run_transpose_solve(ad_mt);
-            } else if (probe_env_enabled("WRF_SDIRK3_ADJOINT_FROZEN_M") && unified_precond_) {
-                FrozenMTransposePreconditioner frozen_m{unified_precond_.get()};
+            } else if (probe_env_enabled("WRF_SDIRK3_ADJOINT_FROZEN_M") && replay_precond) {
+                FrozenMTransposePreconditioner frozen_m{replay_precond};
                 lambda = run_transpose_solve(frozen_m);
             } else {
                 lambda = run_transpose_solve(preconditioner);
@@ -39588,7 +39610,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
         // form too, so this check is SILENT exactly where the bug lived. That is why the
         // ORDER is unit-tested at n=3 separately. This invariant is what starts working the
         // moment the forward runs long enough to produce a second checkpoint.
-        if (unified_precond_) {
+        if (replay_precond) {
             TORCH_CHECK(binds_performed == checkpoints.size(),
                         "runAdjointReplay: bound the preconditioner ", binds_performed,
                         " time(s) for ", checkpoints.size(), " checkpoints -- every "
