@@ -65,7 +65,8 @@
 #include <stdexcept>
 #include <vector>
 #include <cstring>  // PR 9B: std::strcmp in the checker direction loop
-#include <map>      // PR 9B: per-block best-epsilon tracking in the checker
+#include <map>
+#include <set>      // PR 9B: per-block best-epsilon tracking in the checker
 #include <mutex>    // PR 8.1: emit_stage_diag line-atomic output mutex
 #include <sstream>  // PR 8.1: per-record ostringstream (libstdc++ needs it explicit)
 #include <atomic>   // std::atomic was arriving transitively; libstdc++ need not provide it
@@ -1052,6 +1053,29 @@ static KrylovTerminationResolution resolve_krylov_termination(
 }
 
 // GMRES implementation for Krylov subspace method
+// ONE answer to "is the A*P^-1 probe on", shared by the capture in the Newton driver and the
+// emit inside FGMRES. If they disagreed, capturing without emitting would waste work and emitting
+// without capturing would print nothing and look like a broken probe.
+//
+// Evaluated once: getenv per Newton iteration is needless and the value cannot change mid-run.
+// Uses THE project spelling authority, and reports an unrecognised value rather than silently
+// treating it as off -- silence from a diagnostic is indistinguishable from a broken one.
+static bool apinv_probe_armed() {
+    static const bool armed = [] {
+        const char* v = std::getenv("WRF_SDIRK3_APINV_DEFECT");
+        if (!v) return false;
+        const auto parsed = wrf::sdirk3::parse_bool_text(v);
+        if (parsed == wrf::sdirk3::BoolText::Unrecognized) {
+            std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_APINV_DEFECT='" << v
+                      << "' is not a recognised boolean; the A*P^-1 defect probe stays OFF. "
+                         "Use 1/true/.true./t/yes." << std::endl;
+            return false;
+        }
+        return parsed == wrf::sdirk3::BoolText::True;
+    }();
+    return armed;
+}
+
 namespace krylov_methods {
 
 WRFNewtonKrylovSolver::GMRESResult solve_gmres(
@@ -2593,30 +2617,21 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 // different way -- WRF_SDIRK3_APINV_DEFECT=true is valid for every other flag in
                 // this codebase and would have silently done nothing, which is indistinguishable
                 // from a broken probe.
-                const char* apinv_env = std::getenv("WRF_SDIRK3_APINV_DEFECT");
-                bool apinv_on = false;
-                if (apinv_env) {
-                    const auto parsed = wrf::sdirk3::parse_bool_text(apinv_env);
-                    apinv_on = (parsed == wrf::sdirk3::BoolText::True);
-                    if (parsed == wrf::sdirk3::BoolText::Unrecognized) {
-                        static std::atomic<bool> warned{false};
-                        if (!warned.exchange(true)) {
-                            std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_APINV_DEFECT='" << apinv_env
-                                      << "' is not a recognised boolean; the A*P^-1 defect probe "
-                                         "stays OFF. Use 1/true/.true./t/yes." << std::endl;
-                        }
-                    }
-                }
-                if (apinv_on) {
-                    static std::atomic<bool> said{false};
-                    if (!said.exchange(true)) {
-                        std::cerr << "SDIRK3_APINV_DEFECT_ARMED stage=" << stage_id
+                // Armed but silent is the case worth reporting: it looks identical to a broken
+                // probe, and it cost two rebuilds to diagnose the first time. Keyed per STAGE
+                // rather than per process, so one stage's missing input cannot mask another's.
+                if (apinv_probe_armed() && !(stage_weights && layout)) {
+                    static std::mutex said_mu;
+                    static std::set<int> said_stages;
+                    std::lock_guard<std::mutex> lk(said_mu);
+                    if (said_stages.insert(stage_id).second) {
+                        std::cerr << "SDIRK3_APINV_DEFECT_SILENT stage=" << stage_id
                                   << " have_weights=" << (stage_weights ? 1 : 0)
                                   << " have_layout=" << (layout ? 1 : 0)
-                                  << " scaled=" << (krylov_to_physical ? 1 : 0) << std::endl;
+                                  << " -- probe armed but an input is missing" << std::endl;
                     }
                 }
-                if (apinv_on && stage_weights && layout) {
+                if (apinv_probe_armed() && stage_weights && layout) {
                     torch::NoGradGuard ng_defect;
                     const auto v64 = V[j].to(torch::kFloat64);
                     const auto w64 = w.to(torch::kFloat64);
@@ -2638,10 +2653,18 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                     }
 
                     if (std::isfinite(den_k) && den_k > 0.0) {
+                        const char* point_name =
+                            stage_weights->stage.point ==
+                                wrf::sdirk3::WeightingPoint::NewtonLinearization
+                                ? "newton_linearization"
+                                : (stage_weights->stage.point ==
+                                       wrf::sdirk3::WeightingPoint::StageAcceptance
+                                       ? "stage_acceptance" : "stage_entry");
                         std::cerr << "SDIRK3_APINV_DEFECT"
                                   << " solver=" << stage_weights->stage.solver_id
                                   << " stage=" << stage_id
                                   << " capture=" << stage_weights->stage.capture_seq
+                                  << " weighting_point=" << point_name
                                   << " krylov_iter=" << j
                                   << " scaled=" << (krylov_to_physical ? 1 : 0)
                                   << " eps_krylov=" << (num_k / den_k)
@@ -3909,6 +3932,38 @@ public:
         now.point = wrf::sdirk3::WeightingPoint::StageEntry;
         return stage_weights_.usable(now) ? &stage_weights_ : nullptr;
     }
+
+    // Weights at the state the operator is ACTUALLY linearized about.
+    //
+    // FGMRES solves the Newton system formed at Y_n = B + h*K_n, not at the stage's entry state.
+    // e_i(Y) = max(rtol*|Y_i| + atol, floor) depends on Y, so weighting the defect by the
+    // stage-entry state applies the gate's FORMULA at the wrong point -- the same rule, a
+    // different metric. Re-captured per Newton iteration from the same config the caller handed
+    // over, so the tolerances still have one source.
+    //
+    // Built only when the probe is armed: it is one axpy and one weight vector per Newton
+    // iteration, which is nothing next to a Krylov solve but is not free, and the default path
+    // must not pay for a diagnostic.
+    const wrf::sdirk3::FrozenStageWeights* newton_weights_for(
+        const torch::Tensor& stage_base, const torch::Tensor& K,
+        float dt, float gamma, int stage, int newton_iter) const {
+        const auto* handed = stage_weights_for(stage);
+        if (!handed || !layout_initialized_) return nullptr;
+        if (!stage_base.defined() || !K.defined()) return nullptr;
+
+        torch::NoGradGuard ng;
+        const auto Y_n = stage_base.detach() +
+                         static_cast<double>(dt) * static_cast<double>(gamma) * K.detach();
+
+        wrf::sdirk3::StageIdentity ident = handed->stage;
+        ident.point = wrf::sdirk3::WeightingPoint::NewtonLinearization;
+        newton_weights_ = wrf::sdirk3::capture_stage_weights(
+            Y_n, cached_layout_, handed->cfg, ident);
+        newton_weights_newton_iter_ = newton_iter;
+        return newton_weights_.scale.is_valid() ? &newton_weights_ : nullptr;
+    }
+    mutable wrf::sdirk3::FrozenStageWeights newton_weights_;
+    mutable int newton_weights_newton_iter_ = -1;
     mutable uint64_t consumed_weight_seq_ = 0;
 
     // A capture is valid for exactly ONE stage solve, and it is consumed HERE -- at stage entry,
@@ -7241,7 +7296,11 @@ public:
                           // Handed over only if the weighting was frozen for THIS stage. The
                           // identity check stays here, where the stage identity is known, rather
                           // than inside the Krylov solve which would have to be told it.
-                          stage_weights_for(stage),
+                          // Weighted at the Newton linearization point when the probe is on;
+                          // the stage-entry capture is the fallback and is labelled as such.
+                          apinv_probe_armed()
+                              ? newton_weights_for(U_n, K, dt, gamma, stage, newton_iter)
+                              : nullptr,
                           // S, so a physically-weighted defect is computed on physical vectors.
                           // Null when scaling is off, where S = I.
                           scaling_initialized_ ? &S_diag_ : nullptr)

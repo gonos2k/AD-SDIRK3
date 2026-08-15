@@ -344,7 +344,11 @@ inline PackedBlockSizes to_packed_block_sizes(const StateLayout& layout) {
 // The error weight is e_i(Y) = max(rtol*|Y_i| + atol_q, floor), so Y1 != Y2 gives e(Y1) != e(Y2).
 // "Same formula and config" is therefore NOT "same metric", and letting one object serve both
 // points would silently equate them. Naming the point makes a caller say which it wants.
-enum class WeightingPoint { StageEntry, StageAcceptance };
+enum class WeightingPoint {
+    StageEntry,           // the state the stage STARTS from
+    NewtonLinearization,  // Y_n = B + h*K_n, where the operator FGMRES solves is formed
+    StageAcceptance,      // U_new, what the convergence gate weights by
+};
 
 struct StageIdentity {
     uint64_t solver_id = 0;
@@ -388,6 +392,12 @@ struct FrozenStageWeights {
     ResidualScale scale;
     StageIdentity stage;
 
+    // The config the weights were built with, kept so a consumer can re-capture at a DIFFERENT
+    // reference state without inventing its own rules. The reference state is deliberately NOT
+    // kept -- holding it was the freeze defect -- but the config is a small value and losing it
+    // would force the only other option: a second copy of the gate's tolerances.
+    WRMSNormConfig cfg;
+
     bool usable(const StageIdentity& now) const {
         return scale.is_valid() && stage.is_valid() && stage == now;
     }
@@ -408,6 +418,7 @@ inline FrozenStageWeights capture_stage_weights(const torch::Tensor& y_ref,
         error_weights_packed(flat, to_packed_block_sizes(layout), cfg),
         stage.capture_seq);
     w.stage = stage;
+    w.cfg = cfg;
     return w;
 }
 
