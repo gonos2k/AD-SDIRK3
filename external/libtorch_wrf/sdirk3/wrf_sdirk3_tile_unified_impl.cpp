@@ -39022,16 +39022,19 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
         wrf::sdirk3::UnifiedPreconditioner* precond;
         torch::Tensor saved_u_ref;
         wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot saved_stage;
-        double saved_digest = 0.0;
+        uint64_t saved_digest = 0;
         uint64_t saved_coeff_generation = 0;
         ~ReplayStateGuard() noexcept {
             try {
                 self->U_ref_stage_ = saved_u_ref;
                 if (precond) {
                     precond->restore_stage_state(saved_stage);
-                    const double now = precond->stage_state_digest();
-                    if (!(std::abs(now - saved_digest) <=
-                          1e-9 * std::max(1.0, std::abs(saved_digest)))) {
+                    // EXACT: a rollback either restores the state or it does not. The tolerance
+                    // here existed because the old digest was a floating summary sum; the
+                    // fingerprint is over raw bits and covers every restored field, including
+                    // mu_pert_last_bound, which the summary omitted entirely.
+                    const uint64_t now = precond->stage_state_fingerprint();
+                    if (now != saved_digest) {
                         std::cerr << "SDIRK3_REPLAY_ISOLATION VIOLATED: preconditioner stage "
                                      "state digest " << now << " != " << saved_digest
                                   << " after restore" << std::endl << std::flush;
@@ -39076,7 +39079,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                    U_ref_stage_.defined() ? U_ref_stage_.detach().clone() : torch::Tensor{},
                    unified_precond_ ? unified_precond_->snapshot_stage_state()
                                     : wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot{},
-                   unified_precond_ ? unified_precond_->stage_state_digest() : 0.0,
+                   unified_precond_ ? unified_precond_->stage_state_fingerprint() : 0,
                    unified_precond_ ? unified_precond_->coefficient_generation() : 0};
 
     const double alpha = static_cast<double>(dt) * static_cast<double>(gamma);

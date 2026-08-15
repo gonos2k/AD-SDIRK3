@@ -2,6 +2,7 @@
 #define UNIFIED_PRECONDITIONER_ENHANCED_H
 
 #include <torch/torch.h>
+#include <cstring>
 #include <memory>
 #include <set>
 #include <tuple>
@@ -301,13 +302,38 @@ public:
     // Digest of exactly the fields above, for the isolation contract. Deliberately includes
     // mu_full_stage's VALUES, not just its shape -- the whole failure mode is a field from
     // the wrong checkpoint, which has identical shape.
-    double stage_state_digest() const {
+    // EXACT fingerprint of every field the snapshot restores.
+    //
+    // The previous digest was 1e6*stage + 1e3*scale + |mu_full|_1 and claimed, in its own comment,
+    // to cover exactly those fields. It did not:
+    //   * mu_pert_last_bound was ABSENT, so deleting its restore would have kept passing
+    //   * mu_full collapsed to an L1 sum, so any rearrangement with the same sum was identical
+    //   * the terms were ADDED, so a stage change could be offset by a field change
+    //
+    // A rollback either restores the state or it does not, so this is exact equality over the
+    // raw values, not a tolerance on a summary scalar.
+    uint64_t stage_state_fingerprint() const {
         torch::NoGradGuard g;
-        double d = static_cast<double>(current_stage_) * 1e6
-                 + static_cast<double>(mu_scale_correction_) * 1e3;
-        if (mu_full_stage_.defined())
-            d += mu_full_stage_.to(torch::kFloat64).abs().sum().item<double>();
-        return d;
+        uint64_t h = 1469598103934665603ULL;                  // FNV-1a offset basis
+        auto mix = [&h](uint64_t v) { h ^= v; h *= 1099511628211ULL; };
+        auto mix_tensor = [&](const torch::Tensor& t) {
+            if (!t.defined()) { mix(0x9E3779B97F4A7C15ULL); return; }
+            const auto c = t.detach().to(torch::kCPU).to(torch::kFloat64).contiguous();
+            mix(static_cast<uint64_t>(c.numel()));
+            const double* p = c.data_ptr<double>();
+            for (int64_t i = 0; i < c.numel(); ++i) {
+                uint64_t bits;
+                std::memcpy(&bits, &p[i], sizeof(bits));      // exact bits, NaN and -0 included
+                mix(bits);
+            }
+        };
+        mix(static_cast<uint64_t>(static_cast<int64_t>(current_stage_)));
+        uint32_t sc;
+        std::memcpy(&sc, &mu_scale_correction_, sizeof(sc));
+        mix(sc);
+        mix_tensor(mu_full_stage_);
+        mix_tensor(mu_pert_last_bound_);                      // the field the old digest omitted
+        return h;
     }
 
     /**
