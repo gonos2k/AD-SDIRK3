@@ -11219,6 +11219,28 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
             wrf::sdirk3::StateLayout::from_grid_dims(nx_, ny_, nz_, nx_u_, ny_v_, nz_w_));
     };
     auto wrms_gate_config_for_stage = [&]() -> wrf::sdirk3::WRMSNormConfig {
+        // ONE KNOB, TWO ROLES -- and this is the error-weight role, not the stopping rule.
+        //
+        // newton_tol is the Newton ACCEPTANCE tolerance (||S^-1 R|| < newton_tol at
+        // wrf_sdirk3_newton_solver.cpp:5708). Reusing it as the error-weight rtol makes the
+        // DEFINITION of "small" move whenever the stopping rule is retuned, which is a different
+        // decision about a different quantity.
+        //
+        // The consequence is live, not theoretical: em_b_wave sets sdirk3_newton_tol = 0.2, so
+        // the weights are e_i = 0.2*|Y_i| + atol -- a residual counts as small when it is under
+        // roughly a FIFTH of the local state magnitude. Every WRMS-weighted diagnostic inherits
+        // that scale, so those numbers are comparable only across runs sharing this value. The
+        // probe emits ewt_rtol with each record for exactly that reason.
+        //
+        // NOT separated here: an independent ewt_rtol is a new config knob and this project
+        // requires those to be opt-in AND fully wired (Registry + Fortran + C++). That is the
+        // next step, not something to slip in behind a default.
+        //
+        // The review that raised this derived a tau^2 tightening from it, on the assumption that
+        // the gate compares WRMS(R) < tau. This code does not: the stage gate compares a WRMS
+        // GROWTH RATIO (last_stage_wrms_growth_), in which the weights appear in numerator and
+        // denominator and largely cancel. The coupling is real; that particular consequence is
+        // not the one this code has.
         const float rtol = std::max(wrf::sdirk3::g_sdirk3_config.newton_tol, 1.0e-6f);
         return wrf::sdirk3::WRMSNormConfig{
             rtol,

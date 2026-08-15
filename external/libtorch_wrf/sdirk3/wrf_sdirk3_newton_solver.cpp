@@ -2665,6 +2665,14 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                                   << " stage=" << stage_id
                                   << " capture=" << stage_weights->stage.capture_seq
                                   << " weighting_point=" << point_name
+                                  // The weighting that produced these numbers, emitted so a
+                                  // reader never has to look it up. It is NOT a physical error
+                                  // scale: ewt_rtol is max(newton_tol, 1e-6), and em_b_wave sets
+                                  // sdirk3_newton_tol = 0.2, so "small" here means "under ~20% of
+                                  // the local state magnitude". A tighter rtol makes the SAME
+                                  // defect read much larger, so eps is only comparable across
+                                  // runs that share this value.
+                                  << " ewt_rtol=" << stage_weights->cfg.rtol
                                   << " krylov_iter=" << j
                                   << " scaled=" << (krylov_to_physical ? 1 : 0)
                                   << " eps_krylov=" << (num_k / den_k)
