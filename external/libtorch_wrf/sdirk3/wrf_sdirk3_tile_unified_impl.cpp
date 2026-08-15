@@ -11210,6 +11210,47 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         }
     }
 
+    auto packed_block_sizes_for_stage = [&]() -> wrf::sdirk3::PackedBlockSizes {
+        return wrf::sdirk3::PackedBlockSizes{
+            static_cast<int64_t>(nx_u_) * ny_ * nz_,
+            static_cast<int64_t>(nx_) * ny_v_ * nz_,
+            static_cast<int64_t>(nx_) * ny_ * nz_w_,
+            static_cast<int64_t>(nx_) * ny_ * nz_w_,
+            static_cast<int64_t>(nx_) * ny_ * nz_,
+            static_cast<int64_t>(nx_) * ny_
+        };
+    };
+    auto wrms_gate_config_for_stage = [&]() -> wrf::sdirk3::WRMSNormConfig {
+        const float rtol = std::max(wrf::sdirk3::g_sdirk3_config.newton_tol, 1.0e-6f);
+        return wrf::sdirk3::WRMSNormConfig{
+            rtol,
+            1.0e-6f, 1.0e-6f, 1.0e-6f,
+            1.0e-2f,
+            1.0e-5f,
+            1.0e-3f,
+            1.0e-12f
+        };
+    };
+
+    // Hand the solver the gate's weighting so a diagnostic INSIDE the solve can judge A*P^-1 in
+    // the metric that decides convergence, instead of inventing a second one. The formula, the
+    // config and the block layout are the gate's -- shared through the same two helpers above,
+    // not copied.
+    //
+    // ONE DELIBERATE DIFFERENCE, stated because it cannot be removed: the gate weights by U_new,
+    // the POST-stage state, which does not exist yet when the stage begins. A probe running
+    // during the solve can only see the pre-stage state, so that is the reference here. Same
+    // rule, earlier reference -- not bit-identical to the gate's own numbers, and this comment
+    // exists so nobody later reads it as if it were.
+    if (newton_solver_) {
+        wrf::sdirk3::ResidualWeightSource wsrc;
+        wsrc.y_ref  = U_stage;
+        wsrc.blocks = packed_block_sizes_for_stage();
+        wsrc.cfg    = wrms_gate_config_for_stage();
+        wsrc.stage  = stage;
+        newton_solver_->set_residual_weight_source(std::move(wsrc));
+    }
+
     // FIX 2026-01-29: Pass K_prev for stage 2/3 predictor initialization.
     // Without K_prev, stages 2/3 start Newton from K=0, causing 38+ iterations.
     // With K_prev, the predictor computes K ≈ F(U_pred) as initial guess.
@@ -11277,27 +11318,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_wrms_norm_ = 0.0f;
     last_stage_wrms_growth_ = 0.0f;
 
-    auto packed_block_sizes_for_stage = [&]() -> wrf::sdirk3::PackedBlockSizes {
-        return wrf::sdirk3::PackedBlockSizes{
-            static_cast<int64_t>(nx_u_) * ny_ * nz_,
-            static_cast<int64_t>(nx_) * ny_v_ * nz_,
-            static_cast<int64_t>(nx_) * ny_ * nz_w_,
-            static_cast<int64_t>(nx_) * ny_ * nz_w_,
-            static_cast<int64_t>(nx_) * ny_ * nz_,
-            static_cast<int64_t>(nx_) * ny_
-        };
-    };
-    auto wrms_gate_config_for_stage = [&]() -> wrf::sdirk3::WRMSNormConfig {
-        const float rtol = std::max(wrf::sdirk3::g_sdirk3_config.newton_tol, 1.0e-6f);
-        return wrf::sdirk3::WRMSNormConfig{
-            rtol,
-            1.0e-6f, 1.0e-6f, 1.0e-6f,
-            1.0e-2f,
-            1.0e-5f,
-            1.0e-3f,
-            1.0e-12f
-        };
-    };
     auto update_stage_wrms_metric = [&](const torch::Tensor& residual,
                                         const torch::Tensor& y_ref,
                                         const char* label) {
@@ -38992,6 +39012,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
         torch::Tensor saved_u_ref;
         wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot saved_stage;
         double saved_digest = 0.0;
+        uint64_t saved_coeff_generation = 0;
         ~ReplayStateGuard() noexcept {
             try {
                 self->U_ref_stage_ = saved_u_ref;
@@ -39004,6 +39025,37 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                                      "state digest " << now << " != " << saved_digest
                                   << " after restore" << std::endl << std::flush;
                     }
+                    // The digest above covers only what the snapshot RESTORES: mu_full_stage,
+                    // mu_pert_last_bound, current_stage, mu_scale_correction. It says nothing
+                    // about the coefficients DERIVED from them.
+                    //
+                    // This replay calls update() (below), and update() ->
+                    // initialize_acoustic_gravity_solver() recomputes the acoustic/gravity
+                    // coefficients from ITS linearization point and increments
+                    // coefficient_generation. Those coefficients read mu_full_stage_ (see
+                    // wrf_sdirk3_unified_preconditioner.cpp:2436 and :3966, inv_mu0). Restoring
+                    // mu_full_stage_ afterwards does NOT recompute them, so the preconditioner
+                    // is left with stage fields from the caller and coefficients from the replay
+                    // checkpoint.
+                    //
+                    // The guard was built around set_stage_state -- which, as the comment below
+                    // says, this replay never calls -- and update() was the path it did not
+                    // cover. Restoring the coefficients means either snapshotting every
+                    // coefficient tensor or re-running update() with the original linearization
+                    // point inside a noexcept destructor; both are design decisions about what
+                    // the replay contract promises, not edits to slip in here.
+                    //
+                    // Until that is decided, this is reported rather than left silent: a mismatch
+                    // means the coefficients in force are NOT the ones the caller had.
+                    const uint64_t coeff_now = precond->coefficient_generation();
+                    if (coeff_now != saved_coeff_generation) {
+                        std::cerr << "SDIRK3_REPLAY_ISOLATION VIOLATED: coefficient_generation "
+                                  << coeff_now << " != " << saved_coeff_generation
+                                  << " after restore -- coefficients are still bound to the "
+                                     "replay checkpoint (stage fields were restored, the "
+                                     "coefficients derived from them were not)"
+                                  << std::endl << std::flush;
+                    }
                 }
             } catch (...) {
                 std::cerr << "SDIRK3_REPLAY_ISOLATION: restore threw" << std::endl;
@@ -39013,7 +39065,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                    U_ref_stage_.defined() ? U_ref_stage_.detach().clone() : torch::Tensor{},
                    unified_precond_ ? unified_precond_->snapshot_stage_state()
                                     : wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot{},
-                   unified_precond_ ? unified_precond_->stage_state_digest() : 0.0};
+                   unified_precond_ ? unified_precond_->stage_state_digest() : 0.0,
+                   unified_precond_ ? unified_precond_->coefficient_generation() : 0};
 
     const double alpha = static_cast<double>(dt) * static_cast<double>(gamma);
     IdentityTransposePreconditioner preconditioner;

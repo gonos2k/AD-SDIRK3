@@ -3,6 +3,7 @@
 
 #include <torch/torch.h>
 #include "wrf_sdirk3_state_layout.h"   // 9F.D93: THE packed-state layout
+#include "wrf_sdirk3_wrms_norm.h"      // ResidualWeightSource: the stage gate's weighting
 #include <functional>
 #include <memory>
 #include <vector>
@@ -255,6 +256,14 @@ public:
         const torch::Tensor& F_phys = torch::Tensor()
     );
     
+    // The stage gate's residual weighting, handed to the solver so a diagnostic inside it can
+    // judge A*P^-1 in the SAME metric that decides convergence. Built by the caller because that
+    // is where the gate's config and block sizes live; carrying it here rather than through three
+    // solve_stage overloads and solve_fgmres keeps the change to one entry point.
+    //
+    // Costs nothing when unset: no weights are computed unless a probe asks for them.
+    void set_residual_weight_source(wrf::sdirk3::ResidualWeightSource source);
+
     /**
      * Get convergence statistics
      */

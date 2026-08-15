@@ -123,38 +123,23 @@ external/io_int/test_io_idx
 external/io_netcdf/diffwrf
 external/libtorch_wrf/sdirk3/test_*
 external/libtorch_wrf/sdirk3/tests/test_*
-!external/libtorch_wrf/sdirk3/tests/test_wrms_gate_metric.cpp
-!external/libtorch_wrf/sdirk3/tests/test_u_slow_closures.cpp
-!external/libtorch_wrf/sdirk3/tests/test_diag_io_concurrency.cpp
-!external/libtorch_wrf/sdirk3/tests/test_config_provenance.cpp
-!external/libtorch_wrf/sdirk3/tests/test_dump_contract.cpp
-!external/libtorch_wrf/sdirk3/tests/test_acoustic_schedule_matrix.cpp
-!external/libtorch_wrf/sdirk3/tests/test_experiment_config_parser.cpp
-!external/libtorch_wrf/sdirk3/tests/test_base_state_layout.cpp
-!external/libtorch_wrf/sdirk3/tests/test_hydrostatic_balance.cpp
-!external/libtorch_wrf/sdirk3/tests/test_base_eos_contract.cpp
-!external/libtorch_wrf/sdirk3/tests/test_hydrostatic_pressure_orientation.cpp
-!external/libtorch_wrf/sdirk3/tests/test_metric_policy.cpp
-!external/libtorch_wrf/sdirk3/tests/test_ad_tangent_contract.cpp
-!external/libtorch_wrf/sdirk3/tests/test_response_probe.cpp
-!external/libtorch_wrf/sdirk3/tests/test_implicit_diff.cpp
-!external/libtorch_wrf/sdirk3/tests/test_base_state_checked_abi.cpp
-!external/libtorch_wrf/sdirk3/test_wdamp_tangent_contract.cpp
-!external/libtorch_wrf/sdirk3/test_wdamp_preconditioner_policy_contract.cpp
-!external/libtorch_wrf/sdirk3/test_rw_term_capture_contract.cpp
-!external/libtorch_wrf/sdirk3/test_wdamp_wrf_reference_contract.cpp
-!external/libtorch_wrf/sdirk3/test_ww_cp_parity_contract.cpp
-!external/libtorch_wrf/sdirk3/test_stage_operand_decomposition_contract.cpp
-# Torch-free contract test SOURCES are tracked (the extensionless binaries the
-# broad test_* rule above targets stay ignored). CI compiles these standalone.
-!external/libtorch_wrf/sdirk3/test_msf_raw_stats.cpp
-!external/libtorch_wrf/sdirk3/test_geometry_contract.cpp
-!external/libtorch_wrf/sdirk3/test_vjp_semantics.cpp
-!external/libtorch_wrf/sdirk3/test_trust_model_contract.cpp
-!external/libtorch_wrf/sdirk3/test_fgmres_contract.cpp
-!external/libtorch_wrf/sdirk3/test_mpi_halo_contract.cpp
-!external/libtorch_wrf/sdirk3/test_mpi_runtime_contract.cpp
-!external/libtorch_wrf/sdirk3/tests/test_core_link_smoke.cpp
+# Sources are NEVER artifacts. The two rules above target the extensionless compiled binaries,
+# but they matched test_*.cpp too, and the defence was a hand-maintained list of per-file
+# negations -- so every new test had to be enumerated by hand, and forgetting was SILENT: the file
+# builds, links and passes locally while never reaching CI or a reviewer. A contract that exists
+# only on one disk is worse than no contract. Negating by EXTENSION removes the list and the
+# failure mode together; the extensionless binaries stay ignored.
+!external/libtorch_wrf/sdirk3/test_*.cpp
+!external/libtorch_wrf/sdirk3/test_*.h
+!external/libtorch_wrf/sdirk3/tests/test_*.cpp
+!external/libtorch_wrf/sdirk3/tests/test_*.h
+!external/libtorch_wrf/sdirk3/tests/test_*.f90
+!external/libtorch_wrf/sdirk3/tests/test_*.F90
+!external/libtorch_wrf/sdirk3/tests/test_*.py
+!external/libtorch_wrf/sdirk3/tests/test_*.sh
+!external/libtorch_wrf/sdirk3/tests/test_*.txt
+!external/libtorch_wrf/sdirk3/tests/test_*.md
+!external/libtorch_wrf/sdirk3/tests/test_*.golden
 !external/libtorch_wrf/sdirk3/tests/check_core_archive.sh
 !external/libtorch_wrf/sdirk3/tests/lint_from_blob_baseline.txt
 tools/fseeko_test

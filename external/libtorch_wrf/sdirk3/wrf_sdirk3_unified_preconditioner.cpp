@@ -1984,6 +1984,9 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
     // CRITICAL FIX: Invalidate thread-local coefficient caches
     // This ensures solve_coupled_w_theta_column() re-extracts coefficients after update
     ++coefficient_generation_;
+    // A genuine rebuild: the coefficients now match the currently bound state, so a rollback that
+    // marked them stale is answered here rather than by anyone asserting it is fine.
+    coefficients_stale_ = false;
 }
 
 void UnifiedPreconditioner::initialize_horizontal_smoother() {
@@ -2039,6 +2042,15 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
 
 torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                                                 GradPolicy policy) {
+    // FAIL CLOSED after a rollback. restore_stage_state() rolls the stage fields back but cannot
+    // roll back the coefficients derived from them, so applying here would use coefficients built
+    // from a linearization point that is no longer bound -- silently, and with no error anywhere.
+    // A rebuild (update() -> initialize_acoustic_gravity_solver()) clears this.
+    TORCH_CHECK(!coefficients_stale_,
+                "UnifiedPreconditioner::apply: coefficients are STALE after a stage-state "
+                "rollback. They were derived from a linearization point that has since been "
+                "restored away, so applying them would be a silent numerical error. Call "
+                "update() to rebuild before applying.");
     PROFILE_SCOPE("preconditioner_apply");
 
     // FIX 2026-02-03: Entry log gated on debug_level >= 1
@@ -5082,7 +5094,13 @@ void UnifiedPreconditioner::update(const torch::Tensor& state, float dt, float g
     bool dw_floor_changed = (std::abs(config.precond_dw_nosboost_floor - cached_dw_nosboost_floor_) > 1e-8f);
     bool tuning_changed = w_boost_changed || theta_tuning_changed || uv_vfrac_changed || coupling_scale_changed || dw_floor_changed;
 
-    if (dt_changed || base_state_changed || scalar_cache_invalidated || scope_changed || flags_changed || wdamp_signature_changed || tuning_changed) {
+    // coefficients_stale_ is a rebuild TRIGGER, not just a refusal flag. A stage-state rollback
+    // trips none of the other conditions -- dt is unchanged, the base state is unchanged, no
+    // scope or flag moved -- so without this the next update() would decline to rebuild and the
+    // coefficients derived from the rolled-back linearization point would survive indefinitely,
+    // with apply() refusing forever. Measured: the recovery case in
+    // tests/test_stage_state_identity.cpp fails without this clause.
+    if (dt_changed || base_state_changed || scalar_cache_invalidated || scope_changed || flags_changed || wdamp_signature_changed || tuning_changed || coefficients_stale_) {
         if (dt_changed) {
             dt_ = dt;
             gamma_ = gamma;

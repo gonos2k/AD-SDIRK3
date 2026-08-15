@@ -231,7 +231,42 @@ public:
         mu_pert_last_bound_ = s.mu_pert_last_bound;
         current_stage_ = s.current_stage;
         mu_scale_correction_ = s.mu_scale_correction;
+        // A RESTORE IS A BINDING EVENT, so it takes a fresh generation.
+        //
+        // Without this the counter is not a faithful identity across rollback: a replay binds
+        // checkpoints (counter G -> G+k, state S'), then restore puts the state back to S and
+        // leaves the counter at G+k. One value, G+k, then denotes S' during the replay and S
+        // after it -- two different linearizations comparing EQUAL, which is the one thing an
+        // identity must never do.
+        //
+        // Restoring the counter to G instead would be worse: G+1..G+k were already issued, so
+        // they would be handed out again for unrelated binds. Minting a new value keeps it
+        // monotonic and keeps every value bound to exactly one state.
+        //
+        // Safe for numerics by inspection: this counter gates no cache. It is written at bind
+        // (wrf_sdirk3_unified_preconditioner.cpp:5329, "evidence that THIS bind ran"), read into
+        // StageBindingReceipt, and read by the accessor above. Nothing branches on its value.
+        ++stage_state_generation_;
+
+        // THE COEFFICIENTS ARE NOW STALE, and apply() must refuse until they are rebuilt.
+        //
+        // This snapshot carries stage fields only. The acoustic/gravity coefficients are DERIVED
+        // from mu_full_stage_ (see :2436 and :3966, inv_mu0) and are rebuilt by update() ->
+        // initialize_acoustic_gravity_solver(), which the adjoint replay calls with ITS OWN
+        // linearization point. Rolling the stage fields back therefore leaves coefficients
+        // computed from a state that is no longer bound.
+        //
+        // Restoring them is not something to guess at: update() takes the step state while this
+        // guard saves U_ref_stage_, and I have not shown those are the same linearization point.
+        // Choosing one would be inventing a recovery. What IS provable is that coefficients
+        // derived from a rolled-back state must not be applied -- so this fails closed, and a
+        // genuine rebuild clears it.
+        coefficients_stale_ = true;
     }
+
+    // True between a rollback and the next coefficient rebuild. Public so the condition is
+    // observable to a contract rather than only to the code that throws on it.
+    bool coefficients_stale() const { return coefficients_stale_; }
     // Digest of exactly the fields above, for the isolation contract. Deliberately includes
     // mu_full_stage's VALUES, not just its shape -- the whole failure mode is a field from
     // the wrong checkpoint, which has identical shape.
@@ -267,7 +302,19 @@ public:
      * Get condition number estimate (for diagnostics)
      */
     float estimate_condition_number() const { return condition_estimate_; }
-    
+
+    // The two counters that identify WHICH linearization this preconditioner currently is.
+    // Read-only, and DISTINCT for the reason StageBindingReceipt already documents: a small state
+    // change updates mu_full_stage_ without triggering a coefficient rebuild, so
+    // coefficient_generation is not evidence that this state was bound.
+    //
+    // They serve two purposes for a diagnostic that judges A*P^-1: identity (an A and an M^-1 must
+    // come from the same linearization) and purity (a probe must not advance them). The second is
+    // what makes a faithful state digest possible -- these move exactly when this object rebinds
+    // or rebuilds, so a digest over them is a real witness rather than a constant that cannot fail.
+    uint64_t stage_state_generation() const { return stage_state_generation_; }
+    uint64_t coefficient_generation() const { return coefficient_generation_; }
+
 private:
     // Grid and physics info
     std::shared_ptr<WRFGridInfo> grid_info_;
@@ -356,6 +403,11 @@ private:
     // Cache invalidation generation counter
     // Incremented whenever coefficients change (update, initialize_acoustic_gravity_solver)
     uint64_t coefficient_generation_ = 0;
+
+    // Set by restore_stage_state(), cleared by the rebuild in
+    // initialize_acoustic_gravity_solver(). While true, apply() refuses: the coefficients in
+    // memory were derived from a stage state that has since been rolled back.
+    bool coefficients_stale_ = false;
 
     // Diagnostic latch: one slot, so it reports when the measured scope CHANGES.
     // O(1) and race-free by construction -- a set here would grow with coefficient_generation_

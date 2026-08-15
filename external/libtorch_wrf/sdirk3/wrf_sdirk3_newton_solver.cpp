@@ -67,6 +67,8 @@
 #include <map>      // PR 9B: per-block best-epsilon tracking in the checker
 #include <mutex>    // PR 8.1: emit_stage_diag line-atomic output mutex
 #include <sstream>  // PR 8.1: per-record ostringstream (libstdc++ needs it explicit)
+#include <atomic>   // std::atomic was arriving transitively; libstdc++ need not provide it
+#include <cstdint>  // uint64_t, same reason
 #include <chrono>
 #include <cstdlib>  // PR 9F.9.1: std::getenv for the numerical-shadow gate
 
@@ -3347,6 +3349,19 @@ public:
     int diag_final_newton_iter_ = -1;
     int diag_retry_generation_ = -1;
     int diag_solve_generation_ = 0;
+
+    // A MONOTONIC instance id, never a `this` pointer. Addresses are recycled, and this project
+    // has already shipped one latch keyed on a recycled address. Two solvers must be
+    // distinguishable in a linearization token even if their generation counters coincide.
+    // The stage gate's weighting for the CURRENT stage, set by the caller before solve_stage.
+    // Stage-stamped, so one frozen for another stage is refused rather than silently reused.
+    wrf::sdirk3::ResidualWeightSource residual_weight_source_;
+
+    const uint64_t solver_id_ = next_solver_id();
+    static uint64_t next_solver_id() {
+        static std::atomic<uint64_t> counter{0};
+        return ++counter;   // starts at 1, so 0 stays available as "unset"
+    }
     WRFPreconditioner* preconditioner_ = nullptr;
     int mu_size_ = 0;  // Size of mu component for SDIRK3
     
@@ -9240,6 +9255,11 @@ sdirk3::WRFNewtonKrylovSolver::ConvergenceStats sdirk3::WRFNewtonKrylovSolver::g
     s.defect_newton_iter = pImpl->diag_final_newton_iter_;
     s.defect_retry_generation = pImpl->diag_retry_generation_;
     return s;
+}
+
+void sdirk3::WRFNewtonKrylovSolver::set_residual_weight_source(
+    wrf::sdirk3::ResidualWeightSource source) {
+    pImpl->residual_weight_source_ = std::move(source);
 }
 
 void sdirk3::WRFNewtonKrylovSolver::reset_stats() {
