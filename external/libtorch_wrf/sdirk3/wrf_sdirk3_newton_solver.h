@@ -3,7 +3,7 @@
 
 #include <torch/torch.h>
 #include "wrf_sdirk3_state_layout.h"   // 9F.D93: THE packed-state layout
-#include "wrf_sdirk3_wrms_norm.h"      // ResidualWeightSource: the stage gate's weighting
+#include "wrf_sdirk3_operator_contract.h"  // FrozenStageWeights: the stage gate's weighting
 #include <functional>
 #include <memory>
 #include <vector>
@@ -256,13 +256,15 @@ public:
         const torch::Tensor& F_phys = torch::Tensor()
     );
     
-    // The stage gate's residual weighting, handed to the solver so a diagnostic inside it can
-    // judge A*P^-1 in the SAME metric that decides convergence. Built by the caller because that
-    // is where the gate's config and block sizes live; carrying it here rather than through three
-    // solve_stage overloads and solve_fgmres keeps the change to one entry point.
+    // The stage gate's residual weighting, CAPTURED by the caller and handed over frozen, so a
+    // diagnostic inside the solve can judge A*P^-1 in the metric that decides convergence rather
+    // than inventing a second one. Built by the caller because that is where the gate's config
+    // lives; delivered here rather than through three solve_stage overloads and solve_fgmres.
     //
-    // Costs nothing when unset: no weights are computed unless a probe asks for them.
-    void set_residual_weight_source(wrf::sdirk3::ResidualWeightSource source);
+    // Frozen, not referenced: FrozenStageWeights holds computed weights in a detached private
+    // copy, so nothing the caller does afterwards can move them. It is stage-stamped, so a
+    // weighting frozen for one stage is refused for another.
+    void set_stage_weights(wrf::sdirk3::FrozenStageWeights weights);
 
     /**
      * Get convergence statistics

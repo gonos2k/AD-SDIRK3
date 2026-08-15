@@ -16,6 +16,7 @@
 #pragma once
 
 #include "wrf_sdirk3_state_layout.h"
+#include "wrf_sdirk3_wrms_norm.h"
 
 #include <torch/torch.h>
 
@@ -257,6 +258,77 @@ inline torch::Tensor inverse_scale_vector(const StateLayout& layout,
     }
     if (!torch::isfinite(sinv).all().item<bool>()) return torch::Tensor{};
     return sinv;
+}
+
+// Packed block sizes FROM the layout authority. StateLayout::from_grid_dims() already computes
+// these six sizes with OVERFLOW-CHECKED multiplication; a second expression elsewhere is not just
+// a duplicate, it silently loses that checking. One source, derived.
+inline PackedBlockSizes to_packed_block_sizes(const StateLayout& layout) {
+    TORCH_CHECK(layout.is_valid(), "to_packed_block_sizes: layout is not valid");
+    PackedBlockSizes pb;
+    int64_t* slot[6] = {&pb.u, &pb.v, &pb.w, &pb.ph, &pb.t, &pb.mu};
+    TORCH_CHECK(layout.blocks.size() == 6,
+                "to_packed_block_sizes: expected six packed blocks");
+    for (std::size_t i = 0; i < 6; ++i) *slot[i] = layout.blocks[i].size;
+    return pb;
+}
+
+// WHICH stage a weighting was frozen for.
+//
+// ark_stage alone is not enough: ARK stage 2 recurs at EVERY physical step, so a source frozen at
+// step 1 would be accepted at step 100 -- a different linearization wearing the same label.
+// stage_state_generation increments on every bind, so it separates them. A physical step number
+// would say it more directly, but none is threaded to this layer (DiagnosticContext says so in
+// its own comment), and inventing one to look thorough would be worse than using the counter that
+// actually exists.
+struct StageIdentity {
+    uint64_t solver_id = 0;
+    uint64_t stage_state_generation = 0;
+    int ark_stage = -1;
+
+    bool is_valid() const {
+        return solver_id != 0 && stage_state_generation != 0 && ark_stage >= 0;
+    }
+    bool operator==(const StageIdentity& o) const {
+        return solver_id == o.solver_id
+            && stage_state_generation == o.stage_state_generation
+            && ark_stage == o.ark_stage;
+    }
+    bool operator!=(const StageIdentity& o) const { return !(*this == o); }
+};
+
+// The stage gate's weighting, CAPTURED rather than referenced.
+//
+// An earlier version of this carried y_ref, blocks and cfg and built the weights later. A Tensor
+// is a handle, so holding y_ref left the caller able to mutate the reference after the freeze --
+// "frozen" as a name again. Capturing immediately into ResidualScale (whose from_error_weights
+// takes a detached private copy) removes the handle, and with it the need to carry blocks and cfg
+// at all. Fewer fields, and the immutability is structural rather than promised.
+struct FrozenStageWeights {
+    ResidualScale scale;
+    StageIdentity stage;
+
+    bool usable(const StageIdentity& now) const {
+        return scale.is_valid() && stage.is_valid() && stage == now;
+    }
+};
+
+// Build the weights the stage gate would build, at this state, and freeze them.
+inline FrozenStageWeights capture_stage_weights(const torch::Tensor& y_ref,
+                                                const StateLayout& layout,
+                                                const WRMSNormConfig& cfg,
+                                                const StageIdentity& stage)
+{
+    FrozenStageWeights w;
+    if (!y_ref.defined() || !layout.is_valid() || !stage.is_valid()) return w;
+    torch::NoGradGuard no_grad;
+    const auto flat = y_ref.detach().reshape({-1});
+    if (flat.numel() != layout.total_size) return w;
+    w.scale = ResidualScale::from_error_weights(
+        error_weights_packed(flat, to_packed_block_sizes(layout), cfg),
+        stage.stage_state_generation);
+    w.stage = stage;
+    return w;
 }
 
 // Everything a probe needs to be reproducible, and to say which evaluation it describes.

@@ -11210,15 +11210,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         }
     }
 
+    // ONE authority for the six packed block sizes. This used to recompute them from grid dims,
+    // which is not merely a duplicate: StateLayout::from_grid_dims() multiplies with overflow
+    // checking and the local copy did not, so the duplicate was also the weaker of the two.
     auto packed_block_sizes_for_stage = [&]() -> wrf::sdirk3::PackedBlockSizes {
-        return wrf::sdirk3::PackedBlockSizes{
-            static_cast<int64_t>(nx_u_) * ny_ * nz_,
-            static_cast<int64_t>(nx_) * ny_v_ * nz_,
-            static_cast<int64_t>(nx_) * ny_ * nz_w_,
-            static_cast<int64_t>(nx_) * ny_ * nz_w_,
-            static_cast<int64_t>(nx_) * ny_ * nz_,
-            static_cast<int64_t>(nx_) * ny_
-        };
+        return wrf::sdirk3::to_packed_block_sizes(
+            wrf::sdirk3::StateLayout::from_grid_dims(nx_, ny_, nz_, nx_u_, ny_v_, nz_w_));
     };
     auto wrms_gate_config_for_stage = [&]() -> wrf::sdirk3::WRMSNormConfig {
         const float rtol = std::max(wrf::sdirk3::g_sdirk3_config.newton_tol, 1.0e-6f);
@@ -11242,13 +11239,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     // during the solve can only see the pre-stage state, so that is the reference here. Same
     // rule, earlier reference -- not bit-identical to the gate's own numbers, and this comment
     // exists so nobody later reads it as if it were.
-    if (newton_solver_) {
-        wrf::sdirk3::ResidualWeightSource wsrc;
-        wsrc.y_ref  = U_stage;
-        wsrc.blocks = packed_block_sizes_for_stage();
-        wsrc.cfg    = wrms_gate_config_for_stage();
-        wsrc.stage  = stage;
-        newton_solver_->set_residual_weight_source(std::move(wsrc));
+    if (newton_solver_ && unified_precond_) {
+        wrf::sdirk3::StageIdentity ident;
+        ident.solver_id = solver_id_;
+        ident.stage_state_generation = unified_precond_->stage_state_generation();
+        ident.ark_stage = stage;
+        // Block sizes come from the LAYOUT AUTHORITY, not a second expression: from_grid_dims()
+        // computes them with overflow-checked multiplication, and the local helper did not.
+        const auto layout = wrf::sdirk3::StateLayout::from_grid_dims(
+            nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
+        newton_solver_->set_stage_weights(wrf::sdirk3::capture_stage_weights(
+            U_stage, layout, wrms_gate_config_for_stage(), ident));
     }
 
     // FIX 2026-01-29: Pass K_prev for stage 2/3 predictor initialization.
