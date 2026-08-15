@@ -56,6 +56,13 @@ int main() {
     auto grid = tiny_grid();
     auto physics = std::make_shared<wrf::sdirk3::PhysicsConfig>();
     wrf::sdirk3::UnifiedPreconditioner P(grid, physics, 600.0f, 0.4358665215f);
+    const int64_t P_state_numel =
+        static_cast<int64_t>(grid->nx_u) * grid->ny * grid->nz
+      + static_cast<int64_t>(grid->nx) * grid->ny_v * grid->nz
+      + static_cast<int64_t>(grid->nx) * grid->ny * grid->nz_w
+      + static_cast<int64_t>(grid->nx) * grid->ny * grid->nz_w
+      + static_cast<int64_t>(grid->nx) * grid->ny * grid->nz
+      + static_cast<int64_t>(grid->nx) * grid->ny;
 
     const uint64_t g0 = P.stage_state_generation();
     const double digest0 = P.stage_state_digest();
@@ -102,7 +109,35 @@ int main() {
           "a restore does not MASK coefficient drift -- the counter stays visible so the replay "
           "guard can report coefficients left bound to the wrong checkpoint");
 
-    constexpr int expected_checks = 8;
+    // 5. FAIL CLOSED. The coefficients are derived from mu_full_stage_ and are NOT in the
+    //    snapshot, so after a rollback the ones in memory came from a linearization point that is
+    //    no longer bound. Reporting that is not enough -- the replay used to RETURN and let the
+    //    next apply() use them. Now apply() refuses until a genuine rebuild.
+    check(P.coefficients_stale(),
+          "a rollback marks the derived coefficients STALE");
+    {
+        auto r = torch::zeros({16}, torch::kFloat32);
+        bool threw = false;
+        try { (void)P.apply(r); } catch (const std::exception&) { threw = true; }
+        check(threw, "apply() REFUSES while stale -- a silent wrong answer becomes a loud stop");
+    }
+
+    // 6. And the refusal is not permanent: a real rebuild answers it. Without this the check
+    //    above would be satisfied by a preconditioner that is simply broken forever.
+    {
+        auto U = torch::zeros({P_state_numel}, torch::kFloat32);
+        bool rebuilt = false;
+        try { P.update(U, 600.0f, 0.4358665215f); rebuilt = true; }
+        catch (const std::exception&) {}
+        if (rebuilt) {
+            check(!P.coefficients_stale(),
+                  "a genuine rebuild CLEARS the stale mark -- the fail-close is recoverable");
+        } else {
+            check(false, "update() could not run in this fixture, so recovery is unproven");
+        }
+    }
+
+    constexpr int expected_checks = 11;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

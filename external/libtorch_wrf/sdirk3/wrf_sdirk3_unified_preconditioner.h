@@ -247,7 +247,26 @@ public:
         // (wrf_sdirk3_unified_preconditioner.cpp:5329, "evidence that THIS bind ran"), read into
         // StageBindingReceipt, and read by the accessor above. Nothing branches on its value.
         ++stage_state_generation_;
+
+        // THE COEFFICIENTS ARE NOW STALE, and apply() must refuse until they are rebuilt.
+        //
+        // This snapshot carries stage fields only. The acoustic/gravity coefficients are DERIVED
+        // from mu_full_stage_ (see :2436 and :3966, inv_mu0) and are rebuilt by update() ->
+        // initialize_acoustic_gravity_solver(), which the adjoint replay calls with ITS OWN
+        // linearization point. Rolling the stage fields back therefore leaves coefficients
+        // computed from a state that is no longer bound.
+        //
+        // Restoring them is not something to guess at: update() takes the step state while this
+        // guard saves U_ref_stage_, and I have not shown those are the same linearization point.
+        // Choosing one would be inventing a recovery. What IS provable is that coefficients
+        // derived from a rolled-back state must not be applied -- so this fails closed, and a
+        // genuine rebuild clears it.
+        coefficients_stale_ = true;
     }
+
+    // True between a rollback and the next coefficient rebuild. Public so the condition is
+    // observable to a contract rather than only to the code that throws on it.
+    bool coefficients_stale() const { return coefficients_stale_; }
     // Digest of exactly the fields above, for the isolation contract. Deliberately includes
     // mu_full_stage's VALUES, not just its shape -- the whole failure mode is a field from
     // the wrong checkpoint, which has identical shape.
@@ -384,6 +403,11 @@ private:
     // Cache invalidation generation counter
     // Incremented whenever coefficients change (update, initialize_acoustic_gravity_solver)
     uint64_t coefficient_generation_ = 0;
+
+    // Set by restore_stage_state(), cleared by the rebuild in
+    // initialize_acoustic_gravity_solver(). While true, apply() refuses: the coefficients in
+    // memory were derived from a stage state that has since been rolled back.
+    bool coefficients_stale_ = false;
 
     // Diagnostic latch: one slot, so it reports when the measured scope CHANGES.
     // O(1) and race-free by construction -- a set here would grow with coefficient_generation_
