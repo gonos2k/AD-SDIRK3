@@ -2724,7 +2724,14 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
             // coefficients, not a guarantee.
             const bool hevi_mu_identity =
                 wrf::sdirk3::g_sdirk3_config.hevi_split &&
-                (wrf::sdirk3::g_sdirk3_config.effective_imex_split_mode() >= 1);
+                (wrf::sdirk3::g_sdirk3_config.effective_imex_split_mode() >= 1) &&
+                // AND the corrected mass equation. The RHS removes mu from the implicit set only
+                // under BOTH conditions (tile :15331: effective_mu_horizontal_div_only() gates the
+                // zeroing; without it the ImplicitOnly pass keeps div_z, which is VERTICAL and
+                // stays implicit under HEVI). My first gate omitted this half, so HEVI + Legacy
+                // would have applied an identity update to a mu row that is still implicit --
+                // M gating must mirror the RHS's own condition, not part of it.
+                wrf::sdirk3::g_sdirk3_config.effective_mu_horizontal_div_only();
             auto delta_mu = hevi_mu_identity
                 ? r_mu_2d.clone()
                 : (r_mu_reduced / S_mu_mu_safe);                       // [ny, nx]
@@ -4099,7 +4106,14 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
         // above (delta_mu = raw r_mu; the eliminations model couplings HEVI removed).
         const bool hevi_mu_identity_4d =
             wrf::sdirk3::g_sdirk3_config.hevi_split &&
-            (wrf::sdirk3::g_sdirk3_config.effective_imex_split_mode() >= 1);
+            (wrf::sdirk3::g_sdirk3_config.effective_imex_split_mode() >= 1) &&
+            // AND the corrected mass equation. The RHS removes mu from the implicit set only
+            // under BOTH conditions (tile :15331: effective_mu_horizontal_div_only() gates the
+            // zeroing; without it the ImplicitOnly pass keeps div_z, which is VERTICAL and
+            // stays implicit under HEVI). My first gate omitted this half, so HEVI + Legacy
+            // would have applied an identity update to a mu row that is still implicit --
+            // M gating must mirror the RHS's own condition, not part of it.
+            wrf::sdirk3::g_sdirk3_config.effective_mu_horizontal_div_only();
         auto delta_mu = hevi_mu_identity_4d
             ? r_mu_batch.clone()
             : (r_mu_reduced / S_mu_mu_safe);  // [ny, nx]
