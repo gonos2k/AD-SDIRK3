@@ -5026,7 +5026,7 @@ void UnifiedPreconditioner::set_newton_ru_share(float ru_share) {
     }
 }
 
-void UnifiedPreconditioner::update(const torch::Tensor& state, float dt, float gamma) {
+void UnifiedPreconditioner::update_time_coefficients(float dt, float gamma) {
     // FIX 2026-02-03: Diagnostic to confirm update() is called
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
         std::cerr << "[PRECOND UPDATE] Called with dt=" << dt << ", gamma=" << gamma

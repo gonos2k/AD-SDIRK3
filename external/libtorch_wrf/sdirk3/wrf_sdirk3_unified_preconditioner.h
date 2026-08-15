@@ -179,7 +179,27 @@ public:
      * @param dt New time step
      * @param gamma New SDIRK3 coefficient
      */
-    void update(const torch::Tensor& state, float dt, float gamma) override;
+    // What update() ACTUALLY does, under its honest name. 9F.D91 established -- by reading the
+    // whole body -- that update(state, dt, gamma) never reads `state`: it rebuilds the
+    // coefficients on dt/gamma plus the base-state / cache / config generation counters, and
+    // takes the stage mass state from mu_full_stage_, which is bound separately through
+    // bind_stage_state_or_throw(). The three-argument signature repeatedly misled callers into
+    // "I passed the checkpoint state, so the preconditioner matches it" -- D87 believed exactly
+    // that, and D91 had to correct it.
+    //
+    // The name is the fix the D91 comment called for. update() remains as the base-interface
+    // override and DELEGATES here, so there is one body and no behaviour change; new call sites
+    // should say what they mean:
+    //
+    //     P.update_time_coefficients(dt, gamma);        // rebuild for THIS h = dt*gamma
+    //     P.bind_stage_state_or_throw(mu_pert, stage);  // bind THIS stage's mass state
+    void update_time_coefficients(float dt, float gamma);
+
+    // Base-interface override; `state` is accepted and NOT read (see above).
+    void update(const torch::Tensor& state, float dt, float gamma) override {
+        (void)state;
+        update_time_coefficients(dt, gamma);
+    }
     
     // v20.3: Adaptive α - Newton solver sets progress ratio before each GMRES
     void set_newton_residual_ratio(float ratio) override {
