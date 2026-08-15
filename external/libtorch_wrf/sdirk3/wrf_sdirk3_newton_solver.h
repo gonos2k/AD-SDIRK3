@@ -461,7 +461,11 @@ namespace krylov_methods {
         // this is a diagnostic input, and existing callers -- including the standalone FGMRES
         // contract test, which links against this symbol directly -- must keep compiling and
         // linking untouched.
-        const wrf::sdirk3::FrozenStageWeights* stage_weights = nullptr
+        const wrf::sdirk3::FrozenStageWeights* stage_weights = nullptr,
+        // S, the map from the SCALED coordinates this loop iterates back to physical ones.
+        // Null when scaling is inactive, in which case S = I. Without it a physically-weighted
+        // defect would be computed on scaled vectors, which is only correct when S = I.
+        const torch::Tensor* krylov_to_physical = nullptr
     );
     
     /**

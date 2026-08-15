@@ -10,9 +10,34 @@
                       // exactly this and I still shipped it: a local build is not a portability
                       // check for a HEADER, because whichever TU includes it first hides the gap.
 #include <string>
+#include <algorithm>  // std::transform in parse_bool_text; libstdc++ does not provide it
+#include <cctype>     // std::tolower, same reason. THIRD time in this header: see the note above.
 
 namespace wrf {
 namespace sdirk3 {
+
+// THE spelling authority for boolean text, shared by the namelist path, the env path, and any
+// diagnostic gate. Recognises what this project has always recognised -- 1 / true / .true. / t /
+// yes and their false counterparts, case-insensitive, Fortran dots stripped -- and says so when a
+// value is NEITHER, which a plain bool cannot.
+//
+// Unrecognized matters: a gate that silently treats an unknown spelling as "off" is
+// indistinguishable from a broken probe. Callers that care can report it; callers that do not
+// still get the same true/false decision as everywhere else.
+enum class BoolText { True, False, Unrecognized };
+
+inline BoolText parse_bool_text(const std::string& input) {
+    std::string lv(input);
+    while (!lv.empty() && lv.front() == '.') lv.erase(lv.begin());
+    while (!lv.empty() && lv.back() == '.') lv.pop_back();
+    std::transform(lv.begin(), lv.end(), lv.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (lv == "1" || lv == "true" || lv == "t" || lv == "yes") return BoolText::True;
+    if (lv == "0" || lv == "false" || lv == "f" || lv == "no" || lv.empty())
+        return BoolText::False;
+    return BoolText::Unrecognized;
+}
+
 
 /**
  * SDIRK3 Solver Configuration

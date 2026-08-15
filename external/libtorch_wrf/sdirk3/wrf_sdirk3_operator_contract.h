@@ -190,12 +190,25 @@ inline ImplicitActiveDomain make_implicit_active_domain(int mass_coordinate_mode
                 "make_implicit_active_domain: mode must be set (got mass=",
                 mass_coordinate_mode, ", split=", imex_split_mode, ")");
     if (hevi_split) {
-        // Established for the corrected mass coordinate only. Under the legacy Omega the mass row
-        // still couples through w, so the vertical-fast partition is not the same question.
-        TORCH_CHECK(mass_coordinate_mode >= 1,
+        // EXACT combinations, not ranges. `mass >= 1` admitted the partial diagnostic modes
+        // (DiagnosticOmegaOnly = 2, DiagnosticMuOnly = 3), whose mu-row ownership is NOT
+        // established -- each corrects only one half of the mass coordinate, so whether the mass
+        // row leaves the implicit set is a question nobody has answered. And any imex_split_mode
+        // was accepted; the vertical-fast partition has only ever been exercised under ARK324
+        // (mode 3), the operational configuration HEVI gates on.
+        //
+        // A resolver exists to refuse the combinations it cannot answer; admitting them returns a
+        // confident partition for an unestablished question, which is the fail-open this function
+        // was written to remove.
+        TORCH_CHECK(mass_coordinate_mode == 1,
                     "make_implicit_active_domain: HEVI's vertical-fast domain is established for "
-                    "the corrected mass coordinate; mass_coordinate_mode=", mass_coordinate_mode,
-                    " has no written-down partition");
+                    "WRFParity (mass_coordinate_mode=1) only; mode ", mass_coordinate_mode,
+                    mass_coordinate_mode >= 2
+                        ? " is a PARTIAL diagnostic mode whose mu-row ownership is not established"
+                        : " is the legacy Omega, where the mass row still couples through w");
+        TORCH_CHECK(imex_split_mode == 3,
+                    "make_implicit_active_domain: the vertical-fast partition is established "
+                    "under ARK324 (imex_split_mode=3) only; got ", imex_split_mode);
         return ImplicitActiveDomain::hevi_vertical_fast();
     }
     return ImplicitActiveDomain{};   // no split: the implicit solve owns every block
@@ -344,7 +357,11 @@ inline PackedBlockSizes to_packed_block_sizes(const StateLayout& layout) {
 // The error weight is e_i(Y) = max(rtol*|Y_i| + atol_q, floor), so Y1 != Y2 gives e(Y1) != e(Y2).
 // "Same formula and config" is therefore NOT "same metric", and letting one object serve both
 // points would silently equate them. Naming the point makes a caller say which it wants.
-enum class WeightingPoint { StageEntry, StageAcceptance };
+enum class WeightingPoint {
+    StageEntry,           // the state the stage STARTS from
+    NewtonLinearization,  // Y_n = B + h*K_n, where the operator FGMRES solves is formed
+    StageAcceptance,      // U_new, what the convergence gate weights by
+};
 
 struct StageIdentity {
     uint64_t solver_id = 0;
@@ -388,6 +405,12 @@ struct FrozenStageWeights {
     ResidualScale scale;
     StageIdentity stage;
 
+    // The config the weights were built with, kept so a consumer can re-capture at a DIFFERENT
+    // reference state without inventing its own rules. The reference state is deliberately NOT
+    // kept -- holding it was the freeze defect -- but the config is a small value and losing it
+    // would force the only other option: a second copy of the gate's tolerances.
+    WRMSNormConfig cfg;
+
     bool usable(const StageIdentity& now) const {
         return scale.is_valid() && stage.is_valid() && stage == now;
     }
@@ -408,6 +431,7 @@ inline FrozenStageWeights capture_stage_weights(const torch::Tensor& y_ref,
         error_weights_packed(flat, to_packed_block_sizes(layout), cfg),
         stage.capture_seq);
     w.stage = stage;
+    w.cfg = cfg;
     return w;
 }
 

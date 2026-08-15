@@ -5617,7 +5617,8 @@ vertical_coefficients:
     // Update preconditioner with current timestep
     if (unified_precond_) {
         unified_precond_->update(U_n, dt, gamma_);
-        precond_forward_dt_ = dt;   // what the coefficients now correspond to
+        precond_forward_dt_ = dt;                              // what the coefficients now
+        precond_forward_gamma_ = static_cast<float>(gamma_);   // correspond to -- BOTH halves of h
     }
     
     // Monitor energy/mass before stages
@@ -11219,6 +11220,28 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
             wrf::sdirk3::StateLayout::from_grid_dims(nx_, ny_, nz_, nx_u_, ny_v_, nz_w_));
     };
     auto wrms_gate_config_for_stage = [&]() -> wrf::sdirk3::WRMSNormConfig {
+        // ONE KNOB, TWO ROLES -- and this is the error-weight role, not the stopping rule.
+        //
+        // newton_tol is the Newton ACCEPTANCE tolerance (||S^-1 R|| < newton_tol at
+        // wrf_sdirk3_newton_solver.cpp:5708). Reusing it as the error-weight rtol makes the
+        // DEFINITION of "small" move whenever the stopping rule is retuned, which is a different
+        // decision about a different quantity.
+        //
+        // The consequence is live, not theoretical: em_b_wave sets sdirk3_newton_tol = 0.2, so
+        // the weights are e_i = 0.2*|Y_i| + atol -- a residual counts as small when it is under
+        // roughly a FIFTH of the local state magnitude. Every WRMS-weighted diagnostic inherits
+        // that scale, so those numbers are comparable only across runs sharing this value. The
+        // probe emits ewt_rtol with each record for exactly that reason.
+        //
+        // NOT separated here: an independent ewt_rtol is a new config knob and this project
+        // requires those to be opt-in AND fully wired (Registry + Fortran + C++). That is the
+        // next step, not something to slip in behind a default.
+        //
+        // The review that raised this derived a tau^2 tightening from it, on the assumption that
+        // the gate compares WRMS(R) < tau. This code does not: the stage gate compares a WRMS
+        // GROWTH RATIO (last_stage_wrms_growth_), in which the weights appear in numerator and
+        // denominator and largely cancel. The coupling is real; that particular consequence is
+        // not the one this code has.
         const float rtol = std::max(wrf::sdirk3::g_sdirk3_config.newton_tol, 1.0e-6f);
         return wrf::sdirk3::WRMSNormConfig{
             rtol,
@@ -39025,7 +39048,33 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
         wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot saved_stage;
         uint64_t saved_digest = 0;
         float forward_dt = 0.0f;
+        float forward_gamma = 0.0f;
+        bool restored = false;
+
+        // The success path calls THIS, before the replay returns, so a failed restore fails the
+        // replay rather than being logged from a noexcept destructor and discovered at the next
+        // apply(). The destructor keeps the same restoration as a safety net for the exception
+        // paths, where throwing again is not an option.
+        void restore_or_throw() {
+            restored = true;
+            self->U_ref_stage_ = saved_u_ref;
+            if (!precond) return;
+            precond->restore_stage_state(saved_stage);
+            const uint64_t now = precond->stage_state_fingerprint();
+            TORCH_CHECK(now == saved_digest,
+                        "runAdjointReplay: stage state fingerprint mismatch after restore (",
+                        now, " != ", saved_digest, ")");
+            TORCH_CHECK(forward_dt > 0.0f && forward_gamma > 0.0f,
+                        "runAdjointReplay: no forward time coefficient recorded (dt=",
+                        forward_dt, ", gamma=", forward_gamma,
+                        ") -- cannot rebuild the coefficients the caller had");
+            precond->update(saved_u_ref, forward_dt, forward_gamma);
+            TORCH_CHECK(!precond->coefficients_stale(),
+                        "runAdjointReplay: coefficients still stale after restore+rebuild");
+        }
+
         ~ReplayStateGuard() noexcept {
+            if (restored) return;   // the success path already ran restore_or_throw()
             try {
                 self->U_ref_stage_ = saved_u_ref;
                 if (precond) {
@@ -39055,9 +39104,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                     //
                     // Previously this only reported the drift and returned; the recovery depended
                     // on a later update() firing, and any apply() before that threw.
-                    if (forward_dt > 0.0f) {
-                        precond->update(saved_u_ref, forward_dt,
-                                        static_cast<float>(gamma_));
+                    if (forward_dt > 0.0f && forward_gamma > 0.0f) {
+                        precond->update(saved_u_ref, forward_dt, forward_gamma);
                     }
                     if (precond->coefficients_stale()) {
                         std::cerr << "SDIRK3_REPLAY_ISOLATION VIOLATED: coefficients still stale "
@@ -39074,10 +39122,33 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                    unified_precond_ ? unified_precond_->snapshot_stage_state()
                                     : wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot{},
                    unified_precond_ ? unified_precond_->stage_state_fingerprint() : 0,
-                   precond_forward_dt_};
+                   precond_forward_dt_,
+                   precond_forward_gamma_};
 
     const double alpha = static_cast<double>(dt) * static_cast<double>(gamma);
     IdentityTransposePreconditioner preconditioner;
+
+    // A REPLAY-OWNED preconditioner, so the replay never mutates the production one.
+    //
+    // Every prior increment made the shared-instance lifecycle safer -- snapshot, fingerprint,
+    // stale flag, rebuild-on-restore -- and every review answered that true isolation is a
+    // separate instance, not a better rollback. It is constructible: the production instance
+    // receives NOTHING beyond its constructor (grid_info_, a locally-built PhysicsConfig with
+    // enabled=false, dt, gamma -- see :3724), so the same inputs build an equivalent twin, and
+    // the replay's update()/bind/set_stage_state calls configure IT rather than the caller's.
+    //
+    // The guard above still restores U_ref_stage_, which the replay genuinely mutates on `self`.
+    // Its preconditioner half remains armed as a belt-and-braces check: with the replay no longer
+    // touching the production instance, the fingerprint comparison must now be an exact no-op,
+    // and a violation report from it means this isolation has a hole.
+    std::unique_ptr<wrf::sdirk3::UnifiedPreconditioner> replay_precond_owned;
+    if (unified_precond_) {
+        auto replay_physics = std::make_shared<wrf::sdirk3::PhysicsConfig>();
+        replay_physics->enabled = false;   // same as production: physics handled externally
+        replay_precond_owned = std::make_unique<wrf::sdirk3::UnifiedPreconditioner>(
+            grid_info_, replay_physics, dt, gamma);
+    }
+    wrf::sdirk3::UnifiedPreconditioner* const replay_precond = replay_precond_owned.get();
 
     try {
         // 9F.D99 (review section 6): the order comes from a pure, unit-tested function, and
@@ -39140,8 +39211,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             //
             // Safe for the forward path: unifiedStep re-updates at the top of every step,
             // and the replay only runs after one has completed.
-            if (unified_precond_) {
-                unified_precond_->update(linearization_point, dt, gamma);
+            if (replay_precond) {
+                replay_precond->update(linearization_point, dt, gamma);
 
                 // 9F.D95 (review section 4): BIND EVERY CHECKPOINT, AND FAIL CLOSED.
                 //
@@ -39183,7 +39254,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                     // The receipt is read back FROM the preconditioner, so this verifies the
                     // bind took rather than assuming the setter did something.
                     const auto receipt =
-                        unified_precond_->bind_stage_state_or_throw(mu_pert, 1);
+                        replay_precond->bind_stage_state_or_throw(mu_pert, 1);
                     ++binds_performed;
                     static std::atomic<bool> bind_said{false};
                     bool bind_expected = false;
@@ -39230,19 +39301,19 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             // nothing and returned its own input -- as a transpose that was 52% correct.
             // The contract now carries a deliberately severed operator, so that failure is
             // caught in a second instead of a week.
-            if (unified_precond_ && probe_env_enabled("WRF_SDIRK3_RHS_GRAD_PROBE")) {
+            if (replay_precond && probe_env_enabled("WRF_SDIRK3_RHS_GRAD_PROBE")) {
                 static std::atomic<bool> tp_done{false};
                 bool tp_expected = false;
                 if (tp_done.compare_exchange_strong(tp_expected, true)) {
                     namespace tp = wrf::sdirk3::transpose_probe;
 
-                    auto M = [&](const torch::Tensor& x) { return unified_precond_->apply(x); };
+                    auto M = [&](const torch::Tensor& x) { return replay_precond->apply(x); };
 
                     // The CLAIMED transpose: the SAME apply_inverse_transpose the A^T solve is
                     // wired to (9F.D84). Measuring one implementation and shipping another
                     // would make this contract decorative.
                     auto M_transpose = [&](const torch::Tensor& cot) {
-                        return unified_precond_->apply_inverse_transpose(cot);
+                        return replay_precond->apply_inverse_transpose(cot);
                     };
 
                     std::cerr << tp::probe_transpose(M, M_transpose,
@@ -39343,18 +39414,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                             torch::NoGradGuard ng_probe;
                             auto v_probe = torch::randn(linearization_point.numel(),
                                                         linearization_point.options());
-                            auto z_before = unified_precond_->apply(v_probe);
+                            auto z_before = replay_precond->apply(v_probe);
 
                             auto mu_a = linearization_point
                                             .slice(0, mu_blk.start, mu_blk.start + mu_blk.size)
                                             .reshape({ny64, nx64}).clone();
-                            unified_precond_->set_stage_state(mu_a, 1);
-                            auto z_a = unified_precond_->apply(v_probe);
+                            replay_precond->set_stage_state(mu_a, 1);
+                            auto z_a = replay_precond->apply(v_probe);
 
                             // +1000 Pa on the column mass: physically large, ~1% of mu.
                             auto mu_b = mu_a + 1000.0f;
-                            unified_precond_->set_stage_state(mu_b, 1);
-                            auto z_b = unified_precond_->apply(v_probe);
+                            replay_precond->set_stage_state(mu_b, 1);
+                            auto z_b = replay_precond->apply(v_probe);
 
                             auto rel = [](const torch::Tensor& x, const torch::Tensor& y) {
                                 return ((x - y).norm() / y.norm().clamp_min(1e-30))
@@ -39362,10 +39433,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                             };
                             // Does the STAGE INDEX matter? The checkpoint carries no stage,
                             // so if it does, binding with a guessed stage is its own error.
-                            unified_precond_->set_stage_state(mu_a, 1);
-                            auto z_s1 = unified_precond_->apply(v_probe);
-                            unified_precond_->set_stage_state(mu_a, 3);
-                            auto z_s3 = unified_precond_->apply(v_probe);
+                            replay_precond->set_stage_state(mu_a, 1);
+                            auto z_s1 = replay_precond->apply(v_probe);
+                            replay_precond->set_stage_state(mu_a, 3);
+                            auto z_s3 = replay_precond->apply(v_probe);
 
                             const double d_bind = rel(z_a, z_before);
                             const double d_state = rel(z_b, z_a);
@@ -39466,11 +39537,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                     std::max(1e-8f, gmres_tolerance));
             };
 
-            if (probe_env_enabled("WRF_SDIRK3_ADJOINT_AD_MT") && unified_precond_) {
-                AdTransposePreconditioner ad_mt{unified_precond_.get()};
+            if (probe_env_enabled("WRF_SDIRK3_ADJOINT_AD_MT") && replay_precond) {
+                AdTransposePreconditioner ad_mt{replay_precond};
                 lambda = run_transpose_solve(ad_mt);
-            } else if (probe_env_enabled("WRF_SDIRK3_ADJOINT_FROZEN_M") && unified_precond_) {
-                FrozenMTransposePreconditioner frozen_m{unified_precond_.get()};
+            } else if (probe_env_enabled("WRF_SDIRK3_ADJOINT_FROZEN_M") && replay_precond) {
+                FrozenMTransposePreconditioner frozen_m{replay_precond};
                 lambda = run_transpose_solve(frozen_m);
             } else {
                 lambda = run_transpose_solve(preconditioner);
@@ -39539,7 +39610,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
         // form too, so this check is SILENT exactly where the bug lived. That is why the
         // ORDER is unit-tested at n=3 separately. This invariant is what starts working the
         // moment the forward runs long enough to produce a second checkpoint.
-        if (unified_precond_) {
+        if (replay_precond) {
             TORCH_CHECK(binds_performed == checkpoints.size(),
                         "runAdjointReplay: bound the preconditioner ", binds_performed,
                         " time(s) for ", checkpoints.size(), " checkpoints -- every "
@@ -39551,5 +39622,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     }
 
     dt_stage_ = dt_prev;
+    replay_guard.restore_or_throw();
     return lambda;
 }

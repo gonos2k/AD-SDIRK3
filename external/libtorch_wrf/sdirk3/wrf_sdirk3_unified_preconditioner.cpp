@@ -2708,7 +2708,33 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                               << std::endl << std::flush;
                 }
             }
-            auto delta_mu = r_mu_reduced / S_mu_mu_safe;               // [ny, nx]
+            // WRFParity+HEVI exact mu identity (review P0-E-1). Under HEVI the mass row leaves
+            // the implicit set entirely -- F_mu_I = 0, so R_mu(K) = K_mu, A_mu_mu = I and
+            // A_mu_q = 0 -- and the exact update is delta_mu = r_mu, the RAW residual, skipping
+            // the U/V elimination and the mu-phi Schur reduction that model couplings the
+            // operator no longer has. Gated on the SAME hevi condition as every other HEVI branch
+            // in this file (one source of truth), so hevi off is byte-identical.
+            //
+            // MEASURED INERT at this configuration (em_b_wave, WRFParity+HEVI, stage 2, dt=600,
+            // live triplet, identity forced off in an isolating build): eps trajectories agree to
+            // ~5 decimal places either way. The hevi_pc zeroing above already removes the u<->phi
+            // couplings, so the eliminations this branch skips were evidently near-no-ops. Kept
+            // because it is exact BY CONSTRUCTION where the general path is approximate, and
+            // because "the Schur machinery happens to collapse" is a property of today's
+            // coefficients, not a guarantee.
+            const bool hevi_mu_identity =
+                wrf::sdirk3::g_sdirk3_config.hevi_split &&
+                (wrf::sdirk3::g_sdirk3_config.effective_imex_split_mode() >= 1) &&
+                // AND the corrected mass equation. The RHS removes mu from the implicit set only
+                // under BOTH conditions (tile :15331: effective_mu_horizontal_div_only() gates the
+                // zeroing; without it the ImplicitOnly pass keeps div_z, which is VERTICAL and
+                // stays implicit under HEVI). My first gate omitted this half, so HEVI + Legacy
+                // would have applied an identity update to a mu row that is still implicit --
+                // M gating must mirror the RHS's own condition, not part of it.
+                wrf::sdirk3::g_sdirk3_config.effective_mu_horizontal_div_only();
+            auto delta_mu = hevi_mu_identity
+                ? r_mu_2d.clone()
+                : (r_mu_reduced / S_mu_mu_safe);                       // [ny, nx]
 
             // Step 4: Back-substitute Φ (mass levels k=0..nz-1)
             auto delta_phi_mass = (r_phi_mod - S_phi_mu * delta_mu.reshape({ny, 1, nx}))
@@ -4076,7 +4102,21 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
             S_mu_mu_signs * SING_EPS);
 
         // ====== STEP 3: Solve μ ======
-        auto delta_mu = r_mu_reduced / S_mu_mu_safe;  // [ny, nx]
+        // WRFParity+HEVI exact mu identity -- same reasoning and same gate as the packed path
+        // above (delta_mu = raw r_mu; the eliminations model couplings HEVI removed).
+        const bool hevi_mu_identity_4d =
+            wrf::sdirk3::g_sdirk3_config.hevi_split &&
+            (wrf::sdirk3::g_sdirk3_config.effective_imex_split_mode() >= 1) &&
+            // AND the corrected mass equation. The RHS removes mu from the implicit set only
+            // under BOTH conditions (tile :15331: effective_mu_horizontal_div_only() gates the
+            // zeroing; without it the ImplicitOnly pass keeps div_z, which is VERTICAL and
+            // stays implicit under HEVI). My first gate omitted this half, so HEVI + Legacy
+            // would have applied an identity update to a mu row that is still implicit --
+            // M gating must mirror the RHS's own condition, not part of it.
+            wrf::sdirk3::g_sdirk3_config.effective_mu_horizontal_div_only();
+        auto delta_mu = hevi_mu_identity_4d
+            ? r_mu_batch.clone()
+            : (r_mu_reduced / S_mu_mu_safe);  // [ny, nx]
 
         // ====== STEP 4: Back-substitute Φ ======
         auto delta_phi = (r_phi_mod - S_phi_mu * delta_mu.unsqueeze(0)) * inv_S_phi_phi;
@@ -5026,7 +5066,7 @@ void UnifiedPreconditioner::set_newton_ru_share(float ru_share) {
     }
 }
 
-void UnifiedPreconditioner::update(const torch::Tensor& state, float dt, float gamma) {
+void UnifiedPreconditioner::update_time_coefficients(float dt, float gamma) {
     // FIX 2026-02-03: Diagnostic to confirm update() is called
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
         std::cerr << "[PRECOND UPDATE] Called with dt=" << dt << ", gamma=" << gamma

@@ -75,23 +75,35 @@ struct MuPhiDirectCoupling {
 // while A_ph_mu is not -- the operator is asymmetric in exactly this direction, and one scalar
 // serving both was the preconditioner asserting a symmetry its operator does not have.
 //
-// AND IT IS MEASURED HARMFUL, so production passes false and keeps the symmetric value.
+// AND IT IS MEASURED HARMFUL IN THE GATE'S METRIC, so production passes false and keeps the
+// symmetric value.
 //
 // Isolated on em_b_wave, stage 2, dt=600, WRFParity -- same build, same run, only this coupling
-// changed -- reading eps_j = ||W(A z_j - v_j)||/||W v_j|| off the live FGMRES triplet:
+// changed -- read off the live FGMRES triplet AFTER the metric was corrected for the scaled
+// Krylov coordinates (the first measurement of this mixed the two and is superseded):
 //
-//     symmetric (shipped) : 29.8, 0.087, 0.078, 0.042, 1.40, 0.462, 0.239
-//     a_mu_phi = 0        : 268,  1.25,  0.51,  0.23,  0.95, 1.09,  1.59
+//   eps_physical_wrms = ||E^-1 S (w-v)|| / ||E^-1 S v||     <- what the convergence gate weights by
+//     symmetric (shipped) : 30.7, 0.258, 0.251, 0.265, 1.40, 0.515, 0.358
+//     a_mu_phi = 0        : 268,  1.27,  0.587, 0.318, 0.967, 1.098, 1.601
+//     -> worse on 6 of 7 directions (1.2x to 9x); iteration 4 improves
 //
-// An order of magnitude WORSE on most iterations. The reason it is not a contradiction: M
-// approximates A^-1, not A. Nothing requires M to share A's sparsity, and the inverse of an
-// asymmetric operator generally DOES carry the entry A lacks -- deleting it because A lacks it
-// confuses the operator with its inverse.
+//   eps_krylov = ||w-v|| / ||v||                            <- what GMRES's own theory speaks about
+//     symmetric (shipped) : 48.1, 139, 196, 300, 21.8, 99.9, 182
+//     a_mu_phi = 0        : 48.8, 118, 235, 275, 88.1, 23.6, 44.1
+//     -> MIXED: better on 4, worse on 2, unchanged on 1
+//
+// THE TWO METRICS DISAGREE, which is the reason they are reported separately. The decision rests
+// on the physical one, because that is what decides whether the step converges.
+//
+// Why it is not a contradiction that a "correct" removal hurts: M approximates A^-1, not A.
+// Nothing requires M to share A's sparsity, and the inverse of an asymmetric operator generally
+// DOES carry the entry A lacks -- deleting it because A lacks it confuses the operator with its
+// inverse. It may also be compensating another wrong coefficient, which this measurement cannot
+// distinguish; it says the term is load-bearing HERE, not that the symmetry is correct.
 //
 // Third time in this campaign that a mathematically-correct removal degraded conditioning, after
 // the W-phi 2x2 refinement and the spurious W-damping term. The corrected form stays available
-// and tested, and is deliberately not enabled; enabling it is a numerics decision that now has a
-// measurement attached rather than an argument.
+// and tested, and is deliberately not enabled.
 inline float mu_phi_from_phi_mu(float a_phi_mu, bool mu_row_has_no_phi) {
     return mu_row_has_no_phi ? 0.0f : a_phi_mu;
 }
@@ -167,7 +179,27 @@ public:
      * @param dt New time step
      * @param gamma New SDIRK3 coefficient
      */
-    void update(const torch::Tensor& state, float dt, float gamma) override;
+    // What update() ACTUALLY does, under its honest name. 9F.D91 established -- by reading the
+    // whole body -- that update(state, dt, gamma) never reads `state`: it rebuilds the
+    // coefficients on dt/gamma plus the base-state / cache / config generation counters, and
+    // takes the stage mass state from mu_full_stage_, which is bound separately through
+    // bind_stage_state_or_throw(). The three-argument signature repeatedly misled callers into
+    // "I passed the checkpoint state, so the preconditioner matches it" -- D87 believed exactly
+    // that, and D91 had to correct it.
+    //
+    // The name is the fix the D91 comment called for. update() remains as the base-interface
+    // override and DELEGATES here, so there is one body and no behaviour change; new call sites
+    // should say what they mean:
+    //
+    //     P.update_time_coefficients(dt, gamma);        // rebuild for THIS h = dt*gamma
+    //     P.bind_stage_state_or_throw(mu_pert, stage);  // bind THIS stage's mass state
+    void update_time_coefficients(float dt, float gamma);
+
+    // Base-interface override; `state` is accepted and NOT read (see above).
+    void update(const torch::Tensor& state, float dt, float gamma) override {
+        (void)state;
+        update_time_coefficients(dt, gamma);
+    }
     
     // v20.3: Adaptive α - Newton solver sets progress ratio before each GMRES
     void set_newton_residual_ratio(float ratio) override {
