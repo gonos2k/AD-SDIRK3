@@ -455,8 +455,11 @@ inline void sync_newton_stage_stats_mpi(bool& converged,
 inline void sync_stage_quality_mpi(float& rel_r_full,
                                    float& rel_r_full_raw,
                                    float& r_full_norm,
-                                   float& wrms_norm,
-                                   float& wrms_growth) {
+                                   // double, matching the members: the WRMS pair is FP64 end to
+                                   // end now, and reducing it over MPI_FLOAT would narrow across
+                                   // the wire what the promotion widened everywhere else.
+                                   double& wrms_norm,
+                                   double& wrms_growth) {
     MPI_Comm comm = MPI_COMM_NULL;
     if (!get_active_halo_comm(comm)) {
         return;
@@ -465,13 +468,13 @@ inline void sync_stage_quality_mpi(float& rel_r_full,
     float local_rel = finite_or_large(rel_r_full);
     float local_rel_raw = finite_or_large(rel_r_full_raw);
     float local_rnorm = finite_or_large(r_full_norm);
-    float local_wrms_norm = finite_or_large(wrms_norm);
-    float local_wrms_growth = finite_or_large(wrms_growth);
+    double local_wrms_norm = std::isfinite(wrms_norm) ? wrms_norm : 1e30;
+    double local_wrms_growth = std::isfinite(wrms_growth) ? wrms_growth : 1e30;
     float global_rel = local_rel;
     float global_rel_raw = local_rel_raw;
     float global_rnorm = local_rnorm;
-    float global_wrms_norm = local_wrms_norm;
-    float global_wrms_growth = local_wrms_growth;
+    double global_wrms_norm = local_wrms_norm;
+    double global_wrms_growth = local_wrms_growth;
 
     if (MPI_Allreduce(&local_rel, &global_rel, 1, MPI_FLOAT, MPI_MAX, comm) != MPI_SUCCESS) {
         return;
@@ -482,10 +485,10 @@ inline void sync_stage_quality_mpi(float& rel_r_full,
     if (MPI_Allreduce(&local_rnorm, &global_rnorm, 1, MPI_FLOAT, MPI_MAX, comm) != MPI_SUCCESS) {
         return;
     }
-    if (MPI_Allreduce(&local_wrms_norm, &global_wrms_norm, 1, MPI_FLOAT, MPI_MAX, comm) != MPI_SUCCESS) {
+    if (MPI_Allreduce(&local_wrms_norm, &global_wrms_norm, 1, MPI_DOUBLE, MPI_MAX, comm) != MPI_SUCCESS) {
         return;
     }
-    if (MPI_Allreduce(&local_wrms_growth, &global_wrms_growth, 1, MPI_FLOAT, MPI_MAX, comm) != MPI_SUCCESS) {
+    if (MPI_Allreduce(&local_wrms_growth, &global_wrms_growth, 1, MPI_DOUBLE, MPI_MAX, comm) != MPI_SUCCESS) {
         return;
     }
 
@@ -6220,7 +6223,7 @@ vertical_coefficients:
             const float growth_cap = std::max(
                 1.0f, wrf::sdirk3::g_sdirk3_config.stage_gate_growth_cap);
             if (last_stage_initial_R0_ > 1e-15f) {
-                const float growth = last_stage_wrms_growth_;
+                const double growth = last_stage_wrms_growth_;
                 if (!std::isfinite(growth) || growth > growth_cap) {
                     return false;
                 }
@@ -6247,7 +6250,7 @@ vertical_coefficients:
             const float growth_cap = std::max(
                 1.0f, wrf::sdirk3::g_sdirk3_config.stage_gate_growth_cap);
             if (last_stage_initial_R0_ > 1e-15f) {
-                const float growth = last_stage_wrms_growth_;
+                const double growth = last_stage_wrms_growth_;
                 if (!std::isfinite(growth) || growth > growth_cap) {
                     return false;
                 }
@@ -6266,7 +6269,7 @@ vertical_coefficients:
         const int gate_metric_mode = std::clamp(
             wrf::sdirk3::g_sdirk3_config.gate_metric_mode, 0, 2);
         auto stage_gate_metric_value = [&]() -> float {
-            float value = last_stage_wrms_growth_;
+            double value = last_stage_wrms_growth_;
             if (gate_metric_mode == 1) {
                 value = last_stage_R_full_norm_;
             } else if (gate_metric_mode == 2) {
@@ -6283,10 +6286,11 @@ vertical_coefficients:
             }
             return "wrms_growth";
         };
-        auto stage_gate_growth_value = [&]() -> float {
+        auto stage_gate_growth_value = [&]() -> double {
+            // double through: this lambda was the remaining narrowing after the members widened.
             return std::isfinite(last_stage_wrms_growth_)
                 ? last_stage_wrms_growth_
-                : std::numeric_limits<float>::infinity();
+                : std::numeric_limits<double>::infinity();
         };
         // v20.14r67/P2: stagnation detector (opt-in, default OFF). True when this stage's Newton
         // did NOT converge AND barely reduced its WRMS residual (growth > floor) — the case the
@@ -11371,9 +11375,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
             const auto cfg = wrms_gate_config_for_stage();
             torch::NoGradGuard no_grad;
             last_stage_wrms_norm_ = wrf::sdirk3::wrms_norm_packed(r_now, y, blocks, cfg)
-                .detach().to(torch::kCPU).item<float>();
+                .detach().to(torch::kCPU).item<double>();
             last_stage_wrms_growth_ = wrf::sdirk3::wrms_growth_packed(r_now, r0, y, blocks, cfg)
-                .detach().to(torch::kCPU).item<float>();
+                .detach().to(torch::kCPU).item<double>();
         } catch (const std::exception& e) {
             constexpr float SENTINEL = 1e8f;
             last_stage_wrms_norm_ = SENTINEL;
