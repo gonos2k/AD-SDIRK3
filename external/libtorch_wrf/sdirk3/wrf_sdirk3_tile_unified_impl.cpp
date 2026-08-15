@@ -11244,6 +11244,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         ident.solver_id = solver_id_;
         ident.stage_state_generation = unified_precond_->stage_state_generation();
         ident.ark_stage = stage;
+        // STATED, not defaulted: U_stage is the state the solve STARTS from, so this is the
+        // Newton-linearization metric. The convergence gate weights by U_new instead, and the two
+        // are different numbers -- WeightingPoint keeps one from being read as the other.
+        ident.point = wrf::sdirk3::WeightingPoint::StageEntry;
         // Block sizes come from the LAYOUT AUTHORITY, not a second expression: from_grid_dims()
         // computes them with overflow-checked multiplication, and the local helper did not.
         const auto layout = wrf::sdirk3::StateLayout::from_grid_dims(

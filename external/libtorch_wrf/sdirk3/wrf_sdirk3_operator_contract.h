@@ -150,6 +150,34 @@ struct ImplicitActiveDomain {
     }
 };
 
+// The active domain DERIVED from the mode, instead of a caller remembering which one to pick.
+//
+// hevi_vertical_fast() is a fixed answer that says nothing about when it applies, and the default
+// domain is all-six-active -- so a HEVI caller who forgets to set it gets a confident full-domain
+// verdict rather than an error. That is the fail-open shape this contract exists to remove.
+//
+// Only the combinations whose domain has actually been established are answered. Everything else
+// THROWS: an unrecognised split is a question about a partition nobody has written down, and
+// guessing all-active for it is exactly the wrong default.
+inline ImplicitActiveDomain make_implicit_active_domain(int mass_coordinate_mode,
+                                                        int imex_split_mode,
+                                                        bool hevi_split)
+{
+    TORCH_CHECK(mass_coordinate_mode >= 0 && imex_split_mode >= 0,
+                "make_implicit_active_domain: mode must be set (got mass=",
+                mass_coordinate_mode, ", split=", imex_split_mode, ")");
+    if (hevi_split) {
+        // Established for the corrected mass coordinate only. Under the legacy Omega the mass row
+        // still couples through w, so the vertical-fast partition is not the same question.
+        TORCH_CHECK(mass_coordinate_mode >= 1,
+                    "make_implicit_active_domain: HEVI's vertical-fast domain is established for "
+                    "the corrected mass coordinate; mass_coordinate_mode=", mass_coordinate_mode,
+                    " has no written-down partition");
+        return ImplicitActiveDomain::hevi_vertical_fast();
+    }
+    return ImplicitActiveDomain{};   // no split: the implicit solve owns every block
+}
+
 // Per-block scale S for the RESIDUAL space.
 //
 // The blocks carry different units -- the packed state is the VELOCITY basis (see
@@ -281,10 +309,25 @@ inline PackedBlockSizes to_packed_block_sizes(const StateLayout& layout) {
 // would say it more directly, but none is threaded to this layer (DiagnosticContext says so in
 // its own comment), and inventing one to look thorough would be worse than using the counter that
 // actually exists.
+// WHERE a weighting was taken, because there are two different metrics here and they are not
+// interchangeable.
+//
+//   StageEntry      -- the reference state the Newton solve STARTS from. This is what a probe
+//                      inside the solve can see, and it is the metric for judging A*P^-1 at a
+//                      Newton linearization.
+//   StageAcceptance -- the reference state the stage ENDS at (U_new), which is what the
+//                      convergence gate weights by.
+//
+// The error weight is e_i(Y) = max(rtol*|Y_i| + atol_q, floor), so Y1 != Y2 gives e(Y1) != e(Y2).
+// "Same formula and config" is therefore NOT "same metric", and letting one object serve both
+// points would silently equate them. Naming the point makes a caller say which it wants.
+enum class WeightingPoint { StageEntry, StageAcceptance };
+
 struct StageIdentity {
     uint64_t solver_id = 0;
     uint64_t stage_state_generation = 0;
     int ark_stage = -1;
+    WeightingPoint point = WeightingPoint::StageEntry;
 
     bool is_valid() const {
         return solver_id != 0 && stage_state_generation != 0 && ark_stage >= 0;
@@ -292,7 +335,8 @@ struct StageIdentity {
     bool operator==(const StageIdentity& o) const {
         return solver_id == o.solver_id
             && stage_state_generation == o.stage_state_generation
-            && ark_stage == o.ark_stage;
+            && ark_stage == o.ark_stage
+            && point == o.point;
     }
     bool operator!=(const StageIdentity& o) const { return !(*this == o); }
 };
