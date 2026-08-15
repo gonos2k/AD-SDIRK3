@@ -54,6 +54,7 @@
 #include "wrf_sdirk3_rw_term_capture.h"  // PR 9B: rw term bisection
 #include "wrf_sdirk3_autograd_utils.h"
 #include "wrf_sdirk3_stage_history_diag.h"  // PR 9F P2: shared emit_sdirk3_diag_line
+#include "wrf_sdirk3_u_slow_diagnostics.h"   // next_solver_id: the process-wide one
 #include "wrf_sdirk3_unified_preconditioner.h"  // v20.5: For set_stage_state()
 #include <torch/torch.h>
 #include <ATen/CPUGeneratorImpl.h>
@@ -3350,18 +3351,19 @@ public:
     int diag_retry_generation_ = -1;
     int diag_solve_generation_ = 0;
 
-    // A MONOTONIC instance id, never a `this` pointer. Addresses are recycled, and this project
-    // has already shipped one latch keyed on a recycled address. Two solvers must be
-    // distinguishable in a linearization token even if their generation counters coincide.
-    // The stage gate's weighting for the CURRENT stage, set by the caller before solve_stage.
+    // The stage gate's weighting for the CURRENT stage, frozen by the caller before solve_stage.
     // Stage-stamped, so one frozen for another stage is refused rather than silently reused.
-    wrf::sdirk3::ResidualWeightSource residual_weight_source_;
+    wrf::sdirk3::FrozenStageWeights stage_weights_;
 
-    const uint64_t solver_id_ = next_solver_id();
-    static uint64_t next_solver_id() {
-        static std::atomic<uint64_t> counter{0};
-        return ++counter;   // starts at 1, so 0 stays available as "unset"
-    }
+    // A MONOTONIC instance id, never a `this` pointer -- addresses are recycled, and this project
+    // has already shipped one latch keyed on a recycled address.
+    //
+    // Uses the PROCESS-WIDE generator that already existed in wrf_sdirk3_u_slow_diagnostics.h. I
+    // wrote a private duplicate here first, having failed to check -- the same "find the producer
+    // before inventing one" step that turned up the token's fields and the WRMS weights. Sharing
+    // it also makes ids unique ACROSS solver kinds in one process, which two private counters
+    // could not be.
+    const uint64_t solver_id_ = wrf::sdirk3::next_solver_id();
     WRFPreconditioner* preconditioner_ = nullptr;
     int mu_size_ = 0;  // Size of mu component for SDIRK3
     
@@ -9257,9 +9259,9 @@ sdirk3::WRFNewtonKrylovSolver::ConvergenceStats sdirk3::WRFNewtonKrylovSolver::g
     return s;
 }
 
-void sdirk3::WRFNewtonKrylovSolver::set_residual_weight_source(
-    wrf::sdirk3::ResidualWeightSource source) {
-    pImpl->residual_weight_source_ = std::move(source);
+void sdirk3::WRFNewtonKrylovSolver::set_stage_weights(
+    wrf::sdirk3::FrozenStageWeights weights) {
+    pImpl->stage_weights_ = std::move(weights);
 }
 
 void sdirk3::WRFNewtonKrylovSolver::reset_stats() {

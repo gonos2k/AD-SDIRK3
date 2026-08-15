@@ -764,13 +764,63 @@ int main() {
         }
     }
 
+    // ---- 6l. the stage weighting is CAPTURED and STAMPED, not referenced and labelled
+    {
+        using wrf::sdirk3::StageIdentity;
+        using wrf::sdirk3::capture_stage_weights;
+        const wrf::sdirk3::WRMSNormConfig cfg;
+
+        StageIdentity ident;
+        ident.solver_id = 4;
+        ident.stage_state_generation = 9;
+        ident.ark_stage = 2;
+        check(ident.is_valid(), "a fully-set stage identity is valid");
+        check(!StageIdentity{}.is_valid(),
+              "a default stage identity is INVALID -- 0 and -1 are what 'unset' leaves behind");
+
+        // Block sizes come from the layout authority, so the weighting and the packed offsets
+        // cannot describe different partitions.
+        const auto pb = wrf::sdirk3::to_packed_block_sizes(snap.layout);
+        check(pb.total() == snap.layout.total_size,
+              "to_packed_block_sizes agrees with the layout it came from");
+
+        auto y = torch::exp(3.0 * torch::randn({snap.layout.total_size}, gen, opts));
+        auto w = capture_stage_weights(y, snap.layout, cfg, ident);
+        check(w.usable(ident), "weights captured for this stage are usable for it");
+
+        // FROZEN: the capture takes a private detached copy, so the caller mutating its own
+        // tensor afterwards cannot move the weights. Storing y_ref as a handle -- which the first
+        // version did -- left exactly that hole.
+        const double before = w.scale.weights.sum().item<double>();
+        y.mul_(1000.0);
+        check(std::abs(w.scale.weights.sum().item<double>() - before) < 1e-9,
+              "mutating the caller's reference state AFTER capture does not move the weights");
+
+        // STAMPED: ARK stage 2 recurs at every physical step, so the ark_stage alone would accept
+        // a weighting frozen many steps ago. The bind generation separates them.
+        StageIdentity later = ident;
+        later.stage_state_generation += 1;          // same solver, same ARK stage, later bind
+        check(!w.usable(later),
+              "a weighting from an EARLIER bind is refused at the same ARK stage -- step 1 stage 2 "
+              "is not step 100 stage 2");
+
+        StageIdentity other_solver = ident;
+        other_solver.solver_id += 1;
+        check(!w.usable(other_solver), "and a weighting from another solver is refused");
+
+        // An unusable capture yields an unusable object rather than a plausible one.
+        auto bad = capture_stage_weights(y, snap.layout, cfg, StageIdentity{});
+        check(!bad.usable(ident) && !bad.scale.is_valid(),
+              "capturing with an invalid identity yields nothing usable");
+    }
+
     // --------------------------------------------- 7. h is dt*gamma, stated once
     {
         check(std::abs(snap.h() - 600.0 * 0.4358665215) < 1e-12,
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 75;
+    constexpr int expected_checks = 83;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
