@@ -5617,7 +5617,8 @@ vertical_coefficients:
     // Update preconditioner with current timestep
     if (unified_precond_) {
         unified_precond_->update(U_n, dt, gamma_);
-        precond_forward_dt_ = dt;   // what the coefficients now correspond to
+        precond_forward_dt_ = dt;                              // what the coefficients now
+        precond_forward_gamma_ = static_cast<float>(gamma_);   // correspond to -- BOTH halves of h
     }
     
     // Monitor energy/mass before stages
@@ -39047,7 +39048,33 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
         wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot saved_stage;
         uint64_t saved_digest = 0;
         float forward_dt = 0.0f;
+        float forward_gamma = 0.0f;
+        bool restored = false;
+
+        // The success path calls THIS, before the replay returns, so a failed restore fails the
+        // replay rather than being logged from a noexcept destructor and discovered at the next
+        // apply(). The destructor keeps the same restoration as a safety net for the exception
+        // paths, where throwing again is not an option.
+        void restore_or_throw() {
+            restored = true;
+            self->U_ref_stage_ = saved_u_ref;
+            if (!precond) return;
+            precond->restore_stage_state(saved_stage);
+            const uint64_t now = precond->stage_state_fingerprint();
+            TORCH_CHECK(now == saved_digest,
+                        "runAdjointReplay: stage state fingerprint mismatch after restore (",
+                        now, " != ", saved_digest, ")");
+            TORCH_CHECK(forward_dt > 0.0f && forward_gamma > 0.0f,
+                        "runAdjointReplay: no forward time coefficient recorded (dt=",
+                        forward_dt, ", gamma=", forward_gamma,
+                        ") -- cannot rebuild the coefficients the caller had");
+            precond->update(saved_u_ref, forward_dt, forward_gamma);
+            TORCH_CHECK(!precond->coefficients_stale(),
+                        "runAdjointReplay: coefficients still stale after restore+rebuild");
+        }
+
         ~ReplayStateGuard() noexcept {
+            if (restored) return;   // the success path already ran restore_or_throw()
             try {
                 self->U_ref_stage_ = saved_u_ref;
                 if (precond) {
@@ -39077,9 +39104,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                     //
                     // Previously this only reported the drift and returned; the recovery depended
                     // on a later update() firing, and any apply() before that threw.
-                    if (forward_dt > 0.0f) {
-                        precond->update(saved_u_ref, forward_dt,
-                                        static_cast<float>(gamma_));
+                    if (forward_dt > 0.0f && forward_gamma > 0.0f) {
+                        precond->update(saved_u_ref, forward_dt, forward_gamma);
                     }
                     if (precond->coefficients_stale()) {
                         std::cerr << "SDIRK3_REPLAY_ISOLATION VIOLATED: coefficients still stale "
@@ -39096,7 +39122,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                    unified_precond_ ? unified_precond_->snapshot_stage_state()
                                     : wrf::sdirk3::UnifiedPreconditioner::StageStateSnapshot{},
                    unified_precond_ ? unified_precond_->stage_state_fingerprint() : 0,
-                   precond_forward_dt_};
+                   precond_forward_dt_,
+                   precond_forward_gamma_};
 
     const double alpha = static_cast<double>(dt) * static_cast<double>(gamma);
     IdentityTransposePreconditioner preconditioner;
@@ -39573,5 +39600,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     }
 
     dt_stage_ = dt_prev;
+    replay_guard.restore_or_throw();
     return lambda;
 }

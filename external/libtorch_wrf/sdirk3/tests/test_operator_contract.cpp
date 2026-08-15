@@ -862,6 +862,24 @@ int main() {
         try { make_implicit_active_domain(-1, 3, false); }
         catch (const std::exception&) { threw_unset = true; }
         check(threw_unset, "an unset mode throws rather than guessing a domain");
+
+        // EXACT combinations. `mass >= 1` used to admit the partial diagnostic modes, whose
+        // mu-row ownership is an unanswered question -- each corrects only half of the mass
+        // coordinate. And any imex mode was accepted, though the partition has only ever been
+        // exercised under ARK324.
+        for (int partial : {2, 3}) {
+            bool threw_partial = false;
+            try { make_implicit_active_domain(partial, 3, true); }
+            catch (const std::exception&) { threw_partial = true; }
+            check(threw_partial,
+                  "HEVI under a PARTIAL diagnostic mass mode throws -- half-corrected mass has no "
+                  "established mu-row ownership");
+        }
+        bool threw_imex = false;
+        try { make_implicit_active_domain(1, 2, true); }
+        catch (const std::exception&) { threw_imex = true; }
+        check(threw_imex,
+              "HEVI under a non-ARK324 imex mode throws -- the partition was never exercised there");
     }
 
     // ---- 6n. the layout digest distinguishes PARTITIONS, not just sizes
@@ -890,7 +908,7 @@ int main() {
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 92;
+    constexpr int expected_checks = 95;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
