@@ -2200,7 +2200,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     bool periodic_x,
     bool periodic_y,
     KrylovBasisCapture* basis_capture,
-    const wrf::sdirk3::FrozenStageWeights* stage_weights) {
+    const wrf::sdirk3::FrozenStageWeights* stage_weights,
+    const torch::Tensor* krylov_to_physical) {
     
     torch::Tensor x = x0.clone();
 
@@ -2559,27 +2560,83 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             //
             // Weighted by the stage gate's own error weights, so "small" here means what it means
             // to the gate. Opt-in, and silent when no weights were handed over.
-            if (std::getenv("WRF_SDIRK3_APINV_DEFECT")) {
-                static std::atomic<bool> said{false};
-                if (!said.exchange(true)) {
-                    std::cerr << "SDIRK3_APINV_DEFECT_ARMED stage=" << stage_id
-                              << " have_weights=" << (stage_weights ? 1 : 0)
-                              << " have_layout=" << (layout ? 1 : 0) << std::endl;
+            // THE JUDGEMENT, from the triplet FGMRES already has.
+            //
+            //     v_j = V[j],  z_j = P_j^-1 v_j,  w_j = A z_j
+            //
+            // Taken from the quantities in hand rather than by calling A and M^-1 again on a
+            // random probe direction: re-calling them would advance the preconditioner's
+            // counters, fallback latches and caches, and would measure a direction the solve
+            // never visits.
+            //
+            // TWO COORDINATE SYSTEMS, reported separately because conflating them was a real
+            // defect here. When scaling is active this loop iterates the CONJUGATED operator
+            //
+            //     Ahat = S^-1 A S,   Phat^-1 = S^-1 P^-1 S
+            //
+            // so V[j] and w are in SCALED coordinates. Weighting them with the physical error
+            // weights E^-1 -- which the first version did -- mixes the two, and is only correct
+            // when S = I. The physical defect must map back first:
+            //
+            //     eps_phys = ||E^-1 S (w - v)|| / ||E^-1 S v||
+            //
+            // eps_krylov is reported too, since that is the quantity GMRES's own convergence
+            // theory speaks about.
+            //
+            // FP64 BEFORE the arithmetic, not after. Casting the result of (w - v) * E^-1 would
+            // promote a number whose cancellation, overflow and underflow already happened in the
+            // source dtype -- the same defect closed in the synthetic contract and reintroduced
+            // here on the live path.
+            {
+                const char* apinv_env = std::getenv("WRF_SDIRK3_APINV_DEFECT");
+                // STRICT: presence alone turned this on for =0, =false and empty.
+                const bool apinv_on = apinv_env && std::strcmp(apinv_env, "1") == 0;
+                if (apinv_on) {
+                    static std::atomic<bool> said{false};
+                    if (!said.exchange(true)) {
+                        std::cerr << "SDIRK3_APINV_DEFECT_ARMED stage=" << stage_id
+                                  << " have_weights=" << (stage_weights ? 1 : 0)
+                                  << " have_layout=" << (layout ? 1 : 0)
+                                  << " scaled=" << (krylov_to_physical ? 1 : 0) << std::endl;
+                    }
                 }
-            }
-            if (stage_weights && layout && std::getenv("WRF_SDIRK3_APINV_DEFECT")) {
-                torch::NoGradGuard ng_defect;
-                const auto sinv = wrf::sdirk3::inverse_scale_vector(
-                    *layout, stage_weights->scale, V[j]);
-                if (sinv.defined()) {
-                    const auto sv = (V[j] * sinv).to(torch::kFloat64);
-                    const double vn = sv.norm().to(torch::kCPU).item<double>();
-                    if (std::isfinite(vn) && vn > 0.0) {
-                        const auto d = ((w - V[j]) * sinv).to(torch::kFloat64);
-                        const double eps = d.norm().to(torch::kCPU).item<double>() / vn;
-                        std::cerr << "SDIRK3_APINV_DEFECT stage=" << stage_id
+                if (apinv_on && stage_weights && layout) {
+                    torch::NoGradGuard ng_defect;
+                    const auto v64 = V[j].to(torch::kFloat64);
+                    const auto w64 = w.to(torch::kFloat64);
+                    const auto d64 = w64 - v64;
+
+                    const double num_k = d64.norm().to(torch::kCPU).item<double>();
+                    const double den_k = v64.norm().to(torch::kCPU).item<double>();
+
+                    const auto sinv = wrf::sdirk3::inverse_scale_vector(
+                        *layout, stage_weights->scale, V[j]);
+                    double num_p = 0.0, den_p = 0.0;
+                    if (sinv.defined()) {
+                        const auto E64 = sinv.to(torch::kFloat64);
+                        const auto S64 = krylov_to_physical
+                                       ? krylov_to_physical->to(torch::kFloat64)
+                                       : torch::ones_like(v64);
+                        num_p = (E64 * (S64 * d64)).norm().to(torch::kCPU).item<double>();
+                        den_p = (E64 * (S64 * v64)).norm().to(torch::kCPU).item<double>();
+                    }
+
+                    if (std::isfinite(den_k) && den_k > 0.0) {
+                        std::cerr << "SDIRK3_APINV_DEFECT"
+                                  << " solver=" << stage_weights->stage.solver_id
+                                  << " stage=" << stage_id
+                                  << " capture=" << stage_weights->stage.capture_seq
                                   << " krylov_iter=" << j
-                                  << " eps=" << eps << std::endl;
+                                  << " scaled=" << (krylov_to_physical ? 1 : 0)
+                                  << " eps_krylov=" << (num_k / den_k)
+                                  << " num_k=" << num_k << " den_k=" << den_k;
+                        if (std::isfinite(den_p) && den_p > 0.0) {
+                            std::cerr << " eps_physical_wrms=" << (num_p / den_p)
+                                      << " num_p=" << num_p << " den_p=" << den_p;
+                        } else {
+                            std::cerr << " eps_physical_wrms=unavailable";
+                        }
+                        std::cerr << std::endl;
                     }
                 }
             }
@@ -3834,14 +3891,27 @@ public:
         now.capture_seq = stage_weights_.stage.capture_seq;   // whatever was handed over
         now.ark_stage = stage;
         now.point = wrf::sdirk3::WeightingPoint::StageEntry;
-        if (!stage_weights_.usable(now)) return nullptr;
-        // Each capture serves exactly ONE solve. A leftover -- from a previous stage, or from
-        // this stage in a previous step -- is refused because its sequence was already consumed.
-        if (stage_weights_.stage.capture_seq == consumed_weight_seq_) return nullptr;
-        consumed_weight_seq_ = stage_weights_.stage.capture_seq;
-        return &stage_weights_;
+        return stage_weights_.usable(now) ? &stage_weights_ : nullptr;
     }
     mutable uint64_t consumed_weight_seq_ = 0;
+
+    // A capture is valid for exactly ONE stage solve, and it is consumed HERE -- at stage entry,
+    // once -- not on each FGMRES call.
+    //
+    // Consuming per call is what limited the probe to the FIRST Newton linear solve:
+    // stage_weights_for() runs every Newton iteration, so iterations 1+ were refused and the
+    // reported krylov series covered one solve rather than the stage. Moving the consumption to
+    // stage entry keeps the leftover protection -- a capture already used by an earlier stage is
+    // dropped rather than silently reused -- while every Newton iteration of THIS stage is
+    // measured.
+    void consume_stage_weights_at_entry() {
+        const uint64_t seq = stage_weights_.stage.capture_seq;
+        if (seq == 0 || seq == consumed_weight_seq_) {
+            stage_weights_ = wrf::sdirk3::FrozenStageWeights{};   // stale or absent
+            return;
+        }
+        consumed_weight_seq_ = seq;
+    }
 
     WRFNewtonKrylovSolver::NewtonResult solve_stage_impl(
         const torch::Tensor& U_n,
@@ -3859,6 +3929,7 @@ public:
         // at the residual site below; norms materialized once in get_stats().
         diag_final_F_ = torch::Tensor();
         diag_final_R_ = torch::Tensor();
+        consume_stage_weights_at_entry();
         diag_final_K_ = torch::Tensor();
         diag_final_newton_iter_ = -1;
         diag_retry_generation_ = -1;
@@ -7154,7 +7225,10 @@ public:
                           // Handed over only if the weighting was frozen for THIS stage. The
                           // identity check stays here, where the stage identity is known, rather
                           // than inside the Krylov solve which would have to be told it.
-                          stage_weights_for(stage))
+                          stage_weights_for(stage),
+                          // S, so a physically-weighted defect is computed on physical vectors.
+                          // Null when scaling is off, where S = I.
+                          scaling_initialized_ ? &S_diag_ : nullptr)
                     : krylov_methods::solve_gmres(
                           gmres_op,
                           gmres_rhs,
