@@ -186,6 +186,24 @@ struct StateLayout {
 // declaring CoupledMomentum would silently change those units by a factor of mu (~8.9e+04), so
 // consumers refuse it rather than proceeding on the wrong one. Without this the basis field is
 // decoration: recorded, and unable to stop the mistake it exists to name.
+// A cheap structural fingerprint of the layout, so a token can say WHICH partition an operator
+// was formed against. Covers the block boundaries, not just the total: two layouts can share a
+// total size and still cut it differently, which is exactly the confusion worth catching.
+inline uint64_t layout_digest(const StateLayout& layout) {
+    uint64_t h = 1469598103934665603ULL;                 // FNV-1a offset basis
+    auto mix = [&h](uint64_t v) {
+        h ^= v;
+        h *= 1099511628211ULL;
+    };
+    mix(static_cast<uint64_t>(layout.total_size));
+    for (const auto& b : layout.blocks) {
+        mix(static_cast<uint64_t>(b.start));
+        mix(static_cast<uint64_t>(b.size));
+    }
+    mix(static_cast<uint64_t>(layout.momentum_basis));
+    return h ? h : 1ULL;                                 // never 0, which means "unset"
+}
+
 inline void require_velocity_basis(const StateLayout& layout, const char* who) {
     TORCH_CHECK(layout.momentum_basis == MomentumBasis::Velocity,
                 who, ": this core's coefficients assume the VELOCITY momentum basis "

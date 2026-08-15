@@ -2497,7 +2497,9 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
             float A_v_phi_base = hevi_pc ? 0.0f : dt_gamma * H_y;
             float A_phi_u_base = hevi_pc ? 0.0f : dt_gamma * c2 * H_x;
             float A_phi_v_base = hevi_pc ? 0.0f : dt_gamma * c2 * H_y;
-            const auto muphi = wrf::sdirk3::mu_phi_direct_coupling(dt_gamma, c2);
+            const auto muphi = wrf::sdirk3::mu_phi_direct_coupling(
+                dt_gamma, c2,
+                /* mu_row_has_no_phi = */ false);
             float A_phi_mu_base = muphi.a_phi_mu;
 
             // One-shot sign verification vs 4D path coefficients (debug_level >= 2)
@@ -4012,7 +4014,9 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
         float A_v_phi_base = hevi_pc ? 0.0f : dt_gamma * H_y;
         float A_phi_u_base = hevi_pc ? 0.0f : dt_gamma * c2 * H_x;
         float A_phi_v_base = hevi_pc ? 0.0f : dt_gamma * c2 * H_y;
-        const auto muphi4 = wrf::sdirk3::mu_phi_direct_coupling(dt_gamma, c2);
+        const auto muphi4 = wrf::sdirk3::mu_phi_direct_coupling(
+                dt_gamma, c2,
+                /* mu_row_has_no_phi = */ false);
         float A_phi_mu_base = muphi4.a_phi_mu;
 
         // ====== STEP 1: Eliminate U, V from μ and Φ equations ======
@@ -5890,7 +5894,8 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
         float A_phi_v = dt_gamma * (c2 / mu_0_local) * H_y;     // Divergence sensing: V → Φ
         float A_phi_mu = dt_gamma * (c2 / mu_0_local);           // Hydrostatic balance: μ → Φ
         // the shared decision, so this path cannot drift from the other two.
-        float A_mu_phi = wrf::sdirk3::mu_phi_from_phi_mu(A_phi_mu);
+        float A_mu_phi = wrf::sdirk3::mu_phi_from_phi_mu(
+            A_phi_mu, /* mu_row_has_no_phi = */ false);
 
         // Get residuals from pre-copied CPU data
         float r_u_k = r_u_ptr[k];

@@ -1470,6 +1470,12 @@ private:
     // SDIRK stage timestep (stored from advanceZeroCopy for use in RHS computation)
     float dt_stage_ = 0.0f;    // Current SDIRK stage timestep
 
+    // The dt the production preconditioner's coefficients were last built for. Recorded because
+    // update(state, dt, gamma) rebuilds on dt/gamma (9F.D91: it does NOT read `state`), so this
+    // is what a replay must restore the coefficients WITH -- the replay updates with its own
+    // alpha, which is not necessarily the forward one.
+    float precond_forward_dt_ = 0.0f;
+
     // External driving fields for boundary nudging
     torch::Tensor u_ext_;      // External u-field (staggered)
     torch::Tensor v_ext_;      // External v-field (staggered)

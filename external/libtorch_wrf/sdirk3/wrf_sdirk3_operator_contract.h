@@ -64,13 +64,34 @@ struct LinearizationToken {
     int imex_split_mode = -1;
     bool hevi_split = false;
 
+    // Which RHS the operator was formed from (the RhsMode enum in wrf_sdirk3_tile_unified.h,
+    // carried as an int so this header keeps its light dependencies -- the same way the two modes
+    // above are), the time coefficient it was formed with, and WHICH PARTITION of the state:
+    // two layouts can share a total size and cut it differently.
+    int rhs_mode = -1;
+    double h = 0.0;                    // dt * gamma
+    uint64_t layout_digest = 0;
+
+    // DELIBERATELY OPTIONAL, and the only field that is. With flexible preconditioning P_j varies
+    // per FGMRES iteration, so an operator judged at iteration j is not the one at iteration k --
+    // but a token can also identify a whole solve, and -1 says so. It is still compared, so the
+    // two kinds never test equal.
+    int krylov_iteration = -1;
+
+    // NOT ADDED: OperatorKind and StageUnknownForm. The review asks for them and the argument is
+    // sound, but no such enum exists in this codebase -- inventing the values here would shape an
+    // identity by guesswork, which is the objection that kept the sampled-max aggregator and the
+    // first ScalePolicy out. They belong with whatever first needs to distinguish those cases.
+
     // Zero and negative are what an unset field leaves behind, so they are refused -- the same
     // hole the generation receipt had before it required nonzero.
     bool is_valid() const {
         return solver_id != 0 && stage_state_generation != 0 && coefficient_generation != 0
             && rhs_generation != 0 && scale_generation != 0
             && physical_step >= 0 && ark_stage >= 0 && newton_iteration >= 0
-            && mass_coordinate_mode >= 0 && imex_split_mode >= 0;
+            && mass_coordinate_mode >= 0 && imex_split_mode >= 0
+            && rhs_mode >= 0 && layout_digest != 0
+            && std::isfinite(h) && h > 0.0;
     }
 
     bool operator==(const LinearizationToken& o) const {
@@ -82,7 +103,9 @@ struct LinearizationToken {
             && physical_step == o.physical_step && ark_stage == o.ark_stage
             && newton_iteration == o.newton_iteration
             && mass_coordinate_mode == o.mass_coordinate_mode
-            && imex_split_mode == o.imex_split_mode && hevi_split == o.hevi_split;
+            && imex_split_mode == o.imex_split_mode && hevi_split == o.hevi_split
+            && rhs_mode == o.rhs_mode && layout_digest == o.layout_digest
+            && h == o.h && krylov_iteration == o.krylov_iteration;
     }
     bool operator!=(const LinearizationToken& o) const { return !(*this == o); }
 };
@@ -149,6 +172,34 @@ struct ImplicitActiveDomain {
         return d;
     }
 };
+
+// The active domain DERIVED from the mode, instead of a caller remembering which one to pick.
+//
+// hevi_vertical_fast() is a fixed answer that says nothing about when it applies, and the default
+// domain is all-six-active -- so a HEVI caller who forgets to set it gets a confident full-domain
+// verdict rather than an error. That is the fail-open shape this contract exists to remove.
+//
+// Only the combinations whose domain has actually been established are answered. Everything else
+// THROWS: an unrecognised split is a question about a partition nobody has written down, and
+// guessing all-active for it is exactly the wrong default.
+inline ImplicitActiveDomain make_implicit_active_domain(int mass_coordinate_mode,
+                                                        int imex_split_mode,
+                                                        bool hevi_split)
+{
+    TORCH_CHECK(mass_coordinate_mode >= 0 && imex_split_mode >= 0,
+                "make_implicit_active_domain: mode must be set (got mass=",
+                mass_coordinate_mode, ", split=", imex_split_mode, ")");
+    if (hevi_split) {
+        // Established for the corrected mass coordinate only. Under the legacy Omega the mass row
+        // still couples through w, so the vertical-fast partition is not the same question.
+        TORCH_CHECK(mass_coordinate_mode >= 1,
+                    "make_implicit_active_domain: HEVI's vertical-fast domain is established for "
+                    "the corrected mass coordinate; mass_coordinate_mode=", mass_coordinate_mode,
+                    " has no written-down partition");
+        return ImplicitActiveDomain::hevi_vertical_fast();
+    }
+    return ImplicitActiveDomain{};   // no split: the implicit solve owns every block
+}
 
 // Per-block scale S for the RESIDUAL space.
 //
@@ -281,18 +332,47 @@ inline PackedBlockSizes to_packed_block_sizes(const StateLayout& layout) {
 // would say it more directly, but none is threaded to this layer (DiagnosticContext says so in
 // its own comment), and inventing one to look thorough would be worse than using the counter that
 // actually exists.
+// WHERE a weighting was taken, because there are two different metrics here and they are not
+// interchangeable.
+//
+//   StageEntry      -- the reference state the Newton solve STARTS from. This is what a probe
+//                      inside the solve can see, and it is the metric for judging A*P^-1 at a
+//                      Newton linearization.
+//   StageAcceptance -- the reference state the stage ENDS at (U_new), which is what the
+//                      convergence gate weights by.
+//
+// The error weight is e_i(Y) = max(rtol*|Y_i| + atol_q, floor), so Y1 != Y2 gives e(Y1) != e(Y2).
+// "Same formula and config" is therefore NOT "same metric", and letting one object serve both
+// points would silently equate them. Naming the point makes a caller say which it wants.
+enum class WeightingPoint { StageEntry, StageAcceptance };
+
 struct StageIdentity {
     uint64_t solver_id = 0;
-    uint64_t stage_state_generation = 0;
+
+    // A MONOTONIC capture sequence, not the preconditioner's bind generation.
+    //
+    // The bind generation was the obvious choice and it does not work: the caller stamps the
+    // identity BEFORE solve_stage, and the stage bind inside the solve increments that counter --
+    // so the stamped value never equalled the value at use, and the check could never pass.
+    // Measured by running it: the probe produced zero output. A guard that cannot pass is as
+    // useless as one that always passes.
+    //
+    // A capture sequence is what the check actually needs. It distinguishes a leftover from a
+    // previous stage AND from the same stage of a previous step, and the consumer marks it used,
+    // so one capture serves exactly one solve.
+    uint64_t capture_seq = 0;
+
     int ark_stage = -1;
+    WeightingPoint point = WeightingPoint::StageEntry;
 
     bool is_valid() const {
-        return solver_id != 0 && stage_state_generation != 0 && ark_stage >= 0;
+        return solver_id != 0 && capture_seq != 0 && ark_stage >= 0;
     }
     bool operator==(const StageIdentity& o) const {
         return solver_id == o.solver_id
-            && stage_state_generation == o.stage_state_generation
-            && ark_stage == o.ark_stage;
+            && capture_seq == o.capture_seq
+            && ark_stage == o.ark_stage
+            && point == o.point;
     }
     bool operator!=(const StageIdentity& o) const { return !(*this == o); }
 };
@@ -326,7 +406,7 @@ inline FrozenStageWeights capture_stage_weights(const torch::Tensor& y_ref,
     if (flat.numel() != layout.total_size) return w;
     w.scale = ResidualScale::from_error_weights(
         error_weights_packed(flat, to_packed_block_sizes(layout), cfg),
-        stage.stage_state_generation);
+        stage.capture_seq);
     w.stage = stage;
     return w;
 }

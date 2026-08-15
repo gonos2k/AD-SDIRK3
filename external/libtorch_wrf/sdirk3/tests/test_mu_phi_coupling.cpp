@@ -53,7 +53,7 @@ int main() {
 
     // ------------------------------------------------- 1. the hydrostatic direction is real
     {
-        const auto c = mu_phi_direct_coupling(kDtGamma, kC2);
+        const auto c = mu_phi_direct_coupling(kDtGamma, kC2, /*mu_row_has_no_phi=*/false);
         check(std::isfinite(c.a_phi_mu) && c.a_phi_mu != 0.0f,
               "a_phi_mu (vertical hydrostatic phi <- mu) is finite and nonzero");
         check(std::abs(c.a_phi_mu - kDtGamma * kC2) < 1e-4f,
@@ -64,15 +64,15 @@ int main() {
     // If a future edit reintroduces a second, independent formula in some path, the builder
     // and the decision function stop agreeing and this fails.
     {
-        const auto c = mu_phi_direct_coupling(kDtGamma, kC2);
-        check(c.a_mu_phi == mu_phi_from_phi_mu(c.a_phi_mu),
+        const auto c = mu_phi_direct_coupling(kDtGamma, kC2, /*mu_row_has_no_phi=*/false);
+        check(c.a_mu_phi == mu_phi_from_phi_mu(c.a_phi_mu, /*mu_row_has_no_phi=*/false),
               "the builder's a_mu_phi is exactly what the decision function returns");
     }
 
     // ---------------------------------- 3. determinism: same inputs, same coupling, always
     {
-        const auto a = mu_phi_direct_coupling(kDtGamma, kC2);
-        const auto b = mu_phi_direct_coupling(kDtGamma, kC2);
+        const auto a = mu_phi_direct_coupling(kDtGamma, kC2, /*mu_row_has_no_phi=*/false);
+        const auto b = mu_phi_direct_coupling(kDtGamma, kC2, /*mu_row_has_no_phi=*/false);
         check(a.a_mu_phi == b.a_mu_phi && a.a_phi_mu == b.a_phi_mu,
               "the coupling is a pure function of (dt_gamma, c2)");
     }
@@ -82,7 +82,7 @@ int main() {
     // hydrostatic value. The single-scalar form this replaced could not express that state at
     // all -- writing zero to "the" coefficient necessarily erased both directions.
     {
-        auto c = mu_phi_direct_coupling(kDtGamma, kC2);
+        auto c = mu_phi_direct_coupling(kDtGamma, kC2, /*mu_row_has_no_phi=*/false);
         const float hydrostatic = c.a_phi_mu;
 
         c.a_mu_phi = 0.0f;   // what the corrected mass equation implies for the mu ROW
@@ -98,7 +98,7 @@ int main() {
     // Not a physical claim; it demonstrates the fields are genuinely independent rather than
     // one being derived from the other in a way that happens to survive case 4.
     {
-        auto c = mu_phi_direct_coupling(kDtGamma, kC2);
+        auto c = mu_phi_direct_coupling(kDtGamma, kC2, /*mu_row_has_no_phi=*/false);
         const float mu_phi_before = c.a_mu_phi;
         c.a_phi_mu = 0.0f;
         check(c.a_mu_phi == mu_phi_before,
@@ -110,22 +110,45 @@ int main() {
     // different order in h (the review's I - hJ vs h^2 Schur point), this ratio moves and the
     // change becomes visible here rather than only in a convergence run.
     {
-        const auto c1 = mu_phi_direct_coupling(kDtGamma, kC2);
-        const auto c2x = mu_phi_direct_coupling(2.0f * kDtGamma, kC2);
+        const auto c1 = mu_phi_direct_coupling(kDtGamma, kC2, /*mu_row_has_no_phi=*/false);
+        const auto c2x = mu_phi_direct_coupling(2.0f * kDtGamma, kC2, /*mu_row_has_no_phi=*/false);
         check(std::abs(c2x.a_phi_mu - 2.0f * c1.a_phi_mu) < 1e-3f,
               "a_phi_mu is FIRST order in dt_gamma (doubling h doubles it)");
-        check(std::abs(c2x.a_mu_phi - mu_phi_from_phi_mu(c2x.a_phi_mu)) < 1e-6f,
+        check(std::abs(c2x.a_mu_phi - mu_phi_from_phi_mu(c2x.a_phi_mu, /*mu_row_has_no_phi=*/false)) < 1e-6f,
               "a_mu_phi tracks the decision at the doubled step too");
     }
 
     // ------------------------------------------------- 7. zero input yields zero coupling
     {
-        const auto c = mu_phi_direct_coupling(0.0f, kC2);
+        const auto c = mu_phi_direct_coupling(0.0f, kC2, /*mu_row_has_no_phi=*/false);
         check(c.a_phi_mu == 0.0f && c.a_mu_phi == 0.0f,
               "dt_gamma = 0 gives no coupling in either direction");
     }
 
-    constexpr int expected_checks = 11;
+    // ------- 8. THE FIX ITSELF, now that the structure above made it expressible
+    // This file used to say, deliberately, that it would NOT assert the two directions are equal
+    // -- pinning that would have made the wrong answer a requirement. It pinned the STRUCTURE so
+    // the fix had somewhere to land. The fix has landed, so the behaviour can be pinned.
+    //
+    // The property is DERIVED from the mass coordinate, not set by a knob: under the corrected
+    // mass equation the mu tendency is horizontal divergence of (mu u, mu v) with no phi
+    // dependence, so the direct mu <- phi entry is zero. Live measurement agrees --
+    // A_mu_ph = 0 exactly at stage 2, dt=600, WRFParity.
+    {
+        const auto legacy = mu_phi_direct_coupling(kDtGamma, kC2, /*mu_row_has_no_phi=*/false);
+        const auto corrected = mu_phi_direct_coupling(kDtGamma, kC2, /*mu_row_has_no_phi=*/true);
+
+        check(corrected.a_mu_phi == 0.0f,
+              "corrected mass coordinate: the DIRECT mu <- phi coupling is ZERO");
+        check(corrected.a_phi_mu == legacy.a_phi_mu,
+              "and phi <- mu is UNTOUCHED -- the fix removes one direction, not both");
+        check(legacy.a_mu_phi == legacy.a_phi_mu,
+              "legacy is unchanged, so the default path keeps its old value exactly");
+        check(corrected.a_phi_mu != corrected.a_mu_phi,
+              "the operator's measured asymmetry is now representable AND represented");
+    }
+
+    constexpr int expected_checks = 15;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

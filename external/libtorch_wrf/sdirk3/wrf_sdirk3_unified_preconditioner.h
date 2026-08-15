@@ -2,6 +2,7 @@
 #define UNIFIED_PRECONDITIONER_ENHANCED_H
 
 #include <torch/torch.h>
+#include <cstring>
 #include <memory>
 #include <set>
 #include <tuple>
@@ -63,11 +64,42 @@ struct MuPhiDirectCoupling {
 };
 
 // The one line that changes when the asymmetry is derived.
-inline float mu_phi_from_phi_mu(float a_phi_mu) { return a_phi_mu; }
+// THE decision, now derived from the mass equation instead of asserted.
+//
+// mu_row_has_no_phi is effective_mu_horizontal_div_only(): under the corrected mass coordinate
+// the mu tendency is the horizontal divergence of (mu u, mu v) and carries NO phi dependence, so
+// the DIRECT mu <- phi entry is zero. Under legacy Omega = mu w the chain mu -> w -> phi was
+// real, and the coupling with it.
+//
+// Measured on the live operator (block probe, stage 2, dt=600, WRFParity): A_mu_ph = 0 exactly
+// while A_ph_mu is not -- the operator is asymmetric in exactly this direction, and one scalar
+// serving both was the preconditioner asserting a symmetry its operator does not have.
+//
+// AND IT IS MEASURED HARMFUL, so production passes false and keeps the symmetric value.
+//
+// Isolated on em_b_wave, stage 2, dt=600, WRFParity -- same build, same run, only this coupling
+// changed -- reading eps_j = ||W(A z_j - v_j)||/||W v_j|| off the live FGMRES triplet:
+//
+//     symmetric (shipped) : 29.8, 0.087, 0.078, 0.042, 1.40, 0.462, 0.239
+//     a_mu_phi = 0        : 268,  1.25,  0.51,  0.23,  0.95, 1.09,  1.59
+//
+// An order of magnitude WORSE on most iterations. The reason it is not a contradiction: M
+// approximates A^-1, not A. Nothing requires M to share A's sparsity, and the inverse of an
+// asymmetric operator generally DOES carry the entry A lacks -- deleting it because A lacks it
+// confuses the operator with its inverse.
+//
+// Third time in this campaign that a mathematically-correct removal degraded conditioning, after
+// the W-phi 2x2 refinement and the spurious W-damping term. The corrected form stays available
+// and tested, and is deliberately not enabled; enabling it is a numerics decision that now has a
+// measurement attached rather than an argument.
+inline float mu_phi_from_phi_mu(float a_phi_mu, bool mu_row_has_no_phi) {
+    return mu_row_has_no_phi ? 0.0f : a_phi_mu;
+}
 
-inline MuPhiDirectCoupling mu_phi_direct_coupling(float dt_gamma, float c2) {
-    const float a_phi_mu = dt_gamma * c2;   // vertical hydrostatic
-    return MuPhiDirectCoupling{mu_phi_from_phi_mu(a_phi_mu), a_phi_mu};
+inline MuPhiDirectCoupling mu_phi_direct_coupling(float dt_gamma, float c2,
+                                                  bool mu_row_has_no_phi) {
+    const float a_phi_mu = dt_gamma * c2;   // vertical hydrostatic; NOT affected by the above
+    return MuPhiDirectCoupling{mu_phi_from_phi_mu(a_phi_mu, mu_row_has_no_phi), a_phi_mu};
 }
 
 class UnifiedPreconditioner : public WRFPreconditioner {
@@ -270,13 +302,38 @@ public:
     // Digest of exactly the fields above, for the isolation contract. Deliberately includes
     // mu_full_stage's VALUES, not just its shape -- the whole failure mode is a field from
     // the wrong checkpoint, which has identical shape.
-    double stage_state_digest() const {
+    // EXACT fingerprint of every field the snapshot restores.
+    //
+    // The previous digest was 1e6*stage + 1e3*scale + |mu_full|_1 and claimed, in its own comment,
+    // to cover exactly those fields. It did not:
+    //   * mu_pert_last_bound was ABSENT, so deleting its restore would have kept passing
+    //   * mu_full collapsed to an L1 sum, so any rearrangement with the same sum was identical
+    //   * the terms were ADDED, so a stage change could be offset by a field change
+    //
+    // A rollback either restores the state or it does not, so this is exact equality over the
+    // raw values, not a tolerance on a summary scalar.
+    uint64_t stage_state_fingerprint() const {
         torch::NoGradGuard g;
-        double d = static_cast<double>(current_stage_) * 1e6
-                 + static_cast<double>(mu_scale_correction_) * 1e3;
-        if (mu_full_stage_.defined())
-            d += mu_full_stage_.to(torch::kFloat64).abs().sum().item<double>();
-        return d;
+        uint64_t h = 1469598103934665603ULL;                  // FNV-1a offset basis
+        auto mix = [&h](uint64_t v) { h ^= v; h *= 1099511628211ULL; };
+        auto mix_tensor = [&](const torch::Tensor& t) {
+            if (!t.defined()) { mix(0x9E3779B97F4A7C15ULL); return; }
+            const auto c = t.detach().to(torch::kCPU).to(torch::kFloat64).contiguous();
+            mix(static_cast<uint64_t>(c.numel()));
+            const double* p = c.data_ptr<double>();
+            for (int64_t i = 0; i < c.numel(); ++i) {
+                uint64_t bits;
+                std::memcpy(&bits, &p[i], sizeof(bits));      // exact bits, NaN and -0 included
+                mix(bits);
+            }
+        };
+        mix(static_cast<uint64_t>(static_cast<int64_t>(current_stage_)));
+        uint32_t sc;
+        std::memcpy(&sc, &mu_scale_correction_, sizeof(sc));
+        mix(sc);
+        mix_tensor(mu_full_stage_);
+        mix_tensor(mu_pert_last_bound_);                      // the field the old digest omitted
+        return h;
     }
 
     /**

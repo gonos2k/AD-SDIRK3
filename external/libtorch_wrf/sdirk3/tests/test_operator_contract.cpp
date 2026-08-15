@@ -54,6 +54,10 @@ wrf::sdirk3::LinearizationSnapshot make_snapshot() {
     s.token.mass_coordinate_mode = 1;
     s.token.imex_split_mode = 3;
     s.token.hevi_split = false;
+    s.token.rhs_mode = 2;
+    s.token.h = 600.0 * 0.4358665215;
+    s.token.layout_digest = wrf::sdirk3::layout_digest(s.layout);
+    s.token.krylov_iteration = -1;      // a whole-solve token, not one FGMRES iteration
     s.scale = wrf::sdirk3::ResidualScale::unscaled(s.token.scale_generation);
     return s;
 }
@@ -364,6 +368,10 @@ int main() {
             {"mass_coordinate_mode",   [](LinearizationToken& t){ ++t.mass_coordinate_mode; }},
             {"imex_split_mode",        [](LinearizationToken& t){ ++t.imex_split_mode; }},
             {"hevi_split",             [](LinearizationToken& t){ t.hevi_split = !t.hevi_split; }},
+            {"rhs_mode",               [](LinearizationToken& t){ ++t.rhs_mode; }},
+            {"h",                      [](LinearizationToken& t){ t.h *= 2.0; }},
+            {"layout_digest",          [](LinearizationToken& t){ ++t.layout_digest; }},
+            {"krylov_iteration",       [](LinearizationToken& t){ ++t.krylov_iteration; }},
         };
         bool every_field_bites = true;
         for (const auto& kv : bump) {
@@ -772,7 +780,7 @@ int main() {
 
         StageIdentity ident;
         ident.solver_id = 4;
-        ident.stage_state_generation = 9;
+        ident.capture_seq = 9;
         ident.ark_stage = 2;
         check(ident.is_valid(), "a fully-set stage identity is valid");
         check(!StageIdentity{}.is_valid(),
@@ -799,10 +807,10 @@ int main() {
         // STAMPED: ARK stage 2 recurs at every physical step, so the ark_stage alone would accept
         // a weighting frozen many steps ago. The bind generation separates them.
         StageIdentity later = ident;
-        later.stage_state_generation += 1;          // same solver, same ARK stage, later bind
+        later.capture_seq += 1;                     // same solver, same ARK stage, later capture
         check(!w.usable(later),
-              "a weighting from an EARLIER bind is refused at the same ARK stage -- step 1 stage 2 "
-              "is not step 100 stage 2");
+              "a weighting from an EARLIER capture is refused at the same ARK stage -- step 1 "
+              "stage 2 is not step 100 stage 2");
 
         StageIdentity other_solver = ident;
         other_solver.solver_id += 1;
@@ -814,13 +822,75 @@ int main() {
               "capturing with an invalid identity yields nothing usable");
     }
 
+    // ---- 6m. the two metrics are NOT interchangeable, and the domain is DERIVED from the mode
+    {
+        using wrf::sdirk3::StageIdentity;
+        using wrf::sdirk3::WeightingPoint;
+        using wrf::sdirk3::capture_stage_weights;
+        using wrf::sdirk3::make_implicit_active_domain;
+        const wrf::sdirk3::WRMSNormConfig cfg;
+
+        StageIdentity entry;
+        entry.solver_id = 4; entry.capture_seq = 9; entry.ark_stage = 2;
+        entry.point = WeightingPoint::StageEntry;
+        StageIdentity accept = entry;
+        accept.point = WeightingPoint::StageAcceptance;
+
+        auto y = torch::exp(3.0 * torch::randn({snap.layout.total_size}, gen, opts));
+        auto w_entry = capture_stage_weights(y, snap.layout, cfg, entry);
+        check(w_entry.usable(entry), "a StageEntry weighting is usable at StageEntry");
+        check(!w_entry.usable(accept),
+              "and REFUSED at StageAcceptance -- e(Y) depends on Y, so the Newton-linearization "
+              "metric and the convergence gate's metric are different numbers");
+
+        // The domain follows from the mode instead of a caller remembering which to pick.
+        const auto full = make_implicit_active_domain(/*mass=*/1, /*split=*/3, /*hevi=*/false);
+        check(full.ru && full.rv && full.rw && full.ph && full.theta && full.mu,
+              "no split: the implicit solve owns every block");
+        const auto hevi = make_implicit_active_domain(/*mass=*/1, /*split=*/3, /*hevi=*/true);
+        check(!hevi.ru && !hevi.rv && !hevi.mu && hevi.rw && hevi.ph && hevi.theta,
+              "HEVI on the corrected mass coordinate: only the vertical fast subsystem");
+
+        // Unestablished combinations THROW rather than defaulting to all-active, which is the
+        // answer that would look confident and be wrong.
+        bool threw_legacy = false;
+        try { make_implicit_active_domain(0, 3, true); }
+        catch (const std::exception&) { threw_legacy = true; }
+        check(threw_legacy,
+              "HEVI under the LEGACY mass coordinate throws -- that partition is not written down");
+        bool threw_unset = false;
+        try { make_implicit_active_domain(-1, 3, false); }
+        catch (const std::exception&) { threw_unset = true; }
+        check(threw_unset, "an unset mode throws rather than guessing a domain");
+    }
+
+    // ---- 6n. the layout digest distinguishes PARTITIONS, not just sizes
+    {
+        // Same total size, different cut. A digest over the total alone would call these equal,
+        // and an operator formed against one partition is not the operator formed against the
+        // other.
+        const auto a = wrf::sdirk3::StateLayout::from_grid_dims(NX, NY, NZ, NXU, NYV, NZW);
+        const auto b = wrf::sdirk3::StateLayout::from_grid_dims(NY, NX, NZ, NYV, NXU, NZW);
+        check(wrf::sdirk3::layout_digest(a) == wrf::sdirk3::layout_digest(a),
+              "the layout digest is deterministic");
+        if (a.total_size == b.total_size) {
+            check(wrf::sdirk3::layout_digest(a) != wrf::sdirk3::layout_digest(b),
+                  "two layouts with the SAME total but different blocks digest differently");
+        } else {
+            check(wrf::sdirk3::layout_digest(a) != wrf::sdirk3::layout_digest(b),
+                  "different layouts digest differently");
+        }
+        check(wrf::sdirk3::layout_digest(a) != 0,
+              "the digest is never 0, which is what 'unset' means in the token");
+    }
+
     // --------------------------------------------- 7. h is dt*gamma, stated once
     {
         check(std::abs(snap.h() - 600.0 * 0.4358665215) < 1e-12,
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 83;
+    constexpr int expected_checks = 92;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
