@@ -98,7 +98,7 @@ int main() {
     // So read the diagonal the preconditioner ACTUALLY built. Under the flag every entry is
     // exactly 1; on the shipped path they are ~126 at these parameters. This is the only check
     // here that can tell the two apart.
-    const auto diag = P.vertical_diag_phi();
+    const auto diag = P.phi_diagonal_snapshot();
     check(diag.defined() && diag.numel() > 0,
           "the constructed phi diagonal is readable, so the branch check below has an operand");
     const double max_dev = (diag - 1.0f).abs().max().item<double>();
@@ -107,7 +107,16 @@ int main() {
           "exactly 1 -- on the shipped path they are ~126, so this assertion fails if the env "
           "flag did not reach the preconditioner");
 
-    constexpr int expected_checks = 7;
+    // The snapshot is an OWNED copy, not a window onto live state. torch::Tensor const-ness is
+    // shallow, so an accessor returning const& would let any caller -- including this test --
+    // write through it into the preconditioner's diagonal.
+    auto scribble = P.phi_diagonal_snapshot();
+    scribble.fill_(-999.0f);
+    check(P.phi_diagonal_snapshot().sub(1.0f).abs().max().item<double>() == 0.0,
+          "and the snapshot is DECOUPLED: filling the returned tensor with garbage leaves the "
+          "preconditioner's own diagonal untouched, which a const& accessor would not survive");
+
+    constexpr int expected_checks = 8;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
