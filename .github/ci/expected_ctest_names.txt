@@ -29,6 +29,7 @@ MSF_Raw_Stats_Matrix
 Mass_Coordinate_Mode_Contract
 Metric_Policy_Contract
 MuPhi_Coupling_Structure_Contract
+Mu_Adjoint_Sign_Experiment_Enabled_Contract
 Phi_Unity_Experiment_Enabled_Contract
 RW_Term_Capture_Contract
 Response_Probe_Contract
