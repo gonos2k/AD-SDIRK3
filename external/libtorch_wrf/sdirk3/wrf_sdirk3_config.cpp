@@ -835,15 +835,21 @@ void SDIRK3Config::load_from_env() {
         // fall back to newton_tol -- a mistyped value behaving exactly like an unset one, which
         // is the silence-indistinguishable-from-broken defect class again. Parse fully, require
         // finite, refuse loudly and keep the default otherwise.
+        // Range-checked HERE, not only in validate(): a finite out-of-range value would
+        // otherwise be stored -- 5.0 used as the rtol, or -1 silently meaning "follow
+        // newton_tol" through effective_ewt_rtol()'s > 0 test, which is the same silent
+        // fallback the finiteness check just closed. The env gate holds the same standard as
+        // the validator, so a value either lands whole and legal or is refused loudly.
         char* end = nullptr;
         const float parsed = std::strtof(env_val, &end);
-        if (end != env_val && *end == '\0' && std::isfinite(parsed)) {
+        if (end != env_val && *end == '\0' &&
+            parsed >= 0.0f && parsed <= 1.0f) {   // finite AND in range; NaN fails both >= and <=
             ewt_rtol = parsed;
             std::cerr << "[CONFIG ENV] ewt_rtol = " << ewt_rtol
                       << (ewt_rtol > 0.0f ? "" : " (0 = follow newton_tol)") << std::endl;
         } else {
             std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_EWT_RTOL='" << env_val
-                      << "' is not a finite number; keeping ewt_rtol = " << ewt_rtol
+                      << "' is not a finite value in [0, 1]; keeping ewt_rtol = " << ewt_rtol
                       << std::endl;
         }
     }
