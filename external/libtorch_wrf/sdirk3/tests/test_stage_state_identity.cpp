@@ -23,6 +23,7 @@
 #include <torch/torch.h>
 
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <set>
 #include <string>
@@ -259,11 +260,21 @@ int main() {
         check(std::abs(cfg.effective_ewt_rtol() - 1e-3f) < 1e-12,
               "ewt_rtol > 0 OVERRIDES: the weighting no longer moves with the stopping rule");
 
+        // NaN: both halves of a naive range check are false, so it used to PASS validate and
+        // then silently disable the override -- a mistyped env value behaving exactly like an
+        // unset one. validate() must refuse it.
+        cfg.ewt_rtol = std::numeric_limits<float>::quiet_NaN();
+        check(!cfg.validate(),
+              "ewt_rtol = NaN FAILS validate -- it slid through the old range check because NaN "
+              "comparisons are false, then silently fell back downstream");
+        cfg.ewt_rtol = 0.5f;
+        check(cfg.validate(), "a finite in-range ewt_rtol still validates (the refusal is aimed)");
+
         cfg.ewt_rtol = saved_ewt;
         cfg.newton_tol = saved_ntol;
     }
 
-    constexpr int expected_checks = 20;
+    constexpr int expected_checks = 22;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

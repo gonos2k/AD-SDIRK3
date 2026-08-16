@@ -8,6 +8,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
+#include <cmath>
 #include <algorithm>
 #include <cctype>
 #include <unordered_set>  // FIX Round6 Item2: Per-key WARN_ONCE tracking
@@ -829,9 +830,22 @@ void SDIRK3Config::load_from_env() {
         newton_tol = std::atof(env_val);
     }
     if ((env_val = std::getenv("WRF_SDIRK3_EWT_RTOL"))) {
-        ewt_rtol = std::atof(env_val);
-        std::cerr << "[CONFIG ENV] ewt_rtol = " << ewt_rtol
-                  << (ewt_rtol > 0.0f ? "" : " (0 = follow newton_tol)") << std::endl;
+        // STRICT: atof returns NaN for "nan" and 0.0 for any garbage, NaN passes a [0,1] range
+        // check because NaN comparisons are false, and effective_ewt_rtol() would then silently
+        // fall back to newton_tol -- a mistyped value behaving exactly like an unset one, which
+        // is the silence-indistinguishable-from-broken defect class again. Parse fully, require
+        // finite, refuse loudly and keep the default otherwise.
+        char* end = nullptr;
+        const float parsed = std::strtof(env_val, &end);
+        if (end != env_val && *end == '\0' && std::isfinite(parsed)) {
+            ewt_rtol = parsed;
+            std::cerr << "[CONFIG ENV] ewt_rtol = " << ewt_rtol
+                      << (ewt_rtol > 0.0f ? "" : " (0 = follow newton_tol)") << std::endl;
+        } else {
+            std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_EWT_RTOL='" << env_val
+                      << "' is not a finite number; keeping ewt_rtol = " << ewt_rtol
+                      << std::endl;
+        }
     }
     if ((env_val = std::getenv("WRF_SDIRK3_GMRES_RESTART"))) {
         gmres_restart = std::atoi(env_val);
@@ -2077,9 +2091,11 @@ bool SDIRK3Config::validate() const {
         valid = false;
     }
     
-    if (ewt_rtol < 0.0f || ewt_rtol > 1.0f) {
-        std::cerr << "SDIRK3 Config Error: ewt_rtol must be in [0, 1] (0 = follow newton_tol)"
-                  << std::endl;
+    // !(a >= b) form, because ewt_rtol = NaN makes BOTH `< 0` and `> 1` false -- a NaN passed
+    // the previous range check and then silently disabled the override downstream.
+    if (!(ewt_rtol >= 0.0f && ewt_rtol <= 1.0f)) {
+        std::cerr << "SDIRK3 Config Error: ewt_rtol must be a finite value in [0, 1] "
+                     "(0 = follow newton_tol); got " << ewt_rtol << std::endl;
         valid = false;
     }
         if (newton_tol <= 0.0f || newton_tol > 1.0f) {
