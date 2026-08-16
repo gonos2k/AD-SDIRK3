@@ -417,6 +417,12 @@ public:
     // come from the same linearization) and purity (a probe must not advance them). The second is
     // what makes a faithful state digest possible -- these move exactly when this object rebinds
     // or rebuilds, so a digest over them is a real witness rather than a constant that cannot fail.
+    // The phi diagonal this object ACTUALLY built. Read-only, and it exists so a contract can
+    // discriminate which branch the env-latched experiment took -- asserting
+    // phi_diagonal_value(..., true) == 1 with a literal `true` proves a property of the pure
+    // function and NOTHING about the operator that was constructed.
+    const torch::Tensor& vertical_diag_phi() const { return vertical_diag_phi_; }
+
     uint64_t stage_state_generation() const { return stage_state_generation_; }
     uint64_t coefficient_generation() const { return coefficient_generation_; }
 

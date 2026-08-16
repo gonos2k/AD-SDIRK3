@@ -87,11 +87,27 @@ int main() {
           "and NOT the identity -- the preconditioner is still doing work on the enabled path, "
           "so a silent degradation to a no-op cannot hide behind a green test");
 
-    // The value authority agrees with what this process actually built.
-    check(wrf::sdirk3::phi_diagonal_value(261.5f, 346.4f, 1.0f / (500.0f * 500.0f), true) == 1.0f,
-          "and the phi-diagonal authority reports unity for the branch this binary enabled");
+    // THE DISCRIMINATING ASSERTION -- everything above this line passes on the DISABLED path too.
+    //
+    // Construct/finite/nonzero/non-identity are all true of the shipped operator, so if the env
+    // read never landed (variable renamed, parse rejecting "1", the static latched earlier in the
+    // process) this binary would report full coverage of a branch it never took. And asserting
+    // phi_diagonal_value(..., true) == 1 with a LITERAL true tests the pure function, not the
+    // object -- it cannot fail for the reason the test exists.
+    //
+    // So read the diagonal the preconditioner ACTUALLY built. Under the flag every entry is
+    // exactly 1; on the shipped path they are ~126 at these parameters. This is the only check
+    // here that can tell the two apart.
+    const auto diag = P.vertical_diag_phi();
+    check(diag.defined() && diag.numel() > 0,
+          "the constructed phi diagonal is readable, so the branch check below has an operand");
+    const double max_dev = (diag - 1.0f).abs().max().item<double>();
+    check(max_dev == 0.0,
+          "PRODUCTION BRANCH CONFIRMED: every entry of the phi diagonal this object built is "
+          "exactly 1 -- on the shipped path they are ~126, so this assertion fails if the env "
+          "flag did not reach the preconditioner");
 
-    constexpr int expected_checks = 6;
+    constexpr int expected_checks = 7;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
