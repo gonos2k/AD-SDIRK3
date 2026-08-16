@@ -1645,10 +1645,34 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
             C_mu_u_ptr[k] = 0.0f;
             C_mu_v_ptr[k] = 0.0f;
         } else {
+            // EXPERIMENT (env-gated, default OFF -> byte-identical): the DIVERGENCE sign.
+            //
+            // Derivation, from the rows themselves:
+            //     mu row : d(mu)/dt = -D_h(mu u)        => A_mu_u = +h mu0 D_h
+            //     u  row : du/dt    = -(c_s^2/mu0) G_h mu => A_u_mu = +h (c_s^2/mu0) G_h
+            // and for an adjoint pair D_h = -G_h^T, so D_h G_h = -k^2 and the product
+            // A_mu_u * A_u_mu is NEGATIVE. The Schur step subtracts it, giving
+            // S_mu_mu = 1 + h^2 c_s^2 k^2 -- stiffer, which is what A = I - hJ predicts.
+            //
+            // Production writes both directions with the SAME positive scalar H, so the product
+            // is POSITIVE and the Schur step drives S_mu_mu NEGATIVE (measured -0.64 at
+            // operational parameters; Discrete_Adjoint_Pair_Contract). The gradient/divergence
+            // orientation is simply absent from a scalar H.
+            //
+            // The flag restores it on the divergence direction (divergence = MINUS the adjoint
+            // of the gradient). Opt-in because three "mathematically correct" coefficient fixes
+            // in this campaign measured harmful or inert -- M approximates A^-1, and a wrong term
+            // can be load-bearing.
+            static const bool adjoint_sign = [] {
+                const char* v = std::getenv("WRF_SDIRK3_MU_SCHUR_ADJOINT_SIGN");
+                return v && wrf::sdirk3::parse_bool_text(v) == wrf::sdirk3::BoolText::True;
+            }();
+            const float div_sign = adjoint_sign ? +1.0f : -1.0f;
+
             C_u_mu_ptr[k] = -dt_gamma * (c_squared / mu_column_pa) * H_x;
             C_v_mu_ptr[k] = -dt_gamma * (c_squared / mu_column_pa) * H_y;
-            C_mu_u_ptr[k] = -dt_gamma * mu_column_pa * H_x;
-            C_mu_v_ptr[k] = -dt_gamma * mu_column_pa * H_y;
+            C_mu_u_ptr[k] = div_sign * dt_gamma * mu_column_pa * H_x;
+            C_mu_v_ptr[k] = div_sign * dt_gamma * mu_column_pa * H_y;
         }
     }
 
