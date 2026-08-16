@@ -429,6 +429,24 @@ public:
     // It exists so a contract can discriminate which branch the env-latched experiment took:
     // asserting phi_diagonal_value(..., true) == 1 with a literal `true` proves a property of the
     // pure function and NOTHING about the operator that was constructed.
+    // The horizontal mu<->u,v couplings this object actually built, as detached clones.
+    // Same reasoning as phi_diagonal_snapshot(): torch::Tensor const-ness is shallow, so a
+    // const& would hand out writable live state.
+    //
+    // These exist so a contract can read the SIGNS production computes rather than re-typing the
+    // formula. A test that hard-codes `-h*(c_s^2/mu0)*H_x` is asserting a property of its own
+    // literals: it keeps passing if the production build changes underneath it, which is exactly
+    // when the finding would need to be revisited.
+    struct HorizontalCouplingSnapshot {
+        torch::Tensor c_u_mu, c_v_mu, c_mu_u, c_mu_v;
+    };
+    HorizontalCouplingSnapshot horizontal_coupling_snapshot() const {
+        auto cl = [](const torch::Tensor& t) {
+            return t.defined() ? t.detach().clone() : torch::Tensor{};
+        };
+        return {cl(C_u_mu_), cl(C_v_mu_), cl(C_mu_u_), cl(C_mu_v_)};
+    }
+
     torch::Tensor phi_diagonal_snapshot() const {
         return vertical_diag_phi_.defined() ? vertical_diag_phi_.detach().clone()
                                             : torch::Tensor{};

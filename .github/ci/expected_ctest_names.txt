@@ -11,6 +11,7 @@ Core_Archive_MakeParity
 Core_Archive_Manifest
 Core_Full_Object_Link
 Diag_IO_Concurrency
+Discrete_Adjoint_Pair_Contract
 Dump_Contract
 Experiment_Config_Parser
 FGMRES_Contract
@@ -28,7 +29,7 @@ MSF_Raw_Stats_Matrix
 Mass_Coordinate_Mode_Contract
 Metric_Policy_Contract
 MuPhi_Coupling_Structure_Contract
-Phi_Unity_Enabled_Contract
+Phi_Unity_Experiment_Enabled_Contract
 RW_Term_Capture_Contract
 Response_Probe_Contract
 Right_Preconditioner_Quality_Contract
