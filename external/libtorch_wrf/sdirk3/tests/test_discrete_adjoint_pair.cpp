@@ -159,19 +159,34 @@ int main() {
               "the production mu<->u couplings are readable, so the sign check below has real "
               "operands rather than transcribed constants");
 
-        const auto prod = (c.c_mu_u * c.c_u_mu);
-        const double prod_max = prod.max().item<double>();
-        const double prod_min = prod.min().item<double>();
-        std::printf("  production C_mu_u*C_u_mu over levels: min=%.6g max=%.6g\n",
-                    prod_min, prod_max);
+        // BOTH horizontal directions. The Schur sum is
+        //     sum_k [ C_mu_u*C_u_mu/D_u + C_mu_v*C_v_mu/D_v ]
+        // so u and v are siblings in one expression; asserting only u would leave half the term
+        // unmeasured and would pass a build in which only the v pair had been changed.
+        check(c.c_v_mu.defined() && c.c_mu_v.defined() &&
+              c.c_v_mu.numel() > 0 && c.c_mu_v.numel() > 0,
+              "the production mu<->v couplings are readable too, so BOTH halves of the Schur sum "
+              "have operands");
 
-        // Same-sign factors -> non-negative product. This is the measured claim.
-        check(prod_min >= 0.0,
-              "PRODUCTION SIGN: every level's C_mu_u * C_u_mu is non-negative -- the two "
-              "directions share a sign, the opposite of what the adjoint relation gives");
-        check(prod_max > 0.0,
-              "and the product is genuinely nonzero, so the Schur step SUBTRACTS a positive "
-              "quantity from the mass diagonal rather than adding stiffness to it");
+        struct Dir { const char* name; torch::Tensor prod; };
+        const Dir dirs[] = {
+            {"u", c.c_mu_u * c.c_u_mu},
+            {"v", c.c_mu_v * c.c_v_mu},
+        };
+        for (const auto& d : dirs) {
+            const double lo = d.prod.min().item<double>();
+            const double hi = d.prod.max().item<double>();
+            std::printf("  production C_mu_%s*C_%s_mu over levels: min=%.6g max=%.6g\n",
+                        d.name, d.name, lo, hi);
+            check(lo >= 0.0,
+                  std::string("PRODUCTION SIGN (") + d.name + "): every level's product is "
+                  "non-negative -- the two directions share a sign, the opposite of what the "
+                  "adjoint relation gives");
+            check(hi > 0.0,
+                  std::string("and the ") + d.name + " product is genuinely nonzero, so the Schur "
+                  "step SUBTRACTS a positive quantity from the mass diagonal rather than adding "
+                  "stiffness to it");
+        }
 
         // The snapshot must not alias live state (the lesson from the phi accessor). Compare
         // against the value captured BEFORE scribbling -- my first attempt asserted "> -999",
@@ -187,7 +202,7 @@ int main() {
               "tensor leaves the preconditioner's own coefficients bit-identical");
     }
 
-    constexpr int expected_checks = 8;
+    constexpr int expected_checks = 11;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
