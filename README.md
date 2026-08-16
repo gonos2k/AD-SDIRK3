@@ -25,7 +25,7 @@ The differentiable implicit solve converges at small timesteps; making it conver
 stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
 it is **unresolved**.
 
-Verification is an **exact 46-test CTest inventory** pinned by
+Verification is an **exact 47-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
@@ -84,11 +84,22 @@ proven byte-identical.
   repeatability check and a state digest sampled around every call, and refuses an operator that
   supplies neither.
 
+- **Built since, so this list stays honest in both directions:**
+  - a **live `A P_j^-1` probe** reads the actual FGMRES triplet (`v_j`, `P_j^-1 v_j`,
+    `A P_j^-1 v_j`) at zero extra operator calls, in both scaled-Krylov and physical-WRMS
+    coordinates — opt-in via `WRF_SDIRK3_APINV_DEFECT=1`. **Interpretation incomplete**: the
+    identity defect is a target, not a conditioning verdict (`B = cI` has an arbitrarily large
+    one and is a one-step GMRES solve), so gain / shape-defect / cosine belong in the same record
+    before any coefficient is judged by it.
+  - the **adjoint replay owns its preconditioner**, and a guard *verifies* the production instance
+    is untouched instead of restoring it. **Cleanup incomplete**: a receipt-equality contract
+    pinning strict no-write isolation is not yet in place.
 - **Not built yet, stated so the gap is not read as done:**
-  - a **live `A P_j^-1` adapter** — the contract judges synthetic operators; nothing wires the
-    production `UnifiedPreconditioner` and JVP to it
-  - **true replay isolation** — the adjoint replay mutates the shared production preconditioner and
-    leaves it fail-closed until the next `update()`, rather than owning its own instance
+  - the **correct raw block diagonals** `A_qq = I - h·J_qq^direct`. The shipped `phi` and `mu`
+    diagonals are dimensionally invalid (the source says so at both sites), but the replacement
+    values are **not** established — a dimensional argument cannot supply them, and the
+    Schur-reduced round trips are already computed elsewhere, so moving them into the raw
+    diagonal would double-count. See `AcousticGravity_Shadow_Contract`.
   - the **full ARK adjoint** and the **full-timestep `DG`/`DG^T`**
 - **No multi-step well-balancedness, geostrophic/thermal-wind balance, mass/energy/PV budgets,
   or formal temporal-order verification.**
@@ -157,7 +168,7 @@ with a stable marker **before** any communicator/halo state mutation or solve:
 - **AD halo + multi-tile** — refused pre-solve with `SDIRK3_MPI_MULTI_TILE_UNSUPPORTED`.
 - **MPI halo primitive** — verified independently of the solver at np=1/2/4: forward, adjoint,
   packed AD+BC transpose, and the runtime fail-close contracts
-  (`MPI_Halo_Contract_np{1,2,4}` + `MPI_Runtime_Contract_np{1,2,4}` in the 46-test CTest suite).
+  (`MPI_Halo_Contract_np{1,2,4}` + `MPI_Runtime_Contract_np{1,2,4}` in the 47-test CTest suite).
 - **Decomposition evidence** — the SDIRK3 decomposition fail-close matrix
   (`.github/ci/run_decomposition_matrix.sh`, 4 cases) was produced by direct local-machine
   execution; it is *not* a full-WRF decomposition validation and does not include a stock-RK3

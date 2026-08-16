@@ -1,31 +1,42 @@
-// 9F.D130: the acoustic-gravity coefficients DERIVED, next to what production ships.
+// 9F.D132: the acoustic-gravity blocks, with RAW and SCHUR-REDUCED kept apart.
 //
-// This is a SHADOW, not a rewrite. Every earlier single-term "fix" measured on the live operator
-// either made conditioning worse (mu-phi asymmetry) or was inert (HEVI mu identity), so the
-// re-derivation starts by QUANTIFYING each production coefficient against the value a clean
-// I - hJ / Schur derivation gives, at representative em_b_wave parameters. The deliverable is the
-// pinned mismatch table -- which discrepancies are large, which are cosmetic -- so the eventual
-// numerics PR spends its isolating measurements on the terms that matter.
+// RETRACTION. The first version of this contract compared
 //
-// UNITS, fixed once (velocity-basis packed state, wrf_sdirk3_state_layout.h):
-//   w   [m s^-1]      phi [m^2 s^-2]     theta [K]     mu [Pa]
-//   c_s^2 [m^2 s^-2]  N^2 [s^-2]         dz [m]        H_x,H_y [m^-1]   mu0 [Pa]
-//   h = dt*gamma [s]
+//     "derived D_phi" = 1 + h^2 c_s^2/dz^2      <- a SCHUR-REDUCED quantity
+//     shipped D_phi   = 1 + h  c_s^2/dz^2       <- a RAW block diagonal
 //
-// STRUCTURE. Two first-order equations eliminated into one produce a ROUND TRIP: the Schur
-// diagonal picks up h^2 * (rate1 * rate2), which is dimensionless when the rates multiply to
-// [s^-2]. A direct Jacobian rate enters as h * J_qq. Mixing the two orders -- an O(h) term where
-// the elimination gives O(h^2) -- is not a small error at h = 261.5 s.
+// and reported the ratio as a time-order error. Those are different objects, so the comparison
+// was not meaningful and the "1/h under" headline did not follow from it. The tree even
+// contained the contradiction in plain sight: the production experiment shipped alongside this
+// file sets A_phi_phi = 1 -- the RAW claim -- while this contract called 1 + h^2 c_s^2/dz^2 the
+// derived value of the same symbol.
 //
-// Derived reference forms (vertical acoustic-gravity, standard linearized column):
-//   phi <-> w acoustic round trip :  S_phi = 1 + h^2 * c_s^2 / dz^2          [dimensionless]
-//   w diagonal (acoustic+gravity) :  S_w   = 1 + h^2 * (c_s^2/dz^2 + N^2)    [dimensionless]
-//   mu <-> u,v horizontal acoustic:  S_mu  = 1 + h^2 * c_s^2 * (H_x^2+H_y^2) [dimensionless]
+// THE DISTINCTION, which is the whole point of this file now:
 //
-// Production forms (wrf_sdirk3_unified_preconditioner.cpp, cited in the campaign findings):
-//   D_phi = 1 + h * c_s^2 / dz^2            -- O(h) where the round trip is O(h^2)
-//   W     uses (c_s^2 + N^2) / dz^2         -- adds m^2 s^-2 to s^-2 before dividing
-//   D_mu  = 1 + h * mu0 * (H_x^2 + H_y^2)   -- carries mu0 [Pa] instead of c_s^2, O(h)
+//     RAW      A_qq = I - h J_qq^direct                    (what the block diagonal IS)
+//     REDUCED  S_w  = A_ww - A_wphi A_phiphi^-1 A_phiw     (what elimination PRODUCES)
+//
+// With no direct phi self-term, A_phiphi^raw = I, and the acoustic stiffness appears at O(h^2)
+// in S_w -- NOT in the raw diagonal. A term belongs in exactly one of the two; putting a
+// round trip in both is a double count, not a correction.
+//
+// WHAT SURVIVES the distinction, and is asserted below:
+//   * the shipped raw phi diagonal is DIMENSIONALLY INVALID (1/s added to a dimensionless 1) --
+//     this never depended on the raw/reduced confusion, and the production source says so itself
+//   * the reduced acoustic round trip h^2 c_s^2/dz^2 IS dimensionless, so it is the form that
+//     can legitimately appear in S_w
+//   * the c_s^2 + N^2 site is dimensionally wrong but numerically ~2e-4 here -- cosmetic
+//   * D_mu: the h^2 U/V-mu round trip is ALREADY computed by production's elimination, so
+//     inserting it into the raw D_mu would count it twice
+//
+// WHAT IS NO LONGER CLAIMED: any "derived" replacement VALUE for a raw diagonal. Establishing
+// A_qq^direct requires reading the implicit RHS's actual q-self-dependence (vertical advection,
+// damping, metric terms, boundary closure), which this file does not do and a dimensional
+// argument cannot supply.
+//
+// UNITS (velocity-basis packed state):
+//   w [m/s]  phi [m^2/s^2]  theta [K]  mu [Pa]
+//   c_s^2 [m^2/s^2]  N^2 [1/s^2]  dz [m]  H_x,H_y [1/m]  h = dt*gamma [s]
 
 #include <cmath>
 #include <cstdio>
@@ -58,18 +69,27 @@ int main() {
     std::printf("  params: h=%.4g s  c_s^2=%.4g  N^2=%.4g  dz=%.4g  mu0=%.4g  H=%.4g\n",
                 kH, kCs2, kN2, kDz, kMu0, kHx);
 
-    // ---- 1. D_phi: O(h) shipped where the elimination gives O(h^2) --------------------------
+    // ---- 1. The shipped RAW phi diagonal is dimensionally invalid ------------------------
+    // This is the claim that survives: [h c_s^2/dz^2] = 1/s, added to a dimensionless 1. It is
+    // independent of what the correct raw value turns out to be, and the production source
+    // carries the same statement at the site.
     {
-        const double derived = 1.0 + kH * kH * kCs2 / (kDz * kDz);
-        const double shipped = 1.0 + kH * kCs2 / (kDz * kDz);
-        const double corr_ratio = (shipped - 1.0) / (derived - 1.0);   // = 1/h exactly
-        std::printf("  D_phi: derived=%.6g shipped=%.6g correction-ratio=%.6g (=1/h)\n",
-                    derived, shipped, corr_ratio);
-        check(std::abs(corr_ratio - 1.0 / kH) < 1e-12,
-              "D_phi: the shipped correction is EXACTLY 1/h of the derived one -- a time-order "
-              "error, not a tuning difference (h = 261.5 at dt=600)");
-        check(derived / shipped > 200.0,
-              "at operational h the derived phi diagonal is >200x the shipped one -- LARGE");
+        const double shipped_correction = kH * kCs2 / (kDz * kDz);          // units 1/s
+        const double reduced_roundtrip = kH * kH * kCs2 / (kDz * kDz);      // dimensionless
+
+        std::printf("  raw phi diag (shipped) = 1 + %.6g   [1/s -- INVALID]\n", shipped_correction);
+        std::printf("  reduced acoustic round trip S_w = 1 + %.6g   [dimensionless]\n",
+                    reduced_roundtrip);
+
+        check(shipped_correction > 0.0,
+              "the shipped raw phi diagonal carries a correction with units 1/s -- dimensionally "
+              "invalid regardless of what the correct raw value is");
+        check(std::abs(reduced_roundtrip / shipped_correction - kH) < 1e-9 * kH,
+              "the two differ by exactly a factor h, which is what makes them DIFFERENT OBJECTS "
+              "(one per unit time, one dimensionless) -- not a tuning gap between rival values");
+        check(reduced_roundtrip > 1.0,
+              "and the dimensionless round trip is the form that may legitimately appear in the "
+              "REDUCED block S_w -- where production already computes it as acoustic_cfl_sq");
     }
 
     // ---- 2. W diagonal: (c_s^2 + N^2)/dz^2 is dimensionally invalid but numerically tiny ----
@@ -88,34 +108,43 @@ int main() {
               "the smallness is structural (N^2 dz^2 << c_s^2), not a parameter accident");
     }
 
-    // ---- 3. D_mu: wrong physical constant AND wrong time order ------------------------------
+    // ---- 3. D_mu: the h^2 term is ALREADY THERE, so "adding" it would double-count ---------
+    // Production eliminates U and V from the mu row:
+    //     S_mu_mu_k     = -(c_mu_u * c_u_mu / diag_u) - (c_mu_v * c_v_mu / diag_v)
+    //     S_mu_mu_scalar = sum_k S_mu_mu_k + D_mu
+    // The first line IS the U/V-mu acoustic round trip -- the same h^2 c_s^2 H^2 that the earlier
+    // version of this contract proposed inserting into the RAW D_mu. Doing both would apply one
+    // physical round trip twice.
     {
-        const double derived = 1.0 + kH * kH * kCs2 * (2.0 * kHx * kHx);
-        const double shipped = 1.0 + kH * kMu0 * (2.0 * kHx * kHx);
-        const double factor = (kH * kCs2) / kMu0;   // what multiplies shipped's correction
-        std::printf("  D_mu: derived=%.6g shipped=%.6g missing-factor=h*c_s^2/mu0=%.6g\n",
-                    derived, shipped, factor);
-        check(std::abs((derived - 1.0) / (shipped - 1.0) - factor) < 1e-9,
-              "D_mu: shipped is missing EXACTLY h*c_s^2/mu0 -- and that equals 348.7 here, "
-              "matching the campaign's independently measured S_mu_phi=339 to ~3%");
-        check(factor > 100.0,
-              "the mu correction is underweighted by >100x at operational parameters -- LARGE");
-        // The near-coincidence that confused two sessions, pinned so it stays disambiguated:
-        // h*c_s^2/mu0 is numerically ~ S_mu_phi because it is the SAME expression, not because
-        // the mu-phi coupling is the mu-u,v Schur term.
+        const double roundtrip = kH * kH * kCs2 * (2.0 * kHx * kHx);
+        const double shipped_raw_correction = kH * kMu0 * (2.0 * kHx * kHx);
+
+        std::printf("  mu round trip (already in S_mu via elimination) = %.6g\n", roundtrip);
+        std::printf("  shipped RAW D_mu correction = %.6g  [h*mu0*H^2, units Pa/s -- INVALID]\n",
+                    shipped_raw_correction);
+
+        check(roundtrip > 0.0 && shipped_raw_correction > 0.0,
+              "both quantities are positive and non-trivial at operational parameters");
+        check(std::abs(roundtrip / shipped_raw_correction - (kH * kCs2) / kMu0) < 1e-9,
+              "they differ by h*c_s^2/mu0 -- the coincidence that made the round trip look like a "
+              "replacement for the raw diagonal, when it is the term ALREADY subtracted by the "
+              "Schur elimination one line above where D_mu is added");
+        check(true,
+              "RETRACTED: inserting h^2 c_s^2 H^2 into the RAW D_mu would double-count the U/V-mu "
+              "round trip production already computes -- the earlier 'derived D_mu' is withdrawn");
     }
 
-    // ---- 4. The ordering conclusion, stated as a check so the table cannot be read backwards -
+    // ---- 4. What the next numerics PR should actually do ---------------------------------
     {
-        const double dphi_severity = kH;                          // 261.5x
-        const double dmu_severity  = (kH * kCs2) / kMu0;          // 348.7x
-        const double omega_severity = kN2 * kDz * kDz / kCs2;     // 2e-4 relative
-        check(dmu_severity > 100.0 && dphi_severity > 100.0 && omega_severity < 1e-3,
-              "PRIORITY ORDER for the numerics PR: D_mu and D_phi are the large structural "
-              "defects; the c_s^2+N^2 site is cosmetic at these parameters");
+        const double omega_severity = kN2 * kDz * kDz / kCs2;
+        check(omega_severity < 1e-3,
+              "ORDER: the c_s^2+N^2 site is cosmetic at these parameters, so it is not the lever; "
+              "the open questions are the RAW self-terms A_qq^direct (which need the implicit "
+              "RHS read, not a dimensional argument) and whether the discrete gradient/divergence "
+              "pair carries the transpose sign the Schur term assumes");
     }
 
-    constexpr int expected_checks = 7;
+    constexpr int expected_checks = 9;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

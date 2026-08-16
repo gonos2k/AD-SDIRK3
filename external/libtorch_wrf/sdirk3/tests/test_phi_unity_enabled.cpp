@@ -7,6 +7,12 @@
 // cannot fail, which this campaign has shipped before. Setting the environment at the top of a
 // dedicated main(), before any preconditioner exists, is what makes the coverage real.
 //
+// NAMED AN EXPERIMENT ON PURPOSE. This contract proves the branch is REACHED and the object is
+// sane; it does NOT prove D_phi = 1 matches the actual Jacobian, that FGMRES converges, that
+// stage 2 reaches tolerance, or that dt=600 completes. Establishing the correct raw diagonal
+// needs the implicit RHS's phi self-dependence read directly. The earlier name
+// (Phi_Unity_Enabled_Contract) invited "the unity form is contracted"; it is not.
+//
 // What it pins: with the flag ON, the production UnifiedPreconditioner still BUILDS, and its
 // apply() is finite, non-degenerate, and actually does something. The opt-in path had no
 // executable test at all before this -- it was exercised only by hand-run live measurements, so
@@ -54,7 +60,7 @@ int main() {
     // BEFORE anything constructs a preconditioner -- see the header comment.
     ::setenv("WRF_SDIRK3_PHI_SCHUR_DENOM_UNITY", "1", /*overwrite=*/1);
 
-    std::cout << "=== Phi_Unity_Enabled_Contract ===" << std::endl;
+    std::cout << "=== Phi_Unity_Experiment_Enabled_Contract ===" << std::endl;
 
     auto grid = tiny_grid();
     auto physics = std::make_shared<wrf::sdirk3::PhysicsConfig>();
