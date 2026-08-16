@@ -840,16 +840,24 @@ void SDIRK3Config::load_from_env() {
         // newton_tol" through effective_ewt_rtol()'s > 0 test, which is the same silent
         // fallback the finiteness check just closed. The env gate holds the same standard as
         // the validator, so a value either lands whole and legal or is refused loudly.
+        // Parsed as DOUBLE, then narrowed with an underflow check. strtof("1e-50") underflows
+        // to 0.0f -- in range, so the previous gate ACCEPTED it, and a user asking for a tiny
+        // positive rtol silently got "0 = follow newton_tol": the override flipping into its own
+        // fallback. In double the value survives, so "positive as written, zero as float" is
+        // detectable and refused instead of stored.
         char* end = nullptr;
-        const float parsed = std::strtof(env_val, &end);
+        const double parsed_d = std::strtod(env_val, &end);
+        const float parsed = static_cast<float>(parsed_d);
         if (end != env_val && *end == '\0' &&
-            parsed >= 0.0f && parsed <= 1.0f) {   // finite AND in range; NaN fails both >= and <=
+            parsed_d >= 0.0 && parsed_d <= 1.0 &&  // finite AND in range; NaN fails both
+            !(parsed_d > 0.0 && parsed == 0.0f)) { // positive as written must stay positive
             ewt_rtol = parsed;
             std::cerr << "[CONFIG ENV] ewt_rtol = " << ewt_rtol
                       << (ewt_rtol > 0.0f ? "" : " (0 = follow newton_tol)") << std::endl;
         } else {
             std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_EWT_RTOL='" << env_val
-                      << "' is not a finite value in [0, 1]; keeping ewt_rtol = " << ewt_rtol
+                      << "' is not a finite value in [0, 1] representable as a positive float; "
+                         "keeping ewt_rtol = " << ewt_rtol
                       << std::endl;
         }
     }
