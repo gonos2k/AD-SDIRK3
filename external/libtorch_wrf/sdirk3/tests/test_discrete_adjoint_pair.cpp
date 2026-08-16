@@ -34,8 +34,16 @@
 #include <cmath>
 #include <cstdio>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
+
+#include "../wrf_sdirk3_config.h"
+#include "../wrf_sdirk3_types.h"
+#include "../wrf_sdirk3_unified_preconditioner.h"
+#include "../wrf_sdirk3_unified_rhs.h"
+
+#include <torch/torch.h>
 
 namespace {
 
@@ -71,6 +79,17 @@ std::vector<double> divg(const std::vector<double>& u) {
     return d;
 }
 
+std::shared_ptr<wrf::sdirk3::WRFGridInfo> tiny_grid() {
+    auto g = std::make_shared<wrf::sdirk3::WRFGridInfo>();
+    g->nx = 4;  g->ny = 3;  g->nz = 5;
+    g->nx_u = 5; g->ny_v = 4; g->nz_w = 6;
+    g->its = 1; g->ite = 4; g->jts = 1; g->jte = 3; g->kts = 1; g->kte = 5;
+    g->ims = 1; g->ime = 4; g->jms = 1; g->jme = 3; g->kms = 1; g->kme = 6;
+    g->ids = 1; g->ide = 5; g->jds = 1; g->jde = 4; g->kds = 1; g->kde = 6;
+    g->dx = 1000.0f; g->dy = 1000.0f;
+    return g;
+}
+
 double dot(const std::vector<double>& a, const std::vector<double>& b) {
     double s = 0.0;
     for (size_t i = 0; i < a.size(); ++i) s += a[i] * b[i];
@@ -99,8 +118,10 @@ int main() {
         std::printf("  <q,Du> = %.12g   <Gq,u> = %.12g   |sum|/scale = %.3g\n", lhs, rhs, resid);
 
         check(resid < 1e-12,
-              "<q,D_h u> + <G_h q, u> = 0 to machine precision -- the pair IS a discrete adjoint, "
-              "so this is a testable property and not a modelling preference");
+              "REFERENCE PROPERTY (a staggered pair built here, not production's): "
+              "<q,D_h u> + <G_h q,u> = 0 to machine precision -- this establishes what adjointness "
+              "looks like and what sign it forces; it is NOT evidence about the production "
+              "operators, which case 3 reads directly");
         check(std::abs(lhs) > 1e-6 && std::abs(rhs) > 1e-6,
               "and both sides are non-trivial, so the identity above is not 0 = 0");
     }
@@ -122,36 +143,51 @@ int main() {
               "which is the direction A = I - hJ predicts for a stiff acoustic operator");
     }
 
-    // ---- 3. What production's same-sign scalars give instead -------------------------------
+    // ---- 3. What PRODUCTION actually built -- read, not re-typed ---------------------------
+    // The previous version of this case hard-coded `-h*(c_s^2/mu0)*H_x` as literals copied out of
+    // the preconditioner. That asserts a property of the literals: it would keep passing if the
+    // production formula changed, which is precisely when this finding would need revisiting.
+    // Now the coefficients come from a real UnifiedPreconditioner.
     {
-        const double h = 600.0 * 0.4358665215;
-        const double cs2 = 1.2e5;
-        const double mu0 = 9.0e4;
-        const double H = 1.0e-5;
+        auto grid = tiny_grid();
+        auto physics = std::make_shared<wrf::sdirk3::PhysicsConfig>();
+        wrf::sdirk3::UnifiedPreconditioner P(grid, physics, 600.0f, 0.4358665215f);
 
-        // Verbatim from the production coefficient build.
-        const double C_u_mu = -h * (cs2 / mu0) * H;
-        const double C_mu_u = -h * mu0 * H;
-        const double product = C_mu_u * C_u_mu;      // both negative -> POSITIVE
-        const double D_mu = 1.0 + h * mu0 * (2.0 * H * H);
-        const double S_mu_mu = D_mu - 2.0 * product; // x2 for the u and v directions
+        const auto c = P.horizontal_coupling_snapshot();
+        check(c.c_u_mu.defined() && c.c_mu_u.defined() &&
+              c.c_u_mu.numel() > 0 && c.c_mu_u.numel() > 0,
+              "the production mu<->u couplings are readable, so the sign check below has real "
+              "operands rather than transcribed constants");
 
-        std::printf("  production: C_u_mu=%.6g  C_mu_u=%.6g  product=%.6g\n",
-                    C_u_mu, C_mu_u, product);
-        std::printf("  D_mu=%.6g  ->  S_mu_mu = D_mu - 2*product = %.6g\n", D_mu, S_mu_mu);
+        const auto prod = (c.c_mu_u * c.c_u_mu);
+        const double prod_max = prod.max().item<double>();
+        const double prod_min = prod.min().item<double>();
+        std::printf("  production C_mu_u*C_u_mu over levels: min=%.6g max=%.6g\n",
+                    prod_min, prod_max);
 
-        check(product > 0.0,
-              "production's two couplings share a sign, so their product is POSITIVE -- the "
-              "opposite of what the adjoint relation gives");
-        check(S_mu_mu < 0.0,
-              "and the Schur step therefore drives the mass diagonal NEGATIVE at operational "
-              "parameters: an indefinite block inside M, produced by a sign, not by physics");
-        check(std::abs(S_mu_mu) > 0.1,
-              "and it is not a marginal crossing -- the magnitude is O(1), so a sign-preserving "
-              "clamp downstream preserves the negativity rather than masking it");
+        // Same-sign factors -> non-negative product. This is the measured claim.
+        check(prod_min >= 0.0,
+              "PRODUCTION SIGN: every level's C_mu_u * C_u_mu is non-negative -- the two "
+              "directions share a sign, the opposite of what the adjoint relation gives");
+        check(prod_max > 0.0,
+              "and the product is genuinely nonzero, so the Schur step SUBTRACTS a positive "
+              "quantity from the mass diagonal rather than adding stiffness to it");
+
+        // The snapshot must not alias live state (the lesson from the phi accessor). Compare
+        // against the value captured BEFORE scribbling -- my first attempt asserted "> -999",
+        // which these coefficients (~ -2.3e4 at this grid spacing) never satisfied, so the check
+        // failed for its own arithmetic rather than for aliasing. A sentinel is only a probe if
+        // it lies outside the data's actual range.
+        const auto before = P.horizontal_coupling_snapshot().c_mu_u.clone();
+        auto scribble = P.horizontal_coupling_snapshot().c_mu_u;
+        scribble.fill_(-999.0f);
+        const auto after = P.horizontal_coupling_snapshot().c_mu_u;
+        check(torch::equal(before, after),
+              "and the coupling snapshot is DECOUPLED from the object: scribbling the returned "
+              "tensor leaves the preconditioner's own coefficients bit-identical");
     }
 
-    constexpr int expected_checks = 7;
+    constexpr int expected_checks = 8;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

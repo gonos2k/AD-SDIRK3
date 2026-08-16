@@ -333,6 +333,7 @@ target_link_libraries(test_phi_unity_enabled PRIVATE wrf_sdirk3::core)
 add_test(NAME Phi_Unity_Experiment_Enabled_Contract COMMAND test_phi_unity_enabled)
 
 add_executable(test_discrete_adjoint_pair tests/test_discrete_adjoint_pair.cpp)
+target_link_libraries(test_discrete_adjoint_pair PRIVATE wrf_sdirk3::core)
 add_test(NAME Discrete_Adjoint_Pair_Contract COMMAND test_discrete_adjoint_pair)
 
 add_executable(test_acoustic_gravity_shadow tests/test_acoustic_gravity_shadow.cpp)
