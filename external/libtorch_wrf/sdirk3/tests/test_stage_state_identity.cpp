@@ -274,7 +274,41 @@ int main() {
         cfg.newton_tol = saved_ntol;
     }
 
-    constexpr int expected_checks = 22;
+    // 9. THE PHI-DIAGONAL AUTHORITY, both branches executable.
+    //    The enabled experiment path previously had no test at all: it was exercised only by
+    //    hand-run live measurements, so a regression -- or a repeat of the exact bug that got
+    //    caught here, one call site flipped and the other not -- would reach main silently.
+    {
+        const float h = 600.0f * 0.4358665215f;
+        const float c_s = 346.4f;
+        const float dz_inv2 = 1.0f / (500.0f * 500.0f);
+
+        const float shipped = wrf::sdirk3::phi_diagonal_value(h, c_s, dz_inv2, false);
+        const float unity = wrf::sdirk3::phi_diagonal_value(h, c_s, dz_inv2, true);
+
+        check(std::abs(shipped - (1.0f + h * c_s * c_s * dz_inv2)) < 1e-3f * shipped,
+              "phi diagonal, flag OFF: exactly the shipped form 1 + h*c_s^2/dz^2 -- default "
+              "byte-identity depends on this branch never drifting");
+        check(unity == 1.0f,
+              "phi diagonal, flag ON: exactly 1 -- the acoustic term is not a phi self-term");
+        check(shipped > 100.0f,
+              "and the two branches DIFFER by >100x at operational parameters, so this is a "
+              "load-bearing switch and not a cosmetic one (126.5x suppression of the Schur term)");
+
+        // The consistency property itself: the value is a PURE function of its arguments, so the
+        // two call sites (stored array with the phi-level dz, Schur denominator with the w-level
+        // dz) cannot disagree about the FORM. Same inputs -> same output, both branches.
+        const float dz_inv2_w = 1.0f / (450.0f * 450.0f);   // a different dz, as at the real sites
+        check(wrf::sdirk3::phi_diagonal_value(h, c_s, dz_inv2_w, true) == unity,
+              "flag ON is dz-INDEPENDENT (1 everywhere), so the two call sites agree exactly -- "
+              "the inconsistency that made M a third, undesigned operator cannot recur");
+        check(wrf::sdirk3::phi_diagonal_value(h, c_s, dz_inv2_w, false) > 1.0f &&
+              wrf::sdirk3::phi_diagonal_value(h, c_s, dz_inv2_w, false) != shipped,
+              "flag OFF still carries each site's own dz -- the pre-existing dz difference is "
+              "PRESERVED, not silently unified along with the consistency fix");
+    }
+
+    constexpr int expected_checks = 27;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -15,6 +15,22 @@
 namespace wrf {
 namespace sdirk3 {
 
+// THE phi diagonal of the preconditioner, in ONE place and callable from tests.
+//
+// It had TWO independent expressions -- the stored array and a local recompute in the W Schur
+// denominator -- so flipping one produced an operator that was neither the shipped nor the
+// intended one. `unity` is passed EXPLICITLY (not read from the environment in here) so both
+// branches are executable in a contract without depending on process environment or on when a
+// function-local static was first initialized.
+//
+// FORM: 1 + h*c_s^2/dz^2 is dimensionally invalid ([h c_s^2/dz^2] = 1/s added to a dimensionless
+// 1). The acoustic coupling is not a phi SELF-term -- dphi/dt = -c_s^2 dw/dz has no direct phi
+// dependence -- so it belongs in the w<->phi round trip (acoustic_cfl_sq), where it already is.
+inline float phi_diagonal_value(float dt_gamma, float c_s, float dz_inv2, bool unity) {
+    return unity ? 1.0f : 1.0f + dt_gamma * c_s * c_s * dz_inv2;
+}
+
+
 // Forward declarations
 struct WRFGridInfo;
 class PhysicsConfig;
