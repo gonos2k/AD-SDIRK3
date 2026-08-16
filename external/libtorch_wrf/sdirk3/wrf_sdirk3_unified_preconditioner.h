@@ -15,6 +15,22 @@
 namespace wrf {
 namespace sdirk3 {
 
+// THE phi diagonal of the preconditioner, in ONE place and callable from tests.
+//
+// It had TWO independent expressions -- the stored array and a local recompute in the W Schur
+// denominator -- so flipping one produced an operator that was neither the shipped nor the
+// intended one. `unity` is passed EXPLICITLY (not read from the environment in here) so both
+// branches are executable in a contract without depending on process environment or on when a
+// function-local static was first initialized.
+//
+// FORM: 1 + h*c_s^2/dz^2 is dimensionally invalid ([h c_s^2/dz^2] = 1/s added to a dimensionless
+// 1). The acoustic coupling is not a phi SELF-term -- dphi/dt = -c_s^2 dw/dz has no direct phi
+// dependence -- so it belongs in the w<->phi round trip (acoustic_cfl_sq), where it already is.
+inline float phi_diagonal_value(float dt_gamma, float c_s, float dz_inv2, bool unity) {
+    return unity ? 1.0f : 1.0f + dt_gamma * c_s * c_s * dz_inv2;
+}
+
+
 // Forward declarations
 struct WRFGridInfo;
 class PhysicsConfig;
@@ -401,6 +417,23 @@ public:
     // come from the same linearization) and purity (a probe must not advance them). The second is
     // what makes a faithful state digest possible -- these move exactly when this object rebinds
     // or rebuilds, so a digest over them is a real witness rather than a constant that cannot fail.
+    // A SNAPSHOT of the phi diagonal this object actually built -- a detached clone, so the
+    // caller cannot reach back into the preconditioner.
+    //
+    // NOT `const torch::Tensor&`: torch::Tensor const-ness is SHALLOW. A const reference still
+    // hands out a handle whose underlying storage is writable -- `auto t = P.diag(); t.fill_(0);`
+    // silently zeroes the live operator through a method that calls itself read-only, and the
+    // const qualifier on the getter does nothing to stop it. Returning by const& would make the
+    // accessor's own name a false claim, so it returns an owned copy instead.
+    //
+    // It exists so a contract can discriminate which branch the env-latched experiment took:
+    // asserting phi_diagonal_value(..., true) == 1 with a literal `true` proves a property of the
+    // pure function and NOTHING about the operator that was constructed.
+    torch::Tensor phi_diagonal_snapshot() const {
+        return vertical_diag_phi_.defined() ? vertical_diag_phi_.detach().clone()
+                                            : torch::Tensor{};
+    }
+
     uint64_t stage_state_generation() const { return stage_state_generation_; }
     uint64_t coefficient_generation() const { return coefficient_generation_; }
 

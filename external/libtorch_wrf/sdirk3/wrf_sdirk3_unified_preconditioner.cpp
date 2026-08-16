@@ -49,6 +49,20 @@
 
 namespace wrf {
 namespace sdirk3 {
+namespace {
+
+// Environment read only -- the VALUE lives in the header so a contract can exercise both
+// branches without touching the environment. See phi_diagonal_value().
+bool phi_diag_unity_experiment() {
+    static const bool on = [] {
+        const char* v = std::getenv("WRF_SDIRK3_PHI_SCHUR_DENOM_UNITY");
+        return v && wrf::sdirk3::parse_bool_text(v) == wrf::sdirk3::BoolText::True;
+    }();
+    return on;
+}
+
+}  // namespace
+
 
 // ============================================================================
 // FIX 2025-12-30 Batch29 Issue 1: ScalarMeanCache for repeated .mean() calls
@@ -1113,7 +1127,11 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         float acoustic_cfl_sq = acoustic_cfl * acoustic_cfl;  // (dt*γ*c_s/dz)²
         // Divide by the φ diagonal to get the proper Schur complement
         float dz_inv2_w = 1.0f / (dz_w * dz_w);
-        float A_phi_diag = 1.0f + dt_gamma * c_s * c_s * dz_inv2_w;  // same formula as φ diagonal
+        // The Schur denominator and the stored phi diagonal are the SAME quantity; both go
+        // through phi_diagonal_value() so they cannot diverge. (This site's dz is the w-level
+        // one, as before.)
+        float A_phi_diag = wrf::sdirk3::phi_diagonal_value(dt_gamma, c_s, dz_inv2_w,
+                                                          phi_diag_unity_experiment());
         float acoustic_schur = acoustic_cfl_sq / A_phi_diag;  // proper Schur complement
 
         // v20.2: Boost acoustic_schur to account for multi-level vertical coupling
@@ -1315,7 +1333,8 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         // belongs in the w<->phi round trip as h^2*J_phi_w*J_w_phi, produced by the Schur
         // elimination -- not added to a raw first-order diagonal. Left pending the
         // re-derivation; the target value is NOT 1/rayleigh_q.
-        vertical_diag_phi_ptr[k] = 1.0f + dt_ * gamma_ * c_s * c_s * dz_inv2;
+        vertical_diag_phi_ptr[k] = wrf::sdirk3::phi_diagonal_value(
+            dt_ * gamma_, c_s, dz_inv2, phi_diag_unity_experiment());
     }
     
     // 4. U,V horizontal momentum: Acoustic coupling + implicit divergence damping + Rayleigh + diffusion

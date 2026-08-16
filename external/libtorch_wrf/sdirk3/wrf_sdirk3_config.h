@@ -48,6 +48,19 @@ inline BoolText parse_bool_text(const std::string& input) {
 struct SDIRK3Config {
     // Newton-Krylov solver parameters
     int max_newton_iter = 50;  // Increased for stiff problems (was 4)
+    // Error-weight rtol for the WRMS metric, SEPARATED from the Newton stopping rule.
+    //
+    // 0 (default) = follow newton_tol exactly, which is the historical behaviour and keeps the
+    // default path byte-identical. Set > 0 to define "small residual" independently of how the
+    // solver decides to stop -- at runtime em_b_wave runs newton_tol = 0.2, so every
+    // WRMS-weighted number was measured against a weighting where "small" meant "under ~20% of
+    // the local state magnitude". Consumers must go through effective_ewt_rtol(), never read
+    // this raw. Set via env WRF_SDIRK3_EWT_RTOL or namelist sdirk3_ewt_rtol.
+    float ewt_rtol = 0.0f;
+    float effective_ewt_rtol() const {
+        return ewt_rtol > 0.0f ? ewt_rtol : std::max(newton_tol, 1.0e-6f);
+    }
+
     float newton_tol = 0.2f;     // Scaled-RMS norm: ||S⁻¹R||/√N < 0.2 (per-DOF, grid-size independent)
     // 9F.D130: THIS DEFAULT IS NOT WHAT A WRF RUN USES. Registry.EM_COMMON and
     // Registry.SDIRK3_options both declare sdirk3_newton_rtol with default 1.e-10, and

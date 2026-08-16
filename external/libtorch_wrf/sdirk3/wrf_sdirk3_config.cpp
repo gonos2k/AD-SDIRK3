@@ -8,6 +8,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
+#include <cmath>
 #include <algorithm>
 #include <cctype>
 #include <unordered_set>  // FIX Round6 Item2: Per-key WARN_ONCE tracking
@@ -827,6 +828,47 @@ void SDIRK3Config::load_from_env() {
     }
     if ((env_val = std::getenv("WRF_SDIRK3_NEWTON_TOL"))) {
         newton_tol = std::atof(env_val);
+    }
+    if ((env_val = std::getenv("WRF_SDIRK3_EWT_RTOL"))) {
+        // STRICT: atof returns NaN for "nan" and 0.0 for any garbage, NaN passes a [0,1] range
+        // check because NaN comparisons are false, and effective_ewt_rtol() would then silently
+        // fall back to newton_tol -- a mistyped value behaving exactly like an unset one, which
+        // is the silence-indistinguishable-from-broken defect class again. Parse fully, require
+        // finite, refuse loudly and keep the default otherwise.
+        // Range-checked HERE, not only in validate(): a finite out-of-range value would
+        // otherwise be stored -- 5.0 used as the rtol, or -1 silently meaning "follow
+        // newton_tol" through effective_ewt_rtol()'s > 0 test, which is the same silent
+        // fallback the finiteness check just closed. The env gate holds the same standard as
+        // the validator, so a value either lands whole and legal or is refused loudly.
+        // Parsed as DOUBLE, then narrowed with an underflow check -- and a TEXTUAL zero check,
+        // because underflow recurses through every numeric width: strtof("1e-50") gave 0.0f
+        // (caught by the double comparison below), and strtod("1e-5000") gives 0.0 in DOUBLE
+        // too, sliding past any comparison on the parsed value. The only width-independent
+        // predicate is on the TEXT: a parse result of zero is legal only if the significand as
+        // written is actually zero. "0", "0.0", "0e10" land; "1e-5000" is refused.
+        const auto text_denotes_zero = [](const char* t) {
+            if (*t == '+' || *t == '-') ++t;
+            for (; *t && *t != 'e' && *t != 'E'; ++t) {
+                if (*t >= '1' && *t <= '9') return false;
+            }
+            return true;   // exponent cannot make a zero significand nonzero
+        };
+        char* end = nullptr;
+        const double parsed_d = std::strtod(env_val, &end);
+        const float parsed = static_cast<float>(parsed_d);
+        if (end != env_val && *end == '\0' &&
+            parsed_d >= 0.0 && parsed_d <= 1.0 &&   // finite AND in range; NaN fails both
+            !(parsed_d > 0.0 && parsed == 0.0f) &&  // positive as written must stay positive...
+            !(parsed_d == 0.0 && !text_denotes_zero(env_val))) {  // ...at EVERY width
+            ewt_rtol = parsed;
+            std::cerr << "[CONFIG ENV] ewt_rtol = " << ewt_rtol
+                      << (ewt_rtol > 0.0f ? "" : " (0 = follow newton_tol)") << std::endl;
+        } else {
+            std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_EWT_RTOL='" << env_val
+                      << "' is not a finite value in [0, 1] representable as a positive float; "
+                         "keeping ewt_rtol = " << ewt_rtol
+                      << std::endl;
+        }
     }
     if ((env_val = std::getenv("WRF_SDIRK3_GMRES_RESTART"))) {
         gmres_restart = std::atoi(env_val);
@@ -2072,7 +2114,14 @@ bool SDIRK3Config::validate() const {
         valid = false;
     }
     
-    if (newton_tol <= 0.0f || newton_tol > 1.0f) {
+    // !(a >= b) form, because ewt_rtol = NaN makes BOTH `< 0` and `> 1` false -- a NaN passed
+    // the previous range check and then silently disabled the override downstream.
+    if (!(ewt_rtol >= 0.0f && ewt_rtol <= 1.0f)) {
+        std::cerr << "SDIRK3 Config Error: ewt_rtol must be a finite value in [0, 1] "
+                     "(0 = follow newton_tol); got " << ewt_rtol << std::endl;
+        valid = false;
+    }
+        if (newton_tol <= 0.0f || newton_tol > 1.0f) {
         std::cerr << "SDIRK3 Config Error: newton_tol must be between 0 and 1" << std::endl;
         valid = false;
     }
@@ -2569,6 +2618,9 @@ void SDIRK3Config::print() const {
     std::cout << "Newton-Krylov Parameters:" << std::endl;
     std::cout << "  max_newton_iter = " << max_newton_iter << std::endl;
     std::cout << "  newton_tol = " << newton_tol << std::endl;
+    std::cout << "  ewt_rtol = " << ewt_rtol
+              << " [CONFIG EFFECTIVE] effective_ewt_rtol = " << effective_ewt_rtol()
+              << (ewt_rtol > 0.0f ? "" : " (following newton_tol)") << std::endl;
     std::cout << "  newton_rtol = " << newton_rtol << std::endl;
     std::cout << "  jvp_method = " << jvp_method;
     switch(jvp_method) {
@@ -3411,6 +3463,8 @@ void wrf_sdirk3_set_config_float(const char* name, float value) {
 
     if (key == "newton_tol") {
         g_sdirk3_config.newton_tol = value;
+    } else if (key == "ewt_rtol") {
+        g_sdirk3_config.ewt_rtol = value;
     } else if (key == "newton_rtol") {
         g_sdirk3_config.newton_rtol = value;
     } else if (key == "krylov_tol") {

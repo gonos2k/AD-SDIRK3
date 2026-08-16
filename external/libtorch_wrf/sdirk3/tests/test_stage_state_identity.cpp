@@ -15,6 +15,7 @@
 // Restoring the counter to G would be worse -- G+1..G+k were already issued, so they would be
 // handed out again for unrelated binds. A restore is a BINDING EVENT and takes a fresh value.
 
+#include "../wrf_sdirk3_config.h"
 #include "../wrf_sdirk3_unified_preconditioner.h"
 #include "../wrf_sdirk3_types.h"
 #include "../wrf_sdirk3_unified_rhs.h"
@@ -22,6 +23,7 @@
 #include <torch/torch.h>
 
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <set>
 #include <string>
@@ -236,7 +238,77 @@ int main() {
         }
     }
 
-    constexpr int expected_checks = 17;
+    // 8. THE EWT RTOL KNOB: 0 follows newton_tol (byte-identical default), >0 overrides.
+    //    Every WRMS-weighted number used to inherit its scale from the Newton STOPPING RULE
+    //    (newton_tol = 0.2 at runtime); this is the separation, and the contract pins both
+    //    halves so neither the default nor the override can silently invert.
+    {
+        auto& cfg = wrf::sdirk3::g_sdirk3_config;
+        const auto saved_ewt = cfg.ewt_rtol;
+        const auto saved_ntol = cfg.newton_tol;
+
+        cfg.ewt_rtol = 0.0f;
+        cfg.newton_tol = 0.2f;
+        check(std::abs(cfg.effective_ewt_rtol() - 0.2f) < 1e-12,
+              "ewt_rtol = 0 FOLLOWS newton_tol -- the historical behaviour, so default is unchanged");
+        cfg.newton_tol = 1e-9f;
+        check(std::abs(cfg.effective_ewt_rtol() - 1e-6f) < 1e-15,
+              "and keeps the historical 1e-6 floor when newton_tol goes below it");
+
+        cfg.ewt_rtol = 1e-3f;
+        cfg.newton_tol = 0.2f;
+        check(std::abs(cfg.effective_ewt_rtol() - 1e-3f) < 1e-12,
+              "ewt_rtol > 0 OVERRIDES: the weighting no longer moves with the stopping rule");
+
+        // NaN: both halves of a naive range check are false, so it used to PASS validate and
+        // then silently disable the override -- a mistyped env value behaving exactly like an
+        // unset one. validate() must refuse it.
+        cfg.ewt_rtol = std::numeric_limits<float>::quiet_NaN();
+        check(!cfg.validate(),
+              "ewt_rtol = NaN FAILS validate -- it slid through the old range check because NaN "
+              "comparisons are false, then silently fell back downstream");
+        cfg.ewt_rtol = 0.5f;
+        check(cfg.validate(), "a finite in-range ewt_rtol still validates (the refusal is aimed)");
+
+        cfg.ewt_rtol = saved_ewt;
+        cfg.newton_tol = saved_ntol;
+    }
+
+    // 9. THE PHI-DIAGONAL AUTHORITY, both branches executable.
+    //    The enabled experiment path previously had no test at all: it was exercised only by
+    //    hand-run live measurements, so a regression -- or a repeat of the exact bug that got
+    //    caught here, one call site flipped and the other not -- would reach main silently.
+    {
+        const float h = 600.0f * 0.4358665215f;
+        const float c_s = 346.4f;
+        const float dz_inv2 = 1.0f / (500.0f * 500.0f);
+
+        const float shipped = wrf::sdirk3::phi_diagonal_value(h, c_s, dz_inv2, false);
+        const float unity = wrf::sdirk3::phi_diagonal_value(h, c_s, dz_inv2, true);
+
+        check(std::abs(shipped - (1.0f + h * c_s * c_s * dz_inv2)) < 1e-3f * shipped,
+              "phi diagonal, flag OFF: exactly the shipped form 1 + h*c_s^2/dz^2 -- default "
+              "byte-identity depends on this branch never drifting");
+        check(unity == 1.0f,
+              "phi diagonal, flag ON: exactly 1 -- the acoustic term is not a phi self-term");
+        check(shipped > 100.0f,
+              "and the two branches DIFFER by >100x at operational parameters, so this is a "
+              "load-bearing switch and not a cosmetic one (126.5x suppression of the Schur term)");
+
+        // The consistency property itself: the value is a PURE function of its arguments, so the
+        // two call sites (stored array with the phi-level dz, Schur denominator with the w-level
+        // dz) cannot disagree about the FORM. Same inputs -> same output, both branches.
+        const float dz_inv2_w = 1.0f / (450.0f * 450.0f);   // a different dz, as at the real sites
+        check(wrf::sdirk3::phi_diagonal_value(h, c_s, dz_inv2_w, true) == unity,
+              "flag ON is dz-INDEPENDENT (1 everywhere), so the two call sites agree exactly -- "
+              "the inconsistency that made M a third, undesigned operator cannot recur");
+        check(wrf::sdirk3::phi_diagonal_value(h, c_s, dz_inv2_w, false) > 1.0f &&
+              wrf::sdirk3::phi_diagonal_value(h, c_s, dz_inv2_w, false) != shipped,
+              "flag OFF still carries each site's own dz -- the pre-existing dz difference is "
+              "PRESERVED, not silently unified along with the consistency fix");
+    }
+
+    constexpr int expected_checks = 27;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

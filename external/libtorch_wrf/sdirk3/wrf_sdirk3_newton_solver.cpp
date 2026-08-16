@@ -2684,6 +2684,29 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                             std::cerr << " eps_physical_wrms=unavailable";
                         }
                         std::cerr << std::endl;
+
+                        // The i=0 anomaly's CHARACTER, not just its size: per-block norms of the
+                        // weighted input and defect, first Arnoldi direction only (V[0] is the
+                        // normalized initial residual, the direction that measured cos ~ 0.003).
+                        // Which block carries v0 and which receives the defect is what the
+                        // aggregate eps cannot say.
+                        if (j == 0 && layout && sinv.defined()) {
+                            const auto E64b = sinv.to(torch::kFloat64);
+                            const auto S64b = krylov_to_physical
+                                            ? krylov_to_physical->to(torch::kFloat64)
+                                            : torch::ones_like(v64);
+                            const auto vw = E64b * (S64b * v64);
+                            const auto dw = E64b * (S64b * d64);
+                            std::cerr << "SDIRK3_APINV_V0_BLOCKS";
+                            for (const auto& b : layout->blocks) {
+                                const double vb = vw.slice(0, b.start, b.start + b.size)
+                                                    .norm().to(torch::kCPU).item<double>();
+                                const double db = dw.slice(0, b.start, b.start + b.size)
+                                                    .norm().to(torch::kCPU).item<double>();
+                                std::cerr << " " << b.name << ":v=" << vb << ",d=" << db;
+                            }
+                            std::cerr << std::endl;
+                        }
                     }
                 }
             }
