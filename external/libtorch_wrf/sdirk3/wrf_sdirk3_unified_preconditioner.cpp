@@ -49,6 +49,40 @@
 
 namespace wrf {
 namespace sdirk3 {
+namespace {
+
+// THE phi diagonal, in ONE place.
+//
+// This value had TWO independent expressions: the stored array (built with the phi-level dz) and
+// a local recompute inside the W Schur denominator (built with the w-level dz). An experiment
+// that flips one and not the other leaves M internally inconsistent -- its phi block solving
+// against one value while its W Schur divides by another -- which is a different operator from
+// either the shipped one or the intended one, and makes any measurement uninterpretable.
+//
+// The dz DIFFERENCE between the two call sites is pre-existing and deliberately preserved here:
+// each site passes its own dz_inv2. Only the FORM is unified, so the experiment moves every
+// consumer together.
+//
+// FORM: 1 + h*c_s^2/dz^2 is dimensionally invalid -- [h c_s^2/dz^2] = 1/s added to a
+// dimensionless 1 (flagged in-tree at the phi-diagonal site). The acoustic coupling is not a phi
+// SELF-term: dphi/dt = -c_s^2 dw/dz has no direct phi dependence, so A_phi_phi is 1 plus genuine
+// phi self-terms only, and the acoustic stiffness belongs in the w<->phi round trip
+// (acoustic_cfl_sq), where it already is.
+bool phi_diag_unity_experiment() {
+    static const bool on = [] {
+        const char* v = std::getenv("WRF_SDIRK3_PHI_SCHUR_DENOM_UNITY");
+        return v && wrf::sdirk3::parse_bool_text(v) == wrf::sdirk3::BoolText::True;
+    }();
+    return on;
+}
+
+float phi_diagonal_value(float dt_gamma, float c_s, float dz_inv2) {
+    return phi_diag_unity_experiment() ? 1.0f
+                                       : 1.0f + dt_gamma * c_s * c_s * dz_inv2;
+}
+
+}  // namespace
+
 
 // ============================================================================
 // FIX 2025-12-30 Batch29 Issue 1: ScalarMeanCache for repeated .mean() calls
@@ -1113,30 +1147,10 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         float acoustic_cfl_sq = acoustic_cfl * acoustic_cfl;  // (dt*γ*c_s/dz)²
         // Divide by the φ diagonal to get the proper Schur complement
         float dz_inv2_w = 1.0f / (dz_w * dz_w);
-        // EXPERIMENT (env-gated, default OFF -> byte-identical): the Schur DENOMINATOR.
-        //
-        // acoustic_cfl_sq = (h*c_s/dz)^2 is the correct dimensionless w<->phi ROUND TRIP, and
-        // it is already here. But it is divided by A_phi_diag = 1 + h*c_s^2/dz^2 -- the
-        // expression the phi-diagonal site itself flags as DIMENSIONALLY INVALID ([h c_s^2/dz^2]
-        // = 1/s, added to a dimensionless 1). At operational parameters that denominator is
-        // 126.5, so the round trip enters the W diagonal as 259 instead of 32828: the h^2 term
-        // is PRESENT but suppressed ~126x.
-        //
-        // The acoustic coupling is not a phi SELF-term -- dphi/dt = -c_s^2 dw/dz has no direct
-        // phi dependence -- so A_phi_phi is 1 plus whatever genuine phi self-terms exist, and
-        // the acoustic stiffness belongs where it already is, in the numerator.
-        //
-        // This is an EXPERIMENT, not a shipped correction: three prior "mathematically correct"
-        // coefficient fixes in this campaign were measured HARMFUL (mu-phi asymmetry, W-phi 2x2,
-        // W-damping) or INERT (HEVI mu identity), because M approximates A^-1 and a wrong term
-        // can be load-bearing. It ships only if the live instruments move.
-        static const bool phi_denom_experiment = [] {
-            const char* v = std::getenv("WRF_SDIRK3_PHI_SCHUR_DENOM_UNITY");
-            return v && wrf::sdirk3::parse_bool_text(v) == wrf::sdirk3::BoolText::True;
-        }();
-        float A_phi_diag = phi_denom_experiment
-                             ? 1.0f
-                             : 1.0f + dt_gamma * c_s * c_s * dz_inv2_w;  // same formula as φ diagonal
+        // The Schur denominator and the stored phi diagonal are the SAME quantity; both go
+        // through phi_diagonal_value() so they cannot diverge. (This site's dz is the w-level
+        // one, as before.)
+        float A_phi_diag = phi_diagonal_value(dt_gamma, c_s, dz_inv2_w);
         float acoustic_schur = acoustic_cfl_sq / A_phi_diag;  // proper Schur complement
 
         // v20.2: Boost acoustic_schur to account for multi-level vertical coupling
@@ -1338,7 +1352,7 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         // belongs in the w<->phi round trip as h^2*J_phi_w*J_w_phi, produced by the Schur
         // elimination -- not added to a raw first-order diagonal. Left pending the
         // re-derivation; the target value is NOT 1/rayleigh_q.
-        vertical_diag_phi_ptr[k] = 1.0f + dt_ * gamma_ * c_s * c_s * dz_inv2;
+        vertical_diag_phi_ptr[k] = phi_diagonal_value(dt_ * gamma_, c_s, dz_inv2);
     }
     
     // 4. U,V horizontal momentum: Acoustic coupling + implicit divergence damping + Rayleigh + diffusion
