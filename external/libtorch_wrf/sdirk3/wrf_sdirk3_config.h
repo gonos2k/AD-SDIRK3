@@ -2159,6 +2159,20 @@ struct SDIRK3Config {
         return (imex_split_mode == 0 && imex_enabled) ? 1 : imex_split_mode;
     }
 
+    // THE predicate for the preconditioner's exact mu-identity branch (delta_mu = r_mu), in ONE
+    // place so the packed path, the 4D path and any test cannot drift on it.
+    //
+    // Both halves are load-bearing, and this mirrors the RHS's OWN condition
+    // (wrf_sdirk3_tile_unified_impl.cpp, mu-row zeroing): HEVI moves the HORIZONTAL terms out of
+    // the implicit set, and only the corrected mass equation makes the mu tendency horizontal-
+    // only. Under legacy Omega the ImplicitOnly pass keeps div_z -- VERTICAL, still implicit --
+    // so F_mu_I != 0 there and the identity does not hold.
+    bool hevi_mu_identity_active() const {
+        return hevi_split
+            && (effective_imex_split_mode() >= 1)
+            && effective_mu_horizontal_div_only();
+    }
+
     // DA tangent-linear consistency flags for IMEX post-solve modes (mode=2/3)
     // imex_slow_in_tangent: true = K_slow participates in AD graph (correct tangent)
     //                       false = K_slow detached (model-error assumption)

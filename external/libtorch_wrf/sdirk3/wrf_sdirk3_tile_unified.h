@@ -1347,8 +1347,11 @@ private:
     float last_stage_rel_R_full_ = 0.0f;  // from RESIDUAL_REEVAL: floored ratio (K_floor for gate stability)
     float last_stage_rel_R_full_raw_ = 0.0f; // v20.14r41: raw ratio (no K_floor) for post-damp trigger
     float last_stage_R_full_norm_ = 0.0f; // v20.14r27v: absolute ||R_full|| for post-damp comparison
-    float last_stage_wrms_norm_ = 0.0f;   // P1: WRMS residual norm using stage state as reference
-    float last_stage_wrms_growth_ = 0.0f; // P1: WRMS(R_k) / WRMS(R_0), production stage-gate metric
+    // DOUBLE end to end. The reduction inside wrms_norm_packed runs in FP64; narrowing the
+    // result to float here -- which these were -- handed the gate an FP32 number anyway, making
+    // the promotion a claim about the middle of the pipe while the DECISION still read float.
+    double last_stage_wrms_norm_ = 0.0;   // P1: WRMS residual norm using stage state as reference
+    double last_stage_wrms_growth_ = 0.0; // P1: WRMS(R_k) / WRMS(R_0), production stage-gate metric
     float last_stage_initial_R0_ = 0.0f;  // v20.14r39: Newton's initial unscaled L2 ||R_0|| for diagnostics
     int progress_low_streak_ = 0;         // v20.14r64: consecutive low-progress step counter
 
@@ -1470,17 +1473,6 @@ private:
     // SDIRK stage timestep (stored from advanceZeroCopy for use in RHS computation)
     float dt_stage_ = 0.0f;    // Current SDIRK stage timestep
 
-    // The TIME COEFFICIENT the production preconditioner's coefficients were last built for.
-    // Recorded because update(state, dt, gamma) rebuilds on dt/gamma (9F.D91: it does NOT read
-    // `state`), so this is what a replay must restore the coefficients WITH -- the replay updates
-    // with its own alpha, which is not necessarily the forward one.
-    //
-    // BOTH halves. h = dt*gamma is the coefficient authority, and the first version recorded only
-    // dt, taking gamma from the class constant at rebuild time. That works while gamma is a
-    // compile-time constant and breaks the moment it is not (an adaptive ARK tableau, an
-    // alternative scheme) -- an identity contract must not lean on an implicit constant.
-    float precond_forward_dt_ = 0.0f;
-    float precond_forward_gamma_ = 0.0f;
 
     // External driving fields for boundary nudging
     torch::Tensor u_ext_;      // External u-field (staggered)

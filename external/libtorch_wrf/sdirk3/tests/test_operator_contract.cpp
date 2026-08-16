@@ -902,13 +902,61 @@ int main() {
               "the digest is never 0, which is what 'unset' means in the token");
     }
 
+    // ---- 6o. THE COUNTEREXAMPLE: a huge identity defect that GMRES finds trivial
+    // B = cI has eps_I = |c-1|, arbitrarily large -- and GMRES solves cI x = b in ONE step, its
+    // minimal polynomial having degree 1. So eps_I alone must never be read as "the
+    // preconditioner blocks convergence". The decomposition separates what a scalar removes
+    // (gain) from what costs Krylov directions (shape).
+    {
+        wrf::sdirk3::LinearOperator ident = [](const torch::Tensor& x) { return x.clone(); };
+        wrf::sdirk3::LinearOperator times50 = [](const torch::Tensor& x) { return 50.0 * x; };
+        const auto v = rand_in("ph");
+
+        // B = 50 I: terrible identity defect, PERFECT gain/shape/cosine.
+        auto r = evaluate_directional_right_preconditioner_defect(
+            snap, bA(snap, times50), bP(snap, ident), v);
+        check(r.ok && std::abs(r.global_error - 49.0) < 1e-9,
+              "B = 50I: the identity defect is 49 -- looks catastrophic");
+        check(std::abs(r.gain_alpha - 50.0) < 1e-9,
+              "yet gain_alpha = 50 exactly -- the whole defect is one scalar");
+        check(r.shape_defect < 1e-9,
+              "and shape_defect ~ 0: NOTHING is left after removing the scalar, which is why "
+              "GMRES solves this in one step. eps_I alone would have condemned it");
+        check(std::abs(r.cosine - 1.0) < 1e-12, "cosine = 1: the direction is untouched");
+
+        // The CONVERSE control: same identity defect magnitude, but as ROTATION into another
+        // block -- this is the case that genuinely costs Krylov directions, and only
+        // shape_defect separates it from the benign one above.
+        int ph_s = -1, mu_s = -1, n = 0;
+        for (const auto& b : snap.layout.blocks) {
+            if (b.name == "ph") ph_s = b.start;
+            if (b.name == "mu") { mu_s = b.start; n = b.size; }
+        }
+        wrf::sdirk3::LinearOperator rotate = [&](const torch::Tensor& x) {
+            auto out = x.clone();
+            out.slice(0, mu_s, mu_s + n) += 49.0 * x.slice(0, ph_s, ph_s + n);
+            return out;
+        };
+        auto r2 = evaluate_directional_right_preconditioner_defect(
+            snap, bA(snap, rotate), bP(snap, ident), v);
+        // (The rotation covers only mu's size, a subset of ph's, so its magnitude is large but
+        // not exactly 49 -- the structural claims below are the point, not the number.)
+        check(r2.ok && r2.global_error > 10.0,
+              "the rotating operator's identity defect is also LARGE");
+        check(std::abs(r2.shape_defect - r2.global_error) < 1e-6 * r2.global_error,
+              "and ALL of it is shape: rotation into another block is what eps_I cannot separate "
+              "from the benign scalar case, and shape_defect does");
+        check(std::abs(r2.gain_alpha - 1.0) < 1e-9,
+              "its gain is 1: no scalar removes any of it");
+    }
+
     // --------------------------------------------- 7. h is dt*gamma, stated once
     {
         check(std::abs(snap.h() - 600.0 * 0.4358665215) < 1e-12,
               "h = dt * gamma comes from the snapshot, not a local recomputation");
     }
 
-    constexpr int expected_checks = 95;
+    constexpr int expected_checks = 102;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -64,6 +64,7 @@
 #include <algorithm>  // std::min
 #include <stdexcept>
 #include <vector>
+#include <array>
 #include <cstring>  // PR 9B: std::strcmp in the checker direction loop
 #include <map>
 #include <set>      // PR 9B: per-block best-epsilon tracking in the checker
@@ -2640,9 +2641,39 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                     const double num_k = d64.norm().to(torch::kCPU).item<double>();
                     const double den_k = v64.norm().to(torch::kCPU).item<double>();
 
+                    // The identity defect ALONE cannot judge conditioning: B = cI has
+                    // eps_I = |c-1| -- arbitrarily large -- and GMRES solves it in ONE step
+                    // (minimal polynomial of degree 1). So each record also carries, per
+                    // coordinate system:
+                    //
+                    //   gain   alpha = <v,Bv>_W / <v,v>_W    the best scalar multiple
+                    //   shape  eta   = ||W(Bv - alpha v)|| / ||Wv||   what NO scalar removes
+                    //   cosine c     = <v,Bv>_W / (||Wv|| ||WBv||)
+                    //
+                    // A pure gain error (alpha != 1, eta ~ 0, c ~ 1) is cheap for GMRES; shape
+                    // defect is what actually costs Krylov directions. eps stays in the record
+                    // as identity_defect -- still the right target for A*P^-1 ~ I -- but the
+                    // conclusion "eps is large, therefore the preconditioner blocks
+                    // convergence" needs eta, not eps.
+                    const auto triplet64 = [](const torch::Tensor& vv, const torch::Tensor& ww)
+                        -> std::array<double, 3> {
+                        const double vs = vv.dot(vv).to(torch::kCPU).item<double>();
+                        if (!(vs > 0.0)) return {0.0, 0.0, 0.0};
+                        const double vw = vv.dot(ww).to(torch::kCPU).item<double>();
+                        const double alpha = vw / vs;
+                        const double eta =
+                            (ww - alpha * vv).norm().to(torch::kCPU).item<double>()
+                            / std::sqrt(vs);
+                        const double wn = ww.norm().to(torch::kCPU).item<double>();
+                        const double cosv = (wn > 0.0) ? vw / (std::sqrt(vs) * wn) : 0.0;
+                        return {alpha, eta, cosv};
+                    };
+                    const auto tk = triplet64(v64, w64);
+
                     const auto sinv = wrf::sdirk3::inverse_scale_vector(
                         *layout, stage_weights->scale, V[j]);
                     double num_p = 0.0, den_p = 0.0;
+                    std::array<double, 3> tp{0.0, 0.0, 0.0};
                     if (sinv.defined()) {
                         const auto E64 = sinv.to(torch::kFloat64);
                         const auto S64 = krylov_to_physical
@@ -2650,6 +2681,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                                        : torch::ones_like(v64);
                         num_p = (E64 * (S64 * d64)).norm().to(torch::kCPU).item<double>();
                         den_p = (E64 * (S64 * v64)).norm().to(torch::kCPU).item<double>();
+                        tp = triplet64(E64 * (S64 * v64), E64 * (S64 * w64));
                     }
 
                     if (std::isfinite(den_k) && den_k > 0.0) {
@@ -2665,6 +2697,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                                   << " stage=" << stage_id
                                   << " capture=" << stage_weights->stage.capture_seq
                                   << " weighting_point=" << point_name
+                                  // krylov_iter restarts at 0 every cycle, Newton iteration and
+                                  // step; without these two a trajectory cannot be attributed.
+                                  // newton_iter comes stamped on the weights because the loop
+                                  // index lives in the DRIVER, not in this free function.
+                                  << " restart=" << iter
+                                  << " newton_iter=" << stage_weights->newton_iter
                                   // The weighting that produced these numbers, emitted so a
                                   // reader never has to look it up. It is NOT a physical error
                                   // scale: ewt_rtol is max(newton_tol, 1e-6), and em_b_wave sets
@@ -2677,9 +2715,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                                   << " scaled=" << (krylov_to_physical ? 1 : 0)
                                   << " eps_krylov=" << (num_k / den_k)
                                   << " num_k=" << num_k << " den_k=" << den_k;
+                        std::cerr << " gain_k=" << tk[0] << " shape_k=" << tk[1]
+                                  << " cos_k=" << tk[2];
                         if (std::isfinite(den_p) && den_p > 0.0) {
                             std::cerr << " eps_physical_wrms=" << (num_p / den_p)
-                                      << " num_p=" << num_p << " den_p=" << den_p;
+                                      << " num_p=" << num_p << " den_p=" << den_p
+                                      << " gain_p=" << tp[0] << " shape_p=" << tp[1]
+                                      << " cos_p=" << tp[2];
                         } else {
                             std::cerr << " eps_physical_wrms=unavailable";
                         }
@@ -3996,6 +4038,7 @@ public:
         ident.point = wrf::sdirk3::WeightingPoint::NewtonLinearization;
         newton_weights_ = wrf::sdirk3::capture_stage_weights(
             Y_n, cached_layout_, handed->cfg, ident);
+        newton_weights_.newton_iter = newton_iter;   // stamped for the emitted record
         newton_weights_newton_iter_ = newton_iter;
         return newton_weights_.scale.is_valid() ? &newton_weights_ : nullptr;
     }
