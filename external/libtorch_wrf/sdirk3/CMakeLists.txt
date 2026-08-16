@@ -328,6 +328,9 @@ add_executable(test_stage_state_identity tests/test_stage_state_identity.cpp)
 target_link_libraries(test_stage_state_identity PRIVATE wrf_sdirk3::core)
 add_test(NAME Stage_State_Identity_Contract COMMAND test_stage_state_identity)
 
+add_executable(test_acoustic_gravity_shadow tests/test_acoustic_gravity_shadow.cpp)
+add_test(NAME AcousticGravity_Shadow_Contract COMMAND test_acoustic_gravity_shadow)
+
 # The right-preconditioner judgement ||A P^-1 v - v||/||v||, plus the active-domain authority.
 # Its decisive case is a coupled 2x2 where A_qq = 1 but (A^-1)_qq = 1/(1-cd): the exact inverse
 # scores zero and the "1/A_qq" diagonal scores badly, so the metric rejects the reasoning that

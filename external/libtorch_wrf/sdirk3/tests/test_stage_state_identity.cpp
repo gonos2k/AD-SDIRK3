@@ -15,6 +15,7 @@
 // Restoring the counter to G would be worse -- G+1..G+k were already issued, so they would be
 // handed out again for unrelated binds. A restore is a BINDING EVENT and takes a fresh value.
 
+#include "../wrf_sdirk3_config.h"
 #include "../wrf_sdirk3_unified_preconditioner.h"
 #include "../wrf_sdirk3_types.h"
 #include "../wrf_sdirk3_unified_rhs.h"
@@ -236,7 +237,33 @@ int main() {
         }
     }
 
-    constexpr int expected_checks = 17;
+    // 8. THE EWT RTOL KNOB: 0 follows newton_tol (byte-identical default), >0 overrides.
+    //    Every WRMS-weighted number used to inherit its scale from the Newton STOPPING RULE
+    //    (newton_tol = 0.2 at runtime); this is the separation, and the contract pins both
+    //    halves so neither the default nor the override can silently invert.
+    {
+        auto& cfg = wrf::sdirk3::g_sdirk3_config;
+        const auto saved_ewt = cfg.ewt_rtol;
+        const auto saved_ntol = cfg.newton_tol;
+
+        cfg.ewt_rtol = 0.0f;
+        cfg.newton_tol = 0.2f;
+        check(std::abs(cfg.effective_ewt_rtol() - 0.2f) < 1e-12,
+              "ewt_rtol = 0 FOLLOWS newton_tol -- the historical behaviour, so default is unchanged");
+        cfg.newton_tol = 1e-9f;
+        check(std::abs(cfg.effective_ewt_rtol() - 1e-6f) < 1e-15,
+              "and keeps the historical 1e-6 floor when newton_tol goes below it");
+
+        cfg.ewt_rtol = 1e-3f;
+        cfg.newton_tol = 0.2f;
+        check(std::abs(cfg.effective_ewt_rtol() - 1e-3f) < 1e-12,
+              "ewt_rtol > 0 OVERRIDES: the weighting no longer moves with the stopping rule");
+
+        cfg.ewt_rtol = saved_ewt;
+        cfg.newton_tol = saved_ntol;
+    }
+
+    constexpr int expected_checks = 20;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

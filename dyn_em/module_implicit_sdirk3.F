@@ -1706,6 +1706,9 @@ CONTAINS
 
       config_name = "newton_rtol"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_float(config_name, config_flags%sdirk3_newton_rtol)
+
+      config_name = "ewt_rtol"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_float(config_name, config_flags%sdirk3_ewt_rtol)
       
       config_name = "gmres_restart"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_int(config_name, config_flags%sdirk3_gmres_restart)

@@ -828,6 +828,11 @@ void SDIRK3Config::load_from_env() {
     if ((env_val = std::getenv("WRF_SDIRK3_NEWTON_TOL"))) {
         newton_tol = std::atof(env_val);
     }
+    if ((env_val = std::getenv("WRF_SDIRK3_EWT_RTOL"))) {
+        ewt_rtol = std::atof(env_val);
+        std::cerr << "[CONFIG ENV] ewt_rtol = " << ewt_rtol
+                  << (ewt_rtol > 0.0f ? "" : " (0 = follow newton_tol)") << std::endl;
+    }
     if ((env_val = std::getenv("WRF_SDIRK3_GMRES_RESTART"))) {
         gmres_restart = std::atoi(env_val);
     }
@@ -2072,7 +2077,12 @@ bool SDIRK3Config::validate() const {
         valid = false;
     }
     
-    if (newton_tol <= 0.0f || newton_tol > 1.0f) {
+    if (ewt_rtol < 0.0f || ewt_rtol > 1.0f) {
+        std::cerr << "SDIRK3 Config Error: ewt_rtol must be in [0, 1] (0 = follow newton_tol)"
+                  << std::endl;
+        valid = false;
+    }
+        if (newton_tol <= 0.0f || newton_tol > 1.0f) {
         std::cerr << "SDIRK3 Config Error: newton_tol must be between 0 and 1" << std::endl;
         valid = false;
     }
@@ -2569,6 +2579,9 @@ void SDIRK3Config::print() const {
     std::cout << "Newton-Krylov Parameters:" << std::endl;
     std::cout << "  max_newton_iter = " << max_newton_iter << std::endl;
     std::cout << "  newton_tol = " << newton_tol << std::endl;
+    std::cout << "  ewt_rtol = " << ewt_rtol
+              << " [CONFIG EFFECTIVE] effective_ewt_rtol = " << effective_ewt_rtol()
+              << (ewt_rtol > 0.0f ? "" : " (following newton_tol)") << std::endl;
     std::cout << "  newton_rtol = " << newton_rtol << std::endl;
     std::cout << "  jvp_method = " << jvp_method;
     switch(jvp_method) {
@@ -3411,6 +3424,8 @@ void wrf_sdirk3_set_config_float(const char* name, float value) {
 
     if (key == "newton_tol") {
         g_sdirk3_config.newton_tol = value;
+    } else if (key == "ewt_rtol") {
+        g_sdirk3_config.ewt_rtol = value;
     } else if (key == "newton_rtol") {
         g_sdirk3_config.newton_rtol = value;
     } else if (key == "krylov_tol") {

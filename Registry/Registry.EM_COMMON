@@ -3717,6 +3717,7 @@ rconfig   integer dynamics_option         namelist,dynamics  1  2        rh   "d
 # generator emits (verified against inc/namelist_defaults.inc); this block keeps only
 # the keys unique to it (newton_rtol, tol_relax, gmres/krylov, precond, reuse_jacobian).
 rconfig   real      sdirk3_newton_rtol       namelist,dynamics  1    1.e-10 rh    "sdirk3_newton_rtol"       "Newton relative tolerance"            ""
+rconfig   real      sdirk3_ewt_rtol          namelist,dynamics  1    0.     rh    "sdirk3_ewt_rtol"          "Error-weight rtol for the WRMS metric; 0 = follow sdirk3_newton_tol (default, byte-identical)"  ""
 rconfig   real      sdirk3_newton_tol_relax  namelist,dynamics  1    1.e-5  rh    "sdirk3_newton_tol_relax"  "Relaxed Newton tolerance"            ""
 
 # GMRES parameters

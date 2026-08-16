@@ -11242,7 +11242,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         // GROWTH RATIO (last_stage_wrms_growth_), in which the weights appear in numerator and
         // denominator and largely cancel. The coupling is real; that particular consequence is
         // not the one this code has.
-        const float rtol = std::max(wrf::sdirk3::g_sdirk3_config.newton_tol, 1.0e-6f);
+        // effective_ewt_rtol(): sdirk3_ewt_rtol when set (>0), else the historical
+        // follow-newton_tol behaviour -- so the default stays byte-identical and the weighting
+        // can finally be chosen independently of the stopping rule. See the block comment above.
+        const float rtol = wrf::sdirk3::g_sdirk3_config.effective_ewt_rtol();
         return wrf::sdirk3::WRMSNormConfig{
             rtol,
             1.0e-6f, 1.0e-6f, 1.0e-6f,
