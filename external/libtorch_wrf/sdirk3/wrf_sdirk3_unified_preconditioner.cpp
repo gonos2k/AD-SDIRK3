@@ -1113,7 +1113,30 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         float acoustic_cfl_sq = acoustic_cfl * acoustic_cfl;  // (dt*γ*c_s/dz)²
         // Divide by the φ diagonal to get the proper Schur complement
         float dz_inv2_w = 1.0f / (dz_w * dz_w);
-        float A_phi_diag = 1.0f + dt_gamma * c_s * c_s * dz_inv2_w;  // same formula as φ diagonal
+        // EXPERIMENT (env-gated, default OFF -> byte-identical): the Schur DENOMINATOR.
+        //
+        // acoustic_cfl_sq = (h*c_s/dz)^2 is the correct dimensionless w<->phi ROUND TRIP, and
+        // it is already here. But it is divided by A_phi_diag = 1 + h*c_s^2/dz^2 -- the
+        // expression the phi-diagonal site itself flags as DIMENSIONALLY INVALID ([h c_s^2/dz^2]
+        // = 1/s, added to a dimensionless 1). At operational parameters that denominator is
+        // 126.5, so the round trip enters the W diagonal as 259 instead of 32828: the h^2 term
+        // is PRESENT but suppressed ~126x.
+        //
+        // The acoustic coupling is not a phi SELF-term -- dphi/dt = -c_s^2 dw/dz has no direct
+        // phi dependence -- so A_phi_phi is 1 plus whatever genuine phi self-terms exist, and
+        // the acoustic stiffness belongs where it already is, in the numerator.
+        //
+        // This is an EXPERIMENT, not a shipped correction: three prior "mathematically correct"
+        // coefficient fixes in this campaign were measured HARMFUL (mu-phi asymmetry, W-phi 2x2,
+        // W-damping) or INERT (HEVI mu identity), because M approximates A^-1 and a wrong term
+        // can be load-bearing. It ships only if the live instruments move.
+        static const bool phi_denom_experiment = [] {
+            const char* v = std::getenv("WRF_SDIRK3_PHI_SCHUR_DENOM_UNITY");
+            return v && wrf::sdirk3::parse_bool_text(v) == wrf::sdirk3::BoolText::True;
+        }();
+        float A_phi_diag = phi_denom_experiment
+                             ? 1.0f
+                             : 1.0f + dt_gamma * c_s * c_s * dz_inv2_w;  // same formula as φ diagonal
         float acoustic_schur = acoustic_cfl_sq / A_phi_diag;  // proper Schur complement
 
         // v20.2: Boost acoustic_schur to account for multi-level vertical coupling
