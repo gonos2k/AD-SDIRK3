@@ -7590,6 +7590,29 @@ public:
                     if (gmres_rel_error > 0.5f) {
                         std::cerr << "[NEWTON] GMRES failed badly (rel_error=" << gmres_rel_error
                                   << "): " << gmres_result.message << std::endl;
+                        {
+                            // WHY zero progress. rel_error exactly 1 is the signature of a
+                            // TRIVIAL least-squares minimiser: if the Krylov solution x is ~0
+                            // then b - A*0 = b and the ratio is 1 by construction, which says the
+                            // right-hand side is nearly orthogonal to the space the Arnoldi
+                            // process built -- a very different diagnosis from "the solve made
+                            // progress but not enough". Printing ||x|| against ||b|| separates
+                            // them in one line.
+                            torch::NoGradGuard ng_probe;
+                            const double xn =
+                                gmres_result.x.defined()
+                                    ? gmres_result.x.norm().to(torch::kCPU).item<double>()
+                                    : -1.0;
+                            // ||b|| recovered from the reported ratio: rel_error = ||r_true||/||b||
+                            const double bn = (gmres_result.rel_error > 0.0f)
+                                ? static_cast<double>(gmres_result.final_residual) /
+                                  static_cast<double>(gmres_result.rel_error)
+                                : -1.0;
+                            std::cerr << "SDIRK3_GMRES_TRIVIALITY ||x||=" << xn
+                                      << " ||b||=" << bn
+                                      << " ratio=" << (bn > 0.0 ? xn / bn : -1.0)
+                                      << std::endl << std::flush;
+                        }
                     } else {
                         std::cerr << "[NEWTON] GMRES did not converge (rel_error=" << gmres_rel_error
                                   << ") but usable for inexact Newton: " << gmres_result.message << std::endl;
