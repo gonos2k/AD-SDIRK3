@@ -2571,6 +2571,38 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             if (basis_capture) basis_capture->arnoldi_call_active = true;
             torch::Tensor w = A(v_precond);
 
+            // IS THE MATVEC LINEAR? A Krylov method assumes it is. If A(a*v) != a*A(v) the
+            // Arnoldi relation does not hold, the least-squares minimiser is meaningless, and a
+            // flat true residual is expected NO MATTER what preconditioner is used -- which
+            // would explain a stall that survives M on, M off, and every coefficient change.
+            // Homogeneity is the cheap half and needs one extra operator call, so it is gated
+            // and fires once.
+            if (j == 0 && wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_MATVEC_LINEARITY")) {
+                torch::NoGradGuard ng_lin;
+                const double alpha = 0.5;
+                const torch::Tensor w_scaled = A(alpha * v_precond);
+                const auto lhs = w_scaled.to(torch::kFloat64);
+                const auto rhs = (alpha * w).to(torch::kFloat64);
+                const double num = (lhs - rhs).norm().to(torch::kCPU).item<double>();
+                const double den = rhs.norm().to(torch::kCPU).item<double>();
+                // Additivity, the other half: homogeneity alone does not imply linearity.
+                const torch::Tensor u = torch::randn_like(v_precond);
+                const torch::Tensor w_u = A(u);
+                const torch::Tensor w_sum = A(v_precond + u);
+                const auto add_lhs = w_sum.to(torch::kFloat64);
+                const auto add_rhs = (w + w_u).to(torch::kFloat64);
+                const double add_num = (add_lhs - add_rhs).norm().to(torch::kCPU).item<double>();
+                const double add_den = add_rhs.norm().to(torch::kCPU).item<double>();
+
+                std::cerr << "SDIRK3_MATVEC_LINEARITY alpha=" << alpha
+                          << " ||A(av)-aA(v)||=" << num
+                          << " ||aA(v)||=" << den
+                          << " rel=" << (den > 0.0 ? num / den : -1.0)
+                          << " | additivity rel="
+                          << (add_den > 0.0 ? add_num / add_den : -1.0)
+                          << std::endl << std::flush;
+            }
+
             // THE JUDGEMENT, from the triplet FGMRES already has.
             //
             //     v_j = V[j],  z_j = M^-1 v_j,  w_j = A z_j
@@ -7608,6 +7640,23 @@ public:
                                 ? static_cast<double>(gmres_result.final_residual) /
                                   static_cast<double>(gmres_result.rel_error)
                                 : -1.0;
+                            // D3: the Arnoldi/Givens ESTIMATE against the recomputed true
+                            // residual. If the estimate falls while the true ratio sits at 1, the
+                            // Arnoldi relation is being violated somewhere between the
+                            // least-squares solve and the recomputation -- a different diagnosis
+                            // from "the operator is hard".
+                            // rel_error is the UNSCALED ||b-Ax||/||b||, but GMRES minimises the
+                            // BLOCK-SCALED ||D^-1(b - A M^-1 z)||. Different norms -- which is why
+                            // this can exceed 1 without violating the least-squares property:
+                            // x=0 bounds the SCALED residual, not this one. Reporting progress in
+                            // a norm the solver does not optimise is a category error, and every
+                            // coefficient comparison in this campaign so far has been read off it.
+                            std::cerr << "SDIRK3_GMRES_ESTIMATE_VS_TRUE"
+                                      << " internal_iters=" << gmres_result.iterations
+                                      << " final_residual=" << gmres_result.final_residual
+                                      << " rel_error_UNSCALED=" << gmres_result.rel_error
+                                      << " note=minimised_norm_is_block_scaled"
+                                      << std::endl;
                             std::cerr << "SDIRK3_GMRES_TRIVIALITY ||x||=" << xn
                                       << " ||b||=" << bn
                                       << " ratio=" << (bn > 0.0 ? xn / bn : -1.0)
