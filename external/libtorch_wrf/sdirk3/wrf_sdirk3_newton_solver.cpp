@@ -1154,6 +1154,15 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // D[block] = ||r0[block]||₂. After scaling, each block contributes exactly 1 to ||D⁻¹r0||².
     // This prevents phi/theta O(10⁴) from masking u O(1-10) in GMRES's L2 minimization.
     // GMRES now solves: min ||D⁻¹(b - AM⁻¹z)|| — same solution x, different search path.
+    // G1 storage (unpreconditioned copy): the discriminator for whether the indefiniteness is
+    // intrinsic to A or introduced by M. Same capture, same analysis, M = I.
+    static const auto ritz_capture_on = [] {
+        static const bool on =
+            wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_RITZ_CAPTURE");
+        return on;
+    };
+    std::vector<std::vector<double>> ritz_H;
+
     torch::Tensor D_inv;  // per-element scaling vector, empty if disabled
     bool block_scaled = false;
     // v20.14 r50-fix: Block-scaling requires AUTOGRAD JVP. With FD JVP, D_inv amplifies
@@ -1591,6 +1600,16 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
 
             // 9F.D101 (review P0-A): the Givens reduction for the CURRENT column, shared by
             // the breakdown path and the normal path so the two cannot drift apart.
+            if (ritz_capture_on()) {   // pre-reduction Hessenberg column, M = I path
+                torch::NoGradGuard ng_ritz;
+                std::vector<double> col;
+                col.reserve(static_cast<size_t>(j) + 2);
+                for (int i = 0; i <= j + 1 && i < static_cast<int>(H.size(0)); ++i) {
+                    col.push_back(H[i][j].to(torch::kCPU).item<double>());
+                }
+                ritz_H.push_back(std::move(col));
+            }
+
             auto reduce_current_column = [&]() {
                 for (int i = 0; i < j; ++i) {
                     auto h_i_j = H[i][j].clone();
@@ -2028,6 +2047,35 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
             : safe_tensor_norm(r_true_inner) / bnorm_safe;
 
+        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY")) {
+            torch::NoGradGuard ng_traj_u;
+            std::cerr << "SDIRK3_KRYLOV_TRAJECTORY_UNPRECOND restart=" << iter
+                      << " scaled=" << (block_scaled ? 1 : 0)
+                      << " error=" << guarded_item<float>(error_tensor)
+                      << std::endl << std::flush;
+        }
+
+        if (ritz_capture_on() && !ritz_H.empty()) {   // M = I numerical range
+            torch::NoGradGuard ng_ritz_analysis;
+            const int m = static_cast<int>(ritz_H.size());
+            auto Hs = torch::zeros({m, m}, torch::kFloat64);
+            auto acc = Hs.accessor<double, 2>();
+            for (int jj = 0; jj < m; ++jj) {
+                const auto& col = ritz_H[static_cast<size_t>(jj)];
+                for (int ii = 0; ii < m && ii < static_cast<int>(col.size()); ++ii) {
+                    acc[ii][jj] = col[static_cast<size_t>(ii)];
+                }
+            }
+            const auto sym = 0.5 * (Hs + Hs.transpose(0, 1));
+            const auto evals = torch::linalg_eigvalsh(sym);
+            std::cerr << "SDIRK3_NUMERICAL_RANGE_UNPRECOND m=" << m
+                      << " min_eig_sym=" << evals.min().item<double>()
+                      << " max_eig_sym=" << evals.max().item<double>()
+                      << " n_negative=" << (evals < 0.0).sum().item<int64_t>() << "/" << m
+                      << " definite=" << (evals.min().item<double>() > 0.0 ? 1 : 0)
+                      << std::endl << std::flush;
+        }
+
         // NUMERICAL STABILITY: Detect NaN in residual error after update
         if (guarded_item<bool>(torch::isnan(error_tensor).any())) {
             std::cerr << "[GMRES ERROR] NaN detected in error_tensor after iteration " << iter << std::endl;
@@ -2288,6 +2336,14 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // D[block] = ||r0[block]||₂. After scaling, each block contributes exactly 1 to ||D⁻¹r0||².
     // This prevents phi/theta O(10⁴) from masking u O(1-10) in GMRES's L2 minimization.
     // GMRES now solves: min ||D⁻¹(b - AM⁻¹z)|| — same solution x, different search path.
+    // G1 storage: Hessenberg columns captured pre-reduction (see the capture site below).
+    static const auto ritz_capture_on = [] {
+        static const bool on =
+            wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_RITZ_CAPTURE");
+        return on;
+    };
+    std::vector<std::vector<double>> ritz_H;
+
     torch::Tensor D_inv;  // per-element scaling vector, empty if disabled
     bool block_scaled = false;
     // v20.14 r50-fix: Block-scaling requires AUTOGRAD JVP. With FD JVP, D_inv amplifies
@@ -2973,6 +3029,29 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
 
             // 9F.D101 (review P0-A): the Givens reduction for the CURRENT column, shared by
             // the breakdown path and the normal path so the two cannot drift apart.
+            // G1: SNAPSHOT THE HESSENBERG COLUMN before the Givens rotations overwrite it with R.
+            //
+            // The campaign's "A_fast is INTRINSICALLY INDEFINITE" finding drove two strategic
+            // pivots, and it was measured on the LEGACY operator -- the one whose negative ph/mu
+            // diagonals the Omega fix removes. Re-measuring under WRFParity has been flagged
+            // UNDONE ever since. The Arnoldi Hessenberg carries the spectrum of the operator
+            // GMRES ACTUALLY iterates, for free, but only BEFORE reduction -- so the capture
+            // belongs exactly here.
+            //
+            // For a NON-NORMAL operator the GMRES-relevant quantity is the numerical range, not
+            // the eigenvalues: the min eigenvalue of the symmetric part 1/2(H + H^T). A spectrum
+            // in the right half-plane does NOT prove a definite numerical range, and eigenvalues
+            // mislead in both directions -- so the symmetric part is what this accumulates.
+            if (ritz_capture_on()) {
+                torch::NoGradGuard ng_ritz;
+                std::vector<double> col;
+                col.reserve(static_cast<size_t>(j) + 2);
+                for (int i = 0; i <= j + 1 && i < static_cast<int>(H.size(0)); ++i) {
+                    col.push_back(H[i][j].to(torch::kCPU).item<double>());
+                }
+                ritz_H.push_back(std::move(col));
+            }
+
             auto reduce_current_column = [&]() {
                 for (int i = 0; i < j; ++i) {
                     auto h_i_j = H[i][j].clone();
@@ -3409,6 +3488,38 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         error_tensor = block_scaled
             ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
             : safe_tensor_norm(r_true_inner) / bnorm_safe;
+
+        // G1 ANALYSIS: the numerical range of the operator GMRES actually iterates.
+        //
+        // Assemble the square part of the captured Hessenberg, symmetrise it, and report the
+        // extreme eigenvalues of 1/2(H + H^T). If min_eig < 0 the numerical range straddles the
+        // origin and NO SPD preconditioner can fix it (Sylvester); if min_eig > 0 the operator
+        // is positive-definite in the field-of-values sense and the campaign's two pivots rest on
+        // a premise that no longer holds under WRFParity. Ritz eigenvalues are reported too, but
+        // the symmetric part is the quantity that decides.
+        if (ritz_capture_on() && !ritz_H.empty()) {
+            torch::NoGradGuard ng_ritz_analysis;
+            const int m = static_cast<int>(ritz_H.size());
+            auto Hs = torch::zeros({m, m}, torch::kFloat64);
+            auto acc = Hs.accessor<double, 2>();
+            for (int jj = 0; jj < m; ++jj) {
+                const auto& col = ritz_H[static_cast<size_t>(jj)];
+                for (int ii = 0; ii < m && ii < static_cast<int>(col.size()); ++ii) {
+                    acc[ii][jj] = col[static_cast<size_t>(ii)];
+                }
+            }
+            const auto sym = 0.5 * (Hs + Hs.transpose(0, 1));
+            const auto evals = torch::linalg_eigvalsh(sym);
+            const double lo = evals.min().item<double>();
+            const double hi = evals.max().item<double>();
+            const int64_t n_neg = (evals < 0.0).sum().item<int64_t>();
+            std::cerr << "SDIRK3_NUMERICAL_RANGE m=" << m
+                      << " min_eig_sym=" << lo
+                      << " max_eig_sym=" << hi
+                      << " n_negative=" << n_neg << "/" << m
+                      << " definite=" << (lo > 0.0 ? 1 : 0)
+                      << std::endl << std::flush;
+        }
 
         // F1: the per-RESTART trajectory of the minimised norm. 0.14% total reduction over 51
         // Arnoldi directions can mean two different things -- flat from the first step (the
