@@ -7630,6 +7630,13 @@ public:
                             // process built -- a very different diagnosis from "the solve made
                             // progress but not enough". Printing ||x|| against ||b|| separates
                             // them in one line.
+                            // A CAUTION FOR ANYONE COMPARING RUNS WITH THIS. A preconditioner
+                            // on/off pair is NOT a controlled A/B: stage 1 SOLVES in both cases,
+                            // so M changes its solution, which changes the state entering stage 2
+                            // and therefore b itself. Measured: the very first failure record
+                            // already differs, ||b|| = 464.6 with M against 217.6 without. Any
+                            // sound M-on/M-off comparison needs a FIXED (A, b) harness driving
+                            // one linear solve, not two model runs.
                             torch::NoGradGuard ng_probe;
                             const double xn =
                                 gmres_result.x.defined()
