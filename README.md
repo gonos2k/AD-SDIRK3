@@ -101,10 +101,15 @@ proven byte-identical.
     diagonals are dimensionally invalid (the source says so at both sites), but the replacement
     values are **not** established — a dimensional argument cannot supply them, and the
     Schur-reduced round trips are already computed elsewhere, so moving them into the raw
-    diagonal would double-count. Two current **scalar** experiments were also measured to
-    **anti-combine** (`0.9951` and `0.9986` alone, `0.9999` together) — evidence that repairing
-    coefficients one scalar at a time is insufficient, not that two physically-correct
-    corrections cancel. Both live on the open experiment PR, not on `main`. See `AcousticGravity_Shadow_Contract`.
+    diagonal would double-count. THREE scalar experiments have now been measured to
+    **anti-combine** (`div_leg` 0.9951, `phi_unity` 0.9986, `mu_phi_zero` 1.0000 alone; every
+    pairing back at ~1.0000 against a shipped baseline of exactly 1.0000) — evidence that
+    repairing coefficients one scalar at a time is insufficient, not that physically-correct
+    corrections cancel. Two further results narrow it: making the μ block **definite** (zeroing
+    the spurious `S_mu_phi = 335.9`) changes the solve **not at all**, refuting μ-indefiniteness
+    as the cause; and `rel_error = 1` hides two opposite failures — with `M`, `‖x‖/‖b‖ = 0.0035`
+    (trivial minimiser); without it, `2.56` (large update, no reduction). All measured at stage 2,
+    dt=600, restart 60, and living on the open experiment PR rather than on `main`. See `AcousticGravity_Shadow_Contract`.
   - the **full ARK adjoint** and the **full-timestep `DG`/`DG^T`**
   - the **acoustic–gravity coefficient re-derivation** (`D_mu`, `D_phi`, `c_s^2+N^2`,
     direct/Schur double-count, theta–W)
