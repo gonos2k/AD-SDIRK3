@@ -101,7 +101,10 @@ proven byte-identical.
   it (gate 0.058). It had never converged in this configuration before; the shipped budget is 7
   vectors. The stage-2 stall the recent coefficient work was chasing was **budget starvation**.
   This does **not** solve dt=600: stage 3 still fails (gate 0.727 without `M`, 0.999 with) and
-  zero steps complete. The frontier is now stage 3.
+  zero steps complete. **Stage 3 is the opposite case**: it is *not* budget-starved — an explicit
+  stage-3 budget makes it strictly worse (gate 0.727 default → 5.603 at 100 → 3.386 at 600, where
+  > 1 means the residual *grew*). The two stages fail for different reasons, and the lever that
+  fixes one aggravates the other.
 - **Measured, and it reframes the preconditioner work:** the operator GMRES iterates is
   **indefinite in the field-of-values sense** under WRFParity — the min eigenvalue of the
   symmetric part of the Arnoldi Hessenberg is **−2570** against a max of 4545, 13 of 51 negative.
