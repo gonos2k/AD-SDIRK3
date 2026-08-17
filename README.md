@@ -102,14 +102,15 @@ proven byte-identical.
     values are **not** established — a dimensional argument cannot supply them, and the
     Schur-reduced round trips are already computed elsewhere, so moving them into the raw
     diagonal would double-count. THREE scalar experiments have now been measured to
-    **anti-combine** (`div_leg` 0.9951, `phi_unity` 0.9986, `mu_phi_zero` 1.0000 alone; every
-    pairing back at ~1.0000 against a shipped baseline of exactly 1.0000) — evidence that
-    repairing coefficients one scalar at a time is insufficient, not that physically-correct
-    corrections cancel. Two further results narrow it: making the μ block **definite** (zeroing
-    the spurious `S_mu_phi = 335.9`) changes the solve **not at all**, refuting μ-indefiniteness
-    as the cause; and `rel_error = 1` hides two opposite failures — with `M`, `‖x‖/‖b‖ = 0.0035`
-    (trivial minimiser); without it, `2.56` (large update, no reduction). All measured at stage 2,
-    dt=600, restart 60, and living on the open experiment PR rather than on `main`. See `AcousticGravity_Shadow_Contract`.
+    behave differently **in the norm GMRES actually minimises** than in the one first reported.
+    Measured in the block-scaled residual (stage 2, dt=600, restart 60): shipped **0.9986**,
+    `div_leg` **0.9951**, `phi_unity` **0.9986** (i.e. identical to shipped — no effect),
+    `mu_phi_zero` **1.001** (worse than shipped), `div_leg + phi_unity` 0.9959. Three earlier
+    claims are corrected by this: the shipped operator does **not** make exactly zero progress,
+    `phi_unity` does **nothing**, and the `phi × div` anti-combination was largely an artefact of
+    reading the unscaled ratio. What survives: `div_leg` is the best single lever, and
+    `mu_phi_zero` is not inert but actively harmful and still cancels `div_leg`. All on the open
+    experiment PR rather than on `main`. See `AcousticGravity_Shadow_Contract`.
   - the **full ARK adjoint** and the **full-timestep `DG`/`DG^T`**
   - the **acoustic–gravity coefficient re-derivation** (`D_mu`, `D_phi`, `c_s^2+N^2`,
     direct/Schur double-count, theta–W)

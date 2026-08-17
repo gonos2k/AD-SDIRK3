@@ -7664,6 +7664,26 @@ public:
                                       << " rel_error_UNSCALED=" << gmres_result.rel_error
                                       << " note=minimised_norm_is_block_scaled"
                                       << std::endl;
+                            // THE MINIMISED NORM. GMRES iterates the S-conjugated operator when
+                            // block scaling is on, so what it actually minimises is
+                            // ||S^-1(b - Ax)|| / ||S^-1 b||, not the unscaled ratio reported as
+                            // rel_error. Reading progress off the unscaled number is a category
+                            // error, so both are printed here and the scaled one is the
+                            // solver-progress metric.
+                            if (scaling_initialized_ && S_diag_.defined() &&
+                                gmres_result.r_true.defined() &&
+                                gmres_rhs.defined()) {
+                                const auto sinv = 1.0 / S_diag_.to(torch::kFloat64);
+                                const double rs = (gmres_result.r_true.to(torch::kFloat64) * sinv)
+                                                      .norm().to(torch::kCPU).item<double>();
+                                const double bs = (gmres_rhs.to(torch::kFloat64) * sinv)
+                                                      .norm().to(torch::kCPU).item<double>();
+                                std::cerr << "SDIRK3_GMRES_SCALED_RESIDUAL"
+                                          << " scaled_rel=" << (bs > 0.0 ? rs / bs : -1.0)
+                                          << " num=" << rs << " den=" << bs
+                                          << "  (this is the norm GMRES minimises)"
+                                          << std::endl << std::flush;
+                            }
                             std::cerr << "SDIRK3_GMRES_TRIVIALITY ||x||=" << xn
                                       << " ||b||=" << bn
                                       << " ratio=" << (bn > 0.0 ? xn / bn : -1.0)
