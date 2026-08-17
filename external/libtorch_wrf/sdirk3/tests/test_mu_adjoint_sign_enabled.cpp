@@ -36,6 +36,7 @@
 #include <string>
 
 #include "../wrf_sdirk3_config.h"
+#include "../wrf_sdirk3_state_layout.h"
 #include "../wrf_sdirk3_types.h"
 #include "../wrf_sdirk3_unified_preconditioner.h"
 #include "../wrf_sdirk3_unified_rhs.h"
@@ -61,6 +62,10 @@ std::shared_ptr<wrf::sdirk3::WRFGridInfo> tiny_grid() {
     g->ims = 1; g->ime = 4; g->jms = 1; g->jme = 3; g->kms = 1; g->kme = 6;
     g->ids = 1; g->ide = 5; g->jds = 1; g->jde = 4; g->kds = 1; g->kde = 6;
     g->dx = 1000.0f; g->dy = 1000.0f;
+    // The coupled path also needs a defined base mass state; without it apply() falls back to a
+    // simpler branch and the mu elimination never runs.
+    g->mu_base = torch::full({g->ny, g->nx}, 9.0e4f, torch::kFloat32);
+    g->mub = g->mu_base.clone();
     return g;
 }
 
@@ -70,6 +75,12 @@ int main() {
     // BEFORE anything constructs a preconditioner -- see the header comment.
     ::setenv("WRF_SDIRK3_MU_SCHUR_ADJOINT_SIGN", "1", /*overwrite=*/1);
 
+    // The coupled 4x4 mu-phi-U-V path -- the machinery whose orientation this experiment is
+    // about -- is gated on precond_acoustic_4x4 == 1. Without it apply() takes a simpler path and
+    // the elimination never runs, which is why the first version of this contract measured a
+    // reduction that was never reached.
+    wrf::sdirk3::g_sdirk3_config.precond_acoustic_4x4 = 1;
+
     std::cout << "=== Mu_Coupling_Orientation_Experiment_Contract ===" << std::endl;
 
     auto grid = tiny_grid();
@@ -77,6 +88,17 @@ int main() {
     wrf::sdirk3::UnifiedPreconditioner P(grid, physics, 600.0f, 0.4358665215f);
 
     check(true, "the enabled path CONSTRUCTS -- a throw in build would have ended the process");
+
+    {   // what layout does production expect, vs what this fixture feeds?
+        const auto L = wrf::sdirk3::StateLayout::from_grid_dims(
+            grid->nx, grid->ny, grid->nz, grid->nx_u, grid->ny_v, grid->nz_w);
+        int64_t tot = 0;
+        for (const auto& b : L.blocks) {
+            std::printf("  layout %s=%lld\n", b.name.c_str(), (long long)b.size);
+            tot += b.size;
+        }
+        std::printf("  layout total=%lld\n", (long long)tot);
+    }
 
     const auto c = P.horizontal_coupling_snapshot();
     check(c.c_u_mu.defined() && c.c_mu_u.defined() &&
@@ -133,46 +155,36 @@ int main() {
               "Schur denominator is exactly the kind of edit that can produce a division blowup");
     }
 
-    // ---- THE REDUCED BLOCK: A MEASURED COVERAGE GAP, pinned rather than papered over --------
-    // Everything above reads the reduction's INPUTS. Re-multiplying a coefficient snapshot proves
-    // the coefficients were flipped; it does not prove production's reduction consumed them.
-    //
-    // mu_schur_record() is written at ALL THREE sites where the mu elimination is spelled out
-    // (packed 1D, 4D, per-column scalar fallback). It comes back UNRECORDED here: this
-    // configuration's apply() reaches none of them. So the coupled mu-phi-U-V Schur machinery --
-    // the machinery whose sign this experiment is about -- is not exercised by this contract at
-    // all, and the coefficient assertions above verify inputs to a reduction this path never runs.
-    //
-    // That is asserted as the CURRENT FACT, not skipped. A conditional "if recorded" block would
-    // be a witness that cannot fail, which is the failure mode this file already exists to avoid.
-    // When a fixture that drives the coupled path lands, this assertion FLIPS and must be
-    // rewritten to the real bounds -- which is the point: the gap is loud, and closing it is a
-    // visible edit rather than a silent improvement.
+    // ---- THE REDUCED BLOCK, now actually exercised -----------------------------------------
+    // The first version of this contract measured a reduction that never ran: the coupled 4x4
+    // path is gated on precond_acoustic_4x4 == 1 AND a defined base mass state, and the fixture
+    // supplied neither. Both are set above, so the numbers below come from production's own
+    // elimination rather than from re-multiplying a coefficient snapshot in the test.
     {
         const auto rec = P.mu_schur_record();
         std::printf("  mu Schur record: recorded=%d base=%.6g reduced=[%.6g, %.6g]\n",
                     static_cast<int>(rec.recorded), rec.base,
                     rec.reduced_min, rec.reduced_max);
 
-        check(!rec.recorded,
-              "COVERAGE GAP (measured): this configuration's apply() reaches NONE of the three "
-              "mu-elimination sites, so the coupled Schur reduction this experiment is about is "
-              "not exercised here -- the coefficient checks above verify its inputs only");
-        check(std::isfinite(rec.base),
-              "and the record's default state is well-formed, so the gap above is a genuine "
-              "not-run and not a corrupted read");
+        check(rec.recorded,
+              "production's mu elimination RAN -- the coupled path is reached, so the assertions "
+              "below are about the operator the solver meets");
+        check(std::isfinite(rec.base) && std::isfinite(rec.reduced_min) &&
+              std::isfinite(rec.reduced_max),
+              "and its outputs are finite under the flipped orientation");
+        check(rec.base > 0.0f,
+              "BASE diagonal POSITIVE (+640) under the flipped orientation: the U/V elimination "
+              "now ADDS the acoustic round trip instead of subtracting it, which is what flipping "
+              "the divergence leg was for");
+        check(rec.reduced_min < 0.0f,
+              "but the REDUCED diagonal is still NEGATIVE (-3987) -- so the mu-phi Schur "
+              "correction, not the U/V product, is what drives the mass block indefinite here. "
+              "Fixing the coupling orientation alone does not rescue it");
+        check(std::abs(rec.reduced_min) > 1e-20,
+              "and it is not sitting on the singular clamp floor, so the sign above is the "
+              "reduction's own result");
 
-        // THE RECORD MUST BE PER-CALL, or the claim above is about process history rather than
-        // about this apply(). A latching flag would keep reporting recorded=true with an earlier
-        // call's numbers, and no reader could tell fresh from stale. apply_impl() therefore
-        // clears the record at entry.
-        //
-        // HONEST LIMIT, measured: this check CANNOT currently fail. Removing the production reset
-        // and re-running leaves the test green -- because no elimination path records in this
-        // configuration, latching and resetting are indistinguishable here (both give
-        // recorded=false). So the assertion below documents the intended contract and will start
-        // biting the moment a fixture reaches a recording path; today it is not evidence that the
-        // reset works. The reset is justified by reading apply_impl(), not by this line.
+        // PER-CALL, and now discriminating: a second apply() must re-record rather than inherit.
         const int64_t n2 =
             static_cast<int64_t>(grid->nx_u) * grid->ny * grid->nz
           + static_cast<int64_t>(grid->nx) * grid->ny_v * grid->nz
@@ -182,16 +194,26 @@ int main() {
           + static_cast<int64_t>(grid->nx) * grid->ny;
         const auto v2 = torch::randn({n2}, torch::kFloat32);
         P.update(v2, 600.0f, 0.4358665215f);
-        P.apply(v2);                       // a REAL second call -- comparing the record to
-        const auto again = P.mu_schur_record();   // itself with nothing in between proves nothing
-        check(again.recorded == rec.recorded &&
-              again.base == rec.base &&
-              again.reduced_min == rec.reduced_min,
-              "a SECOND apply() reports the same not-run as the first (NOTE: non-discriminating "
-              "in this configuration -- see the HONEST LIMIT above; it holds either way here)");
+        P.apply(v2);
+        check(P.mu_schur_record().recorded,
+              "and a SECOND apply() re-records -- the coupled path runs again");
+
+        // THE STALENESS PROBE, and it has to be built to fail. Two recording applies in a row
+        // cannot distinguish a reset from a latch (both report recorded=true), which is why the
+        // earlier version of this check was inert. Turning the coupled path OFF and applying
+        // again separates them: with the reset the record must go back to not-recorded; without
+        // it, the previous call's numbers survive and are read as this call's.
+        wrf::sdirk3::g_sdirk3_config.precond_acoustic_4x4 = 0;
+        P.update(v2, 600.0f, 0.4358665215f);
+        P.apply(v2);
+        const auto after_offpath = P.mu_schur_record();
+        wrf::sdirk3::g_sdirk3_config.precond_acoustic_4x4 = 1;   // restore for anything later
+        check(!after_offpath.recorded,
+              "STALENESS: after an apply() that does NOT reach the elimination, the record reads "
+              "not-recorded -- a latching flag would still report the previous call's numbers");
     }
 
-    constexpr int expected_checks = 11;
+    constexpr int expected_checks = 15;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
