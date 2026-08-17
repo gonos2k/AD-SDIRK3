@@ -920,7 +920,10 @@ void SDIRK3Config::load_from_env() {
         std::cerr << "[CONFIG ENV] stage2_ew_eta_max = " << stage2_ew_eta_max << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE3_GMRES_RESTART"))) {
-        stage3_gmres_restart = std::clamp(std::atoi(env_val), 0, 100);
+        // Ceiling raised with stage2's, for the same reason: stage 3 is the frontier now that a
+        // real budget converges stage 2, and a clamp below the interesting range turns a budget
+        // experiment into a no-op that looks like evidence.
+        stage3_gmres_restart = std::clamp(std::atoi(env_val), 0, 1000);
         std::cerr << "[CONFIG ENV] stage3_gmres_restart = " << stage3_gmres_restart << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE3_MAX_KRYLOV_RESTARTS"))) {
