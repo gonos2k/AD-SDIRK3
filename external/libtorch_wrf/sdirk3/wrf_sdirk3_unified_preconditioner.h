@@ -451,10 +451,17 @@ public:
         float base = 0.0f;          // D_mu + sum_k of the U/V eliminations
         float reduced_min = 0.0f;   // base - the mu-phi Schur correction, over the (j,i) plane
         float reduced_max = 0.0f;
+        // The mu-phi Schur correction and its dominant factor. Under the CORRECTED mass equation
+        // the mu tendency is the horizontal divergence of (mu*u, mu*v) and has no phi dependence,
+        // so S_mu_phi -- and hence this whole correction -- should be ~0. Recording both makes
+        // that a measurement instead of a comment.
+        float schur_corr_mean = 0.0f;
+        float s_mu_phi_mean = 0.0f;
     };
     MuSchurRecord mu_schur_record() const {
         return {last_mu_schur_recorded_, last_s_mu_mu_base_,
-                last_s_mu_mu_reduced_min_, last_s_mu_mu_reduced_max_};
+                last_s_mu_mu_reduced_min_, last_s_mu_mu_reduced_max_,
+                last_schur_corr_mean_, last_s_mu_phi_mean_};
     }
 
     HorizontalCouplingSnapshot horizontal_coupling_snapshot() const {
@@ -515,6 +522,8 @@ private:
     float last_s_mu_mu_base_ = 0.0f;
     float last_s_mu_mu_reduced_min_ = 0.0f;
     float last_s_mu_mu_reduced_max_ = 0.0f;
+    float last_schur_corr_mean_ = 0.0f;
+    float last_s_mu_phi_mean_ = 0.0f;
 
     torch::Tensor C_u_mu_;    // Pressure gradient effect: μ → u
     torch::Tensor C_v_mu_;    // Pressure gradient effect: μ → v

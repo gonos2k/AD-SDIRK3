@@ -165,6 +165,8 @@ int main() {
         std::printf("  mu Schur record: recorded=%d base=%.6g reduced=[%.6g, %.6g]\n",
                     static_cast<int>(rec.recorded), rec.base,
                     rec.reduced_min, rec.reduced_max);
+        std::printf("  mu-phi correction: schur_corr=%.6g  S_mu_phi=%.6g\n",
+                    rec.schur_corr_mean, rec.s_mu_phi_mean);
 
         check(rec.recorded,
               "production's mu elimination RAN -- the coupled path is reached, so the assertions "
@@ -180,6 +182,16 @@ int main() {
               "but the REDUCED diagonal is still NEGATIVE (-3987) -- so the mu-phi Schur "
               "correction, not the U/V product, is what drives the mass block indefinite here. "
               "Fixing the coupling orientation alone does not rescue it");
+        // WHERE the negativity comes from, pinned as a number rather than inferred.
+        check(std::abs(rec.s_mu_phi_mean) > 100.0f,
+              "S_mu_phi is LARGE (~336) where the corrected mass equation says it should be ~0 -- "
+              "the mu tendency is the horizontal divergence of (mu*u, mu*v) and has no phi "
+              "dependence, so M still carries the coupling the OLD Omega = mu*w mass equation had");
+        check(rec.schur_corr_mean > rec.base,
+              "and its Schur correction (4627) EXCEEDS the base diagonal (+640), which is exactly "
+              "how a positive base becomes a negative reduced block -- the U/V product is not the "
+              "source of the indefiniteness, this term is");
+
         check(std::abs(rec.reduced_min) > 1e-20,
               "and it is not sitting on the singular clamp floor, so the sign above is the "
               "reduction's own result");
@@ -213,7 +225,7 @@ int main() {
               "not-recorded -- a latching flag would still report the previous call's numbers");
     }
 
-    constexpr int expected_checks = 15;
+    constexpr int expected_checks = 17;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -2101,6 +2101,8 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
     last_s_mu_mu_base_ = 0.0f;
     last_s_mu_mu_reduced_min_ = 0.0f;
     last_s_mu_mu_reduced_max_ = 0.0f;
+    last_schur_corr_mean_ = 0.0f;
+    last_s_mu_phi_mean_ = 0.0f;
 
     // FAIL CLOSED after a rollback. restore_stage_state() rolls the stage fields back but cannot
     // roll back the coefficients derived from them, so applying here would use coefficients built
@@ -2655,7 +2657,19 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                 - A_phi_u_base * c_u_mu_t / diag_u_t
                 - A_phi_v_base * c_v_mu_t / diag_v_t;                // [nz]
 
+            // EXPERIMENT (env-gated, default OFF -> byte-identical): the mu row's phi coupling.
+            //
+            // Under the CORRECTED mass equation the mu tendency is the horizontal divergence of
+            // (mu*u, mu*v) and has NO phi dependence, so S_mu_phi should be ~0 and the whole
+            // mu-phi Schur correction should vanish. Measured, it does not: S_mu_phi = 335.9,
+            // and its correction (4627) swamps the base diagonal (+640) to leave the reduced
+            // mass block at -3987. Its magnitude also matches h*c_s^2/mu0 = 348.7 to ~3%, i.e.
+            // exactly the acoustic coupling the OLD Omega = mu*w mass equation had -- which the
+            // Omega fix removed from the operator but never from M.
             auto S_mu_phi = inv_mu0_3d * S_mu_phi_base.reshape({1, nz, 1});  // [ny, nz, nx]
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_MU_PHI_SCHUR_ZERO")) {
+                S_mu_phi = torch::zeros_like(S_mu_phi);
+            }
             auto S_phi_mu = inv_mu0_3d * S_phi_mu_base.reshape({1, nz, 1});  // [ny, nz, nx]
 
             // v20.14 r47c-fix: Live cross-coupling metric |S_phi_mu| / |D_phi|.
@@ -2701,6 +2715,8 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                     S_mu_mu_reduced.min().to(torch::kCPU).item<float>();
                 last_s_mu_mu_reduced_max_ =
                     S_mu_mu_reduced.max().to(torch::kCPU).item<float>();
+                last_schur_corr_mean_ = schur_diag_corr.mean().to(torch::kCPU).item<float>();
+                last_s_mu_phi_mean_ = S_mu_phi.mean().to(torch::kCPU).item<float>();
                 last_mu_schur_recorded_ = true;
             }
             auto r_mu_reduced = r_mu_mod - schur_rhs_corr;                    // [ny, nx]
@@ -4136,6 +4152,9 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
             - A_phi_u_base * c_u_mu / diag_u - A_phi_v_base * c_v_mu / diag_v;
 
         auto S_mu_phi = inv_mu0_3d * S_mu_phi_base.reshape({nz, 1, 1});  // [nz, ny, nx]
+        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_MU_PHI_SCHUR_ZERO")) {
+            S_mu_phi = torch::zeros_like(S_mu_phi);   // same experiment, 4D path
+        }
         auto S_phi_mu = inv_mu0_3d * S_phi_mu_base.reshape({nz, 1, 1});  // [nz, ny, nx]
 
         // Modified Φ RHS: r_phi' = r_phi - inv_mu0 * (A_phi_u_base*r_u/D_u + A_phi_v_base*r_v/D_v)
