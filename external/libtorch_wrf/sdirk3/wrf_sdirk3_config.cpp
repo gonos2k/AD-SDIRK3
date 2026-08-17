@@ -894,7 +894,13 @@ void SDIRK3Config::load_from_env() {
     }
     // v20.14 r49/r59: Stage-aware GMRES budget
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE2_GMRES_RESTART"))) {
-        stage2_gmres_restart = std::clamp(std::atoi(env_val), 0, 100);
+        // EXPERIMENT CEILING RAISED. The 100 cap silently truncated a budget sweep -- 150 and 300 both
+        // ran as 100 and returned identical numbers, which reads as "more budget does not help"
+        // when the budget never changed. The measured trend is still falling at the old ceiling
+        // (0.3109 at 51 Arnoldi -> 0.2056 at 85), so the question of whether it converges with a
+        // real budget has never actually been asked. The clamp stays -- a runaway budget is a
+        // genuine hazard -- it is just no longer below the interesting range.
+        stage2_gmres_restart = std::clamp(std::atoi(env_val), 0, 1000);
         std::cerr << "[CONFIG ENV] stage2_gmres_restart = " << stage2_gmres_restart << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE2_MAX_KRYLOV_RESTARTS"))) {
