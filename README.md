@@ -96,6 +96,12 @@ proven byte-identical.
     production instance is untouched across the replay rather than restoring it. **Cleanup
     incomplete**: a receipt-equality contract pinning strict no-write isolation is not yet in
     place.
+- **STAGE 2 CONVERGES at a real Krylov budget** (2026-08-17). At `stage2_gmres_restart=600`
+  (510 Arnoldi) stage 2 converges — with the production preconditioner (gate 0.095) *and* without
+  it (gate 0.058). It had never converged in this configuration before; the shipped budget is 7
+  vectors. The stage-2 stall the recent coefficient work was chasing was **budget starvation**.
+  This does **not** solve dt=600: stage 3 still fails (gate 0.727 without `M`, 0.999 with) and
+  zero steps complete. The frontier is now stage 3.
 - **Measured, and it reframes the preconditioner work:** the operator GMRES iterates is
   **indefinite in the field-of-values sense** under WRFParity — the min eigenvalue of the
   symmetric part of the Arnoldi Hessenberg is **−2570** against a max of 4545, 13 of 51 negative.
