@@ -2091,6 +2091,17 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
 
 torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                                                 GradPolicy policy) {
+    // The mu-Schur record is PER-CALL. Without this reset the `recorded` flag latches true for
+    // the life of the object, so a later apply() that takes a non-recording path still reports
+    // recorded=true carrying the PREVIOUS call's numbers -- the reader cannot tell a fresh value
+    // from a stale one, and a coverage claim built on it ("this apply reached none of the
+    // elimination sites") would be a claim about process history instead. Clearing here makes
+    // the record mean what its consumers assume: what THIS call did.
+    last_mu_schur_recorded_ = false;
+    last_s_mu_mu_base_ = 0.0f;
+    last_s_mu_mu_reduced_min_ = 0.0f;
+    last_s_mu_mu_reduced_max_ = 0.0f;
+
     // FAIL CLOSED after a rollback. restore_stage_state() rolls the stage fields back but cannot
     // roll back the coefficients derived from them, so applying here would use coefficients built
     // from a linearization point that is no longer bound -- silently, and with no error anywhere.

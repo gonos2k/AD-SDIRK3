@@ -161,9 +161,37 @@ int main() {
         check(std::isfinite(rec.base),
               "and the record's default state is well-formed, so the gap above is a genuine "
               "not-run and not a corrupted read");
+
+        // THE RECORD MUST BE PER-CALL, or the claim above is about process history rather than
+        // about this apply(). A latching flag would keep reporting recorded=true with an earlier
+        // call's numbers, and no reader could tell fresh from stale. apply_impl() therefore
+        // clears the record at entry.
+        //
+        // HONEST LIMIT, measured: this check CANNOT currently fail. Removing the production reset
+        // and re-running leaves the test green -- because no elimination path records in this
+        // configuration, latching and resetting are indistinguishable here (both give
+        // recorded=false). So the assertion below documents the intended contract and will start
+        // biting the moment a fixture reaches a recording path; today it is not evidence that the
+        // reset works. The reset is justified by reading apply_impl(), not by this line.
+        const int64_t n2 =
+            static_cast<int64_t>(grid->nx_u) * grid->ny * grid->nz
+          + static_cast<int64_t>(grid->nx) * grid->ny_v * grid->nz
+          + static_cast<int64_t>(grid->nx) * grid->ny * grid->nz_w
+          + static_cast<int64_t>(grid->nx) * grid->ny * grid->nz_w
+          + static_cast<int64_t>(grid->nx) * grid->ny * grid->nz
+          + static_cast<int64_t>(grid->nx) * grid->ny;
+        const auto v2 = torch::randn({n2}, torch::kFloat32);
+        P.update(v2, 600.0f, 0.4358665215f);
+        P.apply(v2);                       // a REAL second call -- comparing the record to
+        const auto again = P.mu_schur_record();   // itself with nothing in between proves nothing
+        check(again.recorded == rec.recorded &&
+              again.base == rec.base &&
+              again.reduced_min == rec.reduced_min,
+              "a SECOND apply() reports the same not-run as the first (NOTE: non-discriminating "
+              "in this configuration -- see the HONEST LIMIT above; it holds either way here)");
     }
 
-    constexpr int expected_checks = 10;
+    constexpr int expected_checks = 11;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
