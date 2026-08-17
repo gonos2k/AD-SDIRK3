@@ -101,8 +101,10 @@ proven byte-identical.
     diagonals are dimensionally invalid (the source says so at both sites), but the replacement
     values are **not** established — a dimensional argument cannot supply them, and the
     Schur-reduced round trips are already computed elsewhere, so moving them into the raw
-    diagonal would double-count. Two individually-derived corrections were also measured to
-    **anti-combine**, so the block must be derived together. See `AcousticGravity_Shadow_Contract`.
+    diagonal would double-count. Two current **scalar** experiments were also measured to
+    **anti-combine** (`0.9951` and `0.9986` alone, `0.9999` together) — evidence that repairing
+    coefficients one scalar at a time is insufficient, not that two physically-correct
+    corrections cancel. Both live on the open experiment PR, not on `main`. See `AcousticGravity_Shadow_Contract`.
   - the **full ARK adjoint** and the **full-timestep `DG`/`DG^T`**
   - the **acoustic–gravity coefficient re-derivation** (`D_mu`, `D_phi`, `c_s^2+N^2`,
     direct/Schur double-count, theta–W)

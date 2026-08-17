@@ -13,10 +13,20 @@
 // Both horizontal directions are checked, because u and v are siblings in one Schur sum and a
 // flag that flipped only one of them would otherwise pass.
 //
-// NAMED AN EXPERIMENT. This proves the branch is reached and the coefficients carry the derived
-// orientation. It does NOT prove the adjoint sign is the correct production default: it was
-// measured to help alone (FGMRES rel_error 1 -> 0.9951) and to ANTI-COMBINE with the phi fix
-// (-> 0.9999), which is why it ships opt-in.
+// NOT CALLED "ADJOINT" ANY MORE. Production reduces the staggered gradient and divergence to a
+// single positive scalar H_x = 1/dx, so stagger phase, boundary closure, map factors and
+// horizontal quadrature are all absent. Opposite scalar signs MIMIC a necessary condition of an
+// adjoint pair; they do not establish that the production operators form one. That would take a
+// signed, weighted bilinear check on the actual JVP block actions, which does not exist yet.
+//
+// And the measurement says the product sign is not even the operative quantity: flipping the
+// DIVERGENCE leg gives FGMRES rel_error 1 -> 0.9951, while flipping the GRADIENT leg -- same
+// product sign -- leaves it at exactly 1. So this is a ROW-ORIENTATION experiment, and the mu
+// row is the one that matters.
+//
+// It proves the branch is reached and the coefficients carry the flipped orientation. It does
+// NOT prove the orientation is the correct production default: it also ANTI-COMBINES with the
+// phi fix (-> 0.9999), which is why it ships opt-in.
 
 #include <cmath>
 #include <cstdio>
@@ -60,7 +70,7 @@ int main() {
     // BEFORE anything constructs a preconditioner -- see the header comment.
     ::setenv("WRF_SDIRK3_MU_SCHUR_ADJOINT_SIGN", "1", /*overwrite=*/1);
 
-    std::cout << "=== Mu_Adjoint_Sign_Experiment_Enabled_Contract ===" << std::endl;
+    std::cout << "=== Mu_Coupling_Orientation_Experiment_Contract ===" << std::endl;
 
     auto grid = tiny_grid();
     auto physics = std::make_shared<wrf::sdirk3::PhysicsConfig>();
@@ -123,7 +133,37 @@ int main() {
               "Schur denominator is exactly the kind of edit that can produce a division blowup");
     }
 
-    constexpr int expected_checks = 8;
+    // ---- THE REDUCED BLOCK: A MEASURED COVERAGE GAP, pinned rather than papered over --------
+    // Everything above reads the reduction's INPUTS. Re-multiplying a coefficient snapshot proves
+    // the coefficients were flipped; it does not prove production's reduction consumed them.
+    //
+    // mu_schur_record() is written at ALL THREE sites where the mu elimination is spelled out
+    // (packed 1D, 4D, per-column scalar fallback). It comes back UNRECORDED here: this
+    // configuration's apply() reaches none of them. So the coupled mu-phi-U-V Schur machinery --
+    // the machinery whose sign this experiment is about -- is not exercised by this contract at
+    // all, and the coefficient assertions above verify inputs to a reduction this path never runs.
+    //
+    // That is asserted as the CURRENT FACT, not skipped. A conditional "if recorded" block would
+    // be a witness that cannot fail, which is the failure mode this file already exists to avoid.
+    // When a fixture that drives the coupled path lands, this assertion FLIPS and must be
+    // rewritten to the real bounds -- which is the point: the gap is loud, and closing it is a
+    // visible edit rather than a silent improvement.
+    {
+        const auto rec = P.mu_schur_record();
+        std::printf("  mu Schur record: recorded=%d base=%.6g reduced=[%.6g, %.6g]\n",
+                    static_cast<int>(rec.recorded), rec.base,
+                    rec.reduced_min, rec.reduced_max);
+
+        check(!rec.recorded,
+              "COVERAGE GAP (measured): this configuration's apply() reaches NONE of the three "
+              "mu-elimination sites, so the coupled Schur reduction this experiment is about is "
+              "not exercised here -- the coefficient checks above verify its inputs only");
+        check(std::isfinite(rec.base),
+              "and the record's default state is well-formed, so the gap above is a genuine "
+              "not-run and not a corrupted read");
+    }
+
+    constexpr int expected_checks = 10;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

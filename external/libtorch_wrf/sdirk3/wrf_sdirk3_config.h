@@ -10,7 +10,8 @@
                       // exactly this and I still shipped it: a local build is not a portability
                       // check for a HEADER, because whichever TU includes it first hides the gap.
 #include <string>
-#include <algorithm>  // std::transform in parse_bool_text; libstdc++ does not provide it
+#include <algorithm>
+#include <iostream>  // std::transform in parse_bool_text; libstdc++ does not provide it
 #include <cctype>     // std::tolower, same reason. THIRD time in this header: see the note above.
 
 namespace wrf {
@@ -26,6 +27,17 @@ namespace sdirk3 {
 // still get the same true/false decision as everywhere else.
 enum class BoolText { True, False, Unrecognized };
 
+// ONE reader for every experiment env flag.
+//
+// The pattern `v && parse_bool_text(v) == BoolText::True` silently runs the DEFAULT path for
+// =ture, =enabled, =2 -- the experimenter believes the branch is on, no message appears, and the
+// measurement is of the baseline. That failure class cost four rounds on the ewt_rtol knob; it
+// does not get to reappear once per experiment flag.
+//
+// Unrecognized WARNS (once per name) and returns false, so a typo is loud and the default is
+// still what runs.
+inline bool read_experiment_flag(const char* name);
+
 inline BoolText parse_bool_text(const std::string& input) {
     std::string lv(input);
     while (!lv.empty() && lv.front() == '.') lv.erase(lv.begin());
@@ -36,6 +48,21 @@ inline BoolText parse_bool_text(const std::string& input) {
     if (lv == "0" || lv == "false" || lv == "f" || lv == "no" || lv.empty())
         return BoolText::False;
     return BoolText::Unrecognized;
+}
+
+inline bool read_experiment_flag(const char* name) {
+    const char* raw = std::getenv(name);
+    if (!raw) return false;
+    switch (parse_bool_text(raw)) {
+        case BoolText::True:  return true;
+        case BoolText::False: return false;
+        case BoolText::Unrecognized:
+        default:
+            std::cerr << "[SDIRK3 WARN] " << name << "='" << raw
+                      << "' is not a recognized boolean; the experiment stays OFF and the "
+                         "DEFAULT path runs" << std::endl;
+            return false;
+    }
 }
 
 

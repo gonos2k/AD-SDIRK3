@@ -55,8 +55,7 @@ namespace {
 // branches without touching the environment. See phi_diagonal_value().
 bool phi_diag_unity_experiment() {
     static const bool on = [] {
-        const char* v = std::getenv("WRF_SDIRK3_PHI_SCHUR_DENOM_UNITY");
-        return v && wrf::sdirk3::parse_bool_text(v) == wrf::sdirk3::BoolText::True;
+        return wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_PHI_SCHUR_DENOM_UNITY");
     }();
     return on;
 }
@@ -1664,13 +1663,20 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
             // in this campaign measured harmful or inert -- M approximates A^-1, and a wrong term
             // can be load-bearing.
             static const bool adjoint_sign = [] {
-                const char* v = std::getenv("WRF_SDIRK3_MU_SCHUR_ADJOINT_SIGN");
-                return v && wrf::sdirk3::parse_bool_text(v) == wrf::sdirk3::BoolText::True;
+                return wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_MU_SCHUR_ADJOINT_SIGN");
             }();
+            // LEG ISOLATION. Flipping C_mu_u and flipping C_u_mu give the SAME Schur product
+            // sign but are NOT the same operator: C_mu_u also changes the mu RHS elimination and
+            // S_mu_phi, while C_u_mu changes the u row's mu dependence, S_phi_mu and the U
+            // back-substitution. The product sign alone cannot say which row's orientation is
+            // wrong, so the two arms are separately selectable.
+            static const bool flip_grad_leg =
+                wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_MU_SCHUR_FLIP_GRAD_LEG");
             const float div_sign = adjoint_sign ? +1.0f : -1.0f;
+            const float grad_sign = flip_grad_leg ? +1.0f : -1.0f;
 
-            C_u_mu_ptr[k] = -dt_gamma * (c_squared / mu_column_pa) * H_x;
-            C_v_mu_ptr[k] = -dt_gamma * (c_squared / mu_column_pa) * H_y;
+            C_u_mu_ptr[k] = grad_sign * dt_gamma * (c_squared / mu_column_pa) * H_x;
+            C_v_mu_ptr[k] = grad_sign * dt_gamma * (c_squared / mu_column_pa) * H_y;
             C_mu_u_ptr[k] = div_sign * dt_gamma * mu_column_pa * H_x;
             C_mu_v_ptr[k] = div_sign * dt_gamma * mu_column_pa * H_y;
         }
@@ -2672,6 +2678,20 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
             auto schur_rhs_corr = (S_mu_phi * r_phi_mod * inv_S_phi_phi).sum(1);  // [ny, nx]
 
             auto S_mu_mu_reduced = S_mu_mu_scalar_cache - schur_diag_corr;   // [ny, nx]
+
+            // Diagnostic record of what the reduction ACTUALLY produced. A contract that
+            // recomputes C_mu_u*C_u_mu from a coefficient snapshot proves the coefficients were
+            // flipped; it does not prove this reduction consumed them. These two members are
+            // what a test must assert on. Guarded .item() -- project hard constraint.
+            {
+                torch::NoGradGuard no_grad_diag;
+                last_s_mu_mu_base_ = S_mu_mu_scalar_cache;
+                last_s_mu_mu_reduced_min_ =
+                    S_mu_mu_reduced.min().to(torch::kCPU).item<float>();
+                last_s_mu_mu_reduced_max_ =
+                    S_mu_mu_reduced.max().to(torch::kCPU).item<float>();
+                last_mu_schur_recorded_ = true;
+            }
             auto r_mu_reduced = r_mu_mod - schur_rhs_corr;                    // [ny, nx]
 
             // v20.5 Fix 3: Sign-preserving clamp for S_mu_mu
@@ -4127,6 +4147,18 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
         auto schur_rhs_corr = (S_mu_phi * r_phi_mod * inv_S_phi_phi).sum(0);
 
         auto S_mu_mu_reduced = S_mu_mu_scalar - schur_diag_corr;   // [ny, nx]
+
+        // Same diagnostic record as the packed path -- the elimination is written out in BOTH,
+        // so recording in only one leaves whichever path actually ran unobserved. (Discovered by
+        // the `recorded` flag on the contract: without it, three default-zero fields sailed
+        // through a finiteness assertion.)
+        {
+            torch::NoGradGuard no_grad_diag;
+            last_s_mu_mu_base_ = S_mu_mu_scalar;
+            last_s_mu_mu_reduced_min_ = S_mu_mu_reduced.min().to(torch::kCPU).item<float>();
+            last_s_mu_mu_reduced_max_ = S_mu_mu_reduced.max().to(torch::kCPU).item<float>();
+            last_mu_schur_recorded_ = true;
+        }
         auto r_mu_reduced = r_mu_mod_accum - schur_rhs_corr;        // [ny, nx]
 
         // v20.5 Fix 3: Sign-preserving clamp for S_mu_mu (4D path)
@@ -6021,6 +6053,20 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
 
     // Accumulate μ-Φ coupling contributions with singularity checks
     float S_mu_mu_reduced = S_mu_mu_accum;  // Start with accumulated diagonal
+
+    // THIRD copy of the same record. The mu elimination is written out in the packed 1D path,
+    // the 4D path AND this per-column scalar fallback, so recording in two of the three left the
+    // path a small grid actually takes unobserved -- which is exactly what the contract's
+    // `recorded` flag caught (base and both bounds sat at default zero while a finiteness
+    // assertion passed). Three copies of one reduction is the underlying defect; recording in
+    // all three is the honest interim, not the fix.
+    {
+        torch::NoGradGuard no_grad_diag;
+        last_s_mu_mu_base_ = S_mu_mu_accum;
+        last_s_mu_mu_reduced_min_ = S_mu_mu_reduced;
+        last_s_mu_mu_reduced_max_ = S_mu_mu_reduced;
+        last_mu_schur_recorded_ = true;
+    }
     float r_mu_reduced = r_mu_mod_accum;     // Start with accumulated RHS
 
     // v20.14r27l: Relative singularity threshold (was absolute 1e-10).
