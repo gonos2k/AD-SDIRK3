@@ -102,15 +102,13 @@ proven byte-identical.
     values are **not** established — a dimensional argument cannot supply them, and the
     Schur-reduced round trips are already computed elsewhere, so moving them into the raw
     diagonal would double-count. THREE scalar experiments have now been measured to
-    behave differently **in the norm GMRES actually minimises** than in the one first reported.
-    Measured in the block-scaled residual (stage 2, dt=600, restart 60): shipped **0.9986**,
-    `div_leg` **0.9951**, `phi_unity` **0.9986** (i.e. identical to shipped — no effect),
-    `mu_phi_zero` **1.001** (worse than shipped), `div_leg + phi_unity` 0.9959. Three earlier
-    claims are corrected by this: the shipped operator does **not** make exactly zero progress,
-    `phi_unity` does **nothing**, and the `phi × div` anti-combination was largely an artefact of
-    reading the unscaled ratio. What survives: `div_leg` is the best single lever, and
-    `mu_phi_zero` is not inert but actively harmful and still cancels `div_leg`. All on the open
-    experiment PR rather than on `main`. See `AcousticGravity_Shadow_Contract`.
+    are all **harmful** when measured by the solver's OWN convergence quantity — the internal
+    `error_tensor` GMRES tests against its tolerance (stage 2, dt=600, restart 60): shipped
+    **0.6483**, `div_leg` 0.6703, `div_leg+phi_unity` 0.6773, `phi_unity` 0.7979, `mu_phi_zero`
+    0.9194. **The shipped operator is the best of every configuration tried**, and each derived
+    "correction" degrades it. Two earlier readings of these experiments — off the unscaled
+    `rel_error`, then off a residual scaled with the wrong vector — ranked them the other way
+    round; both are retracted. All on the open experiment PR rather than on `main`. See `AcousticGravity_Shadow_Contract`.
   - the **full ARK adjoint** and the **full-timestep `DG`/`DG^T`**
   - the **acoustic–gravity coefficient re-derivation** (`D_mu`, `D_phi`, `c_s^2+N^2`,
     direct/Schur double-count, theta–W)

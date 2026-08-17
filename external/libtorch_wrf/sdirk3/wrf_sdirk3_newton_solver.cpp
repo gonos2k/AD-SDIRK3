@@ -3410,6 +3410,19 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
             : safe_tensor_norm(r_true_inner) / bnorm_safe;
 
+        // F1: the per-RESTART trajectory of the minimised norm. 0.14% total reduction over 51
+        // Arnoldi directions can mean two different things -- flat from the first step (the
+        // leading Krylov direction is useless, which the cos_P = 0.003 measurement predicts) or
+        // an initial drop then a plateau (stagnation after real progress). Different causes, so
+        // print the value at every restart instead of only at exit.
+        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY")) {
+            torch::NoGradGuard ng_traj;
+            std::cerr << "SDIRK3_KRYLOV_TRAJECTORY restart=" << iter
+                      << " scaled=" << (block_scaled ? 1 : 0)
+                      << " error=" << guarded_item<float>(error_tensor)
+                      << std::endl << std::flush;
+        }
+
         // NUMERICAL STABILITY: Detect NaN in residual error after update
         if (guarded_item<bool>(torch::isnan(error_tensor).any())) {
             std::cerr << "[GMRES ERROR] NaN detected in error_tensor after iteration " << iter << std::endl;
