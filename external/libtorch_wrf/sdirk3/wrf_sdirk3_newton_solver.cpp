@@ -1154,6 +1154,15 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // D[block] = ||r0[block]||₂. After scaling, each block contributes exactly 1 to ||D⁻¹r0||².
     // This prevents phi/theta O(10⁴) from masking u O(1-10) in GMRES's L2 minimization.
     // GMRES now solves: min ||D⁻¹(b - AM⁻¹z)|| — same solution x, different search path.
+    // G1 storage (unpreconditioned copy): the discriminator for whether the indefiniteness is
+    // intrinsic to A or introduced by M. Same capture, same analysis, M = I.
+    static const auto ritz_capture_on = [] {
+        static const bool on =
+            wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_RITZ_CAPTURE");
+        return on;
+    };
+    std::vector<std::vector<double>> ritz_H;
+
     torch::Tensor D_inv;  // per-element scaling vector, empty if disabled
     bool block_scaled = false;
     // v20.14 r50-fix: Block-scaling requires AUTOGRAD JVP. With FD JVP, D_inv amplifies
@@ -1591,6 +1600,16 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
 
             // 9F.D101 (review P0-A): the Givens reduction for the CURRENT column, shared by
             // the breakdown path and the normal path so the two cannot drift apart.
+            if (ritz_capture_on()) {   // pre-reduction Hessenberg column, M = I path
+                torch::NoGradGuard ng_ritz;
+                std::vector<double> col;
+                col.reserve(static_cast<size_t>(j) + 2);
+                for (int i = 0; i <= j + 1 && i < static_cast<int>(H.size(0)); ++i) {
+                    col.push_back(H[i][j].to(torch::kCPU).item<double>());
+                }
+                ritz_H.push_back(std::move(col));
+            }
+
             auto reduce_current_column = [&]() {
                 for (int i = 0; i < j; ++i) {
                     auto h_i_j = H[i][j].clone();
@@ -2028,6 +2047,35 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
             : safe_tensor_norm(r_true_inner) / bnorm_safe;
 
+        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY")) {
+            torch::NoGradGuard ng_traj_u;
+            std::cerr << "SDIRK3_KRYLOV_TRAJECTORY_UNPRECOND restart=" << iter
+                      << " scaled=" << (block_scaled ? 1 : 0)
+                      << " error=" << guarded_item<float>(error_tensor)
+                      << std::endl << std::flush;
+        }
+
+        if (ritz_capture_on() && !ritz_H.empty()) {   // M = I numerical range
+            torch::NoGradGuard ng_ritz_analysis;
+            const int m = static_cast<int>(ritz_H.size());
+            auto Hs = torch::zeros({m, m}, torch::kFloat64);
+            auto acc = Hs.accessor<double, 2>();
+            for (int jj = 0; jj < m; ++jj) {
+                const auto& col = ritz_H[static_cast<size_t>(jj)];
+                for (int ii = 0; ii < m && ii < static_cast<int>(col.size()); ++ii) {
+                    acc[ii][jj] = col[static_cast<size_t>(ii)];
+                }
+            }
+            const auto sym = 0.5 * (Hs + Hs.transpose(0, 1));
+            const auto evals = torch::linalg_eigvalsh(sym);
+            std::cerr << "SDIRK3_NUMERICAL_RANGE_UNPRECOND m=" << m
+                      << " min_eig_sym=" << evals.min().item<double>()
+                      << " max_eig_sym=" << evals.max().item<double>()
+                      << " n_negative=" << (evals < 0.0).sum().item<int64_t>() << "/" << m
+                      << " definite=" << (evals.min().item<double>() > 0.0 ? 1 : 0)
+                      << std::endl << std::flush;
+        }
+
         // NUMERICAL STABILITY: Detect NaN in residual error after update
         if (guarded_item<bool>(torch::isnan(error_tensor).any())) {
             std::cerr << "[GMRES ERROR] NaN detected in error_tensor after iteration " << iter << std::endl;
@@ -2288,6 +2336,14 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // D[block] = ||r0[block]||₂. After scaling, each block contributes exactly 1 to ||D⁻¹r0||².
     // This prevents phi/theta O(10⁴) from masking u O(1-10) in GMRES's L2 minimization.
     // GMRES now solves: min ||D⁻¹(b - AM⁻¹z)|| — same solution x, different search path.
+    // G1 storage: Hessenberg columns captured pre-reduction (see the capture site below).
+    static const auto ritz_capture_on = [] {
+        static const bool on =
+            wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_RITZ_CAPTURE");
+        return on;
+    };
+    std::vector<std::vector<double>> ritz_H;
+
     torch::Tensor D_inv;  // per-element scaling vector, empty if disabled
     bool block_scaled = false;
     // v20.14 r50-fix: Block-scaling requires AUTOGRAD JVP. With FD JVP, D_inv amplifies
@@ -2570,6 +2626,38 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             // and capture the actual operator output the solve used.
             if (basis_capture) basis_capture->arnoldi_call_active = true;
             torch::Tensor w = A(v_precond);
+
+            // IS THE MATVEC LINEAR? A Krylov method assumes it is. If A(a*v) != a*A(v) the
+            // Arnoldi relation does not hold, the least-squares minimiser is meaningless, and a
+            // flat true residual is expected NO MATTER what preconditioner is used -- which
+            // would explain a stall that survives M on, M off, and every coefficient change.
+            // Homogeneity is the cheap half and needs one extra operator call, so it is gated
+            // and fires once.
+            if (j == 0 && wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_MATVEC_LINEARITY")) {
+                torch::NoGradGuard ng_lin;
+                const double alpha = 0.5;
+                const torch::Tensor w_scaled = A(alpha * v_precond);
+                const auto lhs = w_scaled.to(torch::kFloat64);
+                const auto rhs = (alpha * w).to(torch::kFloat64);
+                const double num = (lhs - rhs).norm().to(torch::kCPU).item<double>();
+                const double den = rhs.norm().to(torch::kCPU).item<double>();
+                // Additivity, the other half: homogeneity alone does not imply linearity.
+                const torch::Tensor u = torch::randn_like(v_precond);
+                const torch::Tensor w_u = A(u);
+                const torch::Tensor w_sum = A(v_precond + u);
+                const auto add_lhs = w_sum.to(torch::kFloat64);
+                const auto add_rhs = (w + w_u).to(torch::kFloat64);
+                const double add_num = (add_lhs - add_rhs).norm().to(torch::kCPU).item<double>();
+                const double add_den = add_rhs.norm().to(torch::kCPU).item<double>();
+
+                std::cerr << "SDIRK3_MATVEC_LINEARITY alpha=" << alpha
+                          << " ||A(av)-aA(v)||=" << num
+                          << " ||aA(v)||=" << den
+                          << " rel=" << (den > 0.0 ? num / den : -1.0)
+                          << " | additivity rel="
+                          << (add_den > 0.0 ? add_num / add_den : -1.0)
+                          << std::endl << std::flush;
+            }
 
             // THE JUDGEMENT, from the triplet FGMRES already has.
             //
@@ -2941,6 +3029,29 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
 
             // 9F.D101 (review P0-A): the Givens reduction for the CURRENT column, shared by
             // the breakdown path and the normal path so the two cannot drift apart.
+            // G1: SNAPSHOT THE HESSENBERG COLUMN before the Givens rotations overwrite it with R.
+            //
+            // The campaign's "A_fast is INTRINSICALLY INDEFINITE" finding drove two strategic
+            // pivots, and it was measured on the LEGACY operator -- the one whose negative ph/mu
+            // diagonals the Omega fix removes. Re-measuring under WRFParity has been flagged
+            // UNDONE ever since. The Arnoldi Hessenberg carries the spectrum of the operator
+            // GMRES ACTUALLY iterates, for free, but only BEFORE reduction -- so the capture
+            // belongs exactly here.
+            //
+            // For a NON-NORMAL operator the GMRES-relevant quantity is the numerical range, not
+            // the eigenvalues: the min eigenvalue of the symmetric part 1/2(H + H^T). A spectrum
+            // in the right half-plane does NOT prove a definite numerical range, and eigenvalues
+            // mislead in both directions -- so the symmetric part is what this accumulates.
+            if (ritz_capture_on()) {
+                torch::NoGradGuard ng_ritz;
+                std::vector<double> col;
+                col.reserve(static_cast<size_t>(j) + 2);
+                for (int i = 0; i <= j + 1 && i < static_cast<int>(H.size(0)); ++i) {
+                    col.push_back(H[i][j].to(torch::kCPU).item<double>());
+                }
+                ritz_H.push_back(std::move(col));
+            }
+
             auto reduce_current_column = [&]() {
                 for (int i = 0; i < j; ++i) {
                     auto h_i_j = H[i][j].clone();
@@ -3377,6 +3488,51 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         error_tensor = block_scaled
             ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
             : safe_tensor_norm(r_true_inner) / bnorm_safe;
+
+        // G1 ANALYSIS: the numerical range of the operator GMRES actually iterates.
+        //
+        // Assemble the square part of the captured Hessenberg, symmetrise it, and report the
+        // extreme eigenvalues of 1/2(H + H^T). If min_eig < 0 the numerical range straddles the
+        // origin and NO SPD preconditioner can fix it (Sylvester); if min_eig > 0 the operator
+        // is positive-definite in the field-of-values sense and the campaign's two pivots rest on
+        // a premise that no longer holds under WRFParity. Ritz eigenvalues are reported too, but
+        // the symmetric part is the quantity that decides.
+        if (ritz_capture_on() && !ritz_H.empty()) {
+            torch::NoGradGuard ng_ritz_analysis;
+            const int m = static_cast<int>(ritz_H.size());
+            auto Hs = torch::zeros({m, m}, torch::kFloat64);
+            auto acc = Hs.accessor<double, 2>();
+            for (int jj = 0; jj < m; ++jj) {
+                const auto& col = ritz_H[static_cast<size_t>(jj)];
+                for (int ii = 0; ii < m && ii < static_cast<int>(col.size()); ++ii) {
+                    acc[ii][jj] = col[static_cast<size_t>(ii)];
+                }
+            }
+            const auto sym = 0.5 * (Hs + Hs.transpose(0, 1));
+            const auto evals = torch::linalg_eigvalsh(sym);
+            const double lo = evals.min().item<double>();
+            const double hi = evals.max().item<double>();
+            const int64_t n_neg = (evals < 0.0).sum().item<int64_t>();
+            std::cerr << "SDIRK3_NUMERICAL_RANGE m=" << m
+                      << " min_eig_sym=" << lo
+                      << " max_eig_sym=" << hi
+                      << " n_negative=" << n_neg << "/" << m
+                      << " definite=" << (lo > 0.0 ? 1 : 0)
+                      << std::endl << std::flush;
+        }
+
+        // F1: the per-RESTART trajectory of the minimised norm. 0.14% total reduction over 51
+        // Arnoldi directions can mean two different things -- flat from the first step (the
+        // leading Krylov direction is useless, which the cos_P = 0.003 measurement predicts) or
+        // an initial drop then a plateau (stagnation after real progress). Different causes, so
+        // print the value at every restart instead of only at exit.
+        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY")) {
+            torch::NoGradGuard ng_traj;
+            std::cerr << "SDIRK3_KRYLOV_TRAJECTORY restart=" << iter
+                      << " scaled=" << (block_scaled ? 1 : 0)
+                      << " error=" << guarded_item<float>(error_tensor)
+                      << std::endl << std::flush;
+        }
 
         // NUMERICAL STABILITY: Detect NaN in residual error after update
         if (guarded_item<bool>(torch::isnan(error_tensor).any())) {
@@ -7590,6 +7746,73 @@ public:
                     if (gmres_rel_error > 0.5f) {
                         std::cerr << "[NEWTON] GMRES failed badly (rel_error=" << gmres_rel_error
                                   << "): " << gmres_result.message << std::endl;
+                        {
+                            // WHY zero progress. rel_error exactly 1 is the signature of a
+                            // TRIVIAL least-squares minimiser: if the Krylov solution x is ~0
+                            // then b - A*0 = b and the ratio is 1 by construction, which says the
+                            // right-hand side is nearly orthogonal to the space the Arnoldi
+                            // process built -- a very different diagnosis from "the solve made
+                            // progress but not enough". Printing ||x|| against ||b|| separates
+                            // them in one line.
+                            // A CAUTION FOR ANYONE COMPARING RUNS WITH THIS. A preconditioner
+                            // on/off pair is NOT a controlled A/B: stage 1 SOLVES in both cases,
+                            // so M changes its solution, which changes the state entering stage 2
+                            // and therefore b itself. Measured: the very first failure record
+                            // already differs, ||b|| = 464.6 with M against 217.6 without. Any
+                            // sound M-on/M-off comparison needs a FIXED (A, b) harness driving
+                            // one linear solve, not two model runs.
+                            torch::NoGradGuard ng_probe;
+                            const double xn =
+                                gmres_result.x.defined()
+                                    ? gmres_result.x.norm().to(torch::kCPU).item<double>()
+                                    : -1.0;
+                            // ||b|| recovered from the reported ratio: rel_error = ||r_true||/||b||
+                            const double bn = (gmres_result.rel_error > 0.0f)
+                                ? static_cast<double>(gmres_result.final_residual) /
+                                  static_cast<double>(gmres_result.rel_error)
+                                : -1.0;
+                            // D3: the Arnoldi/Givens ESTIMATE against the recomputed true
+                            // residual. If the estimate falls while the true ratio sits at 1, the
+                            // Arnoldi relation is being violated somewhere between the
+                            // least-squares solve and the recomputation -- a different diagnosis
+                            // from "the operator is hard".
+                            // rel_error is the UNSCALED ||b-Ax||/||b||, but GMRES minimises the
+                            // BLOCK-SCALED ||D^-1(b - A M^-1 z)||. Different norms -- which is why
+                            // this can exceed 1 without violating the least-squares property:
+                            // x=0 bounds the SCALED residual, not this one. Reporting progress in
+                            // a norm the solver does not optimise is a category error, and every
+                            // coefficient comparison in this campaign so far has been read off it.
+                            std::cerr << "SDIRK3_GMRES_ESTIMATE_VS_TRUE"
+                                      << " internal_iters=" << gmres_result.iterations
+                                      << " final_residual=" << gmres_result.final_residual
+                                      << " rel_error_UNSCALED=" << gmres_result.rel_error
+                                      << " note=minimised_norm_is_block_scaled"
+                                      << std::endl;
+                            // THE MINIMISED NORM. GMRES iterates the S-conjugated operator when
+                            // block scaling is on, so what it actually minimises is
+                            // ||S^-1(b - Ax)|| / ||S^-1 b||, not the unscaled ratio reported as
+                            // rel_error. Reading progress off the unscaled number is a category
+                            // error, so both are printed here and the scaled one is the
+                            // solver-progress metric.
+                            if (scaling_initialized_ && S_diag_.defined() &&
+                                gmres_result.r_true.defined() &&
+                                gmres_rhs.defined()) {
+                                const auto sinv = 1.0 / S_diag_.to(torch::kFloat64);
+                                const double rs = (gmres_result.r_true.to(torch::kFloat64) * sinv)
+                                                      .norm().to(torch::kCPU).item<double>();
+                                const double bs = (gmres_rhs.to(torch::kFloat64) * sinv)
+                                                      .norm().to(torch::kCPU).item<double>();
+                                std::cerr << "SDIRK3_GMRES_SCALED_RESIDUAL"
+                                          << " scaled_rel=" << (bs > 0.0 ? rs / bs : -1.0)
+                                          << " num=" << rs << " den=" << bs
+                                          << "  (this is the norm GMRES minimises)"
+                                          << std::endl << std::flush;
+                            }
+                            std::cerr << "SDIRK3_GMRES_TRIVIALITY ||x||=" << xn
+                                      << " ||b||=" << bn
+                                      << " ratio=" << (bn > 0.0 ? xn / bn : -1.0)
+                                      << std::endl << std::flush;
+                        }
                     } else {
                         std::cerr << "[NEWTON] GMRES did not converge (rel_error=" << gmres_rel_error
                                   << ") but usable for inexact Newton: " << gmres_result.message << std::endl;

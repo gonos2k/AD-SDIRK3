@@ -440,6 +440,30 @@ public:
     struct HorizontalCouplingSnapshot {
         torch::Tensor c_u_mu, c_v_mu, c_mu_u, c_mu_v;
     };
+    // What the mu reduction ACTUALLY produced on the last apply(), recorded at the site.
+    //
+    // The coupling snapshot above shows the INPUTS to the reduction; this shows its OUTPUT. A
+    // contract that only re-multiplies the coefficients proves they were flipped, not that the
+    // reduction consumed them -- these two are different claims, and only the second one is
+    // about the operator the solver uses.
+    struct MuSchurRecord {
+        bool recorded = false;
+        float base = 0.0f;          // D_mu + sum_k of the U/V eliminations
+        float reduced_min = 0.0f;   // base - the mu-phi Schur correction, over the (j,i) plane
+        float reduced_max = 0.0f;
+        // The mu-phi Schur correction and its dominant factor. Under the CORRECTED mass equation
+        // the mu tendency is the horizontal divergence of (mu*u, mu*v) and has no phi dependence,
+        // so S_mu_phi -- and hence this whole correction -- should be ~0. Recording both makes
+        // that a measurement instead of a comment.
+        float schur_corr_mean = 0.0f;
+        float s_mu_phi_mean = 0.0f;
+    };
+    MuSchurRecord mu_schur_record() const {
+        return {last_mu_schur_recorded_, last_s_mu_mu_base_,
+                last_s_mu_mu_reduced_min_, last_s_mu_mu_reduced_max_,
+                last_schur_corr_mean_, last_s_mu_phi_mean_};
+    }
+
     HorizontalCouplingSnapshot horizontal_coupling_snapshot() const {
         auto cl = [](const torch::Tensor& t) {
             return t.defined() ? t.detach().clone() : torch::Tensor{};
@@ -493,6 +517,14 @@ private:
     torch::Tensor theta_w_coupling_lower_;
 
     // U-V-μ coupling coefficients for acoustic waves (per-level scalars)
+    // Diagnostic-only record of the last mu reduction (see mu_schur_record()).
+    bool last_mu_schur_recorded_ = false;
+    float last_s_mu_mu_base_ = 0.0f;
+    float last_s_mu_mu_reduced_min_ = 0.0f;
+    float last_s_mu_mu_reduced_max_ = 0.0f;
+    float last_schur_corr_mean_ = 0.0f;
+    float last_s_mu_phi_mean_ = 0.0f;
+
     torch::Tensor C_u_mu_;    // Pressure gradient effect: μ → u
     torch::Tensor C_v_mu_;    // Pressure gradient effect: μ → v
     torch::Tensor C_mu_u_;    // Divergence effect: u → μ

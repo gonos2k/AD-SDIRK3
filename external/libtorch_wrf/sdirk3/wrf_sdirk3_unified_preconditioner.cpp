@@ -55,8 +55,7 @@ namespace {
 // branches without touching the environment. See phi_diagonal_value().
 bool phi_diag_unity_experiment() {
     static const bool on = [] {
-        const char* v = std::getenv("WRF_SDIRK3_PHI_SCHUR_DENOM_UNITY");
-        return v && wrf::sdirk3::parse_bool_text(v) == wrf::sdirk3::BoolText::True;
+        return wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_PHI_SCHUR_DENOM_UNITY");
     }();
     return on;
 }
@@ -1645,10 +1644,41 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
             C_mu_u_ptr[k] = 0.0f;
             C_mu_v_ptr[k] = 0.0f;
         } else {
-            C_u_mu_ptr[k] = -dt_gamma * (c_squared / mu_column_pa) * H_x;
-            C_v_mu_ptr[k] = -dt_gamma * (c_squared / mu_column_pa) * H_y;
-            C_mu_u_ptr[k] = -dt_gamma * mu_column_pa * H_x;
-            C_mu_v_ptr[k] = -dt_gamma * mu_column_pa * H_y;
+            // EXPERIMENT (env-gated, default OFF -> byte-identical): the DIVERGENCE sign.
+            //
+            // Derivation, from the rows themselves:
+            //     mu row : d(mu)/dt = -D_h(mu u)        => A_mu_u = +h mu0 D_h
+            //     u  row : du/dt    = -(c_s^2/mu0) G_h mu => A_u_mu = +h (c_s^2/mu0) G_h
+            // and for an adjoint pair D_h = -G_h^T, so D_h G_h = -k^2 and the product
+            // A_mu_u * A_u_mu is NEGATIVE. The Schur step subtracts it, giving
+            // S_mu_mu = 1 + h^2 c_s^2 k^2 -- stiffer, which is what A = I - hJ predicts.
+            //
+            // Production writes both directions with the SAME positive scalar H, so the product
+            // is POSITIVE and the Schur step drives S_mu_mu NEGATIVE (measured -0.64 at
+            // operational parameters; Discrete_Adjoint_Pair_Contract). The gradient/divergence
+            // orientation is simply absent from a scalar H.
+            //
+            // The flag restores it on the divergence direction (divergence = MINUS the adjoint
+            // of the gradient). Opt-in because three "mathematically correct" coefficient fixes
+            // in this campaign measured harmful or inert -- M approximates A^-1, and a wrong term
+            // can be load-bearing.
+            static const bool adjoint_sign = [] {
+                return wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_MU_SCHUR_ADJOINT_SIGN");
+            }();
+            // LEG ISOLATION. Flipping C_mu_u and flipping C_u_mu give the SAME Schur product
+            // sign but are NOT the same operator: C_mu_u also changes the mu RHS elimination and
+            // S_mu_phi, while C_u_mu changes the u row's mu dependence, S_phi_mu and the U
+            // back-substitution. The product sign alone cannot say which row's orientation is
+            // wrong, so the two arms are separately selectable.
+            static const bool flip_grad_leg =
+                wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_MU_SCHUR_FLIP_GRAD_LEG");
+            const float div_sign = adjoint_sign ? +1.0f : -1.0f;
+            const float grad_sign = flip_grad_leg ? +1.0f : -1.0f;
+
+            C_u_mu_ptr[k] = grad_sign * dt_gamma * (c_squared / mu_column_pa) * H_x;
+            C_v_mu_ptr[k] = grad_sign * dt_gamma * (c_squared / mu_column_pa) * H_y;
+            C_mu_u_ptr[k] = div_sign * dt_gamma * mu_column_pa * H_x;
+            C_mu_v_ptr[k] = div_sign * dt_gamma * mu_column_pa * H_y;
         }
     }
 
@@ -2061,6 +2091,19 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
 
 torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                                                 GradPolicy policy) {
+    // The mu-Schur record is PER-CALL. Without this reset the `recorded` flag latches true for
+    // the life of the object, so a later apply() that takes a non-recording path still reports
+    // recorded=true carrying the PREVIOUS call's numbers -- the reader cannot tell a fresh value
+    // from a stale one, and a coverage claim built on it ("this apply reached none of the
+    // elimination sites") would be a claim about process history instead. Clearing here makes
+    // the record mean what its consumers assume: what THIS call did.
+    last_mu_schur_recorded_ = false;
+    last_s_mu_mu_base_ = 0.0f;
+    last_s_mu_mu_reduced_min_ = 0.0f;
+    last_s_mu_mu_reduced_max_ = 0.0f;
+    last_schur_corr_mean_ = 0.0f;
+    last_s_mu_phi_mean_ = 0.0f;
+
     // FAIL CLOSED after a rollback. restore_stage_state() rolls the stage fields back but cannot
     // roll back the coefficients derived from them, so applying here would use coefficients built
     // from a linearization point that is no longer bound -- silently, and with no error anywhere.
@@ -2614,7 +2657,19 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                 - A_phi_u_base * c_u_mu_t / diag_u_t
                 - A_phi_v_base * c_v_mu_t / diag_v_t;                // [nz]
 
+            // EXPERIMENT (env-gated, default OFF -> byte-identical): the mu row's phi coupling.
+            //
+            // Under the CORRECTED mass equation the mu tendency is the horizontal divergence of
+            // (mu*u, mu*v) and has NO phi dependence, so S_mu_phi should be ~0 and the whole
+            // mu-phi Schur correction should vanish. Measured, it does not: S_mu_phi = 335.9,
+            // and its correction (4627) swamps the base diagonal (+640) to leave the reduced
+            // mass block at -3987. Its magnitude also matches h*c_s^2/mu0 = 348.7 to ~3%, i.e.
+            // exactly the acoustic coupling the OLD Omega = mu*w mass equation had -- which the
+            // Omega fix removed from the operator but never from M.
             auto S_mu_phi = inv_mu0_3d * S_mu_phi_base.reshape({1, nz, 1});  // [ny, nz, nx]
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_MU_PHI_SCHUR_ZERO")) {
+                S_mu_phi = torch::zeros_like(S_mu_phi);
+            }
             auto S_phi_mu = inv_mu0_3d * S_phi_mu_base.reshape({1, nz, 1});  // [ny, nz, nx]
 
             // v20.14 r47c-fix: Live cross-coupling metric |S_phi_mu| / |D_phi|.
@@ -2648,6 +2703,22 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
             auto schur_rhs_corr = (S_mu_phi * r_phi_mod * inv_S_phi_phi).sum(1);  // [ny, nx]
 
             auto S_mu_mu_reduced = S_mu_mu_scalar_cache - schur_diag_corr;   // [ny, nx]
+
+            // Diagnostic record of what the reduction ACTUALLY produced. A contract that
+            // recomputes C_mu_u*C_u_mu from a coefficient snapshot proves the coefficients were
+            // flipped; it does not prove this reduction consumed them. These two members are
+            // what a test must assert on. Guarded .item() -- project hard constraint.
+            {
+                torch::NoGradGuard no_grad_diag;
+                last_s_mu_mu_base_ = S_mu_mu_scalar_cache;
+                last_s_mu_mu_reduced_min_ =
+                    S_mu_mu_reduced.min().to(torch::kCPU).item<float>();
+                last_s_mu_mu_reduced_max_ =
+                    S_mu_mu_reduced.max().to(torch::kCPU).item<float>();
+                last_schur_corr_mean_ = schur_diag_corr.mean().to(torch::kCPU).item<float>();
+                last_s_mu_phi_mean_ = S_mu_phi.mean().to(torch::kCPU).item<float>();
+                last_mu_schur_recorded_ = true;
+            }
             auto r_mu_reduced = r_mu_mod - schur_rhs_corr;                    // [ny, nx]
 
             // v20.5 Fix 3: Sign-preserving clamp for S_mu_mu
@@ -4081,6 +4152,9 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
             - A_phi_u_base * c_u_mu / diag_u - A_phi_v_base * c_v_mu / diag_v;
 
         auto S_mu_phi = inv_mu0_3d * S_mu_phi_base.reshape({nz, 1, 1});  // [nz, ny, nx]
+        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_MU_PHI_SCHUR_ZERO")) {
+            S_mu_phi = torch::zeros_like(S_mu_phi);   // same experiment, 4D path
+        }
         auto S_phi_mu = inv_mu0_3d * S_phi_mu_base.reshape({nz, 1, 1});  // [nz, ny, nx]
 
         // Modified Φ RHS: r_phi' = r_phi - inv_mu0 * (A_phi_u_base*r_u/D_u + A_phi_v_base*r_v/D_v)
@@ -4103,6 +4177,18 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
         auto schur_rhs_corr = (S_mu_phi * r_phi_mod * inv_S_phi_phi).sum(0);
 
         auto S_mu_mu_reduced = S_mu_mu_scalar - schur_diag_corr;   // [ny, nx]
+
+        // Same diagnostic record as the packed path -- the elimination is written out in BOTH,
+        // so recording in only one leaves whichever path actually ran unobserved. (Discovered by
+        // the `recorded` flag on the contract: without it, three default-zero fields sailed
+        // through a finiteness assertion.)
+        {
+            torch::NoGradGuard no_grad_diag;
+            last_s_mu_mu_base_ = S_mu_mu_scalar;
+            last_s_mu_mu_reduced_min_ = S_mu_mu_reduced.min().to(torch::kCPU).item<float>();
+            last_s_mu_mu_reduced_max_ = S_mu_mu_reduced.max().to(torch::kCPU).item<float>();
+            last_mu_schur_recorded_ = true;
+        }
         auto r_mu_reduced = r_mu_mod_accum - schur_rhs_corr;        // [ny, nx]
 
         // v20.5 Fix 3: Sign-preserving clamp for S_mu_mu (4D path)
@@ -5997,6 +6083,20 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
 
     // Accumulate μ-Φ coupling contributions with singularity checks
     float S_mu_mu_reduced = S_mu_mu_accum;  // Start with accumulated diagonal
+
+    // THIRD copy of the same record. The mu elimination is written out in the packed 1D path,
+    // the 4D path AND this per-column scalar fallback, so recording in two of the three left the
+    // path a small grid actually takes unobserved -- which is exactly what the contract's
+    // `recorded` flag caught (base and both bounds sat at default zero while a finiteness
+    // assertion passed). Three copies of one reduction is the underlying defect; recording in
+    // all three is the honest interim, not the fix.
+    {
+        torch::NoGradGuard no_grad_diag;
+        last_s_mu_mu_base_ = S_mu_mu_accum;
+        last_s_mu_mu_reduced_min_ = S_mu_mu_reduced;
+        last_s_mu_mu_reduced_max_ = S_mu_mu_reduced;
+        last_mu_schur_recorded_ = true;
+    }
     float r_mu_reduced = r_mu_mod_accum;     // Start with accumulated RHS
 
     // v20.14r27l: Relative singularity threshold (was absolute 1e-10).

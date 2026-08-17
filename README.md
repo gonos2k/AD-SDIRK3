@@ -25,7 +25,7 @@ The differentiable implicit solve converges at small timesteps; making it conver
 stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
 it is **unresolved**.
 
-Verification is an **exact 47-test CTest inventory** pinned by
+Verification is an **exact 48-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
@@ -96,13 +96,35 @@ proven byte-identical.
     production instance is untouched across the replay rather than restoring it. **Cleanup
     incomplete**: a receipt-equality contract pinning strict no-write isolation is not yet in
     place.
+- **STAGE 2 CONVERGES at a real Krylov budget** (2026-08-17). At `stage2_gmres_restart=600`
+  (510 Arnoldi) stage 2 converges — with the production preconditioner (gate 0.095) *and* without
+  it (gate 0.058). It had never converged in this configuration before; the shipped budget is 7
+  vectors. The stage-2 stall the recent coefficient work was chasing was **budget starvation**.
+  This does **not** solve dt=600: stage 3 still fails (gate 0.727 without `M`, 0.999 with) and
+  zero steps complete. **Stage 3 is the opposite case**: it is *not* budget-starved — an explicit
+  stage-3 budget makes it strictly worse (gate 0.727 default → 5.603 at 100 → 3.386 at 600, where
+  > 1 means the residual *grew*). The two stages fail for different reasons, and the lever that
+  fixes one aggravates the other.
+- **Measured, and it reframes the preconditioner work:** the operator GMRES iterates is
+  **indefinite in the field-of-values sense** under WRFParity — the min eigenvalue of the
+  symmetric part of the Arnoldi Hessenberg is **−2570** against a max of 4545, 13 of 51 negative.
+  By Sylvester's law no SPD preconditioner reaches a definite operator from there, which is the
+  mechanical reason every coefficient experiment failed. **And `M` amplifies it 23×**: `A` alone
+  is only mildly indefinite (min −112, 3/51 negative), so the preconditioner is making the
+  field-of-values worse rather than better. Measured at stage 2, dt=600, restart 60.
 - **Not built yet, stated so the gap is not read as done:**
   - the **correct raw block diagonals** `A_qq = I - h·J_qq^direct`. The shipped `phi` and `mu`
     diagonals are dimensionally invalid (the source says so at both sites), but the replacement
     values are **not** established — a dimensional argument cannot supply them, and the
     Schur-reduced round trips are already computed elsewhere, so moving them into the raw
-    diagonal would double-count. Two individually-derived corrections were also measured to
-    **anti-combine**, so the block must be derived together. See `AcousticGravity_Shadow_Contract`.
+    diagonal would double-count. THREE scalar experiments have now been measured to
+    are all **harmful** when measured by the solver's OWN convergence quantity — the internal
+    `error_tensor` GMRES tests against its tolerance (stage 2, dt=600, restart 60): shipped
+    **0.6483**, `div_leg` 0.6703, `div_leg+phi_unity` 0.6773, `phi_unity` 0.7979, `mu_phi_zero`
+    0.9194. **The shipped operator is the best of every configuration tried**, and each derived
+    "correction" degrades it. Two earlier readings of these experiments — off the unscaled
+    `rel_error`, then off a residual scaled with the wrong vector — ranked them the other way
+    round; both are retracted. All on the open experiment PR rather than on `main`. See `AcousticGravity_Shadow_Contract`.
   - the **full ARK adjoint** and the **full-timestep `DG`/`DG^T`**
   - the **acoustic–gravity coefficient re-derivation** (`D_mu`, `D_phi`, `c_s^2+N^2`,
     direct/Schur double-count, theta–W)
@@ -173,7 +195,7 @@ with a stable marker **before** any communicator/halo state mutation or solve:
 - **AD halo + multi-tile** — refused pre-solve with `SDIRK3_MPI_MULTI_TILE_UNSUPPORTED`.
 - **MPI halo primitive** — verified independently of the solver at np=1/2/4: forward, adjoint,
   packed AD+BC transpose, and the runtime fail-close contracts
-  (`MPI_Halo_Contract_np{1,2,4}` + `MPI_Runtime_Contract_np{1,2,4}` in the 47-test CTest suite).
+  (`MPI_Halo_Contract_np{1,2,4}` + `MPI_Runtime_Contract_np{1,2,4}` in the 48-test CTest suite).
 - **Decomposition evidence** — the SDIRK3 decomposition fail-close matrix
   (`.github/ci/run_decomposition_matrix.sh`, 4 cases) was produced by direct local-machine
   execution; it is *not* a full-WRF decomposition validation and does not include a stock-RK3
