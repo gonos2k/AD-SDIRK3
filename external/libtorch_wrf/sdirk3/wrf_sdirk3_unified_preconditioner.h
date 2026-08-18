@@ -469,7 +469,9 @@ public:
         std::optional<float> base;             // D_mu + the U/V eliminations
         std::optional<float> reduced_min;      // after the mu-phi Schur correction
         std::optional<float> reduced_max;
-        std::optional<float> schur_corr_mean;  // over the levels ACTUALLY applied
+        // Over the levels ACTUALLY applied -- EMPTY when that count is zero, because an average
+        // over an empty set is not a measurement of zero.
+        std::optional<float> schur_corr_mean;
         std::optional<float> s_mu_phi_mean;
         std::optional<int> levels_applied;     // < nz means the reduction broke early
 
@@ -483,8 +485,16 @@ public:
         r.base = last_s_mu_mu_base_;
         r.reduced_min = last_s_mu_mu_reduced_min_;
         r.reduced_max = last_s_mu_mu_reduced_max_;
+        // levels_applied is present whenever a path recorded it -- 0 is a MEANINGFUL count (the
+        // scalar reduction broke on the very first level), not an absence.
         if (last_mu_schur_levels_applied_ >= 0) {
             r.levels_applied = last_mu_schur_levels_applied_;
+        }
+        // The means are present only when levels were ACTUALLY applied. With zero levels the
+        // scalar path stores its 0.0f fallback, and wrapping that in an engaged optional would
+        // say "measured" about an average over an empty set -- the same absence-as-value defect
+        // the optionals exist to remove, surviving one level down inside them.
+        if (last_mu_schur_levels_applied_ > 0) {
             r.schur_corr_mean = last_schur_corr_mean_;
             r.s_mu_phi_mean = last_s_mu_phi_mean_;
         }

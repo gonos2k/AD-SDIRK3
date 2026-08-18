@@ -189,6 +189,19 @@ int main() {
         check(rec.reduction_applied,
               "the reduction the record describes is the one the solver USES -- not a value it "
               "computed and then discarded for the decoupled fallback");
+        // The means must be present exactly when levels were applied -- an average over an empty
+        // set is not a measurement of zero, and wrapping the 0.0f fallback in an engaged optional
+        // would reintroduce absence-as-value INSIDE the optional.
+        check(rec.schur_corr_mean.has_value() == (*rec.levels_applied > 0) &&
+              rec.s_mu_phi_mean.has_value() == (*rec.levels_applied > 0),
+              "the means are present exactly when levels_applied > 0 -- with zero levels applied "
+              "they stay EMPTY rather than reporting the 0.0f fallback as a measurement "
+              "(NON-DISCRIMINATING here, measured: this fixture takes the packed path with "
+              "levels = nz = 5, so >=0 and >0 agree; reverting the gate leaves the suite green. "
+              "A zero-level record needs a singular S_phi_phi[0] in the scalar fallback, which "
+              "no reachable fixture produces. The invariant is enforced by the accessor, not "
+              "witnessed by this line.)");
+
         check(rec.levels_applied && *rec.levels_applied > 0,
               "and levels_applied is SET, not the -1 not-recorded sentinel -- it was left unset "
               "on the packed and 4D paths, so the field was silently absent for two of the three "
@@ -279,7 +292,7 @@ int main() {
               "not-recorded -- a latching flag would still report the previous call's numbers");
     }
 
-    constexpr int expected_checks = 22;
+    constexpr int expected_checks = 23;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
