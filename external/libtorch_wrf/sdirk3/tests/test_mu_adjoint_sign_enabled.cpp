@@ -213,11 +213,15 @@ int main() {
         //
         // Writing a case that fabricates a shape until it stops throwing would assert something
         // about the fabrication, not about production. The honest coverage statement is this
-        // comment plus the path-identity check below, which would catch a switch TO path 2.
+        // comment plus the check below PINNING path 1: this fixture demonstrably routes to the
+        // packed elimination, so if a change ever sends it to the unverified 4D copy instead,
+        // that is a silent switch to code no test executes -- and the assertion fails.
 
-        check(rec.path == 1 || rec.path == 2 || rec.path == 3,
-              "and the identity is one of the three known paths -- a fourth copy appearing would "
-              "fail here instead of silently reusing another path's semantics");
+        check(rec.path == 1,
+              "and it is the PACKED path (1) specifically. An earlier version accepted 1, 2 or 3 "
+              "while its comment claimed to catch a switch to the unverified 4D copy -- it "
+              "accepted exactly that. Pinning the value this fixture actually takes makes the "
+              "claim true: a switch to path 2 or 3, or a fourth copy, fails here.");
         check(std::isfinite(rec.base) && std::isfinite(rec.reduced_min) &&
               std::isfinite(rec.reduced_max),
               "and its outputs are finite under the flipped orientation");
