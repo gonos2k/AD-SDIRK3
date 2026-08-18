@@ -171,6 +171,19 @@ int main() {
         check(rec.recorded,
               "production's mu elimination RAN -- the coupled path is reached, so the assertions "
               "below are about the operator the solver meets");
+
+        // WHICH path produced it. The elimination is spelled out three times (packed 1D, batched
+        // 4D, per-column scalar), and the copies have already been caught disagreeing: the scalar
+        // one recorded BEFORE its own Schur correction, so it reported the pre-reduction value
+        // under the name `reduced`. Pinning the identity means a silent switch to a different
+        // path shows up as a failure here rather than as numbers that quietly changed meaning.
+        std::printf("  mu Schur path=%d (1=packed1D 2=batched4D 3=scalarFallback)\n", rec.path);
+        check(rec.path != 0,
+              "the record carries a PATH identity, so its fields are attributable to one of the "
+              "three eliminations rather than being ambiguous across them");
+        check(rec.path == 1 || rec.path == 2 || rec.path == 3,
+              "and the identity is one of the three known paths -- a fourth copy appearing would "
+              "fail here instead of silently reusing another path's semantics");
         check(std::isfinite(rec.base) && std::isfinite(rec.reduced_min) &&
               std::isfinite(rec.reduced_max),
               "and its outputs are finite under the flipped orientation");
@@ -225,7 +238,7 @@ int main() {
               "not-recorded -- a latching flag would still report the previous call's numbers");
     }
 
-    constexpr int expected_checks = 17;
+    constexpr int expected_checks = 19;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

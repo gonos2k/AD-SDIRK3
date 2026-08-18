@@ -457,11 +457,17 @@ public:
         // that a measurement instead of a comment.
         float schur_corr_mean = 0.0f;
         float s_mu_phi_mean = 0.0f;
+        // WHICH of the three duplicated eliminations produced this record:
+        // 0 = none ran, 1 = packed 1D, 2 = batched 4D, 3 = per-column scalar fallback.
+        // Without it the fields are ambiguous across paths, and the paths have already been
+        // caught disagreeing about what "reduced" means -- the scalar copy used to record before
+        // its own Schur correction, so it reported the PRE-reduction value under that name.
+        int path = 0;
     };
     MuSchurRecord mu_schur_record() const {
         return {last_mu_schur_recorded_, last_s_mu_mu_base_,
                 last_s_mu_mu_reduced_min_, last_s_mu_mu_reduced_max_,
-                last_schur_corr_mean_, last_s_mu_phi_mean_};
+                last_schur_corr_mean_, last_s_mu_phi_mean_, last_mu_schur_path_};
     }
 
     HorizontalCouplingSnapshot horizontal_coupling_snapshot() const {
@@ -524,6 +530,7 @@ private:
     float last_s_mu_mu_reduced_max_ = 0.0f;
     float last_schur_corr_mean_ = 0.0f;
     float last_s_mu_phi_mean_ = 0.0f;
+    int last_mu_schur_path_ = 0;
 
     torch::Tensor C_u_mu_;    // Pressure gradient effect: μ → u
     torch::Tensor C_v_mu_;    // Pressure gradient effect: μ → v

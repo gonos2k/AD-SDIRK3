@@ -900,7 +900,16 @@ void SDIRK3Config::load_from_env() {
         // (0.3109 at 51 Arnoldi -> 0.2056 at 85), so the question of whether it converges with a
         // real budget has never actually been asked. The clamp stays -- a runaway budget is a
         // genuine hazard -- it is just no longer below the interesting range.
-        stage2_gmres_restart = std::clamp(std::atoi(env_val), 0, 1000);
+        {
+            int parsed_budget = 0;
+            if (wrf::sdirk3::parse_whole_int(env_val, parsed_budget)) {
+                stage2_gmres_restart = std::clamp(parsed_budget, 0, 1000);
+            } else {
+                std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_STAGE2_GMRES_RESTART='" << env_val
+                          << "' is not a whole integer; keeping stage2_gmres_restart = "
+                          << stage2_gmres_restart << std::endl;
+            }
+        }
         std::cerr << "[CONFIG ENV] stage2_gmres_restart = " << stage2_gmres_restart << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE2_MAX_KRYLOV_RESTARTS"))) {
@@ -923,7 +932,16 @@ void SDIRK3Config::load_from_env() {
         // Ceiling raised with stage2's, for the same reason: stage 3 is the frontier now that a
         // real budget converges stage 2, and a clamp below the interesting range turns a budget
         // experiment into a no-op that looks like evidence.
-        stage3_gmres_restart = std::clamp(std::atoi(env_val), 0, 1000);
+        {
+            int parsed_budget = 0;
+            if (wrf::sdirk3::parse_whole_int(env_val, parsed_budget)) {
+                stage3_gmres_restart = std::clamp(parsed_budget, 0, 1000);
+            } else {
+                std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_STAGE3_GMRES_RESTART='" << env_val
+                          << "' is not a whole integer; keeping stage3_gmres_restart = "
+                          << stage3_gmres_restart << std::endl;
+            }
+        }
         std::cerr << "[CONFIG ENV] stage3_gmres_restart = " << stage3_gmres_restart << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE3_MAX_KRYLOV_RESTARTS"))) {

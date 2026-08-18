@@ -2103,6 +2103,7 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
     last_s_mu_mu_reduced_max_ = 0.0f;
     last_schur_corr_mean_ = 0.0f;
     last_s_mu_phi_mean_ = 0.0f;
+    last_mu_schur_path_ = 0;   // 0 = no path ran
 
     // FAIL CLOSED after a rollback. restore_stage_state() rolls the stage fields back but cannot
     // roll back the coefficients derived from them, so applying here would use coefficients built
@@ -2717,6 +2718,7 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                     S_mu_mu_reduced.max().to(torch::kCPU).item<float>();
                 last_schur_corr_mean_ = schur_diag_corr.mean().to(torch::kCPU).item<float>();
                 last_s_mu_phi_mean_ = S_mu_phi.mean().to(torch::kCPU).item<float>();
+                last_mu_schur_path_ = 1;   // Packed1D
                 last_mu_schur_recorded_ = true;
             }
             auto r_mu_reduced = r_mu_mod - schur_rhs_corr;                    // [ny, nx]
@@ -4187,6 +4189,12 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
             last_s_mu_mu_base_ = S_mu_mu_scalar;
             last_s_mu_mu_reduced_min_ = S_mu_mu_reduced.min().to(torch::kCPU).item<float>();
             last_s_mu_mu_reduced_max_ = S_mu_mu_reduced.max().to(torch::kCPU).item<float>();
+            // Measured here too. Left unset they kept the reset value 0, which is
+            // indistinguishable from a genuine measurement of zero -- the same
+            // absent-vs-measured ambiguity the `recorded` flag exists to prevent, one level down.
+            last_schur_corr_mean_ = schur_diag_corr.mean().to(torch::kCPU).item<float>();
+            last_s_mu_phi_mean_ = S_mu_phi.mean().to(torch::kCPU).item<float>();
+            last_mu_schur_path_ = 2;   // Batched4D
             last_mu_schur_recorded_ = true;
         }
         auto r_mu_reduced = r_mu_mod_accum - schur_rhs_corr;        // [ny, nx]
@@ -6090,13 +6098,10 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
     // `recorded` flag caught (base and both bounds sat at default zero while a finiteness
     // assertion passed). Three copies of one reduction is the underlying defect; recording in
     // all three is the honest interim, not the fix.
-    {
-        torch::NoGradGuard no_grad_diag;
-        last_s_mu_mu_base_ = S_mu_mu_accum;
-        last_s_mu_mu_reduced_min_ = S_mu_mu_reduced;
-        last_s_mu_mu_reduced_max_ = S_mu_mu_reduced;
-        last_mu_schur_recorded_ = true;
-    }
+    // The record is written AFTER the Schur loop below, not here. Written at this point it
+    // reported S_mu_mu_reduced == S_mu_mu_accum -- the PRE-reduction value -- under a field named
+    // `reduced`, so the scalar path silently disagreed with the packed and 4D paths about what
+    // the record means.
     float r_mu_reduced = r_mu_mod_accum;     // Start with accumulated RHS
 
     // v20.14r27l: Relative singularity threshold (was absolute 1e-10).
@@ -6118,6 +6123,28 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
         float inv_S_phi_phi = 1.0f / S_phi_phi[k];
         S_mu_mu_reduced -= S_mu_phi[k] * S_phi_mu[k] * inv_S_phi_phi;  // Schur correction
         r_mu_reduced -= S_mu_phi[k] * r_phi_mod[k] * inv_S_phi_phi;     // RHS correction
+    }
+
+    // THIRD copy of the record, now written after the reduction it reports. The mu elimination
+    // is spelled out in the packed 1D path, the 4D path AND this per-column scalar fallback;
+    // three copies of one reduction is the underlying defect, and recording in all three with
+    // matching semantics is the honest interim.
+    {
+        torch::NoGradGuard no_grad_diag;
+        last_s_mu_mu_base_ = S_mu_mu_accum;
+        last_s_mu_mu_reduced_min_ = S_mu_mu_reduced;
+        last_s_mu_mu_reduced_max_ = S_mu_mu_reduced;
+        float corr_sum = 0.0f, phi_sum = 0.0f;
+        for (int k = 0; k < nz; ++k) {
+            if (std::fabs(S_phi_phi[k]) >= SINGULARITY_THRESHOLD) {
+                corr_sum += S_mu_phi[k] * S_phi_mu[k] / S_phi_phi[k];
+            }
+            phi_sum += S_mu_phi[k];
+        }
+        last_schur_corr_mean_ = (nz > 0) ? corr_sum / static_cast<float>(nz) : 0.0f;
+        last_s_mu_phi_mean_ = (nz > 0) ? phi_sum / static_cast<float>(nz) : 0.0f;
+        last_mu_schur_path_ = 3;   // ScalarFallback
+        last_mu_schur_recorded_ = true;
     }
 
     // Check for μ diagonal singularity after Schur reduction
