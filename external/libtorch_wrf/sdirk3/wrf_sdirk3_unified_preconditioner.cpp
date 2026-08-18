@@ -2104,7 +2104,9 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
     last_schur_corr_mean_ = 0.0f;
     last_s_mu_phi_mean_ = 0.0f;
     last_mu_schur_path_ = 0;   // 0 = no path ran
-    last_mu_schur_reduction_applied_ = false;
+    last_mu_schur_reduction_computed_ = false;
+    last_mu_schur_reduction_used_ = false;
+    last_mu_solve_path_ = 0;
     last_mu_schur_levels_applied_ = -1;
 
     // FAIL CLOSED after a rollback. restore_stage_state() rolls the stage fields back but cannot
@@ -2720,7 +2722,7 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                     S_mu_mu_reduced.max().to(torch::kCPU).item<float>();
                 last_schur_corr_mean_ = schur_diag_corr.mean().to(torch::kCPU).item<float>();
                 last_s_mu_phi_mean_ = S_mu_phi.mean().to(torch::kCPU).item<float>();
-                last_mu_schur_reduction_applied_ = true;   // this path has no discard branch
+                last_mu_schur_reduction_computed_ = true;  // computed; USED is decided at delta_mu
                 // Every level: the correction is a full sum over nz with no early break, unlike
                 // the scalar fallback. Leaving this at the -1 "not recorded" sentinel would make
                 // the field silently absent for two of the three paths -- the same
@@ -2824,6 +2826,11 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
             // coefficients, not a guarantee.
             const bool hevi_mu_identity =
                 wrf::sdirk3::g_sdirk3_config.hevi_mu_identity_active();
+            // The USE decision, recorded where it is made. Under the identity the reduced
+            // system computed above is discarded wholesale, so a record claiming the reduction
+            // was "applied" describes arithmetic the mu update never consumed.
+            last_mu_schur_reduction_used_ = !hevi_mu_identity;
+            last_mu_solve_path_ = hevi_mu_identity ? 2 : 1;   // 2 = exact identity bypass
             auto delta_mu = hevi_mu_identity
                 ? r_mu_2d.clone()
                 : (r_mu_reduced / S_mu_mu_safe);                       // [ny, nx]
@@ -4202,7 +4209,7 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
             // absent-vs-measured ambiguity the `recorded` flag exists to prevent, one level down.
             last_schur_corr_mean_ = schur_diag_corr.mean().to(torch::kCPU).item<float>();
             last_s_mu_phi_mean_ = S_mu_phi.mean().to(torch::kCPU).item<float>();
-            last_mu_schur_reduction_applied_ = true;   // this path has no discard branch
+            last_mu_schur_reduction_computed_ = true;  // computed; USED is decided at delta_mu
             last_mu_schur_levels_applied_ = nz;        // full sum over nz, no early break
             // UNVERIFIED BY EXECUTION. This 4D copy is not reachable from a staggered grid: the
             // entry reads per-variable level counts (r[2].size(0) as nz_w, r[4].size(0) as nz)
@@ -4226,6 +4233,10 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
         // above (delta_mu = raw r_mu; the eliminations model couplings HEVI removed).
         const bool hevi_mu_identity_4d =
             wrf::sdirk3::g_sdirk3_config.hevi_mu_identity_active();
+        last_mu_schur_reduction_used_ = !hevi_mu_identity_4d;
+
+        last_mu_solve_path_ = hevi_mu_identity_4d ? 2 : 1;
+
         auto delta_mu = hevi_mu_identity_4d
             ? r_mu_batch.clone()
             : (r_mu_reduced / S_mu_mu_safe);  // [ny, nx]
@@ -6169,12 +6180,20 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
         last_s_mu_mu_base_ = S_mu_mu_accum;
         last_s_mu_mu_reduced_min_ = S_mu_mu_reduced;
         last_s_mu_mu_reduced_max_ = S_mu_mu_reduced;
-        const float denom = (schur_levels_applied > 0)
-                                ? static_cast<float>(schur_levels_applied) : 1.0f;
-        last_schur_corr_mean_ = (schur_levels_applied > 0) ? schur_corr_applied / denom : 0.0f;
-        last_s_mu_phi_mean_ = (schur_levels_applied > 0) ? s_mu_phi_applied / denom : 0.0f;
+        // COLUMN TOTAL, matching the packed and 4D copies. Those record
+        // mean_{j,i}( sum_k C_jki ) -- the horizontal mean of a column-summed correction. This
+        // path used to divide by the level count instead, making the same field name a LEVEL
+        // MEAN for one column: the two differ by roughly nz, so a reader comparing paths was
+        // comparing different physical quantities under one name.
+        last_schur_corr_mean_ = (schur_levels_applied > 0) ? schur_corr_applied : 0.0f;
+        last_s_mu_phi_mean_ =
+            (schur_levels_applied > 0)
+                ? s_mu_phi_applied / static_cast<float>(schur_levels_applied)
+                : 0.0f;   // element mean, as in the other paths
         last_mu_schur_levels_applied_ = schur_levels_applied;
-        last_mu_schur_reduction_applied_ = schur_valid;
+        last_mu_schur_reduction_computed_ = schur_valid;
+        last_mu_schur_reduction_used_ = schur_valid;   // !valid -> decoupled fallback below
+        last_mu_solve_path_ = schur_valid ? 1 : 3;     // 3 = decoupled fallback
         last_mu_schur_path_ = 3;   // ScalarFallback
         last_mu_schur_recorded_ = true;
     }

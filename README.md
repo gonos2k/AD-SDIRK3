@@ -99,7 +99,11 @@ proven byte-identical.
 - **STAGE 2 CONVERGES at a real Krylov budget** (2026-08-17). At `stage2_gmres_restart=600`
   (510 Arnoldi) stage 2 converges — with the production preconditioner (gate 0.095) *and* without
   it (gate 0.058). It had never converged in this configuration before; the shipped budget is 7
-  vectors. The stage-2 stall the recent coefficient work was chasing was **budget starvation**.
+  vectors. So the stage-2 stall the recent coefficient work was chasing yields to the
+  large-budget experiment configuration — stated that way rather than as "budget starvation",
+  because setting `stage2_gmres_restart` also changes the early-exit policy (it gates a
+  mid-budget probe and suppresses periodic true-residual checks), so the experiment moves two
+  things at once and the attribution to budget alone is not clean.
   This does **not** solve dt=600: stage 3 still fails (gate 0.727 without `M`, 0.999 with) and
   zero steps complete. **Stage 3 is the opposite case**: it is *not* budget-starved — an explicit
   stage-3 budget makes it strictly worse (gate 0.727 default → 5.603 at 100 → 3.386 at 600, where
@@ -124,8 +128,8 @@ proven byte-identical.
     diagonals are dimensionally invalid (the source says so at both sites), but the replacement
     values are **not** established — a dimensional argument cannot supply them, and the
     Schur-reduced round trips are already computed elsewhere, so moving them into the raw
-    diagonal would double-count. THREE scalar experiments have now been measured to
-    are all **harmful** when measured by the solver's OWN convergence quantity — the internal
+    diagonal would double-count. THREE scalar experiments have now been measured, and all
+    are **harmful** when measured by the solver's OWN convergence quantity — the internal
     `error_tensor` GMRES tests against its tolerance (stage 2, dt=600, restart 60): shipped
     **0.6483**, `div_leg` 0.6703, `div_leg+phi_unity` 0.6773, `phi_unity` 0.7979, `mu_phi_zero`
     0.9194. **The shipped operator is the best of every configuration tried**, and each derived

@@ -162,11 +162,16 @@ int main() {
     // elimination rather than from re-multiplying a coefficient snapshot in the test.
     {
         const auto rec = P.mu_schur_record();
-        std::printf("  mu Schur record: path=%d base=%.6g reduced=[%.6g, %.6g]\n",
-                    rec.path, rec.base.value_or(0.0f),
-                    rec.reduced_min.value_or(0.0f), rec.reduced_max.value_or(0.0f));
-        std::printf("  mu-phi correction: schur_corr=%.6g  S_mu_phi=%.6g\n",
-                    rec.schur_corr_mean.value_or(0.0f), rec.s_mu_phi_mean.value_or(0.0f));
+        // Absence prints as NA, never as 0. value_or(0) in a log undoes the whole point of the
+        // optional: a reader sees "base=0" and reads a measurement.
+        const auto show = [](const std::optional<float>& v) {
+            return v ? (std::to_string(*v)) : std::string("NA");
+        };
+        std::printf("  mu Schur record: path=%d base=%s reduced=[%s, %s]\n",
+                    rec.path, show(rec.base).c_str(),
+                    show(rec.reduced_min).c_str(), show(rec.reduced_max).c_str());
+        std::printf("  mu-phi correction: schur_corr=%s  S_mu_phi=%s\n",
+                    show(rec.schur_corr_mean).c_str(), show(rec.s_mu_phi_mean).c_str());
 
         check(rec.recorded(),
               "production's mu elimination RAN -- the coupled path is reached, so the assertions "
@@ -184,16 +189,64 @@ int main() {
         // APPLIED, not merely computed. The scalar fallback can break out of its reduction on a
         // singular diagonal and then DISCARD the reduced system for a decoupled solve -- so a
         // `reduced` number by itself does not mean the operator ever saw it.
-        std::printf("  mu Schur applied=%d levels=%d\n",
-                    static_cast<int>(rec.reduction_applied), rec.levels_applied.value_or(-1));
-        check(rec.reduction_applied,
-              "the reduction the record describes is the one the solver USES -- not a value it "
-              "computed and then discarded for the decoupled fallback");
+        std::printf("  mu Schur computed=%d used=%d solve_path=%d levels=%s\n",
+                    static_cast<int>(rec.reduction_computed),
+                    static_cast<int>(rec.reduction_used), rec.solve_path,
+                    rec.levels_applied ? std::to_string(*rec.levels_applied).c_str() : "NA");
+        check(rec.reduction_computed,
+              "the reduction was COMPUTED -- the loop ran to a verdict rather than being skipped");
+        // COMPUTED is not USED, and this fixture proves it by exhibiting BOTH states.
+        // Default config: the identity predicate is off, so the reduced system IS the update.
+        check(rec.reduction_used && rec.solve_path == 1,
+              "with the identity predicate OFF the reduced system is what the mu update uses "
+              "(solve_path 1) -- computed and used agree here");
+
+        // Now enable WRFParity+HEVI, where the mu row takes the exact identity delta_mu = r_mu
+        // and DISCARDS the reduced system computed moments earlier. A single reduction_applied
+        // flag reported that as "applied"; the split is what makes the bypass visible.
+        {
+            auto& cfg = wrf::sdirk3::g_sdirk3_config;
+            const auto sh = cfg.hevi_split;
+            const auto sm = cfg.mass_coordinate_mode;
+            const auto si = cfg.imex_split_mode;
+            cfg.hevi_split = true;
+            cfg.mass_coordinate_mode = 1;
+            cfg.imex_split_mode = 3;
+            check(cfg.hevi_mu_identity_active(),
+                  "the identity predicate is ACTIVE under WRFParity+HEVI, so the next apply "
+                  "exercises the bypass rather than the Schur path");
+
+            const int64_t nid =
+                static_cast<int64_t>(grid->nx_u) * grid->ny * grid->nz
+              + static_cast<int64_t>(grid->nx) * grid->ny_v * grid->nz
+              + static_cast<int64_t>(grid->nx) * grid->ny * grid->nz_w
+              + static_cast<int64_t>(grid->nx) * grid->ny * grid->nz_w
+              + static_cast<int64_t>(grid->nx) * grid->ny * grid->nz
+              + static_cast<int64_t>(grid->nx) * grid->ny;
+            const auto vid = torch::randn({nid}, torch::kFloat32);
+            P.update(vid, 600.0f, 0.4358665215f);
+            P.apply(vid);
+            const auto idrec = P.mu_schur_record();
+            std::printf("  identity config: computed=%d used=%d solve_path=%d\n",
+                        static_cast<int>(idrec.reduction_computed),
+                        static_cast<int>(idrec.reduction_used), idrec.solve_path);
+            check(idrec.reduction_computed && !idrec.reduction_used && idrec.solve_path == 2,
+                  "COMPUTED BUT NOT USED: the reduction runs in full and the identity discards "
+                  "it (solve_path 2). The old single flag called this 'applied' -- exactly the "
+                  "computed-vs-used conflation already fixed once in the scalar fallback");
+
+            cfg.hevi_split = sh;
+            cfg.mass_coordinate_mode = sm;
+            cfg.imex_split_mode = si;
+        }
         // The means must be present exactly when levels were applied -- an average over an empty
         // set is not a measurement of zero, and wrapping the 0.0f fallback in an engaged optional
         // would reintroduce absence-as-value INSIDE the optional.
-        check(rec.schur_corr_mean.has_value() == (*rec.levels_applied > 0) &&
-              rec.s_mu_phi_mean.has_value() == (*rec.levels_applied > 0),
+        check(rec.levels_applied.has_value(),
+              "the levels receipt is present before anything dereferences it");
+        const bool means_expected = rec.levels_applied && *rec.levels_applied > 0;
+        check(rec.schur_corr_mean.has_value() == means_expected &&
+              rec.s_mu_phi_mean.has_value() == means_expected,
               "the means are present exactly when levels_applied > 0 -- with zero levels applied "
               "they stay EMPTY rather than reporting the 0.0f fallback as a measurement "
               "(NON-DISCRIMINATING here, measured: this fixture takes the packed path with "
@@ -292,7 +345,7 @@ int main() {
               "not-recorded -- a latching flag would still report the previous call's numbers");
     }
 
-    constexpr int expected_checks = 23;
+    constexpr int expected_checks = 27;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

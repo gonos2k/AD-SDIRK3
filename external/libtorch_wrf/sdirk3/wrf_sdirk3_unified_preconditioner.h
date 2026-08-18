@@ -462,15 +462,27 @@ public:
     struct MuSchurRecord {
         // 0 = no elimination ran; 1 = packed 1D, 2 = batched 4D, 3 = per-column scalar fallback.
         int path = 0;
-        // Whether the solver USES the reduced system. The scalar fallback can break out of its
-        // reduction on a singular diagonal and then discard the result for a decoupled solve.
-        bool reduction_applied = false;
+        // COMPUTED and USED are different questions, and conflating them has now produced the
+        // same defect twice. The scalar fallback can break out of its reduction and discard the
+        // result for a decoupled solve; and under WRFParity+HEVI the mu row takes the EXACT
+        // IDENTITY update delta_mu = r_mu, which bypasses the reduced system entirely even
+        // though the reduction was computed in full a few lines earlier.
+        bool reduction_computed = false;
+        bool reduction_used = false;
+
+        // How the mu update was actually produced: 0 = none, 1 = Schur reduction,
+        // 2 = exact identity (HEVI bypass), 3 = decoupled fallback.
+        int solve_path = 0;
 
         std::optional<float> base;             // D_mu + the U/V eliminations
         std::optional<float> reduced_min;      // after the mu-phi Schur correction
         std::optional<float> reduced_max;
-        // Over the levels ACTUALLY applied -- EMPTY when that count is zero, because an average
-        // over an empty set is not a measurement of zero.
+        // COLUMN-TOTAL correction, averaged over columns where the path is 2-D. All three paths
+        // report the same quantity: mean over columns of sum_k (S_mu_phi S_phi_mu / S_phi_phi).
+        // The scalar copy previously divided by the level count instead, so this field named a
+        // LEVEL mean there and a COLUMN TOTAL elsewhere -- roughly an nz-fold difference under
+        // one name. EMPTY when no levels were applied: an average over an empty set is not a
+        // measurement of zero.
         std::optional<float> schur_corr_mean;
         std::optional<float> s_mu_phi_mean;
         std::optional<int> levels_applied;     // < nz means the reduction broke early
@@ -481,7 +493,9 @@ public:
         MuSchurRecord r;
         r.path = last_mu_schur_path_;
         if (r.path == 0) return r;   // nothing ran: every optional stays empty
-        r.reduction_applied = last_mu_schur_reduction_applied_;
+        r.reduction_computed = last_mu_schur_reduction_computed_;
+        r.reduction_used = last_mu_schur_reduction_used_;
+        r.solve_path = last_mu_solve_path_;
         r.base = last_s_mu_mu_base_;
         r.reduced_min = last_s_mu_mu_reduced_min_;
         r.reduced_max = last_s_mu_mu_reduced_max_;
@@ -562,7 +576,9 @@ private:
     float last_schur_corr_mean_ = 0.0f;
     float last_s_mu_phi_mean_ = 0.0f;
     int last_mu_schur_path_ = 0;
-    bool last_mu_schur_reduction_applied_ = false;
+    bool last_mu_schur_reduction_computed_ = false;
+    bool last_mu_schur_reduction_used_ = false;
+    int last_mu_solve_path_ = 0;
     int last_mu_schur_levels_applied_ = -1;
 
     torch::Tensor C_u_mu_;    // Pressure gradient effect: μ → u
