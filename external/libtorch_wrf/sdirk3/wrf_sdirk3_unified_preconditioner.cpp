@@ -4204,6 +4204,11 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
             last_s_mu_phi_mean_ = S_mu_phi.mean().to(torch::kCPU).item<float>();
             last_mu_schur_reduction_applied_ = true;   // this path has no discard branch
             last_mu_schur_levels_applied_ = nz;        // full sum over nz, no early break
+            // UNVERIFIED BY EXECUTION. This 4D copy is not reachable from a staggered grid: the
+            // entry reads per-variable level counts (r[2].size(0) as nz_w, r[4].size(0) as nz)
+            // out of one dense tensor whose level dimension is uniform, so nz_w = nz + 1 cannot
+            // be satisfied -- both level choices were tried and both throw. No production caller
+            // builds a 4-D residual either; the tile drives apply() with packed 1-D vectors.
             last_mu_schur_path_ = 2;   // Batched4D
             last_mu_schur_recorded_ = true;
         }

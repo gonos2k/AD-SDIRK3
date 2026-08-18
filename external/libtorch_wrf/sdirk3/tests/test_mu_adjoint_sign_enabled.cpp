@@ -194,6 +194,27 @@ int main() {
               "on the packed and 4D paths, so the field was silently absent for two of the three "
               "and a reader could not tell 'covered every level' from 'nobody filled this in'");
 
+        // THE 4D PATH IS NOT EXERCISABLE HERE, and that is the finding.
+        //
+        // Codex asked for direct regression coverage of the 4D copy. Attempting it shows the 4D
+        // entry cannot accept a STAGGERED residual at all. apply() dispatches on rank, so a 4-D
+        // input routes there, but the path then reads its level counts per variable
+        // (r[2].size(0) as nz_w, r[4].size(0) as nz) from ONE dense tensor whose level dimension
+        // is necessarily uniform:
+        //
+        //     level dim = nz    -> the w/phi slots are one level short (nz_w = nz + 1)
+        //     level dim = nz_w  -> coefficient arrays built for nz fail to reshape
+        //                          ("shape [6,1,1] is invalid for input of size 5")
+        //
+        // Both were run. The path is self-consistent only where nz_w == nz, i.e. an unstaggered
+        // grid -- and no production caller was found building a 4-D residual; the tile drives
+        // apply() with packed 1-D vectors. So the 4D copy's record fields, including the
+        // levels_applied line added for it, remain UNVERIFIED by execution.
+        //
+        // Writing a case that fabricates a shape until it stops throwing would assert something
+        // about the fabrication, not about production. The honest coverage statement is this
+        // comment plus the path-identity check below, which would catch a switch TO path 2.
+
         check(rec.path == 1 || rec.path == 2 || rec.path == 3,
               "and the identity is one of the three known paths -- a fourth copy appearing would "
               "fail here instead of silently reusing another path's semantics");
