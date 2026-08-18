@@ -108,10 +108,17 @@ proven byte-identical.
 - **Measured, and it reframes the preconditioner work:** the operator GMRES iterates is
   **indefinite in the field-of-values sense** under WRFParity — the min eigenvalue of the
   symmetric part of the Arnoldi Hessenberg is **−2570** against a max of 4545, 13 of 51 negative.
-  By Sylvester's law no SPD preconditioner reaches a definite operator from there, which is the
-  mechanical reason every coefficient experiment failed. **And `M` amplifies it 23×**: `A` alone
-  is only mildly indefinite (min −112, 3/51 negative), so the preconditioner is making the
-  field-of-values worse rather than better. Measured at stage 2, dt=600, restart 60.
+  **RETRACTED — the Sylvester argument was wrong.** Sylvester's law governs *congruence*
+  `CᵀHC`; right-preconditioning gives `AP⁻¹`, whose symmetric part `½(AP⁻¹+P⁻ᵀAᵀ)` is **not** a
+  congruence of `H(A)`. An explicit 2×2 counterexample settles it: `A = [[0,−1],[2,2]]` has
+  `H(A)` eigenvalues −0.118 / 2.118 (indefinite), yet the SPD `P⁻¹ = [[2,−1],[−1,2]]` gives
+  `H(AP⁻¹) = diag(1,2)` — positive definite. So an indefinite symmetric part does **not** rule
+  out an SPD preconditioner.
+  What the measurement still supports: *in these Krylov coordinates, for this preconditioner
+  realisation, the projected symmetric part had negative directions*. The `M`-with vs `M`-without
+  numbers (−2570 vs −112) come from **different full-model runs** — different `A` and `b` — so
+  they are not a causal statement that `M` amplifies anything. Measured at stage 2, dt=600,
+  restart 60.
 - **Not built yet, stated so the gap is not read as done:**
   - the **correct raw block diagonals** `A_qq = I - h·J_qq^direct`. The shipped `phi` and `mu`
     diagonals are dimensionally invalid (the source says so at both sites), but the replacement

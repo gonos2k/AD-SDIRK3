@@ -2103,6 +2103,9 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
     last_s_mu_mu_reduced_max_ = 0.0f;
     last_schur_corr_mean_ = 0.0f;
     last_s_mu_phi_mean_ = 0.0f;
+    last_mu_schur_path_ = 0;   // 0 = no path ran
+    last_mu_schur_reduction_applied_ = false;
+    last_mu_schur_levels_applied_ = -1;
 
     // FAIL CLOSED after a rollback. restore_stage_state() rolls the stage fields back but cannot
     // roll back the coefficients derived from them, so applying here would use coefficients built
@@ -2717,6 +2720,13 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                     S_mu_mu_reduced.max().to(torch::kCPU).item<float>();
                 last_schur_corr_mean_ = schur_diag_corr.mean().to(torch::kCPU).item<float>();
                 last_s_mu_phi_mean_ = S_mu_phi.mean().to(torch::kCPU).item<float>();
+                last_mu_schur_reduction_applied_ = true;   // this path has no discard branch
+                // Every level: the correction is a full sum over nz with no early break, unlike
+                // the scalar fallback. Leaving this at the -1 "not recorded" sentinel would make
+                // the field silently absent for two of the three paths -- the same
+                // absent-vs-measured ambiguity the means were just fixed for.
+                last_mu_schur_levels_applied_ = nz;
+                last_mu_schur_path_ = 1;   // Packed1D
                 last_mu_schur_recorded_ = true;
             }
             auto r_mu_reduced = r_mu_mod - schur_rhs_corr;                    // [ny, nx]
@@ -4187,6 +4197,19 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
             last_s_mu_mu_base_ = S_mu_mu_scalar;
             last_s_mu_mu_reduced_min_ = S_mu_mu_reduced.min().to(torch::kCPU).item<float>();
             last_s_mu_mu_reduced_max_ = S_mu_mu_reduced.max().to(torch::kCPU).item<float>();
+            // Measured here too. Left unset they kept the reset value 0, which is
+            // indistinguishable from a genuine measurement of zero -- the same
+            // absent-vs-measured ambiguity the `recorded` flag exists to prevent, one level down.
+            last_schur_corr_mean_ = schur_diag_corr.mean().to(torch::kCPU).item<float>();
+            last_s_mu_phi_mean_ = S_mu_phi.mean().to(torch::kCPU).item<float>();
+            last_mu_schur_reduction_applied_ = true;   // this path has no discard branch
+            last_mu_schur_levels_applied_ = nz;        // full sum over nz, no early break
+            // UNVERIFIED BY EXECUTION. This 4D copy is not reachable from a staggered grid: the
+            // entry reads per-variable level counts (r[2].size(0) as nz_w, r[4].size(0) as nz)
+            // out of one dense tensor whose level dimension is uniform, so nz_w = nz + 1 cannot
+            // be satisfied -- both level choices were tried and both throw. No production caller
+            // builds a 4-D residual either; the tile drives apply() with packed 1-D vectors.
+            last_mu_schur_path_ = 2;   // Batched4D
             last_mu_schur_recorded_ = true;
         }
         auto r_mu_reduced = r_mu_mod_accum - schur_rhs_corr;        // [ny, nx]
@@ -6090,13 +6113,10 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
     // `recorded` flag caught (base and both bounds sat at default zero while a finiteness
     // assertion passed). Three copies of one reduction is the underlying defect; recording in
     // all three is the honest interim, not the fix.
-    {
-        torch::NoGradGuard no_grad_diag;
-        last_s_mu_mu_base_ = S_mu_mu_accum;
-        last_s_mu_mu_reduced_min_ = S_mu_mu_reduced;
-        last_s_mu_mu_reduced_max_ = S_mu_mu_reduced;
-        last_mu_schur_recorded_ = true;
-    }
+    // The record is written AFTER the Schur loop below, not here. Written at this point it
+    // reported S_mu_mu_reduced == S_mu_mu_accum -- the PRE-reduction value -- under a field named
+    // `reduced`, so the scalar path silently disagreed with the packed and 4D paths about what
+    // the record means.
     float r_mu_reduced = r_mu_mod_accum;     // Start with accumulated RHS
 
     // v20.14r27l: Relative singularity threshold (was absolute 1e-10).
@@ -6107,6 +6127,9 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
     float SINGULARITY_THRESHOLD = std::max(max_S_phi_phi_abs * 1e-8f, 1e-30f);
     bool schur_valid = true;
 
+    int schur_levels_applied = 0;   // how far the reduction actually got before any break
+    float schur_corr_applied = 0.0f;
+    float s_mu_phi_applied = 0.0f;
     for (int k = 0; k < nz; ++k) {
         // Check for Φ diagonal singularity
         if (std::fabs(S_phi_phi[k]) < SINGULARITY_THRESHOLD) {
@@ -6116,13 +6139,44 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
 
         // Add coupling corrections to effective μ system
         float inv_S_phi_phi = 1.0f / S_phi_phi[k];
-        S_mu_mu_reduced -= S_mu_phi[k] * S_phi_mu[k] * inv_S_phi_phi;  // Schur correction
+        const float corr_k = S_mu_phi[k] * S_phi_mu[k] * inv_S_phi_phi;
+        S_mu_mu_reduced -= corr_k;                                      // Schur correction
         r_mu_reduced -= S_mu_phi[k] * r_phi_mod[k] * inv_S_phi_phi;     // RHS correction
+        schur_corr_applied += corr_k;
+        s_mu_phi_applied += S_mu_phi[k];
+        ++schur_levels_applied;
     }
 
     // Check for μ diagonal singularity after Schur reduction
     if (schur_valid && std::fabs(S_mu_mu_reduced) < SINGULARITY_THRESHOLD) {
         schur_valid = false;  // Reduced system is singular
+    }
+
+    // THIRD copy of the record -- written after the VALIDITY VERDICT, not merely after the loop.
+    //
+    // Two ways this used to report a reduction the solver never applied. The loop can BREAK on a
+    // singular S_phi_phi[k], leaving S_mu_mu_reduced only PARTIALLY reduced; and when
+    // schur_valid ends false the solver discards the reduced system entirely and takes the
+    // decoupled diagonal fallback below. Either way the recorded `reduced` described arithmetic
+    // that never reached the operator. The means were worse still: they summed over every level
+    // with a non-singular diagonal, including levels after the break that the reduction never
+    // touched.
+    //
+    // Now: reduction_applied says whether the solver USES the reduced system, the level count
+    // says how far it got, and the means cover exactly the levels actually applied.
+    {
+        torch::NoGradGuard no_grad_diag;
+        last_s_mu_mu_base_ = S_mu_mu_accum;
+        last_s_mu_mu_reduced_min_ = S_mu_mu_reduced;
+        last_s_mu_mu_reduced_max_ = S_mu_mu_reduced;
+        const float denom = (schur_levels_applied > 0)
+                                ? static_cast<float>(schur_levels_applied) : 1.0f;
+        last_schur_corr_mean_ = (schur_levels_applied > 0) ? schur_corr_applied / denom : 0.0f;
+        last_s_mu_phi_mean_ = (schur_levels_applied > 0) ? s_mu_phi_applied / denom : 0.0f;
+        last_mu_schur_levels_applied_ = schur_levels_applied;
+        last_mu_schur_reduction_applied_ = schur_valid;
+        last_mu_schur_path_ = 3;   // ScalarFallback
+        last_mu_schur_recorded_ = true;
     }
 
     // FALLBACK: If Schur system is singular, fall back to decoupled diagonal solve

@@ -162,37 +162,104 @@ int main() {
     // elimination rather than from re-multiplying a coefficient snapshot in the test.
     {
         const auto rec = P.mu_schur_record();
-        std::printf("  mu Schur record: recorded=%d base=%.6g reduced=[%.6g, %.6g]\n",
-                    static_cast<int>(rec.recorded), rec.base,
-                    rec.reduced_min, rec.reduced_max);
+        std::printf("  mu Schur record: path=%d base=%.6g reduced=[%.6g, %.6g]\n",
+                    rec.path, rec.base.value_or(0.0f),
+                    rec.reduced_min.value_or(0.0f), rec.reduced_max.value_or(0.0f));
         std::printf("  mu-phi correction: schur_corr=%.6g  S_mu_phi=%.6g\n",
-                    rec.schur_corr_mean, rec.s_mu_phi_mean);
+                    rec.schur_corr_mean.value_or(0.0f), rec.s_mu_phi_mean.value_or(0.0f));
 
-        check(rec.recorded,
+        check(rec.recorded(),
               "production's mu elimination RAN -- the coupled path is reached, so the assertions "
               "below are about the operator the solver meets");
-        check(std::isfinite(rec.base) && std::isfinite(rec.reduced_min) &&
-              std::isfinite(rec.reduced_max),
-              "and its outputs are finite under the flipped orientation");
-        check(rec.base > 0.0f,
+
+        // WHICH path produced it. The elimination is spelled out three times (packed 1D, batched
+        // 4D, per-column scalar), and the copies have already been caught disagreeing: the scalar
+        // one recorded BEFORE its own Schur correction, so it reported the pre-reduction value
+        // under the name `reduced`. Pinning the identity means a silent switch to a different
+        // path shows up as a failure here rather than as numbers that quietly changed meaning.
+        std::printf("  mu Schur path=%d (1=packed1D 2=batched4D 3=scalarFallback)\n", rec.path);
+        check(rec.path != 0,
+              "the record carries a PATH identity, so its fields are attributable to one of the "
+              "three eliminations rather than being ambiguous across them");
+        // APPLIED, not merely computed. The scalar fallback can break out of its reduction on a
+        // singular diagonal and then DISCARD the reduced system for a decoupled solve -- so a
+        // `reduced` number by itself does not mean the operator ever saw it.
+        std::printf("  mu Schur applied=%d levels=%d\n",
+                    static_cast<int>(rec.reduction_applied), rec.levels_applied.value_or(-1));
+        check(rec.reduction_applied,
+              "the reduction the record describes is the one the solver USES -- not a value it "
+              "computed and then discarded for the decoupled fallback");
+        // The means must be present exactly when levels were applied -- an average over an empty
+        // set is not a measurement of zero, and wrapping the 0.0f fallback in an engaged optional
+        // would reintroduce absence-as-value INSIDE the optional.
+        check(rec.schur_corr_mean.has_value() == (*rec.levels_applied > 0) &&
+              rec.s_mu_phi_mean.has_value() == (*rec.levels_applied > 0),
+              "the means are present exactly when levels_applied > 0 -- with zero levels applied "
+              "they stay EMPTY rather than reporting the 0.0f fallback as a measurement "
+              "(NON-DISCRIMINATING here, measured: this fixture takes the packed path with "
+              "levels = nz = 5, so >=0 and >0 agree; reverting the gate leaves the suite green. "
+              "A zero-level record needs a singular S_phi_phi[0] in the scalar fallback, which "
+              "no reachable fixture produces. The invariant is enforced by the accessor, not "
+              "witnessed by this line.)");
+
+        check(rec.levels_applied && *rec.levels_applied > 0,
+              "and levels_applied is SET, not the -1 not-recorded sentinel -- it was left unset "
+              "on the packed and 4D paths, so the field was silently absent for two of the three "
+              "and a reader could not tell 'covered every level' from 'nobody filled this in'");
+
+        // THE 4D PATH IS NOT EXERCISABLE HERE, and that is the finding.
+        //
+        // Codex asked for direct regression coverage of the 4D copy. Attempting it shows the 4D
+        // entry cannot accept a STAGGERED residual at all. apply() dispatches on rank, so a 4-D
+        // input routes there, but the path then reads its level counts per variable
+        // (r[2].size(0) as nz_w, r[4].size(0) as nz) from ONE dense tensor whose level dimension
+        // is necessarily uniform:
+        //
+        //     level dim = nz    -> the w/phi slots are one level short (nz_w = nz + 1)
+        //     level dim = nz_w  -> coefficient arrays built for nz fail to reshape
+        //                          ("shape [6,1,1] is invalid for input of size 5")
+        //
+        // Both were run. The path is self-consistent only where nz_w == nz, i.e. an unstaggered
+        // grid -- and no production caller was found building a 4-D residual; the tile drives
+        // apply() with packed 1-D vectors. So the 4D copy's record fields, including the
+        // levels_applied line added for it, remain UNVERIFIED by execution.
+        //
+        // Writing a case that fabricates a shape until it stops throwing would assert something
+        // about the fabrication, not about production. The honest coverage statement is this
+        // comment plus the check below PINNING path 1: this fixture demonstrably routes to the
+        // packed elimination, so if a change ever sends it to the unverified 4D copy instead,
+        // that is a silent switch to code no test executes -- and the assertion fails.
+
+        check(rec.path == 1,
+              "and it is the PACKED path (1) specifically. An earlier version accepted 1, 2 or 3 "
+              "while its comment claimed to catch a switch to the unverified 4D copy -- it "
+              "accepted exactly that. Pinning the value this fixture actually takes makes the "
+              "claim true: a switch to path 2 or 3, or a fourth copy, fails here.");
+        check(rec.base && rec.reduced_min && rec.reduced_max,
+              "its outputs are PRESENT -- with optional fields an unmeasured value cannot be read "
+              "as a number at all, so this is now a type-level guarantee rather than a comment");
+        check(std::isfinite(*rec.base) && std::isfinite(*rec.reduced_min) &&
+              std::isfinite(*rec.reduced_max),
+              "and finite under the flipped orientation");
+        check(*rec.base > 0.0f,
               "BASE diagonal POSITIVE (+640) under the flipped orientation: the U/V elimination "
               "now ADDS the acoustic round trip instead of subtracting it, which is what flipping "
               "the divergence leg was for");
-        check(rec.reduced_min < 0.0f,
+        check(*rec.reduced_min < 0.0f,
               "but the REDUCED diagonal is still NEGATIVE (-3987) -- so the mu-phi Schur "
               "correction, not the U/V product, is what drives the mass block indefinite here. "
               "Fixing the coupling orientation alone does not rescue it");
         // WHERE the negativity comes from, pinned as a number rather than inferred.
-        check(std::abs(rec.s_mu_phi_mean) > 100.0f,
+        check(rec.s_mu_phi_mean && std::abs(*rec.s_mu_phi_mean) > 100.0f,
               "S_mu_phi is LARGE (~336) where the corrected mass equation says it should be ~0 -- "
               "the mu tendency is the horizontal divergence of (mu*u, mu*v) and has no phi "
               "dependence, so M still carries the coupling the OLD Omega = mu*w mass equation had");
-        check(rec.schur_corr_mean > rec.base,
+        check(rec.schur_corr_mean && *rec.schur_corr_mean > *rec.base,
               "and its Schur correction (4627) EXCEEDS the base diagonal (+640), which is exactly "
               "how a positive base becomes a negative reduced block -- the U/V product is not the "
               "source of the indefiniteness, this term is");
 
-        check(std::abs(rec.reduced_min) > 1e-20,
+        check(std::abs(*rec.reduced_min) > 1e-20,
               "and it is not sitting on the singular clamp floor, so the sign above is the "
               "reduction's own result");
 
@@ -207,7 +274,7 @@ int main() {
         const auto v2 = torch::randn({n2}, torch::kFloat32);
         P.update(v2, 600.0f, 0.4358665215f);
         P.apply(v2);
-        check(P.mu_schur_record().recorded,
+        check(P.mu_schur_record().recorded(),
               "and a SECOND apply() re-records -- the coupled path runs again");
 
         // THE STALENESS PROBE, and it has to be built to fail. Two recording applies in a row
@@ -220,12 +287,12 @@ int main() {
         P.apply(v2);
         const auto after_offpath = P.mu_schur_record();
         wrf::sdirk3::g_sdirk3_config.precond_acoustic_4x4 = 1;   // restore for anything later
-        check(!after_offpath.recorded,
+        check(!after_offpath.recorded(),
               "STALENESS: after an apply() that does NOT reach the elimination, the record reads "
               "not-recorded -- a latching flag would still report the previous call's numbers");
     }
 
-    constexpr int expected_checks = 17;
+    constexpr int expected_checks = 23;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

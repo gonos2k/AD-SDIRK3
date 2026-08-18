@@ -11,6 +11,9 @@
                       // check for a HEADER, because whichever TU includes it first hides the gap.
 #include <string>
 #include <algorithm>
+#include <cstdlib>
+#include <climits>
+#include <cerrno>
 #include <iostream>  // std::transform in parse_bool_text; libstdc++ does not provide it
 #include <cctype>     // std::tolower, same reason. THIRD time in this header: see the note above.
 
@@ -48,6 +51,22 @@ inline BoolText parse_bool_text(const std::string& input) {
     if (lv == "0" || lv == "false" || lv == "f" || lv == "no" || lv.empty())
         return BoolText::False;
     return BoolText::Unrecognized;
+}
+
+// Whole-string integer parse for experiment budgets. std::atoi("600junk") is 600 and
+// std::atoi("abc") is 0, so a mistyped budget silently runs a DIFFERENT experiment and the log
+// looks legitimate. Budgets are causal authority in this campaign -- a typo that quietly becomes
+// "0" (meaning: use the default) has already cost one round of wrong conclusions.
+// Returns false and leaves `out` untouched when the text is not a complete integer.
+inline bool parse_whole_int(const char* text, int& out) {
+    if (!text || !*text) return false;
+    char* end = nullptr;
+    errno = 0;
+    const long v = std::strtol(text, &end, 10);
+    if (end == text || *end != '\0' || errno == ERANGE) return false;
+    if (v < INT_MIN || v > INT_MAX) return false;
+    out = static_cast<int>(v);
+    return true;
 }
 
 inline bool read_experiment_flag(const char* name) {
@@ -559,8 +578,10 @@ struct SDIRK3Config {
     // v20.15: HEVI split (horizontally-explicit / vertically-implicit). When true (and split_mode>=2),
     // the horizontal-acoustic terms (U-PGF, V-PGF, horizontal mass divergence) are rerouted from the
     // IMPLICIT operator (k_fast) to the EXPLICIT tableau (k_slow), leaving only the vertical W-phi
-    // acoustic implicit. Fixes the indefinite saddle-point Stage-3 operator (Rayleigh -766; SPD
-    // preconditioners provably can't fix it, Sylvester). Implemented via a snapshot/restore in the
+    // acoustic implicit. Targets the indefinite saddle-point Stage-3 operator (Rayleigh -766). NOTE:
+    // an earlier version of this comment claimed SPD preconditioners "provably" cannot fix such an
+    // operator, citing Sylvester. That is FALSE for one-sided preconditioning -- A -> A P^-1 is
+    // not a congruence -- and the claim is withdrawn. Implemented via a snapshot/restore in the
     // monolithic RHS block (baseline byte-identical when off). Default FALSE = OPT-IN (repo guardrail).
     // Set via env WRF_SDIRK3_HEVI_SPLIT (validation) or namelist sdirk3_hevi_split (production).
     bool hevi_split = false;

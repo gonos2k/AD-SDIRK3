@@ -2076,6 +2076,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                       << std::endl << std::flush;
         }
 
+        // PER-RESTART. Each restart builds a NEW basis V^(r) and a NEW local Hessenberg; row i of
+        // cycle r and row i of cycle r+1 index DIFFERENT vectors. Appending across cycles and then
+        // assembling one square matrix mixes bases, so the "projected operator" would not be
+        // V^T B V for any single V and its symmetric spectrum would be meaningless. Clearing here
+        // keeps each report a genuine single-cycle projection.
+        ritz_H.clear();
+
         // NUMERICAL STABILITY: Detect NaN in residual error after update
         if (guarded_item<bool>(torch::isnan(error_tensor).any())) {
             std::cerr << "[GMRES ERROR] NaN detected in error_tensor after iteration " << iter << std::endl;
@@ -3493,7 +3500,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         //
         // Assemble the square part of the captured Hessenberg, symmetrise it, and report the
         // extreme eigenvalues of 1/2(H + H^T). If min_eig < 0 the numerical range straddles the
-        // origin and NO SPD preconditioner can fix it (Sylvester); if min_eig > 0 the operator
+        // origin IN THESE COORDINATES for THIS preconditioner realisation. It does NOT rule out
+        // an SPD preconditioner: Sylvester's law governs congruence C^T H C, and right-
+        // preconditioning gives A P^-1, whose symmetric part is not a congruence of H(A).
+        // Counterexample: A = [[0,-1],[2,2]] has H(A) eigenvalues -0.118 / 2.118, yet the SPD
+        // P^-1 = [[2,-1],[-1,2]] gives H(A P^-1) = diag(1,2), positive definite. If min_eig > 0
+        // the operator
         // is positive-definite in the field-of-values sense and the campaign's two pivots rest on
         // a premise that no longer holds under WRFParity. Ritz eigenvalues are reported too, but
         // the symmetric part is the quantity that decides.
@@ -3520,6 +3532,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                       << " definite=" << (lo > 0.0 ? 1 : 0)
                       << std::endl << std::flush;
         }
+
+        // PER-RESTART. Each restart builds a NEW basis V^(r) and a NEW local Hessenberg; row i of
+        // cycle r and row i of cycle r+1 index DIFFERENT vectors. Appending across cycles and then
+        // assembling one square matrix mixes bases, so the "projected operator" would not be
+        // V^T B V for any single V and its symmetric spectrum would be meaningless. Clearing here
+        // keeps each report a genuine single-cycle projection.
+        ritz_H.clear();
 
         // F1: the per-RESTART trajectory of the minimised norm. 0.14% total reduction over 51
         // Arnoldi directions can mean two different things -- flat from the first step (the
@@ -6958,7 +6977,10 @@ public:
             // directions. q(v) = <v,Av>/<v,v> samples exactly that field.
             //
             // ASYMMETRIC EVIDENCE, and the output says so: ONE negative q PROVES the numerical
-            // range straddles the origin, hence that no SPD preconditioner can fix it (and the
+            // range straddles the origin IN THESE COORDINATES for THIS operator. It does NOT
+            // prove no SPD preconditioner can fix it -- right-preconditioning A -> A P^-1 is not
+            // a congruence, so Sylvester's law does not transfer (A = [[0,-1],[2,2]] indefinite,
+            // SPD P^-1 = [[2,-1],[-1,2]], H(A P^-1) = diag(1,2) definite). (And the
             // sampled v is a witness). All-positive over N samples is EVIDENCE OF NOTHING
             // stronger than "N random directions missed it" -- random vectors concentrate, and a
             // narrow negative cone is easy to miss. Do not read a clean run as a definiteness
@@ -7788,7 +7810,8 @@ public:
                                       << " rel_error_UNSCALED=" << gmres_result.rel_error
                                       << " note=minimised_norm_is_block_scaled"
                                       << std::endl;
-                            // THE MINIMISED NORM. GMRES iterates the S-conjugated operator when
+                            // NOT THE MINIMISED NORM -- retained as telemetry with its status in
+                            // the output string. GMRES iterates the S-conjugated operator when
                             // block scaling is on, so what it actually minimises is
                             // ||S^-1(b - Ax)|| / ||S^-1 b||, not the unscaled ratio reported as
                             // rel_error. Reading progress off the unscaled number is a category
@@ -7802,10 +7825,13 @@ public:
                                                       .norm().to(torch::kCPU).item<double>();
                                 const double bs = (gmres_rhs.to(torch::kFloat64) * sinv)
                                                       .norm().to(torch::kCPU).item<double>();
-                                std::cerr << "SDIRK3_GMRES_SCALED_RESIDUAL"
+                                std::cerr << "SDIRK3_GMRES_S_SCALE_RESIDUAL_TELEMETRY_ONLY"
                                           << " scaled_rel=" << (bs > 0.0 ? rs / bs : -1.0)
                                           << " num=" << rs << " den=" << bs
-                                          << "  (this is the norm GMRES minimises)"
+                                          << "  (TELEMETRY ONLY -- NOT the minimised norm: the "
+                                             "internal convergence check uses D_inv block scaling, "
+                                             "not S_diag. Ranking configurations by this number "
+                                             "inverted the results twice; use error_tensor.)"
                                           << std::endl << std::flush;
                             }
                             std::cerr << "SDIRK3_GMRES_TRIVIALITY ||x||=" << xn
