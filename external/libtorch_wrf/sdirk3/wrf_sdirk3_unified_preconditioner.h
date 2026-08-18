@@ -4,6 +4,7 @@
 #include <torch/torch.h>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <set>
 #include <tuple>
 #include <cstdint>
@@ -446,36 +447,48 @@ public:
     // contract that only re-multiplies the coefficients proves they were flipped, not that the
     // reduction consumed them -- these two are different claims, and only the second one is
     // about the operator the solver uses.
+    // WHAT WAS MEASURED, in the TYPE rather than in a comment.
+    //
+    // This record has now produced five defects of one shape: a field whose unset state is a
+    // legal value (0, -1, false), so "nobody filled this in" reads exactly like a measurement.
+    // The prose had to carry the distinction -- `recorded`, then the means, then
+    // reduction_applied, then levels_applied, then a guard described as narrower than it was --
+    // and prose is checked by nobody, so it drifted each time.
+    //
+    // std::optional makes the unset state UNREPRESENTABLE as a number: a reader cannot obtain a
+    // value without first handling absence. That retires the class instead of patching a sixth
+    // field. `path` and `reduction_applied` stay plain because their zero/false IS the meaning
+    // (no path ran; the solver discarded the reduction) rather than an absence.
     struct MuSchurRecord {
-        bool recorded = false;
-        float base = 0.0f;          // D_mu + sum_k of the U/V eliminations
-        float reduced_min = 0.0f;   // base - the mu-phi Schur correction, over the (j,i) plane
-        float reduced_max = 0.0f;
-        // The mu-phi Schur correction and its dominant factor. Under the CORRECTED mass equation
-        // the mu tendency is the horizontal divergence of (mu*u, mu*v) and has no phi dependence,
-        // so S_mu_phi -- and hence this whole correction -- should be ~0. Recording both makes
-        // that a measurement instead of a comment.
-        float schur_corr_mean = 0.0f;
-        float s_mu_phi_mean = 0.0f;
-        // WHICH of the three duplicated eliminations produced this record:
-        // 0 = none ran, 1 = packed 1D, 2 = batched 4D, 3 = per-column scalar fallback.
-        // Without it the fields are ambiguous across paths, and the paths have already been
-        // caught disagreeing about what "reduced" means -- the scalar copy used to record before
-        // its own Schur correction, so it reported the PRE-reduction value under that name.
+        // 0 = no elimination ran; 1 = packed 1D, 2 = batched 4D, 3 = per-column scalar fallback.
         int path = 0;
-        // Whether the solver actually USES the reduced system. The scalar fallback can break out
-        // of its reduction on a singular diagonal and then discard the result for a decoupled
-        // solve -- so a `reduced` value alone does not mean the operator saw it.
+        // Whether the solver USES the reduced system. The scalar fallback can break out of its
+        // reduction on a singular diagonal and then discard the result for a decoupled solve.
         bool reduction_applied = false;
-        // How many vertical levels the reduction reached (-1 = not recorded). Less than nz means
-        // it broke early, so the means cover only the applied levels.
-        int levels_applied = -1;
+
+        std::optional<float> base;             // D_mu + the U/V eliminations
+        std::optional<float> reduced_min;      // after the mu-phi Schur correction
+        std::optional<float> reduced_max;
+        std::optional<float> schur_corr_mean;  // over the levels ACTUALLY applied
+        std::optional<float> s_mu_phi_mean;
+        std::optional<int> levels_applied;     // < nz means the reduction broke early
+
+        bool recorded() const { return path != 0; }
     };
     MuSchurRecord mu_schur_record() const {
-        return {last_mu_schur_recorded_, last_s_mu_mu_base_,
-                last_s_mu_mu_reduced_min_, last_s_mu_mu_reduced_max_,
-                last_schur_corr_mean_, last_s_mu_phi_mean_, last_mu_schur_path_,
-                last_mu_schur_reduction_applied_, last_mu_schur_levels_applied_};
+        MuSchurRecord r;
+        r.path = last_mu_schur_path_;
+        if (r.path == 0) return r;   // nothing ran: every optional stays empty
+        r.reduction_applied = last_mu_schur_reduction_applied_;
+        r.base = last_s_mu_mu_base_;
+        r.reduced_min = last_s_mu_mu_reduced_min_;
+        r.reduced_max = last_s_mu_mu_reduced_max_;
+        if (last_mu_schur_levels_applied_ >= 0) {
+            r.levels_applied = last_mu_schur_levels_applied_;
+            r.schur_corr_mean = last_schur_corr_mean_;
+            r.s_mu_phi_mean = last_s_mu_phi_mean_;
+        }
+        return r;
     }
 
     HorizontalCouplingSnapshot horizontal_coupling_snapshot() const {

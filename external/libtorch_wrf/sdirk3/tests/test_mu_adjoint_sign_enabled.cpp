@@ -162,13 +162,13 @@ int main() {
     // elimination rather than from re-multiplying a coefficient snapshot in the test.
     {
         const auto rec = P.mu_schur_record();
-        std::printf("  mu Schur record: recorded=%d base=%.6g reduced=[%.6g, %.6g]\n",
-                    static_cast<int>(rec.recorded), rec.base,
-                    rec.reduced_min, rec.reduced_max);
+        std::printf("  mu Schur record: path=%d base=%.6g reduced=[%.6g, %.6g]\n",
+                    rec.path, rec.base.value_or(0.0f),
+                    rec.reduced_min.value_or(0.0f), rec.reduced_max.value_or(0.0f));
         std::printf("  mu-phi correction: schur_corr=%.6g  S_mu_phi=%.6g\n",
-                    rec.schur_corr_mean, rec.s_mu_phi_mean);
+                    rec.schur_corr_mean.value_or(0.0f), rec.s_mu_phi_mean.value_or(0.0f));
 
-        check(rec.recorded,
+        check(rec.recorded(),
               "production's mu elimination RAN -- the coupled path is reached, so the assertions "
               "below are about the operator the solver meets");
 
@@ -185,11 +185,11 @@ int main() {
         // singular diagonal and then DISCARD the reduced system for a decoupled solve -- so a
         // `reduced` number by itself does not mean the operator ever saw it.
         std::printf("  mu Schur applied=%d levels=%d\n",
-                    static_cast<int>(rec.reduction_applied), rec.levels_applied);
+                    static_cast<int>(rec.reduction_applied), rec.levels_applied.value_or(-1));
         check(rec.reduction_applied,
               "the reduction the record describes is the one the solver USES -- not a value it "
               "computed and then discarded for the decoupled fallback");
-        check(rec.levels_applied > 0,
+        check(rec.levels_applied && *rec.levels_applied > 0,
               "and levels_applied is SET, not the -1 not-recorded sentinel -- it was left unset "
               "on the packed and 4D paths, so the field was silently absent for two of the three "
               "and a reader could not tell 'covered every level' from 'nobody filled this in'");
@@ -222,28 +222,31 @@ int main() {
               "while its comment claimed to catch a switch to the unverified 4D copy -- it "
               "accepted exactly that. Pinning the value this fixture actually takes makes the "
               "claim true: a switch to path 2 or 3, or a fourth copy, fails here.");
-        check(std::isfinite(rec.base) && std::isfinite(rec.reduced_min) &&
-              std::isfinite(rec.reduced_max),
-              "and its outputs are finite under the flipped orientation");
-        check(rec.base > 0.0f,
+        check(rec.base && rec.reduced_min && rec.reduced_max,
+              "its outputs are PRESENT -- with optional fields an unmeasured value cannot be read "
+              "as a number at all, so this is now a type-level guarantee rather than a comment");
+        check(std::isfinite(*rec.base) && std::isfinite(*rec.reduced_min) &&
+              std::isfinite(*rec.reduced_max),
+              "and finite under the flipped orientation");
+        check(*rec.base > 0.0f,
               "BASE diagonal POSITIVE (+640) under the flipped orientation: the U/V elimination "
               "now ADDS the acoustic round trip instead of subtracting it, which is what flipping "
               "the divergence leg was for");
-        check(rec.reduced_min < 0.0f,
+        check(*rec.reduced_min < 0.0f,
               "but the REDUCED diagonal is still NEGATIVE (-3987) -- so the mu-phi Schur "
               "correction, not the U/V product, is what drives the mass block indefinite here. "
               "Fixing the coupling orientation alone does not rescue it");
         // WHERE the negativity comes from, pinned as a number rather than inferred.
-        check(std::abs(rec.s_mu_phi_mean) > 100.0f,
+        check(rec.s_mu_phi_mean && std::abs(*rec.s_mu_phi_mean) > 100.0f,
               "S_mu_phi is LARGE (~336) where the corrected mass equation says it should be ~0 -- "
               "the mu tendency is the horizontal divergence of (mu*u, mu*v) and has no phi "
               "dependence, so M still carries the coupling the OLD Omega = mu*w mass equation had");
-        check(rec.schur_corr_mean > rec.base,
+        check(rec.schur_corr_mean && *rec.schur_corr_mean > *rec.base,
               "and its Schur correction (4627) EXCEEDS the base diagonal (+640), which is exactly "
               "how a positive base becomes a negative reduced block -- the U/V product is not the "
               "source of the indefiniteness, this term is");
 
-        check(std::abs(rec.reduced_min) > 1e-20,
+        check(std::abs(*rec.reduced_min) > 1e-20,
               "and it is not sitting on the singular clamp floor, so the sign above is the "
               "reduction's own result");
 
@@ -258,7 +261,7 @@ int main() {
         const auto v2 = torch::randn({n2}, torch::kFloat32);
         P.update(v2, 600.0f, 0.4358665215f);
         P.apply(v2);
-        check(P.mu_schur_record().recorded,
+        check(P.mu_schur_record().recorded(),
               "and a SECOND apply() re-records -- the coupled path runs again");
 
         // THE STALENESS PROBE, and it has to be built to fail. Two recording applies in a row
@@ -271,12 +274,12 @@ int main() {
         P.apply(v2);
         const auto after_offpath = P.mu_schur_record();
         wrf::sdirk3::g_sdirk3_config.precond_acoustic_4x4 = 1;   // restore for anything later
-        check(!after_offpath.recorded,
+        check(!after_offpath.recorded(),
               "STALENESS: after an apply() that does NOT reach the elimination, the record reads "
               "not-recorded -- a latching flag would still report the previous call's numbers");
     }
 
-    constexpr int expected_checks = 21;
+    constexpr int expected_checks = 22;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
