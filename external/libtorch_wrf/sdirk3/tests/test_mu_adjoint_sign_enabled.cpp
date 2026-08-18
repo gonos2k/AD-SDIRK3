@@ -195,6 +195,16 @@ int main() {
                     rec.levels_applied ? std::to_string(*rec.levels_applied).c_str() : "NA");
         check(rec.reduction_computed,
               "the reduction was COMPUTED -- the loop ran to a verdict rather than being skipped");
+
+        // COMPUTED must not alias USED, in either direction. The scalar path set
+        // computed = schur_valid, which reports computed=false for a reduction that ran and
+        // broke partway -- collapsing the two in the same commit that separated them. The
+        // implication that survives is one-directional: anything USED must have been COMPUTED.
+        check(!rec.reduction_used || rec.reduction_computed,
+              "used implies computed -- the solver cannot consume a reduction that never ran");
+        check(rec.levels_applied.has_value() == rec.reduction_computed,
+              "and a computed reduction always reports how far it got, so 'ran but partial' is "
+              "distinguishable from 'never ran' rather than collapsing into one boolean");
         // COMPUTED is not USED, and this fixture proves it by exhibiting BOTH states.
         // Default config: the identity predicate is off, so the reduced system IS the update.
         check(rec.reduction_used && rec.solve_path == 1,
@@ -345,7 +355,7 @@ int main() {
               "not-recorded -- a latching flag would still report the previous call's numbers");
     }
 
-    constexpr int expected_checks = 27;
+    constexpr int expected_checks = 29;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

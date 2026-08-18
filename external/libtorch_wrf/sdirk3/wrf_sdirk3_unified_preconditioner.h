@@ -467,6 +467,11 @@ public:
         // result for a decoupled solve; and under WRFParity+HEVI the mu row takes the EXACT
         // IDENTITY update delta_mu = r_mu, which bypasses the reduced system entirely even
         // though the reduction was computed in full a few lines earlier.
+        // computed: the reduction arithmetic RAN (levels_applied says how far).
+        // used:      the mu update actually consumed the result.
+        // These are three distinct questions with the validity verdict, and every collapse of
+        // any two of them has produced a defect in this record -- including one introduced by
+        // the commit that first separated computed from used.
         bool reduction_computed = false;
         bool reduction_used = false;
 

@@ -6191,8 +6191,17 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
                 ? s_mu_phi_applied / static_cast<float>(schur_levels_applied)
                 : 0.0f;   // element mean, as in the other paths
         last_mu_schur_levels_applied_ = schur_levels_applied;
-        last_mu_schur_reduction_computed_ = schur_valid;
-        last_mu_schur_reduction_used_ = schur_valid;   // !valid -> decoupled fallback below
+        // COMPUTED and VALID are also different questions -- I collapsed them here in the very
+        // commit that introduced the computed/used split. schur_valid says the reduced system is
+        // USABLE; it says nothing about whether the arithmetic ran. A loop that breaks at level 3
+        // of 5 HAS computed a (partial) reduction, and reporting computed=false for it hides the
+        // partial work that levels_applied exists to expose.
+        //
+        //   computed : the reduction loop executed -- always true on this path, it is
+        //              unconditional; levels_applied says how far it got
+        //   used     : schur_valid -- false sends the solve to the decoupled fallback below
+        last_mu_schur_reduction_computed_ = true;
+        last_mu_schur_reduction_used_ = schur_valid;
         last_mu_solve_path_ = schur_valid ? 1 : 3;     // 3 = decoupled fallback
         last_mu_schur_path_ = 3;   // ScalarFallback
         last_mu_schur_recorded_ = true;
