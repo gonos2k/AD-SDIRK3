@@ -181,6 +181,15 @@ int main() {
         check(rec.path != 0,
               "the record carries a PATH identity, so its fields are attributable to one of the "
               "three eliminations rather than being ambiguous across them");
+        // APPLIED, not merely computed. The scalar fallback can break out of its reduction on a
+        // singular diagonal and then DISCARD the reduced system for a decoupled solve -- so a
+        // `reduced` number by itself does not mean the operator ever saw it.
+        std::printf("  mu Schur applied=%d levels=%d\n",
+                    static_cast<int>(rec.reduction_applied), rec.levels_applied);
+        check(rec.reduction_applied,
+              "the reduction the record describes is the one the solver USES -- not a value it "
+              "computed and then discarded for the decoupled fallback");
+
         check(rec.path == 1 || rec.path == 2 || rec.path == 3,
               "and the identity is one of the three known paths -- a fourth copy appearing would "
               "fail here instead of silently reusing another path's semantics");
@@ -238,7 +247,7 @@ int main() {
               "not-recorded -- a latching flag would still report the previous call's numbers");
     }
 
-    constexpr int expected_checks = 19;
+    constexpr int expected_checks = 20;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

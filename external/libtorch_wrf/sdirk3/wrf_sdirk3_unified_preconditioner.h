@@ -463,11 +463,19 @@ public:
         // caught disagreeing about what "reduced" means -- the scalar copy used to record before
         // its own Schur correction, so it reported the PRE-reduction value under that name.
         int path = 0;
+        // Whether the solver actually USES the reduced system. The scalar fallback can break out
+        // of its reduction on a singular diagonal and then discard the result for a decoupled
+        // solve -- so a `reduced` value alone does not mean the operator saw it.
+        bool reduction_applied = false;
+        // How many vertical levels the reduction reached (-1 = not recorded). Less than nz means
+        // it broke early, so the means cover only the applied levels.
+        int levels_applied = -1;
     };
     MuSchurRecord mu_schur_record() const {
         return {last_mu_schur_recorded_, last_s_mu_mu_base_,
                 last_s_mu_mu_reduced_min_, last_s_mu_mu_reduced_max_,
-                last_schur_corr_mean_, last_s_mu_phi_mean_, last_mu_schur_path_};
+                last_schur_corr_mean_, last_s_mu_phi_mean_, last_mu_schur_path_,
+                last_mu_schur_reduction_applied_, last_mu_schur_levels_applied_};
     }
 
     HorizontalCouplingSnapshot horizontal_coupling_snapshot() const {
@@ -531,6 +539,8 @@ private:
     float last_schur_corr_mean_ = 0.0f;
     float last_s_mu_phi_mean_ = 0.0f;
     int last_mu_schur_path_ = 0;
+    bool last_mu_schur_reduction_applied_ = false;
+    int last_mu_schur_levels_applied_ = -1;
 
     torch::Tensor C_u_mu_;    // Pressure gradient effect: μ → u
     torch::Tensor C_v_mu_;    // Pressure gradient effect: μ → v
