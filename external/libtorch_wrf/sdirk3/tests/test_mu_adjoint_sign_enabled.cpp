@@ -293,6 +293,11 @@ int main() {
         // packed elimination, so if a change ever sends it to the unverified 4D copy instead,
         // that is a silent switch to code no test executes -- and the assertion fails.
 
+        // Paths 2 and 3 are not merely unexercised -- they are unreachable. The 4D copy cannot
+        // accept a staggered residual (nz_w = nz + 1 in one dense tensor), and the scalar copy
+        // has NO CALL SITES: grep finds only its declaration, definition and error string, and
+        // `nm` on the archive reports zero undefined references to the symbol. Pinning path 1 is
+        // therefore the whole of the reachable coverage, not a subset of it.
         check(rec.path == 1,
               "and it is the PACKED path (1) specifically. An earlier version accepted 1, 2 or 3 "
               "while its comment claimed to catch a switch to the unverified 4D copy -- it "

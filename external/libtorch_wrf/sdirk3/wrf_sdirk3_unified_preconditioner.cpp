@@ -5893,6 +5893,22 @@ void UnifiedPreconditioner::solve_coupled_uv_mu_column_inplace(
  * Fallback: If |det| < 1e-10, use 3×3 U-V-μ + diagonal Φ
  */
 std::tuple<torch::Tensor, torch::Tensor, torch::Tensor, torch::Tensor>
+// DEAD CODE -- NO CALL SITES. Verified two ways: a repo-wide grep finds only this definition,
+// the header declaration, this function's own error string, and a comment at the batched path
+// saying it "replaces the nx*ny per-column calls to solve_4x4_acoustic_block"; and `nm` on the
+// built archive reports ZERO undefined references to the symbol.
+//
+// So the record instrumentation added here -- path 3, the computed/used/valid separation, the
+// column-total means -- CANNOT be regression-tested, because nothing can reach it. That is the
+// honest status of this copy, not a coverage gap to be closed with a fixture.
+//
+// It also resolves the standing "three copies of one elimination" complaint into something
+// sharper: ONE is live (packed 1D), ONE cannot accept a staggered residual (the 4D path, where
+// nz_w = nz + 1 is unrepresentable in a single dense tensor), and THIS one has no callers at all.
+// The duplication that kept producing semantic drift between copies is largely duplication with
+// dead code. Deleting both is the simplification the project's own rules ask for, and is a
+// separate increment: removing production symbols deserves its own review rather than riding
+// along with a telemetry fix.
 UnifiedPreconditioner::solve_4x4_acoustic_block(
     const torch::Tensor& r_u,
     const torch::Tensor& r_v,
