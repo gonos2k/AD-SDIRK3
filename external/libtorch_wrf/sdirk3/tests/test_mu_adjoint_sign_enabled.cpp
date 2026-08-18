@@ -189,6 +189,10 @@ int main() {
         check(rec.reduction_applied,
               "the reduction the record describes is the one the solver USES -- not a value it "
               "computed and then discarded for the decoupled fallback");
+        check(rec.levels_applied > 0,
+              "and levels_applied is SET, not the -1 not-recorded sentinel -- it was left unset "
+              "on the packed and 4D paths, so the field was silently absent for two of the three "
+              "and a reader could not tell 'covered every level' from 'nobody filled this in'");
 
         check(rec.path == 1 || rec.path == 2 || rec.path == 3,
               "and the identity is one of the three known paths -- a fourth copy appearing would "
@@ -247,7 +251,7 @@ int main() {
               "not-recorded -- a latching flag would still report the previous call's numbers");
     }
 
-    constexpr int expected_checks = 20;
+    constexpr int expected_checks = 21;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

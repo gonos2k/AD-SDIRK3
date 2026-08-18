@@ -2721,6 +2721,11 @@ torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                 last_schur_corr_mean_ = schur_diag_corr.mean().to(torch::kCPU).item<float>();
                 last_s_mu_phi_mean_ = S_mu_phi.mean().to(torch::kCPU).item<float>();
                 last_mu_schur_reduction_applied_ = true;   // this path has no discard branch
+                // Every level: the correction is a full sum over nz with no early break, unlike
+                // the scalar fallback. Leaving this at the -1 "not recorded" sentinel would make
+                // the field silently absent for two of the three paths -- the same
+                // absent-vs-measured ambiguity the means were just fixed for.
+                last_mu_schur_levels_applied_ = nz;
                 last_mu_schur_path_ = 1;   // Packed1D
                 last_mu_schur_recorded_ = true;
             }
@@ -4198,6 +4203,7 @@ torch::Tensor UnifiedPreconditioner::apply_enhanced_vertical_solve(const torch::
             last_schur_corr_mean_ = schur_diag_corr.mean().to(torch::kCPU).item<float>();
             last_s_mu_phi_mean_ = S_mu_phi.mean().to(torch::kCPU).item<float>();
             last_mu_schur_reduction_applied_ = true;   // this path has no discard branch
+            last_mu_schur_levels_applied_ = nz;        // full sum over nz, no early break
             last_mu_schur_path_ = 2;   // Batched4D
             last_mu_schur_recorded_ = true;
         }
