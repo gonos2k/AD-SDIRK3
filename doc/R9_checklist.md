@@ -29,7 +29,7 @@ S is NOT identity: block-constant  S_q = max(||R_0,q||/sqrt(n_q), floor_q)   (:5
 
 ## P0-C  re-measure + retract
 - [x] C1  re-run paired trajectory at dt=600, publish rho_D/rho_S/rho_phys/rho_E
-- [ ] C2  measure kappa(E^-1 S)
+- [x] C2  measure kappa(E^-1 S)
 - [x] C3  retract or update: "70-291x", "Spearman 0.04 => uncorrelated with stage gate", "kappa(E)=3.98e9"
 - [x] C4  restate the block-share table in named coordinates
 
@@ -39,7 +39,7 @@ S is NOT identity: block-constant  S_q = max(||R_0,q||/sqrt(n_q), floor_q)   (:5
 - [x] D3  attribute the 27x to Y3_base vs predictor; retract "inherited from Y3" if unsupported
 
 ## P0-B'  fixed-(A,b) objective comparison  (review §11 P0-B)
-- [ ] E1  freeze ONE stage-3 linear system (A, b, x0, M^-1) and compare
+- [x] E1  freeze ONE stage-3 linear system (A, b, x0, M^-1) and compare
           D-objective / S-coord L2 / physical raw / stage-WRMS on the SAME system
           (run-level A/B is confounded -- see sdirk3-scalar-coefficients-non-separable D1)
 

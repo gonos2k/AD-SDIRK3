@@ -174,3 +174,28 @@ The review's §10.2 (mu-Schur `reduction_applied=true` under the HEVI identity b
 reproduce: `last_mu_schur_reduction_used_ = !hevi_mu_identity` and `solve_path = 2` already
 record the bypass, and `reduction_applied` no longer exists as a field. Two comments still
 naming it have been corrected.
+
+
+## 9. Aligning the objective is measured, and it is strictly WORSE
+
+`WRF_SDIRK3_KRYLOV_WRMS_METRIC=1` installs `E^-1 S` as the Krylov left weight. The FIRST solve
+of both arms runs on an identical `(A, b)` — nothing before it differs — so this is a
+controlled comparison, not a run-level A/B.
+
+| objective | kappa(L) | rho at restart 0 | stage-2 outcome |
+|---|---|---|---|
+| `D` block-constant | 8.1 | 0.2196 | CONVERGED, 3 Newton iters |
+| `E^-1 S` stage-WRMS | **1.63e8** | **1.000** (zero progress) | FAILED, stalled at iter 1 |
+
+`kappa(E^-1 S) = 1.63e8` (max 1.476e10, min 90.49) — the retracted `kappa(E) = 3.98e9` was
+both the wrong operator and 24x off. Under this arm `s_D == s_wrms` exactly, confirming the
+weighting installed is the one reported.
+
+Mechanism: `E^-1 S` puts **0.999998** of the objective on mu, so the Krylov space is built
+almost entirely from mu directions and the other five blocks are invisible to the minimiser.
+All four ratios read 1.000 at restart 0 — GMRES made no progress at all.
+
+**So the mismatch is real (2370x at stage 3) but removing it is not a fix.** It is a symptom of
+mu being physically dominant while numerically tiny, not the cause of the stage-3 failure —
+and §6a already attributes that failure to the explicit ARK term, which no Krylov objective
+touches.
