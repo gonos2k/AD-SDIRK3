@@ -2361,9 +2361,42 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         layout && layout->is_valid() && layout->total_size == r_true_inner.numel()) {
         torch::NoGradGuard no_grad;
         D_inv = torch::ones_like(r_true_inner);
+
+        // THE EXPERIMENT THIS MEASUREMENT ASKS FOR (env-gated, default OFF).
+        //
+        // Measured: FGMRES minimising ||D^-1 r|| with D_q = ||r_0,q|| is essentially UNCORRELATED
+        // with the physical residual the stage gate judges -- Spearman -0.10 across five solves,
+        // 18-343x apart, and the worst solve by one measure is the best by the other. The
+        // minimiser can move error out of a block D made cheap into one it made expensive: free
+        // in its own norm, expensive physically.
+        //
+        // So align the objectives: weight by the STAGE'S OWN error weights E -- the same
+        // pointwise rtol*|y_ref| + atol the acceptance gate uses -- instead of by initial block
+        // norms. FGMRES then minimises the quantity that decides whether the stage is accepted.
+        //
+        // Direct test of whether the stage-3 stall is an inner/outer objective mismatch rather
+        // than anything nonlinear. An EXPERIMENT, not a proposed default: E-weighting removes the
+        // property block scaling exists for (equalising blocks whose initial residuals differ by
+        // 10^4), so it may trade one pathology for another.
+        const bool wrms_metric =
+            wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_WRMS_METRIC");
+        bool wrms_metric_applied = false;
+        if (wrms_metric && stage_weights != nullptr) {
+            const auto einv = wrf::sdirk3::inverse_scale_vector(
+                *layout, stage_weights->scale, torch::ones_like(r_true_inner));
+            if (einv.defined() && einv.numel() == r_true_inner.numel()) {
+                D_inv = einv;
+                wrms_metric_applied = true;
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                    std::cerr << "[GMRES METRIC] stage-WRMS weighting active (E^-1), replacing "
+                                 "initial-block-norm scaling" << std::endl;
+                }
+            }
+        }
         auto r_cpu = r_true_inner.detach().to(torch::kCPU).contiguous();
         bool all_blocks_ok = true;
         for (const auto& blk : layout->blocks) {
+            if (wrms_metric_applied) break;   // E-weighting already set D_inv
             if (blk.start + blk.size > r_cpu.numel()) { all_blocks_ok = false; break; }
             float blk_norm = r_cpu.slice(0, blk.start, blk.start + blk.size)
                 .norm().item<float>();
@@ -2380,6 +2413,53 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         }
         if (all_blocks_ok) {
             block_scaled = true;
+            // WHY the two weightings behave so differently -- their STRUCTURE, not just their values.
+            //
+            //   D_q = ||r_0,q||          BLOCK-CONSTANT, set by the initial residual
+            //   E_i = rtol|y_i| + atol   POINTWISE, set by the state magnitude
+            //
+            // Pointwise weighting has a failure mode block-constant weighting cannot have: where the
+            // state is near zero, E_i -> atol_q and E^-1 -> 1/atol (1e6 for the velocity blocks), so
+            // physically negligible components acquire enormous weight and can dominate the
+            // minimiser. The dynamic range max(w)/min(w) measures exactly that exposure, and it is
+            // the quantity that decides whether an aligned objective is well-posed.
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY")) {
+                torch::NoGradGuard ng_dr;
+                const auto w = D_inv.detach().abs();
+                const double wmax = w.max().to(torch::kCPU).item<double>();
+                const double wmin = w.min().to(torch::kCPU).item<double>();
+                // PER-BLOCK ALIGNMENT, which is the operative quantity -- kappa(L) is not.
+                //
+                // Measured: kappa(D) = 2.07e6, kappa(E) = 3.98e9, while the observed
+                // rho_unscaled/rho_L is 18-343 for D and 5.5 for E. The bound
+                // rho_unscaled/rho_L <= kappa(L) HOLDS in every case but is vacuous -- it permits
+                // 10^6 and we observe 10^2 -- and the ratio is ANTI-correlated with kappa: E has
+                // the worse conditioning by 1920x and the smaller discrepancy by 45x. So the
+                // magnitude of the weighting spread does not drive the divergence.
+                //
+                // What can drive it is ALIGNMENT: how the weight mass is distributed across
+                // blocks relative to where the residual actually lives. A weighting that is large
+                // exactly where the residual is small contributes nothing to the minimised norm
+                // while the physical norm is dominated by blocks the objective barely sees. Both
+                // distributions are printed per block so the comparison is direct rather than
+                // inferred from two scalars.
+                for (const auto& blk : layout->blocks) {
+                    const auto wb = D_inv.slice(0, blk.start, blk.start + blk.size).abs();
+                    const auto rb = r_true_inner.slice(0, blk.start, blk.start + blk.size);
+                    std::cerr << "SDIRK3_WEIGHT_BLOCK " << blk.name
+                              << " w_mean=" << wb.mean().to(torch::kCPU).item<double>()
+                              << " r_norm=" << rb.norm().to(torch::kCPU).item<double>()
+                              << " weighted=" << (wb * rb.abs()).norm().to(torch::kCPU).item<double>()
+                              << std::endl;
+                }
+                std::cerr << "SDIRK3_WEIGHT_STRUCTURE metric="
+                          << (wrms_metric_applied ? "E_pointwise" : "D_blockconst")
+                          << " max=" << wmax << " min=" << wmin
+                          << " dynamic_range=" << (wmin > 0.0 ? wmax / wmin : -1.0)
+                          << std::endl << std::flush;
+            }
+
+
             // Scale the initial residual and RHS
             r_precond = r_precond * D_inv;
             b_inner = b_inner * D_inv;
@@ -3547,9 +3627,24 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // print the value at every restart instead of only at exit.
         if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY")) {
             torch::NoGradGuard ng_traj;
+            // PAIRED TRAJECTORY -- the scientific question, not a diagnostic nicety.
+            //
+            // FGMRES minimises the BLOCK-SCALED residual ||D^-1 r|| / ||D^-1 b||, where
+            // D_q = ||r_0,q|| equalises each block's INITIAL contribution. The stage gate accepts
+            // or rejects on a physically weighted WRMS instead. Those are different objective
+            // functions over the same residual, so on a finite Krylov budget the solver can
+            // reduce its own norm while the gate's norm GROWS -- the minimiser is free to trade
+            // error out of a block D has made cheap and into one it has made expensive.
+            //
+            // If that is happening, "more Krylov work makes stage 3 worse" needs no nonlinear
+            // explanation at all: it is inner and outer objectives disagreeing. Both ratios are
+            // computed here from the SAME r_true_inner and the SAME b, so the pair is exact
+            // rather than assembled from two runs.
+            const auto r_unscaled = safe_tensor_norm(r_true_inner) / bnorm_safe;
             std::cerr << "SDIRK3_KRYLOV_TRAJECTORY restart=" << iter
                       << " scaled=" << (block_scaled ? 1 : 0)
-                      << " error=" << guarded_item<float>(error_tensor)
+                      << " rho_D=" << guarded_item<float>(error_tensor)
+                      << " rho_unscaled=" << guarded_item<float>(r_unscaled)
                       << std::endl << std::flush;
         }
 
@@ -6745,6 +6840,53 @@ public:
             //   1) stage3_* for stage>=3 when explicitly set (>0),
             //   2) stage2_* for stage>=2 when set (>0),
             //   3) base solver options.
+            // STAGE 3 INHERITS STAGE 2 unless its own knob is set (the stage-3 override lives
+            // further down). That inheritance invalidated a published stage-3 budget table:
+            // leaving stage3_gmres_restart unset was labelled "global default" when it actually
+            // ran stage 3 on the stage-2 value, EW-scaled. Measured, same run otherwise:
+            //
+            //     stage3 unset          -> 510 Arnoldi, stage-3 gate 0.727
+            //     stage3 = 600 explicit -> 600 Arnoldi, stage-3 gate 3.386
+            //
+            // WHY THE TWO DIFFER, corrected: it is purely the budget, and the mechanism is
+            // ORDERING. The EW budget scaling
+            //     grep -F 'effective_restart * budget_scale' wrf_sdirk3_newton_solver.cpp
+            //         (the -F matters: the * is a regex quantifier, so plain grep finds NOTHING.
+            //          The source spells this std::max(2, static_cast<int>(...)) across two lines)
+            // runs BEFORE
+            //     grep -F 'if (cfg.stage3_gmres_restart > 0) effective_restart = cfg.stage3_gmres_restart;' wrf_sdirk3_newton_solver.cpp
+            // so an inherited stage-2 value gets scaled (600 -> 510) while an explicit stage-3
+            // value replaces the scaled number outright and stands at 600.
+            //
+            // Cited by GREP-ABLE SUBSTRING, and both halves of that matter. The first version
+            // gave line numbers (:6800, :6848) that inserting THIS comment had already shifted by
+            // seven -- a line number in a comment is invalidated by the edit that writes it. The
+            // second version replaced them with a pretty-printed expression that matched NOTHING
+            // in the file except itself: the source wraps std::max/static_cast across two lines
+            // and writes 0.5f, so grepping the citation found the comment and not the code.
+            //
+            // FOUR iterations on one citation, each failure subtler than the last:
+            //   1. line numbers, invalidated by the edit that wrote them
+            //   2. a pretty-printed "expression" that matched only itself
+            //   3. correct strings, but published as commands that do not run -- plain grep on
+            //      the first returns 0 matches because * is a quantifier (the second worked;
+            //      parentheses are literal in BRE, so only one of the two was broken)
+            //   4. -F added, FILE ARGUMENT omitted -- the published command read stdin, not this
+            //      file, so it exits 1 and matches nothing
+            //
+            // Every round was verified -- on a VARIANT. Escaped when the published form was
+            // unescaped; with a file argument when the published form had none. So the rule is
+            // not "run the citation" but stronger: EXTRACT the command from this file and execute
+            // that, so the thing verified and the thing shipped cannot differ. This version was
+            // checked that way.
+            //
+            // NOT a policy difference -- an earlier version of this comment said setting a
+            // stage-3 knob flips stage_budget_active and changes EW coupling. It does not:
+            // stage_budget_active is an OR over the stage-2 AND stage-3 knobs, and
+            // stage2_gmres_restart = 600 was set in BOTH arms, so it was already true either way.
+            //
+            // Any stage-budget experiment must set the stage's OWN knob explicitly and report the
+            // Arnoldi count actually USED, not the one requested.
             if (stage >= 2) {
                 auto& cfg = wrf::sdirk3::g_sdirk3_config;
                 if (cfg.stage2_gmres_restart > 0) effective_restart = cfg.stage2_gmres_restart;
@@ -7556,7 +7698,11 @@ public:
                           // than inside the Krylov solve which would have to be told it.
                           // Weighted at the Newton linearization point when the probe is on;
                           // the stage-entry capture is the fallback and is labelled as such.
-                          apinv_probe_armed()
+                          // Also needed by the stage-WRMS metric experiment, which USES these
+                          // weights as the Krylov objective rather than merely reporting with
+                          // them -- gating on the probe alone silently disabled that experiment.
+                          (apinv_probe_armed() ||
+                           wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_WRMS_METRIC"))
                               ? newton_weights_for(U_eval, stage, newton_iter)
                               : nullptr,
                           // S, so a physically-weighted defect is computed on physical vectors.
@@ -9221,6 +9367,31 @@ public:
             // FIX 2026-01-31: When all trust-region attempts fail, do NOT force-accept.
             // Keep K unchanged (zero update) so Newton can try again next iteration
             // with the same residual. This prevents divergence from accepting bad steps.
+            // M6: DID THE STEP HAPPEN? "The stage gate exceeded 1, therefore a large Krylov
+            // update grew the residual" does not follow. When every trust attempt is rejected
+            // this branch sets dK_scaled = 0 and K is unchanged, so the stage keeps its entering
+            // residual -- a gate above 1 then reports a step that was never taken. Opposite
+            // diagnoses, and the gate value alone cannot separate them.
+            //
+            // BUT step_accepted DOES NOT MEAN TRUST ACCEPTED. With nk_trust_region = false the
+            // solver takes the full Newton step unconditionally and sets the same flag, having
+            // evaluated nothing -- and em_b_wave runs with it FALSE at runtime despite the struct
+            // default being true. Reading "accepted" as a trust verdict there is exactly wrong:
+            // trust neither accepted nor rejected, it never ran. rho = 0 in every record is the
+            // tell, and the trust state is printed alongside so the flag cannot be read alone.
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STEP_LEDGER")) {
+                torch::NoGradGuard ng_ledger;
+                std::cerr << "SDIRK3_STEP_LEDGER stage=" << stage
+                          << " newton_iter=" << newton_iter
+                          << " step_accepted=" << (step_accepted ? 1 : 0)
+                          << " R_norm=" << R.detach().norm().to(torch::kCPU).item<double>()
+                          << " dK_norm=" << dK.detach().norm().to(torch::kCPU).item<double>()
+                          << " rho=" << last_rho
+                          << " trust_enabled="
+                          << (wrf::sdirk3::g_sdirk3_config.nk_trust_region ? 1 : 0)
+                          << std::endl << std::flush;
+            }
+
             if (!step_accepted) {
                 dK_scaled = torch::zeros_like(dK);
                 accepted_residual = R.detach();  // Keep current residual
