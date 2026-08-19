@@ -2361,9 +2361,42 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         layout && layout->is_valid() && layout->total_size == r_true_inner.numel()) {
         torch::NoGradGuard no_grad;
         D_inv = torch::ones_like(r_true_inner);
+
+        // THE EXPERIMENT THIS MEASUREMENT ASKS FOR (env-gated, default OFF).
+        //
+        // Measured: FGMRES minimising ||D^-1 r|| with D_q = ||r_0,q|| is essentially UNCORRELATED
+        // with the physical residual the stage gate judges -- Spearman -0.10 across five solves,
+        // 18-343x apart, and the worst solve by one measure is the best by the other. The
+        // minimiser can move error out of a block D made cheap into one it made expensive: free
+        // in its own norm, expensive physically.
+        //
+        // So align the objectives: weight by the STAGE'S OWN error weights E -- the same
+        // pointwise rtol*|y_ref| + atol the acceptance gate uses -- instead of by initial block
+        // norms. FGMRES then minimises the quantity that decides whether the stage is accepted.
+        //
+        // Direct test of whether the stage-3 stall is an inner/outer objective mismatch rather
+        // than anything nonlinear. An EXPERIMENT, not a proposed default: E-weighting removes the
+        // property block scaling exists for (equalising blocks whose initial residuals differ by
+        // 10^4), so it may trade one pathology for another.
+        const bool wrms_metric =
+            wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_WRMS_METRIC");
+        bool wrms_metric_applied = false;
+        if (wrms_metric && stage_weights != nullptr) {
+            const auto einv = wrf::sdirk3::inverse_scale_vector(
+                *layout, stage_weights->scale, torch::ones_like(r_true_inner));
+            if (einv.defined() && einv.numel() == r_true_inner.numel()) {
+                D_inv = einv;
+                wrms_metric_applied = true;
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                    std::cerr << "[GMRES METRIC] stage-WRMS weighting active (E^-1), replacing "
+                                 "initial-block-norm scaling" << std::endl;
+                }
+            }
+        }
         auto r_cpu = r_true_inner.detach().to(torch::kCPU).contiguous();
         bool all_blocks_ok = true;
         for (const auto& blk : layout->blocks) {
+            if (wrms_metric_applied) break;   // E-weighting already set D_inv
             if (blk.start + blk.size > r_cpu.numel()) { all_blocks_ok = false; break; }
             float blk_norm = r_cpu.slice(0, blk.start, blk.start + blk.size)
                 .norm().item<float>();
@@ -7618,7 +7651,11 @@ public:
                           // than inside the Krylov solve which would have to be told it.
                           // Weighted at the Newton linearization point when the probe is on;
                           // the stage-entry capture is the fallback and is labelled as such.
-                          apinv_probe_armed()
+                          // Also needed by the stage-WRMS metric experiment, which USES these
+                          // weights as the Krylov objective rather than merely reporting with
+                          // them -- gating on the probe alone silently disabled that experiment.
+                          (apinv_probe_armed() ||
+                           wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_WRMS_METRIC"))
                               ? newton_weights_for(U_eval, stage, newton_iter)
                               : nullptr,
                           // S, so a physically-weighted defect is computed on physical vectors.
