@@ -6755,16 +6755,23 @@ public:
             //
             // WHY THE TWO DIFFER, corrected: it is purely the budget, and the mechanism is
             // ORDERING. The EW budget scaling
-            //     effective_restart = max(2, effective_restart * budget_scale + 0.5)
+            //     effective_restart * budget_scale        <- grep this; the source spells it
+            //                                                 std::max(2, static_cast<int>(...))
+            //                                                 across two lines
             // runs BEFORE
             //     if (cfg.stage3_gmres_restart > 0) effective_restart = cfg.stage3_gmres_restart;
             // so an inherited stage-2 value gets scaled (600 -> 510) while an explicit stage-3
             // value replaces the scaled number outright and stands at 600.
             //
-            // Cited by EXPRESSION, not line number. The first version of this comment gave :6800
-            // and :6848; the real lines were :6807 and :6855, because inserting THIS comment
-            // shifted them by seven. A line number written into a comment is invalidated by the
-            // edit that writes the comment -- grep for the expression instead.
+            // Cited by GREP-ABLE SUBSTRING, and both halves of that matter. The first version
+            // gave line numbers (:6800, :6848) that inserting THIS comment had already shifted by
+            // seven -- a line number in a comment is invalidated by the edit that writes it. The
+            // second version replaced them with a pretty-printed expression that matched NOTHING
+            // in the file except itself: the source wraps std::max/static_cast across two lines
+            // and writes 0.5f, so grepping the citation found the comment and not the code.
+            //
+            // A citation is only useful if pasting it into grep lands on the code. Both strings
+            // above were checked that way rather than eyeballed.
             //
             // NOT a policy difference -- an earlier version of this comment said setting a
             // stage-3 knob flips stage_budget_active and changes EW coupling. It does not:
