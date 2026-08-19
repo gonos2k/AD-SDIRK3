@@ -53,6 +53,8 @@
 #include "wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "wrf_sdirk3_rw_term_capture.h"  // PR 9B: rw term bisection
 #include "wrf_sdirk3_autograd_utils.h"
+#include "wrf_sdirk3_krylov_metrics.h"  // relative_residual / shares / E^-1 S
+#include "wrf_sdirk3_stage_krylov_policy.h"  // pure stage budget/tolerance resolution
 #include "wrf_sdirk3_stage_history_diag.h"  // PR 9F P2: shared emit_sdirk3_diag_line
 #include "wrf_sdirk3_u_slow_diagnostics.h"   // next_solver_id: the process-wide one
 #include "wrf_sdirk3_unified_preconditioner.h"  // v20.5: For set_stage_state()
@@ -282,6 +284,17 @@ static inline float diag_norm(const torch::Tensor& t) {
 // and extra RHS evaluations — never enable it for throughput or timing
 // measurements.
 // ============================================================================
+// R9 §10.1: which ORDER the stage budget knobs resolve in. Default is the shipped order, so
+// this is a measurement selector, not a behaviour change.
+static inline wrf::sdirk3::StageKrylovOrder stage_krylov_order() {
+    static const bool knob_first = [] {
+        const char* v = std::getenv("WRF_SDIRK3_STAGE_KNOB_FIRST");
+        return v != nullptr && v[0] != '\0' && v[0] != '0';
+    }();
+    return knob_first ? wrf::sdirk3::StageKrylovOrder::StageKnobFirst
+                      : wrf::sdirk3::StageKrylovOrder::ShippedOrder;
+}
+
 static inline bool stage4_jvp_check_enabled() {
     static const bool on = [] {
         const char* v = std::getenv("WRF_SDIRK3_STAGE4_JVP_CHECK");
@@ -317,6 +330,10 @@ static inline torch::Tensor gmres_residual_norm(const torch::Tensor& r, int halo
     // 1D packed: raw norm (halo mask is disabled)
     return safe_tensor_norm(r);
 }
+
+// Relative residuals, objective shares and the E^-1 S weighting live in
+// wrf_sdirk3_krylov_metrics.h -- one implementation, reachable from the contracts. See that
+// header for why a relative residual must take (r, b, L) together.
 
 // ============================================================================
 // FORWARD-MODE AD: Compute true JVP (J·v) using dual numbers
@@ -1392,12 +1409,19 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             // Cache once per solve (Gemini #66): no_early_stop_enabled() has a thread-safe
             // static-init guard checked on every call; hoist it out of the Arnoldi loop.
             const bool no_early_stop = no_early_stop_enabled();
+            // The gate's knobs, resolved for THIS stage. Shipped order reads the stage-2
+            // knobs even at stage 3, which is why a stage-3 sweep also flips this gate.
+            const auto gate_knobs = wrf::sdirk3::early_stop_gate_knobs(
+                stage_id,
+                cfg_local.stage2_gmres_restart, cfg_local.stage2_max_krylov_restarts,
+                cfg_local.stage3_gmres_restart, cfg_local.stage3_max_krylov_restarts,
+                stage_krylov_order());
             const bool aggressive_budget_stag_gate =
                 (!no_early_stop &&
                  stage_id >= 2 &&
                  ru_share_hint > 0.98f &&
-                 cfg_local.stage2_gmres_restart > 0 &&
-                 cfg_local.stage2_max_krylov_restarts == 1);
+                 gate_knobs.restart > 0 &&
+                 gate_knobs.max_restarts == 1);
             int stag_window = aggressive_budget_stag_gate
                                 ? 1
                                 : cfg_local.gmres_arnoldi_stag_window;
@@ -1692,8 +1716,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             // avoid extra periodic true-residual probes and keep only the mandatory
             // last-Arnoldi true-residual check. This is a default-off behavior because
             // it activates only when stage2_gmres_restart>0 is configured.
-            if (stage_id >= 2 &&
-                wrf::sdirk3::g_sdirk3_config.stage2_gmres_restart > 0) {
+            if (stage_id >= 2 && gate_knobs.restart > 0) {
                 start_j = std::max(start_j, restart - 1);
             }
             bool skip_periodic_true_check = (stage_id >= 2 && ru_share_hint > 0.9f);
@@ -2339,6 +2362,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     auto b_inner = b.clone();
     zero_halo_regions(b_inner, halo_width, periodic_x, periodic_y);
 
+    // The UNWEIGHTED Krylov RHS, kept before any left weighting touches b_inner.
+    // Every relative residual reported below divides by this vector under its OWN weight,
+    // which is what makes the four ratios comparable; the retracted measurement divided an
+    // unweighted numerator by a D-weighted denominator taken from the mutated b_inner.
+    const auto b_krylov = b_inner.clone();
+
     // v20.14 r50: GMRES block-scaling (left-preconditioning with D⁻¹).
     // D[block] = ||r0[block]||₂. After scaling, each block contributes exactly 1 to ||D⁻¹r0||².
     // This prevents phi/theta O(10⁴) from masking u O(1-10) in GMRES's L2 minimization.
@@ -2356,41 +2385,103 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // v20.14 r50-fix: Block-scaling requires AUTOGRAD JVP. With FD JVP, D_inv amplifies
     // directional noise (D_inv can reach ~800 for small-residual blocks like w/mu),
     // causing ||x||→0. Only enable when forward-mode AD provides exact JVP.
+    // THE FOUR LEFT WEIGHTINGS, built once from the same layout so the ratios reported at
+    // every restart are four views of ONE residual rather than four separate measurements.
+    //
+    //   L_S    = I           unweighted, in the (S) coordinates FGMRES actually iterates
+    //   L_phys = S           the physical residual, which is what the stage gate is a function of
+    //   L_E    = E^-1 S      the stage gate's own WRMS, expressed on Krylov vectors
+    //   L_D    = D^-1        what FGMRES minimises   (assigned after D_inv is built)
+    //
+    // L_S is left undefined on purpose: relative_residual() treats an undefined weight as the
+    // identity, so there is no ones-vector to accidentally diverge from the real identity.
+    torch::Tensor L_phys, L_E, L_D;
+    if (krylov_to_physical != nullptr && krylov_to_physical->defined() &&
+        krylov_to_physical->numel() == r_true_inner.numel()) {
+        torch::NoGradGuard ng_w;
+        L_phys = krylov_to_physical->detach().reshape_as(r_true_inner);
+        if (stage_weights != nullptr && layout && layout->is_valid()) {
+            const auto einv = wrf::sdirk3::inverse_scale_vector(
+                *layout, stage_weights->scale, torch::ones_like(r_true_inner));
+            if (einv.defined() && einv.numel() == r_true_inner.numel()) {
+                L_E = wrf::sdirk3::wrms_left_weight(einv, L_phys);
+            }
+        }
+    }
+    bool wrms_metric_applied = false;
+
+    // A scientific knob that silently runs the baseline is worse than one that fails: the
+    // first WRMS-metric run did exactly that (byte-identical trajectory was the only tell).
+    // The weighting is installed inside the block-scaling gate below, so every precondition
+    // of that gate is also a precondition of the experiment.
+    if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_WRMS_METRIC")) {
+        TORCH_CHECK(wrf::sdirk3::g_sdirk3_config.gmres_block_scale &&
+                        wrf::sdirk3::g_sdirk3_config.use_autograd &&
+                        layout && layout->is_valid() &&
+                        layout->total_size == r_true_inner.numel(),
+                    "WRF_SDIRK3_KRYLOV_WRMS_METRIC requested but the left-weighting path is "
+                    "unavailable (needs gmres_block_scale, use_autograd and a matching layout)");
+    }
     if (wrf::sdirk3::g_sdirk3_config.gmres_block_scale &&
         wrf::sdirk3::g_sdirk3_config.use_autograd &&
         layout && layout->is_valid() && layout->total_size == r_true_inner.numel()) {
         torch::NoGradGuard no_grad;
         D_inv = torch::ones_like(r_true_inner);
 
-        // THE EXPERIMENT THIS MEASUREMENT ASKS FOR (env-gated, default OFF).
+        // THE EXPERIMENT (env-gated, default OFF).
         //
-        // Measured: FGMRES minimising ||D^-1 r|| with D_q = ||r_0,q|| is essentially UNCORRELATED
-        // with the physical residual the stage gate judges -- Spearman -0.10 across five solves,
-        // 18-343x apart, and the worst solve by one measure is the best by the other. The
-        // minimiser can move error out of a block D made cheap into one it made expensive: free
-        // in its own norm, expensive physically.
+        // The question is whether FGMRES minimises a norm that disagrees with the one the stage
+        // acceptance gate judges. That question is open. What was previously recorded here as its
+        // answer -- "18-343x apart, Spearman -0.10" -- is RETRACTED: the quantity compared
+        // against rho_D was ||r~||/||D^-1 b~||, a ratio whose numerator and denominator carry
+        // different weights, so rho_D/rho_unscaled reduced to ||D^-1 r~||/||r~|| with the RHS
+        // cancelled. That is the directional amplification of D^-1, not a disagreement between
+        // two objectives. The paired trajectory below now reports four properly normalised
+        // ratios; the claim has to be re-earned from those.
         //
-        // So align the objectives: weight by the STAGE'S OWN error weights E -- the same
-        // pointwise rtol*|y_ref| + atol the acceptance gate uses -- instead of by initial block
-        // norms. FGMRES then minimises the quantity that decides whether the stage is accepted.
+        // The experiment itself: weight by the STAGE'S OWN error weights E -- the same pointwise
+        // rtol*|y_ref| + atol the acceptance gate uses -- instead of by initial block norms, so
+        // FGMRES minimises the quantity that decides whether the stage is accepted. Applied as
+        // E^-1 S, because the vectors here are r~ = S^-1 R (see below).
         //
-        // Direct test of whether the stage-3 stall is an inner/outer objective mismatch rather
-        // than anything nonlinear. An EXPERIMENT, not a proposed default: E-weighting removes the
-        // property block scaling exists for (equalising blocks whose initial residuals differ by
-        // 10^4), so it may trade one pathology for another.
+        // An EXPERIMENT, not a proposed default: E-weighting removes the property block scaling
+        // exists for (equalising blocks whose initial residuals differ by 10^4), so it may trade
+        // one pathology for another.
         const bool wrms_metric =
             wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_WRMS_METRIC");
-        bool wrms_metric_applied = false;
-        if (wrms_metric && stage_weights != nullptr) {
+        if (wrms_metric) {
+            // THE LEFT WEIGHT IS E^-1 S, NOT E^-1.
+            //
+            // The stage gate's WRMS is ||E^-1 R|| on the PHYSICAL residual, and the vectors
+            // FGMRES holds are r~ = S^-1 R. So the weighting that makes FGMRES minimise the
+            // gate's own quantity, expressed on the vectors it actually has, is E^-1 S.
+            //
+            // Dropping S is not a magnitude error that a tolerance absorbs. S and E are both
+            // block-constant here, so omitting S multiplies each block's weight by 1/S_q and
+            // can rank the blocks in the OPPOSITE order from the physical WRMS the experiment
+            // claims to be testing -- which is the difference between measuring the aligned
+            // objective and measuring a third, meaningless one.
+            TORCH_CHECK(stage_weights != nullptr,
+                        "WRF_SDIRK3_KRYLOV_WRMS_METRIC requested but no stage weights reached "
+                        "the Krylov solve; the run would silently have been the D baseline");
             const auto einv = wrf::sdirk3::inverse_scale_vector(
                 *layout, stage_weights->scale, torch::ones_like(r_true_inner));
-            if (einv.defined() && einv.numel() == r_true_inner.numel()) {
-                D_inv = einv;
-                wrms_metric_applied = true;
-                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                    std::cerr << "[GMRES METRIC] stage-WRMS weighting active (E^-1), replacing "
-                                 "initial-block-norm scaling" << std::endl;
-                }
+            TORCH_CHECK(einv.defined() && einv.numel() == r_true_inner.numel(),
+                        "WRF_SDIRK3_KRYLOV_WRMS_METRIC requested but the stage error weights do "
+                        "not match the state layout");
+            TORCH_CHECK(krylov_to_physical != nullptr && krylov_to_physical->defined() &&
+                            krylov_to_physical->numel() == r_true_inner.numel(),
+                        "WRF_SDIRK3_KRYLOV_WRMS_METRIC requested but S (krylov_to_physical) is "
+                        "unavailable; E^-1 alone is not the physical stage-WRMS objective");
+            D_inv = wrf::sdirk3::wrms_left_weight(einv, *krylov_to_physical);
+            TORCH_CHECK(D_inv.defined() &&
+                            torch::isfinite(D_inv).all().item<bool>() &&
+                            (D_inv > 0).all().item<bool>(),
+                        "WRF_SDIRK3_KRYLOV_WRMS_METRIC: E^-1 S is not finite and positive");
+            wrms_metric_applied = true;
+            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                std::cerr << "[GMRES METRIC] stage-WRMS weighting active (E^-1 S), replacing "
+                             "initial-block-norm scaling" << std::endl;
             }
         }
         auto r_cpu = r_true_inner.detach().to(torch::kCPU).contiguous();
@@ -2413,6 +2504,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         }
         if (all_blocks_ok) {
             block_scaled = true;
+            L_D = D_inv;
             // WHY the two weightings behave so differently -- their STRUCTURE, not just their values.
             //
             //   D_q = ||r_0,q||          BLOCK-CONSTANT, set by the initial residual
@@ -2428,28 +2520,44 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 const auto w = D_inv.detach().abs();
                 const double wmax = w.max().to(torch::kCPU).item<double>();
                 const double wmin = w.min().to(torch::kCPU).item<double>();
-                // PER-BLOCK ALIGNMENT, which is the operative quantity -- kappa(L) is not.
+                    // PER-BLOCK ALIGNMENT.
                 //
-                // Measured: kappa(D) = 2.07e6, kappa(E) = 3.98e9, while the observed
-                // rho_unscaled/rho_L is 18-343 for D and 5.5 for E. The bound
-                // rho_unscaled/rho_L <= kappa(L) HOLDS in every case but is vacuous -- it permits
-                // 10^6 and we observe 10^2 -- and the ratio is ANTI-correlated with kappa: E has
-                // the worse conditioning by 1920x and the smaller discrepancy by 45x. So the
-                // magnitude of the weighting spread does not drive the divergence.
+                // RETRACTED: the kappa(D)=2.07e6 / kappa(E)=3.98e9 comparison, and the
+                // "rho_unscaled/rho_L is 18-343 for D and 5.5 for E" it was weighed against.
+                // Both numbers came from the mixed-denominator ratio, and kappa(E) was the
+                // condition of E^-1 when the left weight FGMRES would actually apply is E^-1 S.
+                // The dynamic_range printed below is the condition number of the weighting
+                // ACTUALLY installed (a diagonal weight has kappa = max/min), so it is the
+                // measured quantity rather than a recomputed one.
                 //
-                // What can drive it is ALIGNMENT: how the weight mass is distributed across
-                // blocks relative to where the residual actually lives. A weighting that is large
-                // exactly where the residual is small contributes nothing to the minimised norm
-                // while the physical norm is dominated by blocks the objective barely sees. Both
-                // distributions are printed per block so the comparison is direct rather than
-                // inferred from two scalars.
-                for (const auto& blk : layout->blocks) {
-                    const auto wb = D_inv.slice(0, blk.start, blk.start + blk.size).abs();
-                    const auto rb = r_true_inner.slice(0, blk.start, blk.start + blk.size);
-                    std::cerr << "SDIRK3_WEIGHT_BLOCK " << blk.name
-                              << " w_mean=" << wb.mean().to(torch::kCPU).item<double>()
-                              << " r_norm=" << rb.norm().to(torch::kCPU).item<double>()
-                              << " weighted=" << (wb * rb.abs()).norm().to(torch::kCPU).item<double>()
+                // What the per-block distributions are for: a weighting that is large exactly
+                // where the residual is small contributes nothing to the minimised norm while
+                // another norm is dominated by blocks the objective barely sees. That is a
+                // statement about ALIGNMENT, and it needs the shares below, not a scalar.
+                // OBJECTIVE SHARES, EACH IN A NAMED COORDINATE SYSTEM.
+                //
+                // The retracted table called ||r~_q||^2 / sum_p ||r~_p||^2 the "physical
+                // residual share". It is not: r~ = S^-1 R, so that ratio is the share in the
+                // (S) coordinates FGMRES iterates. S is block-constant and spans orders of
+                // magnitude, so the (S) share and the physical share can attribute the residual
+                // to DIFFERENT blocks -- and attribution was the whole claim.
+                //
+                // All four come from the same r_true_inner, so nothing has to be inferred about
+                // which coordinate a number lives in.
+                const auto sh_krylov =
+                    wrf::sdirk3::block_energy_shares(*layout, r_true_inner, torch::Tensor{});
+                const auto sh_phys =
+                    wrf::sdirk3::block_energy_shares(*layout, r_true_inner, L_phys);
+                const auto sh_D =
+                    wrf::sdirk3::block_energy_shares(*layout, r_true_inner, L_D);
+                const auto sh_wrms =
+                    wrf::sdirk3::block_energy_shares(*layout, r_true_inner, L_E);
+                for (std::size_t i = 0; i < layout->blocks.size(); ++i) {
+                    std::cerr << "SDIRK3_OBJECTIVE_SHARE " << layout->blocks[i].name
+                              << " s_krylov=" << sh_krylov[i]
+                              << " s_physical=" << (L_phys.defined() ? sh_phys[i] : -1.0)
+                              << " s_D=" << (L_D.defined() ? sh_D[i] : -1.0)
+                              << " s_wrms=" << (L_E.defined() ? sh_wrms[i] : -1.0)
                               << std::endl;
                 }
                 std::cerr << "SDIRK3_WEIGHT_STRUCTURE metric="
@@ -2682,12 +2790,19 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             // Cache once per solve (Gemini #66): no_early_stop_enabled() has a thread-safe
             // static-init guard checked on every call; hoist it out of the Arnoldi loop.
             const bool no_early_stop = no_early_stop_enabled();
+            // The gate's knobs, resolved for THIS stage. Shipped order reads the stage-2
+            // knobs even at stage 3, which is why a stage-3 sweep also flips this gate.
+            const auto gate_knobs = wrf::sdirk3::early_stop_gate_knobs(
+                stage_id,
+                cfg_local.stage2_gmres_restart, cfg_local.stage2_max_krylov_restarts,
+                cfg_local.stage3_gmres_restart, cfg_local.stage3_max_krylov_restarts,
+                stage_krylov_order());
             const bool aggressive_budget_stag_gate =
                 (!no_early_stop &&
                  stage_id >= 2 &&
                  ru_share_hint > 0.98f &&
-                 cfg_local.stage2_gmres_restart > 0 &&
-                 cfg_local.stage2_max_krylov_restarts == 1);
+                 gate_knobs.restart > 0 &&
+                 gate_knobs.max_restarts == 1);
             int stag_window = aggressive_budget_stag_gate
                                 ? 1
                                 : cfg_local.gmres_arnoldi_stag_window;
@@ -3222,8 +3337,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             // avoid extra periodic true-residual probes and keep only the mandatory
             // last-Arnoldi true-residual check. This is a default-off behavior because
             // it activates only when stage2_gmres_restart>0 is configured.
-            if (stage_id >= 2 &&
-                wrf::sdirk3::g_sdirk3_config.stage2_gmres_restart > 0) {
+            if (stage_id >= 2 && gate_knobs.restart > 0) {
                 start_j = std::max(start_j, restart - 1);
             }
             bool skip_periodic_true_check = (stage_id >= 2 && ru_share_hint > 0.9f);
@@ -3629,22 +3743,35 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             torch::NoGradGuard ng_traj;
             // PAIRED TRAJECTORY -- the scientific question, not a diagnostic nicety.
             //
-            // FGMRES minimises the BLOCK-SCALED residual ||D^-1 r|| / ||D^-1 b||, where
-            // D_q = ||r_0,q|| equalises each block's INITIAL contribution. The stage gate accepts
-            // or rejects on a physically weighted WRMS instead. Those are different objective
-            // functions over the same residual, so on a finite Krylov budget the solver can
-            // reduce its own norm while the gate's norm GROWS -- the minimiser is free to trade
-            // error out of a block D has made cheap and into one it has made expensive.
+            // FGMRES minimises ||D^-1 r~|| / ||D^-1 b~|| on the vectors r~ = S^-1 R it holds.
+            // The stage gate accepts or rejects on ||E^-1 R||, a physically weighted WRMS.
+            // Those are different objective functions over the same residual, so on a finite
+            // Krylov budget the solver could reduce its own norm while the gate's norm GROWS.
+            // Whether it DOES is what these four ratios measure.
             //
-            // If that is happening, "more Krylov work makes stage 3 worse" needs no nonlinear
-            // explanation at all: it is inner and outer objectives disagreeing. Both ratios are
-            // computed here from the SAME r_true_inner and the SAME b, so the pair is exact
-            // rather than assembled from two runs.
-            const auto r_unscaled = safe_tensor_norm(r_true_inner) / bnorm_safe;
+            // Reporting all four is the point: with three coordinate systems in play (physical
+            // R, Krylov r~ = S^-1 R, objective L r~), a single "unscaled" number is ambiguous
+            // enough that the previous version of this emit compared two quantities normalised
+            // differently and read the mismatch as a physical finding.
+            // Four relative residuals, one residual, one RHS, one helper. Each ratio carries
+            // the SAME weight above and below the line -- the property the retracted
+            // "rho_unscaled" lacked, which is why its ratio against rho_D reduced to
+            // ||D^-1 r~||/||r~|| with the RHS cancelled out entirely.
+            const auto rho_D    = wrf::sdirk3::relative_residual(r_true_inner, b_krylov, L_D);
+            const auto rho_S    = wrf::sdirk3::relative_residual(r_true_inner, b_krylov, torch::Tensor{});
+            const auto rho_phys = wrf::sdirk3::relative_residual(r_true_inner, b_krylov, L_phys);
+            const auto rho_E    = wrf::sdirk3::relative_residual(r_true_inner, b_krylov, L_E);
             std::cerr << "SDIRK3_KRYLOV_TRAJECTORY restart=" << iter
+                      << " metric=" << (wrms_metric_applied ? "E_S" : "D_blockconst")
                       << " scaled=" << (block_scaled ? 1 : 0)
-                      << " rho_D=" << guarded_item<float>(error_tensor)
-                      << " rho_unscaled=" << guarded_item<float>(r_unscaled)
+                      << " rho_D=" << (rho_D.valid ? rho_D.value : -1.0)
+                      << " rho_S=" << (rho_S.valid ? rho_S.value : -1.0)
+                      << " rho_phys=" << (rho_phys.valid && L_phys.defined() ? rho_phys.value : -1.0)
+                      << " rho_wrms=" << (rho_E.valid && L_E.defined() ? rho_E.value : -1.0)
+                      // Cross-check: rho_D from the helper must equal the solver's own
+                      // error_tensor. If it does not, the helper and the solve disagree about
+                      // what is being minimised, and every number on this line is suspect.
+                      << " solver_error=" << guarded_item<float>(error_tensor)
                       << std::endl << std::flush;
         }
 
@@ -5356,6 +5483,112 @@ public:
             // After fix:         R = K - F           (correct for all configurations)
             torch::Tensor R = K - F;
 
+            // ================================================================
+            // R9 P0-C/D: STAGE-ENTRY RESIDUAL DECOMPOSITION (opt-in, default OFF)
+            // ================================================================
+            // Stage 3 was observed entering Newton at a raw packed residual ~27x stage 2's.
+            // The observation reproduces, but it does not localise anything on its own, because
+            // a stage-tendency residual
+            //
+            //     R_s(K) = K - F_I(Y_s + dt*gamma*K)
+            //
+            // depends on BOTH the stage base Y_s (assembled from the tableau and the earlier
+            // stages) AND the predictor K^(0). "Inherited from Y_3" is therefore not readable
+            // off the entry norm: a stale or badly chosen predictor produces the same symptom.
+            //
+            // Holding Y_s FIXED and varying ONLY the predictor is what divides the
+            // responsibility:
+            //
+            //     K0 = 0         R = -F_I(Y_s)          a pure property of the base state
+            //     K0 = Picard    K0 = F_I(Y_s)          one fixed-point step from that base
+            //     K0 = K_prev    the previous stage's K what stage 3 actually falls back to
+            //     K0 = production                       whatever the predictor policy chose
+            //
+            // Large at K0 = 0 implicates the base state or the stage's F_I scope; large only at
+            // the production predictor implicates the predictor/cache.
+            //
+            // Also reported per row, because the raw packed L2 mixes six blocks with different
+            // units and is not the quantity the stage gate judges: the stage-WRMS norm and the
+            // worst block's WRMS. Three extra RHS evaluations -- never enable for timing.
+            if (newton_iter == 0 &&
+                wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STAGE_ENTRY_LEDGER")) {
+                torch::NoGradGuard ng_entry;
+                // Weights captured at the BASE state, so every row is judged by the same E.
+                const auto* w_entry = newton_weights_for(U_stage, stage, 0);
+                const bool have_layout = layout_initialized_ &&
+                                         cached_layout_.is_valid() &&
+                                         cached_layout_.total_size == R.numel();
+
+                auto emit_row = [&](const char* label, const torch::Tensor& K0,
+                                    const torch::Tensor& F0) {
+                    const auto R0 = (K0 - F0).detach();
+                    const double raw = R0.norm().to(torch::kFloat64).item<double>();
+                    const double k0n = K0.detach().norm().to(torch::kFloat64).item<double>();
+                    const double f0n = F0.detach().norm().to(torch::kFloat64).item<double>();
+                    const double dotv = (K0.detach().to(torch::kFloat64) *
+                                         F0.detach().to(torch::kFloat64)).sum().item<double>();
+                    const double cosv = (k0n > 0.0 && f0n > 0.0) ? dotv / (k0n * f0n) : 0.0;
+
+                    double wrms = -1.0, blockmax = -1.0;
+                    if (w_entry != nullptr && have_layout) {
+                        const auto einv = wrf::sdirk3::inverse_scale_vector(
+                            cached_layout_, w_entry->scale, R0);
+                        if (einv.defined() && einv.numel() == R0.numel()) {
+                            const auto wr = (einv.to(torch::kFloat64) *
+                                             R0.to(torch::kFloat64));
+                            wrms = wr.norm().item<double>() /
+                                   std::sqrt(static_cast<double>(wr.numel()));
+                            for (const auto& blk : cached_layout_.blocks) {
+                                const auto wb = wr.slice(0, blk.start, blk.start + blk.size);
+                                const double bq = wb.norm().item<double>() /
+                                                  std::sqrt(static_cast<double>(blk.size));
+                                if (bq > blockmax) blockmax = bq;
+                            }
+                        }
+                    }
+                    std::cerr << "SDIRK3_STAGE_ENTRY stage=" << stage
+                              << " predictor=" << label
+                              << " raw_l2=" << raw
+                              << " wrms=" << wrms
+                              << " block_max_wrms=" << blockmax
+                              << " K0_norm=" << k0n
+                              << " FI_norm=" << f0n
+                              << " cos_K0_FI=" << cosv;
+                    if (have_layout) {
+                        for (const auto& blk : cached_layout_.blocks) {
+                            std::cerr << " " << blk.name << "="
+                                      << R0.slice(0, blk.start, blk.start + blk.size)
+                                             .norm().to(torch::kFloat64).item<double>();
+                        }
+                    }
+                    std::cerr << std::endl;
+                };
+
+                // Base state itself, so a large R(0) can be read against the state it came from.
+                std::cerr << "SDIRK3_STAGE_ENTRY stage=" << stage
+                          << " Y_base_norm=" << U_stage.detach().norm()
+                                                    .to(torch::kFloat64).item<double>()
+                          << " dt=" << dt << " gamma=" << gamma << std::endl;
+
+                const auto zero_K = torch::zeros_like(K);
+                const auto F_base = compute_rhs(U_stage).detach();
+                emit_row("zero", zero_K, F_base);
+
+                const auto K_picard = F_base;
+                emit_row("picard", K_picard,
+                         compute_rhs(U_stage + dt * gamma * K_picard).detach());
+
+                if (K_prev.defined() && K_prev.size(0) >= 1) {
+                    const auto K_last = K_prev.select(0, K_prev.size(0) - 1).detach();
+                    emit_row("prev_stage", K_last,
+                             compute_rhs(U_stage + dt * gamma * K_last).detach());
+                }
+
+                // The production row reuses F already computed for R -- no extra evaluation,
+                // and by construction it is the same number the Newton loop is about to use.
+                emit_row("production", K.detach(), F.detach());
+            }
+
             // PR 9E (diagnosis-only, opt-in): retain the FINAL fast RHS and Newton
             // defect for this record-stage solve. Assigning the detached tensor
             // handles is O(1) and sync-free; the LAST accepted iteration's write
@@ -6889,70 +7122,58 @@ public:
             // Arnoldi count actually USED, not the one requested.
             if (stage >= 2) {
                 auto& cfg = wrf::sdirk3::g_sdirk3_config;
-                if (cfg.stage2_gmres_restart > 0) effective_restart = cfg.stage2_gmres_restart;
-                if (cfg.stage2_max_krylov_restarts > 0) effective_max_restarts = cfg.stage2_max_krylov_restarts;
-                // v20.14 r49: stage2_krylov_tol is defined as a true override in config.h
-                if (cfg.stage2_krylov_tol > 0.0f) {
-                    krylov_tol_adaptive = cfg.stage2_krylov_tol;
-                    krylov_tol_stage_override = true;
-                }
-                const bool stage_budget_active =
-                    (cfg.stage2_gmres_restart > 0 ||
-                     cfg.stage2_max_krylov_restarts > 0 ||
-                     cfg.stage2_krylov_tol > 0.0f ||
-                     cfg.stage3_gmres_restart > 0 ||
-                     cfg.stage3_max_krylov_restarts > 0 ||
-                     cfg.stage3_krylov_tol > 0.0f);
+                // Knob resolution and EW budget scaling are a PURE function of the config, the
+                // stage and the forcing -- resolved in wrf_sdirk3_stage_krylov_policy.h so the
+                // ORDER is named and testable instead of implicit in this block's line order.
+                // Default is ShippedOrder, which reproduces the previous behaviour exactly.
+                // The hopeless caps below stay here: they read streak counters, i.e. state.
+                wrf::sdirk3::StageKrylovInputs policy_in;
+                policy_in.stage             = stage;
+                policy_in.base_restart      = effective_restart;
+                policy_in.base_max_restarts = effective_max_restarts;
+                policy_in.base_tol          = krylov_tol_adaptive;
+                policy_in.s2_restart        = cfg.stage2_gmres_restart;
+                policy_in.s2_max_restarts   = cfg.stage2_max_krylov_restarts;
+                policy_in.s2_tol            = cfg.stage2_krylov_tol;
+                policy_in.s3_restart        = cfg.stage3_gmres_restart;
+                policy_in.s3_max_restarts   = cfg.stage3_max_krylov_restarts;
+                policy_in.s3_tol            = cfg.stage3_krylov_tol;
+                policy_in.ew_enabled        = ew_eta_enabled_this_iter;
+                policy_in.ew_eta            = ew_eta_used_this_iter;
+                policy_in.order =
+                    wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STAGE_KNOB_FIRST")
+                        ? wrf::sdirk3::StageKrylovOrder::StageKnobFirst
+                        : wrf::sdirk3::StageKrylovOrder::ShippedOrder;
+                const auto policy = wrf::sdirk3::resolve_stage_krylov_policy(policy_in);
+
+                const int  restart_before_policy = effective_restart;
+                const int  maxr_before_policy    = effective_max_restarts;
+                effective_restart         = policy.restart;
+                effective_max_restarts    = policy.max_restarts;
+                krylov_tol_adaptive       = policy.tol;
+                krylov_tol_stage_override = policy.tol_overridden;
+
+                const bool stage_budget_active = policy.budget_active;
                 stage_budget_active_this_iter = stage_budget_active;
-                // Couple EW forcing and Krylov budget only when stage-aware budget is explicitly active.
-                // This keeps baseline runs regression-neutral.
-                if (stage_budget_active && ew_eta_enabled_this_iter && !krylov_tol_stage_override) {
-                    float eta_for_budget = ew_eta_used_this_iter;
-                    if (!(eta_for_budget > 0.0f) || !std::isfinite(eta_for_budget)) {
-                        eta_for_budget = krylov_tol_adaptive;
-                    }
-                    if (std::isfinite(eta_for_budget) && eta_for_budget > 0.0f) {
-                        eta_for_budget = std::clamp(eta_for_budget, 1.0e-3f, 1.0f);
-                        float budget_scale = 1.0f;
-                        if (eta_for_budget <= 0.08f) {
-                            budget_scale = 1.25f;  // tighter forcing: allow more Krylov work
-                        } else if (eta_for_budget <= 0.15f) {
-                            budget_scale = 1.10f;
-                        } else if (eta_for_budget >= 0.40f) {
-                            budget_scale = 0.75f;  // loose forcing: avoid over-solving
-                        } else if (eta_for_budget >= 0.30f) {
-                            budget_scale = 0.85f;
-                        }
-                        int restart_before = effective_restart;
-                        int maxr_before = effective_max_restarts;
-                        effective_restart = std::max(
-                            2, static_cast<int>(effective_restart * budget_scale + 0.5f));
-                        if (budget_scale > 1.0f) {
-                            const float maxr_scale = std::min(budget_scale, 1.20f);
-                            effective_max_restarts = std::max(
-                                1, static_cast<int>(effective_max_restarts * maxr_scale + 0.5f));
-                        } else if (budget_scale < 1.0f) {
-                            const float maxr_scale = std::max(budget_scale, 0.70f);
-                            effective_max_restarts = std::max(
-                                1, static_cast<int>(effective_max_restarts * maxr_scale + 0.5f));
-                        }
-                        stage_budget_forcing_eta = eta_for_budget;
-                        stage_budget_scale = budget_scale;
-                        stage_budget_forcing_coupled =
-                            (effective_restart != restart_before ||
-                             effective_max_restarts != maxr_before);
-                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 &&
-                            newton_iter == 0 && stage_budget_forcing_coupled) {
-                            std::cerr << "[GMRES COUPLING] Stage " << stage
-                                      << ": eta=" << eta_for_budget
-                                      << ", scale=" << budget_scale
-                                      << ", restart=" << restart_before
-                                      << "->" << effective_restart
-                                      << ", max_restarts=" << maxr_before
-                                      << "->" << effective_max_restarts
-                                      << std::endl;
-                        }
-                    }
+                stage_budget_forcing_eta      = policy.ew_eta_used;
+                stage_budget_scale            = policy.ew_scale;
+                stage_budget_forcing_coupled  = policy.ew_applied;
+                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 && newton_iter == 0) {
+                    // Report the value USED and where it came from, so an inherited budget can
+                    // never again be read as "the global default".
+                    std::cerr << "[GMRES POLICY] Stage " << stage
+                              << ": order=" << (policy_in.order ==
+                                                wrf::sdirk3::StageKrylovOrder::StageKnobFirst
+                                                    ? "stage_knob_first" : "shipped")
+                              << ", restart=" << restart_before_policy
+                              << "->" << effective_restart
+                              << " (source=" << static_cast<int>(policy.restart_source) << ")"
+                              << ", max_restarts=" << maxr_before_policy
+                              << "->" << effective_max_restarts
+                              << ", ew_scale=" << policy.ew_scale
+                              << ", ew_applied=" << (policy.ew_applied ? 1 : 0)
+                              << ", budget_active=" << (stage_budget_active ? 1 : 0)
+                              << std::endl;
                 }
                 if (stage == 2 && stage_budget_active && stage2_hopeless_budget_mode_ &&
                     !cfg.hopeless_relax) {
@@ -6974,12 +7195,8 @@ public:
                               << " (streak=" << stage2_hopeless_streak_ << ")\n";
                 }
                 if (stage >= 3) {
-                    if (cfg.stage3_gmres_restart > 0) effective_restart = cfg.stage3_gmres_restart;
-                    if (cfg.stage3_max_krylov_restarts > 0) effective_max_restarts = cfg.stage3_max_krylov_restarts;
-                    if (cfg.stage3_krylov_tol > 0.0f) {
-                        krylov_tol_adaptive = cfg.stage3_krylov_tol;
-                        krylov_tol_stage_override = true;
-                    }
+                    // The stage-3 knobs were already applied by the policy resolver above, in
+                    // the order the resolver names. Only the stateful cap remains here.
 
                     // v20.14r60: Repeated hopeless Stage-3 GMRES failures in ru-dominant mode
                     // indicate wasted JVP budget. Cap Stage-3 restart in that mode.
@@ -7701,8 +7918,14 @@ public:
                           // Also needed by the stage-WRMS metric experiment, which USES these
                           // weights as the Krylov objective rather than merely reporting with
                           // them -- gating on the probe alone silently disabled that experiment.
+                          // Also handed over for the paired trajectory: without E the report
+                          // can print three of its four ratios and the stage gate's own
+                          // objective -- the one the comparison exists to make -- comes out
+                          // as "unavailable". Handing weights over does NOT change the
+                          // objective; only WRF_SDIRK3_KRYLOV_WRMS_METRIC does that.
                           (apinv_probe_armed() ||
-                           wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_WRMS_METRIC"))
+                           wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_WRMS_METRIC") ||
+                           wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY"))
                               ? newton_weights_for(U_eval, stage, newton_iter)
                               : nullptr,
                           // S, so a physically-weighted defect is computed on physical vectors.
@@ -9931,6 +10154,29 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
                   << " msg=\"" << result.message << "\""
                   << "\n";
         });
+    }
+
+    // R9 P0-C: the one link in the stage-entry chain that was inferred rather than measured.
+    // The next stage's base is Y_{s+1} = U_n + dt*sum(a_{s+1,j} K_j), so if Y_3 is orders of
+    // magnitude larger than Y_2, the accepted K of THIS stage is where that came from -- but
+    // "the accepted K must be large" is an inference until the norm is on the record next to
+    // the convergence flag it was accepted under.
+    if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STAGE_ENTRY_LEDGER")) {
+        torch::NoGradGuard ng_exit;
+        std::cerr << "SDIRK3_STAGE_EXIT stage=" << stage
+                  << " converged=" << (result.converged ? 1 : 0)
+                  << " newton_iters=" << result.iterations
+                  << " final_res=" << result.final_residual
+                  << " K_norm=" << (result.K.defined()
+                                        ? result.K.detach().norm()
+                                              .to(torch::kFloat64).item<double>()
+                                        : -1.0)
+                  << " dt_gamma_K_norm=" << (result.K.defined()
+                                        ? (dt * gamma * result.K.detach()).norm()
+                                              .to(torch::kFloat64).item<double>()
+                                        : -1.0)
+                  << " msg=\"" << result.message << "\""
+                  << std::endl;
     }
 
     // Warn if convergence failed but still returning K
