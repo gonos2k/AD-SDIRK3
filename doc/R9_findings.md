@@ -199,3 +199,129 @@ All four ratios read 1.000 at restart 0 — GMRES made no progress at all.
 mu being physically dominant while numerically tiny, not the cause of the stage-3 failure —
 and §6a already attributes that failure to the explicit ARK term, which no Krylov objective
 touches.
+
+---
+
+# R9 remainder — F1, I1, H1..H5
+
+Same configuration unless stated. No independent review has been run.
+
+## F1 — the nonlinear ledger separates the two failure modes, and stage 3 is mode (a)
+
+`WRF_SDIRK3_NONLINEAR_LEDGER=1`. Predicted and actual come from the SAME trial; the prediction
+is a read, not an operator call, via `R + a A dK = (1-a) R - a r_g` (b = -R, r_g = b - A dK).
+E is frozen at STAGE ENTRY so the rows are comparable to each other — a per-iteration recapture
+made the first version's rows silently incomparable, and the chained identity
+`R_actual(iter 0) == R_before(iter 1)` is what shows the fix took.
+
+| stage | iter | R_before | R_pred_linear | R_actual | actual/pred | gmres_rel_error |
+|---|---|---|---|---|---|---|
+| 2 | 0 | 4.891e5 | 3.260e6 | 1.187e6 | 0.364 | 0.196 |
+| 2 | 1 | 1.187e6 | 7.329e5 | 3.497e5 | 0.477 | 0.350 |
+| **3** | 0 | 4.883e6 | 7.657e9 | 7.617e9 | **0.995** | 0.948 |
+
+**Stage 3 fails in mode (a): the linear system is unsolved.** The linearization is FAITHFUL to
+0.5% — the model predicts a 1568x residual growth and the nonlinear map delivers exactly that.
+So the step is bad and reality agrees; nothing is wrong with the local linear model.
+
+At stage 2 the nonlinearity HELPS (actual is 0.36-0.48 of predicted).
+
+## I1 — the explicit cascade scales as dt^2.4, and needs dt ~ 15 s to stop dominating
+
+`||k_slow[1]|| = 1770.82` at every dt (it is `F_slow(U_n)`, dt-independent — a free control).
+
+| dt | `\|\|Y_2 - U_n\|\|` term | `\|\|k_slow[2]\|\| = \|\|F_slow(Y_2)\|\|` | `h a^E_32 k_slow[2]` |
+|---|---|---|---|
+| 600 | 9.262e5 | 2.879e8 | 1.251e10 |
+| 300 | 4.631e5 | 1.091e8 | 2.371e9 |
+| — | 0 | 1770.82 (exact) | — |
+
+`k_slow` scales as `delta^1.400`, and `delta ∝ dt`, so the stage-3 explicit term scales as
+**dt^2.400** (2.400 measured directly from the two term values, not assumed).
+
+Fit: `||F_slow(U_n + delta)|| = 1.277 delta^1.400` reproduces 2.879e8 at dt=600.
+
+**EXTRAPOLATED** (2 measured points + 1 exact anchor, over a 39x extrapolation — not measured):
+the explicit term falls to `||U_n||` only at **dt ~ 15 s**, i.e. ~39x below the operational 600.
+That is the order of an acoustic sub-step, which is what a split-explicit sub-cycle supplies.
+
+**Why it could not be verified by running:** at dt=120 stage 2 STALLS (Newton exits at iter 3,
+`final_res = 0.2146` vs tol 0.2) even with the iteration cap raised to 8, so stage 3 is never
+reached and `k_slow[2]` does not exist. Stage 2 converges at dt=600 and dt=300 and stalls at
+dt=120 — **non-monotonic in dt**, matching the recorded small-dt phenomenology.
+
+## H1 — M does not model the operator, and the defect is SHAPE, not gain
+
+`WRF_SDIRK3_APINV_DEFECT=1`, stage 2, first three Krylov directions:
+
+| krylov_iter | eps_krylov | shape_k | cos_k | gain_p | cos_p |
+|---|---|---|---|---|---|
+| 0 | 8.085e4 | 7.556e4 (93%) | 0.356 | -187.5 | -0.0012 |
+| 1 | 6.897e4 | 4.479e4 (65%) | 0.760 | 6424 | 0.230 |
+| 2 | 5.511e4 | 4.396e4 (80%) | **-0.603** | -8623 | -0.252 |
+
+`shape` is 65-93% of the whole defect, so **no scalar gain can fix it**, and `cos` swings from
++0.76 to -0.60 across three directions. Judged the way the record says to judge it
+(`||A M^-1 v - v||`, never the gain), M is not close to modelling `A`.
+
+Per-block, defect per unit of probe direction (`SDIRK3_APINV_V0_BLOCKS`, first direction):
+
+| block | v | d | d/v |
+|---|---|---|---|
+| ru | 338.3 | 2.663e8 | 7.9e5 |
+| rv | 338.7 | 4.299e10 | 1.3e8 |
+| **rw** | 335.7 | **5.702e11** | **1.7e9** |
+| ph | 175.2 | 2.745e6 | 1.6e4 |
+| t | 338.3 | 1.369e7 | 4.0e4 |
+| **mu** | 3.602e6 | 3.493e9 | **9.7e2** |
+
+**This does not reproduce the recorded "M annihilates the ph/mu rows".** Under WRFParity with
+the corrected Omega, mu has the SMALLEST per-unit defect and **rw the largest, by six orders**.
+The recorded claim was measured on the legacy operator and its re-measurement was open; this is
+it. Caveat: three structured directions at one stage, and structured directions can lie in a
+null space — a claim about the operator needs more than this.
+
+## H2 — the acoustic-gravity block is the worst-modelled row, and re-deriving it cannot reach dt=600
+
+Reachability decided by measurement rather than by re-derivation, as the checklist required.
+Two facts point opposite ways and both are measured:
+
+- **For**: `rw` carries the largest per-unit preconditioner defect of any block, 6 orders above
+  `mu`. The W-phi block IS where M is worst.
+- **Against**: the W-phi 2x2 refinement was already implemented, measured WORSE and reverted
+  (the over-damped W diagonal was load-bearing); and stage 3's state is 99.98% one explicit
+  term, so any M acts on 0.002% of what stage 3 is handed.
+
+**Verdict: worth doing for implicit-solve quality, cannot address dt=600.** Not re-derived here
+— doing so would be building on the second fact being wrong, and it is measured.
+
+## H3 — stage 2 converges at 102 Arnoldi, one fifth of the 510 on record
+
+Single-variable (`WRF_SDIRK3_STAGE_KNOB_FIRST=1`), reporting Arnoldi USED, not requested:
+
+| requested | Arnoldi USED | converged | rho_newton_scaled_exit |
+|---|---|---|---|
+| 60 | 51 | 0 | 0.2758 |
+| **120** | **102** | **1** | 0.1800 |
+| 200 | 170 | 1 | 0.1293 |
+| 300 | 255 | 1 | 0.1035 |
+| 600 | 510 | 1 | 0.0667 |
+
+`newton_tol = 0.2`, so 102 is marginal (0.180) and 170 is comfortable. The recorded "~510
+needed" was measured before the policy confound was removed and without reporting the used
+count. Every arm here scales by exactly 0.85 (51/60, 102/120, 170/200, 255/300, 510/600),
+which is what makes it single-variable.
+
+## H4 — stage-3 ceiling, shown rather than asserted
+
+With stage 2 CONVERGED (`converged=1`, `final_res=0.0667`) and stage 3 given its own 600-vector
+budget, stage 3 reaches `gmres_rel_error = 0.948` and its step multiplies the residual by 1568x
+— faithfully, per F1. Across this session stage 3 failed at every budget tried (51, 128, 255,
+383, 510, 600) and at every objective tried (`D`, `E^-1 S`). It is not a budget or an objective.
+
+## H5 — dt=600 full step: where it stops, with the term named
+
+It stops at **stage 3 of the first ARK sweep**. The state stage 3 is handed is `1.251e10`,
+6640x `||U_n||`, of which **99.98% is the single explicit term `h a^E_32 k_slow[2]`**. `F_I` of
+that state is `7.4e14` and **99.99% `ru`**. No implicit-side lever reaches it. The measured
+scaling says the term stops dominating only near dt ~ 15 s.

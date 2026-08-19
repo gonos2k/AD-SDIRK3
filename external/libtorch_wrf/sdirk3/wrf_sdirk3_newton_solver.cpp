@@ -7062,6 +7062,11 @@ public:
             // CRITICAL FIX (2025-11-28): Declare outside try block for use in trust region
             float gmres_rel_error = 1.0f;  // Default to 1.0 (no reduction) if GMRES fails
             float gmres_raw_rel_error = 1.0f;  // v20.14r27g: unclamped, may be >1 when GMRES diverges
+            // R9 P0-D: the GMRES residual, kept only when the nonlinear ledger is armed. It is
+            // what turns the linear model's prediction into a read rather than an operator
+            // call: with b = -R and r_g = b - A dK, the predicted post-step residual
+            // R + a A dK is exactly (1-a) R - a r_g.
+            torch::Tensor ledger_r_gmres;
             bool krylov_tol_stage_override = false;
             bool stage_budget_active_this_iter = false;
             bool stage_budget_forcing_coupled = false;
@@ -8063,6 +8068,11 @@ public:
                 // Clamped value is only for the quadratic prediction model (e² term).
                 gmres_raw_rel_error = gmres_result.rel_error;
                 gmres_rel_error = std::clamp(gmres_raw_rel_error, 0.0f, 1.0f);
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_NONLINEAR_LEDGER") &&
+                    gmres_result.r_true.defined()) {
+                    torch::NoGradGuard ng_keep;
+                    ledger_r_gmres = gmres_result.r_true.detach();
+                }
                 stats_.total_krylov_iterations += gmres_result.iterations;
 
                 // ============================================================
@@ -9772,6 +9782,81 @@ public:
 
             // Update K with damped and scaled step
             K = K + alpha * dK_scaled;  // Functional operation to preserve autograd graph
+
+            // ================================================================
+            // R9 P0-D: NONLINEAR LEDGER (opt-in, default OFF)
+            // ================================================================
+            // "The stage failed" conflates two different failures:
+            //
+            //   (a) the LINEAR system was not solved -- Krylov made no progress, so the step
+            //       is not a Newton step at all; the lever is the operator/preconditioner.
+            //   (b) the linear system WAS solved and the nonlinear residual still did not
+            //       fall -- the local linear model does not describe the map; the lever is
+            //       the step (damping, trust radius) or the formulation.
+            //
+            // Separating them needs the linear model's PREDICTION and the nonlinear TRUTH from
+            // the SAME trial, in the norm the stage gate judges:
+            //
+            //   predicted   (1-a) R - a r_g        (= R + a A dK, since b = -R and r_g = b - A dK)
+            //   actual      R(K + a dK)
+            //
+            // The prediction needs no operator call -- the identity above turns it into the
+            // GMRES residual, which the solve already produced. The actual is `accepted_residual`,
+            // which production already computed at the trial point. So this costs no RHS and no
+            // JVP; it only reads. dk_norm is printed alongside because on the GMRES-total-failure
+            // path the step is ZERO and `accepted_residual` is then legitimately the OLD residual
+            // -- a row with dk_norm = 0 says "no step was taken", not "the step achieved nothing".
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_NONLINEAR_LEDGER")) {
+                torch::NoGradGuard ng_led;
+                // The STAGE-ENTRY weights, not a per-iteration recapture.
+                //
+                // newton_weights_for() re-captures E at the current linearization point, so a
+                // ledger built on it would weight each row by a DIFFERENT norm -- valid within
+                // a row, silently incomparable ACROSS rows, which is exactly the mistake this
+                // whole review is about. One E per stage makes the iteration sequence readable.
+                const auto* w_led = stage_weights_for(stage);
+                torch::Tensor E_inv;
+                if (w_led != nullptr && layout_initialized_ &&
+                    cached_layout_.is_valid() && cached_layout_.total_size == R.numel()) {
+                    E_inv = wrf::sdirk3::inverse_scale_vector(cached_layout_, w_led->scale, R);
+                    if (E_inv.defined() && E_inv.numel() != R.numel()) E_inv = torch::Tensor{};
+                }
+                auto wnorm = [&](const torch::Tensor& v) -> double {
+                    if (!v.defined()) return -1.0;
+                    const auto v64 = v.detach().to(torch::kFloat64);
+                    const auto z = E_inv.defined() ? v64 * E_inv.to(torch::kFloat64) : v64;
+                    return z.norm().item<double>() /
+                           std::sqrt(static_cast<double>(z.numel()));
+                };
+                // r_g lives in the SCALED space the solve runs in; S maps it back.
+                torch::Tensor r_g_phys;
+                if (ledger_r_gmres.defined()) {
+                    r_g_phys = scaling_initialized_ && S_diag_.defined() &&
+                               S_diag_.numel() == ledger_r_gmres.numel()
+                                   ? S_diag_ * ledger_r_gmres
+                                   : ledger_r_gmres;
+                }
+                torch::Tensor R_pred;
+                if (r_g_phys.defined() && r_g_phys.numel() == R.numel()) {
+                    R_pred = (1.0f - alpha) * R.detach() - alpha * r_g_phys;
+                }
+                const double pred = wnorm(R_pred);
+                const double actual = wnorm(accepted_residual);
+                std::cerr << "SDIRK3_NONLINEAR_LEDGER stage=" << stage
+                          << " iter=" << newton_iter
+                          << " alpha=" << alpha
+                          << " dk_norm=" << dK_scaled.detach().norm()
+                                                .to(torch::kFloat64).item<double>()
+                          << " E_weighted=" << (E_inv.defined() ? 1 : 0)
+                          << " R_before=" << wnorm(R)
+                          << " R_pred_linear=" << pred
+                          << " R_actual=" << actual
+                          << " actual_over_pred=" << ((pred > 0.0 && actual >= 0.0)
+                                                          ? actual / pred : -1.0)
+                          << " gmres_rel_error=" << gmres_raw_rel_error
+                          << " gmres_iters=" << gmres_iters
+                          << std::endl;
+            }
 
             // PR 8: per-iteration update record (opt-in). Emitted after the
             // update is applied; reads only.
