@@ -9367,6 +9367,23 @@ public:
             // FIX 2026-01-31: When all trust-region attempts fail, do NOT force-accept.
             // Keep K unchanged (zero update) so Newton can try again next iteration
             // with the same residual. This prevents divergence from accepting bad steps.
+            // M6: DID THE STEP HAPPEN? "The stage gate exceeded 1, therefore a large Krylov
+            // update grew the residual" does not follow. When every trust attempt is rejected
+            // this branch sets dK_scaled = 0 and K is unchanged, so the stage simply KEEPS its
+            // entering residual -- a gate above 1 then reports a step that was never taken.
+            // Those are opposite diagnoses (a harmful update vs no update at all) and no
+            // published measurement so far distinguishes them.
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STEP_LEDGER")) {
+                torch::NoGradGuard ng_ledger;
+                std::cerr << "SDIRK3_STEP_LEDGER stage=" << stage
+                          << " newton_iter=" << newton_iter
+                          << " step_accepted=" << (step_accepted ? 1 : 0)
+                          << " R_norm=" << R.detach().norm().to(torch::kCPU).item<double>()
+                          << " dK_norm=" << dK.detach().norm().to(torch::kCPU).item<double>()
+                          << " rho=" << last_rho
+                          << std::endl << std::flush;
+            }
+
             if (!step_accepted) {
                 dK_scaled = torch::zeros_like(dK);
                 accepted_residual = R.detach();  // Keep current residual
