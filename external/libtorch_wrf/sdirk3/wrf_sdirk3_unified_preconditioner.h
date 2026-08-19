@@ -457,8 +457,9 @@ public:
     //
     // std::optional makes the unset state UNREPRESENTABLE as a number: a reader cannot obtain a
     // value without first handling absence. That retires the class instead of patching a sixth
-    // field. `path` and `reduction_applied` stay plain because their zero/false IS the meaning
-    // (no path ran; the solver discarded the reduction) rather than an absence.
+    // field. `path`, `reduction_computed` and `reduction_used` stay plain because their
+    // zero/false IS the meaning (no path ran; nothing was computed; the solver discarded the
+    // reduction) rather than an absence.
     struct MuSchurRecord {
         // 0 = no elimination ran; 1 = packed 1D, 2 = batched 4D, 3 = per-column scalar fallback.
         int path = 0;
