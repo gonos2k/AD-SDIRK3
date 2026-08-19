@@ -9803,9 +9803,21 @@ public:
             // The prediction needs no operator call -- the identity above turns it into the
             // GMRES residual, which the solve already produced. The actual is `accepted_residual`,
             // which production already computed at the trial point. So this costs no RHS and no
-            // JVP; it only reads. dk_norm is printed alongside because on the GMRES-total-failure
-            // path the step is ZERO and `accepted_residual` is then legitimately the OLD residual
-            // -- a row with dk_norm = 0 says "no step was taken", not "the step achieved nothing".
+            // JVP; it only reads.
+            //
+            // BUT THE IDENTITY IS ONLY VALID FOR THE STEP a dK. Production applies
+            // `alpha * dK_scaled`, and dK_scaled is NOT always dK: the trust region can shrink
+            // it, the GMRES-total-failure path zeroes it, and the fallback path replaces it with
+            // a DIFFERENT vector (dK_recovery). Predicting for a dK the run never took and
+            // printing it beside the actual for the step it did take is the same
+            // compare-two-different-things error this review is about.
+            //
+            // So the applied step is projected onto dK. If it is parallel -- which covers the
+            // full step (c=1), any trust shrink (0<c<1) and the zero step (c=0, where the
+            // prediction correctly collapses to R) -- the identity holds with the EFFECTIVE
+            // alpha, alpha*c. If it is not parallel, the step is not a multiple of the GMRES
+            // solution at all and there IS no free prediction: the row reports -1 and says why,
+            // rather than a number that describes a different step.
             if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_NONLINEAR_LEDGER")) {
                 torch::NoGradGuard ng_led;
                 // The STAGE-ENTRY weights, not a per-iteration recapture.
@@ -9836,15 +9848,36 @@ public:
                                    ? S_diag_ * ledger_r_gmres
                                    : ledger_r_gmres;
                 }
+                // Is the applied step a multiple of the GMRES solution?
+                double step_c = 0.0;              // dK_scaled = step_c * dK
+                bool   step_parallel = false;
+                {
+                    const auto a64 = dK_scaled.detach().to(torch::kFloat64);
+                    const auto b64 = dK.detach().to(torch::kFloat64);
+                    const double bb = b64.dot(b64).item<double>();
+                    const double an = a64.norm().item<double>();
+                    if (bb > 0.0) {
+                        step_c = a64.dot(b64).item<double>() / bb;
+                        const double resid = (a64 - step_c * b64).norm().item<double>();
+                        // Scale the tolerance by the step itself; a zero step is exactly parallel.
+                        step_parallel = (resid <= 1.0e-6 * std::max(an, 1.0e-30));
+                    } else {
+                        step_parallel = (an == 0.0);
+                    }
+                }
+                const double alpha_eff = alpha * step_c;
                 torch::Tensor R_pred;
-                if (r_g_phys.defined() && r_g_phys.numel() == R.numel()) {
-                    R_pred = (1.0f - alpha) * R.detach() - alpha * r_g_phys;
+                if (step_parallel && r_g_phys.defined() && r_g_phys.numel() == R.numel()) {
+                    R_pred = (1.0 - alpha_eff) * R.detach() - alpha_eff * r_g_phys;
                 }
                 const double pred = wnorm(R_pred);
                 const double actual = wnorm(accepted_residual);
                 std::cerr << "SDIRK3_NONLINEAR_LEDGER stage=" << stage
                           << " iter=" << newton_iter
                           << " alpha=" << alpha
+                          << " step_over_dK=" << step_c
+                          << " alpha_eff=" << alpha_eff
+                          << " step_is_multiple_of_dK=" << (step_parallel ? 1 : 0)
                           << " dk_norm=" << dK_scaled.detach().norm()
                                                 .to(torch::kFloat64).item<double>()
                           << " E_weighted=" << (E_inv.defined() ? 1 : 0)
@@ -9853,6 +9886,7 @@ public:
                           << " R_actual=" << actual
                           << " actual_over_pred=" << ((pred > 0.0 && actual >= 0.0)
                                                           ? actual / pred : -1.0)
+                          << " pred_valid=" << (R_pred.defined() ? 1 : 0)
                           << " gmres_rel_error=" << gmres_raw_rel_error
                           << " gmres_iters=" << gmres_iters
                           << std::endl;

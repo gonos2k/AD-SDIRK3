@@ -220,6 +220,15 @@ made the first version's rows silently incomparable, and the chained identity
 | 2 | 1 | 1.187e6 | 7.329e5 | 3.497e5 | 0.477 | 0.350 |
 | **3** | 0 | 4.883e6 | 7.657e9 | 7.617e9 | **0.995** | 0.948 |
 
+Every row above carries `step_is_multiple_of_dK=1`, `step_over_dK=1`, `alpha_eff=1`,
+`pred_valid=1`. That is not decoration: the identity holds only for the step `a dK`, and
+production applies `alpha * dK_scaled`, which the trust region can shrink, the total-failure
+path zeroes, and the fallback path replaces with a DIFFERENT vector (`dK_recovery`). Without
+the guard the ledger could print a prediction for a step the run never took. The applied step
+is now projected onto `dK`: parallel (full step, any trust shrink, or the zero step, where the
+prediction correctly collapses to `R`) uses the effective `alpha*c`; non-parallel reports
+`pred_valid=0` and no number. On these runs it never fired, so the rows stand as published.
+
 **Stage 3 fails in mode (a): the linear system is unsolved.** The linearization is FAITHFUL to
 0.5% — the model predicts a 1568x residual growth and the nonlinear map delivers exactly that.
 So the step is bad and reality agrees; nothing is wrong with the local linear model.
