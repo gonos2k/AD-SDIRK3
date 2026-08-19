@@ -2413,6 +2413,53 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         }
         if (all_blocks_ok) {
             block_scaled = true;
+            // WHY the two weightings behave so differently -- their STRUCTURE, not just their values.
+            //
+            //   D_q = ||r_0,q||          BLOCK-CONSTANT, set by the initial residual
+            //   E_i = rtol|y_i| + atol   POINTWISE, set by the state magnitude
+            //
+            // Pointwise weighting has a failure mode block-constant weighting cannot have: where the
+            // state is near zero, E_i -> atol_q and E^-1 -> 1/atol (1e6 for the velocity blocks), so
+            // physically negligible components acquire enormous weight and can dominate the
+            // minimiser. The dynamic range max(w)/min(w) measures exactly that exposure, and it is
+            // the quantity that decides whether an aligned objective is well-posed.
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY")) {
+                torch::NoGradGuard ng_dr;
+                const auto w = D_inv.detach().abs();
+                const double wmax = w.max().to(torch::kCPU).item<double>();
+                const double wmin = w.min().to(torch::kCPU).item<double>();
+                // PER-BLOCK ALIGNMENT, which is the operative quantity -- kappa(L) is not.
+                //
+                // Measured: kappa(D) = 2.07e6, kappa(E) = 3.98e9, while the observed
+                // rho_unscaled/rho_L is 18-343 for D and 5.5 for E. The bound
+                // rho_unscaled/rho_L <= kappa(L) HOLDS in every case but is vacuous -- it permits
+                // 10^6 and we observe 10^2 -- and the ratio is ANTI-correlated with kappa: E has
+                // the worse conditioning by 1920x and the smaller discrepancy by 45x. So the
+                // magnitude of the weighting spread does not drive the divergence.
+                //
+                // What can drive it is ALIGNMENT: how the weight mass is distributed across
+                // blocks relative to where the residual actually lives. A weighting that is large
+                // exactly where the residual is small contributes nothing to the minimised norm
+                // while the physical norm is dominated by blocks the objective barely sees. Both
+                // distributions are printed per block so the comparison is direct rather than
+                // inferred from two scalars.
+                for (const auto& blk : layout->blocks) {
+                    const auto wb = D_inv.slice(0, blk.start, blk.start + blk.size).abs();
+                    const auto rb = r_true_inner.slice(0, blk.start, blk.start + blk.size);
+                    std::cerr << "SDIRK3_WEIGHT_BLOCK " << blk.name
+                              << " w_mean=" << wb.mean().to(torch::kCPU).item<double>()
+                              << " r_norm=" << rb.norm().to(torch::kCPU).item<double>()
+                              << " weighted=" << (wb * rb.abs()).norm().to(torch::kCPU).item<double>()
+                              << std::endl;
+                }
+                std::cerr << "SDIRK3_WEIGHT_STRUCTURE metric="
+                          << (wrms_metric_applied ? "E_pointwise" : "D_blockconst")
+                          << " max=" << wmax << " min=" << wmin
+                          << " dynamic_range=" << (wmin > 0.0 ? wmax / wmin : -1.0)
+                          << std::endl << std::flush;
+            }
+
+
             // Scale the initial residual and RHS
             r_precond = r_precond * D_inv;
             b_inner = b_inner * D_inv;
