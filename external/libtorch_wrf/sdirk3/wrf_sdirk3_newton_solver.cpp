@@ -3547,9 +3547,24 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // print the value at every restart instead of only at exit.
         if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY")) {
             torch::NoGradGuard ng_traj;
+            // PAIRED TRAJECTORY -- the scientific question, not a diagnostic nicety.
+            //
+            // FGMRES minimises the BLOCK-SCALED residual ||D^-1 r|| / ||D^-1 b||, where
+            // D_q = ||r_0,q|| equalises each block's INITIAL contribution. The stage gate accepts
+            // or rejects on a physically weighted WRMS instead. Those are different objective
+            // functions over the same residual, so on a finite Krylov budget the solver can
+            // reduce its own norm while the gate's norm GROWS -- the minimiser is free to trade
+            // error out of a block D has made cheap and into one it has made expensive.
+            //
+            // If that is happening, "more Krylov work makes stage 3 worse" needs no nonlinear
+            // explanation at all: it is inner and outer objectives disagreeing. Both ratios are
+            // computed here from the SAME r_true_inner and the SAME b, so the pair is exact
+            // rather than assembled from two runs.
+            const auto r_unscaled = safe_tensor_norm(r_true_inner) / bnorm_safe;
             std::cerr << "SDIRK3_KRYLOV_TRAJECTORY restart=" << iter
                       << " scaled=" << (block_scaled ? 1 : 0)
-                      << " error=" << guarded_item<float>(error_tensor)
+                      << " rho_D=" << guarded_item<float>(error_tensor)
+                      << " rho_unscaled=" << guarded_item<float>(r_unscaled)
                       << std::endl << std::flush;
         }
 
