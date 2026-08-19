@@ -286,11 +286,18 @@ static inline float diag_norm(const torch::Tensor& t) {
 // ============================================================================
 // R9 §10.1: which ORDER the stage budget knobs resolve in. Default is the shipped order, so
 // this is a measurement selector, not a behaviour change.
+//
+// THE ONLY reading of this flag. It governs two sites -- budget resolution and the aggressive
+// early-stop gates -- and the first version let each read the environment for itself. One used
+// read_experiment_flag, the other a raw getenv whose test is `v[0] != '0'`, so
+// WRF_SDIRK3_STAGE_KNOB_FIRST=false parsed as FALSE at one site and TRUE at the other: the
+// budget resolved in the shipped order while the gates resolved stage-first. A hybrid policy
+// that matches neither arm of the experiment, produced by the word "false".
+//
+// Two spellings of one boolean is a recurring defect class here. One function, one parser.
 static inline wrf::sdirk3::StageKrylovOrder stage_krylov_order() {
-    static const bool knob_first = [] {
-        const char* v = std::getenv("WRF_SDIRK3_STAGE_KNOB_FIRST");
-        return v != nullptr && v[0] != '\0' && v[0] != '0';
-    }();
+    static const bool knob_first =
+        wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STAGE_KNOB_FIRST");
     return knob_first ? wrf::sdirk3::StageKrylovOrder::StageKnobFirst
                       : wrf::sdirk3::StageKrylovOrder::ShippedOrder;
 }
@@ -7140,10 +7147,7 @@ public:
                 policy_in.s3_tol            = cfg.stage3_krylov_tol;
                 policy_in.ew_enabled        = ew_eta_enabled_this_iter;
                 policy_in.ew_eta            = ew_eta_used_this_iter;
-                policy_in.order =
-                    wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STAGE_KNOB_FIRST")
-                        ? wrf::sdirk3::StageKrylovOrder::StageKnobFirst
-                        : wrf::sdirk3::StageKrylovOrder::ShippedOrder;
+                policy_in.order = stage_krylov_order();   // the single reading; see its definition
                 const auto policy = wrf::sdirk3::resolve_stage_krylov_policy(policy_in);
 
                 const int  restart_before_policy = effective_restart;

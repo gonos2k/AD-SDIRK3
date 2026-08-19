@@ -9,6 +9,7 @@
 // These cases pin that the two orderings are genuinely different (so the confound is real, not
 // a story), and that StageKnobFirst removes it.
 #include "wrf_sdirk3_stage_krylov_policy.h"
+#include "wrf_sdirk3_config.h"
 
 #include <cstdio>
 #include <cmath>
@@ -19,6 +20,8 @@ using wrf::sdirk3::StageRestartSource;
 using wrf::sdirk3::resolve_stage_krylov_policy;
 using wrf::sdirk3::ew_budget_scale;
 using wrf::sdirk3::early_stop_gate_knobs;
+using wrf::sdirk3::parse_bool_text;
+using wrf::sdirk3::BoolText;
 
 static int g_fail = 0, g_cases = 0;
 static void check(bool ok, const char* what) {
@@ -148,12 +151,45 @@ static void contract_early_stop_gate_knobs() {
     check_eq(s2_shipped.restart, 600, "stage 2 gate reads the stage-2 knob under both orders");
 }
 
+// The word "false" must not turn the experiment ON.
+//
+// The order flag governs two sites (budget resolution and the early-stop gates). The first
+// version let each read the environment for itself, one through parse_bool_text and one
+// through a raw `v[0] != '0'` test -- so WRF_SDIRK3_STAGE_KNOB_FIRST=false was FALSE at one
+// site and TRUE at the other, producing a hybrid policy matching neither arm.
+//
+// There is now a single reading. These cases pin the parser it uses, so the raw heuristic
+// cannot come back as an "equivalent" simplification.
+static void contract_order_flag_parsing() {
+    for (const char* t : {"false", "FALSE", "False", "f", "no", "NO", "0", ".false.", ""}) {
+        ++g_cases;
+        if (parse_bool_text(t) != BoolText::False) {
+            std::printf("FAIL: \"%s\" must parse as False\n", t);
+            ++g_fail;
+        }
+    }
+    for (const char* t : {"true", "TRUE", "t", "yes", "1", ".true."}) {
+        ++g_cases;
+        if (parse_bool_text(t) != BoolText::True) {
+            std::printf("FAIL: \"%s\" must parse as True\n", t);
+            ++g_fail;
+        }
+    }
+    // Anything else is a typo, and a typo must not silently select an arm.
+    check(parse_bool_text("ture") == BoolText::Unrecognized, "a typo is Unrecognized, not True");
+    // The raw heuristic this replaced: first character not '0'. It gets "false" wrong.
+    const char* f = "false";
+    check((f[0] != '\0' && f[0] != '0') != (parse_bool_text(f) == BoolText::True),
+          "the raw first-character test disagrees with the parser on \"false\"");
+}
+
 int main() {
     contract_ordering_confound();
     contract_budget_active_is_an_or();
     contract_tol_override_blocks_scaling();
     contract_stage1_untouched();
     contract_early_stop_gate_knobs();
+    contract_order_flag_parsing();
     std::printf("%s: %d cases, %d failures\n",
                 g_fail == 0 ? "PASS" : "FAIL", g_cases, g_fail);
     return g_fail == 0 ? 0 : 1;
