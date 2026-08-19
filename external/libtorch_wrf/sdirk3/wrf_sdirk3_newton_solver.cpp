@@ -6755,11 +6755,11 @@ public:
             //
             // WHY THE TWO DIFFER, corrected: it is purely the budget, and the mechanism is
             // ORDERING. The EW budget scaling
-            //     effective_restart * budget_scale        <- grep this; the source spells it
-            //                                                 std::max(2, static_cast<int>(...))
-            //                                                 across two lines
+            //     grep -F 'effective_restart * budget_scale'
+            //         (the -F matters: the * is a regex quantifier, so plain grep finds NOTHING.
+            //          The source spells this std::max(2, static_cast<int>(...)) across two lines)
             // runs BEFORE
-            //     if (cfg.stage3_gmres_restart > 0) effective_restart = cfg.stage3_gmres_restart;
+            //     grep -F 'if (cfg.stage3_gmres_restart > 0) effective_restart = cfg.stage3_gmres_restart;'
             // so an inherited stage-2 value gets scaled (600 -> 510) while an explicit stage-3
             // value replaces the scaled number outright and stands at 600.
             //
@@ -6770,8 +6770,15 @@ public:
             // in the file except itself: the source wraps std::max/static_cast across two lines
             // and writes 0.5f, so grepping the citation found the comment and not the code.
             //
-            // A citation is only useful if pasting it into grep lands on the code. Both strings
-            // above were checked that way rather than eyeballed.
+            // Third iteration on one citation, and each failure was subtler than the last:
+            //   1. line numbers, invalidated by the edit that wrote them
+            //   2. a pretty-printed "expression" that matched only itself
+            //   3. correct strings, but documented as commands that do not run -- plain grep on
+            //      the first returns 0 matches because * is a quantifier (the second works, since
+            //      parentheses are literal in BRE, so only one of the two was broken)
+            // Both are now -F, and both were run VERBATIM as written above rather than in an
+            // escaped variant, which is what the previous round got wrong: I verified \* and
+            // shipped *.
             //
             // NOT a policy difference -- an earlier version of this comment said setting a
             // stage-3 knob flips stage_budget_active and changes EW coupling. It does not:
