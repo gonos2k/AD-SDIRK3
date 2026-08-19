@@ -108,10 +108,10 @@ proven byte-identical.
   zero steps complete. **Stage 3: the earlier "not budget-starved" claim is RETRACTED.** That table's
   first row was labelled "global default" but stage 3 *inherits* the stage-2 budget when its own
   knob is unset, so the arms were not budget-comparable — measured, `unset` runs 510 Arnoldi
-  (gate 0.727) while an explicit 600 runs 600 Arnoldi (gate 3.386), and setting a stage-3 knob
-  also flips `stage_budget_active`, which couples EW forcing and the budget scale. Different
-  budget **and** different policy. Stage 3 still fails at every setting tried, but *why* is
-  unmeasured.
+  (gate 0.727) while an explicit 600 runs 600 Arnoldi (gate 3.386). The mechanism is ordering:
+  the EW budget scaling is applied *before* the stage-3 override, so an inherited value is scaled
+  (600 → 510) and an explicit one is not. Stage 3 still fails at every setting tried, but *why*
+  is unmeasured.
 - **Measured, and it reframes the preconditioner work:** the operator GMRES iterates is
   **indefinite in the field-of-values sense** under WRFParity — the min eigenvalue of the
   symmetric part of the Arnoldi Hessenberg is **−2570** against a max of 4545, 13 of 51 negative.

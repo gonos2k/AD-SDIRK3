@@ -6753,11 +6753,18 @@ public:
             //     stage3 unset          -> 510 Arnoldi, stage-3 gate 0.727
             //     stage3 = 600 explicit -> 600 Arnoldi, stage-3 gate 3.386
             //
-            // Different budgets AND different policy (setting a stage-3 knob also flips
-            // stage_budget_active, which couples EW forcing and the budget scale), so the two
-            // arms differ in more than the number they were labelled by. Any stage-budget
-            // experiment must set the stage's OWN knob explicitly and report the Arnoldi count
-            // actually used, not the requested one.
+            // WHY THE TWO DIFFER, corrected: it is purely the budget, and the mechanism is
+            // ORDERING. The EW budget scaling runs at :6800; the stage-3 override is applied at
+            // :6848, AFTER it. So an inherited stage-2 value gets scaled (600 -> 510) while an
+            // explicit stage-3 value replaces the scaled number outright and stands at 600.
+            //
+            // NOT a policy difference -- an earlier version of this comment said setting a
+            // stage-3 knob flips stage_budget_active and changes EW coupling. It does not:
+            // stage_budget_active is an OR over the stage-2 AND stage-3 knobs, and
+            // stage2_gmres_restart = 600 was set in BOTH arms, so it was already true either way.
+            //
+            // Any stage-budget experiment must set the stage's OWN knob explicitly and report the
+            // Arnoldi count actually USED, not the one requested.
             if (stage >= 2) {
                 auto& cfg = wrf::sdirk3::g_sdirk3_config;
                 if (cfg.stage2_gmres_restart > 0) effective_restart = cfg.stage2_gmres_restart;
