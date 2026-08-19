@@ -225,9 +225,18 @@ Every row above carries `step_is_multiple_of_dK=1`, `step_over_dK=1`, `alpha_eff
 production applies `alpha * dK_scaled`, which the trust region can shrink, the total-failure
 path zeroes, and the fallback path replaces with a DIFFERENT vector (`dK_recovery`). Without
 the guard the ledger could print a prediction for a step the run never took. The applied step
-is now projected onto `dK`: parallel (full step, any trust shrink, or the zero step, where the
-prediction correctly collapses to `R`) uses the effective `alpha*c`; non-parallel reports
-`pred_valid=0` and no number. On these runs it never fired, so the rows stand as published.
+is now projected onto the dK **the solve returned**, snapshotted before the two post-solve
+mutations: `apply_halo_zeroing(dK)` always runs, and the direct-U override replaces the whole
+`ru` block with `-R_u` when enabled. Projecting onto the LIVE dK would have compared the step
+against a vector `r_g` never saw and certified a mismatched pair — `pred_valid=1` would have
+been trivially true. Parallel (full step, any trust shrink, or the zero step, where the
+prediction correctly collapses to `R`) uses the effective `alpha*c`; non-parallel, or no
+snapshot, reports `pred_valid=0` and no number.
+
+Measured against the snapshot, `step_over_dK = 1` exactly, so in this configuration both
+mutations are inert — the halo mask is the identity on the 1D packed vector and
+`direct_u_solve_thresh = 0`. The rows stand as published, now on a check that could have
+failed.
 
 **Stage 3 fails in mode (a): the linear system is unsolved.** The linearization is FAITHFUL to
 0.5% — the model predicts a 1568x residual growth and the nonlinear map delivers exactly that.

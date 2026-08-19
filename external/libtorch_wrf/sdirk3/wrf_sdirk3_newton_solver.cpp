@@ -7067,6 +7067,12 @@ public:
             // call: with b = -R and r_g = b - A dK, the predicted post-step residual
             // R + a A dK is exactly (1-a) R - a r_g.
             torch::Tensor ledger_r_gmres;
+            // ... and the dK that residual BELONGS TO. dK is mutated after the solve --
+            // apply_halo_zeroing() always, and the direct-U-solve override replaces the whole
+            // ru block with -R_u when it is enabled -- so projecting the applied step onto the
+            // LIVE dK would compare it against a vector r_g never saw, and certify a prediction
+            // built from a mismatched pair. The snapshot is taken before any of that.
+            torch::Tensor ledger_dK_solve;
             bool krylov_tol_stage_override = false;
             bool stage_budget_active_this_iter = false;
             bool stage_budget_forcing_coupled = false;
@@ -8020,6 +8026,14 @@ public:
                 } else {
                     dK = gmres_result.x;
                 }
+                // R9: the ledger's r_g belongs to THIS dK, before the two post-solve
+                // mutations below (halo zeroing, and the direct-U override of the ru block).
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_NONLINEAR_LEDGER") &&
+                    dK.defined()) {
+                    torch::NoGradGuard ng_snap;
+                    ledger_dK_solve = dK.detach().clone();
+                }
+
                 // Zero halo components in dK before K += dK update.
                 // v20.14r27g: Halo mask is DISABLED in GMRES operator (v20.14r26),
                 // but post-GMRES zeroing is still applied to suppress boundary noise.
@@ -9812,7 +9826,8 @@ public:
             // printing it beside the actual for the step it did take is the same
             // compare-two-different-things error this review is about.
             //
-            // So the applied step is projected onto dK. If it is parallel -- which covers the
+            // So the applied step is projected onto the dK THE SOLVE RETURNED (snapshotted
+            // before the post-solve mutations). If it is parallel -- which covers the
             // full step (c=1), any trust shrink (0<c<1) and the zero step (c=0, where the
             // prediction correctly collapses to R) -- the identity holds with the EFFECTIVE
             // alpha, alpha*c. If it is not parallel, the step is not a multiple of the GMRES
@@ -9851,9 +9866,10 @@ public:
                 // Is the applied step a multiple of the GMRES solution?
                 double step_c = 0.0;              // dK_scaled = step_c * dK
                 bool   step_parallel = false;
-                {
+                if (ledger_dK_solve.defined() &&
+                    ledger_dK_solve.numel() == dK_scaled.numel()) {
                     const auto a64 = dK_scaled.detach().to(torch::kFloat64);
-                    const auto b64 = dK.detach().to(torch::kFloat64);
+                    const auto b64 = ledger_dK_solve.to(torch::kFloat64);
                     const double bb = b64.dot(b64).item<double>();
                     const double an = a64.norm().item<double>();
                     if (bb > 0.0) {
@@ -9864,7 +9880,7 @@ public:
                     } else {
                         step_parallel = (an == 0.0);
                     }
-                }
+                }   // no snapshot -> step_parallel stays false -> pred_valid = 0
                 const double alpha_eff = alpha * step_c;
                 torch::Tensor R_pred;
                 if (step_parallel && r_g_phys.defined() && r_g_phys.numel() == R.numel()) {
