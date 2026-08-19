@@ -6755,11 +6755,11 @@ public:
             //
             // WHY THE TWO DIFFER, corrected: it is purely the budget, and the mechanism is
             // ORDERING. The EW budget scaling
-            //     grep -F 'effective_restart * budget_scale'
+            //     grep -F 'effective_restart * budget_scale' wrf_sdirk3_newton_solver.cpp
             //         (the -F matters: the * is a regex quantifier, so plain grep finds NOTHING.
             //          The source spells this std::max(2, static_cast<int>(...)) across two lines)
             // runs BEFORE
-            //     grep -F 'if (cfg.stage3_gmres_restart > 0) effective_restart = cfg.stage3_gmres_restart;'
+            //     grep -F 'if (cfg.stage3_gmres_restart > 0) effective_restart = cfg.stage3_gmres_restart;' wrf_sdirk3_newton_solver.cpp
             // so an inherited stage-2 value gets scaled (600 -> 510) while an explicit stage-3
             // value replaces the scaled number outright and stands at 600.
             //
@@ -6770,15 +6770,20 @@ public:
             // in the file except itself: the source wraps std::max/static_cast across two lines
             // and writes 0.5f, so grepping the citation found the comment and not the code.
             //
-            // Third iteration on one citation, and each failure was subtler than the last:
+            // FOUR iterations on one citation, each failure subtler than the last:
             //   1. line numbers, invalidated by the edit that wrote them
             //   2. a pretty-printed "expression" that matched only itself
-            //   3. correct strings, but documented as commands that do not run -- plain grep on
-            //      the first returns 0 matches because * is a quantifier (the second works, since
+            //   3. correct strings, but published as commands that do not run -- plain grep on
+            //      the first returns 0 matches because * is a quantifier (the second worked;
             //      parentheses are literal in BRE, so only one of the two was broken)
-            // Both are now -F, and both were run VERBATIM as written above rather than in an
-            // escaped variant, which is what the previous round got wrong: I verified \* and
-            // shipped *.
+            //   4. -F added, FILE ARGUMENT omitted -- the published command read stdin, not this
+            //      file, so it exits 1 and matches nothing
+            //
+            // Every round was verified -- on a VARIANT. Escaped when the published form was
+            // unescaped; with a file argument when the published form had none. So the rule is
+            // not "run the citation" but stronger: EXTRACT the command from this file and execute
+            // that, so the thing verified and the thing shipped cannot differ. This version was
+            // checked that way.
             //
             // NOT a policy difference -- an earlier version of this comment said setting a
             // stage-3 knob flips stage_budget_active and changes EW coupling. It does not:
