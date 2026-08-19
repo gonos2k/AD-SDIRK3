@@ -9369,10 +9369,16 @@ public:
             // with the same residual. This prevents divergence from accepting bad steps.
             // M6: DID THE STEP HAPPEN? "The stage gate exceeded 1, therefore a large Krylov
             // update grew the residual" does not follow. When every trust attempt is rejected
-            // this branch sets dK_scaled = 0 and K is unchanged, so the stage simply KEEPS its
-            // entering residual -- a gate above 1 then reports a step that was never taken.
-            // Those are opposite diagnoses (a harmful update vs no update at all) and no
-            // published measurement so far distinguishes them.
+            // this branch sets dK_scaled = 0 and K is unchanged, so the stage keeps its entering
+            // residual -- a gate above 1 then reports a step that was never taken. Opposite
+            // diagnoses, and the gate value alone cannot separate them.
+            //
+            // BUT step_accepted DOES NOT MEAN TRUST ACCEPTED. With nk_trust_region = false the
+            // solver takes the full Newton step unconditionally and sets the same flag, having
+            // evaluated nothing -- and em_b_wave runs with it FALSE at runtime despite the struct
+            // default being true. Reading "accepted" as a trust verdict there is exactly wrong:
+            // trust neither accepted nor rejected, it never ran. rho = 0 in every record is the
+            // tell, and the trust state is printed alongside so the flag cannot be read alone.
             if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STEP_LEDGER")) {
                 torch::NoGradGuard ng_ledger;
                 std::cerr << "SDIRK3_STEP_LEDGER stage=" << stage
@@ -9381,6 +9387,8 @@ public:
                           << " R_norm=" << R.detach().norm().to(torch::kCPU).item<double>()
                           << " dK_norm=" << dK.detach().norm().to(torch::kCPU).item<double>()
                           << " rho=" << last_rho
+                          << " trust_enabled="
+                          << (wrf::sdirk3::g_sdirk3_config.nk_trust_region ? 1 : 0)
                           << std::endl << std::flush;
             }
 
