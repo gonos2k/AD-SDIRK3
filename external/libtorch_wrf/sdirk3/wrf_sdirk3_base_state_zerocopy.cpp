@@ -421,7 +421,9 @@ int sdirk3_tile_set_base_state_checked(
         //
         // TRACED, and it settles which of the two possible designs applies:
         //   * WRFGridInfoExtended is the ONLY type ever constructed for this member
-        //     (wrf_sdirk3_tile_unified_impl.cpp:3497 is the sole construction site), and
+        //     (sole construction site: grep `make_shared<wrf::sdirk3::WRFGridInfoExtended>` --
+        //     one hit, in wrf_sdirk3_tile_unified_impl.cpp. The claim still holds; the line
+        //     number this comment used to give, :3497, had rotted onto a debug print), and
         //   * WRFGridInfo has no virtual members, so dynamic_pointer_cast is not even
         //     available -- there is no polymorphism to dispatch on.
         // The invariant is "always Extended", so it is asserted rather than pretended-at,

@@ -6754,9 +6754,17 @@ public:
             //     stage3 = 600 explicit -> 600 Arnoldi, stage-3 gate 3.386
             //
             // WHY THE TWO DIFFER, corrected: it is purely the budget, and the mechanism is
-            // ORDERING. The EW budget scaling runs at :6800; the stage-3 override is applied at
-            // :6848, AFTER it. So an inherited stage-2 value gets scaled (600 -> 510) while an
-            // explicit stage-3 value replaces the scaled number outright and stands at 600.
+            // ORDERING. The EW budget scaling
+            //     effective_restart = max(2, effective_restart * budget_scale + 0.5)
+            // runs BEFORE
+            //     if (cfg.stage3_gmres_restart > 0) effective_restart = cfg.stage3_gmres_restart;
+            // so an inherited stage-2 value gets scaled (600 -> 510) while an explicit stage-3
+            // value replaces the scaled number outright and stands at 600.
+            //
+            // Cited by EXPRESSION, not line number. The first version of this comment gave :6800
+            // and :6848; the real lines were :6807 and :6855, because inserting THIS comment
+            // shifted them by seven. A line number written into a comment is invalidated by the
+            // edit that writes the comment -- grep for the expression instead.
             //
             // NOT a policy difference -- an earlier version of this comment said setting a
             // stage-3 knob flips stage_budget_active and changes EW coupling. It does not:
