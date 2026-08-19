@@ -6745,6 +6745,19 @@ public:
             //   1) stage3_* for stage>=3 when explicitly set (>0),
             //   2) stage2_* for stage>=2 when set (>0),
             //   3) base solver options.
+            // STAGE 3 INHERITS STAGE 2 unless its own knob is set (the stage-3 override lives
+            // further down). That inheritance invalidated a published stage-3 budget table:
+            // leaving stage3_gmres_restart unset was labelled "global default" when it actually
+            // ran stage 3 on the stage-2 value, EW-scaled. Measured, same run otherwise:
+            //
+            //     stage3 unset          -> 510 Arnoldi, stage-3 gate 0.727
+            //     stage3 = 600 explicit -> 600 Arnoldi, stage-3 gate 3.386
+            //
+            // Different budgets AND different policy (setting a stage-3 knob also flips
+            // stage_budget_active, which couples EW forcing and the budget scale), so the two
+            // arms differ in more than the number they were labelled by. Any stage-budget
+            // experiment must set the stage's OWN knob explicitly and report the Arnoldi count
+            // actually used, not the requested one.
             if (stage >= 2) {
                 auto& cfg = wrf::sdirk3::g_sdirk3_config;
                 if (cfg.stage2_gmres_restart > 0) effective_restart = cfg.stage2_gmres_restart;

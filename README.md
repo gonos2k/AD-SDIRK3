@@ -105,10 +105,13 @@ proven byte-identical.
   mid-budget probe and suppresses periodic true-residual checks), so the experiment moves two
   things at once and the attribution to budget alone is not clean.
   This does **not** solve dt=600: stage 3 still fails (gate 0.727 without `M`, 0.999 with) and
-  zero steps complete. **Stage 3 is the opposite case**: it is *not* budget-starved — an explicit
-  stage-3 budget makes it strictly worse (gate 0.727 default → 5.603 at 100 → 3.386 at 600, where
-  > 1 means the residual *grew*). The two stages fail for different reasons, and the lever that
-  fixes one aggravates the other.
+  zero steps complete. **Stage 3: the earlier "not budget-starved" claim is RETRACTED.** That table's
+  first row was labelled "global default" but stage 3 *inherits* the stage-2 budget when its own
+  knob is unset, so the arms were not budget-comparable — measured, `unset` runs 510 Arnoldi
+  (gate 0.727) while an explicit 600 runs 600 Arnoldi (gate 3.386), and setting a stage-3 knob
+  also flips `stage_budget_active`, which couples EW forcing and the budget scale. Different
+  budget **and** different policy. Stage 3 still fails at every setting tried, but *why* is
+  unmeasured.
 - **Measured, and it reframes the preconditioner work:** the operator GMRES iterates is
   **indefinite in the field-of-values sense** under WRFParity — the min eigenvalue of the
   symmetric part of the Arnoldi Hessenberg is **−2570** against a max of 4545, 13 of 51 negative.
