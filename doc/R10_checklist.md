@@ -42,7 +42,7 @@ WHAT IS ACTUALLY MEASURED:
              second implementation
 - [x] P0-4b  per-term: fp64 raw, block-WRMS, max_abs + location, cosine with the total,
              interior vs halo, nonfinite count
-- [ ] P0-4c  state admissibility at Y_1, Y_2, Y_3^base (min density/pressure/theta/thickness,
+- [x] P0-4c  state admissibility at Y_1, Y_2, Y_3^base (min density/pressure/theta/thickness,
              negative-mass count, nonfinite, halo mismatch, hydrostatic residual)
 - [x] P0-4d  restate "99.98% dominance" as RAW PACKED COORDINATE dominance, not physical
 

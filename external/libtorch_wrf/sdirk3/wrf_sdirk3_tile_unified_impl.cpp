@@ -9479,6 +9479,24 @@ vertical_coefficients:
                         const auto u_lam64 = U_lam.detach().to(torch::kFloat64);
                         const int64_t nonfinite =
                             (~torch::isfinite(k_lam)).sum().item<int64_t>();
+                        // R10 P0-4c: ADMISSIBILITY, per variable.
+                        //
+                        // A whole-state norm cannot see one column crossing a floor while the
+                        // total moves 10%, and the sub-linear response says something crosses
+                        // something. mu is the mass variable -- it must stay positive -- and
+                        // theta is the one with a physical range; the counts are what a min
+                        // hides when only a handful of points are bad.
+                        auto [u_a, v_a, w_a, ph_a, t_a, mu_a] = extractStateVariables(U_lam);
+                        auto mn = [](const torch::Tensor& x) {
+                            return x.defined()
+                                ? x.detach().to(torch::kFloat64).min().item<double>() : 0.0/0.0;
+                        };
+                        auto mx = [](const torch::Tensor& x) {
+                            return x.defined()
+                                ? x.detach().to(torch::kFloat64).max().item<double>() : 0.0/0.0;
+                        };
+                        const int64_t mu_nonpos = mu_a.defined()
+                            ? (mu_a.detach() <= 0).sum().item<int64_t>() : -1;
                         std::cerr << "SDIRK3_SLOW_CONTINUATION stage=" << stage_id
                                   << " lambda=" << lam
                                   << " disp_rel=" << (base_n > 0.0 ? lam * step_n / base_n : -1.0)
@@ -9486,6 +9504,13 @@ vertical_coefficients:
                                   << " F_E_absmax=" << k_lam.abs().max().item<double>()
                                   << " U_min=" << u_lam64.min().item<double>()
                                   << " U_absmax=" << u_lam64.abs().max().item<double>()
+                                  << " mu_min=" << mn(mu_a)
+                                  << " mu_nonpos=" << mu_nonpos
+                                  << " t_min=" << mn(t_a) << " t_max=" << mx(t_a)
+                                  << " ph_min=" << mn(ph_a)
+                                  << " w_absmax=" << (w_a.defined()
+                                        ? w_a.detach().to(torch::kFloat64).abs().max().item<double>()
+                                        : -1.0)
                                   << " F_E_nonfinite=" << nonfinite
                                   << std::endl;
                     }
@@ -14292,6 +14317,37 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             ucap.terms.advection.x        = ru_adv_x.detach().clone();
             ucap.terms.advection.y        = ru_adv_y.detach().clone();
             ucap.terms.advection.vertical = ru_adv_z.detach().clone();
+
+            // R10: the three directions as NUMBERS on the same stream as everything else.
+            //
+            // The `adv` site delta identified advection as the term carrying the whole 55x
+            // jump, but a lumped `adv` cannot say WHICH operator, and the file dump writes one
+            // artifact per call -- unusable when the question is how the split moves along a
+            // 9-point continuation. These tensors are already captured; only the norms were
+            // missing, and a norm on the same line as the lambda is what makes the comparison
+            // readable. FP64 before the reduction, per the same review.
+            auto n64 = [](const torch::Tensor& t) {
+                return t.defined() ? t.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+            };
+            auto m64 = [](const torch::Tensor& t) {
+                return t.defined()
+                    ? t.detach().to(torch::kFloat64).abs().max().item<double>() : -1.0;
+            };
+            const auto horiz = (ru_adv_x.defined() && ru_adv_y.defined())
+                ? (ru_adv_x + ru_adv_y) : torch::Tensor{};
+            std::cerr << "SDIRK3_ADV_SPLIT"
+                      << " adv_x=" << n64(ru_adv_x)
+                      << " adv_y=" << n64(ru_adv_y)
+                      << " adv_z=" << n64(ru_adv_z)
+                      << " horiz_sum=" << n64(horiz)
+                      // The ratio is the cross-model-comparable quantity: it cancels the index
+                      // extents, the coupled/decoupled convention and any common scaling.
+                      << " z_over_horiz="
+                      << (n64(horiz) > 0.0 ? n64(ru_adv_z) / n64(horiz) : -1.0)
+                      << " max_x=" << m64(ru_adv_x)
+                      << " max_y=" << m64(ru_adv_y)
+                      << " max_z=" << m64(ru_adv_z)
+                      << std::endl;
         }
         // 9F.D20: combined horizontal, to compare against WRF's advect_u split.
         // Captured as the SUM (not |adv_x|+|adv_y|) because WRF's horizontal block

@@ -507,3 +507,45 @@ the RHS, which is what makes it admissible here.
 the previously recorded attribution to VERTICAL advection is **not re-confirmed by this
 measurement** — it stands on the earlier probe, not on this one. Separating the three
 directions is the next step, and it is what would connect this to a specific operator.
+
+## P0-4a (direction) + P0-4c. It is VERTICAL advection, and the theta violation is downstream
+
+The three directions were already captured independently in the production assembly
+(`ucap.terms.advection.{x,y,vertical}`); only their norms were missing from the stream.
+
+| lambda | adv_x | adv_y | **adv_z** | z/horiz | mu_min | t_min |
+|---|---|---|---|---|---|---|
+| 0 | 6556 | 5.999e4 | **2.069e8** | **3444** | -10.89 | -41.16 |
+| **0.125** | 4.548e7 | 5.557e4 | **1.146e10** | 252 | -745.9 | -85.11 |
+| 0.25 | 9.626e7 | 5.407e4 | 2.029e10 | 210.7 | -1481 | -313 |
+| 0.5 | 2.177e8 | 6.036e4 | 3.320e10 | 152.5 | -2951 | -768.7 |
+| 1.0 | 5.592e8 | 1.001e5 | **5.024e10** | 89.8 | -5891 | -1680 |
+
+- **`adv_z` is 3444x the horizontal sum at the base state**, and it carries the jump: 2.069e8
+  -> 1.146e10 is **55.4x**, matching the 56x in `||F_E||` exactly. **This RE-CONFIRMS the
+  recorded attribution to VERTICAL advection**, which the previous (lumped-`adv`) measurement
+  could not separate and which I had therefore marked unconfirmed.
+- `adv_y` is essentially FLAT across the whole continuation (5.4e4 - 1.0e5). The jet is
+  x-directed, so the cross-stream advection barely participates.
+- `adv_x` grows **85,000x** (6556 -> 5.592e8) — the fastest-growing term by far, though still
+  90x below `adv_z` at lambda=1. `z/horiz` falls 3444 -> 90 for that reason, not because
+  `adv_z` weakens.
+
+### The theta violation is a CONSEQUENCE, not the trigger
+
+`t` is the potential-temperature PERTURBATION (t0 = 300), so absolute theta is `300 + t_min`:
+
+| lambda | t_min | absolute theta_min |
+|---|---|---|
+| 0 | -41.16 | 259 K — physical |
+| 0.125 | -85.11 | 215 K — physical |
+| 0.25 | -313 | **-13 K — unphysical** |
+| 1.0 | -1680 | -1380 K |
+
+Absolute theta crosses zero near `lambda ~ 0.24` — **after** the 55x jump at `lambda = 0.125`.
+So the state going unphysical does not trigger the blow-up; it follows it.
+
+**Not claimed:** `mu` is likewise a perturbation (`mu' `, full mass `mu' + mub`), and `mub` was
+not measured here, so the `mu_min` / `mu_nonpos` columns are the perturbation's trend and
+**not** a statement that column mass went non-positive. Establishing that needs `mub` on the
+same record.
