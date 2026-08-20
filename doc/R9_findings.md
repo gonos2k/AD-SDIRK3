@@ -610,3 +610,48 @@ contributions into the live state's `.grad()` or free buffers a real adjoint wou
 the partition, or dropped from one side, would let each operator pass its own test while the
 assembled stage cascaded. It is measurably not happening — the slow/fast split is exact in the
 primal, the tangent AND the adjoint.
+
+## P0-5b. ANSWERED: the explicit partition is 605x outside the RK3 stability region
+
+The FD probe was replaced with the **true forward-mode dual** — the exact directional
+derivative, so the map is linear by construction. But "by construction" is the same kind of
+claim that failed the first time, so linearity is **measured** before any iterate is trusted,
+and the verdict is emitted only when that check passes:
+
+| quantity | value |
+|---|---|
+| `jvp_fd_fallback` | **0** (true dual, not a finite difference) |
+| `homogeneity_rel` — `J(a v) vs a J(v)` | 9.37e-08 |
+| `additivity_rel` — `J(v1+v2) vs J(v1)+J(v2)` | 9.43e-08 |
+| **`linear_verified`** | **1** |
+| **`rho(J_E)`** | **1.746 s^-1** |
+| `h` | 600 |
+| **`h rho`** | **1047.7** |
+| RK3 limits | 2.5 real / 1.73 imaginary |
+
+**The true spectral radius is 1.746, not the 6364 the FD estimate gave — off by 3600x.**
+
+`h rho = 1047.7` against an imaginary-axis limit of 1.73: **outside by 605x**. The implied
+maximum stable step for the explicit partition is
+
+    h_max = 1.73 / 1.746 = 0.99 s
+
+and this is measured at `U_n` — the smooth balanced initial condition, before anything has gone
+wrong. **The explicit partition is unstable at dt=600 from the very first stage.**
+
+That is consistent with everything measured: `||F_E||` goes 1770.81 -> 1.124e6 (635x) across the
+pure ARK explicit assembly step, which is what an operator 605x outside its stability region
+does to a state in one step.
+
+`1/rho = 0.57 s` is the acoustic timescale for this grid, not an advective one — worth noting,
+not yet explained, and the natural next check is whether `rho` survives ablating `adv_z`.
+
+### Two independent estimates of the required dt, and they disagree
+
+| estimate | value | what it measures |
+|---|---|---|
+| `dt^2.4` extrapolation | ~15 s | when the term stops DOMINATING `Y_3` |
+| `h rho <= 1.73` | ~1 s | when the explicit partition is STABLE |
+
+They differ 15x because they answer different questions, and the stability one is the binding
+constraint. The earlier extrapolation is superseded as a design target.

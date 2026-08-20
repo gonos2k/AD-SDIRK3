@@ -47,9 +47,10 @@ WHAT IS ACTUALLY MEASURED:
 - [x] P0-4d  restate "99.98% dominance" as RAW PACKED COORDINATE dominance, not physical
 
 - [x] P0-5a  CFL_{x,y,z} and rho(h J_E(Y_2)) via JVP Arnoldi / power iteration
-- [~] P0-5b  UNANSWERED, and the reason is recorded: the FD power-iteration estimate is
-             eps-DEPENDENT (rho ~ eps^+1), so it is not a Jacobian spectral radius and no
-             stability-region verdict follows from it. Needs a true JVP on the explicit RHS.
+- [x] P0-5b  ANSWERED on a VERIFIED-LINEAR operator (true forward-mode dual, homogeneity and
+             additivity both 9.4e-8): rho(J_E) = 1.746 s^-1, h*rho = 1047.7 against the RK3
+             imaginary-axis limit 1.73 -- OUTSIDE by 605x, at U_n. Max stable h ~ 0.99 s.
+             The earlier FD estimate (6364) was 3600x wrong.
 
 ## P1 — contracts and reporting
 
