@@ -37,10 +37,10 @@ WHAT IS ACTUALLY MEASURED:
 - [ ] P0-3c  VJP split contract       J_full^T w = J_E^T w + J_I^T w
 - [ ] P0-3d  transpose consistency    <J v, w> == <v, J^T w>
 
-- [ ] P0-4a  operator-level ledger of k_slow[2] (adv / pressure-metric / buoyancy / coriolis /
+- [x] P0-4a  operator-level ledger of k_slow[2] (adv / pressure-metric / buoyancy / coriolis /
              mix-diff / source / boundary), observed through the PRODUCTION assembly, never a
              second implementation
-- [ ] P0-4b  per-term: fp64 raw, block-WRMS, max_abs + location, cosine with the total,
+- [x] P0-4b  per-term: fp64 raw, block-WRMS, max_abs + location, cosine with the total,
              interior vs halo, nonfinite count
 - [ ] P0-4c  state admissibility at Y_1, Y_2, Y_3^base (min density/pressure/theta/thickness,
              negative-mass count, nonfinite, halo mismatch, hydrostatic residual)

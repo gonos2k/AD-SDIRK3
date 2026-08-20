@@ -480,3 +480,30 @@ blow-up to the explicit partition is meaningful.
   a `sqrt`/`abs`/floor/denominator would be identified.
 - `P0-5` — `CFL` and `rho(h J_E)` via JVP power iteration, to separate a real explicit stability
   limit from a localized state defect
+
+## P0-4a. The term is ADVECTION, and it carries the whole jump
+
+`WRF_SDIRK3_UTERMS_TRACE=1` alongside the continuation. The trace snapshots the accumulating
+`ru_tend` at named sites inside the PRODUCTION assembly — it is not a second implementation of
+the RHS, which is what makes it admissible here.
+
+| lambda | `\|\|F_E\|\|` | **adv `\|dR\|`** | adv `max\|dR\|` | coriolis `\|dR\|` |
+|---|---|---|---|---|
+| 0 | 1.124e6 | 2.069e8 | 4.731e6 | 4019 |
+| **0.125** | 6.324e7 | **1.146e10** | 2.724e8 | 3871 |
+| 0.25 | 1.171e8 | 2.029e10 | — | 3693 |
+| 0.5 | 1.998e8 | 3.320e10 | — | 3394 |
+| 1.0 | 2.671e8 | 5.025e10 | 2.332e9 | 2978 |
+
+- **`adv` jumps 55.4x in the first 12.5%**, matching the 56x jump in `||F_E||`. It is the term.
+- **Coriolis DECREASES** monotonically (4019 -> 2978) and is 6-7 orders smaller throughout.
+- `entry` and `final` deltas are exactly 0, so on this path `ru_tend` is advection plus
+  Coriolis and nothing else contributes.
+- `max|dR|` grows 493x against `|dR|`'s 243x, so the growth CONCENTRATES as it grows — the
+  later states are less smooth, not merely larger.
+
+**Scope, stated rather than assumed:** this build's trace has four sites
+(`entry`, `adv`, `coriolis`, `final`). There is no `adv_x` / `adv_y` / `adv_z` split here, so
+the previously recorded attribution to VERTICAL advection is **not re-confirmed by this
+measurement** — it stands on the earlier probe, not on this one. Separating the three
+directions is the next step, and it is what would connect this to a specific operator.
