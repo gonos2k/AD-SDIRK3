@@ -9528,6 +9528,84 @@ vertical_coefficients:
                 // Measured at the SAME state the stage actually evaluates, through the SAME
                 // entry point, so it is the production partition being checked and not a
                 // reconstruction of it.
+                // ============================================================
+                // R10 P0-5: is h J_E OUTSIDE the explicit stability region? (opt-in)
+                // ============================================================
+                // Everything so far localises WHERE the growth is (vertical advection, at the
+                // state the implicit solve moved to). It does not say WHICH of two things it
+                // is: a genuine explicit stability limit at this dt, or a defect that makes the
+                // operator far stiffer than the physics warrants. Those have opposite fixes --
+                // repartition/multirate/subcycle versus find the bug -- so the discriminator
+                // has to be measured, not argued.
+                //
+                // The quantity is the spectral radius of the amplification the explicit stage
+                // applies, rho(h J_E). Power iteration needs only matvecs, and a matvec here is
+                // a directional derivative of the production RHS, taken by finite difference so
+                // it uses the SAME assembly the stage uses:
+                //
+                //     J_E v ~ (F_E(U + eps v) - F_E(U)) / eps
+                //
+                // Compare against the RK3 real-axis limit ~2.5: h rho >> that means the
+                // explicit partition genuinely cannot be integrated at this dt.
+                //
+                // Caveat carried in the output rather than in prose: the measured response to
+                // displacement is sub-linear (lambda^0.70), i.e. the derivative is UNBOUNDED at
+                // the base state, so an FD directional derivative there is not approximating
+                // anything. eps_rel is emitted so a reader can see the step the estimate used
+                // and judge it.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_SPECTRUM") &&
+                    k_slow[i].defined() && k_slow[i].numel() > 0) {
+                    torch::NoGradGuard ng_spec;
+                    const auto U0 = U_conv.detach();
+                    const auto F0 = k_slow[i].detach().to(torch::kFloat64);
+                    const double u_norm = U0.to(torch::kFloat64).norm().item<double>();
+                  // SWEEP eps, because a single eps cannot tell stiffness from
+                  // non-differentiability. For a smooth operator the FD quotient is
+                  // eps-INDEPENDENT once eps is below the curvature scale and above round-off.
+                  // For a response that goes as lambda^p with p < 1 the quotient diverges as
+                  // eps^(p-1) -- here p = 0.70 predicts rho ~ eps^-0.30, i.e. rho RISES by
+                  // 10^0.30 = 2.0x per decade of eps REDUCTION. The slope is the discriminator,
+                  // and one eps cannot show a slope.
+                  for (const double eps_rel : {1.0e-2, 1.0e-3, 1.0e-4, 1.0e-5}) {
+                    auto v = torch::randn_like(U0.to(torch::kFloat64));
+                    v = v / v.norm();
+                    double lambda_est = 0.0, prev = 0.0;
+                    int used = 0;
+                    for (int it = 0; it < 20; ++it) {
+                        const double eps = eps_rel * u_norm /
+                                           std::max(v.norm().item<double>(), 1e-300);
+                        const auto Up = (U0.to(torch::kFloat64) + eps * v).to(U0.scalar_type());
+                        const auto Fp = compute_k_slow(Up, torch::Tensor{})
+                                            .detach().to(torch::kFloat64);
+                        auto Jv = (Fp - F0) / eps;
+                        const double n = Jv.norm().item<double>();
+                        if (!std::isfinite(n) || n <= 0.0) break;
+                        lambda_est = n;                 // ||J v|| with ||v|| = 1
+                        v = Jv / n;
+                        used = it + 1;
+                        if (it > 2 && std::abs(lambda_est - prev) <= 1e-3 * lambda_est) break;
+                        prev = lambda_est;
+                    }
+                    // RK3's real-axis stability limit is ~2.5; the imaginary-axis one ~1.73.
+                    std::cerr << "SDIRK3_EXPLICIT_SPECTRUM stage=" << stage_id
+                              << " iters=" << used
+                              << " eps_rel=" << eps_rel
+                              << " rho_J_E=" << lambda_est
+                              << " h=" << dt_stage_
+                              << " h_rho=" << (dt_stage_ * lambda_est)
+                              << " rk3_real_axis_limit=2.5"
+                              << " outside=" << ((dt_stage_ * lambda_est > 2.5) ? 1 : 0)
+                              // What the quotient says about F_E directly: a relative
+                              // perturbation of eps_rel changed ||F_E|| by this factor.
+                              << " dF_over_F="
+                              << ((F0.norm().item<double>() > 0.0)
+                                      ? lambda_est * eps_rel * u_norm / F0.norm().item<double>()
+                                      : -1.0)
+                              << std::endl;
+                  }
+                    U_ref_stage_ = U_conv.detach().clone();
+                }
+
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SPLIT_IDENTITY")) {
                     torch::NoGradGuard ng_split;
                     const auto U_probe = U_conv.detach();

@@ -549,3 +549,38 @@ So the state going unphysical does not trigger the blow-up; it follows it.
 not measured here, so the `mu_min` / `mu_nonpos` columns are the perturbation's trend and
 **not** a statement that column mass went non-positive. Establishing that needs `mub` on the
 same record.
+
+## P0-5. The spectral-radius probe is INVALID as built, and the eps sweep is what shows it
+
+Power iteration with a finite-difference matvec at `U_n`, stage 1:
+
+| eps_rel | rho(J_E) | vs previous | `\|\|dF\|\|/\|\|F\|\|` |
+|---|---|---|---|
+| 1e-2 | 648417 | — | 6.90e6 |
+| 1e-3 | 60367 | /10.7 | 6.42e4 |
+| 1e-4 | 6573 | /9.2 | 699.5 |
+| 1e-5 | 630 | /10.4 | 6.70 |
+
+**`rho` scales as `eps^+1`.** Neither hypothesis survives that:
+
+- a smooth operator gives an FD quotient that is **eps-independent** once eps is below the
+  curvature scale and above round-off — a plateau, which is absent;
+- the measured `lambda^0.70` response predicts `rho ~ eps^-0.30`, i.e. **rising** 2x per decade
+  of eps reduction — the opposite sign.
+
+`rho ~ eps` means `||F(U + eps v) - F(U)|| ~ eps^2`: no linear term is being detected at all.
+
+**The defect is in the instrument, not the operator.** Power iteration assumes a LINEAR map, and
+`(F(U + eps v) - F(U))/eps` is linear in `v` only as `eps -> 0`. At finite `eps` against a
+strongly nonlinear `F`, iterating it is not power iteration on `J_E`, and the iterate walks into
+whatever direction maximises the quadratic response instead of an eigenvector.
+
+**So `h rho = 3.8e6` and `outside=1` are NOT reported as findings.** No claim is made here about
+whether the explicit partition sits outside the RK3 stability region — that question is still
+open, and answering it needs a true JVP (forward-mode AD on the explicit RHS, which the implicit
+side already has) plus a verified-linearity check before any Arnoldi or power iteration is run
+on it.
+
+What the sweep does establish, and it is not nothing: **a single `eps` would have published
+3.8e6 with a confident verdict attached.** The slope is the discriminator; one point cannot
+show a slope.

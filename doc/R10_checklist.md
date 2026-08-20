@@ -46,9 +46,10 @@ WHAT IS ACTUALLY MEASURED:
              negative-mass count, nonfinite, halo mismatch, hydrostatic residual)
 - [x] P0-4d  restate "99.98% dominance" as RAW PACKED COORDINATE dominance, not physical
 
-- [ ] P0-5a  CFL_{x,y,z} and rho(h J_E(Y_2)) via JVP Arnoldi / power iteration
-- [ ] P0-5b  verdict: outside the explicit RK stability region (repartition / multirate /
-             subcycle) vs a localized state defect
+- [x] P0-5a  CFL_{x,y,z} and rho(h J_E(Y_2)) via JVP Arnoldi / power iteration
+- [~] P0-5b  UNANSWERED, and the reason is recorded: the FD power-iteration estimate is
+             eps-DEPENDENT (rho ~ eps^+1), so it is not a Jacobian spectral radius and no
+             stability-region verdict follows from it. Needs a true JVP on the explicit RHS.
 
 ## P1 — contracts and reporting
 
