@@ -221,6 +221,7 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#include "wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
 #include "wrf_sdirk3_config.h"
@@ -9603,6 +9604,97 @@ vertical_coefficients:
                                       : -1.0)
                               << std::endl;
                   }
+                    U_ref_stage_ = U_conv.detach().clone();
+                }
+
+                // ============================================================
+                // R10 P0-3b/c/d: the DERIVATIVE split identities (opt-in)
+                // ============================================================
+                // The primal split F_full = F_E + F_I is exact (2.1e-8), but this is an
+                // ADJOINT model: the partition has to hold for the derivatives too, and a
+                // primal identity does not imply either derivative one. A term that is
+                // double-counted in one mode and cancelled in the other, or a piece of the
+                // graph that only one mode retains, is invisible to the primal check and fatal
+                // to a tangent or an adjoint.
+                //
+                //   JVP        J_full v      == J_E v      + J_I v
+                //   VJP        J_full^T w    == J_E^T w    + J_I^T w
+                //   transpose  <J_full v, w> == <v, J_full^T w>
+                //
+                // The JVP goes through the production forward-mode dual helper (the same one
+                // the Newton matvec uses), and its FD-fallback flag is reported: a fallback
+                // silently degrades the operator to a finite difference and would make a clean
+                // number meaningless.
+                //
+                // The VJP runs on a DETACHED leaf. That is not a detail -- a backward taken on
+                // tensors shared with the live forward would push spurious contributions into
+                // the state's .grad() and can free buffers the real adjoint still needs. The
+                // probe must not be able to touch the run it is observing.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_AD_SPLIT_CONTRACT")) {
+                    const auto U_probe = U_conv.detach().clone();
+                    auto F_of = [&](wrf::sdirk3::RhsMode m) {
+                        return [this, m](const torch::Tensor& x) {
+                            return computeUnifiedRHS(x, m);
+                        };
+                    };
+                    torch::Tensor v = torch::randn_like(U_probe);
+                    {   // .item() only ever under NoGradGuard
+                        torch::NoGradGuard ng;
+                        v = v / v.detach().to(torch::kFloat64).norm().item<double>();
+                    }
+
+                    bool fb_full = false, fb_e = false, fb_i = false;
+                    const auto Jv_full = wrf::sdirk3::compute_jvp_fwad_or_fd(
+                        F_of(wrf::sdirk3::RhsMode::Full), U_probe, v, 0, 0.0f, &fb_full);
+                    const auto Jv_e = wrf::sdirk3::compute_jvp_fwad_or_fd(
+                        F_of(wrf::sdirk3::RhsMode::ExplicitOnly), U_probe, v, 0, 0.0f, &fb_e);
+                    const auto Jv_i = wrf::sdirk3::compute_jvp_fwad_or_fd(
+                        F_of(wrf::sdirk3::RhsMode::ImplicitOnly), U_probe, v, 0, 0.0f, &fb_i);
+
+                    // VJP on an isolated leaf, one mode at a time.
+                    torch::Tensor w = torch::randn_like(U_probe);
+                    auto vjp = [&](wrf::sdirk3::RhsMode m) -> torch::Tensor {
+                        auto leaf = U_probe.detach().clone().requires_grad_(true);
+                        auto F = computeUnifiedRHS(leaf, m);
+                        if (!F.requires_grad()) return torch::Tensor{};
+                        auto g = torch::autograd::grad({F}, {leaf}, {w},
+                                                       /*retain_graph=*/false,
+                                                       /*create_graph=*/false,
+                                                       /*allow_unused=*/true);
+                        return g.empty() ? torch::Tensor{} : g[0];
+                    };
+                    const auto Jt_full = vjp(wrf::sdirk3::RhsMode::Full);
+                    const auto Jt_e    = vjp(wrf::sdirk3::RhsMode::ExplicitOnly);
+                    const auto Jt_i    = vjp(wrf::sdirk3::RhsMode::ImplicitOnly);
+
+                    torch::NoGradGuard ng_report;
+                    auto rel = [](const torch::Tensor& a, const torch::Tensor& b) {
+                        if (!a.defined() || !b.defined()) return -1.0;
+                        const auto a64 = a.detach().to(torch::kFloat64);
+                        const auto b64 = b.detach().to(torch::kFloat64);
+                        const double n = a64.norm().item<double>();
+                        return n > 0.0 ? (a64 - b64).norm().item<double>() / n : -1.0;
+                    };
+                    auto dot = [](const torch::Tensor& a, const torch::Tensor& b) {
+                        if (!a.defined() || !b.defined()) return 0.0/0.0;
+                        return (a.detach().to(torch::kFloat64) *
+                                b.detach().to(torch::kFloat64)).sum().item<double>();
+                    };
+                    const double lhs = dot(Jv_full, w);      // <J v, w>
+                    const double rhs = dot(v, Jt_full);      // <v, J^T w>
+                    const double den = std::max(std::abs(lhs), std::abs(rhs));
+                    std::cerr << "SDIRK3_AD_SPLIT_CONTRACT stage=" << stage_id
+                              << " jvp_split_rel=" << rel(Jv_full, Jv_e + Jv_i)
+                              << " vjp_split_rel="
+                              << ((Jt_full.defined() && Jt_e.defined() && Jt_i.defined())
+                                      ? rel(Jt_full, Jt_e + Jt_i) : -1.0)
+                              << " transpose_lhs=" << lhs
+                              << " transpose_rhs=" << rhs
+                              << " transpose_rel=" << (den > 0.0 ? std::abs(lhs - rhs) / den : -1.0)
+                              << " jvp_fd_fallback=" << (fb_full || fb_e || fb_i ? 1 : 0)
+                              << " vjp_available="
+                              << (Jt_full.defined() && Jt_e.defined() && Jt_i.defined() ? 1 : 0)
+                              << std::endl;
                     U_ref_stage_ = U_conv.detach().clone();
                 }
 

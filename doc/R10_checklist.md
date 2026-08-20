@@ -33,9 +33,9 @@ WHAT IS ACTUALLY MEASURED:
           F_E jumps (branch switch / positivity violation / local singularity)
 
 - [x] P0-3a  primal split contract    F_full = F_E + F_I
-- [ ] P0-3b  JVP split contract       J_full v = J_E v + J_I v
-- [ ] P0-3c  VJP split contract       J_full^T w = J_E^T w + J_I^T w
-- [ ] P0-3d  transpose consistency    <J v, w> == <v, J^T w>
+- [x] P0-3b  JVP split contract       J_full v = J_E v + J_I v
+- [x] P0-3c  VJP split contract       J_full^T w = J_E^T w + J_I^T w
+- [x] P0-3d  transpose consistency    <J v, w> == <v, J^T w>
 
 - [x] P0-4a  operator-level ledger of k_slow[2] (adv / pressure-metric / buoyancy / coriolis /
              mix-diff / source / boundary), observed through the PRODUCTION assembly, never a

@@ -584,3 +584,29 @@ on it.
 What the sweep does establish, and it is not nothing: **a single `eps` would have published
 3.8e6 with a confident verdict attached.** The slope is the discriminator; one point cannot
 show a slope.
+
+## P0-3b/c/d. The DERIVATIVE split identities hold, at machine precision
+
+The primal split being exact does not imply the tangent or adjoint ones: a term double-counted
+in one mode and cancelled in the other, or a piece of graph only one mode retains, is invisible
+to the primal check and fatal to an adjoint model. Measured at the state the stage evaluates,
+through the production entry point, with a random direction:
+
+| identity | relative error |
+|---|---|
+| `J_full v == J_E v + J_I v` | **1.83e-10** |
+| `J_full^T w == J_E^T w + J_I^T w` | **4.52e-08** |
+| `<J v, w> == <v, J^T w>` | **1.60e-08** (-315466 vs -315466) |
+
+`jvp_fd_fallback = 0` — the JVP ran on the **true forward-mode dual**, the same helper the
+Newton matvec uses. Had it fallen back to a finite difference the 1.83e-10 would have measured
+the fallback rather than the AD, which is why the flag is on the record beside the number.
+`vjp_available = 1`: reverse mode ran on all three modes.
+
+The VJP is taken on a **detached leaf**, so the probe's `backward()` cannot push spurious
+contributions into the live state's `.grad()` or free buffers a real adjoint would still need.
+
+**This closes the review's concern directly:** a pressure/acoustic term double-counted across
+the partition, or dropped from one side, would let each operator pass its own test while the
+assembled stage cascaded. It is measurably not happening — the slow/fast split is exact in the
+primal, the tangent AND the adjoint.
