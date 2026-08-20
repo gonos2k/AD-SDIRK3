@@ -5529,9 +5529,9 @@ public:
                 auto emit_row = [&](const char* label, const torch::Tensor& K0,
                                     const torch::Tensor& F0) {
                     const auto R0 = (K0 - F0).detach();
-                    const double raw = R0.norm().to(torch::kFloat64).item<double>();
-                    const double k0n = K0.detach().norm().to(torch::kFloat64).item<double>();
-                    const double f0n = F0.detach().norm().to(torch::kFloat64).item<double>();
+                    const double raw = R0.to(torch::kFloat64).norm().item<double>();
+                    const double k0n = K0.detach().to(torch::kFloat64).norm().item<double>();
+                    const double f0n = F0.detach().to(torch::kFloat64).norm().item<double>();
                     const double dotv = (K0.detach().to(torch::kFloat64) *
                                          F0.detach().to(torch::kFloat64)).sum().item<double>();
                     const double cosv = (k0n > 0.0 && f0n > 0.0) ? dotv / (k0n * f0n) : 0.0;
@@ -5565,7 +5565,7 @@ public:
                         for (const auto& blk : cached_layout_.blocks) {
                             std::cerr << " " << blk.name << "="
                                       << R0.slice(0, blk.start, blk.start + blk.size)
-                                             .norm().to(torch::kFloat64).item<double>();
+                                             .to(torch::kFloat64).norm().item<double>();
                         }
                     }
                     std::cerr << std::endl;
@@ -9888,6 +9888,19 @@ public:
                 }
                 const double pred = wnorm(R_pred);
                 const double actual = wnorm(accepted_residual);
+                // THE NORM RATIO IS NOT AN ACCURACY CLAIM.
+                //
+                // ||r_actual|| / ||r_pred|| ~ 1 says the two vectors are the same LENGTH; it
+                // says nothing about direction, and two vectors of equal norm can be
+                // orthogonal. Reporting only the ratio is how "the linearization is faithful
+                // to 0.5%" got written from evidence that does not support it. The defect
+                // ||r_actual - r_pred|| / ||r_pred|| is the quantity that does.
+                double pred_defect_rel = -1.0;
+                if (R_pred.defined() && accepted_residual.defined() &&
+                    R_pred.numel() == accepted_residual.numel() && pred > 0.0) {
+                    const auto d = accepted_residual.detach() - R_pred.detach();
+                    pred_defect_rel = wnorm(d) / pred;
+                }
                 std::cerr << "SDIRK3_NONLINEAR_LEDGER stage=" << stage
                           << " iter=" << newton_iter
                           << " alpha=" << alpha
@@ -9902,6 +9915,7 @@ public:
                           << " R_actual=" << actual
                           << " actual_over_pred=" << ((pred > 0.0 && actual >= 0.0)
                                                           ? actual / pred : -1.0)
+                          << " pred_defect_rel=" << pred_defect_rel
                           << " pred_valid=" << (R_pred.defined() ? 1 : 0)
                           << " gmres_rel_error=" << gmres_raw_rel_error
                           << " gmres_iters=" << gmres_iters

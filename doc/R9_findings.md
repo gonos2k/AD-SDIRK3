@@ -147,8 +147,12 @@ Stage 3 is handed a state 6640x `||U_n||` by the explicit channel BEFORE any imp
 runs. `F_I(Y_3)` is then 7.4e14 and **99.99% ru** — the u-momentum block, matching
 Wall-2 (the explicit u-momentum cascade). So:
 
-- **No preconditioner, Krylov budget, or objective alignment can fix stage 3.** They act on the
-  implicit solve, which contributes 0.002% of the state stage 3 starts from.
+- ~~**No preconditioner, Krylov budget, or objective alignment can fix stage 3.**~~
+  **RETRACTED 2026-08-21 (review R10, refuted by measurement).** The argument only bounded the
+  DIRECT implicit contribution to `Y_3`. But `k_slow[2] = F_E(U_conv)` with
+  `U_conv = U_stage_2 + h a_22 K_2`, so the explicit tendency is evaluated at a state the
+  IMPLICIT solve moved to — by 60% of `||U_stage_2||`. Measured, `||F_E(U_conv)||` varies
+  **7.5x** with the stage-2 Krylov budget alone. See §R10 below.
 - The stage-acceptance mismatch in §6 is real but is NOT the stage-3 mechanism; stage 2's
   accepted K is small and roughly the right size.
 - This is the same wall the split-explicit rebuild was chosen to address, now measured at the
@@ -343,3 +347,136 @@ It stops at **stage 3 of the first ARK sweep**. The state stage 3 is handed is `
 6640x `||U_n||`, of which **99.98% is the single explicit term `h a^E_32 k_slow[2]`**. `F_I` of
 that state is `7.4e14` and **99.99% `ru`**. No implicit-side lever reaches it. The measured
 scaling says the term stops dominating only near dt ~ 15 s.
+
+---
+
+# R10 — the implicit solve IS in the causal path, and the explicit response is non-differentiable
+
+No independent review has been run (`/code-review ultra` is user-only).
+
+## R0. Retraction
+
+Published and **not established**: *"No preconditioner, Krylov budget or objective alignment
+can fix stage 3."*
+
+The argument bounded only the DIRECT implicit contribution to `Y_3` (`h a^I_32 k_fast[2]`,
+2.7e5 against 1.251e10). It never tested the INDIRECT path, and the indirect path is where the
+term lives:
+
+```
+k_slow[i] = F_E(U_conv),   U_conv = U_stage_i + h a_ii K_i        (tile_unified_impl :9381-9394)
+```
+
+`F_E` is evaluated at the state the implicit solve moved to. At stage 2 that displacement is
+`h gamma ||K_2|| = 1.257e6` against `||U_stage_2|| = 2.10e6` — **60%**, not a perturbation.
+
+## A. Stage-2 solve accuracy changes the dominant term by 7.5x
+
+Single-variable (`WRF_SDIRK3_STAGE_KNOB_FIRST=1`), Arnoldi USED, `||F_E||` read at the same
+production site in every arm:
+
+| stage-2 budget | Arnoldi | converged | final_res | `\|\|K_2\|\|` | **`\|\|F_E(U_conv)\|\|`** |
+|---|---|---|---|---|---|
+| 60 | 51 | 0 | 0.2758 | 2986 | — (sweep aborts before the stage-2 slow evaluation) |
+| 120 | 102 | 1 | 0.1800 | 2346 | **3.83e7** |
+| 300 | 255 | 1 | 0.1035 | 3569 | **2.074e8** |
+| 600 | 510 | 1 | 0.0667 | 4806 | **2.879e8** |
+
+**Verdict A2: the stage-2 solver is IN the causal path.** And monotonically in the direction
+that makes it worse: converging stage 2 harder produces a LARGER explicit tendency for stage 3.
+
+Not a power law — `||F_E||` rises 5.4x over one 1.52x increase in displacement (exponent 4.0)
+and only 1.39x over the next 1.35x (exponent 1.1). Something switches between them, which is
+what experiment D was run to find.
+
+## B. The slow RHS is bit-exactly dt-invariant
+
+`WRF_SDIRK3_RHS_DT_INVARIANCE=1` — same state, same halo, only `dt_stage_` moves:
+
+| stage | dt_ref | dt_alt | norm_ratio | **vector_rel_diff** |
+|---|---|---|---|---|
+| 1 | 600 | 300 | 1 | **0** |
+| 1 | 600 | 1200 | 1 | **0** |
+| 2 | 600 | 300 | 1 | **0** |
+| 2 | 600 | 1200 | 1 | **0** |
+
+**Verdict B2: no hidden dt, no tendency/increment mixing, no dt double-application.** Of the
+review's two candidate explanations for the ~h^2.4 growth, the unit-contract one is refuted
+bit-exactly. (`grid_info_->dt = dt_stage_` at `:12039` is written but measurably not read by
+any term the explicit tendency depends on.)
+
+## D. The blow-up is a NON-DIFFERENTIABLE response, not a cascade
+
+Walking the segment the implicit solve traversed, `U(lambda) = U_stage_2 + lambda (U_conv - U_stage_2)`,
+evaluating the production slow RHS at each point:
+
+| lambda | displacement | `\|\|F_E\|\|` | vs previous |
+|---|---|---|---|
+| 0 | 0 | 1.124e6 | — |
+| **0.125** | 7.5% | **6.731e7** | **59.9x** |
+| 0.25 | 15.0% | 1.248e8 | 1.85x |
+| 0.375 | 22.4% | 1.736e8 | 1.39x |
+| 0.5 | 29.9% | 2.138e8 | 1.23x |
+| 0.625 | 37.4% | 2.452e8 | 1.15x |
+| 0.75 | 44.9% | 2.680e8 | 1.09x |
+| 0.875 | 52.4% | 2.822e8 | 1.05x |
+| 1.0 | 59.8% | 2.879e8 | 1.02x |
+
+**60x of the growth happens in the first 12.5% of the displacement**, then it saturates.
+`F_E ~ C lambda^0.70` fits the tail (at lambda=0.125 the fit gives 6.68e7 against 6.73e7
+measured).
+
+**An exponent below 1 means the derivative is unbounded at lambda = 0.** This is not a
+cascade — a cascade is superlinear. It is the signature of a non-differentiable term: a
+`sqrt`, an `abs`, a `max(.,floor)`, or a denominator that changes magnitude sharply.
+
+The state itself moves smoothly across the whole segment (`U_min` -1.06e4 -> -2.54e4,
+`U_absmax` 1.99e4 -> 2.54e4, monotone) and there are **zero** non-finite values anywhere, so
+this is not overflow and not a positivity trip visible in the state norms.
+
+**Validity of the continuation:** at `lambda = 1` it reproduces the production `k_slow[2]`
+exactly (2.879e8), which is what establishes it is walking the same code path rather than a
+second implementation.
+
+**And it starts before the implicit solve.** `||F_E(U_n)|| = 1770.81`, `||F_E(U_stage_2)|| =
+1.124e6` — a **635x** jump across the pure ARK explicit assembly step, before any implicit
+displacement, followed by a further 256x across the implicit displacement. Both stages of the
+growth are the same sub-linear response to displacement.
+
+## What this leaves
+
+The dominant term is explicit, but the state it is evaluated at is set by the implicit solve,
+and the response to displacement is non-differentiable at the base state. The next measurement
+is therefore the review's P0-4: decompose `F_E` into its operator terms at
+`lambda in {0, 0.125}` and identify which term carries the 60x — that is where a `sqrt`/`abs`/
+floor/denominator would show itself.
+
+## C. The ARK assembly is linear in h, arithmetically
+
+`term_E = dt * |a^E_32| * ||k_slow[2]||`: `600 * 0.07241 * 2.879e8 = 1.2508e10` against the
+assembled `1.251e10`. The assembly applies exactly one factor of `h` to a tendency that B shows
+carries none, so the outer multiplier is not a second source of `h`.
+
+## P0-3a. The primal split is exact
+
+`WRF_SDIRK3_SPLIT_IDENTITY=1`, at the state the stage actually evaluates, through the same
+entry point:
+
+```
+stage=1  F_full=1770.81  F_explicit=1770.81  F_implicit=0.845571
+         defect_abs=3.78e-05  defect_rel=2.13e-08  defect_absmax=1.90e-06
+```
+
+`F_full = F_E + F_I` to **2.1e-8 relative** — float32 round-off over ~1e6 accumulated terms.
+So no term is double-counted across the partition and none is dropped, and attributing the
+blow-up to the explicit partition is meaningful.
+
+## Still open
+
+- `P0-3b/c/d` — JVP, VJP and transpose-consistency split identities (the primal one is closed;
+  the derivative ones need the JVP/VJP plumbed per partition)
+- `P0-4a/b/c` — operator-level decomposition of `F_E` and state admissibility at
+  `lambda in {0, 0.125}`. **This is the next measurement**: it is where the 60x lives and where
+  a `sqrt`/`abs`/floor/denominator would be identified.
+- `P0-5` — `CFL` and `rho(h J_E)` via JVP power iteration, to separate a real explicit stability
+  limit from a localized state defect

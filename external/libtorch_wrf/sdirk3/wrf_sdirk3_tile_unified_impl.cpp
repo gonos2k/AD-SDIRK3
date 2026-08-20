@@ -8772,7 +8772,7 @@ vertical_coefficients:
                     torch::NoGradGuard no_grad;
                     std::cerr << "SDIRK3_STAGE_BASE stage=" << (stage_idx + 1)
                               << " term=U_n norm="
-                              << U_n.detach().norm().to(torch::kFloat64).item<double>()
+                              << U_n.detach().to(torch::kFloat64).norm().item<double>()
                               << std::endl;
                 }
                 torch::Tensor rhs = U_n;
@@ -8791,9 +8791,9 @@ vertical_coefficients:
                         const double aE = static_cast<double>(Ark::a_explicit[stage_idx][j]);
                         const double aI = static_cast<double>(Ark::a_implicit[stage_idx][j]);
                         const double ks = k_slow[j].defined()
-                            ? k_slow[j].detach().norm().to(torch::kFloat64).item<double>() : -1.0;
+                            ? k_slow[j].detach().to(torch::kFloat64).norm().item<double>() : -1.0;
                         const double kf = k_fast[j].defined()
-                            ? k_fast[j].detach().norm().to(torch::kFloat64).item<double>() : -1.0;
+                            ? k_fast[j].detach().to(torch::kFloat64).norm().item<double>() : -1.0;
                         std::cerr << "SDIRK3_STAGE_BASE stage=" << (stage_idx + 1)
                                   << " src=" << (j + 1)
                                   << " aE=" << aE << " k_slow=" << ks
@@ -8801,7 +8801,7 @@ vertical_coefficients:
                                   << " aI=" << aI << " k_fast=" << kf
                                   << " term_I=" << (kf >= 0.0 ? dt * std::abs(aI) * kf : -1.0)
                                   << " running=" 
-                                  << rhs.detach().norm().to(torch::kFloat64).item<double>()
+                                  << rhs.detach().to(torch::kFloat64).norm().item<double>()
                                   << std::endl;
                     }
                 }
@@ -9393,6 +9393,138 @@ vertical_coefficients:
 
                 k_slow[i] = compute_k_slow(U_conv, U_full_exch_conv);
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_slow", k_slow[i]);
+
+                // ============================================================
+                // R10 P0-2 / experiment B: is the SLOW RHS dt-INVARIANT? (opt-in)
+                // ============================================================
+                // F_E(Y) is a tendency, [U/s]. The ARK assembly supplies the h:
+                //
+                //     h a^E_ij F_E(Y_j)  :  [U]
+                //
+                // so if anything inside F_E already carries a dt -- a term written as an
+                // INCREMENT h*F rather than a tendency F, or an operator reading dt from
+                // grid_info_ -- the outer assembly multiplies by h a SECOND time and the
+                // stage term picks up a spurious h^2. That is one of exactly two explanations
+                // for the measured ~h^2.4 growth of the stage-3 explicit term; the other is a
+                // genuine explicit instability. They are distinguished by holding the STATE
+                // fixed and moving only the dt the RHS sees.
+                //
+                // Same U_conv, same halo, same everything: only dt_stage_ changes. A pure
+                // tendency returns the same vector. Any relative difference is a dt the
+                // tendency should not have had, and its SIZE bounds how much of the h^2.4 it
+                // can explain.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_RHS_DT_INVARIANCE") &&
+                    k_slow[i].defined() && k_slow[i].numel() > 0) {
+                    torch::NoGradGuard ng_dt;
+                    const float dt_saved = dt_stage_;
+                    const auto k_ref = k_slow[i].detach().to(torch::kFloat64).clone();
+                    const double n_ref = k_ref.norm().item<double>();
+                    for (const double f : {0.5, 2.0}) {
+                        dt_stage_ = static_cast<float>(dt_saved * f);
+                        const auto k_alt =
+                            compute_k_slow(U_conv, U_full_exch_conv).detach()
+                                .to(torch::kFloat64);
+                        const double n_alt = k_alt.norm().item<double>();
+                        const double d_rel = (n_ref > 0.0)
+                            ? (k_alt - k_ref).norm().item<double>() / n_ref : -1.0;
+                        std::cerr << "SDIRK3_RHS_DT_INVARIANCE stage=" << stage_id
+                                  << " dt_ref=" << dt_saved
+                                  << " dt_alt=" << dt_stage_
+                                  << " factor=" << f
+                                  << " norm_ref=" << n_ref
+                                  << " norm_alt=" << n_alt
+                                  << " norm_ratio=" << (n_ref > 0.0 ? n_alt / n_ref : -1.0)
+                                  << " vector_rel_diff=" << d_rel
+                                  << std::endl;
+                    }
+                    dt_stage_ = dt_saved;
+                    // Restore the reference state compute_k_slow() publishes as a side effect,
+                    // so the probe cannot leak its last evaluation into production.
+                    U_ref_stage_ = U_conv.detach().clone();
+                }
+
+                // ============================================================
+                // R10 experiment D: WHERE along the implicit displacement does F_E jump?
+                // ============================================================
+                // k_slow[i] is evaluated at U_conv = U_stage + h a_ii K_i, i.e. at the state
+                // the IMPLICIT solve moved to -- and at stage 2 that displacement is ~60% of
+                // ||U_stage||. Measured, ||F_E(U_conv)|| varies 7.5x with the stage-2 Krylov
+                // budget alone, and not as a power law: it rises ~5.4x over one 1.5x increase
+                // in the displacement and only ~1.4x over the next 1.35x. A smooth cascade does
+                // not do that; a branch, a floor, or a positivity boundary being crossed does.
+                //
+                // So walk the segment the implicit solve traversed,
+                //
+                //     U(lambda) = U_stage + lambda (U_conv - U_stage),   lambda in [0,1]
+                //
+                // and evaluate the PRODUCTION slow RHS at each point. A smooth curve means the
+                // growth is the operator's genuine response to a large displacement; a knee at
+                // some lambda* localises a switch, and the state diagnostics at lambda* say
+                // which one.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SLOW_CONTINUATION") &&
+                    k_slow[i].defined() && k_slow[i].numel() > 0) {
+                    torch::NoGradGuard ng_cont;
+                    const auto U_base = U_stage.detach();
+                    const auto step = (U_conv.detach() - U_base);
+                    const double step_n = step.to(torch::kFloat64).norm().item<double>();
+                    const double base_n = U_base.to(torch::kFloat64).norm().item<double>();
+                    for (const double lam : {0.0, 0.125, 0.25, 0.375, 0.5,
+                                             0.625, 0.75, 0.875, 1.0}) {
+                        const auto U_lam = U_base + lam * step;
+                        // Same production path the stage itself uses.
+                        const auto k_lam = compute_k_slow(U_lam, torch::Tensor{})
+                                               .detach().to(torch::kFloat64);
+                        // Admissibility at this point, because a norm cannot see one cell
+                        // crossing a floor while the total moves 10%.
+                        const auto u_lam64 = U_lam.detach().to(torch::kFloat64);
+                        const int64_t nonfinite =
+                            (~torch::isfinite(k_lam)).sum().item<int64_t>();
+                        std::cerr << "SDIRK3_SLOW_CONTINUATION stage=" << stage_id
+                                  << " lambda=" << lam
+                                  << " disp_rel=" << (base_n > 0.0 ? lam * step_n / base_n : -1.0)
+                                  << " F_E_norm=" << k_lam.norm().item<double>()
+                                  << " F_E_absmax=" << k_lam.abs().max().item<double>()
+                                  << " U_min=" << u_lam64.min().item<double>()
+                                  << " U_absmax=" << u_lam64.abs().max().item<double>()
+                                  << " F_E_nonfinite=" << nonfinite
+                                  << std::endl;
+                    }
+                    U_ref_stage_ = U_conv.detach().clone();
+                }
+
+                // ============================================================
+                // R10 P0-3a: the PRIMAL split identity  F_full = F_E + F_I  (opt-in)
+                // ============================================================
+                // The whole stage-3 argument rests on attributing the blow-up to the EXPLICIT
+                // partition. That attribution is only meaningful if the partition is exact: a
+                // term double-counted in both modes, or dropped from both, would let each
+                // operator pass its own test while the assembled step is wrong.
+                //
+                // Measured at the SAME state the stage actually evaluates, through the SAME
+                // entry point, so it is the production partition being checked and not a
+                // reconstruction of it.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SPLIT_IDENTITY")) {
+                    torch::NoGradGuard ng_split;
+                    const auto U_probe = U_conv.detach();
+                    const auto f_full = computeUnifiedRHS(U_probe, RhsMode::Full)
+                                            .detach().to(torch::kFloat64);
+                    const auto f_exp  = computeUnifiedRHS(U_probe, RhsMode::ExplicitOnly)
+                                            .detach().to(torch::kFloat64);
+                    const auto f_imp  = computeUnifiedRHS(U_probe, RhsMode::ImplicitOnly)
+                                            .detach().to(torch::kFloat64);
+                    const double n_full = f_full.norm().item<double>();
+                    const auto   resid  = f_full - f_exp - f_imp;
+                    std::cerr << "SDIRK3_SPLIT_IDENTITY stage=" << stage_id
+                              << " F_full=" << n_full
+                              << " F_explicit=" << f_exp.norm().item<double>()
+                              << " F_implicit=" << f_imp.norm().item<double>()
+                              << " defect_abs=" << resid.norm().item<double>()
+                              << " defect_rel="
+                              << (n_full > 0.0 ? resid.norm().item<double>() / n_full : -1.0)
+                              << " defect_absmax=" << resid.abs().max().item<double>()
+                              << std::endl;
+                    U_ref_stage_ = U_conv.detach().clone();
+                }
                 // PR 9F P1-3: birth snapshot of THIS stage's slow derivative, now
                 // finalized, for later stages' history sources (detached clone).
                 if (stage_operand_diag_on && k_slow[i].defined() &&
