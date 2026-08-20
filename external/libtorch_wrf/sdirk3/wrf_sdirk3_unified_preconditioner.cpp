@@ -6189,8 +6189,9 @@ UnifiedPreconditioner::solve_4x4_acoustic_block(
     // with a non-singular diagonal, including levels after the break that the reduction never
     // touched.
     //
-    // Now: reduction_applied says whether the solver USES the reduced system, the level count
-    // says how far it got, and the means cover exactly the levels actually applied.
+    // Now: reduction_computed says the arithmetic ran, reduction_used says the solver actually
+    // CONSUMES the reduced system (false under the HEVI identity bypass, solve_path 2), the
+    // level count says how far it got, and the means cover exactly the levels actually applied.
     {
         torch::NoGradGuard no_grad_diag;
         last_s_mu_mu_base_ = S_mu_mu_accum;

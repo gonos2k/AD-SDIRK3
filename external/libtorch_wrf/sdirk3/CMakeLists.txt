@@ -416,6 +416,22 @@ set_property(TARGET test_trust_model_contract PROPERTY CXX_STANDARD 17)
 target_link_libraries(test_trust_model_contract "${TORCH_LIBRARIES}")
 add_test(NAME Trust_Model_Contract COMMAND test_trust_model_contract)
 
+# R9 P0-A/B: a Krylov metric's coordinate system is part of the metric.
+add_executable(test_krylov_metric_coordinate_contract test_krylov_metric_coordinate_contract.cpp)
+target_include_directories(test_krylov_metric_coordinate_contract PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+set_property(TARGET test_krylov_metric_coordinate_contract PROPERTY CXX_STANDARD 17)
+target_link_libraries(test_krylov_metric_coordinate_contract "${TORCH_LIBRARIES}")
+add_test(NAME Krylov_Metric_Coordinate_Contract COMMAND test_krylov_metric_coordinate_contract)
+
+# R9 §10.1: a stage-budget experiment must vary ONE thing. The resolver is pure, but the
+# contract also pins the boolean parser the order flag reads through, and that lives in
+# wrf_sdirk3_config.h, which pulls in torch.
+add_executable(test_stage_krylov_policy_contract test_stage_krylov_policy_contract.cpp)
+target_include_directories(test_stage_krylov_policy_contract PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+set_property(TARGET test_stage_krylov_policy_contract PROPERTY CXX_STANDARD 17)
+target_link_libraries(test_stage_krylov_policy_contract "${TORCH_LIBRARIES}")
+add_test(NAME Stage_Krylov_Policy_Contract COMMAND test_stage_krylov_policy_contract)
+
 # PR 9B: standing forward-mode tangent contract for the W-damping chain —
 # guards the dual propagation that FD-based checks cannot see at kink-heavy
 # operands (see doc/sdirk3_rw_tangent_bisection_2026-07-17.md).

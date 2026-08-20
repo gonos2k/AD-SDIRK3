@@ -8757,6 +8757,24 @@ vertical_coefficients:
                 const bool capture_deltas =
                     stage_operand_diag_on && (stage_idx == 1 || stage_idx == 2);
                 if (capture_deltas) stage_operand_stage_states.clear();
+                // R9 P0-C: the ARK stage base, TERM BY TERM.
+                //
+                //     Y_s = U_n + h*sum_j a^E_sj k_slow[j] + h*sum_j a^I_sj k_fast[j]
+                //
+                // Measured: ||Y_3|| = 1.251e10 against ||Y_2|| = 2.100e6 and ||U_n|| ~ 2.1e6,
+                // while the accepted stage-2 K has ||K_2|| = 4806, i.e. h*gamma*||K_2|| ~ 1.3e6.
+                // The implicit history cannot supply four of those orders, so the term that
+                // does has to be named rather than deduced. This OBSERVES the production
+                // tensors -- no extra RHS evaluation, no change to the assembly statement.
+                const bool decompose_stage_base =
+                    wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STAGE_ENTRY_LEDGER");
+                if (decompose_stage_base) {
+                    torch::NoGradGuard no_grad;
+                    std::cerr << "SDIRK3_STAGE_BASE stage=" << (stage_idx + 1)
+                              << " term=U_n norm="
+                              << U_n.detach().norm().to(torch::kFloat64).item<double>()
+                              << std::endl;
+                }
                 torch::Tensor rhs = U_n;
                 for (int j = 0; j < stage_idx; ++j) {
                     // UNCHANGED production assembly statement (not decomposed).
@@ -8767,6 +8785,24 @@ vertical_coefficients:
                         torch::NoGradGuard no_grad;
                         // Running FP32 state after source j's actual add.
                         stage_operand_stage_states.push_back(rhs.detach().clone());
+                    }
+                    if (decompose_stage_base) {
+                        torch::NoGradGuard no_grad;
+                        const double aE = static_cast<double>(Ark::a_explicit[stage_idx][j]);
+                        const double aI = static_cast<double>(Ark::a_implicit[stage_idx][j]);
+                        const double ks = k_slow[j].defined()
+                            ? k_slow[j].detach().norm().to(torch::kFloat64).item<double>() : -1.0;
+                        const double kf = k_fast[j].defined()
+                            ? k_fast[j].detach().norm().to(torch::kFloat64).item<double>() : -1.0;
+                        std::cerr << "SDIRK3_STAGE_BASE stage=" << (stage_idx + 1)
+                                  << " src=" << (j + 1)
+                                  << " aE=" << aE << " k_slow=" << ks
+                                  << " term_E=" << (ks >= 0.0 ? dt * std::abs(aE) * ks : -1.0)
+                                  << " aI=" << aI << " k_fast=" << kf
+                                  << " term_I=" << (kf >= 0.0 ? dt * std::abs(aI) * kf : -1.0)
+                                  << " running=" 
+                                  << rhs.detach().norm().to(torch::kFloat64).item<double>()
+                                  << std::endl;
                     }
                 }
                 return rhs;

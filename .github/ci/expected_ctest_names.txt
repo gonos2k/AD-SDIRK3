@@ -19,6 +19,7 @@ Geometry_Contract_Matrix
 Hydrostatic_Balance_Contract
 Hydrostatic_Pressure_Orientation_Contract
 Implicit_Diff_Contract
+Krylov_Metric_Coordinate_Contract
 MPI_Halo_Contract_np1
 MPI_Halo_Contract_np2
 MPI_Halo_Contract_np4
@@ -34,6 +35,7 @@ Phi_Unity_Experiment_Enabled_Contract
 RW_Term_Capture_Contract
 Response_Probe_Contract
 Right_Preconditioner_Quality_Contract
+Stage_Krylov_Policy_Contract
 Stage_Operand_Decomposition_Contract
 Stage_State_Identity_Contract
 State_Layout_Contract
