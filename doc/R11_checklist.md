@@ -32,9 +32,12 @@
 - [ ] S6  np = 1,2,4 comparison
 
 ## P0-3  hidden dt authorities beyond dt_stage_
-- [ ] T1  enumerate: grid_info_->dt, local dt args, acoustic substep, cached coefficients,
-          stage coefficient builder, diffusion/damping timestep, physics tendency dt
-- [ ] T2  mutation-test each one; any that changes the RHS becomes an explicit dependency
+- [x] T1  ENUMERATED: 6 non-comment dt lines in a 10,627-line body -- 1 write (no reads exist),
+          1 string literal, 1 live read feeding W-damping (off under parity), 2 hardcoded
+          gamma_dt = 261.52 (one print-only, one driving a clamp).
+- [x] T2  The clamp branch is DISABLED by default (mu_tend_fortran_parity = true); runtime
+          probe emits nothing. LATENT, not active. And a CONSTANT is trivially dt-invariant, so
+          the earlier invariance test could not have found it -- corrected wording recorded.
 - [ ] T3  RAII restore for the probe (dt, refs, caches, counters) incl. on exception
 
 ## P0-4  physical-state admissibility via the PRODUCTION reconstruction
@@ -48,7 +51,7 @@
 - [ ] F2  cosine with the total, so two large cancelling terms are visible
 
 ## P1  fail-closed in the PRODUCTION path
-- [ ] V1  block_energy_shares() must itself reject overlap/gap/tail/zero/negative/NaN weights
+- [x] V1  block_energy_shares() must itself reject overlap/gap/tail/zero/negative/NaN weights
           and device/dtype mismatch -- the validators exist but no caller invokes them
 - [ ] V2  experiment pair validator must compare RUNTIME behaviour (hopeless cap, early-stop
           streak, refresh period, precond fallback latch, warm start, trust state), not just

@@ -2559,12 +2559,29 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                     wrf::sdirk3::block_energy_shares(*layout, r_true_inner, L_D);
                 const auto sh_wrms =
                     wrf::sdirk3::block_energy_shares(*layout, r_true_inner, L_E);
+                // A share is only reported when its computation says it is valid. The helper
+                // now fails closed on a non-partition layout or a non-positive/mismatched
+                // weight, and printing -1 with the reason is the alternative to printing
+                // plausible numbers that sum to 1 and mean nothing.
+                auto share_of = [](const wrf::sdirk3::BlockShares& b, std::size_t i,
+                                   bool weight_present) {
+                    return (b.valid && weight_present) ? b.shares[i] : -1.0;
+                };
                 for (std::size_t i = 0; i < layout->blocks.size(); ++i) {
                     std::cerr << "SDIRK3_OBJECTIVE_SHARE " << layout->blocks[i].name
-                              << " s_krylov=" << sh_krylov[i]
-                              << " s_physical=" << (L_phys.defined() ? sh_phys[i] : -1.0)
-                              << " s_D=" << (L_D.defined() ? sh_D[i] : -1.0)
-                              << " s_wrms=" << (L_E.defined() ? sh_wrms[i] : -1.0)
+                              << " s_krylov=" << share_of(sh_krylov, i, true)
+                              << " s_physical=" << share_of(sh_phys, i, L_phys.defined())
+                              << " s_D=" << share_of(sh_D, i, L_D.defined())
+                              << " s_wrms=" << share_of(sh_wrms, i, L_E.defined())
+                              << std::endl;
+                }
+                if (!sh_krylov.valid || (L_phys.defined() && !sh_phys.valid) ||
+                    (L_D.defined() && !sh_D.valid) || (L_E.defined() && !sh_wrms.valid)) {
+                    std::cerr << "SDIRK3_OBJECTIVE_SHARE_INVALID"
+                              << " krylov=\"" << sh_krylov.reason << "\""
+                              << " physical=\"" << sh_phys.reason << "\""
+                              << " D=\"" << sh_D.reason << "\""
+                              << " wrms=\"" << sh_wrms.reason << "\""
                               << std::endl;
                 }
                 std::cerr << "SDIRK3_WEIGHT_STRUCTURE metric="

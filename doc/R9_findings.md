@@ -1034,3 +1034,64 @@ one-step tangent through the implicit solves. A growing mode of the linearized d
 by itself a scheme defect — an A-stable implicit step gives bounded amplification of a mode the
 true linearized solution amplifies. The stage-1 `J_full` value (+73.09) has a 20% Ritz residual
 and one isolated near-top value, so it is reported but not relied on.
+
+## T1/T2. The dt authorities inside the explicit RHS, enumerated and reachability-checked
+
+The fixed-state test varied `dt_stage_` and found the RHS bit-identical, and I read that as "no
+hidden dt anywhere". The review's objection — that other dt authorities exist and the test does
+not touch them — is correct, and enumerating them gives a better answer than the black-box test
+could.
+
+`computeUnifiedRHS` spans **10,627 lines**. Non-comment lines mentioning a timestep: **six.**
+
+| line | text | status |
+|---|---|---|
+| 12711 | `grid_info_->dt = dt_stage_;` | a WRITE; no `->dt` read exists anywhere in the tree |
+| 16221 | `float gamma_dt = 261.52f;` | **hardcoded `600 * gamma`** — drives a clamp |
+| 16278 | `float gamma_dt = 261.52f;` | same constant, inside `debug_level >= 2` — print only |
+| 17252 | a string literal in a debug message | not a use |
+| 19811 | `float dt = dt_stage_;` | live read |
+| 19932 | passes that `dt` to the W-damping call | the only consumer |
+
+### The hardcoded constant is real, and it is NOT on the executed path
+
+`mu_tend_threshold = 1e4 / gamma_dt` with `gamma_dt` frozen at `261.52 = 600 * 0.43586652`,
+feeding `mu_tend = mu_tend.clamp(-38, +38)`. By the code's own stated intent
+(`Delta mu' < 1e4 Pa per Newton step`) that threshold must scale as `1/dt` — 76.5 at dt=300,
+382 at dt=60 — so at smaller `dt` it would clamp up to an order of magnitude harder than
+intended. A clamp is also a genuine non-differentiability: zero derivative outside the bounds.
+
+**But it is inside `if (!mu_tend_fortran_parity)`, and `mu_tend_fortran_parity` defaults to
+true** ("Disable mean-subtract and clamp for mu_tend, default true for parity"). Confirmed at
+runtime: `WRF_SDIRK3_MU_CLAMP_TRACE=1` emits **nothing** — the block is never entered.
+
+So this is a **latent** defect, not an active one. It would bite the moment that flag is turned
+off, and it is exactly the shape the review predicted: a dt authority that is frozen rather than
+absent.
+
+### Why the invariance test could not have found it
+
+**A constant is trivially `dt`-invariant.** Varying `dt_stage_` and getting a bit-identical RHS
+shows there is no dt-VARYING path; it cannot distinguish that from a dt path frozen at the wrong
+value. The corrected statement of the earlier result is:
+
+> the explicit slow RHS has no dt-VARYING dependence in this configuration
+
+and the reachability enumeration above is what upgrades it to:
+
+> the only live dt read (`:19811`) feeds W-damping, which is off under parity; the one frozen dt
+> constant is on a disabled branch. So the RHS has no live dt dependence here — established by
+> enumeration and reachability, not by a black-box invariance check.
+
+## V1. `block_energy_shares` now fails closed in the PRODUCTION path
+
+The validators existed and no caller invoked them, so a malformed layout still produced shares
+summing to 1. The helper now returns `BlockShares { shares, valid, reason }` and rejects:
+non-partition layout (overlap / gap / uncovered tail / empty block), weight length mismatch,
+device/dtype mismatch, non-positive or non-finite weights, and zero weighted energy. The Newton
+solver's objective-share emit prints `-1` plus a `SDIRK3_OBJECTIVE_SHARE_INVALID` line carrying
+each reason, instead of plausible numbers.
+
+Returning a bare vector was what made the gap possible: the function had no way to say "these
+numbers mean nothing" other than by returning numbers. Contract: 51 cases (from 46), including
+that an overlapping layout is now REJECTED rather than renormalised.

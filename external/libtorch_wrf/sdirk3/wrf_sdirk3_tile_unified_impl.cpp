@@ -16235,6 +16235,34 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                           << " / " << mu_tend_max_before_cpu.item<float>() << " Pa/s" << std::endl;
             }
 
+            // R11 T1/T2: this clamp is a HIDDEN dt AUTHORITY, and it is frozen.
+            //
+            // mu_tend_threshold = 1e4 / gamma_dt with gamma_dt HARDCODED to 261.52 = 600 * gamma.
+            // By its own stated intent ("Delta mu' < 1e4 Pa per Newton step") the threshold must
+            // scale as 1/dt -- 76.5 at dt=300, 382 at dt=60 -- but it is 38 at every dt, so at
+            // smaller dt it clamps up to an order of magnitude harder than intended.
+            //
+            // It is also why the fixed-state dt-invariance test passed: a CONSTANT is trivially
+            // dt-invariant, so that test can show "no dt-VARYING path" and cannot distinguish it
+            // from "a dt path frozen at the wrong value". The saturated fraction below is what
+            // separates "inert" from "actively shaping the tendency", and a clamp that fires is
+            // additionally a genuine non-differentiability: zero derivative outside the bounds.
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_MU_CLAMP_TRACE")) {
+                torch::NoGradGuard ng_clamp;
+                const auto a = mu_tend.detach().abs();
+                const int64_t n_sat = (a >= mu_tend_threshold).sum().item<int64_t>();
+                std::cerr << "SDIRK3_MU_CLAMP threshold=" << mu_tend_threshold
+                          << " gamma_dt_hardcoded=" << gamma_dt
+                          << " dt_stage=" << dt_stage_
+                          << " threshold_if_scaled="
+                          << (dt_stage_ > 0.0f ? target_delta_mu / (0.43586652f * dt_stage_) : -1.0f)
+                          << " n_saturated=" << n_sat
+                          << " n_total=" << a.numel()
+                          << " sat_frac=" << (a.numel() > 0
+                                ? static_cast<double>(n_sat) / a.numel() : -1.0)
+                          << " max_abs=" << a.max().to(torch::kFloat64).item<double>()
+                          << std::endl;
+            }
             // AUTOGRAD FIX: Use out-of-place clamp() instead of in-place clamp_()
             // In-place operations can break autograd version tracking
             mu_tend = mu_tend.clamp(-mu_tend_threshold, mu_tend_threshold);
