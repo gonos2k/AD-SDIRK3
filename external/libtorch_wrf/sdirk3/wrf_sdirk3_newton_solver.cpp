@@ -7178,6 +7178,55 @@ public:
                 policy_in.order = stage_krylov_order();   // the single reading; see its definition
                 const auto policy = wrf::sdirk3::resolve_stage_krylov_policy(policy_in);
 
+                // R11 V2: the RUNTIME behaviour manifest.
+                //
+                // policy_fields_that_differ() compares the PURE policy, and the pure policy is
+                // not everything that changes what a run does. Hopeless-mode caps, early-stop
+                // streaks, the warm-start latch, the trust radius and the preconditioner mode
+                // are all stateful and all alter the solve, and two arms of a "single-variable"
+                // sweep can differ in any of them without any knob differing.
+                //
+                // Two arms are separate processes, so there is no in-process baseline to fail
+                // closed against. What makes the sweep verifiable is that every behaviour-bearing
+                // value is ON THE RECORD at the same point in both arms: diffing two manifests
+                // then shows any unintended difference, instead of leaving it to the assumption
+                // that only the knob moved.
+                if (newton_iter == 0 &&
+                    wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_POLICY_MANIFEST")) {
+                    auto& cfgm = wrf::sdirk3::g_sdirk3_config;
+                    std::cerr << "SDIRK3_POLICY_MANIFEST stage=" << stage
+                              // resolved policy (what the pure resolver decided)
+                              << " restart=" << policy.restart
+                              << " max_restarts=" << policy.max_restarts
+                              << " tol=" << policy.tol
+                              << " tol_overridden=" << (policy.tol_overridden ? 1 : 0)
+                              << " budget_active=" << (policy.budget_active ? 1 : 0)
+                              << " ew_applied=" << (policy.ew_applied ? 1 : 0)
+                              << " ew_scale=" << policy.ew_scale
+                              << " restart_source=" << static_cast<int>(policy.restart_source)
+                              << " order=" << (policy_in.order ==
+                                               wrf::sdirk3::StageKrylovOrder::StageKnobFirst
+                                                   ? "knob_first" : "shipped")
+                              // stateful runtime behaviour the pure policy does NOT contain
+                              << " s2_hopeless_mode=" << (stage2_hopeless_budget_mode_ ? 1 : 0)
+                              << " s2_hopeless_streak=" << stage2_hopeless_streak_
+                              << " s3_hopeless_mode=" << (stage3_hopeless_budget_mode_ ? 1 : 0)
+                              << " s3_hopeless_streak=" << stage3_hopeless_streak_
+                              << " s3_warmstart_disabled=" << (stage3_warmstart_disabled_ ? 1 : 0)
+                              << " trust_radius=" << trust_radius_
+                              << " trust_region_on=" << (cfgm.nk_trust_region ? 1 : 0)
+                              << " hopeless_relax=" << (cfgm.hopeless_relax ? 1 : 0)
+                              << " precond_type=" << cfgm.precond_type
+                              << " gmres_block_scale=" << (cfgm.gmres_block_scale ? 1 : 0)
+                              << " use_autograd=" << (cfgm.use_autograd ? 1 : 0)
+                              << " imex_split_mode=" << cfgm.imex_split_mode
+                              << " newton_tol=" << cfgm.newton_tol
+                              << " max_newton_iter=" << cfgm.max_newton_iter
+                              << " ew_enabled=" << (ew_eta_enabled_this_iter ? 1 : 0)
+                              << " ew_eta=" << ew_eta_used_this_iter
+                              << std::endl;
+                }
+
                 const int  restart_before_policy = effective_restart;
                 const int  maxr_before_policy    = effective_max_restarts;
                 effective_restart         = policy.restart;

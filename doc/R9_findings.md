@@ -1177,3 +1177,59 @@ stage-2 solution differs; the ratio does not.
 **So the roughness is a property of the implicit-step DIRECTION**, not of the operator
 everywhere and not of the boundary. It is still measured over 1.2 decades of `eps`, so it
 remains short of a differentiability verdict — see the FP32 limit above.
+
+## V2. The runtime behaviour manifest — the sweep WAS single-variable, now demonstrated
+
+`policy_fields_that_differ()` compares the pure policy, and the pure policy is not everything
+that changes what a run does: hopeless-mode caps, early-stop streaks, the warm-start latch, the
+trust radius and the preconditioner mode are all stateful and all alter the solve. Two arms are
+separate processes, so there is no in-process baseline to fail closed against; what makes a
+sweep verifiable is that every behaviour-bearing value is on the record at the same point in
+both arms.
+
+`WRF_SDIRK3_POLICY_MANIFEST=1` emits 26 such fields at stage 2, iteration 0. Diffing the two
+arms of the stage-2 budget sweep (`restart` 120 vs 300):
+
+```
+DIFFERS  restart   102 -> 255
+identical fields: 25 of 26
+```
+
+**Only the knob differs.** The earlier "single-variable" claim for that sweep is no longer an
+assumption about the resolver — it is a measured property of every behaviour-bearing runtime
+field, including the stateful ones the pure policy does not contain.
+
+## S6. The probes are TILE-LOCAL, and now say so instead of producing comparable-looking numbers
+
+The JVP, the Arnoldi basis and the continuation all run on this rank's packed state. Under
+`np > 1` each rank holds a subdomain with an exchanged halo, so a spectrum or a Taylor remainder
+computed there is a property of the LOCAL operator — not the global one, and not comparable
+rank-to-rank or against a single-rank run. Emitting them anyway would produce numbers that look
+like an np-equivalence check and are not one.
+
+All six RHS-re-entering probes now fail closed on any topology other than one rank, with
+`SDIRK3_PROBE_SKIPPED probe=<name> reason="tile-local operator under np>1..."`. Same judgment as
+the existing stage-operand diagnostic; these are opt-in diagnostics, so they skip with a stated
+reason rather than aborting. Verified at `np=1`: the probes still fire.
+
+**An np=1,2,4 equivalence check for these quantities therefore needs a formulation that is
+global by construction, not a rerun of these probes.** That is not done.
+
+## F1. Term-observer coverage, stated exactly
+
+| variable | term observer | status |
+|---|---|---|
+| `ru` | 9 capture sites; 4 fire on the ExplicitOnly path (Entry, Advection, Coriolis, Final) | advection further splits x/y/z with cosines |
+| `rv`, `rw`, `ph`, `t`, `mu` | **none** | **not covered** |
+
+For `ru` the coverage is closed on the executed path: `post_capture_tail status=PASS |dR|=0`
+confirms nothing modifies `ru_tend` after the last capture, so the captured sites account for
+the whole tendency. The advection closure check is fail-closed by design and correctly reports
+`INVALID reason=missing_adv_x` at an evaluation where the advection tensors were never populated
+(the all-zero first call) rather than inventing a pass.
+
+The stage-2 dominant eigenvector is 99.8% `ru`, so the one covered variable is the one that
+carries the stiffness — but that is a reason to have prioritised it, **not** a substitute for
+the other five. `F_E = F_adv + F_pressure/metric + F_buoyancy + F_coriolis + F_diffusion +
+F_damping + F_boundary + F_source` across all six variables is **not** measured, and the review's
+P0-5 stays open on that basis.

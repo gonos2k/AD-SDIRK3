@@ -29,7 +29,9 @@
 - [~] S5  PARTIAL: J_full measured with the same Arnoldi and has LARGER RHP eigenvalues than
           J_E (470.8 vs 169.8 at stage 2, converged) -- so the SPLIT does not create them.
           D(Phi_h), the one-step tangent through the implicit solves, remains unmeasured.
-- [ ] S6  np = 1,2,4 comparison
+- [~] S6  The probes are TILE-LOCAL; all six now fail closed under np>1 with a stated reason
+          rather than emitting rank-local numbers as if global. A real np-equivalence check
+          needs a globally-formulated quantity, not a rerun of these probes. NOT done.
 
 ## P0-3  hidden dt authorities beyond dt_stage_
 - [x] T1  ENUMERATED: 6 non-comment dt lines in a 10,627-line body -- 1 write (no reads exist),
@@ -48,13 +50,15 @@
           reopened. rho_max = 4.2e6 flagged, not explained.
 
 ## P0-5  full slow-RHS decomposition
-- [ ] F1  every term x every variable, through a production-side term observer
+- [~] F1  ru is covered on the executed path (4 sites fire; post_capture_tail |dR|=0 confirms
+          nothing is added after the last capture; advection splits x/y/z with cosines).
+          rv/rw/ph/t/mu have NO term observer. P0-5 stays open on that basis.
 - [x] F2  cosines emitted; MEASURED no cancellation in the u-advection split (sum of norms /
           total = 1.003; adv_z cos = 1.000, adv_x cos = 0.0009 orthogonal)
 
 ## P1  fail-closed in the PRODUCTION path
 - [x] V1  block_energy_shares() must itself reject overlap/gap/tail/zero/negative/NaN weights
           and device/dtype mismatch -- the validators exist but no caller invokes them
-- [ ] V2  experiment pair validator must compare RUNTIME behaviour (hopeless cap, early-stop
+- [x] V2  experiment pair validator must compare RUNTIME behaviour (hopeless cap, early-stop
           streak, refresh period, precond fallback latch, warm start, trust state), not just
           the pure policy fields

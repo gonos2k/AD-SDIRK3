@@ -6050,6 +6050,30 @@ vertical_coefficients:
         //
         // A diagnostic that can alter the run it observes is not a diagnostic. Scope-bound
         // restore makes the exception path identical to the normal one.
+        // R11 S6: these probes measure a TILE-LOCAL operator.
+        //
+        // The JVP, the Arnoldi basis and the continuation all run on this rank's packed state.
+        // Under np > 1 each rank holds a subdomain and the halo is exchanged, so a spectrum or a
+        // Taylor remainder computed here is a property of the LOCAL operator -- not of the
+        // global one, and not comparable rank-to-rank or against a single-rank run. Emitting
+        // them anyway would produce numbers that look like an np-equivalence check and are not
+        // one.
+        //
+        // Same judgment and same failure mode as the stage-operand diagnostic, which fails
+        // closed on any topology other than one rank covering the whole patch. These are
+        // opt-in diagnostics rather than a production path, so they SKIP with a stated reason
+        // instead of aborting.
+        const bool probe_topology_ok = (nprocx_ * nprocy_ == 1);
+        auto probe_skip_note = [&](const char* which) {
+            static bool warned = false;
+            if (!warned) {
+                std::cerr << "SDIRK3_PROBE_SKIPPED probe=" << which
+                          << " reason=\"tile-local operator under np>1 is not the global "
+                             "operator; np=" << (nprocx_ * nprocy_) << "\"" << std::endl;
+                warned = true;
+            }
+        };
+
         struct ScopedProbeState {
             TileSDIRK3UnifiedSolver& s;
             float dt_saved;
@@ -9443,7 +9467,9 @@ vertical_coefficients:
                 // tendency returns the same vector. Any relative difference is a dt the
                 // tendency should not have had, and its SIZE bounds how much of the h^2.4 it
                 // can explain.
-                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_RHS_DT_INVARIANCE") &&
+                if ((probe_topology_ok ? wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_RHS_DT_INVARIANCE")
+                       : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_RHS_DT_INVARIANCE")
+                              ? (probe_skip_note("dt_invariance"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     torch::NoGradGuard ng_dt;
                     ScopedProbeState probe_guard(*this);
@@ -9490,7 +9516,9 @@ vertical_coefficients:
                 // growth is the operator's genuine response to a large displacement; a knee at
                 // some lambda* localises a switch, and the state diagnostics at lambda* say
                 // which one.
-                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SLOW_CONTINUATION") &&
+                if ((probe_topology_ok ? wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SLOW_CONTINUATION")
+                       : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SLOW_CONTINUATION")
+                              ? (probe_skip_note("slow_continuation"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     torch::NoGradGuard ng_cont;
                     ScopedProbeState probe_guard(*this);
@@ -9648,7 +9676,9 @@ vertical_coefficients:
                 // Both are emitted. If either is not at round-off, the rho below is not a
                 // spectral radius and must not be read as one -- exactly the failure the eps
                 // sweep caught, made impossible to repeat silently.
-                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_SPECTRUM") &&
+                if ((probe_topology_ok ? wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_SPECTRUM")
+                       : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_SPECTRUM")
+                              ? (probe_skip_note("explicit_spectrum"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     ScopedProbeState probe_guard(*this);
                     const auto U0 = U_conv.detach().clone();
@@ -9986,7 +10016,9 @@ vertical_coefficients:
                 // tensors shared with the live forward would push spurious contributions into
                 // the state's .grad() and can free buffers the real adjoint still needs. The
                 // probe must not be able to touch the run it is observing.
-                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_AD_SPLIT_CONTRACT")) {
+                if ((probe_topology_ok ? wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_AD_SPLIT_CONTRACT")
+                       : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_AD_SPLIT_CONTRACT")
+                              ? (probe_skip_note("ad_split_contract"), false) : false))) {
                     ScopedProbeState probe_guard(*this);
                     const auto U_probe = U_conv.detach().clone();
                     auto F_of = [&](wrf::sdirk3::RhsMode m) {
@@ -10079,7 +10111,9 @@ vertical_coefficients:
                 // Once that departs from 1 the remainder is measuring rounding, not curvature,
                 // and a row that cannot say so is the same class of defect as an ablation arm
                 // that removed nothing.
-                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_DIRECTIONAL_DERIVATIVE") &&
+                if ((probe_topology_ok ? wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_DIRECTIONAL_DERIVATIVE")
+                       : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_DIRECTIONAL_DERIVATIVE")
+                              ? (probe_skip_note("directional_derivative"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     ScopedProbeState probe_guard(*this);
                     const auto U0d = U_conv.detach().clone();
@@ -10175,7 +10209,9 @@ vertical_coefficients:
                     }
                 }
 
-                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SPLIT_IDENTITY")) {
+                if ((probe_topology_ok ? wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SPLIT_IDENTITY")
+                       : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SPLIT_IDENTITY")
+                              ? (probe_skip_note("split_identity"), false) : false))) {
                     torch::NoGradGuard ng_split;
                     ScopedProbeState probe_guard(*this);
                     const auto U_probe = U_conv.detach();
