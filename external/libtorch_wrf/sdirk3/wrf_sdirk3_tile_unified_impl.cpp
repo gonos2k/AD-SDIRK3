@@ -9640,7 +9640,18 @@ vertical_coefficients:
                                   << " t=" << sh(ev_t) << " mu=" << sh(ev_mu)
                                   << std::endl;
                     }
+                    // SELF-VALIDATING A/B.
+                    //
+                    // An ablation sweep is only evidence if the ablation CHANGED something at
+                    // the state rho was measured at. Five term ablations moved rho by <0.13%
+                    // and I read that as "no single term carries the spectrum" -- without ever
+                    // checking that the terms were nonzero there. ||F_E(U0)|| on the same line
+                    // as rho, from the same U0, is what makes the arms comparable: an arm whose
+                    // F_E norm equals the baseline's removed NOTHING, and its rho says nothing.
+                    const double fE_norm = F_exp_fn(U0).detach()
+                                               .to(torch::kFloat64).norm().item<double>();
                     std::cerr << "SDIRK3_EXPLICIT_SPECTRUM stage=" << stage_id
+                              << " F_E_at_U0=" << fE_norm
                               << " jvp_fd_fallback=" << (fb_any ? 1 : 0)
                               << " homogeneity_rel=" << hom_rel
                               << " additivity_rel=" << add_rel
@@ -15266,7 +15277,22 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
         
         // Total t advection tendency
-        t_tend = t_tend + t_adv_horiz + t_adv_z;
+        // R10 follow-up: ablate theta's advection terms independently. The dominant
+        // eigendirection is 46% theta with ph and mu identically zero, so the stiff mode lives
+        // in the thermodynamic equation and its momentum coupling -- and the u-terms trace only
+        // ever watched `ru`. Same A/B that showed ru_adv_z carries the NORM, not the SPECTRUM.
+        {
+            auto t_ah = t_adv_horiz;
+            auto t_az = t_adv_z;
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_ADV_Z")) {
+                t_az = torch::zeros_like(t_az);
+                t_adv_z_work_ = t_az;
+            }
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_ADV_H")) {
+                t_ah = torch::zeros_like(t_ah);
+            }
+            t_tend = t_tend + t_ah + t_az;
+        }
     }
 
     }  // end if (do_explicit) — Step 3 ADVECTION
@@ -21708,7 +21734,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
                 auto t_diff_v = compute_vertical_mixing_scalar(t, Kv_scalar, rdnw_tensor,
                                                                    rho, t_full, mu_full);
-                t_tend = t_tend + t_diff_v;
+                if (!wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V")) {
+                    t_tend = t_tend + t_diff_v;
+                }
 
                 // PARITY FIX 2025-12-13: Add vertical diffusion for ALL moist species like WRF's vertical_diffusion_s
                 // WRF loops over all moist scalars (qv, qc, qr, qi, qs, qg, etc.)
@@ -22040,7 +22068,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
                 auto t_diff_v = compute_vertical_mixing_scalar(t, Kv_scalar, rdnw_tensor,
                                                                    rho, t_full, mu_full);
-                t_tend = t_tend + t_diff_v;
+                if (!wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V")) {
+                    t_tend = t_tend + t_diff_v;
+                }
 
                 // PARITY FIX 2025-12-13: Add QV vertical diffusion with mix_full_fields/qv_base handling
                 // WRF's vertical_diffusion_s uses var_mix = qv - qv_base when mix_full_fields=false
@@ -22339,6 +22369,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto t_slice_f32 = t.slice(1, 0, nz_div).to(torch::kFloat32);
                 auto th_base_slice_f32 = th_base_.slice(1, 0, nz_div).to(torch::kFloat32);
                 auto t_full_for_compress = t_slice_f32 + th_base_slice_f32;
+            // R10 follow-up: `t_compress = -theta_full * div(u,v,w)` couples theta to ALL THREE
+            // momentum components -- exactly the shape of the dominant eigenvector (t 0.458,
+            // ru 0.310, rw 0.119, rv 0.113, ph and mu identically 0), which makes it the leading
+            // suspect for the 0.57 s timescale. Zeroing the shared factor removes the term on
+            // every branch of this path at once, instead of gating four separate add sites.
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_COMPRESS")) {
+                t_full_for_compress = torch::zeros_like(t_full_for_compress);
+            }
                 auto t_compress_f32 = -t_full_for_compress * div_3d_f32;
                 // Add only to the levels we computed (upper levels unchanged)
                 // Cast back to input dtype when adding to t_tend
@@ -22386,6 +22424,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto t_f32 = t.to(torch::kFloat32);
                 auto th_base_f32 = th_base_.to(torch::kFloat32);
                 auto t_full_for_compress = t_f32 + th_base_f32;
+            // R10 follow-up: `t_compress = -theta_full * div(u,v,w)` couples theta to ALL THREE
+            // momentum components -- exactly the shape of the dominant eigenvector (t 0.458,
+            // ru 0.310, rw 0.119, rv 0.113, ph and mu identically 0), which makes it the leading
+            // suspect for the 0.57 s timescale. Zeroing the shared factor removes the term on
+            // every branch of this path at once, instead of gating four separate add sites.
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_COMPRESS")) {
+                t_full_for_compress = torch::zeros_like(t_full_for_compress);
+            }
                 auto t_compress_f32 = -t_full_for_compress * div_3d_use;
                 // Cast back to input dtype when adding to t_tend
                 // HEVI inc3: split theta compressibility -> horizontal (k_slow) + vertical (k_fast).

@@ -660,7 +660,7 @@ constraint. The earlier extrapolation is superseded as a design target.
 
 Two A/B results that each correct something I wrote earlier.
 
-### 1. Ablating `adv_z` leaves `rho` unchanged
+### 1. Ablating `adv_z` leaves `rho` unchanged — **RETRACTED 2026-08-21, the ablation removed NOTHING**
 
 | `WRF_SDIRK3_ABLATE_ADV_Z` | `rho(J_E)` | `h rho` |
 |---|---|---|
@@ -672,9 +672,32 @@ Two A/B results that each correct something I wrote earlier.
 jump along the continuation — and contributes **nothing** to the **spectrum**. Those are
 different questions about the same term, and it answers them oppositely.
 
-So the stability violation (`h rho = 1048`, 605x outside) is **not** caused by the term that
-makes `F_E` large. Sub-cycling or repartitioning vertical advection alone would not change
-`rho`.
+~~So the stability violation is not caused by the term that makes `F_E` large.~~
+
+**RETRACTED.** The A/B was never valid. The spectrum probe runs at `stage_id = 1`, i.e. at
+`U_conv_1 = U_stage_1 + h a_11 K_1` with `||K_1|| = 0.845` — essentially `U_n`, the balanced
+initial state, where `w ~ 0` and hence `omega ~ 0`. Vertical advection contributes **nothing**
+there, so ablating it removes nothing and `rho` being unchanged is a tautology.
+
+The probe now emits `F_E_at_U0` on the same line as `rho`, from the same `U0`, and it is
+**identical across every arm**:
+
+| ablation | `F_E_at_U0` | `rho(J_E)` |
+|---|---|---|
+| baseline | 1770.81 | 1.74627 |
+| `ADV_Z` | **1770.81** | 1.74501 |
+| `T_COMPRESS` | **1770.81** | 1.74813 |
+| `T_ADV_Z` | **1770.81** | 1.74649 |
+| `T_DIFF_V` | **1770.81** | 1.74724 |
+
+An arm whose `F_E` norm equals the baseline's removed nothing, and its `rho` says nothing. All
+five term ablations are void, and the theta-term table below with them.
+
+**What survives, because it does not depend on any ablation:** `rho = 1.746` with
+`linear_verified = 1`, `h rho = 1048` (605x outside), and the eigenvector decomposition.
+
+**The corrected measurement** is the same A/B at a state where the terms are ACTIVE — stage 2's
+`U_conv`, where `adv_z = 5.02e10` — with `F_E_at_U0` proving each arm removed something.
 
 ### 2. The stiff mode is thermal-momentum, not acoustic
 
