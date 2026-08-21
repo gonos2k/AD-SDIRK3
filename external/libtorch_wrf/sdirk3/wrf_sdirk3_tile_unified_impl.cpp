@@ -9574,6 +9574,18 @@ vertical_coefficients:
                         };
                         const int64_t mu_nonpos = mu_a.defined()
                             ? (mu_a.detach() <= 0).sum().item<int64_t>() : -1;
+                        // A4: a minimum without a location cannot be chased. argmin on the
+                        // flattened full field, reported with the variable it came from.
+                        auto argmin_of = [](const torch::Tensor& x) -> int64_t {
+                            if (!x.defined() || x.numel() == 0) return -1;
+                            return x.detach().to(torch::kFloat64).argmin().item<int64_t>();
+                        };
+                        const int64_t th_argmin =
+                            (th_base_.defined() && t_a.defined())
+                                ? argmin_of(th_base_ + t_a) : -1;
+                        const int64_t mu_argmin =
+                            (mu_base_.defined() && mu_a.defined())
+                                ? argmin_of(mu_base_ + mu_a) : -1;
                         std::cerr << "SDIRK3_SLOW_CONTINUATION stage=" << stage_id
                                   << " lambda=" << lam
                                   << " disp_rel=" << (base_n > 0.0 ? lam * step_n / base_n : -1.0)
@@ -9597,6 +9609,8 @@ vertical_coefficients:
                                   << " p_nonpos=" << p_nonpos
                                   << " rho_min=" << rho_min
                                   << " rho_max=" << rho_max
+                                  << " th_argmin_flat=" << th_argmin
+                                  << " mu_argmin_flat=" << mu_argmin
                                   << " F_E_nonfinite=" << nonfinite
                                   << std::endl;
                     }
@@ -10079,6 +10093,40 @@ vertical_coefficients:
                     std::vector<std::pair<const char*, torch::Tensor>> dirs;
                     dirs.emplace_back("implicit_step", (U_conv.detach() - U_stage.detach()));
                     dirs.emplace_back("random", torch::randn_like(U0d));
+                    // D3: the same direction restricted to the interior, and to the edges only.
+                    // If the remainder behaves differently on the two, the roughness is a
+                    // boundary property; if it behaves the same, it is not. Built by masking the
+                    // per-variable edge slabs, the same edge definition the eigenvector uses.
+                    {
+                        torch::NoGradGuard ng_d3;
+                        auto base = (U_conv.detach() - U_stage.detach());
+                        auto [du,dv,dw,dph,dt_,dmu] = extractStateVariables(base);
+                        auto edge_mask_like = [](const torch::Tensor& x) {
+                            auto m = torch::zeros_like(x);
+                            if (x.dim() == 3) {
+                                for (int64_t d = 0; d < 3; ++d) {
+                                    const int64_t n = x.size(d);
+                                    if (n < 2) continue;
+                                    m.slice(d, 0, 1).fill_(1);
+                                    m.slice(d, n - 1, n).fill_(1);
+                                }
+                            }
+                            return m;
+                        };
+                        std::vector<torch::Tensor> parts{du,dv,dw,dph,dt_,dmu};
+                        std::vector<torch::Tensor> edge, inter;
+                        for (auto& q : parts) {
+                            if (!q.defined()) { edge.push_back(q); inter.push_back(q); continue; }
+                            auto m = edge_mask_like(q);
+                            edge.push_back(q * m);
+                            inter.push_back(q * (1 - m));
+                        }
+                        auto pack = [&](std::vector<torch::Tensor>& v) {
+                            return combineStateVariables(v[0],v[1],v[2],v[3],v[4],v[5]);
+                        };
+                        dirs.emplace_back("edge_only", pack(edge));
+                        dirs.emplace_back("interior_only", pack(inter));
+                    }
                     for (auto& named : dirs) {
                         auto d = named.second;
                         double dn;
@@ -14957,6 +15005,22 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             };
             const auto horiz = (ru_adv_x.defined() && ru_adv_y.defined())
                 ? (ru_adv_x + ru_adv_y) : torch::Tensor{};
+            // F2: norms alone cannot see two large terms cancelling. The cosine with the total
+            // advective tendency separates a term that REINFORCES the result from one that is
+            // large and mostly cancels -- and a near -1 cosine on a large term is the signature
+            // that a norm-ranked decomposition would report as "dominant" while it contributes
+            // almost nothing to the sum.
+            const auto adv_total = (ru_adv_z.defined() && horiz.defined())
+                ? (horiz + ru_adv_z) : torch::Tensor{};
+            auto cos_with = [&](const torch::Tensor& a) -> double {
+                if (!a.defined() || !adv_total.defined()) return -2.0;
+                const auto a64 = a.detach().to(torch::kFloat64);
+                const auto b64 = adv_total.detach().to(torch::kFloat64);
+                const double na = a64.norm().item<double>();
+                const double nb = b64.norm().item<double>();
+                if (!(na > 0.0 && nb > 0.0)) return -2.0;
+                return (a64 * b64).sum().item<double>() / (na * nb);
+            };
             std::cerr << "SDIRK3_ADV_SPLIT"
                       << " adv_x=" << n64(ru_adv_x)
                       << " adv_y=" << n64(ru_adv_y)
@@ -14969,6 +15033,16 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                       << " max_x=" << m64(ru_adv_x)
                       << " max_y=" << m64(ru_adv_y)
                       << " max_z=" << m64(ru_adv_z)
+                      << " adv_total=" << n64(adv_total)
+                      << " cos_x=" << cos_with(ru_adv_x)
+                      << " cos_y=" << cos_with(ru_adv_y)
+                      << " cos_z=" << cos_with(ru_adv_z)
+                      // If the parts are large and the total is small, they cancel; this ratio
+                      // states that directly instead of leaving it to be inferred.
+                      << " sum_of_norms_over_total="
+                      << (n64(adv_total) > 0.0
+                            ? (n64(ru_adv_x) + n64(ru_adv_y) + n64(ru_adv_z)) / n64(adv_total)
+                            : -1.0)
                       << std::endl;
         }
         // 9F.D20: combined horizontal, to compare against WRF's advect_u split.

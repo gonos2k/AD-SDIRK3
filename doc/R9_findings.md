@@ -1134,3 +1134,46 @@ routine builds `al` **geometrically** and is 35% off on the gradient versus WRF'
 `calc_p_rho_phi` form, because `p' = p0*(R(t0+th)/(p0*alpha))^(cp/cv) - pb` cancels two ~1e5 Pa
 terms down to ~11 Pa. Whether these cells are that known artefact or a real near-singularity is
 **not** established here.
+
+## F2. No two large terms are cancelling in the u-advection decomposition
+
+Norms alone cannot see cancellation, so the cosine of each direction with the total advective
+tendency is now on the record (stage-2 state):
+
+| term | norm | cosine with the total |
+|---|---|---|
+| `adv_x` | 4.918e7 | **0.0009** — orthogonal |
+| `adv_y` | 6.584e4 | -0.020 |
+| **`adv_z`** | **1.725e10** | **1.000** |
+| total | 1.725e10 | — |
+| `sum_of_norms / total` | **1.003** | |
+
+The sum of the parts' norms is 1.003x the total, so **nothing cancels**: `adv_z` IS the total,
+`adv_x` is orthogonal to it (4.9e7 that contributes nothing to the magnitude), and `adv_y` is
+negligible. A norm-ranked decomposition is not misleading here — which had to be measured,
+because it is exactly where one would be.
+
+## D3. The large Taylor remainder is DIRECTIONAL, and not a boundary effect
+
+Clean rows only (`realized_frac > 0.94`), stage 2:
+
+| direction | `r1` at eps=0.25 | at 0.0625 | at 0.0156 |
+|---|---|---|---|
+| `implicit_step` | 0.893 | 0.961 | 0.942 |
+| **`random`** | **0.116** | **0.132** | — |
+| `edge_only` | 0.925 | 0.925 | — |
+| `interior_only` | 0.979 | 0.981 | 0.996 |
+
+**Restricting to the interior does not improve the remainder at all** (0.979 vs 0.893 for the
+whole step), and neither does restricting to the edges. So the large remainder is **not** a
+boundary / halo / staggered-endpoint effect — the review's `P J_E P` concern does not explain
+it, consistent with the eigenvector's edge fraction sitting at the uniform baseline.
+
+Along a **random** direction the remainder is **8x smaller** (0.12 vs 0.89-0.98). That
+dissociation reproduces across runs: at `restart=600` it was 0.024 vs 0.249 (10x), here at
+`restart=120` it is 0.116 vs 0.893 (7.7x). The absolute values differ between runs because the
+stage-2 solution differs; the ratio does not.
+
+**So the roughness is a property of the implicit-step DIRECTION**, not of the operator
+everywhere and not of the boundary. It is still measured over 1.2 decades of `eps`, so it
+remains short of a differentiability verdict — see the FP32 limit above.

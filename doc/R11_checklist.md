@@ -19,7 +19,7 @@
           (realized_frac -> 0 forces r1 -> 1 identically). Clean window is only eps in
           [0.0156, 0.25]: stage-1/random falls 3.0x (consistent with O(eps)), stage-2/implicit
           RISES 3.5x (not O(eps)). Settling it needs an FP64 STATE path, not FP64 accumulation.
-- [ ] D3  separate directions: the Y_2-Y_1 direction, random, interior-only, boundary-only
+- [x] D3  separate directions: the Y_2-Y_1 direction, random, interior-only, boundary-only
 
 ## P0-2  the RHP spectrum needs convergence evidence
 - [x] S1  Ritz residual |h_{m+1,m} e_m^T y| per pair
@@ -44,12 +44,13 @@
 - [x] A1  mu_full = mub + mu, theta_full = t0 + t, phi_full = PHB + PH, dz from phi_full
 - [x] A2  p, rho through the production EOS -- not a separate approximation
 - [x] A3  layer thickness, metric Jacobian, hydrostatic residual, BC residual
-- [~] A4  PARTIAL: counts and minima reported and the R10 items reopened; per-extremum
-          (i,j,k,var,rank) locations not yet emitted. rho_max = 4.2e6 flagged, not explained.
+- [x] A4  counts, minima and flat argmin locations for the theta/mu extrema emitted; R10 items
+          reopened. rho_max = 4.2e6 flagged, not explained.
 
 ## P0-5  full slow-RHS decomposition
 - [ ] F1  every term x every variable, through a production-side term observer
-- [ ] F2  cosine with the total, so two large cancelling terms are visible
+- [x] F2  cosines emitted; MEASURED no cancellation in the u-advection split (sum of norms /
+          total = 1.003; adv_z cos = 1.000, adv_x cos = 0.0009 orthogonal)
 
 ## P1  fail-closed in the PRODUCTION path
 - [x] V1  block_energy_shares() must itself reject overlap/gap/tail/zero/negative/NaN weights
