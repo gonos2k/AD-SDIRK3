@@ -726,3 +726,53 @@ identities holding to machine precision.
 The stiff mode is 46% theta, and the u-terms trace only ever watched `ru`. The question is
 which term in the **theta** explicit tendency carries a 0.57 s timescale — ablating candidates
 one at a time against `rho` is the same A/B that just settled `adv_z`.
+
+## The corrected A/B, at a state where the terms are ACTIVE
+
+Re-run at stage 2's `U_conv` — where `F_E_at_U0` **differs between arms**, which is what makes
+the comparison mean anything.
+
+| arm | `F_E_at_U0` | removed | ru | rw | t | `rho` | `h rho` |
+|---|---|---|---|---|---|---|---|
+| baseline | 3.830e7 | — | **0.9979** | 0.0011 | 0.0010 | **205.8** | 1.235e5 |
+| **ADV_Z** | 3.821e7 | 0.23% | **2.0e-9** | **0.5122** | **0.4878** | 222.5 | 1.335e5 |
+| T_COMPRESS | 3.809e7 | 0.55% | 0.9979 | 0.0011 | 0.0010 | 210.5 | 1.263e5 |
+| T_ADV_Z | 3.830e7 | 0.00% | 0.9990 | 0.0010 | 1.1e-11 | 220.9 | 1.326e5 |
+
+(`ph` and `mu` are identically 0 in every arm, as at stage 1.)
+
+### 1. The stiffness is STATE-DEPENDENT, and the implicit displacement causes it
+
+| state | `rho` | `h rho` | max stable `h` |
+|---|---|---|---|
+| `U_n` (stage 1) | 1.746 | 1048 | 0.99 s |
+| `U_conv` (stage 2) | **205.8** | **1.235e5** | **0.0084 s** |
+
+**118x stiffer, and 71,000x outside the RK3 imaginary-axis limit.** The explicit partition at
+the stage-2 state would need `dt ~ 8 milliseconds`.
+
+This is the causal link the review asked for, now measured on a verified-linear operator: the
+implicit solve moves the state to where the explicit operator is two orders of magnitude
+stiffer. Both facts — that the implicit solve is causal, and that the instability is explicit —
+are true at once.
+
+### 2. `ru_adv_z` DOES carry the dominant mode
+
+Ablating it takes `ru` from **0.9979 to 2.0e-9** in the eigenvector — the dominant mode is
+removed outright. (The earlier stage-1 A/B could not see this: it removed nothing there.)
+
+### 3. But removing it does NOT reduce the stiffness
+
+`rho` goes 205.8 -> **222.5**, i.e. slightly UP. Killing the top mode exposes a second one of
+comparable magnitude underneath — `rw 0.512 + t 0.488`, a vertical-velocity/theta pair.
+
+**So the stiffness is not one term.** Sub-cycling or repartitioning vertical advection alone
+would remove the leading eigenvector and leave `h rho` where it is. That is a stronger and more
+useful statement than either of the two things I previously wrote about `adv_z`, and it is the
+first version of the claim that rests on a validated A/B.
+
+### 4. What the other arms say
+
+`T_COMPRESS` removes 0.55% of `F_E` and changes neither the eigenvector nor `rho` — not the
+carrier. `T_ADV_Z` (theta's vertical advection) removes **0.00%** of `F_E` at this state, so
+that arm is uninformative here, exactly as all five were at stage 1.
