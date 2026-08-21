@@ -553,8 +553,12 @@ The three directions were already captured independently in the production assem
 | 0.25 | -313 | **-13 K — unphysical** |
 | 1.0 | -1680 | -1380 K |
 
-Absolute theta crosses zero near `lambda ~ 0.24` — **after** the 55x jump at `lambda = 0.125`.
-So the state going unphysical does not trigger the blow-up; it follows it.
+~~Absolute theta crosses zero near `lambda ~ 0.24`.~~
+
+**RETRACTED 2026-08-21 (R11 A1-A4).** That used `300 + t_min`, but `th_base_` **already carries
+`t0`** — so the full field is `th_base_ + t` and I subtracted `t0` twice. Measured through the
+production reconstruction, absolute theta stays **240 K -> 192.3 K** across the whole
+continuation and never approaches zero. The state does NOT go unphysical.
 
 **Not claimed:** `mu` is likewise a perturbation (`mu' `, full mass `mu' + mub`), and `mub` was
 not measured here, so the `mu_min` / `mu_nonpos` columns are the perturbation's trend and
@@ -1095,3 +1099,38 @@ each reason, instead of plausible numbers.
 Returning a bare vector was what made the gap possible: the function had no way to say "these
 numbers mean nothing" other than by returning numbers. Contract: 51 cases (from 46), including
 that an overlapping layout is now REJECTED rather than renormalised.
+
+## A1–A4. Physical admissibility, through the PRODUCTION reconstruction
+
+The earlier rows reported `mu_min`, `t_min`, `ph_min` — all **perturbations** — and were read as
+an admissibility check. Full fields need the base state, and pressure and density need the same
+EOS the model uses (`acoustic::diag_p_al`), not an inline `rd*theta/p` the code's own comments
+record as 87% off at the top level.
+
+| lambda | `mu_full_min` | `mu<=0` | `th_full_min` | `dz_min` | `dz<=0` | `p_full_min` | `rho_min` |
+|---|---|---|---|---|---|---|---|
+| 0 | 8.907e4 | **0** | **240.0 K** | 215.1 m | **0** | 1.024e4 Pa | 7.69 |
+| 0.25 | 8.881e4 | 0 | 244.3 K | 215.2 m | 0 | 7538 Pa | 3.18 |
+| 0.5 | 8.855e4 | 0 | 247.7 K | 215.3 m | 0 | 5131 Pa | 1.70 |
+| 0.75 | 8.829e4 | 0 | 244.5 K | 215.3 m | 0 | 2726 Pa | 1.09 |
+| 1 | 8.803e4 | **0** | **192.3 K** | 205.7 m | **0** | 679.5 Pa | 0.804 |
+
+**The state stays physical across the entire continuation.** Column mass never goes non-positive,
+no layer inverts, pressure stays positive down to the model top, and absolute theta falls from
+240 K to 192.3 K without approaching zero.
+
+### This retracts the "state goes unphysical" finding
+
+I reported absolute theta crossing zero near `lambda ~ 0.24` from `300 + t_min`. **`th_base_`
+already carries `t0`**, so the full field is `th_base_ + t` and `t0` was subtracted twice. The
+correct minimum is **192.3 K, not -13 K**. Nothing about the continuation is inadmissible, and
+the "violation follows the blow-up" framing goes with it — there is no violation.
+
+### One anomaly, flagged rather than explained
+
+`rho_max` reaches 4.2e6 kg/m^3 while `rho_min` is a plausible 0.80-7.7. So `al` has near-zero
+entries in a few cells. The code's own comment at the `diag_p_al` call site records that this
+routine builds `al` **geometrically** and is 35% off on the gradient versus WRF's
+`calc_p_rho_phi` form, because `p' = p0*(R(t0+th)/(p0*alpha))^(cp/cv) - pb` cancels two ~1e5 Pa
+terms down to ~11 Pa. Whether these cells are that known artefact or a real near-singularity is
+**not** established here.

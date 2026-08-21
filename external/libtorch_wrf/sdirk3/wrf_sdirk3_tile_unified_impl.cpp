@@ -6039,6 +6039,36 @@ vertical_coefficients:
 
         // ===== compute_k_slow: k_slow at U_converged with AD graph control =====
         // U_full_exch: optional full-halo exchanged state for AD path (empty for non-AD)
+        // R11 T3: RAII restore for every diagnostic that re-enters the RHS.
+        //
+        // The probes call compute_k_slow()/computeUnifiedRHS() extra times to observe the
+        // operator, and those calls MUTATE solver state -- compute_k_slow publishes
+        // U_ref_stage_ as a side effect, and the dt-invariance probe moves dt_stage_. Each
+        // probe restored by hand at the end of its block, which is correct only if nothing
+        // throws: a TORCH_CHECK inside an RHS evaluation would leave dt_stage_ pointing at a
+        // probe value and U_ref_stage_ at a probe state, and the run would continue on them.
+        //
+        // A diagnostic that can alter the run it observes is not a diagnostic. Scope-bound
+        // restore makes the exception path identical to the normal one.
+        struct ScopedProbeState {
+            TileSDIRK3UnifiedSolver& s;
+            float dt_saved;
+            torch::Tensor uref_saved;
+            explicit ScopedProbeState(TileSDIRK3UnifiedSolver& solver)
+                : s(solver), dt_saved(solver.dt_stage_) {
+                torch::NoGradGuard ng;
+                if (solver.U_ref_stage_.defined()) {
+                    uref_saved = solver.U_ref_stage_.detach().clone();
+                }
+            }
+            ~ScopedProbeState() {
+                s.dt_stage_ = dt_saved;
+                if (uref_saved.defined()) s.U_ref_stage_ = uref_saved;
+            }
+            ScopedProbeState(const ScopedProbeState&) = delete;
+            ScopedProbeState& operator=(const ScopedProbeState&) = delete;
+        };
+
         auto compute_k_slow = [&](const torch::Tensor& U_conv,
                                    const torch::Tensor& U_full_exch) -> torch::Tensor {
             // Update reference state for ExplicitOnly RHS consistency (w_ref etc.)
@@ -7115,8 +7145,7 @@ vertical_coefficients:
                     if (slow_in_tangent) {
                         U_ref_stage_ = U_conv.clone();
                     } else {
-                        U_ref_stage_ = U_conv.detach().clone();
-                    }
+                        }
                     torch::Tensor k_tend;
                     if (slow_in_tangent) {
                         if (U_full_exch.defined()) {
@@ -9417,6 +9446,7 @@ vertical_coefficients:
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_RHS_DT_INVARIANCE") &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     torch::NoGradGuard ng_dt;
+                    ScopedProbeState probe_guard(*this);
                     const float dt_saved = dt_stage_;
                     const auto k_ref = k_slow[i].detach().to(torch::kFloat64).clone();
                     const double n_ref = k_ref.norm().item<double>();
@@ -9438,10 +9468,8 @@ vertical_coefficients:
                                   << " vector_rel_diff=" << d_rel
                                   << std::endl;
                     }
-                    dt_stage_ = dt_saved;
-                    // Restore the reference state compute_k_slow() publishes as a side effect,
-                    // so the probe cannot leak its last evaluation into production.
-                    U_ref_stage_ = U_conv.detach().clone();
+                    // dt_stage_ and U_ref_stage_ are restored by probe_guard, on every exit
+                    // path including an exception thrown inside an RHS evaluation.
                 }
 
                 // ============================================================
@@ -9465,6 +9493,7 @@ vertical_coefficients:
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SLOW_CONTINUATION") &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     torch::NoGradGuard ng_cont;
+                    ScopedProbeState probe_guard(*this);
                     const auto U_base = U_stage.detach();
                     const auto step = (U_conv.detach() - U_base);
                     const double step_n = step.to(torch::kFloat64).norm().item<double>();
@@ -9488,6 +9517,53 @@ vertical_coefficients:
                         // theta is the one with a physical range; the counts are what a min
                         // hides when only a handful of points are bad.
                         auto [u_a, v_a, w_a, ph_a, t_a, mu_a] = extractStateVariables(U_lam);
+                        // R11 A1-A4: PHYSICAL admissibility, through the PRODUCTION
+                        // reconstruction rather than a second approximation.
+                        //
+                        // mu, t and ph are PERTURBATIONS, so their minima say nothing about
+                        // whether mass, temperature or layer thickness stayed physical -- the
+                        // earlier rows reported exactly those minima and were read as an
+                        // admissibility check. Full fields need the base state, and pressure and
+                        // density need the same EOS the model uses (acoustic::diag_p_al), not an
+                        // inline rd*theta/p that is known to be 87% off at the top level.
+                        double mu_full_min = std::nan(""), th_full_min = std::nan("");
+                        double dz_min = std::nan(""), p_full_min = std::nan("");
+                        double rho_min = std::nan(""), rho_max = std::nan("");
+                        int64_t mu_full_nonpos = -1, dz_nonpos = -1, p_nonpos = -1;
+                        if (mu_base_.defined() && th_base_.defined() &&
+                            ph_base_.defined() && p_base_.defined() &&
+                            c1h_.defined() && c2h_.defined() && mu_a.defined()) {
+                            const auto mu_full = (mu_base_ + mu_a).to(torch::kFloat64);
+                            mu_full_min    = mu_full.min().item<double>();
+                            mu_full_nonpos = (mu_full <= 0).sum().item<int64_t>();
+                            // th_base_ already carries +t0 (verified in the base-state audit),
+                            // so the full field is th_base_ + t, NOT 300 + t_base + t.
+                            const auto th_full = (th_base_ + t_a).to(torch::kFloat64);
+                            th_full_min = th_full.min().item<double>();
+                            const auto phi_full = (ph_base_ + ph_a).to(torch::kFloat64);
+                            const int64_t nzw = phi_full.size(1);
+                            if (nzw >= 2) {
+                                const auto dz = (phi_full.slice(1, 1, nzw) -
+                                                 phi_full.slice(1, 0, nzw - 1)) / g_;
+                                dz_min    = dz.min().item<double>();
+                                dz_nonpos = (dz <= 0).sum().item<int64_t>();
+                            }
+                            auto rdnw_p = getRdnwTensor(U_lam.device(), U_lam.scalar_type(), nz_);
+                            auto pal = wrf::sdirk3::acoustic::diag_p_al(ph_a, ph_base_, t_a, p_base_,
+                                                           mu_base_ + mu_a, mu_base_,
+                                                           c1h_, c2h_, rdnw_p,
+                                                           p0_, rd_, cp_ / cv_, 300.0f);
+                            const auto p_full = (std::get<0>(pal) + p_base_).to(torch::kFloat64);
+                            p_full_min = p_full.min().item<double>();
+                            p_nonpos   = (p_full <= 0).sum().item<int64_t>();
+                            const auto al = std::get<1>(pal).to(torch::kFloat64);
+                            const auto ok = torch::isfinite(al) & (al > 0);
+                            if (ok.any().item<bool>()) {
+                                const auto rho = 1.0 / al.index({ok});
+                                rho_min = rho.min().item<double>();
+                                rho_max = rho.max().item<double>();
+                            }
+                        }
                         auto mn = [](const torch::Tensor& x) {
                             return x.defined()
                                 ? x.detach().to(torch::kFloat64).min().item<double>() : 0.0/0.0;
@@ -9512,10 +9588,18 @@ vertical_coefficients:
                                   << " w_absmax=" << (w_a.defined()
                                         ? w_a.detach().to(torch::kFloat64).abs().max().item<double>()
                                         : -1.0)
+                                  << " mu_full_min=" << mu_full_min
+                                  << " mu_full_nonpos=" << mu_full_nonpos
+                                  << " th_full_min=" << th_full_min
+                                  << " dz_min=" << dz_min
+                                  << " dz_nonpos=" << dz_nonpos
+                                  << " p_full_min=" << p_full_min
+                                  << " p_nonpos=" << p_nonpos
+                                  << " rho_min=" << rho_min
+                                  << " rho_max=" << rho_max
                                   << " F_E_nonfinite=" << nonfinite
                                   << std::endl;
                     }
-                    U_ref_stage_ = U_conv.detach().clone();
                 }
 
                 // ============================================================
@@ -9552,6 +9636,7 @@ vertical_coefficients:
                 // sweep caught, made impossible to repeat silently.
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_SPECTRUM") &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
+                    ScopedProbeState probe_guard(*this);
                     const auto U0 = U_conv.detach().clone();
                     // WHICH operator's spectrum. rho(J_E) does not govern the step: the tangent
                     // of one step involves J_E and J_I together and they do not commute, so a
@@ -9862,7 +9947,6 @@ vertical_coefficients:
                               << (linear ? ((dt_stage_ * rho > 1.73) ? 1 : 0) : -1)
                               << std::endl;
                     std::cerr.precision(prev_prec);
-                    U_ref_stage_ = U_conv.detach().clone();
                 }
 
                 // ============================================================
@@ -9889,6 +9973,7 @@ vertical_coefficients:
                 // the state's .grad() and can free buffers the real adjoint still needs. The
                 // probe must not be able to touch the run it is observing.
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_AD_SPLIT_CONTRACT")) {
+                    ScopedProbeState probe_guard(*this);
                     const auto U_probe = U_conv.detach().clone();
                     auto F_of = [&](wrf::sdirk3::RhsMode m) {
                         return [this, m](const torch::Tensor& x) {
@@ -9953,7 +10038,6 @@ vertical_coefficients:
                               << " vjp_available="
                               << (Jt_full.defined() && Jt_e.defined() && Jt_i.defined() ? 1 : 0)
                               << std::endl;
-                    U_ref_stage_ = U_conv.detach().clone();
                 }
 
                 // ============================================================
@@ -9983,6 +10067,7 @@ vertical_coefficients:
                 // that removed nothing.
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_DIRECTIONAL_DERIVATIVE") &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
+                    ScopedProbeState probe_guard(*this);
                     const auto U0d = U_conv.detach().clone();
                     auto F_exp_d = [this](const torch::Tensor& x) {
                         return computeUnifiedRHS(x, wrf::sdirk3::RhsMode::ExplicitOnly);
@@ -10040,11 +10125,11 @@ vertical_coefficients:
                                       << std::endl;
                         }
                     }
-                    U_ref_stage_ = U_conv.detach().clone();
                 }
 
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SPLIT_IDENTITY")) {
                     torch::NoGradGuard ng_split;
+                    ScopedProbeState probe_guard(*this);
                     const auto U_probe = U_conv.detach();
                     const auto f_full = computeUnifiedRHS(U_probe, RhsMode::Full)
                                             .detach().to(torch::kFloat64);
@@ -10063,7 +10148,6 @@ vertical_coefficients:
                               << (n_full > 0.0 ? resid.norm().item<double>() / n_full : -1.0)
                               << " defect_absmax=" << resid.abs().max().item<double>()
                               << std::endl;
-                    U_ref_stage_ = U_conv.detach().clone();
                 }
                 // PR 9F P1-3: birth snapshot of THIS stage's slow derivative, now
                 // finalized, for later stages' history sources (detached clone).

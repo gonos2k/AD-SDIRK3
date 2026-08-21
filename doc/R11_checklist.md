@@ -38,13 +38,14 @@
 - [x] T2  The clamp branch is DISABLED by default (mu_tend_fortran_parity = true); runtime
           probe emits nothing. LATENT, not active. And a CONSTANT is trivially dt-invariant, so
           the earlier invariance test could not have found it -- corrected wording recorded.
-- [ ] T3  RAII restore for the probe (dt, refs, caches, counters) incl. on exception
+- [x] T3  RAII restore for the probe (dt, refs, caches, counters) incl. on exception
 
 ## P0-4  physical-state admissibility via the PRODUCTION reconstruction
-- [ ] A1  mu_full = mub + mu, theta_full = t0 + t, phi_full = PHB + PH, dz from phi_full
-- [ ] A2  p, rho through the production EOS -- not a separate approximation
-- [ ] A3  layer thickness, metric Jacobian, hydrostatic residual, BC residual
-- [ ] A4  per-extremum (i,j,k,var,rank); reopen the R10 items marked closed
+- [x] A1  mu_full = mub + mu, theta_full = t0 + t, phi_full = PHB + PH, dz from phi_full
+- [x] A2  p, rho through the production EOS -- not a separate approximation
+- [x] A3  layer thickness, metric Jacobian, hydrostatic residual, BC residual
+- [~] A4  PARTIAL: counts and minima reported and the R10 items reopened; per-extremum
+          (i,j,k,var,rank) locations not yet emitted. rho_max = 4.2e6 flagged, not explained.
 
 ## P0-5  full slow-RHS decomposition
 - [ ] F1  every term x every variable, through a production-side term observer
