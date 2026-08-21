@@ -9611,6 +9611,80 @@ vertical_coefficients:
                         prev = rho;
                     }
 
+                    // ARNOLDI: the SPECTRUM, not just its largest modulus.
+                    //
+                    // Eight ablation arms moved the eigenvector composition from (ru 0.998) to
+                    // (rw 0.515, t 0.485) to (rw 1.000) while rho stayed in [205.8, 224.3] -- a
+                    // 9% band. Power iteration returns only the dominant |lambda|, so an
+                    // invariant rho under a changing eigenvector is precisely the case where
+                    // ablation cannot say more: it reports which eigenvector the iteration
+                    // lands on, not how the eigenvalues are distributed.
+                    //
+                    // Arnoldi on the same verified-linear JVP builds an m-dimensional Krylov
+                    // basis and returns the Hessenberg H_m whose eigenvalues (Ritz values)
+                    // approximate the outer spectrum. That answers, numerically rather than by
+                    // inference: how many eigenvalues sit near the top, and whether they are
+                    // real (RK3 limit 2.5) or imaginary (limit 1.73) -- which decides WHICH
+                    // limit h*rho must be compared against.
+                    if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_ARNOLDI")) {
+                        const int m = 24;
+                        std::vector<torch::Tensor> V;
+                        auto H = torch::zeros({m + 1, m}, torch::kFloat64);
+                        {
+                            torch::NoGradGuard ng_a;
+                            auto v0 = torch::randn_like(U0);
+                            v0 = v0 / v0.to(torch::kFloat64).norm().item<double>();
+                            V.push_back(v0);
+                        }
+                        int m_used = 0;
+                        for (int j = 0; j < m; ++j) {
+                            auto w = Jv(V[j]);
+                            {
+                                torch::NoGradGuard ng_a;
+                                for (int k = 0; k <= j; ++k) {
+                                    const double hkj =
+                                        (V[k].detach().to(torch::kFloat64) *
+                                         w.detach().to(torch::kFloat64)).sum().item<double>();
+                                    H[k][j] = hkj;
+                                    w = w - static_cast<float>(hkj) * V[k];
+                                }
+                                const double hn =
+                                    w.detach().to(torch::kFloat64).norm().item<double>();
+                                H[j + 1][j] = hn;
+                                m_used = j + 1;
+                                if (!std::isfinite(hn) || hn < 1e-12) break;   // happy breakdown
+                                V.push_back(w / static_cast<float>(hn));
+                            }
+                        }
+                        torch::NoGradGuard ng_r;
+                        auto Hm = H.slice(0, 0, m_used).slice(1, 0, m_used);
+                        auto ev = torch::linalg_eigvals(Hm);
+                        auto re = torch::real(ev).to(torch::kFloat64);
+                        auto im = torch::imag(ev).to(torch::kFloat64);
+                        auto mod = torch::sqrt(re * re + im * im);
+                        auto order = torch::argsort(mod, /*dim=*/0, /*descending=*/true);
+                        auto re_s = re.index_select(0, order);
+                        auto im_s = im.index_select(0, order);
+                        auto mo_s = mod.index_select(0, order);
+                        std::cerr << "SDIRK3_EXPLICIT_ARNOLDI stage=" << stage_id
+                                  << " m=" << m_used;
+                        const int show = std::min<int>(8, m_used);
+                        for (int k = 0; k < show; ++k) {
+                            std::cerr << " ritz" << k << "=("
+                                      << re_s[k].item<double>() << ","
+                                      << im_s[k].item<double>() << ")|"
+                                      << mo_s[k].item<double>() << "|";
+                        }
+                        // How many Ritz values sit within 10% of the largest modulus, and how
+                        // the modulus is split between real and imaginary parts at the top.
+                        const double top = mo_s[0].item<double>();
+                        const int64_t near_top = (mo_s > 0.9 * top).sum().item<int64_t>();
+                        std::cerr << " near_top_count=" << near_top
+                                  << " top_real_frac="
+                                  << (top > 0.0 ? std::abs(re_s[0].item<double>()) / top : -1.0)
+                                  << std::endl;
+                    }
+
                     torch::NoGradGuard ng_report;
                     const bool linear = (hom_rel >= 0.0 && hom_rel < 1e-5 &&
                                          add_rel >= 0.0 && add_rel < 1e-5);

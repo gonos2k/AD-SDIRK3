@@ -776,3 +776,77 @@ first version of the claim that rests on a validated A/B.
 `T_COMPRESS` removes 0.55% of `F_E` and changes neither the eigenvector nor `rho` — not the
 carrier. `T_ADV_Z` (theta's vertical advection) removes **0.00%** of `F_E` at this state, so
 that arm is uninformative here, exactly as all five were at stage 1.
+
+## The Ritz spectrum, and what it does to every earlier stability claim
+
+Eight ablation arms left `rho` in a 9% band while the eigenvector composition moved from
+`(ru 0.998)` to `(rw 0.515, t 0.485)` to `(rw 1.000)`. Power iteration returns only the dominant
+modulus, so an invariant `rho` under a changing eigenvector is exactly the case where ablation
+cannot say more. Arnoldi (m=24) on the same verified-linear JVP measures the spectrum instead.
+
+### Stage 1 — the spectrum is REAL, and it straddles the origin
+
+```
+ritz0=(+1.76012, 0)   ritz4=(+1.40081, 0)
+ritz1=(+1.72355, 0)   ritz5=(+1.33615, 0)
+ritz2=(+1.67453, 0)   ritz6=(-1.32198, 0)
+ritz3=(+1.58499, 0)   ritz7=(-1.29036, 0)
+near_top_count=4      top_real_frac=1.0
+```
+
+Every imaginary part is exactly 0. **So the imaginary-axis limit 1.73 was the wrong comparison,
+and `max stable h = 1.73/rho = 0.99 s` is RETRACTED.**
+
+### Stage 2 — complex pairs, 12 near the top, dominant real part POSITIVE
+
+```
+ritz0=(+118.6, +-189.5)|223.6|    ritz4=(+85.34, +-198.1)|215.7|
+ritz2=(+102.5, +-193.8)|219.3|    ritz6=(-49.26, +-201.7)|207.7|
+near_top_count=12                 top_real_frac=0.53
+```
+
+### Evaluating the actual RK3 stability function instead of comparing to a scalar limit
+
+`R(z) = 1 + z + z^2/2 + z^3/6`, on the measured eigenvalues:
+
+| stage | `lambda` | `\|R(600 lambda)\|` | **max stable `h`** |
+|---|---|---|---|
+| 1 | **+1.760** | 1.97e8 | **0** |
+| 1 | -1.322 | 8.29e7 | 1.90 s |
+| 2 | **+118.6 +- 189.5i** | 4.02e14 | **0** |
+| 2 | -49.3 +- 201.7i | 3.22e14 | 0.0117 s |
+
+**Eigenvalues with `Re(lambda) > 0` have NO stable timestep** — not a small one, zero. Near the
+origin `R(z) ~ 1 + z`, so `|R| ~ 1 + h Re(lambda) > 1` for every `h > 0`.
+
+### Sub-cycling cannot recover it, and the reason is not the scheme
+
+`N` sub-steps of `h/N` for the dominant `lambda`:
+
+| N | `log10\|amp\|` |
+|---|---|
+| 1 | +14.6 |
+| 10 | +116 |
+| 100 | +860 |
+| 1000 | +5610 |
+| N -> inf | **+3.09e4** = `h Re(lambda)/ln 10` |
+
+Sub-cycling makes it **worse**, converging to the exact exponential `exp(h Re lambda)`. That is
+the point: `Re(lambda) > 0` means the LINEARIZED operator genuinely grows, and no time
+integrator makes a growing mode not grow. An A-stable implicit step is *bounded*
+(`|1/(1-z)| = 7.5e-6`) but that is the scheme damping a mode the true linearized solution
+amplifies.
+
+### What this retracts and what it establishes
+
+**Retracted:** "max stable h = 0.99 s" and "h_max ~ 8.4 ms" — both divided a scalar limit by
+`rho`, presuming an imaginary spectrum. The spectrum is not imaginary and the dominant
+eigenvalues are in the right half-plane.
+
+**Established, numerically:** the explicit partition's linearized operator has right-half-plane
+eigenvalues at BOTH measured states. This is not a CFL/timestep-size problem, and it is not
+addressed by sub-cycling or by a smaller `dt`.
+
+**Caveat, stated not buried:** Ritz values from a 24-dimensional Krylov space approximate the
+OUTER spectrum and their convergence is not established here; and `exp(h Re lambda)` describes
+the frozen linearized operator, not the nonlinear system.
