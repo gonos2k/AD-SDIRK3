@@ -26,7 +26,11 @@
 - [x] S2  m = 24, 48, 96 convergence; >=3 deterministic seeds
 - [x] S3  reorthogonalization (double MGS/DGKS) + ||V^T V - I||
 - [x] S4  active-domain projection P J_E P, not raw J_E (halo / boundary / staggered endpoints)
-- [~] S5  PARTIAL: J_full measured with the same Arnoldi and has LARGER RHP eigenvalues than
+- [~] S5  PARTIAL (extended): all THREE operators now measured -- J_E max_re 170.0, J_I 22.2,
+          J_full 470.6, so max_re(full) is 2.45x the SUM of the parts: spectra are not additive,
+          which is the review objection in quantitative form. J_I dominant is (-4.3, +110.8),
+          nearly imaginary with Re<0 -- a weakly damped oscillation, not the growth source.
+          Original note: J_full has LARGER RHP eigenvalues than
           J_E (470.8 vs 169.8 at stage 2, converged) -- so the SPLIT does not create them.
           D(Phi_h), the one-step tangent through the implicit solves, remains unmeasured.
 - [~] S6  The probes are TILE-LOCAL; all six now fail closed under np>1 with a stated reason

@@ -9690,10 +9690,18 @@ vertical_coefficients:
                     // discriminator for whether the SPLIT creates the RHP modes or the
                     // linearized dynamics already have them.
                     const char* mode_env = std::getenv("WRF_SDIRK3_SPECTRUM_MODE");
-                    const bool spec_full = (mode_env != nullptr &&
-                                            std::string(mode_env) == "full");
+                    const std::string mode_str = mode_env ? std::string(mode_env) : "explicit";
+                    const bool spec_full = (mode_str == "full");
+                    const bool spec_imp  = (mode_str == "implicit");
+                    // J_I completes the picture. J_E and J_full are measured; J_I is the third
+                    // side of J_full = J_E + J_I, and without it "the implicit part does not
+                    // cancel the RHP content" rests on a difference of two measurements rather
+                    // than on the operator itself.
                     const auto spec_mode = spec_full ? wrf::sdirk3::RhsMode::Full
-                                                     : wrf::sdirk3::RhsMode::ExplicitOnly;
+                                        : spec_imp  ? wrf::sdirk3::RhsMode::ImplicitOnly
+                                                    : wrf::sdirk3::RhsMode::ExplicitOnly;
+                    const char* spec_name = spec_full ? "J_full"
+                                          : spec_imp  ? "J_I" : "J_E";
                     auto F_exp_fn = [this, spec_mode](const torch::Tensor& x) {
                         return computeUnifiedRHS(x, spec_mode);
                     };
@@ -9822,7 +9830,7 @@ vertical_coefficients:
                         auto im_s = im.index_select(0, order);
                         auto mo_s = mod.index_select(0, order);
                         std::cerr << "SDIRK3_EXPLICIT_ARNOLDI stage=" << stage_id
-                                  << " op=" << (spec_full ? "J_full" : "J_E")
+                                  << " op=" << spec_name
                                   << " m=" << m_used;
                         const int show = std::min<int>(8, m_used);
                         for (int k = 0; k < show; ++k) {
@@ -9970,7 +9978,7 @@ vertical_coefficients:
                     // is checking is not a check.
                     const auto prev_prec = std::cerr.precision(14);
                     std::cerr << "SDIRK3_EXPLICIT_SPECTRUM stage=" << stage_id
-                              << " op=" << (spec_full ? "J_full" : "J_E")
+                              << " op=" << spec_name
                               << " F_E_at_U0=" << fE_norm
                               << " jvp_fd_fallback=" << (fb_any ? 1 : 0)
                               << " homogeneity_rel=" << hom_rel

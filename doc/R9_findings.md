@@ -1233,3 +1233,41 @@ carries the stiffness — but that is a reason to have prioritised it, **not** a
 the other five. `F_E = F_adv + F_pressure/metric + F_buoyancy + F_coriolis + F_diffusion +
 F_damping + F_boundary + F_source` across all six variables is **not** measured, and the review's
 P0-5 stays open on that basis.
+
+## The three operators, measured — and the spectra are NOT additive
+
+`J_I` completes the set. Without it, "the implicit part does not cancel the RHP content" rested
+on a difference of two measurements rather than on the operator itself. Same Arnoldi, `m=48`,
+stage 2:
+
+| operator | `n_rhp` | `max_re` | `min_re` | `ritz0` | `\|lambda_0\|` | rel res |
+|---|---|---|---|---|---|---|
+| `J_E` | 28/48 | 170.0 | -120.8 | (+119.5, -189.7) | 224.2 | 0.0079 |
+| **`J_I`** | 23/48 | **22.2** | -30.1 | **(-4.302, +110.8)** | 110.9 | 0.0056 |
+| `J_full` | 27/48 | **470.6** | -450.7 | **(+470.6, 0)** | 470.6 | 0.0139 |
+
+### The sum of the parts is not the part of the sum
+
+| quantity | `J_E` | `J_I` | sum | `J_full` | ratio |
+|---|---|---|---|---|---|
+| `max_re` | 170.0 | 22.2 | 192.2 | **470.6** | **2.45x** |
+| `\|lambda_0\|` | 224.2 | 110.9 | 335.1 | 470.6 | 1.40x |
+
+`J_full = J_E + J_I` as operators, but its dominant real part is **2.45x** the sum of theirs.
+Eigenvalues do not add, and this is the review's objection in quantitative form: nothing about
+`J_full`'s spectrum can be inferred from the parts', in either direction.
+
+### `J_I` alone looks like what it should
+
+Its dominant Ritz value is `(-4.302, +110.8)` — `|Re|/|lambda| = 0.039`, i.e. **nearly
+imaginary with a slightly NEGATIVE real part**: a weakly damped oscillation, which is what an
+acoustic / gravity-wave operator ought to look like. It is not the source of the strong growth,
+and its `max_re = 22.2` is an eighth of `J_E`'s.
+
+So the strongly growing purely-real mode at `+470.6` belongs to the **coupled** operator and is
+not a feature of either partition on its own at that strength.
+
+**Still not `D(Phi_h)`.** These are RHS Jacobians; the one-step tangent additionally involves
+the stage solves, whose tangent satisfies `(I - h a_ii J_I) dK_i = J_I dY_i` — the same linear
+system the Newton-Krylov solve already handles, so assembling it is tractable but is
+effectively standing up the TLM, and it is not done here.
