@@ -1,5 +1,10 @@
 # R10 — stage-2 slow-RHS causal isolation and dt/split contracts
 
+> **STATUS CORRECTED 2026-08-21 (review R11): NOT 22/22.** The causal path (stage-2 solver ->
+> Y_2 -> F_E(Y_2)) is closed. Differentiability, full-step stability and physical-state
+> admissibility are REOPENED — the items below were marked closed against probes narrower than
+> the items' own wording. See doc/R11_checklist.md.
+
 ## 0. RETRACTION (accepted before anything else)
 
 PUBLISHED, AND NOT ESTABLISHED:

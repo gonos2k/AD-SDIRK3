@@ -79,8 +79,8 @@ static void contract_metric_coordinate() {
     check_close(L_E[0].item<double>(), 10.0,  1e-12, "E^-1 S block0");
     check_close(L_E[1].item<double>(), 0.1, 1e-12, "E^-1 S block1");
 
-    const auto share_wrong   = block_energy_shares(layout, r, E_inv);  // the shipped defect
-    const auto share_correct = block_energy_shares(layout, r, L_E);
+    const auto share_wrong   = block_energy_shares(layout, r, E_inv).shares;  // the shipped defect
+    const auto share_correct = block_energy_shares(layout, r, L_E).shares;
 
     check(share_wrong[1] > share_wrong[0],
           "E^-1 alone makes block1 dominant (this is what the defect measured)");
@@ -160,10 +160,10 @@ static void contract_objective_share_coordinates() {
     // D^-1_q = 1/||r~_q||, exactly as the solver builds it.
     const auto D_inv = vec(1.0 / 1.0, 1.0 / 50.0);
 
-    const auto s_krylov = block_energy_shares(layout, r, torch::Tensor{});
-    const auto s_phys   = block_energy_shares(layout, r, S);
-    const auto s_D      = block_energy_shares(layout, r, D_inv);
-    const auto s_wrms   = block_energy_shares(layout, r, L_E);
+    const auto s_krylov = block_energy_shares(layout, r, torch::Tensor{}).shares;
+    const auto s_phys   = block_energy_shares(layout, r, S).shares;
+    const auto s_D      = block_energy_shares(layout, r, D_inv).shares;
+    const auto s_wrms   = block_energy_shares(layout, r, L_E).shares;
 
     for (const auto* p : {&s_krylov, &s_phys, &s_D, &s_wrms}) {
         check_close((*p)[0] + (*p)[1], 1.0, 1e-12, "shares sum to 1");
@@ -207,12 +207,26 @@ static void contract_block_partition_validity() {
     check(!is_exact_partition(L({{0,4},{4,8}}), 8), "past-the-end block is rejected");
     check(!is_exact_partition(StateLayout{}, 8), "an empty layout is not a partition");
 
-    // The defect the check exists to catch: an overlapping layout still sums to 1.
+    // The helper now FAILS CLOSED on the malformed layouts above rather than renormalising
+    // them into plausible-looking shares. That is the production gap this closes: the
+    // validators existed and no caller invoked them.
     const auto bad = L({{0,5},{4,4}});
     const auto r = torch::tensor({1.,1.,1.,1.,2.,2.,2.,2.}, torch::kFloat64);
     const auto sh = wrf::sdirk3::block_energy_shares(bad, r, torch::Tensor{});
-    check_close(sh[0] + sh[1], 1.0, 1e-12,
-                "an OVERLAPPING layout still yields shares summing to 1 (why the check exists)");
+    check(!sh.valid, "an OVERLAPPING layout is REJECTED, not renormalised");
+    const auto good = L({{0,4},{4,4}});
+    const auto shg = wrf::sdirk3::block_energy_shares(good, r, torch::Tensor{});
+    check(shg.valid, "an exact partition is accepted");
+    check_close(shg.shares[0] + shg.shares[1], 1.0, 1e-12, "accepted shares sum to 1");
+    check(!wrf::sdirk3::block_energy_shares(good, r,
+              torch::tensor({1.,1.,1.,1.,0.,1.,1.,1.}, torch::kFloat64)).valid,
+          "a ZERO weight is REJECTED by the helper itself");
+    check(!wrf::sdirk3::block_energy_shares(good, r,
+              torch::tensor({1.,1.,1.,1.,-1.,1.,1.,1.}, torch::kFloat64)).valid,
+          "a NEGATIVE weight is REJECTED by the helper itself");
+    check(!wrf::sdirk3::block_energy_shares(good, r,
+              torch::ones({8}, torch::kFloat32)).valid,
+          "a dtype-mismatched weight is REJECTED by the helper itself");
 
     // Weight validity: each of these is invisible in a normalised share.
     using torch::tensor;

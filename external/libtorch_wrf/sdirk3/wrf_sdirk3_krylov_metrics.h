@@ -120,14 +120,46 @@ inline bool same_device_and_dtype(const torch::Tensor& a, const torch::Tensor& b
     return a.device() == b.device() && a.scalar_type() == b.scalar_type();
 }
 
+// The result of a share computation, with validity IN THE TYPE.
+//
+// The validators above existed and no caller invoked them, so a malformed layout still produced
+// shares that summed to 1 and read as a clean attribution. Returning a bare vector is what made
+// that possible: there was no way for the function to say "these numbers mean nothing" other
+// than by returning numbers. `valid` and `reason` remove that.
+struct BlockShares {
+    std::vector<double> shares;
+    bool        valid  = false;
+    const char* reason = "uninitialised";
+};
+
 // Per-block share of ||L r||^2. Shares sum to 1 when the total is positive.
-inline std::vector<double> block_energy_shares(const StateLayout& layout,
-                                               const torch::Tensor& r,
-                                               const torch::Tensor& left_weight) {
+inline BlockShares block_energy_shares(const StateLayout& layout,
+                                       const torch::Tensor& r,
+                                       const torch::Tensor& left_weight) {
     torch::NoGradGuard no_grad;
-    std::vector<double> shares(layout.blocks.size(), 0.0);
-    if (!r.defined()) return shares;
-    if (left_weight.defined() && left_weight.numel() != r.numel()) return shares;
+    BlockShares out;
+    out.shares.assign(layout.blocks.size(), 0.0);
+    if (!r.defined()) { out.reason = "residual undefined"; return out; }
+    // FAIL CLOSED, here, rather than trusting every caller to remember. An overlap double-counts
+    // a block and a gap never counts one, and the renormalisation at the end hides both.
+    if (!is_exact_partition(layout, r.numel())) {
+        out.reason = "layout is not an exact partition of the residual";
+        return out;
+    }
+    if (left_weight.defined()) {
+        if (left_weight.numel() != r.numel()) {
+            out.reason = "weight length does not match the residual";
+            return out;
+        }
+        if (!same_device_and_dtype(r, left_weight)) {
+            out.reason = "weight device/dtype does not match the residual";
+            return out;
+        }
+        if (!weights_are_positive_and_finite(left_weight)) {
+            out.reason = "weight is not positive and finite";
+            return out;
+        }
+    }
     const auto r64 = r.detach().to(torch::kFloat64).reshape({-1});
     const auto w64 = left_weight.defined()
                          ? left_weight.detach().to(torch::kFloat64).reshape({-1})
@@ -135,16 +167,19 @@ inline std::vector<double> block_energy_shares(const StateLayout& layout,
     double total = 0.0;
     for (std::size_t i = 0; i < layout.blocks.size(); ++i) {
         const auto& blk = layout.blocks[i];
-        if (blk.start + blk.size > r64.numel()) return std::vector<double>(layout.blocks.size(), 0.0);
         auto rb = r64.slice(0, blk.start, blk.start + blk.size);
         if (w64.defined()) rb = rb * w64.slice(0, blk.start, blk.start + blk.size);
-        shares[i] = rb.pow(2).sum().item<double>();
-        total += shares[i];
+        out.shares[i] = rb.pow(2).sum().item<double>();
+        total += out.shares[i];
     }
-    if (total > 0.0) {
-        for (auto& v : shares) v /= total;
+    if (!(total > 0.0)) {
+        out.reason = "weighted residual energy is zero";
+        return out;
     }
-    return shares;
+    for (auto& v : out.shares) v /= total;
+    out.valid  = true;
+    out.reason = "ok";
+    return out;
 }
 
 }  // namespace sdirk3

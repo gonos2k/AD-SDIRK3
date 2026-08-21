@@ -350,7 +350,10 @@ scaling says the term stops dominating only near dt ~ 15 s.
 
 ---
 
-# R10 — the implicit solve IS in the causal path, and the explicit response is non-differentiable
+# R10 — the implicit solve IS in the causal path; the explicit response is strongly nonlinear
+
+> (Section title corrected 2026-08-21: "non-differentiable" was not established — see the
+> retraction below and doc/R11_checklist.md.)
 
 No independent review has been run (`/code-review ultra` is user-only).
 
@@ -426,9 +429,17 @@ evaluating the production slow RHS at each point:
 `F_E ~ C lambda^0.70` fits the tail (at lambda=0.125 the fit gives 6.68e7 against 6.73e7
 measured).
 
-**An exponent below 1 means the derivative is unbounded at lambda = 0.** This is not a
-cascade — a cascade is superlinear. It is the signature of a non-differentiable term: a
-`sqrt`, an `abs`, a `max(.,floor)`, or a denominator that changes magnitude sharply.
+~~**An exponent below 1 means the derivative is unbounded at lambda = 0.**~~
+
+**RETRACTED 2026-08-21 (review R11).** The fit is on the wrong function. `||F_E(U_0)|| = 1.124e6`,
+not 0, while `C lambda^0.70 -> 0` as `lambda -> 0`, so that form cannot represent the function
+near the origin at all. An exponent read off `lambda in [0.125, 1]` is a finite-interval slope
+of a NORM; it does not bound a derivative at 0, and a scalar norm cannot decide
+differentiability of a vector field regardless — two fields can rotate while the norm moves
+smoothly, and term cancellation can produce any exponent.
+
+What the data supports: **strong nonlinear, precision-sensitive growth along `Y_1 -> Y_2`.**
+The test that decides it is the Taylor remainder against the true JVP.
 
 The state itself moves smoothly across the whole segment (`U_min` -1.06e4 -> -2.54e4,
 `U_absmax` 1.99e4 -> 2.54e4, monotone) and there are **zero** non-finite values anywhere, so
@@ -446,7 +457,7 @@ growth are the same sub-linear response to displacement.
 ## What this leaves
 
 The dominant term is explicit, but the state it is evaluated at is set by the implicit solve,
-and the response to displacement is non-differentiable at the base state. The next measurement
+and the response to displacement is strongly nonlinear near the base state. The next measurement
 is therefore the review's P0-4: decompose `F_E` into its operator terms at
 `lambda in {0, 0.125}` and identify which term carries the 60x — that is where a `sqrt`/`abs`/
 floor/denominator would show itself.
@@ -542,8 +553,12 @@ The three directions were already captured independently in the production assem
 | 0.25 | -313 | **-13 K — unphysical** |
 | 1.0 | -1680 | -1380 K |
 
-Absolute theta crosses zero near `lambda ~ 0.24` — **after** the 55x jump at `lambda = 0.125`.
-So the state going unphysical does not trigger the blow-up; it follows it.
+~~Absolute theta crosses zero near `lambda ~ 0.24`.~~
+
+**RETRACTED 2026-08-21 (R11 A1-A4).** That used `300 + t_min`, but `th_base_` **already carries
+`t0`** — so the full field is `th_base_ + t` and I subtracted `t0` twice. Measured through the
+production reconstruction, absolute theta stays **240 K -> 192.3 K** across the whole
+continuation and never approaches zero. The state does NOT go unphysical.
 
 **Not claimed:** `mu` is likewise a perturbation (`mu' `, full mass `mu' + mub`), and `mub` was
 not measured here, so the `mu_min` / `mu_nonpos` columns are the perturbation's trend and
@@ -843,9 +858,18 @@ amplifies.
 `rho`, presuming an imaginary spectrum. The spectrum is not imaginary and the dominant
 eigenvalues are in the right half-plane.
 
-**Established, numerically:** the explicit partition's linearized operator has right-half-plane
-eigenvalues at BOTH measured states. This is not a CFL/timestep-size problem, and it is not
-addressed by sub-cycling or by a smaller `dt`.
+**Established, numerically:** an `m=24` Arnoldi projection of the explicit Jacobian, from one
+random start with a single Gram-Schmidt pass, produced Ritz values with large positive real
+parts at both measured states.
+
+**NOT established (review R11); the stronger wording is retracted.** No Ritz residuals, no `m`
+study, no reorthogonalization and one seed, so convergence of those pairs is unknown. The start
+vector is a raw packed random vector, so the operator sampled is `J_E` and not the
+active-domain `P J_E P` — halo, boundary and staggered-endpoint degrees of freedom are in it.
+And `rho(J_E)` does not govern the step: the one-step tangent is `D(Phi_h)`, and `J_E` and
+`J_I` do not commute. A right-half-plane eigenvalue of the frozen linearized explicit operator
+is also not by itself a numerical defect — the exact solution of `y' = lambda y` with
+`Re lambda > 0` grows too.
 
 **Caveat, stated not buried:** Ritz values from a 24-dimensional Krylov space approximate the
 OUTER spectrum and their convergence is not established here; and `exp(h Re lambda)` describes
@@ -895,3 +919,317 @@ own structure is the alternative: `J_E` is a sum of per-term Jacobians, so the R
 could be attributed by measuring the spectrum of each `J_term` directly — the same Arnoldi, run
 on a JVP restricted to one term — rather than by subtracting terms from the total and hoping
 the remainder shifts.
+
+---
+
+# R11 — differentiability, measured on the right function
+
+## D1/D2. The Taylor remainder, and why FP32 cannot settle it
+
+`r1(e) = ||F(U+e d) - F(U) - e J d|| / max(||dF||, e||J d||)` with `J d` from the verified
+forward-mode dual (`jvp_fd_fallback = 0` on every row). Differentiable => `r1 = O(e)`.
+
+`realized_frac = ||(U + e d) - U|| / (e ||d||)` is on every row because the state is FP32: it
+says how much of the intended perturbation actually landed.
+
+| stage / dir | eps | realized | dF/(e Jd) | r1 | r2 |
+|---|---|---|---|---|---|
+| 1 / random | 0.25 | **1.016** | 1.000 | **0.0149** | 0.00087 |
+| 1 / random | 0.0625 | **0.952** | 1.000 | **0.0049** | 0.0025 |
+| 1 / random | 0.0156 | 0.913 | 1.000 | 0.0127 | 0.0099 |
+| 1 / random | 1.5e-5 | 0.668 | 0.938 | 0.347 | 0.347 |
+| 2 / implicit_step | 0.25 | **1.008** | 1.043 | **0.249** | 0.170 |
+| 2 / implicit_step | 0.0625 | **0.982** | 1.411 | **0.823** | 0.684 |
+| 2 / implicit_step | 0.0156 | **1.013** | 2.182 | **0.876** | 1.632 |
+| 2 / implicit_step | 9.8e-4 | 0.019 | 0.098 | 1.005 | 1.001 |
+| 2 / implicit_step | 1.5e-5 | **0.001** | 2.1e-4 | 1.000 | 1.000 |
+| 2 / random | 0.25 | 1.016 | 1.001 | 0.0242 | 0.015 |
+| 2 / random | 1.5e-5 | 0.652 | 14.23 | 0.997 | 9.44 |
+
+### `r1 -> 1` at small eps is an ARTEFACT, and the algebra says so
+
+`r1 = ||dF - e Jd|| / max(||dF||, e||Jd||)`. If the perturbation does not land, `dF -> 0` and
+the ratio tends to `||e Jd|| / ||e Jd|| = 1` **identically** — independent of any property of
+the operator. Every row with `realized_frac << 1` reads `r1 = 1.00` for that reason and carries
+no information. Without `realized_frac` those rows would have looked like a clean demonstration
+of non-differentiability.
+
+### The only rows that mean anything
+
+`realized_frac` within 5% of 1 holds on `eps in [0.0156, 0.25]` — **1.2 decades**:
+
+| dir | eps 0.25 -> smaller | r1 |
+|---|---|---|
+| stage 1 / random | 4x smaller | 0.0149 -> 0.0049, **falls 3.0x** — consistent with `O(eps)` |
+| stage 2 / implicit_step | 16x smaller | 0.249 -> 0.876, **RISES 3.5x** — not `O(eps)` |
+
+### Verdict (D2)
+
+**INCONCLUSIVE at FP32 state precision, and the reason is measured rather than argued.** The
+asymptotic regime that decides differentiability needs `eps -> 0`, and below `eps ~ 1e-2` in the
+implicit-step direction FP32 has already destroyed the perturbation (`realized_frac` 1.013 ->
+0.019 -> 0.001). One direction behaves like a differentiable field over the clean window and one
+does not, over 1.2 decades — that is suggestive, not asymptotic.
+
+**So "non-differentiable" is not re-established by the correct test either.** What is
+established: the `lambda^0.70` argument was wrong (it fit a function that does not vanish at 0),
+and settling the question requires an FP64 state path, not merely FP64 accumulation — the binding
+constraint is the state's own precision, not the reduction's.
+
+## S1–S5. The Arnoldi measurement, hardened — and the split does NOT create the RHP modes
+
+The review's objections to the `m=24` single-pass run were all actionable, and all four are now
+addressed. `WRF_SDIRK3_ARNOLDI_M` selects `m`; the Gram-Schmidt is doubled; per-pair Ritz
+residuals and `||V^T V - I||` are reported; and the operator is selectable
+(`WRF_SDIRK3_SPECTRUM_MODE=explicit|full`).
+
+### S1–S3: convergence, at stage 2
+
+| m | `\|lambda_0\|` | top-pair Ritz residual (relative) | `orth_loss` |
+|---|---|---|---|
+| 24 | 223.6 | 0.049 | 1.0e-07 |
+| 48 | 224.1 | **0.0073** | 9.2e-08 |
+| 96 | 224.4 | 0.0112 | 9.9e-08 |
+
+`|lambda_0|` moves **0.4% over m = 24 -> 96**, the top-pair residual falls from 5% to ~1%, and
+double Gram-Schmidt holds orthogonality at 1e-7 (FP32 vectors, FP64 Gram matrix). The dominant
+pair is converged; the `m=24` single-pass run was not wrong, but it could not have shown that.
+
+### S4: it is NOT a boundary mode
+
+Edge-energy fraction of the converged eigenvector (first and last index along each dimension)
+against the uniform-random baseline `1 - (1-2/40)(1-2/64)(1-2/80) = 0.1027` for this grid
+(`e_we=41, e_sn=81, e_vert=65`):
+
+| m | `edge_ru` | ratio to baseline |
+|---|---|---|
+| 24 | 0.1534 | 1.49 |
+| 48 | 0.1240 | 1.21 |
+| **96** | **0.1047** | **1.02** |
+
+At convergence the mode's edge fraction is what a uniformly distributed vector would have. The
+mild edge bias at `m=24` was truncation contamination and it disappears as `m` grows — so the
+RHP mode is **not** an artefact of sampling halo / staggered-endpoint degrees of freedom, and
+`P J_E P` versus `J_E` is not what is producing it.
+
+### S5 (substance): `J_full` has LARGER right-half-plane eigenvalues than `J_E`
+
+The objection was that `rho(J_E)` cannot decide the additive method because `J_E` and `J_I` do
+not commute and the implicit coupling might cancel the mode. Measured, same Arnoldi, `m=48`:
+
+| stage | operator | `n_rhp` | `max_re` | `min_re` | `ritz0` | rel. residual |
+|---|---|---|---|---|---|---|
+| 1 | `J_E` | 26/48 | 1.764 | -1.327 | (+1.764, 0) | 0.0029 |
+| 1 | `J_full` | 27/48 | **73.09** | -1.341 | (+73.09, 0) | 0.205 (**not converged**) |
+| 2 | `J_E` | 28/48 | 169.8 | -121.0 | (+119.4, -189.7) | 0.0082 |
+| 2 | **`J_full`** | 25/48 | **470.8** | -450.7 | **(+470.8, 0)** | 0.0098 |
+
+**The implicit part does not cancel the right-half-plane content — it increases it**, 169.8 ->
+470.8 at stage 2 on a converged pair. Roughly half the Ritz values are right-half-plane for
+both operators at both stages (25–28 of 48).
+
+So **the RHP modes are not created by the explicit/implicit split.** They are present in the
+full linearized RHS at these states, and more strongly. That removes "the partition manufactures
+the instability" as an explanation and points the question back at the STATE — which the
+stage-2 solver determines, the causal path already established.
+
+**Still open, and not claimed:** this is `J_full`, the full RHS Jacobian, not `D(Phi_h)`, the
+one-step tangent through the implicit solves. A growing mode of the linearized dynamics is not
+by itself a scheme defect — an A-stable implicit step gives bounded amplification of a mode the
+true linearized solution amplifies. The stage-1 `J_full` value (+73.09) has a 20% Ritz residual
+and one isolated near-top value, so it is reported but not relied on.
+
+## T1/T2. The dt authorities inside the explicit RHS, enumerated and reachability-checked
+
+The fixed-state test varied `dt_stage_` and found the RHS bit-identical, and I read that as "no
+hidden dt anywhere". The review's objection — that other dt authorities exist and the test does
+not touch them — is correct, and enumerating them gives a better answer than the black-box test
+could.
+
+`computeUnifiedRHS` spans **10,627 lines**. Non-comment lines mentioning a timestep: **six.**
+
+| line | text | status |
+|---|---|---|
+| 12711 | `grid_info_->dt = dt_stage_;` | a WRITE; no `->dt` read exists anywhere in the tree |
+| 16221 | `float gamma_dt = 261.52f;` | **hardcoded `600 * gamma`** — drives a clamp |
+| 16278 | `float gamma_dt = 261.52f;` | same constant, inside `debug_level >= 2` — print only |
+| 17252 | a string literal in a debug message | not a use |
+| 19811 | `float dt = dt_stage_;` | live read |
+| 19932 | passes that `dt` to the W-damping call | the only consumer |
+
+### The hardcoded constant is real, and it is NOT on the executed path
+
+`mu_tend_threshold = 1e4 / gamma_dt` with `gamma_dt` frozen at `261.52 = 600 * 0.43586652`,
+feeding `mu_tend = mu_tend.clamp(-38, +38)`. By the code's own stated intent
+(`Delta mu' < 1e4 Pa per Newton step`) that threshold must scale as `1/dt` — 76.5 at dt=300,
+382 at dt=60 — so at smaller `dt` it would clamp up to an order of magnitude harder than
+intended. A clamp is also a genuine non-differentiability: zero derivative outside the bounds.
+
+**But it is inside `if (!mu_tend_fortran_parity)`, and `mu_tend_fortran_parity` defaults to
+true** ("Disable mean-subtract and clamp for mu_tend, default true for parity"). Confirmed at
+runtime: `WRF_SDIRK3_MU_CLAMP_TRACE=1` emits **nothing** — the block is never entered.
+
+So this is a **latent** defect, not an active one. It would bite the moment that flag is turned
+off, and it is exactly the shape the review predicted: a dt authority that is frozen rather than
+absent.
+
+### Why the invariance test could not have found it
+
+**A constant is trivially `dt`-invariant.** Varying `dt_stage_` and getting a bit-identical RHS
+shows there is no dt-VARYING path; it cannot distinguish that from a dt path frozen at the wrong
+value. The corrected statement of the earlier result is:
+
+> the explicit slow RHS has no dt-VARYING dependence in this configuration
+
+and the reachability enumeration above is what upgrades it to:
+
+> the only live dt read (`:19811`) feeds W-damping, which is off under parity; the one frozen dt
+> constant is on a disabled branch. So the RHS has no live dt dependence here — established by
+> enumeration and reachability, not by a black-box invariance check.
+
+## V1. `block_energy_shares` now fails closed in the PRODUCTION path
+
+The validators existed and no caller invoked them, so a malformed layout still produced shares
+summing to 1. The helper now returns `BlockShares { shares, valid, reason }` and rejects:
+non-partition layout (overlap / gap / uncovered tail / empty block), weight length mismatch,
+device/dtype mismatch, non-positive or non-finite weights, and zero weighted energy. The Newton
+solver's objective-share emit prints `-1` plus a `SDIRK3_OBJECTIVE_SHARE_INVALID` line carrying
+each reason, instead of plausible numbers.
+
+Returning a bare vector was what made the gap possible: the function had no way to say "these
+numbers mean nothing" other than by returning numbers. Contract: 51 cases (from 46), including
+that an overlapping layout is now REJECTED rather than renormalised.
+
+## A1–A4. Physical admissibility, through the PRODUCTION reconstruction
+
+The earlier rows reported `mu_min`, `t_min`, `ph_min` — all **perturbations** — and were read as
+an admissibility check. Full fields need the base state, and pressure and density need the same
+EOS the model uses (`acoustic::diag_p_al`), not an inline `rd*theta/p` the code's own comments
+record as 87% off at the top level.
+
+| lambda | `mu_full_min` | `mu<=0` | `th_full_min` | `dz_min` | `dz<=0` | `p_full_min` | `rho_min` |
+|---|---|---|---|---|---|---|---|
+| 0 | 8.907e4 | **0** | **240.0 K** | 215.1 m | **0** | 1.024e4 Pa | 7.69 |
+| 0.25 | 8.881e4 | 0 | 244.3 K | 215.2 m | 0 | 7538 Pa | 3.18 |
+| 0.5 | 8.855e4 | 0 | 247.7 K | 215.3 m | 0 | 5131 Pa | 1.70 |
+| 0.75 | 8.829e4 | 0 | 244.5 K | 215.3 m | 0 | 2726 Pa | 1.09 |
+| 1 | 8.803e4 | **0** | **192.3 K** | 205.7 m | **0** | 679.5 Pa | 0.804 |
+
+**The state stays physical across the entire continuation.** Column mass never goes non-positive,
+no layer inverts, pressure stays positive down to the model top, and absolute theta falls from
+240 K to 192.3 K without approaching zero.
+
+### This retracts the "state goes unphysical" finding
+
+I reported absolute theta crossing zero near `lambda ~ 0.24` from `300 + t_min`. **`th_base_`
+already carries `t0`**, so the full field is `th_base_ + t` and `t0` was subtracted twice. The
+correct minimum is **192.3 K, not -13 K**. Nothing about the continuation is inadmissible, and
+the "violation follows the blow-up" framing goes with it — there is no violation.
+
+### One anomaly, flagged rather than explained
+
+`rho_max` reaches 4.2e6 kg/m^3 while `rho_min` is a plausible 0.80-7.7. So `al` has near-zero
+entries in a few cells. The code's own comment at the `diag_p_al` call site records that this
+routine builds `al` **geometrically** and is 35% off on the gradient versus WRF's
+`calc_p_rho_phi` form, because `p' = p0*(R(t0+th)/(p0*alpha))^(cp/cv) - pb` cancels two ~1e5 Pa
+terms down to ~11 Pa. Whether these cells are that known artefact or a real near-singularity is
+**not** established here.
+
+## F2. No two large terms are cancelling in the u-advection decomposition
+
+Norms alone cannot see cancellation, so the cosine of each direction with the total advective
+tendency is now on the record (stage-2 state):
+
+| term | norm | cosine with the total |
+|---|---|---|
+| `adv_x` | 4.918e7 | **0.0009** — orthogonal |
+| `adv_y` | 6.584e4 | -0.020 |
+| **`adv_z`** | **1.725e10** | **1.000** |
+| total | 1.725e10 | — |
+| `sum_of_norms / total` | **1.003** | |
+
+The sum of the parts' norms is 1.003x the total, so **nothing cancels**: `adv_z` IS the total,
+`adv_x` is orthogonal to it (4.9e7 that contributes nothing to the magnitude), and `adv_y` is
+negligible. A norm-ranked decomposition is not misleading here — which had to be measured,
+because it is exactly where one would be.
+
+## D3. The large Taylor remainder is DIRECTIONAL, and not a boundary effect
+
+Clean rows only (`realized_frac > 0.94`), stage 2:
+
+| direction | `r1` at eps=0.25 | at 0.0625 | at 0.0156 |
+|---|---|---|---|
+| `implicit_step` | 0.893 | 0.961 | 0.942 |
+| **`random`** | **0.116** | **0.132** | — |
+| `edge_only` | 0.925 | 0.925 | — |
+| `interior_only` | 0.979 | 0.981 | 0.996 |
+
+**Restricting to the interior does not improve the remainder at all** (0.979 vs 0.893 for the
+whole step), and neither does restricting to the edges. So the large remainder is **not** a
+boundary / halo / staggered-endpoint effect — the review's `P J_E P` concern does not explain
+it, consistent with the eigenvector's edge fraction sitting at the uniform baseline.
+
+Along a **random** direction the remainder is **8x smaller** (0.12 vs 0.89-0.98). That
+dissociation reproduces across runs: at `restart=600` it was 0.024 vs 0.249 (10x), here at
+`restart=120` it is 0.116 vs 0.893 (7.7x). The absolute values differ between runs because the
+stage-2 solution differs; the ratio does not.
+
+**So the roughness is a property of the implicit-step DIRECTION**, not of the operator
+everywhere and not of the boundary. It is still measured over 1.2 decades of `eps`, so it
+remains short of a differentiability verdict — see the FP32 limit above.
+
+## V2. The runtime behaviour manifest — the sweep WAS single-variable, now demonstrated
+
+`policy_fields_that_differ()` compares the pure policy, and the pure policy is not everything
+that changes what a run does: hopeless-mode caps, early-stop streaks, the warm-start latch, the
+trust radius and the preconditioner mode are all stateful and all alter the solve. Two arms are
+separate processes, so there is no in-process baseline to fail closed against; what makes a
+sweep verifiable is that every behaviour-bearing value is on the record at the same point in
+both arms.
+
+`WRF_SDIRK3_POLICY_MANIFEST=1` emits 26 such fields at stage 2, iteration 0. Diffing the two
+arms of the stage-2 budget sweep (`restart` 120 vs 300):
+
+```
+DIFFERS  restart   102 -> 255
+identical fields: 25 of 26
+```
+
+**Only the knob differs.** The earlier "single-variable" claim for that sweep is no longer an
+assumption about the resolver — it is a measured property of every behaviour-bearing runtime
+field, including the stateful ones the pure policy does not contain.
+
+## S6. The probes are TILE-LOCAL, and now say so instead of producing comparable-looking numbers
+
+The JVP, the Arnoldi basis and the continuation all run on this rank's packed state. Under
+`np > 1` each rank holds a subdomain with an exchanged halo, so a spectrum or a Taylor remainder
+computed there is a property of the LOCAL operator — not the global one, and not comparable
+rank-to-rank or against a single-rank run. Emitting them anyway would produce numbers that look
+like an np-equivalence check and are not one.
+
+All six RHS-re-entering probes now fail closed on any topology other than one rank, with
+`SDIRK3_PROBE_SKIPPED probe=<name> reason="tile-local operator under np>1..."`. Same judgment as
+the existing stage-operand diagnostic; these are opt-in diagnostics, so they skip with a stated
+reason rather than aborting. Verified at `np=1`: the probes still fire.
+
+**An np=1,2,4 equivalence check for these quantities therefore needs a formulation that is
+global by construction, not a rerun of these probes.** That is not done.
+
+## F1. Term-observer coverage, stated exactly
+
+| variable | term observer | status |
+|---|---|---|
+| `ru` | 9 capture sites; 4 fire on the ExplicitOnly path (Entry, Advection, Coriolis, Final) | advection further splits x/y/z with cosines |
+| `rv`, `rw`, `ph`, `t`, `mu` | **none** | **not covered** |
+
+For `ru` the coverage is closed on the executed path: `post_capture_tail status=PASS |dR|=0`
+confirms nothing modifies `ru_tend` after the last capture, so the captured sites account for
+the whole tendency. The advection closure check is fail-closed by design and correctly reports
+`INVALID reason=missing_adv_x` at an evaluation where the advection tensors were never populated
+(the all-zero first call) rather than inventing a pass.
+
+The stage-2 dominant eigenvector is 99.8% `ru`, so the one covered variable is the one that
+carries the stiffness — but that is a reason to have prioritised it, **not** a substitute for
+the other five. `F_E = F_adv + F_pressure/metric + F_buoyancy + F_coriolis + F_diffusion +
+F_damping + F_boundary + F_source` across all six variables is **not** measured, and the review's
+P0-5 stays open on that basis.

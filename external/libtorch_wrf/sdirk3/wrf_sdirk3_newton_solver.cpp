@@ -2559,12 +2559,29 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                     wrf::sdirk3::block_energy_shares(*layout, r_true_inner, L_D);
                 const auto sh_wrms =
                     wrf::sdirk3::block_energy_shares(*layout, r_true_inner, L_E);
+                // A share is only reported when its computation says it is valid. The helper
+                // now fails closed on a non-partition layout or a non-positive/mismatched
+                // weight, and printing -1 with the reason is the alternative to printing
+                // plausible numbers that sum to 1 and mean nothing.
+                auto share_of = [](const wrf::sdirk3::BlockShares& b, std::size_t i,
+                                   bool weight_present) {
+                    return (b.valid && weight_present) ? b.shares[i] : -1.0;
+                };
                 for (std::size_t i = 0; i < layout->blocks.size(); ++i) {
                     std::cerr << "SDIRK3_OBJECTIVE_SHARE " << layout->blocks[i].name
-                              << " s_krylov=" << sh_krylov[i]
-                              << " s_physical=" << (L_phys.defined() ? sh_phys[i] : -1.0)
-                              << " s_D=" << (L_D.defined() ? sh_D[i] : -1.0)
-                              << " s_wrms=" << (L_E.defined() ? sh_wrms[i] : -1.0)
+                              << " s_krylov=" << share_of(sh_krylov, i, true)
+                              << " s_physical=" << share_of(sh_phys, i, L_phys.defined())
+                              << " s_D=" << share_of(sh_D, i, L_D.defined())
+                              << " s_wrms=" << share_of(sh_wrms, i, L_E.defined())
+                              << std::endl;
+                }
+                if (!sh_krylov.valid || (L_phys.defined() && !sh_phys.valid) ||
+                    (L_D.defined() && !sh_D.valid) || (L_E.defined() && !sh_wrms.valid)) {
+                    std::cerr << "SDIRK3_OBJECTIVE_SHARE_INVALID"
+                              << " krylov=\"" << sh_krylov.reason << "\""
+                              << " physical=\"" << sh_phys.reason << "\""
+                              << " D=\"" << sh_D.reason << "\""
+                              << " wrms=\"" << sh_wrms.reason << "\""
                               << std::endl;
                 }
                 std::cerr << "SDIRK3_WEIGHT_STRUCTURE metric="
@@ -7160,6 +7177,55 @@ public:
                 policy_in.ew_eta            = ew_eta_used_this_iter;
                 policy_in.order = stage_krylov_order();   // the single reading; see its definition
                 const auto policy = wrf::sdirk3::resolve_stage_krylov_policy(policy_in);
+
+                // R11 V2: the RUNTIME behaviour manifest.
+                //
+                // policy_fields_that_differ() compares the PURE policy, and the pure policy is
+                // not everything that changes what a run does. Hopeless-mode caps, early-stop
+                // streaks, the warm-start latch, the trust radius and the preconditioner mode
+                // are all stateful and all alter the solve, and two arms of a "single-variable"
+                // sweep can differ in any of them without any knob differing.
+                //
+                // Two arms are separate processes, so there is no in-process baseline to fail
+                // closed against. What makes the sweep verifiable is that every behaviour-bearing
+                // value is ON THE RECORD at the same point in both arms: diffing two manifests
+                // then shows any unintended difference, instead of leaving it to the assumption
+                // that only the knob moved.
+                if (newton_iter == 0 &&
+                    wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_POLICY_MANIFEST")) {
+                    auto& cfgm = wrf::sdirk3::g_sdirk3_config;
+                    std::cerr << "SDIRK3_POLICY_MANIFEST stage=" << stage
+                              // resolved policy (what the pure resolver decided)
+                              << " restart=" << policy.restart
+                              << " max_restarts=" << policy.max_restarts
+                              << " tol=" << policy.tol
+                              << " tol_overridden=" << (policy.tol_overridden ? 1 : 0)
+                              << " budget_active=" << (policy.budget_active ? 1 : 0)
+                              << " ew_applied=" << (policy.ew_applied ? 1 : 0)
+                              << " ew_scale=" << policy.ew_scale
+                              << " restart_source=" << static_cast<int>(policy.restart_source)
+                              << " order=" << (policy_in.order ==
+                                               wrf::sdirk3::StageKrylovOrder::StageKnobFirst
+                                                   ? "knob_first" : "shipped")
+                              // stateful runtime behaviour the pure policy does NOT contain
+                              << " s2_hopeless_mode=" << (stage2_hopeless_budget_mode_ ? 1 : 0)
+                              << " s2_hopeless_streak=" << stage2_hopeless_streak_
+                              << " s3_hopeless_mode=" << (stage3_hopeless_budget_mode_ ? 1 : 0)
+                              << " s3_hopeless_streak=" << stage3_hopeless_streak_
+                              << " s3_warmstart_disabled=" << (stage3_warmstart_disabled_ ? 1 : 0)
+                              << " trust_radius=" << trust_radius_
+                              << " trust_region_on=" << (cfgm.nk_trust_region ? 1 : 0)
+                              << " hopeless_relax=" << (cfgm.hopeless_relax ? 1 : 0)
+                              << " precond_type=" << cfgm.precond_type
+                              << " gmres_block_scale=" << (cfgm.gmres_block_scale ? 1 : 0)
+                              << " use_autograd=" << (cfgm.use_autograd ? 1 : 0)
+                              << " imex_split_mode=" << cfgm.imex_split_mode
+                              << " newton_tol=" << cfgm.newton_tol
+                              << " max_newton_iter=" << cfgm.max_newton_iter
+                              << " ew_enabled=" << (ew_eta_enabled_this_iter ? 1 : 0)
+                              << " ew_eta=" << ew_eta_used_this_iter
+                              << std::endl;
+                }
 
                 const int  restart_before_policy = effective_restart;
                 const int  maxr_before_policy    = effective_max_restarts;
