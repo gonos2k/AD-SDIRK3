@@ -9614,6 +9614,32 @@ vertical_coefficients:
                     torch::NoGradGuard ng_report;
                     const bool linear = (hom_rel >= 0.0 && hom_rel < 1e-5 &&
                                          add_rel >= 0.0 && add_rel < 1e-5);
+                    // WHICH BLOCK is stiff.
+                    //
+                    // Ablating adv_z left rho unchanged (1.74762 -> 1.74542, 0.13%), so the
+                    // term that dominates the NORM of F_E is not the term that sets its
+                    // SPECTRUM -- and the u-terms trace only ever watched `ru`. The converged
+                    // power-iteration vector IS the dominant eigendirection, so decomposing it
+                    // per variable says where the stiff mode actually lives, without guessing
+                    // from timescales.
+                    {
+                        auto [ev_u, ev_v, ev_w, ev_ph, ev_t, ev_mu] = extractStateVariables(v);
+                        auto e2 = [](const torch::Tensor& x) {
+                            if (!x.defined()) return 0.0;
+                            const auto x64 = x.detach().to(torch::kFloat64);
+                            return x64.pow(2).sum().item<double>();
+                        };
+                        const double tot = e2(ev_u) + e2(ev_v) + e2(ev_w) +
+                                           e2(ev_ph) + e2(ev_t) + e2(ev_mu);
+                        auto sh = [&](const torch::Tensor& x) {
+                            return tot > 0.0 ? e2(x) / tot : -1.0;
+                        };
+                        std::cerr << "SDIRK3_SPECTRUM_EIGENVECTOR stage=" << stage_id
+                                  << " ru=" << sh(ev_u) << " rv=" << sh(ev_v)
+                                  << " rw=" << sh(ev_w) << " ph=" << sh(ev_ph)
+                                  << " t=" << sh(ev_t) << " mu=" << sh(ev_mu)
+                                  << std::endl;
+                    }
                     std::cerr << "SDIRK3_EXPLICIT_SPECTRUM stage=" << stage_id
                               << " jvp_fd_fallback=" << (fb_any ? 1 : 0)
                               << " homogeneity_rel=" << hom_rel
@@ -14500,6 +14526,23 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
         
         // Total U advection tendency (keep as coupled momentum)
+        // R10 follow-up: ABLATE vertical advection (opt-in, default OFF).
+        //
+        // rho(J_E) = 1.746 s^-1 gives a timescale of 0.57 s, which is the ACOUSTIC time for
+        // this grid, not an advective one -- and acoustic terms belong to the IMPLICIT
+        // partition. `ru_adv_z = wrf_vert_adv3(u, omega_u, ...)` advects by omega, the
+        // mass-coordinate vertical velocity, which is built from the divergence integral and
+        // therefore carries acoustic information into what is nominally a slow term.
+        //
+        // Zeroing adv_z and re-measuring rho is the A/B that decides it: if rho collapses, the
+        // stiffness rides in on omega; if rho survives, the acoustic timescale is somewhere
+        // else in the explicit partition and adv_z's dominance of the NORM was a different
+        // question from its dominance of the SPECTRUM. Placed here, after every branch that
+        // can define ru_adv_z, so one gate covers them all.
+        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_ADV_Z")) {
+            ru_adv_z = torch::zeros_like(ru_adv_z);
+            ru_adv_z_work_ = ru_adv_z;
+        }
         auto ru_tend_adv = ru_adv_horiz + ru_adv_z;  // WRF: ru_tend = advection tendency
         
         // Add coupled momentum tendency directly (no conversion to velocity)

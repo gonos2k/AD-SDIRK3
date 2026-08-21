@@ -655,3 +655,51 @@ not yet explained, and the natural next check is whether `rho` survives ablating
 
 They differ 15x because they answer different questions, and the stability one is the binding
 constraint. The earlier extrapolation is superseded as a design target.
+
+## Follow-up: the largest term is NOT the stiff term, and the stiff mode is NOT acoustic
+
+Two A/B results that each correct something I wrote earlier.
+
+### 1. Ablating `adv_z` leaves `rho` unchanged
+
+| `WRF_SDIRK3_ABLATE_ADV_Z` | `rho(J_E)` | `h rho` |
+|---|---|---|
+| 0 | 1.74762 | 1048.6 |
+| 1 | 1.74542 | 1047.3 |
+| difference | **0.13%** | — |
+
+`adv_z` dominates the **norm** of `F_E` (3444x the horizontal sum) and carries the entire 55.4x
+jump along the continuation — and contributes **nothing** to the **spectrum**. Those are
+different questions about the same term, and it answers them oppositely.
+
+So the stability violation (`h rho = 1048`, 605x outside) is **not** caused by the term that
+makes `F_E` large. Sub-cycling or repartitioning vertical advection alone would not change
+`rho`.
+
+### 2. The stiff mode is thermal-momentum, not acoustic
+
+The converged power-iteration vector IS the dominant eigendirection. Decomposed per variable:
+
+| block | share of the eigenvector |
+|---|---|
+| **t (theta)** | **0.458** |
+| ru | 0.310 |
+| rw | 0.119 |
+| rv | 0.113 |
+| **ph** | **0 exactly** |
+| **mu** | **0 exactly** |
+
+**`ph` and `mu` are exactly zero.** An acoustic mode cannot exist without geopotential and
+column mass participating, so `1/rho = 0.57 s` matching the grid's acoustic time is a
+**coincidence** — my reading of it as an acoustic signature is **retracted**. The stiff mode is
+a theta perturbation coupled to all three momentum components.
+
+That `ph` and `mu` are *identically* zero is also a clean confirmation that the explicit
+partition genuinely does not touch the acoustic variables — consistent with the split
+identities holding to machine precision.
+
+### What this makes the next measurement
+
+The stiff mode is 46% theta, and the u-terms trace only ever watched `ru`. The question is
+which term in the **theta** explicit tendency carries a 0.57 s timescale — ablating candidates
+one at a time against `rho` is the same A/B that just settled `adv_z`.
