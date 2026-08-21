@@ -9679,9 +9679,26 @@ vertical_coefficients:
                         // the modulus is split between real and imaginary parts at the top.
                         const double top = mo_s[0].item<double>();
                         const int64_t near_top = (mo_s > 0.9 * top).sum().item<int64_t>();
+                        // THE quantity a term ablation has to move.
+                        //
+                        // rho is invariant across every arm tried, and it must be: |lambda|
+                        // cannot distinguish a left-half-plane eigenvalue (a dt problem) from a
+                        // right-half-plane one (not a dt problem). The RHP count and the largest
+                        // real part are what actually decide that, so they are what an ablation
+                        // sweep should be read against.
+                        const int64_t n_rhp = (re > 0.0).sum().item<int64_t>();
+                        const double max_re = re.max().item<double>();
+                        const double min_re = re.min().item<double>();
+                        // The growth the RHP part implies over one step, as a log10 so it
+                        // prints: sum over RHP Ritz values is not meaningful, the MAX is.
                         std::cerr << " near_top_count=" << near_top
                                   << " top_real_frac="
                                   << (top > 0.0 ? std::abs(re_s[0].item<double>()) / top : -1.0)
+                                  << " n_rhp=" << n_rhp
+                                  << " n_total=" << re.numel()
+                                  << " max_re=" << max_re
+                                  << " min_re=" << min_re
+                                  << " h_max_re=" << (dt_stage_ * max_re)
                                   << std::endl;
                     }
 
@@ -9724,6 +9741,15 @@ vertical_coefficients:
                     // F_E norm equals the baseline's removed NOTHING, and its rho says nothing.
                     const double fE_norm = F_exp_fn(U0).detach()
                                                .to(torch::kFloat64).norm().item<double>();
+                    // Enough digits to ANSWER THE QUESTION THIS FIELD EXISTS FOR.
+                    //
+                    // F_E_at_U0 is here to say whether an arm removed anything, and at the
+                    // default 6-significant-digit stream precision it printed "3.83e+07" for
+                    // both an arm that removed 0.23% and one whose effect is smaller than the
+                    // formatting -- so "identical" could not be distinguished from "below the
+                    // print resolution". A validity field that cannot resolve the difference it
+                    // is checking is not a check.
+                    const auto prev_prec = std::cerr.precision(14);
                     std::cerr << "SDIRK3_EXPLICIT_SPECTRUM stage=" << stage_id
                               << " F_E_at_U0=" << fE_norm
                               << " jvp_fd_fallback=" << (fb_any ? 1 : 0)
@@ -9737,9 +9763,14 @@ vertical_coefficients:
                               << " rk3_real_limit=2.5 rk3_imag_limit=1.73"
                               // The verdict is REPORTED ONLY when linearity was verified; a
                               // number from an unverified map is what the eps sweep caught.
-                              << " outside="
+                              // NOTE: this compares against the IMAGINARY-axis limit, which the
+                              // Arnoldi measurement showed is the wrong comparison -- the
+                              // spectrum is real at stage 1 and right-half-plane at stage 2.
+                              // Kept only as a coarse flag; read n_rhp / max_re instead.
+                              << " outside_imag_limit_COARSE="
                               << (linear ? ((dt_stage_ * rho > 1.73) ? 1 : 0) : -1)
                               << std::endl;
+                    std::cerr.precision(prev_prec);
                     U_ref_stage_ = U_conv.detach().clone();
                 }
 
@@ -14627,6 +14658,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_ADV_Z")) {
             ru_adv_z = torch::zeros_like(ru_adv_z);
             ru_adv_z_work_ = ru_adv_z;
+        }
+        // ... and the horizontal half, so the u-advection decomposition is complete.
+        // The stage-2 eigenvector is 99.8% ru, so this is where a decomposition of the
+        // right-half-plane part has to look first.
+        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_ADV_H")) {
+            ru_adv_horiz = torch::zeros_like(ru_adv_horiz);
         }
         auto ru_tend_adv = ru_adv_horiz + ru_adv_z;  // WRF: ru_tend = advection tendency
         

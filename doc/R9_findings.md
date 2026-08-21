@@ -850,3 +850,48 @@ addressed by sub-cycling or by a smaller `dt`.
 **Caveat, stated not buried:** Ritz values from a 24-dimensional Krylov space approximate the
 OUTER spectrum and their convergence is not established here; and `exp(h Re lambda)` describes
 the frozen linearized operator, not the nonlinear system.
+
+## Decomposing the right-half-plane eigenvalues by term — a NEGATIVE result, with its coverage stated
+
+The quantity an ablation must move is not `rho`. `|lambda|` cannot separate a left-half-plane
+eigenvalue (a `dt` problem) from a right-half-plane one (not a `dt` problem), which is why eight
+arms left `rho` in a 9% band and said nothing. `n_rhp` and `max_re` are what decide it.
+
+`F_E_at_U0` is printed at 14 digits. At the default stream precision it read `3.83e+07` for an
+arm that removed 0.24% and for one that removed 1e-8 — a validity field that cannot resolve the
+difference it is checking is not a check.
+
+| arm | `F_E_at_U0` | relative change | fired | `n_rhp` | `max_re` | `min_re` |
+|---|---|---|---|---|---|---|
+| baseline | 38296542.293877 | — | — | 13/24 | 143.0 | -120.7 |
+| **ADV_Z** (u vertical adv) | 38205633.485272 | **-2.37e-03** | yes | **15/24** | **167.6** | -111.4 |
+| ADV_H (u horizontal adv) | 38296541.915904 | -9.87e-09 | yes, negligibly | 13/24 | 140.2 | -120.8 |
+| **T_ADV_H** (theta horiz adv) | 38213309.137881 | **-2.17e-03** | yes | 13/24 | 140.6 | -120.8 |
+| T_DIFF_V (theta vert diff) | 38296542.293877 | **+0.00e+00** | **no — bit-identical** | 13/24 | 144.0 | -120.7 |
+
+### The answer
+
+**No term tested produces the right-half-plane eigenvalues.** `n_rhp = 13 of 24` in every arm,
+including the baseline, and at BOTH stages. Removing vertical u-advection makes it **worse** —
+`n_rhp` 13 -> 15 and `max_re` 143 -> 168.
+
+### The coverage limit, which bounds what that answer is worth
+
+The arms that changed anything account for **0.45% of `||F_E||` combined**. So this is not a
+decomposition of the operator; it is a test of four terms that together are half a percent of
+it. "No single term among these carries the RHP part" is what the data supports. "The RHP part
+is not localized in any term" is **not** — 99.5% of the operator was never varied.
+
+Two gates also turned out not to be usable controls, and that is a property of the wiring, not
+a result: `WRF_SDIRK3_ABLATE_RU_SLOW` is wired to `ru_slow` in the split-explicit driver, a path
+the JVP of `computeUnifiedRHS(ExplicitOnly)` does not traverse, so it cannot ablate this
+operator at all; `T_DIFF_V` left `F_E` **bit-identical**, so theta's vertical diffusion is
+either not reached or identically zero at this state.
+
+### What would actually decompose it
+
+Ablation covers a term only if a gate exists for it, and gates exist for four. The operator's
+own structure is the alternative: `J_E` is a sum of per-term Jacobians, so the RHP content
+could be attributed by measuring the spectrum of each `J_term` directly — the same Arnoldi, run
+on a JVP restricted to one term — rather than by subtracting terms from the total and hoping
+the remainder shifts.
