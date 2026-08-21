@@ -134,8 +134,17 @@ inline StageKrylovPolicy resolve_stage_krylov_policy(const StageKrylovInputs& in
     };
 
     if (in.order == StageKrylovOrder::StageKnobFirst) {
-        // The stage's OWN knob decides the budget, and EW scales whatever that is. Setting or
-        // not setting stage3_gmres_restart then changes the VALUE and nothing else.
+        // The stage's OWN knob decides the budget, and EW scales whatever that is, so setting
+        // or not setting stage3_gmres_restart changes the budget VALUE without also changing
+        // whether EW scaling reached it.
+        //
+        // It does NOT by itself make a sweep single-variable, and the earlier wording here
+        // claimed it did. `budget_active` is an OR over both stages' knobs, so turning on the
+        // FIRST stage-3 knob from a baseline with no knobs set also flips budget_active false
+        // -> true, which switches EW/budget coupling and the early-stop gates on. A sweep is
+        // single-variable only when some stage knob was already set in the baseline -- and
+        // that is a property of the experiment, not of this resolver. Use
+        // policy_fields_that_differ() to check it rather than assuming it.
         if (in.stage >= 3) { apply_stage2(); apply_stage3(); } else { apply_stage2(); }
         apply_ew();
     } else {
@@ -171,6 +180,44 @@ inline StageBudgetKnobs early_stop_gate_knobs(int stage,
         if (s3_max_restarts > 0) k.max_restarts = s3_max_restarts;
     }
     return k;
+}
+
+
+// Which behaviour-bearing fields actually differ between two resolved policies.
+//
+// An experiment is single-variable when this set equals what the experimenter intended to
+// change -- nothing more. Comparing the KNOBS is not enough: knobs are inputs, and one input
+// can move several resolved fields (see budget_active above). Comparing the resolved policies
+// is what states the property directly.
+struct PolicyDiff {
+    bool restart = false;
+    bool max_restarts = false;
+    bool tol = false;
+    bool tol_overridden = false;
+    bool budget_active = false;
+    bool ew_applied = false;
+    bool ew_scale = false;
+    bool restart_source = false;
+
+    int count() const {
+        return int(restart) + int(max_restarts) + int(tol) + int(tol_overridden) +
+               int(budget_active) + int(ew_applied) + int(ew_scale) + int(restart_source);
+    }
+    bool only_restart_changed() const { return count() == 1 && restart; }
+};
+
+inline PolicyDiff policy_fields_that_differ(const StageKrylovPolicy& a,
+                                            const StageKrylovPolicy& b) {
+    PolicyDiff d;
+    d.restart         = (a.restart != b.restart);
+    d.max_restarts    = (a.max_restarts != b.max_restarts);
+    d.tol             = (a.tol != b.tol);
+    d.tol_overridden  = (a.tol_overridden != b.tol_overridden);
+    d.budget_active   = (a.budget_active != b.budget_active);
+    d.ew_applied      = (a.ew_applied != b.ew_applied);
+    d.ew_scale        = (a.ew_scale != b.ew_scale);
+    d.restart_source  = (a.restart_source != b.restart_source);
+    return d;
 }
 
 }  // namespace sdirk3

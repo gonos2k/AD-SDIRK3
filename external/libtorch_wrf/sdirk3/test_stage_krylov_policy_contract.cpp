@@ -20,6 +20,7 @@ using wrf::sdirk3::StageRestartSource;
 using wrf::sdirk3::resolve_stage_krylov_policy;
 using wrf::sdirk3::ew_budget_scale;
 using wrf::sdirk3::early_stop_gate_knobs;
+using wrf::sdirk3::policy_fields_that_differ;
 using wrf::sdirk3::parse_bool_text;
 using wrf::sdirk3::BoolText;
 
@@ -183,6 +184,39 @@ static void contract_order_flag_parsing() {
           "the raw first-character test disagrees with the parser on \"false\"");
 }
 
+// P1-1: StageKnobFirst does NOT by itself make a sweep single-variable.
+//
+// budget_active is an OR over both stages' knobs, so turning on the FIRST stage-3 knob from a
+// baseline with none set also flips budget_active, which switches EW/budget coupling and the
+// early-stop gates on. The header used to claim otherwise. Comparing the resolved POLICIES --
+// not the knobs -- states the property directly.
+static void contract_single_variable_is_a_property_of_the_experiment() {
+    StageKrylovInputs bare;                    // no stage knob set anywhere
+    bare.stage = 3; bare.base_restart = 30; bare.base_max_restarts = 4; bare.base_tol = 0.1f;
+    bare.ew_enabled = true; bare.ew_eta = 0.5f;
+    bare.order = StageKrylovOrder::StageKnobFirst;
+
+    auto armed = bare;                          // ... then set the first stage-3 knob
+    armed.s3_restart = 600;
+
+    const auto d_bare = policy_fields_that_differ(resolve_stage_krylov_policy(bare),
+                                                  resolve_stage_krylov_policy(armed));
+    check(d_bare.budget_active,
+          "from a bare baseline the first stage-3 knob ALSO flips budget_active");
+    check(!d_bare.only_restart_changed(),
+          "so that sweep is NOT single-variable, whatever the ordering");
+
+    // With a stage-2 knob already set in BOTH arms -- which is what the measured sweeps did --
+    // budget_active is true either way and only the budget moves.
+    StageKrylovInputs base2 = bare;  base2.s2_restart = 600;
+    StageKrylovInputs arm2  = base2; arm2.s3_restart  = 300;
+    const auto d2 = policy_fields_that_differ(resolve_stage_krylov_policy(base2),
+                                              resolve_stage_krylov_policy(arm2));
+    check(!d2.budget_active, "with a stage-2 knob already set, budget_active does not move");
+    check(d2.restart, "the budget does move");
+    check(d2.count() <= 2, "and almost nothing else does (restart, and its source label)");
+}
+
 int main() {
     contract_ordering_confound();
     contract_budget_active_is_an_or();
@@ -190,6 +224,7 @@ int main() {
     contract_stage1_untouched();
     contract_early_stop_gate_knobs();
     contract_order_flag_parsing();
+    contract_single_variable_is_a_property_of_the_experiment();
     std::printf("%s: %d cases, %d failures\n",
                 g_fail == 0 ? "PASS" : "FAIL", g_cases, g_fail);
     return g_fail == 0 ? 0 : 1;

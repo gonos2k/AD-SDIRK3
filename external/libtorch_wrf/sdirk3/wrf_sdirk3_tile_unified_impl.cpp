@@ -221,6 +221,7 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#include "wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
 #include "wrf_sdirk3_config.h"
@@ -8772,7 +8773,7 @@ vertical_coefficients:
                     torch::NoGradGuard no_grad;
                     std::cerr << "SDIRK3_STAGE_BASE stage=" << (stage_idx + 1)
                               << " term=U_n norm="
-                              << U_n.detach().norm().to(torch::kFloat64).item<double>()
+                              << U_n.detach().to(torch::kFloat64).norm().item<double>()
                               << std::endl;
                 }
                 torch::Tensor rhs = U_n;
@@ -8791,9 +8792,9 @@ vertical_coefficients:
                         const double aE = static_cast<double>(Ark::a_explicit[stage_idx][j]);
                         const double aI = static_cast<double>(Ark::a_implicit[stage_idx][j]);
                         const double ks = k_slow[j].defined()
-                            ? k_slow[j].detach().norm().to(torch::kFloat64).item<double>() : -1.0;
+                            ? k_slow[j].detach().to(torch::kFloat64).norm().item<double>() : -1.0;
                         const double kf = k_fast[j].defined()
-                            ? k_fast[j].detach().norm().to(torch::kFloat64).item<double>() : -1.0;
+                            ? k_fast[j].detach().to(torch::kFloat64).norm().item<double>() : -1.0;
                         std::cerr << "SDIRK3_STAGE_BASE stage=" << (stage_idx + 1)
                                   << " src=" << (j + 1)
                                   << " aE=" << aE << " k_slow=" << ks
@@ -8801,7 +8802,7 @@ vertical_coefficients:
                                   << " aI=" << aI << " k_fast=" << kf
                                   << " term_I=" << (kf >= 0.0 ? dt * std::abs(aI) * kf : -1.0)
                                   << " running=" 
-                                  << rhs.detach().norm().to(torch::kFloat64).item<double>()
+                                  << rhs.detach().to(torch::kFloat64).norm().item<double>()
                                   << std::endl;
                     }
                 }
@@ -9393,6 +9394,499 @@ vertical_coefficients:
 
                 k_slow[i] = compute_k_slow(U_conv, U_full_exch_conv);
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_slow", k_slow[i]);
+
+                // ============================================================
+                // R10 P0-2 / experiment B: is the SLOW RHS dt-INVARIANT? (opt-in)
+                // ============================================================
+                // F_E(Y) is a tendency, [U/s]. The ARK assembly supplies the h:
+                //
+                //     h a^E_ij F_E(Y_j)  :  [U]
+                //
+                // so if anything inside F_E already carries a dt -- a term written as an
+                // INCREMENT h*F rather than a tendency F, or an operator reading dt from
+                // grid_info_ -- the outer assembly multiplies by h a SECOND time and the
+                // stage term picks up a spurious h^2. That is one of exactly two explanations
+                // for the measured ~h^2.4 growth of the stage-3 explicit term; the other is a
+                // genuine explicit instability. They are distinguished by holding the STATE
+                // fixed and moving only the dt the RHS sees.
+                //
+                // Same U_conv, same halo, same everything: only dt_stage_ changes. A pure
+                // tendency returns the same vector. Any relative difference is a dt the
+                // tendency should not have had, and its SIZE bounds how much of the h^2.4 it
+                // can explain.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_RHS_DT_INVARIANCE") &&
+                    k_slow[i].defined() && k_slow[i].numel() > 0) {
+                    torch::NoGradGuard ng_dt;
+                    const float dt_saved = dt_stage_;
+                    const auto k_ref = k_slow[i].detach().to(torch::kFloat64).clone();
+                    const double n_ref = k_ref.norm().item<double>();
+                    for (const double f : {0.5, 2.0}) {
+                        dt_stage_ = static_cast<float>(dt_saved * f);
+                        const auto k_alt =
+                            compute_k_slow(U_conv, U_full_exch_conv).detach()
+                                .to(torch::kFloat64);
+                        const double n_alt = k_alt.norm().item<double>();
+                        const double d_rel = (n_ref > 0.0)
+                            ? (k_alt - k_ref).norm().item<double>() / n_ref : -1.0;
+                        std::cerr << "SDIRK3_RHS_DT_INVARIANCE stage=" << stage_id
+                                  << " dt_ref=" << dt_saved
+                                  << " dt_alt=" << dt_stage_
+                                  << " factor=" << f
+                                  << " norm_ref=" << n_ref
+                                  << " norm_alt=" << n_alt
+                                  << " norm_ratio=" << (n_ref > 0.0 ? n_alt / n_ref : -1.0)
+                                  << " vector_rel_diff=" << d_rel
+                                  << std::endl;
+                    }
+                    dt_stage_ = dt_saved;
+                    // Restore the reference state compute_k_slow() publishes as a side effect,
+                    // so the probe cannot leak its last evaluation into production.
+                    U_ref_stage_ = U_conv.detach().clone();
+                }
+
+                // ============================================================
+                // R10 experiment D: WHERE along the implicit displacement does F_E jump?
+                // ============================================================
+                // k_slow[i] is evaluated at U_conv = U_stage + h a_ii K_i, i.e. at the state
+                // the IMPLICIT solve moved to -- and at stage 2 that displacement is ~60% of
+                // ||U_stage||. Measured, ||F_E(U_conv)|| varies 7.5x with the stage-2 Krylov
+                // budget alone, and not as a power law: it rises ~5.4x over one 1.5x increase
+                // in the displacement and only ~1.4x over the next 1.35x. A smooth cascade does
+                // not do that; a branch, a floor, or a positivity boundary being crossed does.
+                //
+                // So walk the segment the implicit solve traversed,
+                //
+                //     U(lambda) = U_stage + lambda (U_conv - U_stage),   lambda in [0,1]
+                //
+                // and evaluate the PRODUCTION slow RHS at each point. A smooth curve means the
+                // growth is the operator's genuine response to a large displacement; a knee at
+                // some lambda* localises a switch, and the state diagnostics at lambda* say
+                // which one.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SLOW_CONTINUATION") &&
+                    k_slow[i].defined() && k_slow[i].numel() > 0) {
+                    torch::NoGradGuard ng_cont;
+                    const auto U_base = U_stage.detach();
+                    const auto step = (U_conv.detach() - U_base);
+                    const double step_n = step.to(torch::kFloat64).norm().item<double>();
+                    const double base_n = U_base.to(torch::kFloat64).norm().item<double>();
+                    for (const double lam : {0.0, 0.125, 0.25, 0.375, 0.5,
+                                             0.625, 0.75, 0.875, 1.0}) {
+                        const auto U_lam = U_base + lam * step;
+                        // Same production path the stage itself uses.
+                        const auto k_lam = compute_k_slow(U_lam, torch::Tensor{})
+                                               .detach().to(torch::kFloat64);
+                        // Admissibility at this point, because a norm cannot see one cell
+                        // crossing a floor while the total moves 10%.
+                        const auto u_lam64 = U_lam.detach().to(torch::kFloat64);
+                        const int64_t nonfinite =
+                            (~torch::isfinite(k_lam)).sum().item<int64_t>();
+                        // R10 P0-4c: ADMISSIBILITY, per variable.
+                        //
+                        // A whole-state norm cannot see one column crossing a floor while the
+                        // total moves 10%, and the sub-linear response says something crosses
+                        // something. mu is the mass variable -- it must stay positive -- and
+                        // theta is the one with a physical range; the counts are what a min
+                        // hides when only a handful of points are bad.
+                        auto [u_a, v_a, w_a, ph_a, t_a, mu_a] = extractStateVariables(U_lam);
+                        auto mn = [](const torch::Tensor& x) {
+                            return x.defined()
+                                ? x.detach().to(torch::kFloat64).min().item<double>() : 0.0/0.0;
+                        };
+                        auto mx = [](const torch::Tensor& x) {
+                            return x.defined()
+                                ? x.detach().to(torch::kFloat64).max().item<double>() : 0.0/0.0;
+                        };
+                        const int64_t mu_nonpos = mu_a.defined()
+                            ? (mu_a.detach() <= 0).sum().item<int64_t>() : -1;
+                        std::cerr << "SDIRK3_SLOW_CONTINUATION stage=" << stage_id
+                                  << " lambda=" << lam
+                                  << " disp_rel=" << (base_n > 0.0 ? lam * step_n / base_n : -1.0)
+                                  << " F_E_norm=" << k_lam.norm().item<double>()
+                                  << " F_E_absmax=" << k_lam.abs().max().item<double>()
+                                  << " U_min=" << u_lam64.min().item<double>()
+                                  << " U_absmax=" << u_lam64.abs().max().item<double>()
+                                  << " mu_min=" << mn(mu_a)
+                                  << " mu_nonpos=" << mu_nonpos
+                                  << " t_min=" << mn(t_a) << " t_max=" << mx(t_a)
+                                  << " ph_min=" << mn(ph_a)
+                                  << " w_absmax=" << (w_a.defined()
+                                        ? w_a.detach().to(torch::kFloat64).abs().max().item<double>()
+                                        : -1.0)
+                                  << " F_E_nonfinite=" << nonfinite
+                                  << std::endl;
+                    }
+                    U_ref_stage_ = U_conv.detach().clone();
+                }
+
+                // ============================================================
+                // R10 P0-3a: the PRIMAL split identity  F_full = F_E + F_I  (opt-in)
+                // ============================================================
+                // The whole stage-3 argument rests on attributing the blow-up to the EXPLICIT
+                // partition. That attribution is only meaningful if the partition is exact: a
+                // term double-counted in both modes, or dropped from both, would let each
+                // operator pass its own test while the assembled step is wrong.
+                //
+                // Measured at the SAME state the stage actually evaluates, through the SAME
+                // entry point, so it is the production partition being checked and not a
+                // reconstruction of it.
+                // ============================================================
+                // R10 P0-5: is h J_E outside the explicit stability region? (opt-in)
+                // ============================================================
+                // The first attempt at this used power iteration on a FINITE-DIFFERENCE matvec
+                // and reported h*rho = 3.8e6, "outside". The eps sweep refuted it: rho scaled
+                // as eps^+1, where a genuine Jacobian gives an eps-INDEPENDENT plateau. Power
+                // iteration assumes a LINEAR map, and (F(U+eps v)-F(U))/eps is linear in v only
+                // as eps -> 0; at finite eps against a strongly nonlinear F the iterate walks
+                // toward the maximal quadratic response instead of an eigenvector.
+                //
+                // The forward-mode dual gives the EXACT directional derivative, so the map is
+                // linear by construction and power iteration is valid on it. But "by
+                // construction" is the same kind of claim that failed last time, so linearity
+                // is MEASURED here before any iterate is trusted:
+                //
+                //     homogeneity   J(a v) - a J(v)
+                //     additivity    J(v1 + v2) - J(v1) - J(v2)
+                //
+                // Both are emitted. If either is not at round-off, the rho below is not a
+                // spectral radius and must not be read as one -- exactly the failure the eps
+                // sweep caught, made impossible to repeat silently.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_SPECTRUM") &&
+                    k_slow[i].defined() && k_slow[i].numel() > 0) {
+                    const auto U0 = U_conv.detach().clone();
+                    auto F_exp_fn = [this](const torch::Tensor& x) {
+                        return computeUnifiedRHS(x, wrf::sdirk3::RhsMode::ExplicitOnly);
+                    };
+                    bool fb = false, fb_any = false;
+                    auto Jv = [&](const torch::Tensor& d) {
+                        auto out = wrf::sdirk3::compute_jvp_fwad_or_fd(F_exp_fn, U0, d,
+                                                                       0, 0.0f, &fb);
+                        fb_any = fb_any || fb;
+                        return out;
+                    };
+
+                    // --- linearity, measured ---
+                    auto v1 = torch::randn_like(U0);
+                    auto v2 = torch::randn_like(U0);
+                    const auto Jv1 = Jv(v1);
+                    const auto Jv2 = Jv(v2);
+                    const auto Jhom = Jv(v1 * 2.5f);
+                    const auto Jadd = Jv(v1 + v2);
+                    double hom_rel = -1.0, add_rel = -1.0;
+                    {
+                        torch::NoGradGuard ng;
+                        auto rel = [](const torch::Tensor& a, const torch::Tensor& b) {
+                            const auto a64 = a.detach().to(torch::kFloat64);
+                            const auto b64 = b.detach().to(torch::kFloat64);
+                            const double n = a64.norm().item<double>();
+                            return n > 0.0 ? (a64 - b64).norm().item<double>() / n : -1.0;
+                        };
+                        hom_rel = rel(Jhom, 2.5 * Jv1.detach());
+                        add_rel = rel(Jadd, (Jv1 + Jv2).detach());
+                    }
+
+                    // --- power iteration on the verified-linear operator ---
+                    torch::Tensor v;
+                    {
+                        torch::NoGradGuard ng;
+                        v = torch::randn_like(U0);
+                        v = v / v.to(torch::kFloat64).norm().item<double>();
+                    }
+                    double rho = 0.0, prev = 0.0;
+                    int used = 0;
+                    for (int it = 0; it < 40; ++it) {
+                        const auto w = Jv(v);
+                        double n;
+                        {
+                            torch::NoGradGuard ng;
+                            n = w.detach().to(torch::kFloat64).norm().item<double>();
+                        }
+                        if (!std::isfinite(n) || n <= 0.0) break;
+                        rho = n;                                  // ||J v|| with ||v|| = 1
+                        {
+                            torch::NoGradGuard ng;
+                            v = (w.detach() / n);
+                        }
+                        used = it + 1;
+                        if (it > 3 && std::abs(rho - prev) <= 1e-4 * rho) break;
+                        prev = rho;
+                    }
+
+                    // ARNOLDI: the SPECTRUM, not just its largest modulus.
+                    //
+                    // Eight ablation arms moved the eigenvector composition from (ru 0.998) to
+                    // (rw 0.515, t 0.485) to (rw 1.000) while rho stayed in [205.8, 224.3] -- a
+                    // 9% band. Power iteration returns only the dominant |lambda|, so an
+                    // invariant rho under a changing eigenvector is precisely the case where
+                    // ablation cannot say more: it reports which eigenvector the iteration
+                    // lands on, not how the eigenvalues are distributed.
+                    //
+                    // Arnoldi on the same verified-linear JVP builds an m-dimensional Krylov
+                    // basis and returns the Hessenberg H_m whose eigenvalues (Ritz values)
+                    // approximate the outer spectrum. That answers, numerically rather than by
+                    // inference: how many eigenvalues sit near the top, and whether they are
+                    // real (RK3 limit 2.5) or imaginary (limit 1.73) -- which decides WHICH
+                    // limit h*rho must be compared against.
+                    if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_ARNOLDI")) {
+                        const int m = 24;
+                        std::vector<torch::Tensor> V;
+                        auto H = torch::zeros({m + 1, m}, torch::kFloat64);
+                        {
+                            torch::NoGradGuard ng_a;
+                            auto v0 = torch::randn_like(U0);
+                            v0 = v0 / v0.to(torch::kFloat64).norm().item<double>();
+                            V.push_back(v0);
+                        }
+                        int m_used = 0;
+                        for (int j = 0; j < m; ++j) {
+                            auto w = Jv(V[j]);
+                            {
+                                torch::NoGradGuard ng_a;
+                                for (int k = 0; k <= j; ++k) {
+                                    const double hkj =
+                                        (V[k].detach().to(torch::kFloat64) *
+                                         w.detach().to(torch::kFloat64)).sum().item<double>();
+                                    H[k][j] = hkj;
+                                    w = w - static_cast<float>(hkj) * V[k];
+                                }
+                                const double hn =
+                                    w.detach().to(torch::kFloat64).norm().item<double>();
+                                H[j + 1][j] = hn;
+                                m_used = j + 1;
+                                if (!std::isfinite(hn) || hn < 1e-12) break;   // happy breakdown
+                                V.push_back(w / static_cast<float>(hn));
+                            }
+                        }
+                        torch::NoGradGuard ng_r;
+                        auto Hm = H.slice(0, 0, m_used).slice(1, 0, m_used);
+                        auto ev = torch::linalg_eigvals(Hm);
+                        auto re = torch::real(ev).to(torch::kFloat64);
+                        auto im = torch::imag(ev).to(torch::kFloat64);
+                        auto mod = torch::sqrt(re * re + im * im);
+                        auto order = torch::argsort(mod, /*dim=*/0, /*descending=*/true);
+                        auto re_s = re.index_select(0, order);
+                        auto im_s = im.index_select(0, order);
+                        auto mo_s = mod.index_select(0, order);
+                        std::cerr << "SDIRK3_EXPLICIT_ARNOLDI stage=" << stage_id
+                                  << " m=" << m_used;
+                        const int show = std::min<int>(8, m_used);
+                        for (int k = 0; k < show; ++k) {
+                            std::cerr << " ritz" << k << "=("
+                                      << re_s[k].item<double>() << ","
+                                      << im_s[k].item<double>() << ")|"
+                                      << mo_s[k].item<double>() << "|";
+                        }
+                        // How many Ritz values sit within 10% of the largest modulus, and how
+                        // the modulus is split between real and imaginary parts at the top.
+                        const double top = mo_s[0].item<double>();
+                        const int64_t near_top = (mo_s > 0.9 * top).sum().item<int64_t>();
+                        // THE quantity a term ablation has to move.
+                        //
+                        // rho is invariant across every arm tried, and it must be: |lambda|
+                        // cannot distinguish a left-half-plane eigenvalue (a dt problem) from a
+                        // right-half-plane one (not a dt problem). The RHP count and the largest
+                        // real part are what actually decide that, so they are what an ablation
+                        // sweep should be read against.
+                        const int64_t n_rhp = (re > 0.0).sum().item<int64_t>();
+                        const double max_re = re.max().item<double>();
+                        const double min_re = re.min().item<double>();
+                        // The growth the RHP part implies over one step, as a log10 so it
+                        // prints: sum over RHP Ritz values is not meaningful, the MAX is.
+                        std::cerr << " near_top_count=" << near_top
+                                  << " top_real_frac="
+                                  << (top > 0.0 ? std::abs(re_s[0].item<double>()) / top : -1.0)
+                                  << " n_rhp=" << n_rhp
+                                  << " n_total=" << re.numel()
+                                  << " max_re=" << max_re
+                                  << " min_re=" << min_re
+                                  << " h_max_re=" << (dt_stage_ * max_re)
+                                  << std::endl;
+                    }
+
+                    torch::NoGradGuard ng_report;
+                    const bool linear = (hom_rel >= 0.0 && hom_rel < 1e-5 &&
+                                         add_rel >= 0.0 && add_rel < 1e-5);
+                    // WHICH BLOCK is stiff.
+                    //
+                    // Ablating adv_z left rho unchanged (1.74762 -> 1.74542, 0.13%), so the
+                    // term that dominates the NORM of F_E is not the term that sets its
+                    // SPECTRUM -- and the u-terms trace only ever watched `ru`. The converged
+                    // power-iteration vector IS the dominant eigendirection, so decomposing it
+                    // per variable says where the stiff mode actually lives, without guessing
+                    // from timescales.
+                    {
+                        auto [ev_u, ev_v, ev_w, ev_ph, ev_t, ev_mu] = extractStateVariables(v);
+                        auto e2 = [](const torch::Tensor& x) {
+                            if (!x.defined()) return 0.0;
+                            const auto x64 = x.detach().to(torch::kFloat64);
+                            return x64.pow(2).sum().item<double>();
+                        };
+                        const double tot = e2(ev_u) + e2(ev_v) + e2(ev_w) +
+                                           e2(ev_ph) + e2(ev_t) + e2(ev_mu);
+                        auto sh = [&](const torch::Tensor& x) {
+                            return tot > 0.0 ? e2(x) / tot : -1.0;
+                        };
+                        std::cerr << "SDIRK3_SPECTRUM_EIGENVECTOR stage=" << stage_id
+                                  << " ru=" << sh(ev_u) << " rv=" << sh(ev_v)
+                                  << " rw=" << sh(ev_w) << " ph=" << sh(ev_ph)
+                                  << " t=" << sh(ev_t) << " mu=" << sh(ev_mu)
+                                  << std::endl;
+                    }
+                    // SELF-VALIDATING A/B.
+                    //
+                    // An ablation sweep is only evidence if the ablation CHANGED something at
+                    // the state rho was measured at. Five term ablations moved rho by <0.13%
+                    // and I read that as "no single term carries the spectrum" -- without ever
+                    // checking that the terms were nonzero there. ||F_E(U0)|| on the same line
+                    // as rho, from the same U0, is what makes the arms comparable: an arm whose
+                    // F_E norm equals the baseline's removed NOTHING, and its rho says nothing.
+                    const double fE_norm = F_exp_fn(U0).detach()
+                                               .to(torch::kFloat64).norm().item<double>();
+                    // Enough digits to ANSWER THE QUESTION THIS FIELD EXISTS FOR.
+                    //
+                    // F_E_at_U0 is here to say whether an arm removed anything, and at the
+                    // default 6-significant-digit stream precision it printed "3.83e+07" for
+                    // both an arm that removed 0.23% and one whose effect is smaller than the
+                    // formatting -- so "identical" could not be distinguished from "below the
+                    // print resolution". A validity field that cannot resolve the difference it
+                    // is checking is not a check.
+                    const auto prev_prec = std::cerr.precision(14);
+                    std::cerr << "SDIRK3_EXPLICIT_SPECTRUM stage=" << stage_id
+                              << " F_E_at_U0=" << fE_norm
+                              << " jvp_fd_fallback=" << (fb_any ? 1 : 0)
+                              << " homogeneity_rel=" << hom_rel
+                              << " additivity_rel=" << add_rel
+                              << " linear_verified=" << (linear ? 1 : 0)
+                              << " iters=" << used
+                              << " rho_J_E=" << rho
+                              << " h=" << dt_stage_
+                              << " h_rho=" << (dt_stage_ * rho)
+                              << " rk3_real_limit=2.5 rk3_imag_limit=1.73"
+                              // The verdict is REPORTED ONLY when linearity was verified; a
+                              // number from an unverified map is what the eps sweep caught.
+                              // NOTE: this compares against the IMAGINARY-axis limit, which the
+                              // Arnoldi measurement showed is the wrong comparison -- the
+                              // spectrum is real at stage 1 and right-half-plane at stage 2.
+                              // Kept only as a coarse flag; read n_rhp / max_re instead.
+                              << " outside_imag_limit_COARSE="
+                              << (linear ? ((dt_stage_ * rho > 1.73) ? 1 : 0) : -1)
+                              << std::endl;
+                    std::cerr.precision(prev_prec);
+                    U_ref_stage_ = U_conv.detach().clone();
+                }
+
+                // ============================================================
+                // R10 P0-3b/c/d: the DERIVATIVE split identities (opt-in)
+                // ============================================================
+                // The primal split F_full = F_E + F_I is exact (2.1e-8), but this is an
+                // ADJOINT model: the partition has to hold for the derivatives too, and a
+                // primal identity does not imply either derivative one. A term that is
+                // double-counted in one mode and cancelled in the other, or a piece of the
+                // graph that only one mode retains, is invisible to the primal check and fatal
+                // to a tangent or an adjoint.
+                //
+                //   JVP        J_full v      == J_E v      + J_I v
+                //   VJP        J_full^T w    == J_E^T w    + J_I^T w
+                //   transpose  <J_full v, w> == <v, J_full^T w>
+                //
+                // The JVP goes through the production forward-mode dual helper (the same one
+                // the Newton matvec uses), and its FD-fallback flag is reported: a fallback
+                // silently degrades the operator to a finite difference and would make a clean
+                // number meaningless.
+                //
+                // The VJP runs on a DETACHED leaf. That is not a detail -- a backward taken on
+                // tensors shared with the live forward would push spurious contributions into
+                // the state's .grad() and can free buffers the real adjoint still needs. The
+                // probe must not be able to touch the run it is observing.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_AD_SPLIT_CONTRACT")) {
+                    const auto U_probe = U_conv.detach().clone();
+                    auto F_of = [&](wrf::sdirk3::RhsMode m) {
+                        return [this, m](const torch::Tensor& x) {
+                            return computeUnifiedRHS(x, m);
+                        };
+                    };
+                    torch::Tensor v = torch::randn_like(U_probe);
+                    {   // .item() only ever under NoGradGuard
+                        torch::NoGradGuard ng;
+                        v = v / v.detach().to(torch::kFloat64).norm().item<double>();
+                    }
+
+                    bool fb_full = false, fb_e = false, fb_i = false;
+                    const auto Jv_full = wrf::sdirk3::compute_jvp_fwad_or_fd(
+                        F_of(wrf::sdirk3::RhsMode::Full), U_probe, v, 0, 0.0f, &fb_full);
+                    const auto Jv_e = wrf::sdirk3::compute_jvp_fwad_or_fd(
+                        F_of(wrf::sdirk3::RhsMode::ExplicitOnly), U_probe, v, 0, 0.0f, &fb_e);
+                    const auto Jv_i = wrf::sdirk3::compute_jvp_fwad_or_fd(
+                        F_of(wrf::sdirk3::RhsMode::ImplicitOnly), U_probe, v, 0, 0.0f, &fb_i);
+
+                    // VJP on an isolated leaf, one mode at a time.
+                    torch::Tensor w = torch::randn_like(U_probe);
+                    auto vjp = [&](wrf::sdirk3::RhsMode m) -> torch::Tensor {
+                        auto leaf = U_probe.detach().clone().requires_grad_(true);
+                        auto F = computeUnifiedRHS(leaf, m);
+                        if (!F.requires_grad()) return torch::Tensor{};
+                        auto g = torch::autograd::grad({F}, {leaf}, {w},
+                                                       /*retain_graph=*/false,
+                                                       /*create_graph=*/false,
+                                                       /*allow_unused=*/true);
+                        return g.empty() ? torch::Tensor{} : g[0];
+                    };
+                    const auto Jt_full = vjp(wrf::sdirk3::RhsMode::Full);
+                    const auto Jt_e    = vjp(wrf::sdirk3::RhsMode::ExplicitOnly);
+                    const auto Jt_i    = vjp(wrf::sdirk3::RhsMode::ImplicitOnly);
+
+                    torch::NoGradGuard ng_report;
+                    auto rel = [](const torch::Tensor& a, const torch::Tensor& b) {
+                        if (!a.defined() || !b.defined()) return -1.0;
+                        const auto a64 = a.detach().to(torch::kFloat64);
+                        const auto b64 = b.detach().to(torch::kFloat64);
+                        const double n = a64.norm().item<double>();
+                        return n > 0.0 ? (a64 - b64).norm().item<double>() / n : -1.0;
+                    };
+                    auto dot = [](const torch::Tensor& a, const torch::Tensor& b) {
+                        if (!a.defined() || !b.defined()) return 0.0/0.0;
+                        return (a.detach().to(torch::kFloat64) *
+                                b.detach().to(torch::kFloat64)).sum().item<double>();
+                    };
+                    const double lhs = dot(Jv_full, w);      // <J v, w>
+                    const double rhs = dot(v, Jt_full);      // <v, J^T w>
+                    const double den = std::max(std::abs(lhs), std::abs(rhs));
+                    std::cerr << "SDIRK3_AD_SPLIT_CONTRACT stage=" << stage_id
+                              << " jvp_split_rel=" << rel(Jv_full, Jv_e + Jv_i)
+                              << " vjp_split_rel="
+                              << ((Jt_full.defined() && Jt_e.defined() && Jt_i.defined())
+                                      ? rel(Jt_full, Jt_e + Jt_i) : -1.0)
+                              << " transpose_lhs=" << lhs
+                              << " transpose_rhs=" << rhs
+                              << " transpose_rel=" << (den > 0.0 ? std::abs(lhs - rhs) / den : -1.0)
+                              << " jvp_fd_fallback=" << (fb_full || fb_e || fb_i ? 1 : 0)
+                              << " vjp_available="
+                              << (Jt_full.defined() && Jt_e.defined() && Jt_i.defined() ? 1 : 0)
+                              << std::endl;
+                    U_ref_stage_ = U_conv.detach().clone();
+                }
+
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SPLIT_IDENTITY")) {
+                    torch::NoGradGuard ng_split;
+                    const auto U_probe = U_conv.detach();
+                    const auto f_full = computeUnifiedRHS(U_probe, RhsMode::Full)
+                                            .detach().to(torch::kFloat64);
+                    const auto f_exp  = computeUnifiedRHS(U_probe, RhsMode::ExplicitOnly)
+                                            .detach().to(torch::kFloat64);
+                    const auto f_imp  = computeUnifiedRHS(U_probe, RhsMode::ImplicitOnly)
+                                            .detach().to(torch::kFloat64);
+                    const double n_full = f_full.norm().item<double>();
+                    const auto   resid  = f_full - f_exp - f_imp;
+                    std::cerr << "SDIRK3_SPLIT_IDENTITY stage=" << stage_id
+                              << " F_full=" << n_full
+                              << " F_explicit=" << f_exp.norm().item<double>()
+                              << " F_implicit=" << f_imp.norm().item<double>()
+                              << " defect_abs=" << resid.norm().item<double>()
+                              << " defect_rel="
+                              << (n_full > 0.0 ? resid.norm().item<double>() / n_full : -1.0)
+                              << " defect_absmax=" << resid.abs().max().item<double>()
+                              << std::endl;
+                    U_ref_stage_ = U_conv.detach().clone();
+                }
                 // PR 9F P1-3: birth snapshot of THIS stage's slow derivative, now
                 // finalized, for later stages' history sources (detached clone).
                 if (stage_operand_diag_on && k_slow[i].defined() &&
@@ -14148,6 +14642,29 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
         
         // Total U advection tendency (keep as coupled momentum)
+        // R10 follow-up: ABLATE vertical advection (opt-in, default OFF).
+        //
+        // rho(J_E) = 1.746 s^-1 gives a timescale of 0.57 s, which is the ACOUSTIC time for
+        // this grid, not an advective one -- and acoustic terms belong to the IMPLICIT
+        // partition. `ru_adv_z = wrf_vert_adv3(u, omega_u, ...)` advects by omega, the
+        // mass-coordinate vertical velocity, which is built from the divergence integral and
+        // therefore carries acoustic information into what is nominally a slow term.
+        //
+        // Zeroing adv_z and re-measuring rho is the A/B that decides it: if rho collapses, the
+        // stiffness rides in on omega; if rho survives, the acoustic timescale is somewhere
+        // else in the explicit partition and adv_z's dominance of the NORM was a different
+        // question from its dominance of the SPECTRUM. Placed here, after every branch that
+        // can define ru_adv_z, so one gate covers them all.
+        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_ADV_Z")) {
+            ru_adv_z = torch::zeros_like(ru_adv_z);
+            ru_adv_z_work_ = ru_adv_z;
+        }
+        // ... and the horizontal half, so the u-advection decomposition is complete.
+        // The stage-2 eigenvector is 99.8% ru, so this is where a decomposition of the
+        // right-half-plane part has to look first.
+        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_ADV_H")) {
+            ru_adv_horiz = torch::zeros_like(ru_adv_horiz);
+        }
         auto ru_tend_adv = ru_adv_horiz + ru_adv_z;  // WRF: ru_tend = advection tendency
         
         // Add coupled momentum tendency directly (no conversion to velocity)
@@ -14160,6 +14677,37 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             ucap.terms.advection.x        = ru_adv_x.detach().clone();
             ucap.terms.advection.y        = ru_adv_y.detach().clone();
             ucap.terms.advection.vertical = ru_adv_z.detach().clone();
+
+            // R10: the three directions as NUMBERS on the same stream as everything else.
+            //
+            // The `adv` site delta identified advection as the term carrying the whole 55x
+            // jump, but a lumped `adv` cannot say WHICH operator, and the file dump writes one
+            // artifact per call -- unusable when the question is how the split moves along a
+            // 9-point continuation. These tensors are already captured; only the norms were
+            // missing, and a norm on the same line as the lambda is what makes the comparison
+            // readable. FP64 before the reduction, per the same review.
+            auto n64 = [](const torch::Tensor& t) {
+                return t.defined() ? t.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+            };
+            auto m64 = [](const torch::Tensor& t) {
+                return t.defined()
+                    ? t.detach().to(torch::kFloat64).abs().max().item<double>() : -1.0;
+            };
+            const auto horiz = (ru_adv_x.defined() && ru_adv_y.defined())
+                ? (ru_adv_x + ru_adv_y) : torch::Tensor{};
+            std::cerr << "SDIRK3_ADV_SPLIT"
+                      << " adv_x=" << n64(ru_adv_x)
+                      << " adv_y=" << n64(ru_adv_y)
+                      << " adv_z=" << n64(ru_adv_z)
+                      << " horiz_sum=" << n64(horiz)
+                      // The ratio is the cross-model-comparable quantity: it cancels the index
+                      // extents, the coupled/decoupled convention and any common scaling.
+                      << " z_over_horiz="
+                      << (n64(horiz) > 0.0 ? n64(ru_adv_z) / n64(horiz) : -1.0)
+                      << " max_x=" << m64(ru_adv_x)
+                      << " max_y=" << m64(ru_adv_y)
+                      << " max_z=" << m64(ru_adv_z)
+                      << std::endl;
         }
         // 9F.D20: combined horizontal, to compare against WRF's advect_u split.
         // Captured as the SUM (not |adv_x|+|adv_y|) because WRF's horizontal block
@@ -14840,7 +15388,22 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
         
         // Total t advection tendency
-        t_tend = t_tend + t_adv_horiz + t_adv_z;
+        // R10 follow-up: ablate theta's advection terms independently. The dominant
+        // eigendirection is 46% theta with ph and mu identically zero, so the stiff mode lives
+        // in the thermodynamic equation and its momentum coupling -- and the u-terms trace only
+        // ever watched `ru`. Same A/B that showed ru_adv_z carries the NORM, not the SPECTRUM.
+        {
+            auto t_ah = t_adv_horiz;
+            auto t_az = t_adv_z;
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_ADV_Z")) {
+                t_az = torch::zeros_like(t_az);
+                t_adv_z_work_ = t_az;
+            }
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_ADV_H")) {
+                t_ah = torch::zeros_like(t_ah);
+            }
+            t_tend = t_tend + t_ah + t_az;
+        }
     }
 
     }  // end if (do_explicit) — Step 3 ADVECTION
@@ -21282,7 +21845,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
                 auto t_diff_v = compute_vertical_mixing_scalar(t, Kv_scalar, rdnw_tensor,
                                                                    rho, t_full, mu_full);
-                t_tend = t_tend + t_diff_v;
+                if (!wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V")) {
+                    t_tend = t_tend + t_diff_v;
+                }
 
                 // PARITY FIX 2025-12-13: Add vertical diffusion for ALL moist species like WRF's vertical_diffusion_s
                 // WRF loops over all moist scalars (qv, qc, qr, qi, qs, qg, etc.)
@@ -21614,7 +22179,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
                 auto t_diff_v = compute_vertical_mixing_scalar(t, Kv_scalar, rdnw_tensor,
                                                                    rho, t_full, mu_full);
-                t_tend = t_tend + t_diff_v;
+                if (!wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V")) {
+                    t_tend = t_tend + t_diff_v;
+                }
 
                 // PARITY FIX 2025-12-13: Add QV vertical diffusion with mix_full_fields/qv_base handling
                 // WRF's vertical_diffusion_s uses var_mix = qv - qv_base when mix_full_fields=false
@@ -21913,6 +22480,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto t_slice_f32 = t.slice(1, 0, nz_div).to(torch::kFloat32);
                 auto th_base_slice_f32 = th_base_.slice(1, 0, nz_div).to(torch::kFloat32);
                 auto t_full_for_compress = t_slice_f32 + th_base_slice_f32;
+            // R10 follow-up: `t_compress = -theta_full * div(u,v,w)` couples theta to ALL THREE
+            // momentum components -- exactly the shape of the dominant eigenvector (t 0.458,
+            // ru 0.310, rw 0.119, rv 0.113, ph and mu identically 0), which makes it the leading
+            // suspect for the 0.57 s timescale. Zeroing the shared factor removes the term on
+            // every branch of this path at once, instead of gating four separate add sites.
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_COMPRESS")) {
+                t_full_for_compress = torch::zeros_like(t_full_for_compress);
+            }
                 auto t_compress_f32 = -t_full_for_compress * div_3d_f32;
                 // Add only to the levels we computed (upper levels unchanged)
                 // Cast back to input dtype when adding to t_tend
@@ -21960,6 +22535,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto t_f32 = t.to(torch::kFloat32);
                 auto th_base_f32 = th_base_.to(torch::kFloat32);
                 auto t_full_for_compress = t_f32 + th_base_f32;
+            // R10 follow-up: `t_compress = -theta_full * div(u,v,w)` couples theta to ALL THREE
+            // momentum components -- exactly the shape of the dominant eigenvector (t 0.458,
+            // ru 0.310, rw 0.119, rv 0.113, ph and mu identically 0), which makes it the leading
+            // suspect for the 0.57 s timescale. Zeroing the shared factor removes the term on
+            // every branch of this path at once, instead of gating four separate add sites.
+            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_COMPRESS")) {
+                t_full_for_compress = torch::zeros_like(t_full_for_compress);
+            }
                 auto t_compress_f32 = -t_full_for_compress * div_3d_use;
                 // Cast back to input dtype when adding to t_tend
                 // HEVI inc3: split theta compressibility -> horizontal (k_slow) + vertical (k_fast).

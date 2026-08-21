@@ -27,6 +27,8 @@
 
 #include <cmath>
 #include <limits>
+#include <algorithm>
+#include <utility>
 #include <vector>
 
 #include "wrf_sdirk3_operator_contract.h"
@@ -78,6 +80,44 @@ inline torch::Tensor wrms_left_weight(const torch::Tensor& e_inv,
     if (!e_inv.defined() || !krylov_to_physical.defined()) return torch::Tensor{};
     if (e_inv.numel() != krylov_to_physical.numel()) return torch::Tensor{};
     return e_inv * krylov_to_physical.detach().to(e_inv.options()).reshape_as(e_inv);
+}
+
+// A layout is only a partition if it COVERS the vector exactly once.
+//
+// block_energy_shares() renormalises by the total it computed, so an overlapping block
+// (counted twice) or a gap (never counted) still yields shares summing to 1 and reads as a
+// clean attribution. Normalisation hides exactly the defect that would invalidate it, so the
+// partition has to be checked, not inferred from the shares looking sane.
+inline bool is_exact_partition(const StateLayout& layout, int64_t vector_size) {
+    if (layout.blocks.empty()) return false;
+    std::vector<std::pair<int64_t, int64_t>> spans;
+    spans.reserve(layout.blocks.size());
+    for (const auto& b : layout.blocks) {
+        if (b.size <= 0) return false;                      // empty block
+        if (b.start < 0 || b.start + b.size > vector_size) return false;
+        spans.emplace_back(b.start, b.start + b.size);
+    }
+    std::sort(spans.begin(), spans.end());
+    if (spans.front().first != 0) return false;             // leading gap
+    for (std::size_t i = 1; i < spans.size(); ++i) {
+        if (spans[i].first != spans[i - 1].second) return false;   // gap or overlap
+    }
+    return spans.back().second == vector_size;              // trailing tail uncovered
+}
+
+// A weight that is zero hides a block from the objective entirely; a negative one loses its
+// sign inside the norm; a non-finite one poisons the reduction. None of the three is visible
+// in a share that sums to 1.
+inline bool weights_are_positive_and_finite(const torch::Tensor& w) {
+    torch::NoGradGuard no_grad;
+    if (!w.defined() || w.numel() == 0) return false;
+    const auto w64 = w.detach().to(torch::kFloat64);
+    return torch::isfinite(w64).all().item<bool>() && (w64 > 0).all().item<bool>();
+}
+
+inline bool same_device_and_dtype(const torch::Tensor& a, const torch::Tensor& b) {
+    if (!a.defined() || !b.defined()) return false;
+    return a.device() == b.device() && a.scalar_type() == b.scalar_type();
 }
 
 // Per-block share of ||L r||^2. Shares sum to 1 when the total is positive.

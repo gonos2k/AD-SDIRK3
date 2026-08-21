@@ -21,12 +21,17 @@
 #include <torch/torch.h>
 #include <cmath>
 #include <cstdio>
+#include <limits>
+#include <utility>
 
 using wrf::sdirk3::RelativeResidual;
 using wrf::sdirk3::relative_residual;
 using wrf::sdirk3::wrms_left_weight;
 using wrf::sdirk3::block_energy_shares;
 using wrf::sdirk3::StateLayout;
+using wrf::sdirk3::is_exact_partition;
+using wrf::sdirk3::weights_are_positive_and_finite;
+using wrf::sdirk3::same_device_and_dtype;
 
 static int g_fail = 0;
 static int g_cases = 0;
@@ -181,11 +186,61 @@ static void contract_objective_share_coordinates() {
     check(std::fabs(s_D[0]      - s_wrms[0]) > 1e-6, "D share != stage-WRMS share");
 }
 
+// ---------------------------------------------------------------------------
+// P1-2  the shares renormalise, so the PARTITION has to be checked separately
+// ---------------------------------------------------------------------------
+// block_energy_shares() divides by the total it computed. An overlapping block is counted
+// twice and a gap is never counted, yet both still produce shares summing to 1 -- the
+// normalisation hides precisely the defect that would invalidate the attribution.
+static void contract_block_partition_validity() {
+    auto L = [](std::initializer_list<std::pair<int64_t,int64_t>> spans) {
+        StateLayout out;
+        for (auto [st, sz] : spans) out.blocks.push_back({"b", st, sz});
+        return out;
+    };
+    check(is_exact_partition(L({{0,4},{4,4}}), 8), "contiguous exact cover is a partition");
+    check(!is_exact_partition(L({{0,5},{4,4}}), 8), "OVERLAP is rejected");
+    check(!is_exact_partition(L({{0,3},{4,4}}), 8), "GAP is rejected");
+    check(!is_exact_partition(L({{0,4},{4,3}}), 8), "uncovered TAIL is rejected");
+    check(!is_exact_partition(L({{1,4},{5,3}}), 8), "leading gap is rejected");
+    check(!is_exact_partition(L({{0,4},{4,0}}), 8), "empty block is rejected");
+    check(!is_exact_partition(L({{0,4},{4,8}}), 8), "past-the-end block is rejected");
+    check(!is_exact_partition(StateLayout{}, 8), "an empty layout is not a partition");
+
+    // The defect the check exists to catch: an overlapping layout still sums to 1.
+    const auto bad = L({{0,5},{4,4}});
+    const auto r = torch::tensor({1.,1.,1.,1.,2.,2.,2.,2.}, torch::kFloat64);
+    const auto sh = wrf::sdirk3::block_energy_shares(bad, r, torch::Tensor{});
+    check_close(sh[0] + sh[1], 1.0, 1e-12,
+                "an OVERLAPPING layout still yields shares summing to 1 (why the check exists)");
+
+    // Weight validity: each of these is invisible in a normalised share.
+    using torch::tensor;
+    check(weights_are_positive_and_finite(tensor({1.0, 2.0}, torch::kFloat64)), "positive finite ok");
+    check(!weights_are_positive_and_finite(tensor({0.0, 2.0}, torch::kFloat64)),
+          "a ZERO weight hides its block entirely");
+    check(!weights_are_positive_and_finite(tensor({-1.0, 2.0}, torch::kFloat64)),
+          "a NEGATIVE weight loses its sign inside the norm");
+    check(!weights_are_positive_and_finite(
+              tensor({std::numeric_limits<double>::quiet_NaN(), 2.0}, torch::kFloat64)),
+          "a NaN weight poisons the reduction");
+    check(!weights_are_positive_and_finite(
+              tensor({std::numeric_limits<double>::infinity(), 2.0}, torch::kFloat64)),
+          "an Inf weight poisons the reduction");
+    check(!weights_are_positive_and_finite(torch::Tensor{}), "an undefined weight is not valid");
+
+    check(same_device_and_dtype(tensor({1.0}, torch::kFloat64), tensor({1.0}, torch::kFloat64)),
+          "same device and dtype");
+    check(!same_device_and_dtype(tensor({1.0}, torch::kFloat64), tensor({1.0f}, torch::kFloat32)),
+          "dtype mismatch is rejected");
+}
+
 int main() {
     torch::NoGradGuard ng;
     contract_metric_coordinate();
     contract_relative_residual_denominator();
     contract_objective_share_coordinates();
+    contract_block_partition_validity();
     std::printf("%s: %d cases, %d failures\n",
                 g_fail == 0 ? "PASS" : "FAIL", g_cases, g_fail);
     return g_fail == 0 ? 0 : 1;
