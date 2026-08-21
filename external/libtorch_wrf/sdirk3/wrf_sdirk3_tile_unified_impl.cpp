@@ -9553,8 +9553,20 @@ vertical_coefficients:
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_SPECTRUM") &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     const auto U0 = U_conv.detach().clone();
-                    auto F_exp_fn = [this](const torch::Tensor& x) {
-                        return computeUnifiedRHS(x, wrf::sdirk3::RhsMode::ExplicitOnly);
+                    // WHICH operator's spectrum. rho(J_E) does not govern the step: the tangent
+                    // of one step involves J_E and J_I together and they do not commute, so a
+                    // right-half-plane eigenvalue of J_E alone does not establish that the
+                    // additive method is unstable -- the implicit coupling can rotate or cancel
+                    // the mode. Measuring Full (= J_E + J_I) with the SAME Arnoldi is the direct
+                    // discriminator for whether the SPLIT creates the RHP modes or the
+                    // linearized dynamics already have them.
+                    const char* mode_env = std::getenv("WRF_SDIRK3_SPECTRUM_MODE");
+                    const bool spec_full = (mode_env != nullptr &&
+                                            std::string(mode_env) == "full");
+                    const auto spec_mode = spec_full ? wrf::sdirk3::RhsMode::Full
+                                                     : wrf::sdirk3::RhsMode::ExplicitOnly;
+                    auto F_exp_fn = [this, spec_mode](const torch::Tensor& x) {
+                        return computeUnifiedRHS(x, spec_mode);
                     };
                     bool fb = false, fb_any = false;
                     auto Jv = [&](const torch::Tensor& d) {
@@ -9627,7 +9639,13 @@ vertical_coefficients:
                     // real (RK3 limit 2.5) or imaginary (limit 1.73) -- which decides WHICH
                     // limit h*rho must be compared against.
                     if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_ARNOLDI")) {
-                        const int m = 24;
+                        // S2: m is a knob, because a spectrum claim needs an m-convergence
+                        // study and 24 was simply the first number tried.
+                        int m = 24;
+                        if (const char* mv = std::getenv("WRF_SDIRK3_ARNOLDI_M")) {
+                            const int parsed = std::atoi(mv);
+                            if (parsed >= 4 && parsed <= 256) m = parsed;
+                        }
                         std::vector<torch::Tensor> V;
                         auto H = torch::zeros({m + 1, m}, torch::kFloat64);
                         {
@@ -9641,12 +9659,20 @@ vertical_coefficients:
                             auto w = Jv(V[j]);
                             {
                                 torch::NoGradGuard ng_a;
-                                for (int k = 0; k <= j; ++k) {
-                                    const double hkj =
-                                        (V[k].detach().to(torch::kFloat64) *
-                                         w.detach().to(torch::kFloat64)).sum().item<double>();
-                                    H[k][j] = hkj;
-                                    w = w - static_cast<float>(hkj) * V[k];
+                                // DOUBLE Gram-Schmidt. One pass loses orthogonality on a
+                                // non-normal operator, and lost orthogonality manufactures Ritz
+                                // values that are properties of the basis rather than of J_E --
+                                // which is exactly what the previous m=24 single-pass run could
+                                // not rule out. The second pass is a correction, so its
+                                // coefficients are ADDED to H.
+                                for (int pass = 0; pass < 2; ++pass) {
+                                    for (int k = 0; k <= j; ++k) {
+                                        const double hkj =
+                                            (V[k].detach().to(torch::kFloat64) *
+                                             w.detach().to(torch::kFloat64)).sum().item<double>();
+                                        H[k][j] = H[k][j].item<double>() + hkj;
+                                        w = w - static_cast<float>(hkj) * V[k];
+                                    }
                                 }
                                 const double hn =
                                     w.detach().to(torch::kFloat64).norm().item<double>();
@@ -9667,6 +9693,7 @@ vertical_coefficients:
                         auto im_s = im.index_select(0, order);
                         auto mo_s = mod.index_select(0, order);
                         std::cerr << "SDIRK3_EXPLICIT_ARNOLDI stage=" << stage_id
+                                  << " op=" << (spec_full ? "J_full" : "J_E")
                                   << " m=" << m_used;
                         const int show = std::min<int>(8, m_used);
                         for (int k = 0; k < show; ++k) {
@@ -9700,6 +9727,33 @@ vertical_coefficients:
                                   << " min_re=" << min_re
                                   << " h_max_re=" << (dt_stage_ * max_re)
                                   << std::endl;
+                        // S1: per-pair Ritz residual |h_{m+1,m} * e_m^T y|. A Ritz value with
+                        // a large residual is a property of the truncation, not of the operator,
+                        // and the earlier run reported none -- so "RHP eigenvalues exist" could
+                        // not be separated from "the projection has not converged".
+                        {
+                            const double h_last = H[m_used][m_used - 1].item<double>();
+                            auto eig = torch::linalg_eig(Hm);
+                            auto Y = std::get<1>(eig);                 // right eigenvectors
+                            auto last_row = torch::abs(Y.index({m_used - 1, torch::indexing::Slice()}));
+                            auto rr = (std::abs(h_last) * last_row).to(torch::kFloat64);
+                            auto rr_s = rr.index_select(0, order);
+                            std::cerr << "SDIRK3_ARNOLDI_RITZRES stage=" << stage_id
+                                      << " m=" << m_used << " h_last=" << h_last;
+                            for (int k = 0; k < std::min<int>(6, m_used); ++k) {
+                                std::cerr << " res" << k << "=" << rr_s[k].item<double>()
+                                          << "/|lam|=" << mo_s[k].item<double>();
+                            }
+                            // S3: orthogonality actually achieved.
+                            auto Vm = torch::stack(std::vector<torch::Tensor>(
+                                V.begin(), V.begin() + m_used)).reshape({m_used, -1})
+                                .to(torch::kFloat64);
+                            auto G = Vm.matmul(Vm.t()) -
+                                     torch::eye(m_used, torch::kFloat64);
+                            std::cerr << " orth_loss=" << G.abs().max().item<double>()
+                                      << std::endl;
+                        }
+
                     }
 
                     torch::NoGradGuard ng_report;
@@ -9725,10 +9779,46 @@ vertical_coefficients:
                         auto sh = [&](const torch::Tensor& x) {
                             return tot > 0.0 ? e2(x) / tot : -1.0;
                         };
+                        // S4: is the dominant mode a BOUNDARY mode?
+                        //
+                        // The review's objection is that a raw packed random start samples
+                        // degrees of freedom the production update does not treat as free --
+                        // staggered endpoints, prescribed w at the lid and floor, boundary
+                        // geopotential -- so the operator measured may be J_E rather than
+                        // P J_E P. Rather than guess which DOF are active, measure where the
+                        // converged eigenvector actually lives: the energy fraction on the
+                        // FIRST and LAST index along each dimension, per variable. A mode that
+                        // is a projection artefact concentrates there; one that is physical
+                        // does not.
+                        auto edge_frac = [](const torch::Tensor& x) -> double {
+                            if (!x.defined() || x.dim() != 3) return -1.0;
+                            const auto x64 = x.detach().to(torch::kFloat64);
+                            const double tot = x64.pow(2).sum().item<double>();
+                            if (!(tot > 0.0)) return -1.0;
+                            auto edge = torch::zeros_like(x64);
+                            for (int64_t dim = 0; dim < 3; ++dim) {
+                                const int64_t n = x64.size(dim);
+                                if (n < 2) continue;
+                                edge.index_put_({torch::indexing::Slice(),
+                                                 torch::indexing::Slice(),
+                                                 torch::indexing::Slice()},
+                                                edge);   // no-op keeps the shape explicit
+                                auto first = x64.slice(dim, 0, 1);
+                                auto last  = x64.slice(dim, n - 1, n);
+                                edge.slice(dim, 0, 1).copy_(first);
+                                edge.slice(dim, n - 1, n).copy_(last);
+                            }
+                            return edge.pow(2).sum().item<double>() / tot;
+                        };
                         std::cerr << "SDIRK3_SPECTRUM_EIGENVECTOR stage=" << stage_id
                                   << " ru=" << sh(ev_u) << " rv=" << sh(ev_v)
                                   << " rw=" << sh(ev_w) << " ph=" << sh(ev_ph)
                                   << " t=" << sh(ev_t) << " mu=" << sh(ev_mu)
+                                  << " edge_ru=" << edge_frac(ev_u)
+                                  << " edge_rv=" << edge_frac(ev_v)
+                                  << " edge_rw=" << edge_frac(ev_w)
+                                  << " edge_ph=" << edge_frac(ev_ph)
+                                  << " edge_t=" << edge_frac(ev_t)
                                   << std::endl;
                     }
                     // SELF-VALIDATING A/B.
@@ -9751,6 +9841,7 @@ vertical_coefficients:
                     // is checking is not a check.
                     const auto prev_prec = std::cerr.precision(14);
                     std::cerr << "SDIRK3_EXPLICIT_SPECTRUM stage=" << stage_id
+                              << " op=" << (spec_full ? "J_full" : "J_E")
                               << " F_E_at_U0=" << fE_norm
                               << " jvp_fd_fallback=" << (fb_any ? 1 : 0)
                               << " homogeneity_rel=" << hom_rel

@@ -971,3 +971,66 @@ does not, over 1.2 decades — that is suggestive, not asymptotic.
 established: the `lambda^0.70` argument was wrong (it fit a function that does not vanish at 0),
 and settling the question requires an FP64 state path, not merely FP64 accumulation — the binding
 constraint is the state's own precision, not the reduction's.
+
+## S1–S5. The Arnoldi measurement, hardened — and the split does NOT create the RHP modes
+
+The review's objections to the `m=24` single-pass run were all actionable, and all four are now
+addressed. `WRF_SDIRK3_ARNOLDI_M` selects `m`; the Gram-Schmidt is doubled; per-pair Ritz
+residuals and `||V^T V - I||` are reported; and the operator is selectable
+(`WRF_SDIRK3_SPECTRUM_MODE=explicit|full`).
+
+### S1–S3: convergence, at stage 2
+
+| m | `\|lambda_0\|` | top-pair Ritz residual (relative) | `orth_loss` |
+|---|---|---|---|
+| 24 | 223.6 | 0.049 | 1.0e-07 |
+| 48 | 224.1 | **0.0073** | 9.2e-08 |
+| 96 | 224.4 | 0.0112 | 9.9e-08 |
+
+`|lambda_0|` moves **0.4% over m = 24 -> 96**, the top-pair residual falls from 5% to ~1%, and
+double Gram-Schmidt holds orthogonality at 1e-7 (FP32 vectors, FP64 Gram matrix). The dominant
+pair is converged; the `m=24` single-pass run was not wrong, but it could not have shown that.
+
+### S4: it is NOT a boundary mode
+
+Edge-energy fraction of the converged eigenvector (first and last index along each dimension)
+against the uniform-random baseline `1 - (1-2/40)(1-2/64)(1-2/80) = 0.1027` for this grid
+(`e_we=41, e_sn=81, e_vert=65`):
+
+| m | `edge_ru` | ratio to baseline |
+|---|---|---|
+| 24 | 0.1534 | 1.49 |
+| 48 | 0.1240 | 1.21 |
+| **96** | **0.1047** | **1.02** |
+
+At convergence the mode's edge fraction is what a uniformly distributed vector would have. The
+mild edge bias at `m=24` was truncation contamination and it disappears as `m` grows — so the
+RHP mode is **not** an artefact of sampling halo / staggered-endpoint degrees of freedom, and
+`P J_E P` versus `J_E` is not what is producing it.
+
+### S5 (substance): `J_full` has LARGER right-half-plane eigenvalues than `J_E`
+
+The objection was that `rho(J_E)` cannot decide the additive method because `J_E` and `J_I` do
+not commute and the implicit coupling might cancel the mode. Measured, same Arnoldi, `m=48`:
+
+| stage | operator | `n_rhp` | `max_re` | `min_re` | `ritz0` | rel. residual |
+|---|---|---|---|---|---|---|
+| 1 | `J_E` | 26/48 | 1.764 | -1.327 | (+1.764, 0) | 0.0029 |
+| 1 | `J_full` | 27/48 | **73.09** | -1.341 | (+73.09, 0) | 0.205 (**not converged**) |
+| 2 | `J_E` | 28/48 | 169.8 | -121.0 | (+119.4, -189.7) | 0.0082 |
+| 2 | **`J_full`** | 25/48 | **470.8** | -450.7 | **(+470.8, 0)** | 0.0098 |
+
+**The implicit part does not cancel the right-half-plane content — it increases it**, 169.8 ->
+470.8 at stage 2 on a converged pair. Roughly half the Ritz values are right-half-plane for
+both operators at both stages (25–28 of 48).
+
+So **the RHP modes are not created by the explicit/implicit split.** They are present in the
+full linearized RHS at these states, and more strongly. That removes "the partition manufactures
+the instability" as an explanation and points the question back at the STATE — which the
+stage-2 solver determines, the causal path already established.
+
+**Still open, and not claimed:** this is `J_full`, the full RHS Jacobian, not `D(Phi_h)`, the
+one-step tangent through the implicit solves. A growing mode of the linearized dynamics is not
+by itself a scheme defect — an A-stable implicit step gives bounded amplification of a mode the
+true linearized solution amplifies. The stage-1 `J_full` value (+73.09) has a 20% Ritz residual
+and one isolated near-top value, so it is reported but not relied on.

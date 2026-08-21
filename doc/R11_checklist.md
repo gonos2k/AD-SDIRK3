@@ -22,11 +22,13 @@
 - [ ] D3  separate directions: the Y_2-Y_1 direction, random, interior-only, boundary-only
 
 ## P0-2  the RHP spectrum needs convergence evidence
-- [ ] S1  Ritz residual |h_{m+1,m} e_m^T y| per pair
-- [ ] S2  m = 24, 48, 96 convergence; >=3 deterministic seeds
-- [ ] S3  reorthogonalization (double MGS/DGKS) + ||V^T V - I||
-- [ ] S4  active-domain projection P J_E P, not raw J_E (halo / boundary / staggered endpoints)
-- [ ] S5  full one-step IMEX tangent D(Phi_h), not J_E alone -- J_E and J_I do not commute
+- [x] S1  Ritz residual |h_{m+1,m} e_m^T y| per pair
+- [x] S2  m = 24, 48, 96 convergence; >=3 deterministic seeds
+- [x] S3  reorthogonalization (double MGS/DGKS) + ||V^T V - I||
+- [x] S4  active-domain projection P J_E P, not raw J_E (halo / boundary / staggered endpoints)
+- [~] S5  PARTIAL: J_full measured with the same Arnoldi and has LARGER RHP eigenvalues than
+          J_E (470.8 vs 169.8 at stage 2, converged) -- so the SPLIT does not create them.
+          D(Phi_h), the one-step tangent through the implicit solves, remains unmeasured.
 - [ ] S6  np = 1,2,4 comparison
 
 ## P0-3  hidden dt authorities beyond dt_stage_
