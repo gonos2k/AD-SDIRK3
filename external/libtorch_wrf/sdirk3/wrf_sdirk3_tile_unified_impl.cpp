@@ -9865,6 +9865,93 @@ vertical_coefficients:
                     U_ref_stage_ = U_conv.detach().clone();
                 }
 
+                // ============================================================
+                // R11 P0-1: DIRECTIONAL DIFFERENTIABILITY, on the right function
+                // ============================================================
+                // The retracted claim fit ||F_E(U_0 + lambda d)|| ~ C lambda^0.70 and read the
+                // sub-unit exponent as an unbounded derivative. That fit is on the wrong
+                // function: ||F_E(U_0)|| = 1.124e6, not 0, while C lambda^0.70 -> 0, so the form
+                // cannot represent the function near the origin. A finite-interval slope of a
+                // NORM also cannot decide differentiability of a VECTOR field -- two fields can
+                // rotate while the norm moves smoothly, and cancellation can produce any
+                // exponent.
+                //
+                // The quantity that decides it is the Taylor remainder against the true JVP:
+                //
+                //   r1(e) = ||F(U+e d) - F(U) - e J d|| / max(||dF||, e||J d||)     forward
+                //   r2(e) = ||F(U+e d) - F(U-e d) - 2 e J d|| / (2 e ||J d||)       central
+                //
+                // Differentiable => r1 = O(e) and r2 = O(e^2). Non-differentiable => r1 stays
+                // O(1) as e -> 0. J d comes from the SAME verified forward-mode dual used
+                // everywhere else, so this compares the operator against its own derivative.
+                //
+                // realized_frac is on every row because the state is FP32: it reports how much
+                // of the intended perturbation actually landed, ||(U+e d) - U|| / (e ||d||).
+                // Once that departs from 1 the remainder is measuring rounding, not curvature,
+                // and a row that cannot say so is the same class of defect as an ablation arm
+                // that removed nothing.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_DIRECTIONAL_DERIVATIVE") &&
+                    k_slow[i].defined() && k_slow[i].numel() > 0) {
+                    const auto U0d = U_conv.detach().clone();
+                    auto F_exp_d = [this](const torch::Tensor& x) {
+                        return computeUnifiedRHS(x, wrf::sdirk3::RhsMode::ExplicitOnly);
+                    };
+                    // Two directions: the one the continuation walked (U_conv - U_stage, i.e.
+                    // what the implicit solve moved along) and a random one, because a single
+                    // direction cannot separate "this direction is special" from "the operator
+                    // is rough everywhere".
+                    std::vector<std::pair<const char*, torch::Tensor>> dirs;
+                    dirs.emplace_back("implicit_step", (U_conv.detach() - U_stage.detach()));
+                    dirs.emplace_back("random", torch::randn_like(U0d));
+                    for (auto& named : dirs) {
+                        auto d = named.second;
+                        double dn;
+                        {
+                            torch::NoGradGuard ng;
+                            dn = d.detach().to(torch::kFloat64).norm().item<double>();
+                            if (!(dn > 0.0)) continue;
+                            d = d / static_cast<float>(dn);      // unit direction
+                        }
+                        bool fbd = false;
+                        const auto Jd = wrf::sdirk3::compute_jvp_fwad_or_fd(
+                            F_exp_d, U0d, d, 0, 0.0f, &fbd);
+                        torch::NoGradGuard ng_meas;
+                        const auto F0d = F_exp_d(U0d).detach().to(torch::kFloat64);
+                        const auto Jd64 = Jd.detach().to(torch::kFloat64);
+                        const double Jdn = Jd64.norm().item<double>();
+                        const auto d64 = d.detach().to(torch::kFloat64);
+                        for (int k = 2; k <= 16; k += 2) {
+                            const double e = std::pow(2.0, -k);
+                            const auto Up = U0d + static_cast<float>(e) * d;
+                            const auto Um = U0d - static_cast<float>(e) * d;
+                            // How much of the intended step actually landed in FP32.
+                            const double realized =
+                                (Up.to(torch::kFloat64) - U0d.to(torch::kFloat64))
+                                    .norm().item<double>() / e;
+                            const auto Fp = F_exp_d(Up).detach().to(torch::kFloat64);
+                            const auto Fm = F_exp_d(Um).detach().to(torch::kFloat64);
+                            const auto dF = Fp - F0d;
+                            const double dFn = dF.norm().item<double>();
+                            const double r1_num = (dF - e * Jd64).norm().item<double>();
+                            const double r1_den = std::max(dFn, e * Jdn);
+                            const double r2_num = (Fp - Fm - 2.0 * e * Jd64).norm().item<double>();
+                            const double r2_den = 2.0 * e * Jdn;
+                            std::cerr << "SDIRK3_DIRDERIV stage=" << stage_id
+                                      << " dir=" << named.first
+                                      << " eps=" << e
+                                      << " realized_frac=" << realized
+                                      << " Jd_norm=" << Jdn
+                                      << " dF_norm=" << dFn
+                                      << " dF_over_eJd=" << (Jdn > 0.0 ? dFn / (e * Jdn) : -1.0)
+                                      << " r1=" << (r1_den > 0.0 ? r1_num / r1_den : -1.0)
+                                      << " r2=" << (r2_den > 0.0 ? r2_num / r2_den : -1.0)
+                                      << " jvp_fd_fallback=" << (fbd ? 1 : 0)
+                                      << std::endl;
+                        }
+                    }
+                    U_ref_stage_ = U_conv.detach().clone();
+                }
+
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SPLIT_IDENTITY")) {
                     torch::NoGradGuard ng_split;
                     const auto U_probe = U_conv.detach();

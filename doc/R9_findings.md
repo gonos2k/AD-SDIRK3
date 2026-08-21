@@ -350,7 +350,10 @@ scaling says the term stops dominating only near dt ~ 15 s.
 
 ---
 
-# R10 — the implicit solve IS in the causal path, and the explicit response is non-differentiable
+# R10 — the implicit solve IS in the causal path; the explicit response is strongly nonlinear
+
+> (Section title corrected 2026-08-21: "non-differentiable" was not established — see the
+> retraction below and doc/R11_checklist.md.)
 
 No independent review has been run (`/code-review ultra` is user-only).
 
@@ -426,9 +429,17 @@ evaluating the production slow RHS at each point:
 `F_E ~ C lambda^0.70` fits the tail (at lambda=0.125 the fit gives 6.68e7 against 6.73e7
 measured).
 
-**An exponent below 1 means the derivative is unbounded at lambda = 0.** This is not a
-cascade — a cascade is superlinear. It is the signature of a non-differentiable term: a
-`sqrt`, an `abs`, a `max(.,floor)`, or a denominator that changes magnitude sharply.
+~~**An exponent below 1 means the derivative is unbounded at lambda = 0.**~~
+
+**RETRACTED 2026-08-21 (review R11).** The fit is on the wrong function. `||F_E(U_0)|| = 1.124e6`,
+not 0, while `C lambda^0.70 -> 0` as `lambda -> 0`, so that form cannot represent the function
+near the origin at all. An exponent read off `lambda in [0.125, 1]` is a finite-interval slope
+of a NORM; it does not bound a derivative at 0, and a scalar norm cannot decide
+differentiability of a vector field regardless — two fields can rotate while the norm moves
+smoothly, and term cancellation can produce any exponent.
+
+What the data supports: **strong nonlinear, precision-sensitive growth along `Y_1 -> Y_2`.**
+The test that decides it is the Taylor remainder against the true JVP.
 
 The state itself moves smoothly across the whole segment (`U_min` -1.06e4 -> -2.54e4,
 `U_absmax` 1.99e4 -> 2.54e4, monotone) and there are **zero** non-finite values anywhere, so
@@ -446,7 +457,7 @@ growth are the same sub-linear response to displacement.
 ## What this leaves
 
 The dominant term is explicit, but the state it is evaluated at is set by the implicit solve,
-and the response to displacement is non-differentiable at the base state. The next measurement
+and the response to displacement is strongly nonlinear near the base state. The next measurement
 is therefore the review's P0-4: decompose `F_E` into its operator terms at
 `lambda in {0, 0.125}` and identify which term carries the 60x — that is where a `sqrt`/`abs`/
 floor/denominator would show itself.
@@ -843,9 +854,18 @@ amplifies.
 `rho`, presuming an imaginary spectrum. The spectrum is not imaginary and the dominant
 eigenvalues are in the right half-plane.
 
-**Established, numerically:** the explicit partition's linearized operator has right-half-plane
-eigenvalues at BOTH measured states. This is not a CFL/timestep-size problem, and it is not
-addressed by sub-cycling or by a smaller `dt`.
+**Established, numerically:** an `m=24` Arnoldi projection of the explicit Jacobian, from one
+random start with a single Gram-Schmidt pass, produced Ritz values with large positive real
+parts at both measured states.
+
+**NOT established (review R11); the stronger wording is retracted.** No Ritz residuals, no `m`
+study, no reorthogonalization and one seed, so convergence of those pairs is unknown. The start
+vector is a raw packed random vector, so the operator sampled is `J_E` and not the
+active-domain `P J_E P` — halo, boundary and staggered-endpoint degrees of freedom are in it.
+And `rho(J_E)` does not govern the step: the one-step tangent is `D(Phi_h)`, and `J_E` and
+`J_I` do not commute. A right-half-plane eigenvalue of the frozen linearized explicit operator
+is also not by itself a numerical defect — the exact solution of `y' = lambda y` with
+`Re lambda > 0` grows too.
 
 **Caveat, stated not buried:** Ritz values from a 24-dimensional Krylov space approximate the
 OUTER spectrum and their convergence is not established here; and `exp(h Re lambda)` describes
@@ -895,3 +915,59 @@ own structure is the alternative: `J_E` is a sum of per-term Jacobians, so the R
 could be attributed by measuring the spectrum of each `J_term` directly — the same Arnoldi, run
 on a JVP restricted to one term — rather than by subtracting terms from the total and hoping
 the remainder shifts.
+
+---
+
+# R11 — differentiability, measured on the right function
+
+## D1/D2. The Taylor remainder, and why FP32 cannot settle it
+
+`r1(e) = ||F(U+e d) - F(U) - e J d|| / max(||dF||, e||J d||)` with `J d` from the verified
+forward-mode dual (`jvp_fd_fallback = 0` on every row). Differentiable => `r1 = O(e)`.
+
+`realized_frac = ||(U + e d) - U|| / (e ||d||)` is on every row because the state is FP32: it
+says how much of the intended perturbation actually landed.
+
+| stage / dir | eps | realized | dF/(e Jd) | r1 | r2 |
+|---|---|---|---|---|---|
+| 1 / random | 0.25 | **1.016** | 1.000 | **0.0149** | 0.00087 |
+| 1 / random | 0.0625 | **0.952** | 1.000 | **0.0049** | 0.0025 |
+| 1 / random | 0.0156 | 0.913 | 1.000 | 0.0127 | 0.0099 |
+| 1 / random | 1.5e-5 | 0.668 | 0.938 | 0.347 | 0.347 |
+| 2 / implicit_step | 0.25 | **1.008** | 1.043 | **0.249** | 0.170 |
+| 2 / implicit_step | 0.0625 | **0.982** | 1.411 | **0.823** | 0.684 |
+| 2 / implicit_step | 0.0156 | **1.013** | 2.182 | **0.876** | 1.632 |
+| 2 / implicit_step | 9.8e-4 | 0.019 | 0.098 | 1.005 | 1.001 |
+| 2 / implicit_step | 1.5e-5 | **0.001** | 2.1e-4 | 1.000 | 1.000 |
+| 2 / random | 0.25 | 1.016 | 1.001 | 0.0242 | 0.015 |
+| 2 / random | 1.5e-5 | 0.652 | 14.23 | 0.997 | 9.44 |
+
+### `r1 -> 1` at small eps is an ARTEFACT, and the algebra says so
+
+`r1 = ||dF - e Jd|| / max(||dF||, e||Jd||)`. If the perturbation does not land, `dF -> 0` and
+the ratio tends to `||e Jd|| / ||e Jd|| = 1` **identically** — independent of any property of
+the operator. Every row with `realized_frac << 1` reads `r1 = 1.00` for that reason and carries
+no information. Without `realized_frac` those rows would have looked like a clean demonstration
+of non-differentiability.
+
+### The only rows that mean anything
+
+`realized_frac` within 5% of 1 holds on `eps in [0.0156, 0.25]` — **1.2 decades**:
+
+| dir | eps 0.25 -> smaller | r1 |
+|---|---|---|
+| stage 1 / random | 4x smaller | 0.0149 -> 0.0049, **falls 3.0x** — consistent with `O(eps)` |
+| stage 2 / implicit_step | 16x smaller | 0.249 -> 0.876, **RISES 3.5x** — not `O(eps)` |
+
+### Verdict (D2)
+
+**INCONCLUSIVE at FP32 state precision, and the reason is measured rather than argued.** The
+asymptotic regime that decides differentiability needs `eps -> 0`, and below `eps ~ 1e-2` in the
+implicit-step direction FP32 has already destroyed the perturbation (`realized_frac` 1.013 ->
+0.019 -> 0.001). One direction behaves like a differentiable field over the clean window and one
+does not, over 1.2 decades — that is suggestive, not asymptotic.
+
+**So "non-differentiable" is not re-established by the correct test either.** What is
+established: the `lambda^0.70` argument was wrong (it fit a function that does not vanish at 0),
+and settling the question requires an FP64 state path, not merely FP64 accumulation — the binding
+constraint is the state's own precision, not the reduction's.
