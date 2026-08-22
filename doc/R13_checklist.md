@@ -29,7 +29,7 @@ not quietly re-scoped.
 
 ## Phase 0 — typed results and validity fields (no model run needed)
 
-- [ ] **A1 — a failed step must not report a tangent.** (review P0-1)
+- [x] **A1 — a failed step must not report a tangent.** (review P0-1)
       VERDICT: **CONFIRMED, and worse than stated.** `wrf_sdirk3_tile_unified_impl.cpp:4017`
       prints `worst_agree=6.4e-05  (the central difference converged and D(Phi_h).v IS a
       directional derivative)` without ever reading `getLastStepOutcomeCode()`. The
@@ -41,7 +41,7 @@ not quietly re-scoped.
       still print as an observation; it may not print as a finding.
       GATE: `Failed_Step_Map_Is_Invalid_Contract`.
 
-- [ ] **A2 — a JVP that fell back to FD is not a forward-mode tangent.** (review P0-5)
+- [x] **A2 — a JVP that fell back to FD is not a forward-mode tangent.** (review P0-5)
       VERDICT: **CONFIRMED.** `compute_jvp_fwad_or_fd` reports `used_fd_fallback` and a
       `fallback_reason` (R12 W1 added the reason), and a global counter exists, but nothing
       *invalidates a verdict* on it — a spectrum computed on an FD operator prints the same
@@ -51,7 +51,7 @@ not quietly re-scoped.
       false on FD fallback, on a non-complete arm, and on a reference-digest mismatch.
       GATE: `JVP_Fallback_Invalidates_Verdict_Contract`.
 
-- [ ] **A3 — `.item()` outside `NoGradGuard` in the JVP helper.** (not in the review)
+- [x] **A3 — `.item()` outside `NoGradGuard` in the JVP helper.** (not in the review)
       VERDICT: **NEW — found during this inspection, and it is a hard-constraint violation.**
       `wrf_sdirk3_jvp_fwad_or_fd.h` computes the FD epsilon as
       `u.norm().to(torch::kCPU).item<double>()` at **three** sites: the
@@ -62,13 +62,13 @@ not quietly re-scoped.
       FIX: one `NoGradGuard`-scoped epsilon helper, called from all three.
       GATE: covered by the existing AD contracts + a grep gate in CI.
 
-- [ ] **A4 — the probe recursion latch is not exception-safe.** (review P0-2, first half)
+- [x] **A4 — the probe recursion latch is not exception-safe.** (review P0-2, first half)
       VERDICT: **CONFIRMED.** `inside_step_map_probe` (`:3909`) is a raw `thread_local bool`
       set true, cleared manually after the arms. If `unifiedStep` throws inside an arm it
       stays true for the life of the thread and every later probe silently no-ops.
       FIX: RAII latch.
 
-- [ ] **A5 — the stage-reference probe leaks global config on throw.** (review P0-3, aside)
+- [x] **A5 — the stage-reference probe leaks global config on throw.** (review P0-3, aside)
       VERDICT: **CONFIRMED.** `wrf_sdirk3_newton_solver.cpp:10443` mutates nine fields of
       `g_sdirk3_config` (budgets, tolerances, warm start) and restores them ~50 lines later
       by hand. Any exception from `solve_stage_impl` leaves the *production* solver running
@@ -79,7 +79,7 @@ not quietly re-scoped.
 
 ## Phase 1 — probe isolation (observer, not intervention)
 
-- [ ] **B1 — the one-step arms share the live solver.** (review P0-2)
+- [~] **B1 — the one-step arms share the live solver.** (review P0-2)
       VERDICT: **CONFIRMED.** All four tangent arms call `unifiedStep` on `this`, so each
       arm starts from the solver state the previous arm left: warm-start cache, hopeless
       streak, trust radius, preconditioner fallback latch, `U_ref_stage_`. The record admits
@@ -93,7 +93,7 @@ not quietly re-scoped.
       closed when the fingerprint moves. Full fresh-solver-per-arm is recorded as the
       target and its cost assessed; a separate-process harness is the fallback.
 
-- [ ] **B2 — no stage-2 reference is certified.** (review P0-3)
+- [x] **B2 — no stage-2 reference is certified.** (review P0-3)
       VERDICT: **CONFIRMED.** Two arms, `ref_agree=0.2842` against `rel_err=0.7371` — 2.6×
       separation, so these are two unconverged solves being differenced (R12 R4 already
       says so). Both arms run on the live `pImpl`, and neither a residual-decrease nor an
@@ -104,7 +104,7 @@ not quietly re-scoped.
       exists only in R12's prose, not in the code).
       GATE: `Stage_Reference_Certification_Contract`.
 
-- [ ] **B3 — diagnostics must be provably non-interfering.** (review P1-3)
+- [x] **B3 — diagnostics must be provably non-interfering.** (review P1-3)
       VERDICT: **CONFIRMED, and it is the load-bearing one.** `ScopedProbeState` restores two
       members and *reports* (`SDIRK3_PROBE_MUTATED`) what it could not — which is a real
       improvement over a snapshot list, but it is a report, not a gate, and the fingerprint
@@ -118,7 +118,7 @@ not quietly re-scoped.
 
 ## Phase 2 — what the AD graph actually differentiates
 
-- [ ] **C1 — primal and operational tangents are different models.** (review P0-4)
+- [x] **C1 — primal and operational tangents are different models.** (review P0-4)
       VERDICT: **CONFIRMED.** `imex_slow_in_tangent` is 0 at runtime (R12 W1), so
       `compute_k_slow` detaches the slow channel: the forward integrates `F_I + F_E`, the
       tangent differentiates `≈ J_I`. For exact 4D-Var that is not an approximation, it is a
@@ -157,7 +157,7 @@ not quietly re-scoped.
       halo > 0, all three staggers, synthetic `x = 1e6·i + 1e3·j + k`).
       GATE: `Memory_Tile_Offset_Contract`. → moved to F1.
 
-- [ ] **D2 — the global-norm harness cannot tell two timesteps apart.** (review P1-2)
+- [x] **D2 — the global-norm harness cannot tell two timesteps apart.** (review P1-2)
       VERDICT: **CONFIRMED, with one mitigation the review missed.** `parse()` sums *every*
       record in a log with no timestep grouping — but the domain-count check catches a
       two-timestep log, because the counts then come out at 2× the domain and it exits 2.
@@ -183,7 +183,7 @@ not quietly re-scoped.
 
 ## Phase 4 — the record itself
 
-- [ ] **E1 — the manifest parser silently overwrites duplicates.** (review P1-1)
+- [x] **E1 — the manifest parser silently overwrites duplicates.** (review P1-1)
       VERDICT: **CONFIRMED.** `sdirk3_manifest_diff.py` does `stages[stage] = fields` and
       documents it as "last step wins". With retries, several Newton iterations, several
       timesteps or several tiles, two arms can be compared at *different occurrences* of the
@@ -197,7 +197,7 @@ not quietly re-scoped.
 
 ## Phase 5 — CI
 
-- [ ] **F1 — the new contracts, and the ratchets they trip.**
+- [x] **F1 — the new contracts, and the ratchets they trip.**
       Adding a ctest trips three gates at once in this repo (5 prior recurrences):
       `.github/ci/expected_ctest_names.txt` (exact set), the README `N-test CTest` claim
       derived from it, and — if a header is installed — `expected_install_manifest.txt`.
@@ -227,3 +227,91 @@ not quietly re-scoped.
 | Global norm | exact ownership union, no overlap/gap | open (D2) |
 | Observer | ON/OFF ordered digest and outcome identical | open (B3) |
 | Production | no sentinel, no FD fallback, no uncertified reference | **NO-GO** |
+
+
+---
+
+## Closeout — what was done, and what each item cost
+
+Commits on `agent/r13-step-tangent-authority`, ctest 57/58 (`Core_Archive_MakeParity`
+needs the Make archive, which this worktree does not build). Inventory, README count,
+install manifest, the from_blob ratchet and the live stage-operand self-test (56/56) all
+verified locally before pushing, per the five prior recurrences of the count-ratchet trap.
+
+    7a77e50  fix: a probe may not report a verdict its preconditions do not support
+    540477f  test: an exact partition, and a record that can be told from its neighbour
+    ab8f5aa  measure: what the adjoint drops, measured rather than derived
+    0a3d519  fix: the arms of a probe must start from the same solver state
+
+Eight new gates, 55 -> 58 registered tests (two of them the offline comparators, which had
+never been run by any CI job despite R12 reporting them verified):
+
+    Failed_Step_Map_Is_Invalid_Contract
+    JVP_Fallback_Invalidates_Verdict_Contract
+    Memory_Tile_Offset_Contract
+    Global_Ownership_Overlap_Gap_Contract
+    Manifest_Duplicate_Fail_Contract
+    Operational_Primal_Tangent_Contract
+    Stage_Reference_Certification_Contract
+    Diagnostic_Observer_Noninterference_Contract
+
+### Three findings the review did not contain
+
+1. **`.item()` outside `NoGradGuard`, three sites** (A3). The guard in
+   `compute_jvp_fwad_or_fd` is declared inside the `try` block, so it is already destroyed
+   when a `catch` body runs — and both fallback paths, plus the `DNWP_DISABLE_FWAD` branch,
+   compute their epsilon with an unguarded `.item()`. The code reads as guarded. It runs on
+   the path taken when forward-mode AD has just failed.
+
+2. **A finite difference cannot see a `detach()`** (C1, and it is the reason A2 matters).
+   FD perturbs the input and evaluates primal values; `detach()` changes no primal value. So
+   an FD quotient of `F_I + detach(F_E)` returns `(J_I + J_E)v` while the true operational
+   tangent is `J_I v`. An FD fallback on this graph does not degrade the operator, it
+   **replaces** it, and the discrepancy is the entire dropped channel. Measured in the
+   contract: fwAD agrees with `Av` to 1e-12, FD agrees with `(A+B)v` to 1e-6. Corollary
+   worth keeping: **FD is not an oracle for a partially-detached tangent** — an FD check
+   that passes is evidence the detachment is absent.
+
+3. **The two offline comparators were never executed by CI** (D2/E1). R12 C7 and R12 R2
+   both report synthetic verification; no job invoked either script. Both are ctest targets
+   now, and registering them is how the duplicate-key and count-sum defects surfaced.
+
+### Where the review over- or under-read
+
+- **P0-6 was a disjunction the review could not close** and the code turned out correct:
+  Fortran passes the memory base, the adapter slices the tile at `its-ims` first. The work
+  was a contract, not a fix (D1).
+- **P0-2's "same input, same output proves nothing"** is right, but not for the stated
+  reason: R12 *did* measure bitwise agreement — on a run where every arm returned its
+  input, so idempotence was satisfied trivially.
+- **P1-2 understated the mitigation and correctly stated the real defect.** A multi-timestep
+  log already failed closed (counts came out at 2x the domain); what genuinely could not be
+  caught was overlap-plus-gap, which sums correctly.
+- **P0-1 understated the severity.** The `SDIRK3_STEP_MAP_ADVANCE` record did say "NO-OP",
+  but the TANGENT record — the one carrying a verdict — asserted a directional derivative
+  and never read the outcome code.
+
+### Still open, and why
+
+- **[~] B1 full arm isolation.** Arms now restore the Newton solver's carried state and the
+  record fails closed via `arms_isolated` when the digest moves. Not covered: preconditioner
+  internals and any cached linearization. Fresh-solver-per-arm or separate processes remain
+  the target; the honest statement today is "more independent than shared, less than
+  separate processes", and the record says which.
+- **[~] C2 full explicit-RHS decomposition.** Needs an explicit pass at stage >= 2. R12 R3b
+  measured that as unreachable in an aborting run — the run performs exactly one explicit
+  evaluation, at stage 1, where `w == 0`. Blocked on the same forward.
+- **[B] D3 np>1.** Refused before any communicator state is touched
+  (`module_implicit_sdirk3.F:925`). Unblocking it is a change to the solve — establishing
+  stage-halo correctness — not to the harness. The harness is ready.
+- **[B] The successful-step family.** `Successful_Step_JVP_FD_Contract`,
+  `Successful_Step_VJP_Dot_Contract` and the observation-space gradient check all require a
+  step that completes. None exists at any dt tried. What R13 guarantees instead is that
+  their absence is now *visible*: every relevant record emits `step_map_valid=0
+  reason=noncomplete_arm` rather than a converged-looking number.
+
+### The standing verdict, unchanged
+
+Exact 4D-Var and MPI production remain **NO-GO**, for the reasons the review gives. R13
+did not move either; it made the gap between what is measured and what is claimed
+mechanical rather than editorial.
