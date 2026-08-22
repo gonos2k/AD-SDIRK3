@@ -25,7 +25,7 @@ The differentiable implicit solve converges at small timesteps; making it conver
 stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
 it is **unresolved**.
 
-Verification is an **exact 56-test CTest inventory** pinned by
+Verification is an **exact 58-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
@@ -209,7 +209,7 @@ with a stable marker **before** any communicator/halo state mutation or solve:
 - **AD halo + multi-tile** — refused pre-solve with `SDIRK3_MPI_MULTI_TILE_UNSUPPORTED`.
 - **MPI halo primitive** — verified independently of the solver at np=1/2/4: forward, adjoint,
   packed AD+BC transpose, and the runtime fail-close contracts
-  (`MPI_Halo_Contract_np{1,2,4}` + `MPI_Runtime_Contract_np{1,2,4}` in the 56-test CTest suite).
+  (`MPI_Halo_Contract_np{1,2,4}` + `MPI_Runtime_Contract_np{1,2,4}` in the 58-test CTest suite).
 - **Decomposition evidence** — the SDIRK3 decomposition fail-close matrix
   (`.github/ci/run_decomposition_matrix.sh`, 4 cases) was produced by direct local-machine
   execution; it is *not* a full-WRF decomposition validation and does not include a stock-RK3

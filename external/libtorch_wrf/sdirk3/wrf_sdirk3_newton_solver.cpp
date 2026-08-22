@@ -57,6 +57,7 @@
 #include "wrf_sdirk3_stage_krylov_policy.h"  // pure stage budget/tolerance resolution
 #include "wrf_sdirk3_stage_history_diag.h"  // PR 9F P2: shared emit_sdirk3_diag_line
 #include "wrf_sdirk3_u_slow_diagnostics.h"   // next_solver_id: the process-wide one
+#include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_unified_preconditioner.h"  // v20.5: For set_stage_state()
 #include <torch/torch.h>
 #include <ATen/CPUGeneratorImpl.h>
@@ -10508,16 +10509,43 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
         cfg_ref.max_newton_iter = 30;
         cfg_ref.newton_tol = 1.0e-8f;
 
+        // R13 B2: the arms must be INDEPENDENT, and turning the warm start off was only the
+        // most visible way they were not. This solver also carries hopeless-budget streaks, a
+        // trust radius, a preconditioner fallback latch and per-stage warm-start slots ACROSS
+        // solves, and every one of them alters what the next solve does. Two arms that share
+        // them are two points on one trajectory, not two independent solves, and their
+        // agreement cannot certify anything.
+        //
+        // Every arm therefore starts from the state captured at probe entry. That is not the
+        // same as a fresh solver -- preconditioner internals and any cached linearization are
+        // outside this list -- so the record says which state was reset rather than claiming
+        // isolation it does not have.
+        const auto arm_entry = capture_carried_state();
+        auto restore_arm = [&](const CarriedState& a) { restore_carried_state(a); };
+
         auto reference = pImpl->solve_stage_impl(U_n, K_prev, compute_rhs, compute_rhs_fast,
                                                  dt, gamma, stage, F_phys);
 
         // The certifying second reference, at a strictly larger budget.
+        restore_arm(arm_entry);
         cfg_ref.stage2_gmres_restart = cfg_ref.stage3_gmres_restart = 200;
         cfg_ref.stage2_max_krylov_restarts = cfg_ref.stage3_max_krylov_restarts = 30;
         auto reference2 = pImpl->solve_stage_impl(U_n, K_prev, compute_rhs, compute_rhs_fast,
                                                   dt, gamma, stage, F_phys);
 
-        // (restore is ScopedSolverBudget's, at scope exit -- including on an exception)
+        // A THIRD arm, tighter again. Two arms can only report that they disagree; three can
+        // report whether the sequence is CONVERGING, which is the question a reference has to
+        // answer. R12 R4 measured ref_agree=0.284 against rel_err=0.737 and called it settled
+        // on the strength of one gap -- with a third arm, "the gaps are shrinking" and "these
+        // are two arbitrary unconverged solves" become distinguishable.
+        restore_arm(arm_entry);
+        cfg_ref.stage2_gmres_restart = cfg_ref.stage3_gmres_restart = 320;
+        cfg_ref.stage2_max_krylov_restarts = cfg_ref.stage3_max_krylov_restarts = 45;
+        auto reference3 = pImpl->solve_stage_impl(U_n, K_prev, compute_rhs, compute_rhs_fast,
+                                                  dt, gamma, stage, F_phys);
+        restore_arm(arm_entry);
+
+        // (config restore is ScopedSolverBudget's, at scope exit -- including on an exception)
 
         torch::NoGradGuard ng_ref;
         std::cerr << "SDIRK3_STAGE_REFERENCE stage=" << stage
@@ -10529,7 +10557,43 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
                   // own test passed, which is not the same as a residual near zero.
                   << " shipped_final_res=" << result.final_residual
                   << " ref2_converged=" << (reference2.converged ? 1 : 0)
-                  << " ref2_final_res=" << reference2.final_residual;
+                  << " ref2_final_res=" << reference2.final_residual
+                  << " ref3_converged=" << (reference3.converged ? 1 : 0)
+                  << " ref3_final_res=" << reference3.final_residual;
+
+        // The certification, from the rule in wrf_sdirk3_probe_validity.h rather than from a
+        // sentence in this record. reference_certified existed only in R12's prose; a field
+        // that is written in a document and not emitted by the code is a claim, not a
+        // measurement.
+        {
+            auto flat = [](const torch::Tensor& t) {
+                return t.defined() ? t.detach().to(torch::kFloat64).reshape({-1})
+                                   : torch::Tensor{};
+            };
+            auto gap = [&](const torch::Tensor& a, const torch::Tensor& b) {
+                if (!a.defined() || !b.defined() || a.numel() != b.numel()) return -1.0;
+                const double n = a.norm().item<double>();
+                return n > 0.0 ? (a - b).norm().item<double>() / n : -1.0;
+            };
+            const auto K1 = flat(reference.K), K2 = flat(reference2.K), K3 = flat(reference3.K);
+            wrf::sdirk3::StageReferenceArms arms;
+            arms.converged_1 = reference.converged;
+            arms.converged_2 = reference2.converged;
+            arms.converged_3 = reference3.converged;
+            arms.residual_1 = reference.final_residual;
+            arms.residual_2 = reference2.final_residual;
+            arms.residual_3 = reference3.final_residual;
+            arms.state_gap_32 = gap(K3, K2);
+            arms.state_gap_21 = gap(K2, K1);
+            arms.shipped_gap  = gap(K3, flat(result.K));
+            const auto cert = wrf::sdirk3::certify_stage_reference(arms);
+            std::cerr << " reference_certified=" << (cert.certified ? 1 : 0)
+                      << " certification=" << cert.reason
+                      << " state_gap_32=" << arms.state_gap_32
+                      << " state_gap_21=" << arms.state_gap_21
+                      << " shipped_gap=" << arms.shipped_gap;
+        }
+
         if (!reference.converged) {
             // No reference, so no accuracy. Naming the reason keeps this from being read as
             // "the shipped solve was accurate to within nothing measurable".
@@ -10635,6 +10699,78 @@ sdirk3::WRFNewtonKrylovSolver::ConvergenceStats sdirk3::WRFNewtonKrylovSolver::g
 
 std::uint64_t sdirk3::WRFNewtonKrylovSolver::solver_id() const {
     return pImpl->solver_id_;
+}
+
+sdirk3::WRFNewtonKrylovSolver::CarriedState
+sdirk3::WRFNewtonKrylovSolver::capture_carried_state() const {
+    torch::NoGradGuard ng;
+    CarriedState s;
+    s.stage3_warmstart_disabled   = pImpl->stage3_warmstart_disabled_;
+    s.stage2_hopeless_budget_mode = pImpl->stage2_hopeless_budget_mode_;
+    s.stage2_hopeless_streak      = pImpl->stage2_hopeless_streak_;
+    s.stage3_hopeless_budget_mode = pImpl->stage3_hopeless_budget_mode_;
+    s.stage3_hopeless_streak      = pImpl->stage3_hopeless_streak_;
+    s.precond_fallback_count      = pImpl->precond_fallback_count_;
+    s.trust_radius                = pImpl->trust_radius_;
+    s.warmstart_relerr            = pImpl->gmres_warmstart_relerr_stage_;
+    // Cloned, not aliased: a warm-start slot restored as a VIEW of a tensor the next solve
+    // overwrites is not a restore, and this codebase has already shipped one latch that
+    // depended on a value it did not own.
+    for (const auto& t : pImpl->gmres_warmstart_stage_) {
+        s.warmstart_stage.push_back(t.defined() ? t.detach().clone() : torch::Tensor{});
+    }
+    return s;
+}
+
+void sdirk3::WRFNewtonKrylovSolver::restore_carried_state(const CarriedState& s) {
+    torch::NoGradGuard ng;
+    pImpl->stage3_warmstart_disabled_    = s.stage3_warmstart_disabled;
+    pImpl->stage2_hopeless_budget_mode_  = s.stage2_hopeless_budget_mode;
+    pImpl->stage2_hopeless_streak_       = s.stage2_hopeless_streak;
+    pImpl->stage3_hopeless_budget_mode_  = s.stage3_hopeless_budget_mode;
+    pImpl->stage3_hopeless_streak_       = s.stage3_hopeless_streak;
+    pImpl->precond_fallback_count_       = s.precond_fallback_count;
+    pImpl->trust_radius_                 = s.trust_radius;
+    pImpl->gmres_warmstart_stage_        = s.warmstart_stage;
+    pImpl->gmres_warmstart_relerr_stage_ = s.warmstart_relerr;
+}
+
+std::uint64_t sdirk3::WRFNewtonKrylovSolver::carried_state_digest() const {
+    torch::NoGradGuard ng;
+    // FNV-1a over the carried values. Order-sensitive on purpose: two states that differ only
+    // in which stage slot holds a warm start are different states.
+    std::uint64_t h = 1469598103934665603ULL;
+    auto mix = [&h](std::uint64_t v) {
+        h ^= v;
+        h *= 1099511628211ULL;
+    };
+    auto mix_double = [&mix](double d) {
+        std::uint64_t bits = 0;
+        static_assert(sizeof(bits) == sizeof(d), "double is not 64-bit");
+        std::memcpy(&bits, &d, sizeof(bits));
+        mix(bits);
+    };
+    mix(pImpl->stage3_warmstart_disabled_ ? 1u : 0u);
+    mix(pImpl->stage2_hopeless_budget_mode_ ? 1u : 0u);
+    mix(static_cast<std::uint64_t>(pImpl->stage2_hopeless_streak_));
+    mix(pImpl->stage3_hopeless_budget_mode_ ? 1u : 0u);
+    mix(static_cast<std::uint64_t>(pImpl->stage3_hopeless_streak_));
+    mix(static_cast<std::uint64_t>(pImpl->precond_fallback_count_));
+    mix_double(static_cast<double>(pImpl->trust_radius_));
+    for (float r : pImpl->gmres_warmstart_relerr_stage_) {
+        mix_double(static_cast<double>(r));
+    }
+    for (const auto& t : pImpl->gmres_warmstart_stage_) {
+        if (!t.defined() || t.numel() == 0) {
+            mix(0u);
+            continue;
+        }
+        // The norm, not the bytes: a digest that walks every element of every warm-start
+        // vector turns a fingerprint into a second solve.
+        mix_double(t.detach().to(torch::kFloat64).norm().item<double>());
+        mix(static_cast<std::uint64_t>(t.numel()));
+    }
+    return h;
 }
 
 void sdirk3::WRFNewtonKrylovSolver::set_stage_weights(

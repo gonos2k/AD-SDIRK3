@@ -101,6 +101,69 @@ inline ProbeVerdict tangent_verdict(const TangentInputs& in) {
     return {true, "ok"};
 }
 
+// ---------------------------------------------------------------------------------------
+// Stage-reference certification
+// ---------------------------------------------------------------------------------------
+//
+// A reference is an ASSUMPTION until it certifies itself, and R12 R4 is the worked example of
+// why. Its first reading took a 120x20 solve as the truth and reported the shipped solve's
+// error against it as an accuracy. The second arm then returned ref_agree=0 with a WORSE
+// residual -- the signature of a warm start, not of a converged reference. With the warm start
+// off, the two arms disagreed by 0.284 while the quantity they were measuring was 0.737: a
+// reference 2.6x from its own sibling is not a reference, and rel_err was never an accuracy.
+//
+// Three arms, and the rule below. Two arms can only say whether they agree; three can say
+// whether the sequence is CONVERGING, which is the question. The criteria are conjunctive
+// because each rejects a different way of being wrong:
+//   - all three converged      -- an arm the solver itself failed cannot anchor anything
+//   - the residual falls       -- a tighter budget that does not reduce the residual is not
+//                                 approaching a solution, it is wandering
+//   - the states approach      -- the increments must be settling, not merely agreeing once
+//   - and by a clear margin    -- a reference must be far closer to the truth than the
+//                                 quantity it measures, or their difference is two errors
+struct StageReferenceArms {
+    bool   converged_1 = false, converged_2 = false, converged_3 = false;
+    double residual_1 = -1.0, residual_2 = -1.0, residual_3 = -1.0;
+    // ||Y3 - Y2|| / ||Y3||, and ||Y2 - Y1|| / ||Y2||: how far the sequence still moves.
+    double state_gap_32 = -1.0, state_gap_21 = -1.0;
+    // ||Y_shipped - Y3|| / ||Y3||: the quantity the reference is being asked to measure.
+    double shipped_gap = -1.0;
+};
+
+struct StageReferenceVerdict {
+    bool certified = false;
+    const char* reason = "";
+};
+
+// margin: how much closer to the truth the reference must be than the thing it measures.
+inline StageReferenceVerdict certify_stage_reference(const StageReferenceArms& a,
+                                                     double margin = 10.0) {
+    if (!(a.converged_1 && a.converged_2 && a.converged_3)) {
+        return {false, "arm_not_converged"};
+    }
+    if (!(a.residual_1 > 0.0 && a.residual_2 > 0.0 && a.residual_3 > 0.0)) {
+        return {false, "residual_unavailable"};
+    }
+    if (!(a.residual_3 <= a.residual_2 && a.residual_2 <= a.residual_1)) {
+        return {false, "residual_not_decreasing"};
+    }
+    if (!(a.state_gap_32 >= 0.0 && a.state_gap_21 >= 0.0)) {
+        return {false, "state_gap_unavailable"};
+    }
+    if (!(a.state_gap_32 < a.state_gap_21)) {
+        return {false, "state_gap_not_shrinking"};
+    }
+    if (!(a.shipped_gap >= 0.0)) {
+        return {false, "shipped_gap_unavailable"};
+    }
+    // The R12 R4 failure, as a rule: 0.284 against 0.737 is 2.6x, and 2.6x is two unconverged
+    // solves being differenced.
+    if (!(a.state_gap_32 * margin <= a.shipped_gap)) {
+        return {false, "insufficient_margin"};
+    }
+    return {true, "ok"};
+}
+
 }  // namespace sdirk3
 }  // namespace wrf
 

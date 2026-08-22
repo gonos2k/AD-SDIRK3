@@ -280,6 +280,17 @@ add_test(NAME Metric_Policy_Contract COMMAND test_metric_policy)
 
 # 9F.D52 (review section 6): FORWARD-mode tangents and the forward/reverse duality, for
 # the EOS and the pressure integrator. The prior tests used reverse mode and called it JVP.
+# R13 B3: the interference fingerprint must be able to SEE a change. A digest blind to one
+# carried field lets a probe mutate through it forever while the record says "observer".
+add_executable(test_probe_noninterference tests/test_probe_noninterference.cpp)
+target_link_libraries(test_probe_noninterference PRIVATE wrf_sdirk3::core)
+add_test(NAME Diagnostic_Observer_Noninterference_Contract COMMAND test_probe_noninterference)
+
+# R13 B2: three arms, and a certification rule that the R12 R4 measurement fails.
+add_executable(test_stage_reference_certification tests/test_stage_reference_certification.cpp)
+target_link_libraries(test_stage_reference_certification PRIVATE wrf_sdirk3::core)
+add_test(NAME Stage_Reference_Certification_Contract COMMAND test_stage_reference_certification)
+
 # R13 C1: the forward integrates F_I + F_E and the operational graph differentiates
 # F_I + detach(F_E). Includes the FD trap: a finite difference cannot see a detach, so an FD
 # fallback on this function returns a DIFFERENT operator rather than a noisier one.

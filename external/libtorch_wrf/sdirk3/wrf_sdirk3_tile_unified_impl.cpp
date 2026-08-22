@@ -3952,6 +3952,15 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     if (rk_step == 1 && !inside_step_map_probe &&
         (step_map_purity_enabled() || step_map_tangent_enabled())) {
         ProbeLatch step_map_latch(inside_step_map_probe);
+        // Restores the carried state when the probe leaves, however it leaves: the production
+        // step below then starts from the state it would have had, rather than from whatever
+        // the last arm left. The record still notes the arms ran, because the state OUTSIDE
+        // this snapshot -- caches, generations -- is not restored by it.
+        struct ArmRestore {
+            wrf::sdirk3::WRFNewtonKrylovSolver* s;
+            const wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState& st;
+            ~ArmRestore() { if (s) s->restore_carried_state(st); }
+        };
 
         const size_t n_u  = static_cast<size_t>(ny)   * nz   * nx_u;
         const size_t n_v  = static_cast<size_t>(ny_v) * nz   * nx;
@@ -3977,7 +3986,39 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         // identity no matter what the dynamics are. The status is what separates "the tangent
         // is I because the map is I" from "the tangent was never measured".
         std::vector<wrf::sdirk3::StepStatus> arm_status;
+
+        // R13 B1: every arm starts from the SAME solver state.
+        //
+        // Without this, arm k begins where arm k-1 left the hopeless streaks, the trust radius,
+        // the preconditioner fallback latch and the warm-start slots -- so a central difference
+        // over the arms mixes a perturbation of the STATE with a perturbation of the solver's
+        // HISTORY, and only the first is a Jacobian. The earlier record admitted the production
+        // step was perturbed and said nothing about the arms perturbing each other, which is
+        // the half that invalidates the quotient.
+        //
+        // The honest limit: this restores the Newton solver's carried state, not the
+        // preconditioner's internals, this object's reference/dt members (ScopedProbeState's
+        // job) or any cached linearization. So the digest is checked too -- if the state at the
+        // start of an arm differs from the state at the start of the first, something outside
+        // the snapshot moved and the record says so instead of assuming it did not. Fully
+        // independent arms need a fresh solver per arm, or separate processes; that is the
+        // target, and this is what is true today.
+        const bool have_solver = (newton_solver_ != nullptr);
+        const auto arm_entry = have_solver
+            ? newton_solver_->capture_carried_state()
+            : wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState{};
+        const std::uint64_t arm_entry_digest =
+            have_solver ? newton_solver_->carried_state_digest() : 0ULL;
+        bool arms_isolated = true;
+        const ArmRestore arm_restore{have_solver ? newton_solver_.get() : nullptr, arm_entry};
+
         auto run_once_from = [&](Arrays& a) {
+            if (have_solver) {
+                newton_solver_->restore_carried_state(arm_entry);
+                if (newton_solver_->carried_state_digest() != arm_entry_digest) {
+                    arms_isolated = false;
+                }
+            }
             unifiedStep(a.u.data(), a.v.data(), a.w.data(), a.ph.data(), a.t.data(), a.mu.data(),
                         a.ru_t.data(), a.rv_t.data(), a.rw_t.data(),
                         a.ph_t.data(), a.t_t.data(), a.mu_t.data(),
@@ -3991,10 +4032,12 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         // wrf_sdirk3_probe_validity.h. Spelled out inline here it would be exactly the kind of
         // rule this campaign has repeatedly had to retract after publishing.
         auto arms_all_complete = [&]() {
-            return wrf::sdirk3::step_map_verdict(arm_status).valid;
+            return arms_isolated && wrf::sdirk3::step_map_verdict(arm_status).valid;
         };
-        auto arms_reason = [&]() {
-            return wrf::sdirk3::step_map_verdict(arm_status).reason;
+        auto arms_reason = [&]() -> const char* {
+            const auto v = wrf::sdirk3::step_map_verdict(arm_status);
+            if (!v.valid) return v.reason;
+            return arms_isolated ? "ok" : "arms_not_isolated";
         };
         auto emit_arm_status = [&](std::ostream& os) {
             for (size_t i = 0; i < arm_status.size(); ++i) {
@@ -4079,7 +4122,8 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             const bool tangent_valid = arms_all_complete();
             std::cerr << "SDIRK3_STEP_MAP_TANGENT"
                       << " step_map_valid=" << (tangent_valid ? 1 : 0)
-                      << " reason=" << arms_reason();
+                      << " reason=" << arms_reason()
+                      << " arms_isolated=" << (arms_isolated ? 1 : 0);
             emit_arm_status(std::cerr);
             std::cerr << " eps1=" << eps1 << " eps2=" << eps2;
             double worst = 0.0;
@@ -4159,7 +4203,8 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             const bool tend_moved = (d_ru + d_rv + d_rw + d_ph + d_t + d_mu) > 0.0;
             std::cerr << "SDIRK3_STEP_MAP_ADVANCE"
                       << " step_map_valid=" << (arms_all_complete() ? 1 : 0)
-                      << " reason=" << arms_reason();
+                      << " reason=" << arms_reason()
+                      << " arms_isolated=" << (arms_isolated ? 1 : 0);
             emit_arm_status(std::cerr);
             std::cerr << " identity=" << (identity ? 1 : 0)
                       << " u=" << m_u << " v=" << m_v << " w=" << m_w
@@ -4199,7 +4244,8 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
                            r_p == 0.0 && r_t == 0.0 && r_m == 0.0);
         std::cerr << "SDIRK3_STEP_MAP_PURITY"
                   << " step_map_valid=" << (arms_all_complete() ? 1 : 0)
-                  << " reason=" << arms_reason();
+                  << " reason=" << arms_reason()
+                  << " arms_isolated=" << (arms_isolated ? 1 : 0);
         emit_arm_status(std::cerr);
         std::cerr << " pure=" << (pure ? 1 : 0)
                   << " u=" << r_u << " v=" << r_v << " w=" << r_w
@@ -6548,14 +6594,27 @@ vertical_coefficients:
             // enumerating every mutable member is a list that silently falls behind the code.
             // A diagnostic that cannot restore everything can at least REPORT when something
             // else moved, which is the difference between a known limitation and a silent one.
+            // R13 B3: the fingerprint covered four quantities and MISSED the state that
+            // actually changes a solve. The Newton solver carries hopeless streaks, a trust
+            // radius, a preconditioner fallback latch and per-stage warm-start slots across
+            // calls; a probe that moves any of them has altered the run it was observing, and
+            // none of them appeared here. R12 R4 is the case: a diagnostic re-solve left a
+            // warm start behind and the next solve returned it unchanged.
+            //
+            // The step outcome is in too. A probe that leaves a different outcome latched has
+            // changed what the Fortran driver sees, which is the most consequential mutation
+            // available and was the one least visible.
             struct Fingerprint {
                 double grid_dt = 0.0;
                 double ru_work = 0.0;
                 double t_work  = 0.0;
                 long long rhs_calls = 0;
+                std::uint64_t carried = 0;
+                int outcome = 0;
                 bool operator!=(const Fingerprint& o) const {
                     return grid_dt != o.grid_dt || ru_work != o.ru_work ||
-                           t_work != o.t_work || rhs_calls != o.rhs_calls;
+                           t_work != o.t_work || rhs_calls != o.rhs_calls ||
+                           carried != o.carried || outcome != o.outcome;
                 }
             };
             static Fingerprint capture(TileSDIRK3UnifiedSolver& sv) {
@@ -6570,11 +6629,17 @@ vertical_coefficients:
                 f.t_work  = n(sv.t_adv_z_work_);
                 f.rhs_calls =
                     static_cast<long long>(wrf::sdirk3::g_mask_counters.rhs_call_id);
+                f.carried = sv.newton_solver_
+                    ? sv.newton_solver_->carried_state_digest() : 0ULL;
+                f.outcome = sv.getLastStepOutcomeCode();
                 return f;
             }
             Fingerprint before;
-            explicit ScopedProbeState(TileSDIRK3UnifiedSolver& solver)
-                : s(solver), dt_saved(solver.dt_stage_) {
+            // The probe's NAME. "Something mutated state" and "the explicit-spectrum probe
+            // mutated state" are different findings, and only the second names where to look.
+            const char* probe_name;
+            ScopedProbeState(TileSDIRK3UnifiedSolver& solver, const char* name)
+                : s(solver), dt_saved(solver.dt_stage_), probe_name(name) {
                 torch::NoGradGuard ng;
                 if (solver.U_ref_stage_.defined()) {
                     uref_saved = solver.U_ref_stage_.detach().clone();
@@ -6588,12 +6653,16 @@ vertical_coefficients:
                 if (s.grid_info_) s.grid_info_->dt = dt_saved;
                 const auto after = capture(s);
                 if (after != before) {
-                    std::cerr << "SDIRK3_PROBE_MUTATED"
+                    std::cerr << "SDIRK3_PROBE_MUTATED probe=" << probe_name
+                              << " probe_interfered=1"
                               << " grid_dt=" << before.grid_dt << "->" << after.grid_dt
                               << " ru_work=" << before.ru_work << "->" << after.ru_work
                               << " t_work=" << before.t_work << "->" << after.t_work
                               << " rhs_calls=" << before.rhs_calls << "->" << after.rhs_calls
-                              << "  (state the probe changed and did not restore)"
+                              << " carried_digest=" << before.carried << "->" << after.carried
+                              << " outcome=" << before.outcome << "->" << after.outcome
+                              << "  (state the probe changed and did not restore: it is an"
+                                 " INTERVENTION on this run, not an observer of it)"
                               << std::endl;
                 }
             }
@@ -9988,7 +10057,7 @@ vertical_coefficients:
                               ? (probe_skip_note("dt_invariance"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     torch::NoGradGuard ng_dt;
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "rhs_dt_invariance");
                     const float dt_saved = dt_stage_;
                     const auto k_ref = k_slow[i].detach().to(torch::kFloat64).clone();
                     const double n_ref = k_ref.norm().item<double>();
@@ -10037,7 +10106,7 @@ vertical_coefficients:
                               ? (probe_skip_note("slow_continuation"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     torch::NoGradGuard ng_cont;
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "slow_continuation");
                     const auto U_base = U_stage.detach();
                     const auto step = (U_conv.detach() - U_base);
                     const double step_n = step.to(torch::kFloat64).norm().item<double>();
@@ -10206,7 +10275,7 @@ vertical_coefficients:
                        : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_SPECTRUM")
                               ? (probe_skip_note("explicit_spectrum"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "explicit_spectrum");
                     const auto U0 = U_conv.detach().clone();
                     // WHICH operator's spectrum. rho(J_E) does not govern the step: the tangent
                     // of one step involves J_E and J_I together and they do not commute, so a
@@ -10612,7 +10681,7 @@ vertical_coefficients:
                 if ((probe_topology_ok ? wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_AD_SPLIT_CONTRACT")
                        : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_AD_SPLIT_CONTRACT")
                               ? (probe_skip_note("ad_split_contract"), false) : false))) {
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "ad_split_contract");
                     const auto U_probe = U_conv.detach().clone();
                     auto F_of = [&](wrf::sdirk3::RhsMode m) {
                         return [&probe_rhs, m](const torch::Tensor& x) {
@@ -10783,7 +10852,7 @@ vertical_coefficients:
                 // if a reference or a cached input diverges, they do not. Four directions,
                 // because a single one can agree by accident where the missing term is small.
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_PROBE_PARITY")) {
-                    ScopedProbeState parity_guard(*this);
+                    ScopedProbeState parity_guard(*this, "probe_parity");
                     const auto U0p = U_conv.detach().clone();
                     auto F_prod = [&](const torch::Tensor& x) {
                         return compute_k_slow(x, torch::Tensor{});
@@ -10881,7 +10950,7 @@ vertical_coefficients:
                        : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_DIRECTIONAL_DERIVATIVE")
                               ? (probe_skip_note("directional_derivative"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "directional_derivative");
                     const auto U0d = U_conv.detach().clone();
                     auto F_exp_d = [&probe_rhs](const torch::Tensor& x) {
                         return probe_rhs(x, wrf::sdirk3::RhsMode::ExplicitOnly);
@@ -10979,7 +11048,7 @@ vertical_coefficients:
                        : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SPLIT_IDENTITY")
                               ? (probe_skip_note("split_identity"), false) : false))) {
                     torch::NoGradGuard ng_split;
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "split_identity");
                     const auto U_probe = U_conv.detach();
                     const auto f_full = probe_rhs(U_probe, RhsMode::Full)
                                             .detach().to(torch::kFloat64);
