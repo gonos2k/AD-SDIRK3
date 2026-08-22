@@ -111,6 +111,17 @@ inline bool blockmax_gate_enabled() {
 // whether the B4 "7-iter rel_error=1" is a genuine operator plateau or a self-inflicted
 // early-stop artifact: if the residual drops once the full budget runs, the POLICY was the
 // cause, not the operator.
+// Which stage the reference probe targets (0 = every stage). The reference solve is the
+// most expensive thing in the run, and stage 3 alone can outlast the useful part of a
+// session; naming a stage keeps a stage-2 question from paying stage-3's cost.
+inline int stage_reference_target() {
+    static const int target = [] {
+        const char* e = std::getenv("WRF_SDIRK3_STAGE_REFERENCE_STAGE");
+        return (e && *e) ? std::atoi(e) : 0;
+    }();
+    return target;
+}
+
 inline bool no_early_stop_enabled() {
     static const bool on = [] {
         const char* e = std::getenv("WRF_SDIRK3_NO_EARLY_STOP");
@@ -352,6 +363,11 @@ static inline torch::Tensor gmres_residual_norm(const torch::Tensor& r, int halo
 // Forward-mode AD uses dual numbers: F(u + εv) = F(u) + ε·(J·v)
 // We extract the tangent part (J·v) which is the true JVP.
 // ============================================================================
+// Count every fwAD->FD fallback. Without a counter the fallback is visible only at
+// debug_level>=1, so a run that silently spent the whole solve on the noisier FD operator
+// reads afterwards as a run that used forward-mode AD. The manifest reports this count.
+static std::atomic<long long> g_jvp_fd_fallback_count{0};
+
 static torch::Tensor compute_jvp_forward_mode(
     const std::function<torch::Tensor(const torch::Tensor&)>& F,
     const torch::Tensor& u,
@@ -365,9 +381,12 @@ static torch::Tensor compute_jvp_forward_mode(
         /*fd_epsilon_override=*/0.0f,
         &used_fd_fallback);
 
-    if (used_fd_fallback && wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-        std::cerr << "[JVP FWAD] Fallback to finite-difference JVP (fwAD unavailable/failed)"
-                  << std::endl;
+    if (used_fd_fallback) {
+        g_jvp_fd_fallback_count.fetch_add(1, std::memory_order_relaxed);
+        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+            std::cerr << "[JVP FWAD] Fallback to finite-difference JVP (fwAD unavailable/failed)"
+                      << std::endl;
+        }
     }
     return jvp;
 }
@@ -7194,6 +7213,13 @@ public:
                 if (newton_iter == 0 &&
                     wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_POLICY_MANIFEST")) {
                     auto& cfgm = wrf::sdirk3::g_sdirk3_config;
+                    // A manifest is only machine-checkable if its numbers round-trip: at the
+                    // default 6 significant digits two arms whose tolerances differ in the 7th
+                    // digit print identically, and the diff that should have caught it is blind.
+                    const auto prec_saved = std::cerr.precision();
+                    std::cerr << std::setprecision(
+                        std::numeric_limits<double>::max_digits10);
+                    const int ws_slot = (stage >= 0 && stage < 8) ? stage : -1;
                     std::cerr << "SDIRK3_POLICY_MANIFEST stage=" << stage
                               // resolved policy (what the pure resolver decided)
                               << " restart=" << policy.restart
@@ -7224,7 +7250,29 @@ public:
                               << " max_newton_iter=" << cfgm.max_newton_iter
                               << " ew_enabled=" << (ew_eta_enabled_this_iter ? 1 : 0)
                               << " ew_eta=" << ew_eta_used_this_iter
+                              // when GMRES checks the TRUE residual rather than the Arnoldi estimate
+                              << " true_resid_start_j=" << cfgm.gmres_true_residual_start_j
+                              << " true_resid_period=" << cfgm.gmres_true_residual_period
+                              // what makes a restart cycle give up early
+                              << " arnoldi_stag_window=" << cfgm.gmres_arnoldi_stag_window
+                              << " arnoldi_stag_ratio=" << cfgm.gmres_arnoldi_stag_ratio
+                              << " no_early_stop=" << (no_early_stop_enabled() ? 1 : 0)
+                              // degraded-operator latches: a fallback changes the operator, not a knob
+                              << " precond_fallback_count=" << precond_fallback_count_
+                              << " jvp_method=" << static_cast<int>(cfgm.jvp_method)
+                              << " jvp_fd_fallback_count="
+                              << g_jvp_fd_fallback_count.load(std::memory_order_relaxed)
+                              << " imex_slow_in_tangent=" << (cfgm.imex_slow_in_tangent ? 1 : 0)
+                              // warm-start: enabled is a knob, VALID is state -- a sweep needs both
+                              << " warmstart_enabled=" << (cfgm.gmres_warmstart ? 1 : 0)
+                              << " warmstart_gate=" << cfgm.gmres_warmstart_quality_gate
+                              << " warmstart_valid="
+                              << ((ws_slot >= 0 && gmres_warmstart_stage_[ws_slot].defined())
+                                      ? 1 : 0)
+                              << " warmstart_relerr="
+                              << ((ws_slot >= 0) ? gmres_warmstart_relerr_stage_[ws_slot] : -1.0f)
                               << std::endl;
+                    std::cerr << std::setprecision(prec_saved);
                 }
 
                 const int  restart_before_policy = effective_restart;
@@ -10373,6 +10421,120 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
                   << " msg=\"" << result.message << "\""
                   << "\n";
         });
+    }
+
+    // R4: stage accuracy against a CONVERGED reference, not against a bigger budget.
+    //
+    // A budget sweep answers "does more Krylov change K", which conflates two questions: how
+    // far the shipped solve is from the exact stage increment, and how far one budget is from
+    // another. The reference here is defined by CONVERGENCE -- if the reference solve does not
+    // itself converge there is no reference, and the probe reports that instead of reporting
+    // an accuracy it cannot support.
+    //
+    // The reference solve runs the real solver at the real state, so it advances the same
+    // stateful machinery the production solve did (streaks, warm-start cache, trust radius).
+    // That perturbs every LATER stage, and the record says so rather than leaving a run that
+    // looks like production but is not. Snapshotting "the state" was the alternative and is
+    // the ever-growing list this codebase has already rejected once.
+    //
+    // A reference is an assumption until it certifies itself, so it is computed at TWO
+    // budgets: if the two disagree, the larger one is not converged either and the probe
+    // reports the disagreement instead of an accuracy resting on it.
+    if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STAGE_REFERENCE") &&
+        (stage_reference_target() == 0 || stage_reference_target() == stage)) {
+        auto& cfg_ref = wrf::sdirk3::g_sdirk3_config;
+        const int   r2 = cfg_ref.stage2_gmres_restart;
+        const int   m2 = cfg_ref.stage2_max_krylov_restarts;
+        const float t2 = cfg_ref.stage2_krylov_tol;
+        const int   r3 = cfg_ref.stage3_gmres_restart;
+        const int   m3 = cfg_ref.stage3_max_krylov_restarts;
+        const float t3 = cfg_ref.stage3_krylov_tol;
+        const int   ni = cfg_ref.max_newton_iter;
+        const float nt = cfg_ref.newton_tol;
+        const bool  ws = cfg_ref.gmres_warmstart;
+
+        // The two reference solves must not share a warm start. With it on, the second solve
+        // starts from the first's answer and returns it unchanged -- and ref_agree=0 then
+        // certifies nothing, because the two solves were never independent.
+        cfg_ref.gmres_warmstart = false;
+
+        // A budget large enough that failing to converge is a statement about the OPERATOR.
+        cfg_ref.stage2_gmres_restart = cfg_ref.stage3_gmres_restart = 120;
+        cfg_ref.stage2_max_krylov_restarts = cfg_ref.stage3_max_krylov_restarts = 20;
+        cfg_ref.stage2_krylov_tol = cfg_ref.stage3_krylov_tol = 1.0e-10f;
+        cfg_ref.max_newton_iter = 30;
+        cfg_ref.newton_tol = 1.0e-8f;
+
+        auto reference = pImpl->solve_stage_impl(U_n, K_prev, compute_rhs, compute_rhs_fast,
+                                                 dt, gamma, stage, F_phys);
+
+        // The certifying second reference, at a strictly larger budget.
+        cfg_ref.stage2_gmres_restart = cfg_ref.stage3_gmres_restart = 200;
+        cfg_ref.stage2_max_krylov_restarts = cfg_ref.stage3_max_krylov_restarts = 30;
+        auto reference2 = pImpl->solve_stage_impl(U_n, K_prev, compute_rhs, compute_rhs_fast,
+                                                  dt, gamma, stage, F_phys);
+
+        cfg_ref.stage2_gmres_restart = r2;
+        cfg_ref.stage2_max_krylov_restarts = m2;
+        cfg_ref.stage2_krylov_tol = t2;
+        cfg_ref.stage3_gmres_restart = r3;
+        cfg_ref.stage3_max_krylov_restarts = m3;
+        cfg_ref.stage3_krylov_tol = t3;
+        cfg_ref.max_newton_iter = ni;
+        cfg_ref.newton_tol = nt;
+        cfg_ref.gmres_warmstart = ws;
+
+        torch::NoGradGuard ng_ref;
+        std::cerr << "SDIRK3_STAGE_REFERENCE stage=" << stage
+                  << " ref_converged=" << (reference.converged ? 1 : 0)
+                  << " ref_iters=" << reference.iterations
+                  << " ref_final_res=" << reference.final_residual
+                  << " shipped_converged=" << (result.converged ? 1 : 0)
+                  // Both residuals on one line: "the reference converged" means the solver's
+                  // own test passed, which is not the same as a residual near zero.
+                  << " shipped_final_res=" << result.final_residual
+                  << " ref2_converged=" << (reference2.converged ? 1 : 0)
+                  << " ref2_final_res=" << reference2.final_residual;
+        if (!reference.converged) {
+            // No reference, so no accuracy. Naming the reason keeps this from being read as
+            // "the shipped solve was accurate to within nothing measurable".
+            std::cerr << "  (NO REFERENCE: the enlarged solve did not converge either, so"
+                         " this stage has no accuracy to report)" << std::endl;
+        } else if (!result.K.defined() || !reference.K.defined()) {
+            std::cerr << "  (NO REFERENCE: a stage increment is undefined)" << std::endl;
+        } else {
+            const auto Ks = result.K.detach().to(torch::kFloat64).reshape({-1});
+            const auto Kr = reference.K.detach().to(torch::kFloat64).reshape({-1});
+            const double nr = Kr.norm().item<double>();
+            // ref_agree is the validity field: rel_err is an accuracy only if the two
+            // references agree by much more than the shipped solve differs from them.
+            // Otherwise rel_err measures the gap between two unconverged solves.
+            const double ref_agree =
+                (reference2.K.defined() && reference2.K.numel() == Kr.numel() && nr > 0.0)
+                    ? (reference2.K.detach().to(torch::kFloat64).reshape({-1}) - Kr)
+                          .norm().item<double>() / nr
+                    : -1.0;
+            std::cerr << " ref_agree=" << ref_agree;
+            std::cerr << " rel_err="
+                      << ((Ks.numel() == Kr.numel() && nr > 0.0)
+                              ? (Ks - Kr).norm().item<double>() / nr : -1.0)
+                      << " K_shipped=" << Ks.norm().item<double>()
+                      << " K_ref=" << nr;
+            // Per block, because an aggregate cannot say which equation the shipped solve
+            // got wrong -- and the campaign's answer has never been "all of them equally".
+            const auto& lay = pImpl->cached_layout_;
+            if (lay.is_exact && lay.total_size == Ks.numel() && Ks.numel() == Kr.numel()) {
+                for (const auto& b : lay.blocks) {
+                    const auto ds = Ks.slice(0, b.start, b.start + b.size);
+                    const auto dr = Kr.slice(0, b.start, b.start + b.size);
+                    const double bn = dr.norm().item<double>();
+                    std::cerr << " " << b.name << "="
+                              << (bn > 0.0 ? (ds - dr).norm().item<double>() / bn : -1.0);
+                }
+            }
+            std::cerr << "  (perturbs every LATER stage: the reference solve advanced the"
+                         " same stateful machinery)" << std::endl;
+        }
     }
 
     // R9 P0-C: the one link in the stage-entry chain that was inferred rather than measured.

@@ -157,6 +157,34 @@ inline bool probe_env_enabled(const char* name) {
         "was unrecognised produces output that is read as a measurement.");
 }
 
+// R3: the same advection decomposition for the blocks the u-terms trace never watched.
+// One gate, one format, so "adv_z dominates" can be tested as a property of the vertical
+// operator rather than assumed from the one block that happened to be instrumented.
+// Read ONCE, through the one parser: a second reading with a second parser is how a flag
+// comes to mean two different things in one run.
+// R1 gate. Read once, through the one parser.
+inline bool step_map_purity_enabled() {
+    static const bool on = probe_env_enabled("WRF_SDIRK3_STEP_MAP_PURITY");
+    return on;
+}
+
+// R1: the directional derivative of the whole step map, by central difference.
+inline bool step_map_tangent_enabled() {
+    static const bool on = probe_env_enabled("WRF_SDIRK3_STEP_MAP_TANGENT");
+    return on;
+}
+
+// R2: partial sums over each rank's OWNED cells, in global index terms.
+inline bool global_norms_enabled() {
+    static const bool on = probe_env_enabled("WRF_SDIRK3_GLOBAL_NORMS");
+    return on;
+}
+
+inline bool adv_split_blocks_enabled() {
+    static const bool on = probe_env_enabled("WRF_SDIRK3_ADV_SPLIT_BLOCKS");
+    return on;
+}
+
 // 9F.D115: ARMING, so a probe reports the evaluation we are asking about.
 //
 // D113's mu trace was one-shot per RhsMode. That is strictly better than one-shot globally,
@@ -225,8 +253,17 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
 #include "wrf_sdirk3_config.h"
+#include "wrf_sdirk3_adv_split_observer.h"  // R3: one advection observer for every block
 #include "wrf_sdirk3_rw_term_capture.h"  // PR 9B: rw term bisection capture
 #include "wrf_sdirk3_w_damping.h"       // PR 9B: production W-damping helper (contract-tested)
+
+// The evaluation an advection record belongs to, in the same words the mu trace uses.
+inline const char* rhs_mode_name(wrf::sdirk3::RhsMode m) {
+    return m == wrf::sdirk3::RhsMode::ImplicitOnly ? "Implicit"
+         : m == wrf::sdirk3::RhsMode::ExplicitOnly ? "Explicit"
+         : "Full";
+}
+
 #include "wrf_sdirk3_stage_history_diag.h"  // PR 9E: opt-in ARK history + defect summary (diagnosis-only)
 #include "wrf_sdirk3_ww_cp.h"           // PR 9C.1: complete calc_ww_cp omega diagnosis
 #include "wrf_sdirk3_types.h"  // FIX Round186: For centralized safe_device_index()
@@ -3789,6 +3826,313 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     int nx, int ny, int nz,
     int nx_u, int ny_v, int nz_w) {
 
+    // R2: a quantity that does NOT depend on how the domain was decomposed.
+    //
+    // Every probe in this campaign so far reports a TILE-LOCAL number, and two runs at
+    // different rank counts have different tiles, so their records are not comparable -- a
+    // difference between them says nothing about whether the physics agreed. What IS
+    // comparable is a sum over each rank's OWNED cells expressed in GLOBAL indices: owned
+    // regions partition the domain, so the partials add to one domain quantity regardless of
+    // how many ranks produced them.
+    //
+    // The emitted `count` is the validity field. If the counts do not add up to the domain's
+    // degrees of freedom, the owned box is wrong -- halo cells double-counted or interior
+    // cells dropped -- and the norm comparison is void rather than merely approximate. A wrong
+    // count cannot be mistaken for a small discrepancy.
+    if (rk_step == 1 && global_norms_enabled()) {
+        // WRF's ownership rule, and the staggered extra point is ALREADY inside ite_/jte_:
+        // a mass variable loops its..min(ite, ide-1), a staggered one loops its..ite. Adding
+        // one for the domain edge double-counts, which the count check caught on the first
+        // run -- u came back 42x81 where the domain has 41x80 x-staggered points.
+        const int ni_own = std::min(ite_, ide_ - 1) - its_ + 1;   // mass points in i
+        const int nj_own = std::min(jte_, jde_ - 1) - jts_ + 1;   // mass points in j
+        const int ni_u   = ite_ - its_ + 1;                       // x-staggered points
+        const int nj_v   = jte_ - jts_ + 1;                       // y-staggered points
+
+        // Sum over the owned box only. Local index 0 is taken to be global its_/jts_; that
+        // assumption is what the np=1 comparison tests, and the count tests the extent.
+        auto owned_sumsq = [](const float* a, int nj, int nk, int ni,
+                              int stride_j, int stride_k, int stride_i) {
+            double sq = 0.0;
+            long long n = 0;
+            for (int j = 0; j < nj; ++j)
+                for (int k = 0; k < nk; ++k)
+                    for (int i = 0; i < ni; ++i) {
+                        const double x = a[j * stride_j + k * stride_k + i * stride_i];
+                        sq += x * x;
+                        ++n;
+                    }
+            return std::make_pair(sq, n);
+        };
+
+        struct Blk { const char* name; const float* p; int nj, nk, ni, sj, sk; };
+        const Blk blks[6] = {
+            {"u",  u,  nj_own, nz,   ni_u,   nz * nx_u, nx_u},
+            {"v",  v,  nj_v,   nz,   ni_own, nz * nx,   nx  },
+            {"w",  w,  nj_own, nz_w, ni_own, nz_w * nx, nx  },
+            {"ph", ph, nj_own, nz_w, ni_own, nz_w * nx, nx  },
+            {"t",  t,  nj_own, nz,   ni_own, nz * nx,   nx  },
+            {"mu", mu, nj_own, 1,    ni_own, nx,        nx  }};
+
+        for (const auto& b : blks) {
+            const auto r = owned_sumsq(b.p, b.nj, b.nk, b.ni, b.sj, b.sk, 1);
+            std::cerr << "SDIRK3_GLOBAL_NORM block=" << b.name
+                      << " sumsq=" << std::setprecision(
+                             std::numeric_limits<double>::max_digits10) << r.first
+                      << std::setprecision(6)
+                      << " count=" << r.second
+                      // The topology on the same line, so a partial can be checked against
+                      // the decomposition that produced it without a second record.
+                      << " its=" << its_ << " ite=" << ite_
+                      << " jts=" << jts_ << " jte=" << jte_
+                      << " ids=" << ids_ << " ide=" << ide_
+                      << " jds=" << jds_ << " jde=" << jde_
+                      << " nx=" << nx << " ny=" << ny << " nz=" << nz
+                      << " nx_u=" << nx_u << " ny_v=" << ny_v << " nz_w=" << nz_w
+                      << std::endl;
+        }
+    }
+
+    // R1: is Phi_h a FUNCTION of the state?
+    //
+    // The one-step tangent D(Phi_h) is a Jacobian with respect to U_n, and a Jacobian
+    // presupposes that Phi_h(U_n) depends on U_n and nothing else. This solver carries state
+    // ACROSS steps -- hopeless streaks, the warm-start cache, the trust radius, the
+    // preconditioner fallback latch -- and every one of them alters the solve. If two calls on
+    // byte-identical input return different output then Phi_h is not a function of U_n, the
+    // central-difference contract cannot be satisfied by construction, and any measured
+    // "tangent" is partly a difference between two solver histories.
+    //
+    // So run the step TWICE on identical copies and compare, before asking anything about its
+    // derivative. Both probe calls advance the same carried state, so the production step that
+    // follows is perturbed; the record says so.
+    static thread_local bool inside_step_map_probe = false;
+    if (rk_step == 1 && !inside_step_map_probe &&
+        (step_map_purity_enabled() || step_map_tangent_enabled())) {
+        inside_step_map_probe = true;
+
+        const size_t n_u  = static_cast<size_t>(ny)   * nz   * nx_u;
+        const size_t n_v  = static_cast<size_t>(ny_v) * nz   * nx;
+        const size_t n_w  = static_cast<size_t>(ny)   * nz_w * nx;
+        const size_t n_t  = static_cast<size_t>(ny)   * nz   * nx;
+        const size_t n_mu = static_cast<size_t>(ny)   * nx;
+
+        // The function's whole mutable input, snapshotted at the ABI boundary -- which is the
+        // one place a snapshot is a complete list rather than a list that falls behind.
+        struct Arrays {
+            std::vector<float> u, v, w, ph, t, mu, ru_t, rv_t, rw_t, ph_t, t_t, mu_t;
+        };
+        const Arrays in{
+            {u, u + n_u}, {v, v + n_v}, {w, w + n_w}, {ph, ph + n_w},
+            {t, t + n_t}, {mu, mu + n_mu},
+            {ru_tend, ru_tend + n_u}, {rv_tend, rv_tend + n_v},
+            {rw_tend, rw_tend + n_w}, {ph_tend, ph_tend + n_w},
+            {t_tend, t_tend + n_t},   {mu_tend, mu_tend + n_mu}};
+
+        auto run_once_from = [&](Arrays& a) {
+            unifiedStep(a.u.data(), a.v.data(), a.w.data(), a.ph.data(), a.t.data(), a.mu.data(),
+                        a.ru_t.data(), a.rv_t.data(), a.rw_t.data(),
+                        a.ph_t.data(), a.t_t.data(), a.mu_t.data(),
+                        rdx, rdy, rdnw, rdn, msftx, msfty, msfux, msfuy, msfvx, msfvy,
+                        c1f, c2f, c1h, c2h, fnm, fnp, rk_step, dt,
+                        nx, ny, nz, nx_u, ny_v, nz_w);
+        };
+        auto run_once = [&](Arrays& a) { a = in; run_once_from(a); };
+
+        // A deterministic direction: index-based, so two runs and two builds perturb along the
+        // same v and their tangents are comparable. Scaled PER BLOCK, so a block whose values
+        // are small is not perturbed out of its own regime by one global epsilon.
+        auto direction = [](size_t n, size_t seed) {
+            std::vector<float> d(n);
+            double sq = 0.0;
+            for (size_t i = 0; i < n; ++i) {
+                const double x = static_cast<double>(i + seed);
+                d[i] = static_cast<float>(std::sin(0.7 * x) + std::cos(1.3 * x));
+                sq += static_cast<double>(d[i]) * d[i];
+            }
+            const double nrm = std::sqrt(sq);
+            if (nrm > 0.0) for (auto& e : d) e = static_cast<float>(e / nrm);
+            return d;
+        };
+        auto l2 = [](const std::vector<float>& x) {
+            double sq = 0.0;
+            for (float e : x) sq += static_cast<double>(e) * e;
+            return std::sqrt(sq);
+        };
+
+        if (step_map_tangent_enabled()) {
+            // D.v by central difference, at TWO step sizes. One epsilon cannot tell a
+            // derivative from a difference quotient that has not converged.
+            const std::vector<std::vector<float>> dirs{
+                direction(n_u, 1), direction(n_v, 2), direction(n_w, 3),
+                direction(n_w, 4), direction(n_t, 5), direction(n_mu, 6)};
+            const std::vector<const std::vector<float>*> base{
+                &in.u, &in.v, &in.w, &in.ph, &in.t, &in.mu};
+
+            // Scaling epsilon by the block norm gives a block whose input is identically
+            // zero NO perturbation at all -- numerator and denominator both vanish and the
+            // quotient reads 0, which looks like perfect agreement and means never measured.
+            // An absolute floor keeps such a block in the measurement, and step_for() is the
+            // single place the size is decided so the record can report it.
+            auto shifted = [&](double eps_rel, double sign) {
+                Arrays c = in;
+                std::vector<std::vector<float>*> tgt{&c.u, &c.v, &c.w, &c.ph, &c.t, &c.mu};
+                for (size_t bi = 0; bi < tgt.size(); ++bi) {
+                    const double nb = l2(*base[bi]);
+                    const double step = (nb > 0.0) ? eps_rel * nb : eps_rel;
+                    for (size_t i = 0; i < tgt[bi]->size(); ++i) {
+                        (*tgt[bi])[i] = static_cast<float>(
+                            (*tgt[bi])[i] + sign * step * dirs[bi][i]);
+                    }
+                }
+                run_once_from(c);
+                return c;
+            };
+            auto quotient = [&](const Arrays& p, const Arrays& m, double eps_rel) {
+                const std::vector<const std::vector<float>*> P{
+                    &p.u, &p.v, &p.w, &p.ph, &p.t, &p.mu};
+                const std::vector<const std::vector<float>*> M{
+                    &m.u, &m.v, &m.w, &m.ph, &m.t, &m.mu};
+                std::vector<std::vector<float>> q(6);
+                for (size_t bi = 0; bi < 6; ++bi) {
+                    const double nb = l2(*base[bi]);
+                    const double den = 2.0 * eps_rel * ((nb > 0.0) ? nb : 1.0);
+                    q[bi].resize(P[bi]->size());
+                    for (size_t i = 0; i < q[bi].size(); ++i) {
+                        q[bi][i] = den > 0.0
+                            ? static_cast<float>(((*P[bi])[i] - (*M[bi])[i]) / den) : 0.0f;
+                    }
+                }
+                return q;
+            };
+
+            const double eps1 = 1.0e-3, eps2 = 5.0e-4;
+            const Arrays p1 = shifted(eps1, +1.0), m1 = shifted(eps1, -1.0);
+            const Arrays p2 = shifted(eps2, +1.0), m2 = shifted(eps2, -1.0);
+            inside_step_map_probe = false;
+
+            const auto q1 = quotient(p1, m1, eps1);
+            const auto q2 = quotient(p2, m2, eps2);
+            static const char* kBlock[6] = {"u", "v", "w", "ph", "t", "mu"};
+            std::cerr << "SDIRK3_STEP_MAP_TANGENT eps1=" << eps1 << " eps2=" << eps2;
+            double worst = 0.0;
+            for (size_t bi = 0; bi < 6; ++bi) {
+                std::vector<float> d(q1[bi].size());
+                for (size_t i = 0; i < d.size(); ++i) d[i] = q1[bi][i] - q2[bi][i];
+                const double n2 = l2(q2[bi]);
+                const double agree = n2 > 0.0 ? l2(d) / n2 : (l2(d) > 0.0 ? -1.0 : 0.0);
+                worst = std::max(worst, agree);
+                std::cerr << " " << kBlock[bi] << "_Dv=" << n2
+                          << " " << kBlock[bi] << "_agree=" << agree
+                          // A zero input norm is why a block would read 0: on the record, so
+                          // "not measured" is never mistaken for "perfectly agreeing".
+                          << " " << kBlock[bi] << "_in=" << l2(*base[bi]);
+            }
+            // The validity field: halving epsilon must not change D.v if the quotient has
+            // converged. If it does, what was measured is not a derivative.
+            std::cerr << " worst_agree=" << worst
+                      << (worst < 0.05
+                            ? "  (halving epsilon leaves D.v unchanged: the central difference"
+                              " converged and D(Phi_h).v IS a directional derivative)"
+                            : "  (halving epsilon MOVES D.v: a difference quotient that has NOT"
+                              " converged, so this is not a directional derivative)")
+                      << "  [four probe steps advanced carried solver state: the production"
+                         " step below is perturbed]"
+                      << std::endl;
+            return;
+        }
+
+        Arrays a, b;
+        run_once(a);
+        run_once(b);
+        inside_step_map_probe = false;
+
+        // Does the step MOVE the state? D.v came out at exactly 1 for four blocks, which is
+        // what an IDENTITY map gives for a unit direction -- so before reading that as a
+        // converged derivative of the dynamics, measure whether Phi_h(U) differs from U at
+        // all. If it does not, the tangent converged because there is nothing to
+        // differentiate.
+        {
+            auto moved = [&](const std::vector<float>& out, const std::vector<float>& inp) {
+                double num = 0.0, den = 0.0;
+                for (size_t i = 0; i < out.size(); ++i) {
+                    const double d = static_cast<double>(out[i]) - static_cast<double>(inp[i]);
+                    num += d * d;
+                    den += static_cast<double>(inp[i]) * static_cast<double>(inp[i]);
+                }
+                return den > 0.0 ? std::sqrt(num) / std::sqrt(den)
+                                 : (num > 0.0 ? -1.0 : 0.0);
+            };
+            const double m_u = moved(a.u, in.u), m_v = moved(a.v, in.v), m_w = moved(a.w, in.w);
+            const double m_p = moved(a.ph, in.ph), m_t = moved(a.t, in.t),
+                         m_m = moved(a.mu, in.mu);
+            const bool identity = (m_u == 0.0 && m_v == 0.0 && m_w == 0.0 &&
+                                   m_p == 0.0 && m_t == 0.0 && m_m == 0.0);
+            // A state that does not move has an innocent explanation: in WRF's convention a
+            // dynamics core writes TENDENCIES and the driver advances the state. If the
+            // tendency arrays moved, Phi_h is U -> tendencies and "identity on the state" says
+            // nothing about it. Measured here, so the reading is not left to assumption.
+            auto tend_norm = [&](const std::vector<float>& out,
+                                 const std::vector<float>& inp) {
+                double num = 0.0;
+                for (size_t i = 0; i < out.size(); ++i) {
+                    const double d = static_cast<double>(out[i]) - static_cast<double>(inp[i]);
+                    num += d * d;
+                }
+                return std::sqrt(num);
+            };
+            const double d_ru = tend_norm(a.ru_t, in.ru_t), d_rv = tend_norm(a.rv_t, in.rv_t),
+                         d_rw = tend_norm(a.rw_t, in.rw_t), d_ph = tend_norm(a.ph_t, in.ph_t),
+                         d_t  = tend_norm(a.t_t,  in.t_t),  d_mu = tend_norm(a.mu_t, in.mu_t);
+            const bool tend_moved = (d_ru + d_rv + d_rw + d_ph + d_t + d_mu) > 0.0;
+            std::cerr << "SDIRK3_STEP_MAP_ADVANCE"
+                      << " identity=" << (identity ? 1 : 0)
+                      << " u=" << m_u << " v=" << m_v << " w=" << m_w
+                      << " ph=" << m_p << " t=" << m_t << " mu=" << m_m
+                      << " tend_moved=" << (tend_moved ? 1 : 0)
+                      << " d_ru=" << d_ru << " d_rv=" << d_rv << " d_rw=" << d_rw
+                      << " d_ph=" << d_ph << " d_t=" << d_t << " d_mu=" << d_mu
+                      << (identity
+                            ? (tend_moved
+                                 ? "  (state unchanged but TENDENCIES written: Phi_h is"
+                                   " U -> tendencies, and a state-space tangent is the wrong"
+                                   " object to measure here)"
+                                 : "  (neither state nor tendencies moved: the step is a NO-OP,"
+                                   " so its tangent is the identity and measures no dynamics)")
+                            : "  (the step advances the state: its tangent is a derivative of"
+                              " the dynamics)")
+                      << std::endl;
+        }
+
+        // Report each block separately: "the step is not a function" and "the step is not a
+        // function IN rw" are different findings, and only the second names where to look.
+        auto rel = [](const std::vector<float>& x, const std::vector<float>& y) {
+            double num = 0.0, den = 0.0;
+            for (size_t i = 0; i < x.size(); ++i) {
+                const double d = static_cast<double>(x[i]) - static_cast<double>(y[i]);
+                num += d * d;
+                den += static_cast<double>(y[i]) * static_cast<double>(y[i]);
+            }
+            return den > 0.0 ? std::sqrt(num) / std::sqrt(den) : (num > 0.0 ? -1.0 : 0.0);
+        };
+        const double r_u = rel(a.u, b.u), r_v = rel(a.v, b.v), r_w = rel(a.w, b.w);
+        const double r_p = rel(a.ph, b.ph), r_t = rel(a.t, b.t), r_m = rel(a.mu, b.mu);
+        const bool pure = (r_u == 0.0 && r_v == 0.0 && r_w == 0.0 &&
+                           r_p == 0.0 && r_t == 0.0 && r_m == 0.0);
+        std::cerr << "SDIRK3_STEP_MAP_PURITY"
+                  << " pure=" << (pure ? 1 : 0)
+                  << " u=" << r_u << " v=" << r_v << " w=" << r_w
+                  << " ph=" << r_p << " t=" << r_t << " mu=" << r_m
+                  << (pure
+                        ? "  (two calls on identical input agree bitwise: D(Phi_h) is"
+                          " well-posed as a Jacobian of U_n)"
+                        : "  (two calls on IDENTICAL input DISAGREE: Phi_h depends on carried"
+                          " solver state, so a central difference of it is not a Jacobian)")
+                  << "  [both probe calls advanced that carried state: the production step"
+                     " below is perturbed]"
+                  << std::endl;
+    }
+
     // Reset step outcome snapshot on function entry.
     setLastStepOutcome(
         static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED),
@@ -6063,31 +6407,110 @@ vertical_coefficients:
         // closed on any topology other than one rank covering the whole patch. These are
         // opt-in diagnostics rather than a production path, so they SKIP with a stated reason
         // instead of aborting.
-        const bool probe_topology_ok = (nprocx_ * nprocy_ == 1);
+        // R12 C1: rank count is not the whole condition. The sibling stage-operand diagnostic
+        // requires single-rank AND that this tile covers the whole patch, because with one rank
+        // and several OpenMP tiles the solver still sees only part of the patch -- and a
+        // partial-tile operator is no more global than a per-rank one.
+        const bool probe_single_rank = (nprocx_ * nprocy_ == 1);
+        const bool probe_tile_covers_patch =
+            its_ <= ids_ && ite_ >= ide_ - 1 &&
+            jts_ <= jds_ && jte_ >= jde_ - 1;
+        const bool probe_topology_ok = probe_single_rank && probe_tile_covers_patch;
+        // R12 C2: the note was gated on a single function-local `static bool`, SHARED by every
+        // probe, so only the first skip in the process ever printed and the rest vanished --
+        // a silent skip is the failure mode the gate exists to prevent. Per-probe, and no
+        // static: a non-atomic static write is also a race under OpenMP.
         auto probe_skip_note = [&](const char* which) {
-            static bool warned = false;
-            if (!warned) {
-                std::cerr << "SDIRK3_PROBE_SKIPPED probe=" << which
-                          << " reason=\"tile-local operator under np>1 is not the global "
-                             "operator; np=" << (nprocx_ * nprocy_) << "\"" << std::endl;
-                warned = true;
-            }
+            std::cerr << "SDIRK3_PROBE_SKIPPED probe=" << which
+                      << " single_rank=" << (probe_single_rank ? 1 : 0)
+                      << " tile_covers_patch=" << (probe_tile_covers_patch ? 1 : 0)
+                      << " np=" << (nprocx_ * nprocy_)
+                      << " reason=\"a tile-local operator is not the global operator\""
+                      << std::endl;
+        };
+
+        // R12 P0-1: the probes were linearizing a DIFFERENT function than production.
+        //
+        // computeUnifiedRHS reads U_ref_stage_ (:12983) and extracts w_ref from it, which feeds
+        // Omega, vertical advection and mass continuity -- the very operators this campaign
+        // tracked as dominant. The production wrapper compute_k_slow() sets the reference to the
+        // evaluation state before every call, so the production mapping is
+        //
+        //     script_F(U) = F_E(U, U_ref = U)
+        //
+        // The probes called computeUnifiedRHS(x, mode) directly, leaving U_ref_stage_ at the
+        // base state, so they measured
+        //
+        //     tilde_F(U) = F_E(U, U_ref = U_0)
+        //
+        // and their Jacobian is missing the chain-rule term dF/dU_ref. For the JVP this matters
+        // twice: the reference must carry the TANGENT, not just the value, or forward-mode drops
+        // that path silently. Mirroring the production wrapper exactly is the fix.
+        auto probe_rhs = [this](const torch::Tensor& x, wrf::sdirk3::RhsMode m) {
+            const bool sit = wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent;
+            U_ref_stage_ = sit ? x.clone() : x.detach().clone();
+            return computeUnifiedRHS(x, m);
         };
 
         struct ScopedProbeState {
             TileSDIRK3UnifiedSolver& s;
             float dt_saved;
             torch::Tensor uref_saved;
+            // R12 C6: a fingerprint, not an ever-growing snapshot list.
+            //
+            // The guard restores two members, but computeUnifiedRHS also writes
+            // grid_info_->dt, the mask counters, and the advection work tensors -- and
+            // enumerating every mutable member is a list that silently falls behind the code.
+            // A diagnostic that cannot restore everything can at least REPORT when something
+            // else moved, which is the difference between a known limitation and a silent one.
+            struct Fingerprint {
+                double grid_dt = 0.0;
+                double ru_work = 0.0;
+                double t_work  = 0.0;
+                long long rhs_calls = 0;
+                bool operator!=(const Fingerprint& o) const {
+                    return grid_dt != o.grid_dt || ru_work != o.ru_work ||
+                           t_work != o.t_work || rhs_calls != o.rhs_calls;
+                }
+            };
+            static Fingerprint capture(TileSDIRK3UnifiedSolver& sv) {
+                torch::NoGradGuard ng;
+                Fingerprint f;
+                f.grid_dt = sv.grid_info_ ? static_cast<double>(sv.grid_info_->dt) : 0.0;
+                auto n = [](const torch::Tensor& t) {
+                    return t.defined() && t.numel() > 0
+                        ? t.detach().to(torch::kFloat64).norm().item<double>() : 0.0;
+                };
+                f.ru_work = n(sv.ru_adv_z_work_);
+                f.t_work  = n(sv.t_adv_z_work_);
+                f.rhs_calls =
+                    static_cast<long long>(wrf::sdirk3::g_mask_counters.rhs_call_id);
+                return f;
+            }
+            Fingerprint before;
             explicit ScopedProbeState(TileSDIRK3UnifiedSolver& solver)
                 : s(solver), dt_saved(solver.dt_stage_) {
                 torch::NoGradGuard ng;
                 if (solver.U_ref_stage_.defined()) {
                     uref_saved = solver.U_ref_stage_.detach().clone();
                 }
+                before = capture(solver);
             }
             ~ScopedProbeState() {
                 s.dt_stage_ = dt_saved;
                 if (uref_saved.defined()) s.U_ref_stage_ = uref_saved;
+                // Restore what we snapshot, then report what we could not.
+                if (s.grid_info_) s.grid_info_->dt = dt_saved;
+                const auto after = capture(s);
+                if (after != before) {
+                    std::cerr << "SDIRK3_PROBE_MUTATED"
+                              << " grid_dt=" << before.grid_dt << "->" << after.grid_dt
+                              << " ru_work=" << before.ru_work << "->" << after.ru_work
+                              << " t_work=" << before.t_work << "->" << after.t_work
+                              << " rhs_calls=" << before.rhs_calls << "->" << after.rhs_calls
+                              << "  (state the probe changed and did not restore)"
+                              << std::endl;
+                }
             }
             ScopedProbeState(const ScopedProbeState&) = delete;
             ScopedProbeState& operator=(const ScopedProbeState&) = delete;
@@ -7169,6 +7592,14 @@ vertical_coefficients:
                     if (slow_in_tangent) {
                         U_ref_stage_ = U_conv.clone();
                     } else {
+                        // R12 P0-3: this branch was EMPTY, so with slow_in_tangent=false the
+                        // reference from a PREVIOUS evaluation survived. compute_stage_tendency
+                        // is called repeatedly on rolled and unrolled states, so the stale
+                        // reference could pair F(U_rolled) with U_ref = U_unrolled -- and the
+                        // reference feeds w_ref, hence Omega, vertical advection and mass
+                        // continuity. Not a diagnostic path: slow_in_tangent=false is a
+                        // supported model-error configuration.
+                        U_ref_stage_ = U_conv.detach().clone();
                         }
                     torch::Tensor k_tend;
                     if (slow_in_tangent) {
@@ -9558,6 +9989,7 @@ vertical_coefficients:
                         double dz_min = std::nan(""), p_full_min = std::nan("");
                         double rho_min = std::nan(""), rho_max = std::nan("");
                         int64_t mu_full_nonpos = -1, dz_nonpos = -1, p_nonpos = -1;
+                        int64_t rho_nonfinite = -1, rho_nonpos = -1;
                         if (mu_base_.defined() && th_base_.defined() &&
                             ph_base_.defined() && p_base_.defined() &&
                             c1h_.defined() && c2h_.defined() && mu_a.defined()) {
@@ -9584,10 +10016,17 @@ vertical_coefficients:
                             const auto p_full = (std::get<0>(pal) + p_base_).to(torch::kFloat64);
                             p_full_min = p_full.min().item<double>();
                             p_nonpos   = (p_full <= 0).sum().item<int64_t>();
-                            const auto al = std::get<1>(pal).to(torch::kFloat64);
-                            const auto ok = torch::isfinite(al) & (al > 0);
-                            if (ok.any().item<bool>()) {
-                                const auto rho = 1.0 / al.index({ok});
+                            // R12 P0-2: diag_p_al returns {p_pert, al_pert, al_full}. get<1> is
+                            // the PERTURBATION, so inverting it did not give a density at all --
+                            // and selecting only its positive entries silently dropped every
+                            // cell with a non-positive perturbation, which is exactly where an
+                            // admissibility check has to look. get<2> is 1/rho.
+                            const auto al_full = std::get<2>(pal).to(torch::kFloat64);
+                            const auto al_finite = torch::isfinite(al_full);
+                            rho_nonfinite = (~al_finite).sum().item<int64_t>();
+                            rho_nonpos    = (al_finite & (al_full <= 0.0)).sum().item<int64_t>();
+                            if (rho_nonfinite == 0 && rho_nonpos == 0) {
+                                const auto rho = 1.0 / al_full;
                                 rho_min = rho.min().item<double>();
                                 rho_max = rho.max().item<double>();
                             }
@@ -9637,6 +10076,8 @@ vertical_coefficients:
                                   << " p_nonpos=" << p_nonpos
                                   << " rho_min=" << rho_min
                                   << " rho_max=" << rho_max
+                                  << " rho_nonfinite=" << rho_nonfinite
+                                  << " rho_nonpos=" << rho_nonpos
                                   << " th_argmin_flat=" << th_argmin
                                   << " mu_argmin_flat=" << mu_argmin
                                   << " F_E_nonfinite=" << nonfinite
@@ -9689,13 +10130,28 @@ vertical_coefficients:
                     // the mode. Measuring Full (= J_E + J_I) with the SAME Arnoldi is the direct
                     // discriminator for whether the SPLIT creates the RHP modes or the
                     // linearized dynamics already have them.
+                    // R12 C4: strict, because "Full", "FULL", "ful" and any typo all fell
+                    // through to J_E -- a mis-set experiment that silently runs the baseline is
+                    // the pattern this repository has removed several times already.
                     const char* mode_env = std::getenv("WRF_SDIRK3_SPECTRUM_MODE");
-                    const bool spec_full = (mode_env != nullptr &&
-                                            std::string(mode_env) == "full");
+                    const std::string mode_str = mode_env ? std::string(mode_env) : "explicit";
+                    TORCH_CHECK(mode_str == "explicit" || mode_str == "implicit" ||
+                                mode_str == "full",
+                                "WRF_SDIRK3_SPECTRUM_MODE='", mode_str,
+                                "' is not one of {explicit, implicit, full}");
+                    const bool spec_full = (mode_str == "full");
+                    const bool spec_imp  = (mode_str == "implicit");
+                    // J_I completes the picture. J_E and J_full are measured; J_I is the third
+                    // side of J_full = J_E + J_I, and without it "the implicit part does not
+                    // cancel the RHP content" rests on a difference of two measurements rather
+                    // than on the operator itself.
                     const auto spec_mode = spec_full ? wrf::sdirk3::RhsMode::Full
-                                                     : wrf::sdirk3::RhsMode::ExplicitOnly;
-                    auto F_exp_fn = [this, spec_mode](const torch::Tensor& x) {
-                        return computeUnifiedRHS(x, spec_mode);
+                                        : spec_imp  ? wrf::sdirk3::RhsMode::ImplicitOnly
+                                                    : wrf::sdirk3::RhsMode::ExplicitOnly;
+                    const char* spec_name = spec_full ? "J_full"
+                                          : spec_imp  ? "J_I" : "J_E";
+                    auto F_exp_fn = [&probe_rhs, spec_mode](const torch::Tensor& x) {
+                        return probe_rhs(x, spec_mode);
                     };
                     bool fb = false, fb_any = false;
                     auto Jv = [&](const torch::Tensor& d) {
@@ -9770,18 +10226,42 @@ vertical_coefficients:
                     if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_ARNOLDI")) {
                         // S2: m is a knob, because a spectrum claim needs an m-convergence
                         // study and 24 was simply the first number tried.
+                        // R12 C4: whole-string parse. std::atoi("48junk") is 48 and
+                        // std::atoi("abc") is 0, which then silently became the default -- a
+                        // mistyped Arnoldi order would have run a DIFFERENT experiment under
+                        // the requested label.
                         int m = 24;
                         if (const char* mv = std::getenv("WRF_SDIRK3_ARNOLDI_M")) {
-                            const int parsed = std::atoi(mv);
-                            if (parsed >= 4 && parsed <= 256) m = parsed;
+                            int parsed = 0;
+                            TORCH_CHECK(wrf::sdirk3::parse_whole_int(mv, parsed),
+                                        "WRF_SDIRK3_ARNOLDI_M='", mv,
+                                        "' is not a whole integer");
+                            TORCH_CHECK(parsed >= 4 && parsed <= 256,
+                                        "WRF_SDIRK3_ARNOLDI_M=", parsed,
+                                        " is outside [4, 256]");
+                            m = parsed;
                         }
                         std::vector<torch::Tensor> V;
                         auto H = torch::zeros({m + 1, m}, torch::kFloat64);
+                        double v0_digest = 0.0;
                         {
                             torch::NoGradGuard ng_a;
-                            auto v0 = torch::randn_like(U0);
-                            v0 = v0 / v0.to(torch::kFloat64).norm().item<double>();
-                            V.push_back(v0);
+                            // DETERMINISTIC start vector. torch::randn_like draws from the
+                            // global RNG, so two runs -- and therefore the m = 24 / 48 / 96
+                            // comparison, which ran as three separate processes -- did not share
+                            // a start vector. "|lambda| agreed across m" then mixes m-convergence
+                            // with start-vector variation. An index-based vector is reproducible
+                            // without a seed to carry, and its digest goes on the record so a
+                            // reader can tell two runs used the same one.
+                            const int64_t n = U0.numel();
+                            auto idx = torch::arange(n, torch::TensorOptions()
+                                                          .dtype(torch::kFloat64)
+                                                          .device(U0.device()));
+                            auto v0d = torch::sin(0.7139 * (idx + 1.0)) +
+                                       torch::cos(0.3121 * (idx + 1.0));
+                            v0d = v0d / v0d.norm();
+                            v0_digest = v0d.abs().sum().item<double>();
+                            V.push_back(v0d.to(U0.scalar_type()).reshape_as(U0));
                         }
                         int m_used = 0;
                         for (int j = 0; j < m; ++j) {
@@ -9812,8 +10292,38 @@ vertical_coefficients:
                             }
                         }
                         torch::NoGradGuard ng_r;
+                        // NESTED-PREFIX m study, from ONE Arnoldi basis. H_k is the leading
+                        // k x k block of the same H, so moving k changes the Krylov dimension
+                        // and nothing else -- no second run, no second start vector, no second
+                        // stage-2 solution. Three separate runs could not make that claim.
+                        for (int k : {12, 24, 48, 96}) {
+                            if (k >= m_used) continue;
+                            auto Hk = H.slice(0, 0, k).slice(1, 0, k);
+                            auto ek = torch::linalg_eigvals(Hk);
+                            auto rek = torch::real(ek).to(torch::kFloat64);
+                            auto imk = torch::imag(ek).to(torch::kFloat64);
+                            auto mok = torch::sqrt(rek * rek + imk * imk);
+                            const int64_t top = mok.argmax().item<int64_t>();
+                            std::cerr << "SDIRK3_ARNOLDI_PREFIX stage=" << stage_id
+                                      << " op=" << spec_name
+                                      << " m_prefix=" << k
+                                      << " lam_mod=" << mok[top].item<double>()
+                                      << " lam_re=" << rek[top].item<double>()
+                                      << " lam_im=" << imk[top].item<double>()
+                                      << " n_rhp=" << (rek > 0.0).sum().item<int64_t>()
+                                      << " max_re=" << rek.max().item<double>()
+                                      << " v0_digest=" << v0_digest
+                                      << std::endl;
+                        }
                         auto Hm = H.slice(0, 0, m_used).slice(1, 0, m_used);
-                        auto ev = torch::linalg_eigvals(Hm);
+                        // R12 C3: ONE eig call. Ritz VALUES came from linalg_eigvals and Ritz
+                        // VECTORS from a separate linalg_eig, and nothing contracts the two
+                        // calls to order their eigenpairs identically -- so |lambda_k| could be
+                        // reported beside the residual of a DIFFERENT pair. Values and vectors
+                        // now come from the same decomposition and are sorted together.
+                        auto eig_all = torch::linalg_eig(Hm);
+                        auto ev = std::get<0>(eig_all);
+                        auto Yv = std::get<1>(eig_all);
                         auto re = torch::real(ev).to(torch::kFloat64);
                         auto im = torch::imag(ev).to(torch::kFloat64);
                         auto mod = torch::sqrt(re * re + im * im);
@@ -9822,7 +10332,7 @@ vertical_coefficients:
                         auto im_s = im.index_select(0, order);
                         auto mo_s = mod.index_select(0, order);
                         std::cerr << "SDIRK3_EXPLICIT_ARNOLDI stage=" << stage_id
-                                  << " op=" << (spec_full ? "J_full" : "J_E")
+                                  << " op=" << spec_name
                                   << " m=" << m_used;
                         const int show = std::min<int>(8, m_used);
                         for (int k = 0; k < show; ++k) {
@@ -9862,9 +10372,7 @@ vertical_coefficients:
                         // not be separated from "the projection has not converged".
                         {
                             const double h_last = H[m_used][m_used - 1].item<double>();
-                            auto eig = torch::linalg_eig(Hm);
-                            auto Y = std::get<1>(eig);                 // right eigenvectors
-                            auto last_row = torch::abs(Y.index({m_used - 1, torch::indexing::Slice()}));
+                            auto last_row = torch::abs(Yv.index({m_used - 1, torch::indexing::Slice()}));
                             auto rr = (std::abs(h_last) * last_row).to(torch::kFloat64);
                             auto rr_s = rr.index_select(0, order);
                             std::cerr << "SDIRK3_ARNOLDI_RITZRES stage=" << stage_id
@@ -9878,7 +10386,7 @@ vertical_coefficients:
                                 V.begin(), V.begin() + m_used)).reshape({m_used, -1})
                                 .to(torch::kFloat64);
                             auto G = Vm.matmul(Vm.t()) -
-                                     torch::eye(m_used, torch::kFloat64);
+                                     torch::eye(m_used, Vm.options());   // R12 P1-2: Vm may be CUDA/MPS
                             std::cerr << " orth_loss=" << G.abs().max().item<double>()
                                       << std::endl;
                         }
@@ -9970,7 +10478,7 @@ vertical_coefficients:
                     // is checking is not a check.
                     const auto prev_prec = std::cerr.precision(14);
                     std::cerr << "SDIRK3_EXPLICIT_SPECTRUM stage=" << stage_id
-                              << " op=" << (spec_full ? "J_full" : "J_E")
+                              << " op=" << spec_name
                               << " F_E_at_U0=" << fE_norm
                               << " jvp_fd_fallback=" << (fb_any ? 1 : 0)
                               << " homogeneity_rel=" << hom_rel
@@ -10022,8 +10530,8 @@ vertical_coefficients:
                     ScopedProbeState probe_guard(*this);
                     const auto U_probe = U_conv.detach().clone();
                     auto F_of = [&](wrf::sdirk3::RhsMode m) {
-                        return [this, m](const torch::Tensor& x) {
-                            return computeUnifiedRHS(x, m);
+                        return [&probe_rhs, m](const torch::Tensor& x) {
+                            return probe_rhs(x, m);
                         };
                     };
                     torch::Tensor v = torch::randn_like(U_probe);
@@ -10044,7 +10552,7 @@ vertical_coefficients:
                     torch::Tensor w = torch::randn_like(U_probe);
                     auto vjp = [&](wrf::sdirk3::RhsMode m) -> torch::Tensor {
                         auto leaf = U_probe.detach().clone().requires_grad_(true);
-                        auto F = computeUnifiedRHS(leaf, m);
+                        auto F = probe_rhs(leaf, m);
                         if (!F.requires_grad()) return torch::Tensor{};
                         auto g = torch::autograd::grad({F}, {leaf}, {w},
                                                        /*retain_graph=*/false,
@@ -10072,6 +10580,30 @@ vertical_coefficients:
                     const double lhs = dot(Jv_full, w);      // <J v, w>
                     const double rhs = dot(v, Jt_full);      // <v, J^T w>
                     const double den = std::max(std::abs(lhs), std::abs(rhs));
+                    // How much of the tangent production DISCARDS.
+                    //
+                    // imex_slow_in_tangent = 0 at runtime, so compute_k_slow detaches k_slow and
+                    // the slow channel's derivative never reaches the Newton matvec or the
+                    // adjoint. The split identity says J_full = J_E + J_I; the fraction of
+                    // ||J_full v|| carried by J_E is therefore the fraction of the stage tangent
+                    // that is dropped by configuration. For a model whose purpose is a 4D-Var
+                    // adjoint, that number belongs on the record next to the identity that
+                    // makes it computable.
+                    const double n_full = Jv_full.defined()
+                        ? Jv_full.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    const double n_e = Jv_e.defined()
+                        ? Jv_e.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    const double n_i = Jv_i.defined()
+                        ? Jv_i.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    std::cerr << "SDIRK3_TANGENT_BUDGET stage=" << stage_id
+                              << " slow_in_tangent="
+                              << (wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent ? 1 : 0)
+                              << " J_full_v=" << n_full
+                              << " J_E_v=" << n_e
+                              << " J_I_v=" << n_i
+                              << " dropped_frac=" << (n_full > 0.0 ? n_e / n_full : -1.0)
+                              << " retained_frac=" << (n_full > 0.0 ? n_i / n_full : -1.0)
+                              << std::endl;
                     std::cerr << "SDIRK3_AD_SPLIT_CONTRACT stage=" << stage_id
                               << " jvp_split_rel=" << rel(Jv_full, Jv_e + Jv_i)
                               << " vjp_split_rel="
@@ -10084,6 +10616,93 @@ vertical_coefficients:
                               << " vjp_available="
                               << (Jt_full.defined() && Jt_e.defined() && Jt_i.defined() ? 1 : 0)
                               << std::endl;
+                }
+
+                // ============================================================
+                // R12 P1c: does the probe measure the PRODUCTION operator?
+                // ============================================================
+                // The reference-state defect was invisible to every validity field already in
+                // place -- the probe compiled, its JVP was a true dual with no FD fallback, it
+                // passed homogeneity and additivity, and its Arnoldi converged in m. It was a
+                // sound measurement OF THE WRONG FUNCTION, and a hidden second input through a
+                // mutable member cannot be caught by asking the measurement about itself.
+                //
+                // What catches it is comparing against the production wrapper directly:
+                //
+                //     J[compute_k_slow](U0) v   vs   J[probe_rhs(., ExplicitOnly)](U0) v
+                //
+                // compute_k_slow IS the production path -- the stage loop calls exactly it. If
+                // the probe evaluator mirrors it, these agree to round-off in every direction;
+                // if a reference or a cached input diverges, they do not. Four directions,
+                // because a single one can agree by accident where the missing term is small.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_PROBE_PARITY")) {
+                    ScopedProbeState parity_guard(*this);
+                    const auto U0p = U_conv.detach().clone();
+                    auto F_prod = [&](const torch::Tensor& x) {
+                        return compute_k_slow(x, torch::Tensor{});
+                    };
+                    auto F_prob = [&probe_rhs](const torch::Tensor& x) {
+                        return probe_rhs(x, wrf::sdirk3::RhsMode::ExplicitOnly);
+                    };
+                    std::vector<std::pair<const char*, torch::Tensor>> pdirs;
+                    pdirs.emplace_back("implicit_step", U_conv.detach() - U_stage.detach());
+                    pdirs.emplace_back("random", torch::randn_like(U0p));
+                    {
+                        torch::NoGradGuard ng_pd;
+                        auto base = U_conv.detach() - U_stage.detach();
+                        auto [pu,pv,pw,pph,pt,pmu] = extractStateVariables(base);
+                        auto edge_of = [](const torch::Tensor& x, bool want_edge) {
+                            auto m = torch::zeros_like(x);
+                            if (x.dim() == 3) {
+                                for (int64_t d = 0; d < 3; ++d) {
+                                    const int64_t n = x.size(d);
+                                    if (n < 2) continue;
+                                    m.slice(d, 0, 1).fill_(1);
+                                    m.slice(d, n - 1, n).fill_(1);
+                                }
+                            }
+                            return want_edge ? x * m : x * (1 - m);
+                        };
+                        std::vector<torch::Tensor> P{pu,pv,pw,pph,pt,pmu};
+                        std::vector<torch::Tensor> E, I;
+                        for (auto& q : P) { E.push_back(edge_of(q,true)); I.push_back(edge_of(q,false)); }
+                        pdirs.emplace_back("edge", combineStateVariables(E[0],E[1],E[2],E[3],E[4],E[5]));
+                        pdirs.emplace_back("interior", combineStateVariables(I[0],I[1],I[2],I[3],I[4],I[5]));
+                    }
+                    for (auto& nd : pdirs) {
+                        auto d = nd.second;
+                        {
+                            torch::NoGradGuard ng;
+                            const double dn = d.detach().to(torch::kFloat64).norm().item<double>();
+                            if (!(dn > 0.0)) continue;
+                            d = d / static_cast<float>(dn);
+                        }
+                        bool fb1 = false, fb2 = false;
+                        std::string why1, why2;
+                        const auto Jp = wrf::sdirk3::compute_jvp_fwad_or_fd(F_prod, U0p, d, 0, 0.0f, &fb1, &why1);
+                        const auto Jq = wrf::sdirk3::compute_jvp_fwad_or_fd(F_prob, U0p, d, 0, 0.0f, &fb2, &why2);
+                        torch::NoGradGuard ng_r;
+                        const auto a = Jp.detach().to(torch::kFloat64);
+                        const auto b = Jq.detach().to(torch::kFloat64);
+                        const double na = a.norm().item<double>();
+                        std::cerr << "SDIRK3_PROBE_PARITY stage=" << stage_id
+                                  << " dir=" << nd.first
+                                  << " J_prod_norm=" << na
+                                  << " J_probe_norm=" << b.norm().item<double>()
+                                  << " rel_diff=" << (na > 0.0
+                                        ? (a - b).norm().item<double>() / na : -1.0)
+                                  // SEPARATE flags. Combined as fb1||fb2 the record cannot say
+                                  // WHICH side degraded to a finite difference -- and comparing
+                                  // a true dual against an FD quotient is not a like-for-like
+                                  // comparison, so the rel_diff would be read as a structural
+                                  // disagreement when it is partly FD noise.
+                                  << " fd_fallback_prod=" << (fb1 ? 1 : 0)
+                                  << " fd_fallback_probe=" << (fb2 ? 1 : 0)
+                                  << " comparable=" << ((fb1 == fb2) ? 1 : 0)
+                                  << " why_prod=\"" << why1 << "\""
+                                  << " why_probe=\"" << why2 << "\""
+                                  << std::endl;
+                    }
                 }
 
                 // ============================================================
@@ -10117,8 +10736,8 @@ vertical_coefficients:
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     ScopedProbeState probe_guard(*this);
                     const auto U0d = U_conv.detach().clone();
-                    auto F_exp_d = [this](const torch::Tensor& x) {
-                        return computeUnifiedRHS(x, wrf::sdirk3::RhsMode::ExplicitOnly);
+                    auto F_exp_d = [&probe_rhs](const torch::Tensor& x) {
+                        return probe_rhs(x, wrf::sdirk3::RhsMode::ExplicitOnly);
                     };
                     // Two directions: the one the continuation walked (U_conv - U_stage, i.e.
                     // what the implicit solve moved along) and a random one, because a single
@@ -10215,11 +10834,11 @@ vertical_coefficients:
                     torch::NoGradGuard ng_split;
                     ScopedProbeState probe_guard(*this);
                     const auto U_probe = U_conv.detach();
-                    const auto f_full = computeUnifiedRHS(U_probe, RhsMode::Full)
+                    const auto f_full = probe_rhs(U_probe, RhsMode::Full)
                                             .detach().to(torch::kFloat64);
-                    const auto f_exp  = computeUnifiedRHS(U_probe, RhsMode::ExplicitOnly)
+                    const auto f_exp  = probe_rhs(U_probe, RhsMode::ExplicitOnly)
                                             .detach().to(torch::kFloat64);
-                    const auto f_imp  = computeUnifiedRHS(U_probe, RhsMode::ImplicitOnly)
+                    const auto f_imp  = probe_rhs(U_probe, RhsMode::ImplicitOnly)
                                             .detach().to(torch::kFloat64);
                     const double n_full = f_full.norm().item<double>();
                     const auto   resid  = f_full - f_exp - f_imp;
@@ -12387,7 +13006,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 // call can answer in its place.
                 static const bool arm_any =
                     probe_env_enabled("WRF_SDIRK3_MU_DIV_TRACE") ||
-                    probe_env_enabled("WRF_SDIRK3_PH_TERMS_TRACE");
+                    probe_env_enabled("WRF_SDIRK3_PH_TERMS_TRACE") ||
+                    // R3: so an advection record emitted here carries the stage it belongs
+                    // to instead of -1. Records from outside this scope keep -1, which says
+                    // "not the armed evaluation" rather than naming a stage it cannot know.
+                    adv_split_blocks_enabled();
                 torch::Tensor F_fast_final;
                 {
                     std::unique_ptr<ArmProbeFor> arm;
@@ -15024,62 +15647,21 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             ucap.terms.advection.y        = ru_adv_y.detach().clone();
             ucap.terms.advection.vertical = ru_adv_z.detach().clone();
 
-            // R10: the three directions as NUMBERS on the same stream as everything else.
-            //
-            // The `adv` site delta identified advection as the term carrying the whole 55x
-            // jump, but a lumped `adv` cannot say WHICH operator, and the file dump writes one
-            // artifact per call -- unusable when the question is how the split moves along a
-            // 9-point continuation. These tensors are already captured; only the norms were
-            // missing, and a norm on the same line as the lambda is what makes the comparison
-            // readable. FP64 before the reduction, per the same review.
-            auto n64 = [](const torch::Tensor& t) {
-                return t.defined() ? t.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
-            };
-            auto m64 = [](const torch::Tensor& t) {
-                return t.defined()
-                    ? t.detach().to(torch::kFloat64).abs().max().item<double>() : -1.0;
-            };
-            const auto horiz = (ru_adv_x.defined() && ru_adv_y.defined())
-                ? (ru_adv_x + ru_adv_y) : torch::Tensor{};
-            // F2: norms alone cannot see two large terms cancelling. The cosine with the total
-            // advective tendency separates a term that REINFORCES the result from one that is
-            // large and mostly cancels -- and a near -1 cosine on a large term is the signature
-            // that a norm-ranked decomposition would report as "dominant" while it contributes
-            // almost nothing to the sum.
-            const auto adv_total = (ru_adv_z.defined() && horiz.defined())
-                ? (horiz + ru_adv_z) : torch::Tensor{};
-            auto cos_with = [&](const torch::Tensor& a) -> double {
-                if (!a.defined() || !adv_total.defined()) return -2.0;
-                const auto a64 = a.detach().to(torch::kFloat64);
-                const auto b64 = adv_total.detach().to(torch::kFloat64);
-                const double na = a64.norm().item<double>();
-                const double nb = b64.norm().item<double>();
-                if (!(na > 0.0 && nb > 0.0)) return -2.0;
-                return (a64 * b64).sum().item<double>() / (na * nb);
-            };
-            std::cerr << "SDIRK3_ADV_SPLIT"
-                      << " adv_x=" << n64(ru_adv_x)
-                      << " adv_y=" << n64(ru_adv_y)
-                      << " adv_z=" << n64(ru_adv_z)
-                      << " horiz_sum=" << n64(horiz)
-                      // The ratio is the cross-model-comparable quantity: it cancels the index
-                      // extents, the coupled/decoupled convention and any common scaling.
-                      << " z_over_horiz="
-                      << (n64(horiz) > 0.0 ? n64(ru_adv_z) / n64(horiz) : -1.0)
-                      << " max_x=" << m64(ru_adv_x)
-                      << " max_y=" << m64(ru_adv_y)
-                      << " max_z=" << m64(ru_adv_z)
-                      << " adv_total=" << n64(adv_total)
-                      << " cos_x=" << cos_with(ru_adv_x)
-                      << " cos_y=" << cos_with(ru_adv_y)
-                      << " cos_z=" << cos_with(ru_adv_z)
-                      // If the parts are large and the total is small, they cancel; this ratio
-                      // states that directly instead of leaving it to be inferred.
-                      << " sum_of_norms_over_total="
-                      << (n64(adv_total) > 0.0
-                            ? (n64(ru_adv_x) + n64(ru_adv_y) + n64(ru_adv_z)) / n64(adv_total)
-                            : -1.0)
-                      << std::endl;
+        }
+        // R10: the three directions as NUMBERS on the same stream as everything else.
+        //
+        // The `adv` site delta identified advection as the term carrying the whole 55x jump,
+        // but a lumped `adv` cannot say WHICH operator, and the file dump writes one artifact
+        // per call -- unusable when the question is how the split moves along a 9-point
+        // continuation.
+        //
+        // Emitted from the shared observer, and OUTSIDE the u-terms capture, so ru answers to
+        // the same gate as every other block. Left inside, a five-block survey would silently
+        // return four blocks -- the one shape of missing data that reads as a real comparison.
+        if (uterms_trace || adv_split_blocks_enabled()) {
+            wrf::sdirk3::emit_adv_split(
+                "ru", residual_eval_probe().tag_stage.load(), rhs_mode_name(mode),
+                ru_adv_x + ru_adv_y, ru_adv_z, ru_adv_x, ru_adv_y);
         }
         // 9F.D20: combined horizontal, to compare against WRF's advect_u split.
         // Captured as the SUM (not |adv_x|+|adv_y|) because WRF's horizontal block
@@ -15341,6 +15923,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         
         // Total V advection tendency (keep as coupled momentum)
         auto V_tend_adv = rv_adv_horiz + V_adv_z;
+        if (adv_split_blocks_enabled()) {
+            wrf::sdirk3::emit_adv_split("rv", residual_eval_probe().tag_stage.load(), rhs_mode_name(mode),
+                                        rv_adv_horiz, V_adv_z, rv_adv_x, rv_adv_y);
+        }
         
         // Add coupled momentum tendency directly (no conversion to velocity)
         rv_tend = rv_tend + V_tend_adv;    }
@@ -15646,6 +16232,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
         // Total W advection tendency (keep as coupled momentum)
         auto rw_tend_adv = rw_adv_horiz + rw_adv_z;
+        if (adv_split_blocks_enabled()) {
+            // x and y are absent by construction: the map-factor product and the
+            // mass->w average are applied to the horizontal SUM, so a per-direction
+            // tendency is not something this code computes.
+            wrf::sdirk3::emit_adv_split("rw", residual_eval_probe().tag_stage.load(), rhs_mode_name(mode),
+                                        rw_adv_horiz, rw_adv_z);
+        }
         // Add coupled momentum tendency directly (no conversion to velocity)
         rw_tend = rw_tend + rw_tend_adv;
     }
@@ -15775,6 +16368,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 t_ah = torch::zeros_like(t_ah);
             }
             t_tend = t_tend + t_ah + t_az;
+            if (adv_split_blocks_enabled()) {
+                // The ABLATED values, which are what t_tend actually receives -- an
+                // observer that reported the pre-ablation parts would contradict the run.
+                wrf::sdirk3::emit_adv_split("t", residual_eval_probe().tag_stage.load(), rhs_mode_name(mode),
+                                            t_ah, t_az);
+            }
         }
     }
 
@@ -17383,6 +17982,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         
         // AUTOGRAD FIX: Combine all ph_tend contributions to avoid in-place operations
         ph_tend = ph_tend_x_adv + ph_tend_y_adv + ph_tend_z_adv;
+        if (adv_split_blocks_enabled()) {
+            wrf::sdirk3::emit_adv_split("ph", residual_eval_probe().tag_stage.load(), rhs_mode_name(mode),
+                                        ph_tend_x_adv + ph_tend_y_adv,
+                                        ph_tend_z_adv, ph_tend_x_adv, ph_tend_y_adv);
+        }
         if (hevi) hevi_ph_horiz = ph_tend_x_adv + ph_tend_y_adv;  // increment 2: capture horizontal geopotential (-> k_slow)
 
         // DIAGNOSTIC: Check individual advection contributions before adding buoyancy

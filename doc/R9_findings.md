@@ -1126,14 +1126,27 @@ already carries `t0`**, so the full field is `th_base_ + t` and `t0` was subtrac
 correct minimum is **192.3 K, not -13 K**. Nothing about the continuation is inadmissible, and
 the "violation follows the blow-up" framing goes with it — there is no violation.
 
-### One anomaly, flagged rather than explained
+### ~~One anomaly, flagged rather than explained~~ — RETRACTED: it was MY bug
 
-`rho_max` reaches 4.2e6 kg/m^3 while `rho_min` is a plausible 0.80-7.7. So `al` has near-zero
-entries in a few cells. The code's own comment at the `diag_p_al` call site records that this
-routine builds `al` **geometrically** and is 35% off on the gradient versus WRF's
-`calc_p_rho_phi` form, because `p' = p0*(R(t0+th)/(p0*alpha))^(cp/cv) - pb` cancels two ~1e5 Pa
-terms down to ~11 Pa. Whether these cells are that known artefact or a real near-singularity is
-**not** established here.
+I reported `rho_max = 4.2e6 kg/m^3` and speculated it might be the geometric-`al` artefact the
+call site's own comment records. **That was wrong, and the speculation is retracted.**
+
+`diag_p_al` returns `{p_pert, al_pert, al_full}` and I inverted `std::get<1>` — the
+**perturbation** — so the quantity was never a density. Worse, selecting only its positive
+entries silently dropped every cell with a non-positive perturbation, which is exactly where an
+admissibility check must look.
+
+Corrected to `std::get<2>` (`al_full` = `1/rho`), density is entirely physical across the whole
+continuation:
+
+| lambda | `rho_min` | `rho_max` | non-finite | non-positive |
+|---|---|---|---|---|
+| 0 | 0.1616 | 1.330 | **0** | **0** |
+| 0.5 | 0.1491 | 1.341 | **0** | **0** |
+| 1 | 0.1359 | 1.352 | **0** | **0** |
+
+0.14-1.35 kg/m^3 is the atmospheric range (surface ~1.2, model top ~0.1). There is no anomaly,
+and nothing suggests a defect in the production EOS.
 
 ## F2. No two large terms are cancelling in the u-advection decomposition
 
@@ -1233,3 +1246,258 @@ carries the stiffness — but that is a reason to have prioritised it, **not** a
 the other five. `F_E = F_adv + F_pressure/metric + F_buoyancy + F_coriolis + F_diffusion +
 F_damping + F_boundary + F_source` across all six variables is **not** measured, and the review's
 P0-5 stays open on that basis.
+
+## The three operators, measured — and the spectra are NOT additive
+
+`J_I` completes the set. Without it, "the implicit part does not cancel the RHP content" rested
+on a difference of two measurements rather than on the operator itself. Same Arnoldi, `m=48`,
+stage 2:
+
+| operator | `n_rhp` | `max_re` | `min_re` | `ritz0` | `\|lambda_0\|` | rel res |
+|---|---|---|---|---|---|---|
+| `J_E` | 28/48 | 170.0 | -120.8 | (+119.5, -189.7) | 224.2 | 0.0079 |
+| **`J_I`** | 23/48 | **22.2** | -30.1 | **(-4.302, +110.8)** | 110.9 | 0.0056 |
+| `J_full` | 27/48 | **470.6** | -450.7 | **(+470.6, 0)** | 470.6 | 0.0139 |
+
+### The sum of the parts is not the part of the sum
+
+| quantity | `J_E` | `J_I` | sum | `J_full` | ratio |
+|---|---|---|---|---|---|
+| `max_re` | 170.0 | 22.2 | 192.2 | **470.6** | **2.45x** |
+| `\|lambda_0\|` | 224.2 | 110.9 | 335.1 | 470.6 | 1.40x |
+
+`J_full = J_E + J_I` as operators, but its dominant real part is **2.45x** the sum of theirs.
+Eigenvalues do not add, and this is the review's objection in quantitative form: nothing about
+`J_full`'s spectrum can be inferred from the parts', in either direction.
+
+### `J_I` alone looks like what it should
+
+Its dominant Ritz value is `(-4.302, +110.8)` — `|Re|/|lambda| = 0.039`, i.e. **nearly
+imaginary with a slightly NEGATIVE real part**: a weakly damped oscillation, which is what an
+acoustic / gravity-wave operator ought to look like. It is not the source of the strong growth,
+and its `max_re = 22.2` is an eighth of `J_E`'s.
+
+So the strongly growing purely-real mode at `+470.6` belongs to the **coupled** operator and is
+not a feature of either partition on its own at that strength.
+
+**Still not `D(Phi_h)`.** These are RHS Jacobians; the one-step tangent additionally involves
+the stage solves, whose tangent satisfies `(I - h a_ii J_I) dK_i = J_I dY_i` — the same linear
+system the Newton-Krylov solve already handles, so assembling it is tractable but is
+effectively standing up the TLM, and it is not done here.
+
+---
+
+# R12 — the probes were linearizing the wrong function; re-measured
+
+## P0-1. The probe mapping was not the production mapping
+
+`computeUnifiedRHS` **reads** `U_ref_stage_` (`:12983`) and extracts `w_ref` from it, which feeds
+Omega, vertical advection and mass continuity — the operators this campaign tracked as dominant.
+The production wrapper sets that reference to the evaluation state before every call, so
+production is
+
+```
+script_F(U) = F_E(U, U_ref = U)
+```
+
+The probes called `computeUnifiedRHS(x, mode)` directly, leaving `U_ref_stage_` at the base
+state, so they measured `tilde_F(U) = F_E(U, U_ref = U_0)` — a different function whose Jacobian
+is missing `dF/dU_ref`. For the JVP this matters twice: the reference must carry the **tangent**,
+or forward mode drops that path silently.
+
+Every probe now goes through one evaluator that mirrors the production wrapper, including the
+`imex_slow_in_tangent` branch.
+
+### Re-measured on the authoritative mapping — the conclusions hold
+
+| operator | fixed-reference (wrong) | **authoritative** | change |
+|---|---|---|---|
+| `J_E` `max_re` | 170.0 | **169.9** | -0.06% |
+| `J_I` `max_re` | 22.2 | **20.81** | -6.3% |
+| `J_full` `max_re` | 470.6 | **471.0** | +0.08% |
+| non-additivity | 2.45x | **2.47x** | — |
+
+The defect was real and the review was right to flag it. Its numerical effect on these spectra
+is under 0.1% for `J_E` and `J_full`. The RHP findings stand, now on the operator production
+actually evaluates.
+
+## P0-3. A production regression in `slow_in_tangent = false`
+
+`compute_stage_tendency()` had an **empty else**, so with `slow_in_tangent = false` the reference
+from a previous evaluation survived. That function is called repeatedly on rolled and unrolled
+states, so a stale reference could pair `F(U_rolled)` with `U_ref = U_unrolled` — through
+`w_ref`, hence Omega and vertical advection. Not a diagnostic path: `slow_in_tangent = false` is
+a supported model-error configuration. Fixed.
+
+## Probe certification fixes
+
+- **C1** the topology gate checked rank count only; the sibling stage-operand gate also requires
+  `tile_covers_patch`. One rank with several OpenMP tiles still sees part of the patch, and a
+  partial-tile operator is no more global than a per-rank one.
+- **C2** `probe_skip_note` was gated on a single function-local `static bool` **shared by every
+  probe**, so only the first skip in the process printed — a silent skip is the failure the gate
+  exists to prevent. Also a non-atomic static write under OpenMP.
+- **C3** Ritz **values** came from `linalg_eigvals` and Ritz **vectors** from a separate
+  `linalg_eig`; nothing contracts the two calls to order eigenpairs identically, so a residual
+  could be printed beside a different pair's modulus. One call, sorted once.
+- **C4** env parsing was fail-silent again: `"Full"`, `"FULL"`, `"ful"` and any typo all became
+  `J_E`, and `atoi("48junk") = 48`, `atoi("abc") = 0 -> default`. Both now strict and abort.
+- **P1-2** `torch::eye(m, kFloat64)` is a CPU tensor while `Vm` may be CUDA/MPS.
+
+## P1c. The probe-vs-production parity contract — implemented, and it REFUSES
+
+The reference-state defect was invisible to every validity field already in place: the probe
+compiled, its JVP was a true dual with no FD fallback, it passed homogeneity and additivity, and
+its Arnoldi converged in `m`. It was a sound measurement **of the wrong function**. A hidden
+second input through a mutable member cannot be caught by asking the measurement about itself —
+only by comparing against the production path.
+
+So: `J[compute_k_slow](U_0) v` versus `J[probe_rhs(., ExplicitOnly)](U_0) v`, four directions.
+
+| stage | dir | `J_prod` | `J_probe` | `rel_diff` | `fd_prod` | `fd_probe` | `comparable` |
+|---|---|---|---|---|---|---|---|
+| 1 | random | 0.605948 | 0.605836 | 0.0156 | **1** | **0** | **0** |
+| 2 | implicit_step | 26.84 | 42.11 | 1.439 | **1** | **0** | **0** |
+| 2 | random | 458.5 | 458.1 | 0.121 | **1** | **0** | **0** |
+| 2 | edge | 109.7 | 97.22 | 0.856 | **1** | **0** | **0** |
+| 2 | interior | 28.03 | 73.87 | 2.625 | **1** | **0** | **0** |
+
+**`comparable = 0` everywhere.** The production wrapper `compute_k_slow` falls back to a finite
+difference; the probe evaluator does not. So this is a true dual against an FD quotient, and the
+`rel_diff` column is **not** evidence of structural disagreement — it is largely the difference
+between two different derivative methods.
+
+The flags had to be separated to see this. Emitted as `fb1 || fb2` the record said only
+"something degraded", and the 0.12–2.6 spread would have been read as the probe measuring a
+different operator.
+
+### What this does and does not establish
+
+**Does:** the contract works — it refuses to certify rather than producing a number. And it
+surfaces a fact about the codebase worth its own investigation: `compute_k_slow` is not
+forward-mode differentiable while `computeUnifiedRHS` is, even though the wrapper's body is
+structurally the same call plus a reference assignment. `slow_in_tangent` is not the difference
+— both read `g_sdirk3_config.imex_slow_in_tangent` (`:5762`).
+
+**Does not:** certify the probe. **P1c stays OPEN.** The re-measured spectra rest on
+`probe_rhs` mirroring `compute_k_slow` *by construction* — verified by reading both bodies, not
+by measurement. That is weaker than the contract was meant to provide, and it is the honest
+status.
+
+## Why the production wrapper is not forward-mode differentiable — and what it means
+
+Surfacing the fallback REASON (the helper's `catch (...)` swallowed it) answers it in one line:
+
+```
+why_prod : fwAD tangent is undefined (the dual was severed: a detach, or an output that
+           does not depend on the dual input)
+```
+
+Not an exception — **severed**. And `compute_k_slow`'s body says where:
+
+```cpp
+if (slow_in_tangent) { k_slow = computeUnifiedRHS(U_conv, ExplicitOnly); }
+else                 { k_slow = computeUnifiedRHS(U_conv, ExplicitOnly).detach(); }
+```
+
+**`[CONFIG] imex_slow_in_tangent = 0` at runtime** — the struct default is `true`, and the
+namelist sets it to 0. The config's own comment states the intent:
+
+> `false = K_slow detached (model-error assumption)`
+
+### Three consequences
+
+**1. The slow channel contributes NO tangent in the operational configuration.** `k_slow` is
+detached, so the explicit RHS's derivative does not enter the Newton matvec or the adjoint. For
+4D-Var this is by design — the slow dynamics are treated as model error — but it means the
+tangent-linear model deliberately omits that derivative.
+
+**2. `J_E`'s right-half-plane spectrum is a property of the PRIMAL operator, not of the
+production tangent.** The eigenvalues are real and the measurement is sound; what they are
+*about* is the explicit RHS as a mathematical map, which governs the forward integration's
+stability. They are not in the tangent path, because that path has no slow-channel derivative at
+all. Both statements are true and they answer different questions — the campaign's stability
+conclusions concern the primal, and nothing here says the adjoint sees them.
+
+**3. `probe_rhs` still does not match production** — it mirrors the reference handling but not
+the detach. Mirroring it exactly would return a zero tangent, which is precisely the production
+fact. So the probe measures the operator's Jacobian; production's slow-channel tangent is zero.
+Stated, not papered over: **P1c remains open**, and this is the second distinct way the probe
+and production differed.
+
+### It also raises the P0-3 fix's importance
+
+`compute_stage_tendency()`'s empty `else` was on the `slow_in_tangent = false` branch, which I
+described as "a supported model-error configuration". It is the **ACTIVE** configuration at
+runtime, so the stale-reference path was live, not latent.
+
+## How much tangent the detach actually discards
+
+The split identity `J_full = J_E + J_I` makes this computable: with `imex_slow_in_tangent = 0`
+the slow channel's derivative is dropped, so `||J_E v|| / ||J_full v||` is the fraction of the
+stage tangent lost by configuration.
+
+| stage | `\|\|J_full v\|\|` | `\|\|J_E v\|\|` | `\|\|J_I v\|\|` | **dropped** | retained |
+|---|---|---|---|---|---|
+| 1 | 1.657e5 | 0.611 | 1.657e5 | **3.69e-06** | 1.000 |
+| 2 | 1.658e5 | 461.9 | 1.658e5 | **2.79e-03** | 1.000 |
+
+**The slow channel carries 0.0004%-0.28% of the stage tangent.** So the detach discards very
+little in norm, and my framing last round — that the TLM "deliberately omits that derivative",
+stated with implied concern — overstates the consequence at a single stage.
+
+### This looks contradictory next to the spectra, and is not
+
+`J_E` has the LARGER real parts (`max_re` 169.9 vs `J_I`'s 20.81), yet `||J_E v||` is 3-6 orders
+SMALLER than `||J_I v||` on a random direction. Both are true because they are different
+quantities: having large positive real parts is not the same as acting with a large norm.
+
+So the tangent budget answers "how much is dropped **in norm**", and it does **not** answer "how
+much of the growth-producing content is dropped". A systematically omitted growing mode could
+still accumulate across steps even while contributing 0.28% at one stage. That question is not
+settled here.
+
+The split identity is re-confirmed on this run with `jvp_fd_fallback = 0`: `jvp 1.8e-10`,
+`vjp 5.8e-08`, `transpose 7.0e-06`.
+
+## C5. A controlled m study — and `max_re` turns out NOT to be a converged quantity
+
+The earlier m = 24 / 48 / 96 comparison ran as three separate processes, each drawing its start
+vector from the global RNG. "`|lambda|` agreed across m" therefore mixed m-convergence with
+start-vector variation. Now: one Arnoldi basis, a deterministic index-based `v0`
+(`v0_digest = 842.56`, identical across every prefix), and the m study taken as **nested
+prefixes** `H_12`, `H_24`, `H_48` of that one `H` — so moving `m` changes the Krylov dimension
+and nothing else.
+
+| stage | m | `\|lambda_0\|` | `Re(lambda_0)` | `n_rhp` | `max_re` |
+|---|---|---|---|---|---|
+| 1 | 12 | 1.73611 | 1.73611 | 7 | 1.73611 |
+| 1 | 24 | 1.76016 | 1.76016 | 13 | 1.76016 |
+| 1 | 48 | **1.76365** | 1.76365 | 26 | 1.76365 |
+| 2 | 12 | 220.3 | 106.9 | 8 | 136.8 |
+| 2 | 24 | 223.4 | 118.2 | 15 | 141.6 |
+| 2 | 48 | **224.2** | **119.5** | 28 | **170.0** |
+
+### What converges, and what I was wrong to report as converged
+
+**Converged** (m = 24 -> 48): `|lambda_0|` **+0.36%**, `Re(lambda_0)` **+1.10%**. The dominant
+Ritz pair is a genuine converged property of the operator, and it is right-half-plane.
+
+**NOT converged:** `max_re` goes 136.8 -> 141.6 -> **170.0**, **+20% from m=24 to m=48**, still
+climbing. That is the expected behaviour of a maximum taken over a growing set — more Ritz values
+means more chances at a larger real part, and the interior Ritz values are the least converged
+ones.
+
+**So `max_re` should not have been reported as an operator property**, and I reported it as one
+repeatedly — including in the headline comparison `J_full max_re 471.0` vs `J_E max_re 169.9`
+("2.47x non-additivity"). That comparison is still apples-to-apples *at fixed m = 48*, but it is
+not a converged quantity and the ratio would move with `m`. **The non-additivity claim is
+downgraded to a fixed-m observation.**
+
+Similarly `n_rhp` as a **count** scales with `m` (7/12, 13/24, 26/48), so "13 of 24 Ritz values
+are right-half-plane" was never a property of the operator. As a **fraction** it is stable —
+0.67, 0.63, 0.58 — trending down slowly; "roughly half the computed Ritz values are RHP" is the
+defensible form.
+
+**Unchanged:** the dominant pair is RHP and converged at both stages. That is the claim the
+campaign rests on, and it survives on the controlled study.
