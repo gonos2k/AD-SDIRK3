@@ -93,10 +93,51 @@ budget (also a stall — spending every iteration on nothing is not the budget's
 
 ---
 
+## Splitting the disjunction: preconditioner off
+
+Single-variable: `WRF_SDIRK3_PRECOND_TYPE=0`, everything else fixed. Confirmed in the log by
+`[PRECOND SELECTION] No preconditioner (precond_type=0)` — **not** by the `[C++ CONFIG DEBUG]
+Setting precond_type = 2` line, which is the namelist being applied before the env override
+and which a first, careless grep read as "the override did not take". The contradiction
+between that line and two clearly different records is what exposed the bad probe.
+
+| M | budget | newton_iters | R_last | **best_krylov_rel** | krylov_iters | gmres_fail |
+|---|---|---|---|---|---|---|
+| type 2 | 12 **and** 40 | 4 | 0.4578 | **0.5526** | 28 | 1 |
+| I (off) | 12 **and** 40 | 2 | 0.5502 | **0.3853** | 14 | 1 |
+
+Both arms are budget-invariant — 12 and 40 are bit-identical within each — so the comparison
+is between two stable operators, not two samples.
+
+### MEASURED
+
+1. **The preconditioner makes the Krylov residual WORSE.** `best_krylov_rel` 0.5526 with `M`,
+   **0.3853 with `M = I`**. Removing the preconditioner improves the linear solve by ~30%.
+
+2. **Removing it does not fix the wall.** `gmres_total_failures=1` and
+   `category=krylov_stagnated` in both arms. `M = I` floors at 0.3853, which is nowhere near
+   a solved system.
+
+So the disjunction resolves: **the preconditioner is not the cause of the wall, and is
+separately net-harmful; the wall is in the OPERATOR.**
+
+This reaches, from an independent channel, the same place as the earlier stage-2 budget study
+(`M = I` better at both stages) — that one was a Krylov-budget experiment, this one is a
+first-failure classification, and they agree.
+
+### NOT established
+
+That the operator is *indefinite*. That earlier conclusion was measured on the pre-Ω operator,
+and its re-measurement under the corrected Ω / WRF-parity operator has never been done. This
+ladder says the limit is the operator; it does not say **which property** of the operator, and
+inheriting the old spectral verdict would be assuming exactly what is unmeasured.
+
 ## The next measurement
 
-The disjunction `preconditioner_or_operator` is what to split next, and the campaign already
-has the instrument: a preconditioner-**off** run discriminates them. If the linear solve still
-floors at ~0.55 with `M = I`, the limit is the operator; if it improves, it is `M`.
+**Ritz spectrum of the operator GMRES actually iterates, on the current (Ω-corrected)
+operator, with the preconditioner OFF.** Preconditioner-off because the measurement above
+makes `M` a confound with no upside, and the Arnoldi Hessenberg GMRES already builds gives the
+spectrum for free.
 
-That is one run, single-variable, and it is the next thing to do — not another dt.
+That is the outstanding question, and it has been outstanding since the Ω fix landed. Not
+another dt, and not another preconditioner variant.
