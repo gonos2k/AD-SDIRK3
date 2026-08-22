@@ -8071,6 +8071,83 @@ public:
                     }
                 }
 
+                // R13.7: the FROZEN LINEAR-SYSTEM A/B -- the only experiment that can
+                // attribute anything to M.
+                //
+                // R13.4 compared PRECOND_TYPE=2 against PRECOND_TYPE=0 and called it single
+                // variable. It was not: production routes M-on to solve_fgmres and M-off to
+                // solve_gmres (see immediately below), so that comparison moved the
+                // preconditioner AND the Krylov implementation. The two arms also ran
+                // different Newton counts, so `best_krylov_rel` minimised over DIFFERENT
+                // linear systems -- A_n = I - h*gamma*J_F(U_eval,n) with U_eval,n differing.
+                // The conclusion drawn from it ("the preconditioner is net-harmful") was
+                // retracted.
+                //
+                // Here everything is held fixed BY CONSTRUCTION: one (A, b, x0) captured at
+                // this Newton iteration, the same solve_fgmres for both arms, the same
+                // Arnoldi budget, tol=0 so neither arm can exit early on tolerance, and
+                // max_restarts=1 so `restart` IS j. The only difference is the closure passed
+                // as M_inv: production, or the identity.
+                //
+                // The arms run on the SAME operator closure, so this costs 2 x sum(m) extra
+                // matvecs; it is opt-in and never runs in production.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_FROZEN_MI_AB") &&
+                    gmres_M_inv && newton_iter == 0) {
+                    torch::NoGradGuard ng_ab;
+                    auto identity_M = [](const torch::Tensor& v) { return v; };
+                    auto digest = [](const torch::Tensor& t) -> double {
+                        return (t.defined() && t.numel() > 0)
+                            ? t.detach().to(torch::kFloat64).abs().sum().item<double>() : -1.0;
+                    };
+                    const double b_norm = gmres_rhs.defined()
+                        ? gmres_rhs.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    // The proof that the two arms saw one system: digests of the inputs, and
+                    // ||b||, printed once and shared by every row below.
+                    std::cerr << "SDIRK3_FROZEN_AB_SYSTEM stage=" << stage
+                              << " newton_iter=" << newton_iter
+                              << " b_digest=" << digest(gmres_rhs)
+                              << " x0_digest=" << digest(gmres_x0)
+                              << " b_norm=" << b_norm
+                              << "  (one (A,b,x0); both arms below run the SAME solve_fgmres"
+                                 " on it, differing only in the M_inv closure)" << std::endl;
+                    for (int m : {4, 8, 16, 32, 48}) {
+                        for (int arm = 0; arm < 2; ++arm) {
+                            const bool use_M = (arm == 0);
+                            auto res = krylov_methods::solve_fgmres(
+                                gmres_op, gmres_rhs, gmres_x0, stage, ru_share,
+                                /*restart=*/m,
+                                // tol=0: neither arm may stop on tolerance, so both spend
+                                // exactly m Arnoldi steps and rho is compared at equal j.
+                                /*tol=*/0.0f,
+                                /*max_iter=*/1,
+                                use_M ? gmres_M_inv
+                                      : std::function<torch::Tensor(const torch::Tensor&)>(
+                                            identity_M),
+                                layout_initialized_ ? &cached_layout_ : nullptr,
+                                halo_mask_initialized_ ? &halo_mask_ : nullptr,
+                                options_.periodic_x, options_.periodic_y,
+                                nullptr, nullptr, nullptr);
+                            // The TRUE residual, recomputed here rather than trusted from the
+                            // solver's own bookkeeping: the two arms use different M and a
+                            // reported rel_error is not guaranteed to mean the same thing.
+                            double rho = -1.0;
+                            if (res.x.defined() && b_norm > 0.0) {
+                                const auto r = gmres_rhs.detach() - gmres_op(res.x.detach());
+                                rho = r.to(torch::kFloat64).norm().item<double>() / b_norm;
+                            }
+                            std::cerr << "SDIRK3_FROZEN_AB stage=" << stage
+                                      << " arm=" << (use_M ? "M" : "I")
+                                      << " j=" << m
+                                      << " rho_true=" << rho
+                                      << " rel_reported=" << res.rel_error
+                                      << " iters=" << res.iterations
+                                      << " termination=" << static_cast<int>(
+                                             res.termination_reason)
+                                      << std::endl;
+                        }
+                    }
+                }
+
                 // FGMRES ROUTING (full-repo review P1-1, mandatory — not a knob):
                 // any right-preconditioned solve MUST use FGMRES, because the
                 // production preconditioner wrapper can change mid-solve (ratio-guard
