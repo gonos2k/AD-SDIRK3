@@ -1430,3 +1430,32 @@ and production differed.
 `compute_stage_tendency()`'s empty `else` was on the `slow_in_tangent = false` branch, which I
 described as "a supported model-error configuration". It is the **ACTIVE** configuration at
 runtime, so the stale-reference path was live, not latent.
+
+## How much tangent the detach actually discards
+
+The split identity `J_full = J_E + J_I` makes this computable: with `imex_slow_in_tangent = 0`
+the slow channel's derivative is dropped, so `||J_E v|| / ||J_full v||` is the fraction of the
+stage tangent lost by configuration.
+
+| stage | `\|\|J_full v\|\|` | `\|\|J_E v\|\|` | `\|\|J_I v\|\|` | **dropped** | retained |
+|---|---|---|---|---|---|
+| 1 | 1.657e5 | 0.611 | 1.657e5 | **3.69e-06** | 1.000 |
+| 2 | 1.658e5 | 461.9 | 1.658e5 | **2.79e-03** | 1.000 |
+
+**The slow channel carries 0.0004%-0.28% of the stage tangent.** So the detach discards very
+little in norm, and my framing last round — that the TLM "deliberately omits that derivative",
+stated with implied concern — overstates the consequence at a single stage.
+
+### This looks contradictory next to the spectra, and is not
+
+`J_E` has the LARGER real parts (`max_re` 169.9 vs `J_I`'s 20.81), yet `||J_E v||` is 3-6 orders
+SMALLER than `||J_I v||` on a random direction. Both are true because they are different
+quantities: having large positive real parts is not the same as acting with a large norm.
+
+So the tangent budget answers "how much is dropped **in norm**", and it does **not** answer "how
+much of the growth-producing content is dropped". A systematically omitted growing mode could
+still accumulate across steps even while contributing 0.28% at one stage. That question is not
+settled here.
+
+The split identity is re-confirmed on this run with `jvp_fd_fallback = 0`: `jvp 1.8e-10`,
+`vjp 5.8e-08`, `transpose 7.0e-06`.

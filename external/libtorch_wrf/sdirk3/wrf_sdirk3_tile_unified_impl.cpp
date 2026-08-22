@@ -10154,6 +10154,30 @@ vertical_coefficients:
                     const double lhs = dot(Jv_full, w);      // <J v, w>
                     const double rhs = dot(v, Jt_full);      // <v, J^T w>
                     const double den = std::max(std::abs(lhs), std::abs(rhs));
+                    // How much of the tangent production DISCARDS.
+                    //
+                    // imex_slow_in_tangent = 0 at runtime, so compute_k_slow detaches k_slow and
+                    // the slow channel's derivative never reaches the Newton matvec or the
+                    // adjoint. The split identity says J_full = J_E + J_I; the fraction of
+                    // ||J_full v|| carried by J_E is therefore the fraction of the stage tangent
+                    // that is dropped by configuration. For a model whose purpose is a 4D-Var
+                    // adjoint, that number belongs on the record next to the identity that
+                    // makes it computable.
+                    const double n_full = Jv_full.defined()
+                        ? Jv_full.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    const double n_e = Jv_e.defined()
+                        ? Jv_e.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    const double n_i = Jv_i.defined()
+                        ? Jv_i.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    std::cerr << "SDIRK3_TANGENT_BUDGET stage=" << stage_id
+                              << " slow_in_tangent="
+                              << (wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent ? 1 : 0)
+                              << " J_full_v=" << n_full
+                              << " J_E_v=" << n_e
+                              << " J_I_v=" << n_i
+                              << " dropped_frac=" << (n_full > 0.0 ? n_e / n_full : -1.0)
+                              << " retained_frac=" << (n_full > 0.0 ? n_i / n_full : -1.0)
+                              << std::endl;
                     std::cerr << "SDIRK3_AD_SPLIT_CONTRACT stage=" << stage_id
                               << " jvp_split_rel=" << rel(Jv_full, Jv_e + Jv_i)
                               << " vjp_split_rel="
