@@ -9854,11 +9854,25 @@ vertical_coefficients:
                         }
                         std::vector<torch::Tensor> V;
                         auto H = torch::zeros({m + 1, m}, torch::kFloat64);
+                        double v0_digest = 0.0;
                         {
                             torch::NoGradGuard ng_a;
-                            auto v0 = torch::randn_like(U0);
-                            v0 = v0 / v0.to(torch::kFloat64).norm().item<double>();
-                            V.push_back(v0);
+                            // DETERMINISTIC start vector. torch::randn_like draws from the
+                            // global RNG, so two runs -- and therefore the m = 24 / 48 / 96
+                            // comparison, which ran as three separate processes -- did not share
+                            // a start vector. "|lambda| agreed across m" then mixes m-convergence
+                            // with start-vector variation. An index-based vector is reproducible
+                            // without a seed to carry, and its digest goes on the record so a
+                            // reader can tell two runs used the same one.
+                            const int64_t n = U0.numel();
+                            auto idx = torch::arange(n, torch::TensorOptions()
+                                                          .dtype(torch::kFloat64)
+                                                          .device(U0.device()));
+                            auto v0d = torch::sin(0.7139 * (idx + 1.0)) +
+                                       torch::cos(0.3121 * (idx + 1.0));
+                            v0d = v0d / v0d.norm();
+                            v0_digest = v0d.abs().sum().item<double>();
+                            V.push_back(v0d.to(U0.scalar_type()).reshape_as(U0));
                         }
                         int m_used = 0;
                         for (int j = 0; j < m; ++j) {
@@ -9889,6 +9903,29 @@ vertical_coefficients:
                             }
                         }
                         torch::NoGradGuard ng_r;
+                        // NESTED-PREFIX m study, from ONE Arnoldi basis. H_k is the leading
+                        // k x k block of the same H, so moving k changes the Krylov dimension
+                        // and nothing else -- no second run, no second start vector, no second
+                        // stage-2 solution. Three separate runs could not make that claim.
+                        for (int k : {12, 24, 48, 96}) {
+                            if (k >= m_used) continue;
+                            auto Hk = H.slice(0, 0, k).slice(1, 0, k);
+                            auto ek = torch::linalg_eigvals(Hk);
+                            auto rek = torch::real(ek).to(torch::kFloat64);
+                            auto imk = torch::imag(ek).to(torch::kFloat64);
+                            auto mok = torch::sqrt(rek * rek + imk * imk);
+                            const int64_t top = mok.argmax().item<int64_t>();
+                            std::cerr << "SDIRK3_ARNOLDI_PREFIX stage=" << stage_id
+                                      << " op=" << spec_name
+                                      << " m_prefix=" << k
+                                      << " lam_mod=" << mok[top].item<double>()
+                                      << " lam_re=" << rek[top].item<double>()
+                                      << " lam_im=" << imk[top].item<double>()
+                                      << " n_rhp=" << (rek > 0.0).sum().item<int64_t>()
+                                      << " max_re=" << rek.max().item<double>()
+                                      << " v0_digest=" << v0_digest
+                                      << std::endl;
+                        }
                         auto Hm = H.slice(0, 0, m_used).slice(1, 0, m_used);
                         // R12 C3: ONE eig call. Ritz VALUES came from linalg_eigvals and Ritz
                         // VECTORS from a separate linalg_eig, and nothing contracts the two

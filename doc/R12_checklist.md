@@ -44,8 +44,11 @@ R11 marked these `[x]` against probes narrower than the item's own wording. Reve
           linalg_eig -- pairing across two calls is not guaranteed. One call, sort once.
 - [x] C4  P1-4: env parsing is fail-silent again -- "Full"/"FULL"/"ful"/garbage all become J_E,
           and atoi("48junk")=48, atoi("abc")=0->default. Strict parse, abort on unrecognised.
-- [ ] C5  P1-3: deterministic v0 (index-based, not global RNG), emit v0_digest / seed id, and
-          do the m study as NESTED PREFIXES of ONE Arnoldi run
+- [x] C5  deterministic index-based v0 with v0_digest, m study as NESTED PREFIXES of one
+          basis. Result: the DOMINANT pair converges (|lam0| +0.36%, Re +1.10% over
+          m=24->48) but max_re does NOT (+20%, still climbing) and n_rhp as a COUNT scales
+          with m. max_re and n_rhp were reported as operator properties and are not;
+          the 2.47x non-additivity is downgraded to a fixed-m observation.
 - [ ] C6  P1-1: ScopedProbeState restores 2 members; computeUnifiedRHS also mutates
           grid_info_->dt, mask counters, ru_adv_z_work_, t_adv_z_work_. Prefer a mutation
           FINGERPRINT that fail-closes over an ever-growing snapshot list.

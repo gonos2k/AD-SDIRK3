@@ -1459,3 +1459,45 @@ settled here.
 
 The split identity is re-confirmed on this run with `jvp_fd_fallback = 0`: `jvp 1.8e-10`,
 `vjp 5.8e-08`, `transpose 7.0e-06`.
+
+## C5. A controlled m study — and `max_re` turns out NOT to be a converged quantity
+
+The earlier m = 24 / 48 / 96 comparison ran as three separate processes, each drawing its start
+vector from the global RNG. "`|lambda|` agreed across m" therefore mixed m-convergence with
+start-vector variation. Now: one Arnoldi basis, a deterministic index-based `v0`
+(`v0_digest = 842.56`, identical across every prefix), and the m study taken as **nested
+prefixes** `H_12`, `H_24`, `H_48` of that one `H` — so moving `m` changes the Krylov dimension
+and nothing else.
+
+| stage | m | `\|lambda_0\|` | `Re(lambda_0)` | `n_rhp` | `max_re` |
+|---|---|---|---|---|---|
+| 1 | 12 | 1.73611 | 1.73611 | 7 | 1.73611 |
+| 1 | 24 | 1.76016 | 1.76016 | 13 | 1.76016 |
+| 1 | 48 | **1.76365** | 1.76365 | 26 | 1.76365 |
+| 2 | 12 | 220.3 | 106.9 | 8 | 136.8 |
+| 2 | 24 | 223.4 | 118.2 | 15 | 141.6 |
+| 2 | 48 | **224.2** | **119.5** | 28 | **170.0** |
+
+### What converges, and what I was wrong to report as converged
+
+**Converged** (m = 24 -> 48): `|lambda_0|` **+0.36%**, `Re(lambda_0)` **+1.10%**. The dominant
+Ritz pair is a genuine converged property of the operator, and it is right-half-plane.
+
+**NOT converged:** `max_re` goes 136.8 -> 141.6 -> **170.0**, **+20% from m=24 to m=48**, still
+climbing. That is the expected behaviour of a maximum taken over a growing set — more Ritz values
+means more chances at a larger real part, and the interior Ritz values are the least converged
+ones.
+
+**So `max_re` should not have been reported as an operator property**, and I reported it as one
+repeatedly — including in the headline comparison `J_full max_re 471.0` vs `J_E max_re 169.9`
+("2.47x non-additivity"). That comparison is still apples-to-apples *at fixed m = 48*, but it is
+not a converged quantity and the ratio would move with `m`. **The non-additivity claim is
+downgraded to a fixed-m observation.**
+
+Similarly `n_rhp` as a **count** scales with `m` (7/12, 13/24, 26/48), so "13 of 24 Ritz values
+are right-half-plane" was never a property of the operator. As a **fraction** it is stable —
+0.67, 0.63, 0.58 — trending down slowly; "roughly half the computed Ritz values are RHP" is the
+defensible form.
+
+**Unchanged:** the dominant pair is RHP and converged at both stages. That is the claim the
+campaign rests on, and it survives on the controlled study.
