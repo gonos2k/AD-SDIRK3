@@ -157,6 +157,16 @@ inline bool probe_env_enabled(const char* name) {
         "was unrecognised produces output that is read as a measurement.");
 }
 
+// R3: the same advection decomposition for the blocks the u-terms trace never watched.
+// One gate, one format, so "adv_z dominates" can be tested as a property of the vertical
+// operator rather than assumed from the one block that happened to be instrumented.
+// Read ONCE, through the one parser: a second reading with a second parser is how a flag
+// comes to mean two different things in one run.
+inline bool adv_split_blocks_enabled() {
+    static const bool on = probe_env_enabled("WRF_SDIRK3_ADV_SPLIT_BLOCKS");
+    return on;
+}
+
 // 9F.D115: ARMING, so a probe reports the evaluation we are asking about.
 //
 // D113's mu trace was one-shot per RhsMode. That is strictly better than one-shot globally,
@@ -225,8 +235,17 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
 #include "wrf_sdirk3_config.h"
+#include "wrf_sdirk3_adv_split_observer.h"  // R3: one advection observer for every block
 #include "wrf_sdirk3_rw_term_capture.h"  // PR 9B: rw term bisection capture
 #include "wrf_sdirk3_w_damping.h"       // PR 9B: production W-damping helper (contract-tested)
+
+// The evaluation an advection record belongs to, in the same words the mu trace uses.
+inline const char* rhs_mode_name(wrf::sdirk3::RhsMode m) {
+    return m == wrf::sdirk3::RhsMode::ImplicitOnly ? "Implicit"
+         : m == wrf::sdirk3::RhsMode::ExplicitOnly ? "Explicit"
+         : "Full";
+}
+
 #include "wrf_sdirk3_stage_history_diag.h"  // PR 9E: opt-in ARK history + defect summary (diagnosis-only)
 #include "wrf_sdirk3_ww_cp.h"           // PR 9C.1: complete calc_ww_cp omega diagnosis
 #include "wrf_sdirk3_types.h"  // FIX Round186: For centralized safe_device_index()
@@ -12662,7 +12681,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 // call can answer in its place.
                 static const bool arm_any =
                     probe_env_enabled("WRF_SDIRK3_MU_DIV_TRACE") ||
-                    probe_env_enabled("WRF_SDIRK3_PH_TERMS_TRACE");
+                    probe_env_enabled("WRF_SDIRK3_PH_TERMS_TRACE") ||
+                    // R3: so an advection record emitted here carries the stage it belongs
+                    // to instead of -1. Records from outside this scope keep -1, which says
+                    // "not the armed evaluation" rather than naming a stage it cannot know.
+                    adv_split_blocks_enabled();
                 torch::Tensor F_fast_final;
                 {
                     std::unique_ptr<ArmProbeFor> arm;
@@ -15299,62 +15322,21 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             ucap.terms.advection.y        = ru_adv_y.detach().clone();
             ucap.terms.advection.vertical = ru_adv_z.detach().clone();
 
-            // R10: the three directions as NUMBERS on the same stream as everything else.
-            //
-            // The `adv` site delta identified advection as the term carrying the whole 55x
-            // jump, but a lumped `adv` cannot say WHICH operator, and the file dump writes one
-            // artifact per call -- unusable when the question is how the split moves along a
-            // 9-point continuation. These tensors are already captured; only the norms were
-            // missing, and a norm on the same line as the lambda is what makes the comparison
-            // readable. FP64 before the reduction, per the same review.
-            auto n64 = [](const torch::Tensor& t) {
-                return t.defined() ? t.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
-            };
-            auto m64 = [](const torch::Tensor& t) {
-                return t.defined()
-                    ? t.detach().to(torch::kFloat64).abs().max().item<double>() : -1.0;
-            };
-            const auto horiz = (ru_adv_x.defined() && ru_adv_y.defined())
-                ? (ru_adv_x + ru_adv_y) : torch::Tensor{};
-            // F2: norms alone cannot see two large terms cancelling. The cosine with the total
-            // advective tendency separates a term that REINFORCES the result from one that is
-            // large and mostly cancels -- and a near -1 cosine on a large term is the signature
-            // that a norm-ranked decomposition would report as "dominant" while it contributes
-            // almost nothing to the sum.
-            const auto adv_total = (ru_adv_z.defined() && horiz.defined())
-                ? (horiz + ru_adv_z) : torch::Tensor{};
-            auto cos_with = [&](const torch::Tensor& a) -> double {
-                if (!a.defined() || !adv_total.defined()) return -2.0;
-                const auto a64 = a.detach().to(torch::kFloat64);
-                const auto b64 = adv_total.detach().to(torch::kFloat64);
-                const double na = a64.norm().item<double>();
-                const double nb = b64.norm().item<double>();
-                if (!(na > 0.0 && nb > 0.0)) return -2.0;
-                return (a64 * b64).sum().item<double>() / (na * nb);
-            };
-            std::cerr << "SDIRK3_ADV_SPLIT"
-                      << " adv_x=" << n64(ru_adv_x)
-                      << " adv_y=" << n64(ru_adv_y)
-                      << " adv_z=" << n64(ru_adv_z)
-                      << " horiz_sum=" << n64(horiz)
-                      // The ratio is the cross-model-comparable quantity: it cancels the index
-                      // extents, the coupled/decoupled convention and any common scaling.
-                      << " z_over_horiz="
-                      << (n64(horiz) > 0.0 ? n64(ru_adv_z) / n64(horiz) : -1.0)
-                      << " max_x=" << m64(ru_adv_x)
-                      << " max_y=" << m64(ru_adv_y)
-                      << " max_z=" << m64(ru_adv_z)
-                      << " adv_total=" << n64(adv_total)
-                      << " cos_x=" << cos_with(ru_adv_x)
-                      << " cos_y=" << cos_with(ru_adv_y)
-                      << " cos_z=" << cos_with(ru_adv_z)
-                      // If the parts are large and the total is small, they cancel; this ratio
-                      // states that directly instead of leaving it to be inferred.
-                      << " sum_of_norms_over_total="
-                      << (n64(adv_total) > 0.0
-                            ? (n64(ru_adv_x) + n64(ru_adv_y) + n64(ru_adv_z)) / n64(adv_total)
-                            : -1.0)
-                      << std::endl;
+        }
+        // R10: the three directions as NUMBERS on the same stream as everything else.
+        //
+        // The `adv` site delta identified advection as the term carrying the whole 55x jump,
+        // but a lumped `adv` cannot say WHICH operator, and the file dump writes one artifact
+        // per call -- unusable when the question is how the split moves along a 9-point
+        // continuation.
+        //
+        // Emitted from the shared observer, and OUTSIDE the u-terms capture, so ru answers to
+        // the same gate as every other block. Left inside, a five-block survey would silently
+        // return four blocks -- the one shape of missing data that reads as a real comparison.
+        if (uterms_trace || adv_split_blocks_enabled()) {
+            wrf::sdirk3::emit_adv_split(
+                "ru", residual_eval_probe().tag_stage.load(), rhs_mode_name(mode),
+                ru_adv_x + ru_adv_y, ru_adv_z, ru_adv_x, ru_adv_y);
         }
         // 9F.D20: combined horizontal, to compare against WRF's advect_u split.
         // Captured as the SUM (not |adv_x|+|adv_y|) because WRF's horizontal block
@@ -15616,6 +15598,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         
         // Total V advection tendency (keep as coupled momentum)
         auto V_tend_adv = rv_adv_horiz + V_adv_z;
+        if (adv_split_blocks_enabled()) {
+            wrf::sdirk3::emit_adv_split("rv", residual_eval_probe().tag_stage.load(), rhs_mode_name(mode),
+                                        rv_adv_horiz, V_adv_z, rv_adv_x, rv_adv_y);
+        }
         
         // Add coupled momentum tendency directly (no conversion to velocity)
         rv_tend = rv_tend + V_tend_adv;    }
@@ -15921,6 +15907,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
         // Total W advection tendency (keep as coupled momentum)
         auto rw_tend_adv = rw_adv_horiz + rw_adv_z;
+        if (adv_split_blocks_enabled()) {
+            // x and y are absent by construction: the map-factor product and the
+            // mass->w average are applied to the horizontal SUM, so a per-direction
+            // tendency is not something this code computes.
+            wrf::sdirk3::emit_adv_split("rw", residual_eval_probe().tag_stage.load(), rhs_mode_name(mode),
+                                        rw_adv_horiz, rw_adv_z);
+        }
         // Add coupled momentum tendency directly (no conversion to velocity)
         rw_tend = rw_tend + rw_tend_adv;
     }
@@ -16050,6 +16043,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 t_ah = torch::zeros_like(t_ah);
             }
             t_tend = t_tend + t_ah + t_az;
+            if (adv_split_blocks_enabled()) {
+                // The ABLATED values, which are what t_tend actually receives -- an
+                // observer that reported the pre-ablation parts would contradict the run.
+                wrf::sdirk3::emit_adv_split("t", residual_eval_probe().tag_stage.load(), rhs_mode_name(mode),
+                                            t_ah, t_az);
+            }
         }
     }
 
@@ -17658,6 +17657,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         
         // AUTOGRAD FIX: Combine all ph_tend contributions to avoid in-place operations
         ph_tend = ph_tend_x_adv + ph_tend_y_adv + ph_tend_z_adv;
+        if (adv_split_blocks_enabled()) {
+            wrf::sdirk3::emit_adv_split("ph", residual_eval_probe().tag_stage.load(), rhs_mode_name(mode),
+                                        ph_tend_x_adv + ph_tend_y_adv,
+                                        ph_tend_z_adv, ph_tend_x_adv, ph_tend_y_adv);
+        }
         if (hevi) hevi_ph_horiz = ph_tend_x_adv + ph_tend_y_adv;  // increment 2: capture horizontal geopotential (-> k_slow)
 
         // DIAGNOSTIC: Check individual advection contributions before adding buoyancy

@@ -78,6 +78,29 @@ R11 marked these `[x]` against probes narrower than the item's own wording. Reve
 - [ ] R1  D(Phi_h): the full one-step tangent through the implicit solves. Contract:
           central difference of Phi_h, and <D v, w> == <v, D^T w>.
 - [ ] R2  np equivalence: needs a globally-formulated quantity, not a rerun of tile-local probes
-- [ ] R3  term observer for rv, rw, ph, t, mu (only ru has one)
+- [x] R3  term observer for rv, rw, ph, t, mu (only ru has one)
+          DONE, with one correction to the premise: mu ALREADY had one
+          (SDIRK3_MU_DIV_TRACE, div_x/div_y/div_z), so the gap was rv, rw, t, ph.
+          All five now emit SDIRK3_ADV_SPLIT from ONE implementation
+          (wrf_sdirk3_adv_split_observer.h) behind ONE gate
+          (WRF_SDIRK3_ADV_SPLIT_BLOCKS), each record naming its stage and RhsMode --
+          the first record is a stage-1 evaluation where w is identically zero, and an
+          untagged row of zeros reads like a measurement.
+
+          STRUCTURAL RESULT (measured, from the record counts): advection reaches the
+          IMPLICIT channel only through ph. ru/rv/rw/t are evaluated on the explicit
+          pass only, which in an aborting run runs once, at stage 1, where w=0.
+
+          NUMERICAL RESULT (armed stage-2 implicit residual evaluation, single-variable
+          A/B on WRF_SDIRK3_WRF_OMEGA_WW_CP):
+            omega = mu*w (default):   adv_z=4.926e+12  horiz=3.892e+05  z/h=1.27e7  cos_z=1.000
+            omega = calc_ww_cp:       adv_z=5.919e+05  horiz=3.900e+05  z/h=1.518   cos_z=0.837
+          The vertical term falls SEVEN orders while the horizontal moves 0.2%, which is
+          what makes it single-variable: only the term that multiplies omega responded.
+          cos_z=1.000 in the default arm means the vertical term IS the total -- the
+          horizontal contributes nothing to the sum.
+          This corroborates the "Omega is NOT rom" root cause from an INDEPENDENT channel:
+          that cause was found in mu; this is ph, a different equation with a different
+          discretization, reproducing the same signature.
 - [ ] R4  A1: stage-2 accuracy vs a converged REFERENCE Y_2, not a budget sweep
 - [x] R5  rho_max anomaly -- recheck once density is computed from al_full
