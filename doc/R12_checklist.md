@@ -124,8 +124,30 @@ R11 marked these `[x]` against probes narrower than the item's own wording. Reve
           the first and returning it unchanged, not of a converged reference. The manifest had
           already measured warmstart_enabled=1. Self-certification that shares mutable state
           with the thing it certifies is not independent. The probe now disables the warm start
-          across both reference solves; that run is IN PROGRESS and rel_err is NOT yet
-          established as an accuracy -- only as the distance to a better solver-accepted solve.
+          across both reference solves. THAT RUN IS NOW IN:
+
+            ref  (120x20) converged=1  final_res=0.1196
+            ref2 (200x30) converged=0  final_res=0.4612
+            ref_agree=0.2842   rel_err=0.7371   K 3849 vs 4683
+            per block: ru 0.076 | t 0.121 | rv 0.512 | mu 1.155 | ph 1.165 | rw 1.416
+
+          SETTLED, and NOT the way the first reading suggested. ref_agree=0.284 against
+          rel_err=0.737 is 2.6x separation; a reference must be far closer to the truth than
+          the quantity it measures, so at 2.6x these are two UNCONVERGED solves being
+          differenced. There is NO converged reference at stage 2 at budgets up to 200x30, and
+          rel_err is therefore NOT an accuracy. Note also that the LARGER budget did WORSE
+          (0.4612, converged=0) than the smaller (0.1196, converged=1) -- GMRES(m) is not
+          monotone in m so that alone does not prove non-convergence, but it does mean the
+          120x20 answer is not certified as the solution.
+
+          WHAT SURVIVES: the per-block RANKING, because it is invariant across two references
+          that disagree by 28% --
+            shared-warmstart run:  ru .054 < t .104 < rv .444 < mu 1.132 < ph 1.141 < rw 1.458
+            independent run:       ru .076 < t .121 < rv .512 < mu 1.155 < ph 1.165 < rw 1.416
+          Same order both times. ru and t are the accurate blocks; rw, ph and mu are the ones
+          the shipped solve gets wrong. ru dominates the stage-3 ENTRY NORM and is
+          simultaneously the most accurate block -- norm dominance is not inaccuracy, and the
+          campaign had been reading them as the same thing.
 
 - [x] R3b NEGATIVE REACHABILITY (measured): the corrected-Omega re-measurement of Wall-2's ru
           adv_z is NOT reachable from this observer. With BOTH parity knobs on
