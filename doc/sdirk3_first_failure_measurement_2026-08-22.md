@@ -209,3 +209,105 @@ iterates, measured and m-converged, so the remaining questions are about the **f
 which terms put the negative part there, and whether a different split (or an
 indefinite-aware method) removes it. The per-block observers already in the tree are the
 instrument for the first half.
+
+---
+
+# RETRACTION (external review of R13.4, 2026-08-23)
+
+Three conclusions above are **withdrawn**. All three review findings were confirmed in the
+code before writing this.
+
+## 1. "the preconditioner is net-harmful" — RETRACTED
+
+The A/B was **not single-variable**. Production branches:
+
+```cpp
+auto gmres_result = gmres_M_inv
+    ? krylov_methods::solve_fgmres(...)   // M on
+    : krylov_methods::solve_gmres(...);   // M off
+```
+`wrf_sdirk3_newton_solver.cpp:8072/8108` — and the comment there says it outright:
+*"Unpreconditioned solves keep solve_gmres bit-for-bit."*
+
+So `WRF_SDIRK3_PRECOND_TYPE=0` changes the preconditioner **and the Krylov implementation**.
+FGMRES with an identity preconditioner spans the same Krylov space as GMRES in exact
+arithmetic, but two separate implementations are not guaranteed equal in early-stop, restart,
+residual recomputation, breakdown handling or diagnostics — and none of that was checked.
+
+Worse, the two arms ran **different Newton counts** (4 vs 2). `best_krylov_rel_error` is a
+minimum over the stage, so the comparison was
+
+  min over n=0..3 of ρ(A_n^M, b_n^M)   against   min over n=0..1 of ρ(A_n^I, b_n^I)
+
+with `A_n = I − hγ J_F(U_eval,n)` and `U_eval,n` differing between arms. **Not the same linear
+systems.** Adaptive (Eisenstat–Walker) forcing makes the effective tolerances differ too, so
+"everything else fixed" was true of the namelist and false of the effective solver policy.
+
+**What survives:** removing the production preconditioner **does not make the step complete**,
+so `M` is not the sole necessary cause. Nothing about its sign or magnitude survives. "≈30%
+worse" is void.
+
+## 2. "the wall is the operator" — RETRACTED
+
+It followed from (1). It also never separated the mathematical operator from **solver policy**:
+`GMRESResult::termination_reason` already distinguishes `arnoldi_stagnation`,
+`mid_budget_hopeless`, `restart_stagnation_threshold`, `nan_retry_exhausted`, `max_budget`,
+`happy_breakdown` and true-residual divergence — and `StageFailureSignals` discarded every one
+of them, collapsing them all into `krylov_stagnated`. An early-stop policy and an indefinite
+operator arrived as the same category, and I read the category as the operator.
+
+The layer is now the honest disjunction:
+`operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy`.
+
+## 3. "dt was never the question" — RETRACTED
+
+`A_h = I − h·γ·J_F(Y_s + hγK)`. The timestep enters the Krylov operator, its field of values,
+its non-normality, the right-hand side and the stage state **directly**. A falling *outer*
+Newton residual shows the failure is not outer divergence; it says nothing about whether `h`
+drives the *inner* conditioning.
+
+The correct statement is **"outer Newton blow-up at dt=600 is excluded"**. And the old
+600/300/120/60/20 sweep never recorded category, Krylov floor or termination reason per dt, so
+it does not establish dt-independence either.
+
+## Also corrected
+
+- **The exclusion table over-claimed.** `entry_finite=1` excludes a NaN/Inf entry tensor — not
+  a wrong EOS value, a stagger or metric sign error, a stale halo, or a finite-but-unphysical
+  state. `R0_finite=1` excludes a NaN/Inf first residual — not a wrong RHS, a wrong Jacobian,
+  a bad scale, or a JVP inconsistency. Renamed accordingly.
+- **Self-contradiction in my own table.** It shows `rejected=1` at budgets 12 and 40 while the
+  text claimed the trust region was excluded "in all three runs". It is excluded at budget 3
+  only.
+- **`R0_finite` could report an unmeasured residual as finite.** It was derived from
+  `isfinite(initial_unscaled_residual)`, a member initialising to `0.0` — finite. A solve that
+  never evaluated R0 printed `R0_finite=1`. This is my own "absence of a measurement must not
+  become a finding" rule, broken in the code that states it. Now `R0_measured` gates it and the
+  classifier returns `insufficient_evidence`.
+- **Two budget authorities.** The loop bounds on `options_.max_newton_iter`; the record read
+  `g_sdirk3_config.max_newton_iter`. The loop's value is now recorded from the loop.
+- **`fresh_solver_per_arm` was never read.** R13.1 added it, the caller sets it `false`
+  (snapshot/restore is not a fresh solver) and `certify_stage_reference` ignored it — so
+  arms sharing a preconditioner and its caches could still certify. **Fifth occurrence of
+  "a rule computed and its consumer reading something else", and the first where I wrote both
+  halves in one commit.**
+
+## What still stands
+
+- Newton budget 3 is insufficient at dt=600 stage 2 (3/3 iterations, residual still falling).
+- Budgets 12 and 40 give bit-identical summaries — the outer budget is not the binding
+  constraint beyond 4 iterations.
+- With an adequate outer budget the **inner Krylov path** is where the stage stops.
+- Removing the production preconditioner does not complete the step.
+- The **numerical range straddles the origin** — a negative eigenvalue of `Vᵀ H(A) V` with `V`
+  orthonormal is a genuine witness, and only the converse (positive ⇒ definite) is invalid,
+  which was never claimed. Note this does not by itself separate operator from policy either.
+
+## The next experiment — corrected
+
+**Not** another spectrum, and **not** another preconditioner variant. Freeze one linear system
+at one Newton iteration — `(A, b, x₀, D, tol, restart, Arnoldi budget)`, digests recorded —
+and run **M against I through the SAME FGMRES path** (identity closure as the preconditioner),
+with early-stop **off**, comparing true-residual trajectories `ρ_j` at equal `j`.
+
+That is the experiment that can attribute anything to `M`. It has not been run.

@@ -41,6 +41,7 @@ using wrf::sdirk3::StageFailureSignals;
 StageFailureSignals ok_stage() {
     StageFailureSignals s;
     s.entry_state_finite = true;
+    s.initial_residual_measured = true;
     s.initial_residual_finite = true;
     s.residual_first = 1.0e-2;
     s.residual_last = 1.0e-9;
@@ -78,6 +79,7 @@ int main() {
     }
     {
         auto s = ok_stage();
+        s.initial_residual_measured = true;
         s.initial_residual_finite = false;
         s.newton_converged = false;
         check(name_of(s) == "initial_residual_not_finite",
@@ -173,6 +175,7 @@ int main() {
     {
         StageFailureSignals s;
         s.entry_state_finite = true;
+        s.initial_residual_measured = true;
         s.initial_residual_finite = true;
         s.residual_first = 1.0;
         s.residual_last = 0.4855;
@@ -198,6 +201,7 @@ int main() {
         // some other reason, and that IS a finding about the solve.
         StageFailureSignals s;
         s.entry_state_finite = true;
+        s.initial_residual_measured = true;
         s.initial_residual_finite = true;
         s.residual_first = 1.0;
         s.residual_last = 0.4855;
@@ -223,6 +227,57 @@ int main() {
         check(name_of(s) == "newton_stagnated",
               "a FLAT residual that also ran out of budget is a stall: spending every "
               "iteration on nothing is not the budget's fault");
+    }
+
+    // ---- R13.5: the review's counter-examples ----
+    {   // Absence of a measurement must not become a finding. R0 was derived from
+        // isfinite(initial_unscaled_residual), and that member initialises to 0.0 -- finite --
+        // so a solve that never evaluated R0 reported R0_finite=1.
+        StageFailureSignals s = ok_stage();
+        s.initial_residual_measured = false;
+        check(name_of(s) == "insufficient_evidence",
+              "an R0 that was never measured is INSUFFICIENT EVIDENCE, not a finite one -- "
+              "0.0 is finite, which is how the unmeasured case used to read as positive");
+        check(std::string(stage_failure_layer(first_failure_of(s))) == "unknown",
+              "...and it names no layer, because it has no evidence to name one from");
+    }
+    {   // Divergence is not stagnation. The total-failure predicate folds raw_rel_error > 1
+        // (the residual GREW) together with rel_error >= 0.999 (it did not move).
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.krylov_diverged = true;
+        s.gmres_total_failures = 1;
+        check(name_of(s) == "krylov_diverged",
+              "a linear residual that GREW is divergence, not stagnation -- they arrived as "
+              "the same category and point at different work");
+    }
+    {   // The layer must not claim to have excluded five candidates it never tested.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.best_krylov_rel_error = 1.0;
+        const std::string layer = stage_failure_layer(first_failure_of(s));
+        check(layer.find("timestep") != std::string::npos &&
+                  layer.find("jvp") != std::string::npos &&
+                  layer.find("policy") != std::string::npos,
+              "a Krylov stall names the FULL disjunction including timestep, JVP and solver "
+              "policy: A_h = I - h*gamma*J, so h is in the Krylov operator, and "
+              "termination_reason (arnoldi_stagnation / mid_budget_hopeless / restart / nan "
+              "retry / max budget) is not yet plumbed to separate policy from operator");
+    }
+    {   // A stage where a solve succeeded and a later one failed is not the same as one where
+        // none succeeded -- best_krylov_rel and gmres_total_failures describe DIFFERENT solves.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.best_krylov_rel_error = 0.3853;   // some solve got here
+        s.gmres_total_failures = 1;          // a DIFFERENT solve failed outright
+        s.gmres_successes = 3;
+        check(name_of(s) == "krylov_stagnated" && s.gmres_successes > 0,
+              "best_krylov_rel and gmres_total_failures describe different solves, and the "
+              "record now carries gmres_successes so a mixed stage is not read as a uniform "
+              "one");
     }
 
     // ---- ORDERING: the part that decides where the work goes ----
@@ -302,15 +357,21 @@ int main() {
 
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
-              "preconditioner_or_operator" &&
+              "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
           std::string(stage_failure_layer(StageFailure::NewtonDiverged)) ==
               "linearization_or_timestep" &&
           std::string(stage_failure_layer(StageFailure::EntryStateNotFinite)) ==
-              "state_eos_metric_boundary",
+              "nonfinite_entry_state" &&
+          std::string(stage_failure_layer(StageFailure::InitialResidualNotFinite)) ==
+              "nonfinite_initial_residual",
           "each category names the LAYER to work on, as data rather than something the "
-          "reader reconstructs");
+          "reader reconstructs -- and the entry/R0 layers name what they ACTUALLY exclude. "
+          "entry_finite=1 excludes a NaN/Inf entry tensor, not a wrong EOS value, a stagger "
+          "or metric sign error, a stale halo or a finite-but-unphysical state; R0_finite=1 "
+          "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
+          "or a JVP inconsistency");
 
-    constexpr int expected_checks = 22;
+    constexpr int expected_checks = 27;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

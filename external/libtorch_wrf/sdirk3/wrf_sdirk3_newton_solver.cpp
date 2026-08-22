@@ -5263,6 +5263,9 @@ public:
 
         // Newton iteration with graph caching
         int actual_newton_iters = 0;
+        // R13.5: the loop's own bound, recorded from the loop. Reading it anywhere else is a
+        // second authority that can disagree with the iteration that actually ran.
+        stats_.newton_iteration_budget = options_.max_newton_iter;
         for (int newton_iter = 0; newton_iter < options_.max_newton_iter; ++newton_iter) {
             actual_newton_iters = newton_iter + 1;
             // Debug: print Newton iteration start
@@ -5944,6 +5947,12 @@ public:
                 // R0_L2 = unscaled_rms * sqrt_N. Used by RESIDUAL_REEVAL gate:
                 // growth = R_full_norm / R0_L2 replaces rel_R_full = R_full_norm / K_norm.
                 stats_.initial_unscaled_residual = unscaled_rms * sqrt_N;
+                // R13.5: the only place R0 becomes a measurement. Set both flags HERE, so a
+                // solve that never reaches this line reports measured=false rather than
+                // inheriting the finiteness of an uninitialised 0.0.
+                stats_.initial_residual_measured = true;
+                stats_.initial_residual_finite =
+                    std::isfinite(stats_.initial_unscaled_residual);
                 stats_.initial_residual_vector = R_inner.detach().clone();
                 // v20.14r37: Reset baseline at Stage 1 entry, then conditionally update.
                 // Without reset, a stale baseline from the previous timestep persists
@@ -8256,6 +8265,12 @@ public:
                      gmres_result.rel_error < stats_.best_krylov_rel_error)) {
                     stats_.best_krylov_rel_error = gmres_result.rel_error;
                 }
+                // R13.5: divergence is not stagnation. The total-failure predicate folds
+                // raw_rel_error > 1 (the residual GREW) together with rel_error >= 0.999 (it
+                // did not move), and those point at different work.
+                if (std::isfinite(gmres_result.rel_error) && gmres_result.rel_error > 1.0f) {
+                    stats_.krylov_diverged = true;
+                }
 
                 // ============================================================
                 // PR 9B: opt-in directional consistency check — the checker
@@ -9833,7 +9848,10 @@ public:
             }
             if (gmres_total_failure) {
                 stats_.gmres_total_failures++;
+            } else {
+                stats_.gmres_successes++;
             }
+
 
             // FIX (2025-12-05): Conditional diagnostics for autograd compatibility
             // v20.14r27j: Distinguish accepted vs rejected in log label.

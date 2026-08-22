@@ -31,6 +31,9 @@ namespace sdirk3 {
 
 enum class StageFailure {
     None = 0,
+    // The signals do not support ANY verdict. Reported instead of guessing -- a classifier
+    // that always names a layer will name a wrong one.
+    InsufficientEvidence,
     // The stage equation G_s(K) = K - F(Y_base + dt*a_ss*K) is not defined at its own entry.
     // Nothing downstream is meaningful; a dt sweep cannot reach this.
     EntryStateNotFinite,
@@ -43,7 +46,15 @@ enum class StageFailure {
     // The linear solve made no progress: GMRES returned with its relative error essentially
     // unchanged. Newton cannot converge on top of a linear solve that does not solve, and
     // the cause is the operator or the preconditioner -- never the outer iteration.
+    // The linear solve made no progress. NOTE the disjunction in the layer: this does NOT
+    // separate the mathematical operator from solver POLICY. GMRESResult::termination_reason
+    // already distinguishes arnoldi_stagnation, mid_budget_hopeless, restart_stagnation,
+    // nan_retry_exhausted, max_budget and true-residual divergence; until that reaches here,
+    // an early-stop policy and an indefinite operator arrive as the same category.
     KrylovStagnated,
+    // The linear residual GREW. Divergence is not stagnation and does not point at the same
+    // place; the old rule folded raw_rel_error > 1 into KrylovStagnated.
+    KrylovDiverged,
     // The linear solve worked and every step it proposed was rejected. That is a trust-region
     // or line-search policy statement, not a numerical one.
     AllStepsRejected,
@@ -70,6 +81,8 @@ enum class StageFailure {
 inline const char* stage_failure_name(StageFailure f) {
     switch (f) {
         case StageFailure::None:                     return "none";
+        case StageFailure::InsufficientEvidence:     return "insufficient_evidence";
+        case StageFailure::KrylovDiverged:           return "krylov_diverged";
         case StageFailure::EntryStateNotFinite:      return "entry_state_not_finite";
         case StageFailure::InitialResidualNotFinite: return "initial_residual_not_finite";
         case StageFailure::NewtonDiverged:           return "newton_diverged";
@@ -87,10 +100,14 @@ inline const char* stage_failure_name(StageFailure f) {
 inline const char* stage_failure_layer(StageFailure f) {
     switch (f) {
         case StageFailure::None:                     return "none";
-        case StageFailure::EntryStateNotFinite:      return "state_eos_metric_boundary";
-        case StageFailure::InitialResidualNotFinite: return "rhs_operator";
+        case StageFailure::InsufficientEvidence:     return "unknown";
+        case StageFailure::KrylovDiverged:           return "operator_or_timestep_or_jvp";
+        case StageFailure::EntryStateNotFinite:      return "nonfinite_entry_state";
+        case StageFailure::InitialResidualNotFinite: return "nonfinite_initial_residual";
         case StageFailure::NewtonDiverged:           return "linearization_or_timestep";
-        case StageFailure::KrylovStagnated:          return "preconditioner_or_operator";
+        // The honest width. Naming two candidates invited reading the other five as excluded.
+        case StageFailure::KrylovStagnated:
+            return "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy";
         case StageFailure::AllStepsRejected:         return "trust_region_policy";
         case StageFailure::NewtonBudgetExhausted:    return "newton_iteration_budget";
         case StageFailure::NewtonStagnated:          return "residual_floor_or_split";
@@ -102,7 +119,11 @@ inline const char* stage_failure_layer(StageFailure f) {
 struct StageFailureSignals {
     // Measured at stage entry, before anything is solved.
     bool entry_state_finite = true;
-    bool initial_residual_finite = true;
+    // measured BEFORE finite. An unmeasured R0 is not a finite one -- the tile layer used to
+    // derive this from isfinite(initial_unscaled_residual), and that member initialises to
+    // 0.0, so a solve that never evaluated R0 reported R0_finite=1.
+    bool initial_residual_measured = false;
+    bool initial_residual_finite = false;
     // Newton's residual at its first and last iteration. -1 = not measured.
     double residual_first = -1.0;
     double residual_last = -1.0;
@@ -116,6 +137,13 @@ struct StageFailureSignals {
     double best_krylov_rel_error = -1.0;
     int    krylov_iterations = 0;
     int    gmres_total_failures = 0;
+    // Did any linear solve in this stage actually succeed? best_krylov_rel_error is a minimum
+    // over the stage and gmres_total_failures counts a DIFFERENT solve, so neither describes
+    // one system on its own.
+    int    gmres_successes = 0;
+    // The linear residual GREW in at least one solve. Divergence, not stagnation: the
+    // total-failure predicate folds raw_rel_error > 1 together with rel_error >= 0.999.
+    bool   krylov_diverged = false;
     // Trust-region / line-search accounting.
     int    accepted_steps = 0;
     int    rejected_steps = 0;
@@ -142,6 +170,9 @@ inline bool measured(double v) {
 // next week of work to the wrong layer.
 inline StageFailure first_failure_of(const StageFailureSignals& s) {
     if (!s.entry_state_finite)      return StageFailure::EntryStateNotFinite;
+    // Absence of a measurement is not evidence of anything. Checked BEFORE finiteness, so an
+    // R0 that was never evaluated cannot be reported as finite or as non-finite.
+    if (!s.initial_residual_measured) return StageFailure::InsufficientEvidence;
     if (!s.initial_residual_finite) return StageFailure::InitialResidualNotFinite;
 
     if (!s.newton_converged) {
@@ -154,6 +185,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         }
         // The linear solve before the outer one: Newton cannot converge on top of a solve
         // that does not solve, so this is upstream of any statement about the iteration.
+        if (s.krylov_diverged)          return StageFailure::KrylovDiverged;
         if (s.gmres_total_failures > 0) return StageFailure::KrylovStagnated;
         if (measured(s.best_krylov_rel_error) &&
             s.best_krylov_rel_error >= kKrylovNoProgress) {
