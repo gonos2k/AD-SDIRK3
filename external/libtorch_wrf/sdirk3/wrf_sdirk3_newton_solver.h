@@ -328,9 +328,23 @@ public:
         // solve cannot make progress" even if a later one stalled.
         float best_krylov_rel_error = -1.0f;
         int   gmres_total_failures = 0;
+        int   gmres_successes = 0;
+        bool  krylov_diverged = false;
         int   accepted_steps = 0;
         int   rejected_steps = 0;
-        bool  initial_residual_finite = true;
+        // R13.5: MEASURED, then FINITE -- in that order, and both default false.
+        //
+        // The tile layer used to derive R0_finite as isfinite(initial_unscaled_residual). That
+        // member initialises to 0.0, which is finite, so a solve that threw or exited before
+        // ever evaluating R0 reported R0_finite=1: absence of a measurement printed as positive
+        // evidence, which is the failure this project keeps closing elsewhere and reproduced
+        // here. `initial_residual_finite` existed on this struct and nothing wrote it.
+        bool  initial_residual_measured = false;
+        bool  initial_residual_finite = false;
+        // The budget the Newton LOOP actually used. It reads options_.max_newton_iter; the
+        // record was reading g_sdirk3_config.max_newton_iter, a second authority that a
+        // stage-reference probe or a post-construction config change can move independently.
+        int   newton_iteration_budget = -1;
         // PR 9E (diagnosis-only): RAW L2 norms at the FINAL accepted Newton
         // iteration, populated ONLY when g_sdirk3_config.stage_operand_diag is
         // on (else left at -1). final_fast_rhs_norm = ||F_fast(U_eval_final)||;

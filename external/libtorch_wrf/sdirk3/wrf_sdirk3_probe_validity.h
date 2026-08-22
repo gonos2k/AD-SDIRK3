@@ -224,6 +224,12 @@ inline StageReferenceVerdict certify_stage_reference(
     for (int i = 0; i < 3; ++i) {
         if (!a.isolated[i]) return {false, "arm_not_isolated"};
     }
+    // R13.5: and the field is READ. R13.1 added fresh_solver_per_arm to this struct, the
+    // caller sets it false (snapshot/restore is not a fresh solver), and the predicate never
+    // looked at it -- so arms sharing a preconditioner and its caches could still certify.
+    // That is the fifth time in this tree that a rule was computed and its consumer read
+    // something else, and the first where both halves were written in one commit.
+    if (!a.fresh_solver_per_arm) return {false, "not_fresh_solver_per_arm"};
     for (int i = 0; i < 3; ++i) {
         if (!is_measured(a.residual[i])) return {false, "nonfinite_residual"};
     }

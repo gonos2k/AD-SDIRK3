@@ -9203,6 +9203,7 @@ vertical_coefficients:
                               << " layer=" << wrf::sdirk3::stage_failure_layer(first)
                               << " retry=" << (retry_used ? 1 : 0)
                               << " entry_finite=" << (sig.entry_state_finite ? 1 : 0)
+                              << " R0_measured=" << (sig.initial_residual_measured ? 1 : 0)
                               << " R0_finite=" << (sig.initial_residual_finite ? 1 : 0)
                               << " R_first=" << sig.residual_first
                               << " R_last=" << sig.residual_last
@@ -9212,6 +9213,8 @@ vertical_coefficients:
                               << " best_krylov_rel=" << sig.best_krylov_rel_error
                               << " krylov_iters=" << sig.krylov_iterations
                               << " gmres_total_failures=" << sig.gmres_total_failures
+                              << " gmres_successes=" << sig.gmres_successes
+                              << " krylov_diverged=" << (sig.krylov_diverged ? 1 : 0)
                               << " steps_accepted=" << sig.accepted_steps
                               << " steps_rejected=" << sig.rejected_steps
                               << " gate_metric_ok=" << (sig.gate_metric_ok ? 1 : 0)
@@ -13172,21 +13175,24 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     // defect this tree has now paid for three times.
     last_stage_signals_ = wrf::sdirk3::StageFailureSignals{};
     last_stage_signals_.entry_state_finite = last_stage_entry_finite_;
-    last_stage_signals_.initial_residual_finite =
-        std::isfinite(stats.initial_unscaled_residual);
+    // R13.5: carry the solver's own flags. Deriving finiteness from the value made an
+    // unmeasured R0 (the member initialises to 0.0) read as finite.
+    last_stage_signals_.initial_residual_measured = stats.initial_residual_measured;
+    last_stage_signals_.initial_residual_finite = stats.initial_residual_finite;
     last_stage_signals_.residual_first =
         stats.newton_residuals.empty()
             ? static_cast<double>(stats.initial_unscaled_residual)
             : static_cast<double>(stats.newton_residuals.front());
     last_stage_signals_.residual_last = static_cast<double>(stats.final_residual);
     last_stage_signals_.newton_iterations = stats.newton_iterations;
-    last_stage_signals_.newton_iteration_budget =
-        wrf::sdirk3::g_sdirk3_config.max_newton_iter;
+    last_stage_signals_.newton_iteration_budget = stats.newton_iteration_budget;
     last_stage_signals_.newton_converged = stats.converged;
     last_stage_signals_.best_krylov_rel_error =
         static_cast<double>(stats.best_krylov_rel_error);
     last_stage_signals_.krylov_iterations = stats.total_krylov_iterations;
     last_stage_signals_.gmres_total_failures = stats.gmres_total_failures;
+    last_stage_signals_.gmres_successes = stats.gmres_successes;
+    last_stage_signals_.krylov_diverged = stats.krylov_diverged;
     last_stage_signals_.accepted_steps = stats.accepted_steps;
     last_stage_signals_.rejected_steps = stats.rejected_steps;
     // PR 9E (diagnosis-only): carry the raw-L2 fast-RHS / defect norms back for

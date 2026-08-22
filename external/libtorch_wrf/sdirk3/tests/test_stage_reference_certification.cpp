@@ -43,6 +43,7 @@ using wrf::sdirk3::StageReferenceArms;
 StageReferenceArms good() {
     StageReferenceArms a;
     for (int i = 0; i < 3; ++i) { a.converged[i] = true; a.isolated[i] = true; }
+    a.fresh_solver_per_arm = true;
     a.residual[0] = 1.0e-4; a.residual[1] = 1.0e-6; a.residual[2] = 1.0e-8;
     a.state_gap_21 = 1.0e-3;
     a.state_gap_32 = 1.0e-5;
@@ -175,7 +176,16 @@ int main() {
               "reports no reference, not a perfect one");
     }
 
-    constexpr int expected_checks = 15;
+    {   // R13.5: the field the predicate never read. Production sets it false -- snapshot and
+        // restore is not a fresh solver -- so this is the case that was silently certifying.
+        StageReferenceArms a = good();
+        a.fresh_solver_per_arm = false;
+        check(!certify_stage_reference(a).certified && why(a) == "not_fresh_solver_per_arm",
+              "arms that are not fresh solvers do NOT certify -- the flag existed, the caller "
+              "set it correctly, and the predicate ignored it");
+    }
+
+    constexpr int expected_checks = 16;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
