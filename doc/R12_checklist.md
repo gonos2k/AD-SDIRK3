@@ -102,5 +102,37 @@ R11 marked these `[x]` against probes narrower than the item's own wording. Reve
           This corroborates the "Omega is NOT rom" root cause from an INDEPENDENT channel:
           that cause was found in mu; this is ph, a different equation with a different
           discretization, reproducing the same signature.
-- [ ] R4  A1: stage-2 accuracy vs a converged REFERENCE Y_2, not a budget sweep
+- [~] R4  A1: stage-2 accuracy vs a converged REFERENCE Y_2, not a budget sweep
+          PROBE BUILT (WRF_SDIRK3_STAGE_REFERENCE=1, _STAGE=n to target one stage): after the
+          production solve, re-solve the SAME system at an enlarged budget and report the
+          relative difference in the stage increment K, overall and per block.
+
+          FIRST MEASUREMENT, stage 2, dt=600:
+            shipped_converged=0  shipped_final_res=0.4855
+            ref_converged=1      ref_final_res=0.1073   (budget 120x20)
+            rel_err=0.8173  K_shipped=3849  K_ref=5278
+            per block: ru 0.054 | t 0.104 | rv 0.444 | mu 1.132 | ph 1.141 | rw 1.458
+
+          The per-block RANKING is the durable part and it separates two things the campaign
+          had conflated: ru is the block that dominates the stage-3 ENTRY NORM and it is the
+          MOST ACCURATE block here (5.4%), while rw/ph/mu are the ones the shipped solve
+          actually gets wrong (113-146%). Norm dominance is not inaccuracy.
+
+          CERTIFICATION REVERSED THE FIRST READING. A second reference at a LARGER budget
+          (200x30) returned ref_agree=0 (bit-identical K) together with a WORSE residual
+          (0.9989) and converged=0 -- the signature of the second solve warm-starting from
+          the first and returning it unchanged, not of a converged reference. The manifest had
+          already measured warmstart_enabled=1. Self-certification that shares mutable state
+          with the thing it certifies is not independent. The probe now disables the warm start
+          across both reference solves; that run is IN PROGRESS and rel_err is NOT yet
+          established as an accuracy -- only as the distance to a better solver-accepted solve.
+
+- [x] R3b NEGATIVE REACHABILITY (measured): the corrected-Omega re-measurement of Wall-2's ru
+          adv_z is NOT reachable from this observer. With BOTH parity knobs on
+          (WRF_OMEGA_WW_CP + MU_HORIZONTAL_DIV_ONLY) the run still performs exactly ONE
+          explicit RHS evaluation, at stage 1, where w == 0 and every vertical term with it.
+          The run aborts inside stage 2's implicit solve before any later slow evaluation, so
+          there is no explicit-pass state with nonzero w to measure. Re-measuring Wall-2 under
+          the correct Omega needs a run that completes a step, or instrumentation of k_slow
+          at stage >= 2 -- not this observer.
 - [x] R5  rho_max anomaly -- recheck once density is computed from al_full
