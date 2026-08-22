@@ -49,13 +49,23 @@ R11 marked these `[x]` against probes narrower than the item's own wording. Reve
           m=24->48) but max_re does NOT (+20%, still climbing) and n_rhp as a COUNT scales
           with m. max_re and n_rhp were reported as operator properties and are not;
           the 2.47x non-additivity is downgraded to a fixed-m observation.
-- [ ] C6  P1-1: ScopedProbeState restores 2 members; computeUnifiedRHS also mutates
+- [x] C6  P1-1: ScopedProbeState restores 2 members; computeUnifiedRHS also mutates
           grid_info_->dt, mask counters, ru_adv_z_work_, t_adv_z_work_. Prefer a mutation
           FINGERPRINT that fail-closes over an ever-growing snapshot list.
-- [ ] C7  P1-6: manifest -> machine-checkable. Emit at max_digits10, add the missing fields
+- [x] C7  P1-6: manifest -> machine-checkable. Emit at max_digits10, add the missing fields
           (true-residual period, stagnation window/ratio, no-early-stop override, precond
           fallback latch, JVP method + fd fallback, imex_slow_in_tangent, warm-start validity),
           and a comparator that exits non-zero on an unexpected diff or a missing field.
+          DONE. Manifest now prints at max_digits10 (newton_tol reads 0.20000000298023224,
+          the exact float32 0.2 -- at 6 digits a 7th-digit difference between two arms was
+          invisible to any diff) and carries 13 further fields. A new fwAD->FD fallback
+          COUNTER makes a degraded JVP operator visible without debug_level>=1; it measures
+          0 on em_b_wave, so that run's JVP really is forward-mode.
+          sdirk3_manifest_diff.py is the gate: 6 synthetic cases + a real two-arm sweep
+          (STAGE2_GMRES_RESTART) pass, and it fails closed on an undeclared diff, a field
+          present in only one arm, a missing stage, an absent manifest, AND on a DECLARED
+          field that never moved (an arm that silently reran the baseline is equally void).
+          Real sweep moved exactly one field: restart 7 -> 51.
 
 - [x] W1  WHY the production wrapper is not forward-mode differentiable: the AD helper's
           catch-all swallowed the reason. Surfaced, it is "tangent undefined -- the dual was

@@ -352,6 +352,11 @@ static inline torch::Tensor gmres_residual_norm(const torch::Tensor& r, int halo
 // Forward-mode AD uses dual numbers: F(u + εv) = F(u) + ε·(J·v)
 // We extract the tangent part (J·v) which is the true JVP.
 // ============================================================================
+// Count every fwAD->FD fallback. Without a counter the fallback is visible only at
+// debug_level>=1, so a run that silently spent the whole solve on the noisier FD operator
+// reads afterwards as a run that used forward-mode AD. The manifest reports this count.
+static std::atomic<long long> g_jvp_fd_fallback_count{0};
+
 static torch::Tensor compute_jvp_forward_mode(
     const std::function<torch::Tensor(const torch::Tensor&)>& F,
     const torch::Tensor& u,
@@ -365,9 +370,12 @@ static torch::Tensor compute_jvp_forward_mode(
         /*fd_epsilon_override=*/0.0f,
         &used_fd_fallback);
 
-    if (used_fd_fallback && wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-        std::cerr << "[JVP FWAD] Fallback to finite-difference JVP (fwAD unavailable/failed)"
-                  << std::endl;
+    if (used_fd_fallback) {
+        g_jvp_fd_fallback_count.fetch_add(1, std::memory_order_relaxed);
+        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+            std::cerr << "[JVP FWAD] Fallback to finite-difference JVP (fwAD unavailable/failed)"
+                      << std::endl;
+        }
     }
     return jvp;
 }
@@ -7194,6 +7202,13 @@ public:
                 if (newton_iter == 0 &&
                     wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_POLICY_MANIFEST")) {
                     auto& cfgm = wrf::sdirk3::g_sdirk3_config;
+                    // A manifest is only machine-checkable if its numbers round-trip: at the
+                    // default 6 significant digits two arms whose tolerances differ in the 7th
+                    // digit print identically, and the diff that should have caught it is blind.
+                    const auto prec_saved = std::cerr.precision();
+                    std::cerr << std::setprecision(
+                        std::numeric_limits<double>::max_digits10);
+                    const int ws_slot = (stage >= 0 && stage < 8) ? stage : -1;
                     std::cerr << "SDIRK3_POLICY_MANIFEST stage=" << stage
                               // resolved policy (what the pure resolver decided)
                               << " restart=" << policy.restart
@@ -7224,7 +7239,29 @@ public:
                               << " max_newton_iter=" << cfgm.max_newton_iter
                               << " ew_enabled=" << (ew_eta_enabled_this_iter ? 1 : 0)
                               << " ew_eta=" << ew_eta_used_this_iter
+                              // when GMRES checks the TRUE residual rather than the Arnoldi estimate
+                              << " true_resid_start_j=" << cfgm.gmres_true_residual_start_j
+                              << " true_resid_period=" << cfgm.gmres_true_residual_period
+                              // what makes a restart cycle give up early
+                              << " arnoldi_stag_window=" << cfgm.gmres_arnoldi_stag_window
+                              << " arnoldi_stag_ratio=" << cfgm.gmres_arnoldi_stag_ratio
+                              << " no_early_stop=" << (no_early_stop_enabled() ? 1 : 0)
+                              // degraded-operator latches: a fallback changes the operator, not a knob
+                              << " precond_fallback_count=" << precond_fallback_count_
+                              << " jvp_method=" << static_cast<int>(cfgm.jvp_method)
+                              << " jvp_fd_fallback_count="
+                              << g_jvp_fd_fallback_count.load(std::memory_order_relaxed)
+                              << " imex_slow_in_tangent=" << (cfgm.imex_slow_in_tangent ? 1 : 0)
+                              // warm-start: enabled is a knob, VALID is state -- a sweep needs both
+                              << " warmstart_enabled=" << (cfgm.gmres_warmstart ? 1 : 0)
+                              << " warmstart_gate=" << cfgm.gmres_warmstart_quality_gate
+                              << " warmstart_valid="
+                              << ((ws_slot >= 0 && gmres_warmstart_stage_[ws_slot].defined())
+                                      ? 1 : 0)
+                              << " warmstart_relerr="
+                              << ((ws_slot >= 0) ? gmres_warmstart_relerr_stage_[ws_slot] : -1.0f)
                               << std::endl;
+                    std::cerr << std::setprecision(prec_saved);
                 }
 
                 const int  restart_before_policy = effective_restart;
