@@ -141,3 +141,71 @@ spectrum for free.
 
 That is the outstanding question, and it has been outstanding since the Ω fix landed. Not
 another dt, and not another preconditioner variant.
+
+---
+
+# The next measurement, run: the numerical range
+
+Both probes in ONE run, preconditioner OFF, `WRF_SDIRK3_MAX_NEWTON_ITER=12`, stage 2.
+`WRF_SDIRK3_STAGE2_GMRES_RESTART` is the only variable.
+
+`SDIRK3_NUMERICAL_RANGE_UNPRECOND` is the symmetric part of the Hessenberg GMRES builds —
+i.e. `V^T H(A) V` on the Krylov basis the solver **actually iterates**, `V` orthonormal.
+
+| restart | m | min_eig_sym (1st) | n_neg | (2nd) | n_neg | random 24-sample |
+|---|---|---|---|---|---|---|
+| 8 | 7 | −953.7 | 4/7 | −2164 | 4/7 | `q_min=+5616, neg=0` |
+| 24 | 20 | −976.8 | 11/20 | −1913 | 12/20 | `q_min=+5616, neg=0` |
+| 48 | 41 | **−978.8** | 22/41 | **−1917** | 24/41 | `q_min=+5616, neg=0` |
+
+## MEASURED
+
+1. **The numerical range of the operator GMRES iterates straddles the origin.**
+   `definite=0` at every m, both restarts, every budget.
+
+2. **`min_eig_sym` is m-CONVERGED.** 7 → 20 → 41 moves it −953.7 → −976.8 → −978.8 (2.4%,
+   then 0.2%); the second restart −1913 → −1917 (0.2%). This is an operator property, not a
+   basis-size artifact — which the earlier Ritz study could not say of *its* extremes.
+
+3. **The negative fraction is roughly m-invariant**, 0.54–0.60 across a 6× change in m. Also
+   unlike the earlier study, where the count scaled with m.
+
+4. **On the current Ω-corrected operator, with the preconditioner OFF.** This is the
+   measurement that had been outstanding since the Ω fix.
+
+## Why the ladders look the way they do
+
+An indefinite numerical range makes the field-of-values GMRES bound vacuous: there is no
+`q_min > 0` to put in it. A floor that does not move with the Krylov budget, and a
+preconditioner that makes it worse rather than better, are what that looks like from outside —
+and both were measured before this was.
+
+Stated conservatively: this **explains** the budget-invariant floor; it is not a proof that no
+preconditioner can exist. Inertia arguments transfer rigorously only for Hermitian operators,
+and this one is not Hermitian.
+
+## The methodological finding, and it is the sharper one
+
+**Random sampling of the quadratic form found NO negative curvature — 24 directions,
+`neg=0`, in every single run — on the same operator, in the same process, whose Krylov basis
+is more than half negative.**
+
+The probe's own comment had warned that `neg==0` proves nothing, because "random vectors
+concentrate, and a narrow negative cone is easy to miss". That is now demonstrated rather than
+asserted, and there is a reason it is not bad luck:
+
+> **GMRES's basis is adversarially selected.** It is built from the residual, so it goes
+> exactly where the operator behaves badly. Random directions sample the whole space and
+> concentrate; the Krylov basis is the worst case, by construction.
+
+So a definiteness test must project onto the basis the solver actually builds. A random-vector
+survey of `⟨v, Av⟩` is not a weaker version of that test — on this operator it returns the
+opposite answer, with a tight cluster (q_max/q_min = 1.044) that reads as *reassuring*.
+
+## Next
+
+Not another spectrum. The operator's numerical range is indefinite in the space GMRES
+iterates, measured and m-converged, so the remaining questions are about the **formulation**:
+which terms put the negative part there, and whether a different split (or an
+indefinite-aware method) removes it. The per-block observers already in the tree are the
+instrument for the first half.
