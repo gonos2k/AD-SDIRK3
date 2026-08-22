@@ -53,3 +53,4 @@ JVP_Fallback_Invalidates_Verdict_Contract
 Memory_Tile_Offset_Contract
 Global_Ownership_Overlap_Gap_Contract
 Manifest_Duplicate_Fail_Contract
+Operational_Primal_Tangent_Contract

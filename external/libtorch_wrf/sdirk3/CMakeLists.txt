@@ -280,6 +280,13 @@ add_test(NAME Metric_Policy_Contract COMMAND test_metric_policy)
 
 # 9F.D52 (review section 6): FORWARD-mode tangents and the forward/reverse duality, for
 # the EOS and the pressure integrator. The prior tests used reverse mode and called it JVP.
+# R13 C1: the forward integrates F_I + F_E and the operational graph differentiates
+# F_I + detach(F_E). Includes the FD trap: a finite difference cannot see a detach, so an FD
+# fallback on this function returns a DIFFERENT operator rather than a noisier one.
+add_executable(test_operational_primal_tangent tests/test_operational_primal_tangent.cpp)
+target_link_libraries(test_operational_primal_tangent PRIVATE wrf_sdirk3::core)
+add_test(NAME Operational_Primal_Tangent_Contract COMMAND test_operational_primal_tangent)
+
 # R13 D2/E1: the two OFFLINE comparators. R12 reported both verified against synthetic
 # cases and no CI job invoked either -- a gate nothing runs is a script. Registered here so
 # the claim and the check are the same thing.

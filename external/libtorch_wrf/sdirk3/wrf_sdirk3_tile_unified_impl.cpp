@@ -10625,7 +10625,22 @@ vertical_coefficients:
                         v = v / v.detach().to(torch::kFloat64).norm().item<double>();
                     }
 
-                    bool fb_full = false, fb_e = false, fb_i = false;
+                    // The OPERATIONAL tangent, built the way production builds it rather than
+                    // inferred from the split identity. compute_k_slow detaches k_slow when
+                    // imex_slow_in_tangent = 0 (the runtime value), so the graph the adjoint
+                    // differentiates is F_I + detach(F_E). Deriving its tangent as J_I from
+                    // J_full = J_E + J_I assumes the detachment is exactly total; measuring it
+                    // does not, and a partial leak is precisely the thing an assumption hides.
+                    auto F_operational = [&](const torch::Tensor& x) {
+                        const bool sit = wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent;
+                        auto fi = probe_rhs(x, wrf::sdirk3::RhsMode::ImplicitOnly);
+                        auto fe = probe_rhs(x, wrf::sdirk3::RhsMode::ExplicitOnly);
+                        return sit ? (fi + fe) : (fi + fe.detach());
+                    };
+
+                    bool fb_full = false, fb_e = false, fb_i = false, fb_op = false;
+                    const auto Jv_op = wrf::sdirk3::compute_jvp_fwad_or_fd(
+                        F_operational, U_probe, v, 0, 0.0f, &fb_op);
                     const auto Jv_full = wrf::sdirk3::compute_jvp_fwad_or_fd(
                         F_of(wrf::sdirk3::RhsMode::Full), U_probe, v, 0, 0.0f, &fb_full);
                     const auto Jv_e = wrf::sdirk3::compute_jvp_fwad_or_fd(
@@ -10680,14 +10695,61 @@ vertical_coefficients:
                         ? Jv_e.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
                     const double n_i = Jv_i.defined()
                         ? Jv_i.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    const double n_op = Jv_op.defined()
+                        ? Jv_op.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    // e_drop: what the ADJOINT actually loses, measured, not derived. This is
+                    // the quantity an exact 4D-Var gradient needs to be zero -- the forward
+                    // integrates F_I + F_E and the operational graph differentiates
+                    // F_I + detach(F_E), so a nonzero e_drop means the gradient returned is the
+                    // gradient of a DIFFERENT cost function, not an approximation to this one.
+                    const double e_drop =
+                        (Jv_full.defined() && Jv_op.defined() && n_full > 0.0)
+                            ? (Jv_full.detach().to(torch::kFloat64) -
+                               Jv_op.detach().to(torch::kFloat64)).norm().item<double>() / n_full
+                            : -1.0;
+                    // Cancellation between the channels. ||J_E v + J_I v|| is NOT
+                    // ||J_E v|| + ||J_I v||, so a norm ratio is not an additive share and can
+                    // exceed 1 when the channels oppose. The cosine is what says whether the
+                    // ratio may be read as a share at all.
+                    const double cos_ei =
+                        (Jv_e.defined() && Jv_i.defined() && n_e > 0.0 && n_i > 0.0)
+                            ? (Jv_e.detach().to(torch::kFloat64) *
+                               Jv_i.detach().to(torch::kFloat64)).sum().item<double>()
+                                  / (n_e * n_i)
+                            : 0.0 / 0.0;
+                    wrf::sdirk3::TangentInputs tin;
+                    tin.fd_fallback = (fb_full || fb_e || fb_i || fb_op);
+                    tin.topology_ok = probe_topology_ok;
+                    const auto tverdict = wrf::sdirk3::tangent_verdict(tin);
+                    const auto semantics =
+                        wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent
+                            ? wrf::sdirk3::TangentSemantics::ExactPrimal
+                            : wrf::sdirk3::TangentSemantics::OperationalDetachedSlow;
                     std::cerr << "SDIRK3_TANGENT_BUDGET stage=" << stage_id
+                              << " valid=" << (tverdict.valid ? 1 : 0)
+                              << " reason=" << tverdict.reason
+                              << " semantics=" << wrf::sdirk3::tangent_semantics_name(semantics)
                               << " slow_in_tangent="
                               << (wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent ? 1 : 0)
                               << " J_full_v=" << n_full
                               << " J_E_v=" << n_e
                               << " J_I_v=" << n_i
-                              << " dropped_frac=" << (n_full > 0.0 ? n_e / n_full : -1.0)
-                              << " retained_frac=" << (n_full > 0.0 ? n_i / n_full : -1.0)
+                              << " J_operational_v=" << n_op
+                              // NOT "fraction": these are norm RATIOS. Naming them as shares
+                              // invited reading them as adding to 1, which they need not do.
+                              << " slow_norm_over_full=" << (n_full > 0.0 ? n_e / n_full : -1.0)
+                              << " implicit_norm_over_full="
+                              << (n_full > 0.0 ? n_i / n_full : -1.0)
+                              << " operational_norm_over_full="
+                              << (n_full > 0.0 ? n_op / n_full : -1.0)
+                              << " cos_EI=" << cos_ei
+                              << " e_drop=" << e_drop
+                              << (e_drop > 0.0
+                                    ? "  (the operational tangent is NOT the primal derivative:"
+                                      " exact 4D-Var requires imex_slow_in_tangent=true, and"
+                                      " this configuration is a weak-constraint model only once"
+                                      " the dropped component is carried in an explicit Q)"
+                                    : "  (the operational tangent IS the primal derivative)")
                               << std::endl;
                     std::cerr << "SDIRK3_AD_SPLIT_CONTRACT stage=" << stage_id
                               << " jvp_split_rel=" << rel(Jv_full, Jv_e + Jv_i)
