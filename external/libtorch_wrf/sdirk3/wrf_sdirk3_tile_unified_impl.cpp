@@ -162,6 +162,18 @@ inline bool probe_env_enabled(const char* name) {
 // operator rather than assumed from the one block that happened to be instrumented.
 // Read ONCE, through the one parser: a second reading with a second parser is how a flag
 // comes to mean two different things in one run.
+// R1 gate. Read once, through the one parser.
+inline bool step_map_purity_enabled() {
+    static const bool on = probe_env_enabled("WRF_SDIRK3_STEP_MAP_PURITY");
+    return on;
+}
+
+// R1: the directional derivative of the whole step map, by central difference.
+inline bool step_map_tangent_enabled() {
+    static const bool on = probe_env_enabled("WRF_SDIRK3_STEP_MAP_TANGENT");
+    return on;
+}
+
 inline bool adv_split_blocks_enabled() {
     static const bool on = probe_env_enabled("WRF_SDIRK3_ADV_SPLIT_BLOCKS");
     return on;
@@ -3807,6 +3819,246 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     int rk_step, float dt,
     int nx, int ny, int nz,
     int nx_u, int ny_v, int nz_w) {
+
+    // R1: is Phi_h a FUNCTION of the state?
+    //
+    // The one-step tangent D(Phi_h) is a Jacobian with respect to U_n, and a Jacobian
+    // presupposes that Phi_h(U_n) depends on U_n and nothing else. This solver carries state
+    // ACROSS steps -- hopeless streaks, the warm-start cache, the trust radius, the
+    // preconditioner fallback latch -- and every one of them alters the solve. If two calls on
+    // byte-identical input return different output then Phi_h is not a function of U_n, the
+    // central-difference contract cannot be satisfied by construction, and any measured
+    // "tangent" is partly a difference between two solver histories.
+    //
+    // So run the step TWICE on identical copies and compare, before asking anything about its
+    // derivative. Both probe calls advance the same carried state, so the production step that
+    // follows is perturbed; the record says so.
+    static thread_local bool inside_step_map_probe = false;
+    if (rk_step == 1 && !inside_step_map_probe &&
+        (step_map_purity_enabled() || step_map_tangent_enabled())) {
+        inside_step_map_probe = true;
+
+        const size_t n_u  = static_cast<size_t>(ny)   * nz   * nx_u;
+        const size_t n_v  = static_cast<size_t>(ny_v) * nz   * nx;
+        const size_t n_w  = static_cast<size_t>(ny)   * nz_w * nx;
+        const size_t n_t  = static_cast<size_t>(ny)   * nz   * nx;
+        const size_t n_mu = static_cast<size_t>(ny)   * nx;
+
+        // The function's whole mutable input, snapshotted at the ABI boundary -- which is the
+        // one place a snapshot is a complete list rather than a list that falls behind.
+        struct Arrays {
+            std::vector<float> u, v, w, ph, t, mu, ru_t, rv_t, rw_t, ph_t, t_t, mu_t;
+        };
+        const Arrays in{
+            {u, u + n_u}, {v, v + n_v}, {w, w + n_w}, {ph, ph + n_w},
+            {t, t + n_t}, {mu, mu + n_mu},
+            {ru_tend, ru_tend + n_u}, {rv_tend, rv_tend + n_v},
+            {rw_tend, rw_tend + n_w}, {ph_tend, ph_tend + n_w},
+            {t_tend, t_tend + n_t},   {mu_tend, mu_tend + n_mu}};
+
+        auto run_once_from = [&](Arrays& a) {
+            unifiedStep(a.u.data(), a.v.data(), a.w.data(), a.ph.data(), a.t.data(), a.mu.data(),
+                        a.ru_t.data(), a.rv_t.data(), a.rw_t.data(),
+                        a.ph_t.data(), a.t_t.data(), a.mu_t.data(),
+                        rdx, rdy, rdnw, rdn, msftx, msfty, msfux, msfuy, msfvx, msfvy,
+                        c1f, c2f, c1h, c2h, fnm, fnp, rk_step, dt,
+                        nx, ny, nz, nx_u, ny_v, nz_w);
+        };
+        auto run_once = [&](Arrays& a) { a = in; run_once_from(a); };
+
+        // A deterministic direction: index-based, so two runs and two builds perturb along the
+        // same v and their tangents are comparable. Scaled PER BLOCK, so a block whose values
+        // are small is not perturbed out of its own regime by one global epsilon.
+        auto direction = [](size_t n, size_t seed) {
+            std::vector<float> d(n);
+            double sq = 0.0;
+            for (size_t i = 0; i < n; ++i) {
+                const double x = static_cast<double>(i + seed);
+                d[i] = static_cast<float>(std::sin(0.7 * x) + std::cos(1.3 * x));
+                sq += static_cast<double>(d[i]) * d[i];
+            }
+            const double nrm = std::sqrt(sq);
+            if (nrm > 0.0) for (auto& e : d) e = static_cast<float>(e / nrm);
+            return d;
+        };
+        auto l2 = [](const std::vector<float>& x) {
+            double sq = 0.0;
+            for (float e : x) sq += static_cast<double>(e) * e;
+            return std::sqrt(sq);
+        };
+
+        if (step_map_tangent_enabled()) {
+            // D.v by central difference, at TWO step sizes. One epsilon cannot tell a
+            // derivative from a difference quotient that has not converged.
+            const std::vector<std::vector<float>> dirs{
+                direction(n_u, 1), direction(n_v, 2), direction(n_w, 3),
+                direction(n_w, 4), direction(n_t, 5), direction(n_mu, 6)};
+            const std::vector<const std::vector<float>*> base{
+                &in.u, &in.v, &in.w, &in.ph, &in.t, &in.mu};
+
+            // Scaling epsilon by the block norm gives a block whose input is identically
+            // zero NO perturbation at all -- numerator and denominator both vanish and the
+            // quotient reads 0, which looks like perfect agreement and means never measured.
+            // An absolute floor keeps such a block in the measurement, and step_for() is the
+            // single place the size is decided so the record can report it.
+            auto shifted = [&](double eps_rel, double sign) {
+                Arrays c = in;
+                std::vector<std::vector<float>*> tgt{&c.u, &c.v, &c.w, &c.ph, &c.t, &c.mu};
+                for (size_t bi = 0; bi < tgt.size(); ++bi) {
+                    const double nb = l2(*base[bi]);
+                    const double step = (nb > 0.0) ? eps_rel * nb : eps_rel;
+                    for (size_t i = 0; i < tgt[bi]->size(); ++i) {
+                        (*tgt[bi])[i] = static_cast<float>(
+                            (*tgt[bi])[i] + sign * step * dirs[bi][i]);
+                    }
+                }
+                run_once_from(c);
+                return c;
+            };
+            auto quotient = [&](const Arrays& p, const Arrays& m, double eps_rel) {
+                const std::vector<const std::vector<float>*> P{
+                    &p.u, &p.v, &p.w, &p.ph, &p.t, &p.mu};
+                const std::vector<const std::vector<float>*> M{
+                    &m.u, &m.v, &m.w, &m.ph, &m.t, &m.mu};
+                std::vector<std::vector<float>> q(6);
+                for (size_t bi = 0; bi < 6; ++bi) {
+                    const double nb = l2(*base[bi]);
+                    const double den = 2.0 * eps_rel * ((nb > 0.0) ? nb : 1.0);
+                    q[bi].resize(P[bi]->size());
+                    for (size_t i = 0; i < q[bi].size(); ++i) {
+                        q[bi][i] = den > 0.0
+                            ? static_cast<float>(((*P[bi])[i] - (*M[bi])[i]) / den) : 0.0f;
+                    }
+                }
+                return q;
+            };
+
+            const double eps1 = 1.0e-3, eps2 = 5.0e-4;
+            const Arrays p1 = shifted(eps1, +1.0), m1 = shifted(eps1, -1.0);
+            const Arrays p2 = shifted(eps2, +1.0), m2 = shifted(eps2, -1.0);
+            inside_step_map_probe = false;
+
+            const auto q1 = quotient(p1, m1, eps1);
+            const auto q2 = quotient(p2, m2, eps2);
+            static const char* kBlock[6] = {"u", "v", "w", "ph", "t", "mu"};
+            std::cerr << "SDIRK3_STEP_MAP_TANGENT eps1=" << eps1 << " eps2=" << eps2;
+            double worst = 0.0;
+            for (size_t bi = 0; bi < 6; ++bi) {
+                std::vector<float> d(q1[bi].size());
+                for (size_t i = 0; i < d.size(); ++i) d[i] = q1[bi][i] - q2[bi][i];
+                const double n2 = l2(q2[bi]);
+                const double agree = n2 > 0.0 ? l2(d) / n2 : (l2(d) > 0.0 ? -1.0 : 0.0);
+                worst = std::max(worst, agree);
+                std::cerr << " " << kBlock[bi] << "_Dv=" << n2
+                          << " " << kBlock[bi] << "_agree=" << agree
+                          // A zero input norm is why a block would read 0: on the record, so
+                          // "not measured" is never mistaken for "perfectly agreeing".
+                          << " " << kBlock[bi] << "_in=" << l2(*base[bi]);
+            }
+            // The validity field: halving epsilon must not change D.v if the quotient has
+            // converged. If it does, what was measured is not a derivative.
+            std::cerr << " worst_agree=" << worst
+                      << (worst < 0.05
+                            ? "  (halving epsilon leaves D.v unchanged: the central difference"
+                              " converged and D(Phi_h).v IS a directional derivative)"
+                            : "  (halving epsilon MOVES D.v: a difference quotient that has NOT"
+                              " converged, so this is not a directional derivative)")
+                      << "  [four probe steps advanced carried solver state: the production"
+                         " step below is perturbed]"
+                      << std::endl;
+            return;
+        }
+
+        Arrays a, b;
+        run_once(a);
+        run_once(b);
+        inside_step_map_probe = false;
+
+        // Does the step MOVE the state? D.v came out at exactly 1 for four blocks, which is
+        // what an IDENTITY map gives for a unit direction -- so before reading that as a
+        // converged derivative of the dynamics, measure whether Phi_h(U) differs from U at
+        // all. If it does not, the tangent converged because there is nothing to
+        // differentiate.
+        {
+            auto moved = [&](const std::vector<float>& out, const std::vector<float>& inp) {
+                double num = 0.0, den = 0.0;
+                for (size_t i = 0; i < out.size(); ++i) {
+                    const double d = static_cast<double>(out[i]) - static_cast<double>(inp[i]);
+                    num += d * d;
+                    den += static_cast<double>(inp[i]) * static_cast<double>(inp[i]);
+                }
+                return den > 0.0 ? std::sqrt(num) / std::sqrt(den)
+                                 : (num > 0.0 ? -1.0 : 0.0);
+            };
+            const double m_u = moved(a.u, in.u), m_v = moved(a.v, in.v), m_w = moved(a.w, in.w);
+            const double m_p = moved(a.ph, in.ph), m_t = moved(a.t, in.t),
+                         m_m = moved(a.mu, in.mu);
+            const bool identity = (m_u == 0.0 && m_v == 0.0 && m_w == 0.0 &&
+                                   m_p == 0.0 && m_t == 0.0 && m_m == 0.0);
+            // A state that does not move has an innocent explanation: in WRF's convention a
+            // dynamics core writes TENDENCIES and the driver advances the state. If the
+            // tendency arrays moved, Phi_h is U -> tendencies and "identity on the state" says
+            // nothing about it. Measured here, so the reading is not left to assumption.
+            auto tend_norm = [&](const std::vector<float>& out,
+                                 const std::vector<float>& inp) {
+                double num = 0.0;
+                for (size_t i = 0; i < out.size(); ++i) {
+                    const double d = static_cast<double>(out[i]) - static_cast<double>(inp[i]);
+                    num += d * d;
+                }
+                return std::sqrt(num);
+            };
+            const double d_ru = tend_norm(a.ru_t, in.ru_t), d_rv = tend_norm(a.rv_t, in.rv_t),
+                         d_rw = tend_norm(a.rw_t, in.rw_t), d_ph = tend_norm(a.ph_t, in.ph_t),
+                         d_t  = tend_norm(a.t_t,  in.t_t),  d_mu = tend_norm(a.mu_t, in.mu_t);
+            const bool tend_moved = (d_ru + d_rv + d_rw + d_ph + d_t + d_mu) > 0.0;
+            std::cerr << "SDIRK3_STEP_MAP_ADVANCE"
+                      << " identity=" << (identity ? 1 : 0)
+                      << " u=" << m_u << " v=" << m_v << " w=" << m_w
+                      << " ph=" << m_p << " t=" << m_t << " mu=" << m_m
+                      << " tend_moved=" << (tend_moved ? 1 : 0)
+                      << " d_ru=" << d_ru << " d_rv=" << d_rv << " d_rw=" << d_rw
+                      << " d_ph=" << d_ph << " d_t=" << d_t << " d_mu=" << d_mu
+                      << (identity
+                            ? (tend_moved
+                                 ? "  (state unchanged but TENDENCIES written: Phi_h is"
+                                   " U -> tendencies, and a state-space tangent is the wrong"
+                                   " object to measure here)"
+                                 : "  (neither state nor tendencies moved: the step is a NO-OP,"
+                                   " so its tangent is the identity and measures no dynamics)")
+                            : "  (the step advances the state: its tangent is a derivative of"
+                              " the dynamics)")
+                      << std::endl;
+        }
+
+        // Report each block separately: "the step is not a function" and "the step is not a
+        // function IN rw" are different findings, and only the second names where to look.
+        auto rel = [](const std::vector<float>& x, const std::vector<float>& y) {
+            double num = 0.0, den = 0.0;
+            for (size_t i = 0; i < x.size(); ++i) {
+                const double d = static_cast<double>(x[i]) - static_cast<double>(y[i]);
+                num += d * d;
+                den += static_cast<double>(y[i]) * static_cast<double>(y[i]);
+            }
+            return den > 0.0 ? std::sqrt(num) / std::sqrt(den) : (num > 0.0 ? -1.0 : 0.0);
+        };
+        const double r_u = rel(a.u, b.u), r_v = rel(a.v, b.v), r_w = rel(a.w, b.w);
+        const double r_p = rel(a.ph, b.ph), r_t = rel(a.t, b.t), r_m = rel(a.mu, b.mu);
+        const bool pure = (r_u == 0.0 && r_v == 0.0 && r_w == 0.0 &&
+                           r_p == 0.0 && r_t == 0.0 && r_m == 0.0);
+        std::cerr << "SDIRK3_STEP_MAP_PURITY"
+                  << " pure=" << (pure ? 1 : 0)
+                  << " u=" << r_u << " v=" << r_v << " w=" << r_w
+                  << " ph=" << r_p << " t=" << r_t << " mu=" << r_m
+                  << (pure
+                        ? "  (two calls on identical input agree bitwise: D(Phi_h) is"
+                          " well-posed as a Jacobian of U_n)"
+                        : "  (two calls on IDENTICAL input DISAGREE: Phi_h depends on carried"
+                          " solver state, so a central difference of it is not a Jacobian)")
+                  << "  [both probe calls advanced that carried state: the production step"
+                     " below is perturbed]"
+                  << std::endl;
+    }
 
     // Reset step outcome snapshot on function entry.
     setLastStepOutcome(

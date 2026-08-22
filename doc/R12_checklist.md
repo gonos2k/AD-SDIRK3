@@ -75,8 +75,42 @@ R11 marked these `[x]` against probes narrower than the item's own wording. Reve
 
 ## Carried from R11, still open
 
-- [ ] R1  D(Phi_h): the full one-step tangent through the implicit solves. Contract:
+- [x] R1  D(Phi_h): the full one-step tangent through the implicit solves. Contract:
           central difference of Phi_h, and <D v, w> == <v, D^T w>.
+          ANSWERED, and the answer is that the contract is VACUOUS on this configuration.
+
+          Three probes, each with its own refuting measurement:
+          1. WRF_SDIRK3_STEP_MAP_PURITY -- is Phi_h a FUNCTION of U_n? A Jacobian presupposes
+             it, and this solver carries hopeless streaks, a warm-start cache, a trust radius
+             and a preconditioner latch ACROSS calls. Two calls on byte-identical input agree
+             BITWISE on all six blocks: pure=1. Well-posed. (Note call B ran with a warm-start
+             cache that call A populated and still matched -- the same idempotence that made
+             R4's ref_agree degenerate.)
+          2. WRF_SDIRK3_STEP_MAP_TANGENT -- central difference at TWO step sizes,
+             eps=1e-3 and 5e-4: worst_agree=6.4e-05. The quotient has converged.
+          3. But u_Dv = ph_Dv = t_Dv = mu_Dv = EXACTLY 1, which for a unit direction is what
+             an IDENTITY map gives, and v_Dv = w_Dv = 0 because epsilon was scaled by a block
+             norm that is zero for those blocks -- "never measured" printed as "perfect
+             agreement". Both fixed: an absolute epsilon floor, the input norm on the record,
+             and a direct measurement of whether the step moves anything.
+
+          SDIRK3_STEP_MAP_ADVANCE: identity=1, tend_moved=0 -- all TWELVE arrays (six state,
+          six tendency) bit-identical. The step is a complete NO-OP. It is not that the core
+          writes tendencies instead of state (the WRF convention, and the obvious innocent
+          explanation): the tendencies did not move either.
+
+          MECHANISM, named by the code itself, not inferred:
+            [STEP OUTCOME] fail-closed outcome=20; skipping unifiedStep state publish
+            SDIRK3 FAIL-CLOSED outcome=20 final_update_aborted=1
+          The fail-closed gate suppresses the state publish after ABORT_ON_NEWTON_FAIL. The
+          no-op is BY DESIGN and correct; it means D(Phi_h) measures the GATE, not the dynamics.
+
+          CONSEQUENCE FOR THE 4D-VAR GOAL: D(Phi_h) = I here, so <D v, w> == <v, D^T w> holds
+          TRIVIALLY and certifies nothing about the adjoint -- the same failure mode as the
+          severed VJP that passed symmetry, linearity, repeatability and additivity while being
+          the identity. A step-level TLM/adjoint contract cannot become meaningful until the
+          forward advances. This sharpens "completes ZERO steps": unifiedStep returns its input
+          unchanged, bit for bit.
 - [ ] R2  np equivalence: needs a globally-formulated quantity, not a rerun of tile-local probes
 - [x] R3  term observer for rv, rw, ph, t, mu (only ru has one)
           DONE, with one correction to the premise: mu ALREADY had one
