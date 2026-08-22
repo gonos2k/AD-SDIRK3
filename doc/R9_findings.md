@@ -1343,3 +1343,43 @@ a supported model-error configuration. Fixed.
 - **C4** env parsing was fail-silent again: `"Full"`, `"FULL"`, `"ful"` and any typo all became
   `J_E`, and `atoi("48junk") = 48`, `atoi("abc") = 0 -> default`. Both now strict and abort.
 - **P1-2** `torch::eye(m, kFloat64)` is a CPU tensor while `Vm` may be CUDA/MPS.
+
+## P1c. The probe-vs-production parity contract — implemented, and it REFUSES
+
+The reference-state defect was invisible to every validity field already in place: the probe
+compiled, its JVP was a true dual with no FD fallback, it passed homogeneity and additivity, and
+its Arnoldi converged in `m`. It was a sound measurement **of the wrong function**. A hidden
+second input through a mutable member cannot be caught by asking the measurement about itself —
+only by comparing against the production path.
+
+So: `J[compute_k_slow](U_0) v` versus `J[probe_rhs(., ExplicitOnly)](U_0) v`, four directions.
+
+| stage | dir | `J_prod` | `J_probe` | `rel_diff` | `fd_prod` | `fd_probe` | `comparable` |
+|---|---|---|---|---|---|---|---|
+| 1 | random | 0.605948 | 0.605836 | 0.0156 | **1** | **0** | **0** |
+| 2 | implicit_step | 26.84 | 42.11 | 1.439 | **1** | **0** | **0** |
+| 2 | random | 458.5 | 458.1 | 0.121 | **1** | **0** | **0** |
+| 2 | edge | 109.7 | 97.22 | 0.856 | **1** | **0** | **0** |
+| 2 | interior | 28.03 | 73.87 | 2.625 | **1** | **0** | **0** |
+
+**`comparable = 0` everywhere.** The production wrapper `compute_k_slow` falls back to a finite
+difference; the probe evaluator does not. So this is a true dual against an FD quotient, and the
+`rel_diff` column is **not** evidence of structural disagreement — it is largely the difference
+between two different derivative methods.
+
+The flags had to be separated to see this. Emitted as `fb1 || fb2` the record said only
+"something degraded", and the 0.12–2.6 spread would have been read as the probe measuring a
+different operator.
+
+### What this does and does not establish
+
+**Does:** the contract works — it refuses to certify rather than producing a number. And it
+surfaces a fact about the codebase worth its own investigation: `compute_k_slow` is not
+forward-mode differentiable while `computeUnifiedRHS` is, even though the wrapper's body is
+structurally the same call plus a reference assignment. `slow_in_tangent` is not the difference
+— both read `g_sdirk3_config.imex_slow_in_tangent` (`:5762`).
+
+**Does not:** certify the probe. **P1c stays OPEN.** The re-measured spectra rest on
+`probe_rhs` mirroring `compute_k_slow` *by construction* — verified by reading both bodies, not
+by measurement. That is weaker than the contract was meant to provide, and it is the honest
+status.

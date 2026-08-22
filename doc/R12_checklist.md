@@ -26,7 +26,12 @@ R11 marked these `[x]` against probes narrower than the item's own wording. Reve
 - [x] P1b RE-MEASURE every spectrum / directional result on the authoritative mapping and
           restate or retract: J_E, J_I, J_full RHP values, the 2.45x non-additivity, the
           directional remainders, the eigenvector block shares
-- [ ] P1c contract: J_probe v == J_production v on random / implicit-step / edge / interior
+- [~] P1c IMPLEMENTED and it REFUSES: comparable=0 on all four directions because
+          compute_k_slow falls back to FD while probe_rhs does not, so the comparison is a true
+          dual against an FD quotient and rel_diff is not structural disagreement. The contract
+          working is not the contract passing -- P1c stays OPEN, and why the production wrapper
+          is not forward-mode differentiable is a new question (slow_in_tangent is NOT it: both
+          read g_sdirk3_config.imex_slow_in_tangent at :5762).
 
 ## P1 — probe certification
 

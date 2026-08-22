@@ -10169,6 +10169,90 @@ vertical_coefficients:
                 }
 
                 // ============================================================
+                // R12 P1c: does the probe measure the PRODUCTION operator?
+                // ============================================================
+                // The reference-state defect was invisible to every validity field already in
+                // place -- the probe compiled, its JVP was a true dual with no FD fallback, it
+                // passed homogeneity and additivity, and its Arnoldi converged in m. It was a
+                // sound measurement OF THE WRONG FUNCTION, and a hidden second input through a
+                // mutable member cannot be caught by asking the measurement about itself.
+                //
+                // What catches it is comparing against the production wrapper directly:
+                //
+                //     J[compute_k_slow](U0) v   vs   J[probe_rhs(., ExplicitOnly)](U0) v
+                //
+                // compute_k_slow IS the production path -- the stage loop calls exactly it. If
+                // the probe evaluator mirrors it, these agree to round-off in every direction;
+                // if a reference or a cached input diverges, they do not. Four directions,
+                // because a single one can agree by accident where the missing term is small.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_PROBE_PARITY")) {
+                    ScopedProbeState parity_guard(*this);
+                    const auto U0p = U_conv.detach().clone();
+                    auto F_prod = [&](const torch::Tensor& x) {
+                        return compute_k_slow(x, torch::Tensor{});
+                    };
+                    auto F_prob = [&probe_rhs](const torch::Tensor& x) {
+                        return probe_rhs(x, wrf::sdirk3::RhsMode::ExplicitOnly);
+                    };
+                    std::vector<std::pair<const char*, torch::Tensor>> pdirs;
+                    pdirs.emplace_back("implicit_step", U_conv.detach() - U_stage.detach());
+                    pdirs.emplace_back("random", torch::randn_like(U0p));
+                    {
+                        torch::NoGradGuard ng_pd;
+                        auto base = U_conv.detach() - U_stage.detach();
+                        auto [pu,pv,pw,pph,pt,pmu] = extractStateVariables(base);
+                        auto edge_of = [](const torch::Tensor& x, bool want_edge) {
+                            auto m = torch::zeros_like(x);
+                            if (x.dim() == 3) {
+                                for (int64_t d = 0; d < 3; ++d) {
+                                    const int64_t n = x.size(d);
+                                    if (n < 2) continue;
+                                    m.slice(d, 0, 1).fill_(1);
+                                    m.slice(d, n - 1, n).fill_(1);
+                                }
+                            }
+                            return want_edge ? x * m : x * (1 - m);
+                        };
+                        std::vector<torch::Tensor> P{pu,pv,pw,pph,pt,pmu};
+                        std::vector<torch::Tensor> E, I;
+                        for (auto& q : P) { E.push_back(edge_of(q,true)); I.push_back(edge_of(q,false)); }
+                        pdirs.emplace_back("edge", combineStateVariables(E[0],E[1],E[2],E[3],E[4],E[5]));
+                        pdirs.emplace_back("interior", combineStateVariables(I[0],I[1],I[2],I[3],I[4],I[5]));
+                    }
+                    for (auto& nd : pdirs) {
+                        auto d = nd.second;
+                        {
+                            torch::NoGradGuard ng;
+                            const double dn = d.detach().to(torch::kFloat64).norm().item<double>();
+                            if (!(dn > 0.0)) continue;
+                            d = d / static_cast<float>(dn);
+                        }
+                        bool fb1 = false, fb2 = false;
+                        const auto Jp = wrf::sdirk3::compute_jvp_fwad_or_fd(F_prod, U0p, d, 0, 0.0f, &fb1);
+                        const auto Jq = wrf::sdirk3::compute_jvp_fwad_or_fd(F_prob, U0p, d, 0, 0.0f, &fb2);
+                        torch::NoGradGuard ng_r;
+                        const auto a = Jp.detach().to(torch::kFloat64);
+                        const auto b = Jq.detach().to(torch::kFloat64);
+                        const double na = a.norm().item<double>();
+                        std::cerr << "SDIRK3_PROBE_PARITY stage=" << stage_id
+                                  << " dir=" << nd.first
+                                  << " J_prod_norm=" << na
+                                  << " J_probe_norm=" << b.norm().item<double>()
+                                  << " rel_diff=" << (na > 0.0
+                                        ? (a - b).norm().item<double>() / na : -1.0)
+                                  // SEPARATE flags. Combined as fb1||fb2 the record cannot say
+                                  // WHICH side degraded to a finite difference -- and comparing
+                                  // a true dual against an FD quotient is not a like-for-like
+                                  // comparison, so the rel_diff would be read as a structural
+                                  // disagreement when it is partly FD noise.
+                                  << " fd_fallback_prod=" << (fb1 ? 1 : 0)
+                                  << " fd_fallback_probe=" << (fb2 ? 1 : 0)
+                                  << " comparable=" << ((fb1 == fb2) ? 1 : 0)
+                                  << std::endl;
+                    }
+                }
+
+                // ============================================================
                 // R11 P0-1: DIRECTIONAL DIFFERENTIABILITY, on the right function
                 // ============================================================
                 // The retracted claim fit ||F_E(U_0 + lambda d)|| ~ C lambda^0.70 and read the
