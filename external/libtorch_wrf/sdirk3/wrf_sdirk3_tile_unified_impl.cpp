@@ -251,6 +251,7 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_owned_box.h"
+#include "wrf_sdirk3_halo_c_api.h"
 #include "wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
@@ -3813,35 +3814,14 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
         dx, dy, nx, ny, nz);
 }
 
-void TileSDIRK3UnifiedSolver::unifiedStep(
-    float* u, float* v, float* w,
-    float* ph, float* t, float* mu,  // t replaces al
-    float* ru_tend, float* rv_tend, float* rw_tend,
-    float* ph_tend, float* t_tend, float* mu_tend,  // t_tend replaces al_tend
-    float rdx, float rdy, float* rdnw, float* rdn,
-    float* msftx, float* msfty,
-    float* msfux, float* msfuy,
-    float* msfvx, float* msfvy,
-    float* c1f, float* c2f, float* c1h, float* c2h,  // Vertical coordinate coefficients
-    float* fnm, float* fnp,  // Vertical interpolation weights (also used as fzm, fzp)
-    int rk_step, float dt,
-    int nx, int ny, int nz,
-    int nx_u, int ny_v, int nz_w) {
+// R13.1: one emitter, two phases. See the call sites for why the distinction is the whole
+// point of the record.
+void TileSDIRK3UnifiedSolver::emitGlobalNormRecord(
+        const char* phase, bool published, int outcome_code, int rk_step,
+        const float* u, const float* v, const float* w,
+        const float* ph, const float* t, const float* mu,
+        int nx, int ny, int nz, int nx_u, int ny_v, int nz_w) {
 
-    // R2: a quantity that does NOT depend on how the domain was decomposed.
-    //
-    // Every probe in this campaign so far reports a TILE-LOCAL number, and two runs at
-    // different rank counts have different tiles, so their records are not comparable -- a
-    // difference between them says nothing about whether the physics agreed. What IS
-    // comparable is a sum over each rank's OWNED cells expressed in GLOBAL indices: owned
-    // regions partition the domain, so the partials add to one domain quantity regardless of
-    // how many ranks produced them.
-    //
-    // The emitted `count` is the validity field. If the counts do not add up to the domain's
-    // degrees of freedom, the owned box is wrong -- halo cells double-counted or interior
-    // cells dropped -- and the norm comparison is void rather than merely approximate. A wrong
-    // count cannot be mistaken for a small discrepancy.
-    if (rk_step == 1 && global_norms_enabled()) {
         // The ownership rule is wrf_sdirk3_owned_box.h and nothing else -- the loop extents,
         // the printed box and the offline combiner all read the SAME definition. It used to be
         // open-coded here and re-derived again in Python, and two copies of a convention is
@@ -3862,6 +3842,10 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         const int nj_v   = jte_ - jts_ + 1;                       // y-staggered points
         static thread_local long long global_norm_step_seq = 0;
         ++global_norm_step_seq;
+        // The host's forecast timestep, not a per-call counter. step_seq stays on the record
+        // because it orders emissions within a run; it is not an identity across runs.
+        const long long host_timestep =
+            static_cast<long long>(::sdirk3_host_global_timestep());
         auto owned_sumsq = [](const float* a, int nj, int nk, int ni,
                               int stride_j, int stride_k, int stride_i) {
             double sq = 0.0;
@@ -3904,6 +3888,11 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             }
             std::cerr << "SDIRK3_GLOBAL_NORM block=" << b.name
                       << " stagger=" << wrf::sdirk3::stagger_name(b.stagger)
+                      << " phase=" << phase
+                      << " state_published=" << (published ? 1 : 0)
+                      << " outcome=" << outcome_code
+                      << " global_timestep=" << host_timestep
+                      << " rk_step=" << rk_step
                       << " step_seq=" << global_norm_step_seq
                       << " i0=" << box.i0 << " i1=" << box.i1
                       << " j0=" << box.j0 << " j1=" << box.j1
@@ -3924,6 +3913,48 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         }
     }
 
+void TileSDIRK3UnifiedSolver::unifiedStep(
+    float* u, float* v, float* w,
+    float* ph, float* t, float* mu,  // t replaces al
+    float* ru_tend, float* rv_tend, float* rw_tend,
+    float* ph_tend, float* t_tend, float* mu_tend,  // t_tend replaces al_tend
+    float rdx, float rdy, float* rdnw, float* rdn,
+    float* msftx, float* msfty,
+    float* msfux, float* msfuy,
+    float* msfvx, float* msfvy,
+    float* c1f, float* c2f, float* c1h, float* c2h,  // Vertical coordinate coefficients
+    float* fnm, float* fnp,  // Vertical interpolation weights (also used as fzm, fzp)
+    int rk_step, float dt,
+    int nx, int ny, int nz,
+    int nx_u, int ny_v, int nz_w) {
+
+    // R2: a quantity that does NOT depend on how the domain was decomposed.
+    //
+    // Every probe in this campaign so far reports a TILE-LOCAL number, and two runs at
+    // different rank counts have different tiles, so their records are not comparable -- a
+    // difference between them says nothing about whether the physics agreed. What IS
+    // comparable is a sum over each rank's OWNED cells expressed in GLOBAL indices: owned
+    // regions partition the domain, so the partials add to one domain quantity regardless of
+    // how many ranks produced them.
+    //
+    // The emitted `count` is the validity field. If the counts do not add up to the domain's
+    // degrees of freedom, the owned box is wrong -- halo cells double-counted or interior
+    // cells dropped -- and the norm comparison is void rather than merely approximate. A wrong
+    // count cannot be mistaken for a small discrepancy.
+    // Declared here because the global-norm record below must not fire inside a probe arm:
+    // a recursive unifiedStep would emit a partial for a state the run never had.
+    static thread_local bool inside_step_map_probe = false;
+    // R13.1: the record is emitted TWICE with a phase tag, because where it is taken decides
+    // what it can support. At entry it compares the state going IN -- a decomposition and
+    // ownership claim, which is the one currently reachable. After the step publishes it
+    // compares what SDIRK3 produced, which is the np-equivalence claim. R13 emitted only the
+    // entry record and the comparator printed "np-equivalent" from it, which is the stronger
+    // statement made from the weaker one's data.
+    if (rk_step == 1 && global_norms_enabled() && !inside_step_map_probe) {
+        emitGlobalNormRecord("input", /*published=*/false,
+                             getLastStepOutcomeCode(), rk_step,
+                             u, v, w, ph, t, mu, nx, ny, nz, nx_u, ny_v, nz_w);
+    }
     // R1: is Phi_h a FUNCTION of the state?
     //
     // The one-step tangent D(Phi_h) is a Jacobian with respect to U_n, and a Jacobian
@@ -3941,7 +3972,6 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     // after the arms stays true forever if an arm throws, and every later probe on that thread
     // then silently no-ops -- a diagnostic that disables itself and says nothing is the exact
     // failure mode these gates exist to prevent.
-    static thread_local bool inside_step_map_probe = false;
     struct ProbeLatch {
         bool& flag;
         explicit ProbeLatch(bool& f) : flag(f) { flag = true; }
@@ -4009,6 +4039,12 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             : wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState{};
         const std::uint64_t arm_entry_digest =
             have_solver ? newton_solver_->carried_state_digest() : 0ULL;
+        // R13.1: this flag is named for what it MEASURES. It is true when the selected
+        // carried state came back to its entry value -- not when the arms were independent.
+        // Outside the snapshot and therefore outside this claim: preconditioner internals,
+        // jacobian_cache_, k2_prev_/k3_prev_, the bootstrap flags and the stage-3 no-improve
+        // streak. The record carries fresh_solver_per_arm=0 beside it so nothing downstream
+        // has to infer the difference.
         bool arms_isolated = true;
         const ArmRestore arm_restore{have_solver ? newton_solver_.get() : nullptr, arm_entry};
 
@@ -4037,7 +4073,7 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         auto arms_reason = [&]() -> const char* {
             const auto v = wrf::sdirk3::step_map_verdict(arm_status);
             if (!v.valid) return v.reason;
-            return arms_isolated ? "ok" : "arms_not_isolated";
+            return arms_isolated ? "ok" : "selected_state_not_restored";
         };
         auto emit_arm_status = [&](std::ostream& os) {
             for (size_t i = 0; i < arm_status.size(); ++i) {
@@ -4123,7 +4159,8 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             std::cerr << "SDIRK3_STEP_MAP_TANGENT"
                       << " step_map_valid=" << (tangent_valid ? 1 : 0)
                       << " reason=" << arms_reason()
-                      << " arms_isolated=" << (arms_isolated ? 1 : 0);
+                      << " selected_state_restored=" << (arms_isolated ? 1 : 0)
+                      << " fresh_solver_per_arm=0";
             emit_arm_status(std::cerr);
             std::cerr << " eps1=" << eps1 << " eps2=" << eps2;
             double worst = 0.0;
@@ -4204,7 +4241,8 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             std::cerr << "SDIRK3_STEP_MAP_ADVANCE"
                       << " step_map_valid=" << (arms_all_complete() ? 1 : 0)
                       << " reason=" << arms_reason()
-                      << " arms_isolated=" << (arms_isolated ? 1 : 0);
+                      << " selected_state_restored=" << (arms_isolated ? 1 : 0)
+                      << " fresh_solver_per_arm=0";
             emit_arm_status(std::cerr);
             std::cerr << " identity=" << (identity ? 1 : 0)
                       << " u=" << m_u << " v=" << m_v << " w=" << m_w
@@ -4245,7 +4283,8 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         std::cerr << "SDIRK3_STEP_MAP_PURITY"
                   << " step_map_valid=" << (arms_all_complete() ? 1 : 0)
                   << " reason=" << arms_reason()
-                  << " arms_isolated=" << (arms_isolated ? 1 : 0);
+                  << " selected_state_restored=" << (arms_isolated ? 1 : 0)
+                  << " fresh_solver_per_arm=0";
         emit_arm_status(std::cerr);
         std::cerr << " pure=" << (pure ? 1 : 0)
                   << " u=" << r_u << " v=" << r_v << " w=" << r_w
@@ -10812,14 +10851,44 @@ vertical_coefficients:
                               << " operational_norm_over_full="
                               << (n_full > 0.0 ? n_op / n_full : -1.0)
                               << " cos_EI=" << cos_ei
-                              << " e_drop=" << e_drop
-                              << (e_drop > 0.0
-                                    ? "  (the operational tangent is NOT the primal derivative:"
-                                      " exact 4D-Var requires imex_slow_in_tangent=true, and"
-                                      " this configuration is a weak-constraint model only once"
-                                      " the dropped component is carried in an explicit Q)"
-                                    : "  (the operational tangent IS the primal derivative)")
-                              << std::endl;
+                              << " e_drop=" << e_drop;
+                    // R13.1: the RELATION is gated on the verdict, not on the number.
+                    //
+                    // R13 selected this sentence with `e_drop > 0.0` while computing
+                    // tverdict two lines above and not reading it. Under an FD fallback that
+                    // is not a near miss, it is exactly backwards: FD cannot see a detach, so
+                    // it returns the PRIMAL tangent, e_drop comes out ~0, and the record read
+                    //     valid=0 reason=fd_fallback e_drop=0
+                    //     (the operational tangent IS the primal derivative)
+                    // -- the strongest possible claim, asserted from the one measurement
+                    // guaranteed to be incapable of supporting it. An undefined tensor gives
+                    // e_drop=-1, also not > 0, and landed on the same sentence.
+                    //
+                    // A tolerance rather than exact zero: these are float32 tangents and an
+                    // exact 0 is not the question being asked.
+                    const auto relation = wrf::sdirk3::tangent_relation(tverdict, e_drop);
+                    std::cerr << " e_drop_valid="
+                              << (relation == wrf::sdirk3::TangentRelation::Unavailable
+                                      ? 0 : 1)
+                              << " tangent_relation="
+                              << wrf::sdirk3::tangent_relation_name(relation);
+                    switch (relation) {
+                        case wrf::sdirk3::TangentRelation::Unavailable:
+                            std::cerr << "  (no relation to the primal derivative is claimed: "
+                                      << (tverdict.valid ? "e_drop was not measured"
+                                                         : tverdict.reason) << ")";
+                            break;
+                        case wrf::sdirk3::TangentRelation::MatchesPrimal:
+                            std::cerr << "  (the operational tangent IS the primal derivative)";
+                            break;
+                        default:
+                            std::cerr << "  (exact 4D-Var requires imex_slow_in_tangent=true,"
+                                         " and this configuration is a weak-constraint model"
+                                         " only once the dropped component is carried in an"
+                                         " explicit Q)";
+                            break;
+                    }
+                    std::cerr << std::endl;
                     std::cerr << "SDIRK3_AD_SPLIT_CONTRACT stage=" << stage_id
                               << " jvp_split_rel=" << rel(Jv_full, Jv_e + Jv_i)
                               << " vjp_split_rel="
@@ -12065,6 +12134,20 @@ vertical_coefficients:
     
     // Unpack updated state with staggered dimensions
     unpackState(U_new, u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
+
+    // R13.1: THE np-equivalence record, and the only one entitled to that claim.
+    //
+    // Reaching this line means the fail-closed gate above did not fire, so a state was
+    // actually published and the driver will accept it. A norm taken at solver ENTRY -- which
+    // is all R13 emitted -- compares what went IN, and two ranks agreeing on their input says
+    // nothing about whether SDIRK3 produced the same answer from it. At a dt where no step
+    // completes, control never arrives here and the comparator reports that there is nothing
+    // to compare, which is the correct answer rather than a missing feature.
+    if (rk_step == 1 && global_norms_enabled() && !inside_step_map_probe) {
+        emitGlobalNormRecord("output", /*published=*/true,
+                             getLastStepOutcomeCode(), rk_step,
+                             u, v, w, ph, t, mu, nx, ny, nz, nx_u, ny_v, nz_w);
+    }
     
     if (wrf::sdirk3::g_sdirk3_config.debug_level > 2) {
         std::cerr << "\n=== TileSDIRK3UnifiedSolver::unifiedStep DEBUG END ===\n" << std::endl;

@@ -43,15 +43,46 @@ private:
 // path that runs when forward-mode AD has just failed, i.e. when the graph is already
 // suspect. Hoisting the computation here makes the guard impossible to scope wrong, and
 // makes the epsilon rule a single definition rather than three copies that can drift.
+// The machine epsilon OF THE TENSOR, not of float.
+//
+// The step size sqrt(eps_m)*(1+||u||)/||v|| balances two errors that move in opposite
+// directions: truncation (grows with eps) and round-off (grows as eps shrinks). Both depend
+// on the working precision, so a float32 constant is not a conservative default for other
+// dtypes -- it is simply the wrong balance point. On float64 the perturbation is ~2e4 times
+// larger than it should be and truncation dominates, which reads as a genuine tangent
+// discrepancy. On FP16/BF16 it can land below the representable step, so u + eps*v == u and
+// the quotient is exactly zero -- a severed tangent that looks like a converged one.
+inline double machine_epsilon_of(const torch::Tensor& t) {
+    switch (t.scalar_type()) {
+        case torch::kFloat64:  return std::numeric_limits<double>::epsilon();
+        case torch::kFloat32:  return static_cast<double>(std::numeric_limits<float>::epsilon());
+        case torch::kFloat16:  return 9.765625e-4;    // 2^-10
+        case torch::kBFloat16: return 7.8125e-3;      // 2^-7
+        default:
+            throw std::invalid_argument(
+                "compute_jvp_fwad_or_fd: no finite-difference step is defined for this dtype");
+    }
+}
+
 inline float fd_epsilon_for(const torch::Tensor& u, const torch::Tensor& v,
                             float override_value) {
     if (override_value > 0.0f) {
+        if (!std::isfinite(override_value)) {
+            throw std::invalid_argument(
+                "compute_jvp_fwad_or_fd: the epsilon override is not finite");
+        }
         return override_value;
     }
     torch::NoGradGuard no_grad;
-    const double eps_m = static_cast<double>(std::numeric_limits<float>::epsilon());
+    const double eps_m = machine_epsilon_of(u);
     const double u_norm = u.detach().norm().to(torch::kCPU).item<double>();
     const double v_norm = v.detach().norm().to(torch::kCPU).item<double>();
+    // A non-finite norm makes every downstream comparison false rather than failing, which is
+    // how a blow-up becomes a passing measurement.
+    if (!std::isfinite(u_norm) || !std::isfinite(v_norm)) {
+        throw std::invalid_argument(
+            "compute_jvp_fwad_or_fd: a non-finite state or direction norm has no step size");
+    }
     return static_cast<float>(std::clamp(
         std::sqrt(eps_m) * (1.0 + u_norm) / std::max(v_norm, 1e-30),
         1e-6, 1e-2));

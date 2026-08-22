@@ -37,11 +37,12 @@ def check(ok, what):
         failures += 1
 
 
-def rec(stage=2, step_seq=1, newton_iter=0, solver_id=7, rank=0, **fields):
+def rec(stage=2, gts=1, retry=0, newton_iter=0, solver_id=7, rank=0, step_seq=1, **fields):
     base = dict(restart=7, tol=0.2, trust_radius=1.0, precond_type=1)
     base.update(fields)
     body = " ".join(f"{k}={v}" for k, v in base.items())
-    return (f"SDIRK3_POLICY_MANIFEST stage={stage} step_seq={step_seq} "
+    return (f"SDIRK3_POLICY_MANIFEST stage={stage} global_timestep={gts} "
+            f"retry_generation={retry} step_seq={step_seq} "
             f"newton_iter={newton_iter} solver_id={solver_id} rank={rank} {body}")
 
 
@@ -55,16 +56,16 @@ def run(a_lines, b_lines, extra=()):
         return r.returncode, r.stdout + r.stderr
 
 
-both = [rec(stage=2, step_seq=1), rec(stage=3, step_seq=1)]
+both = [rec(stage=2, gts=1), rec(stage=3, gts=1)]
 rc, out = run(both, both)
 check(rc == 0, "two identical arms agree (a gate that rejects everything is not a gate)")
 
 # THE CASE THE OLD KEY HID. Arm A ran two timesteps and arm B one. Under "last wins" both
 # collapsed to one record per stage and the comparison passed while measuring step 2 against
 # step 1. Keyed properly, the extra records are visible as records present in only one arm.
-a_two_steps = both + [rec(stage=2, step_seq=2, restart=51), rec(stage=3, step_seq=2)]
+a_two_steps = both + [rec(stage=2, gts=2, restart=51), rec(stage=3, gts=2)]
 rc, out = run(a_two_steps, both)
-check(rc == 2 and "step_seq=2" in out and "record only in" in out,
+check(rc == 2 and "global_timestep=2" in out and "record only in" in out,
       "arms with different record COUNTS fail -- previously both collapsed to one record "
       "per stage and step 2 was silently compared against step 1")
 
@@ -73,9 +74,24 @@ rc, out = run([rec(newton_iter=0), rec(newton_iter=1)],
               [rec(newton_iter=0), rec(newton_iter=1)])
 check(rc == 0, "several Newton iterations of one stage are distinct records, not duplicates")
 
-# Two tiles / two solver instances in one process.
-rc, out = run([rec(solver_id=7), rec(solver_id=8)], [rec(solver_id=7), rec(solver_id=8)])
-check(rc == 0, "two solver instances in one process are distinct records")
+# R13.1: solver_id is NOT identity. Two separately launched arms assign process-wide
+# ordinals in construction order, so the same id can name different tiles -- and comparing
+# two separately launched arms is the whole job. Differing only in it is not differing.
+rc, out = run([rec(solver_id=7), rec(stage=3, solver_id=7)],
+              [rec(solver_id=41), rec(stage=3, solver_id=41)])
+check(rc == 0,
+      "two runs whose solver_ids differ but whose PHYSICAL identity matches still agree -- "
+      "a process ordinal is not a property of the forecast")
+
+# ...and it cannot be used to make two records of the same physical stage distinct.
+rc, out = run([rec(solver_id=7), rec(solver_id=8)], both)
+check(rc == 2 and "duplicate manifest identity" in out,
+      "two records at the same physical identity are a DUPLICATE even when their solver_ids "
+      "differ -- otherwise a retry hides behind a fresh ordinal")
+
+# A retry is a distinct record; it is not a second timestep.
+rc, out = run([rec(retry=0), rec(retry=1)], [rec(retry=0), rec(retry=1)])
+check(rc == 0, "a retry of the same stage within one timestep is a distinct record")
 
 # Two ranks.
 rc, out = run([rec(rank=0), rec(rank=1)], [rec(rank=0), rec(rank=1)])
@@ -87,10 +103,10 @@ check(rc == 2 and "duplicate manifest identity" in out,
       "a truly duplicated identity is an ERROR, not an overwrite")
 
 # The ordinary job still works.
-rc, out = run(both, [rec(stage=2, step_seq=1, restart=51), rec(stage=3, step_seq=1)])
+rc, out = run(both, [rec(stage=2, step_seq=1, restart=51), rec(stage=3, gts=1)])
 check(rc == 2 and "restart 7 -> 51" in out, "an undeclared difference fails")
 
-rc, out = run(both, [rec(stage=2, step_seq=1, restart=51), rec(stage=3, step_seq=1)],
+rc, out = run(both, [rec(stage=2, step_seq=1, restart=51), rec(stage=3, gts=1)],
               ["--expect", "restart"])
 check(rc == 0, "the declared knob is allowed to move")
 
@@ -98,19 +114,20 @@ rc, out = run(both, both, ["--expect", "restart"])
 check(rc == 2 and "knob never moved" in out,
       "a declared knob that never moved fails -- an arm that reran the baseline is void")
 
-rc, out = run(both, [rec(stage=2, step_seq=1), rec(stage=3, step_seq=1, extra_field=1)])
+rc, out = run(both, [rec(stage=2, gts=1), rec(stage=3, step_seq=1, extra_field=1)])
 check(rc == 2 and "only in" in out, "a field present in one arm only fails")
 
 rc, out = run(both, ["nothing here"])
 check(rc == 2 and "no SDIRK3_POLICY_MANIFEST record" in out, "a run with no manifest fails")
 
 # A log from before the identity was emitted must be refused, not keyed on the stage alone.
-legacy = ["SDIRK3_POLICY_MANIFEST stage=2 restart=7 tol=0.2"]
+legacy = ["SDIRK3_POLICY_MANIFEST stage=2 step_seq=1 solver_id=7 rank=0 newton_iter=0 "
+          "restart=7 tol=0.2"]
 rc, out = run(both, legacy)
-check(rc == 2 and "predates R13" in out,
+check(rc == 2 and "predates R13.1" in out,
       "a log without the full identity is REFUSED rather than keyed on the stage alone")
 
-EXPECTED = 12
+EXPECTED = 14
 ok = checks == EXPECTED
 print(("  ok   " if ok else "  FAIL ") + f"case-count ratchet ({checks}/{EXPECTED})")
 if not ok:
