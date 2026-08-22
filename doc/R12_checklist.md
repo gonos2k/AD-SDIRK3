@@ -111,7 +111,44 @@ R11 marked these `[x]` against probes narrower than the item's own wording. Reve
           the identity. A step-level TLM/adjoint contract cannot become meaningful until the
           forward advances. This sharpens "completes ZERO steps": unifiedStep returns its input
           unchanged, bit for bit.
-- [ ] R2  np equivalence: needs a globally-formulated quantity, not a rerun of tile-local probes
+- [~] R2  np equivalence: needs a globally-formulated quantity, not a rerun of tile-local probes
+          HARNESS BUILT AND SELF-VALIDATED; THE MEASUREMENT IS BLOCKED UPSTREAM.
+
+          The quantity: WRF_SDIRK3_GLOBAL_NORMS=1 emits SDIRK3_GLOBAL_NORM per block -- the
+          sum of squares over each rank's OWNED cells expressed in GLOBAL indices, with the
+          cell count and the full index topology on the same line. Owned regions partition the
+          domain, so the partials add to one domain quantity no matter how many ranks produced
+          it. A tile-local norm has no such property, which is why the earlier probes could not
+          answer this.
+
+          The count is the validity field, and it earned its place immediately: the first run
+          reported u = 42x81x64 = 217728 where the domain has 41x80x64 = 209920 x-staggered
+          points. Cause: I added a staggered point at the domain edge, but WRF already carries
+          it inside ite_ -- a mass variable loops its..min(ite,ide-1), a staggered one loops
+          its..ite. A wrong owned box shifts a norm by a few percent and reads as "close
+          enough"; a wrong COUNT is unmistakable. Corrected, np=1 partitions the domain exactly:
+            u 209920 | v 207360 | w 208000 | ph 208000 | t 204800 | mu 3200
+
+          sdirk3_global_norm_diff.py combines the partials and gates: PASS on np1-vs-itself,
+          and fail-closed (exit 2) on a missing block, on counts that do not add up to the
+          domain, and on a norm drift above tolerance (1.49e-05 > 1e-06). Four cases verified.
+          One CLI trap fixed on the way: argparse consumes a bare "--" as its end-of-options
+          marker, so a separator that looks obvious never reaches the parser -- named --a/--b
+          groups instead.
+
+          BLOCKED, by design and correctly. np=4 refuses to start:
+            SDIRK3_MPI_STAGE_HALO_UNSUPPORTED: decomposition 1 x 4, rk_step=1, num_tiles=1
+          dyn_em/module_implicit_sdirk3.F:925, whose comment states the reason: "every internal
+          SDIRK stage executes inside ONE tile-worker C++ call, so multi-rank stage-halo
+          correctness is NOT established. Refuse BEFORE any communicator or halo state
+          mutation." So np equivalence is not measurable today -- not because the quantity is
+          hard to formulate, but because multi-rank execution is deliberately refused rather
+          than allowed to produce an unverified result. The harness is ready for the run that
+          enabling multi-rank makes possible.
+
+          (Corroboration in passing: v and w have sumsq exactly 0 at np=1, confirming the R1
+          reading that those blocks are identically zero in the initial state -- which is why
+          the tangent probe's per-block epsilon scaling had to gain an absolute floor.)
 - [x] R3  term observer for rv, rw, ph, t, mu (only ru has one)
           DONE, with one correction to the premise: mu ALREADY had one
           (SDIRK3_MU_DIV_TRACE, div_x/div_y/div_z), so the gap was rv, rw, t, ph.

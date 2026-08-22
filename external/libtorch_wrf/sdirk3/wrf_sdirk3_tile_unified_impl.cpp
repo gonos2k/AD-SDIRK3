@@ -174,6 +174,12 @@ inline bool step_map_tangent_enabled() {
     return on;
 }
 
+// R2: partial sums over each rank's OWNED cells, in global index terms.
+inline bool global_norms_enabled() {
+    static const bool on = probe_env_enabled("WRF_SDIRK3_GLOBAL_NORMS");
+    return on;
+}
+
 inline bool adv_split_blocks_enabled() {
     static const bool on = probe_env_enabled("WRF_SDIRK3_ADV_SPLIT_BLOCKS");
     return on;
@@ -3819,6 +3825,73 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     int rk_step, float dt,
     int nx, int ny, int nz,
     int nx_u, int ny_v, int nz_w) {
+
+    // R2: a quantity that does NOT depend on how the domain was decomposed.
+    //
+    // Every probe in this campaign so far reports a TILE-LOCAL number, and two runs at
+    // different rank counts have different tiles, so their records are not comparable -- a
+    // difference between them says nothing about whether the physics agreed. What IS
+    // comparable is a sum over each rank's OWNED cells expressed in GLOBAL indices: owned
+    // regions partition the domain, so the partials add to one domain quantity regardless of
+    // how many ranks produced them.
+    //
+    // The emitted `count` is the validity field. If the counts do not add up to the domain's
+    // degrees of freedom, the owned box is wrong -- halo cells double-counted or interior
+    // cells dropped -- and the norm comparison is void rather than merely approximate. A wrong
+    // count cannot be mistaken for a small discrepancy.
+    if (rk_step == 1 && global_norms_enabled()) {
+        // WRF's ownership rule, and the staggered extra point is ALREADY inside ite_/jte_:
+        // a mass variable loops its..min(ite, ide-1), a staggered one loops its..ite. Adding
+        // one for the domain edge double-counts, which the count check caught on the first
+        // run -- u came back 42x81 where the domain has 41x80 x-staggered points.
+        const int ni_own = std::min(ite_, ide_ - 1) - its_ + 1;   // mass points in i
+        const int nj_own = std::min(jte_, jde_ - 1) - jts_ + 1;   // mass points in j
+        const int ni_u   = ite_ - its_ + 1;                       // x-staggered points
+        const int nj_v   = jte_ - jts_ + 1;                       // y-staggered points
+
+        // Sum over the owned box only. Local index 0 is taken to be global its_/jts_; that
+        // assumption is what the np=1 comparison tests, and the count tests the extent.
+        auto owned_sumsq = [](const float* a, int nj, int nk, int ni,
+                              int stride_j, int stride_k, int stride_i) {
+            double sq = 0.0;
+            long long n = 0;
+            for (int j = 0; j < nj; ++j)
+                for (int k = 0; k < nk; ++k)
+                    for (int i = 0; i < ni; ++i) {
+                        const double x = a[j * stride_j + k * stride_k + i * stride_i];
+                        sq += x * x;
+                        ++n;
+                    }
+            return std::make_pair(sq, n);
+        };
+
+        struct Blk { const char* name; const float* p; int nj, nk, ni, sj, sk; };
+        const Blk blks[6] = {
+            {"u",  u,  nj_own, nz,   ni_u,   nz * nx_u, nx_u},
+            {"v",  v,  nj_v,   nz,   ni_own, nz * nx,   nx  },
+            {"w",  w,  nj_own, nz_w, ni_own, nz_w * nx, nx  },
+            {"ph", ph, nj_own, nz_w, ni_own, nz_w * nx, nx  },
+            {"t",  t,  nj_own, nz,   ni_own, nz * nx,   nx  },
+            {"mu", mu, nj_own, 1,    ni_own, nx,        nx  }};
+
+        for (const auto& b : blks) {
+            const auto r = owned_sumsq(b.p, b.nj, b.nk, b.ni, b.sj, b.sk, 1);
+            std::cerr << "SDIRK3_GLOBAL_NORM block=" << b.name
+                      << " sumsq=" << std::setprecision(
+                             std::numeric_limits<double>::max_digits10) << r.first
+                      << std::setprecision(6)
+                      << " count=" << r.second
+                      // The topology on the same line, so a partial can be checked against
+                      // the decomposition that produced it without a second record.
+                      << " its=" << its_ << " ite=" << ite_
+                      << " jts=" << jts_ << " jte=" << jte_
+                      << " ids=" << ids_ << " ide=" << ide_
+                      << " jds=" << jds_ << " jde=" << jde_
+                      << " nx=" << nx << " ny=" << ny << " nz=" << nz
+                      << " nx_u=" << nx_u << " ny_v=" << ny_v << " nz_w=" << nz_w
+                      << std::endl;
+        }
+    }
 
     // R1: is Phi_h a FUNCTION of the state?
     //
