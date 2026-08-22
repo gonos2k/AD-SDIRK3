@@ -280,6 +280,13 @@ add_test(NAME Metric_Policy_Contract COMMAND test_metric_policy)
 
 # 9F.D52 (review section 6): FORWARD-mode tangents and the forward/reverse duality, for
 # the EOS and the pressure integrator. The prior tests used reverse mode and called it JVP.
+# R13.2 C1: which gate refused FIRST. "The step did not complete" is one bucket holding
+# seven outcomes that point at different layers, and a dt sweep is the right experiment for
+# exactly one of them.
+add_executable(test_first_failure_classification tests/test_first_failure_classification.cpp)
+target_link_libraries(test_first_failure_classification PRIVATE wrf_sdirk3::core)
+add_test(NAME First_Failure_Classification_Contract COMMAND test_first_failure_classification)
+
 # R13 B3: the interference fingerprint must be able to SEE a change. A digest blind to one
 # carried field lets a probe mutate through it forever while the record says "observer".
 add_executable(test_probe_noninterference tests/test_probe_noninterference.cpp)

@@ -252,6 +252,7 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 #include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_owned_box.h"
 #include "wrf_sdirk3_halo_c_api.h"
+#include "wrf_sdirk3_first_failure.h"
 #include "wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
@@ -9179,6 +9180,45 @@ vertical_coefficients:
                 if (stage_id == 3) {
                     stage3_gate_fail_events++;
                 }
+
+                // R13.2: name the FIRST refusal, not the loudest.
+                //
+                // Everything below this line -- the growth cap, the catastrophic test, the
+                // retry policy -- decides what to DO about the failure. None of it says what
+                // the failure WAS, and "the step did not complete" has been one bucket holding
+                // seven outcomes that point at different layers of the model. That is why a dt
+                // sweep has been the only available experiment: it is the right experiment for
+                // exactly one of them.
+                //
+                // Emitted unconditionally on a gate failure rather than behind a knob: a
+                // classification nobody turned on is the diagnostic that was not there when it
+                // was needed, and this costs one line per refusal.
+                {
+                    auto sig = last_stage_signals_;
+                    sig.gate_metric_ok = !gate_metric_bad;
+                    sig.state_published = false;   // the gate is upstream of any publish
+                    const auto first = wrf::sdirk3::first_failure_of(sig);
+                    std::cerr << "SDIRK3_FIRST_FAILURE stage=" << stage_id
+                              << " category=" << wrf::sdirk3::stage_failure_name(first)
+                              << " layer=" << wrf::sdirk3::stage_failure_layer(first)
+                              << " retry=" << (retry_used ? 1 : 0)
+                              << " entry_finite=" << (sig.entry_state_finite ? 1 : 0)
+                              << " R0_finite=" << (sig.initial_residual_finite ? 1 : 0)
+                              << " R_first=" << sig.residual_first
+                              << " R_last=" << sig.residual_last
+                              << " newton_iters=" << sig.newton_iterations
+                              << " newton_converged=" << (sig.newton_converged ? 1 : 0)
+                              << " best_krylov_rel=" << sig.best_krylov_rel_error
+                              << " krylov_iters=" << sig.krylov_iterations
+                              << " gmres_total_failures=" << sig.gmres_total_failures
+                              << " steps_accepted=" << sig.accepted_steps
+                              << " steps_rejected=" << sig.rejected_steps
+                              << " gate_metric_ok=" << (sig.gate_metric_ok ? 1 : 0)
+                              << "  (the first gate to refuse, in causal order -- a later one"
+                                 " will also be refusing, and acting on it sends the work to"
+                                 " the wrong layer)"
+                              << std::endl;
+                }
                 if (stage_id == 2) {
                     stage2_gate_fail_events++;
                 }
@@ -12629,6 +12669,16 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     const torch::Tensor& K_prev,
     const torch::Tensor& U_full_exchanged) {
 
+    // R13.2: does the stage equation exist at its own entry? G_s(K) is a function of
+    // Y_base + dt*a_ss*K, so a non-finite U_stage makes every later number a consequence
+    // rather than a cause -- and a dt sweep cannot reach it.
+    {
+        torch::NoGradGuard no_grad;
+        last_stage_entry_finite_ =
+            U_stage.defined() && U_stage.numel() > 0 &&
+            torch::isfinite(U_stage).all().detach().to(torch::kCPU).item<bool>();
+    }
+
     // CRITICAL FIX: Store reference state for advection terms
     // Use w from this reference state instead of Newton iteration state
     // to avoid feedback loop in vertical advection
@@ -13115,6 +13165,27 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_converged_ = stats.converged;
     last_stage_residual_ = stats.final_residual;
     last_stage_initial_R0_ = stats.initial_unscaled_residual;  // v20.14r39: for diagnostics
+    // R13.2: the signals that let the stage gate name WHICH refusal came first. Carried on
+    // members because the gate runs in the ARK stage loop, several frames from here, and
+    // re-deriving the category there from raw numbers is the "rule without its consumer"
+    // defect this tree has now paid for three times.
+    last_stage_signals_ = wrf::sdirk3::StageFailureSignals{};
+    last_stage_signals_.entry_state_finite = last_stage_entry_finite_;
+    last_stage_signals_.initial_residual_finite =
+        std::isfinite(stats.initial_unscaled_residual);
+    last_stage_signals_.residual_first =
+        stats.newton_residuals.empty()
+            ? static_cast<double>(stats.initial_unscaled_residual)
+            : static_cast<double>(stats.newton_residuals.front());
+    last_stage_signals_.residual_last = static_cast<double>(stats.final_residual);
+    last_stage_signals_.newton_iterations = stats.newton_iterations;
+    last_stage_signals_.newton_converged = stats.converged;
+    last_stage_signals_.best_krylov_rel_error =
+        static_cast<double>(stats.best_krylov_rel_error);
+    last_stage_signals_.krylov_iterations = stats.total_krylov_iterations;
+    last_stage_signals_.gmres_total_failures = stats.gmres_total_failures;
+    last_stage_signals_.accepted_steps = stats.accepted_steps;
+    last_stage_signals_.rejected_steps = stats.rejected_steps;
     // PR 9E (diagnosis-only): carry the raw-L2 fast-RHS / defect norms back for
     // this stage's history-summary snapshot (-1 when stage_operand_diag is off).
     last_stage_fast_rhs_norm_ = stats.final_fast_rhs_norm;

@@ -141,7 +141,7 @@ admissibility rejects, state fine but the publish gate rejects. Which one fires 
 whether the next fix is in the preconditioner, the split, the EOS, the boundary or the gate.
 Tracked as **C1** below.
 
-- [ ] **C1 — first-failure classification for the forward.** Emit, per stage, the first gate
+- [x] **C1 — first-failure classification for the forward.** Emit, per stage, the first gate
       that refuses and the state that reached it, so the failure has a *name* instead of a
       timestep.
 
@@ -190,7 +190,31 @@ and the test still failed. Only the measurement — two sums of +10 and -10 prod
 
 ### Next, per the review's §13
 
-**C1 — first-failure classification.** Stop sweeping dt. "Step did not complete" is one
-bucket holding at least six distinguishable outcomes, and which fires *first* decides whether
-the next fix belongs in the preconditioner, the split, the EOS, the boundary or the gate.
-Not started.
+**C1 — first-failure classification. DONE** (`wrf_sdirk3_first_failure.h`,
+`First_Failure_Classification_Contract`, 18 cases).
+
+Seven categories, not six — "Newton diverged" and "Newton stagnated" are genuinely different
+findings: the first says the iteration is unstable and is the one case a dt sweep answers, the
+second says the residual has a floor and points at the split. Each category names the LAYER to
+work on as data, not as something the reader reconstructs:
+
+    entry_state_not_finite       -> state / EOS / metric / boundary
+    initial_residual_not_finite  -> RHS operator
+    newton_diverged              -> linearization or timestep   <- the dt sweep's category
+    krylov_stagnated             -> preconditioner or operator
+    all_steps_rejected           -> trust-region policy
+    newton_stagnated             -> residual floor or split
+    admissibility_rejected       -> gate threshold
+    publish_rejected             -> publish gate
+
+FIRST in causal order, not worst, and that is the whole design. A run whose entry state is
+already non-finite ALSO shows a stagnating Krylov solve and rejected steps, because every
+later gate is looking at consequences. Three ordering cases pin it; reporting the loudest
+signal is what sends a week of work to the wrong layer.
+
+`SDIRK3_FIRST_FAILURE` is emitted unconditionally on a stage-gate refusal rather than behind
+a knob — a classification nobody turned on is the diagnostic that was not there when it was
+needed, and it costs one line per refusal.
+
+WHAT IT DOES NOT DO: it does not run the model. The next step is one `em_b_wave` run at
+dt=600 reading the first record, and that decides where the campaign works next.

@@ -316,6 +316,21 @@ public:
         torch::Tensor initial_residual_vector;  // Detached packed R_0 used by WRMS stage-gate growth metric
         float condition_number;
         bool converged;
+        // R13.2 (first-failure classification): the signals that separate "Newton diverged"
+        // from "the LINEAR solve never solved" from "every step was rejected". They are all
+        // locals inside solve_stage_impl already; without them on the record the stage gate
+        // sees only converged=0 and every failure looks the same, which is why a dt sweep has
+        // been the only available experiment. Defaults keep every existing aggregate
+        // initialisation valid.
+        //
+        // best_krylov_rel_error: the SMALLEST relative error any GMRES call reached in this
+        // stage. Best rather than last, because one solve that worked disproves "the linear
+        // solve cannot make progress" even if a later one stalled.
+        float best_krylov_rel_error = -1.0f;
+        int   gmres_total_failures = 0;
+        int   accepted_steps = 0;
+        int   rejected_steps = 0;
+        bool  initial_residual_finite = true;
         // PR 9E (diagnosis-only): RAW L2 norms at the FINAL accepted Newton
         // iteration, populated ONLY when g_sdirk3_config.stage_operand_diag is
         // on (else left at -1). final_fast_rhs_norm = ||F_fast(U_eval_final)||;
