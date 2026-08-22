@@ -6112,16 +6112,61 @@ vertical_coefficients:
             TileSDIRK3UnifiedSolver& s;
             float dt_saved;
             torch::Tensor uref_saved;
+            // R12 C6: a fingerprint, not an ever-growing snapshot list.
+            //
+            // The guard restores two members, but computeUnifiedRHS also writes
+            // grid_info_->dt, the mask counters, and the advection work tensors -- and
+            // enumerating every mutable member is a list that silently falls behind the code.
+            // A diagnostic that cannot restore everything can at least REPORT when something
+            // else moved, which is the difference between a known limitation and a silent one.
+            struct Fingerprint {
+                double grid_dt = 0.0;
+                double ru_work = 0.0;
+                double t_work  = 0.0;
+                long long rhs_calls = 0;
+                bool operator!=(const Fingerprint& o) const {
+                    return grid_dt != o.grid_dt || ru_work != o.ru_work ||
+                           t_work != o.t_work || rhs_calls != o.rhs_calls;
+                }
+            };
+            static Fingerprint capture(TileSDIRK3UnifiedSolver& sv) {
+                torch::NoGradGuard ng;
+                Fingerprint f;
+                f.grid_dt = sv.grid_info_ ? static_cast<double>(sv.grid_info_->dt) : 0.0;
+                auto n = [](const torch::Tensor& t) {
+                    return t.defined() && t.numel() > 0
+                        ? t.detach().to(torch::kFloat64).norm().item<double>() : 0.0;
+                };
+                f.ru_work = n(sv.ru_adv_z_work_);
+                f.t_work  = n(sv.t_adv_z_work_);
+                f.rhs_calls =
+                    static_cast<long long>(wrf::sdirk3::g_mask_counters.rhs_call_id);
+                return f;
+            }
+            Fingerprint before;
             explicit ScopedProbeState(TileSDIRK3UnifiedSolver& solver)
                 : s(solver), dt_saved(solver.dt_stage_) {
                 torch::NoGradGuard ng;
                 if (solver.U_ref_stage_.defined()) {
                     uref_saved = solver.U_ref_stage_.detach().clone();
                 }
+                before = capture(solver);
             }
             ~ScopedProbeState() {
                 s.dt_stage_ = dt_saved;
                 if (uref_saved.defined()) s.U_ref_stage_ = uref_saved;
+                // Restore what we snapshot, then report what we could not.
+                if (s.grid_info_) s.grid_info_->dt = dt_saved;
+                const auto after = capture(s);
+                if (after != before) {
+                    std::cerr << "SDIRK3_PROBE_MUTATED"
+                              << " grid_dt=" << before.grid_dt << "->" << after.grid_dt
+                              << " ru_work=" << before.ru_work << "->" << after.ru_work
+                              << " t_work=" << before.t_work << "->" << after.t_work
+                              << " rhs_calls=" << before.rhs_calls << "->" << after.rhs_calls
+                              << "  (state the probe changed and did not restore)"
+                              << std::endl;
+                }
             }
             ScopedProbeState(const ScopedProbeState&) = delete;
             ScopedProbeState& operator=(const ScopedProbeState&) = delete;
