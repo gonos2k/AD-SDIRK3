@@ -9207,6 +9207,7 @@ vertical_coefficients:
                               << " R_first=" << sig.residual_first
                               << " R_last=" << sig.residual_last
                               << " newton_iters=" << sig.newton_iterations
+                              << " newton_budget=" << sig.newton_iteration_budget
                               << " newton_converged=" << (sig.newton_converged ? 1 : 0)
                               << " best_krylov_rel=" << sig.best_krylov_rel_error
                               << " krylov_iters=" << sig.krylov_iterations
@@ -13179,6 +13180,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
             : static_cast<double>(stats.newton_residuals.front());
     last_stage_signals_.residual_last = static_cast<double>(stats.final_residual);
     last_stage_signals_.newton_iterations = stats.newton_iterations;
+    last_stage_signals_.newton_iteration_budget =
+        wrf::sdirk3::g_sdirk3_config.max_newton_iter;
     last_stage_signals_.newton_converged = stats.converged;
     last_stage_signals_.best_krylov_rel_error =
         static_cast<double>(stats.best_krylov_rel_error);
