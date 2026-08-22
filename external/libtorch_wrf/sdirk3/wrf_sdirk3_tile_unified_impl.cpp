@@ -249,6 +249,8 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#include "wrf_sdirk3_probe_validity.h"
+#include "wrf_sdirk3_owned_box.h"
 #include "wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
@@ -3840,17 +3842,26 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     // cells dropped -- and the norm comparison is void rather than merely approximate. A wrong
     // count cannot be mistaken for a small discrepancy.
     if (rk_step == 1 && global_norms_enabled()) {
-        // WRF's ownership rule, and the staggered extra point is ALREADY inside ite_/jte_:
-        // a mass variable loops its..min(ite, ide-1), a staggered one loops its..ite. Adding
-        // one for the domain edge double-counts, which the count check caught on the first
-        // run -- u came back 42x81 where the domain has 41x80 x-staggered points.
+        // The ownership rule is wrf_sdirk3_owned_box.h and nothing else -- the loop extents,
+        // the printed box and the offline combiner all read the SAME definition. It used to be
+        // open-coded here and re-derived again in Python, and two copies of a convention is
+        // how a disagreement between them hides instead of failing.
+        //
+        // Local index 0 is global its_/jts_ because the adapter slices the tile view at
+        // its-ims / jts-jms before this function sees a pointer
+        // (wrf_sdirk3_tile_unified_impl.cpp, u_tile). Memory_Tile_Offset_Contract pins that.
+        // This probe emits its box in GLOBAL indices so a partial can be checked for exact
+        // disjointness against its neighbours -- counts that merely SUM to the domain are also
+        // what m overlapped and m dropped cells produce.
+        //
+        // The record also carries step_seq: a log with two timesteps in it has two records per
+        // block, and summing across them is not a domain quantity at any time.
         const int ni_own = std::min(ite_, ide_ - 1) - its_ + 1;   // mass points in i
         const int nj_own = std::min(jte_, jde_ - 1) - jts_ + 1;   // mass points in j
         const int ni_u   = ite_ - its_ + 1;                       // x-staggered points
         const int nj_v   = jte_ - jts_ + 1;                       // y-staggered points
-
-        // Sum over the owned box only. Local index 0 is taken to be global its_/jts_; that
-        // assumption is what the np=1 comparison tests, and the count tests the extent.
+        static thread_local long long global_norm_step_seq = 0;
+        ++global_norm_step_seq;
         auto owned_sumsq = [](const float* a, int nj, int nk, int ni,
                               int stride_j, int stride_k, int stride_i) {
             double sq = 0.0;
@@ -3865,18 +3876,38 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             return std::make_pair(sq, n);
         };
 
-        struct Blk { const char* name; const float* p; int nj, nk, ni, sj, sk; };
+        struct Blk {
+            const char* name; const float* p; int nj, nk, ni, sj, sk;
+            wrf::sdirk3::Stagger stagger;
+        };
+        using wrf::sdirk3::Stagger;
         const Blk blks[6] = {
-            {"u",  u,  nj_own, nz,   ni_u,   nz * nx_u, nx_u},
-            {"v",  v,  nj_v,   nz,   ni_own, nz * nx,   nx  },
-            {"w",  w,  nj_own, nz_w, ni_own, nz_w * nx, nx  },
-            {"ph", ph, nj_own, nz_w, ni_own, nz_w * nx, nx  },
-            {"t",  t,  nj_own, nz,   ni_own, nz * nx,   nx  },
-            {"mu", mu, nj_own, 1,    ni_own, nx,        nx  }};
+            {"u",  u,  nj_own, nz,   ni_u,   nz * nx_u, nx_u, Stagger::X     },
+            {"v",  v,  nj_v,   nz,   ni_own, nz * nx,   nx,   Stagger::Y     },
+            {"w",  w,  nj_own, nz_w, ni_own, nz_w * nx, nx,   Stagger::Z     },
+            {"ph", ph, nj_own, nz_w, ni_own, nz_w * nx, nx,   Stagger::Z     },
+            {"t",  t,  nj_own, nz,   ni_own, nz * nx,   nx,   Stagger::Mass  },
+            {"mu", mu, nj_own, 1,    ni_own, nx,        nx,   Stagger::Column}};
 
         for (const auto& b : blks) {
             const auto r = owned_sumsq(b.p, b.nj, b.nk, b.ni, b.sj, b.sk, 1);
+            const auto box = wrf::sdirk3::owned_box(b.stagger, its_, ite_, jts_, jte_,
+                                                    ids_, ide_, jds_, jde_, kds_, nz, nz_w);
+            // The loop and the declared box must agree. If they do not, the number is a sum
+            // over a region the record does not describe, and no combiner downstream can tell.
+            if (box.count() != r.second) {
+                std::cerr << "SDIRK3_GLOBAL_NORM_INVALID block=" << b.name
+                          << " looped=" << r.second << " box_count=" << box.count()
+                          << "  (the loop extent and the declared owned box disagree;"
+                             " this partial is void)" << std::endl;
+                continue;
+            }
             std::cerr << "SDIRK3_GLOBAL_NORM block=" << b.name
+                      << " stagger=" << wrf::sdirk3::stagger_name(b.stagger)
+                      << " step_seq=" << global_norm_step_seq
+                      << " i0=" << box.i0 << " i1=" << box.i1
+                      << " j0=" << box.j0 << " j1=" << box.j1
+                      << " k0=" << box.k0 << " k1=" << box.k1
                       << " sumsq=" << std::setprecision(
                              std::numeric_limits<double>::max_digits10) << r.first
                       << std::setprecision(6)
@@ -3906,10 +3937,30 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     // So run the step TWICE on identical copies and compare, before asking anything about its
     // derivative. Both probe calls advance the same carried state, so the production step that
     // follows is perturbed; the record says so.
+    // The latch is RAII because it guards RECURSION: a raw bool set true and cleared by hand
+    // after the arms stays true forever if an arm throws, and every later probe on that thread
+    // then silently no-ops -- a diagnostic that disables itself and says nothing is the exact
+    // failure mode these gates exist to prevent.
     static thread_local bool inside_step_map_probe = false;
+    struct ProbeLatch {
+        bool& flag;
+        explicit ProbeLatch(bool& f) : flag(f) { flag = true; }
+        ~ProbeLatch() { flag = false; }
+        ProbeLatch(const ProbeLatch&) = delete;
+        ProbeLatch& operator=(const ProbeLatch&) = delete;
+    };
     if (rk_step == 1 && !inside_step_map_probe &&
         (step_map_purity_enabled() || step_map_tangent_enabled())) {
-        inside_step_map_probe = true;
+        ProbeLatch step_map_latch(inside_step_map_probe);
+        // Restores the carried state when the probe leaves, however it leaves: the production
+        // step below then starts from the state it would have had, rather than from whatever
+        // the last arm left. The record still notes the arms ran, because the state OUTSIDE
+        // this snapshot -- caches, generations -- is not restored by it.
+        struct ArmRestore {
+            wrf::sdirk3::WRFNewtonKrylovSolver* s;
+            const wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState& st;
+            ~ArmRestore() { if (s) s->restore_carried_state(st); }
+        };
 
         const size_t n_u  = static_cast<size_t>(ny)   * nz   * nx_u;
         const size_t n_v  = static_cast<size_t>(ny_v) * nz   * nx;
@@ -3929,15 +3980,70 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             {rw_tend, rw_tend + n_w}, {ph_tend, ph_tend + n_w},
             {t_tend, t_tend + n_t},   {mu_tend, mu_tend + n_mu}};
 
+        // Every arm's OUTCOME, not just its output. A difference quotient of Phi_h is a
+        // derivative only if each arm actually evaluated Phi_h; an arm that hit the
+        // fail-closed gate returned its INPUT, and differencing two returned inputs gives the
+        // identity no matter what the dynamics are. The status is what separates "the tangent
+        // is I because the map is I" from "the tangent was never measured".
+        std::vector<wrf::sdirk3::StepStatus> arm_status;
+
+        // R13 B1: every arm starts from the SAME solver state.
+        //
+        // Without this, arm k begins where arm k-1 left the hopeless streaks, the trust radius,
+        // the preconditioner fallback latch and the warm-start slots -- so a central difference
+        // over the arms mixes a perturbation of the STATE with a perturbation of the solver's
+        // HISTORY, and only the first is a Jacobian. The earlier record admitted the production
+        // step was perturbed and said nothing about the arms perturbing each other, which is
+        // the half that invalidates the quotient.
+        //
+        // The honest limit: this restores the Newton solver's carried state, not the
+        // preconditioner's internals, this object's reference/dt members (ScopedProbeState's
+        // job) or any cached linearization. So the digest is checked too -- if the state at the
+        // start of an arm differs from the state at the start of the first, something outside
+        // the snapshot moved and the record says so instead of assuming it did not. Fully
+        // independent arms need a fresh solver per arm, or separate processes; that is the
+        // target, and this is what is true today.
+        const bool have_solver = (newton_solver_ != nullptr);
+        const auto arm_entry = have_solver
+            ? newton_solver_->capture_carried_state()
+            : wrf::sdirk3::WRFNewtonKrylovSolver::CarriedState{};
+        const std::uint64_t arm_entry_digest =
+            have_solver ? newton_solver_->carried_state_digest() : 0ULL;
+        bool arms_isolated = true;
+        const ArmRestore arm_restore{have_solver ? newton_solver_.get() : nullptr, arm_entry};
+
         auto run_once_from = [&](Arrays& a) {
+            if (have_solver) {
+                newton_solver_->restore_carried_state(arm_entry);
+                if (newton_solver_->carried_state_digest() != arm_entry_digest) {
+                    arms_isolated = false;
+                }
+            }
             unifiedStep(a.u.data(), a.v.data(), a.w.data(), a.ph.data(), a.t.data(), a.mu.data(),
                         a.ru_t.data(), a.rv_t.data(), a.rw_t.data(),
                         a.ph_t.data(), a.t_t.data(), a.mu_t.data(),
                         rdx, rdy, rdnw, rdn, msftx, msfty, msfux, msfuy, msfvx, msfvy,
                         c1f, c2f, c1h, c2h, fnm, fnp, rk_step, dt,
                         nx, ny, nz, nx_u, ny_v, nz_w);
+            arm_status.push_back(wrf::sdirk3::step_status_of(getLastStepOutcomeCode()));
         };
         auto run_once = [&](Arrays& a) { a = in; run_once_from(a); };
+        // One place decides validity, and it is a free function a test can reject --
+        // wrf_sdirk3_probe_validity.h. Spelled out inline here it would be exactly the kind of
+        // rule this campaign has repeatedly had to retract after publishing.
+        auto arms_all_complete = [&]() {
+            return arms_isolated && wrf::sdirk3::step_map_verdict(arm_status).valid;
+        };
+        auto arms_reason = [&]() -> const char* {
+            const auto v = wrf::sdirk3::step_map_verdict(arm_status);
+            if (!v.valid) return v.reason;
+            return arms_isolated ? "ok" : "arms_not_isolated";
+        };
+        auto emit_arm_status = [&](std::ostream& os) {
+            for (size_t i = 0; i < arm_status.size(); ++i) {
+                os << " arm" << i << "=" << wrf::sdirk3::step_status_name(arm_status[i]);
+            }
+        };
 
         // A deterministic direction: index-based, so two runs and two builds perturb along the
         // same v and their tangents are comparable. Scaled PER BLOCK, so a block whose values
@@ -4009,12 +4115,17 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             const double eps1 = 1.0e-3, eps2 = 5.0e-4;
             const Arrays p1 = shifted(eps1, +1.0), m1 = shifted(eps1, -1.0);
             const Arrays p2 = shifted(eps2, +1.0), m2 = shifted(eps2, -1.0);
-            inside_step_map_probe = false;
 
             const auto q1 = quotient(p1, m1, eps1);
             const auto q2 = quotient(p2, m2, eps2);
             static const char* kBlock[6] = {"u", "v", "w", "ph", "t", "mu"};
-            std::cerr << "SDIRK3_STEP_MAP_TANGENT eps1=" << eps1 << " eps2=" << eps2;
+            const bool tangent_valid = arms_all_complete();
+            std::cerr << "SDIRK3_STEP_MAP_TANGENT"
+                      << " step_map_valid=" << (tangent_valid ? 1 : 0)
+                      << " reason=" << arms_reason()
+                      << " arms_isolated=" << (arms_isolated ? 1 : 0);
+            emit_arm_status(std::cerr);
+            std::cerr << " eps1=" << eps1 << " eps2=" << eps2;
             double worst = 0.0;
             for (size_t bi = 0; bi < 6; ++bi) {
                 std::vector<float> d(q1[bi].size());
@@ -4031,11 +4142,17 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             // The validity field: halving epsilon must not change D.v if the quotient has
             // converged. If it does, what was measured is not a derivative.
             std::cerr << " worst_agree=" << worst
-                      << (worst < 0.05
-                            ? "  (halving epsilon leaves D.v unchanged: the central difference"
-                              " converged and D(Phi_h).v IS a directional derivative)"
-                            : "  (halving epsilon MOVES D.v: a difference quotient that has NOT"
-                              " converged, so this is not a directional derivative)")
+                      << (!tangent_valid
+                            ? "  (VOID -- reason=noncomplete_arm: an arm did not advance the"
+                              " state, so it returned its INPUT and this quotient differences"
+                              " the fail-closed rollback sentinel, not Phi_h. Epsilon-agreement"
+                              " here means the SENTINEL is stable, which it is by construction)"
+                            : (worst < 0.05
+                                 ? "  (halving epsilon leaves D.v unchanged: the central"
+                                   " difference converged and D(Phi_h).v IS a directional"
+                                   " derivative)"
+                                 : "  (halving epsilon MOVES D.v: a difference quotient that has"
+                                   " NOT converged, so this is not a directional derivative)"))
                       << "  [four probe steps advanced carried solver state: the production"
                          " step below is perturbed]"
                       << std::endl;
@@ -4045,7 +4162,6 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         Arrays a, b;
         run_once(a);
         run_once(b);
-        inside_step_map_probe = false;
 
         // Does the step MOVE the state? D.v came out at exactly 1 for four blocks, which is
         // what an IDENTITY map gives for a unit direction -- so before reading that as a
@@ -4086,13 +4202,20 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
                          d_t  = tend_norm(a.t_t,  in.t_t),  d_mu = tend_norm(a.mu_t, in.mu_t);
             const bool tend_moved = (d_ru + d_rv + d_rw + d_ph + d_t + d_mu) > 0.0;
             std::cerr << "SDIRK3_STEP_MAP_ADVANCE"
-                      << " identity=" << (identity ? 1 : 0)
+                      << " step_map_valid=" << (arms_all_complete() ? 1 : 0)
+                      << " reason=" << arms_reason()
+                      << " arms_isolated=" << (arms_isolated ? 1 : 0);
+            emit_arm_status(std::cerr);
+            std::cerr << " identity=" << (identity ? 1 : 0)
                       << " u=" << m_u << " v=" << m_v << " w=" << m_w
                       << " ph=" << m_p << " t=" << m_t << " mu=" << m_m
                       << " tend_moved=" << (tend_moved ? 1 : 0)
                       << " d_ru=" << d_ru << " d_rv=" << d_rv << " d_rw=" << d_rw
                       << " d_ph=" << d_ph << " d_t=" << d_t << " d_mu=" << d_mu
-                      << (identity
+                      << (!arms_all_complete()
+                            ? "  (VOID -- reason=noncomplete_arm: no state was published, so"
+                              " identity=1 records the ROLLBACK, not a property of the map)"
+                            : identity
                             ? (tend_moved
                                  ? "  (state unchanged but TENDENCIES written: Phi_h is"
                                    " U -> tendencies, and a state-space tangent is the wrong"
@@ -4120,10 +4243,18 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         const bool pure = (r_u == 0.0 && r_v == 0.0 && r_w == 0.0 &&
                            r_p == 0.0 && r_t == 0.0 && r_m == 0.0);
         std::cerr << "SDIRK3_STEP_MAP_PURITY"
-                  << " pure=" << (pure ? 1 : 0)
+                  << " step_map_valid=" << (arms_all_complete() ? 1 : 0)
+                  << " reason=" << arms_reason()
+                  << " arms_isolated=" << (arms_isolated ? 1 : 0);
+        emit_arm_status(std::cerr);
+        std::cerr << " pure=" << (pure ? 1 : 0)
                   << " u=" << r_u << " v=" << r_v << " w=" << r_w
                   << " ph=" << r_p << " t=" << r_t << " mu=" << r_m
-                  << (pure
+                  << (!arms_all_complete()
+                        ? "  (VOID -- reason=noncomplete_arm: neither call advanced, so both"
+                          " returned their input and pure=1 is an identity of the sentinel."
+                          " Purity of Phi_h is UNTESTED)"
+                        : pure
                         ? "  (two calls on identical input agree bitwise: D(Phi_h) is"
                           " well-posed as a Jacobian of U_n)"
                         : "  (two calls on IDENTICAL input DISAGREE: Phi_h depends on carried"
@@ -6463,14 +6594,27 @@ vertical_coefficients:
             // enumerating every mutable member is a list that silently falls behind the code.
             // A diagnostic that cannot restore everything can at least REPORT when something
             // else moved, which is the difference between a known limitation and a silent one.
+            // R13 B3: the fingerprint covered four quantities and MISSED the state that
+            // actually changes a solve. The Newton solver carries hopeless streaks, a trust
+            // radius, a preconditioner fallback latch and per-stage warm-start slots across
+            // calls; a probe that moves any of them has altered the run it was observing, and
+            // none of them appeared here. R12 R4 is the case: a diagnostic re-solve left a
+            // warm start behind and the next solve returned it unchanged.
+            //
+            // The step outcome is in too. A probe that leaves a different outcome latched has
+            // changed what the Fortran driver sees, which is the most consequential mutation
+            // available and was the one least visible.
             struct Fingerprint {
                 double grid_dt = 0.0;
                 double ru_work = 0.0;
                 double t_work  = 0.0;
                 long long rhs_calls = 0;
+                std::uint64_t carried = 0;
+                int outcome = 0;
                 bool operator!=(const Fingerprint& o) const {
                     return grid_dt != o.grid_dt || ru_work != o.ru_work ||
-                           t_work != o.t_work || rhs_calls != o.rhs_calls;
+                           t_work != o.t_work || rhs_calls != o.rhs_calls ||
+                           carried != o.carried || outcome != o.outcome;
                 }
             };
             static Fingerprint capture(TileSDIRK3UnifiedSolver& sv) {
@@ -6485,11 +6629,17 @@ vertical_coefficients:
                 f.t_work  = n(sv.t_adv_z_work_);
                 f.rhs_calls =
                     static_cast<long long>(wrf::sdirk3::g_mask_counters.rhs_call_id);
+                f.carried = sv.newton_solver_
+                    ? sv.newton_solver_->carried_state_digest() : 0ULL;
+                f.outcome = sv.getLastStepOutcomeCode();
                 return f;
             }
             Fingerprint before;
-            explicit ScopedProbeState(TileSDIRK3UnifiedSolver& solver)
-                : s(solver), dt_saved(solver.dt_stage_) {
+            // The probe's NAME. "Something mutated state" and "the explicit-spectrum probe
+            // mutated state" are different findings, and only the second names where to look.
+            const char* probe_name;
+            ScopedProbeState(TileSDIRK3UnifiedSolver& solver, const char* name)
+                : s(solver), dt_saved(solver.dt_stage_), probe_name(name) {
                 torch::NoGradGuard ng;
                 if (solver.U_ref_stage_.defined()) {
                     uref_saved = solver.U_ref_stage_.detach().clone();
@@ -6503,12 +6653,16 @@ vertical_coefficients:
                 if (s.grid_info_) s.grid_info_->dt = dt_saved;
                 const auto after = capture(s);
                 if (after != before) {
-                    std::cerr << "SDIRK3_PROBE_MUTATED"
+                    std::cerr << "SDIRK3_PROBE_MUTATED probe=" << probe_name
+                              << " probe_interfered=1"
                               << " grid_dt=" << before.grid_dt << "->" << after.grid_dt
                               << " ru_work=" << before.ru_work << "->" << after.ru_work
                               << " t_work=" << before.t_work << "->" << after.t_work
                               << " rhs_calls=" << before.rhs_calls << "->" << after.rhs_calls
-                              << "  (state the probe changed and did not restore)"
+                              << " carried_digest=" << before.carried << "->" << after.carried
+                              << " outcome=" << before.outcome << "->" << after.outcome
+                              << "  (state the probe changed and did not restore: it is an"
+                                 " INTERVENTION on this run, not an observer of it)"
                               << std::endl;
                 }
             }
@@ -9903,7 +10057,7 @@ vertical_coefficients:
                               ? (probe_skip_note("dt_invariance"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     torch::NoGradGuard ng_dt;
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "rhs_dt_invariance");
                     const float dt_saved = dt_stage_;
                     const auto k_ref = k_slow[i].detach().to(torch::kFloat64).clone();
                     const double n_ref = k_ref.norm().item<double>();
@@ -9952,7 +10106,7 @@ vertical_coefficients:
                               ? (probe_skip_note("slow_continuation"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     torch::NoGradGuard ng_cont;
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "slow_continuation");
                     const auto U_base = U_stage.detach();
                     const auto step = (U_conv.detach() - U_base);
                     const double step_n = step.to(torch::kFloat64).norm().item<double>();
@@ -10121,7 +10275,7 @@ vertical_coefficients:
                        : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_SPECTRUM")
                               ? (probe_skip_note("explicit_spectrum"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "explicit_spectrum");
                     const auto U0 = U_conv.detach().clone();
                     // WHICH operator's spectrum. rho(J_E) does not govern the step: the tangent
                     // of one step involves J_E and J_I together and they do not commute, so a
@@ -10527,7 +10681,7 @@ vertical_coefficients:
                 if ((probe_topology_ok ? wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_AD_SPLIT_CONTRACT")
                        : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_AD_SPLIT_CONTRACT")
                               ? (probe_skip_note("ad_split_contract"), false) : false))) {
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "ad_split_contract");
                     const auto U_probe = U_conv.detach().clone();
                     auto F_of = [&](wrf::sdirk3::RhsMode m) {
                         return [&probe_rhs, m](const torch::Tensor& x) {
@@ -10540,7 +10694,22 @@ vertical_coefficients:
                         v = v / v.detach().to(torch::kFloat64).norm().item<double>();
                     }
 
-                    bool fb_full = false, fb_e = false, fb_i = false;
+                    // The OPERATIONAL tangent, built the way production builds it rather than
+                    // inferred from the split identity. compute_k_slow detaches k_slow when
+                    // imex_slow_in_tangent = 0 (the runtime value), so the graph the adjoint
+                    // differentiates is F_I + detach(F_E). Deriving its tangent as J_I from
+                    // J_full = J_E + J_I assumes the detachment is exactly total; measuring it
+                    // does not, and a partial leak is precisely the thing an assumption hides.
+                    auto F_operational = [&](const torch::Tensor& x) {
+                        const bool sit = wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent;
+                        auto fi = probe_rhs(x, wrf::sdirk3::RhsMode::ImplicitOnly);
+                        auto fe = probe_rhs(x, wrf::sdirk3::RhsMode::ExplicitOnly);
+                        return sit ? (fi + fe) : (fi + fe.detach());
+                    };
+
+                    bool fb_full = false, fb_e = false, fb_i = false, fb_op = false;
+                    const auto Jv_op = wrf::sdirk3::compute_jvp_fwad_or_fd(
+                        F_operational, U_probe, v, 0, 0.0f, &fb_op);
                     const auto Jv_full = wrf::sdirk3::compute_jvp_fwad_or_fd(
                         F_of(wrf::sdirk3::RhsMode::Full), U_probe, v, 0, 0.0f, &fb_full);
                     const auto Jv_e = wrf::sdirk3::compute_jvp_fwad_or_fd(
@@ -10595,14 +10764,61 @@ vertical_coefficients:
                         ? Jv_e.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
                     const double n_i = Jv_i.defined()
                         ? Jv_i.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    const double n_op = Jv_op.defined()
+                        ? Jv_op.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    // e_drop: what the ADJOINT actually loses, measured, not derived. This is
+                    // the quantity an exact 4D-Var gradient needs to be zero -- the forward
+                    // integrates F_I + F_E and the operational graph differentiates
+                    // F_I + detach(F_E), so a nonzero e_drop means the gradient returned is the
+                    // gradient of a DIFFERENT cost function, not an approximation to this one.
+                    const double e_drop =
+                        (Jv_full.defined() && Jv_op.defined() && n_full > 0.0)
+                            ? (Jv_full.detach().to(torch::kFloat64) -
+                               Jv_op.detach().to(torch::kFloat64)).norm().item<double>() / n_full
+                            : -1.0;
+                    // Cancellation between the channels. ||J_E v + J_I v|| is NOT
+                    // ||J_E v|| + ||J_I v||, so a norm ratio is not an additive share and can
+                    // exceed 1 when the channels oppose. The cosine is what says whether the
+                    // ratio may be read as a share at all.
+                    const double cos_ei =
+                        (Jv_e.defined() && Jv_i.defined() && n_e > 0.0 && n_i > 0.0)
+                            ? (Jv_e.detach().to(torch::kFloat64) *
+                               Jv_i.detach().to(torch::kFloat64)).sum().item<double>()
+                                  / (n_e * n_i)
+                            : 0.0 / 0.0;
+                    wrf::sdirk3::TangentInputs tin;
+                    tin.fd_fallback = (fb_full || fb_e || fb_i || fb_op);
+                    tin.topology_ok = probe_topology_ok;
+                    const auto tverdict = wrf::sdirk3::tangent_verdict(tin);
+                    const auto semantics =
+                        wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent
+                            ? wrf::sdirk3::TangentSemantics::ExactPrimal
+                            : wrf::sdirk3::TangentSemantics::OperationalDetachedSlow;
                     std::cerr << "SDIRK3_TANGENT_BUDGET stage=" << stage_id
+                              << " valid=" << (tverdict.valid ? 1 : 0)
+                              << " reason=" << tverdict.reason
+                              << " semantics=" << wrf::sdirk3::tangent_semantics_name(semantics)
                               << " slow_in_tangent="
                               << (wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent ? 1 : 0)
                               << " J_full_v=" << n_full
                               << " J_E_v=" << n_e
                               << " J_I_v=" << n_i
-                              << " dropped_frac=" << (n_full > 0.0 ? n_e / n_full : -1.0)
-                              << " retained_frac=" << (n_full > 0.0 ? n_i / n_full : -1.0)
+                              << " J_operational_v=" << n_op
+                              // NOT "fraction": these are norm RATIOS. Naming them as shares
+                              // invited reading them as adding to 1, which they need not do.
+                              << " slow_norm_over_full=" << (n_full > 0.0 ? n_e / n_full : -1.0)
+                              << " implicit_norm_over_full="
+                              << (n_full > 0.0 ? n_i / n_full : -1.0)
+                              << " operational_norm_over_full="
+                              << (n_full > 0.0 ? n_op / n_full : -1.0)
+                              << " cos_EI=" << cos_ei
+                              << " e_drop=" << e_drop
+                              << (e_drop > 0.0
+                                    ? "  (the operational tangent is NOT the primal derivative:"
+                                      " exact 4D-Var requires imex_slow_in_tangent=true, and"
+                                      " this configuration is a weak-constraint model only once"
+                                      " the dropped component is carried in an explicit Q)"
+                                    : "  (the operational tangent IS the primal derivative)")
                               << std::endl;
                     std::cerr << "SDIRK3_AD_SPLIT_CONTRACT stage=" << stage_id
                               << " jvp_split_rel=" << rel(Jv_full, Jv_e + Jv_i)
@@ -10636,7 +10852,7 @@ vertical_coefficients:
                 // if a reference or a cached input diverges, they do not. Four directions,
                 // because a single one can agree by accident where the missing term is small.
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_PROBE_PARITY")) {
-                    ScopedProbeState parity_guard(*this);
+                    ScopedProbeState parity_guard(*this, "probe_parity");
                     const auto U0p = U_conv.detach().clone();
                     auto F_prod = [&](const torch::Tensor& x) {
                         return compute_k_slow(x, torch::Tensor{});
@@ -10734,7 +10950,7 @@ vertical_coefficients:
                        : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_DIRECTIONAL_DERIVATIVE")
                               ? (probe_skip_note("directional_derivative"), false) : false)) &&
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "directional_derivative");
                     const auto U0d = U_conv.detach().clone();
                     auto F_exp_d = [&probe_rhs](const torch::Tensor& x) {
                         return probe_rhs(x, wrf::sdirk3::RhsMode::ExplicitOnly);
@@ -10832,7 +11048,7 @@ vertical_coefficients:
                        : (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_SPLIT_IDENTITY")
                               ? (probe_skip_note("split_identity"), false) : false))) {
                     torch::NoGradGuard ng_split;
-                    ScopedProbeState probe_guard(*this);
+                    ScopedProbeState probe_guard(*this, "split_identity");
                     const auto U_probe = U_conv.detach();
                     const auto f_full = probe_rhs(U_probe, RhsMode::Full)
                                             .detach().to(torch::kFloat64);

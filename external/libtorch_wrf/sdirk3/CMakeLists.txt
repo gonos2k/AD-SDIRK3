@@ -280,6 +280,53 @@ add_test(NAME Metric_Policy_Contract COMMAND test_metric_policy)
 
 # 9F.D52 (review section 6): FORWARD-mode tangents and the forward/reverse duality, for
 # the EOS and the pressure integrator. The prior tests used reverse mode and called it JVP.
+# R13 B3: the interference fingerprint must be able to SEE a change. A digest blind to one
+# carried field lets a probe mutate through it forever while the record says "observer".
+add_executable(test_probe_noninterference tests/test_probe_noninterference.cpp)
+target_link_libraries(test_probe_noninterference PRIVATE wrf_sdirk3::core)
+add_test(NAME Diagnostic_Observer_Noninterference_Contract COMMAND test_probe_noninterference)
+
+# R13 B2: three arms, and a certification rule that the R12 R4 measurement fails.
+add_executable(test_stage_reference_certification tests/test_stage_reference_certification.cpp)
+target_link_libraries(test_stage_reference_certification PRIVATE wrf_sdirk3::core)
+add_test(NAME Stage_Reference_Certification_Contract COMMAND test_stage_reference_certification)
+
+# R13 C1: the forward integrates F_I + F_E and the operational graph differentiates
+# F_I + detach(F_E). Includes the FD trap: a finite difference cannot see a detach, so an FD
+# fallback on this function returns a DIFFERENT operator rather than a noisier one.
+add_executable(test_operational_primal_tangent tests/test_operational_primal_tangent.cpp)
+target_link_libraries(test_operational_primal_tangent PRIVATE wrf_sdirk3::core)
+add_test(NAME Operational_Primal_Tangent_Contract COMMAND test_operational_primal_tangent)
+
+# R13 D2/E1: the two OFFLINE comparators. R12 reported both verified against synthetic
+# cases and no CI job invoked either -- a gate nothing runs is a script. Registered here so
+# the claim and the check are the same thing.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME Global_Ownership_Overlap_Gap_Contract
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_global_ownership.py)
+add_test(NAME Manifest_Duplicate_Fail_Contract
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_manifest_duplicate.py)
+
+# R13 D1: the memory-domain -> tile-domain offset and WRF's ownership rule. Both were
+# correct and stated only in a comment; a synthetic 1e6*i+1e3*j+k grid makes a wrong offset
+# decode to a different cell instead of shifting a norm by a few percent.
+add_executable(test_memory_tile_offset tests/test_memory_tile_offset.cpp)
+target_link_libraries(test_memory_tile_offset PRIVATE wrf_sdirk3::core)
+add_test(NAME Memory_Tile_Offset_Contract COMMAND test_memory_tile_offset)
+
+# R13 A1/A2: a probe record is entitled to a verdict only when its preconditions hold.
+# Both rules live in wrf_sdirk3_probe_validity.h precisely so a test can reject them; spelled
+# out at the emit site they were the form this campaign kept having to retract.
+add_executable(test_failed_step_map_invalid tests/test_failed_step_map_invalid.cpp)
+target_link_libraries(test_failed_step_map_invalid PRIVATE wrf_sdirk3::core)
+add_test(NAME Failed_Step_Map_Is_Invalid_Contract COMMAND test_failed_step_map_invalid)
+
+add_executable(test_jvp_fallback_invalidates tests/test_jvp_fallback_invalidates.cpp)
+target_link_libraries(test_jvp_fallback_invalidates PRIVATE wrf_sdirk3::core)
+add_test(NAME JVP_Fallback_Invalidates_Verdict_Contract COMMAND test_jvp_fallback_invalidates)
+
 add_executable(test_ad_tangent_contract tests/test_ad_tangent_contract.cpp)
 target_link_libraries(test_ad_tangent_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME AD_Tangent_Contract COMMAND test_ad_tangent_contract)

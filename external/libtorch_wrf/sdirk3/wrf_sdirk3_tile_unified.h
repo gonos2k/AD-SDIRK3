@@ -58,6 +58,39 @@ enum class StepOutcomeCode : int {
     FATAL_INTERNAL = 101
 };
 
+// What an outcome code means for a CALLER that wants to differentiate the step.
+//
+// The distinction the raw code does not make on its own: only OK_ADVANCED corresponds to a
+// state transition the driver accepts. Every other code leaves U_{n+1} = U_n -- and
+// module_implicit_sdirk3.F:1363 then fatals on HARD_STAGE_ABORT, SOFT_NO_PROGRESS and every
+// FATAL_*, so those steps never reach the outer integrator at all. A tangent, a spectrum or an
+// adjoint identity measured across such a step is a property of the ROLLBACK SENTINEL, not of
+// Phi_h, and the identity it reports is the identity of "returned its input unchanged".
+//
+// Naming that here rather than at each probe means a probe cannot forget to ask.
+enum class StepStatus {
+    Complete,  // OK_ADVANCED -- the state moved and was published
+    Rejected,  // finite solve path, no advance (skipped, or no measurable progress)
+    Aborted    // stage abort or fatal: U_{n+1} = U_n by the fail-closed gate
+};
+
+inline StepStatus step_status_of(int outcome_code) {
+    switch (static_cast<StepOutcomeCode>(outcome_code)) {
+        case StepOutcomeCode::OK_ADVANCED:      return StepStatus::Complete;
+        case StepOutcomeCode::OK_SKIPPED:       return StepStatus::Rejected;
+        case StepOutcomeCode::SOFT_NO_PROGRESS: return StepStatus::Rejected;
+        default:                                return StepStatus::Aborted;
+    }
+}
+
+inline const char* step_status_name(StepStatus s) {
+    switch (s) {
+        case StepStatus::Complete: return "COMPLETE";
+        case StepStatus::Rejected: return "REJECTED";
+        default:                   return "ABORTED";
+    }
+}
+
 // FIX Round93: TLS solver tracking for debug mode warnings
 // When multiple solvers run on the same thread, TLS caches are shared.
 // This tracking helps detect potential issues in multi-solver scenarios.

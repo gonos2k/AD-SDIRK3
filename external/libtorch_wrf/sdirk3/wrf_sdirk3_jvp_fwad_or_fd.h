@@ -34,6 +34,29 @@ private:
     uint64_t level_;
 };
 
+// The FD step size, computed under ONE NoGradGuard.
+//
+// This is the repository's hardest constraint (`.item()` only inside a NoGradGuard), and the
+// three call sites below each violated it in a way that reads as guarded: the guard in the
+// `try` block is a scoped object, so by the time a `catch` body runs it has already been
+// destroyed. The two fallback paths therefore synced the graph unguarded -- on exactly the
+// path that runs when forward-mode AD has just failed, i.e. when the graph is already
+// suspect. Hoisting the computation here makes the guard impossible to scope wrong, and
+// makes the epsilon rule a single definition rather than three copies that can drift.
+inline float fd_epsilon_for(const torch::Tensor& u, const torch::Tensor& v,
+                            float override_value) {
+    if (override_value > 0.0f) {
+        return override_value;
+    }
+    torch::NoGradGuard no_grad;
+    const double eps_m = static_cast<double>(std::numeric_limits<float>::epsilon());
+    const double u_norm = u.detach().norm().to(torch::kCPU).item<double>();
+    const double v_norm = v.detach().norm().to(torch::kCPU).item<double>();
+    return static_cast<float>(std::clamp(
+        std::sqrt(eps_m) * (1.0 + u_norm) / std::max(v_norm, 1e-30),
+        1e-6, 1e-2));
+}
+
 }  // namespace jvp_detail
 
 // Try forward-mode AD JVP first, fallback to FD-JVP if fwAD path fails.
@@ -56,15 +79,7 @@ inline torch::Tensor compute_jvp_fwad_or_fd(
     if (used_fd_fallback) {
         *used_fd_fallback = true;
     }
-    float eps = fd_epsilon_override;
-    if (!(eps > 0.0f)) {
-        const double eps_m = static_cast<double>(std::numeric_limits<float>::epsilon());
-        const double u_norm = u.norm().to(torch::kCPU).item<double>();
-        const double v_norm = v.norm().to(torch::kCPU).item<double>();
-        eps = static_cast<float>(std::clamp(
-            std::sqrt(eps_m) * (1.0 + u_norm) / std::max(v_norm, 1e-30),
-            1e-6, 1e-2));
-    }
+    const float eps = jvp_detail::fd_epsilon_for(u, v, fd_epsilon_override);
     return compute_jvp_finite_diff(F, u, v, eps, halo_width);
 #else
     try {
@@ -92,15 +107,7 @@ inline torch::Tensor compute_jvp_fwad_or_fd(
         if (fallback_reason) {
             *fallback_reason = e.what();
         }
-        float eps = fd_epsilon_override;
-        if (!(eps > 0.0f)) {
-            const double eps_m = static_cast<double>(std::numeric_limits<float>::epsilon());
-            const double u_norm = u.norm().to(torch::kCPU).item<double>();
-            const double v_norm = v.norm().to(torch::kCPU).item<double>();
-            eps = static_cast<float>(std::clamp(
-                std::sqrt(eps_m) * (1.0 + u_norm) / std::max(v_norm, 1e-30),
-                1e-6, 1e-2));
-        }
+        const float eps = jvp_detail::fd_epsilon_for(u, v, fd_epsilon_override);
         return compute_jvp_finite_diff(F, u, v, eps, halo_width);
     } catch (...) {
         if (used_fd_fallback) {
@@ -109,15 +116,7 @@ inline torch::Tensor compute_jvp_fwad_or_fd(
         if (fallback_reason) {
             *fallback_reason = "non-std exception";
         }
-        float eps2 = fd_epsilon_override;
-        if (!(eps2 > 0.0f)) {
-            const double eps_m = static_cast<double>(std::numeric_limits<float>::epsilon());
-            const double u_norm = u.norm().to(torch::kCPU).item<double>();
-            const double v_norm = v.norm().to(torch::kCPU).item<double>();
-            eps2 = static_cast<float>(std::clamp(
-                std::sqrt(eps_m) * (1.0 + u_norm) / std::max(v_norm, 1e-30),
-                1e-6, 1e-2));
-        }
+        const float eps2 = jvp_detail::fd_epsilon_for(u, v, fd_epsilon_override);
         return compute_jvp_finite_diff(F, u, v, eps2, halo_width);
     }
 #endif

@@ -273,6 +273,37 @@ public:
     // the consumer -- the probe stayed silent until this was measured.
     std::uint64_t solver_id() const;
 
+    // R13 B1/B2: the state this solver carries ACROSS solves.
+    //
+    // A probe that runs the same solve twice and compares is measuring a derivative only if
+    // both runs started from the same solver state. They do not by default: hopeless-budget
+    // streaks, a trust radius, a preconditioner fallback latch and per-stage warm-start slots
+    // all persist, and every one of them changes what the next solve does. R12 R4 is the worked
+    // case -- a "certifying" second reference warm-started from the first and returned it
+    // unchanged, and ref_agree=0 was read as agreement rather than as the signature of a
+    // solve that never independently happened.
+    //
+    // Snapshot and restore rather than a fresh solver, deliberately and with the limit stated:
+    // this covers the solver's own carried state, NOT the preconditioner's internals or any
+    // cached linearization it holds. Arms isolated this way are more independent than shared
+    // ones and less independent than separate processes. A digest is provided so a caller can
+    // FAIL CLOSED when something outside the list moved, rather than assume it did not.
+    struct CarriedState {
+        bool  stage3_warmstart_disabled = false;
+        bool  stage2_hopeless_budget_mode = false;
+        int   stage2_hopeless_streak = 0;
+        bool  stage3_hopeless_budget_mode = false;
+        int   stage3_hopeless_streak = 0;
+        int   precond_fallback_count = 0;
+        float trust_radius = 0.0f;
+        std::vector<torch::Tensor> warmstart_stage;
+        std::vector<float>         warmstart_relerr;
+    };
+    CarriedState capture_carried_state() const;
+    void restore_carried_state(const CarriedState& s);
+    // Cheap order-sensitive fingerprint of the same state, for records and equality checks.
+    std::uint64_t carried_state_digest() const;
+
     /**
      * Get convergence statistics
      */
