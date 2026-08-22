@@ -264,6 +264,45 @@ inline StageReferenceVerdict certify_stage_reference(
     return {true, "ok"};
 }
 
+// ---------------------------------------------------------------------------------------
+// When an A/B comparison may be attributed to the variable it names
+// ---------------------------------------------------------------------------------------
+//
+// WHY THIS EXISTS. R13.4 compared the preconditioner on against off by flipping one
+// environment variable and called it single-variable. Production branches on that variable
+// into a DIFFERENT KRYLOV IMPLEMENTATION (`gmres_M_inv ? solve_fgmres : solve_gmres`), and
+// the two arms additionally ran different Newton counts, so the metric being compared
+// minimised over different linear systems. The conclusion drawn from it was retracted.
+//
+// One environment variable is not one variable. What makes a comparison attributable is that
+// everything the two arms shared is DEMONSTRATED to be shared -- inputs by digest, code path
+// by construction, budget by equality, and the stopping rule by both arms terminating for the
+// same reason. The last one is the easiest to forget and the most common way a "same budget"
+// comparison silently becomes two different amounts of work.
+struct AbComparison {
+    bool same_operator = false;      // A digests agree
+    bool same_rhs = false;           // b digests agree
+    bool same_x0 = false;            // x0 digests agree
+    bool same_solver_path = false;   // the SAME implementation, not an equivalent one
+    bool same_budget = false;        // equal j / equal Arnoldi steps allowed
+    bool early_stop_disabled = false;
+    int  termination_a = -1;         // both arms must stop for the same reason, or "equal j"
+    int  termination_b = -1;         // was not equal work
+};
+
+inline ProbeVerdict ab_attributable(const AbComparison& c) {
+    if (!c.same_operator)      return {false, "different_operator"};
+    if (!c.same_rhs)           return {false, "different_rhs"};
+    if (!c.same_x0)            return {false, "different_x0"};
+    // The one that caught R13.4. An equivalent algorithm is not the same implementation:
+    // early-stop, restart, residual recomputation and breakdown handling are free to differ.
+    if (!c.same_solver_path)   return {false, "different_solver_path"};
+    if (!c.same_budget)        return {false, "different_budget"};
+    if (!c.early_stop_disabled) return {false, "early_stop_enabled"};
+    if (c.termination_a != c.termination_b) return {false, "different_termination"};
+    return {true, "ok"};
+}
+
 }  // namespace sdirk3
 }  // namespace wrf
 

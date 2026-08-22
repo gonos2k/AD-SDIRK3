@@ -286,6 +286,12 @@ add_test(NAME Metric_Policy_Contract COMMAND test_metric_policy)
 add_executable(test_global_norm_emitter tests/test_global_norm_emitter.cpp)
 target_link_libraries(test_global_norm_emitter PRIVATE wrf_sdirk3::core)
 
+# R13.7: one environment variable is not one variable. The rule that would have caught the
+# retracted R13.4 preconditioner comparison, with that comparison as its first case.
+add_executable(test_ab_attribution tests/test_ab_attribution.cpp)
+target_link_libraries(test_ab_attribution PRIVATE wrf_sdirk3::core)
+add_test(NAME Ab_Attribution_Contract COMMAND test_ab_attribution)
+
 # R13.2 C1: which gate refused FIRST. "The step did not complete" is one bucket holding
 # seven outcomes that point at different layers, and a dt sweep is the right experiment for
 # exactly one of them.

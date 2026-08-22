@@ -57,3 +57,4 @@ Operational_Primal_Tangent_Contract
 Stage_Reference_Certification_Contract
 Diagnostic_Observer_Noninterference_Contract
 First_Failure_Classification_Contract
+Ab_Attribution_Contract

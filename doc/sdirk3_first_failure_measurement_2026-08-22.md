@@ -311,3 +311,65 @@ and run **M against I through the SAME FGMRES path** (identity closure as the pr
 with early-stop **off**, comparing true-residual trajectories `ρ_j` at equal `j`.
 
 That is the experiment that can attribute anything to `M`. It has not been run.
+
+---
+
+# The frozen linear-system A/B — the experiment the retraction called for
+
+One `(A, b, x₀)` captured at **stage 2, Newton iteration 0**. Both arms run the **same**
+`solve_fgmres` on it, `max_restarts=1` so `restart` *is* `j`, `tol=0` so neither arm can exit
+on tolerance. The only difference is the closure passed as `M_inv`: production, or the
+identity. `ρ` is the **true** residual `‖b − A·x‖/‖b‖`, recomputed by the probe rather than
+taken from either arm's own bookkeeping.
+
+```
+SDIRK3_FROZEN_AB_SYSTEM stage=2 newton_iter=0
+  b_digest=717053  x0_digest=0  b_norm=1039.47
+```
+
+| j | ρ (M = production) | ρ (M = I) | ratio M/I | termination |
+|---|---|---|---|---|
+| 4 | 0.7505 | 0.5469 | 1.37 | MaxBudget / MaxBudget |
+| 8 | 0.5525 | 0.3639 | 1.52 | MaxBudget / MaxBudget |
+| 16 | 0.4799 | 0.3095 | 1.55 | MaxBudget / MaxBudget |
+| 32 | 0.4223 | 0.2962 | 1.43 | MaxBudget / MaxBudget |
+| 48 | 0.3604 | 0.2853 | 1.26 | MaxBudget / MaxBudget |
+
+`iters == j` in every row and both arms terminate on `MaxBudget`, so **equal j is equal work** —
+the clause that is easiest to lose and that the earlier comparison never established.
+
+## MEASURED
+
+**The identity outperforms the production preconditioner at every Arnoldi budget**, by 26–55%
+in true relative residual, on one frozen system through one code path.
+
+## On the retraction
+
+The earlier claim was withdrawn because **its evidence did not support it** — not because the
+direction was known to be wrong. A controlled experiment now gives the same direction on
+evidence that does support it. Those are different statements and the distinction is the
+point: R13.4's number (0.5526 vs 0.3853) was uninterpretable, and it happened to point the
+same way.
+
+Attribution, against the rule in `wrf_sdirk3_probe_validity.h`:
+
+| clause | how it is met |
+|---|---|
+| same operator | one closure object, both arms |
+| same rhs / x₀ | digests emitted once, shared by every row |
+| same solver path | both `solve_fgmres` — the clause R13.4 failed |
+| same budget | `iters == j` in both arms |
+| early stop disabled | `tol = 0`; every row terminates `MaxBudget` |
+| same termination | `MaxBudget` in both arms at every j |
+
+## Limits, stated
+
+- **This is Newton iteration 0**, not the iteration where GMRES actually fails (≈4). It
+  measures `M` on *this* system's conditioning, not on the failing one.
+- **Neither arm converges.** Both are still descending at j=48 (0.3604, 0.2853), so this says
+  `M` is worse, not that `I` is adequate. The wall is not removed by dropping the
+  preconditioner — consistent with the earlier observation that the step does not complete
+  either way.
+- **It does not separate the operator from solver policy.** `termination_reason` is now
+  emitted per row, and it is uniform here; plumbing it into `StageFailureSignals` for the
+  production path is still open.
