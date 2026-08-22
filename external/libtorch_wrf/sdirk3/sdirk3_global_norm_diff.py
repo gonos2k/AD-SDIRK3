@@ -107,7 +107,20 @@ def parse(paths, phase):
                                     f"with state_published={f['state_published']} "
                                     f"outcome={f['outcome']}")
                     continue
-                steps[int(f["step_seq"])][block].append(rec)
+                # GROUP ON THE FORECAST, not on a process counter.
+                #
+                # step_seq is a per-process call counter. Under MPI each rank is its own
+                # process, so all ranks happen to start at 1 and grouping by it appeared to
+                # work -- but it is not a property of the forecast, and any two ranks that
+                # made a different number of calls (a retry, a probe arm) land in different
+                # groups and the partition check then sees half a domain. The live
+                # emitter/parser loop found exactly that: two ranks of one decomposition
+                # arrived as step_seq 1 and 2.
+                #
+                # global_timestep = -1 means the host never stamped these records. They can
+                # still be partition-checked -- that is a statement about one instant -- but
+                # they cannot be ordered into a trajectory, and the verdict says so.
+                steps[(int(f["global_timestep"]), int(f["rk_step"]))][block].append(rec)
                 extents = {k: int(f[k]) for k in DOMAIN_KEYS}
                 if domain is None:
                     domain = extents
@@ -187,8 +200,8 @@ def main():
     ap.add_argument("--rtol", type=float, default=1e-6,
                     help="relative tolerance on the combined norm (default 1e-6)")
     ap.add_argument("--step", type=int, default=None,
-                    help="step_seq to compare (default: every step, and the step SETS must "
-                         "match)")
+                    help="global_timestep to compare (default: every step, and the step SETS "
+                         "must match)")
     # WHICH claim the run is being asked to support. These are different statements and the
     # script used to make the stronger one from the weaker one's data.
     #
@@ -224,11 +237,12 @@ def main():
     # step 2 diverges and still prints "np-equivalent" -- and a trajectory that agrees for
     # one step is not an equivalent trajectory. --step narrows it deliberately.
     if args.step is not None:
-        if args.step not in a_steps or args.step not in b_steps:
-            print(f"step_seq {args.step} is not present in both runs "
+        wanted = [k for k in set(a_steps) & set(b_steps) if k[0] == args.step]
+        if not wanted:
+            print(f"global_timestep {args.step} is not present in both runs "
                   f"(A has {sorted(a_steps)}, B has {sorted(b_steps)})", file=sys.stderr)
             return 2
-        steps_to_compare = [args.step]
+        steps_to_compare = sorted(wanted)
     else:
         if set(a_steps) != set(b_steps):
             print(f"the runs recorded DIFFERENT steps, so there is no trajectory to compare: "
@@ -243,7 +257,8 @@ def main():
         for label, blocks, dom in (("A", a_steps[step], dom_a), ("B", b_steps[step], dom_b)):
             for name in ("u", "v", "w", "ph", "t", "mu"):
                 if name not in blocks:
-                    problems.append(f"run {label}: block {name} missing at step_seq {step}")
+                    problems.append(f"run {label}: block {name} missing at "
+                                    f"global_timestep {step[0]} rk_step {step[1]}")
                 else:
                     problems += check_partition(label, name, blocks[name], dom)
     if problems:
@@ -270,10 +285,15 @@ def main():
                       file=sys.stderr)
                 return 2
             if rel > worst:
-                worst, worst_where = rel, f"step {step} block {name}"
-            rows.append(f"  step {step:<4} {name:<3} A={na:.12g}  B={nb:.12g}  rel={rel:.3e}")
+                worst, worst_where = rel, f"global_timestep {step[0]} rk_step {step[1]} block {name}"
+            rows.append(f"  ts={step[0]} rk={step[1]}  {name:<3} "
+                        f"A={na:.12g}  B={nb:.12g}  rel={rel:.3e}")
 
-    print(f"steps compared: {steps_to_compare} -- domain "
+    unstamped = any(k[0] < 0 for k in steps_to_compare)
+    if unstamped:
+        print("NOTE: these records carry global_timestep=-1 -- the host never stamped them, "
+              "so this is a statement about ONE instant and not about a trajectory")
+    print(f"steps compared (global_timestep, rk_step): {steps_to_compare} -- domain "
           f"ids..ide={dom_a['ids']}..{dom_a['ide']} jds..jde={dom_a['jds']}..{dom_a['jde']}; "
           f"owned boxes cover it exactly at every step, with no overlap and no gap")
     print("\n".join(rows))
