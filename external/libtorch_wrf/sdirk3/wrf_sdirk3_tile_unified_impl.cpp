@@ -6063,15 +6063,49 @@ vertical_coefficients:
         // closed on any topology other than one rank covering the whole patch. These are
         // opt-in diagnostics rather than a production path, so they SKIP with a stated reason
         // instead of aborting.
-        const bool probe_topology_ok = (nprocx_ * nprocy_ == 1);
+        // R12 C1: rank count is not the whole condition. The sibling stage-operand diagnostic
+        // requires single-rank AND that this tile covers the whole patch, because with one rank
+        // and several OpenMP tiles the solver still sees only part of the patch -- and a
+        // partial-tile operator is no more global than a per-rank one.
+        const bool probe_single_rank = (nprocx_ * nprocy_ == 1);
+        const bool probe_tile_covers_patch =
+            its_ <= ids_ && ite_ >= ide_ - 1 &&
+            jts_ <= jds_ && jte_ >= jde_ - 1;
+        const bool probe_topology_ok = probe_single_rank && probe_tile_covers_patch;
+        // R12 C2: the note was gated on a single function-local `static bool`, SHARED by every
+        // probe, so only the first skip in the process ever printed and the rest vanished --
+        // a silent skip is the failure mode the gate exists to prevent. Per-probe, and no
+        // static: a non-atomic static write is also a race under OpenMP.
         auto probe_skip_note = [&](const char* which) {
-            static bool warned = false;
-            if (!warned) {
-                std::cerr << "SDIRK3_PROBE_SKIPPED probe=" << which
-                          << " reason=\"tile-local operator under np>1 is not the global "
-                             "operator; np=" << (nprocx_ * nprocy_) << "\"" << std::endl;
-                warned = true;
-            }
+            std::cerr << "SDIRK3_PROBE_SKIPPED probe=" << which
+                      << " single_rank=" << (probe_single_rank ? 1 : 0)
+                      << " tile_covers_patch=" << (probe_tile_covers_patch ? 1 : 0)
+                      << " np=" << (nprocx_ * nprocy_)
+                      << " reason=\"a tile-local operator is not the global operator\""
+                      << std::endl;
+        };
+
+        // R12 P0-1: the probes were linearizing a DIFFERENT function than production.
+        //
+        // computeUnifiedRHS reads U_ref_stage_ (:12983) and extracts w_ref from it, which feeds
+        // Omega, vertical advection and mass continuity -- the very operators this campaign
+        // tracked as dominant. The production wrapper compute_k_slow() sets the reference to the
+        // evaluation state before every call, so the production mapping is
+        //
+        //     script_F(U) = F_E(U, U_ref = U)
+        //
+        // The probes called computeUnifiedRHS(x, mode) directly, leaving U_ref_stage_ at the
+        // base state, so they measured
+        //
+        //     tilde_F(U) = F_E(U, U_ref = U_0)
+        //
+        // and their Jacobian is missing the chain-rule term dF/dU_ref. For the JVP this matters
+        // twice: the reference must carry the TANGENT, not just the value, or forward-mode drops
+        // that path silently. Mirroring the production wrapper exactly is the fix.
+        auto probe_rhs = [this](const torch::Tensor& x, wrf::sdirk3::RhsMode m) {
+            const bool sit = wrf::sdirk3::g_sdirk3_config.imex_slow_in_tangent;
+            U_ref_stage_ = sit ? x.clone() : x.detach().clone();
+            return computeUnifiedRHS(x, m);
         };
 
         struct ScopedProbeState {
@@ -7169,6 +7203,14 @@ vertical_coefficients:
                     if (slow_in_tangent) {
                         U_ref_stage_ = U_conv.clone();
                     } else {
+                        // R12 P0-3: this branch was EMPTY, so with slow_in_tangent=false the
+                        // reference from a PREVIOUS evaluation survived. compute_stage_tendency
+                        // is called repeatedly on rolled and unrolled states, so the stale
+                        // reference could pair F(U_rolled) with U_ref = U_unrolled -- and the
+                        // reference feeds w_ref, hence Omega, vertical advection and mass
+                        // continuity. Not a diagnostic path: slow_in_tangent=false is a
+                        // supported model-error configuration.
+                        U_ref_stage_ = U_conv.detach().clone();
                         }
                     torch::Tensor k_tend;
                     if (slow_in_tangent) {
@@ -9558,6 +9600,7 @@ vertical_coefficients:
                         double dz_min = std::nan(""), p_full_min = std::nan("");
                         double rho_min = std::nan(""), rho_max = std::nan("");
                         int64_t mu_full_nonpos = -1, dz_nonpos = -1, p_nonpos = -1;
+                        int64_t rho_nonfinite = -1, rho_nonpos = -1;
                         if (mu_base_.defined() && th_base_.defined() &&
                             ph_base_.defined() && p_base_.defined() &&
                             c1h_.defined() && c2h_.defined() && mu_a.defined()) {
@@ -9584,10 +9627,17 @@ vertical_coefficients:
                             const auto p_full = (std::get<0>(pal) + p_base_).to(torch::kFloat64);
                             p_full_min = p_full.min().item<double>();
                             p_nonpos   = (p_full <= 0).sum().item<int64_t>();
-                            const auto al = std::get<1>(pal).to(torch::kFloat64);
-                            const auto ok = torch::isfinite(al) & (al > 0);
-                            if (ok.any().item<bool>()) {
-                                const auto rho = 1.0 / al.index({ok});
+                            // R12 P0-2: diag_p_al returns {p_pert, al_pert, al_full}. get<1> is
+                            // the PERTURBATION, so inverting it did not give a density at all --
+                            // and selecting only its positive entries silently dropped every
+                            // cell with a non-positive perturbation, which is exactly where an
+                            // admissibility check has to look. get<2> is 1/rho.
+                            const auto al_full = std::get<2>(pal).to(torch::kFloat64);
+                            const auto al_finite = torch::isfinite(al_full);
+                            rho_nonfinite = (~al_finite).sum().item<int64_t>();
+                            rho_nonpos    = (al_finite & (al_full <= 0.0)).sum().item<int64_t>();
+                            if (rho_nonfinite == 0 && rho_nonpos == 0) {
+                                const auto rho = 1.0 / al_full;
                                 rho_min = rho.min().item<double>();
                                 rho_max = rho.max().item<double>();
                             }
@@ -9637,6 +9687,8 @@ vertical_coefficients:
                                   << " p_nonpos=" << p_nonpos
                                   << " rho_min=" << rho_min
                                   << " rho_max=" << rho_max
+                                  << " rho_nonfinite=" << rho_nonfinite
+                                  << " rho_nonpos=" << rho_nonpos
                                   << " th_argmin_flat=" << th_argmin
                                   << " mu_argmin_flat=" << mu_argmin
                                   << " F_E_nonfinite=" << nonfinite
@@ -9689,8 +9741,15 @@ vertical_coefficients:
                     // the mode. Measuring Full (= J_E + J_I) with the SAME Arnoldi is the direct
                     // discriminator for whether the SPLIT creates the RHP modes or the
                     // linearized dynamics already have them.
+                    // R12 C4: strict, because "Full", "FULL", "ful" and any typo all fell
+                    // through to J_E -- a mis-set experiment that silently runs the baseline is
+                    // the pattern this repository has removed several times already.
                     const char* mode_env = std::getenv("WRF_SDIRK3_SPECTRUM_MODE");
                     const std::string mode_str = mode_env ? std::string(mode_env) : "explicit";
+                    TORCH_CHECK(mode_str == "explicit" || mode_str == "implicit" ||
+                                mode_str == "full",
+                                "WRF_SDIRK3_SPECTRUM_MODE='", mode_str,
+                                "' is not one of {explicit, implicit, full}");
                     const bool spec_full = (mode_str == "full");
                     const bool spec_imp  = (mode_str == "implicit");
                     // J_I completes the picture. J_E and J_full are measured; J_I is the third
@@ -9702,8 +9761,8 @@ vertical_coefficients:
                                                     : wrf::sdirk3::RhsMode::ExplicitOnly;
                     const char* spec_name = spec_full ? "J_full"
                                           : spec_imp  ? "J_I" : "J_E";
-                    auto F_exp_fn = [this, spec_mode](const torch::Tensor& x) {
-                        return computeUnifiedRHS(x, spec_mode);
+                    auto F_exp_fn = [&probe_rhs, spec_mode](const torch::Tensor& x) {
+                        return probe_rhs(x, spec_mode);
                     };
                     bool fb = false, fb_any = false;
                     auto Jv = [&](const torch::Tensor& d) {
@@ -9778,10 +9837,20 @@ vertical_coefficients:
                     if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_EXPLICIT_ARNOLDI")) {
                         // S2: m is a knob, because a spectrum claim needs an m-convergence
                         // study and 24 was simply the first number tried.
+                        // R12 C4: whole-string parse. std::atoi("48junk") is 48 and
+                        // std::atoi("abc") is 0, which then silently became the default -- a
+                        // mistyped Arnoldi order would have run a DIFFERENT experiment under
+                        // the requested label.
                         int m = 24;
                         if (const char* mv = std::getenv("WRF_SDIRK3_ARNOLDI_M")) {
-                            const int parsed = std::atoi(mv);
-                            if (parsed >= 4 && parsed <= 256) m = parsed;
+                            int parsed = 0;
+                            TORCH_CHECK(wrf::sdirk3::parse_whole_int(mv, parsed),
+                                        "WRF_SDIRK3_ARNOLDI_M='", mv,
+                                        "' is not a whole integer");
+                            TORCH_CHECK(parsed >= 4 && parsed <= 256,
+                                        "WRF_SDIRK3_ARNOLDI_M=", parsed,
+                                        " is outside [4, 256]");
+                            m = parsed;
                         }
                         std::vector<torch::Tensor> V;
                         auto H = torch::zeros({m + 1, m}, torch::kFloat64);
@@ -9821,7 +9890,14 @@ vertical_coefficients:
                         }
                         torch::NoGradGuard ng_r;
                         auto Hm = H.slice(0, 0, m_used).slice(1, 0, m_used);
-                        auto ev = torch::linalg_eigvals(Hm);
+                        // R12 C3: ONE eig call. Ritz VALUES came from linalg_eigvals and Ritz
+                        // VECTORS from a separate linalg_eig, and nothing contracts the two
+                        // calls to order their eigenpairs identically -- so |lambda_k| could be
+                        // reported beside the residual of a DIFFERENT pair. Values and vectors
+                        // now come from the same decomposition and are sorted together.
+                        auto eig_all = torch::linalg_eig(Hm);
+                        auto ev = std::get<0>(eig_all);
+                        auto Yv = std::get<1>(eig_all);
                         auto re = torch::real(ev).to(torch::kFloat64);
                         auto im = torch::imag(ev).to(torch::kFloat64);
                         auto mod = torch::sqrt(re * re + im * im);
@@ -9870,9 +9946,7 @@ vertical_coefficients:
                         // not be separated from "the projection has not converged".
                         {
                             const double h_last = H[m_used][m_used - 1].item<double>();
-                            auto eig = torch::linalg_eig(Hm);
-                            auto Y = std::get<1>(eig);                 // right eigenvectors
-                            auto last_row = torch::abs(Y.index({m_used - 1, torch::indexing::Slice()}));
+                            auto last_row = torch::abs(Yv.index({m_used - 1, torch::indexing::Slice()}));
                             auto rr = (std::abs(h_last) * last_row).to(torch::kFloat64);
                             auto rr_s = rr.index_select(0, order);
                             std::cerr << "SDIRK3_ARNOLDI_RITZRES stage=" << stage_id
@@ -9886,7 +9960,7 @@ vertical_coefficients:
                                 V.begin(), V.begin() + m_used)).reshape({m_used, -1})
                                 .to(torch::kFloat64);
                             auto G = Vm.matmul(Vm.t()) -
-                                     torch::eye(m_used, torch::kFloat64);
+                                     torch::eye(m_used, Vm.options());   // R12 P1-2: Vm may be CUDA/MPS
                             std::cerr << " orth_loss=" << G.abs().max().item<double>()
                                       << std::endl;
                         }
@@ -10030,8 +10104,8 @@ vertical_coefficients:
                     ScopedProbeState probe_guard(*this);
                     const auto U_probe = U_conv.detach().clone();
                     auto F_of = [&](wrf::sdirk3::RhsMode m) {
-                        return [this, m](const torch::Tensor& x) {
-                            return computeUnifiedRHS(x, m);
+                        return [&probe_rhs, m](const torch::Tensor& x) {
+                            return probe_rhs(x, m);
                         };
                     };
                     torch::Tensor v = torch::randn_like(U_probe);
@@ -10052,7 +10126,7 @@ vertical_coefficients:
                     torch::Tensor w = torch::randn_like(U_probe);
                     auto vjp = [&](wrf::sdirk3::RhsMode m) -> torch::Tensor {
                         auto leaf = U_probe.detach().clone().requires_grad_(true);
-                        auto F = computeUnifiedRHS(leaf, m);
+                        auto F = probe_rhs(leaf, m);
                         if (!F.requires_grad()) return torch::Tensor{};
                         auto g = torch::autograd::grad({F}, {leaf}, {w},
                                                        /*retain_graph=*/false,
@@ -10125,8 +10199,8 @@ vertical_coefficients:
                     k_slow[i].defined() && k_slow[i].numel() > 0) {
                     ScopedProbeState probe_guard(*this);
                     const auto U0d = U_conv.detach().clone();
-                    auto F_exp_d = [this](const torch::Tensor& x) {
-                        return computeUnifiedRHS(x, wrf::sdirk3::RhsMode::ExplicitOnly);
+                    auto F_exp_d = [&probe_rhs](const torch::Tensor& x) {
+                        return probe_rhs(x, wrf::sdirk3::RhsMode::ExplicitOnly);
                     };
                     // Two directions: the one the continuation walked (U_conv - U_stage, i.e.
                     // what the implicit solve moved along) and a random one, because a single
@@ -10223,11 +10297,11 @@ vertical_coefficients:
                     torch::NoGradGuard ng_split;
                     ScopedProbeState probe_guard(*this);
                     const auto U_probe = U_conv.detach();
-                    const auto f_full = computeUnifiedRHS(U_probe, RhsMode::Full)
+                    const auto f_full = probe_rhs(U_probe, RhsMode::Full)
                                             .detach().to(torch::kFloat64);
-                    const auto f_exp  = computeUnifiedRHS(U_probe, RhsMode::ExplicitOnly)
+                    const auto f_exp  = probe_rhs(U_probe, RhsMode::ExplicitOnly)
                                             .detach().to(torch::kFloat64);
-                    const auto f_imp  = computeUnifiedRHS(U_probe, RhsMode::ImplicitOnly)
+                    const auto f_imp  = probe_rhs(U_probe, RhsMode::ImplicitOnly)
                                             .detach().to(torch::kFloat64);
                     const double n_full = f_full.norm().item<double>();
                     const auto   resid  = f_full - f_exp - f_imp;

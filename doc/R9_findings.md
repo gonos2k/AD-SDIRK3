@@ -1126,14 +1126,27 @@ already carries `t0`**, so the full field is `th_base_ + t` and `t0` was subtrac
 correct minimum is **192.3 K, not -13 K**. Nothing about the continuation is inadmissible, and
 the "violation follows the blow-up" framing goes with it — there is no violation.
 
-### One anomaly, flagged rather than explained
+### ~~One anomaly, flagged rather than explained~~ — RETRACTED: it was MY bug
 
-`rho_max` reaches 4.2e6 kg/m^3 while `rho_min` is a plausible 0.80-7.7. So `al` has near-zero
-entries in a few cells. The code's own comment at the `diag_p_al` call site records that this
-routine builds `al` **geometrically** and is 35% off on the gradient versus WRF's
-`calc_p_rho_phi` form, because `p' = p0*(R(t0+th)/(p0*alpha))^(cp/cv) - pb` cancels two ~1e5 Pa
-terms down to ~11 Pa. Whether these cells are that known artefact or a real near-singularity is
-**not** established here.
+I reported `rho_max = 4.2e6 kg/m^3` and speculated it might be the geometric-`al` artefact the
+call site's own comment records. **That was wrong, and the speculation is retracted.**
+
+`diag_p_al` returns `{p_pert, al_pert, al_full}` and I inverted `std::get<1>` — the
+**perturbation** — so the quantity was never a density. Worse, selecting only its positive
+entries silently dropped every cell with a non-positive perturbation, which is exactly where an
+admissibility check must look.
+
+Corrected to `std::get<2>` (`al_full` = `1/rho`), density is entirely physical across the whole
+continuation:
+
+| lambda | `rho_min` | `rho_max` | non-finite | non-positive |
+|---|---|---|---|---|
+| 0 | 0.1616 | 1.330 | **0** | **0** |
+| 0.5 | 0.1491 | 1.341 | **0** | **0** |
+| 1 | 0.1359 | 1.352 | **0** | **0** |
+
+0.14-1.35 kg/m^3 is the atmospheric range (surface ~1.2, model top ~0.1). There is no anomaly,
+and nothing suggests a defect in the production EOS.
 
 ## F2. No two large terms are cancelling in the u-advection decomposition
 
@@ -1271,3 +1284,62 @@ not a feature of either partition on its own at that strength.
 the stage solves, whose tangent satisfies `(I - h a_ii J_I) dK_i = J_I dY_i` — the same linear
 system the Newton-Krylov solve already handles, so assembling it is tractable but is
 effectively standing up the TLM, and it is not done here.
+
+---
+
+# R12 — the probes were linearizing the wrong function; re-measured
+
+## P0-1. The probe mapping was not the production mapping
+
+`computeUnifiedRHS` **reads** `U_ref_stage_` (`:12983`) and extracts `w_ref` from it, which feeds
+Omega, vertical advection and mass continuity — the operators this campaign tracked as dominant.
+The production wrapper sets that reference to the evaluation state before every call, so
+production is
+
+```
+script_F(U) = F_E(U, U_ref = U)
+```
+
+The probes called `computeUnifiedRHS(x, mode)` directly, leaving `U_ref_stage_` at the base
+state, so they measured `tilde_F(U) = F_E(U, U_ref = U_0)` — a different function whose Jacobian
+is missing `dF/dU_ref`. For the JVP this matters twice: the reference must carry the **tangent**,
+or forward mode drops that path silently.
+
+Every probe now goes through one evaluator that mirrors the production wrapper, including the
+`imex_slow_in_tangent` branch.
+
+### Re-measured on the authoritative mapping — the conclusions hold
+
+| operator | fixed-reference (wrong) | **authoritative** | change |
+|---|---|---|---|
+| `J_E` `max_re` | 170.0 | **169.9** | -0.06% |
+| `J_I` `max_re` | 22.2 | **20.81** | -6.3% |
+| `J_full` `max_re` | 470.6 | **471.0** | +0.08% |
+| non-additivity | 2.45x | **2.47x** | — |
+
+The defect was real and the review was right to flag it. Its numerical effect on these spectra
+is under 0.1% for `J_E` and `J_full`. The RHP findings stand, now on the operator production
+actually evaluates.
+
+## P0-3. A production regression in `slow_in_tangent = false`
+
+`compute_stage_tendency()` had an **empty else**, so with `slow_in_tangent = false` the reference
+from a previous evaluation survived. That function is called repeatedly on rolled and unrolled
+states, so a stale reference could pair `F(U_rolled)` with `U_ref = U_unrolled` — through
+`w_ref`, hence Omega and vertical advection. Not a diagnostic path: `slow_in_tangent = false` is
+a supported model-error configuration. Fixed.
+
+## Probe certification fixes
+
+- **C1** the topology gate checked rank count only; the sibling stage-operand gate also requires
+  `tile_covers_patch`. One rank with several OpenMP tiles still sees part of the patch, and a
+  partial-tile operator is no more global than a per-rank one.
+- **C2** `probe_skip_note` was gated on a single function-local `static bool` **shared by every
+  probe**, so only the first skip in the process printed — a silent skip is the failure the gate
+  exists to prevent. Also a non-atomic static write under OpenMP.
+- **C3** Ritz **values** came from `linalg_eigvals` and Ritz **vectors** from a separate
+  `linalg_eig`; nothing contracts the two calls to order eigenpairs identically, so a residual
+  could be printed beside a different pair's modulus. One call, sorted once.
+- **C4** env parsing was fail-silent again: `"Full"`, `"FULL"`, `"ful"` and any typo all became
+  `J_E`, and `atoi("48junk") = 48`, `atoi("abc") = 0 -> default`. Both now strict and abort.
+- **P1-2** `torch::eye(m, kFloat64)` is a CPU tensor while `Vm` may be CUDA/MPS.
