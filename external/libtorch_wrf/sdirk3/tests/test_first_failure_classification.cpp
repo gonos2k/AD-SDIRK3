@@ -45,6 +45,7 @@ StageFailureSignals ok_stage() {
     s.residual_first = 1.0e-2;
     s.residual_last = 1.0e-9;
     s.newton_iterations = 4;
+    s.newton_iteration_budget = 12;
     s.newton_converged = true;
     s.best_krylov_rel_error = 1.0e-3;
     s.krylov_iterations = 60;
@@ -136,6 +137,7 @@ int main() {
         s.best_krylov_rel_error = 1.0e-4;   // linear solve fine
         s.accepted_steps = 5;               // steps were taken
         s.rejected_steps = 1;
+        s.newton_iterations = 4;            // budget 12: not exhausted
         check(name_of(s) == "newton_stagnated",
               "steps taken, linear solve working, residual flat: the residual has a FLOOR, "
               "which is a statement about the split");
@@ -152,6 +154,75 @@ int main() {
         s.state_published = false;
         check(name_of(s) == "publish_rejected",
               "everything converged and admissible, and the state was still not published");
+    }
+
+    // ---- THE CASE THE FIRST REAL RUN PRODUCED ----
+    //
+    // em_b_wave, dt=600, stage 2, verbatim. Written down as a fixture because it REFUTED the
+    // taxonomy: it classified as newton_stagnated, which sends the work to "residual floor or
+    // split", while the residual had fallen monotonically from 1 to 0.4855 with every step
+    // accepted and the linear solve working. Newton did not stall -- it spent its third and
+    // last iteration and was cut off short of newton_tol=0.2.
+    //
+    // Every other category was excluded by the same record, which is the point of measuring:
+    // entry_finite=1 (not the state or the EOS), R0_finite=1 (not the RHS operator), the
+    // residual FELL (not divergence, so the dt sweep was the wrong experiment),
+    // best_krylov_rel=0.5526 with gmres_total_failures=0 (not the preconditioner or the
+    // operator -- the linear solve made progress), steps_rejected=0 (not the trust region),
+    // gate_metric_ok=1 (not the admissibility threshold).
+    {
+        StageFailureSignals s;
+        s.entry_state_finite = true;
+        s.initial_residual_finite = true;
+        s.residual_first = 1.0;
+        s.residual_last = 0.4855;
+        s.newton_iterations = 3;
+        s.newton_iteration_budget = 3;
+        s.newton_converged = false;
+        s.best_krylov_rel_error = 0.5526;
+        s.krylov_iterations = 21;
+        s.gmres_total_failures = 0;
+        s.accepted_steps = 3;
+        s.rejected_steps = 0;
+        s.gate_metric_ok = true;
+        s.state_published = false;
+        check(name_of(s) == "newton_budget_exhausted",
+              "em_b_wave dt=600 stage 2, as measured: a residual falling 1 -> 0.4855 over "
+              "3 of 3 allowed iterations is BUDGET EXHAUSTION, not a stall");
+        check(std::string(stage_failure_layer(first_failure_of(s))) ==
+                  "newton_iteration_budget",
+              "...and the layer it names is the budget, not the split -- the distinction the "
+              "first real run existed to make");
+    }
+    {   // The same signals with the budget NOT exhausted: the iteration stopped early for
+        // some other reason, and that IS a finding about the solve.
+        StageFailureSignals s;
+        s.entry_state_finite = true;
+        s.initial_residual_finite = true;
+        s.residual_first = 1.0;
+        s.residual_last = 0.4855;
+        s.newton_iterations = 3;
+        s.newton_iteration_budget = 12;
+        s.newton_converged = false;
+        s.best_krylov_rel_error = 0.5526;
+        s.accepted_steps = 3;
+        s.gate_metric_ok = true;
+        check(name_of(s) == "newton_stagnated",
+              "the SAME residual history with iterations left in the budget is NOT budget "
+              "exhaustion -- the two are separated by the budget, not by the residual");
+    }
+    {   // A flat residual that also exhausted the budget is a stall, not a budget statement.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 1.0;
+        s.residual_last = 0.99;
+        s.newton_iterations = 12;
+        s.newton_iteration_budget = 12;
+        s.best_krylov_rel_error = 1.0e-4;
+        s.accepted_steps = 12;
+        check(name_of(s) == "newton_stagnated",
+              "a FLAT residual that also ran out of budget is a stall: spending every "
+              "iteration on nothing is not the budget's fault");
     }
 
     // ---- ORDERING: the part that decides where the work goes ----
@@ -239,7 +310,7 @@ int main() {
           "each category names the LAYER to work on, as data rather than something the "
           "reader reconstructs");
 
-    constexpr int expected_checks = 18;
+    constexpr int expected_checks = 22;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

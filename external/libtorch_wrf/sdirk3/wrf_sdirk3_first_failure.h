@@ -47,8 +47,17 @@ enum class StageFailure {
     // The linear solve worked and every step it proposed was rejected. That is a trust-region
     // or line-search policy statement, not a numerical one.
     AllStepsRejected,
-    // Newton neither diverged nor stalled for either reason above -- it simply ran out of
-    // iterations with the residual roughly flat. The residual has a floor.
+    // Newton was still converging and ran out of ITERATIONS. Not a numerical finding at all:
+    // the residual was falling, every step was accepted and the linear solve was working. The
+    // answer is the budget.
+    //
+    // ADDED AFTER THE FIRST REAL RUN REFUTED THE TAXONOMY. em_b_wave at dt=600 classified as
+    // NewtonStagnated with R 1 -> 0.4855 over newton_iters=3 against max_newton_iter=3 --
+    // a monotonically falling residual reported as a stall, sending the work to "residual
+    // floor or split" when the measurement says "the budget is 3 and the tolerance is 0.2".
+    NewtonBudgetExhausted,
+    // Newton neither diverged nor stalled for either reason above, and it did NOT simply run
+    // out of budget -- the residual stopped moving. The residual has a floor.
     NewtonStagnated,
     // Newton converged by its own test and the stage gate refused the result anyway. The
     // disagreement is between two different measures of "converged", and that is where to
@@ -66,6 +75,7 @@ inline const char* stage_failure_name(StageFailure f) {
         case StageFailure::NewtonDiverged:           return "newton_diverged";
         case StageFailure::KrylovStagnated:          return "krylov_stagnated";
         case StageFailure::AllStepsRejected:         return "all_steps_rejected";
+        case StageFailure::NewtonBudgetExhausted:    return "newton_budget_exhausted";
         case StageFailure::NewtonStagnated:          return "newton_stagnated";
         case StageFailure::AdmissibilityRejected:    return "admissibility_rejected";
         default:                                     return "publish_rejected";
@@ -82,6 +92,7 @@ inline const char* stage_failure_layer(StageFailure f) {
         case StageFailure::NewtonDiverged:           return "linearization_or_timestep";
         case StageFailure::KrylovStagnated:          return "preconditioner_or_operator";
         case StageFailure::AllStepsRejected:         return "trust_region_policy";
+        case StageFailure::NewtonBudgetExhausted:    return "newton_iteration_budget";
         case StageFailure::NewtonStagnated:          return "residual_floor_or_split";
         case StageFailure::AdmissibilityRejected:    return "gate_threshold";
         default:                                     return "publish_gate";
@@ -96,6 +107,9 @@ struct StageFailureSignals {
     double residual_first = -1.0;
     double residual_last = -1.0;
     int    newton_iterations = 0;
+    // What the iteration was allowed to spend. Without it, "ran out of budget" and "stopped
+    // moving" are the same observation, and they point at opposite work.
+    int    newton_iteration_budget = -1;
     bool   newton_converged = false;
     // The BEST relative error any GMRES call reached in this stage. 1.0 means it ended where
     // it started. -1 = not measured.
@@ -115,6 +129,9 @@ struct StageFailureSignals {
 inline constexpr double kDivergenceGrowth = 2.0;
 // A relative error this close to 1 means the linear solve ended where it began.
 inline constexpr double kKrylovNoProgress = 0.99;
+// A residual that ended at or above this fraction of where it started has stopped moving.
+// Below it, the iteration was still working and being cut off is a budget statement.
+inline constexpr double kResidualStillFalling = 0.95;
 
 inline bool measured(double v) {
     return v == v && v >= 0.0 && v < std::numeric_limits<double>::infinity();
@@ -145,6 +162,16 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // The linear solve worked and nothing it proposed was taken.
         if (s.accepted_steps == 0 && s.rejected_steps > 0) {
             return StageFailure::AllStepsRejected;
+        }
+        // Still converging when the budget ran out. This is the em_b_wave dt=600 case, and
+        // it is not a numerical failure -- calling it one sends the work to the split.
+        const bool still_falling =
+            measured(s.residual_first) && measured(s.residual_last) &&
+            s.residual_first > 0.0 &&
+            s.residual_last < kResidualStillFalling * s.residual_first;
+        if (still_falling && s.newton_iteration_budget > 0 &&
+            s.newton_iterations >= s.newton_iteration_budget) {
+            return StageFailure::NewtonBudgetExhausted;
         }
         return StageFailure::NewtonStagnated;
     }
