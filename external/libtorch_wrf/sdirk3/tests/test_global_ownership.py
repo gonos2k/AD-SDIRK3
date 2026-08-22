@@ -44,6 +44,8 @@ def box(stagger, i0, i1, j0, j1):
 
 def record(block, stagger, i0, i1, j0, j1, sumsq, step_seq=1,
            phase="output", published=1, outcome=0, gts=7, rk=1):
+    # gts is the FORECAST identity and the grouping key; step_seq is a process counter and is
+    # deliberately left constant in most fixtures, because it must not affect grouping.
     i0, i1, j0, j1, k0, k1 = box(stagger, i0, i1, j0, j1)
     count = (i1 - i0 + 1) * (j1 - j0 + 1) * (k1 - k0 + 1)
     return (f"SDIRK3_GLOBAL_NORM block={block} stagger={stagger} phase={phase} "
@@ -70,6 +72,11 @@ def j_hi(stagger):
 def single_rank(scale=1.0, step_seq=1, **kw):
     return [record(b, s, IDS, i_hi(s), JDS, j_hi(s), 100.0 * scale, step_seq, **kw)
             for b, s in BLOCKS]
+
+
+def at_step(gts, scale=1.0):
+    """One rank's records for a given FORECAST timestep."""
+    return single_rank(scale=scale, gts=gts)
 
 
 def two_rank(jsplit=40, overlap=0, scale=1.0, step_seq=1):
@@ -114,25 +121,22 @@ check(rc == 2 and "owned by no rank" in out, "a gap with no overlap FAILS")
 
 # Two timesteps in one log. Previously the partials were summed across them and the count
 # came out at 2x the domain -- fail-closed, but reported as a decomposition error.
-rc, out = run(single_rank(step_seq=1) + single_rank(step_seq=2),
-              single_rank(step_seq=1) + single_rank(step_seq=2))
-check(rc == 0 and "steps compared: [1, 2]" in out,
+rc, out = run(at_step(1) + at_step(2), at_step(1) + at_step(2))
+check(rc == 0 and "(1, 1), (2, 1)" in out,
       "a log holding two timesteps compares BOTH of them, not their sum -- R13 compared "
       "only the first common step, so step 1 could agree while step 2 diverged")
 
 # The defect that made "first common step" unsafe.
-rc, out = run(single_rank(step_seq=1) + single_rank(step_seq=2),
-              single_rank(step_seq=1) + single_rank(scale=4.0, step_seq=2))
-check(rc == 2 and "NOT SDIRK3-output equivalent" in out and "step 2" in out,
+rc, out = run(at_step(1) + at_step(2), at_step(1) + at_step(2, scale=4.0))
+check(rc == 2 and "NOT SDIRK3-output equivalent" in out and "global_timestep 2" in out,
       "a run that agrees at step 1 and diverges at step 2 FAILS, and the record names the "
       "step -- under the first-common-step default this printed np-equivalent")
 
-rc, out = run(single_rank(step_seq=1) + single_rank(step_seq=2), single_rank(step_seq=1))
+rc, out = run(at_step(1) + at_step(2), at_step(1))
 check(rc == 2 and "recorded DIFFERENT steps" in out,
       "runs whose step SETS differ have no trajectory to compare")
 
-rc, out = run(single_rank(step_seq=1) + single_rank(scale=4.0, step_seq=2),
-              single_rank(step_seq=2), ["--step", "2"])
+rc, out = run(at_step(1) + at_step(2, scale=4.0), at_step(2), ["--step", "2"])
 check(rc == 2 and "NOT SDIRK3-output equivalent" in out,
       "--step narrows to one timestep deliberately, and a real difference there still fails")
 
@@ -198,7 +202,66 @@ check(rc == 2 and "predates the phase-tagged owned-box record" in out,
       "a log without the owned box and phase tag is REFUSED, not read as a passing "
       "partition")
 
-EXPECTED = 19
+# The defect the live loop found. Two ranks of ONE decomposition whose step_seq counters
+# differ -- a retry, a probe arm, or two tiles in one process -- were being sorted into
+# different groups, so the partition check saw half a domain from each and failed. step_seq is
+# a per-process call counter and must not decide grouping.
+lo = [record(b, s, IDS, i_hi(s), JDS, 40, 50.0, step_seq=1) for b, s in BLOCKS]
+hi = [record(b, s, IDS, i_hi(s), 41, j_hi(s), 50.0, step_seq=9) for b, s in BLOCKS]
+rc, out = run(single_rank(), lo + hi)
+check(rc == 0,
+      "two ranks of one decomposition group together even when their step_seq counters "
+      "differ -- the forecast identity decides grouping, not a process counter")
+
+# ---- THE EMITTER/PARSER LOOP ----
+#
+# Everything above this line tests the comparator against records written BY THIS FILE. That
+# is a test of the comparator, not of the pair: rename `phase` or `i0` in the C++ emitter and
+# every case above still passes while every real log becomes unparseable. This repository has
+# already paid for that shape once (a CI self-test counting its own fixtures instead of the
+# live gates), so the last cases drive the PRODUCTION emitter and feed the comparator what it
+# actually writes.
+emitter = os.environ.get("SDIRK3_GLOBAL_NORM_EMITTER")
+# FAIL, not skip. A loop nobody ran is the defect this exists to catch, and a silent skip is
+# how it would come back.
+check(bool(emitter) and os.path.exists(emitter),
+      "the live emitter binary is available (SDIRK3_GLOBAL_NORM_EMITTER) -- an absent loop "
+      "FAILS rather than skipping")
+
+if emitter and os.path.exists(emitter):
+    env = dict(os.environ, WRF_SDIRK3_GLOBAL_NORMS="1")
+
+    def emit(phase, ranks):
+        r = subprocess.run([emitter, phase, str(ranks)], capture_output=True, text=True,
+                           env=env)
+        return [ln for ln in (r.stdout + r.stderr).splitlines()
+                if "SDIRK3_GLOBAL_NORM" in ln]
+
+    live_1 = emit("output", 1)
+    check(len(live_1) == 6,
+          f"the production emitter writes one record per block ({len(live_1)}/6)")
+
+    rc, out = run(live_1, live_1)
+    check(rc == 0,
+          "the comparator ACCEPTS what the production emitter writes -- this is the case a "
+          "suite of hand-written fixtures cannot provide, and the only one that fails when a "
+          "field is renamed on one side")
+
+    # A real two-rank decomposition from the same emitter, against the one-rank run. If the
+    # C++ ownership rule and the Python partition test ever disagree, this is where it shows.
+    live_2 = emit("output", 2)
+    rc, out = run(live_1, live_2)
+    check(rc == 0,
+          "and a genuine 2-rank partition from the same emitter reproduces the 1-rank norm: "
+          "the C++ owned-box rule and the Python partition test agree on real output")
+
+    live_in = emit("input", 1)
+    rc, out = run(live_in, live_in)
+    check(rc == 2 and "no SDIRK3_GLOBAL_NORM record with phase=output" in out,
+          "the emitter's phase tag reaches the comparator: real input-phase records cannot "
+          "support the output claim either")
+
+EXPECTED = 25
 ok = checks == EXPECTED
 print(("  ok   " if ok else "  FAIL ") + f"case-count ratchet ({checks}/{EXPECTED})")
 if not ok:
