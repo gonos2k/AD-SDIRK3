@@ -2,6 +2,7 @@
 #define WRF_SDIRK3_JVP_FWAD_OR_FD_H
 
 #include <torch/torch.h>
+#include <string>
 #include <torch/csrc/autograd/forward_grad.h>
 
 #include <algorithm>
@@ -42,7 +43,14 @@ inline torch::Tensor compute_jvp_fwad_or_fd(
     const torch::Tensor& v,
     int halo_width = 0,
     float fd_epsilon_override = 0.0f,
-    bool* used_fd_fallback = nullptr) {
+    bool* used_fd_fallback = nullptr,
+    // WHY it fell back, not just THAT it did. `catch (...)` swallowed the distinction between
+    // "F threw" and "the tangent came back undefined", and those have opposite causes: the
+    // first is an error inside the evaluation, the second means the dual was SEVERED -- a
+    // detach, or an output that does not depend on the dual input. A caller that only learns a
+    // fallback happened cannot act on it, and a degraded operator then reads as a working one.
+    // Optional and defaulted, so production call sites are unchanged.
+    std::string* fallback_reason = nullptr) {
 
 #ifdef DNWP_DISABLE_FWAD
     if (used_fd_fallback) {
@@ -69,15 +77,20 @@ inline torch::Tensor compute_jvp_fwad_or_fd(
         auto jvp = std::get<1>(parts);
 
         if (!jvp.defined()) {
-            throw std::runtime_error("fwAD tangent is undefined");
+            throw std::runtime_error(
+                "fwAD tangent is undefined (the dual was severed: a detach, or an output that "
+                "does not depend on the dual input)");
         }
         if (used_fd_fallback) {
             *used_fd_fallback = false;
         }
         return jvp;
-    } catch (...) {
+    } catch (const std::exception& e) {
         if (used_fd_fallback) {
             *used_fd_fallback = true;
+        }
+        if (fallback_reason) {
+            *fallback_reason = e.what();
         }
         float eps = fd_epsilon_override;
         if (!(eps > 0.0f)) {
@@ -89,6 +102,23 @@ inline torch::Tensor compute_jvp_fwad_or_fd(
                 1e-6, 1e-2));
         }
         return compute_jvp_finite_diff(F, u, v, eps, halo_width);
+    } catch (...) {
+        if (used_fd_fallback) {
+            *used_fd_fallback = true;
+        }
+        if (fallback_reason) {
+            *fallback_reason = "non-std exception";
+        }
+        float eps2 = fd_epsilon_override;
+        if (!(eps2 > 0.0f)) {
+            const double eps_m = static_cast<double>(std::numeric_limits<float>::epsilon());
+            const double u_norm = u.norm().to(torch::kCPU).item<double>();
+            const double v_norm = v.norm().to(torch::kCPU).item<double>();
+            eps2 = static_cast<float>(std::clamp(
+                std::sqrt(eps_m) * (1.0 + u_norm) / std::max(v_norm, 1e-30),
+                1e-6, 1e-2));
+        }
+        return compute_jvp_finite_diff(F, u, v, eps2, halo_width);
     }
 #endif
 }

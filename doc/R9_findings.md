@@ -1383,3 +1383,50 @@ structurally the same call plus a reference assignment. `slow_in_tangent` is not
 `probe_rhs` mirroring `compute_k_slow` *by construction* — verified by reading both bodies, not
 by measurement. That is weaker than the contract was meant to provide, and it is the honest
 status.
+
+## Why the production wrapper is not forward-mode differentiable — and what it means
+
+Surfacing the fallback REASON (the helper's `catch (...)` swallowed it) answers it in one line:
+
+```
+why_prod : fwAD tangent is undefined (the dual was severed: a detach, or an output that
+           does not depend on the dual input)
+```
+
+Not an exception — **severed**. And `compute_k_slow`'s body says where:
+
+```cpp
+if (slow_in_tangent) { k_slow = computeUnifiedRHS(U_conv, ExplicitOnly); }
+else                 { k_slow = computeUnifiedRHS(U_conv, ExplicitOnly).detach(); }
+```
+
+**`[CONFIG] imex_slow_in_tangent = 0` at runtime** — the struct default is `true`, and the
+namelist sets it to 0. The config's own comment states the intent:
+
+> `false = K_slow detached (model-error assumption)`
+
+### Three consequences
+
+**1. The slow channel contributes NO tangent in the operational configuration.** `k_slow` is
+detached, so the explicit RHS's derivative does not enter the Newton matvec or the adjoint. For
+4D-Var this is by design — the slow dynamics are treated as model error — but it means the
+tangent-linear model deliberately omits that derivative.
+
+**2. `J_E`'s right-half-plane spectrum is a property of the PRIMAL operator, not of the
+production tangent.** The eigenvalues are real and the measurement is sound; what they are
+*about* is the explicit RHS as a mathematical map, which governs the forward integration's
+stability. They are not in the tangent path, because that path has no slow-channel derivative at
+all. Both statements are true and they answer different questions — the campaign's stability
+conclusions concern the primal, and nothing here says the adjoint sees them.
+
+**3. `probe_rhs` still does not match production** — it mirrors the reference handling but not
+the detach. Mirroring it exactly would return a zero tangent, which is precisely the production
+fact. So the probe measures the operator's Jacobian; production's slow-channel tangent is zero.
+Stated, not papered over: **P1c remains open**, and this is the second distinct way the probe
+and production differed.
+
+### It also raises the P0-3 fix's importance
+
+`compute_stage_tendency()`'s empty `else` was on the `slow_in_tangent = false` branch, which I
+described as "a supported model-error configuration". It is the **ACTIVE** configuration at
+runtime, so the stale-reference path was live, not latent.

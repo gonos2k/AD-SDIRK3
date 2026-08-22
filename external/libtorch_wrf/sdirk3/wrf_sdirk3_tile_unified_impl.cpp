@@ -10228,8 +10228,9 @@ vertical_coefficients:
                             d = d / static_cast<float>(dn);
                         }
                         bool fb1 = false, fb2 = false;
-                        const auto Jp = wrf::sdirk3::compute_jvp_fwad_or_fd(F_prod, U0p, d, 0, 0.0f, &fb1);
-                        const auto Jq = wrf::sdirk3::compute_jvp_fwad_or_fd(F_prob, U0p, d, 0, 0.0f, &fb2);
+                        std::string why1, why2;
+                        const auto Jp = wrf::sdirk3::compute_jvp_fwad_or_fd(F_prod, U0p, d, 0, 0.0f, &fb1, &why1);
+                        const auto Jq = wrf::sdirk3::compute_jvp_fwad_or_fd(F_prob, U0p, d, 0, 0.0f, &fb2, &why2);
                         torch::NoGradGuard ng_r;
                         const auto a = Jp.detach().to(torch::kFloat64);
                         const auto b = Jq.detach().to(torch::kFloat64);
@@ -10248,6 +10249,8 @@ vertical_coefficients:
                                   << " fd_fallback_prod=" << (fb1 ? 1 : 0)
                                   << " fd_fallback_probe=" << (fb2 ? 1 : 0)
                                   << " comparable=" << ((fb1 == fb2) ? 1 : 0)
+                                  << " why_prod=\"" << why1 << "\""
+                                  << " why_probe=\"" << why2 << "\""
                                   << std::endl;
                     }
                 }
