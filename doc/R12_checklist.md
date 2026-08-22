@@ -15,7 +15,8 @@ R11 marked these `[x]` against probes narrower than the item's own wording. Reve
 ## P0 — the probe does not measure the production operator
 
 - [x] H1  P0-3 hotfix: compute_stage_tendency's EMPTY else left a stale U_ref_stage_ under
-          slow_in_tangent=false (a supported production config, not a diagnostic path)
+          slow_in_tangent=false -- which the runtime echo shows is the ACTIVE configuration
+          (imex_slow_in_tangent = 0), so the stale-reference path was LIVE, not latent.
 - [x] H2  P0-2 hotfix: density used std::get<1> (al_pert); the contract is
           {p_pert, al_pert, al_full}. Also silently dropped non-positive-perturbation cells.
 - [x] H3  P1-2 hotfix: torch::eye(m, kFloat64) is CPU while Vm may be CUDA/MPS
@@ -52,6 +53,12 @@ R11 marked these `[x]` against probes narrower than the item's own wording. Reve
           (true-residual period, stagnation window/ratio, no-early-stop override, precond
           fallback latch, JVP method + fd fallback, imex_slow_in_tangent, warm-start validity),
           and a comparator that exits non-zero on an unexpected diff or a missing field.
+
+- [x] W1  WHY the production wrapper is not forward-mode differentiable: the AD helper's
+          catch-all swallowed the reason. Surfaced, it is "tangent undefined -- the dual was
+          severed", and compute_k_slow detaches k_slow when slow_in_tangent=false, which IS
+          the runtime value. So the slow channel carries NO tangent in production: J_E's
+          spectrum is a PRIMAL property and the adjoint has no slow-channel derivative.
 
 ## Carried from R11, still open
 
