@@ -249,6 +249,7 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
@@ -3906,10 +3907,21 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     // So run the step TWICE on identical copies and compare, before asking anything about its
     // derivative. Both probe calls advance the same carried state, so the production step that
     // follows is perturbed; the record says so.
+    // The latch is RAII because it guards RECURSION: a raw bool set true and cleared by hand
+    // after the arms stays true forever if an arm throws, and every later probe on that thread
+    // then silently no-ops -- a diagnostic that disables itself and says nothing is the exact
+    // failure mode these gates exist to prevent.
     static thread_local bool inside_step_map_probe = false;
+    struct ProbeLatch {
+        bool& flag;
+        explicit ProbeLatch(bool& f) : flag(f) { flag = true; }
+        ~ProbeLatch() { flag = false; }
+        ProbeLatch(const ProbeLatch&) = delete;
+        ProbeLatch& operator=(const ProbeLatch&) = delete;
+    };
     if (rk_step == 1 && !inside_step_map_probe &&
         (step_map_purity_enabled() || step_map_tangent_enabled())) {
-        inside_step_map_probe = true;
+        ProbeLatch step_map_latch(inside_step_map_probe);
 
         const size_t n_u  = static_cast<size_t>(ny)   * nz   * nx_u;
         const size_t n_v  = static_cast<size_t>(ny_v) * nz   * nx;
@@ -3929,6 +3941,12 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             {rw_tend, rw_tend + n_w}, {ph_tend, ph_tend + n_w},
             {t_tend, t_tend + n_t},   {mu_tend, mu_tend + n_mu}};
 
+        // Every arm's OUTCOME, not just its output. A difference quotient of Phi_h is a
+        // derivative only if each arm actually evaluated Phi_h; an arm that hit the
+        // fail-closed gate returned its INPUT, and differencing two returned inputs gives the
+        // identity no matter what the dynamics are. The status is what separates "the tangent
+        // is I because the map is I" from "the tangent was never measured".
+        std::vector<wrf::sdirk3::StepStatus> arm_status;
         auto run_once_from = [&](Arrays& a) {
             unifiedStep(a.u.data(), a.v.data(), a.w.data(), a.ph.data(), a.t.data(), a.mu.data(),
                         a.ru_t.data(), a.rv_t.data(), a.rw_t.data(),
@@ -3936,8 +3954,23 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
                         rdx, rdy, rdnw, rdn, msftx, msfty, msfux, msfuy, msfvx, msfvy,
                         c1f, c2f, c1h, c2h, fnm, fnp, rk_step, dt,
                         nx, ny, nz, nx_u, ny_v, nz_w);
+            arm_status.push_back(wrf::sdirk3::step_status_of(getLastStepOutcomeCode()));
         };
         auto run_once = [&](Arrays& a) { a = in; run_once_from(a); };
+        // One place decides validity, and it is a free function a test can reject --
+        // wrf_sdirk3_probe_validity.h. Spelled out inline here it would be exactly the kind of
+        // rule this campaign has repeatedly had to retract after publishing.
+        auto arms_all_complete = [&]() {
+            return wrf::sdirk3::step_map_verdict(arm_status).valid;
+        };
+        auto arms_reason = [&]() {
+            return wrf::sdirk3::step_map_verdict(arm_status).reason;
+        };
+        auto emit_arm_status = [&](std::ostream& os) {
+            for (size_t i = 0; i < arm_status.size(); ++i) {
+                os << " arm" << i << "=" << wrf::sdirk3::step_status_name(arm_status[i]);
+            }
+        };
 
         // A deterministic direction: index-based, so two runs and two builds perturb along the
         // same v and their tangents are comparable. Scaled PER BLOCK, so a block whose values
@@ -4009,12 +4042,16 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             const double eps1 = 1.0e-3, eps2 = 5.0e-4;
             const Arrays p1 = shifted(eps1, +1.0), m1 = shifted(eps1, -1.0);
             const Arrays p2 = shifted(eps2, +1.0), m2 = shifted(eps2, -1.0);
-            inside_step_map_probe = false;
 
             const auto q1 = quotient(p1, m1, eps1);
             const auto q2 = quotient(p2, m2, eps2);
             static const char* kBlock[6] = {"u", "v", "w", "ph", "t", "mu"};
-            std::cerr << "SDIRK3_STEP_MAP_TANGENT eps1=" << eps1 << " eps2=" << eps2;
+            const bool tangent_valid = arms_all_complete();
+            std::cerr << "SDIRK3_STEP_MAP_TANGENT"
+                      << " step_map_valid=" << (tangent_valid ? 1 : 0)
+                      << " reason=" << arms_reason();
+            emit_arm_status(std::cerr);
+            std::cerr << " eps1=" << eps1 << " eps2=" << eps2;
             double worst = 0.0;
             for (size_t bi = 0; bi < 6; ++bi) {
                 std::vector<float> d(q1[bi].size());
@@ -4031,11 +4068,17 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             // The validity field: halving epsilon must not change D.v if the quotient has
             // converged. If it does, what was measured is not a derivative.
             std::cerr << " worst_agree=" << worst
-                      << (worst < 0.05
-                            ? "  (halving epsilon leaves D.v unchanged: the central difference"
-                              " converged and D(Phi_h).v IS a directional derivative)"
-                            : "  (halving epsilon MOVES D.v: a difference quotient that has NOT"
-                              " converged, so this is not a directional derivative)")
+                      << (!tangent_valid
+                            ? "  (VOID -- reason=noncomplete_arm: an arm did not advance the"
+                              " state, so it returned its INPUT and this quotient differences"
+                              " the fail-closed rollback sentinel, not Phi_h. Epsilon-agreement"
+                              " here means the SENTINEL is stable, which it is by construction)"
+                            : (worst < 0.05
+                                 ? "  (halving epsilon leaves D.v unchanged: the central"
+                                   " difference converged and D(Phi_h).v IS a directional"
+                                   " derivative)"
+                                 : "  (halving epsilon MOVES D.v: a difference quotient that has"
+                                   " NOT converged, so this is not a directional derivative)"))
                       << "  [four probe steps advanced carried solver state: the production"
                          " step below is perturbed]"
                       << std::endl;
@@ -4045,7 +4088,6 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         Arrays a, b;
         run_once(a);
         run_once(b);
-        inside_step_map_probe = false;
 
         // Does the step MOVE the state? D.v came out at exactly 1 for four blocks, which is
         // what an IDENTITY map gives for a unit direction -- so before reading that as a
@@ -4086,13 +4128,19 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
                          d_t  = tend_norm(a.t_t,  in.t_t),  d_mu = tend_norm(a.mu_t, in.mu_t);
             const bool tend_moved = (d_ru + d_rv + d_rw + d_ph + d_t + d_mu) > 0.0;
             std::cerr << "SDIRK3_STEP_MAP_ADVANCE"
-                      << " identity=" << (identity ? 1 : 0)
+                      << " step_map_valid=" << (arms_all_complete() ? 1 : 0)
+                      << " reason=" << arms_reason();
+            emit_arm_status(std::cerr);
+            std::cerr << " identity=" << (identity ? 1 : 0)
                       << " u=" << m_u << " v=" << m_v << " w=" << m_w
                       << " ph=" << m_p << " t=" << m_t << " mu=" << m_m
                       << " tend_moved=" << (tend_moved ? 1 : 0)
                       << " d_ru=" << d_ru << " d_rv=" << d_rv << " d_rw=" << d_rw
                       << " d_ph=" << d_ph << " d_t=" << d_t << " d_mu=" << d_mu
-                      << (identity
+                      << (!arms_all_complete()
+                            ? "  (VOID -- reason=noncomplete_arm: no state was published, so"
+                              " identity=1 records the ROLLBACK, not a property of the map)"
+                            : identity
                             ? (tend_moved
                                  ? "  (state unchanged but TENDENCIES written: Phi_h is"
                                    " U -> tendencies, and a state-space tangent is the wrong"
@@ -4120,10 +4168,17 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         const bool pure = (r_u == 0.0 && r_v == 0.0 && r_w == 0.0 &&
                            r_p == 0.0 && r_t == 0.0 && r_m == 0.0);
         std::cerr << "SDIRK3_STEP_MAP_PURITY"
-                  << " pure=" << (pure ? 1 : 0)
+                  << " step_map_valid=" << (arms_all_complete() ? 1 : 0)
+                  << " reason=" << arms_reason();
+        emit_arm_status(std::cerr);
+        std::cerr << " pure=" << (pure ? 1 : 0)
                   << " u=" << r_u << " v=" << r_v << " w=" << r_w
                   << " ph=" << r_p << " t=" << r_t << " mu=" << r_m
-                  << (pure
+                  << (!arms_all_complete()
+                        ? "  (VOID -- reason=noncomplete_arm: neither call advanced, so both"
+                          " returned their input and pure=1 is an identity of the sentinel."
+                          " Purity of Phi_h is UNTESTED)"
+                        : pure
                         ? "  (two calls on identical input agree bitwise: D(Phi_h) is"
                           " well-posed as a Jacobian of U_n)"
                         : "  (two calls on IDENTICAL input DISAGREE: Phi_h depends on carried"

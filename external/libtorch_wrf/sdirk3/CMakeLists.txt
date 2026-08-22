@@ -280,6 +280,17 @@ add_test(NAME Metric_Policy_Contract COMMAND test_metric_policy)
 
 # 9F.D52 (review section 6): FORWARD-mode tangents and the forward/reverse duality, for
 # the EOS and the pressure integrator. The prior tests used reverse mode and called it JVP.
+# R13 A1/A2: a probe record is entitled to a verdict only when its preconditions hold.
+# Both rules live in wrf_sdirk3_probe_validity.h precisely so a test can reject them; spelled
+# out at the emit site they were the form this campaign kept having to retract.
+add_executable(test_failed_step_map_invalid tests/test_failed_step_map_invalid.cpp)
+target_link_libraries(test_failed_step_map_invalid PRIVATE wrf_sdirk3::core)
+add_test(NAME Failed_Step_Map_Is_Invalid_Contract COMMAND test_failed_step_map_invalid)
+
+add_executable(test_jvp_fallback_invalidates tests/test_jvp_fallback_invalidates.cpp)
+target_link_libraries(test_jvp_fallback_invalidates PRIVATE wrf_sdirk3::core)
+add_test(NAME JVP_Fallback_Invalidates_Verdict_Contract COMMAND test_jvp_fallback_invalidates)
+
 add_executable(test_ad_tangent_contract tests/test_ad_tangent_contract.cpp)
 target_link_libraries(test_ad_tangent_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME AD_Tangent_Contract COMMAND test_ad_tangent_contract)

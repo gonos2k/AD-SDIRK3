@@ -10443,15 +10443,36 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
     if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STAGE_REFERENCE") &&
         (stage_reference_target() == 0 || stage_reference_target() == stage)) {
         auto& cfg_ref = wrf::sdirk3::g_sdirk3_config;
-        const int   r2 = cfg_ref.stage2_gmres_restart;
-        const int   m2 = cfg_ref.stage2_max_krylov_restarts;
-        const float t2 = cfg_ref.stage2_krylov_tol;
-        const int   r3 = cfg_ref.stage3_gmres_restart;
-        const int   m3 = cfg_ref.stage3_max_krylov_restarts;
-        const float t3 = cfg_ref.stage3_krylov_tol;
-        const int   ni = cfg_ref.max_newton_iter;
-        const float nt = cfg_ref.newton_tol;
-        const bool  ws = cfg_ref.gmres_warmstart;
+        // RAII, because the probe mutates GLOBAL config. The hand-written restore fifty lines
+        // below is only reached on the success path: one exception out of solve_stage_impl and
+        // the PRODUCTION solver keeps running at budget 200x30, newton_tol=1e-8 and warm start
+        // off for the rest of the run -- a diagnostic silently becoming a configuration change.
+        struct ScopedSolverBudget {
+            wrf::sdirk3::SDIRK3Config& c;
+            int r2, m2, r3, m3, ni;
+            float t2, t3, nt;
+            bool ws;
+            explicit ScopedSolverBudget(wrf::sdirk3::SDIRK3Config& cfg)
+                : c(cfg),
+                  r2(cfg.stage2_gmres_restart), m2(cfg.stage2_max_krylov_restarts),
+                  r3(cfg.stage3_gmres_restart), m3(cfg.stage3_max_krylov_restarts),
+                  ni(cfg.max_newton_iter),
+                  t2(cfg.stage2_krylov_tol), t3(cfg.stage3_krylov_tol),
+                  nt(cfg.newton_tol), ws(cfg.gmres_warmstart) {}
+            ~ScopedSolverBudget() {
+                c.stage2_gmres_restart = r2;
+                c.stage2_max_krylov_restarts = m2;
+                c.stage2_krylov_tol = t2;
+                c.stage3_gmres_restart = r3;
+                c.stage3_max_krylov_restarts = m3;
+                c.stage3_krylov_tol = t3;
+                c.max_newton_iter = ni;
+                c.newton_tol = nt;
+                c.gmres_warmstart = ws;
+            }
+            ScopedSolverBudget(const ScopedSolverBudget&) = delete;
+            ScopedSolverBudget& operator=(const ScopedSolverBudget&) = delete;
+        } scoped_budget(cfg_ref);
 
         // The two reference solves must not share a warm start. With it on, the second solve
         // starts from the first's answer and returns it unchanged -- and ref_agree=0 then
@@ -10474,15 +10495,7 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
         auto reference2 = pImpl->solve_stage_impl(U_n, K_prev, compute_rhs, compute_rhs_fast,
                                                   dt, gamma, stage, F_phys);
 
-        cfg_ref.stage2_gmres_restart = r2;
-        cfg_ref.stage2_max_krylov_restarts = m2;
-        cfg_ref.stage2_krylov_tol = t2;
-        cfg_ref.stage3_gmres_restart = r3;
-        cfg_ref.stage3_max_krylov_restarts = m3;
-        cfg_ref.stage3_krylov_tol = t3;
-        cfg_ref.max_newton_iter = ni;
-        cfg_ref.newton_tol = nt;
-        cfg_ref.gmres_warmstart = ws;
+        // (restore is ScopedSolverBudget's, at scope exit -- including on an exception)
 
         torch::NoGradGuard ng_ref;
         std::cerr << "SDIRK3_STAGE_REFERENCE stage=" << stage
