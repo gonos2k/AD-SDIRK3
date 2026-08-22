@@ -16,6 +16,7 @@
 #include "wrf_sdirk3_tile_base.h"
 #include "wrf_sdirk3_unified_rhs.h"
 #include "wrf_sdirk3_newton_solver.h"
+#include "wrf_sdirk3_first_failure.h"
 #include "wrf_sdirk3_unified_preconditioner.h"
 #include "wrf_sdirk3_implicit_diff.h"   // StageCotangent
 #include "wrf_tile_boundary_optimizer.h"
@@ -1411,6 +1412,12 @@ private:
     long long stage_operand_diag_step_ = 0;  // monotonic diag step label (advanced only when flag on)
 
     // Last step outcome for ABI-side fail-closed checks.
+    // R13.2: the first-failure signals for the stage just solved, and whether its entry
+    // state was finite. Members because the stage gate that classifies them runs several
+    // frames from where they are measured.
+    bool last_stage_entry_finite_ = true;
+    wrf::sdirk3::StageFailureSignals last_stage_signals_{};
+
     int last_step_outcome_code_ = static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED);
     bool last_step_final_update_aborted_ = false;
     float last_step_progress_ratio_ = 0.0f;

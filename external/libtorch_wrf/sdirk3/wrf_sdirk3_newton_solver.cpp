@@ -8247,6 +8247,15 @@ public:
                     ledger_r_gmres = gmres_result.r_true.detach();
                 }
                 stats_.total_krylov_iterations += gmres_result.iterations;
+                // R13.2: how well the LINEAR solve did, kept as the BEST across this stage.
+                // Newton cannot converge on top of a solve that does not solve, so this
+                // separates "the outer iteration is stuck" from "the operator or the
+                // preconditioner is" -- and those point at different work.
+                if (std::isfinite(gmres_result.rel_error) && gmres_result.rel_error >= 0.0f &&
+                    (stats_.best_krylov_rel_error < 0.0f ||
+                     gmres_result.rel_error < stats_.best_krylov_rel_error)) {
+                    stats_.best_krylov_rel_error = gmres_result.rel_error;
+                }
 
                 // ============================================================
                 // PR 9B: opt-in directional consistency check — the checker
@@ -9812,6 +9821,18 @@ public:
                     std::cerr << "[TRUST REGION] All attempts rejected. "
                               << "Keeping K unchanged, radius=" << trust_radius_ << std::endl;
                 }
+            }
+
+            // R13.2: the accounting the first-failure classifier needs. "Every step was
+            // rejected" is a trust-region policy statement, and it is indistinguishable from
+            // a stalled solve unless the two are counted separately.
+            if (step_accepted) {
+                stats_.accepted_steps++;
+            } else {
+                stats_.rejected_steps++;
+            }
+            if (gmres_total_failure) {
+                stats_.gmres_total_failures++;
             }
 
             // FIX (2025-12-05): Conditional diagnostics for autograd compatibility
