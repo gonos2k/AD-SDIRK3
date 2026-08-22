@@ -24,7 +24,14 @@ TWO THINGS THIS CHECKS THAT A COUNT SUM DOES NOT.
    up only as a count that came out at 2x the domain, which fails closed but reads as a
    decomposition error rather than as what it is.
 
-Exits 0 only when both runs partition the domain exactly at the compared step and every
+THE CLAIM IS SPLIT, because the record's position in the step decides what it can support.
+A norm taken at solver ENTRY compares the state going IN: that is a decomposition and
+ownership check, and it is the one currently reachable. A norm taken after the step
+PUBLISHES compares what SDIRK3 produced, which is the np-equivalence claim -- and at a dt
+where no step completes there are no such records, so --phase output fails closed saying so
+rather than borrowing the entry data to make the stronger statement.
+
+Exits 0 only when both runs partition the domain exactly at every compared step and every
 block's combined norm agrees within tolerance.
 """
 import argparse
@@ -36,6 +43,10 @@ RECORD = "SDIRK3_GLOBAL_NORM"
 INVALID = "SDIRK3_GLOBAL_NORM_INVALID"
 
 BOX_KEYS = ("i0", "i1", "j0", "j1", "k0", "k1")
+# What the record must carry before it can be compared at all. `phase` is the one that
+# decides WHICH claim the comparison supports.
+REQUIRED = BOX_KEYS + ("step_seq", "stagger", "sumsq", "count", "phase",
+                       "state_published", "outcome", "global_timestep", "rk_step")
 DOMAIN_KEYS = ("ids", "ide", "jds", "jde", "nz", "nz_w")
 
 
@@ -48,8 +59,8 @@ def _fields(line, marker):
     return out
 
 
-def parse(paths):
-    """Return ({step_seq: {block: [record, ...]}}, domain-extents)."""
+def parse(paths, phase):
+    """Return ({step_seq: {block: [record, ...]}}, domain-extents) for one phase."""
     steps, domain, problems = defaultdict(lambda: defaultdict(list)), None, []
     for path in paths:
         with open(path, encoding="utf-8", errors="replace") as fh:
@@ -65,16 +76,37 @@ def parse(paths):
                 block = f.get("block")
                 if block is None:
                     continue
-                missing = [k for k in BOX_KEYS + ("step_seq", "stagger", "sumsq", "count")
-                           if k not in f]
+                missing = [k for k in REQUIRED if k not in f]
                 if missing:
                     problems.append(
                         f"{path}: {RECORD} block={block} is missing {missing} -- this log "
-                        f"predates the owned-box record and cannot be checked for overlap")
+                        f"predates the phase-tagged owned-box record and cannot support "
+                        f"either claim")
+                    continue
+                if f["phase"] != phase:
                     continue
                 rec = {k: int(f[k]) for k in BOX_KEYS}
-                rec.update(block=block, stagger=f["stagger"],
-                           sumsq=float(f["sumsq"]), count=int(f["count"]))
+                sumsq = float(f["sumsq"])
+                # A blow-up must not read as agreement. `max(0.0, nan)` is 0.0 in Python --
+                # every comparison against NaN is false, so max returns its first argument --
+                # and two Inf norms give rel = nan, leaving worst at 0.0 and printing
+                # "np-equivalent". Two runs that both exploded looked identical.
+                if not math.isfinite(sumsq):
+                    problems.append(f"{path}: non-finite sumsq for block {block} "
+                                    f"({f['sumsq']}) -- a blow-up is not an agreement")
+                    continue
+                if sumsq < 0.0:
+                    problems.append(f"{path}: negative sumsq for block {block} ({sumsq})")
+                    continue
+                rec.update(block=block, stagger=f["stagger"], sumsq=sumsq,
+                           count=int(f["count"]), phase=f["phase"],
+                           outcome=f["outcome"], published=f["state_published"])
+                # An output record from a step that did not publish is not an output.
+                if phase == "output" and f["state_published"] != "1":
+                    problems.append(f"{path}: {RECORD} block={block} is tagged phase=output "
+                                    f"with state_published={f['state_published']} "
+                                    f"outcome={f['outcome']}")
+                    continue
                 steps[int(f["step_seq"])][block].append(rec)
                 extents = {k: int(f[k]) for k in DOMAIN_KEYS}
                 if domain is None:
@@ -155,64 +187,102 @@ def main():
     ap.add_argument("--rtol", type=float, default=1e-6,
                     help="relative tolerance on the combined norm (default 1e-6)")
     ap.add_argument("--step", type=int, default=None,
-                    help="step_seq to compare (default: the first present in both runs)")
+                    help="step_seq to compare (default: every step, and the step SETS must "
+                         "match)")
+    # WHICH claim the run is being asked to support. These are different statements and the
+    # script used to make the stronger one from the weaker one's data.
+    #
+    #   input  -- the ranks partition the domain and see the same state ENTERING the solve.
+    #             Real, and currently the only one reachable: the solve does not complete.
+    #   output -- SDIRK3 produced the same answer. Requires a published state, so at a dt
+    #             where no step completes there are no records and this fails closed.
+    ap.add_argument("--phase", choices=("input", "output"), default="output",
+                    help="input: the state ENTERING the solve (a decomposition claim). "
+                         "output: the published state (the SDIRK3-equivalence claim). "
+                         "Default output.")
     args = ap.parse_args()
 
-    a_steps, dom_a, prob_a = parse(args.a)
-    b_steps, dom_b, prob_b = parse(args.b)
+    a_steps, dom_a, prob_a = parse(args.a, args.phase)
+    b_steps, dom_b, prob_b = parse(args.b, args.phase)
+    verdict_name = ("input-partition" if args.phase == "input" else "SDIRK3-output")
     problems = prob_a + prob_b
 
     for label, steps, paths in (("A", a_steps, args.a), ("B", b_steps, args.b)):
         if not steps:
-            problems.append(f"run {label}: no {RECORD} record in {len(paths)} log(s)")
+            problems.append(
+                f"run {label}: no {RECORD} record with phase={args.phase} in "
+                f"{len(paths)} log(s)" +
+                ("  (a phase=output record is emitted only after a step PUBLISHES its state;"
+                 " if no step completes there is nothing to compare, which is the correct"
+                 " answer rather than a missing feature)" if args.phase == "output" else ""))
     if problems:
         print("RECORDS INVALID:", file=sys.stderr)
         print("\n".join("  " + p for p in problems), file=sys.stderr)
         return 2
 
-    common = sorted(set(a_steps) & set(b_steps))
-    if not common:
-        print(f"no step_seq is present in both runs (A has {sorted(a_steps)}, "
-              f"B has {sorted(b_steps)})", file=sys.stderr)
-        return 2
-    step = args.step if args.step is not None else common[0]
-    if step not in common:
-        print(f"step_seq {step} is not present in both runs (common: {common})",
-              file=sys.stderr)
-        return 2
+    # EVERY step by default. Comparing only the first common one lets step 1 agree while
+    # step 2 diverges and still prints "np-equivalent" -- and a trajectory that agrees for
+    # one step is not an equivalent trajectory. --step narrows it deliberately.
+    if args.step is not None:
+        if args.step not in a_steps or args.step not in b_steps:
+            print(f"step_seq {args.step} is not present in both runs "
+                  f"(A has {sorted(a_steps)}, B has {sorted(b_steps)})", file=sys.stderr)
+            return 2
+        steps_to_compare = [args.step]
+    else:
+        if set(a_steps) != set(b_steps):
+            print(f"the runs recorded DIFFERENT steps, so there is no trajectory to compare: "
+                  f"A has {sorted(a_steps)}, B has {sorted(b_steps)}", file=sys.stderr)
+            return 2
+        steps_to_compare = sorted(a_steps)
     if dom_a != dom_b:
         print(f"runs used different domains: {dom_a} vs {dom_b}", file=sys.stderr)
         return 2
 
-    a, b = a_steps[step], b_steps[step]
-    for label, blocks, dom in (("A", a, dom_a), ("B", b, dom_b)):
-        for name in ("u", "v", "w", "ph", "t", "mu"):
-            if name not in blocks:
-                problems.append(f"run {label}: block {name} missing at step_seq {step}")
-            else:
-                problems += check_partition(label, name, blocks[name], dom)
+    for step in steps_to_compare:
+        for label, blocks, dom in (("A", a_steps[step], dom_a), ("B", b_steps[step], dom_b)):
+            for name in ("u", "v", "w", "ph", "t", "mu"):
+                if name not in blocks:
+                    problems.append(f"run {label}: block {name} missing at step_seq {step}")
+                else:
+                    problems += check_partition(label, name, blocks[name], dom)
     if problems:
         print("PARTITION INVALID:", file=sys.stderr)
         print("\n".join("  " + p for p in problems), file=sys.stderr)
         return 2
 
-    worst, rows = 0.0, []
-    for name in sorted(set(a) | set(b)):
-        na = math.sqrt(sum(r["sumsq"] for r in a[name]))
-        nb = math.sqrt(sum(r["sumsq"] for r in b[name]))
-        rel = abs(na - nb) / nb if nb > 0 else (0.0 if na == 0 else float("inf"))
-        worst = max(worst, rel)
-        rows.append(f"  {name:<3} A={na:.12g}  B={nb:.12g}  rel={rel:.3e}")
+    worst, worst_where, rows = 0.0, None, []
+    for step in steps_to_compare:
+        a, b = a_steps[step], b_steps[step]
+        for name in sorted(set(a) | set(b)):
+            # fsum, not sum: a different rank count changes the accumulation ORDER, and a
+            # difference produced by summation order is not a difference in the physics.
+            na = math.sqrt(math.fsum(r["sumsq"] for r in a[name]))
+            nb = math.sqrt(math.fsum(r["sumsq"] for r in b[name]))
+            if not (math.isfinite(na) and math.isfinite(nb)):
+                print(f"step {step} block {name}: combined norm is not finite "
+                      f"(A={na}, B={nb})", file=sys.stderr)
+                return 2
+            rel = abs(na - nb) / nb if nb > 0 else (0.0 if na == 0 else float("inf"))
+            # Explicit, because `max(worst, nan)` silently keeps `worst`.
+            if not math.isfinite(rel):
+                print(f"step {step} block {name}: relative difference is not finite",
+                      file=sys.stderr)
+                return 2
+            if rel > worst:
+                worst, worst_where = rel, f"step {step} block {name}"
+            rows.append(f"  step {step:<4} {name:<3} A={na:.12g}  B={nb:.12g}  rel={rel:.3e}")
 
-    print(f"step_seq {step} (of {common}) -- domain "
+    print(f"steps compared: {steps_to_compare} -- domain "
           f"ids..ide={dom_a['ids']}..{dom_a['ide']} jds..jde={dom_a['jds']}..{dom_a['jde']}; "
-          f"owned boxes cover it exactly, with no overlap and no gap")
+          f"owned boxes cover it exactly at every step, with no overlap and no gap")
     print("\n".join(rows))
     if worst <= args.rtol:
-        print(f"np-equivalent: worst relative difference {worst:.3e} <= {args.rtol:g}")
+        print(f"{verdict_name} equivalent over {len(steps_to_compare)} step(s): "
+              f"worst relative difference {worst:.3e} <= {args.rtol:g}")
         return 0
-    print(f"NOT np-equivalent: worst relative difference {worst:.3e} > {args.rtol:g}",
-          file=sys.stderr)
+    print(f"NOT {verdict_name} equivalent: worst relative difference {worst:.3e} > "
+          f"{args.rtol:g} at {worst_where}", file=sys.stderr)
     return 2
 
 

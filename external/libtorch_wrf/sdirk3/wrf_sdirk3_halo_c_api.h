@@ -48,6 +48,20 @@ void sdirk3_halo_finalize(void) SDIRK3_C_NOEXCEPT;
 int sdirk3_require_halo_fresh_checked(
     int64_t global_timestep, int logical_read_id) SDIRK3_C_NOEXCEPT;
 
+/* The host's forecast timestep, as last supplied to the freshness consumption point.
+ *
+ * DIAGNOSTIC IDENTITY ONLY. The records this campaign compares across runs were keyed on
+ * counters that are properties of the PROCESS, not of the forecast -- a per-call sequence
+ * number that a recursive probe arm also consumes, and a process-wide solver ordinal that
+ * two separately-launched arms assign in whatever order they happen to construct solvers.
+ * Neither survives a change of decomposition, which is exactly the comparison they were
+ * being used for.
+ *
+ * grid%itimestep already crosses the ABI here, at rk_step == 1 and before the solve, so
+ * the physical identity was available and simply not retained. Returns -1 when the host
+ * has not supplied one, so "unknown" is never printed as timestep 0. */
+int64_t sdirk3_host_global_timestep(void) SDIRK3_C_NOEXCEPT;
+
 #ifdef __cplusplus
 }
 #endif

@@ -27,10 +27,19 @@ import sys
 
 RECORD = "SDIRK3_POLICY_MANIFEST"
 
+# Present on the record, never part of the key. Process-local values that legitimately differ
+# between two runs of the same forecast.
+NON_KEY_DEBUG_FIELDS = ("solver_id", "step_seq")
+
 
 # What makes one manifest record distinct from another. Every one of these can vary within a
 # single run, and two records that agree on all of them are genuinely the same measurement.
-KEY_FIELDS = ("step_seq", "solver_id", "rank", "stage", "newton_iter")
+# PHYSICAL identity, in the order a reader should think about it. `solver_id` is deliberately
+# NOT here: it is a process-wide ordinal assigned in construction order, so two separately
+# launched arms can give the same id to different tiles and different ids to the same one --
+# and comparing two separately launched arms is the entire job. It stays on the record as a
+# debug field, and is not an authority for keying across runs.
+KEY_FIELDS = ("global_timestep", "retry_generation", "rank", "stage", "newton_iter")
 
 
 def parse(path):
@@ -54,9 +63,14 @@ def parse(path):
             if missing:
                 raise ValueError(
                     f"{path}: a {RECORD} record is missing {missing}. A log without the full "
-                    f"identity predates R13 and cannot be keyed -- comparing it would key on "
-                    f"the stage alone, which is the defect this check exists to prevent.")
+                    f"identity predates R13.1 and cannot be keyed on physical identity -- "
+                    f"comparing it would key on a process-local ordinal, which does not "
+                    f"survive the change of decomposition the comparison exists to make.")
             key = tuple(fields.pop(k) for k in KEY_FIELDS)
+            # Dropped from the comparison, not just from the key: two runs differing only in
+            # a process ordinal are not differing.
+            for debug_field in NON_KEY_DEBUG_FIELDS:
+                fields.pop(debug_field, None)
             if key in records:
                 raise ValueError(
                     f"{path}: duplicate manifest identity {dict(zip(KEY_FIELDS, key))}. Two "

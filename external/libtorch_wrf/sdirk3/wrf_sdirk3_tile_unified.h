@@ -859,6 +859,16 @@ public:
     // Get the number of active scalar species
     int getNumScalarSpecies() const { return n_scalar_; }
 
+    // R13.1: the global-norm record, emitted at solver ENTRY and again after a successful
+    // publish. Two phases because where the norm is taken decides which claim it supports:
+    // entry compares the state going in (decomposition), publish compares what SDIRK3
+    // produced (np-equivalence). Public so the acceptance harness can drive it directly.
+    void emitGlobalNormRecord(const char* phase, bool published, int outcome_code,
+                              int rk_step,
+                              const float* u, const float* v, const float* w,
+                              const float* ph, const float* t, const float* mu,
+                              int nx, int ny, int nz, int nx_u, int ny_v, int nz_w);
+
     // Step outcome snapshot for ABI-side non-freeze contract.
     int getLastStepOutcomeCode() const { return last_step_outcome_code_; }
     bool getLastStepFinalUpdateAborted() const { return last_step_final_update_aborted_; }

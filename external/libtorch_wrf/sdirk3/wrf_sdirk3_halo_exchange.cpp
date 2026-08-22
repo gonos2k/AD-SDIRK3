@@ -195,6 +195,9 @@ static std::atomic<bool> g_halo_lifecycle_faulted{false};
 // HaloFreshnessGuard. Atomic: the AD backward compares it against the value
 // saved at forward time.
 static std::atomic<uint64_t> g_halo_lifecycle_epoch{0};
+// The host's forecast timestep, retained for diagnostic identity. See the declaration in
+// wrf_sdirk3_halo_c_api.h for why a process-local counter was not good enough.
+static std::atomic<int64_t> g_host_global_timestep{-1};
 
 // v11: Promoted from function-static to file-scope so set_wrf_communicator()
 // can reset it when the comm changes, allowing re-init to print updated status.
@@ -1618,6 +1621,9 @@ int sdirk3_require_halo_fresh_checked(int64_t global_timestep,
     mpi_safety::HaloFreshnessGuard::requireFreshHaloEpoch(
         static_cast<uint64_t>(global_timestep), logical_read_id,
         "sdirk3_require_halo_fresh_checked");
+    // Retained only AFTER the checks above accept it, so a rejected timestep never becomes
+    // a record's identity.
+    g_host_global_timestep.store(global_timestep, std::memory_order_release);
     return 1;
   } catch (const std::exception& e) {
     std::cerr << e.what() << std::endl;
@@ -1627,6 +1633,10 @@ int sdirk3_require_halo_fresh_checked(int64_t global_timestep,
                  "exception" << std::endl;
     return 0;
   }
+}
+
+int64_t sdirk3_host_global_timestep(void) noexcept {
+  return g_host_global_timestep.load(std::memory_order_acquire);
 }
 
 } // extern "C"

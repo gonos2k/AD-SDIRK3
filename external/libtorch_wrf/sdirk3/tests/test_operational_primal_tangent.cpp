@@ -20,6 +20,9 @@
 // it is measured here rather than asserted.
 
 #include "../wrf_sdirk3_jvp_fwad_or_fd.h"
+
+#include <limits>
+#include <stdexcept>
 #include "../wrf_sdirk3_probe_validity.h"
 
 #include <torch/torch.h>
@@ -141,7 +144,53 @@ int main() {
               "which is why it is not named a fraction, and why cos_EI belongs beside it");
     }
 
-    constexpr int expected_checks = 10;
+    // ---- R13.1: the FD step size must follow the tensor's PRECISION ----
+    //
+    // The step sqrt(eps_m)*(1+||u||)/||v|| balances truncation against round-off, and both
+    // depend on the working precision -- so a float32 constant is not a conservative default
+    // for other dtypes, it is the wrong balance point. R13 hoisted this computation into one
+    // guarded helper and kept the float32 constant.
+    {
+        using wrf::sdirk3::jvp_detail::fd_epsilon_for;
+        using wrf::sdirk3::jvp_detail::machine_epsilon_of;
+
+        auto u32 = torch::ones({8}, torch::kFloat32);
+        auto v32 = torch::ones({8}, torch::kFloat32);
+        auto u64 = torch::ones({8}, torch::kFloat64);
+        auto v64 = torch::ones({8}, torch::kFloat64);
+
+        check(machine_epsilon_of(u64) < machine_epsilon_of(u32),
+              "float64's machine epsilon is smaller than float32's, so its FD step is too");
+        check(fd_epsilon_for(u64, v64, 0.0f) < fd_epsilon_for(u32, v32, 0.0f),
+              "a float64 tangent gets a SMALLER step than a float32 one -- under the float32 "
+              "constant the perturbation was ~2e4x too large and truncation dominated, which "
+              "reads as a real tangent discrepancy");
+
+        auto u16 = torch::ones({8}, torch::kFloat16);
+        auto v16 = torch::ones({8}, torch::kFloat16);
+        check(machine_epsilon_of(u16) > machine_epsilon_of(u32),
+              "and FP16 gets a LARGER one -- a step below the representable resolution gives "
+              "u + eps*v == u exactly, so the quotient is zero and a severed tangent looks "
+              "like a converged one");
+
+        bool threw = false;
+        try { (void)machine_epsilon_of(torch::ones({4}, torch::kInt32)); }
+        catch (const std::invalid_argument&) { threw = true; }
+        check(threw, "an integer tensor has no finite-difference step and says so, rather "
+                     "than silently borrowing float32's");
+
+        bool threw_nonfinite = false;
+        try {
+            auto bad = torch::full({8}, std::numeric_limits<float>::infinity(),
+                                   torch::kFloat32);
+            (void)fd_epsilon_for(bad, v32, 0.0f);
+        } catch (const std::invalid_argument&) { threw_nonfinite = true; }
+        check(threw_nonfinite,
+              "a non-finite state norm has no step size -- left alone it makes every "
+              "downstream comparison false rather than failing");
+    }
+
+    constexpr int expected_checks = 15;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

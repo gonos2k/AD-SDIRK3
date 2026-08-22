@@ -20,6 +20,7 @@
 #include "../wrf_sdirk3_probe_validity.h"
 
 #include <iostream>
+#include <limits>
 #include <string>
 
 namespace {
@@ -103,7 +104,47 @@ int main() {
               "diagnostic_frozen_reference",
           "DiagnosticFrozenReference names the frozen-U_ref probe mapping");
 
-    constexpr int expected_checks = 9;
+    // ---- R13.1: the verdict and its CONSUMER, tested as a pair ----
+    //
+    // R13 computed tangent_verdict and then selected its conclusion sentence with
+    // `e_drop > 0.0`. Under an FD fallback that is not a near miss but an inversion: FD
+    // cannot see a detach, so it returns the primal tangent, e_drop comes out ~0, and the
+    // record asserted the STRONGEST claim available from the one measurement guaranteed to
+    // be incapable of supporting it. Testing the rule alone could never have caught that --
+    // tangent_verdict was correct. Only the pair fails.
+    {
+        using wrf::sdirk3::tangent_relation;
+        using wrf::sdirk3::TangentRelation;
+
+        TangentInputs fd;
+        fd.fd_fallback = true;
+        const auto v_fd = tangent_verdict(fd);
+        check(tangent_relation(v_fd, 0.0) == TangentRelation::Unavailable,
+              "an FD fallback with e_drop=0 reports UNAVAILABLE, not 'matches primal' -- the "
+              "exact record R13 could emit, and the most confident possible reading of the "
+              "least capable possible measurement");
+
+        const auto v_ok = tangent_verdict(TangentInputs{});
+        check(tangent_relation(v_ok, -1.0) == TangentRelation::Unavailable,
+              "e_drop = -1 (never measured) is UNAVAILABLE -- it is not > 0, and R13's test "
+              "sent it to 'IS the primal derivative'");
+        check(tangent_relation(v_ok, std::numeric_limits<double>::quiet_NaN()) ==
+                  TangentRelation::Unavailable,
+              "NaN is UNAVAILABLE: every comparison against it is false, including the one "
+              "that would have rejected it");
+        check(tangent_relation(v_ok, 0.0) == TangentRelation::MatchesPrimal,
+              "a VALID tangent with e_drop=0 does report matching the primal derivative");
+        check(tangent_relation(v_ok, 1.0e-12) == TangentRelation::MatchesPrimal,
+              "and a tolerance, not exact zero -- these are float32 tangents");
+        check(tangent_relation(v_ok, 0.28) == TangentRelation::DiffersFromPrimal,
+              "a valid, measured, nonzero e_drop reports differing from the primal derivative "
+              "(0.28 is the top of the range R12 measured for the detached slow channel)");
+        check(std::string(wrf::sdirk3::tangent_relation_name(TangentRelation::Unavailable)) ==
+                  "unavailable",
+              "and the record names the relation rather than implying it in prose");
+    }
+
+    constexpr int expected_checks = 16;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

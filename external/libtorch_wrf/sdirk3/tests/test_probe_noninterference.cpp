@@ -130,6 +130,51 @@ int main() {
               "overwritten by the very solve it exists to undo");
     }
 
+    // R13.1: RESTORE must clone too. R13 tested that capture clones and stopped there --
+    // half a round trip, and the half that was broken. Assigning the vector shares storage
+    // with the snapshot, so the next solve writing a warm-start slot in place edits the
+    // snapshot the following arm restores from.
+    {
+        auto s = base;
+        s.warmstart_stage.assign(1, torch::ones({8}, torch::kFloat32));
+        s.warmstart_relerr.assign(1, 0.5f);
+        solver.restore_carried_state(s);
+        const auto live = solver.capture_carried_state();
+        // Whatever the solver now writes in place must not reach the snapshot `s`.
+        live.warmstart_stage[0].mul_(7.0);
+        const bool snapshot_intact =
+            s.warmstart_stage[0].defined() &&
+            s.warmstart_stage[0].sum().item<float>() == 8.0f;
+        check(snapshot_intact,
+              "RESTORE clones as well: an in-place write by the solve that follows cannot "
+              "reach back into the snapshot the next arm restores from");
+    }
+
+    // R13.1: the digest has to see DIRECTION. Mixing only norm and numel made v and -v the
+    // same state -- and v and Pv for any norm-preserving P. Either changes what the next
+    // solve does, and neither was visible.
+    {
+        auto a = base;
+        a.warmstart_stage.assign(1, torch::tensor({1.0f, 2.0f, 3.0f, 4.0f}));
+        a.warmstart_relerr.assign(1, -1.0f);
+        const auto da = digest_after(solver, a);
+
+        auto negated = a;
+        negated.warmstart_stage.assign(1, torch::tensor({-1.0f, -2.0f, -3.0f, -4.0f}));
+        check(digest_after(solver, negated) != da,
+              "v and -v are DIFFERENT states. This case FAILED when written: plain FNV-1a "
+              "cannot see a change confined to bit 63 (multiplication mod 2^64 never carries "
+              "out of it), and a negation flips the sign of both the sum and the first "
+              "moment -- two such changes cancel exactly. The avalanche shift is what makes "
+              "the digest able to notice at all");
+
+        auto permuted = a;
+        permuted.warmstart_stage.assign(1, torch::tensor({4.0f, 3.0f, 2.0f, 1.0f}));
+        check(digest_after(solver, permuted) != da,
+              "and a PERMUTATION is a different state: same norm, same sum, different "
+              "first moment");
+    }
+
     // Round trip: restoring the captured state returns the digest to where it was.
     {
         solver.restore_carried_state(base);
@@ -139,7 +184,7 @@ int main() {
               "assumed");
     }
 
-    constexpr int expected_checks = 12;
+    constexpr int expected_checks = 15;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

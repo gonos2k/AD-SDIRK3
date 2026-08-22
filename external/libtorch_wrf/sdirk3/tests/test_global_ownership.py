@@ -42,10 +42,13 @@ def box(stagger, i0, i1, j0, j1):
     return i0, i1, j0, j1, k0, k1
 
 
-def record(block, stagger, i0, i1, j0, j1, sumsq, step_seq=1):
+def record(block, stagger, i0, i1, j0, j1, sumsq, step_seq=1,
+           phase="output", published=1, outcome=0, gts=7, rk=1):
     i0, i1, j0, j1, k0, k1 = box(stagger, i0, i1, j0, j1)
     count = (i1 - i0 + 1) * (j1 - j0 + 1) * (k1 - k0 + 1)
-    return (f"SDIRK3_GLOBAL_NORM block={block} stagger={stagger} step_seq={step_seq} "
+    return (f"SDIRK3_GLOBAL_NORM block={block} stagger={stagger} phase={phase} "
+            f"state_published={published} outcome={outcome} global_timestep={gts} "
+            f"rk_step={rk} step_seq={step_seq} "
             f"i0={i0} i1={i1} j0={j0} j1={j1} k0={k0} k1={k1} "
             f"sumsq={sumsq!r} count={count} "
             f"its={i0} ite={i1} jts={j0} jte={j1} "
@@ -64,8 +67,8 @@ def j_hi(stagger):
     return JDE if stagger == "y" else JDE - 1
 
 
-def single_rank(scale=1.0, step_seq=1):
-    return [record(b, s, IDS, i_hi(s), JDS, j_hi(s), 100.0 * scale, step_seq)
+def single_rank(scale=1.0, step_seq=1, **kw):
+    return [record(b, s, IDS, i_hi(s), JDS, j_hi(s), 100.0 * scale, step_seq, **kw)
             for b, s in BLOCKS]
 
 
@@ -111,17 +114,67 @@ check(rc == 2 and "owned by no rank" in out, "a gap with no overlap FAILS")
 
 # Two timesteps in one log. Previously the partials were summed across them and the count
 # came out at 2x the domain -- fail-closed, but reported as a decomposition error.
+rc, out = run(single_rank(step_seq=1) + single_rank(step_seq=2),
+              single_rank(step_seq=1) + single_rank(step_seq=2))
+check(rc == 0 and "steps compared: [1, 2]" in out,
+      "a log holding two timesteps compares BOTH of them, not their sum -- R13 compared "
+      "only the first common step, so step 1 could agree while step 2 diverged")
+
+# The defect that made "first common step" unsafe.
+rc, out = run(single_rank(step_seq=1) + single_rank(step_seq=2),
+              single_rank(step_seq=1) + single_rank(scale=4.0, step_seq=2))
+check(rc == 2 and "NOT SDIRK3-output equivalent" in out and "step 2" in out,
+      "a run that agrees at step 1 and diverges at step 2 FAILS, and the record names the "
+      "step -- under the first-common-step default this printed np-equivalent")
+
 rc, out = run(single_rank(step_seq=1) + single_rank(step_seq=2), single_rank(step_seq=1))
-check(rc == 0 and "step_seq 1 (of [1])" in out,
-      "a log holding two timesteps compares ONE of them, not their sum")
+check(rc == 2 and "recorded DIFFERENT steps" in out,
+      "runs whose step SETS differ have no trajectory to compare")
 
 rc, out = run(single_rank(step_seq=1) + single_rank(scale=4.0, step_seq=2),
               single_rank(step_seq=2), ["--step", "2"])
-check(rc == 2 and "NOT np-equivalent" in out,
-      "--step selects the timestep, and a real difference at that step still fails")
+check(rc == 2 and "NOT SDIRK3-output equivalent" in out,
+      "--step narrows to one timestep deliberately, and a real difference there still fails")
 
 rc, out = run(single_rank(), single_rank(scale=1.0 + 1e-3))
-check(rc == 2 and "NOT np-equivalent" in out, "a norm drift above tolerance FAILS")
+check(rc == 2 and "NOT SDIRK3-output equivalent" in out,
+      "a norm drift above tolerance FAILS")
+
+# ---- R13.1 ----
+
+# The false PASS. max(0.0, nan) is 0.0 in Python, so two exploded runs read as agreeing.
+inf_a = [r.replace("sumsq=100.0", "sumsq=inf") for r in single_rank()]
+rc, out = run(inf_a, inf_a)
+check(rc == 2 and "non-finite sumsq" in out,
+      "two runs that both blew up FAIL -- rel comes out NaN, max(0.0, nan) is 0.0, and this "
+      "printed 'np-equivalent'")
+
+nan_a = [r.replace("sumsq=100.0", "sumsq=nan") for r in single_rank()]
+rc, out = run(nan_a, single_rank())
+check(rc == 2 and "non-finite sumsq" in out, "a NaN partial FAILS")
+
+neg = [r.replace("sumsq=100.0", "sumsq=-1.0") for r in single_rank()]
+rc, out = run(neg, single_rank())
+check(rc == 2 and "negative sumsq" in out,
+      "a negative sum of squares FAILS -- it is not a norm")
+
+# The claim split. An entry-phase log cannot support the output claim.
+rc, out = run(single_rank(phase="input", published=0),
+              single_rank(phase="input", published=0))
+check(rc == 2 and "no SDIRK3_GLOBAL_NORM record with phase=output" in out
+      and "correct answer rather than a missing feature" in out,
+      "input-phase records cannot support the SDIRK3-output claim: the comparator says there "
+      "is nothing to compare instead of making the stronger statement from the weaker data")
+
+rc, out = run(single_rank(phase="input", published=0),
+              single_rank(phase="input", published=0), ["--phase", "input"])
+check(rc == 0 and "input-partition equivalent" in out,
+      "and the decomposition claim IS supported by them -- the weaker statement is still "
+      "worth making, under its own name")
+
+rc, out = run(single_rank(published=0), single_rank())
+check(rc == 2 and "state_published=0" in out,
+      "a record tagged phase=output that did not publish is refused")
 
 missing = [r for r in single_rank() if not r.startswith("SDIRK3_GLOBAL_NORM block=mu")]
 rc, out = run(single_rank(), missing)
@@ -141,10 +194,11 @@ legacy = ["SDIRK3_GLOBAL_NORM block=t sumsq=100.0 count=204800 "
           f"its=1 ite=41 jts=1 jte=81 ids={IDS} ide={IDE} jds={JDS} jde={JDE} "
           f"nx=41 ny=81 nz={NZ} nx_u=42 ny_v=82 nz_w={NZW}"]
 rc, out = run(single_rank(), legacy)
-check(rc == 2 and "predates the owned-box record" in out,
-      "a log without the owned box is REFUSED, not read as a passing partition")
+check(rc == 2 and "predates the phase-tagged owned-box record" in out,
+      "a log without the owned box and phase tag is REFUSED, not read as a passing "
+      "partition")
 
-EXPECTED = 11
+EXPECTED = 19
 ok = checks == EXPECTED
 print(("  ok   " if ok else "  FAIL ") + f"case-count ratchet ({checks}/{EXPECTED})")
 if not ok:

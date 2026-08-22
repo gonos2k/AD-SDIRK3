@@ -14,6 +14,7 @@
 // inline at the emit site cannot be tested, and every one of the above was spelled out inline.
 // A rule that a test can reject is the only kind that stays true.
 
+#include <limits>
 #include <vector>
 
 #include "wrf_sdirk3_tile_unified.h"
@@ -101,6 +102,40 @@ inline ProbeVerdict tangent_verdict(const TangentInputs& in) {
     return {true, "ok"};
 }
 
+// The RELATION a tangent record may claim, decided by the verdict and the number TOGETHER.
+//
+// R13's three defects were one defect: a rule was computed and its consumer read something
+// else. Here that had a specific and inverted consequence. The sentence was selected by
+// `e_drop > 0`, and under an FD fallback FD cannot see a detach -- it returns the primal
+// tangent, so e_drop ~ 0 and the record asserted "the operational tangent IS the primal
+// derivative" from the one measurement incapable of supporting it. `e_drop = -1` (never
+// measured) landed on the same sentence.
+//
+// So the verdict and the number are consumed in one function, and a test can reject the
+// PAIR. A rule whose consumer is a separate expression is a rule nothing enforces.
+enum class TangentRelation { Unavailable, MatchesPrimal, DiffersFromPrimal };
+
+inline const char* tangent_relation_name(TangentRelation r) {
+    switch (r) {
+        case TangentRelation::MatchesPrimal:     return "matches_primal";
+        case TangentRelation::DiffersFromPrimal: return "differs_from_primal";
+        default:                                 return "unavailable";
+    }
+}
+
+inline TangentRelation tangent_relation(const ProbeVerdict& verdict, double e_drop,
+                                        double tol = 1.0e-8) {
+    if (!verdict.valid) return TangentRelation::Unavailable;
+    // NaN, +/-Inf and the -1 sentinel are all "not measured", and none of them is evidence
+    // of agreement -- which is the reading `e_drop > 0` gave every one of them.
+    if (!(e_drop == e_drop) || e_drop < 0.0 ||
+        e_drop >= std::numeric_limits<double>::infinity()) {
+        return TangentRelation::Unavailable;
+    }
+    return e_drop <= tol ? TangentRelation::MatchesPrimal
+                         : TangentRelation::DiffersFromPrimal;
+}
+
 // ---------------------------------------------------------------------------------------
 // Stage-reference certification
 // ---------------------------------------------------------------------------------------
@@ -122,10 +157,25 @@ inline ProbeVerdict tangent_verdict(const TangentInputs& in) {
 //   - and by a clear margin    -- a reference must be far closer to the truth than the
 //                                 quantity it measures, or their difference is two errors
 struct StageReferenceArms {
-    bool   converged_1 = false, converged_2 = false, converged_3 = false;
-    double residual_1 = -1.0, residual_2 = -1.0, residual_3 = -1.0;
+    // Indexed 0,1,2 = loosest..tightest. An array rather than three named members because
+    // every criterion below is a statement about the SEQUENCE, and three scalars invite a
+    // clause that silently reads only one of them -- which is how R13 came to print arm 1's
+    // gap under the name K_ref while running three arms to obtain arm 3.
+    bool   converged[3] = {false, false, false};
+    // R13.1: isolation belongs IN the predicate. Three arms sharing a live solver's hopeless
+    // streaks, trust radius and warm-start slots can agree numerically because they are three
+    // points on one trajectory. R12 R4 is that exact case: ref_agree=0 was agreement between
+    // a solve and its own warm start.
+    bool   isolated[3] = {false, false, false};
+    bool   fresh_solver_per_arm = false;
+    double residual[3] = {-1.0, -1.0, -1.0};
     // ||Y3 - Y2|| / ||Y3||, and ||Y2 - Y1|| / ||Y2||: how far the sequence still moves.
     double state_gap_32 = -1.0, state_gap_21 = -1.0;
+    // The same for F_E. Stage increments can agree while the explicit RHS they produce does
+    // not, and it is F_E(Y_s) that forces the next stage -- so a reference certified on the
+    // increment alone certifies the wrong quantity. R13's completion table required this and
+    // its predicate had no field for it.
+    double explicit_gap_32 = -1.0, explicit_gap_21 = -1.0;
     // ||Y_shipped - Y3|| / ||Y3||: the quantity the reference is being asked to measure.
     double shipped_gap = -1.0;
 };
@@ -135,30 +185,74 @@ struct StageReferenceVerdict {
     const char* reason = "";
 };
 
-// margin: how much closer to the truth the reference must be than the thing it measures.
-inline StageReferenceVerdict certify_stage_reference(const StageReferenceArms& a,
-                                                     double margin = 10.0) {
-    if (!(a.converged_1 && a.converged_2 && a.converged_3)) {
-        return {false, "arm_not_converged"};
+struct StageReferenceTolerances {
+    // A gap this small is converged outright, whatever the ratio does. Without an absolute
+    // arm, 0.500 -> 0.499 -> 0.498 satisfies every contraction test ever written.
+    double residual_abs = 1.0e-6;
+    double state_abs    = 1.0e-6;
+    double explicit_abs = 1.0e-6;
+    // ...or it must be CONTRACTING at this rate. Either arm suffices; both being required
+    // would reject a sequence that simply arrived.
+    double contraction  = 0.5;
+    // How much closer to the truth the reference must be than the thing it measures.
+    double margin       = 10.0;
+};
+
+// A finite, non-negative number. Rejects NaN and +/-Inf, and admits an exact zero -- which
+// R13's `residual > 0` did not, so a perfectly converged arm reported "residual_unavailable".
+inline bool is_measured(double v) {
+    return v == v && v > -std::numeric_limits<double>::infinity() &&
+           v < std::numeric_limits<double>::infinity() && v >= 0.0;
+}
+
+// Converged, or contracting. Returns false if either value is not a measurement.
+inline bool settled(double now, double before, double abs_tol, double contraction) {
+    if (!is_measured(now) || !is_measured(before)) return false;
+    if (now <= abs_tol) return true;                 // arrived
+    if (before <= 0.0) return false;                 // cannot contract from zero to nonzero
+    return now <= contraction * before;              // still shrinking, and fast enough
+}
+
+inline StageReferenceVerdict certify_stage_reference(
+        const StageReferenceArms& a,
+        const StageReferenceTolerances& tol = StageReferenceTolerances{}) {
+    for (int i = 0; i < 3; ++i) {
+        if (!a.converged[i]) return {false, "arm_not_converged"};
     }
-    if (!(a.residual_1 > 0.0 && a.residual_2 > 0.0 && a.residual_3 > 0.0)) {
-        return {false, "residual_unavailable"};
+    // Independence before numbers. Arms that shared state can agree for reasons that have
+    // nothing to do with either being right.
+    for (int i = 0; i < 3; ++i) {
+        if (!a.isolated[i]) return {false, "arm_not_isolated"};
     }
-    if (!(a.residual_3 <= a.residual_2 && a.residual_2 <= a.residual_1)) {
+    for (int i = 0; i < 3; ++i) {
+        if (!is_measured(a.residual[i])) return {false, "nonfinite_residual"};
+    }
+    // Non-increasing, AND actually getting somewhere. Monotonicity alone admits
+    // 1.000 -> 0.999 -> 0.998, which is not a converging sequence by any reading.
+    if (!(a.residual[2] <= a.residual[1] && a.residual[1] <= a.residual[0])) {
         return {false, "residual_not_decreasing"};
     }
-    if (!(a.state_gap_32 >= 0.0 && a.state_gap_21 >= 0.0)) {
+    if (!settled(a.residual[2], a.residual[1], tol.residual_abs, tol.contraction)) {
+        return {false, "residual_not_settled"};
+    }
+    if (!is_measured(a.state_gap_32) || !is_measured(a.state_gap_21)) {
         return {false, "state_gap_unavailable"};
     }
-    if (!(a.state_gap_32 < a.state_gap_21)) {
-        return {false, "state_gap_not_shrinking"};
+    if (!settled(a.state_gap_32, a.state_gap_21, tol.state_abs, tol.contraction)) {
+        return {false, "state_gap_not_settled"};
     }
-    if (!(a.shipped_gap >= 0.0)) {
+    if (!is_measured(a.explicit_gap_32) || !is_measured(a.explicit_gap_21)) {
+        return {false, "explicit_gap_unavailable"};
+    }
+    if (!settled(a.explicit_gap_32, a.explicit_gap_21, tol.explicit_abs, tol.contraction)) {
+        return {false, "explicit_gap_not_settled"};
+    }
+    if (!is_measured(a.shipped_gap)) {
         return {false, "shipped_gap_unavailable"};
     }
     // The R12 R4 failure, as a rule: 0.284 against 0.737 is 2.6x, and 2.6x is two unconverged
     // solves being differenced.
-    if (!(a.state_gap_32 * margin <= a.shipped_gap)) {
+    if (!(a.state_gap_32 * tol.margin <= a.shipped_gap)) {
         return {false, "insufficient_margin"};
     }
     return {true, "ok"};
