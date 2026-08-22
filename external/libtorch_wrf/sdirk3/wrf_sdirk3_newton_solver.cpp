@@ -4013,6 +4013,18 @@ public:
     // it also makes ids unique ACROSS solver kinds in one process, which two private counters
     // could not be.
     const uint64_t solver_id_ = wrf::sdirk3::next_solver_id();
+    // R13 E1: the policy manifest's IDENTITY. The record carried `stage` and nothing else,
+    // so an offline comparator had no way to distinguish two occurrences of the same stage --
+    // from two timesteps, a retry, another tile or another rank -- and keyed on the stage
+    // alone, which means it silently compared whichever occurrence happened to come last in
+    // each arm. Those need not be the same occurrence, and a diff over mismatched occurrences
+    // still reports agreement.
+    //
+    // step_seq advances when the stage number does NOT advance, rather than on `stage == 1`:
+    // in ARK324 the first stage is explicit and never reaches this solver, so keying on stage 1
+    // would leave the counter at zero for the whole run.
+    int       manifest_last_stage_ = -1;
+    long long manifest_step_seq_   = 0;
     WRFPreconditioner* preconditioner_ = nullptr;
     int mu_size_ = 0;  // Size of mu component for SDIRK3
     
@@ -7220,7 +7232,17 @@ public:
                     std::cerr << std::setprecision(
                         std::numeric_limits<double>::max_digits10);
                     const int ws_slot = (stage >= 0 && stage < 8) ? stage : -1;
+                    if (manifest_last_stage_ < 0 || stage <= manifest_last_stage_) {
+                        ++manifest_step_seq_;
+                    }
+                    manifest_last_stage_ = stage;
                     std::cerr << "SDIRK3_POLICY_MANIFEST stage=" << stage
+                              // the composite identity: without it two arms can be compared at
+                              // different occurrences of the same stage and still "agree"
+                              << " step_seq=" << manifest_step_seq_
+                              << " newton_iter=" << newton_iter
+                              << " solver_id=" << solver_id_
+                              << " rank=" << wrf::sdirk3::diagnostic_mpi_rank()
                               // resolved policy (what the pure resolver decided)
                               << " restart=" << policy.restart
                               << " max_restarts=" << policy.max_restarts

@@ -11,8 +11,16 @@ This comparator turns that record into a gate.
 
 Exits 0 only when the arms agree on every field except the ones named by --expect.
 Exits 2 on an undeclared difference, a field present in one arm and not the other, a
-stage missing from one arm, or a run with no manifest at all -- each of which voids the
+record missing from one arm, or a run with no manifest at all -- each of which voids the
 sweep rather than merely annotating it.
+
+RECORDS ARE KEYED ON THEIR FULL IDENTITY, NOT ON `stage`. The manifest is emitted once per
+stage per Newton solve, so a run with several timesteps, a retry, several tiles or several
+ranks holds several records for the same stage. Keying on the stage alone meant the last
+one won -- and "the last one" need not be the same occurrence in both arms, so the diff
+could compare arm A's third emission against arm B's first and report agreement. A
+duplicate key is now an error rather than an overwrite: if two records really are
+indistinguishable, the identity is not identifying and no comparison built on it is sound.
 """
 import argparse
 import sys
@@ -20,9 +28,18 @@ import sys
 RECORD = "SDIRK3_POLICY_MANIFEST"
 
 
+# What makes one manifest record distinct from another. Every one of these can vary within a
+# single run, and two records that agree on all of them are genuinely the same measurement.
+KEY_FIELDS = ("step_seq", "solver_id", "rank", "stage", "newton_iter")
+
+
 def parse(path):
-    """Return {stage: {field: value}} for every manifest record in a run log."""
-    stages = {}
+    """Return {identity-tuple: {field: value}} for every manifest record in a run log.
+
+    Raises on a duplicate identity: an overwrite here is how two arms end up compared at
+    different occurrences of the same stage while the diff still reports agreement.
+    """
+    records = {}
     with open(path, encoding="utf-8", errors="replace") as fh:
         for line in fh:
             start = line.find(RECORD)
@@ -33,11 +50,19 @@ def parse(path):
                 name, sep, value = token.partition("=")
                 if sep:
                     fields[name] = value
-            stage = fields.pop("stage", None)
-            if stage is not None:
-                # A later record for a stage supersedes an earlier one (last step wins).
-                stages[stage] = fields
-    return stages
+            missing = [k for k in KEY_FIELDS if k not in fields]
+            if missing:
+                raise ValueError(
+                    f"{path}: a {RECORD} record is missing {missing}. A log without the full "
+                    f"identity predates R13 and cannot be keyed -- comparing it would key on "
+                    f"the stage alone, which is the defect this check exists to prevent.")
+            key = tuple(fields.pop(k) for k in KEY_FIELDS)
+            if key in records:
+                raise ValueError(
+                    f"{path}: duplicate manifest identity {dict(zip(KEY_FIELDS, key))}. Two "
+                    f"records that cannot be told apart mean the identity is not identifying.")
+            records[key] = fields
+    return records
 
 
 def main():
@@ -49,36 +74,44 @@ def main():
                     help="field allowed to differ (the knob under sweep); repeatable")
     args = ap.parse_args()
 
-    base, arm = parse(args.baseline), parse(args.arm)
+    try:
+        base, arm = parse(args.baseline), parse(args.arm)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     expected = set(args.expect)
     problems = []
 
-    for path, stages in ((args.baseline, base), (args.arm, arm)):
-        if not stages:
+    for path, records in ((args.baseline, base), (args.arm, arm)):
+        if not records:
             problems.append(f"{path}: no {RECORD} record "
                             f"(was WRF_SDIRK3_POLICY_MANIFEST=1 set?)")
     if problems:
         print("\n".join(problems), file=sys.stderr)
         return 2
 
-    for stage in sorted(set(base) | set(arm)):
-        if stage not in base or stage not in arm:
-            present = args.baseline if stage in base else args.arm
-            problems.append(f"stage {stage}: manifest only in {present}")
+    def name(key):
+        return " ".join(f"{k}={v}" for k, v in zip(KEY_FIELDS, key))
+
+    for key in sorted(set(base) | set(arm)):
+        if key not in base or key not in arm:
+            present = args.baseline if key in base else args.arm
+            problems.append(f"[{name(key)}]: record only in {present}")
             continue
-        b, a = base[stage], arm[stage]
+        b, a = base[key], arm[key]
         for field in sorted(set(b) | set(a)):
             if field not in b or field not in a:
                 where = args.baseline if field in b else args.arm
-                problems.append(f"stage {stage}: field {field!r} only in {where}")
+                problems.append(f"[{name(key)}]: field {field!r} only in {where}")
             elif b[field] != a[field] and field not in expected:
                 problems.append(
-                    f"stage {stage}: {field} {b[field]} -> {a[field]} (not declared)")
+                    f"[{name(key)}]: {field} {b[field]} -> {a[field]} (not declared)")
 
     # A declared field that never actually moved means the sweep did not do what it said.
+    shared = set(base) & set(arm)
     for field in sorted(expected):
-        if all(field in base.get(s, {}) and field in arm.get(s, {})
-               and base[s][field] == arm[s][field] for s in set(base) & set(arm)):
+        if all(field in base[k] and field in arm[k] and base[k][field] == arm[k][field]
+               for k in shared):
             problems.append(f"--expect {field}: identical in both arms (knob never moved)")
 
     if problems:
@@ -86,8 +119,8 @@ def main():
         print("\n".join("  " + p for p in problems), file=sys.stderr)
         return 2
 
-    stages = ", ".join(sorted(set(base) & set(arm)))
-    print(f"manifest diff OK: stages [{stages}] agree except {sorted(expected) or 'nothing'}")
+    print(f"manifest diff OK: {len(shared)} record(s) agree except "
+          f"{sorted(expected) or 'nothing'}")
     return 0
 
 

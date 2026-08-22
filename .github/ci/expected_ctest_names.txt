@@ -50,3 +50,6 @@ WRMS_Gate_Metric
 WW_CP_Parity_Contract
 Failed_Step_Map_Is_Invalid_Contract
 JVP_Fallback_Invalidates_Verdict_Contract
+Memory_Tile_Offset_Contract
+Global_Ownership_Overlap_Gap_Contract
+Manifest_Duplicate_Fail_Contract

@@ -280,6 +280,24 @@ add_test(NAME Metric_Policy_Contract COMMAND test_metric_policy)
 
 # 9F.D52 (review section 6): FORWARD-mode tangents and the forward/reverse duality, for
 # the EOS and the pressure integrator. The prior tests used reverse mode and called it JVP.
+# R13 D2/E1: the two OFFLINE comparators. R12 reported both verified against synthetic
+# cases and no CI job invoked either -- a gate nothing runs is a script. Registered here so
+# the claim and the check are the same thing.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(NAME Global_Ownership_Overlap_Gap_Contract
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_global_ownership.py)
+add_test(NAME Manifest_Duplicate_Fail_Contract
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_manifest_duplicate.py)
+
+# R13 D1: the memory-domain -> tile-domain offset and WRF's ownership rule. Both were
+# correct and stated only in a comment; a synthetic 1e6*i+1e3*j+k grid makes a wrong offset
+# decode to a different cell instead of shifting a norm by a few percent.
+add_executable(test_memory_tile_offset tests/test_memory_tile_offset.cpp)
+target_link_libraries(test_memory_tile_offset PRIVATE wrf_sdirk3::core)
+add_test(NAME Memory_Tile_Offset_Contract COMMAND test_memory_tile_offset)
+
 # R13 A1/A2: a probe record is entitled to a verdict only when its preconditions hold.
 # Both rules live in wrf_sdirk3_probe_validity.h precisely so a test can reject them; spelled
 # out at the emit site they were the form this campaign kept having to retract.

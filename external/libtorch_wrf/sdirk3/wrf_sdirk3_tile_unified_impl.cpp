@@ -250,6 +250,7 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_probe_validity.h"
+#include "wrf_sdirk3_owned_box.h"
 #include "wrf_sdirk3_jvp_fwad_or_fd.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_tile_boundary_optimizer.h"
@@ -3841,17 +3842,26 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     // cells dropped -- and the norm comparison is void rather than merely approximate. A wrong
     // count cannot be mistaken for a small discrepancy.
     if (rk_step == 1 && global_norms_enabled()) {
-        // WRF's ownership rule, and the staggered extra point is ALREADY inside ite_/jte_:
-        // a mass variable loops its..min(ite, ide-1), a staggered one loops its..ite. Adding
-        // one for the domain edge double-counts, which the count check caught on the first
-        // run -- u came back 42x81 where the domain has 41x80 x-staggered points.
+        // The ownership rule is wrf_sdirk3_owned_box.h and nothing else -- the loop extents,
+        // the printed box and the offline combiner all read the SAME definition. It used to be
+        // open-coded here and re-derived again in Python, and two copies of a convention is
+        // how a disagreement between them hides instead of failing.
+        //
+        // Local index 0 is global its_/jts_ because the adapter slices the tile view at
+        // its-ims / jts-jms before this function sees a pointer
+        // (wrf_sdirk3_tile_unified_impl.cpp, u_tile). Memory_Tile_Offset_Contract pins that.
+        // This probe emits its box in GLOBAL indices so a partial can be checked for exact
+        // disjointness against its neighbours -- counts that merely SUM to the domain are also
+        // what m overlapped and m dropped cells produce.
+        //
+        // The record also carries step_seq: a log with two timesteps in it has two records per
+        // block, and summing across them is not a domain quantity at any time.
         const int ni_own = std::min(ite_, ide_ - 1) - its_ + 1;   // mass points in i
         const int nj_own = std::min(jte_, jde_ - 1) - jts_ + 1;   // mass points in j
         const int ni_u   = ite_ - its_ + 1;                       // x-staggered points
         const int nj_v   = jte_ - jts_ + 1;                       // y-staggered points
-
-        // Sum over the owned box only. Local index 0 is taken to be global its_/jts_; that
-        // assumption is what the np=1 comparison tests, and the count tests the extent.
+        static thread_local long long global_norm_step_seq = 0;
+        ++global_norm_step_seq;
         auto owned_sumsq = [](const float* a, int nj, int nk, int ni,
                               int stride_j, int stride_k, int stride_i) {
             double sq = 0.0;
@@ -3866,18 +3876,38 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             return std::make_pair(sq, n);
         };
 
-        struct Blk { const char* name; const float* p; int nj, nk, ni, sj, sk; };
+        struct Blk {
+            const char* name; const float* p; int nj, nk, ni, sj, sk;
+            wrf::sdirk3::Stagger stagger;
+        };
+        using wrf::sdirk3::Stagger;
         const Blk blks[6] = {
-            {"u",  u,  nj_own, nz,   ni_u,   nz * nx_u, nx_u},
-            {"v",  v,  nj_v,   nz,   ni_own, nz * nx,   nx  },
-            {"w",  w,  nj_own, nz_w, ni_own, nz_w * nx, nx  },
-            {"ph", ph, nj_own, nz_w, ni_own, nz_w * nx, nx  },
-            {"t",  t,  nj_own, nz,   ni_own, nz * nx,   nx  },
-            {"mu", mu, nj_own, 1,    ni_own, nx,        nx  }};
+            {"u",  u,  nj_own, nz,   ni_u,   nz * nx_u, nx_u, Stagger::X     },
+            {"v",  v,  nj_v,   nz,   ni_own, nz * nx,   nx,   Stagger::Y     },
+            {"w",  w,  nj_own, nz_w, ni_own, nz_w * nx, nx,   Stagger::Z     },
+            {"ph", ph, nj_own, nz_w, ni_own, nz_w * nx, nx,   Stagger::Z     },
+            {"t",  t,  nj_own, nz,   ni_own, nz * nx,   nx,   Stagger::Mass  },
+            {"mu", mu, nj_own, 1,    ni_own, nx,        nx,   Stagger::Column}};
 
         for (const auto& b : blks) {
             const auto r = owned_sumsq(b.p, b.nj, b.nk, b.ni, b.sj, b.sk, 1);
+            const auto box = wrf::sdirk3::owned_box(b.stagger, its_, ite_, jts_, jte_,
+                                                    ids_, ide_, jds_, jde_, kds_, nz, nz_w);
+            // The loop and the declared box must agree. If they do not, the number is a sum
+            // over a region the record does not describe, and no combiner downstream can tell.
+            if (box.count() != r.second) {
+                std::cerr << "SDIRK3_GLOBAL_NORM_INVALID block=" << b.name
+                          << " looped=" << r.second << " box_count=" << box.count()
+                          << "  (the loop extent and the declared owned box disagree;"
+                             " this partial is void)" << std::endl;
+                continue;
+            }
             std::cerr << "SDIRK3_GLOBAL_NORM block=" << b.name
+                      << " stagger=" << wrf::sdirk3::stagger_name(b.stagger)
+                      << " step_seq=" << global_norm_step_seq
+                      << " i0=" << box.i0 << " i1=" << box.i1
+                      << " j0=" << box.j0 << " j1=" << box.j1
+                      << " k0=" << box.k0 << " k1=" << box.k1
                       << " sumsq=" << std::setprecision(
                              std::numeric_limits<double>::max_digits10) << r.first
                       << std::setprecision(6)
