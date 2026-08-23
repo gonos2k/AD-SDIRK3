@@ -408,6 +408,16 @@ public:
         float worst_krylov_rel_error_vs_r0 = -1.0f;
         int   worst_krylov_iter = -1;
         int   krylov_solves_measured_vs_r0 = 0;
+        // Solves excluded from the max because they did no work (converged on entry) or
+        // finished (reached tolerance). Reported so "the max is over 0 solves" is legible.
+        int   krylov_solves_trivial = 0;
+        // Solves whose r0 was never measured, and (of those) how many made the opt-in r0 rule
+        // fall back to the ||b|| rule. Without these the record claims a rule it did not apply.
+        int   krylov_r0_unmeasured_solves = 0;
+        int   krylov_rule_fellback_to_b = 0;
+        // The r0 no-progress boundary actually in force, overridable per run. A judgment, not
+        // a measurement -- and it decides between the campaign's two competing explanations.
+        double krylov_no_progress_threshold = -1.0;
         // Whether the total-failure predicate was reached at all this solve, so the emitted
         // rule label is a measurement rather than this struct's default.
         bool  krylov_rule_observed = false;

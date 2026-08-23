@@ -1072,3 +1072,97 @@ lift to the FGMRES site. Neither is done; the number is not claimed.
 
 This is recorded as an **emitter landed / measurement open** item rather than a result, because the
 run that would produce it has not been made.
+
+---
+
+## Round 5 (red team) — a P0 in the round-4 fix, and a P0 in the Taylor receipt
+
+### R5-1/R5-2 (P0/P1) — a max over *every* solve scores a no-op as a total stall
+
+`InitialConverged` does **zero work** and returns `rel_error` equal to its own r₀ ratio, so
+`progress ≡ 1.0` exactly. Under a **max** the best possible outcome — the linear system already
+satisfied on entry — scored as complete stagnation, and `worst_krylov_iter` named the healthiest
+solve as the culprit. The bitter part: round 4 added `initial_rel_error` to that return *because*
+dropping it from a **min** manufactured a stall. The same commit then made a max the classifier's
+input, where the identical value manufactures the stall directly. **Two halves of one commit
+pointing opposite ways.**
+
+The general form (R5-2): a max over all solves **pre-empts `NewtonBudgetExhausted`** — the category
+created precisely to stop a falling residual being reported as a stall. As Newton converges its
+linear RHS gets small and noise-dominated, so late solves cannot reduce it and progress → 1: *the
+closer Newton gets, the more certainly the linear solve is blamed.*
+
+**Fix:** the max is over solves that **did work and did not finish** — `InitialConverged` (zero
+work) and `ToleranceReached` (finished) are excluded and counted separately as
+`krylov_solves_trivial`. A stage where every solve converged on entry or reached tolerance now
+yields **no** Krylov evidence, which is correct, and lets the budget clause have its case back.
+`krylov_solves_measured_vs_r0` is incremented inside the same branch, so the count is over exactly
+the solves the max is over.
+
+### R5-3 (P1) — the threshold is a judgment, and it was not reachable
+
+The calibration argues for *some* constant in (0.55, 0.98); it does not select 0.90 over 0.85. Two
+things make that matter: the tree's own default-budget run reads **0.8795 — 2.3% from the
+boundary**, inside run-to-run variation, and the two sides of that boundary are the campaign's two
+competing explanations. And ρ_vs_r0 is **budget-dependent** — a healthy operator given 7 Arnoldi
+vectors on a hard RHS reads 0.92 — so this constant cannot by itself separate *"the operator is
+hard"* from *"the inner budget is small"*. `WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0` now moves it per
+run (out-of-range values are refused with a warning and the default stands), the value in force is
+on the record, and the calibration's honest limits are written at the constant.
+
+Measured, and the margin is exactly as thin as the reviewer said:
+
+```
+budget=12  category=krylov_stagnated       worst=0.9941  solves=4  trivial=0  thr=0.90
+budget=3   category=newton_budget_exhausted worst=0.8795  solves=3  trivial=0  thr=0.90
+budget=3   category=krylov_stagnated        worst=0.8795  solves=3             thr=0.85
+```
+
+The same record classifies both ways across a 5% change in a constant nothing measured.
+
+### R5-4 (P1) — the round-4 P0's *reference* survived, one field over
+
+Round 4 deleted the field that divided by a fallback reference of 1.0 and **left the reference**.
+`total_failure_vs_r0` — a name ending `_vs_r0`, a signals field ending `_vs_r0`, a printed
+`total_failure_vs_r0=` — still held the ‖b‖ answer whenever r₀ was unmeasured. And under the opt-in
+flag it changed what the **solver does**: a knob whose stated meaning is *"use the r₀ rule"*
+silently used the ‖b‖ rule on any solve that did not measure r₀. Now the r₀ reading is simply
+**unavailable** when unmeasured (`krylov_r0_unmeasured`), and a forced fallback is **counted**
+(`krylov_rule_fellback_to_b`) rather than passed off as the rule.
+
+Also: `krylov_diverged` used `>= 0.0f` where its sibling eleven lines up uses `> 0.0f` — the same
+expression written twice with two rules, so a *measured* r₀ of exactly 0 made any nonzero residual
+"divergence". And `krylov_diverged` is consumed **above** the r₀ max clause, so an unmeasured-r₀
+solve returned `KrylovDiverged` from a ‖b‖ comparison and the r₀ evidence was never reached.
+Divergence is now declared only against a measured reference.
+
+### R5-5 (P0) — `linearity_residual = 0` was a tautology, and so was "τ unchanged"
+
+α = ½ is a **power of two**. A forward-AD tangent is a float expression whose every term is
+(primal) × (tangent); scaling the input tangent by a dyadic factor scales every intermediate by
+that factor with **identical significands**, so under IEEE-754 `A(s/2) ≡ 0.5·A(s)` **bit for bit,
+for any operator**. The receipt therefore measured the exponent arithmetic, not the Jacobian. The
+FD path cancels the same way — halving ‖v‖ exactly doubles its ε exactly, so the perturbed vector
+is the *same* vector — meaning the receipt was silent in precisely the regime its comment named.
+And *"τ came out unchanged when we started measuring the arm"*, offered as corroboration, was the
+signature of a substitution that could not have changed anything.
+
+**Re-measured at α = 1/3, which is not dyadic:**
+
+```
+iter=0 tau=0.1192  alpha=0.3333 tau_alpha=0.03972 tau_alpha_over_tau=0.3333 linearity_residual=1.791e-07
+iter=1 tau=0.06452 alpha=0.3333 tau_alpha=0.02151 tau_alpha_over_tau=0.3333 linearity_residual=1.739e-07
+iter=2 tau=0.01821 alpha=0.3333 tau_alpha=0.00607 tau_alpha_over_tau=0.3333 linearity_residual=1.652e-07
+```
+
+**The conclusion survives, and now on evidence that could have failed.** `τ_α/τ = 0.3333` is
+exactly α, three times out of three — the quadratic-remainder prediction `τ(α) = α·τ(1)`, and a
+value that **cannot** be produced by halving anything. `linearity_residual ≈ 1.7e-07` is about 1.5
+float32 ulps: a real measurement where the old one was identically zero. So the finding stands —
+**τ ≪ 1, the remainder is purely quadratic, no Jacobian defect, the inner solve binds** — and the
+receipt behind it is now one that a broken operator would fail.
+
+`taylor_defect_verdict` gained `AlphaDyadic`, checked **before** the residual (with a dyadic α the
+residual is zero by construction, and reporting "linear" from it is the tautology the rule exists
+to prevent), with fixtures over {0.125, 0.25, 0.5, 1, 2}. **A receipt that cannot fail is not a
+receipt.**

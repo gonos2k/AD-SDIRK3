@@ -9233,6 +9233,11 @@ vertical_coefficients:
                               << " worst_krylov_iter=" << sig.worst_krylov_iter
                               << " krylov_solves_vs_r0="
                               << sig.krylov_solves_measured_vs_r0
+                              << " krylov_solves_trivial=" << sig.krylov_solves_trivial
+                              << " krylov_r0_unmeasured=" << sig.krylov_r0_unmeasured_solves
+                              << " krylov_rule_fellback_to_b=" << sig.krylov_rule_fellback_to_b
+                              << " krylov_no_progress_thr="
+                              << sig.krylov_no_progress_threshold
                               << " total_failure_vs_b=" << sig.total_failure_vs_b_count
                               << " total_failure_vs_r0=" << sig.total_failure_vs_r0_count
                               << " krylov_failure_rule="
@@ -13243,6 +13248,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         static_cast<double>(stats.worst_krylov_rel_error_vs_r0);
     last_stage_signals_.worst_krylov_iter = stats.worst_krylov_iter;
     last_stage_signals_.krylov_solves_measured_vs_r0 = stats.krylov_solves_measured_vs_r0;
+    last_stage_signals_.krylov_solves_trivial = stats.krylov_solves_trivial;
+    last_stage_signals_.krylov_r0_unmeasured_solves = stats.krylov_r0_unmeasured_solves;
+    last_stage_signals_.krylov_rule_fellback_to_b = stats.krylov_rule_fellback_to_b;
+    last_stage_signals_.krylov_no_progress_threshold = stats.krylov_no_progress_threshold;
     last_stage_signals_.krylov_rule_observed = stats.krylov_rule_observed;
     // PR 9E (diagnosis-only): carry the raw-L2 fast-RHS / defect norms back for
     // this stage's history-summary snapshot (-1 when stage_operand_diag is off).

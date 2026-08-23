@@ -292,7 +292,15 @@ inline StageReferenceVerdict certify_stage_reference(
 //  2. The alpha arm must MEASURE A(alpha*s), not assume alpha*A(s). Assuming it makes the
 //     ratio partly true by construction (only the numerator is re-measured) and silently
 //     imports precondition 1 a second time.
-// A probe that prints a three-way causal conclusion in its own row needs both on the record.
+//  3. alpha must NOT be a power of two. This one is subtle and cost a P0. A forward-AD tangent
+//     is a float expression whose every term is (primal) x (tangent); scaling the input tangent
+//     by a dyadic factor scales every intermediate by that factor with IDENTICAL significands,
+//     so under IEEE-754 A(s/2) == 0.5*A(s) BIT FOR BIT, for any operator. The linearity receipt
+//     is then identically zero and measures the exponent arithmetic, not the Jacobian. The FD
+//     path cancels the same way: halving ||v|| exactly doubles its epsilon exactly, so the
+//     perturbed vector is the SAME vector. A receipt that cannot fail is not a receipt --
+//     measured with alpha = 1/3 the same probe reports 1.7e-07, about 1.5 float32 ulps.
+// A probe that prints a three-way causal conclusion in its own row needs all three on record.
 struct TaylorDefectInputs {
     bool   fd_fallback_free = false;   // the JVP was forward-mode for every matvec in the probe
     bool   alpha_arm_measured = false; // A(alpha*s) was computed, not scaled from A(s)
@@ -304,13 +312,15 @@ struct TaylorDefectInputs {
     double linearity_residual = -1.0;
 };
 
-enum class TaylorVerdict { Unmeasured, FdFallback, AlphaArmAssumed, OperatorNonlinear, Measured };
+enum class TaylorVerdict { Unmeasured, FdFallback, AlphaArmAssumed, AlphaDyadic,
+                           OperatorNonlinear, Measured };
 
 inline const char* taylor_verdict_name(TaylorVerdict v) {
     switch (v) {
         case TaylorVerdict::Unmeasured:      return "unmeasured";
         case TaylorVerdict::FdFallback:      return "fd_fallback";
         case TaylorVerdict::AlphaArmAssumed: return "alpha_arm_assumed";
+        case TaylorVerdict::AlphaDyadic:     return "alpha_dyadic";
         case TaylorVerdict::OperatorNonlinear: return "operator_nonlinear";
         case TaylorVerdict::Measured:        return "measured";
     }
@@ -320,12 +330,24 @@ inline const char* taylor_verdict_name(TaylorVerdict v) {
 // How far A(alpha*s) may sit from alpha*A(s) before the ratio stops being about the Jacobian.
 inline constexpr double kTaylorLinearityTol = 1.0e-4;
 
+// A power of two, within the exactness that matters here: alpha == 2^k for integer k.
+inline bool is_dyadic(double a) {
+    if (!(a > 0.0)) return false;
+    // Repeated exact doubling/halving reaches 1.0 iff the significand is 1.
+    while (a < 1.0) a *= 2.0;
+    while (a > 1.0) a *= 0.5;
+    return a == 1.0;
+}
+
 inline TaylorVerdict taylor_defect_verdict(const TaylorDefectInputs& in) {
     if (!(in.tau >= 0.0) || !(in.tau_alpha >= 0.0) || !(in.alpha > 0.0)) {
         return TaylorVerdict::Unmeasured;
     }
     if (!in.fd_fallback_free)   return TaylorVerdict::FdFallback;
     if (!in.alpha_arm_measured) return TaylorVerdict::AlphaArmAssumed;
+    // Checked BEFORE the residual, because with a dyadic alpha the residual is zero by
+    // construction and reporting "linear" from it would be the tautology this rule exists for.
+    if (is_dyadic(in.alpha))    return TaylorVerdict::AlphaDyadic;
     if (!(in.linearity_residual >= 0.0) ||
         in.linearity_residual > kTaylorLinearityTol) {
         return TaylorVerdict::OperatorNonlinear;

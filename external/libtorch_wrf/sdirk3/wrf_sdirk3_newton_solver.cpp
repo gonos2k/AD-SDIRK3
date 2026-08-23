@@ -9103,20 +9103,46 @@ public:
                         progress < stats_.best_krylov_rel_error_vs_r0) {
                         stats_.best_krylov_rel_error_vs_r0 = progress;
                     }
-                    // R13.13 (red team round 4): the WORST solve, and which iteration it was.
-                    // "Did the linear solve stop working" is a max question, not a min one --
-                    // a min answers "did any solve work" and one early success clears a stage
-                    // of stalls. This is also the only progress statement with no SELECTOR: an
-                    // earlier attempt keyed the value to the solve that first tripped the
-                    // production total-failure predicate, which under the default rule asks the
-                    // ||b|| question, so the solve was chosen in one coordinate and its value
-                    // reported in another. A max over the solves that measured r0 has no such
-                    // seam. The count says how many solves it is a max over, so a one-solve
-                    // stage cannot be read as a twelve-solve one.
-                    stats_.krylov_solves_measured_vs_r0++;
-                    if (progress > stats_.worst_krylov_rel_error_vs_r0) {
-                        stats_.worst_krylov_rel_error_vs_r0 = progress;
-                        stats_.worst_krylov_iter = newton_iter;
+                    // R13.13 (round 4): the WORST solve, and which iteration it was. "Did the
+                    // linear solve stop working" is a max question, not a min one -- a min
+                    // answers "did any solve work" and one early success clears a stage of
+                    // stalls. It also has no SELECTOR, so no coordinate seam: an earlier attempt
+                    // keyed the value to the solve that first tripped the production predicate,
+                    // which under the default rule asks the ||b|| question.
+                    //
+                    // R13.14 (red team round 5, P0): but the max must be over solves that DID
+                    // WORK AND DID NOT FINISH, and it was over all of them.
+                    //   * InitialConverged does ZERO work and returns rel_error == r0 ratio, so
+                    //     progress is EXACTLY 1.0 -- under a max, the best possible outcome
+                    //     scores as a total stall. Round 4 added initial_rel_error to that
+                    //     return BECAUSE dropping it from a MIN manufactured a stall; the same
+                    //     commit then made a max the classifier's input, and for a max the same
+                    //     value manufactures the stall directly. Two halves of one commit
+                    //     pointing opposite ways.
+                    //   * A solve that REACHED TOLERANCE solved. Its progress is evidence about
+                    //     the tolerance, not about whether Krylov works.
+                    // Excluding both means a stage where every solve either converged on entry
+                    // or reached tolerance yields NO stagnation evidence -- which is correct,
+                    // and lets NewtonBudgetExhausted have its case back. That category exists
+                    // precisely to stop a falling residual being reported as a stall, and a max
+                    // over all solves re-opened that hole through a different door: the later a
+                    // Newton run gets, the smaller and noisier its linear RHS, so progress -> 1
+                    // and "the closer Newton gets, the more certainly the linear solve is
+                    // blamed".
+                    const bool trivial_solve =
+                        (gmres_result.termination_reason ==
+                             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged) ||
+                        (gmres_result.termination_reason ==
+                             WRFNewtonKrylovSolver::KrylovTerminationReason::ToleranceReached);
+                    if (!trivial_solve) {
+                        // Counted here so the count is over exactly the solves the max is over.
+                        stats_.krylov_solves_measured_vs_r0++;
+                        if (progress > stats_.worst_krylov_rel_error_vs_r0) {
+                            stats_.worst_krylov_rel_error_vs_r0 = progress;
+                            stats_.worst_krylov_iter = newton_iter;
+                        }
+                    } else {
+                        stats_.krylov_solves_trivial++;
                     }
                 }
                 // R13.5: divergence is not stagnation. The total-failure predicate folds
@@ -9127,12 +9153,24 @@ public:
                 // rel_error > 1 -- the em_b_wave failing iteration did exactly that (1.054 ->
                 // 0.979) and was classified krylov_diverged. Fall back to the old test only
                 // when the initial ratio was not measured.
+                // R13.14 (round 5, P1): this guard was `>= 0.0f` while its sibling eleven
+                // lines up uses `> 0.0f` -- the same expression written twice with two rules.
+                // A MEASURED initial_rel_error of exactly 0 gave ref = 0, so any nonzero
+                // residual read as divergence. And `krylov_diverged` is consumed ABOVE the r0
+                // max clause, so a solve with unmeasured r0 returned KrylovDiverged from a
+                // ||b||-coordinate comparison and the r0 evidence was never reached at all.
+                // Divergence is now only declared when the reference it is relative to was
+                // measured; an unmeasured one is counted, not substituted.
                 {
-                    const float ref = (gmres_result.initial_rel_error >= 0.0f)
-                        ? gmres_result.initial_rel_error : 1.0f;
-                    if (std::isfinite(gmres_result.rel_error) &&
-                        gmres_result.rel_error > ref * (1.0f + 1.0e-4f)) {
-                        stats_.krylov_diverged = true;
+                    const bool ref_measured =
+                        (gmres_result.initial_rel_error > 0.0f &&
+                         std::isfinite(gmres_result.initial_rel_error));
+                    if (ref_measured) {
+                        const float ref = gmres_result.initial_rel_error;
+                        if (std::isfinite(gmres_result.rel_error) &&
+                            gmres_result.rel_error > ref * (1.0f + 1.0e-4f)) {
+                            stats_.krylov_diverged = true;
+                        }
                     }
                 }
                 // R13.8: what "success" was supposed to mean.
@@ -10034,22 +10072,63 @@ public:
             // whichever is in force. The fallback when r0 was not measured is the old rule.
             static const bool failure_vs_r0 =
                 wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_FAILURE_VS_R0");
-            const float r0_ref =
-                (gmres_initial_rel_error >= 0.0f) ? gmres_initial_rel_error : 1.0f;
+            // R13.14 (red team round 5, P1): the FALLBACK survived the round-4 fix. R13.13
+            // deleted the field that divided by a reference of 1.0 and left the reference, so
+            // `total_failure_vs_r0` -- a name ending `_vs_r0`, a signals field ending `_vs_r0`,
+            // and a printed `total_failure_vs_r0=` -- still held the ||b|| answer whenever r0
+            // was not measured. And under the opt-in flag it changed what the SOLVER DOES: a
+            // knob whose stated meaning is "use the r0 rule" silently used the ||b|| rule on any
+            // solve that did not measure r0. An unmeasured reference is not a reference of one;
+            // the r0 reading is simply UNAVAILABLE, and the record says so.
+            const bool r0_measured =
+                (gmres_initial_rel_error > 0.0f && std::isfinite(gmres_initial_rel_error));
+            const float r0_ref = r0_measured ? gmres_initial_rel_error : 1.0f;
             const bool total_failure_vs_b  =
                 (gmres_raw_rel_error > 1.0f || gmres_rel_error >= 0.999f);
             const bool total_failure_vs_r0 =
+                r0_measured &&
                 (gmres_raw_rel_error > r0_ref * (1.0f + 1.0e-4f) ||
                  gmres_raw_rel_error >= 0.99f * r0_ref);
+            // With the flag on and r0 unmeasured the r0 rule cannot be evaluated. Falling back
+            // to ||b|| is the only thing the solver can do, and it is COUNTED so the record
+            // never claims a rule it did not apply.
             const bool gmres_total_failure_candidate =
-                failure_vs_r0 ? total_failure_vs_r0 : total_failure_vs_b;
+                failure_vs_r0 ? (r0_measured ? total_failure_vs_r0 : total_failure_vs_b)
+                              : total_failure_vs_b;
             stats_.total_failure_vs_b_count  += total_failure_vs_b  ? 1 : 0;
             stats_.total_failure_vs_r0_count += total_failure_vs_r0 ? 1 : 0;
+            if (!r0_measured) {
+                stats_.krylov_r0_unmeasured_solves++;
+                if (failure_vs_r0) stats_.krylov_rule_fellback_to_b++;
+            }
             stats_.krylov_failure_vs_r0 = failure_vs_r0;
             // ...and that a rule was in force at all. Without this the emitter prints
             // `krylov_failure_rule=b` for a stage whose Newton loop never reached the
             // predicate -- a default read as a measurement, which is the whole defect class.
             stats_.krylov_rule_observed = true;
+            // R13.14 (round 5, P1): the r0 no-progress boundary is a JUDGMENT, not a
+            // measurement -- the calibration argues for some constant in (0.55, 0.98) and does
+            // not select 0.90 over 0.85. The tree's own default-budget run sits 2.3% from it,
+            // and rho_vs_r0 is BUDGET-dependent (a healthy operator given 7 Arnoldi vectors on
+            // a hard RHS reads 0.92), so the number that decides between the campaign's two
+            // competing explanations must be movable without a rebuild.
+            {
+                static const double thr = [] {
+                    const char* e = std::getenv("WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0");
+                    if (!e) return static_cast<double>(wrf::sdirk3::kKrylovNoProgressVsR0);
+                    char* end = nullptr;
+                    const double v = std::strtod(e, &end);
+                    const bool ok = (end && *end == '\0' && v > 0.0 && v <= 1.0);
+                    if (!ok) {
+                        std::cerr << "SDIRK3_CONFIG_WARN knob=WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0"
+                                  << " value=" << e << " ignored=out_of_range_or_unparsable"
+                                  << " using=" << wrf::sdirk3::kKrylovNoProgressVsR0 << std::endl;
+                        return static_cast<double>(wrf::sdirk3::kKrylovNoProgressVsR0);
+                    }
+                    return v;
+                }();
+                stats_.krylov_no_progress_threshold = thr;
+            }
             // R13.12 (red team R3-2): the first iteration whose SOLVE was a total failure,
             // which is what the field name says. `gmres_total_failure` below additionally
             // requires that no step was accepted, so indexing off it made this "the first
@@ -10766,33 +10845,51 @@ public:
                     const double nAs = As.to(torch::kFloat64).norm().item<double>();
                     const double tau = nAs > 0.0
                         ? (dR - As).to(torch::kFloat64).norm().item<double>() / nAs : -1.0;
-                    // alpha = 1/2 arm. R13.13 (red team round 4): A(s/2) is MEASURED with a
-                    // second matvec, not taken as 0.5*A(s). Assuming it makes the ratio partly
-                    // true by construction -- only the numerator would be re-measured -- and
-                    // silently presumes A linear, which the FD-fallback path is not (its
-                    // epsilon depends on ||v||, so halving the step changes the operator). The
-                    // difference between the two is now the probe's own linearity receipt.
-                    double tau_half = -1.0, linearity_residual = -1.0;
+                    // The scaled arm. R13.13 (round 4) measured A(alpha*s) with its own matvec
+                    // instead of scaling A(s).
+                    //
+                    // R13.14 (red team round 5, P0): with alpha = 1/2 that was a NO-OP, and the
+                    // receipt it produced was a TAUTOLOGY. A forward-AD tangent is a float
+                    // expression whose every term is (primal) x (tangent); scaling the input
+                    // tangent by a POWER OF TWO scales every intermediate by the same power of
+                    // two with identical significands, so under IEEE-754 A(s/2) == 0.5*A(s) BIT
+                    // FOR BIT, for any operator. `linearity_residual = 0` therefore measured the
+                    // exponent arithmetic, not the Jacobian -- and "tau came out unchanged when
+                    // we started measuring the arm" was the signature of a substitution that
+                    // could not have changed anything, not corroboration. The FD path was blind
+                    // for the same reason: halving ||v|| exactly doubles its epsilon exactly, so
+                    // the perturbed vector is IDENTICAL and the quotient scales by exactly 1/2.
+                    //
+                    // alpha = 1/3 is not dyadic, so neither cancellation happens: the receipt is
+                    // a real measurement on both paths. The A/B probe in this file already chose
+                    // 2.5 for its homogeneity check for exactly this reason. For a quadratic
+                    // (bilinear-RHS) remainder the prediction is tau(alpha)/tau = alpha, so the
+                    // discriminator reads 0.333 rather than 0.5 -- a value that cannot be
+                    // produced by halving anything.
+                    constexpr double kTauAlpha = 1.0 / 3.0;
+                    double tau_alpha = -1.0, linearity_residual = -1.0;
                     bool alpha_arm_measured = false;
                     {
-                        const auto K_half = K.detach() + 0.5 * dK_scaled.detach();
-                        const auto U_half = U_stage + dt * gamma * K_half;
-                        const auto R_half = (K_half - compute_rhs(U_half)).detach();
-                        const auto dR_half = R_half - R.detach();
-                        const auto As_half =
-                            apply_jacobian((0.5 * dK_scaled).detach()).detach();
+                        const auto s_alpha = (kTauAlpha * dK_scaled).detach();
+                        const auto K_alpha = K.detach() + s_alpha;
+                        const auto U_alpha = U_stage + dt * gamma * K_alpha;
+                        const auto R_alpha = (K_alpha - compute_rhs(U_alpha)).detach();
+                        const auto dR_alpha = R_alpha - R.detach();
+                        const auto As_alpha = apply_jacobian(s_alpha).detach();
                         alpha_arm_measured = true;
-                        const double nAs_half = As_half.to(torch::kFloat64).norm().item<double>();
-                        tau_half = nAs_half > 0.0
-                            ? (dR_half - As_half).to(torch::kFloat64).norm().item<double>()
-                                  / nAs_half : -1.0;
-                        // ||A(s/2) - 0.5*A(s)|| / ||0.5*A(s)||: zero for a true JVP, nonzero
-                        // for an FD quotient whose epsilon moved when the step was halved.
-                        const auto As_scaled = 0.5 * As;
+                        const double nAs_alpha =
+                            As_alpha.to(torch::kFloat64).norm().item<double>();
+                        tau_alpha = nAs_alpha > 0.0
+                            ? (dR_alpha - As_alpha).to(torch::kFloat64).norm().item<double>()
+                                  / nAs_alpha : -1.0;
+                        // ||A(alpha*s) - alpha*A(s)|| / ||alpha*A(s)||, with a non-dyadic alpha
+                        // so that neither the fwAD exponent cancellation nor the FD epsilon
+                        // cancellation can force it to zero.
+                        const auto As_scaled = kTauAlpha * As;
                         const double nAs_scaled =
                             As_scaled.to(torch::kFloat64).norm().item<double>();
                         linearity_residual = nAs_scaled > 0.0
-                            ? (As_half - As_scaled).to(torch::kFloat64).norm().item<double>()
+                            ? (As_alpha - As_scaled).to(torch::kFloat64).norm().item<double>()
                                   / nAs_scaled : -1.0;
                     }
                     // The verdict, from the rule in wrf_sdirk3_probe_validity.h -- where a
@@ -10803,8 +10900,8 @@ public:
                              std::memory_order_relaxed) == fd_fallbacks_before_tau);
                     tin.alpha_arm_measured = alpha_arm_measured;
                     tin.tau = tau;
-                    tin.tau_alpha = tau_half;
-                    tin.alpha = 0.5;
+                    tin.tau_alpha = tau_alpha;
+                    tin.alpha = kTauAlpha;
                     tin.linearity_residual = linearity_residual;
                     const auto tau_verdict = wrf::sdirk3::taylor_defect_verdict(tin);
                     const bool tau_measured =
@@ -10812,9 +10909,10 @@ public:
                     std::cerr << "SDIRK3_TAYLOR_DEFECT stage=" << stage
                               << " newton_iter=" << newton_iter
                               << " tau=" << tau
-                              << " tau_half=" << tau_half
-                              << " tau_half_over_tau="
-                              << ((tau > 0.0 && tau_half >= 0.0) ? tau_half / tau : -1.0)
+                              << " alpha=" << kTauAlpha
+                              << " tau_alpha=" << tau_alpha
+                              << " tau_alpha_over_tau="
+                              << ((tau > 0.0 && tau_alpha >= 0.0) ? tau_alpha / tau : -1.0)
                               << " R_k=" << R.detach().to(torch::kFloat64).norm().item<double>()
                               << " R_k1="
                               << accepted_residual.detach().to(torch::kFloat64).norm().item<double>()
@@ -10834,8 +10932,8 @@ public:
                               // are the same row without this gate.
                               << (tau_measured
                                   ? "  (tau<<1: linear model faithful, inner solve binding;"
-                                    " tau=O(1) with tau_half/tau~0.5: nonlinearity over the"
-                                    " step; tau=O(1) with tau_half/tau~1: Jacobian defect)"
+                                    " tau=O(1) with tau_alpha/tau~alpha: nonlinearity over the"
+                                    " step; tau=O(1) with tau_alpha/tau~1: Jacobian defect)"
                                   : "  (NO CONCLUSION: preconditions not met -- see"
                                     " tau_verdict; tau and the ratio are arithmetic, not"
                                     " evidence about the Jacobian)")

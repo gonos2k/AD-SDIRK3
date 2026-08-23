@@ -44,9 +44,9 @@ TaylorDefectInputs sound() {
     in.fd_fallback_free = true;
     in.alpha_arm_measured = true;
     in.tau = 0.1192;          // the measured em_b_wave stage-2 iteration-0 value
-    in.tau_alpha = 0.05959;
-    in.alpha = 0.5;
-    in.linearity_residual = 1.2e-7;
+    in.tau_alpha = 0.03972;   // alpha = 1/3, so tau_alpha/tau = 0.3333 for a quadratic remainder
+    in.alpha = 1.0 / 3.0;
+    in.linearity_residual = 1.791e-7;   // measured: about 1.5 float32 ulps
     return in;
 }
 
@@ -108,6 +108,29 @@ int main() {
               "and for alpha itself: a zero step has no defect ratio to report");
     }
     {
+        // R13.14 (red team round 5, P0): a DYADIC alpha makes the linearity receipt a tautology.
+        // A forward-AD tangent scales by a power of two with identical significands, so
+        // A(s/2) == 0.5*A(s) bit for bit for ANY operator -- and the FD path cancels the same
+        // way, since halving ||v|| exactly doubles its epsilon exactly and the perturbed vector
+        // is the same vector. The probe shipped with alpha = 1/2 and reported
+        // linearity_residual = 0, which was read as "the JVP agrees to the last bit".
+        for (double a : {0.5, 0.25, 2.0, 1.0, 0.125}) {
+            auto in = sound();
+            in.alpha = a;
+            in.linearity_residual = 0.0;      // what a dyadic alpha always produces
+            if (name_of(in) != "alpha_dyadic") {
+                check(false, std::string("dyadic alpha ") + std::to_string(a) +
+                             " must be refused");
+            }
+        }
+        auto in = sound();
+        in.alpha = 1.0 / 3.0;
+        check(name_of(in) == "measured",
+              "a receipt that cannot fail is not a receipt: every power of two is refused, and "
+              "a non-dyadic alpha is what makes the linearity residual a real measurement "
+              "(0 by construction at 1/2; 1.7e-07 measured at 1/3)");
+    }
+    {
         // Ordering: the FD receipt is checked before the linearity residual, because on the FD
         // path the residual is a measurement OF the FD scheme and reporting "operator_nonlinear"
         // would name the wrong cause.
@@ -129,7 +152,7 @@ int main() {
               "only, so it can never quietly suppress the case the probe exists to catch");
     }
 
-    constexpr int expected_checks = 10;
+    constexpr int expected_checks = 11;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

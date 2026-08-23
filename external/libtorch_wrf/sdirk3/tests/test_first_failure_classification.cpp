@@ -568,6 +568,65 @@ int main() {
               "dead code");
     }
 
+    // R13.14 (red team round 5): the max must be over solves that DID WORK AND DID NOT
+    // FINISH. A solve that converged on entry does zero work and returns rel_error equal to
+    // its own r0 ratio, so its progress is EXACTLY 1.0 -- under a max, the best possible
+    // outcome scored as a total stall. The solver excludes those; these fixtures pin what the
+    // classifier must do with the record that results.
+    {
+        // Every solve either converged on entry or reached tolerance: NO stagnation evidence.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 4.8e8;                     // and the residual is still falling
+        s.worst_krylov_rel_error_vs_r0 = -1.0;       // nothing survived the exclusion
+        s.krylov_solves_measured_vs_r0 = 0;
+        s.krylov_solves_trivial = 3;
+        s.accepted_steps = 3;
+        s.newton_iterations = 3;
+        s.newton_iteration_budget = 3;
+        check(name_of(s) == "newton_budget_exhausted",
+              "a stage whose every solve converged on entry or reached tolerance has NO Krylov "
+              "evidence, and a falling residual at the budget is a budget statement -- the "
+              "category that exists to stop exactly this being called a stall");
+    }
+    {
+        // The boundary is movable per run, and the record says which one was used.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.6e8;
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.accepted_steps = 3;
+        s.worst_krylov_rel_error_vs_r0 = 0.8795;     // the tree's measured default-budget value
+        const bool at_default = (name_of(s) != "krylov_stagnated");
+        s.krylov_no_progress_threshold = 0.85;       // a stricter reading of the same record
+        const bool at_override = (name_of(s) == "krylov_stagnated");
+        s.krylov_no_progress_threshold = -1.0;
+        const bool back_to_default = (name_of(s) != "krylov_stagnated");
+        check(at_default && at_override && back_to_default,
+              "the measured 0.8795 sits 2.3% below the default boundary and flips under a "
+              "stricter one, so the constant is reachable per run -- and an unset threshold "
+              "classifies exactly as it did before the knob existed");
+    }
+    {
+        // An out-of-range threshold must not become the rule.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.6e8;
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.accepted_steps = 3;
+        s.worst_krylov_rel_error_vs_r0 = 0.95;
+        s.krylov_no_progress_threshold = 0.0;        // nonsense: would call everything a stall
+        const bool zero_ignored = (name_of(s) == "krylov_stagnated");   // via the DEFAULT 0.90
+        s.krylov_no_progress_threshold = 2.0;        // nonsense: would call nothing a stall
+        const bool big_ignored = (name_of(s) == "krylov_stagnated");
+        check(zero_ignored && big_ignored,
+              "an out-of-range threshold falls back to the header constant rather than becoming "
+              "the rule -- a knob that can silently disable a category is worse than no knob");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -584,7 +643,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 41;
+    constexpr int expected_checks = 44;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

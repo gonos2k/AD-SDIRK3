@@ -182,6 +182,15 @@ struct StageFailureSignals {
     int    worst_krylov_iter = -1;
     // How many solves the max is over, so a one-solve stage is not read as a twelve-solve one.
     int    krylov_solves_measured_vs_r0 = 0;
+    // Solves excluded from the max: zero-work (converged on entry) or finished (reached
+    // tolerance). Neither is evidence about whether Krylov works.
+    int    krylov_solves_trivial = 0;
+    // Solves with no r0 measurement, and how many of those made the opt-in r0 rule fall back.
+    int    krylov_r0_unmeasured_solves = 0;
+    int    krylov_rule_fellback_to_b = 0;
+    // The boundary in force. <= 0 means "use the header default" -- a record taken before the
+    // knob existed must classify exactly as it did then.
+    double krylov_no_progress_threshold = -1.0;
     // Whether a total-failure rule was in force at all (else the label below is a default).
     bool   krylov_rule_observed = false;
     // The stage gate's own verdict, and whether the step reached the driver.
@@ -202,6 +211,17 @@ inline constexpr double kKrylovNoProgress = 0.99;
 // residual read 0.98 -- a stall by any operational standard, and one that a 0.99 threshold
 // inherited from ||b|| coordinates would call healthy and route to "the split". A linear
 // solve that cannot remove a tenth of its own residual is not solving.
+//
+// R13.14 (red team round 5): this value is a JUDGMENT, and the honest statement of its evidence
+// is that the calibration argues for SOME constant in (0.55, 0.98) and does not select 0.90 over
+// 0.85 or 0.95. Two facts make that matter. The tree's own default-budget run reads 0.8795 --
+// 2.3% below the boundary, inside run-to-run variation -- and the two sides of the boundary are
+// the campaign's two competing explanations (`newton_iteration_budget` vs the operator and the
+// preconditioner). And rho_vs_r0 is BUDGET-dependent: a healthy operator given 7 Arnoldi vectors
+// on a hard RHS reads 0.92, so this constant cannot by itself separate "the operator is hard"
+// from "the inner budget is small" -- which is why the layer string for KrylovStagnated ends in
+// `_or_policy` and why `krylov_budget` is on the record beside the ratio. Overridable per run
+// via WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0.
 inline constexpr double kKrylovNoProgressVsR0 = 0.90;
 // A residual that ended at or above this fraction of where it started has stopped moving.
 // Below it, the iteration was still working and being cut off is a budget statement.
@@ -268,7 +288,13 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // another -- and a genuine cold-start stall at raw=0.995 never trips it at all. The
         // max over the solves that measured r0 has no selector and no seam.
         if (measured(s.worst_krylov_rel_error_vs_r0)) {
-            if (s.worst_krylov_rel_error_vs_r0 >= kKrylovNoProgressVsR0) {
+            // R13.14 (round 5): the boundary is a judgment and must be movable per run without
+            // a rebuild. An unset/invalid value falls back to the header constant, so records
+            // taken before the knob existed classify exactly as they did then.
+            const double no_progress =
+                (s.krylov_no_progress_threshold > 0.0 && s.krylov_no_progress_threshold <= 1.0)
+                    ? s.krylov_no_progress_threshold : kKrylovNoProgressVsR0;
+            if (s.worst_krylov_rel_error_vs_r0 >= no_progress) {
                 return StageFailure::KrylovStagnated;
             }
             // Every solve moved. Whatever refused the step is downstream, and the later
