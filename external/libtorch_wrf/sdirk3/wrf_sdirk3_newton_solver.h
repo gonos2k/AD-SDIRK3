@@ -484,6 +484,13 @@ public:
         int   last_stopping_metric = 0;
         int   last_tolerance_source = 0;
         bool  last_budget_exhausted = false;
+        // R13.18 (P0-1 remainder): the STAGE GATE's metric. The gate accepts on ||E^-1 R||, and a
+        // receipt carrying only D and S cannot express "both recorded metrics satisfied, gate
+        // still refuses".
+        double last_rho_E_final = -1.0;
+        bool  last_E_reached = false;
+        double exit_rho_E_final = -1.0;
+        bool  exit_E_reached = false;
         // R13.17 (external review P0-3): recorded at the site that ended the loop.
         int   newton_termination = 0;   // NewtonTerminationReason
         // Solves whose r0 was never measured, and (of those) how many made the opt-in r0 rule

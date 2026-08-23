@@ -973,6 +973,34 @@ int main() {
               "with no exit receipt the event may not borrow the stage-worst one");
     }
 
+    {
+        // R13.18 (deep review P0-1 remainder): the THIRD metric. The stage gate accepts on
+        // ||E^-1 R||, so a solve can satisfy both recorded metrics and still be refused -- a state
+        // the receipt could not express, and therefore a state with no category.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        s.exit_krylov_iter = 2;
+        s.exit_D_reached = true; s.exit_S_reached = true;
+        s.exit_rho_E_final = 0.7; s.exit_E_reached = false;
+        check(name_of(s) == "stage_gate_metric_mismatch",
+              "both metrics the solver was steered by are satisfied and the GATE's metric is not "
+              "-- not the operator, not the forcing term, not the budget, but the gate's norm "
+              "disagreeing with the solver's");
+        check(std::string(stage_failure_layer(StageFailure::StageGateMetricMismatch)) ==
+                  "stage_gate_E_metric_vs_solver_metrics",
+              "and the layer names that disagreement rather than a component");
+        s.exit_E_reached = true;
+        check(name_of(s) != "stage_gate_metric_mismatch",
+              "with the gate's metric also satisfied there is no mismatch to report");
+        s.exit_E_reached = false; s.exit_rho_E_final = -1.0;
+        check(name_of(s) != "stage_gate_metric_mismatch",
+              "and an UNMEASURED rho_E may not produce the finding -- absence of a measurement "
+              "must not become one, here either");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -989,7 +1017,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 82;
+    constexpr int expected_checks = 86;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -9671,6 +9671,49 @@ public:
                     // iteration and outside this scope; it promotes these into exit_* so a
                     // terminal event is subtyped by the solve that ENDED the loop, not by the
                     // stage's largest-ratio solve, which need not be the same iteration.
+                    // R13.18 (deep review P0-1 remainder): rho_E, the THIRD metric. The stage
+                    // gate accepts or rejects on ||E^-1 R||, and the receipt carried only D and S
+                    // -- so rho_D < eta and rho_S < eta with rho_E >= eta, a solve that satisfied
+                    // both recorded metrics and is still refused by the gate, was unclassifiable.
+                    // E comes from the stage weights (one E per stage, so the sequence is
+                    // comparable across iterations), and the residual is mapped back to physical
+                    // coordinates first because E is a physical weighting.
+                    double rho_E_final_this = -1.0;
+                    {
+                        torch::NoGradGuard ng_rE;
+                        const auto* w_e = stage_weights_for(stage);
+                        torch::Tensor E_inv_r;
+                        if (w_e != nullptr && layout_initialized_ &&
+                            cached_layout_.is_valid() &&
+                            gmres_result.r_true.defined() &&
+                            cached_layout_.total_size == gmres_result.r_true.numel()) {
+                            E_inv_r = wrf::sdirk3::inverse_scale_vector(
+                                cached_layout_, w_e->scale, gmres_result.r_true);
+                            if (E_inv_r.defined() &&
+                                E_inv_r.numel() != gmres_result.r_true.numel()) {
+                                E_inv_r = torch::Tensor{};
+                            }
+                        }
+                        if (E_inv_r.defined() && gmres_rhs.defined()) {
+                            auto to_phys = [&](const torch::Tensor& v) {
+                                return (scaling_initialized_ && S_diag_.defined() &&
+                                        S_diag_.numel() == v.numel())
+                                           ? (S_diag_ * v) : v;
+                            };
+                            const auto e64 = E_inv_r.to(torch::kFloat64);
+                            const auto rE =
+                                (to_phys(gmres_result.r_true.detach()).to(torch::kFloat64) * e64)
+                                    .norm().item<double>();
+                            const auto bE =
+                                (to_phys(gmres_rhs.detach()).to(torch::kFloat64) * e64)
+                                    .norm().item<double>();
+                            if (bE > 0.0) rho_E_final_this = rE / bE;
+                        }
+                    }
+                    stats_.last_rho_E_final = rho_E_final_this;
+                    stats_.last_E_reached =
+                        (rho_E_final_this >= 0.0 &&
+                         rho_E_final_this < static_cast<double>(krylov_tol_adaptive));
                     stats_.last_solve_iter = newton_iter;
                     stats_.last_rho_stop_final = gmres_result.rho_D_final;
                     stats_.last_rho_S_final = gmres_result.rho_S_final;
@@ -12006,6 +12049,8 @@ public:
                         stats_.exit_stopping_metric = stats_.last_stopping_metric;
                         stats_.exit_tolerance_source = stats_.last_tolerance_source;
                         stats_.exit_budget_exhausted = stats_.last_budget_exhausted;
+                        stats_.exit_rho_E_final = stats_.last_rho_E_final;
+                        stats_.exit_E_reached = stats_.last_E_reached;
                         break;
                     }
                     // v20.14r36: Configurable zero-step stagnation limit (was hardcoded 3).

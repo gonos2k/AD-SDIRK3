@@ -175,3 +175,42 @@ record. It is captured in both solvers beside its S sibling, from the same initi
 ρ_E *values* and the **stage-gate seam** (the gate accepts on `‖E⁻¹R‖`, so ρ_D < η, ρ_S < η,
 ρ_E ≥ η is still unclassifiable), and the A/B fingerprint's shared preconditioner instance — a
 stated limitation, with the OFF/ON trajectory control standing for the current configuration.
+
+
+---
+
+## Fourth batch — the ρ_E seam closed, and what it immediately showed
+
+`rho_E` is computed per solve from the stage weights (one `E` per stage, so the sequence is
+comparable across iterations) with the residual mapped back to physical coordinates first, since
+`E` is a physical weighting. New category `StageGateMetricMismatch`, layer
+`stage_gate_E_metric_vs_solver_metrics`, for the state the receipt previously could not express:
+both metrics the solver was steered by satisfied, and the **gate's** metric not.
+
+**Measured, dt=600 stage 2 — the exit solve's three readings of the SAME residual:**
+
+```
+exit_rho_stop = 0.9297   (block_D — the metric the loop actually stopped on)
+exit_rho_S    = 1.0480   (the metric `success` is judged by)
+exit_rho_E    = 0.8618   (the metric the STAGE GATE accepts on)
+```
+
+They span **0.86 to 1.05 on one residual — a 22 % spread**, and the ordering matters:
+
+- **ρ_S = 1.048 is the only one above 1**, and `> 1` is precisely what makes `total_failure_vs_b`
+  fire — the flag that gates the `ZeroUpdateAfterTotalFailure` exit.
+- **ρ_E = 0.8618** says that in the gate's own metric this residual came down **14 %**.
+
+So the solve that the ‖b‖ rule called a *total failure* had, in the metric the stage gate actually
+judges by, made real progress. That is round 7's P0-B as a measurement rather than an argument, and
+it is the concrete reason the phrase "the linear solve produced nothing" had to be withdrawn.
+
+**What this does and does not establish.** It shows the three metrics disagree materially on the
+failing solve, with ρ_S the outlier. It does **not** by itself say which metric should govern the
+total-failure flag — that is a design decision about what the solver is being asked to achieve, and
+production behaviour is unchanged here. What has changed is that all three are on the record, so the
+question can be argued from data instead of from whichever one a predicate happened to read.
+
+All checklist items from the R13.17 deep review are now closed except the A/B fingerprint's shared
+preconditioner instance, which is accepted and stated as a limitation with the OFF/ON trajectory
+control standing for the current configuration.

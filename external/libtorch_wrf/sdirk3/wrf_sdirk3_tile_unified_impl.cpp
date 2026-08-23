@@ -9260,6 +9260,10 @@ vertical_coefficients:
                               << " exit_krylov_iter=" << sig.exit_krylov_iter
                               << " exit_D_reached=" << (sig.exit_D_reached ? 1 : 0)
                               << " exit_S_reached=" << (sig.exit_S_reached ? 1 : 0)
+                              << " exit_rho_stop=" << sig.exit_rho_stop_final
+                              << " exit_rho_S=" << sig.exit_rho_S_final
+                              << " exit_rho_E=" << sig.exit_rho_E_final
+                              << " exit_E_reached=" << (sig.exit_E_reached ? 1 : 0)
                               << " exit_stop_metric="
                               << wrf::sdirk3::krylov_stopping_metric_name(sig.exit_stopping_metric)
                               << " exit_tol_source="
@@ -13312,6 +13316,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.exit_D_reached = stats.exit_D_reached;
     last_stage_signals_.exit_S_reached = stats.exit_S_reached;
     last_stage_signals_.exit_budget_exhausted = stats.exit_budget_exhausted;
+    last_stage_signals_.exit_rho_stop_final = stats.exit_rho_stop_final;
+    last_stage_signals_.exit_rho_S_final = stats.exit_rho_S_final;
+    last_stage_signals_.exit_rho_E_final = stats.exit_rho_E_final;
+    last_stage_signals_.exit_E_reached = stats.exit_E_reached;
     last_stage_signals_.exit_stopping_metric =
         static_cast<wrf::sdirk3::KrylovStoppingMetric>(stats.exit_stopping_metric);
     last_stage_signals_.exit_tolerance_source =

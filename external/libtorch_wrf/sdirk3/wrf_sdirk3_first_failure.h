@@ -60,6 +60,13 @@ enum class StageFailure {
     // (the solve worked) nor a forcing-term problem (tightening eta does not align two different
     // objectives): it is the two metrics disagreeing, which is a formulation question about D.
     KrylovObjectiveMismatch,
+    // R13.18 (deep review P0-1 remainder): both RECORDED metrics were satisfied and the STAGE
+    // GATE still refuses. The gate accepts on ||E^-1 R||, a third metric the receipt did not
+    // carry, so rho_D < eta and rho_S < eta with rho_E >= eta had no category at all -- the solve
+    // met everything the classifier could see and the step was rejected anyway. That is not the
+    // operator, not the forcing term and not the budget: it is the gate's metric disagreeing with
+    // the ones the solve was steered by.
+    StageGateMetricMismatch,
     // Neither tolerance met and the Arnoldi budget ran out. Distinct from stagnation: the solve
     // was still descending when it was cut off, so the work is the budget, not the operator.
     KrylovBudgetLimited,
@@ -137,6 +144,8 @@ inline const char* stage_failure_name(StageFailure f) {
             return "krylov_forcing_term_limited";
         case StageFailure::KrylovObjectiveMismatch:
             return "krylov_objective_mismatch";
+        case StageFailure::StageGateMetricMismatch:
+            return "stage_gate_metric_mismatch";
         case StageFailure::KrylovBudgetLimited:
             return "krylov_budget_limited";
         case StageFailure::KrylovSolveThrew:
@@ -177,6 +186,8 @@ inline const char* stage_failure_layer(StageFailure f) {
             return "krylov_tolerance_policy_or_inner_budget";
         case StageFailure::KrylovObjectiveMismatch:
             return "krylov_objective_D_vs_newton_merit";
+        case StageFailure::StageGateMetricMismatch:
+            return "stage_gate_E_metric_vs_solver_metrics";
         case StageFailure::KrylovBudgetLimited:
             return "inner_krylov_budget";
         case StageFailure::KrylovSolveThrew:
@@ -404,6 +415,13 @@ struct StageFailureSignals {
     bool   exit_D_reached = false;
     bool   exit_S_reached = false;
     bool   exit_budget_exhausted = false;
+    // The stage gate's own metric at the exit solve. -1 = not measured.
+    // The exit solve's three readings, raw, so a reader can recompute the category from the
+    // record instead of trusting the booleans derived from it.
+    double exit_rho_stop_final = -1.0;
+    double exit_rho_S_final = -1.0;
+    double exit_rho_E_final = -1.0;
+    bool   exit_E_reached = false;
     KrylovStoppingMetric exit_stopping_metric = KrylovStoppingMetric::Unknown;
     KrylovToleranceSource exit_tolerance_source = KrylovToleranceSource::Unknown;
     // The Arnoldi budget the WORST solve was given, so the ratio and the budget it was read
@@ -554,6 +572,12 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
             // describes a possibly different iteration and is telemetry, not attribution.
             if (s.exit_krylov_iter >= 0 && s.exit_D_reached && !s.exit_S_reached) {
                 return StageFailure::KrylovObjectiveMismatch;
+            }
+            // Both recorded metrics met and the GATE's metric not: the seam the receipt could not
+            // express until rho_E was carried. Only claimed when rho_E was actually measured.
+            if (s.exit_krylov_iter >= 0 && s.exit_D_reached && s.exit_S_reached &&
+                measured(s.exit_rho_E_final) && !s.exit_E_reached) {
+                return StageFailure::StageGateMetricMismatch;
             }
             return StageFailure::ZeroUpdateAfterTotalFailure;
         }
