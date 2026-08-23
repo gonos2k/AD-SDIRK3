@@ -11888,11 +11888,17 @@ public:
                             std::cerr << "[Newton] GMRES total failure + zero update at iter "
                                       << newton_iter << ". K unchanged → breaking early." << std::endl;
                         }
-                        // R13.17 (external review P0-3): the linear solve failed and produced no
-                        // usable step. This is the exit `not_recorded` was reporting at dt=600 --
-                        // one of three real Newton-loop exits, none of which was typed.
+                        // R13.17: the exit `not_recorded` was reporting at dt=600.
+                        // R13.18 (round 7, P0-B) -- NAMED FOR WHAT IT MEASURES. This site is
+                        // gated by ||dK|| < 1e-15 (the accepted update is numerically ZERO) AND
+                        // `gmres_total_failure`, which under the default configuration is
+                        // `raw > 1 || rel >= 0.999` on ||r||/||b||. It therefore does NOT mean
+                        // "the linear solve produced nothing": in the 12x-budget run that carried
+                        // this stamp the worst solve removed 13.8% of its own residual. It was
+                        // called LinearSolveFailure and used to retract a standing claim; the
+                        // measurement (both runs break here) stands, the inference did not.
                         stats_.newton_termination = static_cast<int>(
-                            wrf::sdirk3::NewtonTerminationReason::LinearSolveFailure);
+                            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure);
                         break;
                     }
                     // v20.14r36: Configurable zero-step stagnation limit (was hardcoded 3).

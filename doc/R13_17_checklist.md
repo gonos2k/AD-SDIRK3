@@ -208,17 +208,33 @@ dt=600 — and the answer contradicts a standing campaign claim.
 
 **Both runs exit for the same reason.** Only the ratio moved, and it happened to cross the chosen
 0.90 boundary — so the 12× run was classified `newton_stagnated`, whose layer is
-`residual_floor_or_split`, i.e. **the split-explicit rebuild**, for a run whose loop stopped because
-the linear solve produced nothing at all.
+`residual_floor_or_split`, i.e. **the split-explicit rebuild**, for a run whose loop broke at the
+**zero-update guard**.
 
 The campaign read that flip as *"the failure moved outward to the Newton iteration"*. **It did not
 move.** The external review flagged this claim as HOLD on the grounds that the category change was a
 threshold statement and the real exit was never recorded; the typed exit now shows the stronger
 result — the exit is identical in both runs, and it is the linear solve.
 
-The classifier consumes it: a loop that exited on `LinearSolveFailure` has its first failure in the
-linear solve **whatever the progress ratio reads**, and which kind is answered by the same
-D/S/budget receipts. What survives from the budget experiment is unchanged and still holds — a 12×
+**CORRECTED BY ROUND 7 (P0-B).** The paragraph above originally said the loop stopped "because the
+linear solve produced nothing at all", and had the classifier honour that **whatever the progress
+ratio reads**. Both were wrong, and the contradiction was on this same page: the 12× run's worst
+solve removed **13.8 %** of its own residual — it did not produce nothing.
+
+What the exit is actually gated by: `‖dK‖ < 1e-15` (the accepted update is numerically **zero**)
+**and** `gmres_total_failure`, which under the default configuration is `raw > 1 || rel ≥ 0.999` on
+**‖r‖/‖b‖**. That is the coordinate R13.12–R13.16 spent four rounds moving this classifier *off*,
+and the `||` override reinstated it as a verdict that fires regardless of the r₀ evidence.
+
+So the event is renamed for what it measures — `ZeroUpdateAfterTotalFailure`, layer
+`zero_update_bnorm_rule_or_step_recovery`, naming **both** candidate causes — and it no longer
+overrides the r₀ clause.
+
+**What survives:** both runs break at the *same* code site, which is a real and useful measurement.
+**What does not:** the inference that the failure did not move outward. The gate is the retracted
+coordinate, so this evidence neither establishes nor refutes that claim. The standing claim is
+therefore back to **HOLD**, which is where the external review had it — not retracted, and not
+confirmed. What survives from the budget experiment is unchanged and still holds — a 12×
 budget improves the inner solve 23× (0.59% → 13.8% of its own residual) and does not complete the
 step. What does not survive is the inference that the *failure* relocated.
 

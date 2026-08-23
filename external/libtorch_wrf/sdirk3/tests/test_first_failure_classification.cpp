@@ -858,11 +858,14 @@ int main() {
         s.krylov_solves_measured_vs_r0 = 3;
         s.accepted_steps = 2; s.rejected_steps = 1;
         s.newton_iterations = 3; s.newton_iteration_budget = 12;
-        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::LinearSolveFailure;
-        check(name_of(s) == "krylov_stagnated",
-              "a loop that stopped because the linear solve produced NOTHING has its first "
-              "failure in the linear solve, whatever the progress ratio reads -- routing it to "
-              "residual_floor_or_split sends the work to the split-explicit rebuild");
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        check(name_of(s) == "zero_update_after_total_failure",
+              "the exit names WHAT IT OBSERVED -- a zero update after a total-failure flag -- and "
+              "not a mechanism. Calling it a Krylov stall claimed the linear solve produced "
+              "nothing, while the same run's worst solve removed 13.8% of its own residual, and "
+              "the flag gating it is the ||b|| predicate this classifier spent four rounds "
+              "moving off");
         s.newton_termination = wrf::sdirk3::NewtonTerminationReason::ResidualStall;
         check(name_of(s) == "newton_stagnated",
               "while the same ratio with a RECORDED residual stall is the outer iteration -- the "
@@ -877,11 +880,12 @@ int main() {
         s.worst_krylov_rel_error_vs_r0 = -1.0;       // NO solve measured r0
         s.krylov_r0_unmeasured_solves = 3;
         s.accepted_steps = 0; s.rejected_steps = 3;
-        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::LinearSolveFailure;
-        check(name_of(s) == "krylov_stagnated",
-              "the exit reason must be honoured with NO Krylov evidence too -- putting the test "
-              "inside the measured() branch left the misrouting alive on exactly the path most "
-              "likely to fall through to a Newton category");
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        check(name_of(s) == "zero_update_after_total_failure",
+              "the exit is honoured with NO Krylov evidence too, and still only claims what it "
+              "observed; its layer names both candidates (the ||b|| rule and the step recovery) "
+              "rather than picking one");
         s.newton_termination = wrf::sdirk3::NewtonTerminationReason::Exception;
         check(name_of(s) == "krylov_solve_threw",
               "and an exception thrown by the linear solve is not the outer iteration's failure "

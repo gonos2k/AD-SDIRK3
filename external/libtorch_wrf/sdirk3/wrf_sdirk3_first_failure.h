@@ -67,6 +67,15 @@ enum class StageFailure {
     // behaviour (the residual grew) that an exception does not establish. Borrowing
     // KrylovDiverged for it would name a mechanism nothing measured.
     KrylovSolveThrew,
+    // R13.18 (round 7, P0-B): the Newton loop broke because the accepted update was numerically
+    // ZERO and the solve had been flagged a total failure. Naming that `KrylovStagnated` -- as an
+    // earlier version of this file did -- claims the linear solve produced nothing, and it did
+    // not: under the default configuration the flag is `raw > 1 || rel >= 0.999` on ||r||/||b||,
+    // the very coordinate R13.12-R13.16 moved this classifier OFF, and the run it was used to
+    // reclassify had a worst solve that removed 13.8% of its own residual. What is observed is
+    // the zero update; the cause is ambiguous between the ||b|| rule firing on a warm start it
+    // was retracted for and a genuine failure to produce a step. The layer says so.
+    ZeroUpdateAfterTotalFailure,
     // The signals do not support ANY verdict. Reported instead of guessing -- a classifier
     // that always names a layer will name a wrong one.
     InsufficientEvidence,
@@ -131,6 +140,8 @@ inline const char* stage_failure_name(StageFailure f) {
             return "krylov_budget_limited";
         case StageFailure::KrylovSolveThrew:
             return "krylov_solve_threw";
+        case StageFailure::ZeroUpdateAfterTotalFailure:
+            return "zero_update_after_total_failure";
         case StageFailure::InsufficientEvidence:     return "insufficient_evidence";
         case StageFailure::KrylovDiverged:           return "krylov_diverged";
         case StageFailure::EntryStateNotFinite:      return "entry_state_not_finite";
@@ -165,6 +176,8 @@ inline const char* stage_failure_layer(StageFailure f) {
             return "inner_krylov_budget";
         case StageFailure::KrylovSolveThrew:
             return "linear_solve_exception";
+        case StageFailure::ZeroUpdateAfterTotalFailure:
+            return "zero_update_bnorm_rule_or_step_recovery";
         case StageFailure::InsufficientEvidence:     return "unknown";
         case StageFailure::KrylovDiverged:           return "operator_or_timestep_or_jvp";
         case StageFailure::EntryStateNotFinite:      return "nonfinite_entry_state";
@@ -189,7 +202,7 @@ inline const char* stage_failure_layer(StageFailure f) {
 // moving" from "the budget ran out at a residual that happened to be flat".
 enum class NewtonTerminationReason {
     NotRecorded = 0, Converged, BudgetExhausted, ResidualStall, ZeroStepStall,
-    LinearSolveFailure, TrustRejected, NonfiniteResidual, Exception
+    ZeroUpdateAfterTotalFailure, TrustRejected, NonfiniteResidual, Exception
 };
 
 inline const char* newton_termination_name(NewtonTerminationReason r) {
@@ -199,7 +212,8 @@ inline const char* newton_termination_name(NewtonTerminationReason r) {
         case NewtonTerminationReason::BudgetExhausted:    return "budget_exhausted";
         case NewtonTerminationReason::ResidualStall:      return "residual_stall";
         case NewtonTerminationReason::ZeroStepStall:      return "zero_step_stall";
-        case NewtonTerminationReason::LinearSolveFailure: return "linear_solve_failure";
+        case NewtonTerminationReason::ZeroUpdateAfterTotalFailure:
+            return "zero_update_after_total_failure";
         case NewtonTerminationReason::TrustRejected:      return "trust_rejected";
         case NewtonTerminationReason::NonfiniteResidual:  return "nonfinite_residual";
         case NewtonTerminationReason::Exception:          return "exception";
@@ -453,9 +467,13 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // most likely to fall through to a Newton category and name `residual_floor_or_split`.
         // A loop that stopped because the linear solve produced nothing has its first failure
         // there; without receipts we cannot say WHICH kind, so we say the general one.
-        if (s.newton_termination == NewtonTerminationReason::LinearSolveFailure &&
-            !measured(s.worst_krylov_rel_error_vs_r0)) {
-            return StageFailure::KrylovStagnated;
+        // R13.18 (round 7, P0-B): a RECORDED event outranks the aggregate reconstruction -- but
+        // it may only claim what it observed. This one observed a zero update after a
+        // total-failure flag, so it gets its own category and layer; it does NOT get to say the
+        // linear solve failed, and it must not override the r0 evidence, because the flag that
+        // gates it is the ||b|| predicate this classifier spent four rounds moving off.
+        if (s.newton_termination == NewtonTerminationReason::ZeroUpdateAfterTotalFailure) {
+            return StageFailure::ZeroUpdateAfterTotalFailure;
         }
         // ...and an exception in the linear solve is not the outer iteration's failure either.
         if (s.newton_termination == NewtonTerminationReason::Exception) {
@@ -485,9 +503,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
             // moved. A loop that stopped because the linear solve failed has its first failure in
             // the linear solve whatever the progress ratio reads, and WHICH kind is answered by
             // the same receipts below.
-            const bool exited_on_linear_failure =
-                (s.newton_termination == NewtonTerminationReason::LinearSolveFailure);
-            if (s.worst_krylov_rel_error_vs_r0 >= no_progress || exited_on_linear_failure) {
+            if (s.worst_krylov_rel_error_vs_r0 >= no_progress) {
                 // R13.16 (round 6, R6-2) / R13.17 (external review P0-2): WHY it made no
                 // progress. Four different answers, three of which are not the operator's fault,
                 // and they route to four different layers.

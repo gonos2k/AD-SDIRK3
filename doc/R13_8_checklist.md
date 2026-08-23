@@ -1352,8 +1352,17 @@ outcome=20 (HARD_STAGE_ABORT) x3 — zero steps completed
    `newton_exit=linear_solve_failure`, with the solver's own message
    `[Newton] GMRES total failure + zero update`. **The exit never changed; only the ratio did**, and
    it happened to cross the chosen boundary. The category `newton_stagnated` then routed to layer
-   `residual_floor_or_split` — the split-explicit rebuild — for a run whose loop stopped because the
-   linear solve produced nothing. Points 1 and 2 above are unaffected and stand.
+   `residual_floor_or_split` — the split-explicit rebuild — for a run whose loop broke at the
+   **zero-update guard**. Points 1 and 2 above are unaffected and stand.
+
+   *Corrected again (R13.18, round 7):* an earlier version of this paragraph said the loop stopped
+   "because the linear solve produced nothing". **That is not what the exit measures**, and it
+   contradicts point 1 on this very page — the 12× run's worst solve removed **13.8 %** of its own
+   residual. The exit is gated by ‖dK‖ < 1e-15 *and* a total-failure flag which, under the default
+   configuration, is `raw > 1 || rel ≥ 0.999` on **‖r‖/‖b‖** — the coordinate this campaign spent
+   four rounds moving its classifier off. So what is measured is that **both runs break at the same
+   zero-update guard**; whether the failure "moved outward" is neither established nor refuted by
+   it, because the gate is itself the retracted coordinate.
 
    *The general form of the mistake:* a claim about **where** a failure lives, produced by a
    threshold over an aggregate instead of by an event. See `doc/R13_17_checklist.md`.
