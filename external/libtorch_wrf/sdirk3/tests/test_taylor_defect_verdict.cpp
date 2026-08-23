@@ -19,6 +19,7 @@
 #include "../wrf_sdirk3_probe_validity.h"
 
 #include <iostream>
+#include <limits>
 #include <string>
 
 namespace {
@@ -89,9 +90,11 @@ int main() {
     {
         auto in = sound();
         in.linearity_residual = -1.0;
-        check(name_of(in) == "operator_nonlinear",
-              "an UNMEASURED linearity residual is not a passing one: the sentinel must fail "
-              "the range test, not slip through it");
+        check(name_of(in) == "linearity_unmeasured",
+              "an ABSENT linearity measurement is not a nonlinear operator: the sentinel is "
+              "emitted for a degenerate (zero-norm) matvec, and naming that `operator_nonlinear` "
+              "reports a mechanism from a measurement never taken -- the standard this file "
+              "already applies to tau");
     }
     {
         auto in = sound();
@@ -131,6 +134,27 @@ int main() {
               "(0 by construction at 1/2; 1.7e-07 measured at 1/3)");
     }
     {
+        // R13.14 (round 5, R5-7): +Inf passes a bare `>= 0.0`. A blown-up tau with sound
+        // preconditions returned Measured, and the row printed the three-way causal conclusion
+        // beside tau=inf. The header's own is_measured() rejects it and the rule was not using
+        // it.
+        const double inf = std::numeric_limits<double>::infinity();
+        auto in = sound();
+        in.tau = inf;
+        const bool tau_inf = (name_of(in) == "unmeasured");
+        in = sound(); in.tau_alpha = inf;
+        const bool alpha_inf = (name_of(in) == "unmeasured");
+        in = sound(); in.alpha = inf;
+        const bool a_inf = (name_of(in) == "unmeasured");
+        in = sound(); in.linearity_residual = inf;
+        const bool lin_inf = (name_of(in) == "linearity_unmeasured");
+        in = sound(); in.tau = std::numeric_limits<double>::quiet_NaN();
+        const bool tau_nan = (name_of(in) == "unmeasured");
+        check(tau_inf && alpha_inf && a_inf && lin_inf && tau_nan,
+              "a non-finite input is UNMEASURED, not a finding: +Inf passes `>= 0.0` and would "
+              "have printed a causal conclusion beside tau=inf");
+    }
+    {
         // Ordering: the FD receipt is checked before the linearity residual, because on the FD
         // path the residual is a measurement OF the FD scheme and reporting "operator_nonlinear"
         // would name the wrong cause.
@@ -152,7 +176,7 @@ int main() {
               "only, so it can never quietly suppress the case the probe exists to catch");
     }
 
-    constexpr int expected_checks = 11;
+    constexpr int expected_checks = 12;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

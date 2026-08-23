@@ -8332,6 +8332,39 @@ public:
                     // The probe applies M thousands of times over the ladder; production's
                     // per-solve call count must not carry that.
                     const long long precond_total_calls_before = precond_total_calls_;
+                    // R13.14 (red team round 5, R5-9, P0): the probe also issues thousands of
+                    // MATVECS, and every one bumps the per-iteration JVP counters that
+                    // production's own one-shot diagnostics gate on. Unrestored, that means:
+                    // production's JVP diagnostics are entirely suppressed on the probe
+                    // iteration (they fire on jvp_call_count <= 3); the `== 1 && newton_iter ==
+                    // 0` one-shot fires on the PROBE's first arm's first matvec and is reported
+                    // as production's; the FD-consistency sampler samples the probe's matvecs;
+                    // and the "[Newton] JVP calls / avg" summary reports the probe's count and
+                    // mean. All while the row attests probe_noninterfering=1. The PR-9B
+                    // directional check ~500 lines below already does this correctly -- it
+                    // snapshots eleven counters and forces the call count high so the one-shots
+                    // cannot fire during it. The probe that runs FIRST and issues far more
+                    // matvecs restored none of them.
+                    const int  sv_jvp_calls   = jvp_call_count;
+                    const int  sv_jvp_ad      = jvp_ad_calls;
+                    const int  sv_jvp_fd      = jvp_fd_calls;
+                    const int  sv_jvp_fdf     = jvp_fd_forward_calls;
+                    const int  sv_jvp_fdc     = jvp_fd_central_calls;
+                    const double sv_jvp_ms    = total_jvp_time_ms;
+                    // Same guard the sibling uses: past every one-shot threshold, so the
+                    // probe's own matvecs cannot trigger a production diagnostic.
+                    jvp_call_count = std::max(jvp_call_count, 1000);
+                    // R13.14 (round 5, R5-10, P0): and the shared preconditioner-event flag.
+                    // An arm's M tripping its ratio guard sets it, it is never restored on the
+                    // arm path, and it is read at stage 3 / iteration 0 to decide
+                    // `stage3_hopeless_detected` -- which feeds `stage3_hopeless_streak_` and
+                    // `stage3_hopeless_budget_mode_`, MEMBERS THAT PERSIST ACROSS SOLVES AND
+                    // TIMESTEPS. The probe's default target IS stage-any / iteration 0, so the
+                    // probe could steer the rest of the run. `ab_valid=0` would have said "you
+                    // may not compare the arms"; it never said "this run's trajectory was
+                    // altered". Snapshot and restore, so it cannot be.
+                    const bool sv_variable_pc_event =
+                        variable_pc_event ? *variable_pc_event : false;
                     // fd-fallback count BEFORE the arms; compared after (red team P1-2: reading
                     // it once before the arms made a fallback inside an arm invisible).
                     const long long fd_before =
@@ -8644,8 +8677,20 @@ public:
                             // objective IS the unweighted norm. Substituted, and SAID (N4).
                             rho_D = rho;
                         }
-                        const unsigned long long b_dig_arm  = digest(gmres_rhs);
-                        const unsigned long long x0_dig_arm = digest(gmres_x0);
+                        // R13.14 (round 5, R5-8b): `digest` returns a DOUBLE built from a
+                        // norm plus signed sums, so converting it to an unsigned integer is
+                        // undefined behaviour for any negative value -- and the
+                        // undefined-tensor sentinel is -1.0, which every cold start hits. The
+                        // conversion also truncated the fraction, so two digests differing by
+                        // less than 1.0 compared EQUAL. Compare the bit patterns instead:
+                        // exact, total, and no conversion.
+                        auto digest_bits = [](double d) {
+                            unsigned long long u = 0;
+                            std::memcpy(&u, &d, sizeof(u));
+                            return u;
+                        };
+                        const unsigned long long b_dig_arm  = digest_bits(digest(gmres_rhs));
+                        const unsigned long long x0_dig_arm = digest_bits(digest(gmres_x0));
                         rows.push_back({arm_name, m, rho, rho_phys, rho_D,
                                         res.rel_error,
                                         res.iterations,
@@ -8723,10 +8768,25 @@ public:
                     const long long fd_after_arms =
                         wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
                     precond_total_calls_ = precond_total_calls_before;
+                    // R5-9 / R5-10: restore everything the probe moved that production reads.
+                    jvp_call_count         = sv_jvp_calls;
+                    jvp_ad_calls           = sv_jvp_ad;
+                    jvp_fd_calls           = sv_jvp_fd;
+                    jvp_fd_forward_calls   = sv_jvp_fdf;
+                    jvp_fd_central_calls   = sv_jvp_fdc;
+                    total_jvp_time_ms      = sv_jvp_ms;
+                    const bool pc_event_moved =
+                        variable_pc_event && (*variable_pc_event != sv_variable_pc_event);
+                    if (variable_pc_event) *variable_pc_event = sv_variable_pc_event;
                     const bool noninterfering =
                         (precond_fallback_count_ == fallbacks_before) &&
                         (precond_total_calls_ == precond_total_calls_before) &&
-                        (fd_after_arms == fd_before);
+                        (fd_after_arms == fd_before) &&
+                        // Restored, and the fact that it MOVED is still reported -- a restore
+                        // makes the run safe, it does not make the arms comparable.
+                        !pc_event_moved &&
+                        (jvp_call_count == sv_jvp_calls) &&
+                        (total_jvp_time_ms == sv_jvp_ms);
                     jvp_ok = jvp_ok &&
                         (wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed)
                              == fd_before);
@@ -8835,7 +8895,13 @@ public:
                               << " ab_reason=" << verdict.reason
                               << " b_digest=" << digest(gmres_rhs)
                               << " x0_digest=" << digest(gmres_x0)
-                              << " ab_evidence=digests_compared_b_x0/by_construction_operator"
+                              // R13.14 (round 5, R5-8): the arms are handed the SAME two
+                              // objects by reference, so equal digests follow from aliasing,
+                              // not from a comparison of independently supplied inputs. The
+                              // recheck still has power -- it would catch an in-place mutation
+                              // by an arm -- and the label now says exactly that much.
+                              << " ab_evidence=b_x0_single_object_digest_rechecked_per_arm"
+                                 "/by_construction_operator"
                               << " b_digests_agree=" << (b_digests_agree ? 1 : 0)
                               << " x0_digests_agree=" << (x0_digests_agree ? 1 : 0)
                               << " b_norm=" << b_norm
@@ -10876,9 +10942,15 @@ public:
                         const auto R_alpha = (K_alpha - compute_rhs(U_alpha)).detach();
                         const auto dR_alpha = R_alpha - R.detach();
                         const auto As_alpha = apply_jacobian(s_alpha).detach();
-                        alpha_arm_measured = true;
-                        const double nAs_alpha =
-                            As_alpha.to(torch::kFloat64).norm().item<double>();
+                        const double nAs_alpha = As_alpha.defined()
+                            ? As_alpha.to(torch::kFloat64).norm().item<double>() : -1.0;
+                        // R13.14 (round 5, R5-6): this was hardcoded true, so AlphaArmAssumed
+                        // was unreachable from the only production caller -- a constant dressed
+                        // as a precondition, the same shape removed one screen away in the same
+                        // commit that introduced it. It is now the condition it claims: the arm
+                        // was measured iff its matvec produced a usable tensor.
+                        alpha_arm_measured =
+                            As_alpha.defined() && std::isfinite(nAs_alpha) && nAs_alpha > 0.0;
                         tau_alpha = nAs_alpha > 0.0
                             ? (dR_alpha - As_alpha).to(torch::kFloat64).norm().item<double>()
                                   / nAs_alpha : -1.0;

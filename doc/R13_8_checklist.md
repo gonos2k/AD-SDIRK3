@@ -1166,3 +1166,65 @@ receipt behind it is now one that a broken operator would fail.
 residual is zero by construction, and reporting "linear" from it is the tautology the rule exists
 to prevent), with fixtures over {0.125, 0.25, 0.5, 1, 2}. **A receipt that cannot fail is not a
 receipt.**
+
+### Round 5, part 2 — the probe was steering the run it measured
+
+**R5-9 (P0) — `probe_noninterfering=1` while five per-iteration JVP counters were being
+rewritten.** The frozen A/B probe issues thousands of matvecs, and every one bumps
+`jvp_call_count`, `jvp_ad_calls`, `jvp_fd_calls`, `jvp_fd_forward_calls`, `jvp_fd_central_calls`
+and `total_jvp_time_ms` — all declared *inside* the Newton iteration, and the probe runs **before**
+production's own solve in that iteration. Consequences, all under a row attesting non-interference:
+
+- production's one-shot JVP diagnostics gate on `jvp_call_count <= 3` and were **entirely
+  suppressed** on the probe iteration;
+- the `jvp_call_count == 1 && newton_iter == 0` one-shot fired on the **probe's** first arm's first
+  matvec and was reported as production's;
+- the FD-consistency sampler sampled the **probe's** matvecs;
+- the `[Newton] JVP calls / avg` summary reported the probe's count and mean.
+
+The in-tree proof that this is an omission and not a design choice: the PR-9B directional
+consistency check in the same function snapshots **eleven** of these counters and forces
+`jvp_call_count = max(count, 1000)` so the one-shots cannot fire during it. The probe that runs
+first and issues far more matvecs restored none of them. It now snapshots, forces the count past
+every one-shot threshold, restores, **and includes the restore in what `noninterfering` attests**.
+
+**R5-10 (P0) — the probe could change a control decision that persists across timesteps.** An arm's
+M tripping its ratio guard sets the shared `*variable_pc_event`, which is never restored on the arm
+path and is read at stage 3 / iteration 0 to decide `stage3_hopeless_detected` — feeding
+`stage3_hopeless_streak_` and `stage3_hopeless_budget_mode_`, **members that survive the solve and
+the timestep**. The probe's default target *is* iteration 0 at any stage. There was a partial
+mitigation — the same branch bumps `precond_fallback_count_`, so `ab_valid` would read 0 — but that
+only invalidates the *comparison*. `ab_valid=0` says *"you may not compare the arms"*; it never said
+*"this run's forward trajectory was altered."* The flag is now snapshotted and restored, and the
+fact that it **moved** is still reported: a restore makes the run safe, it does not make the arms
+comparable.
+
+**R5-6/R5-7/R5-8 (P1), all closed.** `alpha_arm_measured` was hardcoded true, so `AlphaArmAssumed`
+was unreachable from the only production caller — the identical shape removed one screen away *in
+the same commit that introduced it*; it is now the condition it claims (the arm was measured iff its
+matvec produced a usable tensor). `linearity_residual = -1` (the **not-measured** sentinel, emitted
+for a zero-norm matvec) was classified `operator_nonlinear` — naming a mechanism from a measurement
+never taken, against the standard the same file already applies to τ; there is now a distinct
+`LinearityUnmeasured`. The rule gated on bare `>= 0.0`, which **+Inf passes**, so a blown-up τ with
+sound preconditions returned `Measured` and printed the causal conclusion beside `tau=inf` — it now
+uses the header's own `is_measured`, with fixtures over Inf and NaN. And the per-arm digest
+converted a `double` built from signed sums to `unsigned long long` — **undefined behaviour for any
+negative value, which the `-1.0` undefined-tensor sentinel hits on every cold start** — while
+truncating the fraction so digests differing by < 1.0 compared equal; it now compares bit patterns.
+The evidence label was also overstated: the arms are handed the *same two objects*, so equal digests
+follow from aliasing rather than comparison. It reads
+`ab_evidence=b_x0_single_object_digest_rechecked_per_arm/by_construction_operator` — which is what
+the check actually establishes (it would still catch an in-place mutation).
+
+**Verified after all of it, same run:**
+
+```
+ab_valid=1 ab_reason=ok probe_noninterfering=1 identity_resolved_krylov=1
+arm=M j=48 ru_rho0=1.667 ru_rho=0.4279 rv_rho0=1.687 rv_rho=0.8541 ...
+tau=0.1192 alpha=0.3333 tau_alpha_over_tau=0.3333 linearity_residual=1.791e-07 tau_verdict=measured
+category=krylov_stagnated worst_krylov_rel_vs_r0=0.9941 krylov_solves_vs_r0=4 krylov_solves_trivial=0
+```
+
+Every number reproduces the pre-fix run. The probe was steering the solver and — on this case —
+not steering it anywhere that changed the measurement. That is a fact about this case, not about
+the probe, which is why the restore matters.

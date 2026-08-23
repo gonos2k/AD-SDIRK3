@@ -313,7 +313,7 @@ struct TaylorDefectInputs {
 };
 
 enum class TaylorVerdict { Unmeasured, FdFallback, AlphaArmAssumed, AlphaDyadic,
-                           OperatorNonlinear, Measured };
+                           LinearityUnmeasured, OperatorNonlinear, Measured };
 
 inline const char* taylor_verdict_name(TaylorVerdict v) {
     switch (v) {
@@ -321,6 +321,7 @@ inline const char* taylor_verdict_name(TaylorVerdict v) {
         case TaylorVerdict::FdFallback:      return "fd_fallback";
         case TaylorVerdict::AlphaArmAssumed: return "alpha_arm_assumed";
         case TaylorVerdict::AlphaDyadic:     return "alpha_dyadic";
+        case TaylorVerdict::LinearityUnmeasured: return "linearity_unmeasured";
         case TaylorVerdict::OperatorNonlinear: return "operator_nonlinear";
         case TaylorVerdict::Measured:        return "measured";
     }
@@ -340,7 +341,12 @@ inline bool is_dyadic(double a) {
 }
 
 inline TaylorVerdict taylor_defect_verdict(const TaylorDefectInputs& in) {
-    if (!(in.tau >= 0.0) || !(in.tau_alpha >= 0.0) || !(in.alpha > 0.0)) {
+    // R13.14 (round 5, R5-7): `is_measured`, not a bare `>= 0.0`. +Inf passes `>= 0.0`, so a
+    // blown-up tau with sound preconditions returned Measured and the row printed the
+    // three-way causal conclusion beside `tau=inf`. This header defines the rejecting
+    // predicate a few lines up and this rule was not using it.
+    if (!is_measured(in.tau) || !is_measured(in.tau_alpha) ||
+        !is_measured(in.alpha) || in.alpha <= 0.0) {
         return TaylorVerdict::Unmeasured;
     }
     if (!in.fd_fallback_free)   return TaylorVerdict::FdFallback;
@@ -348,8 +354,15 @@ inline TaylorVerdict taylor_defect_verdict(const TaylorDefectInputs& in) {
     // Checked BEFORE the residual, because with a dyadic alpha the residual is zero by
     // construction and reporting "linear" from it would be the tautology this rule exists for.
     if (is_dyadic(in.alpha))    return TaylorVerdict::AlphaDyadic;
-    if (!(in.linearity_residual >= 0.0) ||
-        in.linearity_residual > kTaylorLinearityTol) {
+    // R13.14 (round 5, R5-7): an ABSENT linearity measurement is not a nonlinear operator.
+    // The sentinel is emitted when the scaled matvec has zero norm -- a degenerate matvec, not
+    // a Jacobian defect -- and calling that `operator_nonlinear` names a mechanism from a
+    // measurement that was never taken, which is the standard this file's sibling clause
+    // already applies to tau ("unmeasured is its own answer, not folded into a failure that
+    // names a mechanism"). `is_measured` is used rather than a bare >= 0 so that +/-Inf is
+    // rejected here too.
+    if (!is_measured(in.linearity_residual)) return TaylorVerdict::LinearityUnmeasured;
+    if (in.linearity_residual > kTaylorLinearityTol) {
         return TaylorVerdict::OperatorNonlinear;
     }
     return TaylorVerdict::Measured;
