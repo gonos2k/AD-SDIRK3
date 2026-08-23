@@ -320,6 +320,10 @@ struct TaylorDefectInputs {
     // and the ratio still print plausible values. Fraction of ||s|| actually present in the
     // stored K, and the signal-to-roundoff of the measured difference.
     double realized_step_fraction = -1.0;
+    // R13.18 (deep review P1-3): the state the RHS is actually EVALUATED at. K can keep the step
+    // exactly and still lose it when h*gamma*s is added to a large U_stage -- float32 quantization
+    // happens at the addition, not at the storage of K. Checking only K certifies the wrong sum.
+    double realized_U_fraction = -1.0;
     double signal_to_roundoff = -1.0;
 };
 
@@ -400,6 +404,11 @@ inline TaylorVerdict taylor_defect_verdict(const TaylorDefectInputs& in) {
     // unrealized step is a statement about this measurement, not about the operator.
     if (is_measured(in.realized_step_fraction) &&
         in.realized_step_fraction < kTaylorStepRealized) {
+        return TaylorVerdict::StepNotRealized;
+    }
+    // ...and the evaluation state, which is the sum the RHS actually sees.
+    if (is_measured(in.realized_U_fraction) &&
+        in.realized_U_fraction < kTaylorStepRealized) {
         return TaylorVerdict::StepNotRealized;
     }
     if (is_measured(in.signal_to_roundoff) &&

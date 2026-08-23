@@ -206,8 +206,14 @@ inline const char* stage_failure_layer(StageFailure f) {
 // and budget usage -- a fixed precedence over aggregates, which cannot tell "the residual stopped
 // moving" from "the budget ran out at a residual that happened to be flat".
 enum class NewtonTerminationReason {
+    // R13.18 (deep review P1-5): `TrustRejected` and `NonfiniteResidual` were removed -- both had
+    // ZERO producers, and neither corresponds to an actual Newton-loop exit: the trust region's
+    // "all attempts rejected" path keeps K and CONTINUES, and no non-finite-residual site breaks
+    // the loop. An enum value nothing writes is the same defect as a field nothing reads, and
+    // keeping them made the inventory look more complete than the instrumentation was. If such an
+    // exit is added later, the value comes back WITH its producer.
     NotRecorded = 0, Converged, BudgetExhausted, ResidualStall, ZeroStepStall,
-    ZeroUpdateAfterTotalFailure, TrustRejected, NonfiniteResidual, Exception
+    ZeroUpdateAfterTotalFailure, Exception
 };
 
 inline const char* newton_termination_name(NewtonTerminationReason r) {
@@ -219,8 +225,6 @@ inline const char* newton_termination_name(NewtonTerminationReason r) {
         case NewtonTerminationReason::ZeroStepStall:      return "zero_step_stall";
         case NewtonTerminationReason::ZeroUpdateAfterTotalFailure:
             return "zero_update_after_total_failure";
-        case NewtonTerminationReason::TrustRejected:      return "trust_rejected";
-        case NewtonTerminationReason::NonfiniteResidual:  return "nonfinite_residual";
         case NewtonTerminationReason::Exception:          return "exception";
     }
     return "not_recorded";

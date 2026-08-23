@@ -48,10 +48,10 @@ Legend: **[DONE]** · **[OPEN]**
       `rw` Jacobian hardly at all.
 - [x] **P1-2 — `tau_block_max` is written and never read by the verdict**, and the realization /
       roundoff gates only fire when *measured*, so a record missing them still returns `Measured`.
-- [ ] **P1-3 — `K` realization is checked, `U_eval = U_stage + hγK` realization is not.** A step can
+- [x] **P1-3 — `K` realization is checked, `U_eval = U_stage + hγK` realization is not.** A step can
       survive in `K` and be quantized away when added to a large background.
-- [ ] **P1-4 — `rho_D_initial` has no producer; early returns carry an incomplete receipt.**
-- [ ] **P1-5 — enum inventory ≠ producer set**: `TrustRejected` and `NonfiniteResidual` have no
+- [x] **P1-4 — `rho_D_initial` has no producer; early returns carry an incomplete receipt.**
+- [x] **P1-5 — enum inventory ≠ producer set**: `TrustRejected` and `NonfiniteResidual` have no
       producers, and a comment claims a site is "NOT a Newton-loop exit" — verify against the code.
 - [ ] **P1-6 — the A/B fingerprint still shares the underlying preconditioner instance.** Accepted
       as a stated limitation; the OFF/ON trajectory control stands for the current configuration.
@@ -138,3 +138,40 @@ exit-met-D-not-S earns the mismatch, and **no exit receipt may not borrow the st
 - **P1-5**: `TrustRejected` / `NonfiniteResidual` have no producers — enum inventory ≠ producer set.
 - **P1-6**: the A/B fingerprint still shares the underlying preconditioner instance (stated
   limitation; the OFF/ON trajectory control stands for the current configuration).
+
+
+---
+
+## Third batch — P1-3, P1-4, P1-5 closed
+
+```
+tau=0.1192  tau_excited_block_max=0.2008  tau_verdict=measured
+realized_step_fraction=1  realized_U_fraction=1  signal_to_roundoff=2.527e+06
+```
+
+**P1-3.** `U_eval = U_stage + hγK` realization is now measured and gated, not just `K`. The float32
+loss happens **at the addition to the background**, not when `K` is stored, so checking only `K`
+certified the wrong sum. Measured `realized_U_fraction = 1`, so the earlier τ values clear the
+stricter gate too.
+
+**P1-4.** `rho_D_initial` had **zero producers** while its header comment promised "both readings
+(initial and final)" — so the P0-1 headline *"both readings are on the record"* was true of no
+record. It is captured in both solvers beside its S sibling, from the same initial residual.
+
+**P1-5.** Two defects, both mine.
+
+- A comment read *"NOT a Newton-loop exit — stamping it here would attribute the loop's exit to a
+  site that does not end it"* — **ten lines above the `break` that ends the Newton loop, and above
+  the stamp**. I wrote it believing the stall detector and that `break` were two sites; they are
+  one. A comment denying what the code under it does is the same class as a field nothing reads.
+- `TrustRejected` and `NonfiniteResidual` had **zero producers**, and neither corresponds to a real
+  exit: the trust region's "all attempts rejected" path keeps `K` and *continues*, and no
+  non-finite-residual site breaks the loop. **Removed** — keeping them made the inventory look more
+  complete than the instrumentation was. If such an exit is added, the value returns *with* its
+  producer.
+
+## Remaining open, unchanged
+
+ρ_E *values* and the **stage-gate seam** (the gate accepts on `‖E⁻¹R‖`, so ρ_D < η, ρ_S < η,
+ρ_E ≥ η is still unclassifiable), and the A/B fingerprint's shared preconditioner instance — a
+stated limitation, with the OFF/ON trajectory control standing for the current configuration.

@@ -1198,6 +1198,11 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // and solve_gmres did not, so the M-off arm -- the CONTROL arm of every A/B here -- kept
     // the "> 1" divergence rule that fires on a warm start the solve is fixing.
     float initial_rel_error_gmres = -1.0f;
+    // R13.18 (deep review P1-4): the INITIAL D-objective. `rho_D_initial` was declared, its
+    // header comment promised "both readings (initial and final)", and NOTHING wrote it -- so the
+    // headline "both readings are on the record" was true of no record. Captured here, beside its
+    // S sibling, from the same initial residual.
+    float initial_rho_D_gmres = -1.0f;
     {
         torch::NoGradGuard ng_init;
         const float bn0 = guarded_item<float>(b_inner.norm());
@@ -1273,6 +1278,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     auto error_tensor = block_scaled
         ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
         : safe_tensor_norm(r_true_inner) / bnorm_safe;
+    // R13.18 (deep review P1-4): the initial value of the objective the loop will stop on.
+    { torch::NoGradGuard ng_rd0; initial_rho_D_gmres = guarded_item<float>(error_tensor); }
 
     // NUMERICAL STABILITY: Detect NaN in residual error immediately
     if (guarded_item<bool>(torch::isnan(error_tensor).any())) {
@@ -2450,6 +2457,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     res.termination_reason = resolution.reason;
     res.initial_rel_error = initial_rel_error_gmres;
     res.rho_S_initial = initial_rel_error_gmres;
+    res.rho_D_initial = initial_rho_D_gmres;
     // R13.17 (external review P0-1): BOTH convergences on the record. The loop stops on the
     // D-weighted objective it minimises (rho_D, both sides D-scaled -- no mixed denominator) and
     // success is judged on the unweighted rho_S. A solve with rho_D < eta and rho_S >= eta met its
@@ -2582,6 +2590,11 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // R13.9: the j=0 relative residual, in the same halo-zeroed norm every later rel_error
     // uses, so the two are comparable by construction.
     float initial_rel_error_fgmres = -1.0f;
+    // R13.18 (deep review P1-4): the INITIAL D-objective. `rho_D_initial` was declared, its
+    // header comment promised "both readings (initial and final)", and NOTHING wrote it -- so the
+    // headline "both readings are on the record" was true of no record. Captured here, beside its
+    // S sibling, from the same initial residual.
+    float initial_rho_D_fgmres = -1.0f;
     {
         torch::NoGradGuard ng_init;
         const float bn0 = guarded_item<float>(b_inner.norm());
@@ -2837,6 +2850,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     auto error_tensor = block_scaled
         ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
         : safe_tensor_norm(r_true_inner) / bnorm_safe;
+    // R13.18 (deep review P1-4): the initial value of the objective the loop will stop on.
+    { torch::NoGradGuard ng_rd0; initial_rho_D_fgmres = guarded_item<float>(error_tensor); }
 
     // NUMERICAL STABILITY: Detect NaN in residual error immediately
     if (guarded_item<bool>(torch::isnan(error_tensor).any())) {
@@ -4179,6 +4194,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     res.termination_reason = resolution.reason;
     res.initial_rel_error = initial_rel_error_fgmres;
     res.rho_S_initial = initial_rel_error_fgmres;
+    res.rho_D_initial = initial_rho_D_fgmres;
     // R13.17 (external review P0-1): BOTH convergences on the record. The loop stops on the
     // D-weighted objective it minimises (rho_D, both sides D-scaled -- no mixed denominator) and
     // success is judged on the unweighted rho_S. A solve with rho_D < eta and rho_S >= eta met its
@@ -11520,6 +11536,7 @@ public:
                     // difference stand above roundoff? At float32 a small step can leave the
                     // stored state unchanged while tau and the ratio still print plausibly.
                     double realized_step_fraction = -1.0, signal_to_roundoff = -1.0;
+                    double realized_U_fraction = -1.0;
                     {
                         const auto K64 = K.detach().to(torch::kFloat64);
                         const auto s64 = dK_scaled.detach().to(torch::kFloat64);
@@ -11530,6 +11547,21 @@ public:
                                                       .to(torch::kFloat64);
                             realized_step_fraction =
                                 (K_stored - K64).norm().item<double>() / n_s;
+                            // R13.18 (deep review P1-3): the EVALUATION state. The RHS is
+                            // evaluated at U_stage + h*gamma*K, and a step that survives in K can
+                            // still be quantized away when h*gamma*s is added to a large
+                            // background -- the loss happens at that addition, not at K's storage.
+                            const auto U_base = (U_stage + dt * gamma * K.detach());
+                            const auto U_pert =
+                                (U_stage + dt * gamma * (K.detach() + dK_scaled.detach()));
+                            const double n_dU =
+                                (dt * gamma * dK_scaled.detach())
+                                    .to(torch::kFloat64).norm().item<double>();
+                            if (n_dU > 0.0) {
+                                realized_U_fraction =
+                                    (U_pert.to(torch::kFloat64) - U_base.to(torch::kFloat64))
+                                        .norm().item<double>() / n_dU;
+                            }
                         }
                         const double n_dR = dR.to(torch::kFloat64).norm().item<double>();
                         const double eps32 = 1.1920929e-07;
@@ -11543,6 +11575,7 @@ public:
                     wrf::sdirk3::TaylorDefectInputs tin;
                     tin.tau_block_max = tau_block_max;
                     tin.realized_step_fraction = realized_step_fraction;
+                    tin.realized_U_fraction = realized_U_fraction;
                     tin.signal_to_roundoff = signal_to_roundoff;
                     tin.fd_fallback_free =
                         (wrf::sdirk3::g_jvp_fd_fallback_count.load(
@@ -11574,6 +11607,7 @@ public:
                               << " linearity_residual=" << linearity_residual
                               << " tau_excited_block_max=" << tau_block_max
                               << " realized_step_fraction=" << realized_step_fraction
+                              << " realized_U_fraction=" << realized_U_fraction
                               << " signal_to_roundoff=" << signal_to_roundoff
                               << tau_block_rows
                               << " tau_verdict="
@@ -12006,9 +12040,13 @@ public:
                     // v20.14r27j: Require 2 consecutive stalls before early exit.
                     // Single-iteration stall may be transient (e.g., trust-region radius reset).
                     if (newton_stall_count >= 2) {
-                        // NOT a Newton-loop exit -- brace-depth tracking shows this `break`
-                        // belongs to an inner scope. Stamping it here would have attributed the
-                        // loop's exit to a site that does not end it.
+                        // R13.18 (deep review P1-5): this comment used to say "NOT a
+                        // Newton-loop exit ... stamping it here would attribute the loop's exit to
+                        // a site that does not end it" -- written when I believed the stall
+                        // detector and this break were two different sites. They are one: the
+                        // `break` ten lines below ends the Newton loop, and the stamp is correct.
+                        // A comment that denies what the code under it does is the same defect
+                        // class as a field nothing reads.
                         std::cerr << "[Newton] RESIDUAL STALL: iter " << newton_iter
                                   << ", rel_decrease=" << rel_decrease
                                   << " < " << stall_threshold

@@ -50,6 +50,7 @@ TaylorDefectInputs sound() {
     in.linearity_residual = 1.791e-7;   // measured: about 1.5 float32 ulps
     in.tau_block_max = 0.02;            // R13.17: no block far off the packed reading
     in.realized_step_fraction = 1.0;    // the step was actually stored
+    in.realized_U_fraction = 1.0;       // ...and survived the add to U_stage
     in.signal_to_roundoff = 1.0e4;      // and the difference is far above the float32 floor
     return in;
 }
@@ -221,7 +222,21 @@ int main() {
               "and a record without the per-block field keeps classifying as it did");
     }
 
-    constexpr int expected_checks = 18;
+    {
+        // R13.18 (deep review P1-3): K can keep the step and U_eval can still lose it -- the
+        // float32 loss happens when h*gamma*s is added to a large background, not when K is
+        // stored. Checking only K certifies the wrong sum.
+        auto in = sound();
+        in.realized_U_fraction = 0.5;
+        check(name_of(in) == "step_not_realized",
+              "a step that survives in K and is quantized away in U_eval was not realized where "
+              "the RHS is evaluated");
+        in = sound(); in.realized_U_fraction = -1.0;
+        check(name_of(in) == "measured",
+              "and a record without the U field keeps classifying as it did");
+    }
+
+    constexpr int expected_checks = 20;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
