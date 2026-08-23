@@ -298,6 +298,10 @@ add_executable(test_ab_attribution tests/test_ab_attribution.cpp)
 target_link_libraries(test_ab_attribution PRIVATE wrf_sdirk3::core)
 add_test(NAME Ab_Attribution_Contract COMMAND test_ab_attribution)
 
+add_executable(test_taylor_defect_verdict tests/test_taylor_defect_verdict.cpp)
+target_link_libraries(test_taylor_defect_verdict PRIVATE wrf_sdirk3::core)
+add_test(NAME Taylor_Defect_Verdict_Contract COMMAND test_taylor_defect_verdict)
+
 # R13.2 C1: which gate refused FIRST. "The step did not complete" is one bucket holding
 # seven outcomes that point at different layers, and a dt sweep is the right experiment for
 # exactly one of them.

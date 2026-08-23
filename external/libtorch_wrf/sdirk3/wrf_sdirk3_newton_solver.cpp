@@ -8312,6 +8312,9 @@ public:
                         return M_inv;   // by value: its own latch
                     };
                     const int fallbacks_before = precond_fallback_count_;
+                    // The probe applies M thousands of times over the ladder; production's
+                    // per-solve call count must not carry that.
+                    const long long precond_total_calls_before = precond_total_calls_;
                     // fd-fallback count BEFORE the arms; compared after (red team P1-2: reading
                     // it once before the arms made a fallback inside an arm invisible).
                     const long long fd_before =
@@ -8441,6 +8444,8 @@ public:
                         resolution(e_hom_krylov, identity_frac_krylov);
                     // "Resolved" = the identity term stands above the operator's noise floor.
                     // Unmeasured is NOT resolved: -1 fails the range test rather than passing it.
+                    // Consumed by ab_attributable via cmp.identity_resolved below -- the rule
+                    // lives in wrf_sdirk3_probe_validity.h so a fixture can reject its negation.
                     const bool identity_resolved_krylov =
                         (identity_resolution_krylov >= 0.0 && identity_resolution_krylov < 1.0);
                     // R13.9 (referee C5): the operator's linearity was measured; the
@@ -8524,7 +8529,15 @@ public:
 
                     struct Row { const char* arm; int j; double rho; double rho_phys;
                                  double rho_D; float rel; int iters; int term;
-                                 long long a_applies; bool d_weighted; bool msel_engaged; };
+                                 long long a_applies; bool d_weighted; bool msel_engaged;
+                                 // R13.13 (red team round 4): the arms' inputs, digested INSIDE
+                                 // each arm. `same_rhs`/`same_x0` were hardcoded true while b
+                                 // and x0 digests were printed once for the whole block -- so a
+                                 // reader of `ab_valid=1 ... b_digest=0x..` saw evidence of a
+                                 // comparison that never happened, and three of
+                                 // ab_attributable's clauses were unreachable from its only
+                                 // production caller. Now they are compared.
+                                 unsigned long long b_dig; unsigned long long x0_dig; };
                     enum class Arm { M, I, Sel };
                     std::vector<Row> rows;
                     // R13.8 (A4): equal j is equal ARNOLDI DIMENSION, not equal work -- the M
@@ -8614,12 +8627,15 @@ public:
                             // objective IS the unweighted norm. Substituted, and SAID (N4).
                             rho_D = rho;
                         }
+                        const unsigned long long b_dig_arm  = digest(gmres_rhs);
+                        const unsigned long long x0_dig_arm = digest(gmres_x0);
                         rows.push_back({arm_name, m, rho, rho_phys, rho_D,
                                         res.rel_error,
                                         res.iterations,
                                         static_cast<int>(res.termination_reason),
                                         a_apply_count, d_weighted,
-                                        (which == Arm::Sel) ? *msel_engaged : false});
+                                        (which == Arm::Sel) ? *msel_engaged : false,
+                                        b_dig_arm, x0_dig_arm});
                         // R13.9: PER-BLOCK residual at the largest budget, each arm. The three
                         // aggregate norms say M's reduction is large in rho_D and small in
                         // rho_S, and D^-1 up-weights the small-residual blocks -- so the
@@ -8676,8 +8692,24 @@ public:
                     // Restore production's preconditioner to the state it would have had, and
                     // MEASURE whether anything else moved.
                     // Production's wrapper was never handed to an arm; nothing to restore.
+                    //
+                    // R13.13 (red team round 4): "whether ANYTHING else moved" was one counter.
+                    // `precond_total_calls_` is bumped once per M application by every arm --
+                    // thousands of increments over the ladder -- and it is the denominator of
+                    // the fallback-percentage print for the rest of the solve, so the probe was
+                    // mutating production telemetry while reporting that it had not. It is
+                    // restored here (the probe's applications are not production's), and the
+                    // restore is what `noninterfering` now attests. The JVP fallback counter
+                    // was folded into `jvp_ok` instead, so `probe_noninterfering=1` could print
+                    // on a run where the probe demonstrably moved a global; it is counted here
+                    // as well, and still gates jvp_ok below.
+                    const long long fd_after_arms =
+                        wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
+                    precond_total_calls_ = precond_total_calls_before;
                     const bool noninterfering =
-                        (precond_fallback_count_ == fallbacks_before);
+                        (precond_fallback_count_ == fallbacks_before) &&
+                        (precond_total_calls_ == precond_total_calls_before) &&
+                        (fd_after_arms == fd_before);
                     jvp_ok = jvp_ok &&
                         (wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed)
                              == fd_before);
@@ -8736,10 +8768,24 @@ public:
                                 halo_floor_delta, std::abs(r_.rho - r_.rel) / r_.rho);
                         }
                     }
+                    // MEASURED, not asserted: every arm digested the b and x0 it was handed,
+                    // and they must agree across all of them.
+                    bool b_digests_agree = true, x0_digests_agree = true;
+                    if (!rows.empty()) {
+                        for (const auto& r_ : rows) {
+                            b_digests_agree  = b_digests_agree  && (r_.b_dig  == rows[0].b_dig);
+                            x0_digests_agree = x0_digests_agree && (r_.x0_dig == rows[0].x0_dig);
+                        }
+                    } else {
+                        b_digests_agree = x0_digests_agree = false;   // nothing ran: not evidence
+                    }
                     wrf::sdirk3::AbComparison cmp;
-                    cmp.same_operator = true;     // one closure object, both arms
-                    cmp.same_rhs = true;          // one tensor
-                    cmp.same_x0 = true;
+                    // The operator IS one closure object handed to every arm -- by construction,
+                    // and stated as such on the record (`ab_evidence=`) rather than implied by a
+                    // digest that was never compared.
+                    cmp.same_operator = true;
+                    cmp.same_rhs = b_digests_agree;
+                    cmp.same_x0 = x0_digests_agree;
                     // N2: with precond_refinement_passes > 1 production's M is the
                     // defect-correction wrapper and the arm's make_fresh_M is the bare one --
                     // an "M" arm that is not M. Same path only when there is no wrapper.
@@ -8751,6 +8797,7 @@ public:
                     cmp.fresh_operator_per_arm = true;
                     cmp.fresh_preconditioner_per_arm = true;   // copied from pristine per row
                     cmp.diagnostic_noninterfering = noninterfering;
+                    cmp.identity_resolved = identity_resolved_krylov;
                     cmp.jvp_authoritative = jvp_ok && operator_linear && precond_linear;
                     cmp.rho_a_finite = cmp.rho_b_finite = all_finite;
                     cmp.termination_a_admissible = cmp.termination_b_admissible =
@@ -8771,6 +8818,9 @@ public:
                               << " ab_reason=" << verdict.reason
                               << " b_digest=" << digest(gmres_rhs)
                               << " x0_digest=" << digest(gmres_x0)
+                              << " ab_evidence=digests_compared_b_x0/by_construction_operator"
+                              << " b_digests_agree=" << (b_digests_agree ? 1 : 0)
+                              << " x0_digests_agree=" << (x0_digests_agree ? 1 : 0)
                               << " b_norm=" << b_norm
                               << " rho0_S=" << rho0_S
                               << " rho0_phys=" << rho0_phys
@@ -10692,24 +10742,56 @@ public:
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_TAYLOR_DEFECT") &&
                     R.defined() && accepted_residual.defined() && dK_scaled.defined()) {
                     torch::NoGradGuard ng_tau;
+                    const long long fd_fallbacks_before_tau =
+                        wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
                     const auto As   = apply_jacobian(dK_scaled.detach()).detach();
                     const auto dR   = (accepted_residual.detach() - R.detach());
                     const double nAs = As.to(torch::kFloat64).norm().item<double>();
                     const double tau = nAs > 0.0
                         ? (dR - As).to(torch::kFloat64).norm().item<double>() / nAs : -1.0;
-                    // alpha = 1/2 arm: G(K + s/2) needs one more RHS evaluation.
-                    double tau_half = -1.0;
+                    // alpha = 1/2 arm. R13.13 (red team round 4): A(s/2) is MEASURED with a
+                    // second matvec, not taken as 0.5*A(s). Assuming it makes the ratio partly
+                    // true by construction -- only the numerator would be re-measured -- and
+                    // silently presumes A linear, which the FD-fallback path is not (its
+                    // epsilon depends on ||v||, so halving the step changes the operator). The
+                    // difference between the two is now the probe's own linearity receipt.
+                    double tau_half = -1.0, linearity_residual = -1.0;
+                    bool alpha_arm_measured = false;
                     {
                         const auto K_half = K.detach() + 0.5 * dK_scaled.detach();
                         const auto U_half = U_stage + dt * gamma * K_half;
                         const auto R_half = (K_half - compute_rhs(U_half)).detach();
                         const auto dR_half = R_half - R.detach();
-                        const auto As_half = 0.5 * As;
+                        const auto As_half =
+                            apply_jacobian((0.5 * dK_scaled).detach()).detach();
+                        alpha_arm_measured = true;
                         const double nAs_half = As_half.to(torch::kFloat64).norm().item<double>();
                         tau_half = nAs_half > 0.0
                             ? (dR_half - As_half).to(torch::kFloat64).norm().item<double>()
                                   / nAs_half : -1.0;
+                        // ||A(s/2) - 0.5*A(s)|| / ||0.5*A(s)||: zero for a true JVP, nonzero
+                        // for an FD quotient whose epsilon moved when the step was halved.
+                        const auto As_scaled = 0.5 * As;
+                        const double nAs_scaled =
+                            As_scaled.to(torch::kFloat64).norm().item<double>();
+                        linearity_residual = nAs_scaled > 0.0
+                            ? (As_half - As_scaled).to(torch::kFloat64).norm().item<double>()
+                                  / nAs_scaled : -1.0;
                     }
+                    // The verdict, from the rule in wrf_sdirk3_probe_validity.h -- where a
+                    // fixture can reject its negation, which a rule spelled out here cannot.
+                    wrf::sdirk3::TaylorDefectInputs tin;
+                    tin.fd_fallback_free =
+                        (wrf::sdirk3::g_jvp_fd_fallback_count.load(
+                             std::memory_order_relaxed) == fd_fallbacks_before_tau);
+                    tin.alpha_arm_measured = alpha_arm_measured;
+                    tin.tau = tau;
+                    tin.tau_alpha = tau_half;
+                    tin.alpha = 0.5;
+                    tin.linearity_residual = linearity_residual;
+                    const auto tau_verdict = wrf::sdirk3::taylor_defect_verdict(tin);
+                    const bool tau_measured =
+                        (tau_verdict == wrf::sdirk3::TaylorVerdict::Measured);
                     std::cerr << "SDIRK3_TAYLOR_DEFECT stage=" << stage
                               << " newton_iter=" << newton_iter
                               << " tau=" << tau
@@ -10723,9 +10805,23 @@ public:
                               << dK_scaled.detach().to(torch::kFloat64).norm().item<double>()
                               << " As_norm=" << nAs
                               << " achieved_eta=" << gmres_raw_rel_error
-                              << "  (tau<<1: linear model faithful, inner solve binding;"
-                                 " tau=O(1) with tau_half/tau~0.5: nonlinearity over the step;"
-                                 " tau=O(1) with tau_half/tau~1: Jacobian defect)"
+                              << " alpha_arm_measured=" << (alpha_arm_measured ? 1 : 0)
+                              << " fd_fallback_free=" << (tin.fd_fallback_free ? 1 : 0)
+                              << " linearity_residual=" << linearity_residual
+                              << " tau_verdict="
+                              << wrf::sdirk3::taylor_verdict_name(tau_verdict)
+                              // The conclusion is printed ONLY when the preconditions hold. An
+                              // FD matvec at float32 is noise-limited at about the magnitude
+                              // tau itself reports, so "tau=0.018, the linearization is
+                              // faithful to 2%" and "tau=0.018, we measured the noise floor"
+                              // are the same row without this gate.
+                              << (tau_measured
+                                  ? "  (tau<<1: linear model faithful, inner solve binding;"
+                                    " tau=O(1) with tau_half/tau~0.5: nonlinearity over the"
+                                    " step; tau=O(1) with tau_half/tau~1: Jacobian defect)"
+                                  : "  (NO CONCLUSION: preconditions not met -- see"
+                                    " tau_verdict; tau and the ratio are arithmetic, not"
+                                    " evidence about the Jacobian)")
                               << std::endl;
                 }
                 if (stats_.argmin_residual_iter < 0 ||

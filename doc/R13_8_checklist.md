@@ -974,3 +974,76 @@ removed **12%**, so the run was cut off rather than stuck.
 this case and a threshold of 0.85 would flip it. The record carries the number, so the verdict can
 be re-derived under a different constant without re-running anything — which is the point of
 emitting the measurement beside the category.
+
+### Round 4, part 2 — the probes' own preconditions
+
+**P1 — `identity_resolved_krylov` was the TENTH instance, one hour old.** The identity-resolution
+measurement above was computed inline at the emit site and read by nothing: `ab_valid=1` could
+print beside `identity_resolved_krylov=0`, i.e. the row could state in one field that the operator's
+identity term is below its noise floor and in the next that the comparison is attributable —
+`A = I − hγJ` with an unresolved `I` is not the operator any ρ in the row is about. The rule now
+lives in `wrf_sdirk3_probe_validity.h` as `AbComparison::identity_resolved`, is a clause of
+`ab_attributable` (`identity_below_noise_floor`), and has a fixture that rejects its negation. The
+header's own opening paragraph predicted this: *"a rule spelled out inline at the emit site cannot
+be tested."*
+
+**P1 — the Taylor probe had no validity rule, and its one unstated precondition is violated on a
+supported path.** `A(s/2)` was taken as `0.5·A(s)`. That presumes `A` linear, which the FD-fallback
+matvec is not — its epsilon depends on ‖v‖, so halving the step changes the operator — and at
+float32 an FD directional derivative is noise-limited at roughly the magnitude τ itself reports.
+Without a receipt, *"τ = 0.018, the linearization is faithful to 2%"* and *"τ = 0.018, we measured
+the FD noise floor"* are the same record. The probe now:
+
+- **measures** `A(s/2)` with its own matvec instead of scaling — which also removes the reviewer's
+  other objection, that a ratio of exactly ½ was partly built in because only the numerator was
+  re-measured;
+- emits `linearity_residual = ‖A(s/2) − ½A(s)‖ / ‖½A(s)‖`, its own linearity receipt;
+- carries an FD-fallback receipt taken across its own matvecs;
+- has `taylor_defect_verdict` in the validity header with 10 fixtures, and **prints its three-way
+  causal conclusion only when the verdict is `measured`** — otherwise it prints
+  `NO CONCLUSION: preconditions not met`.
+
+Re-measured with the α-arm computed rather than assumed:
+
+```
+newton_iter=0 tau=0.1192  tau_half=0.05959  ratio=0.5  linearity_residual=0  tau_verdict=measured
+newton_iter=1 tau=0.06452 tau_half=0.03226  ratio=0.5  linearity_residual=0  tau_verdict=measured
+newton_iter=2 tau=0.01821 tau_half=0.009104 ratio=0.5  linearity_residual=0  tau_verdict=measured
+```
+
+**τ and the ratio are unchanged, and `linearity_residual = 0` exactly** — the forward-mode JVP
+agrees with the scaled matvec to the last bit. The conclusion drawn earlier stands, and now stands
+on a measured precondition instead of an assumed one, with both halves of the ratio re-measured.
+
+**P2 — three attribution clauses were unreachable from the only production caller.**
+`same_operator`/`same_rhs`/`same_x0` were hardcoded `true` while `b_digest`/`x0_digest` were printed
+once for the whole block — so a reader of `ab_valid=1 … b_digest=0x…` saw evidence of a comparison
+that never happened. Each arm now digests the b and x0 it was handed and the row carries
+`b_digests_agree` / `x0_digests_agree`; the operator remains by-construction (one closure handed to
+every arm) and the record says which is which via `ab_evidence=`.
+
+**P2 — "non-interfering" was one counter under a comment promising "anything else".**
+`precond_total_calls_` is bumped once per M application by every arm — thousands over the ladder —
+and is the denominator of the fallback-percentage print for the rest of the solve, so the probe was
+mutating production telemetry while reporting it had not. It is restored, and the restore is what
+the flag now attests, along with the JVP fallback counter that had been folded into `jvp_ok`
+instead.
+
+Confirmed live, all preconditions met:
+
+```
+ab_valid=1 ab_reason=ok  ab_evidence=digests_compared_b_x0/by_construction_operator
+b_digests_agree=1 x0_digests_agree=1 identity_resolved_krylov=1 identity_resolution_krylov=0.003872
+probe_noninterfering=1 worst_order_delta=0 order_pairs_compared=15
+```
+
+and the per-block ρ at j=48 reproduce the pre-change run digit for digit, so the added receipts did
+not move the measurement. With `WRF_SDIRK3_NO_EARLY_STOP` unset the same run reports
+`ab_valid=0 ab_reason=early_stop_enabled` — the verdict refuses and names which precondition failed.
+
+**A stale coverage claim, and the gate that let it drift.** `external/libtorch_wrf/sdirk3/README.md`
+claimed a *37-test* CTest inventory and cited `.github/ci/expected_ctest_names.txt`, which held 61.
+The CI gate that exists precisely to derive this claim from the file it cites was reading only the
+repo-root README. Both now state 62, and **the gate loops over every file that makes the claim** and
+fails if one of them stops making it. Sixth recurrence of the count-ratchet class; this time the
+gate shell was run locally before pushing rather than after.

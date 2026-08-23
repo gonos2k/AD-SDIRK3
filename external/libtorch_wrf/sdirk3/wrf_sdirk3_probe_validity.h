@@ -279,10 +279,70 @@ inline StageReferenceVerdict certify_stage_reference(
 // by construction, budget by equality, and the stopping rule by both arms terminating for the
 // same reason. The last one is the easiest to forget and the most common way a "same budget"
 // comparison silently becomes two different amounts of work.
+// The Taylor-defect probe: tau = ||G(K+s) - G(K) - A s|| / ||A s||, plus the same at alpha=1/2,
+// used to separate "the inner solve binds" (tau << 1) from "the nonlinearity over the step"
+// (tau = O(1), ratio ~ 1/2) from "the Jacobian is wrong" (tau = O(1), ratio ~ 1).
+//
+// It has TWO preconditions that the arithmetic cannot see:
+//  1. A must be the real Jacobian-vector product. On the FD fallback path A is a difference
+//     quotient with a state-dependent, ||v||-dependent epsilon -- not linear in its argument,
+//     and at float32 noise-limited at roughly the magnitude tau itself reports. "tau = 0.018,
+//     so the linearization is faithful to 2%" and "tau = 0.018, so we measured the FD noise
+//     floor" are then the same record.
+//  2. The alpha arm must MEASURE A(alpha*s), not assume alpha*A(s). Assuming it makes the
+//     ratio partly true by construction (only the numerator is re-measured) and silently
+//     imports precondition 1 a second time.
+// A probe that prints a three-way causal conclusion in its own row needs both on the record.
+struct TaylorDefectInputs {
+    bool   fd_fallback_free = false;   // the JVP was forward-mode for every matvec in the probe
+    bool   alpha_arm_measured = false; // A(alpha*s) was computed, not scaled from A(s)
+    double tau = -1.0;                 // -1 = not measured
+    double tau_alpha = -1.0;
+    double alpha = -1.0;
+    // ||A(alpha*s) - alpha*A(s)|| / ||alpha*A(s)||: the operator's linearity ON THIS STEP,
+    // measured rather than presumed. -1 = not measured.
+    double linearity_residual = -1.0;
+};
+
+enum class TaylorVerdict { Unmeasured, FdFallback, AlphaArmAssumed, OperatorNonlinear, Measured };
+
+inline const char* taylor_verdict_name(TaylorVerdict v) {
+    switch (v) {
+        case TaylorVerdict::Unmeasured:      return "unmeasured";
+        case TaylorVerdict::FdFallback:      return "fd_fallback";
+        case TaylorVerdict::AlphaArmAssumed: return "alpha_arm_assumed";
+        case TaylorVerdict::OperatorNonlinear: return "operator_nonlinear";
+        case TaylorVerdict::Measured:        return "measured";
+    }
+    return "unknown";
+}
+
+// How far A(alpha*s) may sit from alpha*A(s) before the ratio stops being about the Jacobian.
+inline constexpr double kTaylorLinearityTol = 1.0e-4;
+
+inline TaylorVerdict taylor_defect_verdict(const TaylorDefectInputs& in) {
+    if (!(in.tau >= 0.0) || !(in.tau_alpha >= 0.0) || !(in.alpha > 0.0)) {
+        return TaylorVerdict::Unmeasured;
+    }
+    if (!in.fd_fallback_free)   return TaylorVerdict::FdFallback;
+    if (!in.alpha_arm_measured) return TaylorVerdict::AlphaArmAssumed;
+    if (!(in.linearity_residual >= 0.0) ||
+        in.linearity_residual > kTaylorLinearityTol) {
+        return TaylorVerdict::OperatorNonlinear;
+    }
+    return TaylorVerdict::Measured;
+}
+
 struct AbComparison {
-    bool same_operator = false;      // A digests agree
-    bool same_rhs = false;           // b digests agree
-    bool same_x0 = false;            // x0 digests agree
+    // These three are "the arms were handed the same inputs". A caller may establish them by
+    // COMPARING DIGESTS or BY CONSTRUCTION (one closure, one tensor, handed to every arm) --
+    // both are valid evidence, but a caller that emits digests beside `ab_valid=1` is read as
+    // having compared them, so a by-construction caller must say which it did. The frozen A/B
+    // probe now digests b and x0 per arm and compares, so its `ab_evidence=` field reads
+    // `digests_compared`.
+    bool same_operator = false;
+    bool same_rhs = false;
+    bool same_x0 = false;
     bool same_solver_path = false;   // the SAME implementation, not an equivalent one
     bool same_budget = false;        // equal Arnoldi dimension allowed to both arms
     bool early_stop_disabled = false;
@@ -298,6 +358,14 @@ struct AbComparison {
     // R13.8: the operator FGMRES was handed must actually be linear. An FD matvec with a
     // block-dependent epsilon is not, and FGMRES presumes it is.
     bool jvp_authoritative = false;
+    // R13.13 (red team round 4): is the IDENTITY term of A = I - h*gamma*J resolved above the
+    // operator's own floating-point noise? A = I - h*gamma*J is only invertible BECAUSE of the
+    // I; if float32 noise swamps it, every rho below is about a different operator than the one
+    // named. Measured as (matvec noise) / (||v|| / ||A v||) on a Krylov direction. This was
+    // computed inline at the emit site and read by nothing -- the tenth instance in this tree
+    // of a rule whose consumer reads something else -- which is why it now lives here, where a
+    // fixture can reject its negation.
+    bool identity_resolved = false;
     // Each arm produced a finite, usable number.
     bool rho_a_finite = false;
     bool rho_b_finite = false;
@@ -327,6 +395,7 @@ inline ProbeVerdict ab_attributable(const AbComparison& c) {
     if (!c.fresh_preconditioner_per_arm) return {false, "stale_preconditioner_per_arm"};
     if (!c.diagnostic_noninterfering)    return {false, "probe_interfered"};
     if (!c.jvp_authoritative)            return {false, "jvp_not_authoritative"};
+    if (!c.identity_resolved)            return {false, "identity_below_noise_floor"};
     if (!c.rho_a_finite || !c.rho_b_finite) return {false, "nonfinite_rho"};
     if (!c.termination_a_admissible || !c.termination_b_admissible) {
         return {false, "inadmissible_termination"};

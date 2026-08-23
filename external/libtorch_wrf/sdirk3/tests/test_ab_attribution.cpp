@@ -41,6 +41,7 @@ AbComparison sound() {
     c.fresh_operator_per_arm = c.fresh_preconditioner_per_arm = true;
     c.diagnostic_noninterfering = true;
     c.jvp_authoritative = true;
+    c.identity_resolved = true;
     c.rho_a_finite = c.rho_b_finite = true;
     c.termination_a_admissible = c.termination_b_admissible = true;
     c.termination_a = c.termination_b = 5;
@@ -178,7 +179,22 @@ int main() {
               "eighth instance of a rule without its consumer");
     }
 
-    constexpr int expected_checks = 18;
+    // R13.13 (red team round 4): A = I - h*gamma*J is invertible BECAUSE of the I. If float32
+    // noise swamps the identity term on the directions the solver builds, every rho the probe
+    // reports is about a different operator than the one named -- so the measurement was made
+    // and then read by nothing, the tenth instance of that split in this tree. The rule lives
+    // in the header now, and this fixture is what a rule spelled out at the emit site cannot
+    // have.
+    {
+        auto c = sound();
+        c.identity_resolved = false;
+        const auto v = ab_attributable(c);
+        check(!v.valid && std::string(v.reason) == "identity_below_noise_floor",
+              "an operator whose identity term sits below its own noise floor is not the "
+              "operator the comparison names, and the refusal says which precondition failed");
+    }
+
+    constexpr int expected_checks = 19;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
