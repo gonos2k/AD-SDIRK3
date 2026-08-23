@@ -9197,6 +9197,13 @@ vertical_coefficients:
                     auto sig = last_stage_signals_;
                     sig.gate_metric_ok = !gate_metric_bad;
                     sig.state_published = false;   // the gate is upstream of any publish
+                    // R13.15 (external review P1-4): the provenance now REACHES the classifier
+                    // instead of being printed beside its answer. A mismatch is refused with a
+                    // category that names the refusal, not classified from another stage's
+                    // evidence.
+                    sig.signals_from_stage = last_stage_signals_populated_by_stage_;
+                    sig.classifying_stage = stage_id;
+                    sig.is_explicit_stage = last_stage_signals_is_explicit_;
                     const auto first = wrf::sdirk3::first_failure_of(sig);
                     std::cerr << "SDIRK3_FIRST_FAILURE stage=" << stage_id
                               // which stage actually populated the signals being classified --

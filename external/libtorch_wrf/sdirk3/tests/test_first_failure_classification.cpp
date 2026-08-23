@@ -629,6 +629,53 @@ int main() {
               "the rule -- a knob that can silently disable a category is worse than no knob");
     }
 
+    // R13.15 (external review P1-4): PROVENANCE is consumed, not printed beside the answer.
+    {
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.worst_krylov_rel_error_vs_r0 = 0.999;      // would be a confident krylov_stagnated
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.signals_from_stage = 2;
+        s.classifying_stage = 3;                     // ...from the WRONG stage's evidence
+        check(name_of(s) == "stage_signal_mismatch",
+              "classifying stage 3 from stage 2's signals produces a confident WRONG layer; a "
+              "provenance mismatch is not weak evidence, it is the wrong evidence");
+        s.classifying_stage = 2;                     // matched
+        check(name_of(s) == "krylov_stagnated",
+              "and with provenance matched the same record classifies normally -- the gate is "
+              "a refusal, not a new failure mode");
+    }
+    {
+        // An explicit (ARK) stage runs no Newton, so every implicit signal is at its default.
+        StageFailureSignals s;
+        s.is_explicit_stage = true;
+        s.explicit_rhs_measured = true;
+        s.explicit_rhs_finite = false;
+        check(name_of(s) == "explicit_rhs_not_finite",
+              "an explicit stage whose RHS blew up says so, instead of collapsing into "
+              "insufficient_evidence because it has no Newton residual to report");
+        s.explicit_rhs_finite = true;
+        s.gate_metric_ok = false;
+        check(name_of(s) == "explicit_admissibility_rejected",
+              "and its gate refusal is its own category, on its own layer");
+        s.gate_metric_ok = true;
+        s.state_published = false;
+        check(name_of(s) == "explicit_publish_rejected",
+              "as is its publish refusal");
+        s.state_published = true;
+        check(name_of(s) == "none",
+              "a clean explicit stage is clean -- the branch must not manufacture a failure");
+    }
+    {
+        StageFailureSignals s;
+        s.is_explicit_stage = true;
+        s.explicit_rhs_measured = false;
+        check(name_of(s) == "insufficient_evidence",
+              "an explicit stage whose RHS was never measured is unmeasured, not finite -- "
+              "absence of a measurement must not become a finding here either");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -645,7 +692,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 44;
+    constexpr int expected_checks = 51;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

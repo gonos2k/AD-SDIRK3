@@ -2178,13 +2178,20 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 auto Vm = torch::stack(std::vector<torch::Tensor>(V.begin(), V.begin() + m), 1)
                               .to(torch::kFloat64);           // n x m
                 const auto gram = Vm.transpose(0, 1).matmul(Vm);
+                // R13.15 (external review P1-3): DEVICE-SAFE. `eye`/`zeros` were built on the
+                // CPU with a bare dtype while `Vm` keeps whatever device the solver runs on, so
+                // every one of these combinations threw on CUDA/MPS. CI pins CPU Torch, so the
+                // path could not be caught there. Build each helper with the options of the
+                // tensor it is combined with.
                 const double e_orth =
-                    (gram - torch::eye(m, torch::kFloat64)).norm().item<double>();
+                    (gram - torch::eye(m, Vm.options())).norm().item<double>();
                 // Arnoldi relation: ||B V_m - V_{m+1} Hbar_m||_F / ||B V_m||_F, with Hbar the
                 // (m+1) x m Hessenberg the loop produced, reconstructed from ritz_H.
-                auto Hbar = torch::zeros({m + 1, m}, torch::kFloat64);
+                // Filled through a CPU accessor (accessor<> requires CPU), then moved to the
+                // device it is multiplied against.
+                auto Hbar_cpu = torch::zeros({m + 1, m}, torch::kFloat64);
                 {
-                    auto hb = Hbar.accessor<double, 2>();
+                    auto hb = Hbar_cpu.accessor<double, 2>();
                     for (int jj = 0; jj < m; ++jj) {
                         const auto& col = ritz_H[static_cast<size_t>(jj)];
                         for (int ii = 0; ii <= m && ii < static_cast<int>(col.size()); ++ii) {
@@ -2202,11 +2209,16 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 }
                 const auto BV = torch::stack(BV_cols, 1);      // n x m
                 const double n_BV = BV.norm().item<double>();
+                // Moved to the basis' device for the multiply.
+                const auto Hbar = Hbar_cpu.to(Vm.options());
                 const double e_arnoldi =
                     n_BV > 0.0 ? (BV - Vm1.matmul(Hbar)).norm().item<double>() / n_BV : -1.0;
-                // The independent witness.
-                auto eig = torch::linalg_eigh(sym);
-                const auto y_min = std::get<1>(eig).select(1, 0);   // eigvec of min eigval
+                // The independent witness. The m x m eigenproblem stays on the CPU -- it is tiny
+                // and linalg_eigh is not available on every backend -- and only the eigenvector
+                // is moved to the basis' device, which is where it is multiplied.
+                auto eig = torch::linalg_eigh(sym.to(torch::kCPU));
+                const auto y_min =
+                    std::get<1>(eig).select(1, 0).to(Vm.options());  // eigvec of min eigval
                 const auto v_min = Vm.matmul(y_min);               // n
                 const auto Bv = apply_B(v_min.to(V[0].scalar_type())).to(torch::kFloat64);
                 const double vv = v_min.dot(v_min).item<double>();
@@ -8395,6 +8407,26 @@ public:
                     // altered". Snapshot and restore, so it cannot be.
                     const bool sv_variable_pc_event =
                         variable_pc_event ? *variable_pc_event : false;
+                    // R13.15 (external review P0-1/P0-2): BEHAVIOURAL fingerprints of the two
+                    // shared objects. `make_fresh_M()` copies the mutable wrapper but the
+                    // UnifiedPreconditioner underneath is one instance for every arm, and the
+                    // operator closure is deliberately one instance too. Both were reported as
+                    // "fresh per arm", hardcoded. What the comparison needs is not freshness but
+                    // that neither object MOVED between arms -- so apply each to one fixed probe
+                    // vector before and after the ladder and compare the outputs. A state change
+                    // that could alter a result is caught; one that could not is ignored, which
+                    // is the right sensitivity for this question.
+                    torch::Tensor fp_probe, A_fp_before, M_fp_before;
+                    if (gmres_rhs.defined() && gmres_rhs.numel() > 0) {
+                        const double bn = gmres_rhs.detach().to(torch::kFloat64)
+                                              .norm().item<double>();
+                        if (bn > 0.0) {
+                            fp_probe = (gmres_rhs.detach() / static_cast<float>(bn)).clone();
+                            A_fp_before = gmres_op(fp_probe).detach().clone();
+                            M_fp_before = M_inv ? M_inv(fp_probe).detach().clone()
+                                                : torch::Tensor();
+                        }
+                    }
                     // fd-fallback count BEFORE the arms; compared after (red team P1-2: reading
                     // it once before the arms made a fallback inside an arm invisible).
                     const long long fd_before =
@@ -8436,6 +8468,50 @@ public:
                     // separate v from -v or from any permutation -- the same weakness fixed in
                     // carried_state_digest and reintroduced here. Norm, sum and first moment:
                     // the sum is odd under negation, the first moment breaks under reordering.
+                    // R13.15 (external review P1-6): an INDEX-AWARE WIDE hash, not a scalar.
+                    //
+                    // The previous digest was ||x||_2 + 7*sum(x) + 13*sum(i*x_i) -- three signed
+                    // reductions collapsed into one double, and the review supplies an explicit
+                    // collision: x = (1,-2,1,0) and y = (0,1,-2,1) match on all three. Three
+                    // moments cannot separate vectors of any length, so no number of extra
+                    // signed projections fixes the class; the fix is to hash the BYTES with an
+                    // avalanche, and to include shape/dtype/device so two differently-shaped
+                    // tensors with the same bytes cannot agree either.
+                    //
+                    // The in-process A/B shares tensors, so a collision here could not corrupt a
+                    // computation -- but this digest is quoted as provenance, and provenance is
+                    // exactly where a weak hash misleads.
+                    auto digest_u64 = [](const torch::Tensor& t) -> unsigned long long {
+                        unsigned long long h = 1469598103934665603ULL;   // FNV-1a offset basis
+                        auto mix = [&h](unsigned long long v) {
+                            h ^= v;
+                            h *= 1099511628211ULL;
+                            h ^= h >> 29;            // avalanche: FNV alone is blind to bit 63
+                        };
+                        if (!t.defined() || t.numel() == 0) { mix(0xDEADBEEFULL); return h; }
+                        mix(static_cast<unsigned long long>(t.dim()));
+                        for (int64_t d = 0; d < t.dim(); ++d) {
+                            mix(static_cast<unsigned long long>(t.size(d)));
+                        }
+                        mix(static_cast<unsigned long long>(t.scalar_type()));
+                        mix(static_cast<unsigned long long>(t.device().type()));
+                        // Contiguous float64 on the CPU so the byte view is well defined and
+                        // identical across devices.
+                        const auto flat =
+                            t.detach().to(torch::kCPU).to(torch::kFloat64).contiguous()
+                             .reshape({-1});
+                        const double* p = flat.data_ptr<double>();
+                        const int64_t n = flat.numel();
+                        for (int64_t i = 0; i < n; ++i) {
+                            unsigned long long bits = 0;
+                            std::memcpy(&bits, &p[i], sizeof(bits));
+                            mix(bits);
+                            mix(static_cast<unsigned long long>(i));   // index-aware
+                        }
+                        return h;
+                    };
+                    // Kept for the printed provenance field, which is a double in the record
+                    // format. It is NOT what the agreement flags compare.
                     auto digest = [](const torch::Tensor& t) -> double {
                         if (!t.defined() || t.numel() == 0) return -1.0;
                         const auto t64 = t.detach().to(torch::kFloat64).reshape({-1});
@@ -8617,7 +8693,14 @@ public:
                                  // comparison that never happened, and three of
                                  // ab_attributable's clauses were unreachable from its only
                                  // production caller. Now they are compared.
-                                 unsigned long long b_dig; unsigned long long x0_dig; };
+                                 unsigned long long b_dig; unsigned long long x0_dig;
+                                 // R13.15 (external review P1-2): the D the arm ACTUALLY used.
+                                 // `d_weighted` was printed and never enforced, so nothing
+                                 // checked that every arm weighted by the same D -- and rho0_D
+                                 // from the FIRST row was reused as the baseline for all of
+                                 // them. An undefined d_inv_used also could not be told apart
+                                 // from a D that was requested and failed to arrive.
+                                 unsigned long long d_dig; bool d_requested; };
                     enum class Arm { M, I, Sel };
                     std::vector<Row> rows;
                     // R13.8 (A4): equal j is equal ARNOLDI DIMENSION, not equal work -- the M
@@ -8635,6 +8718,12 @@ public:
                     // closure, where only the first row started clean.
                     auto run = [&](Arm which, int m) {
                         const bool use_M = (which == Arm::M);
+                        // R13.15 (external review P1-1): reset per ROW. `msel_engaged` is a
+                        // shared_ptr read after the arm returns; on a path that exits before
+                        // the projection runs (zero iterations, an early termination) the
+                        // PREVIOUS row's `true` was still there and was reported as this row's
+                        // receipt.
+                        if (which == Arm::Sel && msel_engaged) *msel_engaged = false;
                         auto arm_M = (which == Arm::M)   ? make_fresh_M()
                                    : (which == Arm::Sel) ? selective_M
                                                          : identity_M;
@@ -8714,20 +8803,21 @@ public:
                         // conversion also truncated the fraction, so two digests differing by
                         // less than 1.0 compared EQUAL. Compare the bit patterns instead:
                         // exact, total, and no conversion.
-                        auto digest_bits = [](double d) {
-                            unsigned long long u = 0;
-                            std::memcpy(&u, &d, sizeof(u));
-                            return u;
-                        };
-                        const unsigned long long b_dig_arm  = digest_bits(digest(gmres_rhs));
-                        const unsigned long long x0_dig_arm = digest_bits(digest(gmres_x0));
+                        // R13.15: the WIDE index-aware hash for the comparison. The scalar
+                        // digest stays only as the printed provenance number.
+                        const unsigned long long b_dig_arm  = digest_u64(gmres_rhs);
+                        const unsigned long long x0_dig_arm = digest_u64(gmres_x0);
+                        const unsigned long long d_dig_arm = digest_u64(d_inv_used);
+                        const bool d_requested_arm =
+                            (wrf::sdirk3::g_sdirk3_config.gmres_block_scale != 0);
                         rows.push_back({arm_name, m, rho, rho_phys, rho_D,
                                         res.rel_error,
                                         res.iterations,
                                         static_cast<int>(res.termination_reason),
                                         a_apply_count, d_weighted,
                                         (which == Arm::Sel) ? *msel_engaged : false,
-                                        b_dig_arm, x0_dig_arm});
+                                        b_dig_arm, x0_dig_arm,
+                                        d_dig_arm, d_requested_arm});
                         // R13.9: PER-BLOCK residual at the largest budget, each arm. The three
                         // aggregate norms say M's reduction is large in rho_D and small in
                         // rho_S, and D^-1 up-weights the small-residual blocks -- so the
@@ -8795,48 +8885,132 @@ public:
                     // was folded into `jvp_ok` instead, so `probe_noninterfering=1` could print
                     // on a run where the probe demonstrably moved a global; it is counted here
                     // as well, and still gates jvp_ok below.
+                    // The same two fingerprint probes after the ladder. Bit-exact equality:
+                    // the operator is deterministic (e_repeat = 0 is measured beside this) and
+                    // M is a fixed-coefficient solve, so any difference is a state change, not
+                    // noise. Taken BEFORE the restores, because these two applies move the same
+                    // counters the restores fix -- measuring interference with a probe that
+                    // interferes is how the first version of this reported probe_interfered=1
+                    // against itself.
+                    bool operator_state_unchanged = false, precond_state_unchanged = false;
+                    if (fp_probe.defined() && A_fp_before.defined()) {
+                        const auto A_fp_after = gmres_op(fp_probe).detach();
+                        operator_state_unchanged = torch::equal(A_fp_before, A_fp_after);
+                    }
+                    if (fp_probe.defined() && M_fp_before.defined() && M_inv) {
+                        const auto M_fp_after = M_inv(fp_probe).detach();
+                        precond_state_unchanged = torch::equal(M_fp_before, M_fp_after);
+                    } else if (!M_inv) {
+                        // No preconditioner to move. Not evidence of movement, and not a claim
+                        // about one either -- the arms' M is then the identity by construction.
+                        precond_state_unchanged = true;
+                    }
+
+                    // WHAT MOVED, read before anything is put back. R13.15: the previous version
+                    // restored first and then compared the restored values to the snapshots,
+                    // which is true by construction -- two of the clauses were vacuous. The
+                    // decomposition that is not: some state must NOT have moved at all (a
+                    // fallback, an FD fallback, the shared pc event), and some state moves by
+                    // design (call counts, timers) and must be RESTORED.
                     const long long fd_after_arms =
                         wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
-                    precond_total_calls_ = precond_total_calls_before;
+                    const int    precond_fb_after   = precond_fallback_count_;
+                    const bool   pc_event_after =
+                        variable_pc_event ? *variable_pc_event : sv_variable_pc_event;
+                    const bool pc_event_moved = (pc_event_after != sv_variable_pc_event);
+
                     // R5-9 / R5-10: restore everything the probe moved that production reads.
+                    precond_total_calls_   = precond_total_calls_before;
                     jvp_call_count         = sv_jvp_calls;
                     jvp_ad_calls           = sv_jvp_ad;
                     jvp_fd_calls           = sv_jvp_fd;
                     jvp_fd_forward_calls   = sv_jvp_fdf;
                     jvp_fd_central_calls   = sv_jvp_fdc;
                     total_jvp_time_ms      = sv_jvp_ms;
-                    const bool pc_event_moved =
-                        variable_pc_event && (*variable_pc_event != sv_variable_pc_event);
                     if (variable_pc_event) *variable_pc_event = sv_variable_pc_event;
-                    const bool noninterfering =
-                        (precond_fallback_count_ == fallbacks_before) &&
+
+                    // The restore is a separate claim from the no-movement one, and both are
+                    // reported. A restore makes the RUN safe; it does not make the arms
+                    // comparable, which is what `noninterfering` is for.
+                    const bool counters_restored =
                         (precond_total_calls_ == precond_total_calls_before) &&
-                        (fd_after_arms == fd_before) &&
-                        // Restored, and the fact that it MOVED is still reported -- a restore
-                        // makes the run safe, it does not make the arms comparable.
-                        !pc_event_moved &&
                         (jvp_call_count == sv_jvp_calls) &&
-                        (total_jvp_time_ms == sv_jvp_ms);
+                        (jvp_ad_calls == sv_jvp_ad) &&
+                        (jvp_fd_calls == sv_jvp_fd) &&
+                        (jvp_fd_forward_calls == sv_jvp_fdf) &&
+                        (jvp_fd_central_calls == sv_jvp_fdc) &&
+                        (total_jvp_time_ms == sv_jvp_ms) &&
+                        (!variable_pc_event || *variable_pc_event == sv_variable_pc_event);
+                    const bool noninterfering =
+                        (precond_fb_after == fallbacks_before) &&
+                        (fd_after_arms == fd_before) &&
+                        !pc_event_moved &&
+                        counters_restored;
                     jvp_ok = jvp_ok &&
                         (wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed)
                              == fd_before);
 
                     // Order invariance, measured across the two passes.
+                    // R13.15 (external review P0-3): METRIC-COMPLETE order invariance.
+                    //
+                    // This compared `rows[i].rho` -- rho_S -- and nothing else, while the
+                    // headline of every recent report is rho_D, rho_phys, the per-arm Msel
+                    // receipt and the per-block table. So a run whose rho_S was order-invariant
+                    // while rho_D, rho_phys, the termination reason and the Msel engagement all
+                    // flipped with arm order still printed ab_valid=1. Every metric the record
+                    // reports is now compared forward-vs-reverse for the same (arm, j), and the
+                    // discrete ones must match exactly rather than within a tolerance.
                     double worst_order_delta = 0.0;
                     int order_pairs_compared = 0;
+                    const char* worst_order_metric = "none";
+                    bool discrete_order_invariant = true;
+                    auto note_delta = [&](double x, double y, const char* name) {
+                        if (x > 0.0 && y > 0.0) {
+                            const double d = std::abs(x - y) / x;
+                            if (d > worst_order_delta) {
+                                worst_order_delta = d;
+                                worst_order_metric = name;
+                            }
+                        } else if (!(x == y)) {
+                            // One measured and one not is not agreement.
+                            worst_order_delta = std::numeric_limits<double>::infinity();
+                            worst_order_metric = name;
+                        }
+                    };
                     for (size_t i = 0; i < forward_rows; ++i) {
                         for (size_t k = forward_rows; k < rows.size(); ++k) {
                             if (rows[i].j == rows[k].j &&
                                 std::string(rows[i].arm) == rows[k].arm) {
-                                const double a = rows[i].rho, b2 = rows[k].rho;
-                                if (a > 0.0 && b2 > 0.0) {
-                                    worst_order_delta = std::max(
-                                        worst_order_delta, std::abs(a - b2) / a);
+                                const auto& f = rows[i];
+                                const auto& r = rows[k];
+                                if (f.rho > 0.0 && r.rho > 0.0) {
                                     ++order_pairs_compared;
                                 } else {
                                     // A row that could not be compared is not a row that
                                     // agreed. Poison the delta so the clause refuses.
                                     worst_order_delta = std::numeric_limits<double>::infinity();
+                                    worst_order_metric = "rho_S_unmeasured";
+                                }
+                                note_delta(f.rho,      r.rho,      "rho_S");
+                                note_delta(f.rho_phys, r.rho_phys, "rho_phys");
+                                note_delta(f.rho_D,    r.rho_D,    "rho_D");
+                                // Discrete quantities must be IDENTICAL, not close. A solve
+                                // that took a different number of iterations, ended for a
+                                // different reason, weighted by a different D, engaged Msel
+                                // differently or applied A a different number of times is a
+                                // different solve however near its residual landed.
+                                const bool discrete_same =
+                                    (f.iters == r.iters) &&
+                                    (f.term == r.term) &&
+                                    (f.d_weighted == r.d_weighted) &&
+                                    (f.msel_engaged == r.msel_engaged) &&
+                                    (f.a_applies == r.a_applies) &&
+                                    (f.b_dig == r.b_dig) && (f.x0_dig == r.x0_dig);
+                                if (!discrete_same) {
+                                    discrete_order_invariant = false;
+                                    if (worst_order_metric == std::string("none")) {
+                                        worst_order_metric = "discrete";
+                                    }
                                 }
                             }
                         }
@@ -8901,8 +9075,12 @@ public:
                     cmp.same_solver_path = (refinement_passes_now <= 1);
                     cmp.same_budget = iters_equal;
                     cmp.early_stop_disabled = early_stop_off;
-                    cmp.fresh_operator_per_arm = true;
-                    cmp.fresh_preconditioner_per_arm = true;   // copied from pristine per row
+                    // MEASURED, not asserted (external review P0-1/P0-2).
+                    cmp.same_frozen_operator = true;   // one closure, handed to every arm
+                    cmp.fresh_wrapper_per_arm = true;  // make_fresh_M() copies it per row
+                    cmp.shared_preconditioner_instance = true;  // stated, not hidden
+                    cmp.operator_state_unchanged = operator_state_unchanged;
+                    cmp.preconditioner_state_unchanged = precond_state_unchanged;
                     cmp.diagnostic_noninterfering = noninterfering;
                     cmp.identity_resolved = identity_resolved_krylov;
                     cmp.jvp_authoritative = jvp_ok && operator_linear && precond_linear;
@@ -8913,8 +9091,37 @@ public:
                     cmp.termination_b = terms_equal ? 0 : 1;
                     // 1e-6 relative: bit-identical rows give exactly 0; anything larger means
                     // some state survived between passes and the arms were not independent.
-                    cmp.order_invariant = (worst_order_delta <= 1.0e-6);
+                    // Continuous metrics within tolerance AND every discrete one identical.
+                    cmp.order_invariant =
+                        (worst_order_delta <= 1.0e-6) && discrete_order_invariant;
+                    // R13.15 (external review P1-1): the Msel receipt. `msel_engaged` was
+                    // printed per row and read by nothing, so a layout mismatch that silently
+                    // disabled the row projection still produced ab_valid=1 over rows labelled
+                    // Msel. It is now a separate verdict: the M-vs-I comparison does not depend
+                    // on Msel having engaged, and the Msel conclusion does.
+                    bool msel_rows_present = false, msel_all_engaged = true;
+                    for (const auto& r_ : rows) {
+                        if (std::string(r_.arm) == "Msel") {
+                            msel_rows_present = true;
+                            msel_all_engaged = msel_all_engaged && r_.msel_engaged;
+                        }
+                    }
+                    cmp.msel_engaged_measured = msel_rows_present && msel_all_engaged;
+                    // R13.15 (external review P1-2): every arm must have weighted by the SAME D,
+                    // and a D that was requested must have arrived. rho_D is a headline number
+                    // and it is only comparable across arms under both conditions.
+                    bool d_same_across_rows = !rows.empty(), d_all_valid = !rows.empty();
+                    for (const auto& r_ : rows) {
+                        d_same_across_rows = d_same_across_rows && (r_.d_dig == rows[0].d_dig);
+                        // Requested and absent is a TRANSFER FAILURE, not "D = I". Not
+                        // requested and absent is correct and says nothing about the weight.
+                        d_all_valid = d_all_valid && !(r_.d_requested && !r_.d_weighted);
+                    }
+                    cmp.d_consistent_across_arms = d_same_across_rows && d_all_valid;
                     const auto verdict = wrf::sdirk3::ab_attributable(cmp);
+                    // The Msel conclusion needs everything the M-vs-I one needs, plus its own
+                    // receipt. Reported separately so a reader cannot borrow one for the other.
+                    const auto msel_verdict = wrf::sdirk3::msel_attributable(cmp);
 
                     std::cerr << "SDIRK3_FROZEN_AB_SYSTEM stage=" << stage
                               << " newton_iter=" << newton_iter
@@ -8931,7 +9138,13 @@ public:
                               // recheck still has power -- it would catch an in-place mutation
                               // by an arm -- and the label now says exactly that much.
                               << " ab_evidence=b_x0_single_object_digest_rechecked_per_arm"
-                                 "/by_construction_operator"
+                                 "/shared_operator_and_preconditioner_fingerprinted"
+                              << " operator_state_unchanged="
+                              << (operator_state_unchanged ? 1 : 0)
+                              << " precond_state_unchanged=" << (precond_state_unchanged ? 1 : 0)
+                              << " counters_restored=" << (counters_restored ? 1 : 0)
+                              << " pc_event_moved=" << (pc_event_moved ? 1 : 0)
+                              << " shared_preconditioner_instance=1 fresh_wrapper_per_arm=1"
                               << " b_digests_agree=" << (b_digests_agree ? 1 : 0)
                               << " x0_digests_agree=" << (x0_digests_agree ? 1 : 0)
                               << " b_norm=" << b_norm
@@ -8961,6 +9174,13 @@ public:
                               << " probe_noninterfering=" << (noninterfering ? 1 : 0)
                               << " halo_floor_delta=" << halo_floor_delta
                               << " worst_order_delta=" << worst_order_delta
+                              << " worst_order_metric=" << worst_order_metric
+                              << " d_same_across_rows=" << (d_same_across_rows ? 1 : 0)
+                              << " d_all_valid=" << (d_all_valid ? 1 : 0)
+                              << " discrete_order_invariant="
+                              << (discrete_order_invariant ? 1 : 0)
+                              << " msel_valid=" << (msel_verdict.valid ? 1 : 0)
+                              << " msel_reason=" << msel_verdict.reason
                               << " order_pairs_compared=" << order_pairs_compared
                               << (verdict.valid
                                     ? "  (attributable: equal Arnoldi dimension, one code"
@@ -9277,8 +9497,14 @@ public:
                     }
                 }
                 // R13.8: what "success" was supposed to mean.
+                // R13.15 (external review P1-5): InitialConverged ALSO satisfied the tolerance
+                // -- it is the case where x0 already did -- and was excluded from the count of
+                // solves that reached it. That made "how many linear solves actually finished"
+                // an undercount precisely on the iterations where Newton was closest.
                 if (gmres_result.termination_reason ==
-                        KrylovTerminationReason::ToleranceReached) {
+                        KrylovTerminationReason::ToleranceReached ||
+                    gmres_result.termination_reason ==
+                        KrylovTerminationReason::InitialConverged) {
                     stats_.gmres_tolerance_reached++;
                 }
 

@@ -38,7 +38,10 @@ AbComparison sound() {
     AbComparison c;
     c.same_operator = c.same_rhs = c.same_x0 = true;
     c.same_solver_path = c.same_budget = c.early_stop_disabled = true;
-    c.fresh_operator_per_arm = c.fresh_preconditioner_per_arm = true;
+    c.same_frozen_operator = c.fresh_wrapper_per_arm = true;
+    c.operator_state_unchanged = c.preconditioner_state_unchanged = true;
+    c.d_consistent_across_arms = true;
+    c.msel_engaged_measured = true;
     c.diagnostic_noninterfering = true;
     c.jvp_authoritative = true;
     c.identity_resolved = true;
@@ -125,12 +128,24 @@ int main() {
     // first call. Running five arms through one closure gives only the FIRST a fresh
     // preconditioner, and hands the aged one to the production solve that follows.
     {
+        // R13.15 (external review P0-1): the contract used to be "a fresh preconditioner per
+        // arm", asserted true at the only production caller while every arm called into ONE
+        // UnifiedPreconditioner instance. The honest question is not freshness but whether the
+        // shared object MOVED, which is a measurement.
         AbComparison c = sound();
-        c.fresh_preconditioner_per_arm = false;
-        check(!ab_attributable(c).valid && why(c) == "stale_preconditioner_per_arm",
-              "arms sharing ONE stateful preconditioner are not attributable, even with the "
-              "same (A,b,x0), the same code path and the same budget -- this is exactly what "
-              "R13.7 did and what its clean-looking numbers could not support");
+        c.preconditioner_state_unchanged = false;
+        check(!ab_attributable(c).valid && why(c) == "preconditioner_state_moved",
+              "arms sharing ONE stateful preconditioner are attributable only while that "
+              "object's behaviour is identical before and after the ladder -- a fresh WRAPPER "
+              "around a moving instance is what R13.7 had, and what its clean-looking numbers "
+              "could not support");
+    }
+    {
+        AbComparison c = sound();
+        c.fresh_wrapper_per_arm = false;
+        check(!ab_attributable(c).valid && why(c) == "stale_wrapper_per_arm",
+              "and the wrapper itself must still be per-arm: its fallback latch is exactly the "
+              "state that gave only the FIRST arm a clean preconditioner");
     }
     {
         AbComparison c = sound();
@@ -162,11 +177,22 @@ int main() {
               "a non-finite residual in either arm voids the comparison");
     }
     {
+        // R13.15 (external review P0-2): sharing ONE operator closure is the correct A/B
+        // design -- the arms must differ only in M -- so "fresh operator per arm" was both
+        // hardcoded and, as a requirement, wrong. What must hold is that it is the SAME
+        // operator and that it did not move.
         AbComparison c = sound();
-        c.fresh_operator_per_arm = false;
-        check(!ab_attributable(c).valid && why(c) == "stale_operator_per_arm",
-              "a stale operator per arm is refused for the same reason as a stale "
-              "preconditioner");
+        c.same_frozen_operator = false;
+        check(!ab_attributable(c).valid && why(c) == "operator_not_shared_across_arms",
+              "arms given DIFFERENT operators are not an A/B of the preconditioner; the "
+              "requirement is sameness, which the old contract inverted into freshness");
+    }
+    {
+        AbComparison c = sound();
+        c.operator_state_unchanged = false;
+        check(!ab_attributable(c).valid && why(c) == "operator_state_moved",
+              "and a shared operator that behaves differently after the ladder than before it "
+              "did not give the arms the same operator, whatever the closure identity says");
     }
 
     {   // R13.10 (red team P1-1): measured and then not read. worst_order_delta was on the
@@ -194,7 +220,38 @@ int main() {
               "operator the comparison names, and the refusal says which precondition failed");
     }
 
-    constexpr int expected_checks = 19;
+    {
+        // R13.15 (external review P1-2): rho_D is a headline number and is comparable across
+        // arms only if every arm weighted by the SAME D -- which was printed per row and
+        // enforced nowhere, while rho0_D from the FIRST row was reused as the baseline for all.
+        auto c = sound();
+        c.d_consistent_across_arms = false;
+        check(!ab_attributable(c).valid && why(c) == "d_weight_inconsistent",
+              "arms that weighted by different D are not comparable in rho_D, and an empty "
+              "d_inv_used that the config REQUESTED is a transfer failure, not 'D = I'");
+    }
+    {
+        // R13.15 (external review P1-1): the Msel conclusion is a SEPARATE claim. The M-vs-I
+        // verdict must not depend on the projection having engaged, and the Msel one must.
+        auto c = sound();
+        c.msel_engaged_measured = false;
+        const auto mi = ab_attributable(c);
+        const auto ms = wrf::sdirk3::msel_attributable(c);
+        check(mi.valid && !ms.valid && std::string(ms.reason) == "msel_not_engaged",
+              "a layout mismatch that silently disables the row projection voids the Msel "
+              "conclusion and leaves the M-vs-I one standing -- one verdict could not say that");
+    }
+    {
+        // ...and the Msel verdict inherits every attribution precondition.
+        auto c = sound();
+        c.order_invariant = false;
+        const auto ms = wrf::sdirk3::msel_attributable(c);
+        check(!ms.valid && std::string(ms.reason) == "order_dependent",
+              "the Msel verdict is attribution PLUS its own receipt, so it can never be the "
+              "looser of the two");
+    }
+
+    constexpr int expected_checks = 24;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

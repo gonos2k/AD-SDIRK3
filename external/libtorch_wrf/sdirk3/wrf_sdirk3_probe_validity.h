@@ -386,8 +386,28 @@ struct AbComparison {
     // defect gate that only evaluates on its first call -- so a probe that runs several arms
     // through one closure gives only the FIRST arm a fresh preconditioner, and leaves the
     // aged one to the production solve that follows.
-    bool fresh_operator_per_arm = false;
-    bool fresh_preconditioner_per_arm = false;
+    // R13.15 (external R13.8/R13.9 review, P0-1/P0-2): these two used to be hardcoded `true`
+    // at the only production caller, and neither was true as named.
+    //
+    //   * every arm calls into the SAME `UnifiedPreconditioner` instance. `make_fresh_M()`
+    //     copies the mutable WRAPPER (its fallback latch, its closure-local state); the object
+    //     underneath -- with its caches, member diagnostics and stage-bound fields, some of
+    //     which later branches read -- is shared. "fresh wrapper" is true; "fresh
+    //     preconditioner" was not.
+    //   * every arm shares one `gmres_op` closure. That is the CORRECT A/B design -- the arms
+    //     must differ only in M -- so the defect was never the sharing, it was calling it
+    //     freshness.
+    //
+    // What the comparison actually needs is that the shared objects did not MOVE between arms,
+    // which is a measurement, not a naming choice. Each is a behavioural fingerprint: apply the
+    // object to one fixed probe vector before and after the ladder and compare the outputs, so
+    // any internal state change that could alter a result is caught, and one that could not is
+    // correctly ignored.
+    bool fresh_wrapper_per_arm = false;         // the mutable wrapper is per-arm (measured)
+    bool shared_preconditioner_instance = true; // STATED, not hidden: the object is shared
+    bool preconditioner_state_unchanged = false;// M(probe) identical before and after the arms
+    bool same_frozen_operator = false;          // one operator closure for every arm
+    bool operator_state_unchanged = false;      // A(probe) identical before and after the arms
     // ...and the probe must not have changed the run it observed.
     bool diagnostic_noninterfering = false;
     // R13.8: the operator FGMRES was handed must actually be linear. An FD matvec with a
@@ -414,6 +434,16 @@ struct AbComparison {
     // R13.10 (red team P1-1): order invariance was measured (worst_order_delta) and then
     // NOT read by the verdict -- ab_valid=1 printed beside any delta. Measured means a clause.
     bool order_invariant = false;
+    // R13.15 (external review P1-1): the Msel arm is an OUTPUT-ROW PROJECTION, and whether it
+    // actually engaged was printed per row and read by nothing -- so a layout mismatch that
+    // silently disabled the projection still produced ab_valid=1 over rows labelled Msel.
+    // Consumed by `msel_attributable` only: the M-vs-I comparison does not depend on it.
+    bool msel_engaged_measured = false;
+    // R13.15 (external review P1-2): every arm weighted by the SAME D, and a D that the config
+    // requested actually arrived. rho_D is a headline number; it is comparable across arms only
+    // under both. `d_weighted` used to be printed per row and enforced nowhere, and an empty
+    // d_inv_used could not be told apart from a transfer failure.
+    bool d_consistent_across_arms = false;
 };
 
 inline ProbeVerdict ab_attributable(const AbComparison& c) {
@@ -426,8 +456,12 @@ inline ProbeVerdict ab_attributable(const AbComparison& c) {
     if (!c.same_budget)        return {false, "different_budget"};
     if (!c.early_stop_disabled) return {false, "early_stop_enabled"};
     // The ones that caught R13.7.
-    if (!c.fresh_operator_per_arm)       return {false, "stale_operator_per_arm"};
-    if (!c.fresh_preconditioner_per_arm) return {false, "stale_preconditioner_per_arm"};
+    if (!c.same_frozen_operator)         return {false, "operator_not_shared_across_arms"};
+    if (!c.fresh_wrapper_per_arm)        return {false, "stale_wrapper_per_arm"};
+    // The shared instances must not have MOVED. This replaces two claims of freshness that were
+    // asserted; it is weaker in name and stronger in evidence.
+    if (!c.operator_state_unchanged)     return {false, "operator_state_moved"};
+    if (!c.preconditioner_state_unchanged) return {false, "preconditioner_state_moved"};
     if (!c.diagnostic_noninterfering)    return {false, "probe_interfered"};
     if (!c.jvp_authoritative)            return {false, "jvp_not_authoritative"};
     if (!c.identity_resolved)            return {false, "identity_below_noise_floor"};
@@ -436,7 +470,19 @@ inline ProbeVerdict ab_attributable(const AbComparison& c) {
         return {false, "inadmissible_termination"};
     }
     if (c.termination_a != c.termination_b) return {false, "different_termination"};
+    if (!c.d_consistent_across_arms)        return {false, "d_weight_inconsistent"};
     if (!c.order_invariant)                 return {false, "order_dependent"};
+    return {true, "ok"};
+}
+
+// The Msel conclusion is a SEPARATE claim from the M-vs-I one and needs its own gate: everything
+// attribution needs, plus evidence that the row projection actually engaged on every Msel row.
+// Without this split a reader takes `ab_valid=1` -- earned by the M and I arms -- as licence to
+// read the Msel rows too.
+inline ProbeVerdict msel_attributable(const AbComparison& c) {
+    const auto base = ab_attributable(c);
+    if (!base.valid) return base;
+    if (!c.msel_engaged_measured) return {false, "msel_not_engaged"};
     return {true, "ok"};
 }
 

@@ -114,14 +114,13 @@ jobs:
           # command substitution terminates the step before the -z test, so the gate failed
           # SILENTLY -- the opposite of why the message was added. `|| true` lets it print.
           pinned="$(grep -vc '^#' .github/ci/expected_ctest_names.txt)"
-          claimants="$(grep -rl -E '[0-9]+-test CTest' --include='*.md' . \
-                        | grep -v '^./doc/' | grep -v '/build/' | sort)"
-          if [ -z "${claimants}" ]; then
-            echo "no file states a '<N>-test CTest' count -- this gate's subject vanished"
-            exit 1
-          fi
-          echo "claimants found:"; printf '  %s\n' ${claimants}
-          for f in ${claimants}; do
+          # while-read over the discovery, not word-splitting an unquoted variable: correct for
+          # paths with spaces and clean under shellcheck SC2086.
+          found=0
+          while IFS= read -r f; do
+            [ -n "${f}" ] || continue
+            found=$((found + 1))
+            echo "  claimant: ${f}"
             stated="$(grep -oE '[0-9]+-test CTest' "${f}" | grep -oE '^[0-9]+' | sort -u || true)"
             if [ -z "${stated}" ]; then
               echo "${f} no longer states a '<N>-test CTest' count -- the claim this gate checks was removed rather than updated"
@@ -131,8 +130,13 @@ jobs:
               echo "${f} claims '${stated}-test' but the pinned inventory has ${pinned}"
               exit 1
             fi
-          done
-          echo "all count claims agree with the pinned inventory: ${pinned} tests"
+          done < <(grep -rl -E '[0-9]+-test CTest' --include='*.md' . \
+                     | grep -v '^./doc/' | grep -v '/build/' | sort)
+          if [ "${found}" -eq 0 ]; then
+            echo "no file states a '<N>-test CTest' count -- this gate's subject vanished"
+            exit 1
+          fi
+          echo "all ${found} count claims agree with the pinned inventory: ${pinned} tests"
 
       - name: workflow supply-chain policy (SHA pins, event rules, permissions)
         run: |

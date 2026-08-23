@@ -31,6 +31,17 @@ namespace sdirk3 {
 
 enum class StageFailure {
     None = 0,
+    // R13.15 (external review P1-4): the signals belong to a DIFFERENT stage than the one being
+    // classified. `signals_from_stage` was emitted beside the category and the category was
+    // computed anyway, so a record could name a layer from another stage's evidence. A
+    // provenance mismatch is not weak evidence, it is the wrong evidence.
+    StageSignalMismatch,
+    // Explicit (ARK) stages do not run Newton, so every implicit category is inapplicable to
+    // them and they used to collapse into InsufficientEvidence -- which reads as "we could not
+    // tell" when the truth is "a different set of things can fail here".
+    ExplicitRhsNotFinite,
+    ExplicitAdmissibilityRejected,
+    ExplicitPublishRejected,
     // The signals do not support ANY verdict. Reported instead of guessing -- a classifier
     // that always names a layer will name a wrong one.
     InsufficientEvidence,
@@ -81,6 +92,11 @@ enum class StageFailure {
 inline const char* stage_failure_name(StageFailure f) {
     switch (f) {
         case StageFailure::None:                     return "none";
+        case StageFailure::StageSignalMismatch:  return "stage_signal_mismatch";
+        case StageFailure::ExplicitRhsNotFinite: return "explicit_rhs_not_finite";
+        case StageFailure::ExplicitAdmissibilityRejected:
+            return "explicit_admissibility_rejected";
+        case StageFailure::ExplicitPublishRejected: return "explicit_publish_rejected";
         case StageFailure::InsufficientEvidence:     return "insufficient_evidence";
         case StageFailure::KrylovDiverged:           return "krylov_diverged";
         case StageFailure::EntryStateNotFinite:      return "entry_state_not_finite";
@@ -100,6 +116,11 @@ inline const char* stage_failure_name(StageFailure f) {
 inline const char* stage_failure_layer(StageFailure f) {
     switch (f) {
         case StageFailure::None:                     return "none";
+        case StageFailure::StageSignalMismatch:  return "wrong_stage_signals_no_verdict";
+        case StageFailure::ExplicitRhsNotFinite: return "explicit_rhs_operator_or_state";
+        case StageFailure::ExplicitAdmissibilityRejected:
+            return "explicit_stage_gate_threshold";
+        case StageFailure::ExplicitPublishRejected: return "explicit_publish_gate";
         case StageFailure::InsufficientEvidence:     return "unknown";
         case StageFailure::KrylovDiverged:           return "operator_or_timestep_or_jvp";
         case StageFailure::EntryStateNotFinite:      return "nonfinite_entry_state";
@@ -117,6 +138,15 @@ inline const char* stage_failure_layer(StageFailure f) {
 }
 
 struct StageFailureSignals {
+    // R13.15 (external review P1-4): PROVENANCE, consumed rather than printed. -1 = the tile
+    // layer did not stamp it, which is itself not a licence to classify.
+    int    signals_from_stage = -1;
+    int    classifying_stage = -1;
+    // An explicit (ARK) stage runs no Newton iteration, so the implicit signals below are all
+    // at their defaults and mean nothing. These are what CAN fail there.
+    bool   is_explicit_stage = false;
+    bool   explicit_rhs_measured = false;
+    bool   explicit_rhs_finite = false;
     // Measured at stage entry, before anything is solved.
     bool entry_state_finite = true;
     // measured BEFORE finite. An unmeasured R0 is not a finite one -- the tile layer used to
@@ -245,6 +275,20 @@ inline bool measured(double v) {
 // show a stagnating Krylov solve and a rejected step, and reporting either of those sends the
 // next week of work to the wrong layer.
 inline StageFailure first_failure_of(const StageFailureSignals& s) {
+    // PROVENANCE FIRST. Classifying stage 3 from stage 2's signals produces a confident,
+    // wrong layer -- and the record used to print exactly that, with the mismatch beside it.
+    if (s.signals_from_stage >= 0 && s.classifying_stage >= 0 &&
+        s.signals_from_stage != s.classifying_stage) {
+        return StageFailure::StageSignalMismatch;
+    }
+    // An explicit stage has its own failure set; the implicit clauses below cannot speak to it.
+    if (s.is_explicit_stage) {
+        if (!s.explicit_rhs_measured) return StageFailure::InsufficientEvidence;
+        if (!s.explicit_rhs_finite)   return StageFailure::ExplicitRhsNotFinite;
+        if (!s.gate_metric_ok)        return StageFailure::ExplicitAdmissibilityRejected;
+        if (!s.state_published)       return StageFailure::ExplicitPublishRejected;
+        return StageFailure::None;
+    }
     if (!s.entry_state_finite)      return StageFailure::EntryStateNotFinite;
     // Absence of a measurement is not evidence of anything. Checked BEFORE finiteness, so an
     // R0 that was never evaluated cannot be reported as finite or as non-finite.
