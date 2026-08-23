@@ -9975,6 +9975,12 @@ public:
                 result.iterations = options_.max_newton_iter;
                 result.final_residual = stats_.final_residual;
                 result.message = std::string("GMRES exception: ") + e.what();
+                // R13.17 self-review: this exit was UNTYPED, and
+                // NewtonTerminationReason::Exception had ZERO producers -- an enum value with no
+                // writer is the same defect class as a field with no reader, and it was
+                // introduced by the commit that added the enum to end reconstruction.
+                stats_.newton_termination = static_cast<int>(
+                    wrf::sdirk3::NewtonTerminationReason::Exception);
                 // JVP call summary even on GMRES failure (for diagnosis)
                 std::cerr << "[Newton] JVP calls before exception: " << jvp_call_count
                           << ", total JVP time: " << total_jvp_time_ms << " ms" << std::endl;

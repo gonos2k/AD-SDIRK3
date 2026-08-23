@@ -227,3 +227,29 @@ was produced by a threshold or a precedence over aggregates rather than by an ev
 the same each time: record what happened at the site where it happened. The first honest run of the
 new field found a defect in the field itself (a fallback claiming budget exhaustion for a loop that
 used 4 of 12), and the second found this.
+
+---
+
+## Self-review of R13.17 — three more defects, all in this batch's own work
+
+Asked whether the typed-exit work had introduced further mistakes. It had.
+
+1. **The GMRES exception exit was untyped, and `NewtonTerminationReason::Exception` had ZERO
+   producers.** An enum value nothing writes is the same defect class as a field nothing reads —
+   introduced by the very commit that added the enum to *end* reconstruction. Typed at the `catch`.
+
+2. **The linear-failure test was inside `if (measured(worst))`.** So on a stage where no solve
+   measured r₀ — the path with *no* Krylov evidence, and therefore the one most likely to fall
+   through to a Newton category and name `residual_floor_or_split` — the misrouting the fix was
+   written to close was still alive. Moved above the measured() branch.
+
+3. **Mapping the exception to `KrylovDiverged` overclaimed.** Divergence is a *measured* behaviour
+   (the residual grew); an exception establishes no such thing. New `KrylovSolveThrew`, layer
+   `linear_solve_exception` — the same "don't name a mechanism you didn't measure" rule this
+   campaign applies everywhere else, which I broke while applying it.
+
+**And the retracted claim was chased down where it had spread**: `doc/R13_8_checklist.md` point 3
+is struck through with the measurement that refutes it, and the **merged** PR #177 body carries a
+retraction note at the top, since that body is a durable record a future reader will find.
+
+73 checks, ctest 62/62.

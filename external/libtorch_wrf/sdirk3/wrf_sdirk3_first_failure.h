@@ -62,6 +62,11 @@ enum class StageFailure {
     // Neither tolerance met and the Arnoldi budget ran out. Distinct from stagnation: the solve
     // was still descending when it was cut off, so the work is the budget, not the operator.
     KrylovBudgetLimited,
+    // R13.17 self-review: the linear solve THREW. That is a real event and it is not the outer
+    // iteration's failure -- but it is also not divergence, which is a specific measured
+    // behaviour (the residual grew) that an exception does not establish. Borrowing
+    // KrylovDiverged for it would name a mechanism nothing measured.
+    KrylovSolveThrew,
     // The signals do not support ANY verdict. Reported instead of guessing -- a classifier
     // that always names a layer will name a wrong one.
     InsufficientEvidence,
@@ -124,6 +129,8 @@ inline const char* stage_failure_name(StageFailure f) {
             return "krylov_objective_mismatch";
         case StageFailure::KrylovBudgetLimited:
             return "krylov_budget_limited";
+        case StageFailure::KrylovSolveThrew:
+            return "krylov_solve_threw";
         case StageFailure::InsufficientEvidence:     return "insufficient_evidence";
         case StageFailure::KrylovDiverged:           return "krylov_diverged";
         case StageFailure::EntryStateNotFinite:      return "entry_state_not_finite";
@@ -156,6 +163,8 @@ inline const char* stage_failure_layer(StageFailure f) {
             return "krylov_objective_D_vs_newton_merit";
         case StageFailure::KrylovBudgetLimited:
             return "inner_krylov_budget";
+        case StageFailure::KrylovSolveThrew:
+            return "linear_solve_exception";
         case StageFailure::InsufficientEvidence:     return "unknown";
         case StageFailure::KrylovDiverged:           return "operator_or_timestep_or_jvp";
         case StageFailure::EntryStateNotFinite:      return "nonfinite_entry_state";
@@ -438,6 +447,20 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // question, so the solve would be SELECTED in one coordinate and its value REPORTED in
         // another -- and a genuine cold-start stall at raw=0.995 never trips it at all. The
         // max over the solves that measured r0 has no selector and no seam.
+        // R13.17 self-review: the exit reason must be honoured whether or not any solve measured
+        // r0. Placing this test INSIDE the measured() branch left the misrouting it was written
+        // to fix alive on exactly the path with no Krylov evidence -- where the classifier is
+        // most likely to fall through to a Newton category and name `residual_floor_or_split`.
+        // A loop that stopped because the linear solve produced nothing has its first failure
+        // there; without receipts we cannot say WHICH kind, so we say the general one.
+        if (s.newton_termination == NewtonTerminationReason::LinearSolveFailure &&
+            !measured(s.worst_krylov_rel_error_vs_r0)) {
+            return StageFailure::KrylovStagnated;
+        }
+        // ...and an exception in the linear solve is not the outer iteration's failure either.
+        if (s.newton_termination == NewtonTerminationReason::Exception) {
+            return StageFailure::KrylovSolveThrew;
+        }
         if (measured(s.worst_krylov_rel_error_vs_r0)) {
             // R13.14 (round 5): the boundary is a judgment and must be movable per run without
             // a rebuild. An unset/invalid value falls back to the header constant, so records

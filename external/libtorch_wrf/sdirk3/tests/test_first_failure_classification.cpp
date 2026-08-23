@@ -869,6 +869,26 @@ int main() {
               "two are separated by the exit reason, not by the threshold");
     }
 
+    {
+        // R13.17 SELF-REVIEW: the two holes the first version of the linear-failure fix left.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.worst_krylov_rel_error_vs_r0 = -1.0;       // NO solve measured r0
+        s.krylov_r0_unmeasured_solves = 3;
+        s.accepted_steps = 0; s.rejected_steps = 3;
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::LinearSolveFailure;
+        check(name_of(s) == "krylov_stagnated",
+              "the exit reason must be honoured with NO Krylov evidence too -- putting the test "
+              "inside the measured() branch left the misrouting alive on exactly the path most "
+              "likely to fall through to a Newton category");
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::Exception;
+        check(name_of(s) == "krylov_solve_threw",
+              "and an exception thrown by the linear solve is not the outer iteration's failure "
+              "-- nor is it DIVERGENCE, which is a measured behaviour an exception does not "
+              "establish; the Exception enum value had ZERO producers until this review");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -885,7 +905,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 71;
+    constexpr int expected_checks = 73;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
