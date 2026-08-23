@@ -8355,6 +8355,35 @@ public:
                                         res.iterations,
                                         static_cast<int>(res.termination_reason),
                                         a_apply_count});
+                        // R13.9: PER-BLOCK residual at the largest budget, each arm. The three
+                        // aggregate norms say M's reduction is large in rho_D and small in
+                        // rho_S, and D^-1 up-weights the small-residual blocks -- so the
+                        // inference is that M works on the blocks that do not matter to the
+                        // physical residual. That is an inference from aggregates. This is the
+                        // measurement: ||r_block|| / ||b_block|| for each block, in the S
+                        // coordinates, at j=48, beside the same ratio at j=0.
+                        if (m == 48 && res.x.defined() && cached_layout_.is_exact &&
+                            r0_kept.defined()) {
+                            const auto r = (gmres_rhs.detach() - gmres_op(res.x.detach()))
+                                               .to(torch::kFloat64).reshape({-1});
+                            const auto b64 = gmres_rhs.detach().to(torch::kFloat64).reshape({-1});
+                            const auto r064 = r0_kept.to(torch::kFloat64).reshape({-1});
+                            if (cached_layout_.total_size == r.numel()) {
+                                std::cerr << "SDIRK3_FROZEN_AB_BLOCKS stage=" << stage
+                                          << " arm=" << (use_M ? "M" : "I") << " j=" << m;
+                                for (const auto& blk : cached_layout_.blocks) {
+                                    const auto rb  = r.slice(0, blk.start, blk.start + blk.size);
+                                    const auto bb  = b64.slice(0, blk.start, blk.start + blk.size);
+                                    const auto r0b = r064.slice(0, blk.start, blk.start + blk.size);
+                                    const double nb = bb.norm().item<double>();
+                                    std::cerr << " " << blk.name << "_rho0="
+                                              << (nb > 0.0 ? r0b.norm().item<double>() / nb : -1.0)
+                                              << " " << blk.name << "_rho="
+                                              << (nb > 0.0 ? rb.norm().item<double>() / nb : -1.0);
+                                }
+                                std::cerr << std::endl;
+                            }
+                        }
                     };
 
                     // ARM ORDER REVERSED between the two passes. If the numbers move with the

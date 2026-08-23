@@ -387,19 +387,60 @@ Both arms are **monotone non-increasing in ρ_D** — the minimal-residual guara
 an assumption about the implementation until this row. In its own objective M reduces by 26%
 over 48 steps, I by 63%: M is 2.4× slower, not stalled.
 
-The three norms together say where M's effort goes. From the same r₀, M achieves **26% in
-ρ_D, 7% in ρ_S, and −1% in ρ_phys**. `D⁻¹ = 1/‖r₀,block‖` up-weights the blocks whose initial
-residual is *small*, so a reduction that is large in ρ_D and small in ρ_S is one concentrated
-in the small-residual blocks — while the large-residual blocks that dominate ρ_S and ρ_phys
-are left where they were, or slightly worse. **This is an inference from three aggregate
-norms, not a measurement.** The measurement that would make it one is the per-block residual
-of each arm at j=48, which the existing `WRF_SDIRK3_STAGE_RESID_BLOCKS` observer can provide
-if pointed at the A/B iterates.
+The three norms together say where M's effort goes — and the inference I drew from them
+first was **backwards**. It is recorded here, crossed out, because the per-block measurement
+that replaced it is the point:
+
+> ~~`D⁻¹` up-weights the small-residual blocks, so M's reduction must be concentrated there.~~
+
+### Per-block residual of the A/B iterates, j=48 (`SDIRK3_FROZEN_AB_BLOCKS`)
+
+`‖r_block‖/‖b_block‖` in the S coordinates, beside the same ratio at j=0. Order-invariant
+(both passes identical).
+
+| block | ρ₀ | ρ (M) | ρ (I) | M | I |
+|---|---|---|---|---|---|
+| ru | 1.667 | 0.428 | 0.174 | −74% | −90% |
+| rv | 1.687 | 0.854 | 0.994 | **−49%** | −41% |
+| **rw** | 0.877 | 0.849 | 0.239 | **−3%** | −73% |
+| **ph** | 1.012 | **1.020** | 0.625 | **+1%** | −38% |
+| t | 1.363 | 0.229 | 0.099 | −83% | −93% |
+| **mu** | 0.858 | **0.866** | 0.135 | **+1%** | −84% |
+
+### MEASURED
+
+1. **M reduces the momentum and temperature residuals (ru −74%, rv −49%, t −83%) and does
+   nothing — or slightly worsens — the acoustic/mass blocks (rw −3%, ph +1%, mu +1%).** It
+   works on the *large*-ρ₀ blocks and leaves the small ones. The opposite of the inference.
+
+2. **Those three blocks are not intrinsically hard.** With `M = I` the same operator takes
+   rw down 73%, ph 38%, mu 84%. GMRES alone handles them; M prevents it.
+
+3. **M beats I on exactly one block — rv (−49% vs −41%).** Its horizontal-momentum treatment
+   is fine. Its vertical/acoustic treatment is the problem.
+
+4. The aggregate norms are now explained, not inferred. ρ_D weights each block equally at j=0
+   (`D⁻¹ = 1/‖r₀,block‖`), so it reports M's *average* progress across six blocks — 26%, three
+   good and three nil. ρ_S is dominated by whichever blocks carry the most `‖b‖` in S
+   coordinates, and M's 7% there says those are rw/ph/mu: the untouched ones. A check:
+   `mean((ρ/ρ₀)²)` over the six M rows is 0.553 → 0.744, and the measured `ρ_D(M)/ρ₀_D` is
+   0.825/1.108 = 0.745. The D-norm is the equal-block average to three digits.
+
+### What this corroborates
+
+`precond_type=2` is "UnifiedPreconditioner with W-θ coupling" — a vertical acoustic
+preconditioner. **The blocks it exists to handle are the three it does not help.** This is an
+independent-channel confirmation of the earlier finding that M's ph/mu rows are wrong
+(ph 408× off, D_mu with the wrong sign, in the memory record `sdirk3-precond-annihilates-ph-mu`),
+reached here through a controlled A/B rather than by inspecting M's coefficients.
+
+Net-harmful at the aggregate level, then, is not "uniformly bad". It is **correct on three
+blocks and broken on the three it was built for** — and the broken three are the ones that
+dominate the physical residual.
 
 ### Follow-up this correction opens
 
 - **The classifier's `krylov_diverged` compares against `‖b‖`.** `raw_rel_error > 1` fires on
   a warm start that began above 1 even when the solve reduced it. Divergence should mean
   `ρ(j_final) > ρ(0)`, and that needs the Krylov result to carry `rel_error` at j=0. Open.
-- **Per-block residual of the A/B iterates.** Turns the "where M's effort goes" inference
-  above into a measurement. Open.
+- ~~Per-block residual of the A/B iterates.~~ **Done** — and it reversed the inference.
