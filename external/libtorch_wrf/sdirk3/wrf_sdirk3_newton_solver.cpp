@@ -10575,6 +10575,54 @@ public:
             // a stalled solve unless the two are counted separately.
             if (step_accepted) {
                 stats_.accepted_steps++;
+                // Referee C8: the TAYLOR DEFECT of the stage function at the step actually
+                // taken. tau = ||G(K+s) - G(K) - A s|| / ||A s||, with A s one production
+                // matvec. tau << 1: the linear model is faithful here and the INNER solve is
+                // the binding constraint. tau = O(1): the model is wrong at this step -- and
+                // the half-step arm separates the two ways it can be wrong: nonlinearity over
+                // the step (tau falls ~2x at s/2, the relative defect being ~linear in ||s||)
+                // from a Jacobian defect (tau does not fall). Two numbers (first, last
+                // residual) could not separate three mechanisms; this can. Opt-in: one JVP
+                // and one RHS evaluation per accepted iteration.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_TAYLOR_DEFECT") &&
+                    R.defined() && accepted_residual.defined() && dK_scaled.defined()) {
+                    torch::NoGradGuard ng_tau;
+                    const auto As   = apply_jacobian(dK_scaled.detach()).detach();
+                    const auto dR   = (accepted_residual.detach() - R.detach());
+                    const double nAs = As.to(torch::kFloat64).norm().item<double>();
+                    const double tau = nAs > 0.0
+                        ? (dR - As).to(torch::kFloat64).norm().item<double>() / nAs : -1.0;
+                    // alpha = 1/2 arm: G(K + s/2) needs one more RHS evaluation.
+                    double tau_half = -1.0;
+                    {
+                        const auto K_half = K.detach() + 0.5 * dK_scaled.detach();
+                        const auto U_half = U_stage + dt * gamma * K_half;
+                        const auto R_half = (K_half - compute_rhs(U_half)).detach();
+                        const auto dR_half = R_half - R.detach();
+                        const auto As_half = 0.5 * As;
+                        const double nAs_half = As_half.to(torch::kFloat64).norm().item<double>();
+                        tau_half = nAs_half > 0.0
+                            ? (dR_half - As_half).to(torch::kFloat64).norm().item<double>()
+                                  / nAs_half : -1.0;
+                    }
+                    std::cerr << "SDIRK3_TAYLOR_DEFECT stage=" << stage
+                              << " newton_iter=" << newton_iter
+                              << " tau=" << tau
+                              << " tau_half=" << tau_half
+                              << " tau_half_over_tau="
+                              << ((tau > 0.0 && tau_half >= 0.0) ? tau_half / tau : -1.0)
+                              << " R_k=" << R.detach().to(torch::kFloat64).norm().item<double>()
+                              << " R_k1="
+                              << accepted_residual.detach().to(torch::kFloat64).norm().item<double>()
+                              << " step_norm="
+                              << dK_scaled.detach().to(torch::kFloat64).norm().item<double>()
+                              << " As_norm=" << nAs
+                              << " achieved_eta=" << gmres_raw_rel_error
+                              << "  (tau<<1: linear model faithful, inner solve binding;"
+                                 " tau=O(1) with tau_half/tau~0.5: nonlinearity over the step;"
+                                 " tau=O(1) with tau_half/tau~1: Jacobian defect)"
+                              << std::endl;
+                }
                 if (stats_.argmin_residual_iter < 0 ||
                     (!stats_.newton_residuals.empty() &&
                      stats_.newton_residuals.back() <= stats_.min_residual_seen)) {

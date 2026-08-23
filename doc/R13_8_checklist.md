@@ -662,3 +662,66 @@ norm the loop does not minimise.
 - The warm start is not the problem.
 - The production total-failure predicate compares ρ_S against ‖b‖; the r₀ rule is now
   available **opt-in** (`WRF_SDIRK3_KRYLOV_FAILURE_VS_R0`), both readings on the record.
+
+## Round-2 measurements, second batch
+
+### The float32 hypothesis passes its first test (referee X3, test 1)
+
+Numerical-range record, iteration 0, preconditioner off, block scaling on:
+
+```
+m=20  hcol_norm_min=345.2  hcol_norm_max=844    (restart 1)
+m=20  hcol_norm_min=753.6  hcol_norm_max=1511   (restart 2)
+```
+
+`‖H̄eᵢ‖ = ‖Bvᵢ‖` with `‖vᵢ‖ = 1` is the operator's magnitude on the directions GMRES built.
+In B-coordinates `D⁻¹ ≈ 2.1e-3` on five of six blocks, so on those directions
+`‖A_S v‖/‖v‖ ≈ 1.6e5 – 7e5`, where the identity term of `A_S = I − hγ S⁻¹JS` contributes
+exactly 1. The float32 matvec's measured relative error is 3e-7. **Absolute error 0.05–0.2
+against an identity term of 1: the part of A that makes an implicit stage different from a
+singular Jacobian solve is resolved to 5–20% on exactly the directions GMRES uses.** The earlier
+"not precision" verdict compared 1e-7 to a 0.37 residual. The decisive test (a float64 replay
+of the frozen identity arm) has not been run; until it has, float32 is an *open* mechanism for
+the floor, and a serious one.
+
+### The negative curvature is in the diagonal blocks (referee C6d)
+
+```
+q_min_direct=-976.8   q_min_blockdiag=-977.9
+```
+
+`⟨v_min, Σ_q P_q B P_q v_min⟩` reproduces the full quadratic form to 0.1%. The indefiniteness
+lives **inside the variable blocks**, not in the coupling between them — so a by-variable
+block-diagonal preconditioner is the right *class* for it (the production M's structure).
+Whether M's blocks are the right *values* is a separate question the per-block A/B already
+answered in the negative for w/φ/μ.
+
+### At the production budget, M does not move ph (referee X4)
+
+Failing iteration, m=8 (production: restart 7, one cycle), `‖r_block‖/‖b_block‖`:
+
+| block | ρ₀ | M | I | Msel |
+|---|---|---|---|---|
+| ru | 1.667 | 0.583 | 0.473 | 0.533 |
+| rv | 1.687 | 1.536 | 1.455 | 1.727 |
+| rw | 0.877 | 0.896 | **0.292** | 0.287 |
+| **ph** | 1.012 | **1.003** | **0.709** | 0.721 |
+| t | 1.363 | **0.249** | 0.454 | 0.422 |
+| mu | 0.858 | 0.888 | **0.172** | 0.189 |
+
+ph is ≈¾ of ρ_S. **Under M it moves 1% in the eight steps production can afford; under I, 30%.**
+M beats I on one block at this budget (t). This is the block-level form of "neither arm reaches
+the forcing term, and the identity fails by less".
+
+### Production under the r₀ rule (opt-in), with time order on the record
+
+```
+category=krylov_stagnated  gmres_total_failures=1
+first_krylov_failure_iter=3  first_rejection_iter=3  argmin_residual_iter=2
+```
+
+The Krylov failure and the rejection are in the **same** iteration (3) — data-flow order, the
+failed solve produced the rejected step — and the residual minimum was at iteration 2. The
+classifier's new time-order clause has the information it needs. Open: why this solve is still
+a total failure under the r₀ rule when the probe's M arm at j=8 sits below r₀ — production's
+exit ρ and reason beside the probe rows (referee cross-cutting #2) would say.
