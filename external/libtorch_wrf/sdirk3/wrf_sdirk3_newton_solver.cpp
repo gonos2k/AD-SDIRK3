@@ -1285,7 +1285,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 r_true.detach().clone(), 0, false, false};
         res.termination_reason =
             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
-        return res;
+                return res;
     }
     
     // GMRES FAILURE DETECTION: Track NaN/Inf occurrences in apply_jacobian
@@ -2473,6 +2473,17 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // which is what makes the four ratios comparable; the retracted measurement divided an
     // unweighted numerator by a D-weighted denominator taken from the mutated b_inner.
     const auto b_krylov = b_inner.clone();
+    // R13.9: the j=0 relative residual, in the same halo-zeroed norm every later rel_error
+    // uses, so the two are comparable by construction.
+    float initial_rel_error_fgmres = -1.0f;
+    {
+        torch::NoGradGuard ng_init;
+        const float bn0 = guarded_item<float>(b_inner.norm());
+        const float rn0 = guarded_item<float>(r_true_inner.norm());
+        if (bn0 > 0.0f && std::isfinite(bn0) && std::isfinite(rn0)) {
+            initial_rel_error_fgmres = rn0 / bn0;
+        }
+    }
 
     // v20.14 r50: GMRES block-scaling (left-preconditioning with D⁻¹).
     // D[block] = ||r0[block]||₂. After scaling, each block contributes exactly 1 to ||D⁻¹r0||².
@@ -2744,6 +2755,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 r_true.detach().clone(), 0, false, false};
         res.termination_reason =
             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
+        res.initial_rel_error = initial_rel_error_fgmres;
         return res;
     }
     
@@ -3203,6 +3215,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                             "NaN failures exceeded max retries",
                             r_true.detach().clone(), iter, false, false};
                     res.termination_reason = KTR::NanRetryExhausted;
+                    res.initial_rel_error = initial_rel_error_fgmres;
                     return res;
                 } else {
                     // Continue GMRES loop, hope next iteration succeeds
@@ -4054,6 +4067,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             rel_error_final, gmres_msg, r_true_out, actual_restarts, false,
             terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
     res.termination_reason = resolution.reason;
+    res.initial_rel_error = initial_rel_error_fgmres;
     res.probe_j = diag_probe_j;
     res.probe_true_err = diag_probe_true_err;
     res.probe_hopeless_floor = diag_probe_floor;
@@ -8729,8 +8743,18 @@ public:
                 // R13.5: divergence is not stagnation. The total-failure predicate folds
                 // raw_rel_error > 1 (the residual GREW) together with rel_error >= 0.999 (it
                 // did not move), and those point at different work.
-                if (std::isfinite(gmres_result.rel_error) && gmres_result.rel_error > 1.0f) {
-                    stats_.krylov_diverged = true;
+                // R13.9: divergence is measured against where the solve STARTED. On a warm
+                // start ||r0|| can exceed ||b||, and a solve that reduced it still reports
+                // rel_error > 1 -- the em_b_wave failing iteration did exactly that (1.054 ->
+                // 0.979) and was classified krylov_diverged. Fall back to the old test only
+                // when the initial ratio was not measured.
+                {
+                    const float ref = (gmres_result.initial_rel_error >= 0.0f)
+                        ? gmres_result.initial_rel_error : 1.0f;
+                    if (std::isfinite(gmres_result.rel_error) &&
+                        gmres_result.rel_error > ref * (1.0f + 1.0e-4f)) {
+                        stats_.krylov_diverged = true;
+                    }
                 }
                 // R13.8: what "success" was supposed to mean.
                 if (gmres_result.termination_reason ==

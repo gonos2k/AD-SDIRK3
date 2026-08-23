@@ -198,6 +198,12 @@ public:
         // the weight it used; the caller applies it. Empty when block scaling is off, where
         // D = I.
         torch::Tensor d_inv_used;
+        // R13.9: ||r0||/||b|| -- the SAME ratio at j=0. On a warm start x0 != 0 this can exceed
+        // 1, and then rel_error > 1 after the solve means only that it began above 1, not that
+        // the solve diverged. Divergence is rel_error > initial_rel_error, never rel_error > 1.
+        // -1 when not measured. At the END of the struct: the aggregate initialisers at every
+        // return site are positional.
+        float initial_rel_error = -1.0f;
     };
 
     /**

@@ -440,9 +440,12 @@ dominate the physical residual.
 
 ### Follow-up this correction opens
 
-- **The classifier's `krylov_diverged` compares against `‖b‖`.** `raw_rel_error > 1` fires on
-  a warm start that began above 1 even when the solve reduced it. Divergence should mean
-  `ρ(j_final) > ρ(0)`, and that needs the Krylov result to carry `rel_error` at j=0. Open.
+- ~~The classifier's `krylov_diverged` compares against `‖b‖`.~~ **Closed.** `GMRESResult`
+  now carries `initial_rel_error = ‖r₀‖/‖b‖` (set at all three FGMRES return sites, in the same
+  halo-zeroed norm every later `rel_error` uses), and `krylov_diverged` means
+  `rel_error > initial_rel_error·(1+1e-4)`, falling back to `> 1` only when the initial ratio
+  was not measured. Contract G in `test_fgmres_contract.cpp` pins the case: a warm start that
+  begins above 1 and is reduced is **not** divergence.
 - ~~Per-block residual of the A/B iterates.~~ **Done** — and it reversed the inference.
 
 ---
