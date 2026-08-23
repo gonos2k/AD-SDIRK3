@@ -19,6 +19,7 @@
 #include <iostream>
 #include <limits>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -893,6 +894,42 @@ int main() {
               "establish; the Exception enum value had ZERO producers until this review");
     }
 
+    // R13.18 (deep review P0-3): the near-worst fold must be ORDER-INDEPENDENT. The reviewer's
+    // counterexample, both permutations, plus the properties the fold has to have.
+    {
+        using wrf::sdirk3::NearWorstFold;
+        using wrf::sdirk3::near_worst_accumulate;
+        struct Solve { double p; bool met; };
+        auto fold = [](std::vector<Solve> v) {
+            NearWorstFold st;
+            for (const auto& x : v) st = near_worst_accumulate(st, x.p, x.met);
+            return st;
+        };
+        const Solve A{0.90, false}, B{0.99, true};
+        const auto ab = fold({A, B});
+        const auto ba = fold({B, A});
+        check(ab.all_met == ba.all_met && ab.worst == ba.worst && ab.all_met,
+              "A(0.90,not-met) then B(0.99,met) must equal B then A -- the streaming version gave "
+              "false one way and true the other, and that verdict decides whether the "
+              "forcing-term and objective-mismatch categories may be read at all");
+
+        // A strictly worse solve outside the band REPLACES the set; it does not inherit it.
+        check(fold({{0.50, false}, {0.99, true}}).all_met,
+              "a clearly-better earlier solve is not in the final tie set and must not poison it");
+        // ...and a solve inside the band JOINS it.
+        check(!fold({{0.9895, false}, {0.99, true}}).all_met,
+              "a solve within the tie band of the final worst IS in the set, so one that met no "
+              "tolerance makes the set ambiguous");
+        // Order-independence of the joining case too.
+        check(fold({{0.9895, false}, {0.99, true}}).all_met ==
+                  fold({{0.99, true}, {0.9895, false}}).all_met,
+              "and that holds in either arrival order");
+        // A single solve is its own set.
+        check(near_worst_accumulate(NearWorstFold{}, 0.99, false).all_met == false &&
+              near_worst_accumulate(NearWorstFold{}, 0.99, true).all_met == true,
+              "the first solve starts the set rather than inheriting the `true` default");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -909,7 +946,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 73;
+    constexpr int expected_checks = 78;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

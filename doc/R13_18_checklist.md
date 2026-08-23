@@ -1,0 +1,97 @@
+# R13.18 — checklist for the R13.17 deep review
+
+Baseline: `main` merge `a5aaaae` (PR #178 merged). Branch `agent/r13-18-exit-solve-receipts`,
+which first **rescues two orphaned commits** — the physical numerical-range measurement and the
+round-7 withdrawal — that were pushed after #178 merged. Tenth occurrence of that race.
+
+## First: reconciling this review with red-team round 7
+
+The two disagree on the retraction, and the disagreement is **resolvable by separating two claims**:
+
+| claim | verdict | by whom |
+|---|---|---|
+| "the failure moved **outward** to Newton" | **retracted — the exit event is identical in both runs** | both agree (round 7: *"the measured part is sound and survives: both runs break at the same code site"*) |
+| "…therefore the first failure **is the linear solve**" | **not supported** — the gate is `‖dK‖<1e-15` **and** a ‖r‖/‖b‖ predicate | round 7 only |
+
+So the retraction stands; what does **not** follow is the positive attribution. My previous wording
+("back to HOLD, neither confirmed nor retracted") over-corrected and is itself fixed below.
+
+Legend: **[DONE]** · **[OPEN]**
+
+## P0
+
+- [ ] **P0-1 — the stopping metric may be `D` *or* `E`, and the receipt always calls it `D`.**
+      `WRF_SDIRK3_KRYLOV_WRMS_METRIC=1` replaces the block-constant `D⁻¹` with `E⁻¹S`, so the
+      internal objective becomes ρ_E, while the fields still read `rho_D_final` /
+      `D_tolerance_reached`. Worse, the **stage gate** accepts/rejects on `‖E⁻¹R‖`, and neither the
+      receipt nor the classifier carries ρ_E — so ρ_D < η, ρ_S < η, ρ_E ≥ η is unclassifiable.
+- [ ] **P0-2 — tolerance *source* is produced and emitted, and the classifier never reads it**,
+      while the layer string hardcodes `eisenstat_walker_...`. A record can read
+      `tol_source=stage_override` beside a layer naming Eisenstat–Walker. Same class, again.
+- [ ] **P0-3 — the near-worst tie reducer is ORDER-DEPENDENT.** Streaming update never resets the
+      tie state when a strictly larger worst arrives. Reviewer's counterexample: `A(0.90, not-met)`
+      then `B(0.99, met)` → `false`; `B` then `A` → `true`. Same solve set, different verdict.
+- [ ] **P0-4 — the terminal exit is subtyped by the STAGE-WORST solve, not the EXIT solve.** The
+      `worst_*` receipts belong to the largest-ratio solve in the stage, which need not be the one
+      that ended the loop.
+- [ ] **P0-5 — `KrylovBudgetLimited` claims more than it measures.** `reason == MaxBudget` is the
+      resolver's *default* when nothing else is chosen, and coexists with the message "early exit
+      before max restarts" — so it does not establish `spent == allowed`. And "still descending when
+      cut off" has no tail-slope evidence.
+
+## P1
+
+- [ ] **P1-1 — the `rw` Taylor reading is not what the doc claims.** `share_rw = 0.000216 < 1e-3`,
+      the excitation floor, so `tau_rw = 0.0447` is normalised by the **floor**, not by the block's
+      own `‖A s‖`. Raw ≈ 0.207. **My claim that `rw` is "better than the packed reading" is wrong**
+      — the correct statement is that this step direction barely excites `rw`, so it constrains the
+      `rw` Jacobian hardly at all.
+- [ ] **P1-2 — `tau_block_max` is written and never read by the verdict**, and the realization /
+      roundoff gates only fire when *measured*, so a record missing them still returns `Measured`.
+- [ ] **P1-3 — `K` realization is checked, `U_eval = U_stage + hγK` realization is not.** A step can
+      survive in `K` and be quantized away when added to a large background.
+- [ ] **P1-4 — `rho_D_initial` has no producer; early returns carry an incomplete receipt.**
+- [ ] **P1-5 — enum inventory ≠ producer set**: `TrustRejected` and `NonfiniteResidual` have no
+      producers, and a comment claims a site is "NOT a Newton-loop exit" — verify against the code.
+- [ ] **P1-6 — the A/B fingerprint still shares the underlying preconditioner instance.** Accepted
+      as a stated limitation; the OFF/ON trajectory control stands for the current configuration.
+
+## Scientific wording to correct
+
+- [ ] τ_max = 0.2008 must not be called "≪ 1". The honest statement: no dominant first-order
+      Jacobian defect in the measured directions, but the **full-step nonlinear remainder is ~20 %
+      of the linear response in the worst excited block**.
+- [ ] `rw` must be reported as **not constrained** by this direction, not as accurate.
+
+---
+
+## Measured after the first batch
+
+```
+tau=0.1192  tau_excited_block_max=0.2008  tau_verdict=measured
+tau_ru=0.200793  tauraw_ru=0.200793  excited_ru=1
+tau_ph=0.000476  tauraw_ph=0.000476  share_ph=0.139789  excited_ph=1
+tau_rw=0.044653  tauraw_rw=0.207042  share_rw=0.000216  excited_rw=0
+category=zero_update_after_total_failure  newton_exit=zero_update_after_total_failure
+```
+
+**P1-1 confirmed, to four digits.** The reviewer back-computed `rw`'s raw ratio as
+`0.0447 × (1e-3 / 2.16e-4) ≈ 0.207`; measured, **`tauraw_rw = 0.207042`**. So `rw`'s raw defect is
+the *largest* of the three — marginally above `ru`'s 0.2008 — and my earlier claim that `rw` was
+"better than the packed reading" had it exactly backwards. It is **not constrained** by this
+direction (`excited_rw = 0`, 0.02 % of ‖A s‖), which is a different statement from accurate, and the
+record now carries `tauraw_`, `share_` and `excited_` per block so the two cannot be conflated.
+
+`ph` is genuinely excited (share 0.14) and its raw and floor-normalised values coincide, so its
+small τ **is** meaningful. `ru` likewise.
+
+**P0-3 closed and pinned.** The near-worst fold is a pure function
+(`near_worst_accumulate`) with both permutations of the reviewer's counterexample asserted equal,
+plus the replace/join/ignore cases and the single-solve case.
+
+**P0-5 closed.** `budget_exhausted` is now `arnoldi_spent >= arnoldi_allowed`, measured at the
+solve, instead of `termination_reason == MaxBudget` — which is the resolver's *default* and coexists
+with the message "early exit before max restarts", so it never established exhaustion.
+
+**P1-2 closed.** `tau_excited_block_max` is read by the verdict (`BlockDefect` above 1.0); a record
+without the field still classifies as before.

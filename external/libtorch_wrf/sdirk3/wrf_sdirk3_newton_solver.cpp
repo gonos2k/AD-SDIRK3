@@ -2456,6 +2456,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // own objective and was reported as a failed linear solve; collapsed into one `success` that
     // state is indistinguishable from "the operator could not be solved". Production behaviour is
     // unchanged -- what changes is that the seam is stated.
+    res.arnoldi_spent = total_arnoldi_iters;
+    res.arnoldi_allowed = max_iter * restart;
     res.rho_D_final = guarded_item<float>(error_tensor);
     res.rho_S_final = res.rel_error;
     res.tolerance_applied = tol;
@@ -4178,6 +4180,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // own objective and was reported as a failed linear solve; collapsed into one `success` that
     // state is indistinguishable from "the operator could not be solved". Production behaviour is
     // unchanged -- what changes is that the seam is stated.
+    res.arnoldi_spent = total_arnoldi_iters;
+    res.arnoldi_allowed = max_iter * restart;
     res.rho_D_final = guarded_item<float>(error_tensor);
     res.rho_S_final = res.rel_error;
     res.tolerance_applied = tol;
@@ -9619,8 +9623,15 @@ public:
                     const bool met_tolerance =
                         (gmres_result.termination_reason == KTR_::ToleranceReached) ||
                         (gmres_result.termination_reason == KTR_::InternalConvergenceStop);
+                    // R13.18 (deep review P0-5): MEASURED exhaustion, not the resolver's
+                    // default reason. `MaxBudget` is what the resolver keeps when nothing else is
+                    // selected, and it coexists with the message "early exit before max restarts",
+                    // so it does not establish spent == allowed. A category that says "the budget
+                    // ran out" must have seen the budget run out.
                     const bool budget_exhausted =
-                        (gmres_result.termination_reason == KTR_::MaxBudget);
+                        (gmres_result.arnoldi_spent >= 0 &&
+                         gmres_result.arnoldi_allowed > 0 &&
+                         gmres_result.arnoldi_spent >= gmres_result.arnoldi_allowed);
                     // Where the tolerance came from. A category that names Eisenstat-Walker must
                     // have READ this; the layer string used to assert it.
                     const int tol_source = static_cast<int>(
@@ -9637,13 +9648,21 @@ public:
                         // -- not a remote case with eta saturated at its cap. If any solve within
                         // a hair of the worst did NOT meet a tolerance, the forcing-term and
                         // objective-mismatch categories are refused and it reads as a stall.
-                        if (stats_.worst_krylov_rel_error_vs_r0 >= 0.0f &&
-                            progress >= stats_.worst_krylov_rel_error_vs_r0 * (1.0f - 1.0e-3f) &&
-                            !met_tolerance) {
-                            stats_.all_near_worst_met_tolerance = false;
+                        // R13.18 (deep review P0-3): the fold lives in wrf_sdirk3_first_failure.h as a PURE
+                        // function, so the order-independence this reducer needs is testable. The streaming
+                        // version never dropped the old tie set when a strictly larger worst arrived: A(0.90,
+                        // not-met) then B(0.99, met) gave false while B then A gave true -- the same solve set,
+                        // two verdicts, and the verdict decides whether the forcing-term / objective-mismatch
+                        // categories may be read at all.
+                        {
+                            wrf::sdirk3::NearWorstFold st{
+                                static_cast<double>(stats_.worst_krylov_rel_error_vs_r0),
+                                stats_.all_near_worst_met_tolerance};
+                            st = wrf::sdirk3::near_worst_accumulate(
+                                st, static_cast<double>(progress), met_tolerance);
+                            stats_.all_near_worst_met_tolerance = st.all_met;
                         }
                         if (progress > stats_.worst_krylov_rel_error_vs_r0) {
-                            if (!met_tolerance) stats_.all_near_worst_met_tolerance = false;
                             stats_.worst_krylov_rel_error_vs_r0 = progress;
                             stats_.worst_krylov_iter = newton_iter;
                             // Did the WORST solve stop because it was satisfied? That is the
@@ -11448,14 +11467,27 @@ public:
                             // Floor: a block carrying <0.1% of ||A s|| is not being exercised by
                             // this step, and its ratio is noise over noise.
                             const double floor_b = 1.0e-3 * n_As_all;
+                            const bool excited = (na >= floor_b);
                             const double den = std::max(na, floor_b);
-                            const double tb = den > 0.0
-                                ? (d_b - a_b).norm().item<double>() / den : -1.0;
-                            if (na >= floor_b && tb > tau_block_max) tau_block_max = tb;
+                            const double num = (d_b - a_b).norm().item<double>();
+                            const double tb = den > 0.0 ? num / den : -1.0;
+                            // R13.18 (deep review P1-1): an UNEXCITED block's ratio is normalised
+                            // by the FLOOR, not by its own ||A s||, so a small value means "this
+                            // step barely touched the block", NOT "the Jacobian is accurate here".
+                            // The raw ratio is reported beside it so the two cannot be confused --
+                            // measured, rw had share 2.16e-04 (below the 1e-3 floor) and an
+                            // emitted 0.0447 whose RAW value is ~0.207, and the campaign doc read
+                            // the emitted number as evidence of accuracy.
+                            const double tb_raw = na > 0.0 ? num / na : -1.0;
+                            if (excited && tb > tau_block_max) tau_block_max = tb;
                             tau_block_rows += " tau_" + std::string(blk.name) + "=" +
                                               std::to_string(tb) +
+                                              " tauraw_" + std::string(blk.name) + "=" +
+                                              std::to_string(tb_raw) +
                                               " share_" + std::string(blk.name) + "=" +
-                                              std::to_string(n_As_all > 0.0 ? na / n_As_all : -1.0);
+                                              std::to_string(n_As_all > 0.0 ? na / n_As_all : -1.0) +
+                                              " excited_" + std::string(blk.name) + "=" +
+                                              (excited ? "1" : "0");
                         }
                     }
                     // R13.17 (external review P1-2): was the step REALIZED, and does the
@@ -11514,7 +11546,7 @@ public:
                               << " alpha_arm_measured=" << (alpha_arm_measured ? 1 : 0)
                               << " fd_fallback_free=" << (tin.fd_fallback_free ? 1 : 0)
                               << " linearity_residual=" << linearity_residual
-                              << " tau_block_max=" << tau_block_max
+                              << " tau_excited_block_max=" << tau_block_max
                               << " realized_step_fraction=" << realized_step_fraction
                               << " signal_to_roundoff=" << signal_to_roundoff
                               << tau_block_rows

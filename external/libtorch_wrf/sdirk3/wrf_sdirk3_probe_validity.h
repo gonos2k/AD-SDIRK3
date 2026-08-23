@@ -325,7 +325,7 @@ struct TaylorDefectInputs {
 
 enum class TaylorVerdict { Unmeasured, FdFallback, AlphaArmAssumed, AlphaDyadic,
                            LinearityUnmeasured, OperatorNonlinear, StepNotRealized,
-                           RoundoffLimited, Measured };
+                           RoundoffLimited, BlockDefect, Measured };
 
 inline const char* taylor_verdict_name(TaylorVerdict v) {
     switch (v) {
@@ -337,6 +337,7 @@ inline const char* taylor_verdict_name(TaylorVerdict v) {
         case TaylorVerdict::OperatorNonlinear: return "operator_nonlinear";
         case TaylorVerdict::StepNotRealized: return "step_not_realized";
         case TaylorVerdict::RoundoffLimited: return "roundoff_limited";
+        case TaylorVerdict::BlockDefect:     return "block_defect";
         case TaylorVerdict::Measured:        return "measured";
     }
     return "unknown";
@@ -350,6 +351,10 @@ inline constexpr double kTaylorStepRealized = 0.99;
 // ||dR|| must stand this far above the float32 roundoff of the quantities differenced, or the
 // numerator of tau is cancellation noise. 100x is ~7 significant bits of headroom.
 inline constexpr double kTaylorSignalFloor = 100.0;
+// A per-block defect this large is a finding even when the packed reading is small: one dominant
+// block can carry the global norm while another is wrong. Set at 1 -- a remainder as large as the
+// linear response itself in any EXCITED block.
+inline constexpr double kTaylorBlockDefect = 1.0;
 
 // A power of two, within the exactness that matters here: alpha == 2^k for integer k.
 inline bool is_dyadic(double a) {
@@ -400,6 +405,12 @@ inline TaylorVerdict taylor_defect_verdict(const TaylorDefectInputs& in) {
     if (is_measured(in.signal_to_roundoff) &&
         in.signal_to_roundoff < kTaylorSignalFloor) {
         return TaylorVerdict::RoundoffLimited;
+    }
+    // R13.18 (deep review P1-2): the per-block maximum was written and never READ, so a record
+    // with tau_global = 0.01 and tau_excited_block_max = 100 still returned Measured. The number
+    // a conclusion may quote is the max of the two.
+    if (is_measured(in.tau_block_max) && in.tau_block_max > kTaylorBlockDefect) {
+        return TaylorVerdict::BlockDefect;
     }
     return TaylorVerdict::Measured;
 }

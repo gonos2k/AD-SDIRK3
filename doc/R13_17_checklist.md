@@ -141,11 +141,21 @@ tau=0.1192 (packed)   tau_block_max=0.2008
 tau_ru=0.2008   tau_ph=0.000476 (share 0.140)   tau_rw=0.0447 (share 0.000216)   tau_mu=0.0055
 ```
 
-**The packed L2 was not hiding a defect in a small block.** The worst per-block τ is in `ru` — the
-*dominant* block — and `ph`, `rw`, `mu` are all **better** than the packed reading (`ph` by 250×).
-The concern was the right one to raise and the measurement answers it in the direction that
-strengthens the Taylor result. The honest number to quote as the verdict is now **τ_max = 0.2008**,
-not 0.119 — still ≪ 1, and 1.7× the packed value.
+**Corrected by the R13.17 deep review (P1-1).** The original reading here — *"`ph`, `rw`, `mu` are
+all better than the packed reading"* — is **wrong for `rw`**. The per-block ratio is normalised by
+`max(‖A s‖_b, 1e-3·‖A s‖)`, and `share_rw = 2.16e-04` is **below that floor**, so `tau_rw = 0.0447`
+is divided by the *floor*, not by `rw`'s own linear response. Its raw ratio is ≈ **0.207**. The
+honest statement is that this step direction **barely excites `rw` (0.02 % of ‖A s‖) and therefore
+constrains the `rw` Jacobian hardly at all** — "not constrained", not "accurate". `ph` (share 0.14)
+*is* excited, so its small τ is meaningful.
+
+What survives: the worst *excited*-block τ is in `ru`, the dominant block, so the packed L2 was not
+hiding a defect in a block it excited. The verdict number is **τ_max = 0.2008**.
+
+**And 0.2008 must not be called "≪ 1".** It means the full-step nonlinear remainder is ~20 % of the
+linear response in the worst excited block — not negligible. The supported claim is: *no dominant
+first-order Jacobian defect in the measured directions*, with the full-step nonlinearity explicitly
+**not** established as negligible, and `rw` not constrained by this direction at all.
 
 ### P1-2 — the step was realized and the signal is far above roundoff
 

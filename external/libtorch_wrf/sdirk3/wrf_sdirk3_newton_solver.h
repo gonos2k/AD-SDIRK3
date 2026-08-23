@@ -212,6 +212,13 @@ public:
         float tolerance_applied = -1.0f;
         bool  D_tolerance_reached = false;
         bool  S_tolerance_reached = false;
+        // R13.18 (deep review P0-5): the Arnoldi work actually SPENT and the work ALLOWED.
+        // `termination_reason == MaxBudget` does not establish that they are equal -- MaxBudget is
+        // the resolver's DEFAULT when no other reason is selected, and it coexists with the
+        // message "early exit before max restarts". A budget category built on the reason alone
+        // claims exhaustion it did not measure.
+        int   arnoldi_spent = -1;
+        int   arnoldi_allowed = -1;
         int stag_count_final = 0;         // consecutive stagnating checks seen
         // R13.9: the LEFT WEIGHT this solve actually minimised under.
         //

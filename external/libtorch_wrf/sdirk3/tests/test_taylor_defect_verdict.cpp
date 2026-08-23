@@ -209,7 +209,19 @@ int main() {
               "the contract, they do not invalidate measurements already taken");
     }
 
-    constexpr int expected_checks = 16;
+    {
+        // R13.18 (deep review P1-2): tau_block_max was written and never READ.
+        auto in = sound();
+        in.tau_block_max = 100.0;
+        check(name_of(in) == "block_defect",
+              "a packed tau of 0.02 beside a per-block max of 100 is a finding, not a Measured "
+              "record -- one dominant block can carry the global norm while another is wrong");
+        in = sound(); in.tau_block_max = -1.0;
+        check(name_of(in) == "measured",
+              "and a record without the per-block field keeps classifying as it did");
+    }
+
+    constexpr int expected_checks = 18;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -24,6 +24,7 @@
 // been a correct rule whose consumer read something else. A classifier whose emit site
 // re-derives the category from raw signals would be that defect again.
 
+#include <algorithm>
 #include <limits>
 
 namespace wrf {
@@ -219,6 +220,35 @@ inline const char* newton_termination_name(NewtonTerminationReason r) {
         case NewtonTerminationReason::Exception:          return "exception";
     }
     return "not_recorded";
+}
+
+// R13.18 (deep review P0-3): the near-worst tie fold, as a PURE FUNCTION so its
+// order-independence can be tested. The streaming version inside the solver never dropped the old
+// tie set when a strictly larger worst arrived, so A(0.90, not-met) then B(0.99, met) gave false
+// while B then A gave true -- the same solve set, two verdicts, and the verdict decides whether
+// the forcing-term / objective-mismatch categories may be read at all.
+//
+// The state is (worst_so_far, all_near_worst_met). A solve either: starts the set, joins it (its
+// ratio is within the band of the current worst), replaces it (strictly worse and outside the
+// band), or is ignored (clearly better than the worst).
+struct NearWorstFold {
+    double worst = -1.0;
+    bool all_met = true;
+};
+
+inline constexpr double kNearWorstTieBand = 1.0e-3;
+
+inline NearWorstFold near_worst_accumulate(NearWorstFold st, double progress, bool met_tolerance) {
+    if (!(progress >= 0.0)) return st;
+    if (st.worst < 0.0) return NearWorstFold{progress, met_tolerance};
+    const bool joins = (progress >= st.worst * (1.0 - kNearWorstTieBand));
+    const bool replaces = (progress > st.worst) &&
+                          (st.worst < progress * (1.0 - kNearWorstTieBand));
+    if (replaces) return NearWorstFold{progress, met_tolerance};
+    if (joins) {
+        return NearWorstFold{std::max(st.worst, progress), st.all_met && met_tolerance};
+    }
+    return st;   // clearly better than the worst: not in the set
 }
 
 enum class KrylovToleranceSource { Unknown, Base, EisenstatWalker, StageOverride, InnRamp, Other };
