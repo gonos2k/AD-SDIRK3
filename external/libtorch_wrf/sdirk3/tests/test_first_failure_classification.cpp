@@ -723,9 +723,24 @@ int main() {
               "a solve that made no progress because its own forcing term did not ask for more "
               "is not the operator's failure -- naming it krylov_stagnated sends the work to the "
               "preconditioner, and the layer actually responsible had no category at all");
+        // R13.18 (deep review P0-2): the CATEGORY layer is source-neutral, and the specific
+        // source turns into a layer through `krylov_forcing_layer_for`. It used to name
+        // Eisenstat-Walker unconditionally while the tolerance could have come from a stage
+        // override or a ramp -- the source was produced, emitted, and read by nothing.
         check(std::string(stage_failure_layer(StageFailure::KrylovForcingTermLimited)) ==
-                  "eisenstat_walker_forcing_or_inner_budget",
-              "and that category names the forcing term and the inner budget, not the operator");
+                  "krylov_tolerance_policy_or_inner_budget",
+              "the category's own layer names the tolerance policy without asserting WHICH one");
+        check(std::string(wrf::sdirk3::krylov_forcing_layer_for(
+                  wrf::sdirk3::KrylovToleranceSource::StageOverride)) ==
+                  "stage_tolerance_override" &&
+              std::string(wrf::sdirk3::krylov_forcing_layer_for(
+                  wrf::sdirk3::KrylovToleranceSource::EisenstatWalker)) ==
+                  "eisenstat_walker_forcing" &&
+              std::string(wrf::sdirk3::krylov_forcing_layer_for(
+                  wrf::sdirk3::KrylovToleranceSource::Unknown)) ==
+                  "inner_tolerance_source_unrecorded",
+              "...and the recorded source selects the specific layer, with an UNRECORDED source "
+              "saying so rather than defaulting to a named mechanism");
         s.worst_krylov_met_tolerance = false;        // it stopped because it could not progress
         check(name_of(s) == "krylov_stagnated",
               "while the same ratio from a solve that did NOT meet its tolerance is a stall");
@@ -930,6 +945,34 @@ int main() {
               "the first solve starts the set rather than inheriting the `true` default");
     }
 
+    {
+        // R13.18 (deep review P0-4): a terminal event is subtyped by the solve that ENDED the
+        // loop, not by the stage's largest-ratio solve -- they need not be the same iteration.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        // Stage-worst says iteration 0: D met, S not -- an objective mismatch THERE.
+        s.worst_krylov_rel_error_vs_r0 = 0.99;
+        s.worst_krylov_D_reached = true; s.worst_krylov_S_reached = false;
+        s.krylov_solves_measured_vs_r0 = 4;
+        // ...but the solve that ENDED the loop, at iteration 3, met neither.
+        s.exit_krylov_iter = 3;
+        s.exit_D_reached = false; s.exit_S_reached = false;
+        check(name_of(s) == "zero_update_after_total_failure",
+              "the exit solve met no tolerance, so the terminal event keeps its own name -- "
+              "reading the stage-worst receipt here would report an objective mismatch from an "
+              "iteration that ended nothing");
+        s.exit_D_reached = true;   // now the EXIT solve is the mismatch
+        check(name_of(s) == "krylov_objective_mismatch",
+              "and when the exit solve itself met D and not S, the subtype is earned by the "
+              "solve the event belongs to");
+        s.exit_krylov_iter = -1;   // no exit receipt at all
+        check(name_of(s) == "zero_update_after_total_failure",
+              "with no exit receipt the event may not borrow the stage-worst one");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -946,7 +989,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 78;
+    constexpr int expected_checks = 82;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

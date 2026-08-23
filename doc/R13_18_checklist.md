@@ -20,33 +20,33 @@ Legend: **[DONE]** · **[OPEN]**
 
 ## P0
 
-- [ ] **P0-1 — the stopping metric may be `D` *or* `E`, and the receipt always calls it `D`.**
+- [x] **P0-1 — the stopping metric may be `D` *or* `E`, and the receipt always calls it `D`.**
       `WRF_SDIRK3_KRYLOV_WRMS_METRIC=1` replaces the block-constant `D⁻¹` with `E⁻¹S`, so the
       internal objective becomes ρ_E, while the fields still read `rho_D_final` /
       `D_tolerance_reached`. Worse, the **stage gate** accepts/rejects on `‖E⁻¹R‖`, and neither the
       receipt nor the classifier carries ρ_E — so ρ_D < η, ρ_S < η, ρ_E ≥ η is unclassifiable.
-- [ ] **P0-2 — tolerance *source* is produced and emitted, and the classifier never reads it**,
+- [x] **P0-2 — tolerance *source* is produced and emitted, and the classifier never reads it**,
       while the layer string hardcodes `eisenstat_walker_...`. A record can read
       `tol_source=stage_override` beside a layer naming Eisenstat–Walker. Same class, again.
-- [ ] **P0-3 — the near-worst tie reducer is ORDER-DEPENDENT.** Streaming update never resets the
+- [x] **P0-3 — the near-worst tie reducer is ORDER-DEPENDENT.** Streaming update never resets the
       tie state when a strictly larger worst arrives. Reviewer's counterexample: `A(0.90, not-met)`
       then `B(0.99, met)` → `false`; `B` then `A` → `true`. Same solve set, different verdict.
-- [ ] **P0-4 — the terminal exit is subtyped by the STAGE-WORST solve, not the EXIT solve.** The
+- [x] **P0-4 — the terminal exit is subtyped by the STAGE-WORST solve, not the EXIT solve.** The
       `worst_*` receipts belong to the largest-ratio solve in the stage, which need not be the one
       that ended the loop.
-- [ ] **P0-5 — `KrylovBudgetLimited` claims more than it measures.** `reason == MaxBudget` is the
+- [x] **P0-5 — `KrylovBudgetLimited` claims more than it measures.** `reason == MaxBudget` is the
       resolver's *default* when nothing else is chosen, and coexists with the message "early exit
       before max restarts" — so it does not establish `spent == allowed`. And "still descending when
       cut off" has no tail-slope evidence.
 
 ## P1
 
-- [ ] **P1-1 — the `rw` Taylor reading is not what the doc claims.** `share_rw = 0.000216 < 1e-3`,
+- [x] **P1-1 — the `rw` Taylor reading is not what the doc claims.** `share_rw = 0.000216 < 1e-3`,
       the excitation floor, so `tau_rw = 0.0447` is normalised by the **floor**, not by the block's
       own `‖A s‖`. Raw ≈ 0.207. **My claim that `rw` is "better than the packed reading" is wrong**
       — the correct statement is that this step direction barely excites `rw`, so it constrains the
       `rw` Jacobian hardly at all.
-- [ ] **P1-2 — `tau_block_max` is written and never read by the verdict**, and the realization /
+- [x] **P1-2 — `tau_block_max` is written and never read by the verdict**, and the realization /
       roundoff gates only fire when *measured*, so a record missing them still returns `Measured`.
 - [ ] **P1-3 — `K` realization is checked, `U_eval = U_stage + hγK` realization is not.** A step can
       survive in `K` and be quantized away when added to a large background.
@@ -95,3 +95,46 @@ with the message "early exit before max restarts", so it never established exhau
 
 **P1-2 closed.** `tau_excited_block_max` is read by the verdict (`BlockDefect` above 1.0); a record
 without the field still classifies as before.
+
+
+---
+
+## Second batch — P0-1, P0-2, P0-4 closed
+
+```
+category=zero_update_after_total_failure  layer=zero_update_bnorm_rule_or_step_recovery
+newton_exit=zero_update_after_total_failure
+exit_krylov_iter=3  exit_D_reached=0  exit_S_reached=0
+exit_stop_metric=block_D  exit_tol_source=eisenstat_walker
+worst_krylov_tol_source=eisenstat_walker  near_worst_all_met_tol=0
+```
+
+**P0-1.** The stopping metric is now **typed and recorded** (`KrylovStoppingMetric`:
+`identity_S` / `block_D` / `stage_wrms_E`) instead of being called `D` unconditionally.
+`WRF_SDIRK3_KRYLOV_WRMS_METRIC` swaps `D⁻¹` for `E⁻¹S`, and the receipt now says which one ran —
+measured here as `block_D`, which is what the default configuration should give. *(The ρ_E
+**values** and the stage-gate seam the review also raises remain open; naming the metric is the
+prerequisite, not the whole of it.)*
+
+**P0-2.** The forcing category's layer is **source-neutral**
+(`krylov_tolerance_policy_or_inner_budget`) and the specific layer is **derived** from the recorded
+source through `krylov_forcing_layer_for` — `stage_tolerance_override`, `eisenstat_walker_forcing`,
+`inn_tolerance_ramp`, `base_inner_tolerance`, and `inner_tolerance_source_unrecorded` when nothing
+was recorded. It used to name Eisenstat–Walker while the value could have come from a stage
+override, with the source produced, emitted and read by nothing.
+
+**P0-4.** The terminal event is subtyped by the **exit solve's own receipt** (`exit_krylov_iter=3`),
+not the stage's largest-ratio solve. Measured, the exit solve met **neither** tolerance
+(`exit_D_reached=0`, `exit_S_reached=0`), so the event correctly keeps its own name rather than
+being read as an objective mismatch. Three fixtures pin it: exit-met-neither keeps the name,
+exit-met-D-not-S earns the mismatch, and **no exit receipt may not borrow the stage-worst one**.
+
+## Still open, carried forward
+
+- **P0-1 remainder**: ρ_E *values* on the receipt, and the **stage-gate** seam (the gate accepts on
+  `‖E⁻¹R‖`, so ρ_D < η, ρ_S < η, ρ_E ≥ η is still unclassifiable).
+- **P1-3**: `U_eval = U_stage + hγK` realization (only `K` realization is checked).
+- **P1-4**: `rho_D_initial` has no producer; early returns carry an incomplete receipt.
+- **P1-5**: `TrustRejected` / `NonfiniteResidual` have no producers — enum inventory ≠ producer set.
+- **P1-6**: the A/B fingerprint still shares the underlying preconditioner instance (stated
+  limitation; the OFF/ON trajectory control stands for the current configuration).

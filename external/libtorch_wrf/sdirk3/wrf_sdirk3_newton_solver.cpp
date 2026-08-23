@@ -2456,6 +2456,11 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // own objective and was reported as a failed linear solve; collapsed into one `success` that
     // state is indistinguishable from "the operator could not be solved". Production behaviour is
     // unchanged -- what changes is that the seam is stated.
+    // R13.18 (deep review P0-1): name the metric the loop stopped on, rather than calling it D.
+    // solve_gmres has no WRMS path, so its objective is D or the identity.
+    res.stopping_metric = static_cast<int>(
+        block_scaled ? wrf::sdirk3::KrylovStoppingMetric::BlockD
+                     : wrf::sdirk3::KrylovStoppingMetric::IdentityS);
     res.arnoldi_spent = total_arnoldi_iters;
     res.arnoldi_allowed = max_iter * restart;
     res.rho_D_final = guarded_item<float>(error_tensor);
@@ -4180,6 +4185,11 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // own objective and was reported as a failed linear solve; collapsed into one `success` that
     // state is indistinguishable from "the operator could not be solved". Production behaviour is
     // unchanged -- what changes is that the seam is stated.
+    // R13.18 (deep review P0-1): name the metric the loop stopped on, rather than calling it D.
+    res.stopping_metric = static_cast<int>(
+        !block_scaled ? wrf::sdirk3::KrylovStoppingMetric::IdentityS
+                      : (wrms_metric_applied ? wrf::sdirk3::KrylovStoppingMetric::StageWRMS
+                                             : wrf::sdirk3::KrylovStoppingMetric::BlockD));
     res.arnoldi_spent = total_arnoldi_iters;
     res.arnoldi_allowed = max_iter * restart;
     res.rho_D_final = guarded_item<float>(error_tensor);
@@ -9640,6 +9650,22 @@ public:
                             : (stage_budget_forcing_coupled
                                    ? wrf::sdirk3::KrylovToleranceSource::EisenstatWalker
                                    : wrf::sdirk3::KrylovToleranceSource::Base));
+                    // R13.18 (deep review P0-4): this solve's receipt, recorded where
+                    // gmres_result is in scope. The Newton exit site is later in the same
+                    // iteration and outside this scope; it promotes these into exit_* so a
+                    // terminal event is subtyped by the solve that ENDED the loop, not by the
+                    // stage's largest-ratio solve, which need not be the same iteration.
+                    stats_.last_solve_iter = newton_iter;
+                    stats_.last_rho_stop_final = gmres_result.rho_D_final;
+                    stats_.last_rho_S_final = gmres_result.rho_S_final;
+                    stats_.last_D_reached = gmres_result.D_tolerance_reached;
+                    stats_.last_S_reached = gmres_result.S_tolerance_reached;
+                    stats_.last_stopping_metric = gmres_result.stopping_metric;
+                    stats_.last_tolerance_source = tol_source;
+                    stats_.last_budget_exhausted =
+                        (gmres_result.arnoldi_spent >= 0 &&
+                         gmres_result.arnoldi_allowed > 0 &&
+                         gmres_result.arnoldi_spent >= gmres_result.arnoldi_allowed);
                     if (!trivial_solve) {
                         // Counted here so the count is over exactly the solves the max is over.
                         stats_.krylov_solves_measured_vs_r0++;
@@ -11931,6 +11957,21 @@ public:
                         // measurement (both runs break here) stands, the inference did not.
                         stats_.newton_termination = static_cast<int>(
                             wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure);
+                        // R13.18 (deep review P0-4): the receipt of THIS solve -- the one that
+                        // ended the loop -- not the stage's worst. Those need not be the same
+                        // iteration, and subtyping a terminal event from another iteration's
+                        // evidence is how a category ends up describing a solve that did not
+                        // end anything.
+                        // Promote THIS iteration's solve receipt (recorded above, where
+                        // gmres_result was in scope) as the exit solve's.
+                        stats_.exit_krylov_iter = stats_.last_solve_iter;
+                        stats_.exit_rho_stop_final = stats_.last_rho_stop_final;
+                        stats_.exit_rho_S_final = stats_.last_rho_S_final;
+                        stats_.exit_D_reached = stats_.last_D_reached;
+                        stats_.exit_S_reached = stats_.last_S_reached;
+                        stats_.exit_stopping_metric = stats_.last_stopping_metric;
+                        stats_.exit_tolerance_source = stats_.last_tolerance_source;
+                        stats_.exit_budget_exhausted = stats_.last_budget_exhausted;
                         break;
                     }
                     // v20.14r36: Configurable zero-step stagnation limit (was hardcoded 3).
