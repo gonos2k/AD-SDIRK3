@@ -38,6 +38,11 @@ AbComparison sound() {
     AbComparison c;
     c.same_operator = c.same_rhs = c.same_x0 = true;
     c.same_solver_path = c.same_budget = c.early_stop_disabled = true;
+    c.fresh_operator_per_arm = c.fresh_preconditioner_per_arm = true;
+    c.diagnostic_noninterfering = true;
+    c.jvp_authoritative = true;
+    c.rho_a_finite = c.rho_b_finite = true;
+    c.termination_a_admissible = c.termination_b_admissible = true;
     c.termination_a = c.termination_b = 5;
     return c;
 }
@@ -110,7 +115,59 @@ int main() {
               "is not evidence of a controlled experiment");
     }
 
-    constexpr int expected_checks = 11;
+    // ---- R13.8: the clauses that caught R13.7 ----
+    //
+    // R13.7 froze (A, b, x0) and used one solve_fgmres for both arms -- it satisfied every
+    // clause the rule had. It was still unattributable, because production's preconditioner
+    // closures are `mutable`: a fallback latch, and a defect gate that evaluates only on its
+    // first call. Running five arms through one closure gives only the FIRST a fresh
+    // preconditioner, and hands the aged one to the production solve that follows.
+    {
+        AbComparison c = sound();
+        c.fresh_preconditioner_per_arm = false;
+        check(!ab_attributable(c).valid && why(c) == "stale_preconditioner_per_arm",
+              "arms sharing ONE stateful preconditioner are not attributable, even with the "
+              "same (A,b,x0), the same code path and the same budget -- this is exactly what "
+              "R13.7 did and what its clean-looking numbers could not support");
+    }
+    {
+        AbComparison c = sound();
+        c.diagnostic_noninterfering = false;
+        check(!ab_attributable(c).valid && why(c) == "probe_interfered",
+              "a probe that changed the run it observed is an INTERVENTION, and its numbers "
+              "describe a trajectory that would not otherwise have existed");
+    }
+    {   // FGMRES presumes a linear operator; an FD matvec with a block-dependent epsilon is
+        // not one, and A(alpha*v) != alpha*A(v) breaks the premise rather than adding noise.
+        AbComparison c = sound();
+        c.jvp_authoritative = false;
+        check(!ab_attributable(c).valid && why(c) == "jvp_not_authoritative",
+              "an operator that fell back to finite differences is not the linear operator "
+              "FGMRES assumes, so nothing measured through it attributes to the variable");
+    }
+    {   // Same-wrongness is not attribution.
+        AbComparison c = sound();
+        c.termination_a = c.termination_b = 7;   // e.g. NanRetryExhausted, in BOTH arms
+        c.termination_a_admissible = c.termination_b_admissible = false;
+        check(!ab_attributable(c).valid && why(c) == "inadmissible_termination",
+              "two arms that failed the SAME way satisfy termination_a == termination_b and "
+              "are still not attributable -- the rule is an allow-list, not an equality");
+    }
+    {
+        AbComparison c = sound();
+        c.rho_b_finite = false;
+        check(!ab_attributable(c).valid && why(c) == "nonfinite_rho",
+              "a non-finite residual in either arm voids the comparison");
+    }
+    {
+        AbComparison c = sound();
+        c.fresh_operator_per_arm = false;
+        check(!ab_attributable(c).valid && why(c) == "stale_operator_per_arm",
+              "a stale operator per arm is refused for the same reason as a stale "
+              "preconditioner");
+    }
+
+    constexpr int expected_checks = 17;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

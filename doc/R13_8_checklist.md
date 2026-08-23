@@ -1,0 +1,243 @@
+# R13.8 — non-interfering frozen A/B authority
+
+Source: the deep static review of R13.7 (`b53b394`). Every item re-checked in the code before
+being written down.
+
+**All confirmed.** And the headline is uncomfortable: R13.7 *added* `ab_attributable()` — the
+rule whose whole purpose is to stop an unattributable A/B being read as a result — and then
+**did not call it from the emitter that produces the A/B.** That is the sixth occurrence of
+"a rule computed and its consumer reading something else", committed in the same PR that
+introduced the rule against it.
+
+Legend: `[ ]` open · `[x]` closed · `[~]` partial · `[B]` blocked upstream.
+
+---
+
+## The two that invalidate the R13.7 conclusion
+
+- [x] **A1 — the probe mutates the production preconditioner.** (review P0-1)
+      CONFIRMED at two sites, both `mutable` lambdas:
+      - `precond_func = [this, variable_pc_event, fallback_locked = false](…) mutable`
+        (`newton_solver.cpp:6888`) — a latch; once set, every later call returns identity.
+      - `gmres_M_inv = [… call_count = 0, refinement_active = true](…) mutable` (`:7469`) —
+        the defect gate evaluates **only** on `call_count == 0` and can set
+        `refinement_active = false` permanently.
+
+      The frozen A/B calls `gmres_M_inv` five times (m = 4, 8, 16, 32, 48) **before**
+      production's own solve uses the same object, and `solve_fgmres` takes it by
+      `const std::function&` — which does not prevent a `mutable` target from changing.
+
+      Two consequences: the M arms are **not independent of each other** (only the m=4 arm ever
+      sees `call_count == 0`), and **the diagnostic changes the run it observes**. In this
+      particular run `refinement=1`, so the defect wrapper was not installed — but
+      `fallback_locked` is live regardless, and the structural defect is unconditional.
+
+      FIX: a fresh preconditioner per arm. Failing that, snapshot/restore + exact-equality
+      check on `fallback_locked`, `refinement_active`, `call_count`, `variable_pc_event`,
+      `precond_fallback_count`, and fail the record closed when any moved.
+
+- [x] **A2 — the live emitter does not consume `ab_attributable()`.** (review P0-4)
+      CONFIRMED: `grep -c ab_attributable wrf_sdirk3_newton_solver.cpp` → **0**. The rule
+      exists, its synthetic contract passes, and nothing in the emitting path calls it. The
+      record carries `stage / arm / j / rho_true / rel_reported / iters / termination` and no
+      verdict.
+      FIX: build the `AbComparison` at the emit site, emit `ab_valid` + `ab_reason`, and
+      suppress every conclusion-shaped field when `ab_valid = 0`.
+
+---
+
+## Contract defects in what R13.7 claimed
+
+- [x] **A3 — `tol = 0` does not disable early stop.** (review P0-2) CONFIRMED. Arnoldi
+      stagnation, the mid-budget hopeless probe and the restart-stagnation guard are gated on
+      `no_early_stop`, not on `tol`. Every observed row *did* terminate `MaxBudget`, so the
+      measurement is not contaminated — but the **contract** was written as
+      `early_stop_disabled` *because* `tol=0`, which is false. Set `no_early_stop` for the
+      probe and report `tolerance_exit_disabled` and `observed_termination` separately.
+
+- [x] **A4 — "equal j = equal work" is wrong.** (review P0-3) CONFIRMED. Equal `j` is equal
+      **Arnoldi dimension**. The M arm additionally performs `M⁻¹v` per direction, plus the
+      preconditioner's internal solve, plus (when refinement is on) an extra `A` application.
+      Correct phrasing: *equal Arnoldi dimension and equal outer matvec budget.* Add
+      `A_apply_count`, `M_apply_count`.
+
+- [x] **A5 — the attribution rule is itself too weak.** (review P0-5) CONFIRMED: two arms that
+      failed the **same** way (`NanRetryExhausted` / `NanRetryExhausted`, or both on an FD
+      fallback operator) satisfy `termination_a == termination_b`. Same-wrongness is not
+      attribution. Needs per-arm validity, freshness flags, finite-ρ flags, and a termination
+      **allow-list** (`MaxBudget` / `ToleranceReached`) rather than mere equality.
+
+- [x] **A6 — the A/B does not certify which Jacobian it compared.** (review P0-6) CONFIRMED:
+      the probe runs under `torch::NoGradGuard ng_ab` and records nothing about
+      `jvp_method`, `fd_fallback`, or tangent semantics. An FD matvec is not guaranteed linear
+      (block-dependent ε), and FGMRES presumes a linear operator. Record the JVP receipt and
+      measure repeatability / homogeneity / additivity.
+
+- [~] **A7 — `rho_true` is not the physical residual.** (review P0-7) CONFIRMED: with scaling
+      on, the operator is `S⁻¹AS` and FGMRES minimises a further `D⁻¹`-weighted norm. What is
+      reported is the unweighted Euclidean residual **in the S-Krylov coordinates**. Permitted
+      conclusion: *identity was lower in ρ_S.* Not established: the solver objective ρ_D, the
+      physical residual, or the stage-gate WRMS.
+
+- [x] **A8 — five budgets are five separate solves, not one nested trajectory.**
+      (review P0-8) CONFIRMED, and it compounds A1: with a stateful `M`, the first four
+      vectors of the m=8 solve need not equal those of the m=4 solve. One run per arm to
+      j=48 with checkpoints, plus an arm-order-reversed repetition.
+
+---
+
+## Carried from the classifier
+
+- [x] **B1 — an unmeasured final residual is classified as divergence.** (review §11.1)
+      CONFIRMED: `residual_last = -1.0` is the not-measured sentinel and
+      `if (!measured(residual_last)) return NewtonDiverged;` maps it to divergence alongside
+      NaN/Inf. Needs `final_residual_measured` and an `insufficient_evidence` route — the same
+      defect R13.6 fixed for `R0` and left here.
+
+- [x] **B2 — `gmres_successes` does not count successes.** (review §11.2) CONFIRMED: it is
+      incremented whenever the solve was not a *total* failure, so a solve that ended at
+      ρ = 0.5 counts as a success. Rename to what it counts, and count convergence separately.
+
+- [~] **B3 — the numerical-range record does not name its coordinates.** (review §10)
+      CONFIRMED: `UNPRECOND` means `M = I`, not "unscaled". With block scaling the projected
+      operator is `D⁻¹S⁻¹AS`. The negative witness stands **for the operator GMRES iterated**;
+      it does not transfer to raw physical `A` without a coordinate receipt. Add
+      `operator_coordinates`, `block_scaled`, `S_digest`, `D_digest`, and the Arnoldi-relation
+      and orthogonality defects.
+
+- [x] **B4 — A/B records lack identity.** (review §12) CONFIRMED: no `global_timestep`,
+      `rank`, `tile`, `solver_id`, `probe_seq`. And `abs().sum()` as a digest cannot separate
+      `v` from `−v` or from a permutation — the same weakness fixed in
+      `carried_state_digest` and reintroduced here.
+
+---
+
+## What survives R13.7 unchanged
+
+- Freezing `(A, b, x₀)` and routing both arms through the **same** `solve_fgmres` is a real
+  advance over the run-level comparison, and the reason the review's verdict is scoped rather
+  than a full retraction.
+- On that one Newton-0 system, in ρ_S, the identity arm was lower at every measured `j`.
+- Removing the production preconditioner still does not complete the step.
+- `fresh_solver_per_arm` now blocks false stage-reference certification.
+
+## What must NOT be said until R13.8 closes
+
+- that the production preconditioner is causally harmful (A1: the arms were not independent
+  and the probe perturbs production);
+- that the diagnostic is an observer (A1);
+- that the identity wins in the solver objective or the stage-gate metric (A7);
+- that raw physical `A` is indefinite (B3).
+
+
+---
+
+## Closeout
+
+ctest **60/60**.
+
+### Closed
+
+- **A1** — `pristine_M` is copied before any arm runs (nothing has called `gmres_M_inv` at
+  that point), each row takes its own copy, and production is restored from it.
+  Non-interference is **measured** via `precond_fallback_count_`, not assumed, and reported as
+  `probe_noninterfering`.
+- **A2** — the emitter builds an `AbComparison` and emits `ab_valid` / `ab_reason`. Every row
+  carries `ab_valid`, and the record states in words that no comparison may be drawn when it
+  is 0.
+- **A3** — `early_stop_disabled` now comes from `no_early_stop_enabled()`, the real accessor.
+  `tolerance_exit_disabled` is reported separately, because `tol=0` only closes that one exit.
+- **A5** — the rule gained per-arm freshness, non-interference, JVP authority, finite-ρ, and a
+  termination **allow-list** (`MaxBudget` / `ToleranceReached`) instead of bare equality.
+- **A8** — solved differently and, for this purpose, better: rather than one nested trajectory,
+  **every row gets a fresh preconditioner**, which makes rows independent of each other
+  directly. Arm order is additionally reversed in a second pass and `worst_order_delta` is
+  reported — if the numbers move with the order, something is still stateful.
+- **B1** — `final_residual_measured` separates the `-1` sentinel from NaN/Inf. R13.6 fixed this
+  for `R0` and left it here; the sentinel was being reported as `newton_diverged`.
+- **B2** — `gmres_successes` → `gmres_non_total_failures` (what it counts) plus
+  `gmres_tolerance_reached` (what the old name implied).
+
+### Closed in the second pass
+
+- **A4** — `A_applies` is counted per row via a counting wrapper on the operator, and the
+  claim reads *equal Arnoldi dimension* everywhere. The M arm's extra `M⁻¹` work is now
+  visible rather than implied.
+- **A6** — **the operator's linearity is measured, not assumed.** `e_repeat`, `e_homogeneity`
+  and `e_additivity` are computed on the same operator the arms use, and
+  `jvp_authoritative` is now `fd_fallback_free AND operator_linear`. FGMRES presumes a linear
+  operator; an FD matvec with a block-dependent ε is not one, and the failure is silent —
+  the Arnoldi relation simply stops describing what was computed.
+- **B4** — the digest is norm + sum + first moment, so it separates `v` from `−v` and from a
+  permutation. `abs().sum()` could do neither.
+
+### Partial, and why
+
+- **A7** — `rho_phys` (the `S`-weighted physical residual) now sits beside `rho_S` on every
+  row, so the conclusion no longer rests on one norm. **ρ_D** (FGMRES's own `D⁻¹`-weighted
+  objective) and **ρ_WRMS** (the stage gate's) are still not emitted: both live inside
+  `solve_fgmres` and would need it to report them.
+- **B3** — the record now names its coordinates (`operator_coordinates`, `block_scaled`,
+  `right_precond=identity`), so "UNPRECOND" can no longer be read as "unscaled". The
+  **Arnoldi-relation and basis-orthogonality defects** are still not emitted; they need the
+  basis `V` retained, which the capture does not currently keep.
+
+---
+
+# The re-run, with the record judging itself
+
+`WRF_SDIRK3_FROZEN_MI_AB=1 WRF_SDIRK3_NO_EARLY_STOP=1 WRF_SDIRK3_MAX_NEWTON_ITER=12`
+
+```
+ab_valid=1 ab_reason=ok
+  early_stop_disabled=1        (the real accessor, not inferred from tol=0)
+  jvp_fd_fallback_free=1
+  operator_linear=1   e_repeat=0  e_homogeneity=4.277e-07  e_additivity=3.017e-07
+  probe_noninterfering=1       (precond_fallback_count unchanged — measured)
+  worst_order_delta=0          (arm order reversed: bit-identical)
+```
+
+| j | ρ_S (M) | ρ_S (I) | **ρ_phys (M)** | **ρ_phys (I)** | phys ratio | A_applies |
+|---|---|---|---|---|---|---|
+| 4 | 0.7505 | 0.5469 | 0.8793 | 0.5590 | 1.57 | 5 / 5 |
+| 8 | 0.5525 | 0.3639 | 0.7329 | 0.2976 | 2.46 | 9 / 9 |
+| 16 | 0.4799 | 0.3095 | 0.6832 | **0.1134** | **6.02** | 17 / 17 |
+| 32 | 0.4223 | 0.2962 | 0.6175 | **0.0955** | **6.47** | 33 / 33 |
+| 48 | 0.3604 | 0.2853 | 0.4842 | **0.0956** | **5.06** | 49 / 49 |
+
+## The physical norm changes the size of the finding
+
+In ρ_S the identity is 1.26–1.55× better. **In the physical residual it is 5–6.5× better**, and
+the shape differs too: the identity arm reaches ρ_phys ≈ 0.095 by j=32 and plateaus, while the
+production preconditioner is still at 0.48–0.62.
+
+That is exactly why A7 mattered. The metric the earlier record reported was the one in which
+the difference is *smallest*.
+
+## Operator linearity — measured, not assumed
+
+`e_repeat = 0` (bit-exact under repetition), `e_homogeneity = 4.3e-07`,
+`e_additivity = 3.0e-07`. Both are at float32 epsilon (1.2e-07), so **the operator FGMRES was
+handed is linear to working precision** and its premise holds. This was an assumption in every
+previous measurement in this campaign.
+
+## The numbers are unchanged from R13.7 — and that is worth stating
+
+ρ_S is identical to R13.7's, digit for digit. R13.7's method was unsound and its numbers were
+nonetheless right: the staleness hazard was structurally real and did not bite in that run
+(`refinement=1`, so the defect wrapper was never installed, and the fallback latch never
+fired).
+
+A defect that has not yet bitten is not the same as no defect — it bites the moment one
+setting changes, and retroactively casts doubt on every measurement taken before. What is new
+is not the number but `worst_order_delta=0` and `probe_noninterfering=1`: **evidence** that it
+did not bite, where before there was none.
+
+## Still not established
+
+- **ρ_D** — FGMRES's own `D⁻¹`-weighted objective. The open question this raises is sharp:
+  `M` may be helping the norm the solver actually minimises while hurting both ρ_S and ρ_phys.
+  That would make it a preconditioner for the wrong objective rather than a bad one, and it
+  matches the earlier finding that aligning the Krylov objective made convergence worse.
+- **Newton iteration 0**, not the iteration where GMRES fails (≈4).
+- **ρ_WRMS**, the stage gate's own metric.
