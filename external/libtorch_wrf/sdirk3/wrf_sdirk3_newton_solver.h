@@ -328,7 +328,10 @@ public:
         // solve cannot make progress" even if a later one stalled.
         float best_krylov_rel_error = -1.0f;
         int   gmres_total_failures = 0;
-        int   gmres_successes = 0;
+        // NOT successes: counts solves that were not TOTAL failures.
+        int   gmres_non_total_failures = 0;
+        // Solves that actually reached tolerance.
+        int   gmres_tolerance_reached = 0;
         bool  krylov_diverged = false;
         int   accepted_steps = 0;
         int   rejected_steps = 0;
@@ -340,6 +343,7 @@ public:
         // evidence, which is the failure this project keeps closing elsewhere and reproduced
         // here. `initial_residual_finite` existed on this struct and nothing wrote it.
         bool  initial_residual_measured = false;
+        bool  final_residual_measured = false;
         bool  initial_residual_finite = false;
         // The budget the Newton LOOP actually used. It reads options_.max_newton_iter; the
         // record was reading g_sdirk3_config.max_newton_iter, a second authority that a

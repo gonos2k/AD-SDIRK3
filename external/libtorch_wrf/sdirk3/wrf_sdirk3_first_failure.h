@@ -126,6 +126,11 @@ struct StageFailureSignals {
     bool initial_residual_finite = false;
     // Newton's residual at its first and last iteration. -1 = not measured.
     double residual_first = -1.0;
+    // R13.8: measured BEFORE finite, here too. R13.6 fixed this for R0 and left it for the
+    // FINAL residual, where -1.0 (the not-measured sentinel) was mapped to NewtonDiverged
+    // alongside NaN/Inf -- absence of a measurement reported as the strongest finding
+    // available.
+    bool   final_residual_measured = false;
     double residual_last = -1.0;
     int    newton_iterations = 0;
     // What the iteration was allowed to spend. Without it, "ran out of budget" and "stopped
@@ -137,10 +142,11 @@ struct StageFailureSignals {
     double best_krylov_rel_error = -1.0;
     int    krylov_iterations = 0;
     int    gmres_total_failures = 0;
-    // Did any linear solve in this stage actually succeed? best_krylov_rel_error is a minimum
-    // over the stage and gmres_total_failures counts a DIFFERENT solve, so neither describes
-    // one system on its own.
-    int    gmres_successes = 0;
+    // NOT successes. This counts solves that were not TOTAL failures, so a solve that ended
+    // at rho = 0.5 without meeting tolerance is included. Named for what it counts.
+    int    gmres_non_total_failures = 0;
+    // Solves that actually reached tolerance. The quantity the old name implied.
+    int    gmres_tolerance_reached = 0;
     // The linear residual GREW in at least one solve. Divergence, not stagnation: the
     // total-failure predicate folds raw_rel_error > 1 together with rel_error >= 0.999.
     bool   krylov_diverged = false;
@@ -176,8 +182,11 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
     if (!s.initial_residual_finite) return StageFailure::InitialResidualNotFinite;
 
     if (!s.newton_converged) {
-        // A non-finite final residual is divergence that overflowed, not a missing
-        // measurement -- and `measured()` rejects it, so it is checked first.
+        // Three states, not two. A residual that was never measured is not a diverged one:
+        // `measured()` rejects the -1 sentinel and NaN/Inf alike, so the sentinel must be
+        // separated first or "never ran" becomes "blew up".
+        if (!s.final_residual_measured) return StageFailure::InsufficientEvidence;
+        // A non-finite final residual IS divergence that overflowed.
         if (!measured(s.residual_last)) return StageFailure::NewtonDiverged;
         if (measured(s.residual_first) && s.residual_first > 0.0 &&
             s.residual_last > kDivergenceGrowth * s.residual_first) {

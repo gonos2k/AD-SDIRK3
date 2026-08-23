@@ -9213,7 +9213,12 @@ vertical_coefficients:
                               << " best_krylov_rel=" << sig.best_krylov_rel_error
                               << " krylov_iters=" << sig.krylov_iterations
                               << " gmres_total_failures=" << sig.gmres_total_failures
-                              << " gmres_successes=" << sig.gmres_successes
+                              << " gmres_non_total_failures="
+                              << sig.gmres_non_total_failures
+                              << " gmres_tolerance_reached="
+                              << sig.gmres_tolerance_reached
+                              << " R_last_measured="
+                              << (sig.final_residual_measured ? 1 : 0)
                               << " krylov_diverged=" << (sig.krylov_diverged ? 1 : 0)
                               << " steps_accepted=" << sig.accepted_steps
                               << " steps_rejected=" << sig.rejected_steps
@@ -13191,7 +13196,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         static_cast<double>(stats.best_krylov_rel_error);
     last_stage_signals_.krylov_iterations = stats.total_krylov_iterations;
     last_stage_signals_.gmres_total_failures = stats.gmres_total_failures;
-    last_stage_signals_.gmres_successes = stats.gmres_successes;
+    last_stage_signals_.gmres_non_total_failures = stats.gmres_non_total_failures;
+    last_stage_signals_.gmres_tolerance_reached = stats.gmres_tolerance_reached;
+    last_stage_signals_.final_residual_measured = stats.final_residual_measured;
     last_stage_signals_.krylov_diverged = stats.krylov_diverged;
     last_stage_signals_.accepted_steps = stats.accepted_steps;
     last_stage_signals_.rejected_steps = stats.rejected_steps;
