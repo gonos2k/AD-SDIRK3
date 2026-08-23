@@ -348,7 +348,10 @@ M reduced it by 7% over 48 Arnoldi steps; I reduced it by 42% (1.054 → 0.608).
 
 The earlier finding that "removing M does not complete the step" stands — I does not converge
 either. But the shape of M's failure on the system that actually fails is now specific: **it
-is not slow, it is near-stalled** — 7% in 48 steps against I's 42% from the same r₀.
+is slow in the solver's own objective (ρ_D 26% in 48 steps vs I's 63%), and a net LOSS in
+the physical norm at every j (ρ_phys 0.865 → 0.873–0.949)** — the per-block result says why:
+its ρ_D progress is bought entirely in ru/rv/t. "Near-stalled" was the ρ_S number (7%), which is
+neither the solver's objective nor the physical one. (Referee C3.)
 
 **Method note, recorded because it is the third time this shape has appeared in this round:**
 a residual ratio without its j=0 baseline is not a convergence statement. `ρ(j) > 1` was read

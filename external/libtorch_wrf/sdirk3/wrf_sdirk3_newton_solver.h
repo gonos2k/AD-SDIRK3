@@ -197,7 +197,6 @@ public:
         // duplicate-authority defect this tree has paid for repeatedly. The solver publishes
         // the weight it used; the caller applies it. Empty when block scaling is off, where
         // D = I.
-        torch::Tensor d_inv_used;
         // R13.9: ||r0||/||b|| -- the SAME ratio at j=0. On a warm start x0 != 0 this can exceed
         // 1, and then rel_error > 1 after the solve means only that it began above 1, not that
         // the solve diverged. Divergence is rel_error > initial_rel_error, never rel_error > 1.
@@ -322,6 +321,22 @@ public:
     /**
      * Get convergence statistics
      */
+    // R13.10 (red team P0-1): the per-solve reset, as a FREE FUNCTION over the struct.
+    //
+    // reset_stats() cleared the nine fields it had in 2025 and none of the ten added since
+    // (R13.2/R13.5/R13.8), so best_krylov_rel_error, the GMRES counters, krylov_diverged,
+    // accepted/rejected steps and initial_residual_measured accumulated for the LIFE OF THE
+    // SOLVER -- one object per run. Every first-failure classification after the first failure
+    // in a run was reading the run's history, not the stage's. Seventh occurrence of "a rule
+    // computed and its consumer reading something else": the classifier reads per-stage,
+    // the struct said per-stage, and nothing made it per-stage.
+    //
+    // A free function over the struct is testable; a private method on the Impl was not, which
+    // is how ten fields went unreset. Everything in ConvergenceStats is per-solve; run-lifetime
+    // state lives on the Impl and is reset (or deliberately not) there.
+    struct ConvergenceStats;
+    static void reset_per_solve(ConvergenceStats& s);
+
     struct ConvergenceStats {
         int newton_iterations;
         int total_krylov_iterations;

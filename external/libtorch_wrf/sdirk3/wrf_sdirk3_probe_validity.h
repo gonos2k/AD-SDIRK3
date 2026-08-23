@@ -308,6 +308,9 @@ struct AbComparison {
     int  termination_b = -1;
     bool termination_a_admissible = false;   // MaxBudget or ToleranceReached
     bool termination_b_admissible = false;
+    // R13.10 (red team P1-1): order invariance was measured (worst_order_delta) and then
+    // NOT read by the verdict -- ab_valid=1 printed beside any delta. Measured means a clause.
+    bool order_invariant = false;
 };
 
 inline ProbeVerdict ab_attributable(const AbComparison& c) {
@@ -329,6 +332,7 @@ inline ProbeVerdict ab_attributable(const AbComparison& c) {
         return {false, "inadmissible_termination"};
     }
     if (c.termination_a != c.termination_b) return {false, "different_termination"};
+    if (!c.order_invariant)                 return {false, "order_dependent"};
     return {true, "ok"};
 }
 

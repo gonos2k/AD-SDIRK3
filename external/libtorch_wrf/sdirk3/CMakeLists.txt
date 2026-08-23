@@ -286,6 +286,12 @@ add_test(NAME Metric_Policy_Contract COMMAND test_metric_policy)
 add_executable(test_global_norm_emitter tests/test_global_norm_emitter.cpp)
 target_link_libraries(test_global_norm_emitter PRIVATE wrf_sdirk3::core)
 
+# R13.10: the per-solve stats reset must clear EVERY field -- ten added since 2025 were not,
+# and the classifier read the run's history as the stage's. Seventh rule-without-consumer.
+add_executable(test_stats_reset_contract tests/test_stats_reset_contract.cpp)
+target_link_libraries(test_stats_reset_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Stats_Reset_Contract COMMAND test_stats_reset_contract)
+
 # R13.7: one environment variable is not one variable. The rule that would have caught the
 # retracted R13.4 preconditioner comparison, with that comparison as its first case.
 add_executable(test_ab_attribution tests/test_ab_attribution.cpp)

@@ -44,6 +44,7 @@ AbComparison sound() {
     c.rho_a_finite = c.rho_b_finite = true;
     c.termination_a_admissible = c.termination_b_admissible = true;
     c.termination_a = c.termination_b = 5;
+    c.order_invariant = true;
     return c;
 }
 
@@ -167,7 +168,17 @@ int main() {
               "preconditioner");
     }
 
-    constexpr int expected_checks = 17;
+    {   // R13.10 (red team P1-1): measured and then not read. worst_order_delta was on the
+        // record and ab_valid=1 printed beside any value of it.
+        AbComparison c = sound();
+        c.order_invariant = false;
+        check(!ab_attributable(c).valid && why(c) == "order_dependent",
+              "arms whose numbers move with their ORDER are not attributable -- something "
+              "survived between passes, and a measured delta the verdict ignores is the "
+              "eighth instance of a rule without its consumer");
+    }
+
+    constexpr int expected_checks = 18;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

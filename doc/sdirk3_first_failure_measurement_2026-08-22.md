@@ -175,14 +175,12 @@ i.e. `V^T H(A) V` on the Krylov basis the solver **actually iterates**, `V` orth
 
 ## Why the ladders look the way they do
 
-An indefinite numerical range makes the field-of-values GMRES bound vacuous: there is no
-`q_min > 0` to put in it. A floor that does not move with the Krylov budget, and a
-preconditioner that makes it worse rather than better, are what that looks like from outside —
-and both were measured before this was.
-
-Stated conservatively: this **explains** the budget-invariant floor; it is not a proof that no
-preconditioner can exist. Inertia arguments transfer rigorously only for Hermitian operators,
-and this one is not Hermitian.
+**Corrected (referee C4b):** an indefinite numerical range removes the Elman sufficient
+condition and supplies nothing in its place. It is **consistent with** the budget-invariant
+floor; it does not explain it. A definite operator of norm 10³ has an Elman rate flat for
+thousands of steps, and `0 ∈ W(B)` is neither necessary nor sufficient for stagnation (the
+actual `r₀` is demonstrably not a stagnating direction). The witness stands; the causal
+sentence does not.
 
 ## The methodological finding, and it is the sharper one
 

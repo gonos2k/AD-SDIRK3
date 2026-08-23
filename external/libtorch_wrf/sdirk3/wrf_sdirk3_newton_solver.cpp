@@ -8199,16 +8199,53 @@ public:
                 // probe cannot know in advance whether the CURRENT iteration will fail, so
                 // the target is chosen by the caller from that measurement. Default 0 keeps
                 // every earlier record comparable.
+                // Strict parse (red team P1-5): atoi("iter3") == 0 would silently freeze
+                // iteration 0 under a run labelled "iteration 3" -- a scientific knob that
+                // silently runs the baseline is worse than one that fails.
                 static const int ab_target_iter = [] {
                     const char* e = std::getenv("WRF_SDIRK3_FROZEN_MI_AB_ITER");
-                    return (e && *e) ? std::atoi(e) : 0;
+                    if (!e || !*e) return 0;
+                    char* end = nullptr;
+                    const long v = std::strtol(e, &end, 10);
+                    TORCH_CHECK(end && *end == '\0' && v >= 0 && v < 1000,
+                        "WRF_SDIRK3_FROZEN_MI_AB_ITER='", e,
+                        "' is not a non-negative integer");
+                    return static_cast<int>(v);
                 }();
+                // Out of range for THIS solve: say so once, rather than emit nothing.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_FROZEN_MI_AB") &&
+                    newton_iter == 0 && ab_target_iter >= options_.max_newton_iter) {
+                    std::cerr << "SDIRK3_FROZEN_AB_SYSTEM stage=" << stage
+                              << " ab_valid=0 ab_reason=target_iteration_unreachable"
+                              << " requested_iter=" << ab_target_iter
+                              << " max_newton_iter=" << options_.max_newton_iter
+                              << "  (no A/B will be recorded in this solve)" << std::endl;
+                }
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_FROZEN_MI_AB") &&
                     gmres_M_inv && newton_iter == ab_target_iter) {
                     torch::NoGradGuard ng_ab;
-                    // Pristine, because nothing has called gmres_M_inv yet at this point.
-                    const auto pristine_M = gmres_M_inv;
+                    // R13.10 (red team P0-2): NOT a copy of gmres_M_inv. On the scaled path
+                    // gmres_M_inv is a [&] wrapper around the single M_inv, so copying it
+                    // copies a REFERENCE to the one fallback latch -- every "fresh" row and
+                    // production shared it. The reported numbers survived only because the
+                    // latch never fired (the counter proves that), not because the mechanism
+                    // existed. Each row now builds its own wrapper around its own BY-VALUE
+                    // copy of M_inv, so the latch is per row by construction and production's
+                    // gmres_M_inv is never touched by the probe at all.
+                    auto make_fresh_M = [&]() -> std::function<torch::Tensor(const torch::Tensor&)> {
+                        if (scaling_initialized_) {
+                            return [M_copy = M_inv, S = S_diag_, Si = S_inv_diag_]
+                                   (const torch::Tensor& v) -> torch::Tensor {
+                                return Si * M_copy(S * v);
+                            };
+                        }
+                        return M_inv;   // by value: its own latch
+                    };
                     const int fallbacks_before = precond_fallback_count_;
+                    // fd-fallback count BEFORE the arms; compared after (red team P1-2: reading
+                    // it once before the arms made a fallback inside an arm invisible).
+                    const long long fd_before =
+                        wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
                     auto identity_M =
                         std::function<torch::Tensor(const torch::Tensor&)>(
                             [](const torch::Tensor& v) { return v; });
@@ -8219,8 +8256,8 @@ public:
                     // whether the block-level picture composes, before anything is built on it.
                     auto selective_M =
                         std::function<torch::Tensor(const torch::Tensor&)>(
-                            [this, pristine_M](const torch::Tensor& v) {
-                                auto z = pristine_M(v);
+                            [this, M_own = make_fresh_M()](const torch::Tensor& v) {
+                                auto z = M_own(v);
                                 if (!cached_layout_.is_exact ||
                                     cached_layout_.total_size != v.numel()) {
                                     return z;
@@ -8271,7 +8308,34 @@ public:
                             n_Av + Aw.detach().to(torch::kFloat64).norm().item<double>();
                         e_add = rel(gmres_op(v + w) - Av1 - Aw, den_add);
                     }
+                    // R13.9 (referee C5): the operator's linearity was measured; the
+                    // PRECONDITIONER's was not, and the reading "Krylov space of D^-1 A M^-1"
+                    // needs M linear too. Production M^-1 is a tridiagonal/column solve on
+                    // coefficients fixed at build time, so it should be linear per solve --
+                    // "should be" is the word this probe exists to remove. Measured on the
+                    // pristine copy, so the check itself cannot age the closure.
+                    double eM_hom = -1.0, eM_add = -1.0;
+                    {
+                        auto copyM = make_fresh_M();
+                        auto v = torch::randn_like(gmres_rhs);
+                        auto w = torch::randn_like(gmres_rhs);
+                        const double alpha = 2.5;
+                        const auto Mv = copyM(v), Mw = copyM(w);
+                        const double n_Mv = Mv.detach().to(torch::kFloat64).norm().item<double>();
+                        auto relM = [&](const torch::Tensor& a, double den) {
+                            return den > 0.0
+                                ? a.detach().to(torch::kFloat64).norm().item<double>() / den
+                                : -1.0;
+                        };
+                        eM_hom = relM(copyM(alpha * v) - alpha * Mv, alpha * n_Mv);
+                        const double den_add =
+                            n_Mv + Mw.detach().to(torch::kFloat64).norm().item<double>();
+                        eM_add = relM(copyM(v + w) - Mv - Mw, den_add);
+                    }
                     constexpr double kLinearTol = 1.0e-5;
+                    const bool precond_linear =
+                        (eM_hom >= 0.0 && eM_hom < kLinearTol) &&
+                        (eM_add >= 0.0 && eM_add < kLinearTol);
                     const bool operator_linear =
                         (e_repeat >= 0.0 && e_repeat < kLinearTol) &&
                         (e_hom    >= 0.0 && e_hom    < kLinearTol) &&
@@ -8308,9 +8372,7 @@ public:
                     // WHICH operator was compared. An FD matvec with a block-dependent epsilon
                     // is not linear, and FGMRES presumes it is -- so the JVP receipt is part
                     // of the attribution, not a footnote.
-                    const bool jvp_ok =
-                        (wrf::sdirk3::g_jvp_fd_fallback_count.load(
-                             std::memory_order_relaxed) == 0);
+                    bool jvp_ok = (fd_before == 0);   // finalised after the arms
                     const bool early_stop_off = no_early_stop_enabled();
 
                     struct Row { const char* arm; int j; double rho; double rho_phys;
@@ -8332,7 +8394,7 @@ public:
                     // closure, where only the first row started clean.
                     auto run = [&](Arm which, int m) {
                         const bool use_M = (which == Arm::M);
-                        auto arm_M = (which == Arm::M)   ? pristine_M
+                        auto arm_M = (which == Arm::M)   ? make_fresh_M()
                                    : (which == Arm::Sel) ? selective_M
                                                          : identity_M;
                         const char* arm_name = (which == Arm::M)   ? "M"
@@ -8392,6 +8454,11 @@ public:
                                              .norm().item<double>() / nbD;
                             }
                         }
+                        if (rho_D < 0.0 && rho >= 0.0) {
+                            // Block scaling was off (or refused) for this row: FGMRES's own
+                            // objective IS the unweighted norm, so say so instead of -1.
+                            rho_D = rho;
+                        }
                         rows.push_back({arm_name, m, rho, rho_phys, rho_D,
                                         res.rel_error,
                                         res.iterations,
@@ -8441,12 +8508,16 @@ public:
 
                     // Restore production's preconditioner to the state it would have had, and
                     // MEASURE whether anything else moved.
-                    gmres_M_inv = pristine_M;
+                    // Production's wrapper was never handed to an arm; nothing to restore.
                     const bool noninterfering =
                         (precond_fallback_count_ == fallbacks_before);
+                    jvp_ok = jvp_ok &&
+                        (wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed)
+                             == fd_before);
 
                     // Order invariance, measured across the two passes.
                     double worst_order_delta = 0.0;
+                    int order_pairs_compared = 0;
                     for (size_t i = 0; i < forward_rows; ++i) {
                         for (size_t k = forward_rows; k < rows.size(); ++k) {
                             if (rows[i].j == rows[k].j &&
@@ -8455,6 +8526,11 @@ public:
                                 if (a > 0.0 && b2 > 0.0) {
                                     worst_order_delta = std::max(
                                         worst_order_delta, std::abs(a - b2) / a);
+                                    ++order_pairs_compared;
+                                } else {
+                                    // A row that could not be compared is not a row that
+                                    // agreed. Poison the delta so the clause refuses.
+                                    worst_order_delta = std::numeric_limits<double>::infinity();
                                 }
                             }
                         }
@@ -8467,7 +8543,7 @@ public:
                     };
                     bool all_admissible = true, all_finite = true, terms_equal = true,
                          iters_equal = true;
-                    for (size_t i = 0; i + 2 < forward_rows; i += 3) {
+                    for (size_t i = 0; i + 2 < rows.size(); i += 3) {
                         for (size_t k = 0; k < 3; ++k) {
                             all_admissible &= admissible(rows[i + k].term);
                             all_finite &= (rows[i + k].rho >= 0.0);
@@ -8494,6 +8570,9 @@ public:
                         all_admissible;
                     cmp.termination_a = 0;
                     cmp.termination_b = terms_equal ? 0 : 1;
+                    // 1e-6 relative: bit-identical rows give exactly 0; anything larger means
+                    // some state survived between passes and the arms were not independent.
+                    cmp.order_invariant = (worst_order_delta <= 1.0e-6);
                     const auto verdict = wrf::sdirk3::ab_attributable(cmp);
 
                     std::cerr << "SDIRK3_FROZEN_AB_SYSTEM stage=" << stage
@@ -8517,10 +8596,14 @@ public:
                               << " e_repeat=" << e_repeat
                               << " e_homogeneity=" << e_hom
                               << " e_additivity=" << e_add
+                              << " precond_linear=" << (precond_linear ? 1 : 0)
+                              << " eM_homogeneity=" << eM_hom
+                              << " eM_additivity=" << eM_add
                               << " metric_phys=rho_phys_S_weighted"
                               << " metric_D=rho_D_fgmres_objective"
                               << " probe_noninterfering=" << (noninterfering ? 1 : 0)
                               << " worst_order_delta=" << worst_order_delta
+                              << " order_pairs_compared=" << order_pairs_compared
                               << (verdict.valid
                                     ? "  (attributable: equal Arnoldi dimension, one code"
                                       " path, a FRESH preconditioner per row, and the probe"
@@ -10824,15 +10907,8 @@ public:
     }
     
     void reset_stats() {
-        stats_.newton_iterations = 0;
-        stats_.total_krylov_iterations = 0;
-        stats_.newton_residuals.clear();
-        stats_.final_residual = 0.0f;
-        stats_.final_residual_measured = true;
-        stats_.initial_unscaled_residual = 0.0f;
-        stats_.initial_residual_vector = torch::Tensor();
-        stats_.condition_number = 0.0f;
-        stats_.converged = false;
+        // R13.10: ALL per-solve fields, through the one function a test can reject.
+        WRFNewtonKrylovSolver::reset_per_solve(stats_);
 
         // PR 9F.9.1: clear the numerical-shadow state at solve entry so a stale S0 or
         // r_g from a PREVIOUS stage/solve of the same size can never be silently reused
@@ -11307,6 +11383,12 @@ sdirk3::WRFNewtonKrylovSolver::ConvergenceStats sdirk3::WRFNewtonKrylovSolver::g
 
 std::uint64_t sdirk3::WRFNewtonKrylovSolver::solver_id() const {
     return pImpl->solver_id_;
+}
+
+void sdirk3::WRFNewtonKrylovSolver::reset_per_solve(ConvergenceStats& s) {
+    // Value-initialise, then nothing survives that was not meant to. A field-by-field list
+    // is exactly what fell behind the struct for three increments.
+    s = ConvergenceStats{};
 }
 
 sdirk3::WRFNewtonKrylovSolver::CarriedState
