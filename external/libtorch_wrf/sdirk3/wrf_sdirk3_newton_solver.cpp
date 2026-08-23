@@ -8198,6 +8198,28 @@ public:
                     auto identity_M =
                         std::function<torch::Tensor(const torch::Tensor&)>(
                             [](const torch::Tensor& v) { return v; });
+                    // R13.9: a THIRD arm, from the per-block measurement. M helped ru/rv/t and
+                    // did nothing for rw/ph/mu, while the identity took those three down
+                    // 73/38/84%. So: M where it works, identity where it does not. This is a
+                    // diagnostic arm in an opt-in probe, not a production change -- it asks
+                    // whether the block-level picture composes, before anything is built on it.
+                    auto selective_M =
+                        std::function<torch::Tensor(const torch::Tensor&)>(
+                            [this, pristine_M](const torch::Tensor& v) {
+                                auto z = pristine_M(v);
+                                if (!cached_layout_.is_exact ||
+                                    cached_layout_.total_size != v.numel()) {
+                                    return z;
+                                }
+                                for (const auto& blk : cached_layout_.blocks) {
+                                    const std::string n = blk.name;
+                                    if (n == "rw" || n == "ph" || n == "mu") {
+                                        z.slice(0, blk.start, blk.start + blk.size)
+                                            .copy_(v.slice(0, blk.start, blk.start + blk.size));
+                                    }
+                                }
+                                return z;
+                            });
 
                     // R13.8 (B4): a digest that can see DIRECTION. abs().sum() cannot
                     // separate v from -v or from any permutation -- the same weakness fixed in
@@ -8280,6 +8302,7 @@ public:
                     struct Row { const char* arm; int j; double rho; double rho_phys;
                                  double rho_D; float rel; int iters; int term;
                                  long long a_applies; };
+                    enum class Arm { M, I, Sel };
                     std::vector<Row> rows;
                     // R13.8 (A4): equal j is equal ARNOLDI DIMENSION, not equal work -- the M
                     // arm additionally applies M^-1 per direction. Counting the operator
@@ -8293,8 +8316,13 @@ public:
                     // Each row gets its OWN fresh preconditioner, so rows are independent of
                     // each other as well as of production. R13.7 ran them through one aging
                     // closure, where only the first row started clean.
-                    auto run = [&](bool use_M, int m) {
-                        auto arm_M = use_M ? pristine_M : identity_M;
+                    auto run = [&](Arm which, int m) {
+                        const bool use_M = (which == Arm::M);
+                        auto arm_M = (which == Arm::M)   ? pristine_M
+                                   : (which == Arm::Sel) ? selective_M
+                                                         : identity_M;
+                        const char* arm_name = (which == Arm::M)   ? "M"
+                                             : (which == Arm::Sel) ? "Msel" : "I";
                         a_apply_count = 0;
                         torch::Tensor d_inv_used;
                         auto res = krylov_methods::solve_fgmres(
@@ -8350,7 +8378,7 @@ public:
                                              .norm().item<double>() / nbD;
                             }
                         }
-                        rows.push_back({use_M ? "M" : "I", m, rho, rho_phys, rho_D,
+                        rows.push_back({arm_name, m, rho, rho_phys, rho_D,
                                         res.rel_error,
                                         res.iterations,
                                         static_cast<int>(res.termination_reason),
@@ -8370,7 +8398,7 @@ public:
                             const auto r064 = r0_kept.to(torch::kFloat64).reshape({-1});
                             if (cached_layout_.total_size == r.numel()) {
                                 std::cerr << "SDIRK3_FROZEN_AB_BLOCKS stage=" << stage
-                                          << " arm=" << (use_M ? "M" : "I") << " j=" << m;
+                                          << " arm=" << arm_name << " j=" << m;
                                 for (const auto& blk : cached_layout_.blocks) {
                                     const auto rb  = r.slice(0, blk.start, blk.start + blk.size);
                                     const auto bb  = b64.slice(0, blk.start, blk.start + blk.size);
@@ -8389,9 +8417,13 @@ public:
                     // ARM ORDER REVERSED between the two passes. If the numbers move with the
                     // order, something is still stateful and the record must say so rather
                     // than average it away.
-                    for (int m : {4, 8, 16, 32, 48}) { run(true, m); run(false, m); }
+                    for (int m : {4, 8, 16, 32, 48}) {
+                        run(Arm::M, m); run(Arm::I, m); run(Arm::Sel, m);
+                    }
                     const size_t forward_rows = rows.size();
-                    for (int m : {4, 8, 16, 32, 48}) { run(false, m); run(true, m); }
+                    for (int m : {4, 8, 16, 32, 48}) {
+                        run(Arm::Sel, m); run(Arm::I, m); run(Arm::M, m);
+                    }
 
                     // Restore production's preconditioner to the state it would have had, and
                     // MEASURE whether anything else moved.
@@ -8421,12 +8453,15 @@ public:
                     };
                     bool all_admissible = true, all_finite = true, terms_equal = true,
                          iters_equal = true;
-                    for (size_t i = 0; i + 1 < forward_rows; i += 2) {
-                        all_admissible &= admissible(rows[i].term) &&
-                                          admissible(rows[i + 1].term);
-                        all_finite &= (rows[i].rho >= 0.0) && (rows[i + 1].rho >= 0.0);
-                        terms_equal &= (rows[i].term == rows[i + 1].term);
-                        iters_equal &= (rows[i].iters == rows[i + 1].iters);
+                    for (size_t i = 0; i + 2 < forward_rows; i += 3) {
+                        for (size_t k = 0; k < 3; ++k) {
+                            all_admissible &= admissible(rows[i + k].term);
+                            all_finite &= (rows[i + k].rho >= 0.0);
+                        }
+                        terms_equal &= (rows[i].term == rows[i + 1].term) &&
+                                       (rows[i].term == rows[i + 2].term);
+                        iters_equal &= (rows[i].iters == rows[i + 1].iters) &&
+                                       (rows[i].iters == rows[i + 2].iters);
                     }
 
                     wrf::sdirk3::AbComparison cmp;

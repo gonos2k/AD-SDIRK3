@@ -444,3 +444,73 @@ dominate the physical residual.
   a warm start that began above 1 even when the solve reduced it. Divergence should mean
   `ρ(j_final) > ρ(0)`, and that needs the Krylov result to carry `rel_error` at j=0. Open.
 - ~~Per-block residual of the A/B iterates.~~ **Done** — and it reversed the inference.
+
+---
+
+# The third arm — Msel: M on ru/rv/t, identity on rw/ph/mu
+
+The per-block table said M helps three blocks and fails three. Msel tests whether that picture
+**composes**: keep M where it helped, identity where it did not. Diagnostic arm in the opt-in
+probe; order-invariant (`worst_order_delta=0`); `ab_valid=1` for all three arms.
+
+## Failing iteration (Newton 3), aggregate
+
+| j | ρ_S M / I / **Msel** | ρ_phys M / I / **Msel** | ρ_D M / I / **Msel** |
+|---|---|---|---|
+| 4 | 1.049 / 0.946 / **0.999** | 0.873 / 0.249 / **0.231** | 0.939 / 0.722 / **0.774** |
+| 8 | 1.029 / 0.733 / **0.781** | 0.893 / 0.223 / **0.237** | 0.914 / 0.568 / **0.625** |
+| 16 | 0.987 / 0.682 / **0.696** | 0.943 / 0.188 / **0.168** | 0.877 / 0.506 / **0.552** |
+| 32 | 0.974 / 0.624 / **0.628** | 0.949 / 0.182 / **0.192** | 0.859 / 0.447 / **0.487** |
+| 48 | 0.979 / 0.608 / **0.610** | 0.873 / 0.184 / **0.203** | 0.825 / 0.415 / **0.441** |
+
+## Failing iteration, per block, j=48
+
+| block | ρ₀ | M | I | **Msel** |
+|---|---|---|---|---|
+| ru | 1.667 | 0.428 | 0.174 | 0.240 |
+| rv | 1.687 | 0.854 | 0.994 | **1.127** ← worst of three |
+| rw | 0.877 | 0.849 | 0.239 | 0.245 |
+| ph | 1.012 | 1.020 | 0.625 | 0.606 |
+| t | 1.363 | 0.229 | 0.099 | 0.128 |
+| mu | 0.858 | 0.866 | 0.135 | 0.164 |
+
+## Iteration 0, per block, j=48
+
+| block | M | I | **Msel** |
+|---|---|---|---|
+| ru | 0.071 | 0.091 | 0.064 |
+| rv | 0.208 | 0.334 | **0.488** ← worst of three |
+| rw | 0.353 | 0.084 | 0.061 |
+| ph | 0.681 | 0.513 | 0.588 |
+| t | 0.104 | 0.133 | 0.120 |
+| mu | 0.489 | 0.070 | 0.067 |
+
+## MEASURED
+
+1. **Msel ≈ I.** At the failing iteration, within 3% of the identity in every aggregate norm at
+   every j. Replacing M with identity on rw/ph/mu alone **recovers the entire M-vs-I gap**.
+
+2. **Therefore M's ru/rv/t rows contribute nothing net.** If they helped, Msel would beat I.
+   It does not. The per-block "M helps ru/rv/t" was relative to M's own global iterate, not an
+   independent benefit that survives composition.
+
+3. **rv degrades when M leaves the acoustic blocks.** Msel's rv is the worst of the three arms
+   at both iterations (1.127 vs 0.854/0.994; 0.488 vs 0.208/0.334). The mass tendency carries
+   the horizontal divergence of (u, v), so M's mu row is coupled to rv; block-selective
+   identity breaks that coupling in a way that costs rv. **The blocks are not separable**,
+   and "fix the three bad rows" is not the same as "drop them".
+
+4. rw and mu under Msel match I (0.245/0.164 vs 0.239/0.135); ph under Msel is marginally
+   *better* than I (0.606 vs 0.625). Identity on the acoustic blocks is as good as it gets
+   among these three arms — and still leaves rw/ph at 0.25/0.6, so **none of the arms solves
+   the failing system.**
+
+## What this says about the next move
+
+Not "drop M on rw/ph/mu" — that is Msel, and Msel is just I. Not "tune M's ru/rv/t" — they
+contribute nothing net. The measurement points at **rebuilding M's acoustic block** (rw–ph–mu
+and its coupling into rv through mu) so that it does better than identity there, which is
+where the earlier coefficient-level finding (ph 408× off, D_mu wrong sign) already pointed.
+What is new is that the case for it is now a controlled, block-level, order-invariant
+measurement rather than a coefficient inspection — and that the coupling into rv is a
+constraint any replacement has to respect.
