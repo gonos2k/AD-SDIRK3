@@ -315,13 +315,26 @@ warm start is in play here, shared by both arms).
 | 32 | 0.9740 | 0.6239 | 0.9485 | 0.1822 | 0.8591 | 0.4465 |
 | 48 | 0.9785 | 0.6081 | 0.8728 | 0.1842 | 0.8247 | 0.4153 |
 
-### MEASURED
+### MEASURED — CORRECTED after adding the j=0 baseline
 
-1. **With the production preconditioner, the failing system does not converge at all.**
-   ρ_S ≥ 0.97 at every budget to j=48, and **> 1 at j=4 and 8** — the residual *grows* over
-   the first eight Arnoldi steps. ρ_phys stays at 0.87–0.95 throughout. This is the
-   `krylov_diverged` the classifier reports for this iteration in production, reproduced on the
-   frozen system with a fresh `M`.
+**RETRACTED: "anti-convergent", "the residual grows".** Those read `ρ_S > 1` against 1. But
+this iteration is warm-started (`x0_digest ≠ 0`), and a minimal-residual method reduces
+`‖r‖` from `‖r₀‖ = ‖b − Ax₀‖`, not from `‖b‖`. The record did not carry `‖r₀‖/‖b‖`; it does
+now:
+
+```
+rho0_S=1.054   rho0_phys=0.8652
+```
+
+So M took ρ_S from **1.054 → 1.049** (j=4) **→ 0.979** (j=48). The residual did **not** grow.
+M reduced it by 7% over 48 Arnoldi steps; I reduced it by 42% (1.054 → 0.608).
+
+1. **With the production preconditioner the failing system is NEAR-STALLED** — a 7% reduction
+   in ρ_S over 48 steps, and in the physical norm slightly **worse than the warm start**
+   (ρ_phys 0.865 → 0.873). That last is real but must be read carefully: ρ_phys is not the norm
+   FGMRES minimises, so the D-optimal iterate is free to move the physical residual the wrong
+   way. It is a statement about the mismatch between D and the physical weighting, not about
+   FGMRES misbehaving.
 
 2. **Without it, the same system makes progress in every norm.** ρ_S 0.61, ρ_phys 0.18,
    ρ_D 0.42 at j=48. Not converged — but 1.6× / 4.7× / 2.0× better than M in the three norms.
@@ -335,13 +348,28 @@ warm start is in play here, shared by both arms).
 
 The earlier finding that "removing M does not complete the step" stands — I does not converge
 either. But the shape of M's failure on the system that actually fails is now specific: **it
-is not slow, it is stuck, and at small budgets it is anti-convergent.**
+is not slow, it is near-stalled** — 7% in 48 steps against I's 42% from the same r₀.
+
+**Method note, recorded because it is the third time this shape has appeared in this round:**
+a residual ratio without its j=0 baseline is not a convergence statement. `ρ(j) > 1` was read
+as growth; it was a warm start that began above 1. The fix was one more field on the record,
+and the conclusion changed from "anti-convergent" to "near-stalled" — a different finding
+pointing at different work.
 
 ### Classifier correction forced by this run
 
 Production classified this iteration as **`krylov_diverged`** (`krylov_diverged=1`) — which is
 correct by the rule (`raw_rel_error > 1` was observed in production's own FGMRES call) and
 **refines** the earlier `krylov_stagnated`. The layer is `operator_or_timestep_or_jvp`. The
-A/B then narrows it further: with `M = I` the same operator, timestep and JVP do **not**
-diverge, so the divergence is attributable to `M` on this system, and the honest layer for
-*this* record is the preconditioner.
+A/B then narrows it further: with `M = I` the same operator, timestep and JVP make steady
+progress from the same r₀ while `M` barely moves, so the stall is attributable to `M` on this
+system, and the honest layer for *this* record is the preconditioner. (Production's
+`krylov_diverged` reflects `raw_rel_error > 1` in its own call — which, now that the baseline
+is known, is `‖r₀‖/‖b‖ = 1.054` carried through a solve that reduced it only slightly. The
+classifier's divergence test should compare against `r₀`, not `b`; tracked below.)
+
+### Follow-up this correction opens
+
+- **The classifier's `krylov_diverged` compares against `‖b‖`.** `raw_rel_error > 1` fires on
+  a warm start that began above 1 even when the solve reduced it. Divergence should mean
+  `ρ(j_final) > ρ(0)`, and that needs the Krylov result to carry `rel_error` at j=0. Open.
