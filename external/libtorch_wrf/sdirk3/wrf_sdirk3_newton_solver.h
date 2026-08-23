@@ -189,6 +189,20 @@ public:
         float probe_hopeless_floor = -1.0f;  // max(0.9, 2*tol) when probed
         float stag_ratio_used = -1.0f;    // configured stagnation ratio
         int stag_count_final = 0;         // consecutive stagnating checks seen
+        // R13.9: the LEFT WEIGHT this solve actually minimised under.
+        //
+        // FGMRES minimises ||D^-1 (b - A M^-1 z)||, and D is built from the initial residual
+        // inside this function. A caller comparing two configurations therefore cannot form
+        // that objective without D -- and reconstructing it from the same rule is the
+        // duplicate-authority defect this tree has paid for repeatedly. The solver publishes
+        // the weight it used; the caller applies it. Empty when block scaling is off, where
+        // D = I.
+        // R13.9: ||r0||/||b|| -- the SAME ratio at j=0. On a warm start x0 != 0 this can exceed
+        // 1, and then rel_error > 1 after the solve means only that it began above 1, not that
+        // the solve diverged. Divergence is rel_error > initial_rel_error, never rel_error > 1.
+        // -1 when not measured. At the END of the struct: the aggregate initialisers at every
+        // return site are positional.
+        float initial_rel_error = -1.0f;
     };
 
     /**
@@ -307,6 +321,22 @@ public:
     /**
      * Get convergence statistics
      */
+    // R13.10 (red team P0-1): the per-solve reset, as a FREE FUNCTION over the struct.
+    //
+    // reset_stats() cleared the nine fields it had in 2025 and none of the ten added since
+    // (R13.2/R13.5/R13.8), so best_krylov_rel_error, the GMRES counters, krylov_diverged,
+    // accepted/rejected steps and initial_residual_measured accumulated for the LIFE OF THE
+    // SOLVER -- one object per run. Every first-failure classification after the first failure
+    // in a run was reading the run's history, not the stage's. Seventh occurrence of "a rule
+    // computed and its consumer reading something else": the classifier reads per-stage,
+    // the struct said per-stage, and nothing made it per-stage.
+    //
+    // A free function over the struct is testable; a private method on the Impl was not, which
+    // is how ten fields went unreset. Everything in ConvergenceStats is per-solve; run-lifetime
+    // state lives on the Impl and is reset (or deliberately not) there.
+    struct ConvergenceStats;
+    static void reset_per_solve(ConvergenceStats& s);
+
     struct ConvergenceStats {
         int newton_iterations;
         int total_krylov_iterations;
@@ -328,7 +358,10 @@ public:
         // solve cannot make progress" even if a later one stalled.
         float best_krylov_rel_error = -1.0f;
         int   gmres_total_failures = 0;
-        int   gmres_successes = 0;
+        // NOT successes: counts solves that were not TOTAL failures.
+        int   gmres_non_total_failures = 0;
+        // Solves that actually reached tolerance.
+        int   gmres_tolerance_reached = 0;
         bool  krylov_diverged = false;
         int   accepted_steps = 0;
         int   rejected_steps = 0;
@@ -340,6 +373,7 @@ public:
         // evidence, which is the failure this project keeps closing elsewhere and reproduced
         // here. `initial_residual_finite` existed on this struct and nothing wrote it.
         bool  initial_residual_measured = false;
+        bool  final_residual_measured = false;
         bool  initial_residual_finite = false;
         // The budget the Newton LOOP actually used. It reads options_.max_newton_iter; the
         // record was reading g_sdirk3_config.max_newton_iter, a second authority that a
@@ -525,7 +559,12 @@ namespace krylov_methods {
         // S, the map from the SCALED coordinates this loop iterates back to physical ones.
         // Null when scaling is inactive, in which case S = I. Without it a physically-weighted
         // defect would be computed on scaled vectors, which is only correct when S = I.
-        const torch::Tensor* krylov_to_physical = nullptr
+        const torch::Tensor* krylov_to_physical = nullptr,
+        // R13.9: OUT -- the left weight D this solve minimised under, published so a caller
+        // comparing two configurations can form FGMRES's OWN objective without rebuilding D
+        // from the same rule (a second copy of a convention is how the two drift apart).
+        // Empty when block scaling is off, where D = I.
+        torch::Tensor* d_inv_out = nullptr
     );
     
     /**

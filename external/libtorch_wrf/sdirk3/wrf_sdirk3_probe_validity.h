@@ -284,10 +284,33 @@ struct AbComparison {
     bool same_rhs = false;           // b digests agree
     bool same_x0 = false;            // x0 digests agree
     bool same_solver_path = false;   // the SAME implementation, not an equivalent one
-    bool same_budget = false;        // equal j / equal Arnoldi steps allowed
+    bool same_budget = false;        // equal Arnoldi dimension allowed to both arms
     bool early_stop_disabled = false;
-    int  termination_a = -1;         // both arms must stop for the same reason, or "equal j"
-    int  termination_b = -1;         // was not equal work
+    // R13.8: each arm must have STARTED from the same state, not merely been handed the same
+    // inputs. Production's preconditioner closures are `mutable` -- a fallback latch and a
+    // defect gate that only evaluates on its first call -- so a probe that runs several arms
+    // through one closure gives only the FIRST arm a fresh preconditioner, and leaves the
+    // aged one to the production solve that follows.
+    bool fresh_operator_per_arm = false;
+    bool fresh_preconditioner_per_arm = false;
+    // ...and the probe must not have changed the run it observed.
+    bool diagnostic_noninterfering = false;
+    // R13.8: the operator FGMRES was handed must actually be linear. An FD matvec with a
+    // block-dependent epsilon is not, and FGMRES presumes it is.
+    bool jvp_authoritative = false;
+    // Each arm produced a finite, usable number.
+    bool rho_a_finite = false;
+    bool rho_b_finite = false;
+    // R13.8: an ALLOW-LIST, not equality. Two arms that failed the same way -- both
+    // NanRetryExhausted, both on a degraded operator -- satisfy termination_a ==
+    // termination_b, and same-wrongness is not attribution.
+    int  termination_a = -1;
+    int  termination_b = -1;
+    bool termination_a_admissible = false;   // MaxBudget or ToleranceReached
+    bool termination_b_admissible = false;
+    // R13.10 (red team P1-1): order invariance was measured (worst_order_delta) and then
+    // NOT read by the verdict -- ab_valid=1 printed beside any delta. Measured means a clause.
+    bool order_invariant = false;
 };
 
 inline ProbeVerdict ab_attributable(const AbComparison& c) {
@@ -299,7 +322,17 @@ inline ProbeVerdict ab_attributable(const AbComparison& c) {
     if (!c.same_solver_path)   return {false, "different_solver_path"};
     if (!c.same_budget)        return {false, "different_budget"};
     if (!c.early_stop_disabled) return {false, "early_stop_enabled"};
+    // The ones that caught R13.7.
+    if (!c.fresh_operator_per_arm)       return {false, "stale_operator_per_arm"};
+    if (!c.fresh_preconditioner_per_arm) return {false, "stale_preconditioner_per_arm"};
+    if (!c.diagnostic_noninterfering)    return {false, "probe_interfered"};
+    if (!c.jvp_authoritative)            return {false, "jvp_not_authoritative"};
+    if (!c.rho_a_finite || !c.rho_b_finite) return {false, "nonfinite_rho"};
+    if (!c.termination_a_admissible || !c.termination_b_admissible) {
+        return {false, "inadmissible_termination"};
+    }
     if (c.termination_a != c.termination_b) return {false, "different_termination"};
+    if (!c.order_invariant)                 return {false, "order_dependent"};
     return {true, "ok"};
 }
 

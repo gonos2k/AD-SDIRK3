@@ -9199,6 +9199,10 @@ vertical_coefficients:
                     sig.state_published = false;   // the gate is upstream of any publish
                     const auto first = wrf::sdirk3::first_failure_of(sig);
                     std::cerr << "SDIRK3_FIRST_FAILURE stage=" << stage_id
+                              // which stage actually populated the signals being classified --
+                              // equal to stage_id or the record is classifying someone else
+                              << " signals_from_stage=" << last_stage_signals_populated_by_stage_
+                              << " signals_explicit=" << (last_stage_signals_is_explicit_ ? 1 : 0)
                               << " category=" << wrf::sdirk3::stage_failure_name(first)
                               << " layer=" << wrf::sdirk3::stage_failure_layer(first)
                               << " retry=" << (retry_used ? 1 : 0)
@@ -9213,7 +9217,12 @@ vertical_coefficients:
                               << " best_krylov_rel=" << sig.best_krylov_rel_error
                               << " krylov_iters=" << sig.krylov_iterations
                               << " gmres_total_failures=" << sig.gmres_total_failures
-                              << " gmres_successes=" << sig.gmres_successes
+                              << " gmres_non_total_failures="
+                              << sig.gmres_non_total_failures
+                              << " gmres_tolerance_reached="
+                              << sig.gmres_tolerance_reached
+                              << " R_last_measured="
+                              << (sig.final_residual_measured ? 1 : 0)
                               << " krylov_diverged=" << (sig.krylov_diverged ? 1 : 0)
                               << " steps_accepted=" << sig.accepted_steps
                               << " steps_rejected=" << sig.rejected_steps
@@ -9914,6 +9923,15 @@ vertical_coefficients:
                         }
                     }
                     if (std::abs(effective_aii) < 1e-14f) {
+                        // R13.10 (red team P1-6): an explicit stage runs no Newton solve, so it
+                        // must not carry the PREVIOUS implicit stage's signals into its gate.
+                        // Without this reset, a non-finite k_fast at stage 1 of timestep >= 2
+                        // classified with the last implicit stage of timestep 1 -- and the
+                        // record said so as if it were this stage's.
+                        last_stage_signals_ = wrf::sdirk3::StageFailureSignals{};
+                        last_stage_signals_.entry_state_finite = last_stage_entry_finite_;
+                        last_stage_signals_populated_by_stage_ = stage_id;
+                        last_stage_signals_is_explicit_ = true;
                         // ESDIRK explicit first stage: evaluate fast tendency directly.
                         k_fast[i] = compute_fast_rhs(U_stage, U_full_exch_stage);
                         if (stage_id == 1) {
@@ -13175,6 +13193,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     // defect this tree has now paid for three times.
     last_stage_signals_ = wrf::sdirk3::StageFailureSignals{};
     last_stage_signals_.entry_state_finite = last_stage_entry_finite_;
+    last_stage_signals_populated_by_stage_ = stage;
+    last_stage_signals_is_explicit_ = false;
     // R13.5: carry the solver's own flags. Deriving finiteness from the value made an
     // unmeasured R0 (the member initialises to 0.0) read as finite.
     last_stage_signals_.initial_residual_measured = stats.initial_residual_measured;
@@ -13191,7 +13211,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         static_cast<double>(stats.best_krylov_rel_error);
     last_stage_signals_.krylov_iterations = stats.total_krylov_iterations;
     last_stage_signals_.gmres_total_failures = stats.gmres_total_failures;
-    last_stage_signals_.gmres_successes = stats.gmres_successes;
+    last_stage_signals_.gmres_non_total_failures = stats.gmres_non_total_failures;
+    last_stage_signals_.gmres_tolerance_reached = stats.gmres_tolerance_reached;
+    last_stage_signals_.final_residual_measured = stats.final_residual_measured;
     last_stage_signals_.krylov_diverged = stats.krylov_diverged;
     last_stage_signals_.accepted_steps = stats.accepted_steps;
     last_stage_signals_.rejected_steps = stats.rejected_steps;

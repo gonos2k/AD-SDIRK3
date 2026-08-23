@@ -47,6 +47,7 @@ StageFailureSignals ok_stage() {
     s.residual_last = 1.0e-9;
     s.newton_iterations = 4;
     s.newton_iteration_budget = 12;
+    s.final_residual_measured = true;
     s.newton_converged = true;
     s.best_krylov_rel_error = 1.0e-3;
     s.krylov_iterations = 60;
@@ -181,6 +182,7 @@ int main() {
         s.residual_last = 0.4855;
         s.newton_iterations = 3;
         s.newton_iteration_budget = 3;
+        s.final_residual_measured = true;
         s.newton_converged = false;
         s.best_krylov_rel_error = 0.5526;
         s.krylov_iterations = 21;
@@ -207,6 +209,7 @@ int main() {
         s.residual_last = 0.4855;
         s.newton_iterations = 3;
         s.newton_iteration_budget = 12;
+        s.final_residual_measured = true;
         s.newton_converged = false;
         s.best_krylov_rel_error = 0.5526;
         s.accepted_steps = 3;
@@ -273,11 +276,33 @@ int main() {
         s.residual_last = 9.0e-3;
         s.best_krylov_rel_error = 0.3853;   // some solve got here
         s.gmres_total_failures = 1;          // a DIFFERENT solve failed outright
-        s.gmres_successes = 3;
-        check(name_of(s) == "krylov_stagnated" && s.gmres_successes > 0,
-              "best_krylov_rel and gmres_total_failures describe different solves, and the "
-              "record now carries gmres_successes so a mixed stage is not read as a uniform "
-              "one");
+        s.gmres_non_total_failures = 3;
+        s.gmres_tolerance_reached = 0;
+        check(name_of(s) == "krylov_stagnated" && s.gmres_non_total_failures > 0 &&
+                  s.gmres_tolerance_reached == 0,
+              "best_krylov_rel and gmres_total_failures describe different solves. The count "
+              "is named gmres_non_total_failures because that is what it counts -- a solve "
+              "that ended at rho=0.5 without meeting tolerance was being called a success; "
+              "gmres_tolerance_reached is the quantity the old name implied, and it is 0 here");
+    }
+
+    {   // R13.8: the same defect R13.6 fixed for R0, left in place for the FINAL residual.
+        // -1.0 is the not-measured sentinel and it was mapped to NewtonDiverged alongside
+        // NaN/Inf -- absence of a measurement reported as the strongest finding available.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.final_residual_measured = false;
+        s.residual_last = -1.0;
+        check(name_of(s) == "insufficient_evidence",
+              "a final residual that was never MEASURED is insufficient evidence, not "
+              "divergence -- the -1 sentinel and NaN/Inf are different states");
+        StageFailureSignals d = ok_stage();
+        d.newton_converged = false;
+        d.final_residual_measured = true;
+        d.residual_last = std::numeric_limits<double>::infinity();
+        check(name_of(d) == "newton_diverged",
+              "...while a MEASURED non-finite final residual still IS divergence that "
+              "overflowed");
     }
 
     // ---- ORDERING: the part that decides where the work goes ----
@@ -371,7 +396,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 27;
+    constexpr int expected_checks = 29;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

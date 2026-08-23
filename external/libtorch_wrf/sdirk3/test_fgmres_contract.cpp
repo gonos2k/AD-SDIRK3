@@ -199,6 +199,35 @@ int main() {
                "E: solution matches direct solve");
     }
 
+    // G (R13.9): a warm start that begins ABOVE ||b||. The production classifier flagged
+    // "Krylov divergence" on rel_error > 1 -- and on em_b_wave's failing iteration that fired
+    // for a solve that had REDUCED the residual, because ||r0||/||b|| was 1.054 before it
+    // started. A minimal-residual method reduces from ||r0||, not from ||b||, so the result
+    // now carries ||r0||/||b|| and divergence means rel_error > initial_rel_error.
+    {
+        auto x0_bad = -b;          // r0 = b - A(-b) = b + A b: deliberately worse than zero
+        std::function<torch::Tensor(const torch::Tensor&)> M_ident =
+            [](const torch::Tensor& v) -> torch::Tensor { return v; };
+        auto rf = solve_fgmres(A_op, b, x0_bad, 0, 0.0f, /*restart=*/2, tol,
+                               /*max_restarts=*/1, M_ident, nullptr, nullptr, false, false);
+        const float r0_rel = true_rel_residual(A_mat, b, x0_bad);
+        expect(rf.initial_rel_error >= 0.0f,
+               "G: initial_rel_error is MEASURED (not the -1 sentinel)");
+        expect(std::abs(rf.initial_rel_error - r0_rel) < 1e-4f * std::max(1.0f, r0_rel),
+               "G: initial_rel_error equals ||b - A x0|| / ||b|| computed independently");
+        expect(rf.initial_rel_error > 1.0f,
+               "G: this warm start really does begin above 1 (the case the old test misread)");
+        expect(rf.rel_error <= rf.initial_rel_error * (1.0f + 1e-4f),
+               "G: a minimal-residual solve never ends above where it started");
+        const bool new_says_diverged = rf.rel_error > rf.initial_rel_error * (1.0f + 1e-4f);
+        expect(!new_says_diverged,
+               "G: divergence against r0 is FALSE here -- the solve reduced the residual");
+        if (rf.rel_error > 1.0f) {
+            std::printf("  note: rel_error=%.4f > 1 -- the old 'rel_error > 1' test would have"
+                        " called this divergent\n", rf.rel_error);
+        }
+    }
+
     if (g_failures == 0) {
         std::printf("ALL fgmres_contract assertions PASSED\n");
         return 0;

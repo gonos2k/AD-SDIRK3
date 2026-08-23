@@ -1194,6 +1194,18 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // artificially smaller and causing GMRES to stop too early.
     auto b_inner = b.clone();
     zero_halo_regions(b_inner, halo_width, periodic_x, periodic_y);
+    // R13.10 (P1-7): the j=0 ratio on the unpreconditioned path too. solve_fgmres had it
+    // and solve_gmres did not, so the M-off arm -- the CONTROL arm of every A/B here -- kept
+    // the "> 1" divergence rule that fires on a warm start the solve is fixing.
+    float initial_rel_error_gmres = -1.0f;
+    {
+        torch::NoGradGuard ng_init;
+        const float bn0 = guarded_item<float>(b_inner.norm());
+        const float rn0 = guarded_item<float>(r_true_inner.norm());
+        if (bn0 > 0.0f && std::isfinite(bn0) && std::isfinite(rn0)) {
+            initial_rel_error_gmres = rn0 / bn0;
+        }
+    }
 
     // v20.14 r50: GMRES block-scaling (left-preconditioning with D⁻¹).
     // D[block] = ||r0[block]||₂. After scaling, each block contributes exactly 1 to ||D⁻¹r0||².
@@ -1285,7 +1297,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 r_true.detach().clone(), 0, false, false};
         res.termination_reason =
             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
-        return res;
+                return res;
     }
     
     // GMRES FAILURE DETECTION: Track NaN/Inf occurrences in apply_jacobian
@@ -1496,6 +1508,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                             "NaN failures exceeded max retries",
                             r_true.detach().clone(), iter, false, false};
                     res.termination_reason = KTR::NanRetryExhausted;
+                    res.initial_rel_error = initial_rel_error_gmres;
                     return res;
                 } else {
                     // Continue GMRES loop, hope next iteration succeeds
@@ -2119,12 +2132,89 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             }
             const auto sym = 0.5 * (Hs + Hs.transpose(0, 1));
             const auto evals = torch::linalg_eigvalsh(sym);
-            std::cerr << "SDIRK3_NUMERICAL_RANGE_UNPRECOND m=" << m
+            // R13.8: NAME THE COORDINATES. "UNPRECOND" means M = I -- it does NOT mean
+            // unscaled. When block scaling is on, the operator this Hessenberg projects is
+            // D^-1 S^-1 A S, not raw physical A. A negative eigenvalue of the projected
+            // symmetric part is a genuine witness FOR THE OPERATOR GMRES ITERATED; it does
+            // not transfer to A without this receipt, and the record used to omit it.
+            std::cerr << "SDIRK3_NUMERICAL_RANGE_UNPRECOND"
+                      << " operator_coordinates="
+                      << (block_scaled ? "D_left_S_krylov" : "S_krylov")
+                      << " block_scaled=" << (block_scaled ? 1 : 0)
+                      << " right_precond=identity"
+                      << " m=" << m
                       << " min_eig_sym=" << evals.min().item<double>()
                       << " max_eig_sym=" << evals.max().item<double>()
                       << " n_negative=" << (evals < 0.0).sum().item<int64_t>() << "/" << m
-                      << " definite=" << (evals.min().item<double>() > 0.0 ? 1 : 0)
-                      << std::endl << std::flush;
+                      << " definite=" << (evals.min().item<double>() > 0.0 ? 1 : 0);
+
+            // R13.9: the two defects that decide whether H_m is a PROJECTION at all, and an
+            // INDEPENDENT re-evaluation of the negative witness.
+            //
+            // A negative eigenvalue of sym(H_m) is a witness only if H_m = V^T B V, and that
+            // holds only if V is orthonormal and the Arnoldi relation B V_m = V_{m+1} H_m
+            // actually held in floating point. Neither was measured; both are cheap once the
+            // basis is in scope. The witness is then re-evaluated on the full operator:
+            // v_min = V y_min, q = <v_min, B v_min> / <v_min, v_min>. If q < 0 the negative
+            // direction is real in the space the solver iterates, by a path that does not go
+            // through the Hessenberg's arithmetic at all.
+            if (static_cast<int>(V.size()) >= m + 1) {
+                torch::NoGradGuard ng_defects;
+                // B as the loop applied it: the operator, halo-zeroed, then D^-1 when scaled.
+                auto apply_B = [&](const torch::Tensor& v) {
+                    auto w_ = A(v);
+                    zero_halo_regions(w_, halo_width, periodic_x, periodic_y);
+                    if (block_scaled) w_ = w_ * D_inv;
+                    return w_;
+                };
+                // Orthogonality: ||V^T V - I||_F over the m vectors the projection used.
+                auto Vm = torch::stack(std::vector<torch::Tensor>(V.begin(), V.begin() + m), 1)
+                              .to(torch::kFloat64);           // n x m
+                const auto gram = Vm.transpose(0, 1).matmul(Vm);
+                const double e_orth =
+                    (gram - torch::eye(m, torch::kFloat64)).norm().item<double>();
+                // Arnoldi relation: ||B V_m - V_{m+1} Hbar_m||_F / ||B V_m||_F, with Hbar the
+                // (m+1) x m Hessenberg the loop produced, reconstructed from ritz_H.
+                auto Hbar = torch::zeros({m + 1, m}, torch::kFloat64);
+                {
+                    auto hb = Hbar.accessor<double, 2>();
+                    for (int jj = 0; jj < m; ++jj) {
+                        const auto& col = ritz_H[static_cast<size_t>(jj)];
+                        for (int ii = 0; ii <= m && ii < static_cast<int>(col.size()); ++ii) {
+                            hb[ii][jj] = col[static_cast<size_t>(ii)];
+                        }
+                    }
+                }
+                auto Vm1 = torch::stack(
+                    std::vector<torch::Tensor>(V.begin(), V.begin() + m + 1), 1)
+                        .to(torch::kFloat64);                 // n x (m+1)
+                std::vector<torch::Tensor> BV_cols;
+                BV_cols.reserve(m);
+                for (int jj = 0; jj < m; ++jj) {
+                    BV_cols.push_back(apply_B(V[static_cast<size_t>(jj)]).to(torch::kFloat64));
+                }
+                const auto BV = torch::stack(BV_cols, 1);      // n x m
+                const double n_BV = BV.norm().item<double>();
+                const double e_arnoldi =
+                    n_BV > 0.0 ? (BV - Vm1.matmul(Hbar)).norm().item<double>() / n_BV : -1.0;
+                // The independent witness.
+                auto eig = torch::linalg_eigh(sym);
+                const auto y_min = std::get<1>(eig).select(1, 0);   // eigvec of min eigval
+                const auto v_min = Vm.matmul(y_min);               // n
+                const auto Bv = apply_B(v_min.to(V[0].scalar_type())).to(torch::kFloat64);
+                const double vv = v_min.dot(v_min).item<double>();
+                const double q_min_direct =
+                    vv > 0.0 ? v_min.dot(Bv).item<double>() / vv : 0.0 / 0.0;
+                std::cerr << " e_orthogonality=" << e_orth
+                          << " e_arnoldi=" << e_arnoldi
+                          << " q_min_direct=" << q_min_direct
+                          << " witness_confirmed="
+                          << ((q_min_direct == q_min_direct && q_min_direct < 0.0) ? 1 : 0);
+            } else {
+                std::cerr << " e_orthogonality=-1 e_arnoldi=-1 q_min_direct=nan"
+                          << " witness_confirmed=0";
+            }
+            std::cerr << std::endl << std::flush;
         }
 
         // PER-RESTART. Each restart builds a NEW basis V^(r) and a NEW local Hessenberg; row i of
@@ -2285,6 +2375,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             rel_error_final, gmres_msg, r_true_out, actual_restarts, false,
             terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
     res.termination_reason = resolution.reason;
+    res.initial_rel_error = initial_rel_error_gmres;
     res.probe_j = diag_probe_j;
     res.probe_true_err = diag_probe_true_err;
     res.probe_hopeless_floor = diag_probe_floor;
@@ -2332,8 +2423,9 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     bool periodic_y,
     KrylovBasisCapture* basis_capture,
     const wrf::sdirk3::FrozenStageWeights* stage_weights,
-    const torch::Tensor* krylov_to_physical) {
-    
+    const torch::Tensor* krylov_to_physical,
+    torch::Tensor* d_inv_out) {
+
     torch::Tensor x = x0.clone();
 
     // P0 FIX: Compute initial residual
@@ -2395,6 +2487,17 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     // which is what makes the four ratios comparable; the retracted measurement divided an
     // unweighted numerator by a D-weighted denominator taken from the mutated b_inner.
     const auto b_krylov = b_inner.clone();
+    // R13.9: the j=0 relative residual, in the same halo-zeroed norm every later rel_error
+    // uses, so the two are comparable by construction.
+    float initial_rel_error_fgmres = -1.0f;
+    {
+        torch::NoGradGuard ng_init;
+        const float bn0 = guarded_item<float>(b_inner.norm());
+        const float rn0 = guarded_item<float>(r_true_inner.norm());
+        if (bn0 > 0.0f && std::isfinite(bn0) && std::isfinite(rn0)) {
+            initial_rel_error_fgmres = rn0 / bn0;
+        }
+    }
 
     // v20.14 r50: GMRES block-scaling (left-preconditioning with D⁻¹).
     // D[block] = ||r0[block]||₂. After scaling, each block contributes exactly 1 to ||D⁻¹r0||².
@@ -2533,6 +2636,11 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         if (all_blocks_ok) {
             block_scaled = true;
             L_D = D_inv;
+            // R13.9: publish the weight, once, where it is finalised.
+            if (d_inv_out) {
+                torch::NoGradGuard ng_dinv;
+                *d_inv_out = D_inv.detach().clone();
+            }
             // WHY the two weightings behave so differently -- their STRUCTURE, not just their values.
             //
             //   D_q = ||r_0,q||          BLOCK-CONSTANT, set by the initial residual
@@ -2661,6 +2769,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 r_true.detach().clone(), 0, false, false};
         res.termination_reason =
             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
+        res.initial_rel_error = initial_rel_error_fgmres;
         return res;
     }
     
@@ -3120,6 +3229,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                             "NaN failures exceeded max retries",
                             r_true.detach().clone(), iter, false, false};
                     res.termination_reason = KTR::NanRetryExhausted;
+                    res.initial_rel_error = initial_rel_error_fgmres;
                     return res;
                 } else {
                     // Continue GMRES loop, hope next iteration succeeds
@@ -3764,7 +3874,11 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             const double lo = evals.min().item<double>();
             const double hi = evals.max().item<double>();
             const int64_t n_neg = (evals < 0.0).sum().item<int64_t>();
-            std::cerr << "SDIRK3_NUMERICAL_RANGE m=" << m
+            std::cerr << "SDIRK3_NUMERICAL_RANGE"
+                      << " operator_coordinates=" << (block_scaled ? "D_left_S_krylov" : "S_krylov")
+                      << " block_scaled=" << (block_scaled ? 1 : 0)
+                      << " right_precond=M"
+                      << " m=" << m
                       << " min_eig_sym=" << lo
                       << " max_eig_sym=" << hi
                       << " n_negative=" << n_neg << "/" << m
@@ -3971,6 +4085,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             rel_error_final, gmres_msg, r_true_out, actual_restarts, false,
             terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
     res.termination_reason = resolution.reason;
+    res.initial_rel_error = initial_rel_error_fgmres;
     res.probe_j = diag_probe_j;
     res.probe_true_err = diag_probe_true_err;
     res.probe_hopeless_floor = diag_probe_floor;
@@ -4025,6 +4140,9 @@ public:
     // step_seq advances when the stage number does NOT advance, rather than on `stage == 1`:
     // in ARK324 the first stage is explicit and never reaches this solver, so keying on stage 1
     // would leave the counter at zero for the whole run.
+    // R13.10 (N6): whether the frozen A/B actually ran in this solve. Without it a Newton loop
+    // that converged or stalled before the target iteration emitted nothing at all.
+    bool      frozen_ab_fired_this_solve_ = false;
     int       manifest_last_stage_ = -1;
     long long manifest_step_seq_   = 0;
     // Distinguishes repeated solves of the SAME physical stage within one host timestep --
@@ -5266,6 +5384,8 @@ public:
         // R13.5: the loop's own bound, recorded from the loop. Reading it anywhere else is a
         // second authority that can disagree with the iteration that actually ran.
         stats_.newton_iteration_budget = options_.max_newton_iter;
+        stats_.final_residual_measured = false;
+        frozen_ab_fired_this_solve_ = false;
         for (int newton_iter = 0; newton_iter < options_.max_newton_iter; ++newton_iter) {
             actual_newton_iters = newton_iter + 1;
             // Debug: print Newton iteration start
@@ -6248,6 +6368,7 @@ public:
                     ERROR_PRINT("ERROR: NaN detected in Newton residual!");
                     stats_.converged = false;
                     stats_.final_residual = res_norm_for_stats;
+                    stats_.final_residual_measured = true;
 
                     WRFNewtonKrylovSolver::NewtonResult result;
                     result.K = K;  // Return current K to avoid propagating NaN
@@ -6401,10 +6522,12 @@ public:
                 // STATS FIX: Extract final residual accurately
                 if (need_scalar) {
                     stats_.final_residual = res_norm_for_stats;
+                    stats_.final_residual_measured = true;
                 } else {
                     // Fast-path: single .item() on exit only (debug_level=0 without adaptive)
                     // GRADIENT FIX: Use guarded_item instead of manual NoGradGuard
                     stats_.final_residual = guarded_item<float>(res_norm_detached);
+                    stats_.final_residual_measured = true;
                 }
                 
                 // Always print convergence (scaled norm is the convergence criterion)
@@ -8071,80 +8194,531 @@ public:
                     }
                 }
 
-                // R13.7: the FROZEN LINEAR-SYSTEM A/B -- the only experiment that can
-                // attribute anything to M.
+                // R13.8: the FROZEN LINEAR-SYSTEM A/B, made non-interfering and self-judging.
                 //
-                // R13.4 compared PRECOND_TYPE=2 against PRECOND_TYPE=0 and called it single
-                // variable. It was not: production routes M-on to solve_fgmres and M-off to
-                // solve_gmres (see immediately below), so that comparison moved the
-                // preconditioner AND the Krylov implementation. The two arms also ran
-                // different Newton counts, so `best_krylov_rel` minimised over DIFFERENT
-                // linear systems -- A_n = I - h*gamma*J_F(U_eval,n) with U_eval,n differing.
-                // The conclusion drawn from it ("the preconditioner is net-harmful") was
-                // retracted.
+                // R13.7 froze (A, b, x0) and routed both arms through the same solve_fgmres --
+                // a real advance over the run-level comparison it replaced. Two defects made
+                // its number unattributable anyway, and both are fixed here.
                 //
-                // Here everything is held fixed BY CONSTRUCTION: one (A, b, x0) captured at
-                // this Newton iteration, the same solve_fgmres for both arms, the same
-                // Arnoldi budget, tol=0 so neither arm can exit early on tolerance, and
-                // max_restarts=1 so `restart` IS j. The only difference is the closure passed
-                // as M_inv: production, or the identity.
+                // (1) THE PROBE MUTATED WHAT IT MEASURED. Production's preconditioner closures
+                //     are `mutable`: precond_func holds a fallback latch (once set, identity
+                //     forever) and the defect-correction wrapper evaluates its gate ONLY at
+                //     call_count == 0. R13.7 called gmres_M_inv five times before production's
+                //     own solve used the same object, so only the first arm ever saw a fresh
+                //     preconditioner and production inherited an aged one. Copying the
+                //     std::function copies its target's state, so a copy taken HERE -- before
+                //     any arm runs, while the closure is still pristine -- is the fresh
+                //     preconditioner every arm needs, and restoring from it leaves production
+                //     exactly where it would have been.
                 //
-                // The arms run on the SAME operator closure, so this costs 2 x sum(m) extra
-                // matvecs; it is opt-in and never runs in production.
+                // (2) THE VERDICT WAS NEVER CONSUMED. R13.7 added ab_attributable() to stop an
+                //     unattributable A/B being read as a result, and did not call it from this
+                //     emitter. Sixth occurrence of that shape in this tree. It is called now,
+                //     and every conclusion-shaped field is suppressed when it refuses.
+                // R13.9: WHICH Newton iteration to freeze. Iteration 0 is the cleanest
+                // system but not the one where GMRES fails -- the first-failure ladder
+                // measured that at iteration 4 (0-indexed 3) for every adequate budget. The
+                // probe cannot know in advance whether the CURRENT iteration will fail, so
+                // the target is chosen by the caller from that measurement. Default 0 keeps
+                // every earlier record comparable.
+                // Strict parse (red team P1-5): atoi("iter3") == 0 would silently freeze
+                // iteration 0 under a run labelled "iteration 3" -- a scientific knob that
+                // silently runs the baseline is worse than one that fails.
+                static const int ab_target_iter = [] {
+                    const char* e = std::getenv("WRF_SDIRK3_FROZEN_MI_AB_ITER");
+                    if (!e || !*e) return 0;
+                    char* end = nullptr;
+                    const long v = std::strtol(e, &end, 10);
+                    TORCH_CHECK(end && *end == '\0' && v >= 0 && v < 1000,
+                        "WRF_SDIRK3_FROZEN_MI_AB_ITER='", e,
+                        "' is not a non-negative integer");
+                    return static_cast<int>(v);
+                }();
+                // Out of range for THIS solve: say so once, rather than emit nothing.
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_FROZEN_MI_AB") &&
-                    gmres_M_inv && newton_iter == 0) {
+                    newton_iter == 0 && ab_target_iter >= options_.max_newton_iter) {
+                    std::cerr << "SDIRK3_FROZEN_AB_SYSTEM stage=" << stage
+                              << " ab_valid=0 ab_reason=target_iteration_unreachable"
+                              << " requested_iter=" << ab_target_iter
+                              << " max_newton_iter=" << options_.max_newton_iter
+                              << "  (no A/B will be recorded in this solve)" << std::endl;
+                }
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_FROZEN_MI_AB") &&
+                    gmres_M_inv && newton_iter == ab_target_iter) {
+                    frozen_ab_fired_this_solve_ = true;
                     torch::NoGradGuard ng_ab;
-                    auto identity_M = [](const torch::Tensor& v) { return v; };
-                    auto digest = [](const torch::Tensor& t) -> double {
-                        return (t.defined() && t.numel() > 0)
-                            ? t.detach().to(torch::kFloat64).abs().sum().item<double>() : -1.0;
+                    // R13.10 (red team P0-2): NOT a copy of gmres_M_inv. On the scaled path
+                    // gmres_M_inv is a [&] wrapper around the single M_inv, so copying it
+                    // copies a REFERENCE to the one fallback latch -- every "fresh" row and
+                    // production shared it. The reported numbers survived only because the
+                    // latch never fired (the counter proves that), not because the mechanism
+                    // existed. Each row now builds its own wrapper around its own BY-VALUE
+                    // copy of M_inv, so the latch is per row by construction and production's
+                    // gmres_M_inv is never touched by the probe at all.
+                    auto make_fresh_M = [&]() -> std::function<torch::Tensor(const torch::Tensor&)> {
+                        if (scaling_initialized_) {
+                            return [M_copy = M_inv, S = S_diag_, Si = S_inv_diag_]
+                                   (const torch::Tensor& v) -> torch::Tensor {
+                                return Si * M_copy(S * v);
+                            };
+                        }
+                        return M_inv;   // by value: its own latch
                     };
+                    const int fallbacks_before = precond_fallback_count_;
+                    // fd-fallback count BEFORE the arms; compared after (red team P1-2: reading
+                    // it once before the arms made a fallback inside an arm invisible).
+                    const long long fd_before =
+                        wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
+                    auto identity_M =
+                        std::function<torch::Tensor(const torch::Tensor&)>(
+                            [](const torch::Tensor& v) { return v; });
+                    // R13.9: a THIRD arm, from the per-block measurement. M helped ru/rv/t and
+                    // did nothing for rw/ph/mu, while the identity took those three down
+                    // 73/38/84%. So: M where it works, identity where it does not. This is a
+                    // diagnostic arm in an opt-in probe, not a production change -- it asks
+                    // whether the block-level picture composes, before anything is built on it.
+                    // P1-5: a receipt that the selection actually engaged. Without it the arm
+                    // silently degrades to plain M on a layout mismatch and the row still
+                    // prints arm=Msel.
+                    auto msel_engaged = std::make_shared<bool>(false);
+                    auto selective_M =
+                        std::function<torch::Tensor(const torch::Tensor&)>(
+                            [this, M_own = make_fresh_M(), msel_engaged]
+                            (const torch::Tensor& v) {
+                                auto z = M_own(v);
+                                if (!cached_layout_.is_exact ||
+                                    cached_layout_.total_size != v.numel()) {
+                                    *msel_engaged = false;
+                                    return z;
+                                }
+                                *msel_engaged = true;
+                                for (const auto& blk : cached_layout_.blocks) {
+                                    const std::string n = blk.name;
+                                    if (n == "rw" || n == "ph" || n == "mu") {
+                                        z.slice(0, blk.start, blk.start + blk.size)
+                                            .copy_(v.slice(0, blk.start, blk.start + blk.size));
+                                    }
+                                }
+                                return z;
+                            });
+
+                    // R13.8 (B4): a digest that can see DIRECTION. abs().sum() cannot
+                    // separate v from -v or from any permutation -- the same weakness fixed in
+                    // carried_state_digest and reintroduced here. Norm, sum and first moment:
+                    // the sum is odd under negation, the first moment breaks under reordering.
+                    auto digest = [](const torch::Tensor& t) -> double {
+                        if (!t.defined() || t.numel() == 0) return -1.0;
+                        const auto t64 = t.detach().to(torch::kFloat64).reshape({-1});
+                        const auto idx = torch::arange(t64.numel(), t64.options());
+                        return t64.norm().item<double>()
+                             + 7.0 * t64.sum().item<double>()
+                             + 13.0 * (t64 * idx).sum().item<double>();
+                    };
+
+                    // R13.8 (A6): FGMRES PRESUMES A LINEAR OPERATOR. An FD matvec with a
+                    // block-dependent epsilon is not one, and the failure is silent -- the
+                    // Arnoldi relation simply stops describing what was computed. Measured
+                    // here rather than assumed, on the same operator the arms use.
+                    double e_repeat = -1.0, e_hom = -1.0, e_add = -1.0;
+                    // Probe-local generator (the file's own D121/D123 rule): the global stream
+                    // must not shift for downstream one-shot diagnostics.
+                    auto probe_gen = at::detail::createCPUGenerator(
+                        0xAB5EEDULL + static_cast<uint64_t>(stage) * 7919ULL +
+                        static_cast<uint64_t>(newton_iter));
+                    auto probe_randn = [&](const torch::Tensor& like) {
+                        auto t = torch::randn(like.sizes(), probe_gen,
+                                              like.options().device(torch::kCPU));
+                        return t.to(like.device()).to(like.scalar_type());
+                    };
+                    {
+                        auto v = probe_randn(gmres_rhs);
+                        auto w = probe_randn(gmres_rhs);
+                        const auto Av1 = gmres_op(v), Av2 = gmres_op(v);
+                        const auto n_Av = Av1.detach().to(torch::kFloat64).norm().item<double>();
+                        auto rel = [&](const torch::Tensor& a, double den) {
+                            return den > 0.0
+                                ? a.detach().to(torch::kFloat64).norm().item<double>() / den
+                                : -1.0;
+                        };
+                        e_repeat = rel(Av1 - Av2, n_Av);
+                        const double alpha = 2.5;
+                        e_hom = rel(gmres_op(alpha * v) - alpha * Av1, alpha * n_Av);
+                        const auto Aw = gmres_op(w);
+                        const double den_add =
+                            n_Av + Aw.detach().to(torch::kFloat64).norm().item<double>();
+                        e_add = rel(gmres_op(v + w) - Av1 - Aw, den_add);
+                    }
+                    // R13.9 (referee C5): the operator's linearity was measured; the
+                    // PRECONDITIONER's was not, and the reading "Krylov space of D^-1 A M^-1"
+                    // needs M linear too. Production M^-1 is a tridiagonal/column solve on
+                    // coefficients fixed at build time, so it should be linear per solve --
+                    // "should be" is the word this probe exists to remove. Measured on the
+                    // pristine copy, so the check itself cannot age the closure.
+                    double eM_hom = -1.0, eM_add = -1.0;
+                    {
+                        // N3: the ratio guard inside M shares variable_pc_event with production
+                        // through a shared_ptr that by-value copies do not detach, and random
+                        // vectors with no physical structure are exactly what trips it. So the
+                        // linearity check (a) uses vectors built from r0 -- the structure M is
+                        // designed for -- and (b) snapshots the shared flag and the fallback
+                        // counter and restores both: this is a measurement of M's algebra, not
+                        // an arm, and it must not be able to disqualify the arms.
+                        const bool pc_event_before = *variable_pc_event;
+                        const int  fallbacks_lin_before = precond_fallback_count_;
+                        auto copyM = make_fresh_M();
+                        auto v = gmres_rhs.detach() * (1.0 + 0.1 * probe_randn(gmres_rhs));
+                        auto w = gmres_rhs.detach().roll(1, 0) *
+                                 (1.0 + 0.1 * probe_randn(gmres_rhs));
+                        const double alpha = 2.5;
+                        const auto Mv = copyM(v), Mw = copyM(w);
+                        const double n_Mv = Mv.detach().to(torch::kFloat64).norm().item<double>();
+                        auto relM = [&](const torch::Tensor& a, double den) {
+                            return den > 0.0
+                                ? a.detach().to(torch::kFloat64).norm().item<double>() / den
+                                : -1.0;
+                        };
+                        eM_hom = relM(copyM(alpha * v) - alpha * Mv, alpha * n_Mv);
+                        const double den_add =
+                            n_Mv + Mw.detach().to(torch::kFloat64).norm().item<double>();
+                        eM_add = relM(copyM(v + w) - Mv - Mw, den_add);
+                        *variable_pc_event = pc_event_before;
+                        precond_fallback_count_ = fallbacks_lin_before;
+                    }
+                    constexpr double kLinearTol = 1.0e-5;
+                    const bool precond_linear =
+                        (eM_hom >= 0.0 && eM_hom < kLinearTol) &&
+                        (eM_add >= 0.0 && eM_add < kLinearTol);
+                    const bool operator_linear =
+                        (e_repeat >= 0.0 && e_repeat < kLinearTol) &&
+                        (e_hom    >= 0.0 && e_hom    < kLinearTol) &&
+                        (e_add    >= 0.0 && e_add    < kLinearTol);
                     const double b_norm = gmres_rhs.defined()
                         ? gmres_rhs.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
-                    // The proof that the two arms saw one system: digests of the inputs, and
-                    // ||b||, printed once and shared by every row below.
+                    // R13.9: THE j=0 BASELINE. Every rho below is normalised by ||b||, but the
+                    // solve starts from x0, and at a warm-started iteration x0 != 0. A
+                    // minimal-residual method reduces ||r|| from ||r0|| = ||b - A x0||, not
+                    // from ||b|| -- so rho(j) > 1 says nothing about convergence unless
+                    // ||r0||/||b|| is on the record beside it. "Anti-convergent" is earned
+                    // only by rho(j) > rho(0), and that comparison needs this number.
+                    double rho0_S = -1.0, rho0_phys = -1.0, rho0_D = -1.0;
+                    torch::Tensor r0_kept;
+                    {
+                        torch::Tensor r0 = gmres_rhs.detach();
+                        if (gmres_x0.defined() &&
+                            gmres_x0.detach().to(torch::kFloat64).norm().item<double>() > 0.0) {
+                            r0 = gmres_rhs.detach() - gmres_op(gmres_x0.detach());
+                        }
+                        r0_kept = r0;
+                        if (b_norm > 0.0) {
+                            rho0_S = r0.to(torch::kFloat64).norm().item<double>() / b_norm;
+                            if (scaling_initialized_ && S_diag_.defined()) {
+                                const auto nb = (S_diag_ * gmres_rhs.detach())
+                                                    .to(torch::kFloat64).norm().item<double>();
+                                if (nb > 0.0) {
+                                    rho0_phys = (S_diag_ * r0).to(torch::kFloat64)
+                                                    .norm().item<double>() / nb;
+                                }
+                            }
+                        }
+                    }
+                    // WHICH operator was compared. An FD matvec with a block-dependent epsilon
+                    // is not linear, and FGMRES presumes it is -- so the JVP receipt is part
+                    // of the attribution, not a footnote.
+                    bool jvp_ok = (fd_before == 0);   // finalised after the arms
+                    const bool early_stop_off = no_early_stop_enabled();
+
+                    struct Row { const char* arm; int j; double rho; double rho_phys;
+                                 double rho_D; float rel; int iters; int term;
+                                 long long a_applies; bool d_weighted; bool msel_engaged; };
+                    enum class Arm { M, I, Sel };
+                    std::vector<Row> rows;
+                    // R13.8 (A4): equal j is equal ARNOLDI DIMENSION, not equal work -- the M
+                    // arm additionally applies M^-1 per direction. Counting the operator
+                    // applications makes the cost difference visible instead of implied.
+                    long long a_apply_count = 0;
+                    auto counting_op = [&](const torch::Tensor& v) {
+                        ++a_apply_count;
+                        return gmres_op(v);
+                    };
+
+                    const int halo_width_for_probe = 0;   // packed 1-D Krylov vectors
+                    // Each row gets its OWN fresh preconditioner, so rows are independent of
+                    // each other as well as of production. R13.7 ran them through one aging
+                    // closure, where only the first row started clean.
+                    auto run = [&](Arm which, int m) {
+                        const bool use_M = (which == Arm::M);
+                        auto arm_M = (which == Arm::M)   ? make_fresh_M()
+                                   : (which == Arm::Sel) ? selective_M
+                                                         : identity_M;
+                        const char* arm_name = (which == Arm::M)   ? "M"
+                                             : (which == Arm::Sel) ? "Msel" : "I";
+                        a_apply_count = 0;
+                        torch::Tensor d_inv_used;
+                        auto res = krylov_methods::solve_fgmres(
+                            std::function<torch::Tensor(const torch::Tensor&)>(counting_op),
+                            gmres_rhs, gmres_x0, stage, ru_share,
+                            /*restart=*/m, /*tol=*/0.0f, /*max_iter=*/1,
+                            arm_M,
+                            layout_initialized_ ? &cached_layout_ : nullptr,
+                            halo_mask_initialized_ ? &halo_mask_ : nullptr,
+                            options_.periodic_x, options_.periodic_y,
+                            nullptr, nullptr, nullptr, &d_inv_used);
+                        double rho = -1.0, rho_phys = -1.0, rho_D = -1.0;
+                        if (res.x.defined() && b_norm > 0.0) {
+                            // P1-4: in the SAME halo-zeroed norm FGMRES minimises. A no-op on
+                            // 1-D packed vectors, which is what makes rel_reported and rho_S
+                            // agree to the 4th digit -- but consistency is by construction
+                            // now, not by that accident.
+                            auto r = gmres_rhs.detach() - gmres_op(res.x.detach());
+                            zero_halo_regions(r, halo_width_for_probe,
+                                              options_.periodic_x, options_.periodic_y);
+                            rho = r.to(torch::kFloat64).norm().item<double>() / b_norm;
+                            // R13.8 (A7): rho_S lives in the SCALED Krylov coordinates. The
+                            // physical residual is S*r~, and winning in one norm does not
+                            // imply winning in the other -- the two weight the blocks
+                            // differently by construction.
+                            // R13.9: FGMRES's OWN objective, under the weight IT used and
+                            // published. The sharp question this answers: a preconditioner can
+                            // help the norm the solver minimises while hurting the physical
+                            // one, which makes it a preconditioner for the wrong objective
+                            // rather than a bad one.
+                            if (d_inv_used.defined() && d_inv_used.numel() > 0) {
+                                const auto rD = (d_inv_used * r).to(torch::kFloat64);
+                                const auto bD =
+                                    (d_inv_used * gmres_rhs.detach()).to(torch::kFloat64);
+                                const double nbD = bD.norm().item<double>();
+                                if (nbD > 0.0) rho_D = rD.norm().item<double>() / nbD;
+                            }
+                            if (scaling_initialized_ && S_diag_.defined()) {
+                                const auto r_phys = (S_diag_ * r).to(torch::kFloat64);
+                                const auto b_phys =
+                                    (S_diag_ * gmres_rhs.detach()).to(torch::kFloat64);
+                                const double nb = b_phys.norm().item<double>();
+                                if (nb > 0.0) {
+                                    rho_phys = r_phys.norm().item<double>() / nb;
+                                }
+                            }
+                        }
+                        // FGMRES's own objective at j=0, from the D it just built. D depends
+                        // only on r0, which both arms and every row share, so the first row
+                        // that publishes it supplies the baseline for all of them. This is the
+                        // one quantity the algorithm GUARANTEES non-increasing -- and it is
+                        // measured rather than assumed for the same reason everything else is.
+                        if (rho0_D < 0.0 && d_inv_used.defined() && d_inv_used.numel() > 0 &&
+                            r0_kept.defined()) {
+                            const auto bD = (d_inv_used * gmres_rhs.detach()).to(torch::kFloat64);
+                            const double nbD = bD.norm().item<double>();
+                            if (nbD > 0.0) {
+                                rho0_D = (d_inv_used * r0_kept).to(torch::kFloat64)
+                                             .norm().item<double>() / nbD;
+                            }
+                        }
+                        const bool d_weighted = (rho_D >= 0.0);
+                        if (!d_weighted && rho >= 0.0) {
+                            // Block scaling was off (or refused) for this row: FGMRES's own
+                            // objective IS the unweighted norm. Substituted, and SAID (N4).
+                            rho_D = rho;
+                        }
+                        rows.push_back({arm_name, m, rho, rho_phys, rho_D,
+                                        res.rel_error,
+                                        res.iterations,
+                                        static_cast<int>(res.termination_reason),
+                                        a_apply_count, d_weighted,
+                                        (which == Arm::Sel) ? *msel_engaged : false});
+                        // R13.9: PER-BLOCK residual at the largest budget, each arm. The three
+                        // aggregate norms say M's reduction is large in rho_D and small in
+                        // rho_S, and D^-1 up-weights the small-residual blocks -- so the
+                        // inference is that M works on the blocks that do not matter to the
+                        // physical residual. That is an inference from aggregates. This is the
+                        // measurement: ||r_block|| / ||b_block|| for each block, in the S
+                        // coordinates, at j=48, beside the same ratio at j=0.
+                        if (m == 48 && res.x.defined() && cached_layout_.is_exact &&
+                            r0_kept.defined()) {
+                            const auto r = (gmres_rhs.detach() - gmres_op(res.x.detach()))
+                                               .to(torch::kFloat64).reshape({-1});
+                            const auto b64 = gmres_rhs.detach().to(torch::kFloat64).reshape({-1});
+                            const auto r064 = r0_kept.to(torch::kFloat64).reshape({-1});
+                            if (cached_layout_.total_size == r.numel()) {
+                                std::cerr << "SDIRK3_FROZEN_AB_BLOCKS stage=" << stage
+                                          << " arm=" << arm_name << " j=" << m;
+                                for (const auto& blk : cached_layout_.blocks) {
+                                    const auto rb  = r.slice(0, blk.start, blk.start + blk.size);
+                                    const auto bb  = b64.slice(0, blk.start, blk.start + blk.size);
+                                    const auto r0b = r064.slice(0, blk.start, blk.start + blk.size);
+                                    const double nb = bb.norm().item<double>();
+                                    std::cerr << " " << blk.name << "_rho0="
+                                              << (nb > 0.0 ? r0b.norm().item<double>() / nb : -1.0)
+                                              << " " << blk.name << "_rho="
+                                              << (nb > 0.0 ? rb.norm().item<double>() / nb : -1.0);
+                                }
+                                std::cerr << std::endl;
+                            }
+                        }
+                    };
+
+                    // ARM ORDER REVERSED between the two passes. If the numbers move with the
+                    // order, something is still stateful and the record must say so rather
+                    // than average it away.
+                    // Referee C1: "better at every j <= 48" is a statement about j <= 48. A
+                    // cluster-plus-outliers preconditioner loses at small j and wins past the
+                    // outlier count; the ladder must reach where a crossing could live.
+                    std::vector<int> ladder{4, 8, 16, 32, 48};
+                    if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_FROZEN_MI_AB_EXTEND")) {
+                        ladder.push_back(96);
+                        ladder.push_back(192);
+                    }
+                    for (int m : ladder) {
+                        run(Arm::M, m); run(Arm::I, m); run(Arm::Sel, m);
+                    }
+                    const size_t forward_rows = rows.size();
+                    for (auto it = ladder.rbegin(); it != ladder.rend(); ++it) {
+                        run(Arm::Sel, *it); run(Arm::I, *it); run(Arm::M, *it);
+                    }
+
+                    // Restore production's preconditioner to the state it would have had, and
+                    // MEASURE whether anything else moved.
+                    // Production's wrapper was never handed to an arm; nothing to restore.
+                    const bool noninterfering =
+                        (precond_fallback_count_ == fallbacks_before);
+                    jvp_ok = jvp_ok &&
+                        (wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed)
+                             == fd_before);
+
+                    // Order invariance, measured across the two passes.
+                    double worst_order_delta = 0.0;
+                    int order_pairs_compared = 0;
+                    for (size_t i = 0; i < forward_rows; ++i) {
+                        for (size_t k = forward_rows; k < rows.size(); ++k) {
+                            if (rows[i].j == rows[k].j &&
+                                std::string(rows[i].arm) == rows[k].arm) {
+                                const double a = rows[i].rho, b2 = rows[k].rho;
+                                if (a > 0.0 && b2 > 0.0) {
+                                    worst_order_delta = std::max(
+                                        worst_order_delta, std::abs(a - b2) / a);
+                                    ++order_pairs_compared;
+                                } else {
+                                    // A row that could not be compared is not a row that
+                                    // agreed. Poison the delta so the clause refuses.
+                                    worst_order_delta = std::numeric_limits<double>::infinity();
+                                }
+                            }
+                        }
+                    }
+
+                    auto admissible = [](int t) {
+                        using KTR = WRFNewtonKrylovSolver::KrylovTerminationReason;
+                        return t == static_cast<int>(KTR::MaxBudget) ||
+                               t == static_cast<int>(KTR::ToleranceReached);
+                    };
+                    bool all_admissible = true, all_finite = true, terms_equal = true,
+                         iters_equal = true;
+                    for (size_t i = 0; i + 2 < rows.size(); i += 3) {
+                        for (size_t k = 0; k < 3; ++k) {
+                            all_admissible &= admissible(rows[i + k].term);
+                            // All three norms, and finite (P1-4: rho >= 0 admitted +Inf).
+                            for (double q : {rows[i + k].rho, rows[i + k].rho_phys,
+                                             rows[i + k].rho_D}) {
+                                all_finite &= (q >= 0.0) &&
+                                              (q < std::numeric_limits<double>::infinity());
+                            }
+                        }
+                        terms_equal &= (rows[i].term == rows[i + 1].term) &&
+                                       (rows[i].term == rows[i + 2].term);
+                        iters_equal &= (rows[i].iters == rows[i + 1].iters) &&
+                                       (rows[i].iters == rows[i + 2].iters);
+                    }
+
+                    // P1-4 receipt: rel_reported is the solver's halo-zeroed ratio, rho_S the
+                    // probe's. If they disagree past rounding, a halo floor is live and the
+                    // absolute numbers are floor-inclusive.
+                    double halo_floor_delta = 0.0;
+                    for (const auto& r_ : rows) {
+                        if (r_.rho > 0.0 && r_.rel >= 0.0f) {
+                            halo_floor_delta = std::max(
+                                halo_floor_delta, std::abs(r_.rho - r_.rel) / r_.rho);
+                        }
+                    }
+                    wrf::sdirk3::AbComparison cmp;
+                    cmp.same_operator = true;     // one closure object, both arms
+                    cmp.same_rhs = true;          // one tensor
+                    cmp.same_x0 = true;
+                    // N2: with precond_refinement_passes > 1 production's M is the
+                    // defect-correction wrapper and the arm's make_fresh_M is the bare one --
+                    // an "M" arm that is not M. Same path only when there is no wrapper.
+                    const int refinement_passes_now =
+                        wrf::sdirk3::g_sdirk3_config.precond_refinement_passes;
+                    cmp.same_solver_path = (refinement_passes_now <= 1);
+                    cmp.same_budget = iters_equal;
+                    cmp.early_stop_disabled = early_stop_off;
+                    cmp.fresh_operator_per_arm = true;
+                    cmp.fresh_preconditioner_per_arm = true;   // copied from pristine per row
+                    cmp.diagnostic_noninterfering = noninterfering;
+                    cmp.jvp_authoritative = jvp_ok && operator_linear && precond_linear;
+                    cmp.rho_a_finite = cmp.rho_b_finite = all_finite;
+                    cmp.termination_a_admissible = cmp.termination_b_admissible =
+                        all_admissible;
+                    cmp.termination_a = 0;
+                    cmp.termination_b = terms_equal ? 0 : 1;
+                    // 1e-6 relative: bit-identical rows give exactly 0; anything larger means
+                    // some state survived between passes and the arms were not independent.
+                    cmp.order_invariant = (worst_order_delta <= 1.0e-6);
+                    const auto verdict = wrf::sdirk3::ab_attributable(cmp);
+
                     std::cerr << "SDIRK3_FROZEN_AB_SYSTEM stage=" << stage
                               << " newton_iter=" << newton_iter
+                              << " global_timestep=" << ::sdirk3_host_global_timestep()
+                              << " solver_id=" << solver_id_
+                              << " rank=" << wrf::sdirk3::diagnostic_mpi_rank()
+                              << " ab_valid=" << (verdict.valid ? 1 : 0)
+                              << " ab_reason=" << verdict.reason
                               << " b_digest=" << digest(gmres_rhs)
                               << " x0_digest=" << digest(gmres_x0)
                               << " b_norm=" << b_norm
-                              << "  (one (A,b,x0); both arms below run the SAME solve_fgmres"
-                                 " on it, differing only in the M_inv closure)" << std::endl;
-                    for (int m : {4, 8, 16, 32, 48}) {
-                        for (int arm = 0; arm < 2; ++arm) {
-                            const bool use_M = (arm == 0);
-                            auto res = krylov_methods::solve_fgmres(
-                                gmres_op, gmres_rhs, gmres_x0, stage, ru_share,
-                                /*restart=*/m,
-                                // tol=0: neither arm may stop on tolerance, so both spend
-                                // exactly m Arnoldi steps and rho is compared at equal j.
-                                /*tol=*/0.0f,
-                                /*max_iter=*/1,
-                                use_M ? gmres_M_inv
-                                      : std::function<torch::Tensor(const torch::Tensor&)>(
-                                            identity_M),
-                                layout_initialized_ ? &cached_layout_ : nullptr,
-                                halo_mask_initialized_ ? &halo_mask_ : nullptr,
-                                options_.periodic_x, options_.periodic_y,
-                                nullptr, nullptr, nullptr);
-                            // The TRUE residual, recomputed here rather than trusted from the
-                            // solver's own bookkeeping: the two arms use different M and a
-                            // reported rel_error is not guaranteed to mean the same thing.
-                            double rho = -1.0;
-                            if (res.x.defined() && b_norm > 0.0) {
-                                const auto r = gmres_rhs.detach() - gmres_op(res.x.detach());
-                                rho = r.to(torch::kFloat64).norm().item<double>() / b_norm;
-                            }
-                            std::cerr << "SDIRK3_FROZEN_AB stage=" << stage
-                                      << " arm=" << (use_M ? "M" : "I")
-                                      << " j=" << m
-                                      << " rho_true=" << rho
-                                      << " rel_reported=" << res.rel_error
-                                      << " iters=" << res.iterations
-                                      << " termination=" << static_cast<int>(
-                                             res.termination_reason)
-                                      << std::endl;
-                        }
+                              << " rho0_S=" << rho0_S
+                              << " rho0_phys=" << rho0_phys
+                              << " rho0_D=" << rho0_D
+                              << " refinement_passes=" << refinement_passes_now
+                              << " metric=rho_S_unweighted"
+                              << " tolerance_exit_disabled=1"
+                              << " early_stop_disabled=" << (early_stop_off ? 1 : 0)
+                              << " jvp_fd_fallback_free=" << (jvp_ok ? 1 : 0)
+                              << " operator_linear=" << (operator_linear ? 1 : 0)
+                              << " e_repeat=" << e_repeat
+                              << " e_homogeneity=" << e_hom
+                              << " e_additivity=" << e_add
+                              << " precond_linear=" << (precond_linear ? 1 : 0)
+                              << " eM_homogeneity=" << eM_hom
+                              << " eM_additivity=" << eM_add
+                              << " metric_phys=rho_phys_S_weighted"
+                              << " metric_D=rho_D_fgmres_objective"
+                              << " probe_noninterfering=" << (noninterfering ? 1 : 0)
+                              << " halo_floor_delta=" << halo_floor_delta
+                              << " worst_order_delta=" << worst_order_delta
+                              << " order_pairs_compared=" << order_pairs_compared
+                              << (verdict.valid
+                                    ? "  (attributable: equal Arnoldi dimension, one code"
+                                      " path, a FRESH preconditioner per row, and the probe"
+                                      " left production's state unchanged)"
+                                    : "  (NOT attributable -- rows below are raw numbers and"
+                                      " NO comparison between the arms may be drawn from"
+                                      " them)")
+                              << std::endl;
+                    for (size_t i = 0; i < rows.size(); ++i) {
+                        std::cerr << "SDIRK3_FROZEN_AB stage=" << stage
+                                  << " pass=" << (i < forward_rows ? "MI" : "IM")
+                                  << " arm=" << rows[i].arm
+                                  << " j=" << rows[i].j
+                                  << " rho_S=" << rows[i].rho
+                                  << " rho_phys=" << rows[i].rho_phys
+                                  << " rho_D=" << rows[i].rho_D
+                                  << " A_applies=" << rows[i].a_applies
+                                  << " d_weighted=" << (rows[i].d_weighted ? 1 : 0)
+                                  << " msel_engaged=" << (rows[i].msel_engaged ? 1 : 0)
+                                  << " rel_reported=" << rows[i].rel
+                                  << " iters=" << rows[i].iters
+                                  << " termination=" << rows[i].term
+                                  << " ab_valid=" << (verdict.valid ? 1 : 0)
+                                  << std::endl;
                     }
                 }
 
@@ -8345,8 +8919,23 @@ public:
                 // R13.5: divergence is not stagnation. The total-failure predicate folds
                 // raw_rel_error > 1 (the residual GREW) together with rel_error >= 0.999 (it
                 // did not move), and those point at different work.
-                if (std::isfinite(gmres_result.rel_error) && gmres_result.rel_error > 1.0f) {
-                    stats_.krylov_diverged = true;
+                // R13.9: divergence is measured against where the solve STARTED. On a warm
+                // start ||r0|| can exceed ||b||, and a solve that reduced it still reports
+                // rel_error > 1 -- the em_b_wave failing iteration did exactly that (1.054 ->
+                // 0.979) and was classified krylov_diverged. Fall back to the old test only
+                // when the initial ratio was not measured.
+                {
+                    const float ref = (gmres_result.initial_rel_error >= 0.0f)
+                        ? gmres_result.initial_rel_error : 1.0f;
+                    if (std::isfinite(gmres_result.rel_error) &&
+                        gmres_result.rel_error > ref * (1.0f + 1.0e-4f)) {
+                        stats_.krylov_diverged = true;
+                    }
+                }
+                // R13.8: what "success" was supposed to mean.
+                if (gmres_result.termination_reason ==
+                        KrylovTerminationReason::ToleranceReached) {
+                    stats_.gmres_tolerance_reached++;
                 }
 
                 // ============================================================
@@ -8677,6 +9266,7 @@ public:
                 ERROR_PRINT("ERROR in GMRES: " << e.what());
                 stats_.converged = false;
                 stats_.final_residual = res_norm_for_stats;
+                stats_.final_residual_measured = true;
 
                 // Return failure result
                 WRFNewtonKrylovSolver::NewtonResult result;
@@ -9926,7 +10516,7 @@ public:
             if (gmres_total_failure) {
                 stats_.gmres_total_failures++;
             } else {
-                stats_.gmres_successes++;
+                stats_.gmres_non_total_failures++;
             }
 
 
@@ -10358,14 +10948,17 @@ public:
         if (!stats_.newton_residuals.empty()) {
             // Have scalar residuals from inner loop (need_scalar=true)
             stats_.final_residual = stats_.newton_residuals.back();
+            stats_.final_residual_measured = true;
         } else if (res_norm_detached.defined()) {
             // Fast-path: single .item() on failure (debug_level=0 without adaptive)
             torch::NoGradGuard no_grad;
             // FIX 2025-12-27: Add .to(kCPU) before .item<float>() to avoid GPU sync
             stats_.final_residual = res_norm_detached.to(torch::kCPU).item<float>();
+            stats_.final_residual_measured = true;
         } else {
             // Should never reach here, but fallback to tracked value
             stats_.final_residual = last_res_norm;
+            stats_.final_residual_measured = true;
         }
         
         // Debug: print convergence failure
@@ -10395,6 +10988,15 @@ public:
         result.converged = false;
         result.iterations = actual_newton_iters;
         result.final_residual = stats_.final_residual;
+        // R13.10 (N6): the probe was requested and the loop ended before its target.
+        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_FROZEN_MI_AB") &&
+            !frozen_ab_fired_this_solve_) {
+            std::cerr << "SDIRK3_FROZEN_AB_SYSTEM stage=" << stage
+                      << " ab_valid=0 ab_reason=target_iteration_not_reached"
+                      << " newton_iters_run=" << actual_newton_iters
+                      << "  (the Newton loop ended before the requested iteration; no A/B"
+                         " was recorded in this solve)" << std::endl;
+        }
         if (actual_newton_iters < options_.max_newton_iter) {
             result.message = "Newton solver exited early (stall/stagnation) at iter "
                            + std::to_string(actual_newton_iters);
@@ -10407,14 +11009,8 @@ public:
     }
     
     void reset_stats() {
-        stats_.newton_iterations = 0;
-        stats_.total_krylov_iterations = 0;
-        stats_.newton_residuals.clear();
-        stats_.final_residual = 0.0f;
-        stats_.initial_unscaled_residual = 0.0f;
-        stats_.initial_residual_vector = torch::Tensor();
-        stats_.condition_number = 0.0f;
-        stats_.converged = false;
+        // R13.10: ALL per-solve fields, through the one function a test can reject.
+        WRFNewtonKrylovSolver::reset_per_solve(stats_);
 
         // PR 9F.9.1: clear the numerical-shadow state at solve entry so a stale S0 or
         // r_g from a PREVIOUS stage/solve of the same size can never be silently reused
@@ -10889,6 +11485,12 @@ sdirk3::WRFNewtonKrylovSolver::ConvergenceStats sdirk3::WRFNewtonKrylovSolver::g
 
 std::uint64_t sdirk3::WRFNewtonKrylovSolver::solver_id() const {
     return pImpl->solver_id_;
+}
+
+void sdirk3::WRFNewtonKrylovSolver::reset_per_solve(ConvergenceStats& s) {
+    // Value-initialise, then nothing survives that was not meant to. A field-by-field list
+    // is exactly what fell behind the struct for three increments.
+    s = ConvergenceStats{};
 }
 
 sdirk3::WRFNewtonKrylovSolver::CarriedState
