@@ -253,3 +253,54 @@ is struck through with the measurement that refutes it, and the **merged** PR #1
 retraction note at the top, since that body is a durable record a future reader will find.
 
 73 checks, ctest 62/62.
+
+---
+
+## §13 — the raw physical numerical range, MEASURED
+
+The review's remaining open item: every indefiniteness witness this campaign has is for `S⁻¹AS` or
+`D⁻¹S⁻¹AS`, and the numerical range is **not** similarity-invariant — so whether `W(A)` straddles
+the origin in the *physical* inner product was unestablished, and both campaign pivots rested on a
+coordinate statement.
+
+No new operator is needed. With `ṽ` a scaled direction, the physical direction is `v = S ṽ` and
+`A v = S · gmres_op(ṽ)`, so `q_phys = ⟨S ṽ, S·gmres_op(ṽ)⟩ / ‖S ṽ‖²` is the Rayleigh quotient of the
+raw `A` on a genuine physical direction, from matvecs already taken.
+
+**Random directions, 24 samples, dt=600 stage 2:**
+
+```
+A (S coords):   q_min=+5615.98  q_max=+5865.77  neg=0/24
+A (physical) :  q_min=-8043.13  q_max=-5232.09  neg=24/24
+```
+
+The sign of the quadratic form of **the same operator** flips with the metric — which is the
+review's point, demonstrated rather than argued.
+
+**But the random arm alone is a one-sided sample and would have been read wrongly.** All-negative
+suggests *negative definite* — as good as positive definite for GMRES, which would have made the
+"intrinsically indefinite" conclusion a coordinate artefact. Random directions in high dimensions
+concentrate. The spanning check — one direction per variable block — settles it:
+
+```
+qphys_ru=+7198.81  qphys_rv=+7188.39  qphys_rw=+14285.89
+qphys_ph=+1.000000  qphys_t=+7198.81  qphys_mu=-7196.82
+phys_blocks_pos=5  phys_blocks_neg=1  phys_straddles_origin=1
+```
+
+**MEASURED: `W(A)` straddles the origin in the physical Euclidean inner product, and the witness is
+the `mu` block.** The campaign's "intrinsically indefinite" therefore survives the coordinate
+objection — it is a property of the operator, not of `S` or `D`.
+
+Note the near-exact antisymmetry: `ru`/`t` at **+7198.81** against `mu` at **−7196.82**. That is the
+signature of a skew-like coupling between the mass variable and the momentum/thermal ones — the
+continuity coupling — and it is consistent with the long-standing record that `mu` dominates the
+stage-2 residual.
+
+**Two caveats, stated rather than buried.** (1) The block directions are uniform-fill, and this
+project has already recorded that horizontally-uniform structured directions are a **null space** for
+some blocks. `qphys_ph = 1.000000` *exactly* is that signature — `A = I − hγJ` acting as precisely the
+identity, i.e. `J` has no component along it — so the **positive** readings may understate structure.
+The negative witness is not degenerate (−7196.82, nowhere near 1) and is what carries the
+conclusion. (2) A spanning sample of six directions is a witness for straddling, not a bound on the
+range; "5 positive" is not a proof that only `mu` is negative.

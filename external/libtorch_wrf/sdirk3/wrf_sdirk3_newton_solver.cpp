@@ -7805,6 +7805,9 @@ public:
                         0x5D1BC3ULL + static_cast<uint64_t>(stage));
                     const int n_samp = 24;
                     double q_min = std::numeric_limits<double>::infinity();
+                    double qp_min = std::numeric_limits<double>::infinity();
+                    double qp_max = -std::numeric_limits<double>::infinity();
+                    int np_ok = 0, np_neg = 0;
                     double q_max = -std::numeric_limits<double>::infinity();
                     int n_neg = 0, n_ok = 0;
                     // 9F.D121 (review 9.2): production FGMRES is RIGHT-preconditioned -- the file
@@ -7863,6 +7866,33 @@ public:
                             ++n_ok; q_min = std::min(q_min, q); q_max = std::max(q_max, q);
                             if (q < 0.0) ++n_neg;
                         }
+                        // R13.18 (external review S13): the RAW PHYSICAL operator. Every witness
+                        // this campaign has is for S^-1AS or D^-1S^-1AS, and the numerical range
+                        // is NOT similarity-invariant -- so whether W(A) straddles the origin in
+                        // the physical inner product has never been established, and the two
+                        // campaign pivots that rested on "intrinsically indefinite" rested on a
+                        // coordinate statement.
+                        //
+                        // No new operator is needed. With v~ the scaled direction, the physical
+                        // direction is v = S v~ and A v = S * gmres_op(v~), so
+                        //   q_phys = <S v~, S gmres_op(v~)> / ||S v~||^2
+                        // is the Rayleigh quotient of the raw A on a genuine physical direction,
+                        // from matvecs already taken.
+                        if (S_diag_.defined() && S_diag_.numel() == v.numel()) {
+                            const auto v_phys = (S_diag_ * v).to(torch::kFloat64);
+                            const auto Av_phys = (S_diag_ * Av).to(torch::kFloat64);
+                            const double vv_p = v_phys.dot(v_phys).item<double>();
+                            if (vv_p > 0.0) {
+                                const double qp =
+                                    v_phys.dot(Av_phys).item<double>() / vv_p;
+                                if (std::isfinite(qp)) {
+                                    ++np_ok;
+                                    qp_min = std::min(qp_min, qp);
+                                    qp_max = std::max(qp_max, qp);
+                                    if (qp < 0.0) ++np_neg;
+                                }
+                            }
+                        }
                         if (MAv.defined()) {
                             double ql = v.dot(MAv).to(torch::kCPU).item<double>() / vv;
                             if (std::isfinite(ql)) {
@@ -7898,6 +7928,49 @@ public:
                               << " samples=" << n_ok << "/" << n_samp
                               << " A: q_min=" << q_min << " q_max=" << q_max
                               << " neg=" << n_neg << "/" << n_ok;
+                    // R13.18: the random arm above is a ONE-SIDED sample. Random directions in
+                    // high dimensions concentrate, so "negative on all 24" is no more a proof of
+                    // definiteness than the probe's own caveat says "neg==0 proves nothing" is a
+                    // proof of the converse. A spanning check: one direction per variable block.
+                    // If blocks disagree in sign, W_phys(A) straddles the origin and the physical
+                    // operator IS indefinite; if they agree, the sign is a property of the whole
+                    // state, not of a coordinate choice.
+                    std::string phys_block_rows;
+                    int nb_pos = 0, nb_neg = 0;
+                    if (S_diag_.defined() && layout_initialized_ && cached_layout_.is_exact &&
+                        cached_layout_.total_size == R.numel()) {
+                        for (const auto& blk : cached_layout_.blocks) {
+                            auto e_b = torch::zeros_like(R);
+                            e_b.slice(0, blk.start, blk.start + blk.size).fill_(1.0f);
+                            torch::Tensor Ae;
+                            try { Ae = gmres_op(e_b); } catch (...) { continue; }
+                            if (!Ae.defined()) continue;
+                            const auto v_p = (S_diag_ * e_b).to(torch::kFloat64);
+                            const auto Av_p = (S_diag_ * Ae).to(torch::kFloat64);
+                            const double d = v_p.dot(v_p).item<double>();
+                            if (!(d > 0.0)) continue;
+                            const double qb = v_p.dot(Av_p).item<double>() / d;
+                            if (!std::isfinite(qb)) continue;
+                            if (qb > 0.0) ++nb_pos; else if (qb < 0.0) ++nb_neg;
+                            phys_block_rows += " qphys_" + std::string(blk.name) + "=" +
+                                               std::to_string(qb);
+                        }
+                    }
+                    // The raw physical operator, on the same directions.
+                    if (np_ok > 0) {
+                        std::cerr << " | A_physical(raw, unscaled): q_min=" << qp_min
+                                  << " q_max=" << qp_max
+                                  << " neg=" << np_neg << "/" << np_ok
+                                  << " indefinite=" << (qp_min < 0.0 ? 1 : 0)
+                                  << phys_block_rows
+                                  << " phys_blocks_pos=" << nb_pos
+                                  << " phys_blocks_neg=" << nb_neg
+                                  // Blocks of BOTH signs is a witness that the physical numerical
+                                  // range straddles the origin. All one sign is not proof of the
+                                  // converse -- it is a spanning sample, not a bound.
+                                  << " phys_straddles_origin="
+                                  << ((nb_pos > 0 && nb_neg > 0) ? 1 : 0);
+                    }
                     if (nr_ok > 0) {
                         std::cerr << " | AM^-1(production): q_min=" << qr_min
                                   << " neg=" << nr_neg << "/" << nr_ok;
