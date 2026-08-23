@@ -418,6 +418,13 @@ public:
         // The r0 no-progress boundary actually in force, overridable per run. A judgment, not
         // a measurement -- and it decides between the campaign's two competing explanations.
         double krylov_no_progress_threshold = -1.0;
+        // R13.14 (round 5, R5-13): the INNER budget -- the Arnoldi/restart budget the linear
+        // solves were given. rho_vs_r0 is budget-dependent, so the no-progress ratio cannot be
+        // read without it, and the justification for the boundary constant cited it as being
+        // "on the record" when nothing produced it. -1 = not observed.
+        bool  krylov_threshold_observed = false;
+        int   krylov_restart_budget = -1;
+        int   krylov_max_restarts = -1;
         // Whether the total-failure predicate was reached at all this solve, so the emitted
         // rule label is a measurement rather than this struct's default.
         bool  krylov_rule_observed = false;

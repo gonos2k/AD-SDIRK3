@@ -2266,7 +2266,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                           << " witness_confirmed="
                           << ((q_min_direct == q_min_direct && q_min_direct < 0.0) ? 1 : 0);
             } else {
+                // R13.14 (round 5, R5-18b): the SAME field set as the branch above. This printed
+                // four fields where the other prints eight, so any position-based parser
+                // misreads the short form -- and a missing field reads as "not applicable" when
+                // it means "not measured".
                 std::cerr << " e_orthogonality=-1 e_arnoldi=-1 q_min_direct=nan"
+                          << " q_min_blockdiag=nan"
+                          << " hcol_norm_min=-1 hcol_norm_max=-1"
                           << " witness_confirmed=0";
             }
             std::cerr << std::endl << std::flush;
@@ -7753,10 +7759,18 @@ public:
                                              R.options().device(torch::kCPU))
                                     .to(R.device(), R.scalar_type()).detach();
                         }
-                        // The operator is called OUTSIDE any grad guard: gmres_op is a JVP and a
-                        // blanket NoGradGuard around it kills the very graph it needs. Only the
-                        // reductions below are guarded. This exact mistake has been made in this
-                        // repo five times.
+                        // R13.14 (red team round 5, R5-17): this used to assert that a blanket NoGradGuard
+                        // around `gmres_op` "kills the very graph it needs", citing five past mistakes. The
+                        // tree REFUTES it: the frozen A/B probe runs every one of its matvecs -- including 30
+                        // solve_fgmres arms -- inside `NoGradGuard`, and its records report
+                        // jvp_fd_fallback_free=1, i.e. not one matvec fell back. The mechanism agrees:
+                        // compute_jvp_fwad_or_fd opens with its OWN NoGradGuard before _make_dual, and
+                        // forward-mode dual level is independent of grad mode -- so a caller's guard is
+                        // irrelevant on the AD path and harmless on the FD path. The warning may be true of
+                        // the PRODUCTION solve, where the linear solve itself must stay differentiable; it was
+                        // not true here, and it was asserted at an emit site with no fixture to reject it.
+                        // Its cost was real: this probe deliberately ran its matvecs unguarded, building
+                        // reverse-mode graphs nothing consumes, at newton_iter == 0 on the hot path.
                         torch::Tensor Av, MAv, AMv;
                         bool threw = false;
                         try {
@@ -7798,10 +7812,26 @@ public:
                             }
                         }
                     }
-                    std::cerr << "SDIRK3_NUMRANGE operator_coordinates=S_krylov stage=" << stage
+                    // R13.14 (red team round 5, R5-12): the coordinate label was a HARDCODED
+                    // constant stamped over three different operators, and it was FALSE on a
+                    // supported path. `gmres_op` is S^-1 A S only when the scaling was
+                    // initialised; otherwise it is `apply_jacobian`, i.e. RAW coordinates -- and
+                    // this probe fires either way. The sibling emitter in this same file derives
+                    // the field it needs; this one asserted it. Derived now.
+                    //
+                    // The three arms are also three DIFFERENT operators: v'AM^-1 v / v'v is not
+                    // a Rayleigh quotient of any similarity transform of A (M^-1 is applied on
+                    // one side only), so one `operator_coordinates=` cannot cover all of them.
+                    // Each arm names its own operator, and `neg=` carries a denominator on every
+                    // arm so the three are comparable without going back to `samples=`.
+                    std::cerr << "SDIRK3_NUMRANGE"
+                              << " operator_coordinates="
+                              << (scaling_initialized_ ? "S_krylov" : "raw_unscaled")
+                              << " one_sided_precond_arms=AM^-1,M^-1A"
+                              << " stage=" << stage
                               << " samples=" << n_ok << "/" << n_samp
                               << " A: q_min=" << q_min << " q_max=" << q_max
-                              << " neg=" << n_neg;
+                              << " neg=" << n_neg << "/" << n_ok;
                     if (nr_ok > 0) {
                         std::cerr << " | AM^-1(production): q_min=" << qr_min
                                   << " neg=" << nr_neg << "/" << nr_ok;
@@ -9145,6 +9175,13 @@ public:
                     ledger_r_gmres = gmres_result.r_true.detach();
                 }
                 stats_.total_krylov_iterations += gmres_result.iterations;
+                // R13.14 (round 5, R5-13): the INNER budget these solves were given. The
+                // no-progress ratio is budget-dependent -- a healthy operator on 7 Arnoldi
+                // vectors reads 0.92 -- so the ratio cannot be read without it, and the
+                // justification for the boundary constant cited it as "on the record" when
+                // nothing produced it.
+                stats_.krylov_restart_budget = effective_restart;
+                stats_.krylov_max_restarts = effective_max_restarts;
                 // R13.2: how well the LINEAR solve did, kept as the BEST across this stage.
                 // Newton cannot converge on top of a solve that does not solve, so this
                 // separates "the outer iteration is stuck" from "the operator or the
@@ -10194,6 +10231,11 @@ public:
                     return v;
                 }();
                 stats_.krylov_no_progress_threshold = thr;
+                // Round 5, P2: and that the site was REACHED. Without this, `-1` on the record
+                // is ambiguous between "unset, header default applied" and "never reached" --
+                // the same distinction `krylov_rule_observed` twenty lines up exists to make,
+                // and the pattern was not carried to the new field.
+                stats_.krylov_threshold_observed = true;
             }
             // R13.12 (red team R3-2): the first iteration whose SOLVE was a total failure,
             // which is what the field name says. `gmres_total_failure` below additionally

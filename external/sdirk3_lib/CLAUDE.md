@@ -9,7 +9,7 @@
 > tracked in this repository** — only `docs_archive_2025_08_16/` is tracked
 > here. Statements below about the solver (GMRES-era), APIs, or "approved /
 > production-ready" status reflect that snapshot, not the current contract.
-> For the current state (FGMRES solver, MPI support boundary, 15-test CTest
+> For the current state (FGMRES solver, MPI support boundary, 62-test CTest
 > inventory), see the repository root `README.md` and
 > `external/libtorch_wrf/sdirk3/README.md`.
 

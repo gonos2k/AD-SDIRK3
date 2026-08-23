@@ -531,7 +531,9 @@ int main() {
         s.worst_krylov_rel_error_vs_r0 = 0.90;
         const bool at_boundary = (name_of(s) == "krylov_stagnated");
         s.worst_krylov_rel_error_vs_r0 = 0.8999;
-        const bool below = (name_of(s) != "krylov_stagnated");
+        // R13.14 (round 5, R5-18a): NAME the category below the boundary. `!= "krylov_stagnated"`
+        // would pass if a future change made it `insufficient_evidence`.
+        const bool below = (name_of(s) == "newton_stagnated");
         s.worst_krylov_rel_error_vs_r0 = 0.9001;
         const bool above = (name_of(s) == "krylov_stagnated");
         check(at_boundary && below && above,

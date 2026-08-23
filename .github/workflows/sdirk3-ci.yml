@@ -106,13 +106,25 @@ jobs:
           # README made the same claim, cited the same pinned file, and had drifted to 37
           # against a pinned 61 -- because this gate read one file. A gate that covers one
           # copy of a duplicated claim is how the other copy drifts.
+          # R13.14 (red team round 5): the hardcoded claimant list was ITSELF incomplete when
+          # it was written -- external/sdirk3_lib/CLAUDE.md said "15-test CTest" and explicitly
+          # claims to describe the current state. An enumeration has the same drift problem the
+          # gate exists to prevent, so the claimants are DISCOVERED. And the "no longer states a
+          # count" diagnostic was unreachable: under `set -euo pipefail` a failing grep in a
+          # command substitution terminates the step before the -z test, so the gate failed
+          # SILENTLY -- the opposite of why the message was added. `|| true` lets it print.
           pinned="$(grep -vc '^#' .github/ci/expected_ctest_names.txt)"
-          claimants="README.md external/libtorch_wrf/sdirk3/README.md"
+          claimants="$(grep -rl -E '[0-9]+-test CTest' --include='*.md' . \
+                        | grep -v '^./doc/' | grep -v '/build/' | sort)"
+          if [ -z "${claimants}" ]; then
+            echo "no file states a '<N>-test CTest' count -- this gate's subject vanished"
+            exit 1
+          fi
+          echo "claimants found:"; printf '  %s\n' ${claimants}
           for f in ${claimants}; do
-            stated="$(grep -oE '[0-9]+-test CTest' "${f}" | grep -oE '^[0-9]+' | sort -u)"
+            stated="$(grep -oE '[0-9]+-test CTest' "${f}" | grep -oE '^[0-9]+' | sort -u || true)"
             if [ -z "${stated}" ]; then
-              echo "${f} no longer states a '<N>-test CTest' count -- the claim this gate "\
-                   "checks was removed rather than updated"
+              echo "${f} no longer states a '<N>-test CTest' count -- the claim this gate checks was removed rather than updated"
               exit 1
             fi
             if [ "$(printf '%s\n' "${stated}" | wc -l)" -ne 1 ] || [ "${stated}" != "${pinned}" ]; then

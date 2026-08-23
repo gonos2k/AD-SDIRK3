@@ -864,9 +864,15 @@ identity_resolution_rand=0.01172  identity_resolution_krylov=0.003872   identity
 
 `identity_frac = ‖v‖/‖A·v‖` is the identity term's share of the output (A·v = v − hγJ·v, so the
 identity contributes exactly ‖v‖); `e_hom` is the operator's own floating-point noise, measured as
-`‖A(αv) − αA(v)‖/(α‖A v‖)` on a JVP that the same record certifies exactly linear
-(`operator_linear=1`) and free of the FD fallback (`jvp_fd_fallback_free=1`), so it is FP noise and
-not FD truncation. The error **on the identity term** is their ratio.
+`‖A(αv) − αA(v)‖/(α‖A v‖)` at **α = 2.5** — deliberately not a power of two, or the residual would
+be zero by construction (R5-5).
+
+*Corrected after round 5 (R5-15):* an earlier version of this paragraph argued that `e_hom` is FP
+noise rather than FD truncation **because `operator_linear=1`**. That is circular —
+`operator_linear` is *computed from* `e_hom` and its siblings, so it cannot independently certify
+them. The non-circular receipt is `jvp_fd_fallback_free=1`: the FD-fallback counter did not move
+across the probe's matvecs, so the matvec was the forward-mode dual and `e_hom` is its rounding,
+not a difference quotient's truncation. The error **on the identity term** is `e_hom / identity_frac`.
 
 **MEASURED: 0.39% on the Krylov direction, 1.2% on a random one — not 5–20%.** The identity term
 is resolved to about three significant digits. Both inputs to the old estimate were wrong in the
@@ -1011,9 +1017,13 @@ newton_iter=1 tau=0.06452 tau_half=0.03226  ratio=0.5  linearity_residual=0  tau
 newton_iter=2 tau=0.01821 tau_half=0.009104 ratio=0.5  linearity_residual=0  tau_verdict=measured
 ```
 
-**τ and the ratio are unchanged, and `linearity_residual = 0` exactly** — the forward-mode JVP
-agrees with the scaled matvec to the last bit. The conclusion drawn earlier stands, and now stands
-on a measured precondition instead of an assumed one, with both halves of the ratio re-measured.
+~~**τ and the ratio are unchanged, and `linearity_residual = 0` exactly** — the forward-mode JVP
+agrees with the scaled matvec to the last bit.~~ **RETRACTED by round 5 (R5-5), see below.** α = 1/2
+is a power of two, so a forward-AD tangent scales *exactly* under IEEE-754 and the receipt is
+identically zero for **any** operator — it measured the exponent arithmetic. And "τ came out
+unchanged" was not corroboration but the signature of a substitution that could not have changed
+anything. Re-measured at α = 1/3 the receipt reads 1.7e-07 and the ratio reads 0.3333; the
+conclusion survives, on evidence that could have failed.
 
 **P2 — three attribution clauses were unreachable from the only production caller.**
 `same_operator`/`same_rhs`/`same_x0` were hardcoded `true` while `b_digest`/`x0_digest` were printed
@@ -1119,6 +1129,25 @@ budget=3   category=krylov_stagnated        worst=0.8795  solves=3             t
 ```
 
 The same record classifies both ways across a 5% change in a constant nothing measured.
+
+**Reconciling "4 solves" under a "12-iteration budget" (R5-16).** The heading is the *budget*, not
+the iterations run. Measured on the same row: `newton_iters=4 newton_budget=12 newton_converged=0
+steps_accepted=3 steps_rejected=1 krylov_solves_vs_r0=4 krylov_solves_trivial=0`. So Newton exited
+after **4 of 12 allowed** iterations, and all four solves are in the max — the alternative reading
+the reviewer raised, that twelve solves ran and eight were silently dropped for an unmeasured r₀,
+is **refuted** by `trivial=0` and `krylov_r0_unmeasured=0`. The label should have said
+`newton_iters=4 / budget=12`, and does now.
+
+That leaves a real open question the reconciliation surfaces: **Newton stopped at 4 of 12 without
+converging.** That is the early-termination behaviour already on record for this campaign, and it
+means `krylov_stagnated` here is a verdict about a stage that did not spend its outer budget.
+
+**And the ratio is now labelled with the budget it was measured at:** `krylov_restart_budget=7
+krylov_max_restarts=1`. The stall reading of `worst=0.9941` is *at seven Arnoldi vectors*, while
+this document's own ladder shows the identity arm still descending at j=192 and plateauing only
+around ρ_D ≈ 0.32. "The linear solve did not move" and "the linear solve was given seven vectors"
+are not distinguishable from this number alone, which is exactly why the layer string ends in
+`_or_policy` and why the budget is now on the record beside the ratio.
 
 ### R5-4 (P1) — the round-4 P0's *reference* survived, one field over
 
@@ -1228,3 +1257,50 @@ category=krylov_stagnated worst_krylov_rel_vs_r0=0.9941 krylov_solves_vs_r0=4 kr
 Every number reproduces the pre-fix run. The probe was steering the solver and — on this case —
 not steering it anywhere that changed the measurement. That is a fact about this case, not about
 the probe, which is why the restore matters.
+
+### Round 5, part 3 — the np-equivalence record was structurally incapable of refusing
+
+**R5-14 (P0).** `emitGlobalNormRecord`'s `published` argument was a **compile-time literal** at both
+call sites — `false` at input, `true` at output — so `phase=output state_published=1` was printed
+unconditionally. The comparator's only guard on that phase (`state_published != "1"`) therefore
+**could never fire**, and `outcome` — the one field that distinguishes an advanced step from a
+reverted one — was declared required, parsed, stored, and read **only inside that unreachable
+branch**. Eleventh instance of the class, sitting directly under the np-equivalence claim.
+
+The emitter's own comment asserted the invariant that made this safe: *"reaching this line means the
+fail-closed gate above did not fire… at a dt where no step completes, control never arrives here."*
+The stage-3 gate contradicts it **in its own comment**: setting `stage_aborted` routes through the
+final-update revert (`U_new = U_n`) to `HARD_STAGE_ABORT`, which **does not throw** — it falls
+through to `unpackState` and to this emit.
+
+**Why that is not theoretical here.** `em_b_wave` completes **zero** steps at every dt tried. Run it
+at np=2 and np=4 with `WRF_SDIRK3_GLOBAL_NORMS=1` and each rank emits `phase=output
+state_published=1` over a state bit-identical to its input *by construction*; the norms match
+exactly and the comparator returns the equivalence verdict for a step that produced nothing. Same
+shape as the recorded lesson *"the fail-closed gate skips the state publish… every step-level
+TLM/adjoint contract passes TRIVIALLY until the forward advances"*, reached through the np channel.
+
+`published` is now the measured outcome (`getLastStepOutcomeCode() == OK_ADVANCED`), and the
+comparator's predicate reads **both** fields, so neither can go stale behind the other.
+
+**R5-15/R5-17 (P1/P2) — two claims in this document and one in the code were wrong.** The
+`linearity_residual = 0` paragraph is struck through above with its retraction. The argument that
+`e_hom` is FP noise *"because `operator_linear=1`"* was **circular** — `operator_linear` is computed
+from `e_hom` — and now rests on `jvp_fd_fallback_free=1`, which is independent. And a code comment
+warning that a blanket `NoGradGuard` around `gmres_op` *"kills the very graph it needs — this exact
+mistake has been made in this repo five times"* is **refuted by this tree**: the A/B probe runs all
+30 arms inside `NoGradGuard` and reports `jvp_fd_fallback_free=1`. The mechanism agrees —
+`compute_jvp_fwad_or_fd` opens with its own `NoGradGuard` before `_make_dual`, and forward-mode dual
+level is independent of grad mode. The warning may be true of the *production* solve; it was
+asserted at a diagnostic emit site with no fixture, and it cost real work (that probe deliberately
+runs 72 matvecs unguarded at `newton_iter == 0`, building reverse-mode graphs nothing consumes).
+
+**R5-18 (P2), closed:** a boundary fixture asserted `!= krylov_stagnated` instead of naming the
+category below it; and the numerical-range row printed four fields on one branch and eight on the
+other, so a position-based parser misreads the short form. Both fixed.
+
+**Round 5's negative results, which matter as much:** `witness_confirmed` **is** earned — it is
+`⟨v,Bv⟩/⟨v,v⟩` on an explicit direction with `Bv` from a real matvec, so it bypasses the projection
+entirely and does not depend on `e_orthogonality`/`e_arnoldi`. The step-map probe consumes its
+verdict at **every** conclusion site. And every `.item()` added in these rounds is inside a
+`NoGradGuard`, with no stray `.detach()`/`.data` in a graph region.

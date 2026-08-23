@@ -191,6 +191,14 @@ struct StageFailureSignals {
     // The boundary in force. <= 0 means "use the header default" -- a record taken before the
     // knob existed must classify exactly as it did then.
     double krylov_no_progress_threshold = -1.0;
+    // The INNER budget. The outer one is `newton_iteration_budget`; `krylov_iterations` is
+    // iterations SPENT, not the budget. rho_vs_r0 cannot be read without this. -1 = not
+    // observed.
+    // Whether the threshold site was reached at all (else the value below is this struct's
+    // default, not a measurement).
+    bool   krylov_threshold_observed = false;
+    int    krylov_restart_budget = -1;
+    int    krylov_max_restarts = -1;
     // Whether a total-failure rule was in force at all (else the label below is a default).
     bool   krylov_rule_observed = false;
     // The stage gate's own verdict, and whether the step reached the driver.
@@ -220,7 +228,9 @@ inline constexpr double kKrylovNoProgress = 0.99;
 // preconditioner). And rho_vs_r0 is BUDGET-dependent: a healthy operator given 7 Arnoldi vectors
 // on a hard RHS reads 0.92, so this constant cannot by itself separate "the operator is hard"
 // from "the inner budget is small" -- which is why the layer string for KrylovStagnated ends in
-// `_or_policy` and why `krylov_budget` is on the record beside the ratio. Overridable per run
+// `_or_policy` and why `krylov_restart_budget` / `krylov_max_restarts` are on the record beside
+// the ratio. (Round 5 caught that sentence naming a field NOTHING PRODUCED -- the recurring class,
+// in the comment written to close an instance of it. The fields exist now.) Overridable per run
 // via WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0.
 inline constexpr double kKrylovNoProgressVsR0 = 0.90;
 // A residual that ended at or above this fraction of where it started has stopped moving.
