@@ -613,3 +613,52 @@ receipts per row (N4, P1-5i); all three norms in `all_finite`, residuals halo-ze
 4. Block-restricted least squares over the M arm's own Z₄₈ (C4a): separates "M's rows are
    broken" from "the D-optimum spends its subspace on the cheap blocks". Zero new matvecs.
 5. Per-iteration `newton_residuals` + ared/pred (C6/C7): temporal order and the Newton rate.
+
+## Round-2 measurements, run
+
+### Extended ladder (referee C1) — the crossing signature is real
+
+Failing iteration, `WRF_SDIRK3_FROZEN_MI_AB_EXTEND=1`, `ab_valid=1`, `worst_order_delta=0`,
+`halo_floor_delta=9.7e-05`.
+
+| j | ρ_D (M) | ρ_D (I) | M/I | ρ_phys (M) | ρ_phys (I) |
+|---|---|---|---|---|---|
+| 48 | 0.825 | 0.415 | 1.99 | 0.873 | 0.184 |
+| 96 | 0.698 | 0.347 | 2.01 | 0.726 | 0.135 |
+| 192 | 0.487 | **0.318** | **1.53** | 0.477 | 0.124 |
+
+From j=96 to 192 M drops ρ_D by 0.211 and I by 0.029. **The identity plateaus at ρ_D ≈ 0.32 —
+it never meets the forcing term η=0.3, even at 192 — while M is still descending.** The
+M/I ratio peaks at j≈96 and falls. This is exactly the cluster-plus-outliers shape the referee
+said a "right on some blocks, wrong on others" preconditioner would produce: M spends its
+first ~100–200 directions on outliers and only then catches up.
+
+So the scoping is now measured, not cautionary: **"identity beats M" holds at the production
+budget (j=7) by a wide margin and through j≈192; it is not a statement about M's
+asymptotics, and I has a floor of its own.** Neither arm completes the solve.
+
+### Warm start off (referee X5) — REFUTED as a contributor, in the useful direction
+
+Same frozen (A, b) at iteration 3, `x₀ = 0` (`x0_digest=0`, `rho0_* = 1`):
+
+| arm | j=8 ρ_D | j=48 ρ_D | j=48 ρ_phys |
+|---|---|---|---|
+| I from x₀=0 | 0.885 | 0.617 | 0.233 |
+| I from warm start | 0.568 | 0.415 | 0.184 |
+| M from x₀=0 | 0.897 | 0.814 | **1.000** |
+
+**The warm start makes the solve easier**, despite beginning above ‖b‖ in ρ_S and ρ_D: it
+is a good Krylov seed. "The failing system was made harder by the warm start" is refuted.
+And from zero, M makes **no progress at all in the physical norm in 48 steps** (ρ_phys
+1.000). Production classified this run `krylov_diverged` because ρ_S at j=8 was 1.001 > 1
+while ρ_D had fallen to 0.897 — the referee's X1 in a single line: production judges in a
+norm the loop does not minimise.
+
+### What this round adds to the picture
+
+- I's advantage is early (j ≤ 8) and finite (floor ≈ 0.32 in ρ_D).
+- M's failure is late-starting, not permanent — but at the budget production can afford it is
+  total (ρ_phys 0.89–1.00 at j=8 on the failing system).
+- The warm start is not the problem.
+- The production total-failure predicate compares ρ_S against ‖b‖; the r₀ rule is now
+  available **opt-in** (`WRF_SDIRK3_KRYLOV_FAILURE_VS_R0`), both readings on the record.

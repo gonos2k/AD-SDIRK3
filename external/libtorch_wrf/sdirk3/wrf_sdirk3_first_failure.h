@@ -153,6 +153,13 @@ struct StageFailureSignals {
     // Trust-region / line-search accounting.
     int    accepted_steps = 0;
     int    rejected_steps = 0;
+    // R13.11 (referee C7): iteration indices of the first events, so that when two signals
+    // are both true the one that happened FIRST can be named. -1 = did not happen. Without
+    // these the classifier is a fixed precedence over aggregates, which the header used to
+    // call "causal order" and is not.
+    int    first_krylov_failure_iter = -1;
+    int    first_rejection_iter = -1;
+    int    argmin_residual_iter = -1;
     // The stage gate's own verdict, and whether the step reached the driver.
     bool   gate_metric_ok = false;
     bool   state_published = false;
@@ -194,6 +201,13 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         }
         // The linear solve before the outer one: Newton cannot converge on top of a solve
         // that does not solve, so this is upstream of any statement about the iteration.
+        // Time order, where the record has it. A rejection that happened BEFORE the first
+        // Krylov failure is upstream of it (it shrank the radius and changed the next solve's
+        // x0 and budget), and is reported first.
+        const bool rejection_first =
+            (s.first_rejection_iter >= 0 && s.first_krylov_failure_iter >= 0 &&
+             s.first_rejection_iter < s.first_krylov_failure_iter);
+        if (rejection_first && s.accepted_steps == 0) return StageFailure::AllStepsRejected;
         if (s.krylov_diverged)          return StageFailure::KrylovDiverged;
         if (s.gmres_total_failures > 0) return StageFailure::KrylovStagnated;
         if (measured(s.best_krylov_rel_error) &&

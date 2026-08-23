@@ -2205,9 +2205,40 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 const double vv = v_min.dot(v_min).item<double>();
                 const double q_min_direct =
                     vv > 0.0 ? v_min.dot(Bv).item<double>() / vv : 0.0 / 0.0;
+                // Referee X3 test (1), zero matvecs: ||Hbar e_i|| = ||B v_i|| with ||v_i|| = 1,
+                // so the column norms ARE the operator's magnitude on the directions GMRES
+                // built. If they are ~1e5-1e6 the identity term of I - h*gamma*J is 1e-6 of
+                // the operator on those directions and float32 resolves it to ~10-30%.
+                double hcol_min = std::numeric_limits<double>::infinity(), hcol_max = 0.0;
+                for (int jj = 0; jj < m; ++jj) {
+                    const double cn = Hbar.select(1, jj).norm().item<double>();
+                    hcol_min = std::min(hcol_min, cn);
+                    hcol_max = std::max(hcol_max, cn);
+                }
+                // Referee C6(d): does the negative curvature live in the DIAGONAL blocks or in
+                // the coupling? <v_min, B_bd v_min> with B_bd = sum_q P_q B P_q -- six block-
+                // restricted matvecs on the witness. If this is positive while the full form is
+                // negative, no by-variable block-diagonal M is the right class.
+                double q_min_blockdiag = 0.0 / 0.0;
+                if (layout && layout->is_exact && layout->total_size == v_min.numel()) {
+                    double acc = 0.0;
+                    for (const auto& blk : layout->blocks) {
+                        auto vq = torch::zeros_like(v_min);
+                        vq.slice(0, blk.start, blk.start + blk.size)
+                            .copy_(v_min.slice(0, blk.start, blk.start + blk.size));
+                        const auto Bvq = apply_B(vq.to(V[0].scalar_type())).to(torch::kFloat64);
+                        acc += vq.slice(0, blk.start, blk.start + blk.size)
+                                   .dot(Bvq.slice(0, blk.start, blk.start + blk.size))
+                                   .item<double>();
+                    }
+                    q_min_blockdiag = vv > 0.0 ? acc / vv : 0.0 / 0.0;
+                }
                 std::cerr << " e_orthogonality=" << e_orth
                           << " e_arnoldi=" << e_arnoldi
                           << " q_min_direct=" << q_min_direct
+                          << " q_min_blockdiag=" << q_min_blockdiag
+                          << " hcol_norm_min=" << hcol_min
+                          << " hcol_norm_max=" << hcol_max
                           << " witness_confirmed="
                           << ((q_min_direct == q_min_direct && q_min_direct < 0.0) ? 1 : 0);
             } else {
@@ -7248,6 +7279,7 @@ public:
             // CRITICAL FIX (2025-11-28): Declare outside try block for use in trust region
             float gmres_rel_error = 1.0f;  // Default to 1.0 (no reduction) if GMRES fails
             float gmres_raw_rel_error = 1.0f;  // v20.14r27g: unclamped, may be >1 when GMRES diverges
+            float gmres_initial_rel_error = -1.0f;  // R13.11: ||r0||/||b|| from the same solve
             // R9 P0-D: the GMRES residual, kept only when the nonlinear ledger is armed. It is
             // what turns the linear model's prediction into a read rather than an operator
             // call: with b = -R and r_g = b - A dK, the predicted post-step residual
@@ -7705,6 +7737,14 @@ public:
                         bool threw = false;
                         try {
                             Av = gmres_op(v);
+                            // Referee C6(f): this probe samples S^-1 A S. The Arnoldi witness
+                            // in solve_gmres samples D^-1 S^-1 A S when block scaling is on --
+                            // a DIFFERENT operator -- so "random finds none, Krylov finds half,
+                            // on the same operator" was false as stated. D is built inside the
+                            // solve from r0 and is not available here without rebuilding it
+                            // (the duplicate-authority trap), so this probe names its
+                            // coordinates and the same-operator comparison is the Arnoldi
+                            // witness run with block scaling OFF, which is also S^-1 A S.
                             if (gmres_M_inv) {
                                 MAv = gmres_M_inv(Av);          // M^-1 A
                                 AMv = gmres_op(gmres_M_inv(v)); // A M^-1  <- production order
@@ -7734,7 +7774,7 @@ public:
                             }
                         }
                     }
-                    std::cerr << "SDIRK3_NUMRANGE stage=" << stage
+                    std::cerr << "SDIRK3_NUMRANGE operator_coordinates=S_krylov stage=" << stage
                               << " samples=" << n_ok << "/" << n_samp
                               << " A: q_min=" << q_min << " q_max=" << q_max
                               << " neg=" << n_neg;
@@ -8532,7 +8572,10 @@ public:
                         // physical residual. That is an inference from aggregates. This is the
                         // measurement: ||r_block|| / ||b_block|| for each block, in the S
                         // coordinates, at j=48, beside the same ratio at j=0.
-                        if (m == 48 && res.x.defined() && cached_layout_.is_exact &&
+                        // X4: m=8 is the production budget (restart=7, one cycle); j=48 is where
+                        // the arms are compared. Both, so the block that binds production (ph,
+                        // ~3/4 of rho_S) is seen at the budget production actually spends.
+                        if ((m == 8 || m == 48) && res.x.defined() && cached_layout_.is_exact &&
                             r0_kept.defined()) {
                             const auto r = (gmres_rhs.detach() - gmres_op(res.x.detach()))
                                                .to(torch::kFloat64).reshape({-1});
@@ -8900,6 +8943,7 @@ public:
                 // v20.14r27g: Keep raw rel_error for diagnostics/trust-region.
                 // Clamped value is only for the quadratic prediction model (e² term).
                 gmres_raw_rel_error = gmres_result.rel_error;
+                gmres_initial_rel_error = gmres_result.initial_rel_error;
                 gmres_rel_error = std::clamp(gmres_raw_rel_error, 0.0f, 1.0f);
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_NONLINEAR_LEDGER") &&
                     gmres_result.r_true.defined()) {
@@ -9819,8 +9863,29 @@ public:
             int rhs_budget = 5;
             // Canonical GMRES "total failure" predicate used across trust-off, fallback,
             // and trust-region acceptance branches in this Newton iteration.
-            const bool gmres_total_failure_candidate =
+            // Referee C7 / red team P1-7: the classifier's divergence rule was moved to r0
+            // and THIS predicate -- which drives the recovery attempt, the zero-step handling
+            // and gmres_total_failures++ (the classifier's KrylovStagnated trigger) -- still
+            // compared against ||b||. A warm start that began at 1.054 and was reduced tripped
+            // both clauses. Rule fixed, production consumer reading the old quantity: the
+            // eighth instance of that split in this tree.
+            //
+            // Changing what the solver DOES is not a diagnostic, so the r0 baseline is
+            // OPT-IN (default off, baseline byte-identical); the record carries both readings
+            // whichever is in force. The fallback when r0 was not measured is the old rule.
+            static const bool failure_vs_r0 =
+                wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_FAILURE_VS_R0");
+            const float r0_ref =
+                (gmres_initial_rel_error >= 0.0f) ? gmres_initial_rel_error : 1.0f;
+            const bool total_failure_vs_b  =
                 (gmres_raw_rel_error > 1.0f || gmres_rel_error >= 0.999f);
+            const bool total_failure_vs_r0 =
+                (gmres_raw_rel_error > r0_ref * (1.0f + 1.0e-4f) ||
+                 gmres_raw_rel_error >= 0.99f * r0_ref);
+            const bool gmres_total_failure_candidate =
+                failure_vs_r0 ? total_failure_vs_r0 : total_failure_vs_b;
+            stats_.total_failure_vs_b_count  += total_failure_vs_b  ? 1 : 0;
+            stats_.total_failure_vs_r0_count += total_failure_vs_r0 ? 1 : 0;
             // Unified trust-region step bound:
             //   K small  -> use radius floor (max(radius, min_radius))
             //   K large  -> honor relative cap (min(radius, max_rel * ||K||))
@@ -10510,11 +10575,22 @@ public:
             // a stalled solve unless the two are counted separately.
             if (step_accepted) {
                 stats_.accepted_steps++;
+                if (stats_.argmin_residual_iter < 0 ||
+                    (!stats_.newton_residuals.empty() &&
+                     stats_.newton_residuals.back() <= stats_.min_residual_seen)) {
+                    stats_.min_residual_seen = stats_.newton_residuals.empty()
+                        ? stats_.min_residual_seen : stats_.newton_residuals.back();
+                    stats_.argmin_residual_iter = newton_iter;
+                }
             } else {
                 stats_.rejected_steps++;
+                if (stats_.first_rejection_iter < 0) stats_.first_rejection_iter = newton_iter;
             }
             if (gmres_total_failure) {
                 stats_.gmres_total_failures++;
+                if (stats_.first_krylov_failure_iter < 0) {
+                    stats_.first_krylov_failure_iter = newton_iter;
+                }
             } else {
                 stats_.gmres_non_total_failures++;
             }

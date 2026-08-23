@@ -2,6 +2,7 @@
 #define WRF_SDIRK3_NEWTON_SOLVER_H
 
 #include <torch/torch.h>
+#include <limits>
 #include "wrf_sdirk3_state_layout.h"   // 9F.D93: THE packed-state layout
 #include "wrf_sdirk3_operator_contract.h"  // FrozenStageWeights: the stage gate's weighting
 #include <functional>
@@ -379,6 +380,17 @@ public:
         // record was reading g_sdirk3_config.max_newton_iter, a second authority that a
         // stage-reference probe or a post-construction config change can move independently.
         int   newton_iteration_budget = -1;
+        // R13.11 (referee C7): FIRST-EVENT iteration indices, so "first failure" can be a
+        // measurement of time order rather than a fixed precedence over aggregates. -1 =
+        // never happened in this solve.
+        int   first_krylov_failure_iter = -1;
+        int   first_rejection_iter = -1;
+        int   argmin_residual_iter = -1;
+        float min_residual_seen = std::numeric_limits<float>::infinity();
+        // R13.11 (referee C7): both readings of the production total-failure predicate, so the
+        // record shows when the ||b|| rule and the r0 rule disagree.
+        int   total_failure_vs_b_count = 0;
+        int   total_failure_vs_r0_count = 0;
         // PR 9E (diagnosis-only): RAW L2 norms at the FINAL accepted Newton
         // iteration, populated ONLY when g_sdirk3_config.stage_operand_diag is
         // on (else left at -1). final_fast_rhs_norm = ||F_fast(U_eval_final)||;

@@ -9226,6 +9226,9 @@ vertical_coefficients:
                               << " krylov_diverged=" << (sig.krylov_diverged ? 1 : 0)
                               << " steps_accepted=" << sig.accepted_steps
                               << " steps_rejected=" << sig.rejected_steps
+                              << " first_krylov_failure_iter=" << sig.first_krylov_failure_iter
+                              << " first_rejection_iter=" << sig.first_rejection_iter
+                              << " argmin_residual_iter=" << sig.argmin_residual_iter
                               << " gate_metric_ok=" << (sig.gate_metric_ok ? 1 : 0)
                               << "  (the first gate to refuse, in causal order -- a later one"
                                  " will also be refusing, and acting on it sends the work to"
@@ -13217,6 +13220,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.krylov_diverged = stats.krylov_diverged;
     last_stage_signals_.accepted_steps = stats.accepted_steps;
     last_stage_signals_.rejected_steps = stats.rejected_steps;
+    last_stage_signals_.first_krylov_failure_iter = stats.first_krylov_failure_iter;
+    last_stage_signals_.first_rejection_iter = stats.first_rejection_iter;
+    last_stage_signals_.argmin_residual_iter = stats.argmin_residual_iter;
     // PR 9E (diagnosis-only): carry the raw-L2 fast-RHS / defect norms back for
     // this stage's history-summary snapshot (-1 when stage_operand_diag is off).
     last_stage_fast_rhs_norm_ = stats.final_fast_rhs_norm;

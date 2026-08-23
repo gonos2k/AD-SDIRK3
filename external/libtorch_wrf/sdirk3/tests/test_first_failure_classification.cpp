@@ -305,6 +305,34 @@ int main() {
               "overflowed");
     }
 
+    // ---- R13.11 (referee C7): TIME order, where the record has it ----
+    //
+    // "First in causal order" was a fixed precedence over stage aggregates with no iteration
+    // index -- a modelling choice, not a measurement. With first-event indices the one case
+    // the precedence got backwards can be measured: a rejection at iteration 1 that shrank
+    // the radius and changed the next solve's x0 and budget, followed by a Krylov failure
+    // at iteration 3. Precedence said Krylov; time says the rejection came first.
+    {
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.gmres_total_failures = 1;
+        s.first_krylov_failure_iter = 3;
+        s.accepted_steps = 0;
+        s.rejected_steps = 2;
+        s.first_rejection_iter = 1;
+        check(name_of(s) == "all_steps_rejected",
+              "a rejection at iteration 1 followed by a Krylov failure at iteration 3 is "
+              "reported as the REJECTION -- time order, not precedence");
+        s.first_rejection_iter = 5;   // now the Krylov failure came first
+        check(name_of(s) == "krylov_stagnated",
+              "...and with the Krylov failure first in time, it is reported first");
+        s.first_rejection_iter = -1;  // no index recorded: fall back to precedence
+        check(name_of(s) == "krylov_stagnated",
+              "with no index recorded the old precedence stands, and the record says the "
+              "index is -1 rather than implying an order it did not measure");
+    }
+
     // ---- ORDERING: the part that decides where the work goes ----
     {
         // Every later gate is refusing too, because they are all looking at consequences.
@@ -396,7 +424,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 29;
+    constexpr int expected_checks = 32;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
