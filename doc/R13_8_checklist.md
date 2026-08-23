@@ -368,8 +368,38 @@ system, and the honest layer for *this* record is the preconditioner. (Productio
 is known, is `‖r₀‖/‖b‖ = 1.054` carried through a solve that reduced it only slightly. The
 classifier's divergence test should compare against `r₀`, not `b`; tracked below.)
 
+### The solver's own objective, with its baseline
+
+```
+rho0_D = 1.108
+```
+
+| j | ρ_D (M) | ρ_D (I) |
+|---|---|---|
+| 0 | 1.108 | 1.108 |
+| 4 | 0.939 | 0.722 |
+| 8 | 0.914 | 0.568 |
+| 16 | 0.877 | 0.506 |
+| 32 | 0.859 | 0.447 |
+| 48 | 0.825 | 0.415 |
+
+Both arms are **monotone non-increasing in ρ_D** — the minimal-residual guarantee, which was
+an assumption about the implementation until this row. In its own objective M reduces by 26%
+over 48 steps, I by 63%: M is 2.4× slower, not stalled.
+
+The three norms together say where M's effort goes. From the same r₀, M achieves **26% in
+ρ_D, 7% in ρ_S, and −1% in ρ_phys**. `D⁻¹ = 1/‖r₀,block‖` up-weights the blocks whose initial
+residual is *small*, so a reduction that is large in ρ_D and small in ρ_S is one concentrated
+in the small-residual blocks — while the large-residual blocks that dominate ρ_S and ρ_phys
+are left where they were, or slightly worse. **This is an inference from three aggregate
+norms, not a measurement.** The measurement that would make it one is the per-block residual
+of each arm at j=48, which the existing `WRF_SDIRK3_STAGE_RESID_BLOCKS` observer can provide
+if pointed at the A/B iterates.
+
 ### Follow-up this correction opens
 
 - **The classifier's `krylov_diverged` compares against `‖b‖`.** `raw_rel_error > 1` fires on
   a warm start that began above 1 even when the solve reduced it. Divergence should mean
   `ρ(j_final) > ρ(0)`, and that needs the Krylov result to carry `rel_error` at j=0. Open.
+- **Per-block residual of the A/B iterates.** Turns the "where M's effort goes" inference
+  above into a measurement. Open.
