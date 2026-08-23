@@ -1304,3 +1304,55 @@ other, so a position-based parser misreads the short form. Both fixed.
 entirely and does not depend on `e_orthogonality`/`e_arnoldi`. The step-map probe consumes its
 verdict at **every** conclusion site. And every `.item()` added in these rounds is inside a
 `NoGradGuard`, with no stray `.detach()`/`.data` in a graph region.
+
+---
+
+## Does a real Krylov budget complete the dt=600 step? — MEASURED, and it does not
+
+The evidence had converged on one testable claim: the linearization is faithful (τ ≪ 1, no Jacobian
+defect), the inner solve is what binds, and **every stall verdict in this campaign was measured at a
+7-vector Arnoldi budget** while the ladder shows the identity arm still descending at j=192. So:
+raise the budget at both implicit stages and run dt=600.
+
+`sdirk3_stage2_gmres_restart = 192`, `sdirk3_stage3_gmres_restart = 192`,
+`sdirk3_stage3_max_krylov_restarts = 1`, `WRF_SDIRK3_MAX_NEWTON_ITER=12` (namelist restored after).
+
+```
+stage=2  category=newton_stagnated  newton_iters=3  newton_converged=0  krylov_iters=270
+         steps_accepted=2  steps_rejected=1
+         worst_krylov_rel_vs_r0=0.8622  krylov_solves_vs_r0=3  krylov_solves_trivial=0
+         krylov_restart_budget=85  krylov_max_restarts=1
+outcome=20 (HARD_STAGE_ABORT) x3 — zero steps completed
+```
+
+**MEASURED — three things, and they point in different directions.**
+
+1. **The budget is a real limiter.** The worst solve's r₀-relative progress went **0.9941 → 0.8622**
+   — from removing 0.59% of its own residual to removing 13.8%, a 23× improvement in progress — and
+   Krylov iterations went 28 → 270. More budget genuinely buys a better linear solve.
+2. **It does not complete the step.** Still `HARD_STAGE_ABORT`, still zero steps. Budget alone does
+   not reach dt=600.
+3. **The failure moved outward.** The category flips `krylov_stagnated` → **`newton_stagnated`**
+   (0.8622 is below the 0.90 boundary), and **Newton stopped at 3 of 12 allowed iterations without
+   converging** — the early-termination behaviour already on record for this campaign. With the
+   linear solve doing materially better, what refuses is the outer iteration.
+
+**And the run caught a config defect the moment it ran.** The namelist asked for **192** and the
+record reported `krylov_restart_budget=85`. Two causes, both now fixed or documented:
+
+- the **same knob had two different maxima** — `std::clamp(…, 0, 100)` on the namelist path and
+  `std::clamp(…, 0, 1000)` on the env path, twenty lines from a comment explaining that the env
+  limit was widened because "the clamp is just no longer below the interesting range". 192 became
+  **100**, silently;
+- the Eisenstat–Walker budget policy then applied `ew_scale = 0.85`, giving **85**
+  (`[GMRES POLICY] Stage 2: restart=10->85 (source=2), ew_scale=0.85, ew_applied=1`).
+
+The second is by design and was already reported. The first is the recurring class in config form —
+**one rule, two authorities, and the losing one silent**. Both setters now share one maximum and go
+through `clamp_int_warn`, which prints requested vs applied: *"the configuration that RAN is not the
+one that was written"*.
+
+Worth stating plainly: `krylov_restart_budget` exists **only because round 5 caught a comment
+claiming it was on the record when nothing produced it**. The field was added to make that comment
+true, and the first run after adding it revealed that a namelist knob had been silently halved. The
+measurement this section reports would otherwise have been written up as "192 vectors".
