@@ -411,6 +411,14 @@ public:
         // Solves excluded from the max because they did no work (converged on entry) or
         // finished (reached tolerance). Reported so "the max is over 0 solves" is legible.
         int   krylov_solves_trivial = 0;
+        // R13.16 (round 6, R6-2): did the WORST-progress solve stop because it MET its
+        // (adaptive, 0.9-capped) tolerance? "Poor progress because the operator is hard" and
+        // "poor progress because the forcing term did not ask for more" route to opposite
+        // layers, and nothing on the record distinguished them.
+        bool  worst_krylov_met_tolerance = false;
+        float worst_krylov_eta = -1.0f;
+        // The Arnoldi budget the WORST solve was given (the stage field is last-solve-wins).
+        int   worst_krylov_restart_budget = -1;
         // Solves whose r0 was never measured, and (of those) how many made the opt-in r0 rule
         // fall back to the ||b|| rule. Without these the record claims a rule it did not apply.
         int   krylov_r0_unmeasured_solves = 0;

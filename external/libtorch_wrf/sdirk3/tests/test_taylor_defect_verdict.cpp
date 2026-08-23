@@ -126,6 +126,18 @@ int main() {
                              " must be refused");
             }
         }
+        // R13.16 (round 6, R6-10): is_dyadic(+Inf) looped forever -- inf*0.5 == inf. The
+        // verdict rejects non-finite alpha first, so it was unreachable there, but the function
+        // is public and its comment about repeated halving reaching 1.0 is false for infinities.
+        // If this regresses the test HANGS rather than failing, which is its own signal.
+        const double inf_a = std::numeric_limits<double>::infinity();
+        const bool inf_terminates = !wrf::sdirk3::is_dyadic(inf_a) &&
+                                    !wrf::sdirk3::is_dyadic(-inf_a) &&
+                                    !wrf::sdirk3::is_dyadic(
+                                        std::numeric_limits<double>::quiet_NaN());
+        check(inf_terminates,
+              "is_dyadic terminates on +/-Inf and NaN and reports them non-dyadic -- reaching "
+              "this line at all is most of the assertion");
         auto in = sound();
         in.alpha = 1.0 / 3.0;
         check(name_of(in) == "measured",
@@ -176,7 +188,7 @@ int main() {
               "only, so it can never quietly suppress the case the probe exists to catch");
     }
 
-    constexpr int expected_checks = 12;
+    constexpr int expected_checks = 13;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

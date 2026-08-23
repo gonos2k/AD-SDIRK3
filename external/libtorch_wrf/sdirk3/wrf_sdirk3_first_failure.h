@@ -42,6 +42,12 @@ enum class StageFailure {
     ExplicitRhsNotFinite,
     ExplicitAdmissibilityRejected,
     ExplicitPublishRejected,
+    // R13.16 (round 6, R6-2): the linear solve made little progress AND stopped because it met
+    // its own adaptive tolerance. That is the Eisenstat-Walker forcing term, capped at 0.9 and
+    // saturating there exactly when the Newton residual stops falling -- so "reached tolerance"
+    // can mean "removed 10%". Naming this KrylovStagnated sends the work to the operator and the
+    // preconditioner; the layer actually responsible had no category at all.
+    KrylovForcingTermLimited,
     // The signals do not support ANY verdict. Reported instead of guessing -- a classifier
     // that always names a layer will name a wrong one.
     InsufficientEvidence,
@@ -97,6 +103,8 @@ inline const char* stage_failure_name(StageFailure f) {
         case StageFailure::ExplicitAdmissibilityRejected:
             return "explicit_admissibility_rejected";
         case StageFailure::ExplicitPublishRejected: return "explicit_publish_rejected";
+        case StageFailure::KrylovForcingTermLimited:
+            return "krylov_forcing_term_limited";
         case StageFailure::InsufficientEvidence:     return "insufficient_evidence";
         case StageFailure::KrylovDiverged:           return "krylov_diverged";
         case StageFailure::EntryStateNotFinite:      return "entry_state_not_finite";
@@ -121,6 +129,8 @@ inline const char* stage_failure_layer(StageFailure f) {
         case StageFailure::ExplicitAdmissibilityRejected:
             return "explicit_stage_gate_threshold";
         case StageFailure::ExplicitPublishRejected: return "explicit_publish_gate";
+        case StageFailure::KrylovForcingTermLimited:
+            return "eisenstat_walker_forcing_or_inner_budget";
         case StageFailure::InsufficientEvidence:     return "unknown";
         case StageFailure::KrylovDiverged:           return "operator_or_timestep_or_jvp";
         case StageFailure::EntryStateNotFinite:      return "nonfinite_entry_state";
@@ -215,6 +225,12 @@ struct StageFailureSignals {
     // Solves excluded from the max: zero-work (converged on entry) or finished (reached
     // tolerance). Neither is evidence about whether Krylov works.
     int    krylov_solves_trivial = 0;
+    // Did the WORST-progress solve stop because it met its (adaptive, 0.9-capped) tolerance?
+    bool   worst_krylov_met_tolerance = false;
+    double worst_krylov_eta = -1.0;
+    // The Arnoldi budget the WORST solve was given, so the ratio and the budget it was read
+    // at are paired by construction rather than by the stage's last assignment.
+    int    worst_krylov_restart_budget = -1;
     // Solves with no r0 measurement, and how many of those made the opt-in r0 rule fall back.
     int    krylov_r0_unmeasured_solves = 0;
     int    krylov_rule_fellback_to_b = 0;
@@ -345,14 +361,33 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
             // R13.14 (round 5): the boundary is a judgment and must be movable per run without
             // a rebuild. An unset/invalid value falls back to the header constant, so records
             // taken before the knob existed classify exactly as they did then.
+            // R13.16 (round 6, R6-4): the threshold the classifier APPLIES and the one the
+            // emitter PRINTS were two predicates on two different fields, so a row could say
+            // `not_reached` while 0.90 silently decided the category. Both key on the same flag.
             const double no_progress =
-                (s.krylov_no_progress_threshold > 0.0 && s.krylov_no_progress_threshold <= 1.0)
+                (s.krylov_threshold_observed &&
+                 s.krylov_no_progress_threshold > 0.0 &&
+                 s.krylov_no_progress_threshold <= 1.0)
                     ? s.krylov_no_progress_threshold : kKrylovNoProgressVsR0;
             if (s.worst_krylov_rel_error_vs_r0 >= no_progress) {
+                // R13.16 (round 6, R6-2): WHY it made no progress. A solve that stopped because
+                // it met its own forcing term did what it was asked; the operator is not
+                // implicated and the work belongs at the forcing term / inner budget.
+                if (s.worst_krylov_met_tolerance) {
+                    return StageFailure::KrylovForcingTermLimited;
+                }
                 return StageFailure::KrylovStagnated;
             }
             // Every solve moved. Whatever refused the step is downstream, and the later
             // clauses name it.
+        } else if (s.krylov_r0_unmeasured_solves > 0 || s.krylov_solves_trivial > 0) {
+            // R13.16 (round 6, R6-3): `worst == -1` has FOUR causes and they were collapsed into
+            // one branch applying the ||b||-coordinate rule -- the very rule this line of work
+            // exists to get away from. Two are now separated by counters that were added in the
+            // commits that created the ambiguity and then read by nothing: every solve did zero
+            // work, or no solve measured r0. In both, the ||b|| reading says nothing about
+            // whether Krylov works, so there is no Krylov evidence and the later clauses get
+            // their case. (An old record, or no solves at all, keeps the old precedence below.)
         } else {
             if (s.gmres_total_failures > 0) return StageFailure::KrylovStagnated;
             if (measured(s.best_krylov_rel_error) &&

@@ -14,6 +14,7 @@
 // inline at the emit site cannot be tested, and every one of the above was spelled out inline.
 // A rule that a test can reject is the only kind that stays true.
 
+#include <cmath>
 #include <limits>
 #include <vector>
 
@@ -333,7 +334,12 @@ inline constexpr double kTaylorLinearityTol = 1.0e-4;
 
 // A power of two, within the exactness that matters here: alpha == 2^k for integer k.
 inline bool is_dyadic(double a) {
-    if (!(a > 0.0)) return false;
+    // R13.16 (round 6, R6-10): +Inf passed `a > 0.0`, skipped the first loop, and then
+    // `inf * 0.5 == inf` FOREVER -- an infinite loop in a header-inline predicate. Unreachable
+    // from the current caller (taylor_defect_verdict rejects non-finite alpha first), but the
+    // function is public, its comment about repeated halving reaching 1.0 is simply false for
+    // infinities, and no fixture passed it one.
+    if (!(a > 0.0) || !std::isfinite(a)) return false;
     // Repeated exact doubling/halving reaches 1.0 iff the significand is 1.
     while (a < 1.0) a *= 2.0;
     while (a > 1.0) a *= 0.5;

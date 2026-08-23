@@ -4332,6 +4332,13 @@ public:
     // Prevents data races when multiple solver instances exist (multi-tile/OpenMP).
     int precond_fallback_count_ = 0;
     int precond_total_calls_ = 0;
+    // R13.16 (round 6, R6-5): CONFIGURATION IS OBJECT STATE, read once at construction -- not a
+    // function-local static latched on the first numerical call. This tree states that rule in
+    // prose (wrf_sdirk3_tile_unified.h, 9F.D33) and the first version of this knob broke every
+    // consequence it lists: process-wide, so two solvers in one process could not differ; a unit
+    // test could not vary it; and its provenance was "the environment at the first solve" rather
+    // than at construction. Accepted range (0, 1]; out of range warns and keeps the default.
+    double krylov_no_progress_threshold_ = wrf::sdirk3::kKrylovNoProgressVsR0;
     bool jvp_vs_fd_done_ = false;
     bool singularity_check_done_ = false;
 
@@ -4389,6 +4396,20 @@ public:
     float baseline_unscaled_rms_ = 0.0f;
 
     explicit Impl(const WRFNewtonKrylovOptions& options, int mu_size = 0) : options_(options), mu_size_(mu_size) {
+        {
+            const char* e = std::getenv("WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0");
+            if (e) {
+                char* end = nullptr;
+                const double v = std::strtod(e, &end);
+                if (end && *end == '\0' && v > 0.0 && v <= 1.0) {
+                    krylov_no_progress_threshold_ = v;
+                } else {
+                    std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0='" << e
+                              << "' is not in (0, 1]; keeping "
+                              << krylov_no_progress_threshold_ << std::endl;
+                }
+            }
+        }
         reset_stats();
         if (options_.save_trajectory) {
             trajectory_.reserve(options_.checkpoint_interval);
@@ -9452,9 +9473,24 @@ public:
                     // Newton run gets, the smaller and noisier its linear RHS, so progress -> 1
                     // and "the closer Newton gets, the more certainly the linear solve is
                     // blamed".
+                    // R13.16 (round 6, R6-2): ToleranceReached is NOT evidence that the solve
+                    // worked. "Tolerance" here is the Eisenstat-Walker forcing term, and it is
+                    // CAPPED AT 0.9 (`ew_eta_max`) -- and it saturates at exactly that cap in
+                    // the failing regime, because eta = 0.9 * res_ratio^1.5 and res_ratio -> 1
+                    // when the Newton residual stops falling. So a solve can "reach tolerance"
+                    // having removed 10% of its residual, which is a stall by this classifier's
+                    // own threshold. Excluding those was the exact INVERSE of the round-5 P0:
+                    // that one counted a no-op solve as a stall, this one discounted a stall as
+                    // a success -- and the fix for the first produced the second.
+                    //
+                    // Only a solve that did ZERO WORK is excluded. A solve that met a loose
+                    // tolerance keeps whatever progress it made, and the fact that it stopped
+                    // because it was ASKED to is recorded separately (below) so the classifier
+                    // can name the forcing term instead of the operator.
                     const bool trivial_solve =
                         (gmres_result.termination_reason ==
-                             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged) ||
+                             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged);
+                    const bool met_tolerance =
                         (gmres_result.termination_reason ==
                              WRFNewtonKrylovSolver::KrylovTerminationReason::ToleranceReached);
                     if (!trivial_solve) {
@@ -9463,6 +9499,20 @@ public:
                         if (progress > stats_.worst_krylov_rel_error_vs_r0) {
                             stats_.worst_krylov_rel_error_vs_r0 = progress;
                             stats_.worst_krylov_iter = newton_iter;
+                            // Did the WORST solve stop because it was satisfied? That is the
+                            // difference between "the operator could not be solved" and "the
+                            // forcing term did not ask for more", and they route to opposite
+                            // layers. The eta it was given goes on the record beside it.
+                            stats_.worst_krylov_met_tolerance = met_tolerance;
+                            stats_.worst_krylov_eta = krylov_tol_adaptive;
+                            // R13.16 (round 6, R6-14): the budget THIS solve was given. The
+                            // stage-level field is assigned per solve and is therefore the LAST
+                            // iteration's, while worst_krylov_iter can name an earlier one --
+                            // and effective_restart genuinely moves mid-stage (the Krylov policy
+                            // overrides it, the hopeless caps clamp it). Pairing the worst ratio
+                            // with the stage's last budget was true only by luck; recorded here
+                            // it is true by construction.
+                            stats_.worst_krylov_restart_budget = effective_restart;
                         }
                     } else {
                         stats_.krylov_solves_trivial++;
@@ -10411,7 +10461,10 @@ public:
             // the r0 reading is simply UNAVAILABLE, and the record says so.
             const bool r0_measured =
                 (gmres_initial_rel_error > 0.0f && std::isfinite(gmres_initial_rel_error));
-            const float r0_ref = r0_measured ? gmres_initial_rel_error : 1.0f;
+            // R13.16 (round 6, R6-13): no `: 1.0f`. The guard below short-circuits, so the
+            // fallback was already dead -- but leaving the literal kept the constant that
+            // produced the round-4 P0 one deleted `r0_measured &&` away from returning.
+            const float r0_ref = gmres_initial_rel_error;
             const bool total_failure_vs_b  =
                 (gmres_raw_rel_error > 1.0f || gmres_rel_error >= 0.999f);
             const bool total_failure_vs_r0 =
@@ -10441,28 +10494,12 @@ public:
             // and rho_vs_r0 is BUDGET-dependent (a healthy operator given 7 Arnoldi vectors on
             // a hard RHS reads 0.92), so the number that decides between the campaign's two
             // competing explanations must be movable without a rebuild.
-            {
-                static const double thr = [] {
-                    const char* e = std::getenv("WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0");
-                    if (!e) return static_cast<double>(wrf::sdirk3::kKrylovNoProgressVsR0);
-                    char* end = nullptr;
-                    const double v = std::strtod(e, &end);
-                    const bool ok = (end && *end == '\0' && v > 0.0 && v <= 1.0);
-                    if (!ok) {
-                        std::cerr << "SDIRK3_CONFIG_WARN knob=WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0"
-                                  << " value=" << e << " ignored=out_of_range_or_unparsable"
-                                  << " using=" << wrf::sdirk3::kKrylovNoProgressVsR0 << std::endl;
-                        return static_cast<double>(wrf::sdirk3::kKrylovNoProgressVsR0);
-                    }
-                    return v;
-                }();
-                stats_.krylov_no_progress_threshold = thr;
-                // Round 5, P2: and that the site was REACHED. Without this, `-1` on the record
-                // is ambiguous between "unset, header default applied" and "never reached" --
-                // the same distinction `krylov_rule_observed` twenty lines up exists to make,
-                // and the pattern was not carried to the new field.
-                stats_.krylov_threshold_observed = true;
-            }
+            // R13.16 (round 6, R6-5): read from OBJECT STATE, set once at construction.
+            stats_.krylov_no_progress_threshold = krylov_no_progress_threshold_;
+            // Round 5, P2: and that the site was REACHED. Without this, `-1` on the record is
+            // ambiguous between "unset, header default applied" and "never reached" -- the same
+            // distinction `krylov_rule_observed` twenty lines up exists to make.
+            stats_.krylov_threshold_observed = true;
             // R13.12 (red team R3-2): the first iteration whose SOLVE was a total failure,
             // which is what the field name says. `gmres_total_failure` below additionally
             // requires that no step was accepted, so indexing off it made this "the first

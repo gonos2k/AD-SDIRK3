@@ -9241,6 +9241,11 @@ vertical_coefficients:
                               << " krylov_solves_vs_r0="
                               << sig.krylov_solves_measured_vs_r0
                               << " krylov_solves_trivial=" << sig.krylov_solves_trivial
+                              << " worst_krylov_met_tol="
+                              << (sig.worst_krylov_met_tolerance ? 1 : 0)
+                              << " worst_krylov_eta=" << sig.worst_krylov_eta
+                              << " worst_krylov_budget="
+                              << sig.worst_krylov_restart_budget
                               << " krylov_r0_unmeasured=" << sig.krylov_r0_unmeasured_solves
                               << " krylov_rule_fellback_to_b=" << sig.krylov_rule_fellback_to_b
                               << " krylov_no_progress_thr="
@@ -13275,6 +13280,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.worst_krylov_iter = stats.worst_krylov_iter;
     last_stage_signals_.krylov_solves_measured_vs_r0 = stats.krylov_solves_measured_vs_r0;
     last_stage_signals_.krylov_solves_trivial = stats.krylov_solves_trivial;
+    last_stage_signals_.worst_krylov_met_tolerance = stats.worst_krylov_met_tolerance;
+    last_stage_signals_.worst_krylov_eta = static_cast<double>(stats.worst_krylov_eta);
+    last_stage_signals_.worst_krylov_restart_budget = stats.worst_krylov_restart_budget;
     last_stage_signals_.krylov_r0_unmeasured_solves = stats.krylov_r0_unmeasured_solves;
     last_stage_signals_.krylov_rule_fellback_to_b = stats.krylov_rule_fellback_to_b;
     last_stage_signals_.krylov_no_progress_threshold = stats.krylov_no_progress_threshold;

@@ -1143,11 +1143,24 @@ converging.** That is the early-termination behaviour already on record for this
 means `krylov_stagnated` here is a verdict about a stage that did not spend its outer budget.
 
 **And the ratio is now labelled with the budget it was measured at:** `krylov_restart_budget=7
-krylov_max_restarts=1`. The stall reading of `worst=0.9941` is *at seven Arnoldi vectors*, while
-this document's own ladder shows the identity arm still descending at j=192 and plateauing only
-around ρ_D ≈ 0.32. "The linear solve did not move" and "the linear solve was given seven vectors"
-are not distinguishable from this number alone, which is exactly why the layer string ends in
-`_or_policy` and why the budget is now on the record beside the ratio.
+krylov_max_restarts=1`, so the stall reading of `worst=0.9941` is *at seven Arnoldi vectors*.
+"The linear solve did not move" and "the linear solve was given seven vectors" are not
+distinguishable from this number alone, which is why the layer string ends in `_or_policy` and why
+the budget is now on the record beside the ratio.
+
+*Corrected after round 6 (R6-15).* An earlier version of this paragraph supported that point by
+saying "this document's own ladder shows the identity arm still descending at j=192 and plateauing
+only around ρ_D ≈ 0.32" — which is **self-contradictory and reverses the arms**. The measured table
+above says the opposite: **the identity plateaus** (ρ_D 0.347 → 0.318 over a doubling, Δ = 0.029)
+and **M is the one still descending** (0.698 → 0.487, Δ = 0.211). It also weakened its own argument,
+since M's continued descent is the fact that supports "more budget still buys progress".
+
+The sentence also **mixed two coordinates**: `worst = 0.9941` is ‖r‖/‖r₀‖ at j = 7, while the ladder
+is ρ_D — the D-weighted FGMRES objective normalised by ‖D⁻¹b‖ — at j = 48…192. Different numerator,
+different denominator, different budget. That is the mixed-denominator class this document has
+already retracted once. The budget point does not need the ladder at all: it stands on the
+**directly measured** big-budget run above (85 vectors: worst 0.9941 → 0.8622), which is the same
+quantity in the same coordinate at a different budget.
 
 ### R5-4 (P1) — the round-4 P0's *reference* survived, one field over
 
