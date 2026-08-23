@@ -9910,6 +9910,14 @@ public:
             // never precede a rejection, which silently disabled the time-order clause.
             if (gmres_total_failure_candidate && stats_.first_krylov_failure_iter < 0) {
                 stats_.first_krylov_failure_iter = newton_iter;
+                // R13.12: and how much THAT solve moved, r0-relative. The stage-best is the
+                // wrong aggregate for a FIRST-failure question: one good cold-start solve
+                // (em_b_wave iteration 0 reaches 0.55) masks every later stall behind a
+                // min-over-solves. The classifier wants the solve that first refused.
+                if (r0_ref > 0.0f && std::isfinite(gmres_raw_rel_error) &&
+                    gmres_raw_rel_error >= 0.0f) {
+                    stats_.first_krylov_failure_rel_vs_r0 = gmres_raw_rel_error / r0_ref;
+                }
             }
             // Unified trust-region step bound:
             //   K small  -> use radius floor (max(radius, min_radius))

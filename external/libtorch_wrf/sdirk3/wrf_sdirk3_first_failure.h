@@ -174,6 +174,11 @@ struct StageFailureSignals {
     // Krylov solve make progress". -1 = not measured, in which case the classifier says so
     // rather than substituting the other coordinate.
     double best_krylov_rel_error_vs_r0 = -1.0;
+    // The r0-relative error of the solve that FIRST tripped the total-failure predicate.
+    // `best_krylov_rel_error_vs_r0` is a min over the stage's solves, which answers "did any
+    // solve work" -- a different question, and one that hides a late stall behind an early
+    // success. -1 = no solve tripped it, or r0 was not measured.
+    double first_krylov_failure_rel_vs_r0 = -1.0;
     // The stage gate's own verdict, and whether the step reached the driver.
     bool   gate_metric_ok = false;
     bool   state_published = false;
@@ -239,13 +244,22 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // corroborates but cannot by itself name the category, because under the default rule
         // it may be reporting the step question. When it was NOT measured the old precedence
         // stands -- the classifier does not get weaker on records that lack the field.
-        const bool krylov_progress_measured = measured(s.best_krylov_rel_error_vs_r0);
-        if (krylov_progress_measured) {
+        //
+        // WHICH solve. The question is what refused FIRST, so the answer is the progress of
+        // the solve that first tripped the predicate -- not the stage's best, which is a
+        // min-over-solves answering "did any solve work" and which hides a late stall behind
+        // an early success (em_b_wave iteration 0 reaches 0.55 and iteration 3 fails).
+        if (measured(s.first_krylov_failure_rel_vs_r0)) {
+            if (s.first_krylov_failure_rel_vs_r0 >= kKrylovNoProgress) {
+                return StageFailure::KrylovStagnated;
+            }
+            // It moved. The refusal is downstream -- the later clauses name it.
+        } else if (measured(s.best_krylov_rel_error_vs_r0)) {
+            // No solve tripped the predicate; the stage-best is then the only progress
+            // statement available, and it is the right one for "every solve was poor".
             if (s.best_krylov_rel_error_vs_r0 >= kKrylovNoProgress) {
                 return StageFailure::KrylovStagnated;
             }
-            // The solve moved. Whatever refused the step is downstream of it, and the later
-            // clauses name that -- AllStepsRejected, NewtonBudgetExhausted, NewtonStagnated.
         } else {
             if (s.gmres_total_failures > 0) return StageFailure::KrylovStagnated;
             if (measured(s.best_krylov_rel_error) &&

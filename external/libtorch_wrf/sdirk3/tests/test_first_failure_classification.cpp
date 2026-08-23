@@ -421,8 +421,9 @@ int main() {
         s.newton_converged = false;
         s.residual_first = 8.7e8;
         s.residual_last = 4.8e8;
-        s.best_krylov_rel_error = 1.02;          // ||r||/||b||  -- above 1
-        s.best_krylov_rel_error_vs_r0 = 0.968;   // ||r||/||r0|| -- it moved
+        s.best_krylov_rel_error = 1.02;             // ||r||/||b||  -- above 1
+        s.best_krylov_rel_error_vs_r0 = 0.968;      // ||r||/||r0|| -- it moved
+        s.first_krylov_failure_rel_vs_r0 = 0.968;   // and that WAS the failing solve
         s.total_failure_vs_b_count = 1;
         s.total_failure_vs_r0_count = 0;
         s.gmres_total_failures = 1;              // by the ||b|| rule, in force by default
@@ -479,6 +480,39 @@ int main() {
               "not make the classifier weaker on the records it already had");
     }
 
+    // R13.12: WHICH solve's progress. The stage-best is a min over solves and answers "did
+    // any solve work"; a first-failure classifier is asking about the solve that first
+    // refused. On em_b_wave the cold-start solve reaches 0.55 and the failing one is at
+    // iteration 3 -- reading the best would report the early success and clear the stall.
+    {
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.5e8;
+        s.best_krylov_rel_error_vs_r0 = 0.5526;      // iteration 0 solved well
+        s.first_krylov_failure_rel_vs_r0 = 0.997;    // iteration 3 went nowhere
+        s.gmres_total_failures = 1;
+        s.first_krylov_failure_iter = 3;
+        s.accepted_steps = 3;
+        check(name_of(s) == "krylov_stagnated",
+              "a stage whose FIRST failing solve went nowhere is a Krylov stall, however well "
+              "an earlier solve did -- the stage-best must not clear a late stall");
+    }
+    {
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.5e8;
+        s.best_krylov_rel_error_vs_r0 = 0.997;       // every solve was poor...
+        s.first_krylov_failure_rel_vs_r0 = 0.60;     // ...but the one that FAILED moved
+        s.gmres_total_failures = 1;
+        s.accepted_steps = 0;
+        s.rejected_steps = 5;
+        check(name_of(s) == "all_steps_rejected",
+              "and the converse: the failing solve's own progress decides, so a poor "
+              "stage-best cannot manufacture a stall the first refusal did not show");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -495,7 +529,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 37;
+    constexpr int expected_checks = 39;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

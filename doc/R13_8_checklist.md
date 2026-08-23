@@ -725,3 +725,122 @@ failed solve produced the rejected step — and the residual minimum was at iter
 classifier's new time-order clause has the information it needs. Open: why this solve is still
 a total failure under the r₀ rule when the probe's M arm at j=8 sits below r₀ — production's
 exit ρ and reason beside the probe rows (referee cross-cutting #2) would say.
+
+---
+
+## Round-2 measurements, third batch — the Taylor defect (referee C8)
+
+`WRF_SDIRK3_TAYLOR_DEFECT=1`, dt=600, `em_b_wave`, stage 2, default config, 12-iteration
+budget. At each accepted step the probe measures the **Taylor defect** of the Newton model
+over the step it just took,
+
+  τ  =  ‖G(K+s) − G(K) − A·s‖ / ‖A·s‖,
+
+and repeats it at half the step (α = ½) to separate two ways the model can be wrong.
+
+| Newton iter | τ | τ(½)/τ | ‖R_k‖ | ‖R_{k+1}‖ | ‖s‖ | achieved η |
+|---|---|---|---|---|---|---|
+| 0 | 0.1192 | 0.500 | 8.742e8 | 6.406e8 | 2616 | 0.5526 |
+| 1 | 0.0645 | 0.500 | 6.406e8 | 5.335e8 | 1209 | 0.8871 |
+| 2 | 0.0182 | 0.500 | 5.335e8 | 4.770e8 |  422 | 0.9550 |
+
+**MEASURED.** τ ≪ 1 at every iteration and falling by a factor ≈ 2–3 per iteration as the step
+shrinks. The half-step ratio is **0.500 to four digits, three times out of three**.
+
+**What the ratio settles.** The three branches the probe was built to separate are:
+
+- τ ≪ 1 → the linear model is faithful and the **inner solve** is what binds;
+- τ = O(1) with τ(½)/τ ≈ ½ → the **nonlinearity over the step** is the problem (the remainder is
+  quadratic, the model is right, the step is too long);
+- τ = O(1) with τ(½)/τ ≈ 1 → a **Jacobian defect** (the remainder has a term linear in s, which
+  does not shrink relative to ‖A·s‖ when the step is halved).
+
+The measurement is in the first branch, and the ratio independently excludes the third: a
+first-order error in A would hold τ roughly constant under halving. A ratio of exactly ½ is what
+a **bilinear** RHS must give — advection is quadratic in the state, so the Taylor remainder is
+*exactly* the quadratic form Q(s,s), and τ(α) = α·τ(1) identically. The measurement is therefore
+also a consistency check on the probe: it reproduces the analytic value the operator's structure
+predicts.
+
+**So the Jacobian is not the problem and neither is the step length.** What remains is the inner
+solve, and the same rows show it directly: η climbs 0.55 → 0.89 → 0.955 while the residual crawls
+8.7e8 → 6.4e8 → 5.3e8 → 4.8e8 (ratio 0.73, 0.83, 0.89 — approaching 1 in lockstep with η). Each
+Newton step is limited by how little the FGMRES solve reduced the linear residual, not by how
+badly the linear model described the nonlinear one. This is the same conclusion the A/B ladder
+reached from the other side, now with the linearization itself measured rather than assumed.
+
+**Scope, honestly.** τ is measured only on **accepted** steps (the probe sits after
+`stats_.accepted_steps++`), so it says nothing about the steps the trust region refused, and the
+three rows are one stage of one step of one case. It does not say the Jacobian is right in every
+block — only that whatever error it has is second order in the step and 12% or less of ‖A·s‖ at
+the largest step taken.
+
+---
+
+## Round 3 (red team) — two findings, both closed (commit `11fe6aa`)
+
+**R3-1 (P1) — the two counts were dead writes.** `total_failure_vs_b_count` and
+`total_failure_vs_r0_count` were incremented in the solver and read by nothing: not copied into
+`StageFailureSignals`, not printed, not tested. The comment claiming "the record carries both
+readings whichever is in force" described a consumer that did not exist. **Ninth** instance of
+the defect class this tree keeps closing. Both counts and the rule in force
+(`krylov_failure_rule=b|r0`) are now on the `SDIRK3_FIRST_FAILURE` record.
+
+**R3-2 (P1) — the stagnation clause read the wrong coordinate.** Two quantities were being used
+as if they were one:
+
+| quantity | question it answers |
+|---|---|
+| ‖r‖/‖b‖ | is the proposed step predicted to reduce the **nonlinear** residual? (b = −R, so > 1 is a legitimate trust-region reason to refuse a step) |
+| ‖r‖/‖r₀‖ | did the **linear solve** move at all? |
+
+They coincide only on a cold start. `best_krylov_rel_error` is always the first, under a comment
+claiming the second ("1.0 means it ended where it started"). On the measured `em_b_wave` warm
+start (r₀/‖b‖ = 1.054) a solve that **reduced** its residual by 3% reads 1.02 and trips the
+≥ 0.99 test → `KrylovStagnated` for a solve that made progress, which sends the next week of work
+to the operator and the preconditioner instead of to the step policy.
+`best_krylov_rel_error_vs_r0` is now measured per solve and decides the clause; when it is absent
+the old precedence stands, so no record already taken gets a weaker verdict.
+
+**Found while checking R3-2's other claim** (that the time-order clause used the default rule —
+it does not; `gmres_total_failure` derives from the in-force candidate):
+`first_krylov_failure_iter` was indexed off `gmres_total_failure`, which *additionally* requires
+that no step was accepted. So a field named "first Krylov failure" meant "first failure that also
+produced no step" — an event that can never precede a rejection, which silently disabled the
+time-order clause it was built for. It is now set at the predicate, from the solve's own verdict.
+
+Default path unchanged (the r₀ baseline for the production predicate stays opt-in; the new fields
+are telemetry). 5 contract cases, 37 checks, ctest 61/61.
+
+### The fix, measured on the case it was written for
+
+Same case, same 12-iteration budget, both rules (`rsl.r313_rule0.log`, `rsl.r313_rule1.log`):
+
+```
+rule=b   stage=2 category=krylov_stagnated  gmres_total_failures=1  krylov_diverged=0
+         best_krylov_rel=0.5526  best_krylov_rel_vs_r0=0.5526  first_failure_rel_vs_r0=0.9941
+         total_failure_vs_b=1  total_failure_vs_r0=1
+         first_krylov_failure_iter=3  first_rejection_iter=3  argmin_residual_iter=2
+rule=r0  (identical, only krylov_failure_rule= differs)
+```
+
+**The verdict did not change; the evidence did.** Before, `krylov_stagnated` was reached through
+`gmres_total_failures > 0` — a count that under the default rule can fire for a solve that was
+working. Now it is reached through **`first_failure_rel_vs_r0 = 0.9941`: the solve that first
+failed reduced its own residual by 0.59%.** That is stagnation measured in the coordinate that
+can express it, on the solve the classifier is actually asking about. The old clause happened to
+give the right answer here and would not have on the warm-started iteration R13.9 measured.
+
+**The two rules agree on this iteration** (`vs_b=1`, `vs_r0=1`), so the opt-in flag changes
+nothing on this case. That is now visible on the record instead of being an open question — which
+is the entire point of R3-1.
+
+**Note on the stage-best.** `best_krylov_rel_vs_r0 = 0.5526` equals `best_krylov_rel`, i.e. the
+best solve of the stage was the cold-start one, where r₀ = b. A classifier reading the stage-best
+would have seen 0.55 — comfortably "made progress" — and cleared a stall that the first failing
+solve shows plainly at 0.9941. The aggregate has to match the question being asked.
+
+At the default namelist budget (`sdirk3_max_newton_iter = 3`) the same run classifies as
+`newton_budget_exhausted` with no Krylov failure and no rejection at all — three iterations is
+fewer than the four it takes to reach the first failure, so the budget statement is the honest
+one there.

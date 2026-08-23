@@ -401,6 +401,10 @@ public:
         // (r0/||b|| = 1.054) a solve that reduced the residual by 3% still reads 1.02 and
         // trips a >= 0.99 test. -1 = not measured.
         float best_krylov_rel_error_vs_r0 = -1.0f;
+        // The r0-relative error of the solve at `first_krylov_failure_iter` -- the solve that
+        // first tripped the predicate, which is the one a FIRST-failure classifier is asking
+        // about. -1 = no solve tripped it, or r0 was not measured.
+        float first_krylov_failure_rel_vs_r0 = -1.0f;
         // PR 9E (diagnosis-only): RAW L2 norms at the FINAL accepted Newton
         // iteration, populated ONLY when g_sdirk3_config.stage_operand_diag is
         // on (else left at -1). final_fast_rhs_norm = ||F_fast(U_eval_final)||;
