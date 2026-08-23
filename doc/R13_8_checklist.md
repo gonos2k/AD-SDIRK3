@@ -1047,3 +1047,28 @@ The CI gate that exists precisely to derive this claim from the file it cites wa
 repo-root README. Both now state 62, and **the gate loops over every file that makes the claim** and
 fails if one of them stops making it. Sixth recurrence of the count-ratchet class; this time the
 gate shell was run locally before pushing rather than after.
+
+---
+
+## Which variable block carries the negative curvature — emitter added, measurement OPEN
+
+`q_min_blockdiag = −977.9` vs `q_min_direct = −976.8` says the indefiniteness lives in the diagonal
+blocks rather than the coupling, so a by-variable block preconditioner is the right *class*. It does
+not say **which** block, and that is what a fix would have to target.
+
+The per-block terms were already being computed — the loop summed `⟨P_q v, B P_q v⟩` over blocks and
+kept only the sum. Each term is now emitted named (`q_bd_<block>`) **beside the witness's mass in
+that block** (`mass_<block>`): without the mass a small term is ambiguous between *"this block is
+fine"* and *"the witness barely lives here"*, and this campaign has been caught by that exact
+ambiguity before.
+
+**Not yet measured, and here is why.** The block breakdown sits at the `SDIRK3_NUMERICAL_RANGE_UNPRECOND`
+site in `solve_gmres` — the M = I path, which is where the witness lift (`v_min = V·y_min`, then
+`B·v_min`) exists. Production runs FGMRES with M, whose site emits the Hessenberg symmetric spectrum
+(`min_eig_sym=−117.7`, `n_negative=3/7`, `definite=0` at the failing iteration) but has **no witness
+lift**, so there is no `v_min` in the full space to restrict. Taking the measurement requires either
+the preconditioner-off configuration (which is what produced the −977.9 figure) or adding a witness
+lift to the FGMRES site. Neither is done; the number is not claimed.
+
+This is recorded as an **emitter landed / measurement open** item rather than a result, because the
+run that would produce it has not been made.

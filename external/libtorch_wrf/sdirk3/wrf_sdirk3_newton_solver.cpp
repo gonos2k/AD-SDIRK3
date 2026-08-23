@@ -2214,8 +2214,10 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                     vv > 0.0 ? v_min.dot(Bv).item<double>() / vv : 0.0 / 0.0;
                 // Referee X3 test (1), zero matvecs: ||Hbar e_i|| = ||B v_i|| with ||v_i|| = 1,
                 // so the column norms ARE the operator's magnitude on the directions GMRES
-                // built. If they are ~1e5-1e6 the identity term of I - h*gamma*J is 1e-6 of
-                // the operator on those directions and float32 resolves it to ~10-30%.
+                // built, and 1/||Hbar e_i|| is the identity term's share of the operator there.
+                // The 10-30% figure this comment used to quote was an ESTIMATE and is REFUTED:
+                // measured directly (identity_frac_krylov / e_hom_krylov in the frozen A/B
+                // probe) the identity term carries 0.39% relative error, not 5-20%.
                 double hcol_min = std::numeric_limits<double>::infinity(), hcol_max = 0.0;
                 for (int jj = 0; jj < m; ++jj) {
                     const double cn = Hbar.select(1, jj).norm().item<double>();
@@ -2227,6 +2229,14 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 // restricted matvecs on the witness. If this is positive while the full form is
                 // negative, no by-variable block-diagonal M is the right class.
                 double q_min_blockdiag = 0.0 / 0.0;
+                // R13.13: the SUM was the only thing kept, and it names no culprit. The
+                // per-block terms are already computed here -- emitting them says WHICH
+                // variable carries the negative curvature, which is what a by-variable
+                // preconditioner would have to fix. Each term is reported with the witness's
+                // MASS in that block: without the mass a small term is ambiguous between "this
+                // block is fine" and "the witness barely lives here", and this project has been
+                // caught by exactly that ambiguity before.
+                std::string blockdiag_rows;
                 if (layout && layout->is_exact && layout->total_size == v_min.numel()) {
                     double acc = 0.0;
                     for (const auto& blk : layout->blocks) {
@@ -2234,9 +2244,15 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                         vq.slice(0, blk.start, blk.start + blk.size)
                             .copy_(v_min.slice(0, blk.start, blk.start + blk.size));
                         const auto Bvq = apply_B(vq.to(V[0].scalar_type())).to(torch::kFloat64);
-                        acc += vq.slice(0, blk.start, blk.start + blk.size)
+                        const double term = vq.slice(0, blk.start, blk.start + blk.size)
                                    .dot(Bvq.slice(0, blk.start, blk.start + blk.size))
                                    .item<double>();
+                        acc += term;
+                        const double mass = vq.dot(vq).item<double>();
+                        blockdiag_rows += " q_bd_" + std::string(blk.name) + "=" +
+                                          std::to_string(vv > 0.0 ? term / vv : 0.0 / 0.0) +
+                                          " mass_" + std::string(blk.name) + "=" +
+                                          std::to_string(vv > 0.0 ? mass / vv : 0.0 / 0.0);
                     }
                     q_min_blockdiag = vv > 0.0 ? acc / vv : 0.0 / 0.0;
                 }
@@ -2244,6 +2260,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                           << " e_arnoldi=" << e_arnoldi
                           << " q_min_direct=" << q_min_direct
                           << " q_min_blockdiag=" << q_min_blockdiag
+                          << blockdiag_rows
                           << " hcol_norm_min=" << hcol_min
                           << " hcol_norm_max=" << hcol_max
                           << " witness_confirmed="
