@@ -298,3 +298,50 @@ a statement about raw physical `A`, and the record no longer lets it be read as 
 ## Checklist state
 
 All twelve review items closed. Adversarial review in progress.
+
+## The FAILING iteration — `WRF_SDIRK3_FROZEN_MI_AB_ITER=3`
+
+Every earlier A/B was at Newton iteration 0: the cleanest system, and not the one where GMRES
+fails. The first-failure ladder put the failure at iteration 4 (0-indexed 3) for every
+adequate budget. This freezes that system. `ab_valid=1`, `worst_order_delta=0`,
+`operator_linear=1` (`e_hom=3.7e-07`, `e_add=2.7e-07`), `b_norm=476`, `x0_digest≠0` (a
+warm start is in play here, shared by both arms).
+
+| j | ρ_S (M) | ρ_S (I) | ρ_phys (M) | ρ_phys (I) | ρ_D (M) | ρ_D (I) |
+|---|---|---|---|---|---|---|
+| 4 | **1.049** | 0.9455 | 0.8725 | 0.2489 | 0.939 | 0.7223 |
+| 8 | **1.029** | 0.7330 | 0.8927 | 0.2226 | 0.914 | 0.5680 |
+| 16 | 0.9869 | 0.6823 | 0.9426 | 0.1882 | 0.8768 | 0.5057 |
+| 32 | 0.9740 | 0.6239 | 0.9485 | 0.1822 | 0.8591 | 0.4465 |
+| 48 | 0.9785 | 0.6081 | 0.8728 | 0.1842 | 0.8247 | 0.4153 |
+
+### MEASURED
+
+1. **With the production preconditioner, the failing system does not converge at all.**
+   ρ_S ≥ 0.97 at every budget to j=48, and **> 1 at j=4 and 8** — the residual *grows* over
+   the first eight Arnoldi steps. ρ_phys stays at 0.87–0.95 throughout. This is the
+   `krylov_diverged` the classifier reports for this iteration in production, reproduced on the
+   frozen system with a fresh `M`.
+
+2. **Without it, the same system makes progress in every norm.** ρ_S 0.61, ρ_phys 0.18,
+   ρ_D 0.42 at j=48. Not converged — but 1.6× / 4.7× / 2.0× better than M in the three norms.
+
+3. **The effect is larger on the failing system than on the clean one.** At iteration 0 the
+   M/I ratio in ρ_phys was 5–6.5×; here it is 3.5–5.2× in ρ_phys but the *absolute* picture is
+   what changed: M is flat at ~0.9 while I descends. On iteration 0 both arms descended and M
+   was merely slower.
+
+### What this settles
+
+The earlier finding that "removing M does not complete the step" stands — I does not converge
+either. But the shape of M's failure on the system that actually fails is now specific: **it
+is not slow, it is stuck, and at small budgets it is anti-convergent.**
+
+### Classifier correction forced by this run
+
+Production classified this iteration as **`krylov_diverged`** (`krylov_diverged=1`) — which is
+correct by the rule (`raw_rel_error > 1` was observed in production's own FGMRES call) and
+**refines** the earlier `krylov_stagnated`. The layer is `operator_or_timestep_or_jvp`. The
+A/B then narrows it further: with `M = I` the same operator, timestep and JVP do **not**
+diverge, so the divergence is attributable to `M` on this system, and the honest layer for
+*this* record is the preconditioner.

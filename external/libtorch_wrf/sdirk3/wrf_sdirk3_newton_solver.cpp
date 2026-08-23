@@ -8179,8 +8179,18 @@ public:
                 //     unattributable A/B being read as a result, and did not call it from this
                 //     emitter. Sixth occurrence of that shape in this tree. It is called now,
                 //     and every conclusion-shaped field is suppressed when it refuses.
+                // R13.9: WHICH Newton iteration to freeze. Iteration 0 is the cleanest
+                // system but not the one where GMRES fails -- the first-failure ladder
+                // measured that at iteration 4 (0-indexed 3) for every adequate budget. The
+                // probe cannot know in advance whether the CURRENT iteration will fail, so
+                // the target is chosen by the caller from that measurement. Default 0 keeps
+                // every earlier record comparable.
+                static const int ab_target_iter = [] {
+                    const char* e = std::getenv("WRF_SDIRK3_FROZEN_MI_AB_ITER");
+                    return (e && *e) ? std::atoi(e) : 0;
+                }();
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_FROZEN_MI_AB") &&
-                    gmres_M_inv && newton_iter == 0) {
+                    gmres_M_inv && newton_iter == ab_target_iter) {
                     torch::NoGradGuard ng_ab;
                     // Pristine, because nothing has called gmres_M_inv yet at this point.
                     const auto pristine_M = gmres_M_inv;
