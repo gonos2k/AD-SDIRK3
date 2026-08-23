@@ -8242,6 +8242,33 @@ public:
                         (e_add    >= 0.0 && e_add    < kLinearTol);
                     const double b_norm = gmres_rhs.defined()
                         ? gmres_rhs.detach().to(torch::kFloat64).norm().item<double>() : -1.0;
+                    // R13.9: THE j=0 BASELINE. Every rho below is normalised by ||b||, but the
+                    // solve starts from x0, and at a warm-started iteration x0 != 0. A
+                    // minimal-residual method reduces ||r|| from ||r0|| = ||b - A x0||, not
+                    // from ||b|| -- so rho(j) > 1 says nothing about convergence unless
+                    // ||r0||/||b|| is on the record beside it. "Anti-convergent" is earned
+                    // only by rho(j) > rho(0), and that comparison needs this number.
+                    double rho0_S = -1.0, rho0_phys = -1.0, rho0_D = -1.0;
+                    torch::Tensor r0_kept;
+                    {
+                        torch::Tensor r0 = gmres_rhs.detach();
+                        if (gmres_x0.defined() &&
+                            gmres_x0.detach().to(torch::kFloat64).norm().item<double>() > 0.0) {
+                            r0 = gmres_rhs.detach() - gmres_op(gmres_x0.detach());
+                        }
+                        r0_kept = r0;
+                        if (b_norm > 0.0) {
+                            rho0_S = r0.to(torch::kFloat64).norm().item<double>() / b_norm;
+                            if (scaling_initialized_ && S_diag_.defined()) {
+                                const auto nb = (S_diag_ * gmres_rhs.detach())
+                                                    .to(torch::kFloat64).norm().item<double>();
+                                if (nb > 0.0) {
+                                    rho0_phys = (S_diag_ * r0).to(torch::kFloat64)
+                                                    .norm().item<double>() / nb;
+                                }
+                            }
+                        }
+                    }
                     // WHICH operator was compared. An FD matvec with a block-dependent epsilon
                     // is not linear, and FGMRES presumes it is -- so the JVP receipt is part
                     // of the attribution, not a footnote.
@@ -8307,6 +8334,20 @@ public:
                                 if (nb > 0.0) {
                                     rho_phys = r_phys.norm().item<double>() / nb;
                                 }
+                            }
+                        }
+                        // FGMRES's own objective at j=0, from the D it just built. D depends
+                        // only on r0, which both arms and every row share, so the first row
+                        // that publishes it supplies the baseline for all of them. This is the
+                        // one quantity the algorithm GUARANTEES non-increasing -- and it is
+                        // measured rather than assumed for the same reason everything else is.
+                        if (rho0_D < 0.0 && d_inv_used.defined() && d_inv_used.numel() > 0 &&
+                            r0_kept.defined()) {
+                            const auto bD = (d_inv_used * gmres_rhs.detach()).to(torch::kFloat64);
+                            const double nbD = bD.norm().item<double>();
+                            if (nbD > 0.0) {
+                                rho0_D = (d_inv_used * r0_kept).to(torch::kFloat64)
+                                             .norm().item<double>() / nbD;
                             }
                         }
                         rows.push_back({use_M ? "M" : "I", m, rho, rho_phys, rho_D,
@@ -8387,6 +8428,9 @@ public:
                               << " b_digest=" << digest(gmres_rhs)
                               << " x0_digest=" << digest(gmres_x0)
                               << " b_norm=" << b_norm
+                              << " rho0_S=" << rho0_S
+                              << " rho0_phys=" << rho0_phys
+                              << " rho0_D=" << rho0_D
                               << " metric=rho_S_unweighted"
                               << " tolerance_exit_disabled=1"
                               << " early_stop_disabled=" << (early_stop_off ? 1 : 0)
