@@ -391,6 +391,16 @@ public:
         // record shows when the ||b|| rule and the r0 rule disagree.
         int   total_failure_vs_b_count = 0;
         int   total_failure_vs_r0_count = 0;
+        // Which rule the production predicate was RUNNING under, so a reader of the record
+        // does not have to know the env var to read the two counts above.
+        bool  krylov_failure_vs_r0 = false;
+        // R13.12 (red team R3-2): the BEST relative error measured against where each solve
+        // STARTED, not against ||b||. `best_krylov_rel_error` is ||r||/||b||, and the
+        // classifier's no-progress clause read it under a comment claiming "ended where it
+        // began" -- true only on a cold start, where r0 == b. On the em_b_wave warm start
+        // (r0/||b|| = 1.054) a solve that reduced the residual by 3% still reads 1.02 and
+        // trips a >= 0.99 test. -1 = not measured.
+        float best_krylov_rel_error_vs_r0 = -1.0f;
         // PR 9E (diagnosis-only): RAW L2 norms at the FINAL accepted Newton
         // iteration, populated ONLY when g_sdirk3_config.stage_operand_diag is
         // on (else left at -1). final_fast_rhs_norm = ||F_fast(U_eval_final)||;

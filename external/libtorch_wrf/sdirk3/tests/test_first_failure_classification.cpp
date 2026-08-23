@@ -408,6 +408,77 @@ int main() {
               "measurement must not become a finding");
     }
 
+    // R13.12 (red team R3-2): the two Krylov coordinates are not interchangeable.
+    // ||r||/||b|| answers "is this step predicted to reduce the NONLINEAR residual" -- on a
+    // warm start it can exceed 1 while the linear solve is working fine. ||r||/||r0|| answers
+    // "did the solve move". The classifier's no-progress clause read the first under a comment
+    // claiming the second, so a solve that made progress was named KrylovStagnated and the
+    // work would have gone to the operator/preconditioner instead of to the step policy.
+    {
+        // The measured em_b_wave failing iteration: r0/||b|| = 1.054, exit 1.02 -- a 3%
+        // reduction that reads as "worse than b".
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 4.8e8;
+        s.best_krylov_rel_error = 1.02;          // ||r||/||b||  -- above 1
+        s.best_krylov_rel_error_vs_r0 = 0.968;   // ||r||/||r0|| -- it moved
+        s.total_failure_vs_b_count = 1;
+        s.total_failure_vs_r0_count = 0;
+        s.gmres_total_failures = 1;              // by the ||b|| rule, in force by default
+        s.accepted_steps = 0;
+        s.rejected_steps = 4;
+        check(name_of(s) == "all_steps_rejected",
+              "a solve that REDUCED its residual is not a stalled solve, however it compares "
+              "to ||b||: with r0-relative progress measured, the category is what refused the "
+              "step, not the linear solve that produced it");
+        check(s.total_failure_vs_b_count != s.total_failure_vs_r0_count,
+              "the two readings of the production predicate are BOTH on the record, so a "
+              "disagreement between the rules is visible rather than silent");
+    }
+    {
+        // Same solve, nothing rejected, budget ran out while the residual was still falling.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 4.8e8;
+        s.best_krylov_rel_error = 1.02;
+        s.best_krylov_rel_error_vs_r0 = 0.968;
+        s.gmres_total_failures = 1;
+        s.accepted_steps = 3;
+        s.newton_iterations = 12;
+        s.newton_iteration_budget = 12;
+        check(name_of(s) == "newton_budget_exhausted",
+              "and when nothing refused the step either, a working solve plus a falling "
+              "residual at the budget is a budget statement -- the em_b_wave dt=600 case");
+    }
+    {
+        // Genuine stagnation, stated in the coordinate that can express it.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.6e8;
+        s.best_krylov_rel_error = 0.94;          // looks like progress against ||b||
+        s.best_krylov_rel_error_vs_r0 = 0.9995;  // went nowhere from where it started
+        s.accepted_steps = 2;
+        check(name_of(s) == "krylov_stagnated",
+              "the converse case: a warm start whose ||r||/||b|| looks healthy while the "
+              "solve made no progress at all -- caught only in r0 coordinates");
+    }
+    {
+        // The fallback: no r0 measurement, old precedence unchanged.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.best_krylov_rel_error = 0.995;
+        s.best_krylov_rel_error_vs_r0 = -1.0;    // not measured
+        s.gmres_total_failures = 1;
+        s.accepted_steps = 1;
+        check(name_of(s) == "krylov_stagnated",
+              "a record without the r0 measurement keeps the old precedence -- the fix must "
+              "not make the classifier weaker on the records it already had");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -424,7 +495,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 32;
+    constexpr int expected_checks = 37;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

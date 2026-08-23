@@ -137,8 +137,10 @@ struct StageFailureSignals {
     // moving" are the same observation, and they point at opposite work.
     int    newton_iteration_budget = -1;
     bool   newton_converged = false;
-    // The BEST relative error any GMRES call reached in this stage. 1.0 means it ended where
-    // it started. -1 = not measured.
+    // The BEST relative error any GMRES call reached in this stage, as ||r||/||b||. This is
+    // NOT progress: on a warm start ||r0|| != ||b||, so 1.0 means "the step is predicted to
+    // leave the nonlinear residual where it is", not "the solve went nowhere". Progress is
+    // `best_krylov_rel_error_vs_r0` below. -1 = not measured.
     double best_krylov_rel_error = -1.0;
     int    krylov_iterations = 0;
     int    gmres_total_failures = 0;
@@ -160,6 +162,18 @@ struct StageFailureSignals {
     int    first_krylov_failure_iter = -1;
     int    first_rejection_iter = -1;
     int    argmin_residual_iter = -1;
+    // R13.12 (red team R3-1/R3-2): the two readings of the production total-failure
+    // predicate and the rule that was in force. They were computed in the solver and read by
+    // nothing -- the ninth instance in this tree of a measurement added and never consumed.
+    // On the record they make a disagreement between the rules visible instead of silent.
+    int    total_failure_vs_b_count = 0;
+    int    total_failure_vs_r0_count = 0;
+    bool   krylov_failure_vs_r0 = false;
+    // The best relative error measured against where each solve STARTED. This -- not
+    // `best_krylov_rel_error`, which is ||r||/||b|| -- is the quantity that answers "did the
+    // Krylov solve make progress". -1 = not measured, in which case the classifier says so
+    // rather than substituting the other coordinate.
+    double best_krylov_rel_error_vs_r0 = -1.0;
     // The stage gate's own verdict, and whether the step reached the driver.
     bool   gate_metric_ok = false;
     bool   state_published = false;
@@ -209,10 +223,35 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
              s.first_rejection_iter < s.first_krylov_failure_iter);
         if (rejection_first && s.accepted_steps == 0) return StageFailure::AllStepsRejected;
         if (s.krylov_diverged)          return StageFailure::KrylovDiverged;
-        if (s.gmres_total_failures > 0) return StageFailure::KrylovStagnated;
-        if (measured(s.best_krylov_rel_error) &&
-            s.best_krylov_rel_error >= kKrylovNoProgress) {
-            return StageFailure::KrylovStagnated;
+        // R13.12 (red team R3-2): stagnation is a statement about PROGRESS, so it is measured
+        // against where the solve started. Two quantities were being read as if they were one:
+        //   ||r||/||b||  -- is the proposed step predicted to reduce the NONLINEAR residual?
+        //                   (b = -R, so > 1 is a legitimate trust-region reason to refuse a
+        //                   step, and says nothing about whether Krylov worked)
+        //   ||r||/||r0|| -- did the LINEAR solve move at all?
+        // `gmres_total_failures` is the first question by default and the second under the
+        // opt-in flag; `best_krylov_rel_error` is always the first, under a comment claiming
+        // the second. On the em_b_wave warm start (r0/||b|| = 1.054) a solve that reduced its
+        // residual by 3% reads 1.02 and trips both -- KrylovStagnated for a solve that made
+        // progress, which sends the work to the wrong place.
+        //
+        // So: when r0-relative progress was measured, it decides. A total-failure count then
+        // corroborates but cannot by itself name the category, because under the default rule
+        // it may be reporting the step question. When it was NOT measured the old precedence
+        // stands -- the classifier does not get weaker on records that lack the field.
+        const bool krylov_progress_measured = measured(s.best_krylov_rel_error_vs_r0);
+        if (krylov_progress_measured) {
+            if (s.best_krylov_rel_error_vs_r0 >= kKrylovNoProgress) {
+                return StageFailure::KrylovStagnated;
+            }
+            // The solve moved. Whatever refused the step is downstream of it, and the later
+            // clauses name that -- AllStepsRejected, NewtonBudgetExhausted, NewtonStagnated.
+        } else {
+            if (s.gmres_total_failures > 0) return StageFailure::KrylovStagnated;
+            if (measured(s.best_krylov_rel_error) &&
+                s.best_krylov_rel_error >= kKrylovNoProgress) {
+                return StageFailure::KrylovStagnated;
+            }
         }
         // The linear solve worked and nothing it proposed was taken.
         if (s.accepted_steps == 0 && s.rejected_steps > 0) {

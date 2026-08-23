@@ -9227,6 +9227,11 @@ vertical_coefficients:
                               << " steps_accepted=" << sig.accepted_steps
                               << " steps_rejected=" << sig.rejected_steps
                               << " first_krylov_failure_iter=" << sig.first_krylov_failure_iter
+                              << " best_krylov_rel_vs_r0=" << sig.best_krylov_rel_error_vs_r0
+                              << " total_failure_vs_b=" << sig.total_failure_vs_b_count
+                              << " total_failure_vs_r0=" << sig.total_failure_vs_r0_count
+                              << " krylov_failure_rule="
+                              << (sig.krylov_failure_vs_r0 ? "r0" : "b")
                               << " first_rejection_iter=" << sig.first_rejection_iter
                               << " argmin_residual_iter=" << sig.argmin_residual_iter
                               << " gate_metric_ok=" << (sig.gate_metric_ok ? 1 : 0)
@@ -13223,6 +13228,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.first_krylov_failure_iter = stats.first_krylov_failure_iter;
     last_stage_signals_.first_rejection_iter = stats.first_rejection_iter;
     last_stage_signals_.argmin_residual_iter = stats.argmin_residual_iter;
+    last_stage_signals_.total_failure_vs_b_count = stats.total_failure_vs_b_count;
+    last_stage_signals_.total_failure_vs_r0_count = stats.total_failure_vs_r0_count;
+    last_stage_signals_.krylov_failure_vs_r0 = stats.krylov_failure_vs_r0;
+    last_stage_signals_.best_krylov_rel_error_vs_r0 =
+        static_cast<double>(stats.best_krylov_rel_error_vs_r0);
     // PR 9E (diagnosis-only): carry the raw-L2 fast-RHS / defect norms back for
     // this stage's history-summary snapshot (-1 when stage_operand_diag is off).
     last_stage_fast_rhs_norm_ = stats.final_fast_rhs_norm;

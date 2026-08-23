@@ -8960,6 +8960,22 @@ public:
                      gmres_result.rel_error < stats_.best_krylov_rel_error)) {
                     stats_.best_krylov_rel_error = gmres_result.rel_error;
                 }
+                // R13.12 (red team R3-2): the same quantity measured against where THIS solve
+                // started. ||r||/||b|| answers "is the step predicted to reduce the nonlinear
+                // residual"; ||r||/||r0|| answers "did the Krylov solve do anything". The
+                // classifier needs the second and was reading the first. Only recorded when r0
+                // was measured -- an unmeasured r0 leaves the sentinel, and the classifier
+                // falls back rather than inventing a reference of 1.
+                if (std::isfinite(gmres_result.rel_error) && gmres_result.rel_error >= 0.0f &&
+                    gmres_result.initial_rel_error > 0.0f &&
+                    std::isfinite(gmres_result.initial_rel_error)) {
+                    const float progress =
+                        gmres_result.rel_error / gmres_result.initial_rel_error;
+                    if (stats_.best_krylov_rel_error_vs_r0 < 0.0f ||
+                        progress < stats_.best_krylov_rel_error_vs_r0) {
+                        stats_.best_krylov_rel_error_vs_r0 = progress;
+                    }
+                }
                 // R13.5: divergence is not stagnation. The total-failure predicate folds
                 // raw_rel_error > 1 (the residual GREW) together with rel_error >= 0.999 (it
                 // did not move), and those point at different work.
@@ -9886,6 +9902,15 @@ public:
                 failure_vs_r0 ? total_failure_vs_r0 : total_failure_vs_b;
             stats_.total_failure_vs_b_count  += total_failure_vs_b  ? 1 : 0;
             stats_.total_failure_vs_r0_count += total_failure_vs_r0 ? 1 : 0;
+            stats_.krylov_failure_vs_r0 = failure_vs_r0;
+            // R13.12 (red team R3-2): the first iteration whose SOLVE was a total failure,
+            // which is what the field name says. `gmres_total_failure` below additionally
+            // requires that no step was accepted, so indexing off it made this "the first
+            // failure that also produced no step" -- a different event, and one that can
+            // never precede a rejection, which silently disabled the time-order clause.
+            if (gmres_total_failure_candidate && stats_.first_krylov_failure_iter < 0) {
+                stats_.first_krylov_failure_iter = newton_iter;
+            }
             // Unified trust-region step bound:
             //   K small  -> use radius floor (max(radius, min_radius))
             //   K large  -> honor relative cap (min(radius, max_rel * ||K||))
@@ -10635,10 +10660,10 @@ public:
                 if (stats_.first_rejection_iter < 0) stats_.first_rejection_iter = newton_iter;
             }
             if (gmres_total_failure) {
+                // Counts solves declared a total failure that ALSO produced no accepted step
+                // (that conjunction is what drives the recovery path above). The first-event
+                // index is set from the solve's own verdict, at the predicate.
                 stats_.gmres_total_failures++;
-                if (stats_.first_krylov_failure_iter < 0) {
-                    stats_.first_krylov_failure_iter = newton_iter;
-                }
             } else {
                 stats_.gmres_non_total_failures++;
             }
