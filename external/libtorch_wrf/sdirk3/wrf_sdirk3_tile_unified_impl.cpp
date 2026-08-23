@@ -9257,6 +9257,18 @@ vertical_coefficients:
                               << (sig.all_near_worst_met_tolerance ? 1 : 0)
                               << " newton_exit="
                               << wrf::sdirk3::newton_termination_name(sig.newton_termination)
+                              << " exit_krylov_iter=" << sig.exit_krylov_iter
+                              << " exit_D_reached=" << (sig.exit_D_reached ? 1 : 0)
+                              << " exit_S_reached=" << (sig.exit_S_reached ? 1 : 0)
+                              << " exit_rho_stop=" << sig.exit_rho_stop_final
+                              << " exit_rho_S=" << sig.exit_rho_S_final
+                              << " exit_rho_E=" << sig.exit_rho_E_final
+                              << " exit_E_reached=" << (sig.exit_E_reached ? 1 : 0)
+                              << " exit_stop_metric="
+                              << wrf::sdirk3::krylov_stopping_metric_name(sig.exit_stopping_metric)
+                              << " exit_tol_source="
+                              << wrf::sdirk3::krylov_tolerance_source_name(
+                                     sig.exit_tolerance_source)
                               << " krylov_r0_unmeasured=" << sig.krylov_r0_unmeasured_solves
                               << " krylov_rule_fellback_to_b=" << sig.krylov_rule_fellback_to_b
                               << " krylov_no_progress_thr="
@@ -13300,6 +13312,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         static_cast<wrf::sdirk3::KrylovToleranceSource>(stats.worst_krylov_tolerance_source);
     last_stage_signals_.worst_krylov_budget_exhausted = stats.worst_krylov_budget_exhausted;
     last_stage_signals_.all_near_worst_met_tolerance = stats.all_near_worst_met_tolerance;
+    last_stage_signals_.exit_krylov_iter = stats.exit_krylov_iter;
+    last_stage_signals_.exit_D_reached = stats.exit_D_reached;
+    last_stage_signals_.exit_S_reached = stats.exit_S_reached;
+    last_stage_signals_.exit_budget_exhausted = stats.exit_budget_exhausted;
+    last_stage_signals_.exit_rho_stop_final = stats.exit_rho_stop_final;
+    last_stage_signals_.exit_rho_S_final = stats.exit_rho_S_final;
+    last_stage_signals_.exit_rho_E_final = stats.exit_rho_E_final;
+    last_stage_signals_.exit_E_reached = stats.exit_E_reached;
+    last_stage_signals_.exit_stopping_metric =
+        static_cast<wrf::sdirk3::KrylovStoppingMetric>(stats.exit_stopping_metric);
+    last_stage_signals_.exit_tolerance_source =
+        static_cast<wrf::sdirk3::KrylovToleranceSource>(stats.exit_tolerance_source);
     last_stage_signals_.newton_termination =
         static_cast<wrf::sdirk3::NewtonTerminationReason>(stats.newton_termination);
     last_stage_signals_.krylov_r0_unmeasured_solves = stats.krylov_r0_unmeasured_solves;

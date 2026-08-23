@@ -141,11 +141,21 @@ tau=0.1192 (packed)   tau_block_max=0.2008
 tau_ru=0.2008   tau_ph=0.000476 (share 0.140)   tau_rw=0.0447 (share 0.000216)   tau_mu=0.0055
 ```
 
-**The packed L2 was not hiding a defect in a small block.** The worst per-block τ is in `ru` — the
-*dominant* block — and `ph`, `rw`, `mu` are all **better** than the packed reading (`ph` by 250×).
-The concern was the right one to raise and the measurement answers it in the direction that
-strengthens the Taylor result. The honest number to quote as the verdict is now **τ_max = 0.2008**,
-not 0.119 — still ≪ 1, and 1.7× the packed value.
+**Corrected by the R13.17 deep review (P1-1).** The original reading here — *"`ph`, `rw`, `mu` are
+all better than the packed reading"* — is **wrong for `rw`**. The per-block ratio is normalised by
+`max(‖A s‖_b, 1e-3·‖A s‖)`, and `share_rw = 2.16e-04` is **below that floor**, so `tau_rw = 0.0447`
+is divided by the *floor*, not by `rw`'s own linear response. Its raw ratio is ≈ **0.207**. The
+honest statement is that this step direction **barely excites `rw` (0.02 % of ‖A s‖) and therefore
+constrains the `rw` Jacobian hardly at all** — "not constrained", not "accurate". `ph` (share 0.14)
+*is* excited, so its small τ is meaningful.
+
+What survives: the worst *excited*-block τ is in `ru`, the dominant block, so the packed L2 was not
+hiding a defect in a block it excited. The verdict number is **τ_max = 0.2008**.
+
+**And 0.2008 must not be called "≪ 1".** It means the full-step nonlinear remainder is ~20 % of the
+linear response in the worst excited block — not negligible. The supported claim is: *no dominant
+first-order Jacobian defect in the measured directions*, with the full-step nonlinearity explicitly
+**not** established as negligible, and `rw` not constrained by this direction at all.
 
 ### P1-2 — the step was realized and the signal is far above roundoff
 
@@ -208,17 +218,33 @@ dt=600 — and the answer contradicts a standing campaign claim.
 
 **Both runs exit for the same reason.** Only the ratio moved, and it happened to cross the chosen
 0.90 boundary — so the 12× run was classified `newton_stagnated`, whose layer is
-`residual_floor_or_split`, i.e. **the split-explicit rebuild**, for a run whose loop stopped because
-the linear solve produced nothing at all.
+`residual_floor_or_split`, i.e. **the split-explicit rebuild**, for a run whose loop broke at the
+**zero-update guard**.
 
 The campaign read that flip as *"the failure moved outward to the Newton iteration"*. **It did not
 move.** The external review flagged this claim as HOLD on the grounds that the category change was a
 threshold statement and the real exit was never recorded; the typed exit now shows the stronger
 result — the exit is identical in both runs, and it is the linear solve.
 
-The classifier consumes it: a loop that exited on `LinearSolveFailure` has its first failure in the
-linear solve **whatever the progress ratio reads**, and which kind is answered by the same
-D/S/budget receipts. What survives from the budget experiment is unchanged and still holds — a 12×
+**CORRECTED BY ROUND 7 (P0-B).** The paragraph above originally said the loop stopped "because the
+linear solve produced nothing at all", and had the classifier honour that **whatever the progress
+ratio reads**. Both were wrong, and the contradiction was on this same page: the 12× run's worst
+solve removed **13.8 %** of its own residual — it did not produce nothing.
+
+What the exit is actually gated by: `‖dK‖ < 1e-15` (the accepted update is numerically **zero**)
+**and** `gmres_total_failure`, which under the default configuration is `raw > 1 || rel ≥ 0.999` on
+**‖r‖/‖b‖**. That is the coordinate R13.12–R13.16 spent four rounds moving this classifier *off*,
+and the `||` override reinstated it as a verdict that fires regardless of the r₀ evidence.
+
+So the event is renamed for what it measures — `ZeroUpdateAfterTotalFailure`, layer
+`zero_update_bnorm_rule_or_step_recovery`, naming **both** candidate causes — and it no longer
+overrides the r₀ clause.
+
+**What survives:** both runs break at the *same* code site, which is a real and useful measurement.
+**What does not:** the inference that the failure did not move outward. The gate is the retracted
+coordinate, so this evidence neither establishes nor refutes that claim. The standing claim is
+therefore back to **HOLD**, which is where the external review had it — not retracted, and not
+confirmed. What survives from the budget experiment is unchanged and still holds — a 12×
 budget improves the inner solve 23× (0.59% → 13.8% of its own residual) and does not complete the
 step. What does not survive is the inference that the *failure* relocated.
 
@@ -253,3 +279,54 @@ is struck through with the measurement that refutes it, and the **merged** PR #1
 retraction note at the top, since that body is a durable record a future reader will find.
 
 73 checks, ctest 62/62.
+
+---
+
+## §13 — the raw physical numerical range, MEASURED
+
+The review's remaining open item: every indefiniteness witness this campaign has is for `S⁻¹AS` or
+`D⁻¹S⁻¹AS`, and the numerical range is **not** similarity-invariant — so whether `W(A)` straddles
+the origin in the *physical* inner product was unestablished, and both campaign pivots rested on a
+coordinate statement.
+
+No new operator is needed. With `ṽ` a scaled direction, the physical direction is `v = S ṽ` and
+`A v = S · gmres_op(ṽ)`, so `q_phys = ⟨S ṽ, S·gmres_op(ṽ)⟩ / ‖S ṽ‖²` is the Rayleigh quotient of the
+raw `A` on a genuine physical direction, from matvecs already taken.
+
+**Random directions, 24 samples, dt=600 stage 2:**
+
+```
+A (S coords):   q_min=+5615.98  q_max=+5865.77  neg=0/24
+A (physical) :  q_min=-8043.13  q_max=-5232.09  neg=24/24
+```
+
+The sign of the quadratic form of **the same operator** flips with the metric — which is the
+review's point, demonstrated rather than argued.
+
+**But the random arm alone is a one-sided sample and would have been read wrongly.** All-negative
+suggests *negative definite* — as good as positive definite for GMRES, which would have made the
+"intrinsically indefinite" conclusion a coordinate artefact. Random directions in high dimensions
+concentrate. The spanning check — one direction per variable block — settles it:
+
+```
+qphys_ru=+7198.81  qphys_rv=+7188.39  qphys_rw=+14285.89
+qphys_ph=+1.000000  qphys_t=+7198.81  qphys_mu=-7196.82
+phys_blocks_pos=5  phys_blocks_neg=1  phys_straddles_origin=1
+```
+
+**MEASURED: `W(A)` straddles the origin in the physical Euclidean inner product, and the witness is
+the `mu` block.** The campaign's "intrinsically indefinite" therefore survives the coordinate
+objection — it is a property of the operator, not of `S` or `D`.
+
+Note the near-exact antisymmetry: `ru`/`t` at **+7198.81** against `mu` at **−7196.82**. That is the
+signature of a skew-like coupling between the mass variable and the momentum/thermal ones — the
+continuity coupling — and it is consistent with the long-standing record that `mu` dominates the
+stage-2 residual.
+
+**Two caveats, stated rather than buried.** (1) The block directions are uniform-fill, and this
+project has already recorded that horizontally-uniform structured directions are a **null space** for
+some blocks. `qphys_ph = 1.000000` *exactly* is that signature — `A = I − hγJ` acting as precisely the
+identity, i.e. `J` has no component along it — so the **positive** readings may understate structure.
+The negative witness is not degenerate (−7196.82, nowhere near 1) and is what carries the
+conclusion. (2) A spanning sample of six directions is a witness for straddling, not a bound on the
+range; "5 positive" is not a proof that only `mu` is negative.

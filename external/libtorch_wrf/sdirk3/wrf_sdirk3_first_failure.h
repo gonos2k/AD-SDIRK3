@@ -24,6 +24,7 @@
 // been a correct rule whose consumer read something else. A classifier whose emit site
 // re-derives the category from raw signals would be that defect again.
 
+#include <algorithm>
 #include <limits>
 
 namespace wrf {
@@ -59,6 +60,13 @@ enum class StageFailure {
     // (the solve worked) nor a forcing-term problem (tightening eta does not align two different
     // objectives): it is the two metrics disagreeing, which is a formulation question about D.
     KrylovObjectiveMismatch,
+    // R13.18 (deep review P0-1 remainder): both RECORDED metrics were satisfied and the STAGE
+    // GATE still refuses. The gate accepts on ||E^-1 R||, a third metric the receipt did not
+    // carry, so rho_D < eta and rho_S < eta with rho_E >= eta had no category at all -- the solve
+    // met everything the classifier could see and the step was rejected anyway. That is not the
+    // operator, not the forcing term and not the budget: it is the gate's metric disagreeing with
+    // the ones the solve was steered by.
+    StageGateMetricMismatch,
     // Neither tolerance met and the Arnoldi budget ran out. Distinct from stagnation: the solve
     // was still descending when it was cut off, so the work is the budget, not the operator.
     KrylovBudgetLimited,
@@ -67,6 +75,15 @@ enum class StageFailure {
     // behaviour (the residual grew) that an exception does not establish. Borrowing
     // KrylovDiverged for it would name a mechanism nothing measured.
     KrylovSolveThrew,
+    // R13.18 (round 7, P0-B): the Newton loop broke because the accepted update was numerically
+    // ZERO and the solve had been flagged a total failure. Naming that `KrylovStagnated` -- as an
+    // earlier version of this file did -- claims the linear solve produced nothing, and it did
+    // not: under the default configuration the flag is `raw > 1 || rel >= 0.999` on ||r||/||b||,
+    // the very coordinate R13.12-R13.16 moved this classifier OFF, and the run it was used to
+    // reclassify had a worst solve that removed 13.8% of its own residual. What is observed is
+    // the zero update; the cause is ambiguous between the ||b|| rule firing on a warm start it
+    // was retracted for and a genuine failure to produce a step. The layer says so.
+    ZeroUpdateAfterTotalFailure,
     // The signals do not support ANY verdict. Reported instead of guessing -- a classifier
     // that always names a layer will name a wrong one.
     InsufficientEvidence,
@@ -127,10 +144,14 @@ inline const char* stage_failure_name(StageFailure f) {
             return "krylov_forcing_term_limited";
         case StageFailure::KrylovObjectiveMismatch:
             return "krylov_objective_mismatch";
+        case StageFailure::StageGateMetricMismatch:
+            return "stage_gate_metric_mismatch";
         case StageFailure::KrylovBudgetLimited:
             return "krylov_budget_limited";
         case StageFailure::KrylovSolveThrew:
             return "krylov_solve_threw";
+        case StageFailure::ZeroUpdateAfterTotalFailure:
+            return "zero_update_after_total_failure";
         case StageFailure::InsufficientEvidence:     return "insufficient_evidence";
         case StageFailure::KrylovDiverged:           return "krylov_diverged";
         case StageFailure::EntryStateNotFinite:      return "entry_state_not_finite";
@@ -158,13 +179,21 @@ inline const char* stage_failure_layer(StageFailure f) {
             return "explicit_stage_gate_threshold";
         case StageFailure::ExplicitPublishRejected: return "explicit_publish_gate";
         case StageFailure::KrylovForcingTermLimited:
-            return "eisenstat_walker_forcing_or_inner_budget";
+            // R13.18 (deep review P0-2): SOURCE-NEUTRAL. This used to name Eisenstat-Walker while
+            // the tolerance could have come from a stage override or a ramp -- the source was
+            // produced, emitted, and read by nothing. The specific source is on the record and
+            // `krylov_forcing_layer_for` turns it into a layer.
+            return "krylov_tolerance_policy_or_inner_budget";
         case StageFailure::KrylovObjectiveMismatch:
             return "krylov_objective_D_vs_newton_merit";
+        case StageFailure::StageGateMetricMismatch:
+            return "stage_gate_E_metric_vs_solver_metrics";
         case StageFailure::KrylovBudgetLimited:
             return "inner_krylov_budget";
         case StageFailure::KrylovSolveThrew:
             return "linear_solve_exception";
+        case StageFailure::ZeroUpdateAfterTotalFailure:
+            return "zero_update_bnorm_rule_or_step_recovery";
         case StageFailure::InsufficientEvidence:     return "unknown";
         case StageFailure::KrylovDiverged:           return "operator_or_timestep_or_jvp";
         case StageFailure::EntryStateNotFinite:      return "nonfinite_entry_state";
@@ -188,8 +217,14 @@ inline const char* stage_failure_layer(StageFailure f) {
 // and budget usage -- a fixed precedence over aggregates, which cannot tell "the residual stopped
 // moving" from "the budget ran out at a residual that happened to be flat".
 enum class NewtonTerminationReason {
+    // R13.18 (deep review P1-5): `TrustRejected` and `NonfiniteResidual` were removed -- both had
+    // ZERO producers, and neither corresponds to an actual Newton-loop exit: the trust region's
+    // "all attempts rejected" path keeps K and CONTINUES, and no non-finite-residual site breaks
+    // the loop. An enum value nothing writes is the same defect as a field nothing reads, and
+    // keeping them made the inventory look more complete than the instrumentation was. If such an
+    // exit is added later, the value comes back WITH its producer.
     NotRecorded = 0, Converged, BudgetExhausted, ResidualStall, ZeroStepStall,
-    LinearSolveFailure, TrustRejected, NonfiniteResidual, Exception
+    ZeroUpdateAfterTotalFailure, Exception
 };
 
 inline const char* newton_termination_name(NewtonTerminationReason r) {
@@ -199,15 +234,72 @@ inline const char* newton_termination_name(NewtonTerminationReason r) {
         case NewtonTerminationReason::BudgetExhausted:    return "budget_exhausted";
         case NewtonTerminationReason::ResidualStall:      return "residual_stall";
         case NewtonTerminationReason::ZeroStepStall:      return "zero_step_stall";
-        case NewtonTerminationReason::LinearSolveFailure: return "linear_solve_failure";
-        case NewtonTerminationReason::TrustRejected:      return "trust_rejected";
-        case NewtonTerminationReason::NonfiniteResidual:  return "nonfinite_residual";
+        case NewtonTerminationReason::ZeroUpdateAfterTotalFailure:
+            return "zero_update_after_total_failure";
         case NewtonTerminationReason::Exception:          return "exception";
     }
     return "not_recorded";
 }
 
+// R13.18 (deep review P0-3): the near-worst tie fold, as a PURE FUNCTION so its
+// order-independence can be tested. The streaming version inside the solver never dropped the old
+// tie set when a strictly larger worst arrived, so A(0.90, not-met) then B(0.99, met) gave false
+// while B then A gave true -- the same solve set, two verdicts, and the verdict decides whether
+// the forcing-term / objective-mismatch categories may be read at all.
+//
+// The state is (worst_so_far, all_near_worst_met). A solve either: starts the set, joins it (its
+// ratio is within the band of the current worst), replaces it (strictly worse and outside the
+// band), or is ignored (clearly better than the worst).
+struct NearWorstFold {
+    double worst = -1.0;
+    bool all_met = true;
+};
+
+inline constexpr double kNearWorstTieBand = 1.0e-3;
+
+inline NearWorstFold near_worst_accumulate(NearWorstFold st, double progress, bool met_tolerance) {
+    if (!(progress >= 0.0)) return st;
+    if (st.worst < 0.0) return NearWorstFold{progress, met_tolerance};
+    const bool joins = (progress >= st.worst * (1.0 - kNearWorstTieBand));
+    const bool replaces = (progress > st.worst) &&
+                          (st.worst < progress * (1.0 - kNearWorstTieBand));
+    if (replaces) return NearWorstFold{progress, met_tolerance};
+    if (joins) {
+        return NearWorstFold{std::max(st.worst, progress), st.all_met && met_tolerance};
+    }
+    return st;   // clearly better than the worst: not in the set
+}
+
+// R13.18 (deep review P0-1): the metric the Krylov loop actually stopped on. The receipt used to
+// call it D unconditionally, but `WRF_SDIRK3_KRYLOV_WRMS_METRIC` swaps the block-constant D^-1 for
+// E^-1 S and the objective becomes rho_E.
+enum class KrylovStoppingMetric { Unknown, IdentityS, BlockD, StageWRMS };
+
+inline const char* krylov_stopping_metric_name(KrylovStoppingMetric m) {
+    switch (m) {
+        case KrylovStoppingMetric::Unknown:   return "unknown";
+        case KrylovStoppingMetric::IdentityS: return "identity_S";
+        case KrylovStoppingMetric::BlockD:    return "block_D";
+        case KrylovStoppingMetric::StageWRMS: return "stage_wrms_E";
+    }
+    return "unknown";
+}
+
 enum class KrylovToleranceSource { Unknown, Base, EisenstatWalker, StageOverride, InnRamp, Other };
+
+// R13.18 (deep review P0-2): the layer a tolerance-limited verdict should send work to, DERIVED
+// from the recorded source. Consumed beside the category so the two cannot disagree.
+inline const char* krylov_forcing_layer_for(KrylovToleranceSource s) {
+    switch (s) {
+        case KrylovToleranceSource::EisenstatWalker: return "eisenstat_walker_forcing";
+        case KrylovToleranceSource::StageOverride:   return "stage_tolerance_override";
+        case KrylovToleranceSource::InnRamp:         return "inn_tolerance_ramp";
+        case KrylovToleranceSource::Base:            return "base_inner_tolerance";
+        case KrylovToleranceSource::Unknown:
+        case KrylovToleranceSource::Other:           return "inner_tolerance_source_unrecorded";
+    }
+    return "inner_tolerance_source_unrecorded";
+}
 
 inline const char* krylov_tolerance_source_name(KrylovToleranceSource s) {
     switch (s) {
@@ -316,6 +408,22 @@ struct StageFailureSignals {
     bool   all_near_worst_met_tolerance = true;
     // R13.17 (external review P0-3): the loop's OWN exit reason, from the site that took it.
     NewtonTerminationReason newton_termination = NewtonTerminationReason::NotRecorded;
+    // R13.18 (deep review P0-4): the receipt of the solve that ENDED the loop. The worst_* fields
+    // belong to the stage's largest-ratio solve, which need not be the same iteration -- subtyping
+    // a terminal event from another iteration's evidence describes a solve that ended nothing.
+    int    exit_krylov_iter = -1;
+    bool   exit_D_reached = false;
+    bool   exit_S_reached = false;
+    bool   exit_budget_exhausted = false;
+    // The stage gate's own metric at the exit solve. -1 = not measured.
+    // The exit solve's three readings, raw, so a reader can recompute the category from the
+    // record instead of trusting the booleans derived from it.
+    double exit_rho_stop_final = -1.0;
+    double exit_rho_S_final = -1.0;
+    double exit_rho_E_final = -1.0;
+    bool   exit_E_reached = false;
+    KrylovStoppingMetric exit_stopping_metric = KrylovStoppingMetric::Unknown;
+    KrylovToleranceSource exit_tolerance_source = KrylovToleranceSource::Unknown;
     // The Arnoldi budget the WORST solve was given, so the ratio and the budget it was read
     // at are paired by construction rather than by the stage's last assignment.
     int    worst_krylov_restart_budget = -1;
@@ -453,9 +561,25 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // most likely to fall through to a Newton category and name `residual_floor_or_split`.
         // A loop that stopped because the linear solve produced nothing has its first failure
         // there; without receipts we cannot say WHICH kind, so we say the general one.
-        if (s.newton_termination == NewtonTerminationReason::LinearSolveFailure &&
-            !measured(s.worst_krylov_rel_error_vs_r0)) {
-            return StageFailure::KrylovStagnated;
+        // R13.18 (round 7, P0-B): a RECORDED event outranks the aggregate reconstruction -- but
+        // it may only claim what it observed. This one observed a zero update after a
+        // total-failure flag, so it gets its own category and layer; it does NOT get to say the
+        // linear solve failed, and it must not override the r0 evidence, because the flag that
+        // gates it is the ||b|| predicate this classifier spent four rounds moving off.
+        if (s.newton_termination == NewtonTerminationReason::ZeroUpdateAfterTotalFailure) {
+            // R13.18 (deep review P0-4): subtype from the EXIT solve when its receipt is present.
+            // A terminal event describes the solve that ended the loop; the stage-worst receipt
+            // describes a possibly different iteration and is telemetry, not attribution.
+            if (s.exit_krylov_iter >= 0 && s.exit_D_reached && !s.exit_S_reached) {
+                return StageFailure::KrylovObjectiveMismatch;
+            }
+            // Both recorded metrics met and the GATE's metric not: the seam the receipt could not
+            // express until rho_E was carried. Only claimed when rho_E was actually measured.
+            if (s.exit_krylov_iter >= 0 && s.exit_D_reached && s.exit_S_reached &&
+                measured(s.exit_rho_E_final) && !s.exit_E_reached) {
+                return StageFailure::StageGateMetricMismatch;
+            }
+            return StageFailure::ZeroUpdateAfterTotalFailure;
         }
         // ...and an exception in the linear solve is not the outer iteration's failure either.
         if (s.newton_termination == NewtonTerminationReason::Exception) {
@@ -485,9 +609,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
             // moved. A loop that stopped because the linear solve failed has its first failure in
             // the linear solve whatever the progress ratio reads, and WHICH kind is answered by
             // the same receipts below.
-            const bool exited_on_linear_failure =
-                (s.newton_termination == NewtonTerminationReason::LinearSolveFailure);
-            if (s.worst_krylov_rel_error_vs_r0 >= no_progress || exited_on_linear_failure) {
+            if (s.worst_krylov_rel_error_vs_r0 >= no_progress) {
                 // R13.16 (round 6, R6-2) / R13.17 (external review P0-2): WHY it made no
                 // progress. Four different answers, three of which are not the operator's fault,
                 // and they route to four different layers.

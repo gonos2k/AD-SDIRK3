@@ -19,6 +19,7 @@
 #include <iostream>
 #include <limits>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -722,9 +723,24 @@ int main() {
               "a solve that made no progress because its own forcing term did not ask for more "
               "is not the operator's failure -- naming it krylov_stagnated sends the work to the "
               "preconditioner, and the layer actually responsible had no category at all");
+        // R13.18 (deep review P0-2): the CATEGORY layer is source-neutral, and the specific
+        // source turns into a layer through `krylov_forcing_layer_for`. It used to name
+        // Eisenstat-Walker unconditionally while the tolerance could have come from a stage
+        // override or a ramp -- the source was produced, emitted, and read by nothing.
         check(std::string(stage_failure_layer(StageFailure::KrylovForcingTermLimited)) ==
-                  "eisenstat_walker_forcing_or_inner_budget",
-              "and that category names the forcing term and the inner budget, not the operator");
+                  "krylov_tolerance_policy_or_inner_budget",
+              "the category's own layer names the tolerance policy without asserting WHICH one");
+        check(std::string(wrf::sdirk3::krylov_forcing_layer_for(
+                  wrf::sdirk3::KrylovToleranceSource::StageOverride)) ==
+                  "stage_tolerance_override" &&
+              std::string(wrf::sdirk3::krylov_forcing_layer_for(
+                  wrf::sdirk3::KrylovToleranceSource::EisenstatWalker)) ==
+                  "eisenstat_walker_forcing" &&
+              std::string(wrf::sdirk3::krylov_forcing_layer_for(
+                  wrf::sdirk3::KrylovToleranceSource::Unknown)) ==
+                  "inner_tolerance_source_unrecorded",
+              "...and the recorded source selects the specific layer, with an UNRECORDED source "
+              "saying so rather than defaulting to a named mechanism");
         s.worst_krylov_met_tolerance = false;        // it stopped because it could not progress
         check(name_of(s) == "krylov_stagnated",
               "while the same ratio from a solve that did NOT meet its tolerance is a stall");
@@ -858,11 +874,14 @@ int main() {
         s.krylov_solves_measured_vs_r0 = 3;
         s.accepted_steps = 2; s.rejected_steps = 1;
         s.newton_iterations = 3; s.newton_iteration_budget = 12;
-        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::LinearSolveFailure;
-        check(name_of(s) == "krylov_stagnated",
-              "a loop that stopped because the linear solve produced NOTHING has its first "
-              "failure in the linear solve, whatever the progress ratio reads -- routing it to "
-              "residual_floor_or_split sends the work to the split-explicit rebuild");
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        check(name_of(s) == "zero_update_after_total_failure",
+              "the exit names WHAT IT OBSERVED -- a zero update after a total-failure flag -- and "
+              "not a mechanism. Calling it a Krylov stall claimed the linear solve produced "
+              "nothing, while the same run's worst solve removed 13.8% of its own residual, and "
+              "the flag gating it is the ||b|| predicate this classifier spent four rounds "
+              "moving off");
         s.newton_termination = wrf::sdirk3::NewtonTerminationReason::ResidualStall;
         check(name_of(s) == "newton_stagnated",
               "while the same ratio with a RECORDED residual stall is the outer iteration -- the "
@@ -877,16 +896,109 @@ int main() {
         s.worst_krylov_rel_error_vs_r0 = -1.0;       // NO solve measured r0
         s.krylov_r0_unmeasured_solves = 3;
         s.accepted_steps = 0; s.rejected_steps = 3;
-        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::LinearSolveFailure;
-        check(name_of(s) == "krylov_stagnated",
-              "the exit reason must be honoured with NO Krylov evidence too -- putting the test "
-              "inside the measured() branch left the misrouting alive on exactly the path most "
-              "likely to fall through to a Newton category");
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        check(name_of(s) == "zero_update_after_total_failure",
+              "the exit is honoured with NO Krylov evidence too, and still only claims what it "
+              "observed; its layer names both candidates (the ||b|| rule and the step recovery) "
+              "rather than picking one");
         s.newton_termination = wrf::sdirk3::NewtonTerminationReason::Exception;
         check(name_of(s) == "krylov_solve_threw",
               "and an exception thrown by the linear solve is not the outer iteration's failure "
               "-- nor is it DIVERGENCE, which is a measured behaviour an exception does not "
               "establish; the Exception enum value had ZERO producers until this review");
+    }
+
+    // R13.18 (deep review P0-3): the near-worst fold must be ORDER-INDEPENDENT. The reviewer's
+    // counterexample, both permutations, plus the properties the fold has to have.
+    {
+        using wrf::sdirk3::NearWorstFold;
+        using wrf::sdirk3::near_worst_accumulate;
+        struct Solve { double p; bool met; };
+        auto fold = [](std::vector<Solve> v) {
+            NearWorstFold st;
+            for (const auto& x : v) st = near_worst_accumulate(st, x.p, x.met);
+            return st;
+        };
+        const Solve A{0.90, false}, B{0.99, true};
+        const auto ab = fold({A, B});
+        const auto ba = fold({B, A});
+        check(ab.all_met == ba.all_met && ab.worst == ba.worst && ab.all_met,
+              "A(0.90,not-met) then B(0.99,met) must equal B then A -- the streaming version gave "
+              "false one way and true the other, and that verdict decides whether the "
+              "forcing-term and objective-mismatch categories may be read at all");
+
+        // A strictly worse solve outside the band REPLACES the set; it does not inherit it.
+        check(fold({{0.50, false}, {0.99, true}}).all_met,
+              "a clearly-better earlier solve is not in the final tie set and must not poison it");
+        // ...and a solve inside the band JOINS it.
+        check(!fold({{0.9895, false}, {0.99, true}}).all_met,
+              "a solve within the tie band of the final worst IS in the set, so one that met no "
+              "tolerance makes the set ambiguous");
+        // Order-independence of the joining case too.
+        check(fold({{0.9895, false}, {0.99, true}}).all_met ==
+                  fold({{0.99, true}, {0.9895, false}}).all_met,
+              "and that holds in either arrival order");
+        // A single solve is its own set.
+        check(near_worst_accumulate(NearWorstFold{}, 0.99, false).all_met == false &&
+              near_worst_accumulate(NearWorstFold{}, 0.99, true).all_met == true,
+              "the first solve starts the set rather than inheriting the `true` default");
+    }
+
+    {
+        // R13.18 (deep review P0-4): a terminal event is subtyped by the solve that ENDED the
+        // loop, not by the stage's largest-ratio solve -- they need not be the same iteration.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        // Stage-worst says iteration 0: D met, S not -- an objective mismatch THERE.
+        s.worst_krylov_rel_error_vs_r0 = 0.99;
+        s.worst_krylov_D_reached = true; s.worst_krylov_S_reached = false;
+        s.krylov_solves_measured_vs_r0 = 4;
+        // ...but the solve that ENDED the loop, at iteration 3, met neither.
+        s.exit_krylov_iter = 3;
+        s.exit_D_reached = false; s.exit_S_reached = false;
+        check(name_of(s) == "zero_update_after_total_failure",
+              "the exit solve met no tolerance, so the terminal event keeps its own name -- "
+              "reading the stage-worst receipt here would report an objective mismatch from an "
+              "iteration that ended nothing");
+        s.exit_D_reached = true;   // now the EXIT solve is the mismatch
+        check(name_of(s) == "krylov_objective_mismatch",
+              "and when the exit solve itself met D and not S, the subtype is earned by the "
+              "solve the event belongs to");
+        s.exit_krylov_iter = -1;   // no exit receipt at all
+        check(name_of(s) == "zero_update_after_total_failure",
+              "with no exit receipt the event may not borrow the stage-worst one");
+    }
+
+    {
+        // R13.18 (deep review P0-1 remainder): the THIRD metric. The stage gate accepts on
+        // ||E^-1 R||, so a solve can satisfy both recorded metrics and still be refused -- a state
+        // the receipt could not express, and therefore a state with no category.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        s.exit_krylov_iter = 2;
+        s.exit_D_reached = true; s.exit_S_reached = true;
+        s.exit_rho_E_final = 0.7; s.exit_E_reached = false;
+        check(name_of(s) == "stage_gate_metric_mismatch",
+              "both metrics the solver was steered by are satisfied and the GATE's metric is not "
+              "-- not the operator, not the forcing term, not the budget, but the gate's norm "
+              "disagreeing with the solver's");
+        check(std::string(stage_failure_layer(StageFailure::StageGateMetricMismatch)) ==
+                  "stage_gate_E_metric_vs_solver_metrics",
+              "and the layer names that disagreement rather than a component");
+        s.exit_E_reached = true;
+        check(name_of(s) != "stage_gate_metric_mismatch",
+              "with the gate's metric also satisfied there is no mismatch to report");
+        s.exit_E_reached = false; s.exit_rho_E_final = -1.0;
+        check(name_of(s) != "stage_gate_metric_mismatch",
+              "and an UNMEASURED rho_E may not produce the finding -- absence of a measurement "
+              "must not become one, here either");
     }
 
     // The layer mapping is the point of the exercise: it says where to work next.
@@ -905,7 +1017,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 73;
+    constexpr int expected_checks = 86;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

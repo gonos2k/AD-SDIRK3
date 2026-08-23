@@ -212,6 +212,18 @@ public:
         float tolerance_applied = -1.0f;
         bool  D_tolerance_reached = false;
         bool  S_tolerance_reached = false;
+        // R13.18 (deep review P0-5): the Arnoldi work actually SPENT and the work ALLOWED.
+        // `termination_reason == MaxBudget` does not establish that they are equal -- MaxBudget is
+        // the resolver's DEFAULT when no other reason is selected, and it coexists with the
+        // message "early exit before max restarts". A budget category built on the reason alone
+        // claims exhaustion it did not measure.
+        int   arnoldi_spent = -1;
+        int   arnoldi_allowed = -1;
+        // R13.18 (deep review P0-1): WHICH metric the loop stopped on. `WRF_SDIRK3_KRYLOV_WRMS_METRIC`
+        // replaces the block-constant D^-1 with E^-1 S, so the internal objective becomes rho_E --
+        // while the fields are named rho_D and D_tolerance_reached. A receipt that misnames the
+        // metric it stopped on is worse than one that omits it.
+        int   stopping_metric = 0;   // KrylovStoppingMetric
         int stag_count_final = 0;         // consecutive stagnating checks seen
         // R13.9: the LEFT WEIGHT this solve actually minimised under.
         //
@@ -450,6 +462,35 @@ public:
         int   worst_krylov_tolerance_source = 0;   // KrylovToleranceSource
         bool  worst_krylov_budget_exhausted = false;
         bool  all_near_worst_met_tolerance = true;
+        // R13.18 (deep review P0-4): the receipt of the solve that ENDED THE LOOP. The `worst_*`
+        // fields belong to the largest-ratio solve in the stage, which need not be the one that
+        // exited -- so a terminal failure could be subtyped from a different iteration's evidence.
+        // -1 / false = the exit was not a linear-solve event.
+        int   exit_krylov_iter = -1;
+        double exit_rho_stop_final = -1.0;
+        double exit_rho_S_final = -1.0;
+        bool  exit_D_reached = false;
+        bool  exit_S_reached = false;
+        int   exit_stopping_metric = 0;
+        int   exit_tolerance_source = 0;
+        bool  exit_budget_exhausted = false;
+        // The most recent solve's receipt, written where gmres_result is in scope. The exit site
+        // is later in the same Newton iteration and outside that scope, so it promotes these.
+        int   last_solve_iter = -1;
+        double last_rho_stop_final = -1.0;
+        double last_rho_S_final = -1.0;
+        bool  last_D_reached = false;
+        bool  last_S_reached = false;
+        int   last_stopping_metric = 0;
+        int   last_tolerance_source = 0;
+        bool  last_budget_exhausted = false;
+        // R13.18 (P0-1 remainder): the STAGE GATE's metric. The gate accepts on ||E^-1 R||, and a
+        // receipt carrying only D and S cannot express "both recorded metrics satisfied, gate
+        // still refuses".
+        double last_rho_E_final = -1.0;
+        bool  last_E_reached = false;
+        double exit_rho_E_final = -1.0;
+        bool  exit_E_reached = false;
         // R13.17 (external review P0-3): recorded at the site that ended the loop.
         int   newton_termination = 0;   // NewtonTerminationReason
         // Solves whose r0 was never measured, and (of those) how many made the opt-in r0 rule
