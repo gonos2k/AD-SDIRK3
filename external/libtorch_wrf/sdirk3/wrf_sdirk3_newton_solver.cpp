@@ -2133,8 +2133,75 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                       << " min_eig_sym=" << evals.min().item<double>()
                       << " max_eig_sym=" << evals.max().item<double>()
                       << " n_negative=" << (evals < 0.0).sum().item<int64_t>() << "/" << m
-                      << " definite=" << (evals.min().item<double>() > 0.0 ? 1 : 0)
-                      << std::endl << std::flush;
+                      << " definite=" << (evals.min().item<double>() > 0.0 ? 1 : 0);
+
+            // R13.9: the two defects that decide whether H_m is a PROJECTION at all, and an
+            // INDEPENDENT re-evaluation of the negative witness.
+            //
+            // A negative eigenvalue of sym(H_m) is a witness only if H_m = V^T B V, and that
+            // holds only if V is orthonormal and the Arnoldi relation B V_m = V_{m+1} H_m
+            // actually held in floating point. Neither was measured; both are cheap once the
+            // basis is in scope. The witness is then re-evaluated on the full operator:
+            // v_min = V y_min, q = <v_min, B v_min> / <v_min, v_min>. If q < 0 the negative
+            // direction is real in the space the solver iterates, by a path that does not go
+            // through the Hessenberg's arithmetic at all.
+            if (static_cast<int>(V.size()) >= m + 1) {
+                torch::NoGradGuard ng_defects;
+                // B as the loop applied it: the operator, halo-zeroed, then D^-1 when scaled.
+                auto apply_B = [&](const torch::Tensor& v) {
+                    auto w_ = A(v);
+                    zero_halo_regions(w_, halo_width, periodic_x, periodic_y);
+                    if (block_scaled) w_ = w_ * D_inv;
+                    return w_;
+                };
+                // Orthogonality: ||V^T V - I||_F over the m vectors the projection used.
+                auto Vm = torch::stack(std::vector<torch::Tensor>(V.begin(), V.begin() + m), 1)
+                              .to(torch::kFloat64);           // n x m
+                const auto gram = Vm.transpose(0, 1).matmul(Vm);
+                const double e_orth =
+                    (gram - torch::eye(m, torch::kFloat64)).norm().item<double>();
+                // Arnoldi relation: ||B V_m - V_{m+1} Hbar_m||_F / ||B V_m||_F, with Hbar the
+                // (m+1) x m Hessenberg the loop produced, reconstructed from ritz_H.
+                auto Hbar = torch::zeros({m + 1, m}, torch::kFloat64);
+                {
+                    auto hb = Hbar.accessor<double, 2>();
+                    for (int jj = 0; jj < m; ++jj) {
+                        const auto& col = ritz_H[static_cast<size_t>(jj)];
+                        for (int ii = 0; ii <= m && ii < static_cast<int>(col.size()); ++ii) {
+                            hb[ii][jj] = col[static_cast<size_t>(ii)];
+                        }
+                    }
+                }
+                auto Vm1 = torch::stack(
+                    std::vector<torch::Tensor>(V.begin(), V.begin() + m + 1), 1)
+                        .to(torch::kFloat64);                 // n x (m+1)
+                std::vector<torch::Tensor> BV_cols;
+                BV_cols.reserve(m);
+                for (int jj = 0; jj < m; ++jj) {
+                    BV_cols.push_back(apply_B(V[static_cast<size_t>(jj)]).to(torch::kFloat64));
+                }
+                const auto BV = torch::stack(BV_cols, 1);      // n x m
+                const double n_BV = BV.norm().item<double>();
+                const double e_arnoldi =
+                    n_BV > 0.0 ? (BV - Vm1.matmul(Hbar)).norm().item<double>() / n_BV : -1.0;
+                // The independent witness.
+                auto eig = torch::linalg_eigh(sym);
+                const auto y_min = std::get<1>(eig).select(1, 0);   // eigvec of min eigval
+                const auto v_min = Vm.matmul(y_min);               // n
+                const auto Bv = apply_B(v_min.to(V[0].scalar_type())).to(torch::kFloat64);
+                const double vv = v_min.dot(v_min).item<double>();
+                const double q_min_direct =
+                    vv > 0.0 ? v_min.dot(Bv).item<double>() / vv : 0.0 / 0.0;
+                std::cerr << " e_orthogonality=" << e_orth
+                          << " e_arnoldi=" << e_arnoldi
+                          << " q_min_direct=" << q_min_direct
+                          << " witness_confirmed="
+                          << ((q_min_direct == q_min_direct && q_min_direct < 0.0) ? 1 : 0);
+            } else {
+                std::cerr << " e_orthogonality=-1 e_arnoldi=-1 q_min_direct=nan"
+                          << " witness_confirmed=0";
+            }
+            std::cerr << std::endl << std::flush;
         }
 
         // PER-RESTART. Each restart builds a NEW basis V^(r) and a NEW local Hessenberg; row i of
@@ -2342,8 +2409,9 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     bool periodic_y,
     KrylovBasisCapture* basis_capture,
     const wrf::sdirk3::FrozenStageWeights* stage_weights,
-    const torch::Tensor* krylov_to_physical) {
-    
+    const torch::Tensor* krylov_to_physical,
+    torch::Tensor* d_inv_out) {
+
     torch::Tensor x = x0.clone();
 
     // P0 FIX: Compute initial residual
@@ -2543,6 +2611,11 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         if (all_blocks_ok) {
             block_scaled = true;
             L_D = D_inv;
+            // R13.9: publish the weight, once, where it is finalised.
+            if (d_inv_out) {
+                torch::NoGradGuard ng_dinv;
+                *d_inv_out = D_inv.detach().clone();
+            }
             // WHY the two weightings behave so differently -- their STRUCTURE, not just their values.
             //
             //   D_q = ||r_0,q||          BLOCK-CONSTANT, set by the initial residual
@@ -8168,7 +8241,8 @@ public:
                     const bool early_stop_off = no_early_stop_enabled();
 
                     struct Row { const char* arm; int j; double rho; double rho_phys;
-                                 float rel; int iters; int term; long long a_applies; };
+                                 double rho_D; float rel; int iters; int term;
+                                 long long a_applies; };
                     std::vector<Row> rows;
                     // R13.8 (A4): equal j is equal ARNOLDI DIMENSION, not equal work -- the M
                     // arm additionally applies M^-1 per direction. Counting the operator
@@ -8185,6 +8259,7 @@ public:
                     auto run = [&](bool use_M, int m) {
                         auto arm_M = use_M ? pristine_M : identity_M;
                         a_apply_count = 0;
+                        torch::Tensor d_inv_used;
                         auto res = krylov_methods::solve_fgmres(
                             std::function<torch::Tensor(const torch::Tensor&)>(counting_op),
                             gmres_rhs, gmres_x0, stage, ru_share,
@@ -8193,8 +8268,8 @@ public:
                             layout_initialized_ ? &cached_layout_ : nullptr,
                             halo_mask_initialized_ ? &halo_mask_ : nullptr,
                             options_.periodic_x, options_.periodic_y,
-                            nullptr, nullptr, nullptr);
-                        double rho = -1.0, rho_phys = -1.0;
+                            nullptr, nullptr, nullptr, &d_inv_used);
+                        double rho = -1.0, rho_phys = -1.0, rho_D = -1.0;
                         if (res.x.defined() && b_norm > 0.0) {
                             const auto r = gmres_rhs.detach() - gmres_op(res.x.detach());
                             rho = r.to(torch::kFloat64).norm().item<double>() / b_norm;
@@ -8202,6 +8277,18 @@ public:
                             // physical residual is S*r~, and winning in one norm does not
                             // imply winning in the other -- the two weight the blocks
                             // differently by construction.
+                            // R13.9: FGMRES's OWN objective, under the weight IT used and
+                            // published. The sharp question this answers: a preconditioner can
+                            // help the norm the solver minimises while hurting the physical
+                            // one, which makes it a preconditioner for the wrong objective
+                            // rather than a bad one.
+                            if (d_inv_used.defined() && d_inv_used.numel() > 0) {
+                                const auto rD = (d_inv_used * r).to(torch::kFloat64);
+                                const auto bD =
+                                    (d_inv_used * gmres_rhs.detach()).to(torch::kFloat64);
+                                const double nbD = bD.norm().item<double>();
+                                if (nbD > 0.0) rho_D = rD.norm().item<double>() / nbD;
+                            }
                             if (scaling_initialized_ && S_diag_.defined()) {
                                 const auto r_phys = (S_diag_ * r).to(torch::kFloat64);
                                 const auto b_phys =
@@ -8212,7 +8299,8 @@ public:
                                 }
                             }
                         }
-                        rows.push_back({use_M ? "M" : "I", m, rho, rho_phys, res.rel_error,
+                        rows.push_back({use_M ? "M" : "I", m, rho, rho_phys, rho_D,
+                                        res.rel_error,
                                         res.iterations,
                                         static_cast<int>(res.termination_reason),
                                         a_apply_count});
@@ -8298,6 +8386,7 @@ public:
                               << " e_homogeneity=" << e_hom
                               << " e_additivity=" << e_add
                               << " metric_phys=rho_phys_S_weighted"
+                              << " metric_D=rho_D_fgmres_objective"
                               << " probe_noninterfering=" << (noninterfering ? 1 : 0)
                               << " worst_order_delta=" << worst_order_delta
                               << (verdict.valid
@@ -8315,6 +8404,7 @@ public:
                                   << " j=" << rows[i].j
                                   << " rho_S=" << rows[i].rho
                                   << " rho_phys=" << rows[i].rho_phys
+                                  << " rho_D=" << rows[i].rho_D
                                   << " A_applies=" << rows[i].a_applies
                                   << " rel_reported=" << rows[i].rel
                                   << " iters=" << rows[i].iters

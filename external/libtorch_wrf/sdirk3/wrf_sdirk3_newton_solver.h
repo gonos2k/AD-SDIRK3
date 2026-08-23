@@ -189,6 +189,15 @@ public:
         float probe_hopeless_floor = -1.0f;  // max(0.9, 2*tol) when probed
         float stag_ratio_used = -1.0f;    // configured stagnation ratio
         int stag_count_final = 0;         // consecutive stagnating checks seen
+        // R13.9: the LEFT WEIGHT this solve actually minimised under.
+        //
+        // FGMRES minimises ||D^-1 (b - A M^-1 z)||, and D is built from the initial residual
+        // inside this function. A caller comparing two configurations therefore cannot form
+        // that objective without D -- and reconstructing it from the same rule is the
+        // duplicate-authority defect this tree has paid for repeatedly. The solver publishes
+        // the weight it used; the caller applies it. Empty when block scaling is off, where
+        // D = I.
+        torch::Tensor d_inv_used;
     };
 
     /**
@@ -529,7 +538,12 @@ namespace krylov_methods {
         // S, the map from the SCALED coordinates this loop iterates back to physical ones.
         // Null when scaling is inactive, in which case S = I. Without it a physically-weighted
         // defect would be computed on scaled vectors, which is only correct when S = I.
-        const torch::Tensor* krylov_to_physical = nullptr
+        const torch::Tensor* krylov_to_physical = nullptr,
+        // R13.9: OUT -- the left weight D this solve minimised under, published so a caller
+        // comparing two configurations can form FGMRES's OWN objective without rebuilding D
+        // from the same rule (a second copy of a convention is how the two drift apart).
+        // Empty when block scaling is off, where D = I.
+        torch::Tensor* d_inv_out = nullptr
     );
     
     /**

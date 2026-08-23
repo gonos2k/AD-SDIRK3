@@ -73,7 +73,7 @@ Legend: `[ ]` open · `[x]` closed · `[~]` partial · `[B]` blocked upstream.
       (block-dependent ε), and FGMRES presumes a linear operator. Record the JVP receipt and
       measure repeatability / homogeneity / additivity.
 
-- [~] **A7 — `rho_true` is not the physical residual.** (review P0-7) CONFIRMED: with scaling
+- [x] **A7 — `rho_true` is not the physical residual.** (review P0-7) CONFIRMED: with scaling
       on, the operator is `S⁻¹AS` and FGMRES minimises a further `D⁻¹`-weighted norm. What is
       reported is the unweighted Euclidean residual **in the S-Krylov coordinates**. Permitted
       conclusion: *identity was lower in ρ_S.* Not established: the solver objective ρ_D, the
@@ -98,7 +98,7 @@ Legend: `[ ]` open · `[x]` closed · `[~]` partial · `[B]` blocked upstream.
       incremented whenever the solve was not a *total* failure, so a solve that ended at
       ρ = 0.5 counts as a success. Rename to what it counts, and count convergence separately.
 
-- [~] **B3 — the numerical-range record does not name its coordinates.** (review §10)
+- [x] **B3 — the numerical-range record does not name its coordinates.** (review §10)
       CONFIRMED: `UNPRECOND` means `M = I`, not "unscaled". With block scaling the projected
       operator is `D⁻¹S⁻¹AS`. The negative witness stands **for the operator GMRES iterated**;
       it does not transfer to raw physical `A` without a coordinate receipt. Add
@@ -241,3 +241,60 @@ did not bite, where before there was none.
   matches the earlier finding that aligning the Krylov objective made convergence worse.
 - **Newton iteration 0**, not the iteration where GMRES fails (≈4).
 - **ρ_WRMS**, the stage gate's own metric.
+
+
+---
+
+# Third pass — the two remaining halves (R13.9)
+
+- **A7 closed.** `solve_fgmres` now *publishes* the left weight it minimised under
+  (`d_inv_out`), and the probe forms ρ_D from it. Not rebuilt from the same rule — a second
+  copy of a convention is how the two drift apart.
+- **B3 closed.** The numerical-range record emits `e_orthogonality` (`‖VᵀV − I‖_F`) and
+  `e_arnoldi` (`‖BV_m − V_{m+1}H̄_m‖_F / ‖BV_m‖_F`), which decide whether `H_m` is a projection
+  at all — and then **re-evaluates the witness independently**: `v_min = V·y_min`,
+  `q = ⟨v_min, B·v_min⟩/⟨v_min, v_min⟩` on the full operator, by a path that never touches the
+  Hessenberg's arithmetic. `witness_confirmed=1` only if `q < 0`.
+
+Measurements pending the rebuild; results appended below.
+
+## Third-pass measurements
+
+### ρ_D — the "wrong objective" hypothesis is REFUTED
+
+| j | ρ_D (M) | ρ_D (I) | D ratio | ρ_S ratio | ρ_phys ratio |
+|---|---|---|---|---|---|
+| 4 | 0.7750 | 0.5497 | 1.41 | 1.37 | 1.57 |
+| 8 | 0.5879 | 0.3534 | 1.66 | 1.52 | 2.46 |
+| 16 | 0.5205 | 0.2853 | 1.82 | 1.55 | 6.02 |
+| 32 | 0.4617 | 0.2721 | 1.70 | 1.43 | 6.47 |
+| 48 | 0.3843 | 0.2623 | 1.47 | 1.26 | 5.06 |
+
+The identity beats the production preconditioner **in all three norms** — the solver's own
+objective included. `M` is not "a preconditioner for the wrong objective"; it loses in the
+norm it is optimised against. The hypothesis raised at the end of R13.8 is closed, by
+measurement, in the negative. `ab_valid=1` throughout; `e_repeat=0`, `e_homogeneity=4.5e-07`,
+`e_additivity=3.0e-07`.
+
+### Numerical range — the witness is confirmed by an independent path
+
+```
+m=20  min_eig_sym=-976.8   q_min_direct=-976.8   witness_confirmed=1
+      e_orthogonality=3.3e-04   e_arnoldi=9.5e-08
+m=20  min_eig_sym=-1913    q_min_direct=-1913    witness_confirmed=1
+      e_orthogonality=4.6e-04   e_arnoldi=9.0e-08
+```
+
+`q_min_direct` — `⟨v_min, B·v_min⟩/⟨v_min, v_min⟩` evaluated on the **full operator**, by a path
+that never touches the Hessenberg's arithmetic — agrees with the projected eigenvalue to four
+digits. The Arnoldi relation held to 1e-07 (float32 ε level) and the basis is orthonormal to
+3e-04. So `H_m` genuinely **is** `VᵀBV`, and the negative direction is real in the space the
+solver iterates.
+
+The record now also names that space: `operator_coordinates=D_left_S_krylov`,
+`block_scaled=1`, `right_precond=identity`. The witness holds for `D⁻¹S⁻¹AS`. It is **not**
+a statement about raw physical `A`, and the record no longer lets it be read as one.
+
+## Checklist state
+
+All twelve review items closed. Adversarial review in progress.
