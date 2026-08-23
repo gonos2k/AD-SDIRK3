@@ -140,7 +140,7 @@ public:
     enum class KrylovTerminationReason {
         InitialConverged,            // ||b - A x0|| already under tolerance
         ToleranceReached,            // converged during the Arnoldi sweep
-        InternalConvergenceStop,     // internal-stop criterion before budget
+        InternalConvergenceStop,     // D-objective tolerance met before budget; see rho_D/rho_S
         ArnoldiStagnation,           // consecutive true-residual ratio detector
         MidBudgetHopeless,           // forced ru-dominant mid-budget probe
         RestartStagnationThreshold,  // restart-to-restart stagnation guard
@@ -189,6 +189,29 @@ public:
         float probe_true_err = -1.0f;     // true relative error at that check
         float probe_hopeless_floor = -1.0f;  // max(0.9, 2*tol) when probed
         float stag_ratio_used = -1.0f;    // configured stagnation ratio
+        // R13.17 (external review P0-1): THE TWO CONVERGENCES, stated separately.
+        //
+        // FGMRES ENDS ITS SEARCH on the D-weighted objective it actually minimises,
+        //   rho_D = ||D^-1 r|| / ||D^-1 b||        (both sides D-scaled; no mixed denominator)
+        // and REPORTS SUCCESS on the unweighted Krylov-coordinate residual,
+        //   rho_S = ||r|| / ||b||.
+        // A solve with rho_D < eta and rho_S >= eta stopped because its own objective was met and
+        // was reported as a FAILED linear solve -- feeding total-failure recovery, zero-step
+        // handling and trust rejection. Collapsed into one `success`, that state cannot be told
+        // apart from "the operator could not be solved", and it is precisely the
+        // objective-mismatch this project has measured before.
+        //
+        // Production control flow is unchanged: the D-stop remains a legitimate termination and
+        // the Newton layer still judges merit in its own coordinate. What changes is that both
+        // readings, the tolerance actually applied and WHERE THAT TOLERANCE CAME FROM are on the
+        // record, so a consumer can name the seam instead of inheriting one side of it.
+        float rho_D_initial = -1.0f;
+        float rho_D_final = -1.0f;
+        float rho_S_initial = -1.0f;   // == initial_rel_error, kept here for symmetry
+        float rho_S_final = -1.0f;     // == rel_error
+        float tolerance_applied = -1.0f;
+        bool  D_tolerance_reached = false;
+        bool  S_tolerance_reached = false;
         int stag_count_final = 0;         // consecutive stagnating checks seen
         // R13.9: the LEFT WEIGHT this solve actually minimised under.
         //
@@ -419,6 +442,16 @@ public:
         float worst_krylov_eta = -1.0f;
         // The Arnoldi budget the WORST solve was given (the stage field is last-solve-wins).
         int   worst_krylov_restart_budget = -1;
+        // R13.17 (external review P0-2): which metric the worst solve satisfied, where its
+        // tolerance came from, whether its budget ran out, and whether EVERY solve tied at the
+        // worst ratio met a tolerance (a tie must not be resolved by arrival order).
+        bool  worst_krylov_D_reached = false;
+        bool  worst_krylov_S_reached = false;
+        int   worst_krylov_tolerance_source = 0;   // KrylovToleranceSource
+        bool  worst_krylov_budget_exhausted = false;
+        bool  all_near_worst_met_tolerance = true;
+        // R13.17 (external review P0-3): recorded at the site that ended the loop.
+        int   newton_termination = 0;   // NewtonTerminationReason
         // Solves whose r0 was never measured, and (of those) how many made the opt-in r0 rule
         // fall back to the ||b|| rule. Without these the record claims a rule it did not apply.
         int   krylov_r0_unmeasured_solves = 0;

@@ -40,6 +40,11 @@ using wrf::sdirk3::StageFailureSignals;
 // A clean, converged, published stage.
 StageFailureSignals ok_stage() {
     StageFailureSignals s;
+    // R13.17 (external review P0-4): a properly STAMPED record. The provenance gate now refuses a
+    // missing stamp as well as a mismatched one, so every fixture must say which stage owns its
+    // signals -- which is the point: an unstamped record used to run the whole classifier.
+    s.signals_from_stage = 2;
+    s.classifying_stage = 2;
     s.entry_state_finite = true;
     s.initial_residual_measured = true;
     s.initial_residual_finite = true;
@@ -175,6 +180,7 @@ int main() {
     // gate_metric_ok=1 (not the admissibility threshold).
     {
         StageFailureSignals s;
+        s.signals_from_stage = 2; s.classifying_stage = 2;  // R13.17: stamped
         s.entry_state_finite = true;
         s.initial_residual_measured = true;
         s.initial_residual_finite = true;
@@ -202,6 +208,7 @@ int main() {
     {   // The same signals with the budget NOT exhausted: the iteration stopped early for
         // some other reason, and that IS a finding about the solve.
         StageFailureSignals s;
+        s.signals_from_stage = 2; s.classifying_stage = 2;  // R13.17: stamped
         s.entry_state_finite = true;
         s.initial_residual_measured = true;
         s.initial_residual_finite = true;
@@ -653,6 +660,7 @@ int main() {
     {
         // An explicit (ARK) stage runs no Newton, so every implicit signal is at its default.
         StageFailureSignals s;
+        s.signals_from_stage = 2; s.classifying_stage = 2;  // R13.17: stamped
         s.is_explicit_stage = true;
         s.explicit_rhs_measured = true;
         s.explicit_rhs_finite = false;
@@ -673,6 +681,7 @@ int main() {
     }
     {
         StageFailureSignals s;
+        s.signals_from_stage = 2; s.classifying_stage = 2;  // R13.17: stamped
         s.is_explicit_stage = true;
         s.explicit_rhs_measured = false;
         check(name_of(s) == "insufficient_evidence",
@@ -744,6 +753,142 @@ int main() {
               "classifier does not get weaker on evidence it already had");
     }
 
+    // R13.17 (external review P0-4): fail-closed on ABSENCE, not only on disagreement.
+    {
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.worst_krylov_rel_error_vs_r0 = 0.999;
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.signals_from_stage = -1;                   // the documented "not stamped" sentinel
+        check(name_of(s) == "stage_signal_missing",
+              "an UNSTAMPED record cannot be classified: the gate required both stamps >= 0, so "
+              "the sentinel skipped it and the whole classifier ran on signals of unknown owner");
+        s.signals_from_stage = 2; s.classifying_stage = -1;
+        check(name_of(s) == "stage_signal_missing",
+              "and the same when the classifying stage is the one that was never stamped");
+    }
+    // R13.17 (external review P0-2): FOUR reasons a solve can show no progress, four layers.
+    {
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.krylov_solves_measured_vs_r0 = 4;
+        s.accepted_steps = 4;
+        s.worst_krylov_rel_error_vs_r0 = 0.99;
+        // The decisive synthetic case the review names: rho_D = 0.85 < eta = 0.9 while
+        // rho_S = 0.99 > eta. The solve minimised WHAT IT WAS ASKED TO and the result is still
+        // useless to the Newton merit.
+        s.worst_krylov_D_reached = true;
+        s.worst_krylov_S_reached = false;
+        s.worst_krylov_met_tolerance = true;         // InternalConvergenceStop is a tolerance
+        s.worst_krylov_tolerance_source = wrf::sdirk3::KrylovToleranceSource::EisenstatWalker;
+        check(name_of(s) == "krylov_objective_mismatch",
+              "D reached and S not is neither a stall (the solve worked) nor a forcing-term "
+              "problem (tightening eta does not align two objectives) -- and it is exactly the "
+              "InternalConvergenceStop state the round-6 rule sent back to krylov_stagnated");
+        check(std::string(stage_failure_layer(StageFailure::KrylovObjectiveMismatch)) ==
+                  "krylov_objective_D_vs_newton_merit",
+              "and its layer names the D objective against the Newton merit, not the operator");
+
+        s.worst_krylov_D_reached = true; s.worst_krylov_S_reached = true;
+        check(name_of(s) == "krylov_forcing_term_limited",
+              "with BOTH metrics satisfied and progress still poor, the forcing term asked for "
+              "little -- that is the policy layer");
+
+        s.worst_krylov_D_reached = false; s.worst_krylov_S_reached = false;
+        s.worst_krylov_met_tolerance = false;
+        s.worst_krylov_budget_exhausted = true;
+        check(name_of(s) == "krylov_budget_limited",
+              "neither tolerance met and the budget gone is a solve cut off while still "
+              "descending -- the inner budget, not the operator");
+
+        s.worst_krylov_budget_exhausted = false;
+        check(name_of(s) == "krylov_stagnated",
+              "and only when it met nothing and was not cut off is the operator implicated");
+    }
+    {
+        // R13.17 (external review P0-2): a TIE must not be resolved by arrival order.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.krylov_solves_measured_vs_r0 = 4;
+        s.accepted_steps = 4;
+        s.worst_krylov_rel_error_vs_r0 = 0.99;
+        s.worst_krylov_D_reached = true;
+        s.worst_krylov_met_tolerance = true;
+        s.all_near_worst_met_tolerance = false;      // another solve tied and met nothing
+        check(name_of(s) == "krylov_stagnated",
+              "when a solve tied at the worst ratio and met NO tolerance, the forcing-term and "
+              "objective-mismatch readings are refused -- with eta saturated at its cap a tie is "
+              "not a remote case, and a strict `>` let whichever arrived first name the layer");
+    }
+
+    // R13.17 (external review P0-3): the loop's OWN exit reason outranks the reconstruction.
+    {
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;   // flat: reconstruction says "stall"
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.accepted_steps = 3;
+        s.newton_iterations = 12; s.newton_iteration_budget = 12;
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::BudgetExhausted;
+        check(name_of(s) == "newton_budget_exhausted",
+              "a flat residual at the bound is 'stopped moving' to the aggregate reconstruction "
+              "and 'ran out of budget' to the loop itself -- and the loop is the one that knows; "
+              "the campaign's reading of the 12x-budget run rests on exactly this distinction");
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::ResidualStall;
+        check(name_of(s) == "newton_stagnated",
+              "and the same aggregates with a RECORDED stall are a stall");
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::NotRecorded;
+        check(name_of(s) == "newton_stagnated",
+              "an unrecorded reason falls back to the old precedence, so records taken before "
+              "the field classify exactly as they did");
+    }
+
+    {
+        // R13.17, MEASURED: the em_b_wave 12x-budget run. The ratio fell below the boundary and
+        // the category became `newton_stagnated`, layer `residual_floor_or_split` -- the
+        // split-explicit rebuild -- while the loop's own exit was LinearSolveFailure ("[Newton]
+        // GMRES total failure + zero update"), the SAME exit as the default-budget run. Only the
+        // ratio moved. The campaign read that flip as "the failure moved outward to Newton".
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.worst_krylov_rel_error_vs_r0 = 0.8622;     // BELOW the 0.90 boundary
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.accepted_steps = 2; s.rejected_steps = 1;
+        s.newton_iterations = 3; s.newton_iteration_budget = 12;
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::LinearSolveFailure;
+        check(name_of(s) == "krylov_stagnated",
+              "a loop that stopped because the linear solve produced NOTHING has its first "
+              "failure in the linear solve, whatever the progress ratio reads -- routing it to "
+              "residual_floor_or_split sends the work to the split-explicit rebuild");
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::ResidualStall;
+        check(name_of(s) == "newton_stagnated",
+              "while the same ratio with a RECORDED residual stall is the outer iteration -- the "
+              "two are separated by the exit reason, not by the threshold");
+    }
+
+    {
+        // R13.17 SELF-REVIEW: the two holes the first version of the linear-failure fix left.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.worst_krylov_rel_error_vs_r0 = -1.0;       // NO solve measured r0
+        s.krylov_r0_unmeasured_solves = 3;
+        s.accepted_steps = 0; s.rejected_steps = 3;
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::LinearSolveFailure;
+        check(name_of(s) == "krylov_stagnated",
+              "the exit reason must be honoured with NO Krylov evidence too -- putting the test "
+              "inside the measured() branch left the misrouting alive on exactly the path most "
+              "likely to fall through to a Newton category");
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::Exception;
+        check(name_of(s) == "krylov_solve_threw",
+              "and an exception thrown by the linear solve is not the outer iteration's failure "
+              "-- nor is it DIVERGENCE, which is a measured behaviour an exception does not "
+              "establish; the Exception enum value had ZERO producers until this review");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -760,7 +905,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 58;
+    constexpr int expected_checks = 73;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
