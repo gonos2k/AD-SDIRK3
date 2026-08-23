@@ -613,3 +613,759 @@ receipts per row (N4, P1-5i); all three norms in `all_finite`, residuals halo-ze
 4. Block-restricted least squares over the M arm's own Z₄₈ (C4a): separates "M's rows are
    broken" from "the D-optimum spends its subspace on the cheap blocks". Zero new matvecs.
 5. Per-iteration `newton_residuals` + ared/pred (C6/C7): temporal order and the Newton rate.
+
+## Round-2 measurements, run
+
+### Extended ladder (referee C1) — the crossing signature is real
+
+Failing iteration, `WRF_SDIRK3_FROZEN_MI_AB_EXTEND=1`, `ab_valid=1`, `worst_order_delta=0`,
+`halo_floor_delta=9.7e-05`.
+
+| j | ρ_D (M) | ρ_D (I) | M/I | ρ_phys (M) | ρ_phys (I) |
+|---|---|---|---|---|---|
+| 48 | 0.825 | 0.415 | 1.99 | 0.873 | 0.184 |
+| 96 | 0.698 | 0.347 | 2.01 | 0.726 | 0.135 |
+| 192 | 0.487 | **0.318** | **1.53** | 0.477 | 0.124 |
+
+From j=96 to 192 M drops ρ_D by 0.211 and I by 0.029. **The identity plateaus at ρ_D ≈ 0.32 —
+it never meets the forcing term η=0.3, even at 192 — while M is still descending.** The
+M/I ratio peaks at j≈96 and falls. This is exactly the cluster-plus-outliers shape the referee
+said a "right on some blocks, wrong on others" preconditioner would produce: M spends its
+first ~100–200 directions on outliers and only then catches up.
+
+So the scoping is now measured, not cautionary: **"identity beats M" holds at the production
+budget (j=7) by a wide margin and through j≈192; it is not a statement about M's
+asymptotics, and I has a floor of its own.** Neither arm completes the solve.
+
+### Warm start off (referee X5) — REFUTED as a contributor, in the useful direction
+
+Same frozen (A, b) at iteration 3, `x₀ = 0` (`x0_digest=0`, `rho0_* = 1`):
+
+| arm | j=8 ρ_D | j=48 ρ_D | j=48 ρ_phys |
+|---|---|---|---|
+| I from x₀=0 | 0.885 | 0.617 | 0.233 |
+| I from warm start | 0.568 | 0.415 | 0.184 |
+| M from x₀=0 | 0.897 | 0.814 | **1.000** |
+
+**The warm start makes the solve easier**, despite beginning above ‖b‖ in ρ_S and ρ_D: it
+is a good Krylov seed. "The failing system was made harder by the warm start" is refuted.
+And from zero, M makes **no progress at all in the physical norm in 48 steps** (ρ_phys
+1.000). Production classified this run `krylov_diverged` because ρ_S at j=8 was 1.001 > 1
+while ρ_D had fallen to 0.897 — the referee's X1 in a single line: production judges in a
+norm the loop does not minimise.
+
+### What this round adds to the picture
+
+- I's advantage is early (j ≤ 8) and finite (floor ≈ 0.32 in ρ_D).
+- M's failure is late-starting, not permanent — but at the budget production can afford it is
+  total (ρ_phys 0.89–1.00 at j=8 on the failing system).
+- The warm start is not the problem.
+- The production total-failure predicate compares ρ_S against ‖b‖; the r₀ rule is now
+  available **opt-in** (`WRF_SDIRK3_KRYLOV_FAILURE_VS_R0`), both readings on the record.
+
+## Round-2 measurements, second batch
+
+### The float32 hypothesis passes its first test (referee X3, test 1)
+
+Numerical-range record, iteration 0, preconditioner off, block scaling on:
+
+```
+m=20  hcol_norm_min=345.2  hcol_norm_max=844    (restart 1)
+m=20  hcol_norm_min=753.6  hcol_norm_max=1511   (restart 2)
+```
+
+`‖H̄eᵢ‖ = ‖Bvᵢ‖` with `‖vᵢ‖ = 1` is the operator's magnitude on the directions GMRES built.
+In B-coordinates `D⁻¹ ≈ 2.1e-3` on five of six blocks, so on those directions
+`‖A_S v‖/‖v‖ ≈ 1.6e5 – 7e5`, where the identity term of `A_S = I − hγ S⁻¹JS` contributes
+exactly 1. The float32 matvec's measured relative error is 3e-7. **Absolute error 0.05–0.2
+against an identity term of 1: the part of A that makes an implicit stage different from a
+singular Jacobian solve is resolved to 5–20% on exactly the directions GMRES uses.** The earlier
+"not precision" verdict compared 1e-7 to a 0.37 residual. The decisive test (a float64 replay
+of the frozen identity arm) has not been run; until it has, float32 is an *open* mechanism for
+the floor, and a serious one.
+
+### The negative curvature is in the diagonal blocks (referee C6d)
+
+```
+q_min_direct=-976.8   q_min_blockdiag=-977.9
+```
+
+`⟨v_min, Σ_q P_q B P_q v_min⟩` reproduces the full quadratic form to 0.1%. The indefiniteness
+lives **inside the variable blocks**, not in the coupling between them — so a by-variable
+block-diagonal preconditioner is the right *class* for it (the production M's structure).
+Whether M's blocks are the right *values* is a separate question the per-block A/B already
+answered in the negative for w/φ/μ.
+
+### At the production budget, M does not move ph (referee X4)
+
+Failing iteration, m=8 (production: restart 7, one cycle), `‖r_block‖/‖b_block‖`:
+
+| block | ρ₀ | M | I | Msel |
+|---|---|---|---|---|
+| ru | 1.667 | 0.583 | 0.473 | 0.533 |
+| rv | 1.687 | 1.536 | 1.455 | 1.727 |
+| rw | 0.877 | 0.896 | **0.292** | 0.287 |
+| **ph** | 1.012 | **1.003** | **0.709** | 0.721 |
+| t | 1.363 | **0.249** | 0.454 | 0.422 |
+| mu | 0.858 | 0.888 | **0.172** | 0.189 |
+
+ph is ≈¾ of ρ_S. **Under M it moves 1% in the eight steps production can afford; under I, 30%.**
+M beats I on one block at this budget (t). This is the block-level form of "neither arm reaches
+the forcing term, and the identity fails by less".
+
+### Production under the r₀ rule (opt-in), with time order on the record
+
+```
+category=krylov_stagnated  gmres_total_failures=1
+first_krylov_failure_iter=3  first_rejection_iter=3  argmin_residual_iter=2
+```
+
+The Krylov failure and the rejection are in the **same** iteration (3) — data-flow order, the
+failed solve produced the rejected step — and the residual minimum was at iteration 2. The
+classifier's new time-order clause has the information it needs. Open: why this solve is still
+a total failure under the r₀ rule when the probe's M arm at j=8 sits below r₀ — production's
+exit ρ and reason beside the probe rows (referee cross-cutting #2) would say.
+
+---
+
+## Round-2 measurements, third batch — the Taylor defect (referee C8)
+
+`WRF_SDIRK3_TAYLOR_DEFECT=1`, dt=600, `em_b_wave`, stage 2, default config, 12-iteration
+budget. At each accepted step the probe measures the **Taylor defect** of the Newton model
+over the step it just took,
+
+  τ  =  ‖G(K+s) − G(K) − A·s‖ / ‖A·s‖,
+
+and repeats it at half the step (α = ½) to separate two ways the model can be wrong.
+
+| Newton iter | τ | τ(½)/τ | ‖R_k‖ | ‖R_{k+1}‖ | ‖s‖ | achieved η |
+|---|---|---|---|---|---|---|
+| 0 | 0.1192 | 0.500 | 8.742e8 | 6.406e8 | 2616 | 0.5526 |
+| 1 | 0.0645 | 0.500 | 6.406e8 | 5.335e8 | 1209 | 0.8871 |
+| 2 | 0.0182 | 0.500 | 5.335e8 | 4.770e8 |  422 | 0.9550 |
+
+**MEASURED.** τ ≪ 1 at every iteration and falling by a factor ≈ 2–3 per iteration as the step
+shrinks. The half-step ratio is **0.500 to four digits, three times out of three**.
+
+**What the ratio settles.** The three branches the probe was built to separate are:
+
+- τ ≪ 1 → the linear model is faithful and the **inner solve** is what binds;
+- τ = O(1) with τ(½)/τ ≈ ½ → the **nonlinearity over the step** is the problem (the remainder is
+  quadratic, the model is right, the step is too long);
+- τ = O(1) with τ(½)/τ ≈ 1 → a **Jacobian defect** (the remainder has a term linear in s, which
+  does not shrink relative to ‖A·s‖ when the step is halved).
+
+The measurement is in the first branch, and the ratio independently excludes the third: a
+first-order error in A would hold τ roughly constant under halving. A ratio of exactly ½ is what
+a **bilinear** RHS must give — advection is quadratic in the state, so the Taylor remainder is
+*exactly* the quadratic form Q(s,s), and τ(α) = α·τ(1) identically. The measurement is therefore
+also a consistency check on the probe: it reproduces the analytic value the operator's structure
+predicts.
+
+**So the Jacobian is not the problem and neither is the step length.** What remains is the inner
+solve, and the same rows show it directly: η climbs 0.55 → 0.89 → 0.955 while the residual crawls
+8.7e8 → 6.4e8 → 5.3e8 → 4.8e8 (ratio 0.73, 0.83, 0.89 — approaching 1 in lockstep with η). Each
+Newton step is limited by how little the FGMRES solve reduced the linear residual, not by how
+badly the linear model described the nonlinear one. This is the same conclusion the A/B ladder
+reached from the other side, now with the linearization itself measured rather than assumed.
+
+**Scope, honestly.** τ is measured only on **accepted** steps (the probe sits after
+`stats_.accepted_steps++`), so it says nothing about the steps the trust region refused, and the
+three rows are one stage of one step of one case. It does not say the Jacobian is right in every
+block — only that whatever error it has is second order in the step and 12% or less of ‖A·s‖ at
+the largest step taken.
+
+---
+
+## Round 3 (red team) — two findings, both closed (commit `11fe6aa`)
+
+**R3-1 (P1) — the two counts were dead writes.** `total_failure_vs_b_count` and
+`total_failure_vs_r0_count` were incremented in the solver and read by nothing: not copied into
+`StageFailureSignals`, not printed, not tested. The comment claiming "the record carries both
+readings whichever is in force" described a consumer that did not exist. **Ninth** instance of
+the defect class this tree keeps closing. Both counts and the rule in force
+(`krylov_failure_rule=b|r0`) are now on the `SDIRK3_FIRST_FAILURE` record.
+
+**R3-2 (P1) — the stagnation clause read the wrong coordinate.** Two quantities were being used
+as if they were one:
+
+| quantity | question it answers |
+|---|---|
+| ‖r‖/‖b‖ | is the proposed step predicted to reduce the **nonlinear** residual? (b = −R, so > 1 is a legitimate trust-region reason to refuse a step) |
+| ‖r‖/‖r₀‖ | did the **linear solve** move at all? |
+
+They coincide only on a cold start. `best_krylov_rel_error` is always the first, under a comment
+claiming the second ("1.0 means it ended where it started"). On the measured `em_b_wave` warm
+start (r₀/‖b‖ = 1.054) a solve that **reduced** its residual by 3% reads 1.02 and trips the
+≥ 0.99 test → `KrylovStagnated` for a solve that made progress, which sends the next week of work
+to the operator and the preconditioner instead of to the step policy.
+`best_krylov_rel_error_vs_r0` is now measured per solve and decides the clause; when it is absent
+the old precedence stands, so no record already taken gets a weaker verdict.
+
+**Found while checking R3-2's other claim** (that the time-order clause used the default rule —
+it does not; `gmres_total_failure` derives from the in-force candidate):
+`first_krylov_failure_iter` was indexed off `gmres_total_failure`, which *additionally* requires
+that no step was accepted. So a field named "first Krylov failure" meant "first failure that also
+produced no step" — an event that can never precede a rejection, which silently disabled the
+time-order clause it was built for. It is now set at the predicate, from the solve's own verdict.
+
+Default path unchanged (the r₀ baseline for the production predicate stays opt-in; the new fields
+are telemetry). 5 contract cases, 37 checks, ctest 61/61.
+
+### The fix, measured on the case it was written for
+
+Same case, same 12-iteration budget, both rules (`rsl.r313_rule0.log`, `rsl.r313_rule1.log`):
+
+```
+rule=b   stage=2 category=krylov_stagnated  gmres_total_failures=1  krylov_diverged=0
+         best_krylov_rel=0.5526  best_krylov_rel_vs_r0=0.5526  first_failure_rel_vs_r0=0.9941
+         total_failure_vs_b=1  total_failure_vs_r0=1
+         first_krylov_failure_iter=3  first_rejection_iter=3  argmin_residual_iter=2
+rule=r0  (identical, only krylov_failure_rule= differs)
+```
+
+**The verdict did not change; the evidence did.** Before, `krylov_stagnated` was reached through
+`gmres_total_failures > 0` — a count that under the default rule can fire for a solve that was
+working. Now it is reached through **`first_failure_rel_vs_r0 = 0.9941`: the solve that first
+failed reduced its own residual by 0.59%.** That is stagnation measured in the coordinate that
+can express it, on the solve the classifier is actually asking about. The old clause happened to
+give the right answer here and would not have on the warm-started iteration R13.9 measured.
+
+**The two rules agree on this iteration** (`vs_b=1`, `vs_r0=1`), so the opt-in flag changes
+nothing on this case. That is now visible on the record instead of being an open question — which
+is the entire point of R3-1.
+
+**Note on the stage-best.** `best_krylov_rel_vs_r0 = 0.5526` equals `best_krylov_rel`, i.e. the
+best solve of the stage was the cold-start one, where r₀ = b. A classifier reading the stage-best
+would have seen 0.55 — comfortably "made progress" — and cleared a stall that the first failing
+solve shows plainly at 0.9941. The aggregate has to match the question being asked.
+
+At the default namelist budget (`sdirk3_max_newton_iter = 3`) the same run classifies as
+`newton_budget_exhausted` with no Krylov failure and no rejection at all — three iterations is
+fewer than the four it takes to reach the first failure, so the budget statement is the honest
+one there.
+
+---
+
+## The float32 hypothesis, measured — and REFUTED as stated (referee X3)
+
+The hypothesis on the record was: *the operator's float32 matvec error is 5–20% of the identity
+term of `A = I − hγJ` on exactly the directions GMRES builds, so the solver cannot resolve the
+part of `A` that makes it invertible.* That figure was an **estimate**, from ε = 3e-7 times a
+scale separation read off `‖H̄eᵢ‖`. Both inputs are now measured directly, in the same probe, on
+the same operator, at the failing iteration (`rsl.identity_resolution.log`, stage 2, iter 3):
+
+```
+jvp_fd_fallback_free=1   operator_linear=1
+e_repeat=0   e_homogeneity=3.720e-07   e_additivity=2.478e-07   e_hom_krylov=1.198e-07
+identity_frac_rand=3.173e-05      identity_frac_krylov=3.095e-05
+identity_resolution_rand=0.01172  identity_resolution_krylov=0.003872   identity_resolved_krylov=1
+```
+
+`identity_frac = ‖v‖/‖A·v‖` is the identity term's share of the output (A·v = v − hγJ·v, so the
+identity contributes exactly ‖v‖); `e_hom` is the operator's own floating-point noise, measured as
+`‖A(αv) − αA(v)‖/(α‖A v‖)` at **α = 2.5** — deliberately not a power of two, or the residual would
+be zero by construction (R5-5).
+
+*Corrected after round 5 (R5-15):* an earlier version of this paragraph argued that `e_hom` is FP
+noise rather than FD truncation **because `operator_linear=1`**. That is circular —
+`operator_linear` is *computed from* `e_hom` and its siblings, so it cannot independently certify
+them. The non-circular receipt is `jvp_fd_fallback_free=1`: the FD-fallback counter did not move
+across the probe's matvecs, so the matvec was the forward-mode dual and `e_hom` is its rounding,
+not a difference quotient's truncation. The error **on the identity term** is `e_hom / identity_frac`.
+
+**MEASURED: 0.39% on the Krylov direction, 1.2% on a random one — not 5–20%.** The identity term
+is resolved to about three significant digits. Both inputs to the old estimate were wrong in the
+same direction and compounded: the effective noise is 1.2e-7 (≈1 ulp), not 3e-7, and the scale
+separation is 3.2e4, not 1.6e5–7e5.
+
+**So the proposed mechanism is dead.** The claim "float32 cannot resolve the identity term of the
+implicit operator on Krylov directions" is refuted by direct measurement, and it did not need the
+float64 replay — the replay would have measured the *consequence*; this measures the *premise*.
+
+**What survives.** float32 is not thereby exonerated as a *whole*: this measures the matvec, not
+the Arnoldi process. Loss of orthogonality in Gram–Schmidt is a separate float32 channel with its
+own emitted fields (`e_orthogonality`, `e_arnoldi`), and the float64 replay remains the test for
+that one. What is now settled is that the specific mechanism the campaign had written down — the
+one that would have made the operator itself unrepresentable — is not occurring.
+
+`e_repeat = 0` also confirms the matvec is bit-deterministic, so none of the A/B arms are being
+compared across a nondeterministic operator.
+
+---
+
+## Round 4 (red team) — five findings, one of them a P0 in the round-3 fix itself
+
+The round-3 fix introduced `first_krylov_failure_rel_vs_r0` and made it the classifier's primary
+input. Round 4 took it apart. All findings below are closed.
+
+**P0 — the new field laundered ‖r‖/‖b‖ into a name ending `_vs_r0`.** It was computed as
+`gmres_raw_rel_error / r0_ref`, where `r0_ref` falls back to **1.0** when r₀ was not measured — so
+on every path with an unmeasured r₀ (and there were several) the field held ‖r‖/‖b‖ under a name,
+a header comment, a signals comment and a consumer that all said r₀-relative. Worse, when the GMRES
+call did not run at all, `gmres_raw_rel_error` keeps its initialiser 1.0 and the field read
+**exactly 1.0 — "the failing solve went nowhere", emitted as a measurement when nothing was
+measured.** The sibling field five lines up guards on the *measurement* and says so in its comment;
+the new one invented the reference the comment promised not to invent. Tenth instance of the class,
+and this one was mine, written in the commit that closed the ninth.
+
+**P1 — the selector was in a different coordinate from the value.** The solve whose progress got
+reported was the first to trip the *production* total-failure predicate, which under the default
+rule asks the ‖b‖ question. So the solve was chosen in one coordinate and its value reported in
+another — and a genuine cold-start stall at `raw = 0.995` never trips that predicate at all
+(0.995 < 0.999), so the real stall would have been invisible.
+
+**Both are closed by removing the field.** The stagnation input is now
+**`worst_krylov_rel_error_vs_r0` — a max over the solves that measured r₀** — plus
+`worst_krylov_iter` and `krylov_solves_measured_vs_r0`. A max has no selector and therefore no
+seam; it answers "did the linear solve stop working" where the min answers "did any solve work";
+and the count keeps a one-solve stage from reading like a twelve-solve one. The reviewer's own
+ranking of honest aggregates put this second and the min last.
+
+**P1 — the threshold was reused across a coordinate change without recalibration.**
+`kKrylovNoProgress = 0.99` was calibrated in ‖b‖ coordinates, where a healthy solve reads ~1e-3.
+In r₀ coordinates a healthy solve reads ~0.55. Twelve consecutive solves each removing 2% of their
+own residual read 0.98 — a stall by any operational standard — and under the inherited 0.99 the
+classifier returned `newton_stagnated`, whose layer is `residual_floor_or_split`: it would have
+routed the work to the split-explicit rebuild, the most expensive wrong answer available here.
+There is now a separate `kKrylovNoProgressVsR0 = 0.90` with its calibration written down, and a
+fixture that pins the boundary from both sides and at the constant.
+
+**P1 — the justification for moving `first_krylov_failure_iter` was FALSE, and is retracted.**
+R13.12 claimed `gmres_total_failure` "additionally requires that no step was accepted", making the
+old index a different event that "silently disabled the time-order clause". The conjunction is
+**vacuous**: under the trust region `step_accepted` is still false where `gmres_total_failure` is
+formed (the attempt loop that sets it runs later), and without the trust region `step_accepted ==
+!candidate` — so `gmres_total_failure ≡ gmres_total_failure_candidate` in both configurations. The
+move is a no-op refactor. **Records taken before it are not untrustworthy.** The retraction is in
+the code at the count site, because that is where the false claim was written. No fixture could
+have caught this: the time-order test assigns the index directly, so it passes identically either
+way — a solver-population contract is the missing coverage, noted and not yet built.
+
+**P1 — a fixture was a tautology, and another asserted an unreachable state.** One read back two
+literals it had assigned nine lines earlier and would have passed with the fields completely
+unwired — the exact state it was added to close — while consuming a ratchet slot. The other set
+`first < best` where `first` is one of the solves `best` is a min over, so `first ≥ best` is an
+invariant and the state was reachable *only through the P0 above*: the fixture certifying the new
+clause was written in a state only that clause's bug could produce. Both deleted. Replaced with
+five that constrain something: the 2%-twelve-solves case, min-vs-max, the boundary from both
+sides, divergence outranking progress, and the ‖b‖ fallback branch.
+
+**P2, both closed** — `krylov_failure_rule` printed `b` from a struct default when the predicate
+was never reached (now `none`, gated on `krylov_rule_observed`); and a comment claiming the
+total-failure count "corroborates" in a branch that does not read it (comment corrected to say it
+decides alone, and why).
+
+**Also verified by round 4 and NOT defective** (negative results, worth as much as the findings):
+the write→copy→emit chain for the two counts; `reset_per_solve`'s whole-struct value-init, so new
+fields cannot fall off a reset list; the explicit-stage signals path assigning a fresh struct; and
+the new index site being unreachable-free — no `try`, `continue` or early `return` between the
+predicate and it, with `gmres_total_failure_candidate` `const` and final one line earlier.
+
+### Measured after the fix
+
+```
+12-iteration budget: category=krylov_stagnated
+    worst_krylov_rel_vs_r0=0.9941  worst_krylov_iter=3  krylov_solves_vs_r0=4
+    best_krylov_rel_vs_r0=0.5526   total_failure_vs_b=1  total_failure_vs_r0=1
+default (3-iteration) budget: category=newton_budget_exhausted
+    worst_krylov_rel_vs_r0=0.8795  krylov_solves_vs_r0=3
+```
+
+The 12-iteration case is a stall on the evidence: the worst of four solves removed **0.59%** of its
+own residual, at a named iteration. The default-budget case is not: the worst of three solves still
+removed **12%**, so the run was cut off rather than stuck.
+
+**Stated plainly: 0.8795 sits 2.3% below the 0.90 boundary.** The constant is doing real work on
+this case and a threshold of 0.85 would flip it. The record carries the number, so the verdict can
+be re-derived under a different constant without re-running anything — which is the point of
+emitting the measurement beside the category.
+
+### Round 4, part 2 — the probes' own preconditions
+
+**P1 — `identity_resolved_krylov` was the TENTH instance, one hour old.** The identity-resolution
+measurement above was computed inline at the emit site and read by nothing: `ab_valid=1` could
+print beside `identity_resolved_krylov=0`, i.e. the row could state in one field that the operator's
+identity term is below its noise floor and in the next that the comparison is attributable —
+`A = I − hγJ` with an unresolved `I` is not the operator any ρ in the row is about. The rule now
+lives in `wrf_sdirk3_probe_validity.h` as `AbComparison::identity_resolved`, is a clause of
+`ab_attributable` (`identity_below_noise_floor`), and has a fixture that rejects its negation. The
+header's own opening paragraph predicted this: *"a rule spelled out inline at the emit site cannot
+be tested."*
+
+**P1 — the Taylor probe had no validity rule, and its one unstated precondition is violated on a
+supported path.** `A(s/2)` was taken as `0.5·A(s)`. That presumes `A` linear, which the FD-fallback
+matvec is not — its epsilon depends on ‖v‖, so halving the step changes the operator — and at
+float32 an FD directional derivative is noise-limited at roughly the magnitude τ itself reports.
+Without a receipt, *"τ = 0.018, the linearization is faithful to 2%"* and *"τ = 0.018, we measured
+the FD noise floor"* are the same record. The probe now:
+
+- **measures** `A(s/2)` with its own matvec instead of scaling — which also removes the reviewer's
+  other objection, that a ratio of exactly ½ was partly built in because only the numerator was
+  re-measured;
+- emits `linearity_residual = ‖A(s/2) − ½A(s)‖ / ‖½A(s)‖`, its own linearity receipt;
+- carries an FD-fallback receipt taken across its own matvecs;
+- has `taylor_defect_verdict` in the validity header with 10 fixtures, and **prints its three-way
+  causal conclusion only when the verdict is `measured`** — otherwise it prints
+  `NO CONCLUSION: preconditions not met`.
+
+Re-measured with the α-arm computed rather than assumed:
+
+```
+newton_iter=0 tau=0.1192  tau_half=0.05959  ratio=0.5  linearity_residual=0  tau_verdict=measured
+newton_iter=1 tau=0.06452 tau_half=0.03226  ratio=0.5  linearity_residual=0  tau_verdict=measured
+newton_iter=2 tau=0.01821 tau_half=0.009104 ratio=0.5  linearity_residual=0  tau_verdict=measured
+```
+
+~~**τ and the ratio are unchanged, and `linearity_residual = 0` exactly** — the forward-mode JVP
+agrees with the scaled matvec to the last bit.~~ **RETRACTED by round 5 (R5-5), see below.** α = 1/2
+is a power of two, so a forward-AD tangent scales *exactly* under IEEE-754 and the receipt is
+identically zero for **any** operator — it measured the exponent arithmetic. And "τ came out
+unchanged" was not corroboration but the signature of a substitution that could not have changed
+anything. Re-measured at α = 1/3 the receipt reads 1.7e-07 and the ratio reads 0.3333; the
+conclusion survives, on evidence that could have failed.
+
+**P2 — three attribution clauses were unreachable from the only production caller.**
+`same_operator`/`same_rhs`/`same_x0` were hardcoded `true` while `b_digest`/`x0_digest` were printed
+once for the whole block — so a reader of `ab_valid=1 … b_digest=0x…` saw evidence of a comparison
+that never happened. Each arm now digests the b and x0 it was handed and the row carries
+`b_digests_agree` / `x0_digests_agree`; the operator remains by-construction (one closure handed to
+every arm) and the record says which is which via `ab_evidence=`.
+
+**P2 — "non-interfering" was one counter under a comment promising "anything else".**
+`precond_total_calls_` is bumped once per M application by every arm — thousands over the ladder —
+and is the denominator of the fallback-percentage print for the rest of the solve, so the probe was
+mutating production telemetry while reporting it had not. It is restored, and the restore is what
+the flag now attests, along with the JVP fallback counter that had been folded into `jvp_ok`
+instead.
+
+Confirmed live, all preconditions met:
+
+```
+ab_valid=1 ab_reason=ok  ab_evidence=digests_compared_b_x0/by_construction_operator
+b_digests_agree=1 x0_digests_agree=1 identity_resolved_krylov=1 identity_resolution_krylov=0.003872
+probe_noninterfering=1 worst_order_delta=0 order_pairs_compared=15
+```
+
+and the per-block ρ at j=48 reproduce the pre-change run digit for digit, so the added receipts did
+not move the measurement. With `WRF_SDIRK3_NO_EARLY_STOP` unset the same run reports
+`ab_valid=0 ab_reason=early_stop_enabled` — the verdict refuses and names which precondition failed.
+
+**A stale coverage claim, and the gate that let it drift.** `external/libtorch_wrf/sdirk3/README.md`
+claimed a *37-test* CTest inventory and cited `.github/ci/expected_ctest_names.txt`, which held 61.
+The CI gate that exists precisely to derive this claim from the file it cites was reading only the
+repo-root README. Both now state 62, and **the gate loops over every file that makes the claim** and
+fails if one of them stops making it. Sixth recurrence of the count-ratchet class; this time the
+gate shell was run locally before pushing rather than after.
+
+---
+
+## Which variable block carries the negative curvature — emitter added, measurement OPEN
+
+`q_min_blockdiag = −977.9` vs `q_min_direct = −976.8` says the indefiniteness lives in the diagonal
+blocks rather than the coupling, so a by-variable block preconditioner is the right *class*. It does
+not say **which** block, and that is what a fix would have to target.
+
+The per-block terms were already being computed — the loop summed `⟨P_q v, B P_q v⟩` over blocks and
+kept only the sum. Each term is now emitted named (`q_bd_<block>`) **beside the witness's mass in
+that block** (`mass_<block>`): without the mass a small term is ambiguous between *"this block is
+fine"* and *"the witness barely lives here"*, and this campaign has been caught by that exact
+ambiguity before.
+
+**Not yet measured, and here is why.** The block breakdown sits at the `SDIRK3_NUMERICAL_RANGE_UNPRECOND`
+site in `solve_gmres` — the M = I path, which is where the witness lift (`v_min = V·y_min`, then
+`B·v_min`) exists. Production runs FGMRES with M, whose site emits the Hessenberg symmetric spectrum
+(`min_eig_sym=−117.7`, `n_negative=3/7`, `definite=0` at the failing iteration) but has **no witness
+lift**, so there is no `v_min` in the full space to restrict. Taking the measurement requires either
+the preconditioner-off configuration (which is what produced the −977.9 figure) or adding a witness
+lift to the FGMRES site. Neither is done; the number is not claimed.
+
+This is recorded as an **emitter landed / measurement open** item rather than a result, because the
+run that would produce it has not been made.
+
+---
+
+## Round 5 (red team) — a P0 in the round-4 fix, and a P0 in the Taylor receipt
+
+### R5-1/R5-2 (P0/P1) — a max over *every* solve scores a no-op as a total stall
+
+`InitialConverged` does **zero work** and returns `rel_error` equal to its own r₀ ratio, so
+`progress ≡ 1.0` exactly. Under a **max** the best possible outcome — the linear system already
+satisfied on entry — scored as complete stagnation, and `worst_krylov_iter` named the healthiest
+solve as the culprit. The bitter part: round 4 added `initial_rel_error` to that return *because*
+dropping it from a **min** manufactured a stall. The same commit then made a max the classifier's
+input, where the identical value manufactures the stall directly. **Two halves of one commit
+pointing opposite ways.**
+
+The general form (R5-2): a max over all solves **pre-empts `NewtonBudgetExhausted`** — the category
+created precisely to stop a falling residual being reported as a stall. As Newton converges its
+linear RHS gets small and noise-dominated, so late solves cannot reduce it and progress → 1: *the
+closer Newton gets, the more certainly the linear solve is blamed.*
+
+**Fix:** the max is over solves that **did work and did not finish** — `InitialConverged` (zero
+work) and `ToleranceReached` (finished) are excluded and counted separately as
+`krylov_solves_trivial`. A stage where every solve converged on entry or reached tolerance now
+yields **no** Krylov evidence, which is correct, and lets the budget clause have its case back.
+`krylov_solves_measured_vs_r0` is incremented inside the same branch, so the count is over exactly
+the solves the max is over.
+
+### R5-3 (P1) — the threshold is a judgment, and it was not reachable
+
+The calibration argues for *some* constant in (0.55, 0.98); it does not select 0.90 over 0.85. Two
+things make that matter: the tree's own default-budget run reads **0.8795 — 2.3% from the
+boundary**, inside run-to-run variation, and the two sides of that boundary are the campaign's two
+competing explanations. And ρ_vs_r0 is **budget-dependent** — a healthy operator given 7 Arnoldi
+vectors on a hard RHS reads 0.92 — so this constant cannot by itself separate *"the operator is
+hard"* from *"the inner budget is small"*. `WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0` now moves it per
+run (out-of-range values are refused with a warning and the default stands), the value in force is
+on the record, and the calibration's honest limits are written at the constant.
+
+Measured, and the margin is exactly as thin as the reviewer said:
+
+```
+budget=12  category=krylov_stagnated       worst=0.9941  solves=4  trivial=0  thr=0.90
+budget=3   category=newton_budget_exhausted worst=0.8795  solves=3  trivial=0  thr=0.90
+budget=3   category=krylov_stagnated        worst=0.8795  solves=3             thr=0.85
+```
+
+The same record classifies both ways across a 5% change in a constant nothing measured.
+
+**Reconciling "4 solves" under a "12-iteration budget" (R5-16).** The heading is the *budget*, not
+the iterations run. Measured on the same row: `newton_iters=4 newton_budget=12 newton_converged=0
+steps_accepted=3 steps_rejected=1 krylov_solves_vs_r0=4 krylov_solves_trivial=0`. So Newton exited
+after **4 of 12 allowed** iterations, and all four solves are in the max — the alternative reading
+the reviewer raised, that twelve solves ran and eight were silently dropped for an unmeasured r₀,
+is **refuted** by `trivial=0` and `krylov_r0_unmeasured=0`. The label should have said
+`newton_iters=4 / budget=12`, and does now.
+
+That leaves a real open question the reconciliation surfaces: **Newton stopped at 4 of 12 without
+converging.** That is the early-termination behaviour already on record for this campaign, and it
+means `krylov_stagnated` here is a verdict about a stage that did not spend its outer budget.
+
+**And the ratio is now labelled with the budget it was measured at:** `krylov_restart_budget=7
+krylov_max_restarts=1`, so the stall reading of `worst=0.9941` is *at seven Arnoldi vectors*.
+"The linear solve did not move" and "the linear solve was given seven vectors" are not
+distinguishable from this number alone, which is why the layer string ends in `_or_policy` and why
+the budget is now on the record beside the ratio.
+
+*Corrected after round 6 (R6-15).* An earlier version of this paragraph supported that point by
+saying "this document's own ladder shows the identity arm still descending at j=192 and plateauing
+only around ρ_D ≈ 0.32" — which is **self-contradictory and reverses the arms**. The measured table
+above says the opposite: **the identity plateaus** (ρ_D 0.347 → 0.318 over a doubling, Δ = 0.029)
+and **M is the one still descending** (0.698 → 0.487, Δ = 0.211). It also weakened its own argument,
+since M's continued descent is the fact that supports "more budget still buys progress".
+
+The sentence also **mixed two coordinates**: `worst = 0.9941` is ‖r‖/‖r₀‖ at j = 7, while the ladder
+is ρ_D — the D-weighted FGMRES objective normalised by ‖D⁻¹b‖ — at j = 48…192. Different numerator,
+different denominator, different budget. That is the mixed-denominator class this document has
+already retracted once. The budget point does not need the ladder at all: it stands on the
+**directly measured** big-budget run above (85 vectors: worst 0.9941 → 0.8622), which is the same
+quantity in the same coordinate at a different budget.
+
+### R5-4 (P1) — the round-4 P0's *reference* survived, one field over
+
+Round 4 deleted the field that divided by a fallback reference of 1.0 and **left the reference**.
+`total_failure_vs_r0` — a name ending `_vs_r0`, a signals field ending `_vs_r0`, a printed
+`total_failure_vs_r0=` — still held the ‖b‖ answer whenever r₀ was unmeasured. And under the opt-in
+flag it changed what the **solver does**: a knob whose stated meaning is *"use the r₀ rule"*
+silently used the ‖b‖ rule on any solve that did not measure r₀. Now the r₀ reading is simply
+**unavailable** when unmeasured (`krylov_r0_unmeasured`), and a forced fallback is **counted**
+(`krylov_rule_fellback_to_b`) rather than passed off as the rule.
+
+Also: `krylov_diverged` used `>= 0.0f` where its sibling eleven lines up uses `> 0.0f` — the same
+expression written twice with two rules, so a *measured* r₀ of exactly 0 made any nonzero residual
+"divergence". And `krylov_diverged` is consumed **above** the r₀ max clause, so an unmeasured-r₀
+solve returned `KrylovDiverged` from a ‖b‖ comparison and the r₀ evidence was never reached.
+Divergence is now declared only against a measured reference.
+
+### R5-5 (P0) — `linearity_residual = 0` was a tautology, and so was "τ unchanged"
+
+α = ½ is a **power of two**. A forward-AD tangent is a float expression whose every term is
+(primal) × (tangent); scaling the input tangent by a dyadic factor scales every intermediate by
+that factor with **identical significands**, so under IEEE-754 `A(s/2) ≡ 0.5·A(s)` **bit for bit,
+for any operator**. The receipt therefore measured the exponent arithmetic, not the Jacobian. The
+FD path cancels the same way — halving ‖v‖ exactly doubles its ε exactly, so the perturbed vector
+is the *same* vector — meaning the receipt was silent in precisely the regime its comment named.
+And *"τ came out unchanged when we started measuring the arm"*, offered as corroboration, was the
+signature of a substitution that could not have changed anything.
+
+**Re-measured at α = 1/3, which is not dyadic:**
+
+```
+iter=0 tau=0.1192  alpha=0.3333 tau_alpha=0.03972 tau_alpha_over_tau=0.3333 linearity_residual=1.791e-07
+iter=1 tau=0.06452 alpha=0.3333 tau_alpha=0.02151 tau_alpha_over_tau=0.3333 linearity_residual=1.739e-07
+iter=2 tau=0.01821 alpha=0.3333 tau_alpha=0.00607 tau_alpha_over_tau=0.3333 linearity_residual=1.652e-07
+```
+
+**The conclusion survives, and now on evidence that could have failed.** `τ_α/τ = 0.3333` is
+exactly α, three times out of three — the quadratic-remainder prediction `τ(α) = α·τ(1)`, and a
+value that **cannot** be produced by halving anything. `linearity_residual ≈ 1.7e-07` is about 1.5
+float32 ulps: a real measurement where the old one was identically zero. So the finding stands —
+**τ ≪ 1, the remainder is purely quadratic, no Jacobian defect, the inner solve binds** — and the
+receipt behind it is now one that a broken operator would fail.
+
+`taylor_defect_verdict` gained `AlphaDyadic`, checked **before** the residual (with a dyadic α the
+residual is zero by construction, and reporting "linear" from it is the tautology the rule exists
+to prevent), with fixtures over {0.125, 0.25, 0.5, 1, 2}. **A receipt that cannot fail is not a
+receipt.**
+
+### Round 5, part 2 — the probe was steering the run it measured
+
+**R5-9 (P0) — `probe_noninterfering=1` while five per-iteration JVP counters were being
+rewritten.** The frozen A/B probe issues thousands of matvecs, and every one bumps
+`jvp_call_count`, `jvp_ad_calls`, `jvp_fd_calls`, `jvp_fd_forward_calls`, `jvp_fd_central_calls`
+and `total_jvp_time_ms` — all declared *inside* the Newton iteration, and the probe runs **before**
+production's own solve in that iteration. Consequences, all under a row attesting non-interference:
+
+- production's one-shot JVP diagnostics gate on `jvp_call_count <= 3` and were **entirely
+  suppressed** on the probe iteration;
+- the `jvp_call_count == 1 && newton_iter == 0` one-shot fired on the **probe's** first arm's first
+  matvec and was reported as production's;
+- the FD-consistency sampler sampled the **probe's** matvecs;
+- the `[Newton] JVP calls / avg` summary reported the probe's count and mean.
+
+The in-tree proof that this is an omission and not a design choice: the PR-9B directional
+consistency check in the same function snapshots **eleven** of these counters and forces
+`jvp_call_count = max(count, 1000)` so the one-shots cannot fire during it. The probe that runs
+first and issues far more matvecs restored none of them. It now snapshots, forces the count past
+every one-shot threshold, restores, **and includes the restore in what `noninterfering` attests**.
+
+**R5-10 (P0) — the probe could change a control decision that persists across timesteps.** An arm's
+M tripping its ratio guard sets the shared `*variable_pc_event`, which is never restored on the arm
+path and is read at stage 3 / iteration 0 to decide `stage3_hopeless_detected` — feeding
+`stage3_hopeless_streak_` and `stage3_hopeless_budget_mode_`, **members that survive the solve and
+the timestep**. The probe's default target *is* iteration 0 at any stage. There was a partial
+mitigation — the same branch bumps `precond_fallback_count_`, so `ab_valid` would read 0 — but that
+only invalidates the *comparison*. `ab_valid=0` says *"you may not compare the arms"*; it never said
+*"this run's forward trajectory was altered."* The flag is now snapshotted and restored, and the
+fact that it **moved** is still reported: a restore makes the run safe, it does not make the arms
+comparable.
+
+**R5-6/R5-7/R5-8 (P1), all closed.** `alpha_arm_measured` was hardcoded true, so `AlphaArmAssumed`
+was unreachable from the only production caller — the identical shape removed one screen away *in
+the same commit that introduced it*; it is now the condition it claims (the arm was measured iff its
+matvec produced a usable tensor). `linearity_residual = -1` (the **not-measured** sentinel, emitted
+for a zero-norm matvec) was classified `operator_nonlinear` — naming a mechanism from a measurement
+never taken, against the standard the same file already applies to τ; there is now a distinct
+`LinearityUnmeasured`. The rule gated on bare `>= 0.0`, which **+Inf passes**, so a blown-up τ with
+sound preconditions returned `Measured` and printed the causal conclusion beside `tau=inf` — it now
+uses the header's own `is_measured`, with fixtures over Inf and NaN. And the per-arm digest
+converted a `double` built from signed sums to `unsigned long long` — **undefined behaviour for any
+negative value, which the `-1.0` undefined-tensor sentinel hits on every cold start** — while
+truncating the fraction so digests differing by < 1.0 compared equal; it now compares bit patterns.
+The evidence label was also overstated: the arms are handed the *same two objects*, so equal digests
+follow from aliasing rather than comparison. It reads
+`ab_evidence=b_x0_single_object_digest_rechecked_per_arm/by_construction_operator` — which is what
+the check actually establishes (it would still catch an in-place mutation).
+
+**Verified after all of it, same run:**
+
+```
+ab_valid=1 ab_reason=ok probe_noninterfering=1 identity_resolved_krylov=1
+arm=M j=48 ru_rho0=1.667 ru_rho=0.4279 rv_rho0=1.687 rv_rho=0.8541 ...
+tau=0.1192 alpha=0.3333 tau_alpha_over_tau=0.3333 linearity_residual=1.791e-07 tau_verdict=measured
+category=krylov_stagnated worst_krylov_rel_vs_r0=0.9941 krylov_solves_vs_r0=4 krylov_solves_trivial=0
+```
+
+Every number reproduces the pre-fix run. The probe was steering the solver and — on this case —
+not steering it anywhere that changed the measurement. That is a fact about this case, not about
+the probe, which is why the restore matters.
+
+### Round 5, part 3 — the np-equivalence record was structurally incapable of refusing
+
+**R5-14 (P0).** `emitGlobalNormRecord`'s `published` argument was a **compile-time literal** at both
+call sites — `false` at input, `true` at output — so `phase=output state_published=1` was printed
+unconditionally. The comparator's only guard on that phase (`state_published != "1"`) therefore
+**could never fire**, and `outcome` — the one field that distinguishes an advanced step from a
+reverted one — was declared required, parsed, stored, and read **only inside that unreachable
+branch**. Eleventh instance of the class, sitting directly under the np-equivalence claim.
+
+The emitter's own comment asserted the invariant that made this safe: *"reaching this line means the
+fail-closed gate above did not fire… at a dt where no step completes, control never arrives here."*
+The stage-3 gate contradicts it **in its own comment**: setting `stage_aborted` routes through the
+final-update revert (`U_new = U_n`) to `HARD_STAGE_ABORT`, which **does not throw** — it falls
+through to `unpackState` and to this emit.
+
+**Why that is not theoretical here.** `em_b_wave` completes **zero** steps at every dt tried. Run it
+at np=2 and np=4 with `WRF_SDIRK3_GLOBAL_NORMS=1` and each rank emits `phase=output
+state_published=1` over a state bit-identical to its input *by construction*; the norms match
+exactly and the comparator returns the equivalence verdict for a step that produced nothing. Same
+shape as the recorded lesson *"the fail-closed gate skips the state publish… every step-level
+TLM/adjoint contract passes TRIVIALLY until the forward advances"*, reached through the np channel.
+
+`published` is now the measured outcome (`getLastStepOutcomeCode() == OK_ADVANCED`), and the
+comparator's predicate reads **both** fields, so neither can go stale behind the other.
+
+**R5-15/R5-17 (P1/P2) — two claims in this document and one in the code were wrong.** The
+`linearity_residual = 0` paragraph is struck through above with its retraction. The argument that
+`e_hom` is FP noise *"because `operator_linear=1`"* was **circular** — `operator_linear` is computed
+from `e_hom` — and now rests on `jvp_fd_fallback_free=1`, which is independent. And a code comment
+warning that a blanket `NoGradGuard` around `gmres_op` *"kills the very graph it needs — this exact
+mistake has been made in this repo five times"* is **refuted by this tree**: the A/B probe runs all
+30 arms inside `NoGradGuard` and reports `jvp_fd_fallback_free=1`. The mechanism agrees —
+`compute_jvp_fwad_or_fd` opens with its own `NoGradGuard` before `_make_dual`, and forward-mode dual
+level is independent of grad mode. The warning may be true of the *production* solve; it was
+asserted at a diagnostic emit site with no fixture, and it cost real work (that probe deliberately
+runs 72 matvecs unguarded at `newton_iter == 0`, building reverse-mode graphs nothing consumes).
+
+**R5-18 (P2), closed:** a boundary fixture asserted `!= krylov_stagnated` instead of naming the
+category below it; and the numerical-range row printed four fields on one branch and eight on the
+other, so a position-based parser misreads the short form. Both fixed.
+
+**Round 5's negative results, which matter as much:** `witness_confirmed` **is** earned — it is
+`⟨v,Bv⟩/⟨v,v⟩` on an explicit direction with `Bv` from a real matvec, so it bypasses the projection
+entirely and does not depend on `e_orthogonality`/`e_arnoldi`. The step-map probe consumes its
+verdict at **every** conclusion site. And every `.item()` added in these rounds is inside a
+`NoGradGuard`, with no stray `.detach()`/`.data` in a graph region.
+
+---
+
+## Does a real Krylov budget complete the dt=600 step? — MEASURED, and it does not
+
+The evidence had converged on one testable claim: the linearization is faithful (τ ≪ 1, no Jacobian
+defect), the inner solve is what binds, and **every stall verdict in this campaign was measured at a
+7-vector Arnoldi budget** while the ladder shows the identity arm still descending at j=192. So:
+raise the budget at both implicit stages and run dt=600.
+
+`sdirk3_stage2_gmres_restart = 192`, `sdirk3_stage3_gmres_restart = 192`,
+`sdirk3_stage3_max_krylov_restarts = 1`, `WRF_SDIRK3_MAX_NEWTON_ITER=12` (namelist restored after).
+
+```
+stage=2  category=newton_stagnated  newton_iters=3  newton_converged=0  krylov_iters=270
+         steps_accepted=2  steps_rejected=1
+         worst_krylov_rel_vs_r0=0.8622  krylov_solves_vs_r0=3  krylov_solves_trivial=0
+         krylov_restart_budget=85  krylov_max_restarts=1
+outcome=20 (HARD_STAGE_ABORT) x3 — zero steps completed
+```
+
+**MEASURED — three things, and they point in different directions.**
+
+1. **The budget is a real limiter.** The worst solve's r₀-relative progress went **0.9941 → 0.8622**
+   — from removing 0.59% of its own residual to removing 13.8%, a 23× improvement in progress — and
+   Krylov iterations went 28 → 270. More budget genuinely buys a better linear solve.
+2. **It does not complete the step.** Still `HARD_STAGE_ABORT`, still zero steps. Budget alone does
+   not reach dt=600.
+3. **The failure moved outward.** The category flips `krylov_stagnated` → **`newton_stagnated`**
+   (0.8622 is below the 0.90 boundary), and **Newton stopped at 3 of 12 allowed iterations without
+   converging** — the early-termination behaviour already on record for this campaign. With the
+   linear solve doing materially better, what refuses is the outer iteration.
+
+**And the run caught a config defect the moment it ran.** The namelist asked for **192** and the
+record reported `krylov_restart_budget=85`. Two causes, both now fixed or documented:
+
+- the **same knob had two different maxima** — `std::clamp(…, 0, 100)` on the namelist path and
+  `std::clamp(…, 0, 1000)` on the env path, twenty lines from a comment explaining that the env
+  limit was widened because "the clamp is just no longer below the interesting range". 192 became
+  **100**, silently;
+- the Eisenstat–Walker budget policy then applied `ew_scale = 0.85`, giving **85**
+  (`[GMRES POLICY] Stage 2: restart=10->85 (source=2), ew_scale=0.85, ew_applied=1`).
+
+The second is by design and was already reported. The first is the recurring class in config form —
+**one rule, two authorities, and the losing one silent**. Both setters now share one maximum and go
+through `clamp_int_warn`, which prints requested vs applied: *"the configuration that RAN is not the
+one that was written"*.
+
+Worth stating plainly: `krylov_restart_budget` exists **only because round 5 caught a comment
+claiming it was on the record when nothing produced it**. The field was added to make that comment
+true, and the first run after adding it revealed that a namelist knob had been silently halved. The
+measurement this section reports would otherwise have been written up as "192 vectors".

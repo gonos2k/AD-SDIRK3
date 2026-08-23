@@ -9197,6 +9197,13 @@ vertical_coefficients:
                     auto sig = last_stage_signals_;
                     sig.gate_metric_ok = !gate_metric_bad;
                     sig.state_published = false;   // the gate is upstream of any publish
+                    // R13.15 (external review P1-4): the provenance now REACHES the classifier
+                    // instead of being printed beside its answer. A mismatch is refused with a
+                    // category that names the refusal, not classified from another stage's
+                    // evidence.
+                    sig.signals_from_stage = last_stage_signals_populated_by_stage_;
+                    sig.classifying_stage = stage_id;
+                    sig.is_explicit_stage = last_stage_signals_is_explicit_;
                     const auto first = wrf::sdirk3::first_failure_of(sig);
                     std::cerr << "SDIRK3_FIRST_FAILURE stage=" << stage_id
                               // which stage actually populated the signals being classified --
@@ -9226,6 +9233,34 @@ vertical_coefficients:
                               << " krylov_diverged=" << (sig.krylov_diverged ? 1 : 0)
                               << " steps_accepted=" << sig.accepted_steps
                               << " steps_rejected=" << sig.rejected_steps
+                              << " first_krylov_failure_iter=" << sig.first_krylov_failure_iter
+                              << " best_krylov_rel_vs_r0=" << sig.best_krylov_rel_error_vs_r0
+                              << " worst_krylov_rel_vs_r0="
+                              << sig.worst_krylov_rel_error_vs_r0
+                              << " worst_krylov_iter=" << sig.worst_krylov_iter
+                              << " krylov_solves_vs_r0="
+                              << sig.krylov_solves_measured_vs_r0
+                              << " krylov_solves_trivial=" << sig.krylov_solves_trivial
+                              << " worst_krylov_met_tol="
+                              << (sig.worst_krylov_met_tolerance ? 1 : 0)
+                              << " worst_krylov_eta=" << sig.worst_krylov_eta
+                              << " worst_krylov_budget="
+                              << sig.worst_krylov_restart_budget
+                              << " krylov_r0_unmeasured=" << sig.krylov_r0_unmeasured_solves
+                              << " krylov_rule_fellback_to_b=" << sig.krylov_rule_fellback_to_b
+                              << " krylov_no_progress_thr="
+                              << (sig.krylov_threshold_observed
+                                      ? std::to_string(sig.krylov_no_progress_threshold)
+                                      : std::string("not_reached"))
+                              << " krylov_restart_budget=" << sig.krylov_restart_budget
+                              << " krylov_max_restarts=" << sig.krylov_max_restarts
+                              << " total_failure_vs_b=" << sig.total_failure_vs_b_count
+                              << " total_failure_vs_r0=" << sig.total_failure_vs_r0_count
+                              << " krylov_failure_rule="
+                              << (!sig.krylov_rule_observed ? "none"
+                                                            : (sig.krylov_failure_vs_r0 ? "r0" : "b"))
+                              << " first_rejection_iter=" << sig.first_rejection_iter
+                              << " argmin_residual_iter=" << sig.argmin_residual_iter
                               << " gate_metric_ok=" << (sig.gate_metric_ok ? 1 : 0)
                               << "  (the first gate to refuse, in causal order -- a later one"
                                  " will also be refusing, and acting on it sends the work to"
@@ -12199,14 +12234,29 @@ vertical_coefficients:
 
     // R13.1: THE np-equivalence record, and the only one entitled to that claim.
     //
-    // Reaching this line means the fail-closed gate above did not fire, so a state was
-    // actually published and the driver will accept it. A norm taken at solver ENTRY -- which
-    // is all R13 emitted -- compares what went IN, and two ranks agreeing on their input says
-    // nothing about whether SDIRK3 produced the same answer from it. At a dt where no step
-    // completes, control never arrives here and the comparator reports that there is nothing
-    // to compare, which is the correct answer rather than a missing feature.
+    // A norm taken at solver ENTRY -- which is all R13 emitted -- compares what went IN, and two
+    // ranks agreeing on their input says nothing about whether SDIRK3 produced the same answer
+    // from it.
+    //
+    // R13.14 (red team round 5, R5-14, P0): the comment here used to claim "reaching this line
+    // means the fail-closed gate above did not fire, so a state was actually published ... at a
+    // dt where no step completes, control never arrives here". THAT IS FALSE, and the stage-3
+    // gate says so in its own comment: setting `stage_aborted` routes through the final-update
+    // revert (U_new = U_n) to HARD_STAGE_ABORT, which does NOT throw -- it falls through to the
+    // unpackState above and to this emit. So a step that published U_n back to itself printed
+    // `phase=output state_published=1`, and `published` was a compile-time LITERAL at both call
+    // sites, so the comparator's only guard on that field could never fire. On em_b_wave, which
+    // completes ZERO steps at every dt tried, an np=2 vs np=4 diff would then find bit-identical
+    // norms -- identical by construction, since nothing moved -- and return "the ranks produced
+    // the same answer" for a step that produced nothing. Eleventh instance of the class, sitting
+    // directly under the np-equivalence claim.
+    //
+    // `published` is now the measured outcome, so the record can say a step did not advance.
     if (rk_step == 1 && global_norms_enabled() && !inside_step_map_probe) {
-        emitGlobalNormRecord("output", /*published=*/true,
+        emitGlobalNormRecord("output",
+                             /*published=*/getLastStepOutcomeCode() ==
+                                 static_cast<int>(
+                                     wrf::sdirk3::StepOutcomeCode::OK_ADVANCED),
                              getLastStepOutcomeCode(), rk_step,
                              u, v, w, ph, t, mu, nx, ny, nz, nx_u, ny_v, nz_w);
     }
@@ -13217,6 +13267,29 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.krylov_diverged = stats.krylov_diverged;
     last_stage_signals_.accepted_steps = stats.accepted_steps;
     last_stage_signals_.rejected_steps = stats.rejected_steps;
+    last_stage_signals_.first_krylov_failure_iter = stats.first_krylov_failure_iter;
+    last_stage_signals_.first_rejection_iter = stats.first_rejection_iter;
+    last_stage_signals_.argmin_residual_iter = stats.argmin_residual_iter;
+    last_stage_signals_.total_failure_vs_b_count = stats.total_failure_vs_b_count;
+    last_stage_signals_.total_failure_vs_r0_count = stats.total_failure_vs_r0_count;
+    last_stage_signals_.krylov_failure_vs_r0 = stats.krylov_failure_vs_r0;
+    last_stage_signals_.best_krylov_rel_error_vs_r0 =
+        static_cast<double>(stats.best_krylov_rel_error_vs_r0);
+    last_stage_signals_.worst_krylov_rel_error_vs_r0 =
+        static_cast<double>(stats.worst_krylov_rel_error_vs_r0);
+    last_stage_signals_.worst_krylov_iter = stats.worst_krylov_iter;
+    last_stage_signals_.krylov_solves_measured_vs_r0 = stats.krylov_solves_measured_vs_r0;
+    last_stage_signals_.krylov_solves_trivial = stats.krylov_solves_trivial;
+    last_stage_signals_.worst_krylov_met_tolerance = stats.worst_krylov_met_tolerance;
+    last_stage_signals_.worst_krylov_eta = static_cast<double>(stats.worst_krylov_eta);
+    last_stage_signals_.worst_krylov_restart_budget = stats.worst_krylov_restart_budget;
+    last_stage_signals_.krylov_r0_unmeasured_solves = stats.krylov_r0_unmeasured_solves;
+    last_stage_signals_.krylov_rule_fellback_to_b = stats.krylov_rule_fellback_to_b;
+    last_stage_signals_.krylov_no_progress_threshold = stats.krylov_no_progress_threshold;
+    last_stage_signals_.krylov_threshold_observed = stats.krylov_threshold_observed;
+    last_stage_signals_.krylov_restart_budget = stats.krylov_restart_budget;
+    last_stage_signals_.krylov_max_restarts = stats.krylov_max_restarts;
+    last_stage_signals_.krylov_rule_observed = stats.krylov_rule_observed;
     // PR 9E (diagnosis-only): carry the raw-L2 fast-RHS / defect norms back for
     // this stage's history-summary snapshot (-1 when stage_operand_diag is off).
     last_stage_fast_rhs_norm_ = stats.final_fast_rhs_norm;

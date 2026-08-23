@@ -14,6 +14,7 @@
 // inline at the emit site cannot be tested, and every one of the above was spelled out inline.
 // A rule that a test can reject is the only kind that stays true.
 
+#include <cmath>
 #include <limits>
 #include <vector>
 
@@ -279,10 +280,110 @@ inline StageReferenceVerdict certify_stage_reference(
 // by construction, budget by equality, and the stopping rule by both arms terminating for the
 // same reason. The last one is the easiest to forget and the most common way a "same budget"
 // comparison silently becomes two different amounts of work.
+// The Taylor-defect probe: tau = ||G(K+s) - G(K) - A s|| / ||A s||, plus the same at alpha=1/2,
+// used to separate "the inner solve binds" (tau << 1) from "the nonlinearity over the step"
+// (tau = O(1), ratio ~ 1/2) from "the Jacobian is wrong" (tau = O(1), ratio ~ 1).
+//
+// It has TWO preconditions that the arithmetic cannot see:
+//  1. A must be the real Jacobian-vector product. On the FD fallback path A is a difference
+//     quotient with a state-dependent, ||v||-dependent epsilon -- not linear in its argument,
+//     and at float32 noise-limited at roughly the magnitude tau itself reports. "tau = 0.018,
+//     so the linearization is faithful to 2%" and "tau = 0.018, so we measured the FD noise
+//     floor" are then the same record.
+//  2. The alpha arm must MEASURE A(alpha*s), not assume alpha*A(s). Assuming it makes the
+//     ratio partly true by construction (only the numerator is re-measured) and silently
+//     imports precondition 1 a second time.
+//  3. alpha must NOT be a power of two. This one is subtle and cost a P0. A forward-AD tangent
+//     is a float expression whose every term is (primal) x (tangent); scaling the input tangent
+//     by a dyadic factor scales every intermediate by that factor with IDENTICAL significands,
+//     so under IEEE-754 A(s/2) == 0.5*A(s) BIT FOR BIT, for any operator. The linearity receipt
+//     is then identically zero and measures the exponent arithmetic, not the Jacobian. The FD
+//     path cancels the same way: halving ||v|| exactly doubles its epsilon exactly, so the
+//     perturbed vector is the SAME vector. A receipt that cannot fail is not a receipt --
+//     measured with alpha = 1/3 the same probe reports 1.7e-07, about 1.5 float32 ulps.
+// A probe that prints a three-way causal conclusion in its own row needs all three on record.
+struct TaylorDefectInputs {
+    bool   fd_fallback_free = false;   // the JVP was forward-mode for every matvec in the probe
+    bool   alpha_arm_measured = false; // A(alpha*s) was computed, not scaled from A(s)
+    double tau = -1.0;                 // -1 = not measured
+    double tau_alpha = -1.0;
+    double alpha = -1.0;
+    // ||A(alpha*s) - alpha*A(s)|| / ||alpha*A(s)||: the operator's linearity ON THIS STEP,
+    // measured rather than presumed. -1 = not measured.
+    double linearity_residual = -1.0;
+};
+
+enum class TaylorVerdict { Unmeasured, FdFallback, AlphaArmAssumed, AlphaDyadic,
+                           LinearityUnmeasured, OperatorNonlinear, Measured };
+
+inline const char* taylor_verdict_name(TaylorVerdict v) {
+    switch (v) {
+        case TaylorVerdict::Unmeasured:      return "unmeasured";
+        case TaylorVerdict::FdFallback:      return "fd_fallback";
+        case TaylorVerdict::AlphaArmAssumed: return "alpha_arm_assumed";
+        case TaylorVerdict::AlphaDyadic:     return "alpha_dyadic";
+        case TaylorVerdict::LinearityUnmeasured: return "linearity_unmeasured";
+        case TaylorVerdict::OperatorNonlinear: return "operator_nonlinear";
+        case TaylorVerdict::Measured:        return "measured";
+    }
+    return "unknown";
+}
+
+// How far A(alpha*s) may sit from alpha*A(s) before the ratio stops being about the Jacobian.
+inline constexpr double kTaylorLinearityTol = 1.0e-4;
+
+// A power of two, within the exactness that matters here: alpha == 2^k for integer k.
+inline bool is_dyadic(double a) {
+    // R13.16 (round 6, R6-10): +Inf passed `a > 0.0`, skipped the first loop, and then
+    // `inf * 0.5 == inf` FOREVER -- an infinite loop in a header-inline predicate. Unreachable
+    // from the current caller (taylor_defect_verdict rejects non-finite alpha first), but the
+    // function is public, its comment about repeated halving reaching 1.0 is simply false for
+    // infinities, and no fixture passed it one.
+    if (!(a > 0.0) || !std::isfinite(a)) return false;
+    // Repeated exact doubling/halving reaches 1.0 iff the significand is 1.
+    while (a < 1.0) a *= 2.0;
+    while (a > 1.0) a *= 0.5;
+    return a == 1.0;
+}
+
+inline TaylorVerdict taylor_defect_verdict(const TaylorDefectInputs& in) {
+    // R13.14 (round 5, R5-7): `is_measured`, not a bare `>= 0.0`. +Inf passes `>= 0.0`, so a
+    // blown-up tau with sound preconditions returned Measured and the row printed the
+    // three-way causal conclusion beside `tau=inf`. This header defines the rejecting
+    // predicate a few lines up and this rule was not using it.
+    if (!is_measured(in.tau) || !is_measured(in.tau_alpha) ||
+        !is_measured(in.alpha) || in.alpha <= 0.0) {
+        return TaylorVerdict::Unmeasured;
+    }
+    if (!in.fd_fallback_free)   return TaylorVerdict::FdFallback;
+    if (!in.alpha_arm_measured) return TaylorVerdict::AlphaArmAssumed;
+    // Checked BEFORE the residual, because with a dyadic alpha the residual is zero by
+    // construction and reporting "linear" from it would be the tautology this rule exists for.
+    if (is_dyadic(in.alpha))    return TaylorVerdict::AlphaDyadic;
+    // R13.14 (round 5, R5-7): an ABSENT linearity measurement is not a nonlinear operator.
+    // The sentinel is emitted when the scaled matvec has zero norm -- a degenerate matvec, not
+    // a Jacobian defect -- and calling that `operator_nonlinear` names a mechanism from a
+    // measurement that was never taken, which is the standard this file's sibling clause
+    // already applies to tau ("unmeasured is its own answer, not folded into a failure that
+    // names a mechanism"). `is_measured` is used rather than a bare >= 0 so that +/-Inf is
+    // rejected here too.
+    if (!is_measured(in.linearity_residual)) return TaylorVerdict::LinearityUnmeasured;
+    if (in.linearity_residual > kTaylorLinearityTol) {
+        return TaylorVerdict::OperatorNonlinear;
+    }
+    return TaylorVerdict::Measured;
+}
+
 struct AbComparison {
-    bool same_operator = false;      // A digests agree
-    bool same_rhs = false;           // b digests agree
-    bool same_x0 = false;            // x0 digests agree
+    // These three are "the arms were handed the same inputs". A caller may establish them by
+    // COMPARING DIGESTS or BY CONSTRUCTION (one closure, one tensor, handed to every arm) --
+    // both are valid evidence, but a caller that emits digests beside `ab_valid=1` is read as
+    // having compared them, so a by-construction caller must say which it did. The frozen A/B
+    // probe now digests b and x0 per arm and compares, so its `ab_evidence=` field reads
+    // `digests_compared`.
+    bool same_operator = false;
+    bool same_rhs = false;
+    bool same_x0 = false;
     bool same_solver_path = false;   // the SAME implementation, not an equivalent one
     bool same_budget = false;        // equal Arnoldi dimension allowed to both arms
     bool early_stop_disabled = false;
@@ -291,13 +392,41 @@ struct AbComparison {
     // defect gate that only evaluates on its first call -- so a probe that runs several arms
     // through one closure gives only the FIRST arm a fresh preconditioner, and leaves the
     // aged one to the production solve that follows.
-    bool fresh_operator_per_arm = false;
-    bool fresh_preconditioner_per_arm = false;
+    // R13.15 (external R13.8/R13.9 review, P0-1/P0-2): these two used to be hardcoded `true`
+    // at the only production caller, and neither was true as named.
+    //
+    //   * every arm calls into the SAME `UnifiedPreconditioner` instance. `make_fresh_M()`
+    //     copies the mutable WRAPPER (its fallback latch, its closure-local state); the object
+    //     underneath -- with its caches, member diagnostics and stage-bound fields, some of
+    //     which later branches read -- is shared. "fresh wrapper" is true; "fresh
+    //     preconditioner" was not.
+    //   * every arm shares one `gmres_op` closure. That is the CORRECT A/B design -- the arms
+    //     must differ only in M -- so the defect was never the sharing, it was calling it
+    //     freshness.
+    //
+    // What the comparison actually needs is that the shared objects did not MOVE between arms,
+    // which is a measurement, not a naming choice. Each is a behavioural fingerprint: apply the
+    // object to one fixed probe vector before and after the ladder and compare the outputs, so
+    // any internal state change that could alter a result is caught, and one that could not is
+    // correctly ignored.
+    bool fresh_wrapper_per_arm = false;         // the mutable wrapper is per-arm (measured)
+    bool shared_preconditioner_instance = true; // STATED, not hidden: the object is shared
+    bool preconditioner_state_unchanged = false;// M(probe) identical before and after the arms
+    bool same_frozen_operator = false;          // one operator closure for every arm
+    bool operator_state_unchanged = false;      // A(probe) identical before and after the arms
     // ...and the probe must not have changed the run it observed.
     bool diagnostic_noninterfering = false;
     // R13.8: the operator FGMRES was handed must actually be linear. An FD matvec with a
     // block-dependent epsilon is not, and FGMRES presumes it is.
     bool jvp_authoritative = false;
+    // R13.13 (red team round 4): is the IDENTITY term of A = I - h*gamma*J resolved above the
+    // operator's own floating-point noise? A = I - h*gamma*J is only invertible BECAUSE of the
+    // I; if float32 noise swamps it, every rho below is about a different operator than the one
+    // named. Measured as (matvec noise) / (||v|| / ||A v||) on a Krylov direction. This was
+    // computed inline at the emit site and read by nothing -- the tenth instance in this tree
+    // of a rule whose consumer reads something else -- which is why it now lives here, where a
+    // fixture can reject its negation.
+    bool identity_resolved = false;
     // Each arm produced a finite, usable number.
     bool rho_a_finite = false;
     bool rho_b_finite = false;
@@ -311,6 +440,16 @@ struct AbComparison {
     // R13.10 (red team P1-1): order invariance was measured (worst_order_delta) and then
     // NOT read by the verdict -- ab_valid=1 printed beside any delta. Measured means a clause.
     bool order_invariant = false;
+    // R13.15 (external review P1-1): the Msel arm is an OUTPUT-ROW PROJECTION, and whether it
+    // actually engaged was printed per row and read by nothing -- so a layout mismatch that
+    // silently disabled the projection still produced ab_valid=1 over rows labelled Msel.
+    // Consumed by `msel_attributable` only: the M-vs-I comparison does not depend on it.
+    bool msel_engaged_measured = false;
+    // R13.15 (external review P1-2): every arm weighted by the SAME D, and a D that the config
+    // requested actually arrived. rho_D is a headline number; it is comparable across arms only
+    // under both. `d_weighted` used to be printed per row and enforced nowhere, and an empty
+    // d_inv_used could not be told apart from a transfer failure.
+    bool d_consistent_across_arms = false;
 };
 
 inline ProbeVerdict ab_attributable(const AbComparison& c) {
@@ -323,16 +462,33 @@ inline ProbeVerdict ab_attributable(const AbComparison& c) {
     if (!c.same_budget)        return {false, "different_budget"};
     if (!c.early_stop_disabled) return {false, "early_stop_enabled"};
     // The ones that caught R13.7.
-    if (!c.fresh_operator_per_arm)       return {false, "stale_operator_per_arm"};
-    if (!c.fresh_preconditioner_per_arm) return {false, "stale_preconditioner_per_arm"};
+    if (!c.same_frozen_operator)         return {false, "operator_not_shared_across_arms"};
+    if (!c.fresh_wrapper_per_arm)        return {false, "stale_wrapper_per_arm"};
+    // The shared instances must not have MOVED. This replaces two claims of freshness that were
+    // asserted; it is weaker in name and stronger in evidence.
+    if (!c.operator_state_unchanged)     return {false, "operator_state_moved"};
+    if (!c.preconditioner_state_unchanged) return {false, "preconditioner_state_moved"};
     if (!c.diagnostic_noninterfering)    return {false, "probe_interfered"};
     if (!c.jvp_authoritative)            return {false, "jvp_not_authoritative"};
+    if (!c.identity_resolved)            return {false, "identity_below_noise_floor"};
     if (!c.rho_a_finite || !c.rho_b_finite) return {false, "nonfinite_rho"};
     if (!c.termination_a_admissible || !c.termination_b_admissible) {
         return {false, "inadmissible_termination"};
     }
     if (c.termination_a != c.termination_b) return {false, "different_termination"};
+    if (!c.d_consistent_across_arms)        return {false, "d_weight_inconsistent"};
     if (!c.order_invariant)                 return {false, "order_dependent"};
+    return {true, "ok"};
+}
+
+// The Msel conclusion is a SEPARATE claim from the M-vs-I one and needs its own gate: everything
+// attribution needs, plus evidence that the row projection actually engaged on every Msel row.
+// Without this split a reader takes `ab_valid=1` -- earned by the M and I arms -- as licence to
+// read the Msel rows too.
+inline ProbeVerdict msel_attributable(const AbComparison& c) {
+    const auto base = ab_attributable(c);
+    if (!base.valid) return base;
+    if (!c.msel_engaged_measured) return {false, "msel_not_engaged"};
     return {true, "ok"};
 }
 

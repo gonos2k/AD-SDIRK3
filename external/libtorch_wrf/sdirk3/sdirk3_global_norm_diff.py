@@ -40,6 +40,9 @@ import sys
 from collections import defaultdict
 
 RECORD = "SDIRK3_GLOBAL_NORM"
+# wrf_sdirk3_tile_unified.h: only OK_ADVANCED corresponds to a step the driver accepts. Every
+# other code -- HARD_STAGE_ABORT included -- means U_{n+1} = U_n was published back.
+OK_ADVANCED = 0
 INVALID = "SDIRK3_GLOBAL_NORM_INVALID"
 
 BOX_KEYS = ("i0", "i1", "j0", "j1", "k0", "k1")
@@ -102,10 +105,26 @@ def parse(paths, phase):
                            count=int(f["count"]), phase=f["phase"],
                            outcome=f["outcome"], published=f["state_published"])
                 # An output record from a step that did not publish is not an output.
-                if phase == "output" and f["state_published"] != "1":
+                #
+                # R13.14 (red team round 5, R5-14): this guard could never fire, because the
+                # emitter passed `published` as a compile-time LITERAL `true` at the only
+                # phase=output call site -- and `outcome`, the one field that distinguishes an
+                # advanced step from a reverted one, was declared REQUIRED, parsed, stored, and
+                # read ONLY inside this unreachable branch. Meanwhile HARD_STAGE_ABORT publishes
+                # U_n back to itself and falls through to that same emit. On em_b_wave, which
+                # completes zero steps at every dt tried, ranks would then agree bit-for-bit --
+                # by construction, since nothing moved -- and this comparator would call that
+                # np-equivalence.
+                #
+                # The emitter now passes the measured outcome. This predicate reads BOTH fields,
+                # so a record whose outcome is not OK_ADVANCED is refused whatever `published`
+                # says, and neither field can go stale behind the other.
+                if phase == "output" and (f["state_published"] != "1"
+                                          or f["outcome"] != str(OK_ADVANCED)):
                     problems.append(f"{path}: {RECORD} block={block} is tagged phase=output "
                                     f"with state_published={f['state_published']} "
-                                    f"outcome={f['outcome']}")
+                                    f"outcome={f['outcome']} -- an output record from a step "
+                                    f"that did not advance compares two copies of the input")
                     continue
                 # GROUP ON THE FORECAST, not on a process counter.
                 #

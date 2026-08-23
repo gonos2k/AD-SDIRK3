@@ -31,6 +31,21 @@ static std::atomic<bool> g_workers_started{false};
 // v20.14r18: Signed-char-safe tolower for std::transform (avoids UB with negative char).
 static char safe_tolower(char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); }
 
+// A clamp that SAYS it clamped. A silent std::clamp means the config that ran is not the config
+// that was written, and a measurement then gets attributed to a budget it never had -- this was
+// found by a namelist asking for 192 Arnoldi vectors, silently receiving 100, and the run's own
+// record (krylov_restart_budget) reporting 85 after the Eisenstat-Walker scale.
+static int clamp_int_warn(const char* knob, int requested, int lo, int hi) {
+    const int applied = std::clamp(requested, lo, hi);
+    if (applied != requested) {
+        std::cerr << "[SDIRK3 WARN] " << knob << " requested=" << requested
+                  << " is outside [" << lo << ", " << hi << "]; applied=" << applied
+                  << " -- the configuration that RAN is not the one that was written"
+                  << std::endl;
+    }
+    return applied;
+}
+
 // Shared Fortran-style bool parser for both env and namelist paths.
 static bool parse_fortran_bool_value(const std::string& input) {
     // Delegates to THE spelling authority in the header, so the namelist path, the env path and
@@ -160,7 +175,14 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 jvp_mixed_fd_newton_switch = std::stoi(value);
             // v20.14 r49/r59: Stage-aware GMRES budget + JVP auto-bench
             } else if (key == "sdirk3_stage2_gmres_restart") {
-                stage2_gmres_restart = std::clamp(std::stoi(value), 0, 100);
+                // R13.14: the SAME knob had two maxima -- 100 here, 1000 on the env path
+                // twenty lines of comment away, where the widening is explained as "the clamp
+                // is just no longer below the interesting range". A namelist asking for 192
+                // therefore ran at 100 (then 85 after the EW budget scale) with NOTHING said,
+                // which is how a measurement gets attributed to a budget it never had. One
+                // maximum, and a clamp that says it clamped.
+                stage2_gmres_restart =
+                    clamp_int_warn("sdirk3_stage2_gmres_restart", std::stoi(value), 0, 1000);
             } else if (key == "sdirk3_stage2_max_krylov_restarts") {
                 stage2_max_krylov_restarts = std::clamp(std::stoi(value), 0, 20);
             } else if (key == "sdirk3_stage2_krylov_tol") {
@@ -170,7 +192,8 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
             } else if (key == "sdirk3_stage2_ew_eta_max") {
                 stage2_ew_eta_max = std::clamp(std::strtof(value.c_str(), nullptr), 0.0f, 1.0f);
             } else if (key == "sdirk3_stage3_gmres_restart") {
-                stage3_gmres_restart = std::clamp(std::stoi(value), 0, 100);
+                stage3_gmres_restart =
+                    clamp_int_warn("sdirk3_stage3_gmres_restart", std::stoi(value), 0, 1000);
             } else if (key == "sdirk3_stage3_max_krylov_restarts") {
                 stage3_max_krylov_restarts = std::clamp(std::stoi(value), 0, 20);
             } else if (key == "sdirk3_stage3_krylov_tol") {
@@ -903,7 +926,8 @@ void SDIRK3Config::load_from_env() {
         {
             int parsed_budget = 0;
             if (wrf::sdirk3::parse_whole_int(env_val, parsed_budget)) {
-                stage2_gmres_restart = std::clamp(parsed_budget, 0, 1000);
+                stage2_gmres_restart = clamp_int_warn(
+                    "WRF_SDIRK3_STAGE2_GMRES_RESTART", parsed_budget, 0, 1000);
             } else {
                 std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_STAGE2_GMRES_RESTART='" << env_val
                           << "' is not a whole integer; keeping stage2_gmres_restart = "
@@ -935,7 +959,8 @@ void SDIRK3Config::load_from_env() {
         {
             int parsed_budget = 0;
             if (wrf::sdirk3::parse_whole_int(env_val, parsed_budget)) {
-                stage3_gmres_restart = std::clamp(parsed_budget, 0, 1000);
+                stage3_gmres_restart = clamp_int_warn(
+                    "WRF_SDIRK3_STAGE3_GMRES_RESTART", parsed_budget, 0, 1000);
             } else {
                 std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_STAGE3_GMRES_RESTART='" << env_val
                           << "' is not a whole integer; keeping stage3_gmres_restart = "

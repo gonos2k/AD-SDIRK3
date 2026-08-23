@@ -1297,6 +1297,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 r_true.detach().clone(), 0, false, false};
         res.termination_reason =
             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
+        // R13.13 (red team round 4): the THIRD return path. R13.10 added the computation and
+        // two of the three returns; this one kept the -1 sentinel, so a solve that converged
+        // on entry was dropped from every r0-relative aggregate -- and it is solve_gmres, the
+        // M-off CONTROL arm, so the A/B was comparing arms measured under two different rules.
+        // Dropping the stage's BEST solve from a min-over-solves is the direction that
+        // manufactures a stall.
+        res.initial_rel_error = initial_rel_error_gmres;
                 return res;
     }
     
@@ -2171,13 +2178,20 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 auto Vm = torch::stack(std::vector<torch::Tensor>(V.begin(), V.begin() + m), 1)
                               .to(torch::kFloat64);           // n x m
                 const auto gram = Vm.transpose(0, 1).matmul(Vm);
+                // R13.15 (external review P1-3): DEVICE-SAFE. `eye`/`zeros` were built on the
+                // CPU with a bare dtype while `Vm` keeps whatever device the solver runs on, so
+                // every one of these combinations threw on CUDA/MPS. CI pins CPU Torch, so the
+                // path could not be caught there. Build each helper with the options of the
+                // tensor it is combined with.
                 const double e_orth =
-                    (gram - torch::eye(m, torch::kFloat64)).norm().item<double>();
+                    (gram - torch::eye(m, Vm.options())).norm().item<double>();
                 // Arnoldi relation: ||B V_m - V_{m+1} Hbar_m||_F / ||B V_m||_F, with Hbar the
                 // (m+1) x m Hessenberg the loop produced, reconstructed from ritz_H.
-                auto Hbar = torch::zeros({m + 1, m}, torch::kFloat64);
+                // Filled through a CPU accessor (accessor<> requires CPU), then moved to the
+                // device it is multiplied against.
+                auto Hbar_cpu = torch::zeros({m + 1, m}, torch::kFloat64);
                 {
-                    auto hb = Hbar.accessor<double, 2>();
+                    auto hb = Hbar_cpu.accessor<double, 2>();
                     for (int jj = 0; jj < m; ++jj) {
                         const auto& col = ritz_H[static_cast<size_t>(jj)];
                         for (int ii = 0; ii <= m && ii < static_cast<int>(col.size()); ++ii) {
@@ -2195,23 +2209,82 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 }
                 const auto BV = torch::stack(BV_cols, 1);      // n x m
                 const double n_BV = BV.norm().item<double>();
+                // Moved to the basis' device for the multiply.
+                const auto Hbar = Hbar_cpu.to(Vm.options());
                 const double e_arnoldi =
                     n_BV > 0.0 ? (BV - Vm1.matmul(Hbar)).norm().item<double>() / n_BV : -1.0;
-                // The independent witness.
-                auto eig = torch::linalg_eigh(sym);
-                const auto y_min = std::get<1>(eig).select(1, 0);   // eigvec of min eigval
+                // The independent witness. The m x m eigenproblem stays on the CPU -- it is tiny
+                // and linalg_eigh is not available on every backend -- and only the eigenvector
+                // is moved to the basis' device, which is where it is multiplied.
+                auto eig = torch::linalg_eigh(sym.to(torch::kCPU));
+                const auto y_min =
+                    std::get<1>(eig).select(1, 0).to(Vm.options());  // eigvec of min eigval
                 const auto v_min = Vm.matmul(y_min);               // n
                 const auto Bv = apply_B(v_min.to(V[0].scalar_type())).to(torch::kFloat64);
                 const double vv = v_min.dot(v_min).item<double>();
                 const double q_min_direct =
                     vv > 0.0 ? v_min.dot(Bv).item<double>() / vv : 0.0 / 0.0;
+                // Referee X3 test (1), zero matvecs: ||Hbar e_i|| = ||B v_i|| with ||v_i|| = 1,
+                // so the column norms ARE the operator's magnitude on the directions GMRES
+                // built, and 1/||Hbar e_i|| is the identity term's share of the operator there.
+                // The 10-30% figure this comment used to quote was an ESTIMATE and is REFUTED:
+                // measured directly (identity_frac_krylov / e_hom_krylov in the frozen A/B
+                // probe) the identity term carries 0.39% relative error, not 5-20%.
+                double hcol_min = std::numeric_limits<double>::infinity(), hcol_max = 0.0;
+                for (int jj = 0; jj < m; ++jj) {
+                    const double cn = Hbar.select(1, jj).norm().item<double>();
+                    hcol_min = std::min(hcol_min, cn);
+                    hcol_max = std::max(hcol_max, cn);
+                }
+                // Referee C6(d): does the negative curvature live in the DIAGONAL blocks or in
+                // the coupling? <v_min, B_bd v_min> with B_bd = sum_q P_q B P_q -- six block-
+                // restricted matvecs on the witness. If this is positive while the full form is
+                // negative, no by-variable block-diagonal M is the right class.
+                double q_min_blockdiag = 0.0 / 0.0;
+                // R13.13: the SUM was the only thing kept, and it names no culprit. The
+                // per-block terms are already computed here -- emitting them says WHICH
+                // variable carries the negative curvature, which is what a by-variable
+                // preconditioner would have to fix. Each term is reported with the witness's
+                // MASS in that block: without the mass a small term is ambiguous between "this
+                // block is fine" and "the witness barely lives here", and this project has been
+                // caught by exactly that ambiguity before.
+                std::string blockdiag_rows;
+                if (layout && layout->is_exact && layout->total_size == v_min.numel()) {
+                    double acc = 0.0;
+                    for (const auto& blk : layout->blocks) {
+                        auto vq = torch::zeros_like(v_min);
+                        vq.slice(0, blk.start, blk.start + blk.size)
+                            .copy_(v_min.slice(0, blk.start, blk.start + blk.size));
+                        const auto Bvq = apply_B(vq.to(V[0].scalar_type())).to(torch::kFloat64);
+                        const double term = vq.slice(0, blk.start, blk.start + blk.size)
+                                   .dot(Bvq.slice(0, blk.start, blk.start + blk.size))
+                                   .item<double>();
+                        acc += term;
+                        const double mass = vq.dot(vq).item<double>();
+                        blockdiag_rows += " q_bd_" + std::string(blk.name) + "=" +
+                                          std::to_string(vv > 0.0 ? term / vv : 0.0 / 0.0) +
+                                          " mass_" + std::string(blk.name) + "=" +
+                                          std::to_string(vv > 0.0 ? mass / vv : 0.0 / 0.0);
+                    }
+                    q_min_blockdiag = vv > 0.0 ? acc / vv : 0.0 / 0.0;
+                }
                 std::cerr << " e_orthogonality=" << e_orth
                           << " e_arnoldi=" << e_arnoldi
                           << " q_min_direct=" << q_min_direct
+                          << " q_min_blockdiag=" << q_min_blockdiag
+                          << blockdiag_rows
+                          << " hcol_norm_min=" << hcol_min
+                          << " hcol_norm_max=" << hcol_max
                           << " witness_confirmed="
                           << ((q_min_direct == q_min_direct && q_min_direct < 0.0) ? 1 : 0);
             } else {
+                // R13.14 (round 5, R5-18b): the SAME field set as the branch above. This printed
+                // four fields where the other prints eight, so any position-based parser
+                // misreads the short form -- and a missing field reads as "not applicable" when
+                // it means "not measured".
                 std::cerr << " e_orthogonality=-1 e_arnoldi=-1 q_min_direct=nan"
+                          << " q_min_blockdiag=nan"
+                          << " hcol_norm_min=-1 hcol_norm_max=-1"
                           << " witness_confirmed=0";
             }
             std::cerr << std::endl << std::flush;
@@ -4259,6 +4332,13 @@ public:
     // Prevents data races when multiple solver instances exist (multi-tile/OpenMP).
     int precond_fallback_count_ = 0;
     int precond_total_calls_ = 0;
+    // R13.16 (round 6, R6-5): CONFIGURATION IS OBJECT STATE, read once at construction -- not a
+    // function-local static latched on the first numerical call. This tree states that rule in
+    // prose (wrf_sdirk3_tile_unified.h, 9F.D33) and the first version of this knob broke every
+    // consequence it lists: process-wide, so two solvers in one process could not differ; a unit
+    // test could not vary it; and its provenance was "the environment at the first solve" rather
+    // than at construction. Accepted range (0, 1]; out of range warns and keeps the default.
+    double krylov_no_progress_threshold_ = wrf::sdirk3::kKrylovNoProgressVsR0;
     bool jvp_vs_fd_done_ = false;
     bool singularity_check_done_ = false;
 
@@ -4316,6 +4396,20 @@ public:
     float baseline_unscaled_rms_ = 0.0f;
 
     explicit Impl(const WRFNewtonKrylovOptions& options, int mu_size = 0) : options_(options), mu_size_(mu_size) {
+        {
+            const char* e = std::getenv("WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0");
+            if (e) {
+                char* end = nullptr;
+                const double v = std::strtod(e, &end);
+                if (end && *end == '\0' && v > 0.0 && v <= 1.0) {
+                    krylov_no_progress_threshold_ = v;
+                } else {
+                    std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0='" << e
+                              << "' is not in (0, 1]; keeping "
+                              << krylov_no_progress_threshold_ << std::endl;
+                }
+            }
+        }
         reset_stats();
         if (options_.save_trajectory) {
             trajectory_.reserve(options_.checkpoint_interval);
@@ -7248,6 +7342,7 @@ public:
             // CRITICAL FIX (2025-11-28): Declare outside try block for use in trust region
             float gmres_rel_error = 1.0f;  // Default to 1.0 (no reduction) if GMRES fails
             float gmres_raw_rel_error = 1.0f;  // v20.14r27g: unclamped, may be >1 when GMRES diverges
+            float gmres_initial_rel_error = -1.0f;  // R13.11: ||r0||/||b|| from the same solve
             // R9 P0-D: the GMRES residual, kept only when the nonlinear ledger is armed. It is
             // what turns the linear model's prediction into a read rather than an operator
             // call: with b = -R and r_g = b - A dK, the predicted post-step residual
@@ -7697,14 +7792,30 @@ public:
                                              R.options().device(torch::kCPU))
                                     .to(R.device(), R.scalar_type()).detach();
                         }
-                        // The operator is called OUTSIDE any grad guard: gmres_op is a JVP and a
-                        // blanket NoGradGuard around it kills the very graph it needs. Only the
-                        // reductions below are guarded. This exact mistake has been made in this
-                        // repo five times.
+                        // R13.14 (red team round 5, R5-17): this used to assert that a blanket NoGradGuard
+                        // around `gmres_op` "kills the very graph it needs", citing five past mistakes. The
+                        // tree REFUTES it: the frozen A/B probe runs every one of its matvecs -- including 30
+                        // solve_fgmres arms -- inside `NoGradGuard`, and its records report
+                        // jvp_fd_fallback_free=1, i.e. not one matvec fell back. The mechanism agrees:
+                        // compute_jvp_fwad_or_fd opens with its OWN NoGradGuard before _make_dual, and
+                        // forward-mode dual level is independent of grad mode -- so a caller's guard is
+                        // irrelevant on the AD path and harmless on the FD path. The warning may be true of
+                        // the PRODUCTION solve, where the linear solve itself must stay differentiable; it was
+                        // not true here, and it was asserted at an emit site with no fixture to reject it.
+                        // Its cost was real: this probe deliberately ran its matvecs unguarded, building
+                        // reverse-mode graphs nothing consumes, at newton_iter == 0 on the hot path.
                         torch::Tensor Av, MAv, AMv;
                         bool threw = false;
                         try {
                             Av = gmres_op(v);
+                            // Referee C6(f): this probe samples S^-1 A S. The Arnoldi witness
+                            // in solve_gmres samples D^-1 S^-1 A S when block scaling is on --
+                            // a DIFFERENT operator -- so "random finds none, Krylov finds half,
+                            // on the same operator" was false as stated. D is built inside the
+                            // solve from r0 and is not available here without rebuilding it
+                            // (the duplicate-authority trap), so this probe names its
+                            // coordinates and the same-operator comparison is the Arnoldi
+                            // witness run with block scaling OFF, which is also S^-1 A S.
                             if (gmres_M_inv) {
                                 MAv = gmres_M_inv(Av);          // M^-1 A
                                 AMv = gmres_op(gmres_M_inv(v)); // A M^-1  <- production order
@@ -7734,10 +7845,26 @@ public:
                             }
                         }
                     }
-                    std::cerr << "SDIRK3_NUMRANGE stage=" << stage
+                    // R13.14 (red team round 5, R5-12): the coordinate label was a HARDCODED
+                    // constant stamped over three different operators, and it was FALSE on a
+                    // supported path. `gmres_op` is S^-1 A S only when the scaling was
+                    // initialised; otherwise it is `apply_jacobian`, i.e. RAW coordinates -- and
+                    // this probe fires either way. The sibling emitter in this same file derives
+                    // the field it needs; this one asserted it. Derived now.
+                    //
+                    // The three arms are also three DIFFERENT operators: v'AM^-1 v / v'v is not
+                    // a Rayleigh quotient of any similarity transform of A (M^-1 is applied on
+                    // one side only), so one `operator_coordinates=` cannot cover all of them.
+                    // Each arm names its own operator, and `neg=` carries a denominator on every
+                    // arm so the three are comparable without going back to `samples=`.
+                    std::cerr << "SDIRK3_NUMRANGE"
+                              << " operator_coordinates="
+                              << (scaling_initialized_ ? "S_krylov" : "raw_unscaled")
+                              << " one_sided_precond_arms=AM^-1,M^-1A"
+                              << " stage=" << stage
                               << " samples=" << n_ok << "/" << n_samp
                               << " A: q_min=" << q_min << " q_max=" << q_max
-                              << " neg=" << n_neg;
+                              << " neg=" << n_neg << "/" << n_ok;
                     if (nr_ok > 0) {
                         std::cerr << " | AM^-1(production): q_min=" << qr_min
                                   << " neg=" << nr_neg << "/" << nr_ok;
@@ -8265,6 +8392,62 @@ public:
                         return M_inv;   // by value: its own latch
                     };
                     const int fallbacks_before = precond_fallback_count_;
+                    // The probe applies M thousands of times over the ladder; production's
+                    // per-solve call count must not carry that.
+                    const long long precond_total_calls_before = precond_total_calls_;
+                    // R13.14 (red team round 5, R5-9, P0): the probe also issues thousands of
+                    // MATVECS, and every one bumps the per-iteration JVP counters that
+                    // production's own one-shot diagnostics gate on. Unrestored, that means:
+                    // production's JVP diagnostics are entirely suppressed on the probe
+                    // iteration (they fire on jvp_call_count <= 3); the `== 1 && newton_iter ==
+                    // 0` one-shot fires on the PROBE's first arm's first matvec and is reported
+                    // as production's; the FD-consistency sampler samples the probe's matvecs;
+                    // and the "[Newton] JVP calls / avg" summary reports the probe's count and
+                    // mean. All while the row attests probe_noninterfering=1. The PR-9B
+                    // directional check ~500 lines below already does this correctly -- it
+                    // snapshots eleven counters and forces the call count high so the one-shots
+                    // cannot fire during it. The probe that runs FIRST and issues far more
+                    // matvecs restored none of them.
+                    const int  sv_jvp_calls   = jvp_call_count;
+                    const int  sv_jvp_ad      = jvp_ad_calls;
+                    const int  sv_jvp_fd      = jvp_fd_calls;
+                    const int  sv_jvp_fdf     = jvp_fd_forward_calls;
+                    const int  sv_jvp_fdc     = jvp_fd_central_calls;
+                    const double sv_jvp_ms    = total_jvp_time_ms;
+                    // Same guard the sibling uses: past every one-shot threshold, so the
+                    // probe's own matvecs cannot trigger a production diagnostic.
+                    jvp_call_count = std::max(jvp_call_count, 1000);
+                    // R13.14 (round 5, R5-10, P0): and the shared preconditioner-event flag.
+                    // An arm's M tripping its ratio guard sets it, it is never restored on the
+                    // arm path, and it is read at stage 3 / iteration 0 to decide
+                    // `stage3_hopeless_detected` -- which feeds `stage3_hopeless_streak_` and
+                    // `stage3_hopeless_budget_mode_`, MEMBERS THAT PERSIST ACROSS SOLVES AND
+                    // TIMESTEPS. The probe's default target IS stage-any / iteration 0, so the
+                    // probe could steer the rest of the run. `ab_valid=0` would have said "you
+                    // may not compare the arms"; it never said "this run's trajectory was
+                    // altered". Snapshot and restore, so it cannot be.
+                    const bool sv_variable_pc_event =
+                        variable_pc_event ? *variable_pc_event : false;
+                    // R13.15 (external review P0-1/P0-2): BEHAVIOURAL fingerprints of the two
+                    // shared objects. `make_fresh_M()` copies the mutable wrapper but the
+                    // UnifiedPreconditioner underneath is one instance for every arm, and the
+                    // operator closure is deliberately one instance too. Both were reported as
+                    // "fresh per arm", hardcoded. What the comparison needs is not freshness but
+                    // that neither object MOVED between arms -- so apply each to one fixed probe
+                    // vector before and after the ladder and compare the outputs. A state change
+                    // that could alter a result is caught; one that could not is ignored, which
+                    // is the right sensitivity for this question.
+                    torch::Tensor fp_probe, A_fp_before, M_fp_before;
+                    if (gmres_rhs.defined() && gmres_rhs.numel() > 0) {
+                        const double bn = gmres_rhs.detach().to(torch::kFloat64)
+                                              .norm().item<double>();
+                        if (bn > 0.0) {
+                            fp_probe = (gmres_rhs.detach() / static_cast<float>(bn)).clone();
+                            A_fp_before = gmres_op(fp_probe).detach().clone();
+                            M_fp_before = M_inv ? M_inv(fp_probe).detach().clone()
+                                                : torch::Tensor();
+                        }
+                    }
                     // fd-fallback count BEFORE the arms; compared after (red team P1-2: reading
                     // it once before the arms made a fallback inside an arm invisible).
                     const long long fd_before =
@@ -8306,6 +8489,50 @@ public:
                     // separate v from -v or from any permutation -- the same weakness fixed in
                     // carried_state_digest and reintroduced here. Norm, sum and first moment:
                     // the sum is odd under negation, the first moment breaks under reordering.
+                    // R13.15 (external review P1-6): an INDEX-AWARE WIDE hash, not a scalar.
+                    //
+                    // The previous digest was ||x||_2 + 7*sum(x) + 13*sum(i*x_i) -- three signed
+                    // reductions collapsed into one double, and the review supplies an explicit
+                    // collision: x = (1,-2,1,0) and y = (0,1,-2,1) match on all three. Three
+                    // moments cannot separate vectors of any length, so no number of extra
+                    // signed projections fixes the class; the fix is to hash the BYTES with an
+                    // avalanche, and to include shape/dtype/device so two differently-shaped
+                    // tensors with the same bytes cannot agree either.
+                    //
+                    // The in-process A/B shares tensors, so a collision here could not corrupt a
+                    // computation -- but this digest is quoted as provenance, and provenance is
+                    // exactly where a weak hash misleads.
+                    auto digest_u64 = [](const torch::Tensor& t) -> unsigned long long {
+                        unsigned long long h = 1469598103934665603ULL;   // FNV-1a offset basis
+                        auto mix = [&h](unsigned long long v) {
+                            h ^= v;
+                            h *= 1099511628211ULL;
+                            h ^= h >> 29;            // avalanche: FNV alone is blind to bit 63
+                        };
+                        if (!t.defined() || t.numel() == 0) { mix(0xDEADBEEFULL); return h; }
+                        mix(static_cast<unsigned long long>(t.dim()));
+                        for (int64_t d = 0; d < t.dim(); ++d) {
+                            mix(static_cast<unsigned long long>(t.size(d)));
+                        }
+                        mix(static_cast<unsigned long long>(t.scalar_type()));
+                        mix(static_cast<unsigned long long>(t.device().type()));
+                        // Contiguous float64 on the CPU so the byte view is well defined and
+                        // identical across devices.
+                        const auto flat =
+                            t.detach().to(torch::kCPU).to(torch::kFloat64).contiguous()
+                             .reshape({-1});
+                        const double* p = flat.data_ptr<double>();
+                        const int64_t n = flat.numel();
+                        for (int64_t i = 0; i < n; ++i) {
+                            unsigned long long bits = 0;
+                            std::memcpy(&bits, &p[i], sizeof(bits));
+                            mix(bits);
+                            mix(static_cast<unsigned long long>(i));   // index-aware
+                        }
+                        return h;
+                    };
+                    // Kept for the printed provenance field, which is a double in the record
+                    // format. It is NOT what the agreement flags compare.
                     auto digest = [](const torch::Tensor& t) -> double {
                         if (!t.defined() || t.numel() == 0) return -1.0;
                         const auto t64 = t.detach().to(torch::kFloat64).reshape({-1});
@@ -8320,6 +8547,20 @@ public:
                     // Arnoldi relation simply stops describing what was computed. Measured
                     // here rather than assumed, on the same operator the arms use.
                     double e_repeat = -1.0, e_hom = -1.0, e_add = -1.0;
+                    // R13.12 (referee X3): is the IDENTITY term of A = I - h*gamma*J even
+                    // resolved in float32? A*v = v - h*gamma*J*v, so the identity contributes
+                    // ||v|| out of ||A*v||: identity_frac = ||v||/||A*v||. The operator's own
+                    // floating-point noise is e_hom (measured just below -- an upper bound,
+                    // since scaling v and A*v each round once). The error ON THE IDENTITY TERM
+                    // is therefore e_hom / identity_frac, and if that reaches 1 the identity is
+                    // below the noise floor. The campaign's "5-20%" figure was an ESTIMATE from
+                    // eps x scale-separation; these two numbers replace it with a measurement.
+                    // Measured on the RHS direction b/||b|| as well as a random one: at a cold
+                    // start b/||b|| IS the first Arnoldi vector, so it is a genuine Krylov
+                    // direction, and the random/Krylov pair is reported separately because this
+                    // operator is known to behave differently on the two.
+                    double identity_frac_rand = -1.0, identity_frac_krylov = -1.0;
+                    double e_hom_krylov = -1.0;
                     // Probe-local generator (the file's own D121/D123 rule): the global stream
                     // must not shift for downstream one-shot diagnostics.
                     auto probe_gen = at::detail::createCPUGenerator(
@@ -8347,7 +8588,43 @@ public:
                         const double den_add =
                             n_Av + Aw.detach().to(torch::kFloat64).norm().item<double>();
                         e_add = rel(gmres_op(v + w) - Av1 - Aw, den_add);
+                        {
+                            const double n_v =
+                                v.detach().to(torch::kFloat64).norm().item<double>();
+                            identity_frac_rand = (n_Av > 0.0) ? n_v / n_Av : -1.0;
+                        }
+                        // Same pair on the RHS direction: the cold-start first Arnoldi vector.
+                        if (gmres_rhs.defined()) {
+                            const double n_b =
+                                gmres_rhs.detach().to(torch::kFloat64).norm().item<double>();
+                            if (n_b > 0.0) {
+                                auto vb = gmres_rhs.detach() / static_cast<float>(n_b);
+                                const auto Avb = gmres_op(vb);
+                                const double n_Avb =
+                                    Avb.detach().to(torch::kFloat64).norm().item<double>();
+                                if (n_Avb > 0.0) {
+                                    const double n_vb =
+                                        vb.detach().to(torch::kFloat64).norm().item<double>();
+                                    identity_frac_krylov = n_vb / n_Avb;
+                                    e_hom_krylov =
+                                        rel(gmres_op(alpha * vb) - alpha * Avb, alpha * n_Avb);
+                                }
+                            }
+                        }
                     }
+                    // The verdict, computed once and printed beside the numbers it is made of.
+                    auto resolution = [](double noise, double frac) {
+                        return (noise >= 0.0 && frac > 0.0) ? noise / frac : -1.0;
+                    };
+                    const double identity_resolution_rand = resolution(e_hom, identity_frac_rand);
+                    const double identity_resolution_krylov =
+                        resolution(e_hom_krylov, identity_frac_krylov);
+                    // "Resolved" = the identity term stands above the operator's noise floor.
+                    // Unmeasured is NOT resolved: -1 fails the range test rather than passing it.
+                    // Consumed by ab_attributable via cmp.identity_resolved below -- the rule
+                    // lives in wrf_sdirk3_probe_validity.h so a fixture can reject its negation.
+                    const bool identity_resolved_krylov =
+                        (identity_resolution_krylov >= 0.0 && identity_resolution_krylov < 1.0);
                     // R13.9 (referee C5): the operator's linearity was measured; the
                     // PRECONDITIONER's was not, and the reading "Krylov space of D^-1 A M^-1"
                     // needs M linear too. Production M^-1 is a tridiagonal/column solve on
@@ -8429,7 +8706,22 @@ public:
 
                     struct Row { const char* arm; int j; double rho; double rho_phys;
                                  double rho_D; float rel; int iters; int term;
-                                 long long a_applies; bool d_weighted; bool msel_engaged; };
+                                 long long a_applies; bool d_weighted; bool msel_engaged;
+                                 // R13.13 (red team round 4): the arms' inputs, digested INSIDE
+                                 // each arm. `same_rhs`/`same_x0` were hardcoded true while b
+                                 // and x0 digests were printed once for the whole block -- so a
+                                 // reader of `ab_valid=1 ... b_digest=0x..` saw evidence of a
+                                 // comparison that never happened, and three of
+                                 // ab_attributable's clauses were unreachable from its only
+                                 // production caller. Now they are compared.
+                                 unsigned long long b_dig; unsigned long long x0_dig;
+                                 // R13.15 (external review P1-2): the D the arm ACTUALLY used.
+                                 // `d_weighted` was printed and never enforced, so nothing
+                                 // checked that every arm weighted by the same D -- and rho0_D
+                                 // from the FIRST row was reused as the baseline for all of
+                                 // them. An undefined d_inv_used also could not be told apart
+                                 // from a D that was requested and failed to arrive.
+                                 unsigned long long d_dig; bool d_requested; };
                     enum class Arm { M, I, Sel };
                     std::vector<Row> rows;
                     // R13.8 (A4): equal j is equal ARNOLDI DIMENSION, not equal work -- the M
@@ -8447,6 +8739,12 @@ public:
                     // closure, where only the first row started clean.
                     auto run = [&](Arm which, int m) {
                         const bool use_M = (which == Arm::M);
+                        // R13.15 (external review P1-1): reset per ROW. `msel_engaged` is a
+                        // shared_ptr read after the arm returns; on a path that exits before
+                        // the projection runs (zero iterations, an early termination) the
+                        // PREVIOUS row's `true` was still there and was reported as this row's
+                        // receipt.
+                        if (which == Arm::Sel && msel_engaged) *msel_engaged = false;
                         auto arm_M = (which == Arm::M)   ? make_fresh_M()
                                    : (which == Arm::Sel) ? selective_M
                                                          : identity_M;
@@ -8519,12 +8817,28 @@ public:
                             // objective IS the unweighted norm. Substituted, and SAID (N4).
                             rho_D = rho;
                         }
+                        // R13.14 (round 5, R5-8b): `digest` returns a DOUBLE built from a
+                        // norm plus signed sums, so converting it to an unsigned integer is
+                        // undefined behaviour for any negative value -- and the
+                        // undefined-tensor sentinel is -1.0, which every cold start hits. The
+                        // conversion also truncated the fraction, so two digests differing by
+                        // less than 1.0 compared EQUAL. Compare the bit patterns instead:
+                        // exact, total, and no conversion.
+                        // R13.15: the WIDE index-aware hash for the comparison. The scalar
+                        // digest stays only as the printed provenance number.
+                        const unsigned long long b_dig_arm  = digest_u64(gmres_rhs);
+                        const unsigned long long x0_dig_arm = digest_u64(gmres_x0);
+                        const unsigned long long d_dig_arm = digest_u64(d_inv_used);
+                        const bool d_requested_arm =
+                            (wrf::sdirk3::g_sdirk3_config.gmres_block_scale != 0);
                         rows.push_back({arm_name, m, rho, rho_phys, rho_D,
                                         res.rel_error,
                                         res.iterations,
                                         static_cast<int>(res.termination_reason),
                                         a_apply_count, d_weighted,
-                                        (which == Arm::Sel) ? *msel_engaged : false});
+                                        (which == Arm::Sel) ? *msel_engaged : false,
+                                        b_dig_arm, x0_dig_arm,
+                                        d_dig_arm, d_requested_arm});
                         // R13.9: PER-BLOCK residual at the largest budget, each arm. The three
                         // aggregate norms say M's reduction is large in rho_D and small in
                         // rho_S, and D^-1 up-weights the small-residual blocks -- so the
@@ -8532,7 +8846,10 @@ public:
                         // physical residual. That is an inference from aggregates. This is the
                         // measurement: ||r_block|| / ||b_block|| for each block, in the S
                         // coordinates, at j=48, beside the same ratio at j=0.
-                        if (m == 48 && res.x.defined() && cached_layout_.is_exact &&
+                        // X4: m=8 is the production budget (restart=7, one cycle); j=48 is where
+                        // the arms are compared. Both, so the block that binds production (ph,
+                        // ~3/4 of rho_S) is seen at the budget production actually spends.
+                        if ((m == 8 || m == 48) && res.x.defined() && cached_layout_.is_exact &&
                             r0_kept.defined()) {
                             const auto r = (gmres_rhs.detach() - gmres_op(res.x.detach()))
                                                .to(torch::kFloat64).reshape({-1});
@@ -8578,28 +8895,143 @@ public:
                     // Restore production's preconditioner to the state it would have had, and
                     // MEASURE whether anything else moved.
                     // Production's wrapper was never handed to an arm; nothing to restore.
+                    //
+                    // R13.13 (red team round 4): "whether ANYTHING else moved" was one counter.
+                    // `precond_total_calls_` is bumped once per M application by every arm --
+                    // thousands of increments over the ladder -- and it is the denominator of
+                    // the fallback-percentage print for the rest of the solve, so the probe was
+                    // mutating production telemetry while reporting that it had not. It is
+                    // restored here (the probe's applications are not production's), and the
+                    // restore is what `noninterfering` now attests. The JVP fallback counter
+                    // was folded into `jvp_ok` instead, so `probe_noninterfering=1` could print
+                    // on a run where the probe demonstrably moved a global; it is counted here
+                    // as well, and still gates jvp_ok below.
+                    // The same two fingerprint probes after the ladder. Bit-exact equality:
+                    // the operator is deterministic (e_repeat = 0 is measured beside this) and
+                    // M is a fixed-coefficient solve, so any difference is a state change, not
+                    // noise. Taken BEFORE the restores, because these two applies move the same
+                    // counters the restores fix -- measuring interference with a probe that
+                    // interferes is how the first version of this reported probe_interfered=1
+                    // against itself.
+                    bool operator_state_unchanged = false, precond_state_unchanged = false;
+                    if (fp_probe.defined() && A_fp_before.defined()) {
+                        const auto A_fp_after = gmres_op(fp_probe).detach();
+                        operator_state_unchanged = torch::equal(A_fp_before, A_fp_after);
+                    }
+                    if (fp_probe.defined() && M_fp_before.defined() && M_inv) {
+                        const auto M_fp_after = M_inv(fp_probe).detach();
+                        precond_state_unchanged = torch::equal(M_fp_before, M_fp_after);
+                    } else if (!M_inv) {
+                        // No preconditioner to move. Not evidence of movement, and not a claim
+                        // about one either -- the arms' M is then the identity by construction.
+                        precond_state_unchanged = true;
+                    }
+
+                    // WHAT MOVED, read before anything is put back. R13.15: the previous version
+                    // restored first and then compared the restored values to the snapshots,
+                    // which is true by construction -- two of the clauses were vacuous. The
+                    // decomposition that is not: some state must NOT have moved at all (a
+                    // fallback, an FD fallback, the shared pc event), and some state moves by
+                    // design (call counts, timers) and must be RESTORED.
+                    const long long fd_after_arms =
+                        wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
+                    const int    precond_fb_after   = precond_fallback_count_;
+                    const bool   pc_event_after =
+                        variable_pc_event ? *variable_pc_event : sv_variable_pc_event;
+                    const bool pc_event_moved = (pc_event_after != sv_variable_pc_event);
+
+                    // R5-9 / R5-10: restore everything the probe moved that production reads.
+                    precond_total_calls_   = precond_total_calls_before;
+                    jvp_call_count         = sv_jvp_calls;
+                    jvp_ad_calls           = sv_jvp_ad;
+                    jvp_fd_calls           = sv_jvp_fd;
+                    jvp_fd_forward_calls   = sv_jvp_fdf;
+                    jvp_fd_central_calls   = sv_jvp_fdc;
+                    total_jvp_time_ms      = sv_jvp_ms;
+                    if (variable_pc_event) *variable_pc_event = sv_variable_pc_event;
+
+                    // The restore is a separate claim from the no-movement one, and both are
+                    // reported. A restore makes the RUN safe; it does not make the arms
+                    // comparable, which is what `noninterfering` is for.
+                    const bool counters_restored =
+                        (precond_total_calls_ == precond_total_calls_before) &&
+                        (jvp_call_count == sv_jvp_calls) &&
+                        (jvp_ad_calls == sv_jvp_ad) &&
+                        (jvp_fd_calls == sv_jvp_fd) &&
+                        (jvp_fd_forward_calls == sv_jvp_fdf) &&
+                        (jvp_fd_central_calls == sv_jvp_fdc) &&
+                        (total_jvp_time_ms == sv_jvp_ms) &&
+                        (!variable_pc_event || *variable_pc_event == sv_variable_pc_event);
                     const bool noninterfering =
-                        (precond_fallback_count_ == fallbacks_before);
+                        (precond_fb_after == fallbacks_before) &&
+                        (fd_after_arms == fd_before) &&
+                        !pc_event_moved &&
+                        counters_restored;
                     jvp_ok = jvp_ok &&
                         (wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed)
                              == fd_before);
 
                     // Order invariance, measured across the two passes.
+                    // R13.15 (external review P0-3): METRIC-COMPLETE order invariance.
+                    //
+                    // This compared `rows[i].rho` -- rho_S -- and nothing else, while the
+                    // headline of every recent report is rho_D, rho_phys, the per-arm Msel
+                    // receipt and the per-block table. So a run whose rho_S was order-invariant
+                    // while rho_D, rho_phys, the termination reason and the Msel engagement all
+                    // flipped with arm order still printed ab_valid=1. Every metric the record
+                    // reports is now compared forward-vs-reverse for the same (arm, j), and the
+                    // discrete ones must match exactly rather than within a tolerance.
                     double worst_order_delta = 0.0;
                     int order_pairs_compared = 0;
+                    const char* worst_order_metric = "none";
+                    bool discrete_order_invariant = true;
+                    auto note_delta = [&](double x, double y, const char* name) {
+                        if (x > 0.0 && y > 0.0) {
+                            const double d = std::abs(x - y) / x;
+                            if (d > worst_order_delta) {
+                                worst_order_delta = d;
+                                worst_order_metric = name;
+                            }
+                        } else if (!(x == y)) {
+                            // One measured and one not is not agreement.
+                            worst_order_delta = std::numeric_limits<double>::infinity();
+                            worst_order_metric = name;
+                        }
+                    };
                     for (size_t i = 0; i < forward_rows; ++i) {
                         for (size_t k = forward_rows; k < rows.size(); ++k) {
                             if (rows[i].j == rows[k].j &&
                                 std::string(rows[i].arm) == rows[k].arm) {
-                                const double a = rows[i].rho, b2 = rows[k].rho;
-                                if (a > 0.0 && b2 > 0.0) {
-                                    worst_order_delta = std::max(
-                                        worst_order_delta, std::abs(a - b2) / a);
+                                const auto& f = rows[i];
+                                const auto& r = rows[k];
+                                if (f.rho > 0.0 && r.rho > 0.0) {
                                     ++order_pairs_compared;
                                 } else {
                                     // A row that could not be compared is not a row that
                                     // agreed. Poison the delta so the clause refuses.
                                     worst_order_delta = std::numeric_limits<double>::infinity();
+                                    worst_order_metric = "rho_S_unmeasured";
+                                }
+                                note_delta(f.rho,      r.rho,      "rho_S");
+                                note_delta(f.rho_phys, r.rho_phys, "rho_phys");
+                                note_delta(f.rho_D,    r.rho_D,    "rho_D");
+                                // Discrete quantities must be IDENTICAL, not close. A solve
+                                // that took a different number of iterations, ended for a
+                                // different reason, weighted by a different D, engaged Msel
+                                // differently or applied A a different number of times is a
+                                // different solve however near its residual landed.
+                                const bool discrete_same =
+                                    (f.iters == r.iters) &&
+                                    (f.term == r.term) &&
+                                    (f.d_weighted == r.d_weighted) &&
+                                    (f.msel_engaged == r.msel_engaged) &&
+                                    (f.a_applies == r.a_applies) &&
+                                    (f.b_dig == r.b_dig) && (f.x0_dig == r.x0_dig);
+                                if (!discrete_same) {
+                                    discrete_order_invariant = false;
+                                    if (worst_order_metric == std::string("none")) {
+                                        worst_order_metric = "discrete";
+                                    }
                                 }
                             }
                         }
@@ -8638,10 +9070,24 @@ public:
                                 halo_floor_delta, std::abs(r_.rho - r_.rel) / r_.rho);
                         }
                     }
+                    // MEASURED, not asserted: every arm digested the b and x0 it was handed,
+                    // and they must agree across all of them.
+                    bool b_digests_agree = true, x0_digests_agree = true;
+                    if (!rows.empty()) {
+                        for (const auto& r_ : rows) {
+                            b_digests_agree  = b_digests_agree  && (r_.b_dig  == rows[0].b_dig);
+                            x0_digests_agree = x0_digests_agree && (r_.x0_dig == rows[0].x0_dig);
+                        }
+                    } else {
+                        b_digests_agree = x0_digests_agree = false;   // nothing ran: not evidence
+                    }
                     wrf::sdirk3::AbComparison cmp;
-                    cmp.same_operator = true;     // one closure object, both arms
-                    cmp.same_rhs = true;          // one tensor
-                    cmp.same_x0 = true;
+                    // The operator IS one closure object handed to every arm -- by construction,
+                    // and stated as such on the record (`ab_evidence=`) rather than implied by a
+                    // digest that was never compared.
+                    cmp.same_operator = true;
+                    cmp.same_rhs = b_digests_agree;
+                    cmp.same_x0 = x0_digests_agree;
                     // N2: with precond_refinement_passes > 1 production's M is the
                     // defect-correction wrapper and the arm's make_fresh_M is the bare one --
                     // an "M" arm that is not M. Same path only when there is no wrapper.
@@ -8650,9 +9096,14 @@ public:
                     cmp.same_solver_path = (refinement_passes_now <= 1);
                     cmp.same_budget = iters_equal;
                     cmp.early_stop_disabled = early_stop_off;
-                    cmp.fresh_operator_per_arm = true;
-                    cmp.fresh_preconditioner_per_arm = true;   // copied from pristine per row
+                    // MEASURED, not asserted (external review P0-1/P0-2).
+                    cmp.same_frozen_operator = true;   // one closure, handed to every arm
+                    cmp.fresh_wrapper_per_arm = true;  // make_fresh_M() copies it per row
+                    cmp.shared_preconditioner_instance = true;  // stated, not hidden
+                    cmp.operator_state_unchanged = operator_state_unchanged;
+                    cmp.preconditioner_state_unchanged = precond_state_unchanged;
                     cmp.diagnostic_noninterfering = noninterfering;
+                    cmp.identity_resolved = identity_resolved_krylov;
                     cmp.jvp_authoritative = jvp_ok && operator_linear && precond_linear;
                     cmp.rho_a_finite = cmp.rho_b_finite = all_finite;
                     cmp.termination_a_admissible = cmp.termination_b_admissible =
@@ -8661,8 +9112,37 @@ public:
                     cmp.termination_b = terms_equal ? 0 : 1;
                     // 1e-6 relative: bit-identical rows give exactly 0; anything larger means
                     // some state survived between passes and the arms were not independent.
-                    cmp.order_invariant = (worst_order_delta <= 1.0e-6);
+                    // Continuous metrics within tolerance AND every discrete one identical.
+                    cmp.order_invariant =
+                        (worst_order_delta <= 1.0e-6) && discrete_order_invariant;
+                    // R13.15 (external review P1-1): the Msel receipt. `msel_engaged` was
+                    // printed per row and read by nothing, so a layout mismatch that silently
+                    // disabled the row projection still produced ab_valid=1 over rows labelled
+                    // Msel. It is now a separate verdict: the M-vs-I comparison does not depend
+                    // on Msel having engaged, and the Msel conclusion does.
+                    bool msel_rows_present = false, msel_all_engaged = true;
+                    for (const auto& r_ : rows) {
+                        if (std::string(r_.arm) == "Msel") {
+                            msel_rows_present = true;
+                            msel_all_engaged = msel_all_engaged && r_.msel_engaged;
+                        }
+                    }
+                    cmp.msel_engaged_measured = msel_rows_present && msel_all_engaged;
+                    // R13.15 (external review P1-2): every arm must have weighted by the SAME D,
+                    // and a D that was requested must have arrived. rho_D is a headline number
+                    // and it is only comparable across arms under both conditions.
+                    bool d_same_across_rows = !rows.empty(), d_all_valid = !rows.empty();
+                    for (const auto& r_ : rows) {
+                        d_same_across_rows = d_same_across_rows && (r_.d_dig == rows[0].d_dig);
+                        // Requested and absent is a TRANSFER FAILURE, not "D = I". Not
+                        // requested and absent is correct and says nothing about the weight.
+                        d_all_valid = d_all_valid && !(r_.d_requested && !r_.d_weighted);
+                    }
+                    cmp.d_consistent_across_arms = d_same_across_rows && d_all_valid;
                     const auto verdict = wrf::sdirk3::ab_attributable(cmp);
+                    // The Msel conclusion needs everything the M-vs-I one needs, plus its own
+                    // receipt. Reported separately so a reader cannot borrow one for the other.
+                    const auto msel_verdict = wrf::sdirk3::msel_attributable(cmp);
 
                     std::cerr << "SDIRK3_FROZEN_AB_SYSTEM stage=" << stage
                               << " newton_iter=" << newton_iter
@@ -8673,6 +9153,21 @@ public:
                               << " ab_reason=" << verdict.reason
                               << " b_digest=" << digest(gmres_rhs)
                               << " x0_digest=" << digest(gmres_x0)
+                              // R13.14 (round 5, R5-8): the arms are handed the SAME two
+                              // objects by reference, so equal digests follow from aliasing,
+                              // not from a comparison of independently supplied inputs. The
+                              // recheck still has power -- it would catch an in-place mutation
+                              // by an arm -- and the label now says exactly that much.
+                              << " ab_evidence=b_x0_single_object_digest_rechecked_per_arm"
+                                 "/shared_operator_and_preconditioner_fingerprinted"
+                              << " operator_state_unchanged="
+                              << (operator_state_unchanged ? 1 : 0)
+                              << " precond_state_unchanged=" << (precond_state_unchanged ? 1 : 0)
+                              << " counters_restored=" << (counters_restored ? 1 : 0)
+                              << " pc_event_moved=" << (pc_event_moved ? 1 : 0)
+                              << " shared_preconditioner_instance=1 fresh_wrapper_per_arm=1"
+                              << " b_digests_agree=" << (b_digests_agree ? 1 : 0)
+                              << " x0_digests_agree=" << (x0_digests_agree ? 1 : 0)
                               << " b_norm=" << b_norm
                               << " rho0_S=" << rho0_S
                               << " rho0_phys=" << rho0_phys
@@ -8686,6 +9181,12 @@ public:
                               << " e_repeat=" << e_repeat
                               << " e_homogeneity=" << e_hom
                               << " e_additivity=" << e_add
+                              << " identity_frac_rand=" << identity_frac_rand
+                              << " identity_frac_krylov=" << identity_frac_krylov
+                              << " e_hom_krylov=" << e_hom_krylov
+                              << " identity_resolution_rand=" << identity_resolution_rand
+                              << " identity_resolution_krylov=" << identity_resolution_krylov
+                              << " identity_resolved_krylov=" << (identity_resolved_krylov ? 1 : 0)
                               << " precond_linear=" << (precond_linear ? 1 : 0)
                               << " eM_homogeneity=" << eM_hom
                               << " eM_additivity=" << eM_add
@@ -8694,6 +9195,13 @@ public:
                               << " probe_noninterfering=" << (noninterfering ? 1 : 0)
                               << " halo_floor_delta=" << halo_floor_delta
                               << " worst_order_delta=" << worst_order_delta
+                              << " worst_order_metric=" << worst_order_metric
+                              << " d_same_across_rows=" << (d_same_across_rows ? 1 : 0)
+                              << " d_all_valid=" << (d_all_valid ? 1 : 0)
+                              << " discrete_order_invariant="
+                              << (discrete_order_invariant ? 1 : 0)
+                              << " msel_valid=" << (msel_verdict.valid ? 1 : 0)
+                              << " msel_reason=" << msel_verdict.reason
                               << " order_pairs_compared=" << order_pairs_compared
                               << (verdict.valid
                                     ? "  (attributable: equal Arnoldi dimension, one code"
@@ -8900,6 +9408,7 @@ public:
                 // v20.14r27g: Keep raw rel_error for diagnostics/trust-region.
                 // Clamped value is only for the quadratic prediction model (e² term).
                 gmres_raw_rel_error = gmres_result.rel_error;
+                gmres_initial_rel_error = gmres_result.initial_rel_error;
                 gmres_rel_error = std::clamp(gmres_raw_rel_error, 0.0f, 1.0f);
                 if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_NONLINEAR_LEDGER") &&
                     gmres_result.r_true.defined()) {
@@ -8907,6 +9416,13 @@ public:
                     ledger_r_gmres = gmres_result.r_true.detach();
                 }
                 stats_.total_krylov_iterations += gmres_result.iterations;
+                // R13.14 (round 5, R5-13): the INNER budget these solves were given. The
+                // no-progress ratio is budget-dependent -- a healthy operator on 7 Arnoldi
+                // vectors reads 0.92 -- so the ratio cannot be read without it, and the
+                // justification for the boundary constant cited it as "on the record" when
+                // nothing produced it.
+                stats_.krylov_restart_budget = effective_restart;
+                stats_.krylov_max_restarts = effective_max_restarts;
                 // R13.2: how well the LINEAR solve did, kept as the BEST across this stage.
                 // Newton cannot converge on top of a solve that does not solve, so this
                 // separates "the outer iteration is stuck" from "the operator or the
@@ -8916,6 +9432,92 @@ public:
                      gmres_result.rel_error < stats_.best_krylov_rel_error)) {
                     stats_.best_krylov_rel_error = gmres_result.rel_error;
                 }
+                // R13.12 (red team R3-2): the same quantity measured against where THIS solve
+                // started. ||r||/||b|| answers "is the step predicted to reduce the nonlinear
+                // residual"; ||r||/||r0|| answers "did the Krylov solve do anything". The
+                // classifier needs the second and was reading the first. Only recorded when r0
+                // was measured -- an unmeasured r0 leaves the sentinel, and the classifier
+                // falls back rather than inventing a reference of 1.
+                if (std::isfinite(gmres_result.rel_error) && gmres_result.rel_error >= 0.0f &&
+                    gmres_result.initial_rel_error > 0.0f &&
+                    std::isfinite(gmres_result.initial_rel_error)) {
+                    const float progress =
+                        gmres_result.rel_error / gmres_result.initial_rel_error;
+                    if (stats_.best_krylov_rel_error_vs_r0 < 0.0f ||
+                        progress < stats_.best_krylov_rel_error_vs_r0) {
+                        stats_.best_krylov_rel_error_vs_r0 = progress;
+                    }
+                    // R13.13 (round 4): the WORST solve, and which iteration it was. "Did the
+                    // linear solve stop working" is a max question, not a min one -- a min
+                    // answers "did any solve work" and one early success clears a stage of
+                    // stalls. It also has no SELECTOR, so no coordinate seam: an earlier attempt
+                    // keyed the value to the solve that first tripped the production predicate,
+                    // which under the default rule asks the ||b|| question.
+                    //
+                    // R13.14 (red team round 5, P0): but the max must be over solves that DID
+                    // WORK AND DID NOT FINISH, and it was over all of them.
+                    //   * InitialConverged does ZERO work and returns rel_error == r0 ratio, so
+                    //     progress is EXACTLY 1.0 -- under a max, the best possible outcome
+                    //     scores as a total stall. Round 4 added initial_rel_error to that
+                    //     return BECAUSE dropping it from a MIN manufactured a stall; the same
+                    //     commit then made a max the classifier's input, and for a max the same
+                    //     value manufactures the stall directly. Two halves of one commit
+                    //     pointing opposite ways.
+                    //   * A solve that REACHED TOLERANCE solved. Its progress is evidence about
+                    //     the tolerance, not about whether Krylov works.
+                    // Excluding both means a stage where every solve either converged on entry
+                    // or reached tolerance yields NO stagnation evidence -- which is correct,
+                    // and lets NewtonBudgetExhausted have its case back. That category exists
+                    // precisely to stop a falling residual being reported as a stall, and a max
+                    // over all solves re-opened that hole through a different door: the later a
+                    // Newton run gets, the smaller and noisier its linear RHS, so progress -> 1
+                    // and "the closer Newton gets, the more certainly the linear solve is
+                    // blamed".
+                    // R13.16 (round 6, R6-2): ToleranceReached is NOT evidence that the solve
+                    // worked. "Tolerance" here is the Eisenstat-Walker forcing term, and it is
+                    // CAPPED AT 0.9 (`ew_eta_max`) -- and it saturates at exactly that cap in
+                    // the failing regime, because eta = 0.9 * res_ratio^1.5 and res_ratio -> 1
+                    // when the Newton residual stops falling. So a solve can "reach tolerance"
+                    // having removed 10% of its residual, which is a stall by this classifier's
+                    // own threshold. Excluding those was the exact INVERSE of the round-5 P0:
+                    // that one counted a no-op solve as a stall, this one discounted a stall as
+                    // a success -- and the fix for the first produced the second.
+                    //
+                    // Only a solve that did ZERO WORK is excluded. A solve that met a loose
+                    // tolerance keeps whatever progress it made, and the fact that it stopped
+                    // because it was ASKED to is recorded separately (below) so the classifier
+                    // can name the forcing term instead of the operator.
+                    const bool trivial_solve =
+                        (gmres_result.termination_reason ==
+                             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged);
+                    const bool met_tolerance =
+                        (gmres_result.termination_reason ==
+                             WRFNewtonKrylovSolver::KrylovTerminationReason::ToleranceReached);
+                    if (!trivial_solve) {
+                        // Counted here so the count is over exactly the solves the max is over.
+                        stats_.krylov_solves_measured_vs_r0++;
+                        if (progress > stats_.worst_krylov_rel_error_vs_r0) {
+                            stats_.worst_krylov_rel_error_vs_r0 = progress;
+                            stats_.worst_krylov_iter = newton_iter;
+                            // Did the WORST solve stop because it was satisfied? That is the
+                            // difference between "the operator could not be solved" and "the
+                            // forcing term did not ask for more", and they route to opposite
+                            // layers. The eta it was given goes on the record beside it.
+                            stats_.worst_krylov_met_tolerance = met_tolerance;
+                            stats_.worst_krylov_eta = krylov_tol_adaptive;
+                            // R13.16 (round 6, R6-14): the budget THIS solve was given. The
+                            // stage-level field is assigned per solve and is therefore the LAST
+                            // iteration's, while worst_krylov_iter can name an earlier one --
+                            // and effective_restart genuinely moves mid-stage (the Krylov policy
+                            // overrides it, the hopeless caps clamp it). Pairing the worst ratio
+                            // with the stage's last budget was true only by luck; recorded here
+                            // it is true by construction.
+                            stats_.worst_krylov_restart_budget = effective_restart;
+                        }
+                    } else {
+                        stats_.krylov_solves_trivial++;
+                    }
+                }
                 // R13.5: divergence is not stagnation. The total-failure predicate folds
                 // raw_rel_error > 1 (the residual GREW) together with rel_error >= 0.999 (it
                 // did not move), and those point at different work.
@@ -8924,17 +9526,35 @@ public:
                 // rel_error > 1 -- the em_b_wave failing iteration did exactly that (1.054 ->
                 // 0.979) and was classified krylov_diverged. Fall back to the old test only
                 // when the initial ratio was not measured.
+                // R13.14 (round 5, P1): this guard was `>= 0.0f` while its sibling eleven
+                // lines up uses `> 0.0f` -- the same expression written twice with two rules.
+                // A MEASURED initial_rel_error of exactly 0 gave ref = 0, so any nonzero
+                // residual read as divergence. And `krylov_diverged` is consumed ABOVE the r0
+                // max clause, so a solve with unmeasured r0 returned KrylovDiverged from a
+                // ||b||-coordinate comparison and the r0 evidence was never reached at all.
+                // Divergence is now only declared when the reference it is relative to was
+                // measured; an unmeasured one is counted, not substituted.
                 {
-                    const float ref = (gmres_result.initial_rel_error >= 0.0f)
-                        ? gmres_result.initial_rel_error : 1.0f;
-                    if (std::isfinite(gmres_result.rel_error) &&
-                        gmres_result.rel_error > ref * (1.0f + 1.0e-4f)) {
-                        stats_.krylov_diverged = true;
+                    const bool ref_measured =
+                        (gmres_result.initial_rel_error > 0.0f &&
+                         std::isfinite(gmres_result.initial_rel_error));
+                    if (ref_measured) {
+                        const float ref = gmres_result.initial_rel_error;
+                        if (std::isfinite(gmres_result.rel_error) &&
+                            gmres_result.rel_error > ref * (1.0f + 1.0e-4f)) {
+                            stats_.krylov_diverged = true;
+                        }
                     }
                 }
                 // R13.8: what "success" was supposed to mean.
+                // R13.15 (external review P1-5): InitialConverged ALSO satisfied the tolerance
+                // -- it is the case where x0 already did -- and was excluded from the count of
+                // solves that reached it. That made "how many linear solves actually finished"
+                // an undercount precisely on the iterations where Newton was closest.
                 if (gmres_result.termination_reason ==
-                        KrylovTerminationReason::ToleranceReached) {
+                        KrylovTerminationReason::ToleranceReached ||
+                    gmres_result.termination_reason ==
+                        KrylovTerminationReason::InitialConverged) {
                     stats_.gmres_tolerance_reached++;
                 }
 
@@ -9819,8 +10439,75 @@ public:
             int rhs_budget = 5;
             // Canonical GMRES "total failure" predicate used across trust-off, fallback,
             // and trust-region acceptance branches in this Newton iteration.
-            const bool gmres_total_failure_candidate =
+            // Referee C7 / red team P1-7: the classifier's divergence rule was moved to r0
+            // and THIS predicate -- which drives the recovery attempt, the zero-step handling
+            // and gmres_total_failures++ (the classifier's KrylovStagnated trigger) -- still
+            // compared against ||b||. A warm start that began at 1.054 and was reduced tripped
+            // both clauses. Rule fixed, production consumer reading the old quantity: the
+            // eighth instance of that split in this tree.
+            //
+            // Changing what the solver DOES is not a diagnostic, so the r0 baseline is
+            // OPT-IN (default off, baseline byte-identical); the record carries both readings
+            // whichever is in force. The fallback when r0 was not measured is the old rule.
+            static const bool failure_vs_r0 =
+                wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_FAILURE_VS_R0");
+            // R13.14 (red team round 5, P1): the FALLBACK survived the round-4 fix. R13.13
+            // deleted the field that divided by a reference of 1.0 and left the reference, so
+            // `total_failure_vs_r0` -- a name ending `_vs_r0`, a signals field ending `_vs_r0`,
+            // and a printed `total_failure_vs_r0=` -- still held the ||b|| answer whenever r0
+            // was not measured. And under the opt-in flag it changed what the SOLVER DOES: a
+            // knob whose stated meaning is "use the r0 rule" silently used the ||b|| rule on any
+            // solve that did not measure r0. An unmeasured reference is not a reference of one;
+            // the r0 reading is simply UNAVAILABLE, and the record says so.
+            const bool r0_measured =
+                (gmres_initial_rel_error > 0.0f && std::isfinite(gmres_initial_rel_error));
+            // R13.16 (round 6, R6-13): no `: 1.0f`. The guard below short-circuits, so the
+            // fallback was already dead -- but leaving the literal kept the constant that
+            // produced the round-4 P0 one deleted `r0_measured &&` away from returning.
+            const float r0_ref = gmres_initial_rel_error;
+            const bool total_failure_vs_b  =
                 (gmres_raw_rel_error > 1.0f || gmres_rel_error >= 0.999f);
+            const bool total_failure_vs_r0 =
+                r0_measured &&
+                (gmres_raw_rel_error > r0_ref * (1.0f + 1.0e-4f) ||
+                 gmres_raw_rel_error >= 0.99f * r0_ref);
+            // With the flag on and r0 unmeasured the r0 rule cannot be evaluated. Falling back
+            // to ||b|| is the only thing the solver can do, and it is COUNTED so the record
+            // never claims a rule it did not apply.
+            const bool gmres_total_failure_candidate =
+                failure_vs_r0 ? (r0_measured ? total_failure_vs_r0 : total_failure_vs_b)
+                              : total_failure_vs_b;
+            stats_.total_failure_vs_b_count  += total_failure_vs_b  ? 1 : 0;
+            stats_.total_failure_vs_r0_count += total_failure_vs_r0 ? 1 : 0;
+            if (!r0_measured) {
+                stats_.krylov_r0_unmeasured_solves++;
+                if (failure_vs_r0) stats_.krylov_rule_fellback_to_b++;
+            }
+            stats_.krylov_failure_vs_r0 = failure_vs_r0;
+            // ...and that a rule was in force at all. Without this the emitter prints
+            // `krylov_failure_rule=b` for a stage whose Newton loop never reached the
+            // predicate -- a default read as a measurement, which is the whole defect class.
+            stats_.krylov_rule_observed = true;
+            // R13.14 (round 5, P1): the r0 no-progress boundary is a JUDGMENT, not a
+            // measurement -- the calibration argues for some constant in (0.55, 0.98) and does
+            // not select 0.90 over 0.85. The tree's own default-budget run sits 2.3% from it,
+            // and rho_vs_r0 is BUDGET-dependent (a healthy operator given 7 Arnoldi vectors on
+            // a hard RHS reads 0.92), so the number that decides between the campaign's two
+            // competing explanations must be movable without a rebuild.
+            // R13.16 (round 6, R6-5): read from OBJECT STATE, set once at construction.
+            stats_.krylov_no_progress_threshold = krylov_no_progress_threshold_;
+            // Round 5, P2: and that the site was REACHED. Without this, `-1` on the record is
+            // ambiguous between "unset, header default applied" and "never reached" -- the same
+            // distinction `krylov_rule_observed` twenty lines up exists to make.
+            stats_.krylov_threshold_observed = true;
+            // R13.12 (red team R3-2): the first iteration whose SOLVE was a total failure,
+            // which is what the field name says. `gmres_total_failure` below additionally
+            // requires that no step was accepted, so indexing off it made this "the first
+            // failure that also produced no step" -- a different event, and one that can
+            // never precede a rejection, which silently disabled the time-order clause.
+            if (gmres_total_failure_candidate && stats_.first_krylov_failure_iter < 0) {
+                stats_.first_krylov_failure_iter = newton_iter;
+            }
             // Unified trust-region step bound:
             //   K small  -> use radius floor (max(radius, min_radius))
             //   K large  -> honor relative cap (min(radius, max_rel * ||K||))
@@ -10510,10 +11197,147 @@ public:
             // a stalled solve unless the two are counted separately.
             if (step_accepted) {
                 stats_.accepted_steps++;
+                // Referee C8: the TAYLOR DEFECT of the stage function at the step actually
+                // taken. tau = ||G(K+s) - G(K) - A s|| / ||A s||, with A s one production
+                // matvec. tau << 1: the linear model is faithful here and the INNER solve is
+                // the binding constraint. tau = O(1): the model is wrong at this step -- and
+                // the half-step arm separates the two ways it can be wrong: nonlinearity over
+                // the step (tau falls ~2x at s/2, the relative defect being ~linear in ||s||)
+                // from a Jacobian defect (tau does not fall). Two numbers (first, last
+                // residual) could not separate three mechanisms; this can. Opt-in: one JVP
+                // and one RHS evaluation per accepted iteration.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_TAYLOR_DEFECT") &&
+                    R.defined() && accepted_residual.defined() && dK_scaled.defined()) {
+                    torch::NoGradGuard ng_tau;
+                    const long long fd_fallbacks_before_tau =
+                        wrf::sdirk3::g_jvp_fd_fallback_count.load(std::memory_order_relaxed);
+                    const auto As   = apply_jacobian(dK_scaled.detach()).detach();
+                    const auto dR   = (accepted_residual.detach() - R.detach());
+                    const double nAs = As.to(torch::kFloat64).norm().item<double>();
+                    const double tau = nAs > 0.0
+                        ? (dR - As).to(torch::kFloat64).norm().item<double>() / nAs : -1.0;
+                    // The scaled arm. R13.13 (round 4) measured A(alpha*s) with its own matvec
+                    // instead of scaling A(s).
+                    //
+                    // R13.14 (red team round 5, P0): with alpha = 1/2 that was a NO-OP, and the
+                    // receipt it produced was a TAUTOLOGY. A forward-AD tangent is a float
+                    // expression whose every term is (primal) x (tangent); scaling the input
+                    // tangent by a POWER OF TWO scales every intermediate by the same power of
+                    // two with identical significands, so under IEEE-754 A(s/2) == 0.5*A(s) BIT
+                    // FOR BIT, for any operator. `linearity_residual = 0` therefore measured the
+                    // exponent arithmetic, not the Jacobian -- and "tau came out unchanged when
+                    // we started measuring the arm" was the signature of a substitution that
+                    // could not have changed anything, not corroboration. The FD path was blind
+                    // for the same reason: halving ||v|| exactly doubles its epsilon exactly, so
+                    // the perturbed vector is IDENTICAL and the quotient scales by exactly 1/2.
+                    //
+                    // alpha = 1/3 is not dyadic, so neither cancellation happens: the receipt is
+                    // a real measurement on both paths. The A/B probe in this file already chose
+                    // 2.5 for its homogeneity check for exactly this reason. For a quadratic
+                    // (bilinear-RHS) remainder the prediction is tau(alpha)/tau = alpha, so the
+                    // discriminator reads 0.333 rather than 0.5 -- a value that cannot be
+                    // produced by halving anything.
+                    constexpr double kTauAlpha = 1.0 / 3.0;
+                    double tau_alpha = -1.0, linearity_residual = -1.0;
+                    bool alpha_arm_measured = false;
+                    {
+                        const auto s_alpha = (kTauAlpha * dK_scaled).detach();
+                        const auto K_alpha = K.detach() + s_alpha;
+                        const auto U_alpha = U_stage + dt * gamma * K_alpha;
+                        const auto R_alpha = (K_alpha - compute_rhs(U_alpha)).detach();
+                        const auto dR_alpha = R_alpha - R.detach();
+                        const auto As_alpha = apply_jacobian(s_alpha).detach();
+                        const double nAs_alpha = As_alpha.defined()
+                            ? As_alpha.to(torch::kFloat64).norm().item<double>() : -1.0;
+                        // R13.14 (round 5, R5-6): this was hardcoded true, so AlphaArmAssumed
+                        // was unreachable from the only production caller -- a constant dressed
+                        // as a precondition, the same shape removed one screen away in the same
+                        // commit that introduced it. It is now the condition it claims: the arm
+                        // was measured iff its matvec produced a usable tensor.
+                        alpha_arm_measured =
+                            As_alpha.defined() && std::isfinite(nAs_alpha) && nAs_alpha > 0.0;
+                        tau_alpha = nAs_alpha > 0.0
+                            ? (dR_alpha - As_alpha).to(torch::kFloat64).norm().item<double>()
+                                  / nAs_alpha : -1.0;
+                        // ||A(alpha*s) - alpha*A(s)|| / ||alpha*A(s)||, with a non-dyadic alpha
+                        // so that neither the fwAD exponent cancellation nor the FD epsilon
+                        // cancellation can force it to zero.
+                        const auto As_scaled = kTauAlpha * As;
+                        const double nAs_scaled =
+                            As_scaled.to(torch::kFloat64).norm().item<double>();
+                        linearity_residual = nAs_scaled > 0.0
+                            ? (As_alpha - As_scaled).to(torch::kFloat64).norm().item<double>()
+                                  / nAs_scaled : -1.0;
+                    }
+                    // The verdict, from the rule in wrf_sdirk3_probe_validity.h -- where a
+                    // fixture can reject its negation, which a rule spelled out here cannot.
+                    wrf::sdirk3::TaylorDefectInputs tin;
+                    tin.fd_fallback_free =
+                        (wrf::sdirk3::g_jvp_fd_fallback_count.load(
+                             std::memory_order_relaxed) == fd_fallbacks_before_tau);
+                    tin.alpha_arm_measured = alpha_arm_measured;
+                    tin.tau = tau;
+                    tin.tau_alpha = tau_alpha;
+                    tin.alpha = kTauAlpha;
+                    tin.linearity_residual = linearity_residual;
+                    const auto tau_verdict = wrf::sdirk3::taylor_defect_verdict(tin);
+                    const bool tau_measured =
+                        (tau_verdict == wrf::sdirk3::TaylorVerdict::Measured);
+                    std::cerr << "SDIRK3_TAYLOR_DEFECT stage=" << stage
+                              << " newton_iter=" << newton_iter
+                              << " tau=" << tau
+                              << " alpha=" << kTauAlpha
+                              << " tau_alpha=" << tau_alpha
+                              << " tau_alpha_over_tau="
+                              << ((tau > 0.0 && tau_alpha >= 0.0) ? tau_alpha / tau : -1.0)
+                              << " R_k=" << R.detach().to(torch::kFloat64).norm().item<double>()
+                              << " R_k1="
+                              << accepted_residual.detach().to(torch::kFloat64).norm().item<double>()
+                              << " step_norm="
+                              << dK_scaled.detach().to(torch::kFloat64).norm().item<double>()
+                              << " As_norm=" << nAs
+                              << " achieved_eta=" << gmres_raw_rel_error
+                              << " alpha_arm_measured=" << (alpha_arm_measured ? 1 : 0)
+                              << " fd_fallback_free=" << (tin.fd_fallback_free ? 1 : 0)
+                              << " linearity_residual=" << linearity_residual
+                              << " tau_verdict="
+                              << wrf::sdirk3::taylor_verdict_name(tau_verdict)
+                              // The conclusion is printed ONLY when the preconditions hold. An
+                              // FD matvec at float32 is noise-limited at about the magnitude
+                              // tau itself reports, so "tau=0.018, the linearization is
+                              // faithful to 2%" and "tau=0.018, we measured the noise floor"
+                              // are the same row without this gate.
+                              << (tau_measured
+                                  ? "  (tau<<1: linear model faithful, inner solve binding;"
+                                    " tau=O(1) with tau_alpha/tau~alpha: nonlinearity over the"
+                                    " step; tau=O(1) with tau_alpha/tau~1: Jacobian defect)"
+                                  : "  (NO CONCLUSION: preconditions not met -- see"
+                                    " tau_verdict; tau and the ratio are arithmetic, not"
+                                    " evidence about the Jacobian)")
+                              << std::endl;
+                }
+                if (stats_.argmin_residual_iter < 0 ||
+                    (!stats_.newton_residuals.empty() &&
+                     stats_.newton_residuals.back() <= stats_.min_residual_seen)) {
+                    stats_.min_residual_seen = stats_.newton_residuals.empty()
+                        ? stats_.min_residual_seen : stats_.newton_residuals.back();
+                    stats_.argmin_residual_iter = newton_iter;
+                }
             } else {
                 stats_.rejected_steps++;
+                if (stats_.first_rejection_iter < 0) stats_.first_rejection_iter = newton_iter;
             }
             if (gmres_total_failure) {
+                // RETRACTED (red team round 4). R13.12 moved the first-event index here from
+                // the predicate on the claim that `gmres_total_failure` "additionally requires
+                // that no step was accepted", making it a different event. That conjunction is
+                // VACUOUS: `step_accepted` is false at the point `gmres_total_failure` is
+                // formed under the trust region (the attempt loop that can set it runs later)
+                // and is exactly `!candidate` without it, so `gmres_total_failure ==
+                // gmres_total_failure_candidate` in both configurations. The move is a
+                // no-op refactor; records taken before it are NOT untrustworthy. Kept at the
+                // predicate because that is where the quantity is defined, not because the old
+                // site was wrong.
                 stats_.gmres_total_failures++;
             } else {
                 stats_.gmres_non_total_failures++;

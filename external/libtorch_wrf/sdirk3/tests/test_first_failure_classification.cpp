@@ -305,6 +305,34 @@ int main() {
               "overflowed");
     }
 
+    // ---- R13.11 (referee C7): TIME order, where the record has it ----
+    //
+    // "First in causal order" was a fixed precedence over stage aggregates with no iteration
+    // index -- a modelling choice, not a measurement. With first-event indices the one case
+    // the precedence got backwards can be measured: a rejection at iteration 1 that shrank
+    // the radius and changed the next solve's x0 and budget, followed by a Krylov failure
+    // at iteration 3. Precedence said Krylov; time says the rejection came first.
+    {
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.gmres_total_failures = 1;
+        s.first_krylov_failure_iter = 3;
+        s.accepted_steps = 0;
+        s.rejected_steps = 2;
+        s.first_rejection_iter = 1;
+        check(name_of(s) == "all_steps_rejected",
+              "a rejection at iteration 1 followed by a Krylov failure at iteration 3 is "
+              "reported as the REJECTION -- time order, not precedence");
+        s.first_rejection_iter = 5;   // now the Krylov failure came first
+        check(name_of(s) == "krylov_stagnated",
+              "...and with the Krylov failure first in time, it is reported first");
+        s.first_rejection_iter = -1;  // no index recorded: fall back to precedence
+        check(name_of(s) == "krylov_stagnated",
+              "with no index recorded the old precedence stands, and the record says the "
+              "index is -1 rather than implying an order it did not measure");
+    }
+
     // ---- ORDERING: the part that decides where the work goes ----
     {
         // Every later gate is refusing too, because they are all looking at consequences.
@@ -380,6 +408,342 @@ int main() {
               "measurement must not become a finding");
     }
 
+    // R13.12 (red team R3-2): the two Krylov coordinates are not interchangeable.
+    // ||r||/||b|| answers "is this step predicted to reduce the NONLINEAR residual" -- on a
+    // warm start it can exceed 1 while the linear solve is working fine. ||r||/||r0|| answers
+    // "did the solve move". The classifier's no-progress clause read the first under a comment
+    // claiming the second, so a solve that made progress was named KrylovStagnated and the
+    // work would have gone to the operator/preconditioner instead of to the step policy.
+    {
+        // The measured em_b_wave failing iteration: r0/||b|| = 1.054, exit 1.02 -- a 3%
+        // reduction that reads as "worse than b".
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 4.8e8;
+        s.best_krylov_rel_error = 1.02;              // ||r||/||b||  -- above 1
+        s.best_krylov_rel_error_vs_r0 = 0.80;
+        s.worst_krylov_rel_error_vs_r0 = 0.868;      // even the WORST solve moved 13%
+        s.krylov_solves_measured_vs_r0 = 4;
+        s.total_failure_vs_b_count = 1;
+        s.total_failure_vs_r0_count = 0;
+        s.gmres_total_failures = 1;              // by the ||b|| rule, in force by default
+        s.accepted_steps = 0;
+        s.rejected_steps = 4;
+        check(name_of(s) == "all_steps_rejected",
+              "a solve that REDUCED its residual is not a stalled solve, however it compares "
+              "to ||b||: with r0-relative progress measured, the category is what refused the "
+              "step, not the linear solve that produced it");
+    }
+    {
+        // Same solve, nothing rejected, budget ran out while the residual was still falling.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 4.8e8;
+        s.best_krylov_rel_error = 1.02;
+        s.best_krylov_rel_error_vs_r0 = 0.55;
+        s.worst_krylov_rel_error_vs_r0 = 0.868;
+        s.krylov_solves_measured_vs_r0 = 12;
+        s.gmres_total_failures = 1;
+        s.accepted_steps = 3;
+        s.newton_iterations = 12;
+        s.newton_iteration_budget = 12;
+        check(name_of(s) == "newton_budget_exhausted",
+              "and when nothing refused the step either, a working solve plus a falling "
+              "residual at the budget is a budget statement -- the em_b_wave dt=600 case");
+    }
+    {
+        // Genuine stagnation, stated in the coordinate that can express it.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.6e8;
+        s.best_krylov_rel_error = 0.94;           // looks like progress against ||b||
+        s.best_krylov_rel_error_vs_r0 = 0.9995;   // went nowhere from where it started
+        s.worst_krylov_rel_error_vs_r0 = 0.9995;
+        s.krylov_solves_measured_vs_r0 = 1;
+        s.accepted_steps = 2;
+        check(name_of(s) == "krylov_stagnated",
+              "the converse case: a warm start whose ||r||/||b|| looks healthy while the "
+              "solve made no progress at all -- caught only in r0 coordinates");
+    }
+    {
+        // The fallback: no r0 measurement, old precedence unchanged.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.best_krylov_rel_error = 0.995;
+        s.best_krylov_rel_error_vs_r0 = -1.0;     // not measured
+        s.worst_krylov_rel_error_vs_r0 = -1.0;    // not measured
+        s.gmres_total_failures = 1;
+        s.accepted_steps = 1;
+        check(name_of(s) == "krylov_stagnated",
+              "a record without the r0 measurement keeps the old precedence -- the fix must "
+              "not make the classifier weaker on the records it already had");
+    }
+
+    // R13.13 (red team round 4): the MAX over solves, and a threshold calibrated for the
+    // coordinate it is applied in. Reusing the ||b||-coordinate 0.99 in r0 coordinates is what
+    // made the case below classify as newton_stagnated -- routing twelve consecutive 2% solves
+    // to "the split", the most expensive wrong answer this campaign has available.
+    {
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.6e8;                     // the outer iteration fell 1.1%
+        s.best_krylov_rel_error_vs_r0 = 0.98;        // every solve removed 2%...
+        s.worst_krylov_rel_error_vs_r0 = 0.98;       // ...and none did better
+        s.krylov_solves_measured_vs_r0 = 12;
+        s.gmres_total_failures = 12;
+        s.accepted_steps = 12;
+        s.newton_iterations = 12;
+        s.newton_iteration_budget = 12;
+        check(name_of(s) == "krylov_stagnated",
+              "twelve consecutive solves each removing 2% of their own residual is a Krylov "
+              "stall; a 0.99 threshold inherited from ||b|| coordinates calls it healthy and "
+              "sends the work to the split");
+    }
+    {
+        // The aggregate, not the threshold: one early success must not clear a late stall.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.5e8;
+        s.best_krylov_rel_error_vs_r0 = 0.5526;      // iteration 0 solved well
+        s.worst_krylov_rel_error_vs_r0 = 0.997;      // a later one went nowhere
+        s.krylov_solves_measured_vs_r0 = 4;
+        s.worst_krylov_iter = 3;
+        s.accepted_steps = 3;
+        check(name_of(s) == "krylov_stagnated",
+              "the stage-best is a MIN and answers 'did any solve work'; the max is what "
+              "answers 'did the linear solve stop working', and the record names the "
+              "iteration it happened at");
+    }
+    {
+        // Boundary, in the coordinate the constant lives in.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.6e8;
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.accepted_steps = 3;
+        s.worst_krylov_rel_error_vs_r0 = 0.90;
+        const bool at_boundary = (name_of(s) == "krylov_stagnated");
+        s.worst_krylov_rel_error_vs_r0 = 0.8999;
+        // R13.14 (round 5, R5-18a): NAME the category below the boundary. `!= "krylov_stagnated"`
+        // would pass if a future change made it `insufficient_evidence`.
+        const bool below = (name_of(s) == "newton_stagnated");
+        s.worst_krylov_rel_error_vs_r0 = 0.9001;
+        const bool above = (name_of(s) == "krylov_stagnated");
+        check(at_boundary && below && above,
+              "the r0 no-progress boundary is pinned at 0.90 from both sides and AT the "
+              "constant, so a later coordinate change cannot move it unnoticed");
+    }
+    {
+        // Divergence still outranks the progress clause.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.6e8;
+        s.krylov_diverged = true;
+        s.worst_krylov_rel_error_vs_r0 = 0.20;       // by the progress test, healthy
+        s.krylov_solves_measured_vs_r0 = 5;
+        s.accepted_steps = 2;
+        check(name_of(s) == "krylov_diverged",
+              "a solve whose residual GREW is diverged even when the stage's worst progress "
+              "ratio looks healthy -- divergence is upstream of stagnation, and the new "
+              "progress clause must not preempt it");
+    }
+    {
+        // The ||b||-coordinate second clause, in the branch where it still applies.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.worst_krylov_rel_error_vs_r0 = -1.0;       // r0 never measured
+        s.gmres_total_failures = 0;                  // and nothing tripped the predicate
+        s.best_krylov_rel_error = 0.995;             // so only the ||b|| reading is left
+        s.accepted_steps = 2;
+        check(name_of(s) == "krylov_stagnated",
+              "with no r0 measurement and no total failure, the ||b|| reading is the only "
+              "progress statement available and still fires -- the fallback branch is not "
+              "dead code");
+    }
+
+    // R13.14 (red team round 5): the max must be over solves that DID WORK AND DID NOT
+    // FINISH. A solve that converged on entry does zero work and returns rel_error equal to
+    // its own r0 ratio, so its progress is EXACTLY 1.0 -- under a max, the best possible
+    // outcome scored as a total stall. The solver excludes those; these fixtures pin what the
+    // classifier must do with the record that results.
+    {
+        // Every solve either converged on entry or reached tolerance: NO stagnation evidence.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 4.8e8;                     // and the residual is still falling
+        s.worst_krylov_rel_error_vs_r0 = -1.0;       // nothing survived the exclusion
+        s.krylov_solves_measured_vs_r0 = 0;
+        s.krylov_solves_trivial = 3;
+        s.accepted_steps = 3;
+        s.newton_iterations = 3;
+        s.newton_iteration_budget = 3;
+        check(name_of(s) == "newton_budget_exhausted",
+              "a stage whose every solve converged on entry or reached tolerance has NO Krylov "
+              "evidence, and a falling residual at the budget is a budget statement -- the "
+              "category that exists to stop exactly this being called a stall");
+    }
+    {
+        // The boundary is movable per run, and the record says which one was used.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.6e8;
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.accepted_steps = 3;
+        s.worst_krylov_rel_error_vs_r0 = 0.8795;     // the tree's measured default-budget value
+        const bool at_default = (name_of(s) != "krylov_stagnated");
+        // R13.16 (round 6, R6-4): the classifier applies a threshold only when the site that
+        // sets it was REACHED -- the same flag the emitter prints. Two predicates on two
+        // different fields let a row say `not_reached` while 0.90 silently decided the category.
+        s.krylov_threshold_observed = true;
+        s.krylov_no_progress_threshold = 0.85;       // a stricter reading of the same record
+        const bool at_override = (name_of(s) == "krylov_stagnated");
+        s.krylov_no_progress_threshold = -1.0;
+        const bool back_to_default = (name_of(s) != "krylov_stagnated");
+        check(at_default && at_override && back_to_default,
+              "the measured 0.8795 sits 2.3% below the default boundary and flips under a "
+              "stricter one, so the constant is reachable per run -- and an unset threshold "
+              "classifies exactly as it did before the knob existed");
+    }
+    {
+        // An out-of-range threshold must not become the rule.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8;
+        s.residual_last = 8.6e8;
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.accepted_steps = 3;
+        s.worst_krylov_rel_error_vs_r0 = 0.95;
+        s.krylov_no_progress_threshold = 0.0;        // nonsense: would call everything a stall
+        const bool zero_ignored = (name_of(s) == "krylov_stagnated");   // via the DEFAULT 0.90
+        s.krylov_no_progress_threshold = 2.0;        // nonsense: would call nothing a stall
+        const bool big_ignored = (name_of(s) == "krylov_stagnated");
+        check(zero_ignored && big_ignored,
+              "an out-of-range threshold falls back to the header constant rather than becoming "
+              "the rule -- a knob that can silently disable a category is worse than no knob");
+    }
+
+    // R13.15 (external review P1-4): PROVENANCE is consumed, not printed beside the answer.
+    {
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.worst_krylov_rel_error_vs_r0 = 0.999;      // would be a confident krylov_stagnated
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.signals_from_stage = 2;
+        s.classifying_stage = 3;                     // ...from the WRONG stage's evidence
+        check(name_of(s) == "stage_signal_mismatch",
+              "classifying stage 3 from stage 2's signals produces a confident WRONG layer; a "
+              "provenance mismatch is not weak evidence, it is the wrong evidence");
+        s.classifying_stage = 2;                     // matched
+        check(name_of(s) == "krylov_stagnated",
+              "and with provenance matched the same record classifies normally -- the gate is "
+              "a refusal, not a new failure mode");
+    }
+    {
+        // An explicit (ARK) stage runs no Newton, so every implicit signal is at its default.
+        StageFailureSignals s;
+        s.is_explicit_stage = true;
+        s.explicit_rhs_measured = true;
+        s.explicit_rhs_finite = false;
+        check(name_of(s) == "explicit_rhs_not_finite",
+              "an explicit stage whose RHS blew up says so, instead of collapsing into "
+              "insufficient_evidence because it has no Newton residual to report");
+        s.explicit_rhs_finite = true;
+        s.gate_metric_ok = false;
+        check(name_of(s) == "explicit_admissibility_rejected",
+              "and its gate refusal is its own category, on its own layer");
+        s.gate_metric_ok = true;
+        s.state_published = false;
+        check(name_of(s) == "explicit_publish_rejected",
+              "as is its publish refusal");
+        s.state_published = true;
+        check(name_of(s) == "none",
+              "a clean explicit stage is clean -- the branch must not manufacture a failure");
+    }
+    {
+        StageFailureSignals s;
+        s.is_explicit_stage = true;
+        s.explicit_rhs_measured = false;
+        check(name_of(s) == "insufficient_evidence",
+              "an explicit stage whose RHS was never measured is unmeasured, not finite -- "
+              "absence of a measurement must not become a finding here either");
+    }
+
+    {
+        // R13.16 (round 6, R6-4): a threshold value with no observation flag is this struct's
+        // DEFAULT, not a measurement, and must not decide the category.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.accepted_steps = 3;
+        s.worst_krylov_rel_error_vs_r0 = 0.8795;
+        s.krylov_threshold_observed = false;
+        s.krylov_no_progress_threshold = 0.10;       // would call everything a stall...
+        check(name_of(s) != "krylov_stagnated",
+              "...but the site was never reached, so the header constant applies and the "
+              "emitter's `not_reached` and the classifier's answer agree");
+    }
+    {
+        // R13.16 (round 6, R6-2): "reached tolerance" is not evidence the solve worked. The
+        // tolerance is the Eisenstat-Walker forcing term, CAPPED AT 0.9 and saturating there
+        // exactly when the Newton residual stops falling -- so a solve can meet it having
+        // removed 10%. Excluding those from the max was the inverse of the round-5 P0: that one
+        // scored a no-op as a stall, this one discounted a stall as a success.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.krylov_solves_measured_vs_r0 = 5;
+        s.accepted_steps = 5;
+        s.worst_krylov_rel_error_vs_r0 = 0.926;      // removed 7%
+        s.worst_krylov_met_tolerance = true;         // ...and was told that was enough
+        s.worst_krylov_eta = 0.9;
+        check(name_of(s) == "krylov_forcing_term_limited",
+              "a solve that made no progress because its own forcing term did not ask for more "
+              "is not the operator's failure -- naming it krylov_stagnated sends the work to the "
+              "preconditioner, and the layer actually responsible had no category at all");
+        check(std::string(stage_failure_layer(StageFailure::KrylovForcingTermLimited)) ==
+                  "eisenstat_walker_forcing_or_inner_budget",
+              "and that category names the forcing term and the inner budget, not the operator");
+        s.worst_krylov_met_tolerance = false;        // it stopped because it could not progress
+        check(name_of(s) == "krylov_stagnated",
+              "while the same ratio from a solve that did NOT meet its tolerance is a stall");
+    }
+    {
+        // R13.16 (round 6, R6-3): `worst == -1` had four causes collapsed into the ||b|| rule.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 4.8e8;   // still falling
+        s.worst_krylov_rel_error_vs_r0 = -1.0;
+        s.krylov_solves_trivial = 4;                 // every solve did zero work
+        s.gmres_total_failures = 1;                  // the ||b|| rule would fire on this
+        s.accepted_steps = 4;
+        s.newton_iterations = 12; s.newton_iteration_budget = 12;
+        check(name_of(s) == "newton_budget_exhausted",
+              "a stage whose every solve did zero work has NO Krylov evidence, so the ||b|| "
+              "rule -- the coordinate this line of work exists to leave -- must not be applied "
+              "to it by default");
+        s.krylov_solves_trivial = 0;
+        s.krylov_r0_unmeasured_solves = 4;           // the other separable cause
+        check(name_of(s) == "newton_budget_exhausted",
+              "and the same for a stage where no solve measured r0");
+        s.krylov_r0_unmeasured_solves = 0;           // neither: an old record
+        check(name_of(s) == "krylov_stagnated",
+              "while a record that simply predates the field keeps the old precedence, so the "
+              "classifier does not get weaker on evidence it already had");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -396,7 +760,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 29;
+    constexpr int expected_checks = 58;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

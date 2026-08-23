@@ -191,10 +191,14 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 37-test CTest inventory** (pinned by
-`.github/ci/expected_ctest_names.txt`; any drift fails hosted CI):
+The CMake tree registers an **exact 62-test CTest inventory** (pinned by
+`.github/ci/expected_ctest_names.txt`; any drift fails hosted CI). This number had
+drifted to 37 while the pinned file held 61: the CI gate that derives the claim from
+the file it cites was reading only the repo-root README, so this copy of the same claim
+was never checked. It is checked now. The breakdown below is a guide to the categories,
+not an inventory — the pinned file is the inventory:
 
-- 15 core contracts (geometry matrix, MSF stats, VJP semantics, FGMRES
+- core contracts (geometry matrix, MSF stats, VJP semantics, FGMRES
   contract, WRMS gate metric, acoustic-substep AD, the W-damping forward-mode
   tangent contract, the rw term-capture safety contract, the WRF W-damping reference contract, the calc_ww_cp state-to-omega contract, the W-damping operator/preconditioner policy contract, the stage-operand decomposition contract, core
   manifest/archive/link parity),

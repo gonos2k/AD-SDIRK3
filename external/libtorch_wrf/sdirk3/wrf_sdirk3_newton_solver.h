@@ -2,6 +2,7 @@
 #define WRF_SDIRK3_NEWTON_SOLVER_H
 
 #include <torch/torch.h>
+#include <limits>
 #include "wrf_sdirk3_state_layout.h"   // 9F.D93: THE packed-state layout
 #include "wrf_sdirk3_operator_contract.h"  // FrozenStageWeights: the stage gate's weighting
 #include <functional>
@@ -379,6 +380,62 @@ public:
         // record was reading g_sdirk3_config.max_newton_iter, a second authority that a
         // stage-reference probe or a post-construction config change can move independently.
         int   newton_iteration_budget = -1;
+        // R13.11 (referee C7): FIRST-EVENT iteration indices, so "first failure" can be a
+        // measurement of time order rather than a fixed precedence over aggregates. -1 =
+        // never happened in this solve.
+        int   first_krylov_failure_iter = -1;
+        int   first_rejection_iter = -1;
+        int   argmin_residual_iter = -1;
+        float min_residual_seen = std::numeric_limits<float>::infinity();
+        // R13.11 (referee C7): both readings of the production total-failure predicate, so the
+        // record shows when the ||b|| rule and the r0 rule disagree.
+        int   total_failure_vs_b_count = 0;
+        int   total_failure_vs_r0_count = 0;
+        // Which rule the production predicate was RUNNING under, so a reader of the record
+        // does not have to know the env var to read the two counts above.
+        bool  krylov_failure_vs_r0 = false;
+        // R13.12 (red team R3-2): the BEST relative error measured against where each solve
+        // STARTED, not against ||b||. `best_krylov_rel_error` is ||r||/||b||, and the
+        // classifier's no-progress clause read it under a comment claiming "ended where it
+        // began" -- true only on a cold start, where r0 == b. On the em_b_wave warm start
+        // (r0/||b|| = 1.054) a solve that reduced the residual by 3% still reads 1.02 and
+        // trips a >= 0.99 test. -1 = not measured.
+        float best_krylov_rel_error_vs_r0 = -1.0f;
+        // R13.13: the WORST r0-relative error over this stage's solves, the iteration it
+        // happened at, and how many solves the max is over. "Did the linear solve stop
+        // working" is a max question; the min above answers "did any solve work". -1 = no
+        // solve measured r0.
+        float worst_krylov_rel_error_vs_r0 = -1.0f;
+        int   worst_krylov_iter = -1;
+        int   krylov_solves_measured_vs_r0 = 0;
+        // Solves excluded from the max because they did no work (converged on entry) or
+        // finished (reached tolerance). Reported so "the max is over 0 solves" is legible.
+        int   krylov_solves_trivial = 0;
+        // R13.16 (round 6, R6-2): did the WORST-progress solve stop because it MET its
+        // (adaptive, 0.9-capped) tolerance? "Poor progress because the operator is hard" and
+        // "poor progress because the forcing term did not ask for more" route to opposite
+        // layers, and nothing on the record distinguished them.
+        bool  worst_krylov_met_tolerance = false;
+        float worst_krylov_eta = -1.0f;
+        // The Arnoldi budget the WORST solve was given (the stage field is last-solve-wins).
+        int   worst_krylov_restart_budget = -1;
+        // Solves whose r0 was never measured, and (of those) how many made the opt-in r0 rule
+        // fall back to the ||b|| rule. Without these the record claims a rule it did not apply.
+        int   krylov_r0_unmeasured_solves = 0;
+        int   krylov_rule_fellback_to_b = 0;
+        // The r0 no-progress boundary actually in force, overridable per run. A judgment, not
+        // a measurement -- and it decides between the campaign's two competing explanations.
+        double krylov_no_progress_threshold = -1.0;
+        // R13.14 (round 5, R5-13): the INNER budget -- the Arnoldi/restart budget the linear
+        // solves were given. rho_vs_r0 is budget-dependent, so the no-progress ratio cannot be
+        // read without it, and the justification for the boundary constant cited it as being
+        // "on the record" when nothing produced it. -1 = not observed.
+        bool  krylov_threshold_observed = false;
+        int   krylov_restart_budget = -1;
+        int   krylov_max_restarts = -1;
+        // Whether the total-failure predicate was reached at all this solve, so the emitted
+        // rule label is a measurement rather than this struct's default.
+        bool  krylov_rule_observed = false;
         // PR 9E (diagnosis-only): RAW L2 norms at the FINAL accepted Newton
         // iteration, populated ONLY when g_sdirk3_config.stage_operand_diag is
         // on (else left at -1). final_fast_rhs_norm = ||F_fast(U_eval_final)||;
