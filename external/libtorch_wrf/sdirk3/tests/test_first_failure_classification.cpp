@@ -845,6 +845,30 @@ int main() {
               "the field classify exactly as they did");
     }
 
+    {
+        // R13.17, MEASURED: the em_b_wave 12x-budget run. The ratio fell below the boundary and
+        // the category became `newton_stagnated`, layer `residual_floor_or_split` -- the
+        // split-explicit rebuild -- while the loop's own exit was LinearSolveFailure ("[Newton]
+        // GMRES total failure + zero update"), the SAME exit as the default-budget run. Only the
+        // ratio moved. The campaign read that flip as "the failure moved outward to Newton".
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.worst_krylov_rel_error_vs_r0 = 0.8622;     // BELOW the 0.90 boundary
+        s.krylov_solves_measured_vs_r0 = 3;
+        s.accepted_steps = 2; s.rejected_steps = 1;
+        s.newton_iterations = 3; s.newton_iteration_budget = 12;
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::LinearSolveFailure;
+        check(name_of(s) == "krylov_stagnated",
+              "a loop that stopped because the linear solve produced NOTHING has its first "
+              "failure in the linear solve, whatever the progress ratio reads -- routing it to "
+              "residual_floor_or_split sends the work to the split-explicit rebuild");
+        s.newton_termination = wrf::sdirk3::NewtonTerminationReason::ResidualStall;
+        check(name_of(s) == "newton_stagnated",
+              "while the same ratio with a RECORDED residual stall is the outer iteration -- the "
+              "two are separated by the exit reason, not by the threshold");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -861,7 +885,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 69;
+    constexpr int expected_checks = 71;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -190,3 +190,40 @@ Two consequences, both stated rather than resolved here:
 - Finding and typing that path is the concrete next step, and it is a **measurement**, not a design
   question: instrument the remaining exits (the total-failure zero-step path, the stage-abort
   break, the trust-region exhaustion) until `not_recorded` stops appearing at dt=600.
+
+---
+
+## The typed exit RETRACTS "the failure moved outward to Newton"
+
+Instrumenting the three real Newton-loop exits (brace-depth tracking found them; the site I first
+guessed at was an inner-scope `break` that does not end the loop) makes `not_recorded` disappear at
+dt=600 — and the answer contradicts a standing campaign claim.
+
+| | default budget | 12× budget |
+|---|---|---|
+| `worst_krylov_rel_vs_r0` | 0.9941 | 0.8622 |
+| category | `krylov_stagnated` | **`newton_stagnated`** → layer `residual_floor_or_split` |
+| **`newton_exit`** | `linear_solve_failure` | **`linear_solve_failure`** |
+| solver's own message | `[Newton] GMRES total failure + zero update` | same |
+
+**Both runs exit for the same reason.** Only the ratio moved, and it happened to cross the chosen
+0.90 boundary — so the 12× run was classified `newton_stagnated`, whose layer is
+`residual_floor_or_split`, i.e. **the split-explicit rebuild**, for a run whose loop stopped because
+the linear solve produced nothing at all.
+
+The campaign read that flip as *"the failure moved outward to the Newton iteration"*. **It did not
+move.** The external review flagged this claim as HOLD on the grounds that the category change was a
+threshold statement and the real exit was never recorded; the typed exit now shows the stronger
+result — the exit is identical in both runs, and it is the linear solve.
+
+The classifier consumes it: a loop that exited on `LinearSolveFailure` has its first failure in the
+linear solve **whatever the progress ratio reads**, and which kind is answered by the same
+D/S/budget receipts. What survives from the budget experiment is unchanged and still holds — a 12×
+budget improves the inner solve 23× (0.59% → 13.8% of its own residual) and does not complete the
+step. What does not survive is the inference that the *failure* relocated.
+
+*Method note.* This is the fourth time in this campaign that a claim about **where** a failure lives
+was produced by a threshold or a precedence over aggregates rather than by an event, and the fix was
+the same each time: record what happened at the site where it happened. The first honest run of the
+new field found a defect in the field itself (a fallback claiming budget exhaustion for a loop that
+used 4 of 12), and the second found this.

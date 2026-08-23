@@ -11809,6 +11809,11 @@ public:
                             std::cerr << "[Newton] GMRES total failure + zero update at iter "
                                       << newton_iter << ". K unchanged → breaking early." << std::endl;
                         }
+                        // R13.17 (external review P0-3): the linear solve failed and produced no
+                        // usable step. This is the exit `not_recorded` was reporting at dt=600 --
+                        // one of three real Newton-loop exits, none of which was typed.
+                        stats_.newton_termination = static_cast<int>(
+                            wrf::sdirk3::NewtonTerminationReason::LinearSolveFailure);
                         break;
                     }
                     // v20.14r36: Configurable zero-step stagnation limit (was hardcoded 3).
@@ -11818,6 +11823,8 @@ public:
                                   << " consecutive zero-update iterations (limit=" << stall_limit
                                   << "). Trust-region cannot find descent direction. "
                                   << "Breaking at iter=" << newton_iter << std::endl;
+                        stats_.newton_termination = static_cast<int>(
+                            wrf::sdirk3::NewtonTerminationReason::ZeroStepStall);
                         break;
                     }
                 } else {
@@ -11841,14 +11848,17 @@ public:
                     // v20.14r27j: Require 2 consecutive stalls before early exit.
                     // Single-iteration stall may be transient (e.g., trust-region radius reset).
                     if (newton_stall_count >= 2) {
-                        stats_.newton_termination = static_cast<int>(
-                            wrf::sdirk3::NewtonTerminationReason::ResidualStall);
+                        // NOT a Newton-loop exit -- brace-depth tracking shows this `break`
+                        // belongs to an inner scope. Stamping it here would have attributed the
+                        // loop's exit to a site that does not end it.
                         std::cerr << "[Newton] RESIDUAL STALL: iter " << newton_iter
                                   << ", rel_decrease=" << rel_decrease
                                   << " < " << stall_threshold
                                   << ", gmres_rel_error=" << gmres_rel_error
                                   << ". Exiting early (prev_res=" << prev_iter_res_norm
                                   << ", cur_res=" << res_norm_for_stats << ")." << std::endl;
+                        stats_.newton_termination = static_cast<int>(
+                            wrf::sdirk3::NewtonTerminationReason::ResidualStall);
                         break;
                     }
                 } else {

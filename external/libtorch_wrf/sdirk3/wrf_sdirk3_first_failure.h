@@ -450,7 +450,21 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
                  s.krylov_no_progress_threshold > 0.0 &&
                  s.krylov_no_progress_threshold <= 1.0)
                     ? s.krylov_no_progress_threshold : kKrylovNoProgressVsR0;
-            if (s.worst_krylov_rel_error_vs_r0 >= no_progress) {
+            // R13.17 (external review P0-3), MEASURED: the loop's own exit outranks the ratio.
+            //
+            // At dt=600 BOTH the default and the 12x-budget runs exit with
+            // `newton_exit=linear_solve_failure` -- the solver's own message is "[Newton] GMRES
+            // total failure + zero update". Only the ratio moved (0.9941 -> 0.8622), and it
+            // crossed the 0.90 boundary, so the 12x run was classified `newton_stagnated`, layer
+            // `residual_floor_or_split` -- routing to the split-explicit rebuild a run whose loop
+            // stopped because THE LINEAR SOLVE GAVE IT NOTHING. The campaign read that flip as
+            // "the failure moved outward to the Newton iteration"; the exit reason says it never
+            // moved. A loop that stopped because the linear solve failed has its first failure in
+            // the linear solve whatever the progress ratio reads, and WHICH kind is answered by
+            // the same receipts below.
+            const bool exited_on_linear_failure =
+                (s.newton_termination == NewtonTerminationReason::LinearSolveFailure);
+            if (s.worst_krylov_rel_error_vs_r0 >= no_progress || exited_on_linear_failure) {
                 // R13.16 (round 6, R6-2) / R13.17 (external review P0-2): WHY it made no
                 // progress. Four different answers, three of which are not the operator's fault,
                 // and they route to four different layers.
