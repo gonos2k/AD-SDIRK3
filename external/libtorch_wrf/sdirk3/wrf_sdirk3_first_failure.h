@@ -174,11 +174,16 @@ struct StageFailureSignals {
     // Krylov solve make progress". -1 = not measured, in which case the classifier says so
     // rather than substituting the other coordinate.
     double best_krylov_rel_error_vs_r0 = -1.0;
-    // The r0-relative error of the solve that FIRST tripped the total-failure predicate.
-    // `best_krylov_rel_error_vs_r0` is a min over the stage's solves, which answers "did any
-    // solve work" -- a different question, and one that hides a late stall behind an early
-    // success. -1 = no solve tripped it, or r0 was not measured.
-    double first_krylov_failure_rel_vs_r0 = -1.0;
+    // R13.13: the WORST r0-relative error over the stage's solves, and where it happened.
+    // `best_krylov_rel_error_vs_r0` is a MIN over the same solves: it answers "did any solve
+    // work", which a late stall behind an early success passes. "Did the linear solve stop
+    // working" is a max question. -1 = no solve measured r0.
+    double worst_krylov_rel_error_vs_r0 = -1.0;
+    int    worst_krylov_iter = -1;
+    // How many solves the max is over, so a one-solve stage is not read as a twelve-solve one.
+    int    krylov_solves_measured_vs_r0 = 0;
+    // Whether a total-failure rule was in force at all (else the label below is a default).
+    bool   krylov_rule_observed = false;
     // The stage gate's own verdict, and whether the step reached the driver.
     bool   gate_metric_ok = false;
     bool   state_published = false;
@@ -187,8 +192,17 @@ struct StageFailureSignals {
 // How much the Newton residual must grow before "diverged" is the honest word. Below this a
 // residual that ends slightly above where it started is stagnation with noise, not divergence.
 inline constexpr double kDivergenceGrowth = 2.0;
-// A relative error this close to 1 means the linear solve ended where it began.
+// ||r||/||b|| this close to 1 means the step is predicted to leave the nonlinear residual
+// where it is. Calibrated in ||b|| coordinates, where a healthy solve reads ~1e-3.
 inline constexpr double kKrylovNoProgress = 0.99;
+// ||r||/||r0|| at or above this means the solve did not solve. This is a SEPARATE constant
+// because the coordinate change invalidates the calibration of the one above: in r0
+// coordinates a healthy solve reads ~0.55 (em_b_wave iteration 0) and a solve that reaches
+// tolerance reads ~1e-3, while twelve consecutive solves each removing 2% of their own
+// residual read 0.98 -- a stall by any operational standard, and one that a 0.99 threshold
+// inherited from ||b|| coordinates would call healthy and route to "the split". A linear
+// solve that cannot remove a tenth of its own residual is not solving.
+inline constexpr double kKrylovNoProgressVsR0 = 0.90;
 // A residual that ended at or above this fraction of where it started has stopped moving.
 // Below it, the iteration was still working and being cut off is a budget statement.
 inline constexpr double kResidualStillFalling = 0.95;
@@ -240,26 +254,25 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // residual by 3% reads 1.02 and trips both -- KrylovStagnated for a solve that made
         // progress, which sends the work to the wrong place.
         //
-        // So: when r0-relative progress was measured, it decides. A total-failure count then
-        // corroborates but cannot by itself name the category, because under the default rule
-        // it may be reporting the step question. When it was NOT measured the old precedence
-        // stands -- the classifier does not get weaker on records that lack the field.
+        // So: when r0-relative progress was measured, it decides ALONE -- the total-failure
+        // count is not read in that branch, because under the default rule it may be
+        // reporting the step question and there is no way here to tell which. When progress
+        // was NOT measured the old precedence stands, count included, so the classifier does
+        // not get weaker on records that lack the field.
         //
-        // WHICH solve. The question is what refused FIRST, so the answer is the progress of
-        // the solve that first tripped the predicate -- not the stage's best, which is a
-        // min-over-solves answering "did any solve work" and which hides a late stall behind
-        // an early success (em_b_wave iteration 0 reaches 0.55 and iteration 3 fails).
-        if (measured(s.first_krylov_failure_rel_vs_r0)) {
-            if (s.first_krylov_failure_rel_vs_r0 >= kKrylovNoProgress) {
+        // WHICH solve. Not the stage's best -- that is a min-over-solves answering "did any
+        // solve work", and one early success clears a stage of stalls (em_b_wave iteration 0
+        // reaches 0.55 while iteration 3 goes nowhere). Not the first solve to trip the
+        // production predicate either: under the default rule that predicate asks the ||b||
+        // question, so the solve would be SELECTED in one coordinate and its value REPORTED in
+        // another -- and a genuine cold-start stall at raw=0.995 never trips it at all. The
+        // max over the solves that measured r0 has no selector and no seam.
+        if (measured(s.worst_krylov_rel_error_vs_r0)) {
+            if (s.worst_krylov_rel_error_vs_r0 >= kKrylovNoProgressVsR0) {
                 return StageFailure::KrylovStagnated;
             }
-            // It moved. The refusal is downstream -- the later clauses name it.
-        } else if (measured(s.best_krylov_rel_error_vs_r0)) {
-            // No solve tripped the predicate; the stage-best is then the only progress
-            // statement available, and it is the right one for "every solve was poor".
-            if (s.best_krylov_rel_error_vs_r0 >= kKrylovNoProgress) {
-                return StageFailure::KrylovStagnated;
-            }
+            // Every solve moved. Whatever refused the step is downstream, and the later
+            // clauses name it.
         } else {
             if (s.gmres_total_failures > 0) return StageFailure::KrylovStagnated;
             if (measured(s.best_krylov_rel_error) &&

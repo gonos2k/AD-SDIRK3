@@ -844,3 +844,133 @@ At the default namelist budget (`sdirk3_max_newton_iter = 3`) the same run class
 `newton_budget_exhausted` with no Krylov failure and no rejection at all — three iterations is
 fewer than the four it takes to reach the first failure, so the budget statement is the honest
 one there.
+
+---
+
+## The float32 hypothesis, measured — and REFUTED as stated (referee X3)
+
+The hypothesis on the record was: *the operator's float32 matvec error is 5–20% of the identity
+term of `A = I − hγJ` on exactly the directions GMRES builds, so the solver cannot resolve the
+part of `A` that makes it invertible.* That figure was an **estimate**, from ε = 3e-7 times a
+scale separation read off `‖H̄eᵢ‖`. Both inputs are now measured directly, in the same probe, on
+the same operator, at the failing iteration (`rsl.identity_resolution.log`, stage 2, iter 3):
+
+```
+jvp_fd_fallback_free=1   operator_linear=1
+e_repeat=0   e_homogeneity=3.720e-07   e_additivity=2.478e-07   e_hom_krylov=1.198e-07
+identity_frac_rand=3.173e-05      identity_frac_krylov=3.095e-05
+identity_resolution_rand=0.01172  identity_resolution_krylov=0.003872   identity_resolved_krylov=1
+```
+
+`identity_frac = ‖v‖/‖A·v‖` is the identity term's share of the output (A·v = v − hγJ·v, so the
+identity contributes exactly ‖v‖); `e_hom` is the operator's own floating-point noise, measured as
+`‖A(αv) − αA(v)‖/(α‖A v‖)` on a JVP that the same record certifies exactly linear
+(`operator_linear=1`) and free of the FD fallback (`jvp_fd_fallback_free=1`), so it is FP noise and
+not FD truncation. The error **on the identity term** is their ratio.
+
+**MEASURED: 0.39% on the Krylov direction, 1.2% on a random one — not 5–20%.** The identity term
+is resolved to about three significant digits. Both inputs to the old estimate were wrong in the
+same direction and compounded: the effective noise is 1.2e-7 (≈1 ulp), not 3e-7, and the scale
+separation is 3.2e4, not 1.6e5–7e5.
+
+**So the proposed mechanism is dead.** The claim "float32 cannot resolve the identity term of the
+implicit operator on Krylov directions" is refuted by direct measurement, and it did not need the
+float64 replay — the replay would have measured the *consequence*; this measures the *premise*.
+
+**What survives.** float32 is not thereby exonerated as a *whole*: this measures the matvec, not
+the Arnoldi process. Loss of orthogonality in Gram–Schmidt is a separate float32 channel with its
+own emitted fields (`e_orthogonality`, `e_arnoldi`), and the float64 replay remains the test for
+that one. What is now settled is that the specific mechanism the campaign had written down — the
+one that would have made the operator itself unrepresentable — is not occurring.
+
+`e_repeat = 0` also confirms the matvec is bit-deterministic, so none of the A/B arms are being
+compared across a nondeterministic operator.
+
+---
+
+## Round 4 (red team) — five findings, one of them a P0 in the round-3 fix itself
+
+The round-3 fix introduced `first_krylov_failure_rel_vs_r0` and made it the classifier's primary
+input. Round 4 took it apart. All findings below are closed.
+
+**P0 — the new field laundered ‖r‖/‖b‖ into a name ending `_vs_r0`.** It was computed as
+`gmres_raw_rel_error / r0_ref`, where `r0_ref` falls back to **1.0** when r₀ was not measured — so
+on every path with an unmeasured r₀ (and there were several) the field held ‖r‖/‖b‖ under a name,
+a header comment, a signals comment and a consumer that all said r₀-relative. Worse, when the GMRES
+call did not run at all, `gmres_raw_rel_error` keeps its initialiser 1.0 and the field read
+**exactly 1.0 — "the failing solve went nowhere", emitted as a measurement when nothing was
+measured.** The sibling field five lines up guards on the *measurement* and says so in its comment;
+the new one invented the reference the comment promised not to invent. Tenth instance of the class,
+and this one was mine, written in the commit that closed the ninth.
+
+**P1 — the selector was in a different coordinate from the value.** The solve whose progress got
+reported was the first to trip the *production* total-failure predicate, which under the default
+rule asks the ‖b‖ question. So the solve was chosen in one coordinate and its value reported in
+another — and a genuine cold-start stall at `raw = 0.995` never trips that predicate at all
+(0.995 < 0.999), so the real stall would have been invisible.
+
+**Both are closed by removing the field.** The stagnation input is now
+**`worst_krylov_rel_error_vs_r0` — a max over the solves that measured r₀** — plus
+`worst_krylov_iter` and `krylov_solves_measured_vs_r0`. A max has no selector and therefore no
+seam; it answers "did the linear solve stop working" where the min answers "did any solve work";
+and the count keeps a one-solve stage from reading like a twelve-solve one. The reviewer's own
+ranking of honest aggregates put this second and the min last.
+
+**P1 — the threshold was reused across a coordinate change without recalibration.**
+`kKrylovNoProgress = 0.99` was calibrated in ‖b‖ coordinates, where a healthy solve reads ~1e-3.
+In r₀ coordinates a healthy solve reads ~0.55. Twelve consecutive solves each removing 2% of their
+own residual read 0.98 — a stall by any operational standard — and under the inherited 0.99 the
+classifier returned `newton_stagnated`, whose layer is `residual_floor_or_split`: it would have
+routed the work to the split-explicit rebuild, the most expensive wrong answer available here.
+There is now a separate `kKrylovNoProgressVsR0 = 0.90` with its calibration written down, and a
+fixture that pins the boundary from both sides and at the constant.
+
+**P1 — the justification for moving `first_krylov_failure_iter` was FALSE, and is retracted.**
+R13.12 claimed `gmres_total_failure` "additionally requires that no step was accepted", making the
+old index a different event that "silently disabled the time-order clause". The conjunction is
+**vacuous**: under the trust region `step_accepted` is still false where `gmres_total_failure` is
+formed (the attempt loop that sets it runs later), and without the trust region `step_accepted ==
+!candidate` — so `gmres_total_failure ≡ gmres_total_failure_candidate` in both configurations. The
+move is a no-op refactor. **Records taken before it are not untrustworthy.** The retraction is in
+the code at the count site, because that is where the false claim was written. No fixture could
+have caught this: the time-order test assigns the index directly, so it passes identically either
+way — a solver-population contract is the missing coverage, noted and not yet built.
+
+**P1 — a fixture was a tautology, and another asserted an unreachable state.** One read back two
+literals it had assigned nine lines earlier and would have passed with the fields completely
+unwired — the exact state it was added to close — while consuming a ratchet slot. The other set
+`first < best` where `first` is one of the solves `best` is a min over, so `first ≥ best` is an
+invariant and the state was reachable *only through the P0 above*: the fixture certifying the new
+clause was written in a state only that clause's bug could produce. Both deleted. Replaced with
+five that constrain something: the 2%-twelve-solves case, min-vs-max, the boundary from both
+sides, divergence outranking progress, and the ‖b‖ fallback branch.
+
+**P2, both closed** — `krylov_failure_rule` printed `b` from a struct default when the predicate
+was never reached (now `none`, gated on `krylov_rule_observed`); and a comment claiming the
+total-failure count "corroborates" in a branch that does not read it (comment corrected to say it
+decides alone, and why).
+
+**Also verified by round 4 and NOT defective** (negative results, worth as much as the findings):
+the write→copy→emit chain for the two counts; `reset_per_solve`'s whole-struct value-init, so new
+fields cannot fall off a reset list; the explicit-stage signals path assigning a fresh struct; and
+the new index site being unreachable-free — no `try`, `continue` or early `return` between the
+predicate and it, with `gmres_total_failure_candidate` `const` and final one line earlier.
+
+### Measured after the fix
+
+```
+12-iteration budget: category=krylov_stagnated
+    worst_krylov_rel_vs_r0=0.9941  worst_krylov_iter=3  krylov_solves_vs_r0=4
+    best_krylov_rel_vs_r0=0.5526   total_failure_vs_b=1  total_failure_vs_r0=1
+default (3-iteration) budget: category=newton_budget_exhausted
+    worst_krylov_rel_vs_r0=0.8795  krylov_solves_vs_r0=3
+```
+
+The 12-iteration case is a stall on the evidence: the worst of four solves removed **0.59%** of its
+own residual, at a named iteration. The default-budget case is not: the worst of three solves still
+removed **12%**, so the run was cut off rather than stuck.
+
+**Stated plainly: 0.8795 sits 2.3% below the 0.90 boundary.** The constant is doing real work on
+this case and a threshold of 0.85 would flip it. The record carries the number, so the verdict can
+be re-derived under a different constant without re-running anything — which is the point of
+emitting the measurement beside the category.

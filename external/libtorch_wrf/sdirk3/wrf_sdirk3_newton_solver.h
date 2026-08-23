@@ -401,10 +401,16 @@ public:
         // (r0/||b|| = 1.054) a solve that reduced the residual by 3% still reads 1.02 and
         // trips a >= 0.99 test. -1 = not measured.
         float best_krylov_rel_error_vs_r0 = -1.0f;
-        // The r0-relative error of the solve at `first_krylov_failure_iter` -- the solve that
-        // first tripped the predicate, which is the one a FIRST-failure classifier is asking
-        // about. -1 = no solve tripped it, or r0 was not measured.
-        float first_krylov_failure_rel_vs_r0 = -1.0f;
+        // R13.13: the WORST r0-relative error over this stage's solves, the iteration it
+        // happened at, and how many solves the max is over. "Did the linear solve stop
+        // working" is a max question; the min above answers "did any solve work". -1 = no
+        // solve measured r0.
+        float worst_krylov_rel_error_vs_r0 = -1.0f;
+        int   worst_krylov_iter = -1;
+        int   krylov_solves_measured_vs_r0 = 0;
+        // Whether the total-failure predicate was reached at all this solve, so the emitted
+        // rule label is a measurement rather than this struct's default.
+        bool  krylov_rule_observed = false;
         // PR 9E (diagnosis-only): RAW L2 norms at the FINAL accepted Newton
         // iteration, populated ONLY when g_sdirk3_config.stage_operand_diag is
         // on (else left at -1). final_fast_rhs_norm = ||F_fast(U_eval_final)||;

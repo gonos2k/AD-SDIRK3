@@ -1297,6 +1297,13 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 r_true.detach().clone(), 0, false, false};
         res.termination_reason =
             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
+        // R13.13 (red team round 4): the THIRD return path. R13.10 added the computation and
+        // two of the three returns; this one kept the -1 sentinel, so a solve that converged
+        // on entry was dropped from every r0-relative aggregate -- and it is solve_gmres, the
+        // M-off CONTROL arm, so the A/B was comparing arms measured under two different rules.
+        // Dropping the stage's BEST solve from a min-over-solves is the direction that
+        // manufactures a stall.
+        res.initial_rel_error = initial_rel_error_gmres;
                 return res;
     }
     
@@ -8360,6 +8367,20 @@ public:
                     // Arnoldi relation simply stops describing what was computed. Measured
                     // here rather than assumed, on the same operator the arms use.
                     double e_repeat = -1.0, e_hom = -1.0, e_add = -1.0;
+                    // R13.12 (referee X3): is the IDENTITY term of A = I - h*gamma*J even
+                    // resolved in float32? A*v = v - h*gamma*J*v, so the identity contributes
+                    // ||v|| out of ||A*v||: identity_frac = ||v||/||A*v||. The operator's own
+                    // floating-point noise is e_hom (measured just below -- an upper bound,
+                    // since scaling v and A*v each round once). The error ON THE IDENTITY TERM
+                    // is therefore e_hom / identity_frac, and if that reaches 1 the identity is
+                    // below the noise floor. The campaign's "5-20%" figure was an ESTIMATE from
+                    // eps x scale-separation; these two numbers replace it with a measurement.
+                    // Measured on the RHS direction b/||b|| as well as a random one: at a cold
+                    // start b/||b|| IS the first Arnoldi vector, so it is a genuine Krylov
+                    // direction, and the random/Krylov pair is reported separately because this
+                    // operator is known to behave differently on the two.
+                    double identity_frac_rand = -1.0, identity_frac_krylov = -1.0;
+                    double e_hom_krylov = -1.0;
                     // Probe-local generator (the file's own D121/D123 rule): the global stream
                     // must not shift for downstream one-shot diagnostics.
                     auto probe_gen = at::detail::createCPUGenerator(
@@ -8387,7 +8408,41 @@ public:
                         const double den_add =
                             n_Av + Aw.detach().to(torch::kFloat64).norm().item<double>();
                         e_add = rel(gmres_op(v + w) - Av1 - Aw, den_add);
+                        {
+                            const double n_v =
+                                v.detach().to(torch::kFloat64).norm().item<double>();
+                            identity_frac_rand = (n_Av > 0.0) ? n_v / n_Av : -1.0;
+                        }
+                        // Same pair on the RHS direction: the cold-start first Arnoldi vector.
+                        if (gmres_rhs.defined()) {
+                            const double n_b =
+                                gmres_rhs.detach().to(torch::kFloat64).norm().item<double>();
+                            if (n_b > 0.0) {
+                                auto vb = gmres_rhs.detach() / static_cast<float>(n_b);
+                                const auto Avb = gmres_op(vb);
+                                const double n_Avb =
+                                    Avb.detach().to(torch::kFloat64).norm().item<double>();
+                                if (n_Avb > 0.0) {
+                                    const double n_vb =
+                                        vb.detach().to(torch::kFloat64).norm().item<double>();
+                                    identity_frac_krylov = n_vb / n_Avb;
+                                    e_hom_krylov =
+                                        rel(gmres_op(alpha * vb) - alpha * Avb, alpha * n_Avb);
+                                }
+                            }
+                        }
                     }
+                    // The verdict, computed once and printed beside the numbers it is made of.
+                    auto resolution = [](double noise, double frac) {
+                        return (noise >= 0.0 && frac > 0.0) ? noise / frac : -1.0;
+                    };
+                    const double identity_resolution_rand = resolution(e_hom, identity_frac_rand);
+                    const double identity_resolution_krylov =
+                        resolution(e_hom_krylov, identity_frac_krylov);
+                    // "Resolved" = the identity term stands above the operator's noise floor.
+                    // Unmeasured is NOT resolved: -1 fails the range test rather than passing it.
+                    const bool identity_resolved_krylov =
+                        (identity_resolution_krylov >= 0.0 && identity_resolution_krylov < 1.0);
                     // R13.9 (referee C5): the operator's linearity was measured; the
                     // PRECONDITIONER's was not, and the reading "Krylov space of D^-1 A M^-1"
                     // needs M linear too. Production M^-1 is a tridiagonal/column solve on
@@ -8729,6 +8784,12 @@ public:
                               << " e_repeat=" << e_repeat
                               << " e_homogeneity=" << e_hom
                               << " e_additivity=" << e_add
+                              << " identity_frac_rand=" << identity_frac_rand
+                              << " identity_frac_krylov=" << identity_frac_krylov
+                              << " e_hom_krylov=" << e_hom_krylov
+                              << " identity_resolution_rand=" << identity_resolution_rand
+                              << " identity_resolution_krylov=" << identity_resolution_krylov
+                              << " identity_resolved_krylov=" << (identity_resolved_krylov ? 1 : 0)
                               << " precond_linear=" << (precond_linear ? 1 : 0)
                               << " eM_homogeneity=" << eM_hom
                               << " eM_additivity=" << eM_add
@@ -8974,6 +9035,21 @@ public:
                     if (stats_.best_krylov_rel_error_vs_r0 < 0.0f ||
                         progress < stats_.best_krylov_rel_error_vs_r0) {
                         stats_.best_krylov_rel_error_vs_r0 = progress;
+                    }
+                    // R13.13 (red team round 4): the WORST solve, and which iteration it was.
+                    // "Did the linear solve stop working" is a max question, not a min one --
+                    // a min answers "did any solve work" and one early success clears a stage
+                    // of stalls. This is also the only progress statement with no SELECTOR: an
+                    // earlier attempt keyed the value to the solve that first tripped the
+                    // production total-failure predicate, which under the default rule asks the
+                    // ||b|| question, so the solve was chosen in one coordinate and its value
+                    // reported in another. A max over the solves that measured r0 has no such
+                    // seam. The count says how many solves it is a max over, so a one-solve
+                    // stage cannot be read as a twelve-solve one.
+                    stats_.krylov_solves_measured_vs_r0++;
+                    if (progress > stats_.worst_krylov_rel_error_vs_r0) {
+                        stats_.worst_krylov_rel_error_vs_r0 = progress;
+                        stats_.worst_krylov_iter = newton_iter;
                     }
                 }
                 // R13.5: divergence is not stagnation. The total-failure predicate folds
@@ -9903,6 +9979,10 @@ public:
             stats_.total_failure_vs_b_count  += total_failure_vs_b  ? 1 : 0;
             stats_.total_failure_vs_r0_count += total_failure_vs_r0 ? 1 : 0;
             stats_.krylov_failure_vs_r0 = failure_vs_r0;
+            // ...and that a rule was in force at all. Without this the emitter prints
+            // `krylov_failure_rule=b` for a stage whose Newton loop never reached the
+            // predicate -- a default read as a measurement, which is the whole defect class.
+            stats_.krylov_rule_observed = true;
             // R13.12 (red team R3-2): the first iteration whose SOLVE was a total failure,
             // which is what the field name says. `gmres_total_failure` below additionally
             // requires that no step was accepted, so indexing off it made this "the first
@@ -9910,14 +9990,6 @@ public:
             // never precede a rejection, which silently disabled the time-order clause.
             if (gmres_total_failure_candidate && stats_.first_krylov_failure_iter < 0) {
                 stats_.first_krylov_failure_iter = newton_iter;
-                // R13.12: and how much THAT solve moved, r0-relative. The stage-best is the
-                // wrong aggregate for a FIRST-failure question: one good cold-start solve
-                // (em_b_wave iteration 0 reaches 0.55) masks every later stall behind a
-                // min-over-solves. The classifier wants the solve that first refused.
-                if (r0_ref > 0.0f && std::isfinite(gmres_raw_rel_error) &&
-                    gmres_raw_rel_error >= 0.0f) {
-                    stats_.first_krylov_failure_rel_vs_r0 = gmres_raw_rel_error / r0_ref;
-                }
             }
             // Unified trust-region step bound:
             //   K small  -> use radius floor (max(radius, min_radius))
@@ -10668,9 +10740,16 @@ public:
                 if (stats_.first_rejection_iter < 0) stats_.first_rejection_iter = newton_iter;
             }
             if (gmres_total_failure) {
-                // Counts solves declared a total failure that ALSO produced no accepted step
-                // (that conjunction is what drives the recovery path above). The first-event
-                // index is set from the solve's own verdict, at the predicate.
+                // RETRACTED (red team round 4). R13.12 moved the first-event index here from
+                // the predicate on the claim that `gmres_total_failure` "additionally requires
+                // that no step was accepted", making it a different event. That conjunction is
+                // VACUOUS: `step_accepted` is false at the point `gmres_total_failure` is
+                // formed under the trust region (the attempt loop that can set it runs later)
+                // and is exactly `!candidate` without it, so `gmres_total_failure ==
+                // gmres_total_failure_candidate` in both configurations. The move is a
+                // no-op refactor; records taken before it are NOT untrustworthy. Kept at the
+                // predicate because that is where the quantity is defined, not because the old
+                // site was wrong.
                 stats_.gmres_total_failures++;
             } else {
                 stats_.gmres_non_total_failures++;
