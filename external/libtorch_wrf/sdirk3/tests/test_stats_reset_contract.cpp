@@ -4,9 +4,12 @@
 // best_krylov_rel_error, the GMRES counters, krylov_diverged, accepted/rejected steps and
 // initial_residual_measured accumulated for the LIFE OF THE SOLVER -- one object per run --
 // and every first-failure classification after the first failure in a run read the run's
-// history as the stage's. The fix value-initialises the struct; this contract exists so the
-// NEXT field added cannot fall behind it, by setting every field to a non-default value and
-// requiring the reset to restore the default.
+// history as the stage's. The fix value-initialises the struct. What THIS contract pins is
+// narrower than "the next field cannot fall behind": the poison list below is hand-enumerated,
+// so a future field is reset only because the implementation is value-init, and a future
+// field-by-field rewrite that forgot one would pass here. The guarantee lives in
+// reset_per_solve() being `s = ConvergenceStats{}`; this file pins that the fields known TODAY
+// -- in particular the ten that were missed -- come back to their defaults.
 
 #include "../wrf_sdirk3_newton_solver.h"
 

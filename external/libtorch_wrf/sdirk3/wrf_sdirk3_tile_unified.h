@@ -1417,6 +1417,10 @@ private:
     // frames from where they are measured.
     bool last_stage_entry_finite_ = true;
     wrf::sdirk3::StageFailureSignals last_stage_signals_{};
+    // R13.10 (P1-6): provenance of the signals, so a gate can see it is classifying another
+    // stage's solve. -1 = never populated.
+    int  last_stage_signals_populated_by_stage_ = -1;
+    bool last_stage_signals_is_explicit_ = false;
 
     int last_step_outcome_code_ = static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED);
     bool last_step_final_update_aborted_ = false;

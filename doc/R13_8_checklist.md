@@ -520,3 +520,96 @@ where the earlier coefficient-level finding (ph 408× off, D_mu wrong sign) alre
 What is new is that the case for it is now a controlled, block-level, order-invariant
 measurement rather than a coefficient inspection — and that the coupling into rv is a
 constraint any replacement has to respect.
+
+
+---
+
+# Adversarial review, round 2 (red team + numerical-analysis referee) — what changed
+
+Two independent reviewers, no shared context with the work. Both reports are in the session
+scratchpad; every finding below was confirmed in code before it was acted on.
+
+## P0 — confirmed, fixed
+
+- **The first-failure signals accumulated for the life of the run** (red team P0-1, **the
+  seventh** "rule computed, consumer reads something else"). `reset_stats()` cleared the nine
+  fields it had in 2025 and none of the ten added since. `best_krylov_rel_error` was the
+  process-wide minimum, `krylov_diverged` a lifetime latch, `all_steps_rejected` unreachable
+  after the first accepted step of the process, and `initial_residual_measured` stayed true —
+  so R13.5's fix held for the first solve only. The reported classifications were at the first
+  failing stage of each run and were right by ordering, not by mechanism.
+  **Fix:** `reset_per_solve()` value-initialises the struct; `Stats_Reset_Contract` pins the
+  fields known today. An explicit ARK stage now resets the signals too (P1-6), and every record
+  carries `signals_from_stage`.
+- **"Fresh M per row" was a reference** (P0-2). The scaled-path wrapper is `[&]`, so every copy
+  shared one fallback latch; the numbers survived only because the latch never fired.
+  **Fix:** each row builds its own wrapper around its own by-value copy of `M_inv`; production's
+  wrapper is never handed to an arm. Verified: rows identical, `worst_order_delta=0`.
+
+## P1 — confirmed, fixed
+
+`order_invariant` is a verdict clause (was measured and ignored); `precond_linear` is a
+verdict clause (N1 — same shape, same commit); the FD-fallback counter is read before *and*
+after the arms; `refinement_passes` is on the record and gates `same_solver_path` (N2); the
+shared `variable_pc_event` is snapshotted around the linearity probe, which now uses
+structured vectors from a probe-local generator (N3, RNG); `d_weighted` and `msel_engaged`
+receipts per row (N4, P1-5i); all three norms in `all_finite`, residuals halo-zeroed,
+`halo_floor_delta` on the record (P1-4); `solve_gmres` now sets `initial_rel_error` too
+(P1-7 — the control arm had kept the `> 1` rule); `AB_ITER` parsed strictly with
+`target_iteration_not_reached` emitted at loop exit (P1-5/N6); the FGMRES-side
+`SDIRK3_NUMERICAL_RANGE` carries coordinates.
+
+## Wording the referee rejected — corrected
+
+- **"near-stalled"** (C3iii): INVALID. Per-step ρ_D slopes on the failing system at j∈(32,48]
+  are **equal** — M 0.0021, I 0.0020. I's entire advantage (0.54 of ρ_D) is accrued in
+  **j ≤ 8**, which is the production budget. Correct sentence: *"the identity's first eight
+  Arnoldi directions reduce ρ_D by 0.54 where M's reduce it by 0.19; beyond j≈16 both arms
+  progress at ~0.002/step."* That points at what is in I's first eight directions, not at a
+  stall.
+- **"those blocks are not intrinsically hard"** (C4b): INVALID as stated. "I handles them"
+  means the 48-dim Krylov space of the *full coupled* operator reduces the rw/ph/mu residual
+  *rows* by 73/38/84% — through A's off-diagonal coupling — and says nothing about the
+  acoustic sub-operator restricted to those rows and columns. Valid version: *"the rw/ph/mu
+  residual rows are reducible by 73/38/84% in 48 unpreconditioned steps from this r₀ under
+  the D objective."*
+- **The headline "correct on three blocks, broken on the three it was built for"** (C4e):
+  INVALID twice. "Correct on three" was relative to r₀; relative to the identity, **M is worse
+  on five blocks and better on one (rv)**. And `precond_type=2` is "W–θ coupling": θ is `t`,
+  the block M reduces *most* (−83%). Correct: *M handles θ; it fails the vertical-acoustic
+  triple w/φ/μ; against the identity it loses on ru, rw, ph, t, mu and wins on rv.*
+- **"M is near-stalled / net-harmful"**: "net-harmful" had been retracted in R13.6 and was
+  re-asserted here. Withdrawn again. The supported statement is *worse than the identity at
+  j ≤ 48 on these two systems, in all three norms.*
+- **Msel** (red team P1-5ii, referee C5): it is an **output-row projection** `P₁M⁻¹ + P₂`, not
+  a block-diagonal preconditioner — M⁻¹'s ru/rv/t outputs still read v's rw/ph/mu inputs. And
+  at the failing iteration Msel is *worse than I on ru, rv and t* (0.240/1.127/0.128 vs
+  0.174/0.994/0.099) — the rows M was said to be "good" at — while at iteration 0 it beats I
+  on four blocks. "M's good rows add nothing net" is an aggregate statement at one Newton
+  iteration; it does not survive the per-block table as a blanket claim. What survives:
+  Msel ≈ I in every aggregate norm at the failing iteration; the decomposition does not compose.
+- **"0 ∈ W(B) explains the floor"** (C4b, C6e): withdrawn for *consistent with* (see above).
+
+## New measurements
+
+- **D does not create the indefiniteness.** With block scaling off (`D = I`, coordinates
+  `S_krylov`): `min_eig_sym = −8.3e4`, `max = +1.1e5`, 11/20 negative, `witness_confirmed=1`.
+  The referee's prime suspect is cleared; the negative numerical range is in `S⁻¹AS`. Whether
+  `S` creates it (vs an energy-consistent inner product, where the acoustic part is
+  skew-adjoint) is the remaining half of C4(d).
+- **M⁻¹ is linear**: `eM_homogeneity = 1.3e-07`, `eM_additivity = 9.5e-08` (C5 gap closed).
+- **ρ_S is ≈ ¾ ph** at the failing iteration (referee C4f, from the four rows as an LP): the
+  norm production's forcing test and total-failure predicate consume is dominated by one
+  block, and even the identity leaves ph at 0.625 after 48 steps.
+
+## Ranked open measurements (referee)
+
+1. ~~D = I rerun~~ — done; D cleared.
+2. **Warm start off at the failing iteration** (C3iv): ρ₀ > 1 in four of six blocks — the warm
+   start is worse than zero, shared by both arms. If I from zero beats I from the warm start
+   at j=7, the warm-start policy contributes to the first failure independently of M.
+3. **Extended ladder j = 96, 192** (C1): the ρ_D gap closes 0.235 → 0.190 → 0.122 over
+   j = 16 → 32 → 48; a late-starting preconditioner looks like this from below.
+4. Block-restricted least squares over the M arm's own Z₄₈ (C4a): separates "M's rows are
+   broken" from "the D-optimum spends its subspace on the cheap blocks". Zero new matvecs.
+5. Per-iteration `newton_residuals` + ared/pred (C6/C7): temporal order and the Newton rate.

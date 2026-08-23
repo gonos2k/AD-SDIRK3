@@ -9199,6 +9199,10 @@ vertical_coefficients:
                     sig.state_published = false;   // the gate is upstream of any publish
                     const auto first = wrf::sdirk3::first_failure_of(sig);
                     std::cerr << "SDIRK3_FIRST_FAILURE stage=" << stage_id
+                              // which stage actually populated the signals being classified --
+                              // equal to stage_id or the record is classifying someone else
+                              << " signals_from_stage=" << last_stage_signals_populated_by_stage_
+                              << " signals_explicit=" << (last_stage_signals_is_explicit_ ? 1 : 0)
                               << " category=" << wrf::sdirk3::stage_failure_name(first)
                               << " layer=" << wrf::sdirk3::stage_failure_layer(first)
                               << " retry=" << (retry_used ? 1 : 0)
@@ -9919,6 +9923,15 @@ vertical_coefficients:
                         }
                     }
                     if (std::abs(effective_aii) < 1e-14f) {
+                        // R13.10 (red team P1-6): an explicit stage runs no Newton solve, so it
+                        // must not carry the PREVIOUS implicit stage's signals into its gate.
+                        // Without this reset, a non-finite k_fast at stage 1 of timestep >= 2
+                        // classified with the last implicit stage of timestep 1 -- and the
+                        // record said so as if it were this stage's.
+                        last_stage_signals_ = wrf::sdirk3::StageFailureSignals{};
+                        last_stage_signals_.entry_state_finite = last_stage_entry_finite_;
+                        last_stage_signals_populated_by_stage_ = stage_id;
+                        last_stage_signals_is_explicit_ = true;
                         // ESDIRK explicit first stage: evaluate fast tendency directly.
                         k_fast[i] = compute_fast_rhs(U_stage, U_full_exch_stage);
                         if (stage_id == 1) {
@@ -13180,6 +13193,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     // defect this tree has now paid for three times.
     last_stage_signals_ = wrf::sdirk3::StageFailureSignals{};
     last_stage_signals_.entry_state_finite = last_stage_entry_finite_;
+    last_stage_signals_populated_by_stage_ = stage;
+    last_stage_signals_is_explicit_ = false;
     // R13.5: carry the solver's own flags. Deriving finiteness from the value made an
     // unmeasured R0 (the member initialises to 0.0) read as finite.
     last_stage_signals_.initial_residual_measured = stats.initial_residual_measured;
