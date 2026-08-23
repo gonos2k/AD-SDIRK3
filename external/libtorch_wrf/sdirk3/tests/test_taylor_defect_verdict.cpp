@@ -48,6 +48,9 @@ TaylorDefectInputs sound() {
     in.tau_alpha = 0.03972;   // alpha = 1/3, so tau_alpha/tau = 0.3333 for a quadratic remainder
     in.alpha = 1.0 / 3.0;
     in.linearity_residual = 1.791e-7;   // measured: about 1.5 float32 ulps
+    in.tau_block_max = 0.02;            // R13.17: no block far off the packed reading
+    in.realized_step_fraction = 1.0;    // the step was actually stored
+    in.signal_to_roundoff = 1.0e4;      // and the difference is far above the float32 floor
     return in;
 }
 
@@ -188,7 +191,25 @@ int main() {
               "only, so it can never quietly suppress the case the probe exists to catch");
     }
 
-    constexpr int expected_checks = 13;
+    {
+        // R13.17 (external review P1-2): at float32 a small step can leave the stored state
+        // unchanged, and G(K+s)-G(K) can be cancellation noise, while tau and the ratio still
+        // print plausible values. Both are preconditions, not findings.
+        auto in = sound();
+        in.realized_step_fraction = 0.5;
+        check(name_of(in) == "step_not_realized",
+              "a step the state only half kept is not the step tau is normalised by");
+        in = sound(); in.signal_to_roundoff = 10.0;
+        check(name_of(in) == "roundoff_limited",
+              "and a difference only 10x the float32 roundoff of what was differenced is "
+              "cancellation, not a measured remainder");
+        in = sound(); in.realized_step_fraction = -1.0; in.signal_to_roundoff = -1.0;
+        check(name_of(in) == "measured",
+              "records without the new fields keep classifying as they did -- the gates tighten "
+              "the contract, they do not invalidate measurements already taken");
+    }
+
+    constexpr int expected_checks = 16;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

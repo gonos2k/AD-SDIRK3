@@ -36,6 +36,11 @@ enum class StageFailure {
     // computed anyway, so a record could name a layer from another stage's evidence. A
     // provenance mismatch is not weak evidence, it is the wrong evidence.
     StageSignalMismatch,
+    // R13.17 (external review P0-4): the stamp is ABSENT. The mismatch gate required both stamps
+    // to be >= 0, so the documented "-1 = not stamped" sentinel skipped it entirely and the rest
+    // of the classifier ran on signals whose owner is unknown -- fail-closed on disagreement,
+    // fail-OPEN on absence, which is the weaker half of the same contract.
+    StageSignalMissing,
     // Explicit (ARK) stages do not run Newton, so every implicit category is inapplicable to
     // them and they used to collapse into InsufficientEvidence -- which reads as "we could not
     // tell" when the truth is "a different set of things can fail here".
@@ -48,6 +53,15 @@ enum class StageFailure {
     // can mean "removed 10%". Naming this KrylovStagnated sends the work to the operator and the
     // preconditioner; the layer actually responsible had no category at all.
     KrylovForcingTermLimited,
+    // R13.17 (external review P0-2): the D-objective tolerance was met and the S-coordinate
+    // residual was not. The solve ENDED ITS SEARCH legitimately -- it minimised what it was asked
+    // to minimise -- and is nonetheless useless to the Newton merit. That is neither a stall
+    // (the solve worked) nor a forcing-term problem (tightening eta does not align two different
+    // objectives): it is the two metrics disagreeing, which is a formulation question about D.
+    KrylovObjectiveMismatch,
+    // Neither tolerance met and the Arnoldi budget ran out. Distinct from stagnation: the solve
+    // was still descending when it was cut off, so the work is the budget, not the operator.
+    KrylovBudgetLimited,
     // The signals do not support ANY verdict. Reported instead of guessing -- a classifier
     // that always names a layer will name a wrong one.
     InsufficientEvidence,
@@ -99,12 +113,17 @@ inline const char* stage_failure_name(StageFailure f) {
     switch (f) {
         case StageFailure::None:                     return "none";
         case StageFailure::StageSignalMismatch:  return "stage_signal_mismatch";
+        case StageFailure::StageSignalMissing:   return "stage_signal_missing";
         case StageFailure::ExplicitRhsNotFinite: return "explicit_rhs_not_finite";
         case StageFailure::ExplicitAdmissibilityRejected:
             return "explicit_admissibility_rejected";
         case StageFailure::ExplicitPublishRejected: return "explicit_publish_rejected";
         case StageFailure::KrylovForcingTermLimited:
             return "krylov_forcing_term_limited";
+        case StageFailure::KrylovObjectiveMismatch:
+            return "krylov_objective_mismatch";
+        case StageFailure::KrylovBudgetLimited:
+            return "krylov_budget_limited";
         case StageFailure::InsufficientEvidence:     return "insufficient_evidence";
         case StageFailure::KrylovDiverged:           return "krylov_diverged";
         case StageFailure::EntryStateNotFinite:      return "entry_state_not_finite";
@@ -125,12 +144,18 @@ inline const char* stage_failure_layer(StageFailure f) {
     switch (f) {
         case StageFailure::None:                     return "none";
         case StageFailure::StageSignalMismatch:  return "wrong_stage_signals_no_verdict";
+        case StageFailure::StageSignalMissing:
+            return "unstamped_signals_no_verdict";
         case StageFailure::ExplicitRhsNotFinite: return "explicit_rhs_operator_or_state";
         case StageFailure::ExplicitAdmissibilityRejected:
             return "explicit_stage_gate_threshold";
         case StageFailure::ExplicitPublishRejected: return "explicit_publish_gate";
         case StageFailure::KrylovForcingTermLimited:
             return "eisenstat_walker_forcing_or_inner_budget";
+        case StageFailure::KrylovObjectiveMismatch:
+            return "krylov_objective_D_vs_newton_merit";
+        case StageFailure::KrylovBudgetLimited:
+            return "inner_krylov_budget";
         case StageFailure::InsufficientEvidence:     return "unknown";
         case StageFailure::KrylovDiverged:           return "operator_or_timestep_or_jvp";
         case StageFailure::EntryStateNotFinite:      return "nonfinite_entry_state";
@@ -145,6 +170,46 @@ inline const char* stage_failure_layer(StageFailure f) {
         case StageFailure::AdmissibilityRejected:    return "gate_threshold";
         default:                                     return "publish_gate";
     }
+}
+
+// Where a Krylov tolerance actually came from. A category that names Eisenstat-Walker must have
+// read this, not assumed it.
+// R13.17 (external review P0-3): why the Newton loop ACTUALLY stopped, recorded at the site that
+// stopped it. The classifier reconstructed this from accepted/rejected counts, residual first/last
+// and budget usage -- a fixed precedence over aggregates, which cannot tell "the residual stopped
+// moving" from "the budget ran out at a residual that happened to be flat".
+enum class NewtonTerminationReason {
+    NotRecorded = 0, Converged, BudgetExhausted, ResidualStall, ZeroStepStall,
+    LinearSolveFailure, TrustRejected, NonfiniteResidual, Exception
+};
+
+inline const char* newton_termination_name(NewtonTerminationReason r) {
+    switch (r) {
+        case NewtonTerminationReason::NotRecorded:        return "not_recorded";
+        case NewtonTerminationReason::Converged:          return "converged";
+        case NewtonTerminationReason::BudgetExhausted:    return "budget_exhausted";
+        case NewtonTerminationReason::ResidualStall:      return "residual_stall";
+        case NewtonTerminationReason::ZeroStepStall:      return "zero_step_stall";
+        case NewtonTerminationReason::LinearSolveFailure: return "linear_solve_failure";
+        case NewtonTerminationReason::TrustRejected:      return "trust_rejected";
+        case NewtonTerminationReason::NonfiniteResidual:  return "nonfinite_residual";
+        case NewtonTerminationReason::Exception:          return "exception";
+    }
+    return "not_recorded";
+}
+
+enum class KrylovToleranceSource { Unknown, Base, EisenstatWalker, StageOverride, InnRamp, Other };
+
+inline const char* krylov_tolerance_source_name(KrylovToleranceSource s) {
+    switch (s) {
+        case KrylovToleranceSource::Unknown:         return "unknown";
+        case KrylovToleranceSource::Base:            return "base";
+        case KrylovToleranceSource::EisenstatWalker: return "eisenstat_walker";
+        case KrylovToleranceSource::StageOverride:   return "stage_override";
+        case KrylovToleranceSource::InnRamp:         return "inn_ramp";
+        case KrylovToleranceSource::Other:           return "other";
+    }
+    return "unknown";
 }
 
 struct StageFailureSignals {
@@ -228,6 +293,20 @@ struct StageFailureSignals {
     // Did the WORST-progress solve stop because it met its (adaptive, 0.9-capped) tolerance?
     bool   worst_krylov_met_tolerance = false;
     double worst_krylov_eta = -1.0;
+    // R13.17 (external review P0-2): which METRIC the worst solve satisfied, and where its
+    // tolerance came from. `met_tolerance` alone cannot separate "met the D objective" from "met
+    // the S one", and the layer string hardcoded Eisenstat-Walker while the value can come from a
+    // stage override or a ramp -- a category must not name a source it did not read.
+    bool   worst_krylov_D_reached = false;
+    bool   worst_krylov_S_reached = false;
+    KrylovToleranceSource worst_krylov_tolerance_source = KrylovToleranceSource::Unknown;
+    bool   worst_krylov_budget_exhausted = false;
+    // R13.17 (external review P0-2): with eta saturated at its cap, two solves can tie on the
+    // worst ratio while ending for different reasons, and a strict `>` update let whichever came
+    // first decide the category. True only if EVERY near-worst solve met a tolerance.
+    bool   all_near_worst_met_tolerance = true;
+    // R13.17 (external review P0-3): the loop's OWN exit reason, from the site that took it.
+    NewtonTerminationReason newton_termination = NewtonTerminationReason::NotRecorded;
     // The Arnoldi budget the WORST solve was given, so the ratio and the budget it was read
     // at are paired by construction rather than by the stage's last assignment.
     int    worst_krylov_restart_budget = -1;
@@ -293,8 +372,10 @@ inline bool measured(double v) {
 inline StageFailure first_failure_of(const StageFailureSignals& s) {
     // PROVENANCE FIRST. Classifying stage 3 from stage 2's signals produces a confident,
     // wrong layer -- and the record used to print exactly that, with the mismatch beside it.
-    if (s.signals_from_stage >= 0 && s.classifying_stage >= 0 &&
-        s.signals_from_stage != s.classifying_stage) {
+    if (s.signals_from_stage < 0 || s.classifying_stage < 0) {
+        return StageFailure::StageSignalMissing;
+    }
+    if (s.signals_from_stage != s.classifying_stage) {
         return StageFailure::StageSignalMismatch;
     }
     // An explicit stage has its own failure set; the implicit clauses below cannot speak to it.
@@ -370,11 +451,39 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
                  s.krylov_no_progress_threshold <= 1.0)
                     ? s.krylov_no_progress_threshold : kKrylovNoProgressVsR0;
             if (s.worst_krylov_rel_error_vs_r0 >= no_progress) {
-                // R13.16 (round 6, R6-2): WHY it made no progress. A solve that stopped because
-                // it met its own forcing term did what it was asked; the operator is not
-                // implicated and the work belongs at the forcing term / inner budget.
-                if (s.worst_krylov_met_tolerance) {
+                // R13.16 (round 6, R6-2) / R13.17 (external review P0-2): WHY it made no
+                // progress. Four different answers, three of which are not the operator's fault,
+                // and they route to four different layers.
+                //
+                //   D met, S not  -> the solve minimised WHAT IT WAS ASKED TO and the result is
+                //                    still useless to the Newton merit. Not a stall (it worked)
+                //                    and not a forcing-term problem (tightening eta does not
+                //                    align two objectives) -- the D objective is the question.
+                //                    `InternalConvergenceStop` IS this state, and the round-6
+                //                    rule missed it entirely: `met_tolerance` was
+                //                    `reason == ToleranceReached` only, so the one termination
+                //                    that means "met its own tolerance" fell through to
+                //                    KrylovStagnated -- the exact misclassification the category
+                //                    was added to prevent.
+                //   S met         -> it did what was asked in the coordinate that matters, and
+                //                    little progress means the forcing term asked for little.
+                //   neither, budget gone -> it was cut off while still descending.
+                //   otherwise     -> it could not progress. That is the operator.
+                //
+                // A tie on the worst ratio is refused rather than resolved: with eta saturated at
+                // its cap two solves can share the worst value and end for different reasons, and
+                // a strict `>` update let whichever came first name the layer.
+                if (!s.all_near_worst_met_tolerance) {
+                    return StageFailure::KrylovStagnated;
+                }
+                if (s.worst_krylov_D_reached && !s.worst_krylov_S_reached) {
+                    return StageFailure::KrylovObjectiveMismatch;
+                }
+                if (s.worst_krylov_S_reached || s.worst_krylov_met_tolerance) {
                     return StageFailure::KrylovForcingTermLimited;
+                }
+                if (s.worst_krylov_budget_exhausted) {
+                    return StageFailure::KrylovBudgetLimited;
                 }
                 return StageFailure::KrylovStagnated;
             }
@@ -398,6 +507,18 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // The linear solve worked and nothing it proposed was taken.
         if (s.accepted_steps == 0 && s.rejected_steps > 0) {
             return StageFailure::AllStepsRejected;
+        }
+        // R13.17 (external review P0-3): when the loop RECORDED why it stopped, that is the
+        // answer -- not a precedence over aggregates. The reconstruction below cannot separate
+        // "the residual stopped moving" from "the budget ran out at a flat residual", and the
+        // campaign's reading of the 12x-budget run ("the failure moved outward") rests on exactly
+        // that distinction.
+        if (s.newton_termination == NewtonTerminationReason::BudgetExhausted) {
+            return StageFailure::NewtonBudgetExhausted;
+        }
+        if (s.newton_termination == NewtonTerminationReason::ResidualStall ||
+            s.newton_termination == NewtonTerminationReason::ZeroStepStall) {
+            return StageFailure::NewtonStagnated;
         }
         // Still converging when the budget ran out. This is the em_b_wave dt=600 case, and
         // it is not a numerical failure -- calling it one sends the work to the split.

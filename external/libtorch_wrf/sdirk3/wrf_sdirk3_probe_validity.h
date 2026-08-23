@@ -311,10 +311,21 @@ struct TaylorDefectInputs {
     // ||A(alpha*s) - alpha*A(s)|| / ||alpha*A(s)||: the operator's linearity ON THIS STEP,
     // measured rather than presumed. -1 = not measured.
     double linearity_residual = -1.0;
+    // R13.17 (external review P1-1): the WORST per-block tau. The global packed L2 lets one
+    // dominant block hide a large relative defect in a small one -- and rw/ph/mu, the blocks this
+    // campaign is actually about, are the small ones. -1 = not measured.
+    double tau_block_max = -1.0;
+    // R13.17 (external review P1-2): was the step REALIZED? At float32 a small step can fail to
+    // change the stored state at all, and G(K+s) - G(K) can be cancellation-dominated, while tau
+    // and the ratio still print plausible values. Fraction of ||s|| actually present in the
+    // stored K, and the signal-to-roundoff of the measured difference.
+    double realized_step_fraction = -1.0;
+    double signal_to_roundoff = -1.0;
 };
 
 enum class TaylorVerdict { Unmeasured, FdFallback, AlphaArmAssumed, AlphaDyadic,
-                           LinearityUnmeasured, OperatorNonlinear, Measured };
+                           LinearityUnmeasured, OperatorNonlinear, StepNotRealized,
+                           RoundoffLimited, Measured };
 
 inline const char* taylor_verdict_name(TaylorVerdict v) {
     switch (v) {
@@ -324,6 +335,8 @@ inline const char* taylor_verdict_name(TaylorVerdict v) {
         case TaylorVerdict::AlphaDyadic:     return "alpha_dyadic";
         case TaylorVerdict::LinearityUnmeasured: return "linearity_unmeasured";
         case TaylorVerdict::OperatorNonlinear: return "operator_nonlinear";
+        case TaylorVerdict::StepNotRealized: return "step_not_realized";
+        case TaylorVerdict::RoundoffLimited: return "roundoff_limited";
         case TaylorVerdict::Measured:        return "measured";
     }
     return "unknown";
@@ -331,6 +344,12 @@ inline const char* taylor_verdict_name(TaylorVerdict v) {
 
 // How far A(alpha*s) may sit from alpha*A(s) before the ratio stops being about the Jacobian.
 inline constexpr double kTaylorLinearityTol = 1.0e-4;
+// The stored state must contain essentially all of the step that was requested. Below this the
+// difference being measured is a different step from the one tau is normalised by.
+inline constexpr double kTaylorStepRealized = 0.99;
+// ||dR|| must stand this far above the float32 roundoff of the quantities differenced, or the
+// numerator of tau is cancellation noise. 100x is ~7 significant bits of headroom.
+inline constexpr double kTaylorSignalFloor = 100.0;
 
 // A power of two, within the exactness that matters here: alpha == 2^k for integer k.
 inline bool is_dyadic(double a) {
@@ -370,6 +389,17 @@ inline TaylorVerdict taylor_defect_verdict(const TaylorDefectInputs& in) {
     if (!is_measured(in.linearity_residual)) return TaylorVerdict::LinearityUnmeasured;
     if (in.linearity_residual > kTaylorLinearityTol) {
         return TaylorVerdict::OperatorNonlinear;
+    }
+    // R13.17 (external review P1-2): the step must have HAPPENED, and the difference it produced
+    // must stand above the roundoff floor. Checked after the operator preconditions because an
+    // unrealized step is a statement about this measurement, not about the operator.
+    if (is_measured(in.realized_step_fraction) &&
+        in.realized_step_fraction < kTaylorStepRealized) {
+        return TaylorVerdict::StepNotRealized;
+    }
+    if (is_measured(in.signal_to_roundoff) &&
+        in.signal_to_roundoff < kTaylorSignalFloor) {
+        return TaylorVerdict::RoundoffLimited;
     }
     return TaylorVerdict::Measured;
 }

@@ -9246,6 +9246,17 @@ vertical_coefficients:
                               << " worst_krylov_eta=" << sig.worst_krylov_eta
                               << " worst_krylov_budget="
                               << sig.worst_krylov_restart_budget
+                              << " worst_krylov_D_reached="
+                              << (sig.worst_krylov_D_reached ? 1 : 0)
+                              << " worst_krylov_S_reached="
+                              << (sig.worst_krylov_S_reached ? 1 : 0)
+                              << " worst_krylov_tol_source="
+                              << wrf::sdirk3::krylov_tolerance_source_name(
+                                     sig.worst_krylov_tolerance_source)
+                              << " near_worst_all_met_tol="
+                              << (sig.all_near_worst_met_tolerance ? 1 : 0)
+                              << " newton_exit="
+                              << wrf::sdirk3::newton_termination_name(sig.newton_termination)
                               << " krylov_r0_unmeasured=" << sig.krylov_r0_unmeasured_solves
                               << " krylov_rule_fellback_to_b=" << sig.krylov_rule_fellback_to_b
                               << " krylov_no_progress_thr="
@@ -13283,6 +13294,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.worst_krylov_met_tolerance = stats.worst_krylov_met_tolerance;
     last_stage_signals_.worst_krylov_eta = static_cast<double>(stats.worst_krylov_eta);
     last_stage_signals_.worst_krylov_restart_budget = stats.worst_krylov_restart_budget;
+    last_stage_signals_.worst_krylov_D_reached = stats.worst_krylov_D_reached;
+    last_stage_signals_.worst_krylov_S_reached = stats.worst_krylov_S_reached;
+    last_stage_signals_.worst_krylov_tolerance_source =
+        static_cast<wrf::sdirk3::KrylovToleranceSource>(stats.worst_krylov_tolerance_source);
+    last_stage_signals_.worst_krylov_budget_exhausted = stats.worst_krylov_budget_exhausted;
+    last_stage_signals_.all_near_worst_met_tolerance = stats.all_near_worst_met_tolerance;
+    last_stage_signals_.newton_termination =
+        static_cast<wrf::sdirk3::NewtonTerminationReason>(stats.newton_termination);
     last_stage_signals_.krylov_r0_unmeasured_solves = stats.krylov_r0_unmeasured_solves;
     last_stage_signals_.krylov_rule_fellback_to_b = stats.krylov_rule_fellback_to_b;
     last_stage_signals_.krylov_no_progress_threshold = stats.krylov_no_progress_threshold;

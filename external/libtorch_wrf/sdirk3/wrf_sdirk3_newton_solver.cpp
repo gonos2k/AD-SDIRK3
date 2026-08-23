@@ -2449,6 +2449,18 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
     res.termination_reason = resolution.reason;
     res.initial_rel_error = initial_rel_error_gmres;
+    res.rho_S_initial = initial_rel_error_gmres;
+    // R13.17 (external review P0-1): BOTH convergences on the record. The loop stops on the
+    // D-weighted objective it minimises (rho_D, both sides D-scaled -- no mixed denominator) and
+    // success is judged on the unweighted rho_S. A solve with rho_D < eta and rho_S >= eta met its
+    // own objective and was reported as a failed linear solve; collapsed into one `success` that
+    // state is indistinguishable from "the operator could not be solved". Production behaviour is
+    // unchanged -- what changes is that the seam is stated.
+    res.rho_D_final = guarded_item<float>(error_tensor);
+    res.rho_S_final = res.rel_error;
+    res.tolerance_applied = tol;
+    res.D_tolerance_reached = (res.rho_D_final >= 0.0f && res.rho_D_final < tol);
+    res.S_tolerance_reached = (res.rho_S_final >= 0.0f && res.rho_S_final < tol);
     res.probe_j = diag_probe_j;
     res.probe_true_err = diag_probe_true_err;
     res.probe_hopeless_floor = diag_probe_floor;
@@ -4159,6 +4171,18 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             terminated_by_arnoldi_stagnation || terminated_by_restart_stag_threshold};
     res.termination_reason = resolution.reason;
     res.initial_rel_error = initial_rel_error_fgmres;
+    res.rho_S_initial = initial_rel_error_fgmres;
+    // R13.17 (external review P0-1): BOTH convergences on the record. The loop stops on the
+    // D-weighted objective it minimises (rho_D, both sides D-scaled -- no mixed denominator) and
+    // success is judged on the unweighted rho_S. A solve with rho_D < eta and rho_S >= eta met its
+    // own objective and was reported as a failed linear solve; collapsed into one `success` that
+    // state is indistinguishable from "the operator could not be solved". Production behaviour is
+    // unchanged -- what changes is that the seam is stated.
+    res.rho_D_final = guarded_item<float>(error_tensor);
+    res.rho_S_final = res.rel_error;
+    res.tolerance_applied = tol;
+    res.D_tolerance_reached = (res.rho_D_final >= 0.0f && res.rho_D_final < tol);
+    res.S_tolerance_reached = (res.rho_S_final >= 0.0f && res.rho_S_final < tol);
     res.probe_j = diag_probe_j;
     res.probe_true_err = diag_probe_true_err;
     res.probe_hopeless_floor = diag_probe_floor;
@@ -4339,6 +4363,10 @@ public:
     // test could not vary it; and its provenance was "the environment at the first solve" rather
     // than at construction. Accepted range (0, 1]; out of range warns and keeps the default.
     double krylov_no_progress_threshold_ = wrf::sdirk3::kKrylovNoProgressVsR0;
+    // R13.17 (external review P1-4): the same treatment for the total-failure rule. It was a
+    // function-local static, so the first solve in a process latched it for every solver in that
+    // process -- the defect fixed for the threshold one commit earlier, left in its sibling.
+    bool krylov_failure_vs_r0_ = false;
     bool jvp_vs_fd_done_ = false;
     bool singularity_check_done_ = false;
 
@@ -4397,6 +4425,8 @@ public:
 
     explicit Impl(const WRFNewtonKrylovOptions& options, int mu_size = 0) : options_(options), mu_size_(mu_size) {
         {
+            krylov_failure_vs_r0_ =
+                wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_FAILURE_VS_R0");
             const char* e = std::getenv("WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0");
             if (e) {
                 char* end = nullptr;
@@ -6612,6 +6642,9 @@ public:
                 }
                 stats_.newton_iterations = newton_iter + 1;
                 stats_.converged = true;
+                // R13.17 (external review P0-3): recorded HERE, by the site that ended the loop.
+                stats_.newton_termination =
+                    static_cast<int>(wrf::sdirk3::NewtonTerminationReason::Converged);
 
                 // STATS FIX: Extract final residual accurately
                 if (need_scalar) {
@@ -8438,14 +8471,25 @@ public:
                     // that could alter a result is caught; one that could not is ignored, which
                     // is the right sensitivity for this question.
                     torch::Tensor fp_probe, A_fp_before, M_fp_before;
+                    std::function<torch::Tensor(const torch::Tensor&)> M_fp_probe;
                     if (gmres_rhs.defined() && gmres_rhs.numel() > 0) {
                         const double bn = gmres_rhs.detach().to(torch::kFloat64)
                                               .norm().item<double>();
                         if (bn > 0.0) {
                             fp_probe = (gmres_rhs.detach() / static_cast<float>(bn)).clone();
                             A_fp_before = gmres_op(fp_probe).detach().clone();
-                            M_fp_before = M_inv ? M_inv(fp_probe).detach().clone()
-                                                : torch::Tensor();
+                            // R13.17 (external review P1-3): fingerprint a PRISTINE COPY, never
+                            // production's closure. Production M carries the amplification
+                            // guard's mutable `fallback_locked`; if the probe vector trips it,
+                            // the very act of taking the "before" reading locks production to the
+                            // identity for the rest of the run -- a latch no counter restore can
+                            // undo -- and then "before" and "after" agree BECAUSE both are the
+                            // identity, printing preconditioner_state_unchanged=1 from a
+                            // preconditioner the probe itself changed. Observing a state must not
+                            // be done by exercising it.
+                            M_fp_probe = make_fresh_M();
+                            M_fp_before = M_fp_probe ? M_fp_probe(fp_probe).detach().clone()
+                                                     : torch::Tensor();
                         }
                     }
                     // fd-fallback count BEFORE the arms; compared after (red team P1-2: reading
@@ -8918,8 +8962,11 @@ public:
                         const auto A_fp_after = gmres_op(fp_probe).detach();
                         operator_state_unchanged = torch::equal(A_fp_before, A_fp_after);
                     }
-                    if (fp_probe.defined() && M_fp_before.defined() && M_inv) {
-                        const auto M_fp_after = M_inv(fp_probe).detach();
+                    if (fp_probe.defined() && M_fp_before.defined() && M_fp_probe) {
+                        // The SAME pristine copy, so what is compared is the shared state the two
+                        // wrappers read -- not the wrapper's own latch, which is per-copy by
+                        // construction and would make this trivially true.
+                        const auto M_fp_after = M_fp_probe(fp_probe).detach();
                         precond_state_unchanged = torch::equal(M_fp_before, M_fp_after);
                     } else if (!M_inv) {
                         // No preconditioner to move. Not evidence of movement, and not a claim
@@ -9490,13 +9537,40 @@ public:
                     const bool trivial_solve =
                         (gmres_result.termination_reason ==
                              WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged);
+                    // R13.17 (external review P0-2): `ToleranceReached` is not the only
+                    // termination that met a tolerance. `InternalConvergenceStop` means the
+                    // D-objective was satisfied -- the loop stopped because it had minimised what
+                    // it was asked to -- and reading only the first sent exactly that state back
+                    // to KrylovStagnated, the misclassification the category exists to prevent.
+                    using KTR_ = WRFNewtonKrylovSolver::KrylovTerminationReason;
                     const bool met_tolerance =
-                        (gmres_result.termination_reason ==
-                             WRFNewtonKrylovSolver::KrylovTerminationReason::ToleranceReached);
+                        (gmres_result.termination_reason == KTR_::ToleranceReached) ||
+                        (gmres_result.termination_reason == KTR_::InternalConvergenceStop);
+                    const bool budget_exhausted =
+                        (gmres_result.termination_reason == KTR_::MaxBudget);
+                    // Where the tolerance came from. A category that names Eisenstat-Walker must
+                    // have READ this; the layer string used to assert it.
+                    const int tol_source = static_cast<int>(
+                        krylov_tol_stage_override
+                            ? wrf::sdirk3::KrylovToleranceSource::StageOverride
+                            : (stage_budget_forcing_coupled
+                                   ? wrf::sdirk3::KrylovToleranceSource::EisenstatWalker
+                                   : wrf::sdirk3::KrylovToleranceSource::Base));
                     if (!trivial_solve) {
                         // Counted here so the count is over exactly the solves the max is over.
                         stats_.krylov_solves_measured_vs_r0++;
+                        // R13.17 (external review P0-2): the TIE SET. A strict `>` update lets
+                        // the first arrival name the layer when two solves share the worst ratio
+                        // -- not a remote case with eta saturated at its cap. If any solve within
+                        // a hair of the worst did NOT meet a tolerance, the forcing-term and
+                        // objective-mismatch categories are refused and it reads as a stall.
+                        if (stats_.worst_krylov_rel_error_vs_r0 >= 0.0f &&
+                            progress >= stats_.worst_krylov_rel_error_vs_r0 * (1.0f - 1.0e-3f) &&
+                            !met_tolerance) {
+                            stats_.all_near_worst_met_tolerance = false;
+                        }
                         if (progress > stats_.worst_krylov_rel_error_vs_r0) {
+                            if (!met_tolerance) stats_.all_near_worst_met_tolerance = false;
                             stats_.worst_krylov_rel_error_vs_r0 = progress;
                             stats_.worst_krylov_iter = newton_iter;
                             // Did the WORST solve stop because it was satisfied? That is the
@@ -9513,6 +9587,12 @@ public:
                             // with the stage's last budget was true only by luck; recorded here
                             // it is true by construction.
                             stats_.worst_krylov_restart_budget = effective_restart;
+                            stats_.worst_krylov_D_reached =
+                                gmres_result.D_tolerance_reached;
+                            stats_.worst_krylov_S_reached =
+                                gmres_result.S_tolerance_reached;
+                            stats_.worst_krylov_tolerance_source = tol_source;
+                            stats_.worst_krylov_budget_exhausted = budget_exhausted;
                         }
                     } else {
                         stats_.krylov_solves_trivial++;
@@ -10449,8 +10529,7 @@ public:
             // Changing what the solver DOES is not a diagnostic, so the r0 baseline is
             // OPT-IN (default off, baseline byte-identical); the record carries both readings
             // whichever is in force. The fallback when r0 was not measured is the old rule.
-            static const bool failure_vs_r0 =
-                wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_FAILURE_VS_R0");
+            const bool failure_vs_r0 = krylov_failure_vs_r0_;
             // R13.14 (red team round 5, P1): the FALLBACK survived the round-4 fix. R13.13
             // deleted the field that divided by a reference of 1.0 and left the reference, so
             // `total_failure_vs_r0` -- a name ending `_vs_r0`, a signals field ending `_vs_r0`,
@@ -11271,7 +11350,63 @@ public:
                     }
                     // The verdict, from the rule in wrf_sdirk3_probe_validity.h -- where a
                     // fixture can reject its negation, which a rule spelled out here cannot.
+                    // R13.17 (external review P1-1): PER-BLOCK tau. The packed L2 above lets a
+                    // dominant block hide a large relative defect in a small one, and rw/ph/mu --
+                    // the blocks this campaign is about -- are the small ones. Each block is
+                    // normalised by its OWN ||A s||, with a floor so a block the step barely
+                    // touches cannot manufacture a huge ratio from noise.
+                    double tau_block_max = -1.0;
+                    std::string tau_block_rows;
+                    if (layout_initialized_ && cached_layout_.is_exact &&
+                        cached_layout_.total_size == dR.numel()) {
+                        const auto dR64 = dR.to(torch::kFloat64).reshape({-1});
+                        const auto As64 = As.to(torch::kFloat64).reshape({-1});
+                        const double n_As_all = As64.norm().item<double>();
+                        for (const auto& blk : cached_layout_.blocks) {
+                            const auto d_b = dR64.slice(0, blk.start, blk.start + blk.size);
+                            const auto a_b = As64.slice(0, blk.start, blk.start + blk.size);
+                            const double na = a_b.norm().item<double>();
+                            // Floor: a block carrying <0.1% of ||A s|| is not being exercised by
+                            // this step, and its ratio is noise over noise.
+                            const double floor_b = 1.0e-3 * n_As_all;
+                            const double den = std::max(na, floor_b);
+                            const double tb = den > 0.0
+                                ? (d_b - a_b).norm().item<double>() / den : -1.0;
+                            if (na >= floor_b && tb > tau_block_max) tau_block_max = tb;
+                            tau_block_rows += " tau_" + std::string(blk.name) + "=" +
+                                              std::to_string(tb) +
+                                              " share_" + std::string(blk.name) + "=" +
+                                              std::to_string(n_As_all > 0.0 ? na / n_As_all : -1.0);
+                        }
+                    }
+                    // R13.17 (external review P1-2): was the step REALIZED, and does the
+                    // difference stand above roundoff? At float32 a small step can leave the
+                    // stored state unchanged while tau and the ratio still print plausibly.
+                    double realized_step_fraction = -1.0, signal_to_roundoff = -1.0;
+                    {
+                        const auto K64 = K.detach().to(torch::kFloat64);
+                        const auto s64 = dK_scaled.detach().to(torch::kFloat64);
+                        const double n_s = s64.norm().item<double>();
+                        if (n_s > 0.0) {
+                            // What the state actually kept of the step we asked for.
+                            const auto K_stored = (K.detach() + dK_scaled.detach())
+                                                      .to(torch::kFloat64);
+                            realized_step_fraction =
+                                (K_stored - K64).norm().item<double>() / n_s;
+                        }
+                        const double n_dR = dR.to(torch::kFloat64).norm().item<double>();
+                        const double eps32 = 1.1920929e-07;
+                        const double roundoff =
+                            eps32 * std::max(
+                                R.detach().to(torch::kFloat64).norm().item<double>(),
+                                accepted_residual.detach().to(torch::kFloat64)
+                                    .norm().item<double>());
+                        signal_to_roundoff = roundoff > 0.0 ? n_dR / roundoff : -1.0;
+                    }
                     wrf::sdirk3::TaylorDefectInputs tin;
+                    tin.tau_block_max = tau_block_max;
+                    tin.realized_step_fraction = realized_step_fraction;
+                    tin.signal_to_roundoff = signal_to_roundoff;
                     tin.fd_fallback_free =
                         (wrf::sdirk3::g_jvp_fd_fallback_count.load(
                              std::memory_order_relaxed) == fd_fallbacks_before_tau);
@@ -11300,6 +11435,10 @@ public:
                               << " alpha_arm_measured=" << (alpha_arm_measured ? 1 : 0)
                               << " fd_fallback_free=" << (tin.fd_fallback_free ? 1 : 0)
                               << " linearity_residual=" << linearity_residual
+                              << " tau_block_max=" << tau_block_max
+                              << " realized_step_fraction=" << realized_step_fraction
+                              << " signal_to_roundoff=" << signal_to_roundoff
+                              << tau_block_rows
                               << " tau_verdict="
                               << wrf::sdirk3::taylor_verdict_name(tau_verdict)
                               // The conclusion is printed ONLY when the preconditions hold. An
@@ -11702,6 +11841,8 @@ public:
                     // v20.14r27j: Require 2 consecutive stalls before early exit.
                     // Single-iteration stall may be transient (e.g., trust-region radius reset).
                     if (newton_stall_count >= 2) {
+                        stats_.newton_termination = static_cast<int>(
+                            wrf::sdirk3::NewtonTerminationReason::ResidualStall);
                         std::cerr << "[Newton] RESIDUAL STALL: iter " << newton_iter
                                   << ", rel_decrease=" << rel_decrease
                                   << " < " << stall_threshold
@@ -11721,6 +11862,21 @@ public:
         // Failed to converge — record actual iterations performed, not max.
         stats_.newton_iterations = actual_newton_iters;
         stats_.converged = false;
+        // R13.17 (external review P0-3): only if no site inside the loop already said why, AND
+        // the loop actually reached its bound.
+        //
+        // The first version of this said "nothing claimed it, so it was the budget" -- and the
+        // very first verification run printed `newton_exit=budget_exhausted` for a loop that used
+        // FOUR of twelve iterations. Absence of a recorded reason is not evidence of one, which
+        // is the rule this campaign has applied to every other field; applying it to the field
+        // added to fix a reconstruction would have been a reconstruction with a confident name.
+        if (stats_.newton_termination ==
+            static_cast<int>(wrf::sdirk3::NewtonTerminationReason::NotRecorded) &&
+            options_.max_newton_iter > 0 &&
+            actual_newton_iters >= options_.max_newton_iter) {
+            stats_.newton_termination = static_cast<int>(
+                wrf::sdirk3::NewtonTerminationReason::BudgetExhausted);
+        }
 
         // v20.14r61: Update hopeless Stage-2 budget mode state.
         if (stage == 2) {
