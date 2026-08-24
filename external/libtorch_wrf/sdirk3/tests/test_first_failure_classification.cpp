@@ -688,6 +688,25 @@ int main() {
         check(name_of(s) == "insufficient_evidence",
               "an explicit stage whose RHS was never measured is unmeasured, not finite -- "
               "absence of a measurement must not become a finding here either");
+        // R13.20 (adversarial loop, iteration 2): the PRODUCER-REACHABLE explicit failure. The
+        // gate fires on a non-finite explicit tendency by setting converged=false AND all three
+        // metrics to infinity, so the classifier sees `gate_metric_ok = false` alongside
+        // `explicit_rhs_finite = false` -- and the RHS answer must win, because it is the earlier
+        // cause. Until R13.20 nothing produced these signals and this returned
+        // `insufficient_evidence` on every run.
+        {
+            StageFailureSignals e;
+            e.signals_from_stage = 1; e.classifying_stage = 1;
+            e.is_explicit_stage = true;
+            e.explicit_rhs_measured = true;
+            e.explicit_rhs_finite = false;
+            e.gate_metric_ok = false;      // what the infinite metrics produce at the gate
+            e.state_published = false;     // the gate is upstream of any publish
+            check(name_of(e) == "explicit_rhs_not_finite",
+                  "a non-finite explicit tendency is reported AS THAT, not as the admissibility "
+                  "or publish rejection that the same signals also satisfy -- the RHS is the "
+                  "earlier cause, and before R13.20 this stage was never gated at all");
+        }
         // R13.20: and the explicit stage's own gates are their OWN evidence class, not the
         // implicit machinery's preconditions -- the record must not label them `precondition`.
         const auto dx = wrf::sdirk3::stage_diagnosis_of(s);
@@ -1379,7 +1398,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 118;
+    constexpr int expected_checks = 119;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

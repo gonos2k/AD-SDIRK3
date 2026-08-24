@@ -233,3 +233,69 @@ numbers were already computed. `worst_krylov_rho_D` and `worst_krylov_rho_S` are
 dt=600 run. Same for `phys_blocks_local`, `taylor_covers_last_newton_iter`, `tau_raw_block_max`,
 `event_basis` and `rhs_dir_is_first_arnoldi`. Everything in this document is static or contract-test
 evidence.
+
+---
+
+## Adversarial loop — findings the reviews did not report
+
+Each iteration attacks this increment's own changes. The campaign's record is that nine consecutive
+rounds found a defect *inside* the previous round's fix; these are mine.
+
+### Iteration 1 — the tolerance outlived its iteration
+
+R9-5 moved the tolerance *receipt* into the Newton loop and left the **value it describes** outside
+it. Five writers, no cross-iteration role. Inert with adaptive tolerances on (the E-W block
+reassigns before any read, so the default path is byte-identical) and **not** inert with them off:
+the INN ramp is an in-place multiply and the policy round-trip passes the value through, so
+iteration *k* started from *k−1*'s post-ramp value and the ramp compounded to γ^k. At γ = 0.5 over a
+12-iteration budget that is 2.4e-4 × base — a tolerance no solve can reach — while the code calls
+the ramp "conservative".
+
+Checked systematically, not just this one: a brace-depth scan of every local declared between the
+function head and the Newton loop, cross-referenced against assignments inside it, returns 14
+names. Thirteen have one writer and are cross-iteration **by design** (`K`, `last_res_norm`,
+`prev_iter_res_norm`, the stall/hopeless counters, and `newton_tol_adaptive` — a monotone ratchet
+seeded from `init_R0_norm`, now commented as deliberate).
+
+### Iteration 2 — an entire stage class was never classified, and a NaN was reported one stage late
+
+A field-by-field audit of `StageFailureSignals` (65 fields) against every producer found **two with
+no production writer at all**: `explicit_rhs_measured` and `explicit_rhs_finite`. Only the test
+fixtures wrote them. Both default `false`, and they gate the explicit branch — so
+`first_failure_of` returned `InsufficientEvidence` on its first line **every time**, and three
+categories below it were unreachable.
+
+Following that found the larger one. The explicit branch hard-set `last_stage_converged_ = true`
+and all three gate metrics to `0`, so `handle_stage_gate` **early-returned on every explicit
+stage** — nothing classified it, and a non-finite explicit tendency passed silently into the next
+stage's state, where `entry_state_finite` caught it. **One stage late, attributed to the wrong
+stage**: exactly the "first, not worst" misattribution this classifier exists to prevent. This is
+live on `em_b_wave`/ARK324, where stage 1 is explicit on every timestep.
+
+Both fixed. The signals are produced where the tendency is evaluated (one GPU→CPU sync per
+timestep inside a `NoGradGuard`, the same shape and justification as `last_stage_entry_finite_`),
+and a non-finite tendency now sets `converged = false` **and** all three metrics to infinity — all
+three, because otherwise the `gate_metric_mode` chosen at runtime decides whether a NaN is caught.
+
+**Behaviour change, stated plainly.** On any step whose explicit tendency is finite this is
+byte-identical: finite → `converged = true`, metrics 0, gate early-returns, exactly as before. It
+differs *only* when the tendency is non-finite, where the previous behaviour was to advance a NaN.
+
+**And the reachability is now on the record instead of implied.** From the single production call
+site the explicit branch can return `InsufficientEvidence` or `ExplicitRhsNotFinite` and nothing
+else: `ExplicitAdmissibilityRejected` needs a finite tendency with a bad metric, but a finite
+tendency sets the metrics to 0 and the gate early-returns; `ExplicitPublishRejected` and the
+explicit `None` need `state_published`, which that call site sets `false` unconditionally because it
+is upstream of any publish. Both are kept for a publish-site call that does not exist yet, and the
+header says so rather than leaving three live-looking categories.
+
+CI gates run locally rather than push-and-see (`sdirk3-ci.yml` has four count ratchets):
+`check_ratchets.sh` → `from_blob actual=70 == baseline=70`; the README/`CLAUDE.md` "N-test CTest"
+claims both read 62 against a pinned inventory of 62; no new ctest target, so none of them move.
+
+Verified sound while looking, and worth recording as negatives: `worst_krylov_rho_S` is
+`gmres_result.rel_error`, the **unclamped** ρ_S (the clamp happens later, into `gmres_rel_error`),
+so the warm-start value above 1 that this campaign measured is preserved rather than hidden;
+`worst_krylov_rho_D` is `‖D⁻¹r‖/‖D⁻¹b‖` with a **consistent** denominator (`bnorm_safe` is taken
+from the already-scaled `b_inner`), so it really is the ladder's coordinate and claim 7.4's
+comparison is well posed; and `res_norm_detached`'s exit `.item()` is inside a `NoGradGuard`.

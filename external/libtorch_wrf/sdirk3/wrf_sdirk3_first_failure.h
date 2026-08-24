@@ -724,6 +724,27 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
     if (s.is_explicit_stage) {
         // Every path out of this block returns, and none of them is a precondition on the
         // implicit machinery -- they are the explicit stage's own gates.
+        //
+        // R13.20 (adversarial loop, iteration 2) -- REACHABILITY, stated rather than implied.
+        // Until R13.20 `explicit_rhs_measured` had NO producer in production (only fixtures wrote
+        // it), so this block returned `InsufficientEvidence` on its first line every time, and
+        // the explicit stage was never gated at all: `last_stage_converged_` was hard-set true
+        // and all three gate metrics hard-set 0, so `handle_stage_gate` early-returned. A
+        // non-finite explicit tendency reached the NEXT stage and was reported there as
+        // `EntryStateNotFinite` -- one stage late, wrong stage.
+        //
+        // Both are fixed, and from the single production call site (inside `handle_stage_gate`)
+        // the reachable set is now exactly:
+        //   InsufficientEvidence   -- k_fast undefined/empty
+        //   ExplicitRhsNotFinite   -- measured and non-finite; the gate now fires on it
+        // and these two are NOT reachable from that call site, by arithmetic:
+        //   ExplicitAdmissibilityRejected -- needs a FINITE tendency with a bad gate metric, but
+        //       a finite explicit tendency sets all three metrics to 0, so the gate early-returns
+        //   ExplicitPublishRejected / None -- the call site sets `state_published = false`
+        //       unconditionally ("the gate is upstream of any publish"), and it is only entered
+        //       when the gate is already unhappy
+        // They are kept for a publish-site classifier call that does not exist yet. Do not read
+        // them as live classifications of anything.
         if (basis) *basis = StageDecisionBasis::ExplicitStageGate;
         if (!s.explicit_rhs_measured) return StageFailure::InsufficientEvidence;
         if (!s.explicit_rhs_finite)   return StageFailure::ExplicitRhsNotFinite;

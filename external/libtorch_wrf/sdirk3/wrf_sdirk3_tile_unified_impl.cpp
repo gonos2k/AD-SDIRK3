@@ -10086,17 +10086,61 @@ vertical_coefficients:
                         last_stage_signals_is_explicit_ = true;
                         // ESDIRK explicit first stage: evaluate fast tendency directly.
                         k_fast[i] = compute_fast_rhs(U_stage, U_full_exch_stage);
+                        // R13.20 (adversarial loop, iteration 2) -- TWO defects, one root.
+                        //
+                        // (1) `explicit_rhs_measured` / `explicit_rhs_finite` had NO producer
+                        //     anywhere in production; only the test fixtures wrote them. The
+                        //     R13.10 reset three lines above is correct -- an explicit stage must
+                        //     not inherit the last implicit stage's signals -- but it left these
+                        //     two at their `false` defaults, so `!explicit_rhs_measured` returned
+                        //     `insufficient_evidence` at the FIRST line of the explicit branch and
+                        //     the three categories below it were unreachable. The fix that closed
+                        //     one instance of this class opened another.
+                        //
+                        // (2) The bigger one, found by following (1): the gate could not fire on
+                        //     an explicit stage AT ALL. `last_stage_converged_` was hard-set true
+                        //     and all three gate metrics hard-set 0, so `handle_stage_gate`
+                        //     early-returned and NOTHING classified this stage. A non-finite
+                        //     explicit tendency therefore passed silently into the next stage's
+                        //     state, where `entry_state_finite` caught it -- one stage late and
+                        //     attributed to the wrong stage. That is precisely the
+                        //     "first, not worst" misattribution this classifier exists to prevent.
+                        //
+                        // BEHAVIOUR CHANGE, stated: on any step whose explicit tendency is finite
+                        // this is byte-identical (finite -> converged=true, metrics 0, gate
+                        // early-returns, exactly as before). It differs ONLY when the tendency is
+                        // non-finite, where the previous behaviour was to advance a NaN.
+                        //
+                        // One GPU->CPU sync per timestep, inside a NoGradGuard, on a path that
+                        // just evaluated a full RHS -- the same shape and the same justification
+                        // as `last_stage_entry_finite_`.
+                        const bool expl_measured =
+                            k_fast[i].defined() && k_fast[i].numel() > 0;
+                        bool expl_finite = false;
+                        if (expl_measured) {
+                            torch::NoGradGuard ng_expl;
+                            expl_finite = torch::isfinite(k_fast[i]).all()
+                                              .detach().to(torch::kCPU).item<bool>();
+                        }
+                        last_stage_signals_.explicit_rhs_measured = expl_measured;
+                        last_stage_signals_.explicit_rhs_finite   = expl_finite;
                         if (stage_id == 1) {
                             newton_solver_->maybe_save_trajectory_checkpoint(U_stage, stage_id);
                         }
-                        last_stage_converged_ = true;
+                        // A stage whose tendency is not finite has not converged, and its gate
+                        // metric must say so in EVERY gate_metric_mode (0 reads wrms_growth, 1
+                        // reads R_full_norm, 2 reads rel_R_full) -- otherwise the mode chosen at
+                        // runtime decides whether a NaN is caught.
+                        const float expl_bad = std::numeric_limits<float>::infinity();
+                        last_stage_converged_ = expl_finite;
                         last_stage_residual_ = 0.0f;
                         last_stage_initial_R0_ = 0.0f;
-                        last_stage_rel_R_full_ = 0.0f;
-                        last_stage_rel_R_full_raw_ = 0.0f;
-                        last_stage_R_full_norm_ = 0.0f;
-                        last_stage_wrms_norm_ = 0.0f;
-                        last_stage_wrms_growth_ = 0.0f;
+                        last_stage_rel_R_full_ = expl_finite ? 0.0f : expl_bad;
+                        last_stage_rel_R_full_raw_ = expl_finite ? 0.0f : expl_bad;
+                        last_stage_R_full_norm_ = expl_finite ? 0.0f : expl_bad;
+                        last_stage_wrms_norm_ = expl_finite ? 0.0f : expl_bad;
+                        last_stage_wrms_growth_ =
+                            expl_finite ? 0.0 : std::numeric_limits<double>::infinity();
                     } else {
                         k_fast[i] = solveImplicitStage(U_stage, F_phys, dt, effective_aii, stage_id,
                                                        K_prev_attempt, U_full_exch_stage);
