@@ -9245,15 +9245,41 @@ vertical_coefficients:
                         // and carries its subtype as `exit_attribution`, whose layer is emitted
                         // separately below. Keeping the exit arm here would be an alternative no
                         // input can select, the defect this emitter removed one field over.
+                        //
+                        // R13.21 (external review P1-1): and it can now NAME the layer. The
+                        // stage-worst receipt gained `worst_krylov_stopping_metric`, the twin of
+                        // `exit_stopping_metric`; before it, this row could only say
+                        // "unrecorded_for_worst_solve" -- fail-closed and never actionable.
                         specific_layer =
-                            layer_from_worst ? "stop_metric_unrecorded_for_worst_solve"
-                                             : "stop_metric_unrecorded";
+                            layer_from_worst
+                                ? wrf::sdirk3::krylov_stopping_layer_for(
+                                      sig.worst_krylov_stopping_metric)
+                                : "stop_metric_unrecorded";
                     }
                     // R13.21 (external review P0-2): the exit solve's metric attribution and the
                     // layer THAT receipt supports, beside the event rather than replacing it.
                     // Before this, a zero-update exit whose receipt said "objective mismatch"
                     // reported that AS the event; now the row carries both, and the layer is
                     // derived from `exit_stopping_metric`, which is the receipt it belongs to.
+                    // R13.21 (external review P0-3): the ATTRIBUTION's own specific layer. The
+                    // emitter derived one only for the primary category, so a row reading
+                    // `attribution=krylov_forcing_term_limited` lost the source-specific place to
+                    // work and printed only the category-level layer.
+                    const char* attribution_specific_layer = "n/a";
+                    if (diag.attribution == wrf::sdirk3::StageFailure::KrylovForcingTermLimited) {
+                        attribution_specific_layer =
+                            (diag.attribution_basis == StageDecisionBasis::KrylovR0Receipt)
+                                ? wrf::sdirk3::krylov_forcing_layer_for(
+                                      sig.worst_krylov_tolerance_source)
+                                : "inner_tolerance_source_unrecorded";
+                    } else if (diag.attribution ==
+                               wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
+                        attribution_specific_layer =
+                            (diag.attribution_basis == StageDecisionBasis::KrylovR0Receipt)
+                                ? wrf::sdirk3::krylov_stopping_layer_for(
+                                      sig.worst_krylov_stopping_metric)
+                                : "stop_metric_unrecorded";
+                    }
                     const char* exit_attr_layer = "n/a";
                     if (diag.exit_attribution == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
                         exit_attr_layer =
@@ -9299,6 +9325,8 @@ vertical_coefficients:
                               << " exit_attribution="
                               << wrf::sdirk3::stage_failure_name(diag.exit_attribution)
                               << " exit_attribution_layer=" << exit_attr_layer
+                              // R13.21 (P0-3): the attribution's own specific layer.
+                              << " attribution_specific_layer=" << attribution_specific_layer
                               // R13.20: and the basis itself, so a reader can see WHICH body of
                               // evidence answered without inferring it from the category.
                               // R13.20 (numerics referee, claim 1): does the Taylor-defect
@@ -13472,6 +13500,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.worst_krylov_S_reached = stats.worst_krylov_S_reached;
     last_stage_signals_.worst_krylov_tolerance_source =
         static_cast<wrf::sdirk3::KrylovToleranceSource>(stats.worst_krylov_tolerance_source);
+    last_stage_signals_.worst_krylov_stopping_metric =
+        static_cast<wrf::sdirk3::KrylovStoppingMetric>(stats.worst_krylov_stopping_metric);
     last_stage_signals_.worst_krylov_budget_exhausted = stats.worst_krylov_budget_exhausted;
     last_stage_signals_.all_near_worst_met_tolerance = stats.all_near_worst_met_tolerance;
     last_stage_signals_.near_worst_mechanism_ambiguous = stats.near_worst_mechanism_ambiguous;

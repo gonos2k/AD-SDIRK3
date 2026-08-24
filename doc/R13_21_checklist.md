@@ -95,15 +95,33 @@ rather than inventing one.
 
 ### Phase 3 — P0-3: an action-stable reducer
 
-- [ ] **3.1** Add `stopping_metric` to the per-solve `KrylovSolveMechanism` receipt.
-- [ ] **3.2** Compare near-worst solves on the full **action key** — category + stopping metric +
+- [x] **3.1** Add `stopping_metric` to the per-solve `KrylovSolveMechanism` receipt.
+- [x] **3.2** Compare near-worst solves on the full **action key** — category + stopping metric +
       tolerance source — not category alone.
-- [ ] **3.3** Emit `attribution_specific_layer` beside the primary one.
-- [ ] **3.4** Add `worst_krylov_stopping_metric` (P1-1) so a stage-worst objective mismatch can name
+- [x] **3.3** Emit `attribution_specific_layer` beside the primary one.
+- [x] **3.4** Add `worst_krylov_stopping_metric` (P1-1) so a stage-worst objective mismatch can name
       its layer instead of `stop_metric_unrecorded_for_worst_solve`.
-- [ ] **3.5** Fixtures: `NearWorst_SameCategoryDifferentToleranceSource_IsActionAmbiguous`,
+- [x] **3.5** Fixtures: `NearWorst_SameCategoryDifferentToleranceSource_IsActionAmbiguous`,
       `NearWorst_SameCategoryDifferentStoppingMetric_IsActionAmbiguous`,
       `SpecificLayer_IsPermutationInvariant`, `AttributionSpecificLayer_IsEmitted`.
+
+**Phase 3 result.** The tie check compares the **derived layer**, not the raw provenance fields.
+R13.20 narrowed it from field equality to *category* equality on the ground that the classifier does
+not branch on `tolerance_source` — right about the category, wrong about the consequence:
+`specific_layer` is derived from the tolerance source (forcing) or the stopping metric (objective
+mismatch), and the stage-worst receipt updates on a strict `>`, so on an exact tie the **first
+arrival's** provenance is what the emitter reads.
+
+Comparing the layer keeps R13.20's gain rather than reverting it: two tied solves that both imply
+`KrylovStagnated` derive **no** specific layer, so differing provenance does not make them
+ambiguous and the refusal still does not fire toward the operator/split layer for a difference that
+cannot change the answer. Fixtures pin both directions.
+
+`worst_krylov_stopping_metric` (P1-1) is added as the stage-worst twin of `exit_stopping_metric`,
+so a four-way objective mismatch names its layer instead of `stop_metric_unrecorded_for_worst_solve`
+— fail-closed before, actionable now. And `attribution_specific_layer` is emitted beside the
+primary one, so a row whose *attribution* is forcing-limited no longer loses the source-specific
+place to work.
 
 ### Phase 4 — P1-2: one finalizer for every return path
 

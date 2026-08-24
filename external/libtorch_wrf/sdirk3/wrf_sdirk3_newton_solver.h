@@ -483,6 +483,11 @@ public:
         bool  worst_krylov_D_reached = false;
         bool  worst_krylov_S_reached = false;
         int   worst_krylov_tolerance_source = 0;   // KrylovToleranceSource
+        // R13.21 (external review P1-1): the metric the STAGE-WORST solve stopped on. The exit
+        // receipt has `exit_stopping_metric`; without its stage-worst twin an objective mismatch
+        // reached through the four-way could only emit `stop_metric_unrecorded_for_worst_solve`
+        // -- fail-closed, but never actionable.
+        int   worst_krylov_stopping_metric = 0;    // KrylovStoppingMetric
         bool  worst_krylov_budget_exhausted = false;
         // R13.20 (numerics referee, claim 7.4): the worst solve's ratio in the SAME coordinate
         // the frozen A/B ladder reports (rho_D, b-normalised), so the ladder and the production

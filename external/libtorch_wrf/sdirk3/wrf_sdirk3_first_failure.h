@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <vector>
 #include <limits>
+#include <cstring>
 
 namespace wrf {
 namespace sdirk3 {
@@ -306,6 +307,10 @@ struct KrylovSolveMechanism {
     bool S_reached = false;
     bool budget_exhausted = false;
     int  tolerance_source = 0;      // KrylovToleranceSource
+    // R13.21 (external review P1-1 / P0-3): the metric this solve STOPPED on. Without it a
+    // stage-worst objective mismatch cannot name its layer, and two tied solves that stopped on
+    // different metrics look identical to the tie check.
+    int  stopping_metric = 0;       // KrylovStoppingMetric
 
     // R13.20 (round 9, R9-6): compares the CATEGORY the two receipts imply, not their fields.
     // The predecessor also compared `tolerance_source` -- tolerance PROVENANCE, which the
@@ -316,6 +321,24 @@ struct KrylovSolveMechanism {
     // misrouting the four-way was built to stop.
     bool implies_same_category_as(const KrylovSolveMechanism& o) const;
 };
+
+// R13.21 (external review P0-3): the layer the record would emit for ONE solve's receipt.
+// Defined after the layer maps; declared here because the tie reducer below needs it.
+inline const char* krylov_specific_layer_for(const KrylovSolveMechanism& m);
+
+// R13.21 (external review P0-3): TWO SOLVES ARE INTERCHANGEABLE ONLY IF THEY SEND YOU TO THE SAME
+// PLACE. R13.20 narrowed the tie check from field equality to CATEGORY equality, on the ground
+// that the classifier does not branch on `tolerance_source`. That was right about the category and
+// wrong about the consequence: `specific_layer` for `KrylovForcingTermLimited` IS derived from the
+// tolerance source, and for `KrylovObjectiveMismatch` from the stopping metric -- and the
+// stage-worst receipt is updated on a STRICT `>`, so on an exact tie the first arrival's source is
+// what the emitter reads. Category was order-invariant; the next place to work was not.
+//
+// Comparing the DERIVED LAYER rather than the raw fields keeps R13.20's gain: two solves that both
+// imply `KrylovStagnated` derive no specific layer, so a differing tolerance source does not make
+// them ambiguous and the refusal does not fire toward the operator/split layer for a difference
+// that cannot change the answer.
+inline bool implies_same_action_as(const KrylovSolveMechanism& a, const KrylovSolveMechanism& b);
 
 // The category ONE solve's receipt implies. Defined once and called from both the tie-set
 // ambiguity check and the classifier's four-way, so the two cannot drift apart -- the drift the
@@ -341,7 +364,7 @@ inline bool near_worst_mechanism_ambiguous(const std::vector<KrylovSolveMechanis
     for (const auto& x : solves) {
         if (!(x.progress >= worst * (1.0 - kNearWorstTieBand))) continue;
         if (first == nullptr) { first = &x; continue; }
-        if (!first->implies_same_category_as(x)) return true;
+        if (!implies_same_action_as(*first, x)) return true;
     }
     return false;
 }
@@ -424,6 +447,29 @@ inline const char* krylov_forcing_layer_for(KrylovToleranceSource s) {
         case KrylovToleranceSource::Other:           return "inner_tolerance_source_unrecorded";
     }
     return "inner_tolerance_source_unrecorded";
+}
+
+// R13.21 (external review P0-3): the definitions promised above, now that both layer maps exist.
+inline const char* krylov_specific_layer_for(const KrylovSolveMechanism& m) {
+    switch (krylov_mechanism_category(m)) {
+        case StageFailure::KrylovForcingTermLimited:
+            return krylov_forcing_layer_for(
+                static_cast<KrylovToleranceSource>(m.tolerance_source));
+        case StageFailure::KrylovObjectiveMismatch:
+            return krylov_stopping_layer_for(
+                static_cast<KrylovStoppingMetric>(m.stopping_metric));
+        default:
+            // Every other category names a layer from the category alone, so two solves that
+            // imply it are interchangeable whatever their provenance fields say.
+            return "n/a";
+    }
+}
+
+inline bool implies_same_action_as(const KrylovSolveMechanism& a, const KrylovSolveMechanism& b) {
+    if (krylov_mechanism_category(a) != krylov_mechanism_category(b)) return false;
+    const char* la = krylov_specific_layer_for(a);
+    const char* lb = krylov_specific_layer_for(b);
+    return la == lb || std::strcmp(la, lb) == 0;
 }
 
 inline const char* krylov_tolerance_source_name(KrylovToleranceSource s) {
@@ -533,6 +579,8 @@ struct StageFailureSignals {
     bool   worst_krylov_D_reached = false;
     bool   worst_krylov_S_reached = false;
     KrylovToleranceSource worst_krylov_tolerance_source = KrylovToleranceSource::Unknown;
+    // R13.21 (external review P1-1): the stage-worst twin of `exit_stopping_metric`.
+    KrylovStoppingMetric worst_krylov_stopping_metric = KrylovStoppingMetric::Unknown;
     bool   worst_krylov_budget_exhausted = false;
     // R13.20 (claim 7.4): the worst solve in the ladder's coordinate (rho_D, b-normalised) and in
     // the success coordinate (rho_S). Reported, not classified on.

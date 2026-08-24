@@ -1463,6 +1463,59 @@ int main() {
               "verdict is about the entry return, not about S alone");
     }
 
+    {
+        // R13.21 (external review P0-3): two solves are interchangeable only if they send you to
+        // THE SAME PLACE. R13.20 narrowed the tie check to CATEGORY equality, which was right
+        // about the category and wrong about the consequence -- `specific_layer` is derived from
+        // the tolerance source (forcing) or the stopping metric (objective mismatch), and the
+        // stage-worst receipt updates on a strict `>`, so on an exact tie the FIRST ARRIVAL's
+        // provenance is what the emitter reads. Category was order-invariant; the next place to
+        // work was not.
+        using wrf::sdirk3::KrylovSolveMechanism;
+        using wrf::sdirk3::near_worst_mechanism_ambiguous;
+        using wrf::sdirk3::krylov_specific_layer_for;
+        using wrf::sdirk3::KrylovToleranceSource;
+        using wrf::sdirk3::KrylovStoppingMetric;
+
+        KrylovSolveMechanism F1; F1.progress = 0.99; F1.S_reached = true; F1.met_tolerance = true;
+        F1.tolerance_source = static_cast<int>(KrylovToleranceSource::EwEtaClamp);
+        KrylovSolveMechanism F2 = F1;
+        F2.tolerance_source = static_cast<int>(KrylovToleranceSource::InnRamp);
+        check(krylov_mechanism_category(F1) == krylov_mechanism_category(F2) &&
+              near_worst_mechanism_ambiguous({F1, F2}) &&
+              near_worst_mechanism_ambiguous({F2, F1}),
+              "two tied forcing-limited solves whose tolerance came from DIFFERENT knobs agree on "
+              "the category and disagree on the layer, so they are action-ambiguous in either "
+              "order -- R13.20 called them interchangeable and the emitted layer depended on "
+              "arrival order");
+        check(std::string(krylov_specific_layer_for(F1)) == "ew_eta_min_max_clamp" &&
+              std::string(krylov_specific_layer_for(F2)) == "inn_tolerance_ramp",
+              "...and those are the two different places the record would have sent the work");
+
+        KrylovSolveMechanism M1; M1.progress = 0.99; M1.D_reached = true; M1.S_reached = false;
+        M1.met_tolerance = true;
+        M1.stopping_metric = static_cast<int>(KrylovStoppingMetric::BlockD);
+        KrylovSolveMechanism M2 = M1;
+        M2.stopping_metric = static_cast<int>(KrylovStoppingMetric::StageWRMS);
+        check(near_worst_mechanism_ambiguous({M1, M2}) && near_worst_mechanism_ambiguous({M2, M1}),
+              "and two tied objective mismatches that stopped on DIFFERENT metrics are ambiguous "
+              "too -- the layer is derived from the stopping metric there");
+
+        // The gain R13.20 bought must survive: a category that derives no specific layer is not
+        // made ambiguous by provenance that cannot change the answer.
+        KrylovSolveMechanism S1; S1.progress = 0.99;   // met nothing -> KrylovStagnated
+        S1.tolerance_source = static_cast<int>(KrylovToleranceSource::EwEtaClamp);
+        KrylovSolveMechanism S2 = S1;
+        S2.tolerance_source = static_cast<int>(KrylovToleranceSource::Base);
+        S2.stopping_metric = static_cast<int>(KrylovStoppingMetric::IdentityS);
+        check(!near_worst_mechanism_ambiguous({S1, S2}) && !near_worst_mechanism_ambiguous({S2, S1}),
+              "but two tied stagnations derive no specific layer, so differing provenance does NOT "
+              "make them ambiguous -- the refusal must not fire toward the operator/split layer "
+              "for a difference that cannot change where the work goes");
+        check(std::string(krylov_specific_layer_for(S1)) == "n/a",
+              "...which is exactly because that category names its layer from the category alone");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1479,7 +1532,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 127;
+    constexpr int expected_checks = 132;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

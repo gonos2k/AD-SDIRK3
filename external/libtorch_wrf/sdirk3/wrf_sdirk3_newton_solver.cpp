@@ -10119,6 +10119,7 @@ public:
                                 m.S_reached = gmres_result.S_tolerance_reached;
                                 m.budget_exhausted = budget_exhausted;
                                 m.tolerance_source = tol_source;
+                                m.stopping_metric = gmres_result.stopping_metric;
                                 stats_.krylov_mechanisms.push_back(m);
                                 stats_.near_worst_mechanism_ambiguous =
                                     wrf::sdirk3::near_worst_mechanism_ambiguous(
@@ -10147,6 +10148,7 @@ public:
                             stats_.worst_krylov_S_reached =
                                 gmres_result.S_tolerance_reached;
                             stats_.worst_krylov_tolerance_source = tol_source;
+                            stats_.worst_krylov_stopping_metric = gmres_result.stopping_metric;
                             stats_.worst_krylov_budget_exhausted = budget_exhausted;
                             // R13.20 (claim 7.4): the same solve in the LADDER's coordinate.
                             stats_.worst_krylov_rho_D = gmres_result.rho_D_final;
