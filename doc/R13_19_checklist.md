@@ -362,3 +362,36 @@ failing solve, and **ρ_S is the only one above 1** — which is exactly why it,
   single-variable** (the namelist clamp and the EW scale both moved).
 - **Claim 6** — the retraction split is right and can be stated *more* strongly than the doc does.
 - **Claim 7** — the uncalibrated `1e-3` excitation floor, and **n = 1 everywhere**.
+
+---
+
+## P1-F answered — the `InitialConverged` path is not merely unexercised, it is unreachable here
+
+Round 8's P1-F: `krylov_solves_trivial = 0` in every measurement, so "verdict and values unchanged"
+was never evidence that the `InitialConverged` work was safe. I forced the branch with a **loose
+stage tolerance** (`sdirk3_stage2_krylov_tol = 0.999`, which also bypasses Eisenstat–Walker since
+`apply_ew` returns early when the tolerance is overridden), dt=600, 12-iteration budget:
+
+```
+"Initial residual already converged" occurrences: 0
+krylov_solves_trivial=0   gmres_tolerance_reached=4   krylov_solves_vs_r0=5
+category=krylov_diverged  exit_rho_stop=1.005  exit_rho_S=1.021  worst_krylov_rel_vs_r0=1
+```
+
+**The branch still did not fire, and the reason is structural.** It is gated on
+`error_tensor < tol` at *entry*, i.e. `ρ(r₀) < tol`. With `x₀ = 0`, `r₀ = b` and that ratio is
+**exactly 1**, so no admissible tolerance (`tol ≤ 1`) can open it. It can only open on a **good warm
+start** — and on this case the warm start is *worse* than `‖b‖`: the campaign's own measurement is
+`rho0_S = 1.054`.
+
+**So the honest status of the `InitialConverged` work** — P0-1 (success/rel_error), P0-B
+(`met_tolerance`), P1-A (the unconditional total-failure flag), P1-B (`gmres_tolerance_reached`) —
+is: **correct by construction and by contract test, and not exercised by any run on this case,
+because this case cannot reach the path.** They are insurance against a regime this configuration
+does not enter, not fixes to observed behaviour. That is a weaker claim than "verified", and it is
+the one the evidence supports.
+
+*Incidental, and worth keeping:* the loose-tolerance run is a different regime — 4 solves reach
+tolerance, the exit ratios sit just above 1 (`ρ_stop = 1.005`, `ρ_S = 1.021`) and the category
+becomes `krylov_diverged`. It also exercises the P1-B counting change (`gmres_tolerance_reached=4`)
+without the D-only case, so that change is confirmed not to have broken ordinary counting.
