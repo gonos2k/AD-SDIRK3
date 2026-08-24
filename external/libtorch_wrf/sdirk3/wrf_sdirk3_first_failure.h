@@ -765,6 +765,43 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
            r.stopping_metric >= 0 && r.arnoldi_spent >= 0 && r.arnoldi_allowed > 0;
 }
 
+// R13.21 (external review section 8): HOW CLOSE WAS THE CALL?
+//
+// The no-progress boundary is a DECISION BOUNDARY, not a mechanism classifier, and this campaign
+// measured how sharp that is: on the stage-3 budget sweep `vs_r0` read 0.907 at one setting and
+// 0.8993 at the next -- a 0.8 % difference in the ratio -- and the attribution flipped
+// `krylov_stagnated` <-> `newton_stagnated`, taking the layer with it, while the primary event was
+// stage-3 `zero_update_after_total_failure` in both. `attribution_basis` already exposes WHICH
+// side of the boundary a row landed on. This says HOW FAR from it.
+//
+// A row inside the band is not wrong -- the classifier still answers -- but its specific layer is
+// not a safe work order for another code layer, so `threshold_sensitive` gates that.
+inline constexpr double kThresholdSensitivityBand = 0.02;
+
+struct ThresholdProximity {
+    double threshold = -1.0;   // the boundary actually applied
+    double distance = 0.0;     // progress - threshold; signed, so the side is readable
+    bool   sensitive = false;  // |distance| < band
+    bool   measured_ = false;  // false when no r0 progress was measured at all
+};
+
+inline ThresholdProximity threshold_proximity(double progress, double threshold,
+                                              double band = kThresholdSensitivityBand) {
+    ThresholdProximity t;
+    if (!measured(progress) || !(threshold > 0.0)) return t;   // measured_ stays false
+    t.measured_ = true;
+    t.threshold = threshold;
+    t.distance = progress - threshold;
+    t.sensitive = (t.distance < 0.0 ? -t.distance : t.distance) < band;
+    return t;
+}
+
+// A specific layer is a work order. Do not issue one from a verdict that a 1 % change in the
+// ratio would have reversed.
+inline bool threshold_permits_specific_layer(const ThresholdProximity& t) {
+    return !(t.measured_ && t.sensitive);
+}
+
 // R13.20 (round 9, R9-2): WHICH BODY OF EVIDENCE the returned category came from.
 //
 // `attribution_from_metric` used to be inferred AFTER the fact, from `measured(worst_..._vs_r0)
@@ -845,6 +882,9 @@ struct StageDiagnosis {
     // R13.21 (external review P0-2): what the EXIT solve's receipt says about why the loop ended,
     // kept beside the event instead of replacing it. `None` = the receipt cannot support a subtype.
     StageFailure exit_attribution = StageFailure::None;
+    // R13.21 (external review section 8): how close the r0 progress was to the boundary that
+    // decided the attribution.
+    ThresholdProximity threshold = {};
     StageDecisionBasis attribution_basis   = StageDecisionBasis::NotRecorded;
     // R13.19 SELF-REVIEW (round 8, P0-C): WHICH solve's receipt decided the category. The
     // emitter derived `specific_layer` from the EXIT solve's source/metric while the four-way
@@ -1175,6 +1215,15 @@ inline StageDiagnosis stage_diagnosis_of(const StageFailureSignals& s) {
         (d.primary_event_basis == StageDecisionBasis::ExitReceipt);
     // R13.21 (P0-2): the subtype the zero-update branch used to return as the event.
     d.exit_attribution = krylov_exit_attribution_of(s);
+    // R13.21 (section 8): the same threshold resolution the classifier applies, so the record
+    // cannot report a distance from a boundary other than the one that was used.
+    {
+        const double applied =
+            (s.krylov_threshold_observed && s.krylov_no_progress_threshold > 0.0 &&
+             s.krylov_no_progress_threshold <= 1.0)
+                ? s.krylov_no_progress_threshold : kKrylovNoProgressVsR0;
+        d.threshold = threshold_proximity(s.worst_krylov_rel_error_vs_r0, applied);
+    }
     return d;
 }
 

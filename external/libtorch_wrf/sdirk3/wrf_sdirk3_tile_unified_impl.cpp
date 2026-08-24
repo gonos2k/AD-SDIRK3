@@ -9232,14 +9232,24 @@ vertical_coefficients:
                         (diag.primary_event_basis == StageDecisionBasis::ExitReceipt);
                     const bool layer_from_worst =
                         (diag.primary_event_basis == StageDecisionBasis::KrylovR0Receipt);
-                    const char* specific_layer = "n/a";
-                    if (first == wrf::sdirk3::StageFailure::KrylovForcingTermLimited) {
+                    // R13.21 (external review section 8): a specific layer is a WORK ORDER, and
+                    // this campaign measured the boundary flipping the category on a 0.8 % change
+                    // in the ratio (stage-3 sweep: vs_r0 0.907 vs 0.8993). A verdict that close to
+                    // the boundary still answers, but its specific layer must not be issued as an
+                    // instruction to another code layer.
+                    const bool layer_allowed =
+                        wrf::sdirk3::threshold_permits_specific_layer(diag.threshold);
+                    const char* specific_layer =
+                        layer_allowed ? "n/a" : "threshold_sensitive_no_specific_layer";
+                    if (layer_allowed &&
+                        first == wrf::sdirk3::StageFailure::KrylovForcingTermLimited) {
                         specific_layer =
                             layer_from_worst
                                 ? wrf::sdirk3::krylov_forcing_layer_for(
                                       sig.worst_krylov_tolerance_source)
                                 : "inner_tolerance_source_unrecorded";
-                    } else if (first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
+                    } else if (layer_allowed &&
+                               first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
                         // R13.21 (external review P0-2): ONE arm now. This category can only be
                         // returned by the r0 four-way -- the exit-receipt block returns the EVENT
                         // and carries its subtype as `exit_attribution`, whose layer is emitted
@@ -9265,15 +9275,18 @@ vertical_coefficients:
                     // emitter derived one only for the primary category, so a row reading
                     // `attribution=krylov_forcing_term_limited` lost the source-specific place to
                     // work and printed only the category-level layer.
-                    const char* attribution_specific_layer = "n/a";
-                    if (diag.attribution == wrf::sdirk3::StageFailure::KrylovForcingTermLimited) {
+                    const char* attribution_specific_layer =
+                        layer_allowed ? "n/a" : "threshold_sensitive_no_specific_layer";
+                    if (layer_allowed &&
+                        diag.attribution == wrf::sdirk3::StageFailure::KrylovForcingTermLimited) {
                         attribution_specific_layer =
                             (diag.attribution_basis == StageDecisionBasis::KrylovR0Receipt)
                                 ? wrf::sdirk3::krylov_forcing_layer_for(
                                       sig.worst_krylov_tolerance_source)
                                 : "inner_tolerance_source_unrecorded";
-                    } else if (diag.attribution ==
-                               wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
+                    } else if (layer_allowed &&
+                               diag.attribution ==
+                                   wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
                         attribution_specific_layer =
                             (diag.attribution_basis == StageDecisionBasis::KrylovR0Receipt)
                                 ? wrf::sdirk3::krylov_stopping_layer_for(
@@ -9327,6 +9340,13 @@ vertical_coefficients:
                               << " exit_attribution_layer=" << exit_attr_layer
                               // R13.21 (P0-3): the attribution's own specific layer.
                               << " attribution_specific_layer=" << attribution_specific_layer
+                              // R13.21 (section 8): the boundary that was applied, the signed
+                              // distance to it, and whether that distance is small enough that a
+                              // specific layer would be an unsafe work order.
+                              << " threshold_value=" << diag.threshold.threshold
+                              << " threshold_distance=" << diag.threshold.distance
+                              << " threshold_measured=" << (diag.threshold.measured_ ? 1 : 0)
+                              << " threshold_sensitive=" << (diag.threshold.sensitive ? 1 : 0)
                               // R13.20: and the basis itself, so a reader can see WHICH body of
                               // evidence answered without inferring it from the category.
                               // R13.20 (numerics referee, claim 1): does the Taylor-defect

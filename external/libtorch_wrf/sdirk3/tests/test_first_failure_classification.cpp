@@ -1555,6 +1555,44 @@ int main() {
               "is why a terminal solve ending there fell back to the generic event");
     }
 
+    {
+        // R13.21 (external review section 8): the no-progress boundary is a DECISION boundary, not
+        // a mechanism classifier. Measured on this campaign's own stage-3 budget sweep: vs_r0
+        // 0.907 at one setting and 0.8993 at the next -- 0.8 % apart -- flipped the attribution
+        // krylov_stagnated <-> newton_stagnated and the layer with it, while the primary event was
+        // stage-3 zero_update_after_total_failure in both.
+        using wrf::sdirk3::threshold_proximity;
+        using wrf::sdirk3::threshold_permits_specific_layer;
+
+        const auto near_above = threshold_proximity(0.907, 0.90);
+        const auto near_below = threshold_proximity(0.8993, 0.90);
+        check(near_above.measured_ && near_below.measured_ &&
+              near_above.distance > 0.0 && near_below.distance < 0.0,
+              "the distance is SIGNED, so the record says which side of the boundary the row "
+              "landed on as well as how far");
+        check(near_above.sensitive && near_below.sensitive,
+              "and both readings from the real sweep are inside the sensitivity band -- the flip "
+              "between them is a boundary crossing, not a change of mechanism");
+        check(!threshold_permits_specific_layer(near_above) &&
+              !threshold_permits_specific_layer(near_below),
+              "so neither may issue a specific layer: a work order that a 1 % change in the ratio "
+              "would have reversed is not a work order");
+
+        const auto far = threshold_proximity(0.9941, 0.90);
+        check(far.measured_ && !far.sensitive && threshold_permits_specific_layer(far),
+              "the dt=600 central record at 0.9941 is far from the boundary and keeps its layer");
+
+        const auto unmeasured = threshold_proximity(-1.0, 0.90);
+        check(!unmeasured.measured_ && threshold_permits_specific_layer(unmeasured),
+              "and a row with no r0 progress at all is not 'threshold sensitive' -- absence of a "
+              "measurement must not be reported as a near-boundary verdict");
+
+        const auto custom = threshold_proximity(0.86, 0.85);
+        check(custom.threshold == 0.85 && custom.sensitive,
+              "the band is applied to the threshold ACTUALLY used, not to the header constant -- "
+              "the boundary is overridable per run and the distance must follow it");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1571,7 +1609,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 139;
+    constexpr int expected_checks = 145;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

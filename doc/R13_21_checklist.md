@@ -145,10 +145,25 @@ which is why a terminal solve ending there fell back to the generic event.
 
 ### Phase 5 — §8: the threshold's sensitivity on the record
 
-- [ ] **5.1** Emit `threshold_value`, `threshold_distance`, `threshold_sensitive`.
-- [ ] **5.2** A threshold-sensitive attribution must not route to a specific layer.
-- [ ] **5.3** Fixtures: `ThresholdDistance_IsEmitted`,
+- [x] **5.1** Emit `threshold_value`, `threshold_distance`, `threshold_sensitive`.
+- [x] **5.2** A threshold-sensitive attribution must not route to a specific layer.
+- [x] **5.3** Fixtures: `ThresholdDistance_IsEmitted`,
       `ThresholdSensitiveAttribution_DoesNotRouteToSpecificLayer`.
+
+**Phase 5 result.** `threshold_value`, `threshold_distance` (signed, so the side is readable),
+`threshold_measured` and `threshold_sensitive` are on the record, computed with the **same
+threshold resolution the classifier applies** — so the row cannot report a distance from a boundary
+other than the one used. A verdict inside the ±0.02 band no longer issues a specific layer:
+`specific_layer` and `attribution_specific_layer` both read
+`threshold_sensitive_no_specific_layer`, because a work order that a 1 % change in the ratio would
+reverse is not a work order. Absence of an r0 measurement is explicitly **not** reported as
+near-boundary.
+
+Fixtures use this campaign's own numbers: 0.907 and 0.8993 from the stage-3 sweep are both inside
+the band and both refused a layer, while 0.9941 from the dt=600 central record is not.
+
+**Verified live:** that record now reads `threshold_value=0.9 threshold_distance=0.09413
+threshold_measured=1 threshold_sensitive=0` — far outside the band, layer retained.
 
 ### Phase 6 — the experiments (after Phases 1–5 land)
 
