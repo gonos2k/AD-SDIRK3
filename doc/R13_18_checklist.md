@@ -58,10 +58,16 @@ Legend: **[DONE]** · **[OPEN]**
 
 ## Scientific wording to correct
 
-- [ ] τ_max = 0.2008 must not be called "≪ 1". The honest statement: no dominant first-order
+- [x] τ_max = 0.2008 must not be called "≪ 1". The honest statement: no dominant first-order
       Jacobian defect in the measured directions, but the **full-step nonlinear remainder is ~20 %
       of the linear response in the worst excited block**.
-- [ ] `rw` must be reported as **not constrained** by this direction, not as accurate.
+      **DONE in R13.20** — the referee (claim 1D) found the retraction had been chased into R13.8's
+      "moved outward" point but NOT into the τ wording, which is older and more load-bearing: it
+      still stood at `R13_8_checklist.md:747, 752, 1204, 1325`, including the premise sentence of
+      the budget experiment. All four corrected, and the worst excited block is named: it is `ru`.
+- [x] `rw` must be reported as **not constrained** by this direction, not as accurate.
+      **Already done** in P1-1 above and in the measured block below (`tauraw_rw = 0.207042`,
+      `excited_rw = 0`); only the checkbox was left unticked. Ticked in R13.20.
 
 ---
 
@@ -187,7 +193,20 @@ comparable across iterations) with the residual mapped back to physical coordina
 `stage_gate_E_metric_vs_solver_metrics`, for the state the receipt previously could not express:
 both metrics the solver was steered by satisfied, and the **gate's** metric not.
 
-**Measured, dt=600 stage 2 — the exit solve's three readings of the SAME residual:**
+**Measured, dt=600 stage 2 — the exit solve's three metric readings.**
+
+*Correction, twice — read both halves.* The numerics referee said "three readings of the **SAME**
+residual" was false because ρ_D and ρ_S use halo-zeroed copies while ρ_E used the raw
+`gmres_result.r_true`. **I accepted that without verifying it, and it is wrong** (round 9, R9-1):
+`zero_halo_regions` early-returns on `t.dim() < 3` and these are **1-D packed state vectors**, so
+*every* one of those calls is a no-op — the tree says so in three other places. ρ_D and ρ_S are
+produced by the **same** no-op and are equally raw. **There was never a halo asymmetry**, the
+"fix" I added was inert on every run, and it has been removed.
+
+What **does** survive from that exchange is the *denominator* half: the three ratios normalise by
+different `b`'s (D-scaled, unscaled, E-weighted), which is intrinsic to their being different
+metrics. So the honest wording is **"three metric readings of the exit solve"**, not "three readings
+of the same residual" — the residual is shared, the weightings and denominators are not.
 
 ```
 exit_rho_stop = 0.9297   (block_D — the metric the loop actually stopped on)
@@ -199,10 +218,19 @@ They span **0.86 to 1.05 on one residual — a 22 % spread**, and the ordering m
 
 - **ρ_S = 1.048 is the only one above 1**, and `> 1` is precisely what makes `total_failure_vs_b`
   fire — the flag that gates the `ZeroUpdateAfterTotalFailure` exit.
-- **ρ_E = 0.8618** says that in the gate's own metric this residual came down **14 %**.
+- ~~**ρ_E = 0.8618** says that in the gate's own metric this residual came down **14 %**.~~
+  **WITHDRAWN — a baseline error, and the fifth appearance of a class this campaign has caught four
+  times before.** ρ_E is `‖E⁻¹Sr‖ / ‖E⁻¹Sb‖` — normalised by **b**, not by **r₀** — so it cannot say
+  how far the residual "came down". This document's own table settles it: ‖r‖/‖b‖ asks *is the step
+  predicted to reduce the nonlinear residual*, ‖r‖/‖r₀‖ asks *did the solve move*, and **they
+  coincide only on a cold start**. The exit solve is Newton iteration 3, warm-started, with
+  `r₀/‖b‖ = 1.054` measured on this very case.
 
-So the solve that the ‖b‖ rule called a *total failure* had, in the metric the stage gate actually
-judges by, made real progress. That is round 7's P0-B as a measurement rather than an argument, and
+~~So the solve that the ‖b‖ rule called a *total failure* had, in the metric the stage gate actually
+judges by, made real progress.~~ **UNSUPPORTED** — progress is not what ρ_E measures, and (per
+R13.19 P0-2) ρ_E is not the stage gate's metric either. What survives is the weaker and still
+useful statement: **the three metrics disagree materially on the failing solve, and ρ_S is the only
+one above 1** — which is what makes it, and only it, trip the ‖b‖ total-failure rule. That is round 7's P0-B as a measurement rather than an argument, and
 it is the concrete reason the phrase "the linear solve produced nothing" had to be withdrawn.
 
 **What this does and does not establish.** It shows the three metrics disagree materially on the

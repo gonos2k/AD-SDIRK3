@@ -2,6 +2,7 @@
 #define WRF_SDIRK3_NEWTON_SOLVER_H
 
 #include <torch/torch.h>
+#include "wrf_sdirk3_first_failure.h"
 #include <limits>
 #include "wrf_sdirk3_state_layout.h"   // 9F.D93: THE packed-state layout
 #include "wrf_sdirk3_operator_contract.h"  // FrozenStageWeights: the stage gate's weighting
@@ -380,6 +381,11 @@ public:
         float final_residual;
         float initial_unscaled_residual;  // v20.14r39: L2 ||R_0|| at Newton iter 0 (for diagnostics)
         torch::Tensor initial_residual_vector;  // Detached packed R_0 used by WRMS stage-gate growth metric
+        // R13.20 (adversarial loop, iteration 3): DEAD FIELD -- an audit of all 80
+        // ConvergenceStats members against every reader and writer in the tree found this is the
+        // only one with NEITHER. Its option `compute_condition_number` (defaulting false) has no
+        // consumer either. Predates this campaign; left in place because the struct crosses the
+        // public API, and recorded here so the next audit does not re-derive it.
         float condition_number;
         bool converged;
         // R13.2 (first-failure classification): the signals that separate "Newton diverged"
@@ -446,6 +452,12 @@ public:
         // Solves excluded from the max because they did no work (converged on entry) or
         // finished (reached tolerance). Reported so "the max is over 0 solves" is legible.
         int   krylov_solves_trivial = 0;
+        // R13.20 (numerics referee, claim 1): the last Newton iteration the Taylor-defect probe
+        // actually measured. The probe sits inside `if (step_accepted)`, so it CANNOT sample an
+        // iteration whose step was rejected -- including the one that ends the loop at dt=600
+        // (`gmres_total_failure && ||dK|| < 1e-15`, no accepted step). Every tau on record is
+        // therefore from a step that SUCCEEDED, and nothing said so. -1 = the probe never ran.
+        int   taylor_probe_last_iter = -1;
         // R13.16 (round 6, R6-2): did the WORST-progress solve stop because it MET its
         // (adaptive, 0.9-capped) tolerance? "Poor progress because the operator is hard" and
         // "poor progress because the forcing term did not ask for more" route to opposite
@@ -461,7 +473,22 @@ public:
         bool  worst_krylov_S_reached = false;
         int   worst_krylov_tolerance_source = 0;   // KrylovToleranceSource
         bool  worst_krylov_budget_exhausted = false;
+        // R13.20 (numerics referee, claim 7.4): the worst solve's ratio in the SAME coordinate
+        // the frozen A/B ladder reports (rho_D, b-normalised), so the ladder and the production
+        // solve can be put on one axis. Both quantities were already computed; only the
+        // r0-coordinate one reached the record, which is why the one comparison that would say
+        // whether the ladder is representative of production was never on it.
+        float worst_krylov_rho_D = -1.0f;
+        float worst_krylov_rho_S = -1.0f;
         bool  all_near_worst_met_tolerance = true;
+        // R13.19 (P0-3): the running MAXIMUM over solves that met no tolerance. Paired with the
+        // worst it makes the tie predicate order-independent; a running boolean could not be.
+        double near_worst_unmet = -1.0;
+        // R13.19 SELF-REVIEW: the per-solve mechanism receipts, reduced in one pass at the end so
+        // the layer named does not depend on which solve arrived first. Newton budgets here are
+        // single digits, so this stays small; reset_per_solve value-initialises it with the rest.
+        std::vector<wrf::sdirk3::KrylovSolveMechanism> krylov_mechanisms;
+        bool  near_worst_mechanism_ambiguous = false;
         // R13.18 (deep review P0-4): the receipt of the solve that ENDED THE LOOP. The `worst_*`
         // fields belong to the largest-ratio solve in the stage, which need not be the one that
         // exited -- so a terminal failure could be subtyped from a different iteration's evidence.

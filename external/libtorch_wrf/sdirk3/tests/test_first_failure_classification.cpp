@@ -32,6 +32,24 @@ void check(bool ok, const std::string& what) {
     if (!ok) ++failures;
 }
 
+// R13.20 (adversarial loop, iteration 3): a pinned classification whose SIGNALS NO PRODUCTION
+// CALL SITE CAN EMIT. It still tests something real -- the classifier's precedence -- but it is
+// NOT coverage of production behaviour, and nothing here used to say so.
+//
+// That distinction is not pedantry: it is how a dead branch survived two increments. The
+// `krylov_budget_exhausted` fixture reached its clause from `all_near_worst_met_tolerance = true`
+// with `worst_krylov_met_tolerance = false`, a pair the solver cannot produce, so the category
+// read as covered in CI while never firing -- and it was even RENAMED, with a new fixture, on a
+// branch production never reached. Marking these in the OUTPUT, not just in a comment, means the
+// next reader sees the difference without re-deriving it.
+int reserved_count = 0;
+void check_reserved(bool ok, const std::string& what) {
+    ++check_count;
+    ++reserved_count;
+    std::cout << (ok ? "  ok(RESERVED) " : "  FAIL(RESERVED) ") << what << std::endl;
+    if (!ok) ++failures;
+}
+
 using wrf::sdirk3::first_failure_of;
 using wrf::sdirk3::StageFailure;
 using wrf::sdirk3::stage_failure_layer;
@@ -161,8 +179,13 @@ int main() {
     {
         auto s = ok_stage();
         s.state_published = false;
-        check(name_of(s) == "publish_rejected",
-              "everything converged and admissible, and the state was still not published");
+        check_reserved(name_of(s) == "publish_rejected",
+              "everything converged and admissible, and the state was still not published -- "
+              "RESERVED: the one production call site (handle_stage_gate) sets state_published "
+              "false unconditionally because it is upstream of any publish, AND is entered only "
+              "when the gate is already unhappy, so a converged stage there always answers "
+              "admissibility_rejected first. Kept for a publish-site classifier call that does "
+              "not exist yet");
     }
 
     // ---- THE CASE THE FIRST REAL RUN PRODUCED ----
@@ -670,15 +693,18 @@ int main() {
               "insufficient_evidence because it has no Newton residual to report");
         s.explicit_rhs_finite = true;
         s.gate_metric_ok = false;
-        check(name_of(s) == "explicit_admissibility_rejected",
-              "and its gate refusal is its own category, on its own layer");
+        check_reserved(name_of(s) == "explicit_admissibility_rejected",
+              "and its gate refusal is its own category, on its own layer -- RESERVED: reaching "
+              "it needs a FINITE explicit tendency with a bad gate metric, but a finite tendency "
+              "sets all three gate metrics to 0 and the gate early-returns");
         s.gate_metric_ok = true;
         s.state_published = false;
-        check(name_of(s) == "explicit_publish_rejected",
-              "as is its publish refusal");
+        check_reserved(name_of(s) == "explicit_publish_rejected",
+              "as is its publish refusal -- RESERVED, same reason as publish_rejected above");
         s.state_published = true;
-        check(name_of(s) == "none",
-              "a clean explicit stage is clean -- the branch must not manufacture a failure");
+        check_reserved(name_of(s) == "none",
+              "a clean explicit stage is clean -- the branch must not manufacture a failure. "
+              "RESERVED: the gate is not entered at all when nothing is wrong");
     }
     {
         StageFailureSignals s;
@@ -688,6 +714,35 @@ int main() {
         check(name_of(s) == "insufficient_evidence",
               "an explicit stage whose RHS was never measured is unmeasured, not finite -- "
               "absence of a measurement must not become a finding here either");
+        // R13.20 (adversarial loop, iteration 2): the PRODUCER-REACHABLE explicit failure. The
+        // gate fires on a non-finite explicit tendency by setting converged=false AND all three
+        // metrics to infinity, so the classifier sees `gate_metric_ok = false` alongside
+        // `explicit_rhs_finite = false` -- and the RHS answer must win, because it is the earlier
+        // cause. Until R13.20 nothing produced these signals and this returned
+        // `insufficient_evidence` on every run.
+        {
+            StageFailureSignals e;
+            e.signals_from_stage = 1; e.classifying_stage = 1;
+            e.is_explicit_stage = true;
+            e.explicit_rhs_measured = true;
+            e.explicit_rhs_finite = false;
+            e.gate_metric_ok = false;      // what the infinite metrics produce at the gate
+            e.state_published = false;     // the gate is upstream of any publish
+            check(name_of(e) == "explicit_rhs_not_finite",
+                  "a non-finite explicit tendency is reported AS THAT, not as the admissibility "
+                  "or publish rejection that the same signals also satisfy -- the RHS is the "
+                  "earlier cause, and before R13.20 this stage was never gated at all");
+        }
+        // R13.20: and the explicit stage's own gates are their OWN evidence class, not the
+        // implicit machinery's preconditions -- the record must not label them `precondition`.
+        const auto dx = wrf::sdirk3::stage_diagnosis_of(s);
+        check(dx.primary_event_basis == wrf::sdirk3::StageDecisionBasis::ExplicitStageGate &&
+              std::string(wrf::sdirk3::stage_decision_basis_name(
+                  wrf::sdirk3::StageDecisionBasis::ExplicitStageGate)) == "explicit_stage_gate",
+              "an explicit-stage verdict names the explicit-stage gate as its basis");
+        check(!dx.attribution_from_metric && !dx.decided_by_exit_receipt,
+              "...and claims neither r0 metric evidence nor an exit receipt, neither of which "
+              "an explicit stage has");
     }
 
     {
@@ -802,9 +857,24 @@ int main() {
               "D reached and S not is neither a stall (the solve worked) nor a forcing-term "
               "problem (tightening eta does not align two objectives) -- and it is exactly the "
               "InternalConvergenceStop state the round-6 rule sent back to krylov_stagnated");
+        // R13.19 (P0-4): the category's layer is metric-NEUTRAL, and the specific one is derived
+        // from the metric the solve actually stopped on -- it used to say "D" while the WRMS
+        // experiment makes the satisfied metric E^-1 S at the Newton linearization point.
         check(std::string(stage_failure_layer(StageFailure::KrylovObjectiveMismatch)) ==
-                  "krylov_objective_D_vs_newton_merit",
-              "and its layer names the D objective against the Newton merit, not the operator");
+                  "krylov_stop_metric_vs_newton_merit",
+              "the category's layer names the stop metric against the Newton merit without "
+              "asserting WHICH metric");
+        check(std::string(wrf::sdirk3::krylov_stopping_layer_for(
+                  wrf::sdirk3::KrylovStoppingMetric::StageWRMS)) ==
+                  "newton_WRMS_E_vs_newton_merit" &&
+              std::string(wrf::sdirk3::krylov_stopping_layer_for(
+                  wrf::sdirk3::KrylovStoppingMetric::BlockD)) ==
+                  "block_D_vs_newton_merit" &&
+              std::string(wrf::sdirk3::krylov_stopping_layer_for(
+                  wrf::sdirk3::KrylovStoppingMetric::Unknown)) ==
+                  "stop_metric_unrecorded",
+              "...and the RECORDED metric selects the specific one, with an unrecorded metric "
+              "saying so rather than defaulting to block D");
 
         s.worst_krylov_D_reached = true; s.worst_krylov_S_reached = true;
         check(name_of(s) == "krylov_forcing_term_limited",
@@ -813,8 +883,12 @@ int main() {
 
         s.worst_krylov_D_reached = false; s.worst_krylov_S_reached = false;
         s.worst_krylov_met_tolerance = false;
+        s.all_near_worst_met_tolerance = false;   // R13.20: what the producer emits alongside
         s.worst_krylov_budget_exhausted = true;
-        check(name_of(s) == "krylov_budget_limited",
+        // R13.19 (P1-2): the category states the FACT (the budget ran out), not the CAUSE
+        // ("still descending when cut off"), which nothing measures -- a solve flat from its
+        // first restart reaches this branch identically.
+        check(name_of(s) == "krylov_budget_exhausted",
               "neither tolerance met and the budget gone is a solve cut off while still "
               "descending -- the inner budget, not the operator");
 
@@ -832,11 +906,50 @@ int main() {
         s.worst_krylov_rel_error_vs_r0 = 0.99;
         s.worst_krylov_D_reached = true;
         s.worst_krylov_met_tolerance = true;
-        s.all_near_worst_met_tolerance = false;      // another solve tied and met nothing
+        // R13.20 (round 9, R9-6 self-review): the refusal is expressed by the signal that means
+        // TIE DISAGREEMENT. A tied solve that met nothing implies `krylov_stagnated` while this
+        // worst receipt implies `krylov_objective_mismatch`, so the producer sets this flag.
+        s.near_worst_mechanism_ambiguous = true;
         check(name_of(s) == "krylov_stagnated",
-              "when a solve tied at the worst ratio and met NO tolerance, the forcing-term and "
-              "objective-mismatch readings are refused -- with eta saturated at its cap a tie is "
-              "not a remote case, and a strict `>` let whichever arrived first name the layer");
+              "when a solve tied at the worst ratio implies a DIFFERENT category, the "
+              "forcing-term and objective-mismatch readings are refused -- with eta saturated at "
+              "its cap a tie is not a remote case, and a strict `>` let whichever arrived first "
+              "name the layer");
+        // ...and the aggregate `all_near_worst_met_tolerance` no longer decides anything. It is
+        // false on EVERY stage whose worst solve met nothing -- including stages where the tied
+        // solves agree perfectly -- and while it gated this clause it made two of the four
+        // answers below unreachable in production.
+        s.near_worst_mechanism_ambiguous = false;
+        s.all_near_worst_met_tolerance = false;
+        check(name_of(s) == "krylov_objective_mismatch",
+              "an UNMET tie that agrees on the mechanism is not ambiguous, and the specific "
+              "category is named rather than refused");
+    }
+    {
+        // R13.20 (round 9, R9-6 self-review): `krylov_budget_exhausted` from a state the SOLVER
+        // CAN EMIT. The fixture that used to pin it set `worst_krylov_met_tolerance = false`
+        // while leaving `all_near_worst_met_tolerance` at its `true` default -- and the producer
+        // cannot emit that pair, because `near_worst_all_met` compares `worst_unmet` against
+        // `worst` and those are the same number when the strictly-worst solve is the unmet one.
+        // So the old guard returned `krylov_stagnated` before this clause on every real record,
+        // and the category read as covered while never firing.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.krylov_solves_measured_vs_r0 = 4;
+        s.accepted_steps = 4;
+        s.worst_krylov_rel_error_vs_r0 = 0.99;
+        s.worst_krylov_D_reached = false;
+        s.worst_krylov_S_reached = false;
+        s.worst_krylov_met_tolerance = false;
+        s.all_near_worst_met_tolerance = false;   // what the producer ACTUALLY emits here
+        s.worst_krylov_budget_exhausted = true;
+        check(name_of(s) == "krylov_budget_exhausted",
+              "neither tolerance met and the budget gone is the inner budget, not the operator -- "
+              "and it is now reachable from the signal combination the solver produces");
+        s.worst_krylov_budget_exhausted = false;
+        check(name_of(s) == "krylov_stagnated",
+              "and only when it met nothing and was not cut off is the operator implicated");
     }
 
     // R13.17 (external review P0-3): the loop's OWN exit reason outranks the reconstruction.
@@ -920,28 +1033,52 @@ int main() {
             for (const auto& x : v) st = near_worst_accumulate(st, x.p, x.met);
             return st;
         };
+        auto all_met_of = [&](std::vector<Solve> v) {
+            return wrf::sdirk3::near_worst_all_met(fold(std::move(v)));
+        };
         const Solve A{0.90, false}, B{0.99, true};
         const auto ab = fold({A, B});
         const auto ba = fold({B, A});
-        check(ab.all_met == ba.all_met && ab.worst == ba.worst && ab.all_met,
+        check(all_met_of({A, B}) == all_met_of({B, A}) && ab.worst == ba.worst &&
+              all_met_of({A, B}),
               "A(0.90,not-met) then B(0.99,met) must equal B then A -- the streaming version gave "
               "false one way and true the other, and that verdict decides whether the "
               "forcing-term and objective-mismatch categories may be read at all");
 
         // A strictly worse solve outside the band REPLACES the set; it does not inherit it.
-        check(fold({{0.50, false}, {0.99, true}}).all_met,
+        check(all_met_of({{0.50, false}, {0.99, true}}),
               "a clearly-better earlier solve is not in the final tie set and must not poison it");
         // ...and a solve inside the band JOINS it.
-        check(!fold({{0.9895, false}, {0.99, true}}).all_met,
+        check(!all_met_of({{0.9895, false}, {0.99, true}}),
               "a solve within the tie band of the final worst IS in the set, so one that met no "
               "tolerance makes the set ambiguous");
         // Order-independence of the joining case too.
-        check(fold({{0.9895, false}, {0.99, true}}).all_met ==
-                  fold({{0.99, true}, {0.9895, false}}).all_met,
+        check(all_met_of({{0.9895, false}, {0.99, true}}) ==
+                  all_met_of({{0.99, true}, {0.9895, false}}),
               "and that holds in either arrival order");
+        // R13.19 (precision review P0-3): the THREE-ELEMENT CHAIN, all six permutations.
+        // "Near" is NON-TRANSITIVE -- A~B and B~C with A!~C -- so a running boolean cannot
+        // retract A once C arrives. The R13.18 fold gave `false` on two of these six and `true`
+        // on four; the correct answer is `true`, since the final worst is 1.0 and A at 0.9985
+        // sits outside the band (>= 0.999).
+        {
+            const Solve X{0.9985, false}, Y{0.9994, true}, Z{1.0000, true};
+            const std::vector<std::vector<Solve>> perms = {
+                {X, Y, Z}, {X, Z, Y}, {Y, X, Z}, {Y, Z, X}, {Z, X, Y}, {Z, Y, X}};
+            bool all_true = true, agree = true;
+            const bool first = all_met_of(perms[0]);
+            for (const auto& v : perms) {
+                const bool r = all_met_of(v);
+                agree = agree && (r == first);
+                all_true = all_true && r;
+            }
+            check(agree && all_true,
+                  "all six permutations of a three-element chain agree, and agree on TRUE -- the "
+                  "solve that met nothing is outside the final tie band, and a running boolean "
+                  "could not retract it because near-ness is not transitive");
+        }
         // A single solve is its own set.
-        check(near_worst_accumulate(NearWorstFold{}, 0.99, false).all_met == false &&
-              near_worst_accumulate(NearWorstFold{}, 0.99, true).all_met == true,
+        check(!all_met_of({{0.99, false}}) && all_met_of({{0.99, true}}),
               "the first solve starts the set rather than inheriting the `true` default");
     }
 
@@ -985,20 +1122,290 @@ int main() {
         s.exit_krylov_iter = 2;
         s.exit_D_reached = true; s.exit_S_reached = true;
         s.exit_rho_E_final = 0.7; s.exit_E_reached = false;
-        check(name_of(s) == "stage_gate_metric_mismatch",
+        // R13.19 (precision review P0-2): this fixture used to assert the mismatch on a record
+        // inheriting `gate_metric_ok = true` from ok_stage() -- CI pinning a contract that
+        // reported the gate refusing while the record said it passed. The gate must actually
+        // have refused, and the category is named for the ENTRY metric it measures, not the gate.
+        s.gate_metric_ok = false;
+        check(name_of(s) == "krylov_entry_metric_mismatch",
               "both metrics the solver was steered by are satisfied and the GATE's metric is not "
               "-- not the operator, not the forcing term, not the budget, but the gate's norm "
               "disagreeing with the solver's");
-        check(std::string(stage_failure_layer(StageFailure::StageGateMetricMismatch)) ==
-                  "stage_gate_E_metric_vs_solver_metrics",
+        check(std::string(stage_failure_layer(StageFailure::KrylovEntryMetricMismatch)) ==
+                  "krylov_entry_E_metric_vs_solver_metrics",
               "and the layer names that disagreement rather than a component");
         s.exit_E_reached = true;
-        check(name_of(s) != "stage_gate_metric_mismatch",
+        check(name_of(s) != "krylov_entry_metric_mismatch",
               "with the gate's metric also satisfied there is no mismatch to report");
         s.exit_E_reached = false; s.exit_rho_E_final = -1.0;
-        check(name_of(s) != "stage_gate_metric_mismatch",
+        check(name_of(s) != "krylov_entry_metric_mismatch",
               "and an UNMEASURED rho_E may not produce the finding -- absence of a measurement "
               "must not become one, here either");
+    }
+
+    {
+        // R13.19 (P0-2): with the gate recorded as PASSING, the entry-metric seam may not be
+        // reported as a failure -- the record would be claiming a refusal that did not happen.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        s.exit_krylov_iter = 2;
+        s.exit_D_reached = true; s.exit_S_reached = true;
+        s.exit_rho_E_final = 0.7; s.exit_E_reached = false;
+        s.gate_metric_ok = true;                 // the gate did NOT refuse
+        check(name_of(s) != "krylov_entry_metric_mismatch",
+              "a seam between the solver's metrics is not a refusal, and the classifier may not "
+              "report one while the gate is recorded as having passed");
+    }
+
+    {
+        // R13.19 (precision review P1-4): EVENT and CAUSE are two questions. The branch comment
+        // said a recorded event "must not override the r0 evidence" while the code returned,
+        // which overrides it. Both answers are now reported.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        s.worst_krylov_rel_error_vs_r0 = 0.999;     // the metric evidence says STALL
+        s.krylov_solves_measured_vs_r0 = 4;
+        s.accepted_steps = 3;
+        const auto d = wrf::sdirk3::stage_diagnosis_of(s);
+        check(std::string(wrf::sdirk3::stage_failure_name(d.primary_event)) ==
+                  "zero_update_after_total_failure",
+              "the primary slot is what actually ended the stage");
+        check(std::string(wrf::sdirk3::stage_failure_name(d.attribution)) ==
+                  "krylov_stagnated" && d.attribution_measured &&
+                  d.attribution_from_metric,
+              "...and the r0 evidence is PRESERVED beside it rather than discarded by it -- the "
+              "event outranking the reconstruction no longer means throwing it away");
+        check(wrf::sdirk3::first_failure_of(s) == d.primary_event,
+              "and first_failure_of still returns the primary event, so every fixture built on "
+              "it keeps its meaning");
+    }
+    {
+        // With no metric evidence at all, the attribution says so instead of agreeing.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.final_residual_measured = false;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        const auto d = wrf::sdirk3::stage_diagnosis_of(s);
+        check(!d.attribution_measured,
+              "absence of metric evidence is reported as absence, not as agreement with the "
+              "event -- the rule this campaign has applied to every other field");
+    }
+
+    {
+        // R13.19 SELF-REVIEW: `attribution` is the classification with the EXIT REMOVED, and with
+        // the termination cleared the clauses that consume it fall back to the AGGREGATE
+        // reconstruction. So on a stage with no r0 evidence the field is the old precedence, not a
+        // measurement -- and the first version of `attribution_measured` (excluding two enum
+        // values) would have called that "measured".
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        s.worst_krylov_rel_error_vs_r0 = -1.0;   // no r0 evidence at all
+        s.best_krylov_rel_error_vs_r0 = -1.0;
+        s.krylov_solves_measured_vs_r0 = 0;
+        s.accepted_steps = 3;
+        const auto d = wrf::sdirk3::stage_diagnosis_of(s);
+        check(d.attribution_measured && !d.attribution_from_metric,
+              "an attribution reached by the aggregate fallback is NOT metric evidence, and the "
+              "record says which -- a reconstruction naming an operator layer must not read as a "
+              "measurement");
+    }
+
+    {
+        // R13.19 SELF-REVIEW: the MECHANISM attribution was order-dependent even after the
+        // all_met predicate became order-independent, because the D/S/source/budget receipt rides
+        // on worst_*, which updates on strict `>`. Two solves at the SAME worst ratio let
+        // whichever arrived first name the layer.
+        using wrf::sdirk3::KrylovSolveMechanism;
+        using wrf::sdirk3::near_worst_mechanism_ambiguous;
+        KrylovSolveMechanism A; A.progress = 0.99; A.met_tolerance = true;
+        A.D_reached = true;  A.S_reached = false;
+        KrylovSolveMechanism B; B.progress = 0.99; B.met_tolerance = true;
+        B.D_reached = true;  B.S_reached = true;
+        check(near_worst_mechanism_ambiguous({A, B}) &&
+              near_worst_mechanism_ambiguous({B, A}),
+              "two solves tied at the worst ratio with DIFFERENT mechanisms are ambiguous in "
+              "either order -- one of them is an objective mismatch and the other a forcing-term "
+              "limit, and reporting the first arrival's was order-dependent");
+        check(!near_worst_mechanism_ambiguous({A, A}) &&
+              !near_worst_mechanism_ambiguous({A}),
+              "agreeing solves, and a single solve, are not ambiguous");
+        KrylovSolveMechanism C = A; C.progress = 0.5;   // clearly better: outside the band
+        check(!near_worst_mechanism_ambiguous({B, C}) &&
+              !near_worst_mechanism_ambiguous({C, B}),
+              "and a solve outside the tie band is not in the set, so it cannot create ambiguity");
+    }
+    {
+        // ...and the classifier refuses to name a mechanism when they disagree.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.worst_krylov_rel_error_vs_r0 = 0.99;
+        s.krylov_solves_measured_vs_r0 = 2;
+        s.accepted_steps = 2;
+        s.exit_krylov_iter = 1;
+        s.worst_krylov_D_reached = true; s.worst_krylov_S_reached = false;
+        s.worst_krylov_met_tolerance = true;
+        check(name_of(s) == "krylov_objective_mismatch",
+              "with the near-worst solves agreeing, the specific mechanism is named");
+        s.near_worst_mechanism_ambiguous = true;
+        check(name_of(s) == "krylov_stagnated",
+              "and when they disagree the classifier reports the general category rather than "
+              "whichever solve arrived first");
+    }
+
+    {
+        // R13.19 SELF-REVIEW (round 8, P0-B): the D-satisfied zero-work solve must REACH the
+        // objective-mismatch clause. Admitting it to the aggregate without counting its D
+        // tolerance as "met" made it an unmet solve at the maximum, which trips the tie refusal --
+        // the FIRST clause of the four-way -- so the category the fix exists to name became
+        // unreachable and the layer emitted was the operator/split.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.worst_krylov_rel_error_vs_r0 = 1.0;     // zero-work solve: progress ~ 1
+        s.krylov_solves_measured_vs_r0 = 1;
+        s.accepted_steps = 1;
+        s.exit_krylov_iter = 0;
+        s.worst_krylov_D_reached = true;          // it met the D objective on entry
+        s.worst_krylov_S_reached = false;         // and not the S one
+        s.worst_krylov_met_tolerance = true;      // ...which IS meeting a tolerance
+        s.all_near_worst_met_tolerance = true;
+        check(name_of(s) == "krylov_objective_mismatch",
+              "a solve that converged on entry in the D objective and not in S is the objective "
+              "mismatch, and must reach that clause rather than being refused as an unmet tie");
+        // R13.20: the historical misrouting is reproduced through the flag that now carries it.
+        // (`all_near_worst_met_tolerance` no longer gates the clause -- see the R9-6 block above.)
+        s.near_worst_mechanism_ambiguous = true;  // as the tie read before the fix
+        check(name_of(s) == "krylov_stagnated",
+              "...which is exactly what the record said before: krylov_stagnated, on the "
+              "operator/split layer, beside a receipt reading D_reached=1 S_reached=0");
+    }
+
+    {
+        // R13.19 SELF-REVIEW (round 8, P0-C): the layer must come from the receipt that DECIDED
+        // the category. `specific_layer` read the EXIT solve's source/metric unconditionally,
+        // while the four-way clauses can be reached from the STAGE-WORST receipt.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.worst_krylov_rel_error_vs_r0 = 0.99;
+        s.krylov_solves_measured_vs_r0 = 2;
+        s.accepted_steps = 2;
+        s.worst_krylov_D_reached = true; s.worst_krylov_S_reached = false;
+        s.worst_krylov_met_tolerance = true;
+        // No exit receipt and no zero-update exit: this reached the clause via stage-worst.
+        s.exit_krylov_iter = -1;
+        const auto d = wrf::sdirk3::stage_diagnosis_of(s);
+        check(name_of(s) == "krylov_objective_mismatch" && !d.decided_by_exit_receipt,
+              "a category reached through the STAGE-WORST receipt must not be annotated with the "
+              "exit solve's source or metric -- that is a layer describing one solve attached to "
+              "a verdict decided by another");
+        // ...and when the exit receipt IS what decided it, the flag says so.
+        StageFailureSignals e = ok_stage();
+        e.newton_converged = false;
+        e.residual_first = 8.7e8; e.residual_last = 8.6e8;
+        e.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        e.exit_krylov_iter = 3;
+        e.exit_D_reached = true; e.exit_S_reached = false;
+        const auto de = wrf::sdirk3::stage_diagnosis_of(e);
+        check(de.primary_event == StageFailure::KrylovObjectiveMismatch &&
+              de.decided_by_exit_receipt,
+              "and a category reached through the exit receipt is flagged as such, so the "
+              "emitted layer and the verdict describe the same solve");
+    }
+
+    {
+        // R13.20 (round 9, R9-6): the tie refusal must fire on a difference that can change the
+        // ANSWER. Tolerance PROVENANCE cannot: the classifier never branches on it.
+        using wrf::sdirk3::KrylovSolveMechanism;
+        using wrf::sdirk3::near_worst_mechanism_ambiguous;
+        using wrf::sdirk3::krylov_mechanism_category;
+        KrylovSolveMechanism P; P.progress = 0.99; P.met_tolerance = true;
+        P.D_reached = true; P.S_reached = false;
+        P.tolerance_source = static_cast<int>(wrf::sdirk3::KrylovToleranceSource::EisenstatWalker);
+        KrylovSolveMechanism Q = P;
+        Q.tolerance_source = static_cast<int>(wrf::sdirk3::KrylovToleranceSource::InnRamp);
+        check(!near_worst_mechanism_ambiguous({P, Q}) &&
+              !near_worst_mechanism_ambiguous({Q, P}),
+              "two tied solves that differ ONLY in where their tolerance came from imply the "
+              "same category and are not ambiguous -- the refusal used to fire here and fall "
+              "through to krylov_stagnated, i.e. toward the operator/split layer");
+        check(krylov_mechanism_category(P) == StageFailure::KrylovObjectiveMismatch &&
+              krylov_mechanism_category(Q) == StageFailure::KrylovObjectiveMismatch,
+              "...and both of them say objective mismatch, which is why");
+        KrylovSolveMechanism R; R.progress = 0.99;   // met nothing, no budget signal
+        check(krylov_mechanism_category(R) == StageFailure::KrylovStagnated &&
+              near_worst_mechanism_ambiguous({P, R}),
+              "a tied solve that implies a DIFFERENT category is still ambiguous");
+        KrylovSolveMechanism T; T.progress = 0.99; T.budget_exhausted = true;
+        check(krylov_mechanism_category(T) == StageFailure::KrylovBudgetExhausted,
+              "and the budget answer is reachable from one receipt, so the four-way's third "
+              "arm has a producer rather than only a fixture");
+    }
+    {
+        // R13.20 (round 9, R9-2): `attribution_from_metric` must be produced by the clause that
+        // RETURNED. The case it was written for -- r0 measured, worst ratio BELOW the
+        // no-progress threshold, so the classifier falls through to the aggregate
+        // reconstruction -- used to read 1, because the branch it fell through was entered on
+        // `measured(worst_..._vs_r0)`. That is 1 by construction where the comment defines 0.
+        using wrf::sdirk3::StageDecisionBasis;
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;   // flat: reconstruction says "stall"
+        s.krylov_solves_measured_vs_r0 = 4;
+        s.accepted_steps = 4;
+        s.worst_krylov_rel_error_vs_r0 = 0.20;   // every solve MOVED: below the threshold
+        const auto d = wrf::sdirk3::stage_diagnosis_of(s);
+        check(d.attribution == StageFailure::NewtonStagnated &&
+              d.attribution_basis == StageDecisionBasis::AggregateReconstruction,
+              "with every solve making progress the attribution comes from the residual trend "
+              "and the iteration counts -- the aggregate reconstruction, by name");
+        check(!d.attribution_from_metric,
+              "...so it is NOT metric-decided, however many r0 readings exist on the record");
+        s.worst_krylov_rel_error_vs_r0 = 0.99;   // now no solve moved
+        s.worst_krylov_D_reached = true; s.worst_krylov_S_reached = false;
+        s.worst_krylov_met_tolerance = true;
+        const auto d2 = wrf::sdirk3::stage_diagnosis_of(s);
+        check(d2.attribution_basis == StageDecisionBasis::KrylovR0Receipt &&
+              d2.attribution_from_metric,
+              "and when the r0 four-way is the clause that answered, it says so");
+        check(std::string(wrf::sdirk3::stage_decision_basis_name(
+                  StageDecisionBasis::LegacyKrylovAggregate)) == "legacy_krylov_aggregate",
+              "the ||b||-coordinate fallback has its own name and is deliberately NOT counted "
+              "as metric evidence");
+    }
+    {
+        // R13.20 (round 9, R9-5): the E-W arm used to collapse three levers into one enum value,
+        // routing a tolerance-limited verdict to ew_gamma/ew_alpha on solves that read neither.
+        using wrf::sdirk3::KrylovToleranceSource;
+        using wrf::sdirk3::krylov_forcing_layer_for;
+        check(std::string(krylov_forcing_layer_for(KrylovToleranceSource::EisenstatWalker)) ==
+                  "eisenstat_walker_forcing" &&
+              std::string(krylov_forcing_layer_for(KrylovToleranceSource::EwEtaClamp)) ==
+                  "ew_eta_min_max_clamp" &&
+              std::string(krylov_forcing_layer_for(KrylovToleranceSource::EwInitialFloor)) ==
+                  "ew_initial_eta_floor" &&
+              std::string(krylov_forcing_layer_for(KrylovToleranceSource::Base)) ==
+                  "base_inner_tolerance",
+              "the eta clamp and the iteration-0 seed constant name their OWN knobs: the "
+              "forcing term is not what bound when max(krylov_tol, EW_ETA_INITIAL) or the "
+              "[eta_min, eta_max] clamp produced the number");
+        check(std::string(wrf::sdirk3::krylov_tolerance_source_name(
+                  KrylovToleranceSource::EwEtaClamp)) == "ew_eta_clamp" &&
+              std::string(wrf::sdirk3::krylov_tolerance_source_name(
+                  KrylovToleranceSource::EwInitialFloor)) == "ew_initial_floor",
+              "...and the record prints them distinctly from eisenstat_walker");
     }
 
     // The layer mapping is the point of the exercise: it says where to work next.
@@ -1017,12 +1424,21 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 86;
+    constexpr int expected_checks = 119;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
               << std::endl;
     if (!count_ok) ++failures;
+
+    // R13.20: ratcheted like the case count, so converting a RESERVED pin into a live one -- or
+    // silently adding another unreachable branch -- has to be an explicit edit here.
+    constexpr int expected_reserved = 4;
+    const bool reserved_ok = (reserved_count == expected_reserved);
+    std::cout << (reserved_ok ? "  ok   " : "  FAIL ")
+              << "reserved-branch ratchet (" << reserved_count << "/" << expected_reserved
+              << " pinned classifications that NO production call site can produce)" << std::endl;
+    if (!reserved_ok) ++failures;
 
     if (failures == 0) {
         std::cout << "FIRST_FAILURE_CLASSIFICATION_CONTRACT: PASS" << std::endl;

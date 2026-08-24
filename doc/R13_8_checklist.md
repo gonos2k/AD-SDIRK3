@@ -744,12 +744,19 @@ and repeats it at half the step (α = ½) to separate two ways the model can be 
 | 1 | 0.0645 | 0.500 | 6.406e8 | 5.335e8 | 1209 | 0.8871 |
 | 2 | 0.0182 | 0.500 | 5.335e8 | 4.770e8 |  422 | 0.9550 |
 
-**MEASURED.** τ ≪ 1 at every iteration and falling by a factor ≈ 2–3 per iteration as the step
-shrinks. The half-step ratio is **0.500 to four digits, three times out of three**.
+**MEASURED.** ~~τ ≪ 1 at every iteration~~ — **WORDING RETRACTED (R13.18; chased here in R13.20,
+numerics referee claim 1D).** τ_max = 0.2008 is not "≪ 1". The honest statement: **no dominant
+first-order AD-vs-primal defect in the measured directions, with a full-step nonlinear remainder of
+~20 % of the linear response in the worst excited block** — and that block is `ru`, the one this
+campaign's own record says dominates the stage-3 entry norm. τ falls by ≈ 2–3 per iteration as the
+step shrinks, and the half-step ratio is **0.500 to four digits, three times out of three**.
 
 **What the ratio settles.** The three branches the probe was built to separate are:
 
-- τ ≪ 1 → the linear model is faithful and the **inner solve** is what binds;
+- τ small → the AD tangent is faithful **to the primal it differentiates** and the **inner solve**
+  is what binds. R13.20: τ compares `apply_jacobian` against a finite difference of the *same*
+  `compute_rhs`, so a wrong `compute_rhs` — e.g. the standing `Omega := rom = mu*w` note — leaves
+  every τ row untouched. "Jacobian defect" below means AD-vs-primal, nothing wider;
 - τ = O(1) with τ(½)/τ ≈ ½ → the **nonlinearity over the step** is the problem (the remainder is
   quadratic, the model is right, the step is too long);
 - τ = O(1) with τ(½)/τ ≈ 1 → a **Jacobian defect** (the remainder has a term linear in s, which
@@ -762,18 +769,42 @@ a **bilinear** RHS must give — advection is quadratic in the state, so the Tay
 also a consistency check on the probe: it reproduces the analytic value the operator's structure
 predicts.
 
-**So the Jacobian is not the problem and neither is the step length.** What remains is the inner
-solve, and the same rows show it directly: η climbs 0.55 → 0.89 → 0.955 while the residual crawls
-8.7e8 → 6.4e8 → 5.3e8 → 4.8e8 (ratio 0.73, 0.83, 0.89 — approaching 1 in lockstep with η). Each
-Newton step is limited by how little the FGMRES solve reduced the linear residual, not by how
-badly the linear model described the nonlinear one. This is the same conclusion the A/B ladder
-reached from the other side, now with the linearization itself measured rather than assumed.
+**The inner solve binds — and the strongest evidence for that is in this table, not in τ.**
+*Priority inverted in R13.20 (numerics referee, claim 7.3).* The outer reduction ratio **tracks the
+achieved forcing term almost exactly**: η climbs 0.55 → 0.89 → 0.955 while the residual crawls
+8.7e8 → 6.4e8 → 5.3e8 → 4.8e8, ratios 0.73, 0.83, 0.89. That is the inexact-Newton bound
+`‖R_{k+1}‖ ≲ η_k‖R_k‖ + O(‖s‖²)` **being attained**, and it is a far more direct argument than the
+Taylor defect: it needs none of τ's selection caveats (accepted steps only, AD-vs-primal only,
+three directions). It was already measured and was written up as a supporting remark under a
+headline built on τ. The order was wrong.
 
-**Scope, honestly.** τ is measured only on **accepted** steps (the probe sits after
-`stats_.accepted_steps++`), so it says nothing about the steps the trust region refused, and the
-three rows are one stage of one step of one case. It does not say the Jacobian is right in every
-block — only that whatever error it has is second order in the step and 12% or less of ‖A·s‖ at
-the largest step taken.
+The same table carries an implication that was never drawn: **at ratio 0.89 and ‖R‖ ≈ 4.8e8, even a
+perfect outer trajectory needs O(10²) Newton iterations against a 12-iteration budget.** So "the
+inner solve binds" is not merely true — at this ratio it is the *only* thing that could matter, and
+the target is not "a better solve" but **a forcing term small enough to change the ratio**.
+
+The τ rows say the weaker, still-useful thing: whatever error the AD tangent has relative to the
+primal it differentiates is second order in the step. This is the same conclusion the A/B ladder
+reached from the other side.
+
+**Scope, honestly — and this denominator belongs on every "MEASURED" headline in these five
+documents (R13.20, referee claim 7.2).** τ is measured only on **accepted** steps (the probe sits
+inside `if (step_accepted)`), so it says nothing about the steps the trust region refused — **and
+structurally nothing about the iteration that ENDS the loop at dt=600**, whose exit is a zero
+update with no accepted step. The record now carries `probe_gate=step_accepted`,
+`accepted_so_far` / `rejected_so_far`, and `taylor_covers_last_newton_iter` on the first-failure
+row, so a reader can see the coverage instead of inferring it.
+
+**n = 1, everywhere.** One case (`em_b_wave`), one stage (2), one timestep (the first — and the
+only one, since zero steps ever complete), and for τ one Newton loop. There is no dt ladder in
+R13.8–R13.19, no second configuration, and no repeat of any physics run except the probe OFF/ON
+control. That sentence appeared **once** in these documents and in none of the conclusions citing
+the results.
+
+And it does not say the Jacobian is right in every block — only that whatever error the AD tangent
+has *relative to the primal it differentiates* is second order in the step, and ≤ 20 % of ‖A·s‖ in
+the worst excited block (`ru`) at the largest step taken. A defect in `compute_rhs` itself is
+invisible to τ: AD differentiates the wrong function faithfully.
 
 ---
 
@@ -1201,8 +1232,15 @@ iter=2 tau=0.01821 alpha=0.3333 tau_alpha=0.00607 tau_alpha_over_tau=0.3333 line
 exactly α, three times out of three — the quadratic-remainder prediction `τ(α) = α·τ(1)`, and a
 value that **cannot** be produced by halving anything. `linearity_residual ≈ 1.7e-07` is about 1.5
 float32 ulps: a real measurement where the old one was identically zero. So the finding stands —
-**τ ≪ 1, the remainder is purely quadratic, no Jacobian defect, the inner solve binds** — and the
-receipt behind it is now one that a broken operator would fail.
+**the remainder is purely quadratic, no AD-vs-primal Jacobian defect, the inner solve binds** — with
+τ_max = 0.2008, not "≪ 1".
+
+~~and the receipt behind it is now one that a broken operator would fail.~~ **FALSE for
+`linearity_residual` (R13.20, referee claim 1C).** `e_repeat`, `e_hom`, `e_add` and
+`linearity_residual` all test **linearity**, and a wrong-but-linear operator `A = J + E` passes
+every one of them *exactly*. The sentence is true only of `tau_alpha_over_tau`, and the two are
+printed side by side. `operator_linear = 1` says the matvec is a deterministically-evaluated linear
+map — never that it is accurate.
 
 `taylor_defect_verdict` gained `AlphaDyadic`, checked **before** the residual (with a dyadic α the
 residual is zero by construction, and reporting "linear" from it is the tautology the rule exists
@@ -1322,8 +1360,9 @@ verdict at **every** conclusion site. And every `.item()` added in these rounds 
 
 ## Does a real Krylov budget complete the dt=600 step? — MEASURED, and it does not
 
-The evidence had converged on one testable claim: the linearization is faithful (τ ≪ 1, no Jacobian
-defect), the inner solve is what binds, and **every stall verdict in this campaign was measured at a
+The evidence had converged on one testable claim: the linearization is faithful (τ_max = 0.2008 —
+R13.20: *not* "≪ 1"; no AD-vs-primal Jacobian defect, on accepted steps only), the inner solve is
+what binds, and **every stall verdict in this campaign was measured at a
 7-vector Arnoldi budget** while the ladder shows the identity arm still descending at j=192. So:
 raise the budget at both implicit stages and run dt=600.
 
@@ -1340,9 +1379,43 @@ outcome=20 (HARD_STAGE_ABORT) x3 — zero steps completed
 
 **MEASURED — three things, and they point in different directions.**
 
-1. **The budget is a real limiter.** The worst solve's r₀-relative progress went **0.9941 → 0.8622**
-   — from removing 0.59% of its own residual to removing 13.8%, a 23× improvement in progress — and
-   Krylov iterations went 28 → 270. More budget genuinely buys a better linear solve.
+1. **The budget is a real limiter — in DIRECTION; the magnitude attribution is overstated.**
+   The worst solve's r₀-relative progress went **0.9941 → 0.8622**, from removing 0.59 % of its own
+   residual to removing 13.8 %, and Krylov iterations went 28 → 270.
+
+   *Three corrections (R13.20, numerics referee claim 4). All three were checked against the record
+   before being written here.*
+
+   **(a) "23×" is arithmetically fair and rhetorically misleading.** `(1−0.9941)→(1−0.8622)` is
+   23.4× and `−log ρ` gives 25×, so the factor is not a chosen framing. What it hides is that *both
+   endpoints are non-solves*: ρ = 0.8622 is **0.064 decimal digits** of residual reduction, and a
+   Newton method wants ρ ≲ 1e-2. Taking the run's own per-vector rate at face value
+   (`ln 0.8622 / 85 = −1.65e-3`, an extrapolation — GMRES is not log-linear) ρ = 0.1 needs ~1400
+   vectors and ρ = 0.01 needs ~2800: **another 16–33× on top of the 12×.** The honest sentence is
+   *"a 12× budget takes the worst solve from removing 0.6 % of its own residual to removing 14 % — a
+   real and large relative gain that leaves the solve two orders of magnitude short of usable."*
+
+   **(b) The two runs are NOT the same experiment.** The budget change altered the Newton
+   trajectory: 4 → 3 iterations, 4 → 3 solves, 3 → 2 accepted steps. `worst_krylov_rel_vs_r0` is
+   therefore a **maximum over different sets of different linear systems**, at different iterates
+   with different right-hand sides. Comparing extrema across two populations is not a controlled
+   measurement of the budget's effect; the supported reading is *"the stage as a whole behaved
+   better"*, not *"the same solve improved 23×"*. Nothing on the record identifies a common solve
+   between the arms.
+
+   **(c) `krylov_iters` is a stage AGGREGATE and `worst_…_vs_r0` a per-solve EXTREMUM.** Printing
+   28 → 270 beside 0.9941 → 0.8622 invites a per-iteration efficiency inference the data cannot
+   support — read literally it says the per-vector rate roughly *doubled*, which cuts against
+   "diminishing returns". This is the same aggregate-vs-per-solve mixing this document correctly
+   caught for `best_krylov_rel_vs_r0 = 0.5526` two hundred lines above.
+
+   Two lesser confounds, stated: three knobs moved rather than one (`stage2_gmres_restart`,
+   `stage3_gmres_restart`, `stage3_max_krylov_restarts` — one family, pointing the same way); and
+   the exit site sets `stage2_hopeless_budget_mode_` / `stage2_hopeless_streak_`, members that
+   persist across solves and timesteps, under a condition the experiment also configured
+   (`stage2_max_krylov_restarts == 1`). It did **not** fire on these runs (the break was not at
+   iteration 0), but the record does not say so, and it is a variable that can change the applied
+   budget mid-run.
 2. **It does not complete the step.** Still `HARD_STAGE_ABORT`, still zero steps. Budget alone does
    not reach dt=600.
 3. ~~**The failure moved outward.**~~ **RETRACTED (R13.17).** The category does flip

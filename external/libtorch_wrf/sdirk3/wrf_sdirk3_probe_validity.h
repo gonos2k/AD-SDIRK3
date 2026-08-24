@@ -23,6 +23,24 @@
 namespace wrf {
 namespace sdirk3 {
 
+// R13.20 (numerics referee, claim 7.1): the EXCITATION FLOOR, promoted from a bare literal.
+//
+// A block carrying less than this share of ||A s|| is not being exercised by the step, and its
+// ratio is noise over noise -- so it is excluded from `tau_excited_block_max`. The campaign fixed
+// the floor-NORMALISATION trap (R13.18 P1-1: an unexcited block's tau is divided by the floor, so
+// a small value means "barely touched", not "accurate"). It did not fix the floor-VALUE trap: this
+// constant SELECTS WHICH BLOCK THE VERDICT NAMES. Measured on the dt=600 record, `share_rw` is
+// 2.16e-04, 4.6x below 1e-3, so `rw` is excluded and the verdict reads 0.2008 (`ru`) -- while
+// `tauraw_rw = 0.207042` is LARGER. At a floor of 1e-4 the headline number and the block it names
+// both change.
+//
+// Same treatment as kKrylovNoProgressVsR0, which had the identical shape: an override, the value
+// on the record, and the limits written at the constant. The raw max is now emitted beside the
+// excited max, so the counterfactual is on every row rather than reachable only by re-running.
+// Overridable per run via WRF_SDIRK3_TAU_EXCITATION_SHARE.
+inline constexpr double kTauExcitationShare = 1.0e-3;
+
+
 struct ProbeVerdict {
     bool valid = false;
     // Stable machine-greppable token, not prose: the record is parsed by gates.
@@ -303,6 +321,12 @@ inline StageReferenceVerdict certify_stage_reference(
 //     measured with alpha = 1/3 the same probe reports 1.7e-07, about 1.5 float32 ulps.
 // A probe that prints a three-way causal conclusion in its own row needs all three on record.
 struct TaylorDefectInputs {
+    // R13.19 (precision review P1-3): the receipt VERSION. Every new gate below fires only when
+    // its field was measured, so a record missing them returned `Measured` -- and the contract
+    // pinned that, for compatibility with logs taken before the fields existed. The cost is that
+    // a NEW record which failed to populate them is indistinguishable from an old one, and reads
+    // as certified. Version 1 keeps the legacy behaviour; version 2 requires the fields.
+    int receipt_version = 1;
     bool   fd_fallback_free = false;   // the JVP was forward-mode for every matvec in the probe
     bool   alpha_arm_measured = false; // A(alpha*s) was computed, not scaled from A(s)
     double tau = -1.0;                 // -1 = not measured
@@ -329,7 +353,7 @@ struct TaylorDefectInputs {
 
 enum class TaylorVerdict { Unmeasured, FdFallback, AlphaArmAssumed, AlphaDyadic,
                            LinearityUnmeasured, OperatorNonlinear, StepNotRealized,
-                           RoundoffLimited, BlockDefect, Measured };
+                           RoundoffLimited, BlockDefect, ReceiptIncomplete, Measured };
 
 inline const char* taylor_verdict_name(TaylorVerdict v) {
     switch (v) {
@@ -342,6 +366,7 @@ inline const char* taylor_verdict_name(TaylorVerdict v) {
         case TaylorVerdict::StepNotRealized: return "step_not_realized";
         case TaylorVerdict::RoundoffLimited: return "roundoff_limited";
         case TaylorVerdict::BlockDefect:     return "block_defect";
+        case TaylorVerdict::ReceiptIncomplete: return "receipt_incomplete";
         case TaylorVerdict::Measured:        return "measured";
     }
     return "unknown";
@@ -421,6 +446,12 @@ inline TaylorVerdict taylor_defect_verdict(const TaylorDefectInputs& in) {
     if (is_measured(in.tau_block_max) && in.tau_block_max > kTaylorBlockDefect) {
         return TaylorVerdict::BlockDefect;
     }
+    // A v2 record must CARRY the preconditions, not merely pass them when present.
+    if (in.receipt_version >= 2 &&
+        (!is_measured(in.tau_block_max) || !is_measured(in.realized_step_fraction) ||
+         !is_measured(in.realized_U_fraction) || !is_measured(in.signal_to_roundoff))) {
+        return TaylorVerdict::ReceiptIncomplete;
+    }
     return TaylorVerdict::Measured;
 }
 
@@ -460,7 +491,12 @@ struct AbComparison {
     // any internal state change that could alter a result is caught, and one that could not is
     // correctly ignored.
     bool fresh_wrapper_per_arm = false;         // the mutable wrapper is per-arm (measured)
-    bool shared_preconditioner_instance = true; // STATED, not hidden: the object is shared
+    // STATED, not hidden: the object is shared. R13.20 (adversarial loop, iteration 5): this is
+    // deliberately NOT a gate in `ab_attributable` -- sharing the instance is admissible precisely
+    // because `preconditioner_state_unchanged` below MEASURES that it did not move between the
+    // arms. It is emitted on the A/B row instead, which is its consumer; before R13.20 the row
+    // printed a compile-time `1` and this field was read by nothing at all.
+    bool shared_preconditioner_instance = true;
     bool preconditioner_state_unchanged = false;// M(probe) identical before and after the arms
     bool same_frozen_operator = false;          // one operator closure for every arm
     bool operator_state_unchanged = false;      // A(probe) identical before and after the arms

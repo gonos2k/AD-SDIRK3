@@ -128,6 +128,8 @@ public:
             }
         }
         // Fallback: GPU or non-contiguous
+        // R13.20 (adversarial loop, iteration 4): guarded per the repo's unconditional rule.
+        torch::NoGradGuard ng_get;
         return data_.index({idx, var}).to(torch::kCPU).item<double>();
     }
 

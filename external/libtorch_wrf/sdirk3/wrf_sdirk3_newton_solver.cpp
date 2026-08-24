@@ -1298,10 +1298,38 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         // v20.14r24: final_residual = ||r_true_inner|| (absolute), rel_error = error_val (relative).
         // r_true = RAW (not halo-zeroed), consistent with normal exit (line ~1127) and NaN paths.
         // Callers must apply halo zeroing to r_true before per-block analysis.
+        // R13.19 (precision review P0-1): the STOP metric and the S metric, kept apart.
+        //
+        // This return used to set success = true unconditionally and store `error_val` -- which is
+        // rho_D under block scaling, or rho_E under the WRMS experiment -- into `rel_error`, the
+        // S-COORDINATE field. So rho_stop = 0.85 with rho_S = 0.99 and eta = 0.90 returned SUCCESS,
+        // while the normal finaliser on the identical state returns failure and the classifier
+        // calls it KrylovObjectiveMismatch. The one state R13.17-R13.18 exist to separate was
+        // being merged back into a single success, on a PRODUCTION path: this value feeds
+        // gmres_success, gmres_raw_rel_error, the trust-region prediction, the total-failure rule
+        // and warm-start quality.
+        //
+        // `success` is the S-coordinate question, the same one the normal exit answers, and
+        // `rel_error` always carries rho_S. The stop metric keeps its own field.
+        const float bnorm_unscaled_val = guarded_item<float>(bnorm_unscaled);
+        const float rho_S_here = (bnorm_unscaled_val > BNORM_MIN_THRESHOLD)
+            ? (r_true_norm / bnorm_unscaled_val) : 1.0f;
+        const bool S_reached_here = (rho_S_here < tol);
         WRFNewtonKrylovSolver::GMRESResult res{
-                x, true, 0, r_true_norm, error_val,
+                x, S_reached_here, 0, r_true_norm, rho_S_here,
                 "Initial residual already converged",
                 r_true.detach().clone(), 0, false, false};
+        res.rho_S_initial = rho_S_here;
+        res.rho_S_final = rho_S_here;
+        res.rho_D_initial = error_val;      // the stop objective, named by stopping_metric
+        res.rho_D_final = error_val;
+        res.tolerance_applied = tol;
+        res.D_tolerance_reached = (error_val < tol);
+        res.S_tolerance_reached = S_reached_here;
+        res.arnoldi_spent = 0;
+        res.arnoldi_allowed = max_iter * restart;
+        res.stopping_metric = static_cast<int>((block_scaled ? wrf::sdirk3::KrylovStoppingMetric::BlockD
+                                          : wrf::sdirk3::KrylovStoppingMetric::IdentityS));
         res.termination_reason =
             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
         // R13.13 (red team round 4): the THIRD return path. R13.10 added the computation and
@@ -2235,7 +2263,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 // so the column norms ARE the operator's magnitude on the directions GMRES
                 // built, and 1/||Hbar e_i|| is the identity term's share of the operator there.
                 // The 10-30% figure this comment used to quote was an ESTIMATE and is REFUTED:
-                // measured directly (identity_frac_krylov / e_hom_krylov in the frozen A/B
+                // measured directly (identity_frac_rhs_dir / e_hom_rhs_dir in the frozen A/B
                 // probe) the identity term carries 0.39% relative error, not 5-20%.
                 double hcol_min = std::numeric_limits<double>::infinity(), hcol_max = 0.0;
                 for (int jj = 0; jj < m; ++jj) {
@@ -2870,10 +2898,39 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // v20.14r24: final_residual = ||r_true_inner|| (absolute), rel_error = error_val (relative).
         // r_true = RAW (not halo-zeroed), consistent with normal exit (line ~1127) and NaN paths.
         // Callers must apply halo zeroing to r_true before per-block analysis.
+        // R13.19 (precision review P0-1): the STOP metric and the S metric, kept apart.
+        //
+        // This return used to set success = true unconditionally and store `error_val` -- which is
+        // rho_D under block scaling, or rho_E under the WRMS experiment -- into `rel_error`, the
+        // S-COORDINATE field. So rho_stop = 0.85 with rho_S = 0.99 and eta = 0.90 returned SUCCESS,
+        // while the normal finaliser on the identical state returns failure and the classifier
+        // calls it KrylovObjectiveMismatch. The one state R13.17-R13.18 exist to separate was
+        // being merged back into a single success, on a PRODUCTION path: this value feeds
+        // gmres_success, gmres_raw_rel_error, the trust-region prediction, the total-failure rule
+        // and warm-start quality.
+        //
+        // `success` is the S-coordinate question, the same one the normal exit answers, and
+        // `rel_error` always carries rho_S. The stop metric keeps its own field.
+        const float bnorm_unscaled_val = guarded_item<float>(bnorm_unscaled);
+        const float rho_S_here = (bnorm_unscaled_val > BNORM_MIN_THRESHOLD)
+            ? (r_true_norm / bnorm_unscaled_val) : 1.0f;
+        const bool S_reached_here = (rho_S_here < tol);
         WRFNewtonKrylovSolver::GMRESResult res{
-                x, true, 0, r_true_norm, error_val,
+                x, S_reached_here, 0, r_true_norm, rho_S_here,
                 "Initial residual already converged",
                 r_true.detach().clone(), 0, false, false};
+        res.rho_S_initial = rho_S_here;
+        res.rho_S_final = rho_S_here;
+        res.rho_D_initial = error_val;      // the stop objective, named by stopping_metric
+        res.rho_D_final = error_val;
+        res.tolerance_applied = tol;
+        res.D_tolerance_reached = (error_val < tol);
+        res.S_tolerance_reached = S_reached_here;
+        res.arnoldi_spent = 0;
+        res.arnoldi_allowed = max_iter * restart;
+        res.stopping_metric = static_cast<int>((!block_scaled ? wrf::sdirk3::KrylovStoppingMetric::IdentityS
+                       : (wrms_metric_applied ? wrf::sdirk3::KrylovStoppingMetric::StageWRMS
+                                              : wrf::sdirk3::KrylovStoppingMetric::BlockD)));
         res.termination_reason =
             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
         res.initial_rel_error = initial_rel_error_fgmres;
@@ -4393,6 +4450,11 @@ public:
     // test could not vary it; and its provenance was "the environment at the first solve" rather
     // than at construction. Accepted range (0, 1]; out of range warns and keeps the default.
     double krylov_no_progress_threshold_ = wrf::sdirk3::kKrylovNoProgressVsR0;
+    // R13.20 (numerics referee, claim 7.1): the Taylor excitation floor gets the same treatment
+    // as the no-progress threshold -- a per-run override, the value on the record, and its
+    // selection effect stated. It decides WHICH BLOCK `tau_excited_block_max` names.
+    double tau_excitation_share_ = wrf::sdirk3::kTauExcitationShare;
+    bool   tau_excitation_share_observed_ = false;
     // R13.17 (external review P1-4): the same treatment for the total-failure rule. It was a
     // function-local static, so the first solve in a process latched it for every solver in that
     // process -- the defect fixed for the threshold one commit earlier, left in its sibling.
@@ -4469,6 +4531,19 @@ public:
                               << krylov_no_progress_threshold_ << std::endl;
                 }
             }
+            const char* ex = std::getenv("WRF_SDIRK3_TAU_EXCITATION_SHARE");
+            if (ex) {
+                char* end = nullptr;
+                const double v = std::strtod(ex, &end);
+                if (end && *end == '\0' && v > 0.0 && v <= 1.0) {
+                    tau_excitation_share_ = v;
+                    tau_excitation_share_observed_ = true;
+                } else {
+                    std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_TAU_EXCITATION_SHARE='" << ex
+                              << "' is not in (0, 1]; keeping "
+                              << tau_excitation_share_ << std::endl;
+                }
+            }
         }
         reset_stats();
         if (options_.save_trajectory) {
@@ -4541,10 +4616,15 @@ public:
     // Mask is always built as float32 on CPU (for safe accessor<float>),
     // then cast to target dtype/device at the end.
     //
-    // v20.14r27f: CURRENTLY UNUSED — build_halo_mask() is never called.
-    // halo_mask_initialized_ stays false, so all mask branches are no-ops.
-    // Reason: halo masking degraded single-tile accuracy (rel_error 0.5940 → 0.7984).
-    // Retained for potential multi-tile production use with enable_stage_halo_exchange.
+    // R13.20 (round 9, R9-9): the v20.14r27f note here said "CURRENTLY UNUSED -- build_halo_mask()
+    // is never called", and v20.14r27m added a call ten lines above it without correcting the
+    // claim. It IS called, from solve_stage_impl, under
+    //   options_.is_multi_tile && (!periodic_x || !periodic_y) && !halo_mask_initialized_ &&
+    //   layout_initialized_
+    // so the invariant holds for single-tile em_b_wave and is FALSE for exactly the multi-tile
+    // configuration the mask was retained for -- which is the reading a maintainer needs when
+    // deciding whether a 1-D halo no-op matters.
+    // Reason it stays gated: halo masking degraded single-tile accuracy (rel_error 0.5940 -> 0.7984).
     void build_halo_mask(torch::Device target_device, torch::Dtype target_dtype) {
         int hw = wrf::sdirk3::g_sdirk3_config.halo_width;
         // v20.14r21: Use options_ (instance state) instead of global config.
@@ -4680,8 +4760,9 @@ public:
 
     // Apply halo zeroing to a tensor (in-place).
     // 3D tensors: zero_halo_regions (direct boundary zeroing).
-    // 1D packed tensors: mul by halo_mask_ IF mask was built (currently never — see build_halo_mask).
-    // When halo_mask_initialized_=false (current default), 1D path is a no-op.
+    // 1D packed tensors: mul by halo_mask_ IF mask was built -- which happens only on multi-tile
+    // non-periodic runs (see build_halo_mask). When halo_mask_initialized_=false, which is the
+    // single-tile default, the 1D path is a no-op. R13.20: "currently never" was wrong here too.
     void apply_halo_zeroing(torch::Tensor& t) {
         if (t.dim() >= 3) {
             // Original 3D path
@@ -4912,8 +4993,10 @@ public:
         reset_stats();
         
         // Get adaptive parameters if enabled
+        // `newton_tol_adaptive` is DELIBERATELY cross-iteration: it is a monotone ratchet seeded
+        // from init_R0_norm at iteration 0 (see :6420). `krylov_tol_adaptive` is not -- it lives
+        // inside the loop now, see the Newton loop body.
         float newton_tol_adaptive = options_.newton_tol;
-        float krylov_tol_adaptive = static_cast<float>(options_.krylov_tol);
         float init_R0_norm = 0.0f;  // Captured at iter 0 for relative convergence criterion
         float last_res_scaled = 0.0f;  // v20.3: Last Newton residual (float) for adaptive α
 
@@ -5551,6 +5634,34 @@ public:
             float ew_eta_used_this_iter = -1.0f;
             bool ew_eta_updated_this_iter = false;
             const bool ew_eta_enabled_this_iter = options_.use_adaptive_tolerances;
+            // R13.20 (self-review, iteration 1 of the adversarial loop): the TOLERANCE itself is
+            // per-iteration, and it was declared outside the Newton loop -- the same defect the
+            // flag below was moved in to fix, one level down. My R9-5 fix moved the receipt and
+            // left the value it describes behind.
+            //
+            // Why it was inert on the default path: with `use_adaptive_tolerances` on (the
+            // default) the E-W block assigns this unconditionally at the top of every iteration,
+            // before any read, so the carried-over value is never observed and the default path
+            // is byte-identical either way.
+            //
+            // Why it was NOT inert with adaptive tolerances OFF: the INN ramp at :8591 is an
+            // IN-PLACE MULTIPLY (`krylov_tol_adaptive = gamma_eff * krylov_tol_adaptive`), and
+            // the policy round-trip at :7620/:7741 carries the value through unchanged unless a
+            // stage override fires. With nothing reseeding it, iteration k started from
+            // iteration k-1's post-ramp value and the ramp COMPOUNDED: gamma^k, not gamma. At
+            // gamma = 0.5 over a 12-iteration budget that is 2.4e-4 x base -- a tolerance no
+            // solve can reach, so every solve spends its whole budget. The ramp's own comment
+            // calls it "conservative" and describes a per-iteration tightening, not a geometric
+            // one. Seeded fresh here, it is what that comment says.
+            float krylov_tol_adaptive = static_cast<float>(options_.krylov_tol);
+            // R13.20 (round 9, R9-5): which knob BOUND this iteration's inner tolerance.
+            // Declared here, inside the Newton loop body, so it cannot inherit the previous
+            // iteration's answer -- its predecessor was a bool declared outside the loop and
+            // never reset, inert only because both E-W arms happened to set it. Seeded `Base`
+            // because with adaptive tolerances off the tolerance IS `options_.krylov_tol`; the
+            // E-W block below overwrites it with the arm that bound.
+            wrf::sdirk3::KrylovToleranceSource ew_tol_source =
+                wrf::sdirk3::KrylovToleranceSource::Base;
             
             // Zero K's halo elements before forming U_eval.
             // compute_rhs does not apply halo/BC internally (WRF handles halos
@@ -6460,9 +6571,18 @@ public:
                     }
 
                     // Cap using stage-aware eta_min and eta_max.
+                    // R13.20 (round 9, R9-5): remember whether the cap BOUND. When it does, the
+                    // number in effect is ew_eta_max/min, not gamma*(ratio)^alpha, and a
+                    // tolerance-limited verdict must send work to that knob and not to the
+                    // forcing-term parameters. eta_max saturating in the failing regime is the
+                    // documented operational case, not a corner.
+                    const float eta_k_pre_clamp = eta_k;
                     eta_k = std::max(ew_eta_min_stage, std::min(ew_eta_max_stage, eta_k));
 
                     krylov_tol_adaptive = eta_k;
+                    ew_tol_source = (eta_k != eta_k_pre_clamp)
+                                        ? wrf::sdirk3::KrylovToleranceSource::EwEtaClamp
+                                        : wrf::sdirk3::KrylovToleranceSource::EisenstatWalker;
                     ew_prev_eta_ = eta_k;
                     ew_eta_used_this_iter = eta_k;
                     ew_eta_updated_this_iter = true;
@@ -6489,8 +6609,22 @@ public:
                             const char* v = std::getenv("WRF_SDIRK3_EW_ETA_INITIAL");
                             return v ? std::atof(v) : 0.40;
                         }();
-                        krylov_tol_adaptive = std::max(static_cast<float>(options_.krylov_tol), ew_eta_initial);
-                        krylov_tol_adaptive = std::max(ew_eta_min_stage, std::min(ew_eta_max_stage, krylov_tol_adaptive));
+                        // R13.20 (round 9, R9-5): no residual ratio is read on this arm --
+                        // `ew_eta_updated_this_iter = false` three lines below is the code's own
+                        // statement that E-W updated nothing. The value is one of three
+                        // constants, and the receipt must name the one that bound, or a
+                        // tolerance-limited verdict here routes a week of work to ew_gamma /
+                        // ew_alpha, neither of which was read.
+                        const float base_tol_this = static_cast<float>(options_.krylov_tol);
+                        const float floored_this  = std::max(base_tol_this, ew_eta_initial);
+                        krylov_tol_adaptive = std::max(ew_eta_min_stage,
+                                                       std::min(ew_eta_max_stage, floored_this));
+                        ew_tol_source =
+                            (krylov_tol_adaptive != floored_this)
+                                ? wrf::sdirk3::KrylovToleranceSource::EwEtaClamp
+                                : (floored_this > base_tol_this
+                                       ? wrf::sdirk3::KrylovToleranceSource::EwInitialFloor
+                                       : wrf::sdirk3::KrylovToleranceSource::Base);
                     }
                     ew_eta_used_this_iter = krylov_tol_adaptive;
                     ew_eta_updated_this_iter = false;
@@ -6901,8 +7035,13 @@ public:
                                 }
                                 for (size_t bi = 0; bi < eps_blocks.size(); ++bi) {
                                     const auto& blk = *eps_blocks[bi];
-                                    float U_blk_norm = u_blk_norm_cpu[static_cast<long>(bi)].item<float>();
-                                    float v_blk_norm = v_blk_norm_cpu[static_cast<long>(bi)].item<float>();
+                                    // R13.20 (hard-constraint audit): the tensors were built
+                                    // under a guard, but the EXTRACTION was not. The rule is
+                                    // unconditional and `guarded_item` is the established form.
+                                    float U_blk_norm =
+                                        guarded_item<float>(u_blk_norm_cpu[static_cast<long>(bi)]);
+                                    float v_blk_norm =
+                                        guarded_item<float>(v_blk_norm_cpu[static_cast<long>(bi)]);
                                     if (v_blk_norm < 1e-30f) continue;
                                     // Per-block: eps must resolve U_blk_rms for this block's v share
                                     float sqrt_N = std::sqrt(static_cast<float>(blk.size));
@@ -6962,7 +7101,9 @@ public:
                         for (size_t bi = 0; bi < blk_refs.size(); ++bi) {
                             const auto& blk = *blk_refs[bi];
                             auto v_blk = v.slice(0, blk.start, blk.start + blk.size);
-                            float blk_norm = v_blk_norm_cpu[static_cast<long>(bi)].item<float>();
+                            // R13.20 (hard-constraint audit): guarded extraction, same reason.
+                            float blk_norm =
+                                guarded_item<float>(v_blk_norm_cpu[static_cast<long>(bi)]);
                             float blk_scale = fd_base_eps * std::max(1.0f, blk_norm);
                             blk_scale = std::min(blk_scale, eps_clamp_hi);
                             v_scaled.slice(0, blk.start, blk.start + blk.size)
@@ -7308,10 +7449,12 @@ public:
                                    .to(K.device(), K.scalar_type())
                                    .detach();
 
-                float v_norm_val = bench_v.norm().to(torch::kCPU).item<float>();
+                // R13.20 (hard-constraint audit): both of these were bare `.item()` outside a
+                // guard, and each is also a GPU->CPU sync.
+                float v_norm_val = guarded_item<float>(bench_v.norm());
                 if (!(v_norm_val > 1e-20f)) {
                     bench_v = torch::ones_like(K).detach();
-                    v_norm_val = bench_v.norm().to(torch::kCPU).item<float>();
+                    v_norm_val = guarded_item<float>(bench_v.norm());
                 }
                 auto v_scaled = (eps_bench / std::max(v_norm_val, 1e-20f)) * bench_v;
                 const float inv_eps = v_norm_val / std::max(eps_bench, 1e-20f);
@@ -7405,6 +7548,9 @@ public:
             // CRITICAL FIX (2025-11-28): Declare outside try block for use in trust region
             float gmres_rel_error = 1.0f;  // Default to 1.0 (no reduction) if GMRES fails
             float gmres_raw_rel_error = 1.0f;  // v20.14r27g: unclamped, may be >1 when GMRES diverges
+            // R13.19 SELF-REVIEW (round 8, P1-A): set where gmres_result is in scope; read by the
+            // total-failure predicate below, which is outside that scope.
+            bool gmres_converged_on_entry = false;
             float gmres_initial_rel_error = -1.0f;  // R13.11: ||r0||/||b|| from the same solve
             // R9 P0-D: the GMRES residual, kept only when the nonlinear ledger is armed. It is
             // what turns the linear model's prediction into a read rather than an operator
@@ -7956,8 +8102,15 @@ public:
                               << " one_sided_precond_arms=AM^-1,M^-1A"
                               << " stage=" << stage
                               << " samples=" << n_ok << "/" << n_samp
-                              << " A: q_min=" << q_min << " q_max=" << q_max
-                              << " neg=" << n_neg << "/" << n_ok;
+                              // R13.20 (adversarial loop, iteration 10): PER-ARM KEYS. This row
+                              // carries four arms and all four emitted `q_min=`, three of them
+                              // `neg=`, distinguished only by the prose separators between them --
+                              // so a grep for `neg=` on a row this campaign quotes as pivot-level
+                              // evidence returns whichever arm came last. Section 13 quotes BOTH
+                              // `neg=0/24` and `neg=24/24` from this single line. The prose labels
+                              // stay for a human reader; the keys are now unique.
+                              << " A: A_q_min=" << q_min << " A_q_max=" << q_max
+                              << " A_neg=" << n_neg << "/" << n_ok;
                     // R13.18: the random arm above is a ONE-SIDED sample. Random directions in
                     // high dimensions concentrate, so "negative on all 24" is no more a proof of
                     // definiteness than the probe's own caveat says "neg==0 proves nothing" is a
@@ -7967,6 +8120,28 @@ public:
                     // state, not of a coordinate choice.
                     std::string phys_block_rows;
                     int nb_pos = 0, nb_neg = 0;
+                    // R13.20 -- TWO defects fixed here.
+                    //
+                    // (1) HARD-CONSTRAINT VIOLATION: the two `.item<double>()` calls below ran
+                    //     OUTSIDE any NoGradGuard. `ng_red` is declared inside the sample loop
+                    //     and its scope closed with that iteration; this loop is after it. The
+                    //     repo's standing rule is that every `.item()` sits in a guard, and
+                    //     round 9 checked the Taylor probe for exactly this and reported it
+                    //     sound without checking this block.
+                    //
+                    // (2) R9-12 asked whether these six directions are genuinely DISTINCT
+                    //     probes, after three of them reported |q-1| identical to six figures.
+                    //     Support leakage -- the mechanism the review proposed -- is refuted BY
+                    //     CONSTRUCTION: `e_b` is exactly zero outside its block, so <v,Av> reads
+                    //     only block-b rows and no other block can contribute to q_b. That is
+                    //     now MEASURED (`vout` must be 0) instead of argued, and the response
+                    //     norms inside and outside the block are reported beside it -- which is
+                    //     where a shared-coefficient explanation for the coincidence would show.
+                    //     Until those rows are read, section 13's numbers carry no locality
+                    //     verdict and must not be built on again.
+                    torch::NoGradGuard ng_blocks;
+                    int nb_measured = 0;
+                    bool blocks_local = true;
                     if (S_diag_.defined() && layout_initialized_ && cached_layout_.is_exact &&
                         cached_layout_.total_size == R.numel()) {
                         for (const auto& blk : cached_layout_.blocks) {
@@ -7981,16 +8156,44 @@ public:
                             if (!(d > 0.0)) continue;
                             const double qb = v_p.dot(Av_p).item<double>() / d;
                             if (!std::isfinite(qb)) continue;
+                            // R13.20 (dt=600 run, 2026-08-24): the out-of-block norms are taken
+                            // DIRECTLY, by zeroing the block and measuring what is left. The first
+                            // version computed them as sqrt(||x||^2 - ||x_in||^2), and the run
+                            // showed why that is wrong: when the out-of-block part is exactly zero
+                            // -- which is what `e_b` guarantees for `v` -- the subtraction is
+                            // catastrophic cancellation between two ~1e8 norms, and it reported
+                            // `qphys_ru_vout = 0.838` for a direction that is identically zero
+                            // outside its block. `phys_blocks_local` then read 0, i.e. the
+                            // instrument accused the probe of a defect the probe does not have.
+                            // Cancellation also hides the opposite case: `Av_out` came out
+                            // EXACTLY 0.0 where the true value is merely small relative to
+                            // `Av_in`. A difference of squares cannot measure a small residue.
+                            auto v_out_t = v_p.clone();
+                            v_out_t.slice(0, blk.start, blk.start + blk.size).zero_();
+                            auto Av_out_t = Av_p.clone();
+                            Av_out_t.slice(0, blk.start, blk.start + blk.size).zero_();
+                            const double v_in =
+                                v_p.slice(0, blk.start, blk.start + blk.size).norm().item<double>();
+                            const double v_out = v_out_t.norm().item<double>();
+                            const double Av_in =
+                                Av_p.slice(0, blk.start, blk.start + blk.size).norm().item<double>();
+                            const double Av_out = Av_out_t.norm().item<double>();
+                            if (v_out > 0.0) blocks_local = false;
+                            ++nb_measured;
                             if (qb > 0.0) ++nb_pos; else if (qb < 0.0) ++nb_neg;
-                            phys_block_rows += " qphys_" + std::string(blk.name) + "=" +
-                                               std::to_string(qb);
+                            const std::string nm(blk.name);
+                            phys_block_rows += " qphys_" + nm + "=" + std::to_string(qb) +
+                                               " qphys_" + nm + "_vin=" + std::to_string(v_in) +
+                                               " qphys_" + nm + "_vout=" + std::to_string(v_out) +
+                                               " qphys_" + nm + "_Avin=" + std::to_string(Av_in) +
+                                               " qphys_" + nm + "_Avout=" + std::to_string(Av_out);
                         }
                     }
                     // The raw physical operator, on the same directions.
                     if (np_ok > 0) {
-                        std::cerr << " | A_physical(raw, unscaled): q_min=" << qp_min
-                                  << " q_max=" << qp_max
-                                  << " neg=" << np_neg << "/" << np_ok
+                        std::cerr << " | A_physical(raw, unscaled): Aphys_q_min=" << qp_min
+                                  << " Aphys_q_max=" << qp_max
+                                  << " Aphys_neg=" << np_neg << "/" << np_ok
                                   << " indefinite=" << (qp_min < 0.0 ? 1 : 0)
                                   << phys_block_rows
                                   << " phys_blocks_pos=" << nb_pos
@@ -7999,15 +8202,24 @@ public:
                                   // range straddles the origin. All one sign is not proof of the
                                   // converse -- it is a spanning sample, not a bound.
                                   << " phys_straddles_origin="
-                                  << ((nb_pos > 0 && nb_neg > 0) ? 1 : 0);
+                                  << ((nb_pos > 0 && nb_neg > 0) ? 1 : 0)
+                                  // R13.20 (round 9, R9-12): the probe's OWN precondition,
+                                  // measured. `blocks=0` means the block scan did not run, and
+                                  // then `local` says so rather than printing the initialiser
+                                  // as a verdict -- the class this file has been fixing since
+                                  // round 5.
+                                  << " phys_blocks_measured=" << nb_measured
+                                  << " phys_blocks_local="
+                                  << (nb_measured == 0 ? "unmeasured"
+                                                       : (blocks_local ? "1" : "0"));
                     }
                     if (nr_ok > 0) {
-                        std::cerr << " | AM^-1(production): q_min=" << qr_min
-                                  << " neg=" << nr_neg << "/" << nr_ok;
+                        std::cerr << " | AM^-1(production): AMinv_q_min=" << qr_min
+                                  << " AMinv_neg=" << nr_neg << "/" << nr_ok;
                     }
                     if (nl_ok > 0) {
-                        std::cerr << " | M^-1A: q_min=" << ql_min << " neg=" << nl_neg
-                                  << "/" << nl_ok;
+                        std::cerr << " | M^-1A: MinvA_q_min=" << ql_min
+                                  << " MinvA_neg=" << nl_neg << "/" << nl_ok;
                     }
                     // 9F.D121 (review 10, 10.1): both previous claims were too strong.
                     //
@@ -8702,12 +8914,32 @@ public:
                     // is therefore e_hom / identity_frac, and if that reaches 1 the identity is
                     // below the noise floor. The campaign's "5-20%" figure was an ESTIMATE from
                     // eps x scale-separation; these two numbers replace it with a measurement.
-                    // Measured on the RHS direction b/||b|| as well as a random one: at a cold
-                    // start b/||b|| IS the first Arnoldi vector, so it is a genuine Krylov
-                    // direction, and the random/Krylov pair is reported separately because this
-                    // operator is known to behave differently on the two.
-                    double identity_frac_rand = -1.0, identity_frac_krylov = -1.0;
-                    double e_hom_krylov = -1.0;
+                    // Measured on the RHS direction b/||b|| as well as a random one, and
+                    // reported separately because this operator behaves differently on the two.
+                    //
+                    // R13.20 (numerics referee, claim 2a): these were named `*_krylov` on the
+                    // strength of the comment right here -- "at a cold start b/||b|| IS the first
+                    // Arnoldi vector" -- which states a PRECONDITION THE PROBE NEVER MEASURED.
+                    // The record the campaign quoted (stage 2, iteration 3) is a WARM start; this
+                    // case has a measured r0/||b|| = 1.054, and at a warm start the first Arnoldi
+                    // vector is r0/||r0|| = (b - A x0)/||.||, not b/||b||. That is the campaign's
+                    // own rule -- a probe that prints a conclusion must carry a verdict over its
+                    // own preconditions -- recurring one probe over. Renamed to what it IS (the
+                    // RHS direction), with the cold-start condition MEASURED beside it.
+                    //
+                    // (2b) And even at a cold start this is Arnoldi vector #1. The later basis
+                    // vectors, formed by subtracting nearly-parallel projections, are where
+                    // cancellation lives and are NOT measured -- so "the directions GMRES builds"
+                    // was never earned either. The verdict below says `first_arnoldi`, singular.
+                    double identity_frac_rand = -1.0, identity_frac_rhs_dir = -1.0;
+                    double e_hom_rhs_dir = -1.0;
+                    // MEASURED, not asserted: b/||b|| coincides with the first Arnoldi vector
+                    // only when x0 = 0. -1 = the initial guess was not available to check.
+                    int rhs_dir_is_first_arnoldi = -1;
+                    if (gmres_x0.defined()) {
+                        rhs_dir_is_first_arnoldi =
+                            (guarded_item<float>(gmres_x0.norm()) == 0.0f) ? 1 : 0;
+                    }
                     // Probe-local generator (the file's own D121/D123 rule): the global stream
                     // must not shift for downstream one-shot diagnostics.
                     auto probe_gen = at::detail::createCPUGenerator(
@@ -8740,7 +8972,7 @@ public:
                                 v.detach().to(torch::kFloat64).norm().item<double>();
                             identity_frac_rand = (n_Av > 0.0) ? n_v / n_Av : -1.0;
                         }
-                        // Same pair on the RHS direction: the cold-start first Arnoldi vector.
+                        // Same pair on the RHS direction b/||b||.
                         if (gmres_rhs.defined()) {
                             const double n_b =
                                 gmres_rhs.detach().to(torch::kFloat64).norm().item<double>();
@@ -8752,8 +8984,8 @@ public:
                                 if (n_Avb > 0.0) {
                                     const double n_vb =
                                         vb.detach().to(torch::kFloat64).norm().item<double>();
-                                    identity_frac_krylov = n_vb / n_Avb;
-                                    e_hom_krylov =
+                                    identity_frac_rhs_dir = n_vb / n_Avb;
+                                    e_hom_rhs_dir =
                                         rel(gmres_op(alpha * vb) - alpha * Avb, alpha * n_Avb);
                                 }
                             }
@@ -8764,14 +8996,14 @@ public:
                         return (noise >= 0.0 && frac > 0.0) ? noise / frac : -1.0;
                     };
                     const double identity_resolution_rand = resolution(e_hom, identity_frac_rand);
-                    const double identity_resolution_krylov =
-                        resolution(e_hom_krylov, identity_frac_krylov);
+                    const double identity_resolution_rhs_dir =
+                        resolution(e_hom_rhs_dir, identity_frac_rhs_dir);
                     // "Resolved" = the identity term stands above the operator's noise floor.
                     // Unmeasured is NOT resolved: -1 fails the range test rather than passing it.
                     // Consumed by ab_attributable via cmp.identity_resolved below -- the rule
                     // lives in wrf_sdirk3_probe_validity.h so a fixture can reject its negation.
-                    const bool identity_resolved_krylov =
-                        (identity_resolution_krylov >= 0.0 && identity_resolution_krylov < 1.0);
+                    const bool identity_resolved_rhs_dir =
+                        (identity_resolution_rhs_dir >= 0.0 && identity_resolution_rhs_dir < 1.0);
                     // R13.9 (referee C5): the operator's linearity was measured; the
                     // PRECONDITIONER's was not, and the reading "Krylov space of D^-1 A M^-1"
                     // needs M linear too. Production M^-1 is a tridiagonal/column solve on
@@ -8812,6 +9044,13 @@ public:
                     const bool precond_linear =
                         (eM_hom >= 0.0 && eM_hom < kLinearTol) &&
                         (eM_add >= 0.0 && eM_add < kLinearTol);
+                    // R13.20 (numerics referee, claim 1C): these three test LINEARITY, and a
+                    // wrong-but-linear operator A = J + E passes ALL of them EXACTLY. So
+                    // `operator_linear = 1` must never be read as "the operator is accurate" --
+                    // it says the matvec is a linear map, deterministically evaluated. The only
+                    // instrument in this tree that can see a linear operator defect is
+                    // `tau_alpha_over_tau`, and that one is limited to accepted steps and cannot
+                    // see a defect in compute_rhs itself (claim 1B).
                     const bool operator_linear =
                         (e_repeat >= 0.0 && e_repeat < kLinearTol) &&
                         (e_hom    >= 0.0 && e_hom    < kLinearTol) &&
@@ -8881,6 +9120,14 @@ public:
                     };
 
                     const int halo_width_for_probe = 0;   // packed 1-D Krylov vectors
+                    // R13.20 (adversarial loop, iteration 5): the arms' tolerance, NAMED so the
+                    // record can be derived from it. A residual is never < 0, so this disables
+                    // the tolerance exit and every arm runs its full Arnoldi dimension -- which
+                    // is what makes `same_budget` a comparison of equal work. The row used to
+                    // print `tolerance_exit_disabled=1` as a compile-time literal beside fields
+                    // read from real variables, so changing this argument would have left the
+                    // claim standing. Same shape as the `published` literal the tree recorded.
+                    constexpr float kAbArmTol = 0.0f;
                     // Each row gets its OWN fresh preconditioner, so rows are independent of
                     // each other as well as of production. R13.7 ran them through one aging
                     // closure, where only the first row started clean.
@@ -8902,7 +9149,7 @@ public:
                         auto res = krylov_methods::solve_fgmres(
                             std::function<torch::Tensor(const torch::Tensor&)>(counting_op),
                             gmres_rhs, gmres_x0, stage, ru_share,
-                            /*restart=*/m, /*tol=*/0.0f, /*max_iter=*/1,
+                            /*restart=*/m, /*tol=*/kAbArmTol, /*max_iter=*/1,
                             arm_M,
                             layout_initialized_ ? &cached_layout_ : nullptr,
                             halo_mask_initialized_ ? &halo_mask_ : nullptr,
@@ -9246,14 +9493,24 @@ public:
                     cmp.same_solver_path = (refinement_passes_now <= 1);
                     cmp.same_budget = iters_equal;
                     cmp.early_stop_disabled = early_stop_off;
-                    // MEASURED, not asserted (external review P0-1/P0-2).
-                    cmp.same_frozen_operator = true;   // one closure, handed to every arm
-                    cmp.fresh_wrapper_per_arm = true;  // make_fresh_M() copies it per row
-                    cmp.shared_preconditioner_instance = true;  // stated, not hidden
+                    // R13.20 (adversarial loop, iteration 5): "MEASURED, not asserted" stood
+                    // above THREE CONSTANTS. They are true, but true BY CONSTRUCTION AT THIS
+                    // SITE -- one `gmres_op` closure is passed to every arm, `make_fresh_M()`
+                    // copies the wrapper per row, and the preconditioner object is shared -- not
+                    // measured from anything. The label is corrected rather than the values,
+                    // because a constant dressed as a precondition is the defect this campaign
+                    // removed from `alpha_arm_measured` in round 5. What IS measured is the
+                    // consequence, on the lines below: `operator_state_unchanged` and
+                    // `preconditioner_state_unchanged` fingerprint the shared objects before and
+                    // after the arms, which is why sharing them is admissible at all.
+                    cmp.same_frozen_operator = true;   // by construction: one closure, every arm
+                    cmp.fresh_wrapper_per_arm = true;  // by construction: make_fresh_M() per row
+                    cmp.shared_preconditioner_instance = true;  // by construction: shared object
+                    // MEASURED (external review P0-1/P0-2):
                     cmp.operator_state_unchanged = operator_state_unchanged;
                     cmp.preconditioner_state_unchanged = precond_state_unchanged;
                     cmp.diagnostic_noninterfering = noninterfering;
-                    cmp.identity_resolved = identity_resolved_krylov;
+                    cmp.identity_resolved = identity_resolved_rhs_dir;
                     cmp.jvp_authoritative = jvp_ok && operator_linear && precond_linear;
                     cmp.rho_a_finite = cmp.rho_b_finite = all_finite;
                     cmp.termination_a_admissible = cmp.termination_b_admissible =
@@ -9315,7 +9572,19 @@ public:
                               << " precond_state_unchanged=" << (precond_state_unchanged ? 1 : 0)
                               << " counters_restored=" << (counters_restored ? 1 : 0)
                               << " pc_event_moved=" << (pc_event_moved ? 1 : 0)
-                              << " shared_preconditioner_instance=1 fresh_wrapper_per_arm=1"
+                              // R13.20 (adversarial loop, iteration 5): from the FIELDS. These
+                              // were a compile-time literal -- the same defect the tree recorded
+                              // for `published` at tile_unified_impl:12408 -- so a change to
+                              // `fresh_wrapper_per_arm` would have left the row reading 1.
+                              // Printing `shared_preconditioner_instance` also gives it its first
+                              // consumer: it is deliberately NOT a gate in `ab_attributable`
+                              // (sharing is admissible because `preconditioner_state_unchanged`
+                              // measures that the object did not move), so without this it was a
+                              // field nothing read.
+                              << " shared_preconditioner_instance="
+                              << (cmp.shared_preconditioner_instance ? 1 : 0)
+                              << " fresh_wrapper_per_arm="
+                              << (cmp.fresh_wrapper_per_arm ? 1 : 0)
                               << " b_digests_agree=" << (b_digests_agree ? 1 : 0)
                               << " x0_digests_agree=" << (x0_digests_agree ? 1 : 0)
                               << " b_norm=" << b_norm
@@ -9324,7 +9593,8 @@ public:
                               << " rho0_D=" << rho0_D
                               << " refinement_passes=" << refinement_passes_now
                               << " metric=rho_S_unweighted"
-                              << " tolerance_exit_disabled=1"
+                              << " tolerance_exit_disabled="
+                              << ((kAbArmTol <= 0.0f) ? 1 : 0)
                               << " early_stop_disabled=" << (early_stop_off ? 1 : 0)
                               << " jvp_fd_fallback_free=" << (jvp_ok ? 1 : 0)
                               << " operator_linear=" << (operator_linear ? 1 : 0)
@@ -9332,11 +9602,15 @@ public:
                               << " e_homogeneity=" << e_hom
                               << " e_additivity=" << e_add
                               << " identity_frac_rand=" << identity_frac_rand
-                              << " identity_frac_krylov=" << identity_frac_krylov
-                              << " e_hom_krylov=" << e_hom_krylov
+                              // R13.20 (referee claim 2): renamed from `*_krylov`. Same
+                              // quantity, a name that no longer asserts an unmeasured
+                              // precondition; past logs' `identity_*_krylov` rows are these.
+                              << " identity_frac_rhs_dir=" << identity_frac_rhs_dir
+                              << " rhs_dir_is_first_arnoldi=" << rhs_dir_is_first_arnoldi
+                              << " e_hom_rhs_dir=" << e_hom_rhs_dir
                               << " identity_resolution_rand=" << identity_resolution_rand
-                              << " identity_resolution_krylov=" << identity_resolution_krylov
-                              << " identity_resolved_krylov=" << (identity_resolved_krylov ? 1 : 0)
+                              << " identity_resolution_rhs_dir=" << identity_resolution_rhs_dir
+                              << " identity_resolved_rhs_dir=" << (identity_resolved_rhs_dir ? 1 : 0)
                               << " precond_linear=" << (precond_linear ? 1 : 0)
                               << " eM_homogeneity=" << eM_hom
                               << " eM_additivity=" << eM_add
@@ -9566,6 +9840,16 @@ public:
                     ledger_r_gmres = gmres_result.r_true.detach();
                 }
                 stats_.total_krylov_iterations += gmres_result.iterations;
+                // R13.19 SELF-REVIEW (round 8 P1-G, extended): set UNCONDITIONALLY, per solve.
+                // This flag and the `last_*` receipt were written inside the r0-measured guard,
+                // so a solve that did not measure r0 inherited the PREVIOUS iteration's values --
+                // and the exit site promotes `last_*` as "the receipt of THIS solve", which is
+                // exactly the misattribution the R13.18 P0-4 fix exists to prevent. A stale
+                // `gmres_converged_on_entry` would additionally suppress this solve's
+                // total-failure flag, a production effect.
+                gmres_converged_on_entry =
+                    (gmres_result.termination_reason ==
+                         WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged);
                 // R13.14 (round 5, R5-13): the INNER budget these solves were given. The
                 // no-progress ratio is budget-dependent -- a healthy operator on 7 Arnoldi
                 // vectors reads 0.92 -- so the ratio cannot be read without it, and the
@@ -9606,13 +9890,15 @@ public:
                     //
                     // R13.14 (red team round 5, P0): but the max must be over solves that DID
                     // WORK AND DID NOT FINISH, and it was over all of them.
-                    //   * InitialConverged does ZERO work and returns rel_error == r0 ratio, so
-                    //     progress is EXACTLY 1.0 -- under a max, the best possible outcome
-                    //     scores as a total stall. Round 4 added initial_rel_error to that
-                    //     return BECAUSE dropping it from a MIN manufactured a stall; the same
-                    //     commit then made a max the classifier's input, and for a max the same
-                    //     value manufactures the stall directly. Two halves of one commit
-                    //     pointing opposite ways.
+                    //   * InitialConverged does ZERO work and its progress is ~1.0, so under a
+                    //     max the best possible outcome would score as a total stall. Round 4
+                    //     added initial_rel_error to that return BECAUSE dropping it from a MIN
+                    //     manufactured a stall; the same commit then made a max the classifier's
+                    //     input, where the same value manufactures the stall directly.
+                    //     R13.19 (P0-1) narrowed the exclusion to solves that met BOTH metrics,
+                    //     and R13.19 self-review (round 8, P0-B) had to follow it with
+                    //     `met_tolerance` including a D-satisfied InitialConverged -- otherwise
+                    //     admitting the solve only moved the misclassification one clause over.
                     //   * A solve that REACHED TOLERANCE solved. Its progress is evidence about
                     //     the tolerance, not about whether Krylov works.
                     // Excluding both means a stage where every solve either converged on entry
@@ -9637,18 +9923,37 @@ public:
                     // tolerance keeps whatever progress it made, and the fact that it stopped
                     // because it was ASKED to is recorded separately (below) so the classifier
                     // can name the forcing term instead of the operator.
+                    // R13.19 (precision review P0-1): an InitialConverged solve is TRIVIAL
+                    // only when it satisfied BOTH metrics. One that met the stop objective and
+                    // not the S one is not a zero-work success -- it is exactly the objective
+                    // mismatch, and excluding it from the progress aggregate hides the state
+                    // this classifier exists to name.
                     const bool trivial_solve =
                         (gmres_result.termination_reason ==
-                             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged);
+                             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged) &&
+                        gmres_result.D_tolerance_reached &&
+                        gmres_result.S_tolerance_reached;
                     // R13.17 (external review P0-2): `ToleranceReached` is not the only
                     // termination that met a tolerance. `InternalConvergenceStop` means the
                     // D-objective was satisfied -- the loop stopped because it had minimised what
                     // it was asked to -- and reading only the first sent exactly that state back
                     // to KrylovStagnated, the misclassification the category exists to prevent.
                     using KTR_ = WRFNewtonKrylovSolver::KrylovTerminationReason;
+                    // R13.19 SELF-REVIEW (round 8, P0-B): `InitialConverged` MET A TOLERANCE
+                    // -- the D objective; that branch is gated on `error_tensor < tol`. Leaving it
+                    // out made the R13.19 P0-1 fix produce the INVERSION it was written to stop:
+                    // a D-satisfied zero-work solve was admitted to the aggregate (correct), then
+                    // scored as an unmet solve at the maximum, which trips the tie refusal --
+                    // the FIRST clause of the four-way -- so `KrylovObjectiveMismatch`, the
+                    // category the fix exists to reach, became UNREACHABLE for exactly the solve
+                    // it was aiming at, and the layer emitted was the operator/split. The row even
+                    // carried `worst_krylov_D_reached=1 worst_krylov_S_reached=0` beside
+                    // `category=krylov_stagnated`: two mutually exclusive readings on one line.
                     const bool met_tolerance =
                         (gmres_result.termination_reason == KTR_::ToleranceReached) ||
-                        (gmres_result.termination_reason == KTR_::InternalConvergenceStop);
+                        (gmres_result.termination_reason == KTR_::InternalConvergenceStop) ||
+                        (gmres_result.termination_reason == KTR_::InitialConverged &&
+                         gmres_result.D_tolerance_reached);
                     // R13.18 (deep review P0-5): MEASURED exhaustion, not the resolver's
                     // default reason. `MaxBudget` is what the resolver keeps when nothing else is
                     // selected, and it coexists with the message "early exit before max restarts",
@@ -9660,12 +9965,30 @@ public:
                          gmres_result.arnoldi_spent >= gmres_result.arnoldi_allowed);
                     // Where the tolerance came from. A category that names Eisenstat-Walker must
                     // have READ this; the layer string used to assert it.
+                    // R13.19 (precision review P1-1): the source must key on what set the
+                    // TOLERANCE. `stage_budget_forcing_coupled` is `policy.ew_applied`, which is
+                    // whether Eisenstat-Walker changed the RESTART BUDGET -- so a run whose
+                    // tolerance came from E-W while the budget multiplier happened to be 1 was
+                    // recorded as `Base`. And the INN ramp multiplies krylov_tol_adaptive and was
+                    // not in the selector at all, leaving `InnRamp` with no producer. Last writer
+                    // wins, which is the order the tolerance is actually built in.
+                    // R13.20 (round 9, R9-5), two corrections to this selector:
+                    //  (a) `stage_budget_forcing_eta > 0` is DROPPED. It is `policy.ew_eta_used`,
+                    //      and `apply_ew` (wrf_sdirk3_stage_krylov_policy.h:114-134) writes the
+                    //      restart BUDGET and never `p.tol` -- only apply_stage2/apply_stage3
+                    //      write the tolerance, and both also set `tol_overridden`, which is the
+                    //      `krylov_tol_stage_override` arm above. So the disjunct could only fire
+                    //      with adaptive tolerances OFF and a stage budget knob set, where it
+                    //      labelled a plain `options_.krylov_tol` solve `eisenstat_walker`. Same
+                    //      category error as the P1-1 defect it replaced, one level up.
+                    //  (b) the E-W arm no longer collapses to one enum value: `ew_tol_source`
+                    //      carries which of {forcing term, eta clamp, initial floor, base} bound.
                     const int tol_source = static_cast<int>(
-                        krylov_tol_stage_override
-                            ? wrf::sdirk3::KrylovToleranceSource::StageOverride
-                            : (stage_budget_forcing_coupled
-                                   ? wrf::sdirk3::KrylovToleranceSource::EisenstatWalker
-                                   : wrf::sdirk3::KrylovToleranceSource::Base));
+                        gmres_inn_tol_ramped
+                            ? wrf::sdirk3::KrylovToleranceSource::InnRamp
+                            : (krylov_tol_stage_override
+                                   ? wrf::sdirk3::KrylovToleranceSource::StageOverride
+                                   : ew_tol_source));
                     // R13.18 (deep review P0-4): this solve's receipt, recorded where
                     // gmres_result is in scope. The Newton exit site is later in the same
                     // iteration and outside this scope; it promotes these into exit_* so a
@@ -9700,6 +10023,18 @@ public:
                                         S_diag_.numel() == v.numel())
                                            ? (S_diag_ * v) : v;
                             };
+                            // R13.19 SELF-REVIEW, ROUND 9 (R9-1): the halo-zeroing added here
+                            // was INERT and has been removed. `zero_halo_regions` early-returns
+                            // on `t.dim() < 3` and these are 1-D PACKED state vectors, so both
+                            // calls returned at the first `if` on every run, for every halo
+                            // width and grid. The tree states this in three other places
+                            // ("1D packed tensors: raw norm", "zero_halo_regions is no-op on 1D
+                            // tensors").
+                            //
+                            // That also falsifies the premise I accepted from the numerics
+                            // referee: rho_D and rho_S are computed on copies produced by the
+                            // SAME no-op, so they are equally raw and there was never a halo
+                            // asymmetry between the three metrics to correct.
                             const auto e64 = E_inv_r.to(torch::kFloat64);
                             const auto rE =
                                 (to_phys(gmres_result.r_true.detach()).to(torch::kFloat64) * e64)
@@ -9740,12 +10075,32 @@ public:
                         // two verdicts, and the verdict decides whether the forcing-term / objective-mismatch
                         // categories may be read at all.
                         {
-                            wrf::sdirk3::NearWorstFold st{
-                                static_cast<double>(stats_.worst_krylov_rel_error_vs_r0),
-                                stats_.all_near_worst_met_tolerance};
+                            wrf::sdirk3::NearWorstFold st;
+                            st.worst =
+                                static_cast<double>(stats_.worst_krylov_rel_error_vs_r0);
+                            st.worst_unmet = stats_.near_worst_unmet;
                             st = wrf::sdirk3::near_worst_accumulate(
                                 st, static_cast<double>(progress), met_tolerance);
-                            stats_.all_near_worst_met_tolerance = st.all_met;
+                            stats_.near_worst_unmet = st.worst_unmet;
+                            // Evaluated from two MAXIMA at the end, so the answer cannot depend
+                            // on the order the solves arrived in.
+                            stats_.all_near_worst_met_tolerance =
+                                wrf::sdirk3::near_worst_all_met(st);
+                            // R13.19 SELF-REVIEW: and the per-solve MECHANISM, so the layer named
+                            // is not whichever solve happened to arrive first at a tied worst.
+                            {
+                                wrf::sdirk3::KrylovSolveMechanism m;
+                                m.progress = static_cast<double>(progress);
+                                m.met_tolerance = met_tolerance;
+                                m.D_reached = gmres_result.D_tolerance_reached;
+                                m.S_reached = gmres_result.S_tolerance_reached;
+                                m.budget_exhausted = budget_exhausted;
+                                m.tolerance_source = tol_source;
+                                stats_.krylov_mechanisms.push_back(m);
+                                stats_.near_worst_mechanism_ambiguous =
+                                    wrf::sdirk3::near_worst_mechanism_ambiguous(
+                                        stats_.krylov_mechanisms);
+                            }
                         }
                         if (progress > stats_.worst_krylov_rel_error_vs_r0) {
                             stats_.worst_krylov_rel_error_vs_r0 = progress;
@@ -9770,6 +10125,9 @@ public:
                                 gmres_result.S_tolerance_reached;
                             stats_.worst_krylov_tolerance_source = tol_source;
                             stats_.worst_krylov_budget_exhausted = budget_exhausted;
+                            // R13.20 (claim 7.4): the same solve in the LADDER's coordinate.
+                            stats_.worst_krylov_rho_D = gmres_result.rho_D_final;
+                            stats_.worst_krylov_rho_S = gmres_result.rho_S_final;
                         }
                     } else {
                         stats_.krylov_solves_trivial++;
@@ -9808,10 +10166,17 @@ public:
                 // -- it is the case where x0 already did -- and was excluded from the count of
                 // solves that reached it. That made "how many linear solves actually finished"
                 // an undercount precisely on the iterations where Newton was closest.
+                // R13.19 SELF-REVIEW (round 8, P1-B): a consumer left behind when its
+                // producer's meaning changed. R13.15 added InitialConverged here because it "did
+                // satisfy the tolerance" -- true when that return reported a single metric.
+                // R13.19 made it report two, and a solve can now reach this line having met the
+                // D objective and NOT the S one. Counting that as a finished solve overstates
+                // exactly the case the objective-mismatch work exists to surface.
                 if (gmres_result.termination_reason ==
                         KrylovTerminationReason::ToleranceReached ||
-                    gmres_result.termination_reason ==
-                        KrylovTerminationReason::InitialConverged) {
+                    (gmres_result.termination_reason ==
+                         KrylovTerminationReason::InitialConverged &&
+                     gmres_result.S_tolerance_reached)) {
                     stats_.gmres_tolerance_reached++;
                 }
 
@@ -9927,10 +10292,29 @@ public:
                             // x=0 bounds the SCALED residual, not this one. Reporting progress in
                             // a norm the solver does not optimise is a category error, and every
                             // coefficient comparison in this campaign so far has been read off it.
+                            // R13.20 (dt=600 budget ladder, 2026-08-24): PROVENANCE. This row
+                            // carried no stage and no Newton iteration, and the number of rows a
+                            // run emits does not match its solve count -- it is emitted
+                            // conditionally. So a reader cannot tell WHICH solve a row describes,
+                            // and comparing "the same solve" across a budget sweep is impossible
+                            // from the log. I nearly drew a mechanism conclusion from the first
+                            // row of each run on the assumption that it was Newton iteration 0 of
+                            // stage 2; the assumption is unverifiable from the record, and the
+                            // back-computed ||b|| varying 3.6x across the sweep says it was
+                            // probably false. Same class as R13.10's stage-provenance fix for the
+                            // classifier: a diagnostic without provenance invites confident
+                            // cross-run comparisons of different things.
+                            //
+                            // `b_unscaled` is derived, not re-measured: final_residual / rel_error
+                            // is exactly the denominator this row's ratio used, so a reader can
+                            // see when a ratio moved because the RHS moved.
                             std::cerr << "SDIRK3_GMRES_ESTIMATE_VS_TRUE"
+                                      << " stage=" << stage
+                                      << " newton_iter=" << newton_iter
                                       << " internal_iters=" << gmres_result.iterations
                                       << " final_residual=" << gmres_result.final_residual
                                       << " rel_error_UNSCALED=" << gmres_result.rel_error
+                                      << " b_unscaled_derived=" << bn
                                       << " note=minimised_norm_is_block_scaled"
                                       << std::endl;
                             // NOT THE MINIMISED NORM -- retained as telemetry with its status in
@@ -10728,9 +11112,18 @@ public:
             // produced the round-4 P0 one deleted `r0_measured &&` away from returning.
             const float r0_ref = gmres_initial_rel_error;
             const bool total_failure_vs_b  =
+                !gmres_converged_on_entry &&
                 (gmres_raw_rel_error > 1.0f || gmres_rel_error >= 0.999f);
+            // R13.19 SELF-REVIEW (round 8, P1-A): a solve that CONVERGED ON ENTRY is not a
+            // total failure, and after the P0-1 fix it would otherwise be flagged as one
+            // UNCONDITIONALLY. `rel_error` now carries rho_S, and `initial_rel_error` is
+            // rn0/bn0 taken from the same halo-zeroed r and the same PRE-SCALING b -- the same
+            // two norms -- so their ratio is exactly 1 and `raw >= 0.99 * r0_ref` is always
+            // true. That would put every InitialConverged solve on the recovery / zero-step
+            // path under the opt-in r0 rule: a production side effect of a fix whose commit
+            // message claimed only to change what is REPORTED.
             const bool total_failure_vs_r0 =
-                r0_measured &&
+                r0_measured && !gmres_converged_on_entry &&
                 (gmres_raw_rel_error > r0_ref * (1.0f + 1.0e-4f) ||
                  gmres_raw_rel_error >= 0.99f * r0_ref);
             // With the flag on and r0 unmeasured the r0 rule cannot be evaluated. Falling back
@@ -11461,7 +11854,22 @@ public:
                 stats_.accepted_steps++;
                 // Referee C8: the TAYLOR DEFECT of the stage function at the step actually
                 // taken. tau = ||G(K+s) - G(K) - A s|| / ||A s||, with A s one production
-                // matvec. tau << 1: the linear model is faithful here and the INNER solve is
+                // matvec.
+                //
+                // R13.20 (numerics referee, claim 1B) -- WHAT tau CAN AND CANNOT SEE. `As` is the
+                // AD JVP OF `compute_rhs`, and `dR` is a finite difference OF THE SAME
+                // `compute_rhs` (R = K - compute_rhs(U); the alpha arm re-evaluates
+                // compute_rhs(U_alpha)). So tau measures whether the AD tangent is consistent
+                // with the primal it differentiates. It CANNOT see a defect in `compute_rhs`
+                // itself: if the implemented RHS is physically wrong, AD differentiates the wrong
+                // function faithfully and tau -> 0. That is not hypothetical here -- the
+                // campaign's own standing root-cause note (Omega := rom = mu*w where WRF's Omega
+                // is mu*d(eta)/dt from calc_ww_cp) is exactly such a defect, and it would leave
+                // every tau row untouched. "Jacobian defect" below means AD-vs-primal, nothing
+                // wider.
+                //
+                // (1D) and it is gated on `step_accepted` -- see the coverage fields on the
+                // emitted row and on SDIRK3_FIRST_FAILURE. tau << 1: the linear model is faithful here and the INNER solve is
                 // the binding constraint. tau = O(1): the model is wrong at this step -- and
                 // the half-step arm separates the two ways it can be wrong: nonlinearity over
                 // the step (tau falls ~2x at s/2, the relative defect being ~linear in ||s||)
@@ -11539,6 +11947,14 @@ public:
                     // normalised by its OWN ||A s||, with a floor so a block the step barely
                     // touches cannot manufacture a huge ratio from noise.
                     double tau_block_max = -1.0;
+                    // R13.20 (claim 7.1): the counterfactual, on every row. `tau_block_max` is
+                    // gated by the excitation floor; this is the largest RAW block ratio with no
+                    // gate at all. On the dt=600 record they disagree -- 0.2008 (`ru`, excited)
+                    // vs 0.207042 (`rw`, share 2.16e-04) -- and the second is larger, so quoting
+                    // the verdict alone reports the floor's choice as a property of the operator.
+                    double tau_block_max_raw = -1.0;
+                    std::string tau_block_max_name = "none";
+                    std::string tau_block_max_raw_name = "none";
                     std::string tau_block_rows;
                     if (layout_initialized_ && cached_layout_.is_exact &&
                         cached_layout_.total_size == dR.numel()) {
@@ -11551,7 +11967,7 @@ public:
                             const double na = a_b.norm().item<double>();
                             // Floor: a block carrying <0.1% of ||A s|| is not being exercised by
                             // this step, and its ratio is noise over noise.
-                            const double floor_b = 1.0e-3 * n_As_all;
+                            const double floor_b = tau_excitation_share_ * n_As_all;
                             const bool excited = (na >= floor_b);
                             const double den = std::max(na, floor_b);
                             const double num = (d_b - a_b).norm().item<double>();
@@ -11564,7 +11980,14 @@ public:
                             // emitted 0.0447 whose RAW value is ~0.207, and the campaign doc read
                             // the emitted number as evidence of accuracy.
                             const double tb_raw = na > 0.0 ? num / na : -1.0;
-                            if (excited && tb > tau_block_max) tau_block_max = tb;
+                            if (excited && tb > tau_block_max) {
+                                tau_block_max = tb;
+                                tau_block_max_name = blk.name;
+                            }
+                            if (tb_raw > tau_block_max_raw) {
+                                tau_block_max_raw = tb_raw;
+                                tau_block_max_raw_name = blk.name;
+                            }
                             tau_block_rows += " tau_" + std::string(blk.name) + "=" +
                                               std::to_string(tb) +
                                               " tauraw_" + std::string(blk.name) + "=" +
@@ -11616,6 +12039,14 @@ public:
                         signal_to_roundoff = roundoff > 0.0 ? n_dR / roundoff : -1.0;
                     }
                     wrf::sdirk3::TaylorDefectInputs tin;
+                    // R13.20 (round 9, R9-11): declares v2. It does NOT assert that all four
+                    // v2 fields were populated -- three of them are conditionally assigned above
+                    // (`tau_block_max` on an exact layout and an excited block,
+                    // `realized_step_fraction` on n_s > 0, `realized_U_fraction` on n_dU > 0) --
+                    // and when one is missing the verdict fails closed to `ReceiptIncomplete`,
+                    // which is what P1-3 was written for. The predecessor comment claimed the
+                    // unconditional version.
+                    tin.receipt_version = 2;
                     tin.tau_block_max = tau_block_max;
                     tin.realized_step_fraction = realized_step_fraction;
                     tin.realized_U_fraction = realized_U_fraction;
@@ -11631,8 +12062,18 @@ public:
                     const auto tau_verdict = wrf::sdirk3::taylor_defect_verdict(tin);
                     const bool tau_measured =
                         (tau_verdict == wrf::sdirk3::TaylorVerdict::Measured);
+                    stats_.taylor_probe_last_iter = newton_iter;
                     std::cerr << "SDIRK3_TAYLOR_DEFECT stage=" << stage
                               << " newton_iter=" << newton_iter
+                              // R13.20 (numerics referee, claim 1): the probe's own GATE, and the
+                              // denominators it implies. This block is inside `if (step_accepted)`,
+                              // so a rejected iteration -- and the zero-update exit that ends the
+                              // loop at dt=600 -- is never sampled. A run that printed three tau
+                              // rows out of twelve iterations looked like a probe that fired three
+                              // times, not one that could not see nine of them.
+                              << " probe_gate=step_accepted"
+                              << " accepted_so_far=" << stats_.accepted_steps
+                              << " rejected_so_far=" << stats_.rejected_steps
                               << " tau=" << tau
                               << " alpha=" << kTauAlpha
                               << " tau_alpha=" << tau_alpha
@@ -11649,6 +12090,14 @@ public:
                               << " fd_fallback_free=" << (tin.fd_fallback_free ? 1 : 0)
                               << " linearity_residual=" << linearity_residual
                               << " tau_excited_block_max=" << tau_block_max
+                              << " tau_excited_block_max_name=" << tau_block_max_name
+                              // R13.20 (claim 7.1): the floor, its provenance, and what the
+                              // verdict would have named without it.
+                              << " tau_excitation_share=" << tau_excitation_share_
+                              << " tau_excitation_share_observed="
+                              << (tau_excitation_share_observed_ ? 1 : 0)
+                              << " tau_raw_block_max=" << tau_block_max_raw
+                              << " tau_raw_block_max_name=" << tau_block_max_raw_name
                               << " realized_step_fraction=" << realized_step_fraction
                               << " realized_U_fraction=" << realized_U_fraction
                               << " signal_to_roundoff=" << signal_to_roundoff
@@ -11661,9 +12110,12 @@ public:
                               // faithful to 2%" and "tau=0.018, we measured the noise floor"
                               // are the same row without this gate.
                               << (tau_measured
-                                  ? "  (tau<<1: linear model faithful, inner solve binding;"
+                                  ? "  (tau<<1: the AD tangent is faithful TO THE PRIMAL IT"
+                                    " DIFFERENTIATES over this accepted step, and the inner solve"
+                                    " is binding -- a wrong compute_rhs is invisible here;"
                                     " tau=O(1) with tau_alpha/tau~alpha: nonlinearity over the"
-                                    " step; tau=O(1) with tau_alpha/tau~1: Jacobian defect)"
+                                    " step; tau=O(1) with tau_alpha/tau~1: AD-vs-primal Jacobian"
+                                    " defect)"
                                   : "  (NO CONCLUSION: preconditions not met -- see"
                                     " tau_verdict; tau and the ratio are arithmetic, not"
                                     " evidence about the Jacobian)")
@@ -12040,17 +12492,27 @@ public:
                         // evidence is how a category ends up describing a solve that did not
                         // end anything.
                         // Promote THIS iteration's solve receipt (recorded above, where
-                        // gmres_result was in scope) as the exit solve's.
-                        stats_.exit_krylov_iter = stats_.last_solve_iter;
-                        stats_.exit_rho_stop_final = stats_.last_rho_stop_final;
-                        stats_.exit_rho_S_final = stats_.last_rho_S_final;
-                        stats_.exit_D_reached = stats_.last_D_reached;
-                        stats_.exit_S_reached = stats_.last_S_reached;
-                        stats_.exit_stopping_metric = stats_.last_stopping_metric;
-                        stats_.exit_tolerance_source = stats_.last_tolerance_source;
-                        stats_.exit_budget_exhausted = stats_.last_budget_exhausted;
-                        stats_.exit_rho_E_final = stats_.last_rho_E_final;
-                        stats_.exit_E_reached = stats_.last_E_reached;
+                        // gmres_result was in scope) as the exit solve's -- and only if it IS
+                        // this iteration's. `last_*` is written per solve; a Newton iteration
+                        // that took a path without a solve would otherwise donate a stale
+                        // receipt to the exit event, labelled "the receipt of THIS solve".
+                        if (stats_.last_solve_iter != newton_iter) {
+                            // No solve receipt for THIS iteration: the exit event gets none
+                            // rather than the previous iteration's, which the classifier would
+                            // otherwise subtype from.
+                            stats_.exit_krylov_iter = -1;
+                        } else {
+                            stats_.exit_krylov_iter = stats_.last_solve_iter;
+                            stats_.exit_rho_stop_final = stats_.last_rho_stop_final;
+                            stats_.exit_rho_S_final = stats_.last_rho_S_final;
+                            stats_.exit_D_reached = stats_.last_D_reached;
+                            stats_.exit_S_reached = stats_.last_S_reached;
+                            stats_.exit_stopping_metric = stats_.last_stopping_metric;
+                            stats_.exit_tolerance_source = stats_.last_tolerance_source;
+                            stats_.exit_budget_exhausted = stats_.last_budget_exhausted;
+                            stats_.exit_rho_E_final = stats_.last_rho_E_final;
+                            stats_.exit_E_reached = stats_.last_E_reached;
+                        }
                         break;
                     }
                     // v20.14r36: Configurable zero-step stagnation limit (was hardcoded 3).

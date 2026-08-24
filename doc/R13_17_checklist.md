@@ -300,6 +300,12 @@ A (S coords):   q_min=+5615.98  q_max=+5865.77  neg=0/24
 A (physical) :  q_min=-8043.13  q_max=-5232.09  neg=24/24
 ```
 
+*(R13.20, iteration 10: those two rows came off a single emitted line on which **all four arms used
+the key `q_min=` and three used `neg=`**, separated only by prose — so a keyed read of it returned
+whichever arm came last, and this section quotes two different `neg=` values from it. The keys are
+now per-arm: `A_q_min` / `A_neg`, `Aphys_q_min` / `Aphys_neg`, `AMinv_*`, `MinvA_*`. The numbers
+above are unchanged; only the row they will be re-read from is now unambiguous.)*
+
 The sign of the quadratic form of **the same operator** flips with the metric — which is the
 review's point, demonstrated rather than argued.
 
@@ -314,19 +320,99 @@ qphys_ph=+1.000000  qphys_t=+7198.81  qphys_mu=-7196.82
 phys_blocks_pos=5  phys_blocks_neg=1  phys_straddles_origin=1
 ```
 
-**MEASURED: `W(A)` straddles the origin in the physical Euclidean inner product, and the witness is
-the `mu` block.** The campaign's "intrinsically indefinite" therefore survives the coordinate
-objection — it is a property of the operator, not of `S` or `D`.
+**MEASURED: `W(A)` straddles the origin in the physical Euclidean inner product.**
 
-Note the near-exact antisymmetry: `ru`/`t` at **+7198.81** against `mu` at **−7196.82**. That is the
-signature of a skew-like coupling between the mass variable and the momentum/thermal ones — the
-continuity coupling — and it is consistent with the long-standing record that `mu` dominates the
-stage-2 residual.
+*Corrected by the numerics referee — the original reading here was **logically inverted**.* It said
+"the witness is the `mu` block" and that the negative reading "carries the conclusion". It does not:
+the **negative** side was already over-determined by the 24 random directions (`neg = 24/24`). What
+the block scan **adds** is the *positive* side — `ru`, `rv`, `rw`, `t` — and **the straddle rests
+entirely on those four structured readings**, which are exactly the ones the caveat below discounts
+as possibly degenerate for horizontally-uniform directions.
+
+The consequence is sharper than the original text: **in the physical metric the random evidence
+alone reads negative definite**, which for GMRES is as good as positive definite. So the straddle
+depends on the block scan, and the positive side — not `mu` — is what a further measurement must
+attack.
+
+~~…survives the coordinate objection **only through those four structured directions**~~ —
+**OVERSTATED IN THE OPPOSITE DIRECTION (round 9, R9-12), corrected.** The caveat below identifies
+degeneracy by `q ≈ 1`, and it says degeneracy makes a reading *understate* structure, i.e. the
+measured `|q − 1|` is a **lower bound**. By that test `ph` (1.000000) is degenerate and `ru`
+(7198.81), `rv` (7188.39), `rw` (14285.89) and `t` (7198.81) are **not** — the document's own
+non-degeneracy argument for `mu` ("nowhere near 1") applies verbatim to them. The straddle is
+witnessed by a non-degenerate positive **and** a non-degenerate negative. The correction traded an
+overclaim for its mirror image; what is actually true is narrower: *the random sample is one-sided
+and the straddle depends on the block scan; the block scan's positive readings are not `q≈1`
+degenerate, but uniform-fill directions are a restricted probe and a spanning sample of six is a
+witness, not a bound* — which is caveat (2) below, unchanged.
+
+**RESOLVED BY MEASUREMENT (dt=600 run, 2026-08-24) — read this before the paragraph below it.**
+The probe now emits per-direction in/out-of-block norms, and the first run **falsified the
+instrument before it answered the question**: computing the out-of-block norm as
+`sqrt(‖x‖² − ‖x_in‖²)` is catastrophic cancellation when the out-of-block part is exactly zero, and
+it reported `qphys_ru_vout = 0.838` — accusing the probe of a defect it does not have — while
+elsewhere returning exactly `0.0` where the true residue is merely small. Taken directly (zero the
+block, measure what is left) on the re-run:
+
+```
+qphys_*_vout = 0.000000 for ALL SIX blocks        phys_blocks_local=1   phys_blocks_measured=6
+```
+
+**So the directions ARE block-local, measured, not argued.** Round 9's proposed mechanism (leakage)
+is refuted, and my own first metric was the only thing suggesting otherwise.
+
+**And the coincidence has an explanation.** With `q = ⟨v,Av⟩/‖v‖²` and `v` block-local, split it into
+the in-block gain `‖(Av)_in‖/‖v_in‖` and the alignment `q / gain`:
+
+| blk | q | gain = ‖Av_in‖/‖v_in‖ | q / gain | ‖Av_out‖/‖Av_in‖ |
+|---|---|---|---|---|
+| ru | +7198.814 | 43338.106 | +0.1661 | 1.6e-08 |
+| rv | +7188.386 | 43406.316 | +0.1656 | 2.8e-07 |
+| rw | +14285.893 | 86174.536 | +0.1658 | **5.9e+03** |
+| ph | +1.000000 | **1.000** | +1.0000 | **0.0** |
+| t  | +7198.814 | 43338.105 | +0.1661 | 2.1e-16 |
+| mu | **−7196.816** | 43337.774 | **−0.1661** | 1.1e-05 |
+
+**Both factors are shared.** The gain agrees between `ru` and `t` to **1 part in 5×10⁷**, with `mu`
+at 1 part in 1.3×10⁵ and `rv` 0.157 % away; `rw` is **1.9884×** it. The alignment is **±0.166 on
+every non-degenerate block**. That is the referee's "one shared mode or normalisation", measured.
+
+**What this does to §13's claim.** The straddle **survives**: `rw` (+14285.9) and `mu` (−7196.8) are
+both non-degenerate and their gains genuinely differ (2×). But *"a spanning sample of six
+directions"* is now measurably weaker than it reads — **five of the six sample essentially one
+gain**, with the sign carried by `mu` alone and `rw` at twice it. The uniform-fill family probes
+roughly **one mode**, and caveat (2) below should be read as that, not as six independent witnesses.
+`ph` is settled outright: gain exactly 1.000 and `‖Av_out‖ = 0.0` **exactly** — `A` acts as precisely
+the identity there and does not leak, so `J` has no component along it at all.
+
+*(Inferred, not measured: if `A = I − hγJ` with `hγ = 600γ ≈ 261.5`, these back out to a
+block-diagonal Rayleigh quotient of `J` of −27.52 s⁻¹ on ru/t, +27.52 on mu, −54.62 on rw and 0 on
+ph. The γ was not read from the code for this note; treat the s⁻¹ figures as illustrative.)*
+
+**Previously open (round 9, R9-12), retained for the audit trail.** Three of the six report `|q − 1|` identical to six
+figures — `ru` 7197.81, `t` 7197.81, `mu` 7197.82 (opposite sign); `rv` differs by 0.15 %, `rw` is
+~1.98× the common value. Three nominally independent directions agreeing to ~1 part in 10⁵ in a
+stiff, heterogeneous operator wants an explanation before anything else is built on these numbers.
+The review's proposed mechanism — *the block directions are not block-local* — is **refuted by
+construction**: `e_b` is exactly zero outside its block, so `⟨v,Av⟩` reads only block-`b` rows and
+no other block can contribute to `q_b`. That leaves a shared coefficient or a genuine physical
+coincidence, and the probe now emits what discriminates them: per direction, `_vout` (the
+out-of-block support of `v`, which must be 0), `_Avin` and `_Avout` (where the response goes), plus
+`phys_blocks_measured` / `phys_blocks_local` so the precondition carries a verdict instead of an
+initialiser. **Until those rows are read, §13's numbers carry no locality verdict and must not be
+built on again.** Withdrawing a *reading* of a number is not validating the number.
+
+~~Note the near-exact antisymmetry … the signature of a skew-like coupling.~~ **WITHDRAWN.**
+Single-block directions probe the *diagonal* blocks of the symmetric part; they cannot see the
+`mu`↔`(ru,t)` **coupling** at all, so a near-antisymmetric pair of diagonal readings is not evidence
+of a skew coupling between them. It says the two diagonal blocks have near-opposite symmetric parts,
+which is a different statement and does not identify a mechanism.
 
 **Two caveats, stated rather than buried.** (1) The block directions are uniform-fill, and this
 project has already recorded that horizontally-uniform structured directions are a **null space** for
 some blocks. `qphys_ph = 1.000000` *exactly* is that signature — `A = I − hγJ` acting as precisely the
 identity, i.e. `J` has no component along it — so the **positive** readings may understate structure.
-The negative witness is not degenerate (−7196.82, nowhere near 1) and is what carries the
-conclusion. (2) A spanning sample of six directions is a witness for straddling, not a bound on the
-range; "5 positive" is not a proof that only `mu` is negative.
+The `mu` reading is not degenerate (−7196.82, nowhere near 1) — but per the correction above it is
+**not what carries the conclusion**; the four positive readings are, and they are the ones this
+caveat applies to. (2) A spanning sample of six directions is a witness for straddling, not a bound
+on the range; "5 positive" is not a proof that only `mu` is negative.

@@ -466,6 +466,33 @@ if [ "${1:-}" = "--self-test" ]; then
   SELF_TEST_EXPECTED_WITH_LIVE=56
   SELF_TEST_EXPECTED_NO_LIVE=44
   if [ -x "$CBIN" ]; then exp=$SELF_TEST_EXPECTED_WITH_LIVE; else exp=$SELF_TEST_EXPECTED_NO_LIVE; fi
+  # R13.20 (adversarial loop, iterations 6-7): the COVERAGE CENSUS, DERIVED from this file
+  # rather than restated in the workflow -- and reporting what ACTUALLY RAN, not what is
+  # present.
+  #
+  # The YAML used to carry a hand-written census ("42 gate calls + 2 skip", "16 covered,
+  # lines 205-235", "26 not covered, lines 263-434", "--self-test exits at 239") and every
+  # one of those numbers had drifted. Iteration 6 replaced it with a derived count of the
+  # gates INSIDE this block -- and that overstated hosted-CI coverage by the gates behind
+  # `-x "$CBIN"`, which the torch-free hosted job does not build. A coverage claim larger
+  # than what runs is the same defect one layer down, so the headline number below is
+  # `$checks`: the gates this invocation executed.
+  _census_src="${BASH_SOURCE[0]}"
+  _st_open="$(grep -n 'if \[ "\${1:-}" = "--self-test" \]' "$_census_src" | head -1 | cut -d: -f1)"
+  _st_close="$(grep -n 'SELF-TEST: ALL PASS' "$_census_src" | head -1 | cut -d: -f1)"
+  _g_all="$(grep -cE '^[[:space:]]*gate ' "$_census_src")"
+  _s_all="$(grep -cE '^[[:space:]]*skip ' "$_census_src")"
+  _g_in="$(awk -v a="$_st_open" -v b="$_st_close" 'NR>=a && NR<=b && /^[[:space:]]*gate /' "$_census_src" | wc -l | tr -d ' ')"
+  _g_out=$((_g_all - _g_in))
+  _g_live=$((SELF_TEST_EXPECTED_WITH_LIVE - SELF_TEST_EXPECTED_NO_LIVE))
+  if [ -x "$CBIN" ]; then _live="present"; else _live="ABSENT (torch-free hosted job)"; fi
+  note "CENSUS (derived, not stated): ${_g_all} gate + ${_s_all} skip"
+  note "  EXECUTED THIS RUN: ${checks}   contract binary: ${_live}"
+  note "  ${_g_in} gate calls sit in the --self-test block, of which ${_g_live} need that binary"
+  note "  ${_g_out} after the block  -> 'bash -n' SYNTAX CHECK ONLY in hosted CI"
+  note "  What that does NOT prove: the shared helpers ARE exercised, but the WIRING at each"
+  note "  production gate -- which helper, which argument, which comparison -- is not. An"
+  note "  inverted test, a stale variable, or a gate that can never fire still passes."
   if [ "$checks" -ne "$exp" ]; then
     note "  FAIL: self-test executed $checks checks, expected $exp"
     note "        (a gate was added or removed -- update the ratchet deliberately)"

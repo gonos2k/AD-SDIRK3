@@ -202,27 +202,30 @@ jobs:
       # PR 9F.2 P2: same argument for the stage-operand harness, but be exact
       # about what this does and does not cover.
       #
-      # Census, counted rather than estimated (42 `gate` calls + 2 `skip` total):
+      # R13.20 (adversarial loop, iteration 6): the census that stood here was
+      # HAND-WRITTEN and every number in it had drifted -- it claimed "42 gate
+      # calls + 2 skip", "16 covered, lines 205-235", "26 not covered, lines
+      # 263-434" and "--self-test exits at 239", against a measured 95 gates, 3
+      # skips and a self-test block spanning 187..474. A coverage claim that
+      # drifts, inside the gate that IS the coverage, is the defect the README
+      # ctest-count ratchet exists to stop.
       #
-      # COVERED -- 16 gates, lines 205-235, inside the --self-test block. Each
-      # runs against a synthetic fixture built to VIOLATE the property it claims.
-      # No WRF, no mpirun, sub-second. Until now that pass rate was local
-      # evidence, not a standing gate: nothing failed if a gate silently stopped
-      # rejecting its fixture.
+      # Iteration 7 then caught the REPLACEMENT overstating: counting the gates
+      # present in the block says 56, but 12 of them sit behind `-x "$CBIN"` and
+      # this torch-free job does not build that binary, so 44 actually run. The
+      # census headline is `EXECUTED THIS RUN` now -- what ran, not what is
+      # present -- with the live-only count derived from the ratchet constants.
       #
-      # NOT COVERED -- the 26 gates at lines 263-434 (provenance, ideal.exe,
-      # positive OFF/ON, negative topology). --self-test exits at 239, so these
-      # get `bash -n` syntax checking ONLY.
+      # So it is DERIVED now, not restated: --self-test prints the census from
+      # its own source (`CENSUS (derived, not stated): ...`) together with what
+      # the split does and does not prove. Read it in this step's log rather
+      # than trusting a number typed here.
       #
-      # Precisely what is and is not proven: the shared HELPERS those gates call
-      # (cnt, gate_common_records, gate_rhs_records, gate_success_count,
-      # gate_fail_count, gate_closure_count, rhs_sweep_table,
-      # rhs_sweeps_well_formed) ARE exercised by the self-test. What is unproven
-      # is the WIRING at each production gate -- which helper it calls, with
-      # which argument, against which comparison. An inverted test, a stale
-      # variable, or a gate that can never fire still passes CI. Closing that
-      # needs the gate bodies extracted into functions the self-test can drive
-      # with synthetic logs; until then a green fast-contracts does NOT mean
+      # The standing caveat, which is not a count and so is repeated: the shared
+      # HELPERS those gates call ARE exercised by the self-test; the WIRING at
+      # each production gate -- which helper, with which argument, against which
+      # comparison -- is not. An inverted test, a stale variable, or a gate that
+      # can never fire still passes CI. A green fast-contracts does NOT mean
       # "the acceptance gates are proven".
       #
       # Run under `bash -e` deliberately -- several gates count with `grep -c`,
@@ -244,7 +247,7 @@ jobs:
           /tmp/actionlint -version
           /tmp/actionlint
 
-      - name: from_blob ratchet (actual == head baseline, never above base branch)
+      - name: lint ratchets -- from_blob and .item()-outside-NoGradGuard (actual == head baseline, never above base branch)
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bash .github/ci/check_ratchets.sh "$BASE_SHA"
@@ -395,13 +398,20 @@ jobs:
           STAGE_OPERAND_CONTRACT_BIN="$PWD/$BIN" \
             bash -e external/libtorch_wrf/sdirk3/tests/stage_operand_runtime_acceptance.sh --self-test \
             | tee /tmp/live_selftest.log
-          # Key on the exact-count ratchet, not a gate title. A title is prose and
-          # silently drifts (this grep broke the moment the gate was renamed); the
-          # count is a contract, and 40-vs-28 is itself the proof that the live
-          # gates ran rather than skipped.
-          grep -q 'SELF-TEST: ALL PASS (56/56)' /tmp/live_selftest.log \
-            || { echo "FAIL: live gates did not run (expected the 56/56 ratchet)"; \
-                 tail -5 /tmp/live_selftest.log; exit 1; }
+          # Key on a DERIVED signal, not a duplicated number. The original keyed on a
+          # gate title, which drifted the moment the gate was renamed; the replacement
+          # keyed on `ALL PASS (56/56)`, which put the expected count in TWO places --
+          # here and SELF_TEST_EXPECTED_WITH_LIVE in the script -- so adding a live gate
+          # needed two edits and this one silently lagged. (Its own comment still said
+          # "40-vs-28", numbers from an older pair: the rot, in the sentence explaining
+          # the fix.) The script already fails when `checks != exp`, so the count stays
+          # owned there; what this step must prove is that the LIVE path was taken, and
+          # the census line says that directly.
+          grep -q 'contract binary: present' /tmp/live_selftest.log \
+            || { echo "FAIL: live gates skipped -- the contract binary was not picked up"; \
+                 tail -8 /tmp/live_selftest.log; exit 1; }
+          grep -q 'SELF-TEST: ALL PASS' /tmp/live_selftest.log \
+            || { echo "FAIL: self-test did not pass"; tail -8 /tmp/live_selftest.log; exit 1; }
 
       - name: CTest inventory (exact set, then run)
         run: |

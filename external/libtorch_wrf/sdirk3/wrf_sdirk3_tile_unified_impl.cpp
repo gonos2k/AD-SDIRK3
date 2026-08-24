@@ -9204,7 +9204,56 @@ vertical_coefficients:
                     sig.signals_from_stage = last_stage_signals_populated_by_stage_;
                     sig.classifying_stage = stage_id;
                     sig.is_explicit_stage = last_stage_signals_is_explicit_;
-                    const auto first = wrf::sdirk3::first_failure_of(sig);
+                    // R13.20 (adversarial loop, iteration 6): ONE classifier call. `first` used
+                    // to be an independent `first_failure_of(sig)` beside `diag.primary_event`
+                    // computed from the same input -- equal today because the function is pure,
+                    // but the emitter now pairs `first` with `diag.primary_event_basis`, and a
+                    // layer derived from one call annotating a category from another is the
+                    // shape round 8's P0-C removed one field over.
+                    // R13.19 (P1-4): the metric evidence, preserved beside the event rather than
+                    // discarded by it. `attribution` is what the same clauses say with the
+                    // recorded exit removed, so "the event outranks the reconstruction" no longer
+                    // means "the reconstruction is thrown away".
+                    const auto diag = wrf::sdirk3::stage_diagnosis_of(sig);
+                    const auto first = diag.primary_event;
+                    // R13.20 (round 9, R9-3): the specific layer and the receipt it came from,
+                    // computed TOGETHER from the basis the deciding clause reported. Two defects
+                    // in the previous inline form:
+                    //   * `layer_receipt` printed unconditionally, so the ~13 categories whose
+                    //     `specific_layer` is `n/a` still carried `layer_receipt=stage_worst` --
+                    //     the struct default rendered as a measurement, on a row where no receipt
+                    //     was consulted. One commit message reported it as a finding.
+                    //   * the `KrylovForcingTermLimited` branch offered an `exit_tolerance_source`
+                    //     arm that no input can select: that category is returned only by the r0
+                    //     four-way, never by the exit-receipt block. It is gone rather than left
+                    //     as a live-looking alternative.
+                    using wrf::sdirk3::StageDecisionBasis;
+                    const bool layer_from_exit =
+                        (diag.primary_event_basis == StageDecisionBasis::ExitReceipt);
+                    const bool layer_from_worst =
+                        (diag.primary_event_basis == StageDecisionBasis::KrylovR0Receipt);
+                    const char* specific_layer = "n/a";
+                    if (first == wrf::sdirk3::StageFailure::KrylovForcingTermLimited) {
+                        specific_layer =
+                            layer_from_worst
+                                ? wrf::sdirk3::krylov_forcing_layer_for(
+                                      sig.worst_krylov_tolerance_source)
+                                : "inner_tolerance_source_unrecorded";
+                    } else if (first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
+                        // Two arms, both live: this category is returned by the exit-receipt
+                        // block and by the r0 four-way, and by nothing else. A third
+                        // "neither" arm would be exactly the unreachable alternative this
+                        // change removes one line above.
+                        specific_layer =
+                            layer_from_exit
+                                ? wrf::sdirk3::krylov_stopping_layer_for(sig.exit_stopping_metric)
+                                : "stop_metric_unrecorded_for_worst_solve";
+                    }
+                    const char* layer_receipt =
+                        (std::strcmp(specific_layer, "n/a") == 0)
+                            ? "n/a"
+                            : (layer_from_exit ? "exit"
+                                               : (layer_from_worst ? "stage_worst" : "none"));
                     std::cerr << "SDIRK3_FIRST_FAILURE stage=" << stage_id
                               // which stage actually populated the signals being classified --
                               // equal to stage_id or the record is classifying someone else
@@ -9212,6 +9261,44 @@ vertical_coefficients:
                               << " signals_explicit=" << (last_stage_signals_is_explicit_ ? 1 : 0)
                               << " category=" << wrf::sdirk3::stage_failure_name(first)
                               << " layer=" << wrf::sdirk3::stage_failure_layer(first)
+                              // R13.19 (precision review P0-4/P1-1): the SPECIFIC layer, derived
+                              // from the metric and the tolerance source the record carries. The
+                              // helpers existed and only the contract tests called them, so the
+                              // claim that "the recorded source selects the layer" was not
+                              // implemented end to end -- the emitter printed the neutral one.
+                              << " attribution="
+                              << wrf::sdirk3::stage_failure_name(diag.attribution)
+                              << " attribution_layer="
+                              << wrf::sdirk3::stage_failure_layer(diag.attribution)
+                              << " attribution_measured="
+                              << (diag.attribution_measured ? 1 : 0)
+                              << " attribution_from_metric="
+                              << (diag.attribution_from_metric ? 1 : 0)
+                              // R13.19 SELF-REVIEW (round 8, P0-C): the layer must be derived
+                              // from the SAME receipt that decided the category. This used to
+                              // read the EXIT solve's source/metric unconditionally, while the
+                              // four-way clauses can be reached from the STAGE-WORST receipt --
+                              // a layer describing one solve annotating a category decided by
+                              // another. Both are computed above from the reported basis.
+                              << " specific_layer=" << specific_layer
+                              << " layer_receipt=" << layer_receipt
+                              // R13.20: and the basis itself, so a reader can see WHICH body of
+                              // evidence answered without inferring it from the category.
+                              // R13.20 (numerics referee, claim 1): does the Taylor-defect
+                              // evidence cover the iteration that ENDED this stage? The probe is
+                              // gated on `step_accepted`, so when the loop exits on a rejected or
+                              // zero update it structurally cannot -- and every tau this campaign
+                              // has quoted came from a step that succeeded.
+                              << " taylor_probe_iter=" << sig.taylor_probe_last_iter
+                              << " taylor_covers_last_newton_iter="
+                              << (sig.taylor_probe_last_iter < 0
+                                      ? "unmeasured"
+                                      : (sig.taylor_probe_last_iter == sig.newton_iterations - 1
+                                             ? "1" : "0"))
+                              << " event_basis="
+                              << wrf::sdirk3::stage_decision_basis_name(diag.primary_event_basis)
+                              << " attribution_basis="
+                              << wrf::sdirk3::stage_decision_basis_name(diag.attribution_basis)
                               << " retry=" << (retry_used ? 1 : 0)
                               << " entry_finite=" << (sig.entry_state_finite ? 1 : 0)
                               << " R0_measured=" << (sig.initial_residual_measured ? 1 : 0)
@@ -9237,6 +9324,14 @@ vertical_coefficients:
                               << " best_krylov_rel_vs_r0=" << sig.best_krylov_rel_error_vs_r0
                               << " worst_krylov_rel_vs_r0="
                               << sig.worst_krylov_rel_error_vs_r0
+                              // R13.20 (numerics referee, claim 7.4): the SAME solve in the
+                              // coordinate the frozen A/B ladder reports (rho_D, b-normalised)
+                              // and in the one `success` is judged by (rho_S). Both were already
+                              // computed; only the r0 one reached the record, so the comparison
+                              // that would say whether the ladder is representative of the
+                              // production solve could not be made from a log.
+                              << " worst_krylov_rho_D=" << sig.worst_krylov_rho_D
+                              << " worst_krylov_rho_S=" << sig.worst_krylov_rho_S
                               << " worst_krylov_iter=" << sig.worst_krylov_iter
                               << " krylov_solves_vs_r0="
                               << sig.krylov_solves_measured_vs_r0
@@ -9255,6 +9350,8 @@ vertical_coefficients:
                                      sig.worst_krylov_tolerance_source)
                               << " near_worst_all_met_tol="
                               << (sig.all_near_worst_met_tolerance ? 1 : 0)
+                              << " near_worst_mech_ambiguous="
+                              << (sig.near_worst_mechanism_ambiguous ? 1 : 0)
                               << " newton_exit="
                               << wrf::sdirk3::newton_termination_name(sig.newton_termination)
                               << " exit_krylov_iter=" << sig.exit_krylov_iter
@@ -9262,8 +9359,11 @@ vertical_coefficients:
                               << " exit_S_reached=" << (sig.exit_S_reached ? 1 : 0)
                               << " exit_rho_stop=" << sig.exit_rho_stop_final
                               << " exit_rho_S=" << sig.exit_rho_S_final
-                              << " exit_rho_E=" << sig.exit_rho_E_final
-                              << " exit_E_reached=" << (sig.exit_E_reached ? 1 : 0)
+                              // R13.19 (P0-2): named for what it is -- the StageEntry-weighted
+                              // LINEAR Krylov residual, not the stage gate's nonlinear metric.
+                              << " exit_rho_E_entry_linear=" << sig.exit_rho_E_final
+                              << " exit_E_entry_linear_reached="
+                              << (sig.exit_E_reached ? 1 : 0)
                               << " exit_stop_metric="
                               << wrf::sdirk3::krylov_stopping_metric_name(sig.exit_stopping_metric)
                               << " exit_tol_source="
@@ -9992,6 +10092,33 @@ vertical_coefficients:
                         last_stage_signals_is_explicit_ = true;
                         // ESDIRK explicit first stage: evaluate fast tendency directly.
                         k_fast[i] = compute_fast_rhs(U_stage, U_full_exch_stage);
+                        // R13.20 (adversarial loop, iteration 2) -- TWO defects, one root.
+                        //
+                        // (1) `explicit_rhs_measured` / `explicit_rhs_finite` had NO producer
+                        //     anywhere in production; only the test fixtures wrote them. The
+                        //     R13.10 reset three lines above is correct -- an explicit stage must
+                        //     not inherit the last implicit stage's signals -- but it left these
+                        //     two at their `false` defaults, so `!explicit_rhs_measured` returned
+                        //     `insufficient_evidence` at the FIRST line of the explicit branch and
+                        //     the three categories below it were unreachable. The fix that closed
+                        //     one instance of this class opened another.
+                        //
+                        // (2) RETRACTED in iteration 8, by reading the code I should have read
+                        //     before writing it. Iteration 2 claimed "the gate could not fire on
+                        //     an explicit stage AT ALL, so a non-finite tendency passed silently
+                        //     into the next stage". FALSE: the shared `k_fast_all_finite` check
+                        //     ~40 lines below runs after BOTH branches and already sets
+                        //     `last_stage_converged_ = false` on a non-finite tendency, which
+                        //     makes `stage_failed` true and the gate fire. What was true is (1):
+                        //     the gate fired and the classifier could not say WHY, because the
+                        //     two signals it branches on had no producer.
+                        //
+                        // So `measured` is set here -- it is free, no sync -- and `finite` comes
+                        // from that shared check, which computes it once for both branches.
+                        // Duplicating the isfinite() reduction here, as iteration 2 did, bought a
+                        // second GPU->CPU sync per timestep for a fact already being measured.
+                        last_stage_signals_.explicit_rhs_measured =
+                            k_fast[i].defined() && k_fast[i].numel() > 0;
                         if (stage_id == 1) {
                             newton_solver_->maybe_save_trajectory_checkpoint(U_stage, stage_id);
                         }
@@ -10030,6 +10157,14 @@ vertical_coefficients:
                         k_fast_all_finite = torch::isfinite(k_fast[i])
                             .all().detach().to(torch::kCPU).item<bool>();
                     }
+                    // R13.20 (adversarial loop, iterations 2 + 8): the single producer of
+                    // `explicit_rhs_finite`. It had NONE until iteration 2 -- only the test
+                    // fixtures wrote it -- so `first_failure_of` returned `insufficient_evidence`
+                    // at the first line of its explicit branch on EVERY explicit-stage gate
+                    // failure, and the three categories below it were unreachable. Fed from the
+                    // reduction this block already performs, for both branches, rather than from
+                    // a second one on the explicit path.
+                    last_stage_signals_.explicit_rhs_finite = k_fast_all_finite;
                     if (!k_fast_all_finite) {
                         probe_firsthit_nonfinite(stage_id, retry_used, "k_fast_nonfinite", k_fast[i]);
                         if (stage_id == 2) {
@@ -10043,6 +10178,16 @@ vertical_coefficients:
                         last_stage_rel_R_full_ = std::numeric_limits<float>::infinity();
                         last_stage_rel_R_full_raw_ = std::numeric_limits<float>::infinity();
                         last_stage_R_full_norm_ = std::numeric_limits<float>::infinity();
+                        // R13.20 (adversarial loop, iteration 8): the WRMS pair too. This block
+                        // set three of the five gate metrics to infinity and left
+                        // `wrms_growth_` -- which is the metric `stage_gate_metric_value()` reads
+                        // in the DEFAULT mode 0 -- untouched. `converged_ = false` above forces
+                        // the gate to fire either way, so nothing was missed; but which metrics
+                        // are infinite decided `gate_metric_ok`, and therefore whether the record
+                        // said "the tendency is not finite" or "the metric was fine". A runtime
+                        // mode should not change what a NaN looks like on the record.
+                        last_stage_wrms_norm_ = std::numeric_limits<float>::infinity();
+                        last_stage_wrms_growth_ = std::numeric_limits<double>::infinity();
                         if (!(last_stage_initial_R0_ > 0.0f) || !std::isfinite(last_stage_initial_R0_)) {
                             last_stage_initial_R0_ = 1.0f;
                         }
@@ -13312,6 +13457,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         static_cast<wrf::sdirk3::KrylovToleranceSource>(stats.worst_krylov_tolerance_source);
     last_stage_signals_.worst_krylov_budget_exhausted = stats.worst_krylov_budget_exhausted;
     last_stage_signals_.all_near_worst_met_tolerance = stats.all_near_worst_met_tolerance;
+    last_stage_signals_.near_worst_mechanism_ambiguous = stats.near_worst_mechanism_ambiguous;
+    last_stage_signals_.taylor_probe_last_iter = stats.taylor_probe_last_iter;
+    last_stage_signals_.worst_krylov_rho_D = stats.worst_krylov_rho_D;
+    last_stage_signals_.worst_krylov_rho_S = stats.worst_krylov_rho_S;
     last_stage_signals_.exit_krylov_iter = stats.exit_krylov_iter;
     last_stage_signals_.exit_D_reached = stats.exit_D_reached;
     last_stage_signals_.exit_S_reached = stats.exit_S_reached;
@@ -14896,7 +15045,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 if (!t.defined() || t.numel() == 0) return;
                 const float eps = getAutocastAwareEps(t);
                 auto valid = torch::isfinite(t) & (t.abs() >= eps);
-                auto bad_count = (~valid).sum().item<int64_t>();
+                // R13.20 (adversarial loop, iteration 4): guarded. See the audit note above
+                // computeUnifiedRHS -- these 18 sites are the ones NOT behind a debug gate.
+                auto bad_count = wrf::sdirk3::guarded_item<int64_t>((~valid).sum());
                 if (bad_count > 0) {
                     t = torch::where(valid, t, torch::ones_like(t));
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
@@ -20264,7 +20415,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             try {
                                 auto tg = t._fw_grad(/*level=*/0);
                                 if (tg.defined() && tg.numel() > 0) {
-                                    float tg_norm = tg.norm().item<float>();
+                                    float tg_norm = wrf::sdirk3::guarded_item<float>(tg.norm());
                                     std::cerr << "[FWAD_CHECK] " << name << ": HAS tangent, ||tangent||=" << tg_norm << std::endl;
                                 } else {
                                     std::cerr << "[FWAD_CHECK] " << name << ": NO tangent" << std::endl;
@@ -20396,7 +20547,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         auto rw_k_has_nan_cpu = rw_tend_k_cpu.isnan().any();
                         auto rw_tend_k_min_cpu = rw_tend_k_cpu.min();
                         auto rw_tend_k_max_cpu = rw_tend_k_cpu.max();
-                        bool rw_k_has_nan = rw_k_has_nan_cpu.item<bool>();
+                        bool rw_k_has_nan = wrf::sdirk3::guarded_item<bool>(rw_k_has_nan_cpu);
                         if (!rw_k_has_nan) {
                             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                                 std::cerr << "[SDIRK3] W-PGF rw_tend_k: " << rw_tend_k_min_cpu.item<float>()
@@ -20473,15 +20624,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         }
 
                         // Check for NaN in inputs
-                        if (p_diff_has_nan_cpu.item<bool>()) {
+                        if (wrf::sdirk3::guarded_item<bool>(p_diff_has_nan_cpu)) {
                             std::cerr << "[SDIRK3] W-PGF WARNING: p_diff has NaN at k=" << k << std::endl;
                         }
-                        if (cq1_k_has_nan_cpu.item<bool>()) {
+                        if (wrf::sdirk3::guarded_item<bool>(cq1_k_has_nan_cpu)) {
                             std::cerr << "[SDIRK3] W-PGF WARNING: cq1_k has NaN at k=" << k << std::endl;
                         }
                         // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
                         auto muf_k_has_nan_cpu = muf_k_cpu.isnan().any();
-                        if (muf_k_has_nan_cpu.item<bool>()) {
+                        if (wrf::sdirk3::guarded_item<bool>(muf_k_has_nan_cpu)) {
                             std::cerr << "[SDIRK3] W-PGF WARNING: muf_k has NaN at k=" << k << std::endl;
                         }
                     }
@@ -20660,8 +20811,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
                         auto wpgf_has_nan_cpu = wpgf_cpu.isnan().any();
                         auto wpgf_has_inf_cpu = wpgf_cpu.isinf().any();
-                        auto has_nan = wpgf_has_nan_cpu.item<bool>();
-                        auto has_inf = wpgf_has_inf_cpu.item<bool>();
+                        auto has_nan = wrf::sdirk3::guarded_item<bool>(wpgf_has_nan_cpu);
+                        auto has_inf = wrf::sdirk3::guarded_item<bool>(wpgf_has_inf_cpu);
 
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
@@ -20747,7 +20898,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         auto rw_tend_k_after_has_nan_cpu = rw_tend_k_after_cpu.isnan().any();
                         auto rw_tend_k_after_min_cpu = rw_tend_k_after_cpu.min();
                         auto rw_tend_k_after_max_cpu = rw_tend_k_after_cpu.max();
-                        bool rw_tend_k_after_has_nan = rw_tend_k_after_has_nan_cpu.item<bool>();
+                        bool rw_tend_k_after_has_nan = wrf::sdirk3::guarded_item<bool>(rw_tend_k_after_has_nan_cpu);
                         if (!rw_tend_k_after_has_nan) {
                             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                                 std::cerr << "[SDIRK3] W-PGF rw_tend_k_after[k=" << k << "]: " << rw_tend_k_after_min_cpu.item<float>()
@@ -20801,7 +20952,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             try {
                                 auto tg = t._fw_grad(0);
                                 if (tg.defined() && tg.numel() > 0) {
-                                    float tg_norm = tg.norm().item<float>();
+                                    float tg_norm = wrf::sdirk3::guarded_item<float>(tg.norm());
                                     std::cerr << "[FWAD_CHECK] " << name << ": HAS tangent, ||tangent||=" << tg_norm << std::endl;
                                 } else {
                                     std::cerr << "[FWAD_CHECK] " << name << ": NO tangent" << std::endl;
@@ -24121,7 +24272,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // PERF FIX 2025-12-28: Pre-compute NaN checks with _cpu suffix
     auto ru_nan_cpu = torch::any(torch::isnan(ru_tend_val_cpu));
-    if (ru_nan_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(ru_nan_cpu)) {
         has_nan = true;
     }
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24134,7 +24285,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // PERF FIX 2025-12-28: Pre-compute NaN checks with _cpu suffix
     auto rv_nan_cpu = torch::any(torch::isnan(rv_tend_val_cpu));
-    if (rv_nan_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(rv_nan_cpu)) {
         has_nan = true;
     }
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24147,11 +24298,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // PERF FIX 2025-12-28: Pre-compute NaN/Inf checks with _cpu suffix
     auto rw_nan_cpu = torch::any(torch::isnan(rw_tend_val_cpu));
-    if (rw_nan_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(rw_nan_cpu)) {
         has_nan = true;
     }
     auto rw_inf_cpu = torch::any(torch::isinf(rw_tend_val_cpu));
-    if (rw_inf_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(rw_inf_cpu)) {
         has_inf = true;
     }
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24307,7 +24458,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 try {
                     auto tg = t._fw_grad(0);
                     if (tg.defined() && tg.numel() > 0) {
-                        float tg_norm = tg.norm().item<float>();
+                        float tg_norm = wrf::sdirk3::guarded_item<float>(tg.norm());
                         std::cerr << "[FWAD_CHECK] " << name << ": HAS tangent, ||tangent||=" << tg_norm << std::endl;
                     } else {
                         std::cerr << "[FWAD_CHECK] " << name << ": NO tangent" << std::endl;
@@ -28681,19 +28832,19 @@ void TileSDIRK3UnifiedSolver::checkTensorHealth(const torch::Tensor& tensor,
 
     // Check for NaN values
     auto nan_any_cpu = torch::isnan(tensor_cpu).any();
-    if (nan_any_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(nan_any_cpu)) {
         throw std::runtime_error("NaN in " + name);
     }
 
     // Check for Inf values
     auto inf_any_cpu = torch::isinf(tensor_cpu).any();
-    if (inf_any_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(inf_any_cpu)) {
         throw std::runtime_error("Inf in " + name);
     }
 
     // Check magnitude
     auto max_abs_cpu = torch::max(torch::abs(tensor_cpu));
-    float max_abs = max_abs_cpu.item<float>();
+    float max_abs = wrf::sdirk3::guarded_item<float>(max_abs_cpu);
     if (max_abs > 1e10f) {
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
             std::cerr << "[SDIRK3] Large magnitude warning in " << name

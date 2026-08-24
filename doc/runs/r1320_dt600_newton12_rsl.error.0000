@@ -1,0 +1,2069 @@
+taskid: 0 hostname: Yongui-MacBookPro.local
+ starting wrf task            0  of            1
+ module_io_quilt_old.F        2931 F
+Quilting with   1 groups of   0 I/O tasks.
+ Ntasks in X            1 , ntasks in Y            1
+  Domain # 1: dx = ********* m
+WRF V4.7.0 MODEL
+git commit a8e91c9748149f9bc9a36a4b9db5dcd5e5d6d507
+ *************************************
+ Parent domain
+ ids,ide,jds,jde            1          41           1          81
+ ims,ime,jms,jme           -4          46          -4          86
+ ips,ipe,jps,jpe            1          41           1          81
+ *************************************
+DYNAMICS OPTION: Eulerian Mass Coordinate
+   alloc_space_field: domain            1 ,             201436844  bytes allocated
+  med_initialdata_input: calling input_input
+   Input data is acceptable to use: wrfinput_d01
+ CURRENT DATE          = 0001-01-01_00:00:00
+ SIMULATION START DATE = 0001-01-01_00:00:00
+Timing for processing wrfinput file (stream 0) for domain        1:    0.06266 elapsed seconds
+Initializing SDIRK3 implicit time integration in start_em
+Max map factor in domain 1 =  1.00. Scale the dt in the model accordingly.
+Timing for Writing wrfout_d01_0001-01-01_00:00:00 for domain        1:    0.11067 elapsed seconds
+ === FORTRAN DEBUG: About to check USE_SDIRK3 block ===
+ === FORTRAN DEBUG: config_flags%time_integration_scheme =           6
+ Tile Strategy is not specified. Assuming 1D-Y
+WRF TILE   1 IS      1 IE     41 JS      1 JE     81
+WRF NUMBER OF TILES =   1
+ === SDIRK3 FORTRAN: Entering main SDIRK3 computation ===
+ === SDIRK3 FORTRAN: itimestep =           1
+ === SDIRK3 FORTRAN: num_tiles =           1
+ === SDIRK3 FORTRAN: checking initialization...
+Using SDIRK3 implicit time integration
+ === BEFORE sdirk3_initialize_solvers ===
+[CONFIG] wrf_w_damping = 0
+[CONFIG] wrf_zadvect_implicit = 0
+[CONFIG] wrf_w_crit_cfl = 1
+[C++ CONFIG DEBUG] Setting precond_type = 2
+[CONFIG] precond_mu_coupling_damping = 0.1
+[CONFIG DEBUG] Setting jvp_method = 0 (from value 0), use_autograd = 0
+[CONFIG DEBUG] Setting use_autograd = 1 (from value 1), jvp_method = 1
+[CONFIG] enable_stage_halo_exchange = 0
+[CONFIG] stage_boundary_sync = false
+[CONFIG] nk_trust_region = false
+[CONFIG] stage2_gmres_restart = 8
+[CONFIG] stage2_max_krylov_restarts = 1
+[CONFIG] stage2_krylov_tol = 0
+[CONFIG] stage2_ew_eta_min = 0
+[CONFIG] stage2_ew_eta_max = 0
+[CONFIG] stage3_gmres_restart = 0
+[CONFIG] stage3_max_krylov_restarts = 0
+[CONFIG] stage3_krylov_tol = 0
+[CONFIG] stage3_ew_eta_min = 0
+[CONFIG] stage3_ew_eta_max = 0
+[CONFIG] IMEX raw: imex_split_mode=3, imex_enabled=0
+[CONFIG] IMEX effective: mode=3 (post-solve IMEX ARK324)
+[CONFIG] imex_slow_in_tangent = 0
+[CONFIG] imex_phys_in_tangent = 0
+[CONFIG] stage1_explicit = 0
+[CONFIG] stage3_warmstart = 0
+[CONFIG] stage_fail_action = 0 (0=continue, 1=abort, 2=retry_once_then_abort)
+[CONFIG] gate_metric_mode = 0 (0=wrms_growth, 1=scaled_abs, 2=legacy_rel)
+[CONFIG] stage3_gate_rel_threshold = 0 (0=use stage_gate_rel_threshold)
+[CONFIG] stagnation_gate_enable = false
+[CONFIG] stagnation_growth_floor = 0.9
+[CONFIG] stage_require_convergence = false
+[CONFIG] hevi_split = false
+[CONFIG] split_explicit = false
+[CONFIG] mu_horizontal_div_only = false
+[CONFIG] wrf_omega_ww_cp = false
+[CONFIG] mass_coordinate_mode = 0 (Legacy)
+[CONFIG] split_explicit_time_step_sound = 4
+[CONFIG] split_explicit_epssm = 0.1
+[CONFIG] split_explicit_smdiv = 0.1
+[CONFIG] split_explicit_emdiv = 0.01
+[CONFIG] split_explicit_top_lid = false
+[CONFIG] hopeless_relax = false
+[CONFIG] precond_ratio_guard_warn_only = false
+[CONFIG] jvp_auto_bench_calls = 0
+[CONFIG] jvp_auto_bench_quality_gate = false
+[CONFIG] jvp_auto_bench_warmup = 0
+[CONFIG] jvp_auto_bench_seed = 0
+[CONFIG] jvp_auto_bench_lock_reset_stage1 = false
+[CONFIG] solver_telemetry = true
+[CONFIG] progress_invariant_enable = false
+[CONFIG] progress_invariant_min_ratio = 0
+[CONFIG] progress_invariant_streak_limit = 0
+[CONFIG] variable_pc_event_log = false
+[CONFIG] gmres_warmstart = true
+[CONFIG] gmres_warmstart_quality_gate = 1
+[CONFIG] inn_warmstart_enable = true
+[CONFIG] inn_residual_gate_enable = true
+[CONFIG] inn_q_min = 0
+[CONFIG] inn_gate_rel_tol = 1e-06
+[CONFIG] inn_gate_q_noise = 5e-07
+[CONFIG] inn_beta_max = 0.25
+[CONFIG] inn_ood_guard_enable = false
+[CONFIG] inn_tol_ramp_enable = false
+[CONFIG] inn_tol_ramp_gamma = 1
+[CONFIG] rhs_bc_parity = false
+[CONFIG] mass_pgf_bc_guard = false
+[CONFIG] precond_horizontal_smooth_alpha = 0
+[CONFIG] precond_horizontal_smooth_iters = 1
+[CONFIG] precond_vertical_smooth_alpha = 0
+[CONFIG] precond_smooth_boundary_guard = false
+[CONFIG] trust_region_block_aware_thresh = 0
+[CONFIG] trust_fallback_relax = false
+[CONFIG] trust_fallback_ratio = 0.98
+[CONFIG] direct_u_solve_thresh = 0
+[CONFIG] enable_ad_halo_exchange = 0
+[CONFIG] obs_source_mode = 0
+[CONFIG] obs_window_sync_mode = 0
+SDIRK3: MPI baseline thread established by sdirk3_mpi_safety_init, MPI thread level 0 (single-flight contract enforced regardless)
+[CONFIG EFFECTIVE] precond: gs_beta=0.5, theta_factor=0, w_boost=2, uv_vfrac=1, warmup_start=0, refinement=1, relaxation=0, coupled_phi_w=off, du_weak=1/0.95
+[CONFIG EFFECTIVE] wdamp_parity: wrf_w_damping=0 wrf_zadvect_implicit=0 w_damp_alpha=0.3 wrf_w_crit_cfl=1 legacy_w_crit_cfl=1 implicit_wdamp=1
+[CONFIG EFFECTIVE] stagnation_gate=off, growth_floor=0.9
+[CONFIG EFFECTIVE] stage_require_convergence=off (legacy soft-continue)
+[CONFIG EFFECTIVE] hevi_split=off (full implicit)
+[CONFIG EFFECTIVE] mu_horizontal_div_only=off (mu tendency also carries the omega*rdnw column sum div_z)
+[CONFIG EFFECTIVE] mass_coordinate_mode=0 (Legacy) -> omega_ww_cp=off, mu_horizontal_div_only=off
+[CONFIG EFFECTIVE] wrf_omega_ww_cp(raw)=off (Omega = rom = mu*w, the coupled vertical momentum)
+[CONFIG EFFECTIVE] split_explicit=off (ARK324 implicit)
+[CONFIG EFFECTIVE] solver: gmres_restart=10, max_krylov=2, max_newton=12, stage_fail=0, gate_metric_mode=0, s4_severe_abort=on, retry_nan_sanitize=off, firsthit_probe=off, s4_preclip=off, s4_clip_abs=1e+06, retry_handoff_clip=off, retry_handoff_clip_abs=1e+06, jvp_block_eps=off, true_res=12+8, arnoldi_stag=3/0.995, mixed_fd=0
+[CONFIG EFFECTIVE] thresholds: near_fail=0.003, stall=0.003, catastrophic_cap=10000/abs100, explosion=10000/100, fd_samples=0
+[CONFIG EFFECTIVE] limits: zero_step_stall=3, gs_awphi_cap=1, stage_gate=100, stage3_gate=0, stage_damp=10, growth_cap=10, K_floor=1, gate_metric_mode=0, tr_max_rel=0.5
+[CONFIG EFFECTIVE] r49: stage2_budget=8/1/0, stage2_ew=0/0, stage3_budget=0/0/0, stage3_ew=0/0, stage3_warmstart=off, hopeless_relax=off, precond_guard_warn_only=off, jvp_bench=0, jvp_bench_qgate=off, jvp_bench_warmup=0, jvp_bench_seed=0, jvp_bench_reset_s1=off, solver_tel=on, p_inv=off/0/0, varpc_log=off, gmres_warmstart=on, gmres_ws_gate=1, inn_ws=on, inn_gate=on, inn_qmin=0, inn_gate_rel_tol=1e-06, inn_gate_q_noise=5e-07, inn_beta=0.25, inn_ood=off, inn_tol_ramp=off/1, rhs_bc_parity=off, mass_pgf_bc_guard=off, stage_bsync=off, h_smooth=0/1, v_smooth=0, smooth_bdy_guard=off, block_tr=0, tr_fb_relax=off, tr_fb_ratio=0.98, direct_u=0, blk_scale=1
+[CONFIG PROVENANCE] tile=1 experiment{uv_slow=none stage1_substeps=1} digest=0xd4cfc4696c08b97c diagnostics{trace_u_terms=0 dump_advect_u_split=0}
+
+=== TileSDIRK3UnifiedSolver CONSTRUCTOR ===
+  nx=41, ny=81, nz=64
+  ny_v_=82, nx_u_=42, nz_w_=65
+  periodic_x=0, periodic_y=0
+  About to set PyTorch threads to 1
+  PyTorch threads set to 1 (interop=1)
+  rdnw validated: 64 levels
+    rdnw[0] = 28.1039, rdnw[63] = 201.272
+[SDIRK3] fnm[1]+fnp[1]=1 (should be 1.0)
+  Boundary conditions:
+    periodic_x=0
+    periodic_y=0
+    symmetric_xs=0
+    symmetric_xe=0
+    symmetric_ys=0
+    symmetric_ye=0
+    is_idealized=0
+
+=== STORING GRID PARAMETERS IN unifiedStep ===
+  rdx vector size = 1
+  rdy vector size = 1
+  rdx[0] = 1e-05 (1/dx)
+  rdy[0] = 1e-05 (1/dy)
+[CONFIG DIAGNOSTIC] g_sdirk3_config.debug_level = 1
+[CONFIG DIAGNOSTIC] g_sdirk3_config.nk_adaptive_tol = TRUE
+[CONFIG DIAGNOSTIC] g_sdirk3_config.nk_line_search = TRUE
+[CONFIG DIAGNOSTIC] g_sdirk3_config.precond_type = 2
+[CONFIG DIAGNOSTIC] g_sdirk3_config.max_krylov_iter = 2
+[CONFIG DIAGNOSTIC] g_sdirk3_config.krylov_tol = 0.1
+[CONFIG DIAGNOSTIC] nk_options.verbose = FALSE
+[NEWTON SOLVER CONFIG] Preconditioner: ENABLED (type=2)
+[NEWTON SOLVER CONFIG] GMRES restart: 10
+[NEWTON SOLVER CONFIG] Max Krylov iter: 2
+[NEWTON SOLVER CONFIG] Krylov tol (base): 0.1
+[NEWTON SOLVER CONFIG] Eisenstat-Walker: ENABLED
+[NEWTON SOLVER CONFIG] Line search: ENABLED
+[NEWTON SOLVER CONFIG] 4DVAR replay: save_trajectory=DISABLED, checkpoint_interval=10, retain_graph_for_adjoint=DISABLED
+[NEWTON SOLVER CONFIG] Grid dimensions for JVP epsilon scaling:
+  nx=41, ny=81, nz=64
+  nx_u=42, ny_v=82, nz_w=65 (constructor defaults, will be updated by setStaggeredDimensions)
+[PRECOND SELECTION] UnifiedPreconditioner with W-θ coupling (precond_type=2)
+[PRECOND] w_acoustic_boost = 2 (from config)
+[PRECOND] theta_acoustic_factor = 0 (from config)
+UnifiedPreconditioner: Implicit damping/diffusion enabled:
+  - Divergence damping: kdamp=0.2
+  - Rayleigh damping: coef=0.2
+  - W-damping: alpha=0.3
+  - Vertical diffusion: kvdif=100
+  IMEX scope gating (mode=3): rayleigh=OFF vdiff=OFF divergence=on
+  wdamp: physical_w_direct_diag=0 extra_regularization=OFF
+[PRECOND CTOR] STEP A: Damping config done, creating diagonal arrays with nz=64
+[PRECOND CTOR] STEP A1: About to create TensorOptions
+[PRECOND CTOR] STEP A2: TensorOptions created, calling torch::ones({nz+1})
+[PRECOND CTOR] STEP A3: vertical_diag_w_ created
+[PRECOND CTOR] STEP B: Diagonal arrays created
+[PRECOND CTOR] STEP C: Off-diagonal arrays done, checking dz
+[PRECOND CTOR] STEP D: dz_effective computed, caching...
+[PRECOND CTOR] STEP E: dz_effective_cached_ done, size=64
+[PRECONDITIONER] Raw momentum_coupling = 88000
+
+[PRECONDITIONER] W-block momentum coupling (from actual grid data):
+  μ_representative (from mub.mean()) = 88000 Pa
+  c1f_representative (from c1f.mean()) = 1
+  c2f_representative (from c2f.mean()) = 0
+  msfty_representative (from msfty.mean()) = 1
+  msfty_safe (guarded) = 1
+  Coupling factor (c1f*μ+c2f)/msfty = 88000 (scalar), per-k enabled
+
+[PRECOND DIAG k=1] CONFIG-DRIVEN PRECONDITIONER:
+  Config: clamps=ON, damping=0.05, momentum_range=[10000, 100000]
+  Raw physics:
+    diag_contribution = 0.4624
+    momentum_coupling_raw = 88000
+  Scaling:
+    diag_contrib / momentum_coupling = 5.25455e-06
+    dt = 0.1, gamma = 0.435867, dt*gamma = 0.0435867
+    dt*gamma*contrib_scaled = 2.29028e-07
+  Acoustic Schur complement (W↔φ coupling):
+    c_s = 340 m/s, dz_w = 500 m
+    acoustic_cfl = dt*gamma*c_s/dz = 0.0296389
+    acoustic_cfl² = 0.000878466
+    A_phi_diag = 1 + dt*gamma*c_s²/dz² = 1.02015
+    acoustic_schur = cfl²/A_phi = 0.000861111
+    acoustic_schur_boosted = 0.00172222 (boost=2x)
+  Diagonal:
+    1 + direct + acoustic_schur_boosted = 1.00172 (pure physics)
+    + damping_factor = 1.05172 (with 0.05 damping)
+    Final diagonal = 1.05172
+  Preconditioning strength: 1/diagonal = 0.950821x
+
+[PRECOND DIAG k=2] CONFIG-DRIVEN PRECONDITIONER:
+  Config: clamps=ON, damping=0.05, momentum_range=[10000, 100000]
+  Raw physics:
+    diag_contribution = 0.4624
+    momentum_coupling_raw = 88000
+  Scaling:
+    diag_contrib / momentum_coupling = 5.25455e-06
+    dt = 0.1, gamma = 0.435867, dt*gamma = 0.0435867
+    dt*gamma*contrib_scaled = 2.29028e-07
+  Acoustic Schur complement (W↔φ coupling):
+    c_s = 340 m/s, dz_w = 500 m
+    acoustic_cfl = dt*gamma*c_s/dz = 0.0296389
+    acoustic_cfl² = 0.000878466
+    A_phi_diag = 1 + dt*gamma*c_s²/dz² = 1.02015
+    acoustic_schur = cfl²/A_phi = 0.000861111
+    acoustic_schur_boosted = 0.00172222 (boost=2x)
+  Diagonal:
+    1 + direct + acoustic_schur_boosted = 1.00172 (pure physics)
+    + damping_factor = 1.05172 (with 0.05 damping)
+    Final diagonal = 1.05172
+  Preconditioning strength: 1/diagonal = 0.950821x
+
+[PRECOND DIAG k=3] CONFIG-DRIVEN PRECONDITIONER:
+  Config: clamps=ON, damping=0.05, momentum_range=[10000, 100000]
+  Raw physics:
+    diag_contribution = 0.4624
+    momentum_coupling_raw = 88000
+  Scaling:
+    diag_contrib / momentum_coupling = 5.25455e-06
+    dt = 0.1, gamma = 0.435867, dt*gamma = 0.0435867
+    dt*gamma*contrib_scaled = 2.29028e-07
+  Acoustic Schur complement (W↔φ coupling):
+    c_s = 340 m/s, dz_w = 500 m
+    acoustic_cfl = dt*gamma*c_s/dz = 0.0296389
+    acoustic_cfl² = 0.000878466
+    A_phi_diag = 1 + dt*gamma*c_s²/dz² = 1.02015
+    acoustic_schur = cfl²/A_phi = 0.000861111
+    acoustic_schur_boosted = 0.00172222 (boost=2x)
+  Diagonal:
+    1 + direct + acoustic_schur_boosted = 1.00172 (pure physics)
+    + damping_factor = 1.05172 (with 0.05 damping)
+    Final diagonal = 1.05172
+  Preconditioning strength: 1/diagonal = 0.950821x
+[PRECOND UV] Capped vertical acoustic proxy in D_u/D_v: uv_vfrac 1 -> 5e-05 (horiz=2.312e-05, vert=0.4624)
+
+[PRECOND DIAG SUMMARY] dt=0.1 gamma=0.435867 dt*gamma=0.0435867
+  D_w  range: [1, 1.05172]
+  D_θ  range: [1, 1]
+  D_u  range: [1, 1]
+  D_φ  range: [1.02015, 1.02015]
+  D_μ  value: 1
+SDIRK3_PRECOND_WDAMP_DIAG dt=0.1 rhs_config_enabled=0 physical_w_direct_diag=0 extra_regularization=0 extra_alpha=0 momentum_coupling_min=88000 momentum_coupling_max=88000 legacy_scaled_min=3.40909e-06 legacy_scaled_max=3.40909e-06 final_wdiag_min=1 final_wdiag_max=1.05172 coefficient_generation=0
+TileSDIRK3UnifiedSolver created for tile 1 with dimensions 41x81x64
+[NEWTON SOLVER] Updated grid dimensions:
+  Grid: 41x81x64
+  Stagger: 42,82,65
+  Total size: 1080491
+  Scaling vectors invalidated (will rebuild)
+SDIRK3: Boundary conditions set for solver 0xc8dacfc00
+  periodic_x=1, periodic_y=0
+  symmetric_xs=0, symmetric_xe=0
+  symmetric_ys=1, symmetric_ye=1
+  open_xs=0, open_xe=0, open_ys=0, open_ye=0
+  specified=0, nested=0
+SDIRK3: Map projection set for solver 0xc8dacfc00
+  map_proj=0 (idealized case)
+[CONFIG] Workers started - config changes will now trigger warnings
+SDIRK3: init_implicit_sdirk3 called
+SDIRK3 init_implicit: kde from pb array = 65, kde-1 = 64
+UNIFIED SDIRK3: Allocating space for 1 tile solvers
+SDIRK3: Configuration updated from namelist
+SDIRK3 DEBUG: kds/kde/kms/kme/kts/kte =     1   65    1   65    1   64
+SDIRK3 init: WRF-consistent nz=64 (kde=65, kte=64, kts=1)
+SDIRK3 INIT DEBUG: jte=   81, jde=   81, jte==jde=T
+SDIRK3 DEBUG: Creating solver with nx/ny/nz=   41   81   64, nx_u/ny_v/nz_w=   42   82   65
+UNIFIED SDIRK3: Initialized 1 tile solvers
+UNIFIED SDIRK3: L-stable implicit integration; realized stability depends on the verified IMEX partition, the configured split-explicit acoustic operator, and sufficiently converged implicit stages
+SDIRK3: Solvers initialized for solve_em
+SDIRK3: Using finite difference for JVP computation
+ === AFTER sdirk3_initialize_solvers ===
+ === BEFORE set_base_state_sdirk3 ===
+[SDIRK3] ph_base range: 0 / 156973
+[SDIRK3] grid_info_->p_base range: 11080 to 98357.7 Pa
+[SDIRK3] grid_info_->alb range: 0.816593 to 6.11678 m³/kg
+[SDIRK3] dampcoef range: 0 to 0.198769
+DEBUG: Base state generation incremented to 1 (will trigger refresh in first unifiedStep with real dt)
+DEBUG: computeTerrainSlopes completed
+  zx_ shape: [81, 65, 41]
+  zy_ shape: [81, 65, 41]
+  zx_ range: [0, 0]
+  zy_ range: [0, 0]
+ === AFTER set_base_state_sdirk3 ===
+[SDIRK3] advanceZeroCopy p_base range: [11080, 98357.7] Pa
+[SDIRK3] Grid config: rdx=1e-05, rdy=1e-05, kdamp=0.01, khdif=0, kvdif=0
+[SDIRK3] Boundary tensor creation skipped: spec_bdy_width=0 (periodic/global domain)
+[SDIRK3] t_patch range: -41.1606 / 147.995 K
+[SDIRK3] u-slice: j[5:86] k[0:64] i[5:47]
+[SDIRK3] v-slice: j[5:87] k[0:64] i[5:46]
+[SDIRK3] mass-slice: j[5:86] k[0:64] i[5:46]
+[SDIRK3] t_tile range: -41.1606 / 147.995 K
+[SDIRK3] t_contig range: -41.1606 / 147.995 K
+[SDIRK3] U west halo max: 67.3412, east halo max: 67.3412
+[SDIRK3] V west halo max: 0, east halo max: 0
+[SDIRK3] RSL_LITE i_compute: [5, 36]
+[SDIRK3] RSL_LITE j_compute: [5, 76]
+[SDIRK3] msftx_tile min=1 max=1
+[SDIRK3] p_pert range: -10.7083 / 8.05528 Pa
+[SDIRK3] t_pert range: -41.1606 / 147.995 K
+[SDIRK3] al range: -0.201733 / 0.130076 m³/kg
+
+=== RDN VALUES FROM WRF ===
+  nz = 64
+  rdn_ size = 64
+  First 10 rdn values:
+    rdn_[0] = 0
+    rdn_[1] = 28.5429
+    rdn_[2] = 29.449
+    rdn_[3] = 30.3838
+    rdn_[4] = 31.3483
+    rdn_[5] = 32.3434
+    rdn_[6] = 33.3701
+    rdn_[7] = 34.4293
+    rdn_[8] = 35.5223
+    rdn_[9] = 36.6498
+  Max |rdn| = 198.127 at k = 63
+============================
+[SDIRK3] fnm[1]+fnp[1]=1 (should be 1.0)
+
+=== RDZW COMPUTED FROM RDNW ===
+  nz = 64
+  First 5 rdnw/rdzw pairs:
+    rdnw[0] = 28.1039 -> rdzw[0] = 28.1039
+    rdnw[1] = 28.996 -> rdzw[1] = 28.996
+    rdnw[2] = 29.9164 -> rdzw[2] = 29.9164
+    rdnw[3] = 30.8661 -> rdzw[3] = 30.8661
+    rdnw[4] = 31.8458 -> rdzw[4] = 31.8458
+  c1h_ min/max: 1 / 1
+  fnm_ min/max: 0 / 0.507814
+  fnp_ min/max: 0 / 0.492189
+
+=== BASE STATE VALIDATION ===
+  c1f_ range: [1, 1]
+  c2f_ range: [0, 0]
+
+=== DEBUG: Packed State Check ===
+  U_n has NaN: NO
+  U_n has Inf: NO
+  F_phys has NaN: NO
+  F_phys has Inf: NO
+  F_phys min/max: 0 / 0
+  F_phys norm: 0
+  ru_tend min/max: 0 / 0
+  t_tend min/max: 0 / 0
+  mu_tend min/max: 0 / 0
+  t min/max: -41.1606 / 147.995
+  mu min/max: -10.8906 / 8.19531
+  u max: 67.3412
+[PRECOND UPDATE] Called with dt=600, gamma=0.435867 (stored dt_=0.1, gamma_=0.435867)
+DEBUG: Preconditioner dt/gamma changed, refreshing coefficients
+DEBUG: Base state generation changed (now 1), refreshing coefficients with REAL mub/th_base!
+DEBUG: ScalarMeanCache epoch changed (now 3), refreshing coefficients (msfty/mub/c1f/c2f may have changed)
+UnifiedPreconditioner: Implicit damping/diffusion enabled:
+  - Divergence damping: kdamp=0.2
+  - Rayleigh damping: coef=0.2
+  - W-damping: alpha=0.3
+  IMEX scope gating (mode=3): rayleigh=OFF vdiff=OFF divergence=on
+  wdamp: physical_w_direct_diag=0 extra_regularization=OFF
+[PRECOND CTOR] STEP A: Damping config done, creating diagonal arrays with nz=64
+[PRECOND CTOR] STEP A1: About to create TensorOptions
+[PRECOND CTOR] STEP A2: TensorOptions created, calling torch::ones({nz+1})
+[PRECOND CTOR] STEP A3: vertical_diag_w_ created
+[PRECOND CTOR] STEP B: Diagonal arrays created
+[PRECOND CTOR] STEP C: Off-diagonal arrays done, checking dz
+[DZ] grid_info_->dz dim=1 sizes=[64] device=cpu
+[PRECOND CTOR] STEP D: dz_effective computed, caching...
+[PRECOND CTOR] STEP E: dz_effective_cached_ done, size=64
+[PRECONDITIONER] Raw momentum_coupling = 89083.9
+[PRECONDITIONER] Per-k momentum_coupling range: 89083.9 to 89083.9 (scalar avg = 89083.9)
+
+[PRECONDITIONER] W-block momentum coupling (from actual grid data):
+  μ_representative (from mub.mean()) = 89083.9 Pa
+  c1f_representative (from c1f.mean()) = 1
+  c2f_representative (from c2f.mean()) = 0
+  msfty_representative (from msfty.mean()) = 1
+  msfty_safe (guarded) = 1
+  Coupling factor (c1f*μ+c2f)/msfty = 89083.9 (scalar), per-k enabled
+
+[PRECOND DIAG k=1] CONFIG-DRIVEN PRECONDITIONER:
+  Config: clamps=ON, damping=0.05, momentum_range=[10000, 100000]
+  Raw physics:
+    diag_contribution = 1.66387
+    momentum_coupling_raw = 89083.9
+  Scaling:
+    diag_contrib / momentum_coupling = 1.86776e-05
+    dt = 600, gamma = 0.435867, dt*gamma = 261.52
+    dt*gamma*contrib_scaled = 0.00488456
+  Acoustic Schur complement (W↔φ coupling):
+    c_s = 340 m/s, dz_w = 263.584 m
+    acoustic_cfl = dt*gamma*c_s/dz = 337.338
+    acoustic_cfl² = 113797
+    A_phi_diag = 1 + dt*gamma*c_s²/dz² = 436.136
+    acoustic_schur = cfl²/A_phi = 260.92
+    acoustic_schur_boosted = 521.841 (boost=2x)
+  Diagonal:
+    1 + direct + acoustic_schur_boosted = 522.846 (pure physics)
+    + damping_factor = 522.896 (with 0.05 damping)
+    Final diagonal = 522.896
+  Preconditioning strength: 1/diagonal = 0.00191243x
+
+[PRECOND DIAG k=2] CONFIG-DRIVEN PRECONDITIONER:
+  Config: clamps=ON, damping=0.05, momentum_range=[10000, 100000]
+  Raw physics:
+    diag_contribution = 1.67427
+    momentum_coupling_raw = 89083.9
+  Scaling:
+    diag_contrib / momentum_coupling = 1.87943e-05
+    dt = 600, gamma = 0.435867, dt*gamma = 261.52
+    dt*gamma*contrib_scaled = 0.00491509
+  Acoustic Schur complement (W↔φ coupling):
+    c_s = 340 m/s, dz_w = 262.764 m
+    acoustic_cfl = dt*gamma*c_s/dz = 338.39
+    acoustic_cfl² = 114508
+    A_phi_diag = 1 + dt*gamma*c_s²/dz² = 438.855
+    acoustic_schur = cfl²/A_phi = 260.924
+    acoustic_schur_boosted = 521.848 (boost=2x)
+  Diagonal:
+    1 + direct + acoustic_schur_boosted = 522.853 (pure physics)
+    + damping_factor = 522.903 (with 0.05 damping)
+    Final diagonal = 522.903
+  Preconditioning strength: 1/diagonal = 0.0019124x
+
+[PRECOND DIAG k=3] CONFIG-DRIVEN PRECONDITIONER:
+  Config: clamps=ON, damping=0.05, momentum_range=[10000, 100000]
+  Raw physics:
+    diag_contribution = 1.68823
+    momentum_coupling_raw = 89083.9
+  Scaling:
+    diag_contrib / momentum_coupling = 1.8951e-05
+    dt = 600, gamma = 0.435867, dt*gamma = 261.52
+    dt*gamma*contrib_scaled = 0.00495608
+  Acoustic Schur complement (W↔φ coupling):
+    c_s = 340 m/s, dz_w = 261.675 m
+    acoustic_cfl = dt*gamma*c_s/dz = 339.798
+    acoustic_cfl² = 115463
+    A_phi_diag = 1 + dt*gamma*c_s²/dz² = 442.507
+    acoustic_schur = cfl²/A_phi = 260.929
+    acoustic_schur_boosted = 521.858 (boost=2x)
+  Diagonal:
+    1 + direct + acoustic_schur_boosted = 522.863 (pure physics)
+    + damping_factor = 522.913 (with 0.05 damping)
+    Final diagonal = 522.913
+  Preconditioning strength: 1/diagonal = 0.00191236x
+
+[PRECOND DIAG SUMMARY] dt=600 gamma=0.435867 dt*gamma=261.52
+  D_w  range: [1, 523.113]
+  D_θ  range: [1, 1]
+  D_u  range: [1.01209, 1.01209]
+  D_φ  range: [405.948, 532.311]
+  D_μ  value: 1.00466
+SDIRK3_PRECOND_WDAMP_DIAG dt=600 rhs_config_enabled=0 physical_w_direct_diag=0 extra_regularization=0 extra_alpha=0 momentum_coupling_min=89083.9 momentum_coupling_max=89083.9 legacy_scaled_min=3.36761e-06 legacy_scaled_max=3.36761e-06 final_wdiag_min=1 final_wdiag_max=523.113 coefficient_generation=1
+[COUPLED DIAG] Coefficient landscape (nz=64, dt*gamma=261.52, c_s=340, g=9.81, boost=2):
+  [clamps=ON, damping=0.05]
+  k | D_phi | D_W_nosb | D_W_full | damp | schur_boost | GS_same(k) | GS_km1(k-1) | phys_g/dz | pdet_full | pdet_nosb_gs | pdet_nosb_phys
+  1 | 436.1356 | 1.0549 | 522.8955 | 0.0500 | 521.8406 | 0.0001 | -0.0001 | 9.7332 | 114256.7031 | 460.0666 | 365.3318
+  16 | 491.0512 | 1.0555 | 523.0302 | 0.0500 | 521.9747 | 0.0001 | -0.0001 | 10.3291 | 128676.4688 | 518.2952 | 411.6046
+  32 | 531.8401 | 1.0560 | 523.1123 | 0.0500 | 522.0563 | 0.0001 | -0.0001 | 10.7504 | 139386.8594 | 561.6068 | 446.0359
+  48 | 497.7715 | 1.0555 | 523.0446 | 0.0500 | 521.9891 | 0.0001 | -0.0001 | 10.3997 | 130441.0703 | 525.4188 | 417.2650
+  63 | 405.9480 | 1.0545 | 522.8059 | 0.0500 | 521.7514 | 0.0001 | -0.0001 | 9.3895 | 106330.0547 | 428.0740 | 339.9114
+[COUPLED DIAG] Top level (nz_w=64): D_phi_top=435.233, D_W_top=1 (boundary: coupling=0, no off-diag)
+[COUPLED DIAG] Proxy-det ranges (same-level approx, ignores k-1 coupling):
+  pdet(D_W_full, acfl²):    [106330, 139510] candidate
+  pdet(D_W_nosb, GS²):      [428.074, 562.106] candidate
+  pdet(D_W_nosb, phys²):    [339.911, 446.439] candidate
+  NOTE: positive proxy = necessary but NOT sufficient for block-Thomas stability
+[COUPLED DIAG] Coupling scale summary (k=1):
+  acoustic_cfl=337.338, GS_Awp(uncapped,no_beta)=0.000109259 [same=0.000109259, km1=-0.000109259], phys_g/dz=9.73318, ratio acfl/gs=3.08752e+06, ratio acfl/phys=34.6585
+[IMEX MODE=3] Post-solve ARK324 active slow_in_tangent=0 phys_in_tangent=0
+[RHS DEBUG GUARD] debug_level=1, ENABLE_RHS_DEBUG=FALSE
+[IMEX MODE=3] Stage 2 predictor depth=1 (last stage converged=1, rel_R_full_raw=0)
+[PHYSICS] Physics forcing inactive (ideal test case, max(|F_phys|) = 0)
+[RHS CONFIG] split_mode=3 omega_update_ref_per_newton=0 omega_w_blend=1 imex_enabled=0 imex_split_mode=3 precond_relaxation=0 w_acoustic_boost=2
+
+=== NEWTON SOLVER ENTRY ===
+  Stage: 2
+  dt: 600, gamma: 0.435867
+  dt*gamma: 261.52 (implicit timestep)
+  U_n dim: 1, size: 1080491
+  U_n shape: [1080491]
+  max_newton_iter: 12
+  newton_tol: 0.2
+  gmres_restart: 10
+=========================
+Stage 2: Using predictor from K_prev, ||K|| = 0.845519 (K_prev depth=1)
+[PRECOND] set_stage_state ENTRY: stage=2, mu_pert.defined()=1, mu_pert.dim()=2
+[PRECOND] set_stage_state: mu_base_2d.sizes()=[81, 41], mu_pert.sizes()=[81, 41]
+[PRECOND] mu_scale_correction = 0.999985 (mu_full_mean=89082.5 / mu_rep=89083.9)
+[PRECOND] set_stage_state: stage=2, ||mu_pert||/||mu_base||=0.00932483% -> RECOMPUTE (stage changed)
+UnifiedPreconditioner: Implicit damping/diffusion enabled:
+  - Divergence damping: kdamp=0.2
+  - Rayleigh damping: coef=0.2
+  - W-damping: alpha=0.3
+  IMEX scope gating (mode=3): rayleigh=OFF vdiff=OFF divergence=on
+  wdamp: physical_w_direct_diag=0 extra_regularization=OFF
+[PRECOND CTOR] STEP A: Damping config done, creating diagonal arrays with nz=64
+[PRECOND CTOR] STEP A1: About to create TensorOptions
+[PRECOND CTOR] STEP A2: TensorOptions created, calling torch::ones({nz+1})
+[PRECOND CTOR] STEP A3: vertical_diag_w_ created
+[PRECOND CTOR] STEP B: Diagonal arrays created
+[PRECOND CTOR] STEP C: Off-diagonal arrays done, checking dz
+[PRECOND CTOR] STEP D: dz_effective computed, caching...
+[PRECOND CTOR] STEP E: dz_effective_cached_ done, size=64
+[PRECONDITIONER] Raw momentum_coupling = 89083.9
+[PRECONDITIONER] Per-k momentum_coupling range: 89083.9 to 89083.9 (scalar avg = 89083.9)
+
+[PRECONDITIONER] W-block momentum coupling (from actual grid data):
+  μ_representative (from mub.mean()) = 89083.9 Pa
+  c1f_representative (from c1f.mean()) = 1
+  c2f_representative (from c2f.mean()) = 0
+  msfty_representative (from msfty.mean()) = 1
+  msfty_safe (guarded) = 1
+  Coupling factor (c1f*μ+c2f)/msfty = 89083.9 (scalar), per-k enabled
+
+[PRECOND DIAG k=1] CONFIG-DRIVEN PRECONDITIONER:
+  Config: clamps=ON, damping=0.05, momentum_range=[10000, 100000]
+  Raw physics:
+    diag_contribution = 1.66387
+    momentum_coupling_raw = 89083.9
+  Scaling:
+    diag_contrib / momentum_coupling = 1.86776e-05
+    dt = 600, gamma = 0.435867, dt*gamma = 261.52
+    dt*gamma*contrib_scaled = 0.00488456
+  Acoustic Schur complement (W↔φ coupling):
+    c_s = 340 m/s, dz_w = 263.584 m
+    acoustic_cfl = dt*gamma*c_s/dz = 337.338
+    acoustic_cfl² = 113797
+    A_phi_diag = 1 + dt*gamma*c_s²/dz² = 436.136
+    acoustic_schur = cfl²/A_phi = 260.92
+    acoustic_schur_boosted = 521.841 (boost=2x)
+  Diagonal:
+    1 + direct + acoustic_schur_boosted = 522.846 (pure physics)
+    + damping_factor = 522.896 (with 0.05 damping)
+    Final diagonal = 522.896
+  Preconditioning strength: 1/diagonal = 0.00191243x
+
+[PRECOND DIAG k=2] CONFIG-DRIVEN PRECONDITIONER:
+  Config: clamps=ON, damping=0.05, momentum_range=[10000, 100000]
+  Raw physics:
+    diag_contribution = 1.67427
+    momentum_coupling_raw = 89083.9
+  Scaling:
+    diag_contrib / momentum_coupling = 1.87943e-05
+    dt = 600, gamma = 0.435867, dt*gamma = 261.52
+    dt*gamma*contrib_scaled = 0.00491509
+  Acoustic Schur complement (W↔φ coupling):
+    c_s = 340 m/s, dz_w = 262.764 m
+    acoustic_cfl = dt*gamma*c_s/dz = 338.39
+    acoustic_cfl² = 114508
+    A_phi_diag = 1 + dt*gamma*c_s²/dz² = 438.855
+    acoustic_schur = cfl²/A_phi = 260.924
+    acoustic_schur_boosted = 521.848 (boost=2x)
+  Diagonal:
+    1 + direct + acoustic_schur_boosted = 522.853 (pure physics)
+    + damping_factor = 522.903 (with 0.05 damping)
+    Final diagonal = 522.903
+  Preconditioning strength: 1/diagonal = 0.0019124x
+
+[PRECOND DIAG k=3] CONFIG-DRIVEN PRECONDITIONER:
+  Config: clamps=ON, damping=0.05, momentum_range=[10000, 100000]
+  Raw physics:
+    diag_contribution = 1.68823
+    momentum_coupling_raw = 89083.9
+  Scaling:
+    diag_contrib / momentum_coupling = 1.8951e-05
+    dt = 600, gamma = 0.435867, dt*gamma = 261.52
+    dt*gamma*contrib_scaled = 0.00495608
+  Acoustic Schur complement (W↔φ coupling):
+    c_s = 340 m/s, dz_w = 261.675 m
+    acoustic_cfl = dt*gamma*c_s/dz = 339.798
+    acoustic_cfl² = 115463
+    A_phi_diag = 1 + dt*gamma*c_s²/dz² = 442.507
+    acoustic_schur = cfl²/A_phi = 260.929
+    acoustic_schur_boosted = 521.858 (boost=2x)
+  Diagonal:
+    1 + direct + acoustic_schur_boosted = 522.863 (pure physics)
+    + damping_factor = 522.913 (with 0.05 damping)
+    Final diagonal = 522.913
+  Preconditioning strength: 1/diagonal = 0.00191236x
+
+[PRECOND DIAG SUMMARY] dt=600 gamma=0.435867 dt*gamma=261.52
+  D_w  range: [1, 523.113]
+  D_θ  range: [1, 1]
+  D_u  range: [1.01209, 1.01209]
+  D_φ  range: [405.948, 532.311]
+  D_μ  value: 1.00466
+SDIRK3_PRECOND_WDAMP_DIAG dt=600 rhs_config_enabled=0 physical_w_direct_diag=0 extra_regularization=0 extra_alpha=0 momentum_coupling_min=89083.9 momentum_coupling_max=89083.9 legacy_scaled_min=3.36761e-06 legacy_scaled_max=3.36761e-06 final_wdiag_min=1 final_wdiag_max=523.113 coefficient_generation=2
+[COUPLED DIAG] Coefficient landscape (nz=64, dt*gamma=261.52, c_s=340, g=9.81, boost=2):
+  [clamps=ON, damping=0.05]
+  k | D_phi | D_W_nosb | D_W_full | damp | schur_boost | GS_same(k) | GS_km1(k-1) | phys_g/dz | pdet_full | pdet_nosb_gs | pdet_nosb_phys
+  1 | 436.1356 | 1.0549 | 522.8955 | 0.0500 | 521.8406 | 0.0001 | -0.0001 | 9.7332 | 114256.7031 | 460.0666 | 365.3318
+  16 | 491.0512 | 1.0555 | 523.0302 | 0.0500 | 521.9747 | 0.0001 | -0.0001 | 10.3291 | 128676.4688 | 518.2952 | 411.6046
+  32 | 531.8401 | 1.0560 | 523.1123 | 0.0500 | 522.0563 | 0.0001 | -0.0001 | 10.7504 | 139386.8594 | 561.6068 | 446.0359
+  48 | 497.7715 | 1.0555 | 523.0446 | 0.0500 | 521.9891 | 0.0001 | -0.0001 | 10.3997 | 130441.0703 | 525.4188 | 417.2650
+  63 | 405.9480 | 1.0545 | 522.8059 | 0.0500 | 521.7514 | 0.0001 | -0.0001 | 9.3895 | 106330.0547 | 428.0740 | 339.9114
+[COUPLED DIAG] Top level (nz_w=64): D_phi_top=435.233, D_W_top=1 (boundary: coupling=0, no off-diag)
+[COUPLED DIAG] Proxy-det ranges (same-level approx, ignores k-1 coupling):
+  pdet(D_W_full, acfl²):    [106330, 139510] candidate
+  pdet(D_W_nosb, GS²):      [428.074, 562.106] candidate
+  pdet(D_W_nosb, phys²):    [339.911, 446.439] candidate
+  NOTE: positive proxy = necessary but NOT sufficient for block-Thomas stability
+[COUPLED DIAG] Coupling scale summary (k=1):
+  acoustic_cfl=337.338, GS_Awp(uncapped,no_beta)=0.00010926 [same=0.00010926, km1=-0.00010926], phys_g/dz=9.73318, ratio acfl/gs=3.08747e+06, ratio acfl/phys=34.6585
+
+--- Newton iteration 0 starting ---
+[PRECOND] set_stage_state ENTRY: stage=2, mu_pert.defined()=1, mu_pert.dim()=2
+[PRECOND] set_stage_state: mu_base_2d.sizes()=[81, 41], mu_pert.sizes()=[81, 41]
+[PRECOND] mu_scale_correction = 0.999985 (mu_full_mean=89082.5 / mu_rep=89083.9)
+[NEWTON] State validation at iteration 0:
+[NEWTON] U_eval range: [-10593.3, 19913.2]
+[NEWTON] U_eval norm: 2.09998e+06
+[NEWTON] Checking U_eval = U_stage + (600 * 0.435867) * K:
+  W-block in U_eval: min/max = -0.943974 / 1.2547
+  W-block norm = 441.208
+  W-block in U_stage: min/max = -0.471987 / 0.627351
+  Scaling factor dt*gamma = 261.52
+[NEWTON] Has NaN: NO
+[NEWTON] Has Inf: NO
+[NEWTON] U_n norm: 2.09998e+06
+[NEWTON] U_stage norm: 2.09998e+06
+[NEWTON] K norm: 0.845519
+[NEWTON] dt: 600, gamma: 0.435867
+[SCALING] Rebuilding S from R₀ (iter 0):
+  S[ru] = 360373 (RMS=360373, floor=1)
+  S[rv] = 97.5269 (RMS=97.5269, floor=1)
+  S[rw] = 177.997 (RMS=177.997, floor=1)
+  S[ph] = 237899 (RMS=237899, floor=1)
+  S[t] = 10525.4 (RMS=10525.4, floor=1)
+  S[mu] = 1.47619e+07 (RMS=1.47619e+07, floor=1)
+[Newton] Convergence norm: scaled-RMS ||S⁻¹R||/√N (N=1080491), atol=0.2, rtol=1e-10*1=1e-10 => effective_tol=0.2
+[Newton] iter 0: ||S⁻¹R||_rms=1.000002e+00 [scaled-RMS], ||R||=8.741829e+08 [unscaled-L2], tol=2.000000e-01
+  ru: ||S⁻¹R||_rms=0.999998 (N=217728)
+  rv: ||S⁻¹R||_rms=1 (N=215168)
+  rw: ||S⁻¹R||_rms=1.00001 (N=215865)
+  ph: ||S⁻¹R||_rms=0.999995 (N=215865)
+  t: ||S⁻¹R||_rms=1 (N=212544)
+  mu: ||S⁻¹R||_rms=1 (N=3321)
+[EISENSTAT-WALKER] Newton iter 0, Stage 2: using initial eta = 0.3
+[BLOCK_RES] iter=0 ru=1.68e+08 rv=4.52e+04 rw=8.27e+04 ph=1.11e+08 t=4.85e+06 mu=8.51e+08 max=8.51e+08 ru_share=0.037
+[Newton] JVP method: FORWARD-MODE AD (compute_jvp_forward_mode)
+[Newton] JVP ready for GMRES (use_autograd=true)
+[PRECOND] Using TDMA preconditioner for GMRES
+[GMRES POLICY] Stage 2: order=shipped, restart=10->7 (source=2), max_restarts=2->1, ew_scale=0.85, ew_applied=1, budget_active=1
+[GMRES INIT] Stage 2 effective: restart=7, max_restarts=1, tol=0.3, budget_coupled=yes, budget_eta=0.3, budget_scale=0.85
+[FWAD_CHECK] === Forward-mode AD active, checking W-PGF tangent propagation ===
+[FWAD_CHECK] mu (perturbation): HAS tangent, ||tangent||=2.24202e+11
+[FWAD_CHECK] mu_full: HAS tangent, ||tangent||=2.24202e+11
+[FWAD_CHECK] p_pert_mass (from hydrostatic): HAS tangent, ||tangent||=7.94569e+11
+[FWAD_CHECK] muf (mu at w-points): HAS tangent, ||tangent||=1.80752e+12
+[FWAD_CHECK] mubf (mu_base at w-points): NO tangent
+[FWAD_CHECK] rw_tend (before PGF): NO tangent
+[FWAD_CHECK] cq1: NO tangent
+[FWAD_CHECK] w_pgf_buoy_all (stacked PGF): HAS tangent, ||tangent||=3.49143e+13
+[FWAD_CHECK] rw_tend (after PGF): HAS tangent, ||tangent||=3.49143e+13
+[FWAD_CHECK] w_pgf_buoy_levels[1] (k=1): HAS tangent, ||tangent||=4.39883e+12
+[FWAD_CHECK] === Checking tangent at coupled-to-velocity conversion ===
+[FWAD_CHECK] rw_tend (at conversion): HAS tangent, ||tangent||=3.51903e+13
+[FWAD_CHECK] w_tend (after conversion): HAS tangent, ||tangent||=3.69959e+09
+[FWAD_CHECK] u_tend (after conversion): HAS tangent, ||tangent||=7.33039e+12
+[FWAD_CHECK] ru_tend (coupled): HAS tangent, ||tangent||=6.25316e+11
+[FWAD_CHECK] mu_tend: HAS tangent, ||tangent||=3.73968e+13
+[FWAD_CHECK] t_tend: HAS tangent, ||tangent||=1.4684e+12
+[JVP FORWARD] Call #1: forward-mode AD took 63 ms
+[JVP DIAG] call #1: ||dK||=8.80655e+08, ||v=dt*γ*dK||=2.30309e+11, ||J*v||=3.85319e+13, ||dK-J*v||=3.85318e+13, ratio ||J*v||/||dK||=43753.7
+[PRECOND APPLY] Called #1 residual.dim()=1 numel=1080491 dt_=600 gamma_=0.435867
+[PRECOND DEBUG] Input residual ||r|| = 3.85318e+13 (call #1)
+[PRECOND 1D PATH] Entered. do_diag_sample=1 diag_counter=1 debug_level=1
+
+[PRECOND DIAGNOSTIC] 1D State Vector Analysis:
+  Grid dimensions: nx=41, ny=81, nz=64
+  Staggered dims: nx_u=42, ny_v=82, nz_w=65
+  Total vector size: z.size(0) = 1080491
+
+  Component sizes:
+    size_u   = 217728  (42 x 81 x 64)
+    size_v   = 215168  (41 x 82 x 64)
+    size_w   = 215865  (41 x 81 x 65)
+    size_phi = 215865  (41 x 81 x 65)
+    size_t   = 212544  (41 x 81 x 64)
+    size_mu  = 3321  (41 x 81) [2D ONLY]
+  Sum of all components = 1080491
+  ✓ Size match: All 6 components present [U,V,W,PHI,T,MU]
+[PRECOND DEBUG STEP 1] Passed size/device checks
+[PRECOND DEBUG STEP 2] Coefficient cache built
+[PRECOND DEBUG STEP 3] Entering 4x4 Schur path
+[PRECOND DEBUG STEP 4] Interior blocks extracted: r_u_3d=[81, 64, 41] r_v_3d=[81, 64, 41] r_phi_mass=[81, 64, 41] r_mu_2d=[81, 41]
+[PRECOND DEBUG STEP 5] About to access mu_base cache. grid_info_->mu_base.defined()=1 sizes=[81, 41]
+[PRECOND 4x4] Using mu_full_stage_ for inv_mu0: mu_base_mean=89083.9 mu_full_mean=89082.5 (delta=-1.36719)
+[PRECOND DEBUG STEP 6] mu_for_inv ready. mu_full_stage_.defined()=1 mu_for_inv.sizes()=[81, 41]
+[COUPLED DIAG 4x4] S_phi_phi/D_phi ratio: min=1, max=1, mean=1 (alpha_phi range: [1.56235, 1.56235]), max_dev=0, bad_levels(>0.1)=0/64 (phi-feedback OK)
+[PRECOND BLOCK NORMS] U: 7.24943e+12, V: 3.65757e+09, MU: 1.14231e+11
+[PRECOND BLOCK NORMS] PHI: 6.42116e+11
+[PRECOND PHI-W GS] Active with boost=2 (boost=diagonal quality, GS=off-diagonal RHS correction)
+[PRECOND BLOCK NORMS] W: 8.16748e+08, THETA: 2.12835e+11
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND 1D RESULT] BEFORE relaxation: ||z||=7.28002e+12 ||r||=3.85318e+13 ||z-r||=3.7865e+13 ||z-r||/||r||=0.982695
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.28002e+12 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.188936
+[PRECOND APPLY] Called #2 residual.dim()=1 numel=1080491 dt_=600 gamma_=0.435867
+[PRECOND 1D PATH] Entered. do_diag_sample=0 diag_counter=2 debug_level=1
+[PRECOND DEBUG STEP 1] Passed size/device checks
+[PRECOND DEBUG STEP 2] Coefficient cache built
+[PRECOND DEBUG STEP 3] Entering 4x4 Schur path
+[PRECOND DEBUG STEP 4] Interior blocks extracted: r_u_3d=[81, 64, 41] r_v_3d=[81, 64, 41] r_phi_mass=[81, 64, 41] r_mu_2d=[81, 41]
+[PRECOND DEBUG STEP 5] About to access mu_base cache. grid_info_->mu_base.defined()=1 sizes=[81, 41]
+[PRECOND 4x4] Using mu_full_stage_ for inv_mu0: mu_base_mean=89083.9 mu_full_mean=89082.5 (delta=-1.36719)
+[PRECOND DEBUG STEP 6] mu_for_inv ready. mu_full_stage_.defined()=1 mu_for_inv.sizes()=[81, 41]
+[PRECOND 1D RESULT] BEFORE relaxation: ||z||=1.67005e+08 ||r||=8.80655e+08 ||z-r||=8.65356e+08 ||z-r||/||r||=0.982628
+[JVP FORWARD] Call #2: forward-mode AD took 57 ms
+[JVP DIAG] call #2: ||dK||=1.67005e+08, ||v=dt*γ*dK||=4.36756e+10, ||J*v||=7.3946e+12, ||dK-J*v||=7.39463e+12, ratio ||J*v||/||dK||=44277.7
+[JVP FORWARD] Call #3: forward-mode AD took 55 ms
+[JVP DIAG] call #3: ||dK||=8.70343e+08, ||v=dt*γ*dK||=2.27612e+11, ||J*v||=3.83733e+13, ||dK-J*v||=3.83732e+13, ratio ||J*v||/||dK||=44089.8
+[PRECOND APPLY] Called #3 residual.dim()=1 numel=1080491 dt_=600 gamma_=0.435867
+[PRECOND 1D PATH] Entered. do_diag_sample=0 diag_counter=3 debug_level=1
+[PRECOND DEBUG STEP 1] Passed size/device checks
+[PRECOND DEBUG STEP 2] Coefficient cache built
+[PRECOND DEBUG STEP 3] Entering 4x4 Schur path
+[PRECOND DEBUG STEP 4] Interior blocks extracted: r_u_3d=[81, 64, 41] r_v_3d=[81, 64, 41] r_phi_mass=[81, 64, 41] r_mu_2d=[81, 41]
+[PRECOND DEBUG STEP 5] About to access mu_base cache. grid_info_->mu_base.defined()=1 sizes=[81, 41]
+[PRECOND 4x4] Using mu_full_stage_ for inv_mu0: mu_base_mean=89083.9 mu_full_mean=89082.5 (delta=-1.36719)
+[PRECOND DEBUG STEP 6] mu_for_inv ready. mu_full_stage_.defined()=1 mu_for_inv.sizes()=[81, 41]
+[PRECOND 1D RESULT] BEFORE relaxation: ||z||=7.2513e+12 ||r||=3.83732e+13 ||z-r||=3.77065e+13 ||z-r||/||r||=0.982628
+[PRECOND DEBUG] Input residual ||r|| = 3.79181e+13 (call #5)
+[PRECOND BLOCK NORMS] U: 7.23995e+12, V: 3.59766e+09, MU: 1.1124e+11
+[PRECOND BLOCK NORMS] PHI: 6.25371e+11
+[PRECOND BLOCK NORMS] W: 8.03384e+08, THETA: 2.12553e+11
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.26906e+12 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.191704
+[PRECOND DEBUG] Input residual ||r|| = 8.71789e+08 (call #10)
+[PRECOND BLOCK NORMS] U: 1.66167e+08, V: 79044.5, MU: 2.43169e+06
+[PRECOND BLOCK NORMS] PHI: 1.36667e+07
+[PRECOND BLOCK NORMS] W: 17032.8, THETA: 4.85768e+06
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.66777e+08 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.191304
+[PRECOND DEBUG] Input residual ||r|| = 3.90092e+13 (call #15)
+[PRECOND BLOCK NORMS] U: 7.25097e+12, V: 3.57777e+09, MU: 1.10625e+11
+[PRECOND BLOCK NORMS] PHI: 6.2185e+11
+[PRECOND BLOCK NORMS] W: 8.05497e+08, THETA: 2.1318e+11
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.27979e+12 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.186617
+[PRECOND DEBUG] Input residual ||r|| = 8.67855e+08 (call #20)
+[PRECOND BLOCK NORMS] U: 1.66009e+08, V: 80680.9, MU: 2.49666e+06
+[PRECOND BLOCK NORMS] PHI: 1.40309e+07
+[PRECOND BLOCK NORMS] W: 17302.4, THETA: 4.86746e+06
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.66651e+08 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.192027
+[PRECOND DEBUG] Input residual ||r|| = 3.86843e+13 (call #25)
+[PRECOND BLOCK NORMS] U: 7.26475e+12, V: 3.5878e+09, MU: 1.11043e+11
+[PRECOND BLOCK NORMS] PHI: 6.24267e+11
+[PRECOND BLOCK NORMS] W: 8.16615e+08, THETA: 2.13098e+11
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.29367e+12 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.188543
+[PRECOND DEBUG] Input residual ||r|| = 8.7254e+08 (call #30)
+[PRECOND BLOCK NORMS] U: 1.66423e+08, V: 80820.8, MU: 2.51065e+06
+[PRECOND BLOCK NORMS] PHI: 1.411e+07
+[PRECOND BLOCK NORMS] W: 17180.7, THETA: 4.84681e+06
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.67071e+08 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.191477
+[PRECOND DEBUG] Input residual ||r|| = 3.88793e+13 (call #35)
+[PRECOND BLOCK NORMS] U: 7.23734e+12, V: 3.61014e+09, MU: 1.12014e+11
+[PRECOND BLOCK NORMS] PHI: 6.29697e+11
+[PRECOND BLOCK NORMS] W: 8.13006e+08, THETA: 2.13074e+11
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.26686e+12 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.186908
+[PRECOND DEBUG] Input residual ||r|| = 8.77032e+08 (call #40)
+[PRECOND BLOCK NORMS] U: 1.66364e+08, V: 80308.1, MU: 2.48882e+06
+[PRECOND BLOCK NORMS] PHI: 1.39865e+07
+[PRECOND BLOCK NORMS] W: 16968.5, THETA: 4.86475e+06
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.67e+08 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.190415
+[PRECOND DEBUG] Input residual ||r|| = 3.88565e+13 (call #45)
+[PRECOND BLOCK NORMS] U: 7.22785e+12, V: 3.64242e+09, MU: 1.13458e+11
+[PRECOND BLOCK NORMS] PHI: 6.37781e+11
+[PRECOND BLOCK NORMS] W: 8.14572e+08, THETA: 2.12968e+11
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.2581e+12 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.186792
+SDIRK3_NUMRANGE operator_coordinates=S_krylov one_sided_precond_arms=AM^-1,M^-1A stage=2 samples=24/24 A: A_q_min=5615.98 A_q_max=5865.77 A_neg=0/24 | A_physical(raw, unscaled): Aphys_q_min=-8043.13 Aphys_q_max=-5232.09 Aphys_neg=24/24 indefinite=1 qphys_ru=7198.814447 qphys_ru_vin=168154699.858280 qphys_ru_vout=0.000000 qphys_ru_Avin=7287506220527.971680 qphys_ru_Avout=116771.434833 qphys_rv=7188.386225 qphys_rv_vin=45239.042347 qphys_rv_vout=0.000000 qphys_rv_Avin=1963660187.289589 qphys_rv_Avout=554.233029 qphys_rw=14285.893036 qphys_rw_vin=82699.784884 qphys_rw_vout=0.000000 qphys_rw_Avin=7126615619.258952 qphys_rw_Avout=42394230345269.773438 qphys_ph=1.000000 qphys_ph_vin=110530732.472002 qphys_ph_vout=0.000000 qphys_ph_Avin=110530732.472002 qphys_ph_Avout=0.000000 qphys_t=7198.813909 qphys_t_vin=4852489.245540 qphys_t_vout=0.000000 qphys_t_Avin=210297689712.579712 qphys_t_Avout=0.000044 qphys_mu=-7196.815889 qphys_mu_vin=850701323.918699 qphys_mu_vout=0.000000 qphys_mu_Avin=36867501685058.898438 qphys_mu_Avout=391999821.651815 phys_blocks_pos=5 phys_blocks_neg=1 phys_straddles_origin=1 phys_blocks_measured=6 phys_blocks_local=1 | AM^-1(production): AMinv_q_min=4185.28 AMinv_neg=0/24 | M^-1A: MinvA_q_min=4182.84 MinvA_neg=0/24  (q sees only the SYMMETRIC part: q~1 does NOT imply well-conditioned -- I+bK with K skew gives q==1 for any b. neg>0 witnesses an indefinite symmetric part in these coordinates; neg==0 proves NOTHING)
+[GMRES WARMSTART] stage=2 disabled (shape_ok=0, prev_rel=1, gate=1, prev_varpc=no)
+[GMRES INN] stage=2, status=no_base_warmstart, reason_code=2, base_warmstart=no, built=no, used=no, gate_pass=no, prev_shape_ok=no, prev_quality_ok=no, prev_varpc_ok=no, prev_rel=0, q=0, r_base=0, r_cand=0, x0_base_norm=0, x0_cand_norm=0, x0_delta_norm=0, x0_rel_delta=0, gate_rel_diff=0, gate_non_degrade=no, gate_quality_ok=no, ru_share_base=0, ru_share_cand=0, rw_share_base=0, rw_share_cand=0, ph_share_base=0, ph_share_cand=0, tol_ramped=no
+[PRECOND DEBUG] Input residual ||r|| = 8.76729e+08 (call #50)
+[PRECOND BLOCK NORMS] U: 1.6655e+08, V: 181605, MU: 5.71558e+06
+[PRECOND BLOCK NORMS] PHI: 3.22398e+07
+[PRECOND BLOCK NORMS] W: 32919, THETA: 4.88052e+06
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.6978e+08 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.193651
+[GMRES BLOCK-SCALE] ru: ||r0||=466.612 → D_inv=0.00214311
+[GMRES BLOCK-SCALE] rv: ||r0||=463.863 → D_inv=0.00215581
+[GMRES BLOCK-SCALE] rw: ||r0||=464.616 → D_inv=0.00215232
+[GMRES BLOCK-SCALE] ph: ||r0||=464.61 → D_inv=0.00215234
+[GMRES BLOCK-SCALE] t: ||r0||=461.027 → D_inv=0.00216907
+[GMRES BLOCK-SCALE] mu: ||r0||=57.6281 → D_inv=0.0173526
+[FGMRES] Z-basis memory budget: restart=4 x numel=1080491 => ~16.487 MiB per cycle
+[PRECOND DEBUG] Input residual ||r|| = 2.63392e+06 (call #55)
+[PRECOND BLOCK NORMS] U: 40619.4, V: 122.253, MU: 1524.08
+[PRECOND BLOCK NORMS] PHI: 8499.9
+[PRECOND BLOCK NORMS] W: 20.9804, THETA: 2057.87
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 41572.8 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.0157836
+[GMRES REORTH] j=1 before=148.817 after1=81.4843 after2=81.4844 ratio=0.547547
+[GMRES REORTH] j=2 before=119.351 after1=75.7866 after2=75.7868 ratio=0.634992
+[GMRES] restart=1 j=3: hess_est=0.7750, true_err=0.7751
+[GMRES BLOCK r/b] restart=1 j=3 ru=89.7857 rv=179.8267 rw=145.2190 ph=179.6292 t=85.2064 mu=20.9459
+[FGMRES] NOT CONVERGED: ||x||=0.0147, ||r_true||=780.1282, ||b||=1039.4686, rel_error=0.7505, tol=0.0000, restarts=1, arnoldi=4 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=4 x numel=1080491 => ~16.49 MiB per cycle
+[GMRES REORTH] j=1 before=844 after1=527.8 after2=527.8 ratio=0.6253
+[GMRES REORTH] j=2 before=681.9 after1=411.5 after2=411.5 ratio=0.6034
+[GMRES] restart=1 j=3: hess_est=0.5497, true_err=0.5497
+[GMRES BLOCK r/b] restart=1 j=3 ru=65.5209 rv=116.6260 rw=71.3045 ph=142.3255 t=102.2735 mu=13.2219
+[FGMRES] NOT CONVERGED: ||x||=0.0077, ||r_true||=568.4401, ||b||=1039.4686, rel_error=0.5469, tol=0.0000, restarts=1, arnoldi=4 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=4 x numel=1080491 => ~16.49 MiB per cycle
+[GMRES REORTH] j=1 before=785.4 after1=539.5 after2=539.5 ratio=0.687
+[PRECOND DEBUG] Input residual ||r|| = 1.096e+07 (call #60)
+[PRECOND BLOCK NORMS] U: 6.275e+04, V: 38.87, MU: 2306
+[PRECOND BLOCK NORMS] PHI: 1.3e+04
+[PRECOND BLOCK NORMS] W: 9.681, THETA: 2739
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 6.417e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.005857
+[GMRES REORTH] j=2 before=644.3 after1=418.3 after2=418.3 ratio=0.6493
+[GMRES] restart=1 j=3: hess_est=0.6952, true_err=0.6952
+[GMRES BLOCK r/b] restart=1 j=3 ru=118.3997 rv=175.8333 rw=112.7080 ph=165.2943 t=134.1573 mu=4.1196
+[FGMRES] NOT CONVERGED: ||x||=0.0104, ||r_true||=786.0260, ||b||=1039.4686, rel_error=0.7562, tol=0.0000, restarts=1, arnoldi=4 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=8 x numel=1080491 => ~32.97 MiB per cycle
+[GMRES REORTH] j=1 before=148.8 after1=81.48 after2=81.48 ratio=0.5475
+[GMRES REORTH] j=2 before=119.4 after1=75.79 after2=75.79 ratio=0.635
+[PRECOND DEBUG] Input residual ||r|| = 2.804e+06 (call #65)
+[PRECOND BLOCK NORMS] U: 1.002e+05, V: 114.3, MU: 3667
+[PRECOND BLOCK NORMS] PHI: 2.053e+04
+[PRECOND BLOCK NORMS] W: 13.45, THETA: 2639
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.024e+05 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.03653
+[GMRES] restart=1 j=7: hess_est=0.5879, true_err=0.5879
+[GMRES BLOCK r/b] restart=1 j=7 ru=13.9974 rv=106.8598 rw=114.6866 ph=171.4339 t=22.8023 mu=17.4983
+[FGMRES] NOT CONVERGED: ||x||=0.0173, ||r_true||=574.2696, ||b||=1039.4686, rel_error=0.5525, tol=0.0000, restarts=1, arnoldi=8 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=M j=8 ru_rho0=1 ru_rho=0.07348 rv_rho0=1 rv_rho=0.5643 rw_rho0=1 rw_rho=0.6046 ph_rho0=1 ph_rho=0.9038 t_rho0=1 t_rho=0.1211 mu_rho0=1 mu_rho=0.7437
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=8 x numel=1080491 => ~32.97 MiB per cycle
+[GMRES REORTH] j=1 before=844 after1=527.8 after2=527.8 ratio=0.6253
+[GMRES REORTH] j=2 before=681.9 after1=411.5 after2=411.5 ratio=0.6034
+[GMRES] restart=1 j=7: hess_est=0.3534, true_err=0.3534
+[GMRES BLOCK r/b] restart=1 j=7 ru=40.9857 rv=96.9539 rw=21.7991 ph=103.8607 t=38.1465 mu=6.9266
+[FGMRES] NOT CONVERGED: ||x||=0.0099, ||r_true||=378.2021, ||b||=1039.4686, rel_error=0.3638, tol=0.0000, restarts=1, arnoldi=8 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=I j=8 ru_rho0=1 ru_rho=0.2151 rv_rho0=1 rv_rho=0.512 rw_rho0=1 rw_rho=0.1149 ph_rho0=1 ph_rho=0.5475 t_rho0=1 t_rho=0.2027 mu_rho0=1 mu_rho=0.2944
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=8 x numel=1080491 => ~32.97 MiB per cycle
+[PRECOND DEBUG] Input residual ||r|| = 6.029e+06 (call #70)
+[PRECOND BLOCK NORMS] U: 1.453e+05, V: 153.3, MU: 4807
+[PRECOND BLOCK NORMS] PHI: 2.711e+04
+[PRECOND BLOCK NORMS] W: 28.92, THETA: 4297
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.48e+05 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02454
+[GMRES REORTH] j=1 before=785.4 after1=539.5 after2=539.5 ratio=0.687
+[GMRES REORTH] j=2 before=644.3 after1=418.3 after2=418.3 ratio=0.6493
+[PRECOND DEBUG] Input residual ||r|| = 1.098e+07 (call #75)
+[PRECOND BLOCK NORMS] U: 6.804e+04, V: 75.64, MU: 2385
+[PRECOND BLOCK NORMS] PHI: 1.337e+04
+[PRECOND BLOCK NORMS] W: 19.59, THETA: 3611
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 6.947e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.00633
+[GMRES] restart=1 j=7: hess_est=0.5618, true_err=0.5618
+[GMRES BLOCK r/b] restart=1 j=7 ru=71.2314 rv=154.5583 rw=66.0025 ph=139.7399 t=79.1080 mu=11.7054
+[FGMRES] NOT CONVERGED: ||x||=0.0127, ||r_true||=596.1353, ||b||=1039.4686, rel_error=0.5735, tol=0.0000, restarts=1, arnoldi=8 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=Msel j=8 ru_rho0=1 ru_rho=0.3739 rv_rho0=1 rv_rho=0.8161 rw_rho0=1 rw_rho=0.348 ph_rho0=1 ph_rho=0.7367 t_rho0=1 t_rho=0.4203 mu_rho0=1 mu_rho=0.4975
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=16 x numel=1080491 => ~65.95 MiB per cycle
+[GMRES REORTH] j=1 before=148.8 after1=81.48 after2=81.48 ratio=0.5475
+[PRECOND DEBUG] Input residual ||r|| = 1.558e+06 (call #80)
+[PRECOND BLOCK NORMS] U: 7.447e+04, V: 114.4, MU: 2595
+[PRECOND BLOCK NORMS] PHI: 1.458e+04
+[PRECOND BLOCK NORMS] W: 37.11, THETA: 3462
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.6e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.04878
+[GMRES REORTH] j=2 before=119.4 after1=75.79 after2=75.79 ratio=0.635
+[PRECOND DEBUG] Input residual ||r|| = 2.518e+06 (call #85)
+[PRECOND BLOCK NORMS] U: 7.087e+04, V: 96.44, MU: 2569
+[PRECOND BLOCK NORMS] PHI: 1.439e+04
+[PRECOND BLOCK NORMS] W: 17.76, THETA: 2231
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.238e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02874
+[PRECOND DEBUG] Input residual ||r|| = 1.108e+06 (call #90)
+[PRECOND BLOCK NORMS] U: 3.106e+04, V: 93.4, MU: 1119
+[PRECOND BLOCK NORMS] PHI: 6280
+[PRECOND BLOCK NORMS] W: 5.895, THETA: 964.5
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.171e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02863
+[GMRES] restart=1 j=15: hess_est=0.5205, true_err=0.5205
+[GMRES BLOCK r/b] restart=1 j=15 ru=21.3685 rv=54.3569 rw=99.0752 ph=164.6885 t=29.4593 mu=16.2958
+[FGMRES] NOT CONVERGED: ||x||=0.0177, ||r_true||=498.8445, ||b||=1039.4686, rel_error=0.4799, tol=0.0000, restarts=1, arnoldi=16 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=16 x numel=1080491 => ~65.95 MiB per cycle
+[GMRES REORTH] j=1 before=844 after1=527.8 after2=527.8 ratio=0.6253
+[GMRES REORTH] j=2 before=681.9 after1=411.5 after2=411.5 ratio=0.6034
+[GMRES] restart=1 j=15: hess_est=0.2853, true_err=0.2853
+[GMRES BLOCK r/b] restart=1 j=15 ru=23.1476 rv=73.3673 rw=17.9190 ph=100.6464 t=29.6096 mu=2.1369
+[FGMRES] NOT CONVERGED: ||x||=0.0111, ||r_true||=321.6658, ||b||=1039.4686, rel_error=0.3095, tol=0.0000, restarts=1, arnoldi=16 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=16 x numel=1080491 => ~65.95 MiB per cycle
+[PRECOND DEBUG] Input residual ||r|| = 1.233e+07 (call #95)
+[PRECOND BLOCK NORMS] U: 5.819e+04, V: 112.8, MU: 2608
+[PRECOND BLOCK NORMS] PHI: 1.466e+04
+[PRECOND BLOCK NORMS] W: 7.677, THETA: 2098
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 6.01e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.004874
+[GMRES REORTH] j=1 before=785.4 after1=539.5 after2=539.5 ratio=0.687
+[GMRES REORTH] j=2 before=644.3 after1=418.3 after2=418.3 ratio=0.6493
+[PRECOND DEBUG] Input residual ||r|| = 1.375e+07 (call #100)
+[PRECOND BLOCK NORMS] U: 1.611e+04, V: 43.15, MU: 1101
+[PRECOND BLOCK NORMS] PHI: 6187
+[PRECOND BLOCK NORMS] W: 8.831, THETA: 1008
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.732e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.00126
+[PRECOND DEBUG] Input residual ||r|| = 1.319e+07 (call #105)
+[PRECOND BLOCK NORMS] U: 4.197e+04, V: 60.19, MU: 1688
+[PRECOND BLOCK NORMS] PHI: 9501
+[PRECOND BLOCK NORMS] W: 10.58, THETA: 1406
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.309e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003266
+[GMRES] restart=1 j=15: hess_est=0.4772, true_err=0.4772
+[GMRES BLOCK r/b] restart=1 j=15 ru=45.3036 rv=159.8165 rw=37.3367 ph=125.8641 t=46.8728 mu=5.5889
+[FGMRES] NOT CONVERGED: ||x||=0.0142, ||r_true||=531.2861, ||b||=1039.4686, rel_error=0.5111, tol=0.0000, restarts=1, arnoldi=16 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=32 x numel=1080491 => ~131.9 MiB per cycle
+[PRECOND DEBUG] Input residual ||r|| = 6.029e+06 (call #110)
+[PRECOND BLOCK NORMS] U: 1.453e+05, V: 153.3, MU: 4807
+[PRECOND BLOCK NORMS] PHI: 2.711e+04
+[PRECOND BLOCK NORMS] W: 28.92, THETA: 4297
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.48e+05 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02454
+[GMRES REORTH] j=1 before=148.8 after1=81.48 after2=81.48 ratio=0.5475
+[GMRES REORTH] j=2 before=119.4 after1=75.79 after2=75.79 ratio=0.635
+[PRECOND DEBUG] Input residual ||r|| = 2.382e+06 (call #115)
+[PRECOND BLOCK NORMS] U: 8.267e+04, V: 106.6, MU: 2941
+[PRECOND BLOCK NORMS] PHI: 1.649e+04
+[PRECOND BLOCK NORMS] W: 21.91, THETA: 2769
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 8.439e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.03543
+[PRECOND DEBUG] Input residual ||r|| = 7.181e+05 (call #120)
+[PRECOND BLOCK NORMS] U: 3.935e+04, V: 95.43, MU: 1409
+[PRECOND BLOCK NORMS] PHI: 7910
+[PRECOND BLOCK NORMS] W: 7.195, THETA: 1088
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.017e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.05594
+[PRECOND DEBUG] Input residual ||r|| = 1.065e+06 (call #125)
+[PRECOND BLOCK NORMS] U: 1.313e+04, V: 90.1, MU: 461.1
+[PRECOND BLOCK NORMS] PHI: 2583
+[PRECOND BLOCK NORMS] W: 6.087, THETA: 592.3
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.34e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.01258
+[PRECOND DEBUG] Input residual ||r|| = 7.841e+05 (call #130)
+[PRECOND BLOCK NORMS] U: 1.797e+04, V: 93.27, MU: 650.3
+[PRECOND BLOCK NORMS] PHI: 3648
+[PRECOND BLOCK NORMS] W: 9.506, THETA: 974.7
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.837e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02343
+[PRECOND DEBUG] Input residual ||r|| = 1.501e+06 (call #135)
+[PRECOND BLOCK NORMS] U: 2.009e+04, V: 89.54, MU: 683
+[PRECOND BLOCK NORMS] PHI: 3830
+[PRECOND BLOCK NORMS] W: 18.86, THETA: 1114
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.049e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.01365
+[PRECOND DEBUG] Input residual ||r|| = 1.77e+06 (call #140)
+[PRECOND BLOCK NORMS] U: 2.732e+04, V: 88.45, MU: 982.7
+[PRECOND BLOCK NORMS] PHI: 5511
+[PRECOND BLOCK NORMS] W: 23.15, THETA: 2547
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.8e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.01582
+[GMRES] restart=1 j=31: hess_est=0.4615, true_err=0.4617
+[GMRES BLOCK r/b] restart=1 j=31 ru=16.4795 rv=50.9378 rw=77.8798 ph=149.8467 t=22.7442 mu=14.7278
+[FGMRES] NOT CONVERGED: ||x||=0.0201, ||r_true||=438.9504, ||b||=1039.4686, rel_error=0.4223, tol=0.0000, restarts=1, arnoldi=32 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=32 x numel=1080491 => ~131.9 MiB per cycle
+[GMRES REORTH] j=1 before=844 after1=527.8 after2=527.8 ratio=0.6253
+[GMRES REORTH] j=2 before=681.9 after1=411.5 after2=411.5 ratio=0.6034
+[GMRES] restart=1 j=31: hess_est=0.2721, true_err=0.2721
+[GMRES BLOCK r/b] restart=1 j=31 ru=19.9444 rv=67.7639 rw=15.0190 ph=99.5743 t=25.9406 mu=1.5855
+[FGMRES] NOT CONVERGED: ||x||=0.0115, ||r_true||=307.9249, ||b||=1039.4686, rel_error=0.2962, tol=0.0000, restarts=1, arnoldi=32 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=32 x numel=1080491 => ~131.9 MiB per cycle
+[GMRES REORTH] j=1 before=785.4 after1=539.5 after2=539.5 ratio=0.687
+[GMRES REORTH] j=2 before=644.3 after1=418.3 after2=418.3 ratio=0.6493
+[PRECOND DEBUG] Input residual ||r|| = 1.127e+07 (call #145)
+[PRECOND BLOCK NORMS] U: 6.703e+04, V: 105, MU: 2608
+[PRECOND BLOCK NORMS] PHI: 1.461e+04
+[PRECOND BLOCK NORMS] W: 21.1, THETA: 2971
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 6.871e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.006098
+[PRECOND DEBUG] Input residual ||r|| = 1.078e+07 (call #150)
+[PRECOND BLOCK NORMS] U: 3.757e+04, V: 86.22, MU: 1734
+[PRECOND BLOCK NORMS] PHI: 9723
+[PRECOND BLOCK NORMS] W: 7.952, THETA: 1264
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.886e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003607
+[PRECOND DEBUG] Input residual ||r|| = 1.314e+07 (call #155)
+[PRECOND BLOCK NORMS] U: 4.344e+04, V: 62.08, MU: 1818
+[PRECOND BLOCK NORMS] PHI: 1.023e+04
+[PRECOND BLOCK NORMS] W: 10.57, THETA: 1384
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.468e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003401
+[PRECOND DEBUG] Input residual ||r|| = 1.38e+07 (call #160)
+[PRECOND BLOCK NORMS] U: 2.3e+04, V: 45.73, MU: 1341
+[PRECOND BLOCK NORMS] PHI: 7558
+[PRECOND BLOCK NORMS] W: 8.689, THETA: 688.5
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.425e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.001757
+[PRECOND DEBUG] Input residual ||r|| = 1.24e+07 (call #165)
+[PRECOND BLOCK NORMS] U: 4.722e+04, V: 79.02, MU: 1851
+[PRECOND BLOCK NORMS] PHI: 1.04e+04
+[PRECOND BLOCK NORMS] W: 9.877, THETA: 1483
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.84e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003905
+[PRECOND DEBUG] Input residual ||r|| = 1.262e+07 (call #170)
+[PRECOND BLOCK NORMS] U: 3.459e+04, V: 62.54, MU: 1494
+[PRECOND BLOCK NORMS] PHI: 8390
+[PRECOND BLOCK NORMS] W: 9.836, THETA: 1309
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.564e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.002823
+[GMRES] restart=1 j=31: hess_est=0.3559, true_err=0.3558
+[GMRES BLOCK r/b] restart=1 j=31 ru=14.4927 rv=100.1985 rw=9.7479 ph=127.7546 t=19.6035 mu=1.9710
+[FGMRES] NOT CONVERGED: ||x||=0.0143, ||r_true||=402.8210, ||b||=1039.4686, rel_error=0.3875, tol=0.0000, restarts=1, arnoldi=32 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=48 x numel=1080491 => ~197.8 MiB per cycle
+[PRECOND DEBUG] Input residual ||r|| = 2.634e+06 (call #175)
+[PRECOND BLOCK NORMS] U: 4.062e+04, V: 122.3, MU: 1524
+[PRECOND BLOCK NORMS] PHI: 8500
+[PRECOND BLOCK NORMS] W: 20.98, THETA: 2058
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.157e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.01578
+[GMRES REORTH] j=1 before=148.8 after1=81.48 after2=81.48 ratio=0.5475
+[GMRES REORTH] j=2 before=119.4 after1=75.79 after2=75.79 ratio=0.635
+[PRECOND DEBUG] Input residual ||r|| = 1.406e+06 (call #180)
+[PRECOND BLOCK NORMS] U: 4.054e+04, V: 86.08, MU: 1354
+[PRECOND BLOCK NORMS] PHI: 7636
+[PRECOND BLOCK NORMS] W: 16.09, THETA: 1409
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.129e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02937
+[PRECOND DEBUG] Input residual ||r|| = 1.272e+06 (call #185)
+[PRECOND BLOCK NORMS] U: 3.268e+04, V: 92.12, MU: 1196
+[PRECOND BLOCK NORMS] PHI: 6694
+[PRECOND BLOCK NORMS] W: 8.118, THETA: 1019
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.339e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02626
+[PRECOND DEBUG] Input residual ||r|| = 1.194e+06 (call #190)
+[PRECOND BLOCK NORMS] U: 2.433e+04, V: 92.57, MU: 902
+[PRECOND BLOCK NORMS] PHI: 5054
+[PRECOND BLOCK NORMS] W: 6.481, THETA: 887.9
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.487e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02083
+[PRECOND DEBUG] Input residual ||r|| = 1.908e+06 (call #195)
+[PRECOND BLOCK NORMS] U: 1.339e+04, V: 88.57, MU: 514.8
+[PRECOND BLOCK NORMS] PHI: 2862
+[PRECOND BLOCK NORMS] W: 10.63, THETA: 722.9
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.372e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.007191
+[PRECOND DEBUG] Input residual ||r|| = 1.453e+06 (call #200)
+[PRECOND BLOCK NORMS] U: 2.398e+04, V: 92.88, MU: 864.4
+[PRECOND BLOCK NORMS] PHI: 4848
+[PRECOND BLOCK NORMS] W: 19.08, THETA: 1618
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.453e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.01688
+[PRECOND DEBUG] Input residual ||r|| = 1.336e+06 (call #205)
+[PRECOND BLOCK NORMS] U: 2.671e+04, V: 87.46, MU: 840
+[PRECOND BLOCK NORMS] PHI: 4750
+[PRECOND BLOCK NORMS] W: 23.44, THETA: 3046
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.731e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02045
+[PRECOND DEBUG] Input residual ||r|| = 1.675e+06 (call #210)
+[PRECOND BLOCK NORMS] U: 4.439e+04, V: 89.88, MU: 1682
+[PRECOND BLOCK NORMS] PHI: 9452
+[PRECOND BLOCK NORMS] W: 19.84, THETA: 2064
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.546e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02714
+[PRECOND DEBUG] Input residual ||r|| = 2.346e+06 (call #215)
+[PRECOND BLOCK NORMS] U: 9.792e+04, V: 124.7, MU: 3751
+[PRECOND BLOCK NORMS] PHI: 2.107e+04
+[PRECOND BLOCK NORMS] W: 34.59, THETA: 2479
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.002e+05 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.04273
+[PRECOND DEBUG] Input residual ||r|| = 2.605e+06 (call #220)
+[PRECOND BLOCK NORMS] U: 1.638e+05, V: 179.8, MU: 6338
+[PRECOND BLOCK NORMS] PHI: 3.561e+04
+[PRECOND BLOCK NORMS] W: 29.17, THETA: 3131
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.678e+05 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.06441
+[GMRES] restart=1 j=47: hess_est=0.3842, true_err=0.3843
+[GMRES BLOCK r/b] restart=1 j=47 ru=13.4563 rv=39.2917 rw=66.9434 ph=129.1277 t=19.5777 mu=11.5145
+[FGMRES] NOT CONVERGED: ||x||=0.0244, ||r_true||=374.6125, ||b||=1039.4686, rel_error=0.3604, tol=0.0000, restarts=1, arnoldi=48 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=M j=48 ru_rho0=1 ru_rho=0.07064 rv_rho0=1 rv_rho=0.2075 rw_rho0=1 rw_rho=0.3529 ph_rho0=1 ph_rho=0.6807 t_rho0=1 t_rho=0.104 mu_rho0=1 mu_rho=0.4894
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=48 x numel=1080491 => ~197.8 MiB per cycle
+[GMRES REORTH] j=1 before=844 after1=527.8 after2=527.8 ratio=0.6253
+[GMRES REORTH] j=2 before=681.9 after1=411.5 after2=411.5 ratio=0.6034
+[GMRES] restart=1 j=47: hess_est=0.2623, true_err=0.2623
+[GMRES BLOCK r/b] restart=1 j=47 ru=17.2718 rv=63.2723 rw=16.0184 ph=97.3156 t=25.0551 mu=1.6457
+[FGMRES] NOT CONVERGED: ||x||=0.0117, ||r_true||=296.5214, ||b||=1039.4686, rel_error=0.2853, tol=0.0000, restarts=1, arnoldi=48 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=I j=48 ru_rho0=1 ru_rho=0.09066 rv_rho0=1 rv_rho=0.3341 rw_rho0=1 rw_rho=0.08445 ph_rho0=1 ph_rho=0.513 t_rho0=1 t_rho=0.1331 mu_rho0=1 mu_rho=0.06995
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=48 x numel=1080491 => ~197.8 MiB per cycle
+[GMRES REORTH] j=1 before=785.4 after1=539.5 after2=539.5 ratio=0.687
+[GMRES REORTH] j=2 before=644.3 after1=418.3 after2=418.3 ratio=0.6493
+[PRECOND DEBUG] Input residual ||r|| = 1.127e+07 (call #225)
+[PRECOND BLOCK NORMS] U: 6.703e+04, V: 105, MU: 2608
+[PRECOND BLOCK NORMS] PHI: 1.461e+04
+[PRECOND BLOCK NORMS] W: 21.1, THETA: 2971
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 6.871e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.006098
+[PRECOND DEBUG] Input residual ||r|| = 1.078e+07 (call #230)
+[PRECOND BLOCK NORMS] U: 3.757e+04, V: 86.22, MU: 1734
+[PRECOND BLOCK NORMS] PHI: 9723
+[PRECOND BLOCK NORMS] W: 7.952, THETA: 1264
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.886e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003607
+[PRECOND DEBUG] Input residual ||r|| = 1.314e+07 (call #235)
+[PRECOND BLOCK NORMS] U: 4.344e+04, V: 62.08, MU: 1818
+[PRECOND BLOCK NORMS] PHI: 1.023e+04
+[PRECOND BLOCK NORMS] W: 10.57, THETA: 1384
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.468e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003401
+[PRECOND DEBUG] Input residual ||r|| = 1.38e+07 (call #240)
+[PRECOND BLOCK NORMS] U: 2.3e+04, V: 45.73, MU: 1341
+[PRECOND BLOCK NORMS] PHI: 7558
+[PRECOND BLOCK NORMS] W: 8.689, THETA: 688.5
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.425e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.001757
+[PRECOND DEBUG] Input residual ||r|| = 1.24e+07 (call #245)
+[PRECOND BLOCK NORMS] U: 4.722e+04, V: 79.02, MU: 1851
+[PRECOND BLOCK NORMS] PHI: 1.04e+04
+[PRECOND BLOCK NORMS] W: 9.877, THETA: 1483
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.84e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003905
+[PRECOND DEBUG] Input residual ||r|| = 1.262e+07 (call #250)
+[PRECOND BLOCK NORMS] U: 3.459e+04, V: 62.54, MU: 1494
+[PRECOND BLOCK NORMS] PHI: 8390
+[PRECOND BLOCK NORMS] W: 9.836, THETA: 1309
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.564e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.002823
+[PRECOND DEBUG] Input residual ||r|| = 1.34e+07 (call #255)
+[PRECOND BLOCK NORMS] U: 1.967e+04, V: 41.08, MU: 1123
+[PRECOND BLOCK NORMS] PHI: 6323
+[PRECOND BLOCK NORMS] W: 8.063, THETA: 762.2
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.07e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.001545
+[PRECOND DEBUG] Input residual ||r|| = 1.206e+07 (call #260)
+[PRECOND BLOCK NORMS] U: 4.073e+04, V: 66.77, MU: 1645
+[PRECOND BLOCK NORMS] PHI: 9262
+[PRECOND BLOCK NORMS] W: 10.73, THETA: 1076
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.181e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003466
+[PRECOND DEBUG] Input residual ||r|| = 1.081e+07 (call #265)
+[PRECOND BLOCK NORMS] U: 4.206e+04, V: 77.91, MU: 1597
+[PRECOND BLOCK NORMS] PHI: 8965
+[PRECOND BLOCK NORMS] W: 12.83, THETA: 2017
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.308e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003984
+[GMRES] restart=1 j=47: hess_est=0.3188, true_err=0.3188
+[GMRES BLOCK r/b] restart=1 j=47 ru=12.1569 rv=92.3614 rw=11.6443 ph=111.4578 t=22.5209 mu=1.5748
+[FGMRES] NOT CONVERGED: ||x||=0.0142, ||r_true||=361.1660, ||b||=1039.4686, rel_error=0.3475, tol=0.0000, restarts=1, arnoldi=48 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=Msel j=48 ru_rho0=1 ru_rho=0.06382 rv_rho0=1 rv_rho=0.4877 rw_rho0=1 rw_rho=0.06139 ph_rho0=1 ph_rho=0.5876 t_rho0=1 t_rho=0.1197 mu_rho0=1 mu_rho=0.06693
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=48 x numel=1080491 => ~197.8 MiB per cycle
+[PRECOND DEBUG] Input residual ||r|| = 6.029e+06 (call #270)
+[PRECOND BLOCK NORMS] U: 1.453e+05, V: 153.3, MU: 4807
+[PRECOND BLOCK NORMS] PHI: 2.711e+04
+[PRECOND BLOCK NORMS] W: 28.92, THETA: 4297
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.48e+05 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02454
+[GMRES REORTH] j=1 before=785.4 after1=539.5 after2=539.5 ratio=0.687
+[GMRES REORTH] j=2 before=644.3 after1=418.3 after2=418.3 ratio=0.6493
+[PRECOND DEBUG] Input residual ||r|| = 1.098e+07 (call #275)
+[PRECOND BLOCK NORMS] U: 6.804e+04, V: 75.64, MU: 2385
+[PRECOND BLOCK NORMS] PHI: 1.337e+04
+[PRECOND BLOCK NORMS] W: 19.59, THETA: 3611
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 6.947e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.00633
+[PRECOND DEBUG] Input residual ||r|| = 1.224e+07 (call #280)
+[PRECOND BLOCK NORMS] U: 3.174e+04, V: 62.76, MU: 1222
+[PRECOND BLOCK NORMS] PHI: 6840
+[PRECOND BLOCK NORMS] W: 7.01, THETA: 1131
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.251e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.002656
+[PRECOND DEBUG] Input residual ||r|| = 1.365e+07 (call #285)
+[PRECOND BLOCK NORMS] U: 3.619e+04, V: 53, MU: 1574
+[PRECOND BLOCK NORMS] PHI: 8852
+[PRECOND BLOCK NORMS] W: 9.817, THETA: 1216
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.73e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.002733
+[PRECOND DEBUG] Input residual ||r|| = 1.31e+07 (call #290)
+[PRECOND BLOCK NORMS] U: 3.09e+04, V: 61.1, MU: 1495
+[PRECOND BLOCK NORMS] PHI: 8422
+[PRECOND BLOCK NORMS] W: 8.682, THETA: 912.2
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.207e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.002449
+[PRECOND DEBUG] Input residual ||r|| = 1.262e+07 (call #295)
+[PRECOND BLOCK NORMS] U: 4.065e+04, V: 69.83, MU: 1626
+[PRECOND BLOCK NORMS] PHI: 9136
+[PRECOND BLOCK NORMS] W: 9.163, THETA: 1254
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.171e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003304
+[PRECOND DEBUG] Input residual ||r|| = 1.299e+07 (call #300)
+[PRECOND BLOCK NORMS] U: 2.857e+04, V: 50.86, MU: 1302
+[PRECOND BLOCK NORMS] PHI: 7319
+[PRECOND BLOCK NORMS] W: 9.312, THETA: 1184
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.954e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.002274
+[PRECOND DEBUG] Input residual ||r|| = 1.098e+07 (call #305)
+[PRECOND BLOCK NORMS] U: 3.425e+04, V: 66.52, MU: 1428
+[PRECOND BLOCK NORMS] PHI: 8041
+[PRECOND BLOCK NORMS] W: 11.08, THETA: 1451
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.524e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003208
+[PRECOND DEBUG] Input residual ||r|| = 1.209e+07 (call #310)
+[PRECOND BLOCK NORMS] U: 3.869e+04, V: 69.25, MU: 1558
+[PRECOND BLOCK NORMS] PHI: 8750
+[PRECOND BLOCK NORMS] W: 10.18, THETA: 1511
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.973e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.003285
+[PRECOND DEBUG] Input residual ||r|| = 1.267e+07 (call #315)
+[PRECOND BLOCK NORMS] U: 3.553e+04, V: 64.22, MU: 1492
+[PRECOND BLOCK NORMS] PHI: 8382
+[PRECOND BLOCK NORMS] W: 9.324, THETA: 1401
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.656e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.002885
+[GMRES] restart=1 j=47: hess_est=0.3188, true_err=0.3188
+[GMRES BLOCK r/b] restart=1 j=47 ru=12.1569 rv=92.3614 rw=11.6443 ph=111.4578 t=22.5209 mu=1.5748
+[FGMRES] NOT CONVERGED: ||x||=0.0142, ||r_true||=361.1660, ||b||=1039.4686, rel_error=0.3475, tol=0.0000, restarts=1, arnoldi=48 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=Msel j=48 ru_rho0=1 ru_rho=0.06382 rv_rho0=1 rv_rho=0.4877 rw_rho0=1 rw_rho=0.06139 ph_rho0=1 ph_rho=0.5876 t_rho0=1 t_rho=0.1197 mu_rho0=1 mu_rho=0.06693
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=48 x numel=1080491 => ~197.8 MiB per cycle
+[GMRES REORTH] j=1 before=844 after1=527.8 after2=527.8 ratio=0.6253
+[GMRES REORTH] j=2 before=681.9 after1=411.5 after2=411.5 ratio=0.6034
+[GMRES] restart=1 j=47: hess_est=0.2623, true_err=0.2623
+[GMRES BLOCK r/b] restart=1 j=47 ru=17.2718 rv=63.2723 rw=16.0184 ph=97.3156 t=25.0551 mu=1.6457
+[FGMRES] NOT CONVERGED: ||x||=0.0117, ||r_true||=296.5214, ||b||=1039.4686, rel_error=0.2853, tol=0.0000, restarts=1, arnoldi=48 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=I j=48 ru_rho0=1 ru_rho=0.09066 rv_rho0=1 rv_rho=0.3341 rw_rho0=1 rw_rho=0.08445 ph_rho0=1 ph_rho=0.513 t_rho0=1 t_rho=0.1331 mu_rho0=1 mu_rho=0.06995
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=48 x numel=1080491 => ~197.8 MiB per cycle
+[GMRES REORTH] j=1 before=148.8 after1=81.48 after2=81.48 ratio=0.5475
+[PRECOND DEBUG] Input residual ||r|| = 1.558e+06 (call #320)
+[PRECOND BLOCK NORMS] U: 7.447e+04, V: 114.4, MU: 2595
+[PRECOND BLOCK NORMS] PHI: 1.458e+04
+[PRECOND BLOCK NORMS] W: 37.11, THETA: 3462
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.6e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.04878
+[GMRES REORTH] j=2 before=119.4 after1=75.79 after2=75.79 ratio=0.635
+[PRECOND DEBUG] Input residual ||r|| = 2.518e+06 (call #325)
+[PRECOND BLOCK NORMS] U: 7.087e+04, V: 96.44, MU: 2569
+[PRECOND BLOCK NORMS] PHI: 1.439e+04
+[PRECOND BLOCK NORMS] W: 17.76, THETA: 2231
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.238e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02874
+[PRECOND DEBUG] Input residual ||r|| = 1.108e+06 (call #330)
+[PRECOND BLOCK NORMS] U: 3.106e+04, V: 93.4, MU: 1119
+[PRECOND BLOCK NORMS] PHI: 6280
+[PRECOND BLOCK NORMS] W: 5.895, THETA: 964.5
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.171e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02863
+[PRECOND DEBUG] Input residual ||r|| = 1.638e+06 (call #335)
+[PRECOND BLOCK NORMS] U: 1.223e+04, V: 89.15, MU: 468.9
+[PRECOND BLOCK NORMS] PHI: 2610
+[PRECOND BLOCK NORMS] W: 6.282, THETA: 588.9
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.252e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.007647
+[PRECOND DEBUG] Input residual ||r|| = 9.799e+05 (call #340)
+[PRECOND BLOCK NORMS] U: 1.996e+04, V: 93.61, MU: 721.2
+[PRECOND BLOCK NORMS] PHI: 4046
+[PRECOND BLOCK NORMS] W: 12.77, THETA: 1125
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.041e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02083
+[PRECOND DEBUG] Input residual ||r|| = 1.373e+06 (call #345)
+[PRECOND BLOCK NORMS] U: 2.361e+04, V: 89.5, MU: 727.4
+[PRECOND BLOCK NORMS] PHI: 4117
+[PRECOND BLOCK NORMS] W: 23.2, THETA: 1321
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.401e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.01749
+[PRECOND DEBUG] Input residual ||r|| = 1.296e+06 (call #350)
+[PRECOND BLOCK NORMS] U: 1.884e+04, V: 87.26, MU: 603.8
+[PRECOND BLOCK NORMS] PHI: 3412
+[PRECOND BLOCK NORMS] W: 20.28, THETA: 3115
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.94e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.01496
+[PRECOND DEBUG] Input residual ||r|| = 2.432e+06 (call #355)
+[PRECOND BLOCK NORMS] U: 8.808e+04, V: 118.6, MU: 3382
+[PRECOND BLOCK NORMS] PHI: 1.899e+04
+[PRECOND BLOCK NORMS] W: 34.26, THETA: 2819
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 9.02e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.03708
+[PRECOND DEBUG] Input residual ||r|| = 1.675e+06 (call #360)
+[PRECOND BLOCK NORMS] U: 9.117e+04, V: 123.5, MU: 3494
+[PRECOND BLOCK NORMS] PHI: 1.963e+04
+[PRECOND BLOCK NORMS] W: 25.3, THETA: 2395
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 9.333e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.05573
+[PRECOND DEBUG] Input residual ||r|| = 2.102e+06 (call #365)
+[PRECOND BLOCK NORMS] U: 1.288e+05, V: 151.9, MU: 4959
+[PRECOND BLOCK NORMS] PHI: 2.787e+04
+[PRECOND BLOCK NORMS] W: 32.3, THETA: 3347
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.319e+05 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.06274
+[GMRES] restart=1 j=47: hess_est=0.3842, true_err=0.3843
+[GMRES BLOCK r/b] restart=1 j=47 ru=13.4563 rv=39.2917 rw=66.9434 ph=129.1277 t=19.5777 mu=11.5145
+[FGMRES] NOT CONVERGED: ||x||=0.0244, ||r_true||=374.6125, ||b||=1039.4686, rel_error=0.3604, tol=0.0000, restarts=1, arnoldi=48 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=M j=48 ru_rho0=1 ru_rho=0.07064 rv_rho0=1 rv_rho=0.2075 rw_rho0=1 rw_rho=0.3529 ph_rho0=1 ph_rho=0.6807 t_rho0=1 t_rho=0.104 mu_rho0=1 mu_rho=0.4894
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=32 x numel=1080491 => ~131.9 MiB per cycle
+[GMRES REORTH] j=1 before=785.4 after1=539.5 after2=539.5 ratio=0.687
+[GMRES REORTH] j=2 before=644.3 after1=418.3 after2=418.3 ratio=0.6493
+[PRECOND DEBUG] Input residual ||r|| = 1.162e+07 (call #370)
+[PRECOND BLOCK NORMS] U: 4.667e+04, V: 74.62, MU: 2049
+[PRECOND BLOCK NORMS] PHI: 1.154e+04
+[PRECOND BLOCK NORMS] W: 10.84, THETA: 2346
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.816e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.004143
+[PRECOND DEBUG] Input residual ||r|| = 1.411e+07 (call #375)
+[PRECOND BLOCK NORMS] U: 3.039e+04, V: 36.21, MU: 1295
+[PRECOND BLOCK NORMS] PHI: 7276
+[PRECOND BLOCK NORMS] W: 9.777, THETA: 1288
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.13e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.002219
+[PRECOND DEBUG] Input residual ||r|| = 1.226e+07 (call #380)
+[PRECOND BLOCK NORMS] U: 5e+04, V: 72, MU: 1982
+[PRECOND BLOCK NORMS] PHI: 1.114e+04
+[PRECOND BLOCK NORMS] W: 10.02, THETA: 1339
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 5.127e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.004181
+[PRECOND DEBUG] Input residual ||r|| = 1.245e+07 (call #385)
+[PRECOND BLOCK NORMS] U: 5.562e+04, V: 76.81, MU: 2032
+[PRECOND BLOCK NORMS] PHI: 1.14e+04
+[PRECOND BLOCK NORMS] W: 10.49, THETA: 1739
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 5.684e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.004566
+[PRECOND DEBUG] Input residual ||r|| = 1.357e+07 (call #390)
+[PRECOND BLOCK NORMS] U: 2.436e+04, V: 43.23, MU: 1268
+[PRECOND BLOCK NORMS] PHI: 7115
+[PRECOND BLOCK NORMS] W: 9.73, THETA: 1012
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.543e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.001874
+[PRECOND DEBUG] Input residual ||r|| = 1.276e+07 (call #395)
+[PRECOND BLOCK NORMS] U: 3.052e+04, V: 57.16, MU: 1390
+[PRECOND BLOCK NORMS] PHI: 7806
+[PRECOND BLOCK NORMS] W: 8.9, THETA: 983.5
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.155e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.002473
+[GMRES] restart=1 j=31: hess_est=0.3559, true_err=0.3558
+[GMRES BLOCK r/b] restart=1 j=31 ru=14.4927 rv=100.1985 rw=9.7479 ph=127.7546 t=19.6035 mu=1.9710
+[FGMRES] NOT CONVERGED: ||x||=0.0143, ||r_true||=402.8210, ||b||=1039.4686, rel_error=0.3875, tol=0.0000, restarts=1, arnoldi=32 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=32 x numel=1080491 => ~131.9 MiB per cycle
+[GMRES REORTH] j=1 before=844 after1=527.8 after2=527.8 ratio=0.6253
+[GMRES REORTH] j=2 before=681.9 after1=411.5 after2=411.5 ratio=0.6034
+[GMRES] restart=1 j=31: hess_est=0.2721, true_err=0.2721
+[GMRES BLOCK r/b] restart=1 j=31 ru=19.9444 rv=67.7639 rw=15.0190 ph=99.5743 t=25.9406 mu=1.5855
+[FGMRES] NOT CONVERGED: ||x||=0.0115, ||r_true||=307.9249, ||b||=1039.4686, rel_error=0.2962, tol=0.0000, restarts=1, arnoldi=32 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=32 x numel=1080491 => ~131.9 MiB per cycle
+[GMRES REORTH] j=1 before=148.8 after1=81.48 after2=81.48 ratio=0.5475
+[PRECOND DEBUG] Input residual ||r|| = 1.558e+06 (call #400)
+[PRECOND BLOCK NORMS] U: 7.447e+04, V: 114.4, MU: 2595
+[PRECOND BLOCK NORMS] PHI: 1.458e+04
+[PRECOND BLOCK NORMS] W: 37.11, THETA: 3462
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.6e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.04878
+[GMRES REORTH] j=2 before=119.4 after1=75.79 after2=75.79 ratio=0.635
+[PRECOND DEBUG] Input residual ||r|| = 2.518e+06 (call #405)
+[PRECOND BLOCK NORMS] U: 7.087e+04, V: 96.44, MU: 2569
+[PRECOND BLOCK NORMS] PHI: 1.439e+04
+[PRECOND BLOCK NORMS] W: 17.76, THETA: 2231
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 7.238e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02874
+[PRECOND DEBUG] Input residual ||r|| = 1.108e+06 (call #410)
+[PRECOND BLOCK NORMS] U: 3.106e+04, V: 93.4, MU: 1119
+[PRECOND BLOCK NORMS] PHI: 6280
+[PRECOND BLOCK NORMS] W: 5.895, THETA: 964.5
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.171e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02863
+[PRECOND DEBUG] Input residual ||r|| = 1.638e+06 (call #415)
+[PRECOND BLOCK NORMS] U: 1.223e+04, V: 89.15, MU: 468.9
+[PRECOND BLOCK NORMS] PHI: 2610
+[PRECOND BLOCK NORMS] W: 6.282, THETA: 588.9
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.252e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.007647
+[PRECOND DEBUG] Input residual ||r|| = 9.799e+05 (call #420)
+[PRECOND BLOCK NORMS] U: 1.996e+04, V: 93.61, MU: 721.2
+[PRECOND BLOCK NORMS] PHI: 4046
+[PRECOND BLOCK NORMS] W: 12.77, THETA: 1125
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.041e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02083
+[PRECOND DEBUG] Input residual ||r|| = 1.373e+06 (call #425)
+[PRECOND BLOCK NORMS] U: 2.361e+04, V: 89.5, MU: 727.4
+[PRECOND BLOCK NORMS] PHI: 4117
+[PRECOND BLOCK NORMS] W: 23.2, THETA: 1321
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.401e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.01749
+[GMRES] restart=1 j=31: hess_est=0.4615, true_err=0.4617
+[GMRES BLOCK r/b] restart=1 j=31 ru=16.4795 rv=50.9378 rw=77.8798 ph=149.8467 t=22.7442 mu=14.7278
+[FGMRES] NOT CONVERGED: ||x||=0.0201, ||r_true||=438.9504, ||b||=1039.4686, rel_error=0.4223, tol=0.0000, restarts=1, arnoldi=32 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=16 x numel=1080491 => ~65.95 MiB per cycle
+[PRECOND DEBUG] Input residual ||r|| = 6.029e+06 (call #430)
+[PRECOND BLOCK NORMS] U: 1.453e+05, V: 153.3, MU: 4807
+[PRECOND BLOCK NORMS] PHI: 2.711e+04
+[PRECOND BLOCK NORMS] W: 28.92, THETA: 4297
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.48e+05 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02454
+[GMRES REORTH] j=1 before=785.4 after1=539.5 after2=539.5 ratio=0.687
+[GMRES REORTH] j=2 before=644.3 after1=418.3 after2=418.3 ratio=0.6493
+[PRECOND DEBUG] Input residual ||r|| = 1.098e+07 (call #435)
+[PRECOND BLOCK NORMS] U: 6.804e+04, V: 75.64, MU: 2385
+[PRECOND BLOCK NORMS] PHI: 1.337e+04
+[PRECOND BLOCK NORMS] W: 19.59, THETA: 3611
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 6.947e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.00633
+[PRECOND DEBUG] Input residual ||r|| = 1.224e+07 (call #440)
+[PRECOND BLOCK NORMS] U: 3.174e+04, V: 62.76, MU: 1222
+[PRECOND BLOCK NORMS] PHI: 6840
+[PRECOND BLOCK NORMS] W: 7.01, THETA: 1131
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.251e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.002656
+[PRECOND DEBUG] Input residual ||r|| = 1.365e+07 (call #445)
+[PRECOND BLOCK NORMS] U: 3.619e+04, V: 53, MU: 1574
+[PRECOND BLOCK NORMS] PHI: 8852
+[PRECOND BLOCK NORMS] W: 9.817, THETA: 1216
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 3.73e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.002733
+[GMRES] restart=1 j=15: hess_est=0.4772, true_err=0.4772
+[GMRES BLOCK r/b] restart=1 j=15 ru=45.3036 rv=159.8165 rw=37.3367 ph=125.8641 t=46.8728 mu=5.5889
+[FGMRES] NOT CONVERGED: ||x||=0.0142, ||r_true||=531.2861, ||b||=1039.4686, rel_error=0.5111, tol=0.0000, restarts=1, arnoldi=16 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=16 x numel=1080491 => ~65.95 MiB per cycle
+[GMRES REORTH] j=1 before=844 after1=527.8 after2=527.8 ratio=0.6253
+[GMRES REORTH] j=2 before=681.9 after1=411.5 after2=411.5 ratio=0.6034
+[GMRES] restart=1 j=15: hess_est=0.2853, true_err=0.2853
+[GMRES BLOCK r/b] restart=1 j=15 ru=23.1476 rv=73.3673 rw=17.9190 ph=100.6464 t=29.6096 mu=2.1369
+[FGMRES] NOT CONVERGED: ||x||=0.0111, ||r_true||=321.6658, ||b||=1039.4686, rel_error=0.3095, tol=0.0000, restarts=1, arnoldi=16 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=16 x numel=1080491 => ~65.95 MiB per cycle
+[GMRES REORTH] j=1 before=148.8 after1=81.48 after2=81.48 ratio=0.5475
+[GMRES REORTH] j=2 before=119.4 after1=75.79 after2=75.79 ratio=0.635
+[PRECOND DEBUG] Input residual ||r|| = 2.01e+06 (call #450)
+[PRECOND BLOCK NORMS] U: 8.295e+04, V: 87.27, MU: 2786
+[PRECOND BLOCK NORMS] PHI: 1.57e+04
+[PRECOND BLOCK NORMS] W: 37.64, THETA: 3423
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 8.452e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.04204
+[PRECOND DEBUG] Input residual ||r|| = 1.96e+06 (call #455)
+[PRECOND BLOCK NORMS] U: 4.228e+04, V: 89.18, MU: 1533
+[PRECOND BLOCK NORMS] PHI: 8583
+[PRECOND BLOCK NORMS] W: 11.89, THETA: 1449
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 4.319e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02204
+[PRECOND DEBUG] Input residual ||r|| = 1.208e+06 (call #460)
+[PRECOND BLOCK NORMS] U: 2.626e+04, V: 92.44, MU: 966
+[PRECOND BLOCK NORMS] PHI: 5418
+[PRECOND BLOCK NORMS] W: 5.947, THETA: 853.6
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 2.684e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02222
+[GMRES] restart=1 j=15: hess_est=0.5205, true_err=0.5205
+[GMRES BLOCK r/b] restart=1 j=15 ru=21.3685 rv=54.3569 rw=99.0752 ph=164.6885 t=29.4593 mu=16.2958
+[FGMRES] NOT CONVERGED: ||x||=0.0177, ||r_true||=498.8445, ||b||=1039.4686, rel_error=0.4799, tol=0.0000, restarts=1, arnoldi=16 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=8 x numel=1080491 => ~32.97 MiB per cycle
+[GMRES REORTH] j=1 before=785.4 after1=539.5 after2=539.5 ratio=0.687
+[GMRES REORTH] j=2 before=644.3 after1=418.3 after2=418.3 ratio=0.6493
+[PRECOND DEBUG] Input residual ||r|| = 1.127e+07 (call #465)
+[PRECOND BLOCK NORMS] U: 6.703e+04, V: 105, MU: 2608
+[PRECOND BLOCK NORMS] PHI: 1.461e+04
+[PRECOND BLOCK NORMS] W: 21.1, THETA: 2971
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 6.871e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.006098
+[GMRES] restart=1 j=7: hess_est=0.5618, true_err=0.5618
+[GMRES BLOCK r/b] restart=1 j=7 ru=71.2314 rv=154.5583 rw=66.0025 ph=139.7399 t=79.1080 mu=11.7054
+[FGMRES] NOT CONVERGED: ||x||=0.0127, ||r_true||=596.1353, ||b||=1039.4686, rel_error=0.5735, tol=0.0000, restarts=1, arnoldi=8 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=Msel j=8 ru_rho0=1 ru_rho=0.3739 rv_rho0=1 rv_rho=0.8161 rw_rho0=1 rw_rho=0.348 ph_rho0=1 ph_rho=0.7367 t_rho0=1 t_rho=0.4203 mu_rho0=1 mu_rho=0.4975
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=8 x numel=1080491 => ~32.97 MiB per cycle
+[GMRES REORTH] j=1 before=844 after1=527.8 after2=527.8 ratio=0.6253
+[GMRES REORTH] j=2 before=681.9 after1=411.5 after2=411.5 ratio=0.6034
+[GMRES] restart=1 j=7: hess_est=0.3534, true_err=0.3534
+[GMRES BLOCK r/b] restart=1 j=7 ru=40.9857 rv=96.9539 rw=21.7991 ph=103.8607 t=38.1465 mu=6.9266
+[FGMRES] NOT CONVERGED: ||x||=0.0099, ||r_true||=378.2021, ||b||=1039.4686, rel_error=0.3638, tol=0.0000, restarts=1, arnoldi=8 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=I j=8 ru_rho0=1 ru_rho=0.2151 rv_rho0=1 rv_rho=0.512 rw_rho0=1 rw_rho=0.1149 ph_rho0=1 ph_rho=0.5475 t_rho0=1 t_rho=0.2027 mu_rho0=1 mu_rho=0.2944
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=8 x numel=1080491 => ~32.97 MiB per cycle
+[PRECOND DEBUG] Input residual ||r|| = 6.029e+06 (call #470)
+[PRECOND BLOCK NORMS] U: 1.453e+05, V: 153.3, MU: 4807
+[PRECOND BLOCK NORMS] PHI: 2.711e+04
+[PRECOND BLOCK NORMS] W: 28.92, THETA: 4297
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.48e+05 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02454
+[GMRES REORTH] j=1 before=148.8 after1=81.48 after2=81.48 ratio=0.5475
+[GMRES REORTH] j=2 before=119.4 after1=75.79 after2=75.79 ratio=0.635
+[PRECOND DEBUG] Input residual ||r|| = 2.382e+06 (call #475)
+[PRECOND BLOCK NORMS] U: 8.267e+04, V: 106.6, MU: 2941
+[PRECOND BLOCK NORMS] PHI: 1.649e+04
+[PRECOND BLOCK NORMS] W: 21.91, THETA: 2769
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 8.439e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.03543
+[GMRES] restart=1 j=7: hess_est=0.5879, true_err=0.5879
+[GMRES BLOCK r/b] restart=1 j=7 ru=13.9974 rv=106.8598 rw=114.6866 ph=171.4339 t=22.8023 mu=17.4983
+[FGMRES] NOT CONVERGED: ||x||=0.0173, ||r_true||=574.2696, ||b||=1039.4686, rel_error=0.5525, tol=0.0000, restarts=1, arnoldi=8 (block-scaled)
+SDIRK3_FROZEN_AB_BLOCKS stage=2 arm=M j=8 ru_rho0=1 ru_rho=0.07348 rv_rho0=1 rv_rho=0.5643 rw_rho0=1 rw_rho=0.6046 ph_rho0=1 ph_rho=0.9038 t_rho0=1 t_rho=0.1211 mu_rho0=1 mu_rho=0.7437
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=4 x numel=1080491 => ~16.49 MiB per cycle
+[GMRES REORTH] j=1 before=785.4 after1=539.5 after2=539.5 ratio=0.687
+[PRECOND DEBUG] Input residual ||r|| = 1.096e+07 (call #480)
+[PRECOND BLOCK NORMS] U: 6.275e+04, V: 38.87, MU: 2306
+[PRECOND BLOCK NORMS] PHI: 1.3e+04
+[PRECOND BLOCK NORMS] W: 9.681, THETA: 2739
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 6.417e+04 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.005857
+[GMRES REORTH] j=2 before=644.3 after1=418.3 after2=418.3 ratio=0.6493
+[GMRES] restart=1 j=3: hess_est=0.6952, true_err=0.6952
+[GMRES BLOCK r/b] restart=1 j=3 ru=118.3997 rv=175.8333 rw=112.7080 ph=165.2943 t=134.1573 mu=4.1196
+[FGMRES] NOT CONVERGED: ||x||=0.0104, ||r_true||=786.0260, ||b||=1039.4686, rel_error=0.7562, tol=0.0000, restarts=1, arnoldi=4 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=4 x numel=1080491 => ~16.49 MiB per cycle
+[GMRES REORTH] j=1 before=844 after1=527.8 after2=527.8 ratio=0.6253
+[GMRES REORTH] j=2 before=681.9 after1=411.5 after2=411.5 ratio=0.6034
+[GMRES] restart=1 j=3: hess_est=0.5497, true_err=0.5497
+[GMRES BLOCK r/b] restart=1 j=3 ru=65.5209 rv=116.6260 rw=71.3045 ph=142.3255 t=102.2735 mu=13.2219
+[FGMRES] NOT CONVERGED: ||x||=0.0077, ||r_true||=568.4401, ||b||=1039.4686, rel_error=0.5469, tol=0.0000, restarts=1, arnoldi=4 (block-scaled)
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=4 x numel=1080491 => ~16.49 MiB per cycle
+[GMRES REORTH] j=1 before=148.8 after1=81.48 after2=81.48 ratio=0.5475
+[GMRES REORTH] j=2 before=119.4 after1=75.79 after2=75.79 ratio=0.635
+[PRECOND DEBUG] Input residual ||r|| = 2.804e+06 (call #485)
+[PRECOND BLOCK NORMS] U: 1.002e+05, V: 114.3, MU: 3667
+[PRECOND BLOCK NORMS] PHI: 2.053e+04
+[PRECOND BLOCK NORMS] W: 13.45, THETA: 2639
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.024e+05 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.03653
+[GMRES] restart=1 j=3: hess_est=0.7750, true_err=0.7751
+[GMRES BLOCK r/b] restart=1 j=3 ru=89.7857 rv=179.8267 rw=145.2190 ph=179.6292 t=85.2064 mu=20.9459
+[FGMRES] NOT CONVERGED: ||x||=0.0147, ||r_true||=780.1282, ||b||=1039.4686, rel_error=0.7505, tol=0.0000, restarts=1, arnoldi=4 (block-scaled)
+SDIRK3_FROZEN_AB_SYSTEM stage=2 newton_iter=0 global_timestep=1 solver_id=2 rank=-1 ab_valid=0 ab_reason=early_stop_enabled b_digest=-1.583e+12 x0_digest=0 ab_evidence=b_x0_single_object_digest_rechecked_per_arm/shared_operator_and_preconditioner_fingerprinted operator_state_unchanged=1 precond_state_unchanged=1 counters_restored=1 pc_event_moved=0 shared_preconditioner_instance=1 fresh_wrapper_per_arm=1 b_digests_agree=1 x0_digests_agree=1 b_norm=1039 rho0_S=1 rho0_phys=1 rho0_D=1 refinement_passes=1 metric=rho_S_unweighted tolerance_exit_disabled=1 early_stop_disabled=0 jvp_fd_fallback_free=1 operator_linear=1 e_repeat=0 e_homogeneity=4.265e-07 e_additivity=3.081e-07 identity_frac_rand=2.19e-05 identity_frac_rhs_dir=1.125e-05 rhs_dir_is_first_arnoldi=1 e_hom_rhs_dir=9.893e-08 identity_resolution_rand=0.01948 identity_resolution_rhs_dir=0.008796 identity_resolved_rhs_dir=1 precond_linear=1 eM_homogeneity=1.29e-07 eM_additivity=1.103e-07 metric_phys=rho_phys_S_weighted metric_D=rho_D_fgmres_objective probe_noninterfering=1 halo_floor_delta=0.0001425 worst_order_delta=0 worst_order_metric=none d_same_across_rows=1 d_all_valid=1 discrete_order_invariant=1 msel_valid=0 msel_reason=early_stop_enabled order_pairs_compared=15  (NOT attributable -- rows below are raw numbers and NO comparison between the arms may be drawn from them)
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=M j=4 rho_S=0.7505 rho_phys=0.8793 rho_D=0.775 A_applies=5 d_weighted=1 msel_engaged=0 rel_reported=0.7505 iters=4 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=I j=4 rho_S=0.5469 rho_phys=0.559 rho_D=0.5497 A_applies=5 d_weighted=1 msel_engaged=0 rel_reported=0.5469 iters=4 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=Msel j=4 rho_S=0.7562 rho_phys=0.2355 rho_D=0.6952 A_applies=5 d_weighted=1 msel_engaged=1 rel_reported=0.7562 iters=4 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=M j=8 rho_S=0.5525 rho_phys=0.7329 rho_D=0.5879 A_applies=9 d_weighted=1 msel_engaged=0 rel_reported=0.5525 iters=8 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=I j=8 rho_S=0.3639 rho_phys=0.2976 rho_D=0.3534 A_applies=9 d_weighted=1 msel_engaged=0 rel_reported=0.3638 iters=8 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=Msel j=8 rho_S=0.5735 rho_phys=0.4983 rho_D=0.5618 A_applies=9 d_weighted=1 msel_engaged=1 rel_reported=0.5735 iters=8 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=M j=16 rho_S=0.4799 rho_phys=0.6832 rho_D=0.5205 A_applies=17 d_weighted=1 msel_engaged=0 rel_reported=0.4799 iters=16 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=I j=16 rho_S=0.3095 rho_phys=0.1134 rho_D=0.2853 A_applies=17 d_weighted=1 msel_engaged=0 rel_reported=0.3095 iters=16 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=Msel j=16 rho_S=0.5112 rho_phys=0.2501 rho_D=0.4772 A_applies=17 d_weighted=1 msel_engaged=1 rel_reported=0.5111 iters=16 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=M j=32 rho_S=0.4223 rho_phys=0.6175 rho_D=0.4617 A_applies=33 d_weighted=1 msel_engaged=0 rel_reported=0.4223 iters=32 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=I j=32 rho_S=0.2962 rho_phys=0.09546 rho_D=0.2721 A_applies=33 d_weighted=1 msel_engaged=0 rel_reported=0.2962 iters=32 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=Msel j=32 rho_S=0.3876 rho_phys=0.1188 rho_D=0.3559 A_applies=33 d_weighted=1 msel_engaged=1 rel_reported=0.3875 iters=32 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=M j=48 rho_S=0.3604 rho_phys=0.4842 rho_D=0.3843 A_applies=49 d_weighted=1 msel_engaged=0 rel_reported=0.3604 iters=48 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=I j=48 rho_S=0.2853 rho_phys=0.09563 rho_D=0.2623 A_applies=49 d_weighted=1 msel_engaged=0 rel_reported=0.2853 iters=48 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=MI arm=Msel j=48 rho_S=0.3475 rho_phys=0.09957 rho_D=0.3188 A_applies=49 d_weighted=1 msel_engaged=1 rel_reported=0.3475 iters=48 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=Msel j=48 rho_S=0.3475 rho_phys=0.09957 rho_D=0.3188 A_applies=49 d_weighted=1 msel_engaged=1 rel_reported=0.3475 iters=48 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=I j=48 rho_S=0.2853 rho_phys=0.09563 rho_D=0.2623 A_applies=49 d_weighted=1 msel_engaged=0 rel_reported=0.2853 iters=48 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=M j=48 rho_S=0.3604 rho_phys=0.4842 rho_D=0.3843 A_applies=49 d_weighted=1 msel_engaged=0 rel_reported=0.3604 iters=48 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=Msel j=32 rho_S=0.3876 rho_phys=0.1188 rho_D=0.3559 A_applies=33 d_weighted=1 msel_engaged=1 rel_reported=0.3875 iters=32 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=I j=32 rho_S=0.2962 rho_phys=0.09546 rho_D=0.2721 A_applies=33 d_weighted=1 msel_engaged=0 rel_reported=0.2962 iters=32 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=M j=32 rho_S=0.4223 rho_phys=0.6175 rho_D=0.4617 A_applies=33 d_weighted=1 msel_engaged=0 rel_reported=0.4223 iters=32 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=Msel j=16 rho_S=0.5112 rho_phys=0.2501 rho_D=0.4772 A_applies=17 d_weighted=1 msel_engaged=1 rel_reported=0.5111 iters=16 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=I j=16 rho_S=0.3095 rho_phys=0.1134 rho_D=0.2853 A_applies=17 d_weighted=1 msel_engaged=0 rel_reported=0.3095 iters=16 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=M j=16 rho_S=0.4799 rho_phys=0.6832 rho_D=0.5205 A_applies=17 d_weighted=1 msel_engaged=0 rel_reported=0.4799 iters=16 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=Msel j=8 rho_S=0.5735 rho_phys=0.4983 rho_D=0.5618 A_applies=9 d_weighted=1 msel_engaged=1 rel_reported=0.5735 iters=8 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=I j=8 rho_S=0.3639 rho_phys=0.2976 rho_D=0.3534 A_applies=9 d_weighted=1 msel_engaged=0 rel_reported=0.3638 iters=8 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=M j=8 rho_S=0.5525 rho_phys=0.7329 rho_D=0.5879 A_applies=9 d_weighted=1 msel_engaged=0 rel_reported=0.5525 iters=8 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=Msel j=4 rho_S=0.7562 rho_phys=0.2355 rho_D=0.6952 A_applies=5 d_weighted=1 msel_engaged=1 rel_reported=0.7562 iters=4 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=I j=4 rho_S=0.5469 rho_phys=0.559 rho_D=0.5497 A_applies=5 d_weighted=1 msel_engaged=0 rel_reported=0.5469 iters=4 termination=8 ab_valid=0
+SDIRK3_FROZEN_AB stage=2 pass=IM arm=M j=4 rho_S=0.7505 rho_phys=0.8793 rho_D=0.775 A_applies=5 d_weighted=1 msel_engaged=0 rel_reported=0.7505 iters=4 termination=8 ab_valid=0
+[GMRES BLOCK-SCALE] ru: ||r0||=466.6 → D_inv=0.002143
+[GMRES BLOCK-SCALE] rv: ||r0||=463.9 → D_inv=0.002156
+[GMRES BLOCK-SCALE] rw: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] ph: ||r0||=464.6 → D_inv=0.002152
+[GMRES BLOCK-SCALE] t: ||r0||=461 → D_inv=0.002169
+[GMRES BLOCK-SCALE] mu: ||r0||=57.63 → D_inv=0.01735
+[FGMRES] Z-basis memory budget: restart=7 x numel=1080491 => ~28.85 MiB per cycle
+[GMRES REORTH] j=1 before=148.8 after1=81.48 after2=81.48 ratio=0.5475
+[GMRES REORTH] j=2 before=119.4 after1=75.79 after2=75.79 ratio=0.635
+[PRECOND DEBUG] Input residual ||r|| = 2.804e+06 (call #490)
+[PRECOND BLOCK NORMS] U: 1.002e+05, V: 114.3, MU: 3667
+[PRECOND BLOCK NORMS] PHI: 2.053e+04
+[PRECOND BLOCK NORMS] W: 13.45, THETA: 2639
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.024e+05 (α₀=0, ratio=1, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.03653
+[GMRES] restart=1 j=6: hess_est=0.5880, true_err=0.5880
+[GMRES BLOCK r/b] restart=1 j=6 ru=13.8438 rv=107.3941 rw=114.4924 ph=171.3559 t=22.6772 mu=17.4894
+[FGMRES] NOT CONVERGED: ||x||=0.0173, ||r_true||=574.4381, ||b||=1039.4686, rel_error=0.5526, tol=0.3000, restarts=1, arnoldi=7 (block-scaled)
+[NEWTON] GMRES failed badly (rel_error=0.5526): FGMRES max iterations reached (7 Arnoldi)
+SDIRK3_GMRES_ESTIMATE_VS_TRUE internal_iters=7 final_residual=574.4 rel_error_UNSCALED=0.5526 note=minimised_norm_is_block_scaled
+SDIRK3_GMRES_S_SCALE_RESIDUAL_TELEMETRY_ONLY scaled_rel=0.5757 num=3.124 den=5.426  (TELEMETRY ONLY -- NOT the minimised norm: the internal convergence check uses D_inv block scaling, not S_diag. Ranking configurations by this number inverted the results twice; use error_tensor.)
+SDIRK3_GMRES_TRIVIALITY ||x||=0.01731 ||b||=1039 ratio=1.665e-05
+[GMRES BLOCK RESIDUAL] ru=3.391e+01(rel=0.073,share=0.001) rv=2.630e+02(rel=0.567,share=0.064) rw=2.804e+02(rel=0.604,share=0.073) ph=4.197e+02(rel=0.903,share=0.163) t=5.555e+01(rel=0.120,share=0.003) mu=4.284e+01(rel=0.743,share=0.002) 
+[Newton] GMRES: 7 krylov iters, ||dK||=2615, rel_error=0.5526 (FAIL)
+[Newton] JVP calls: 62, total JVP time: 3451 ms, avg: 55.67 ms/call
+[SOLVER TELEMETRY] stage=2, newton=0, gmres_iters=7, gmres_rel=0.5526, jvp_calls=62, jvp_ms=3451, warmstart=off, inn_status=no_base_warmstart, inn_reason_code=2, inn_candidate=no, inn_used=no, inn_gate_pass=no, inn_q=0, inn_r_base=0, inn_r_cand=0, inn_x0_base_norm=0, inn_x0_cand_norm=0, inn_x0_delta_norm=0, inn_x0_rel_delta=0, inn_gate_rel_diff=0, inn_gate_non_degrade=no, inn_gate_quality_ok=no, inn_tol_ramped=no, inn_base_warmstart=no, inn_prev_shape_ok=no, inn_prev_quality_ok=no, inn_prev_varpc_ok=no, inn_prev_rel=0, inn_ru_share_base=0, inn_ru_share_cand=0, inn_rw_share_base=0, inn_rw_share_cand=0, inn_ph_share_base=0, inn_ph_share_cand=0, variable_pc=no, jvp_mode=unlocked, jvp_fd_mode=none, jvp_ad_calls=62, jvp_fd_calls=0, jvp_eps_mean=0, jvp_eps_min=0, jvp_eps_max=0, jvp_eps_auto_calls=0, jvp_eps_manual_calls=0, ew_eta_enabled=yes, ew_eta=0.3, ew_eta_updated=no, krylov_tol_final=0.3, krylov_tol_stage_override=no, budget_coupled=yes, budget_eta=0.3, budget_scale=0.85
+SDIRK3_TAYLOR_DEFECT stage=2 newton_iter=0 probe_gate=step_accepted accepted_so_far=1 rejected_so_far=0 tau=0.1192 alpha=0.3333 tau_alpha=0.03972 tau_alpha_over_tau=0.3333 R_k=8.742e+08 R_k1=6.406e+08 step_norm=2616 As_norm=2.809e+08 achieved_eta=0.5526 alpha_arm_measured=1 fd_fallback_free=1 linearity_residual=1.791e-07 tau_excited_block_max=0.2008 tau_excited_block_max_name=ru tau_excitation_share=0.001 tau_excitation_share_observed=0 tau_raw_block_max=0.207 tau_raw_block_max_name=rw realized_step_fraction=1 realized_U_fraction=1 signal_to_roundoff=2.527e+06 tau_ru=0.200793 tauraw_ru=0.200793 share_ru=0.592850 excited_ru=1 tau_rv=0.033641 tauraw_rv=0.196645 share_rv=0.000171 excited_rv=0 tau_rw=0.044653 tauraw_rw=0.207042 share_rw=0.000216 excited_rw=0 tau_ph=0.000476 tauraw_ph=0.000476 share_ph=0.139789 excited_ph=1 tau_t=0.192243 tauraw_t=0.192243 share_t=0.017996 excited_t=1 tau_mu=0.005513 tauraw_mu=0.005513 share_mu=0.792883 excited_mu=1 tau_verdict=measured  (tau<<1: the AD tangent is faithful TO THE PRIMAL IT DIFFERENTIATES over this accepted step, and the inner solve is binding -- a wrong compute_rhs is invisible here; tau=O(1) with tau_alpha/tau~alpha: nonlinearity over the step; tau=O(1) with tau_alpha/tau~1: AD-vs-primal Jacobian defect)
+
+--- Newton iteration 1 starting ---
+[PRECOND] set_stage_state ENTRY: stage=2, mu_pert.defined()=1, mu_pert.dim()=2
+[PRECOND] set_stage_state: mu_base_2d.sizes()=[81, 41], mu_pert.sizes()=[81, 41]
+[PRECOND] mu_scale_correction = 1.001 (mu_full_mean=8.92e+04 / mu_rep=8.908e+04)
+[Newton] iter 1: ||S⁻¹R||_rms=5.5398e-01 [scaled-RMS], ||R||=6.4057e+08 [unscaled-L2], tol=2.0000e-01
+[EISENSTAT-WALKER] Newton iter 1
+  ||R_k|| = 0.554
+  ||R_{k-1}|| = 1
+  Residual ratio = 0.554
+  gamma=0.9, alpha=1.5
+  Adaptive eta_k = 0.3 (range: 0.02 to 0.3)
+[BLOCK_RES] iter=1 ru=1.45e+04 rv=1.97e+04 rw=4.90e+04 ph=1.93e+05 t=1.10e+04 mu=6.85e+06 max=6.85e+06 ru_share=0.003
+[Newton] JVP method: FORWARD-MODE AD (compute_jvp_forward_mode)
+[Newton] JVP ready for GMRES (use_autograd=true)
+[JVP FORWARD] Call #1: forward-mode AD took 56 ms
+[JVP DIAG] call #1: ||dK||=2615, ||v=dt*γ*dK||=6.84e+05, ||J*v||=2.49e+08, ||dK-J*v||=2.49e+08, ratio ||J*v||/||dK||=9.519e+04
+[GMRES BLOCK-SCALE] ru: ||r0||=188.2 → D_inv=0.005313
+[GMRES BLOCK-SCALE] rv: ||r0||=390.5 → D_inv=0.002561
+[GMRES BLOCK-SCALE] rw: ||r0||=240.5 → D_inv=0.004157
+[GMRES BLOCK-SCALE] ph: ||r0||=437 → D_inv=0.002288
+[GMRES BLOCK-SCALE] t: ||r0||=237.8 → D_inv=0.004205
+[GMRES BLOCK-SCALE] mu: ||r0||=28.24 → D_inv=0.03541
+[FGMRES] Z-basis memory budget: restart=7 x numel=1080491 => ~28.85 MiB per cycle
+[JVP FORWARD] Call #2: forward-mode AD took 86 ms
+[JVP DIAG] call #2: ||dK||=1.483e+05, ||v=dt*γ*dK||=3.878e+07, ||J*v||=9.284e+09, ||dK-J*v||=9.284e+09, ratio ||J*v||/||dK||=6.26e+04
+[PRECOND DEBUG] Input residual ||r|| = 1.482e+06 (call #495)
+[PRECOND BLOCK NORMS] U: 1.384e+05, V: 205.3, MU: 4788
+[PRECOND BLOCK NORMS] PHI: 2.682e+04
+[PRECOND BLOCK NORMS] W: 21.08, THETA: 3630
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.411e+05 (α₀=0, ratio=0.554, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.09519
+[JVP FORWARD] Call #3: forward-mode AD took 56 ms
+[JVP DIAG] call #3: ||dK||=1.411e+05, ||v=dt*γ*dK||=3.689e+07, ||J*v||=7.077e+09, ||dK-J*v||=7.077e+09, ratio ||J*v||/||dK||=5.017e+04
+[GMRES REORTH] j=2 before=144.5 after1=81.17 after2=81.17 ratio=0.5616
+[PRECOND DEBUG] Input residual ||r|| = 4.477e+06 (call #500)
+[PRECOND BLOCK NORMS] U: 1.357e+05, V: 166.7, MU: 4346
+[PRECOND BLOCK NORMS] PHI: 2.435e+04
+[PRECOND BLOCK NORMS] W: 16.04, THETA: 1401
+[PRECOND TIMING] W-THETA coupled solve: 5 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.379e+05 (α₀=0, ratio=0.554, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.0308
+[GMRES] restart=1 j=6: hess_est=0.8364, true_err=0.8364
+[GMRES BLOCK r/b] restart=1 j=6 ru=21.1616 rv=70.8950 rw=98.6444 ph=178.7752 t=36.3147 mu=15.3440
+[FGMRES] NOT CONVERGED: ||x||=0.0100, ||r_true||=510.8482, ||b||=575.8416, rel_error=0.8871, tol=0.3000, restarts=1, arnoldi=7 (block-scaled)
+[NEWTON] GMRES failed badly (rel_error=0.8871): FGMRES max iterations reached (7 Arnoldi)
+SDIRK3_GMRES_ESTIMATE_VS_TRUE internal_iters=7 final_residual=510.8 rel_error_UNSCALED=0.8871 note=minimised_norm_is_block_scaled
+SDIRK3_GMRES_S_SCALE_RESIDUAL_TELEMETRY_ONLY scaled_rel=0.7207 num=2.116 den=2.936  (TELEMETRY ONLY -- NOT the minimised norm: the internal convergence check uses D_inv block scaling, not S_diag. Ranking configurations by this number inverted the results twice; use error_tensor.)
+SDIRK3_GMRES_TRIVIALITY ||x||=0.01001 ||b||=575.8 ratio=1.738e-05
+[Newton] GMRES: 7 krylov iters, ||dK||=1209, rel_error=0.8871 (FAIL)
+[Newton] JVP calls: 9, total JVP time: 527 ms, avg: 58.56 ms/call
+[SOLVER TELEMETRY] stage=2, newton=1, gmres_iters=7, gmres_rel=0.8871, jvp_calls=9, jvp_ms=527, warmstart=on, inn_status=prev_history_missing, inn_reason_code=4, inn_candidate=no, inn_used=no, inn_gate_pass=no, inn_q=0, inn_r_base=0, inn_r_cand=0, inn_x0_base_norm=0, inn_x0_cand_norm=0, inn_x0_delta_norm=0, inn_x0_rel_delta=0, inn_gate_rel_diff=0, inn_gate_non_degrade=no, inn_gate_quality_ok=no, inn_tol_ramped=no, inn_base_warmstart=yes, inn_prev_shape_ok=no, inn_prev_quality_ok=yes, inn_prev_varpc_ok=yes, inn_prev_rel=1, inn_ru_share_base=0, inn_ru_share_cand=0, inn_rw_share_base=0, inn_rw_share_cand=0, inn_ph_share_base=0, inn_ph_share_cand=0, variable_pc=no, jvp_mode=unlocked, jvp_fd_mode=none, jvp_ad_calls=9, jvp_fd_calls=0, jvp_eps_mean=0, jvp_eps_min=0, jvp_eps_max=0, jvp_eps_auto_calls=0, jvp_eps_manual_calls=0, ew_eta_enabled=yes, ew_eta=0.3, ew_eta_updated=yes, krylov_tol_final=0.3, krylov_tol_stage_override=no, budget_coupled=yes, budget_eta=0.3, budget_scale=0.85
+SDIRK3_TAYLOR_DEFECT stage=2 newton_iter=1 probe_gate=step_accepted accepted_so_far=2 rejected_so_far=0 tau=0.06452 alpha=0.3333 tau_alpha=0.02151 tau_alpha_over_tau=0.3333 R_k=6.406e+08 R_k1=5.335e+08 step_norm=1209 As_norm=1.228e+08 achieved_eta=0.8871 alpha_arm_measured=1 fd_fallback_free=1 linearity_residual=1.739e-07 tau_excited_block_max=0.1717 tau_excited_block_max_name=ru tau_excitation_share=0.001 tau_excitation_share_observed=0 tau_raw_block_max=0.1717 tau_raw_block_max_name=ru realized_step_fraction=1 realized_U_fraction=1 signal_to_roundoff=1.575e+06 tau_ru=0.171742 tauraw_ru=0.171742 share_ru=0.375405 excited_ru=1 tau_rv=0.027581 tauraw_rv=0.156239 share_rv=0.000177 excited_rv=0 tau_rw=0.022108 tauraw_rw=0.154349 share_rw=0.000143 excited_rw=0 tau_ph=0.000306 tauraw_ph=0.000306 share_ph=0.147600 excited_ph=1 tau_t=0.151393 tauraw_t=0.151393 share_t=0.011745 excited_t=1 tau_mu=0.001928 tauraw_mu=0.001928 share_mu=0.914958 excited_mu=1 tau_verdict=measured  (tau<<1: the AD tangent is faithful TO THE PRIMAL IT DIFFERENTIATES over this accepted step, and the inner solve is binding -- a wrong compute_rhs is invisible here; tau=O(1) with tau_alpha/tau~alpha: nonlinearity over the step; tau=O(1) with tau_alpha/tau~1: AD-vs-primal Jacobian defect)
+
+--- Newton iteration 2 starting ---
+[PRECOND] set_stage_state ENTRY: stage=2, mu_pert.defined()=1, mu_pert.dim()=2
+[PRECOND] set_stage_state: mu_base_2d.sizes()=[81, 41], mu_pert.sizes()=[81, 41]
+[Newton] iter 2: ||S⁻¹R||_rms=4.8551e-01 [scaled-RMS], ||R||=5.3352e+08 [unscaled-L2], tol=2.0000e-01
+[EISENSTAT-WALKER] Newton iter 2
+  ||R_k|| = 0.4855
+  ||R_{k-1}|| = 0.554
+  Residual ratio = 0.8764
+  gamma=0.9, alpha=1.5
+  Adaptive eta_k = 0.3 (range: 0.02 to 0.3)
+[BLOCK_RES] iter=2 ru=3.85e+03 rv=9.98e+03 rw=3.96e+04 ph=1.41e+05 t=6.07e+03 mu=4.22e+06 max=4.22e+06 ru_share=0.001
+[Newton] JVP method: FORWARD-MODE AD (compute_jvp_forward_mode)
+[Newton] JVP ready for GMRES (use_autograd=true)
+[JVP FORWARD] Call #1: forward-mode AD took 54 ms
+[JVP DIAG] call #1: ||dK||=1209, ||v=dt*γ*dK||=3.161e+05, ||J*v||=1.182e+08, ||dK-J*v||=1.182e+08, ratio ||J*v||/||dK||=9.776e+04
+[JVP FORWARD] Call #2: forward-mode AD took 55 ms
+[JVP DIAG] call #2: ||dK||=1548, ||v=dt*γ*dK||=4.049e+05, ||J*v||=1.476e+08, ||dK-J*v||=1.476e+08, ratio ||J*v||/||dK||=9.535e+04
+[JVP FORWARD] Call #3: forward-mode AD took 56 ms
+[JVP DIAG] call #3: ||dK||=1209, ||v=dt*γ*dK||=3.161e+05, ||J*v||=1.182e+08, ||dK-J*v||=1.182e+08, ratio ||J*v||/||dK||=9.776e+04
+[GMRES BLOCK-SCALE] ru: ||r0||=103.6 → D_inv=0.00965
+[GMRES BLOCK-SCALE] rv: ||r0||=220.3 → D_inv=0.004539
+[GMRES BLOCK-SCALE] rw: ||r0||=196 → D_inv=0.005101
+[GMRES BLOCK-SCALE] ph: ||r0||=421.8 → D_inv=0.002371
+[GMRES BLOCK-SCALE] t: ||r0||=154.7 → D_inv=0.006465
+[GMRES BLOCK-SCALE] mu: ||r0||=28.4 → D_inv=0.03521
+[FGMRES] Z-basis memory budget: restart=7 x numel=1080491 => ~28.85 MiB per cycle
+[GMRES REORTH] j=2 before=275.3 after1=130.1 after2=130.1 ratio=0.4727
+[PRECOND DEBUG] Input residual ||r|| = 3.486e+06 (call #505)
+[PRECOND BLOCK NORMS] U: 9.97e+04, V: 152.7, MU: 3454
+[PRECOND BLOCK NORMS] PHI: 1.933e+04
+[PRECOND BLOCK NORMS] W: 8.7, THETA: 4475
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.017e+05 (α₀=0, ratio=0.4855, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.02917
+[GMRES] restart=1 j=6: hess_est=0.8901, true_err=0.8901
+[GMRES BLOCK r/b] restart=1 j=6 ru=12.0999 rv=67.1302 rw=91.6111 ph=189.3928 t=8.8525 mu=14.5530
+[FGMRES] NOT CONVERGED: ||x||=0.0100, ||r_true||=481.9461, ||b||=504.6712, rel_error=0.9550, tol=0.3000, restarts=1, arnoldi=7 (block-scaled)
+[NEWTON] GMRES failed badly (rel_error=0.955): FGMRES max iterations reached (7 Arnoldi)
+SDIRK3_GMRES_ESTIMATE_VS_TRUE internal_iters=7 final_residual=481.9 rel_error_UNSCALED=0.955 note=minimised_norm_is_block_scaled
+SDIRK3_GMRES_S_SCALE_RESIDUAL_TELEMETRY_ONLY scaled_rel=0.9135 num=1.868 den=2.044  (TELEMETRY ONLY -- NOT the minimised norm: the internal convergence check uses D_inv block scaling, not S_diag. Ranking configurations by this number inverted the results twice; use error_tensor.)
+SDIRK3_GMRES_TRIVIALITY ||x||=0.01001 ||b||=504.7 ratio=1.984e-05
+[Newton] GMRES: 7 krylov iters, ||dK||=421.9, rel_error=0.955 (FAIL)
+[Newton] JVP calls: 11, total JVP time: 610.7 ms, avg: 55.51 ms/call
+[SOLVER TELEMETRY] stage=2, newton=2, gmres_iters=7, gmres_rel=0.955, jvp_calls=11, jvp_ms=610.7, warmstart=on, inn_status=gate_reject, inn_reason_code=15, inn_candidate=yes, inn_used=no, inn_gate_pass=no, inn_q=-0.03091, inn_r_base=548, inn_r_cand=564.9, inn_x0_base_norm=0.01001, inn_x0_cand_norm=0.01018, inn_x0_delta_norm=0.003927, inn_x0_rel_delta=0.3925, inn_gate_rel_diff=0.03091, inn_gate_non_degrade=no, inn_gate_quality_ok=no, inn_tol_ramped=no, inn_base_warmstart=yes, inn_prev_shape_ok=yes, inn_prev_quality_ok=yes, inn_prev_varpc_ok=yes, inn_prev_rel=0.5526, inn_ru_share_base=0.03576, inn_ru_share_cand=0.05169, inn_rw_share_base=0.128, inn_rw_share_cand=0.1201, inn_ph_share_base=0.5923, inn_ph_share_cand=0.5776, variable_pc=no, jvp_mode=unlocked, jvp_fd_mode=none, jvp_ad_calls=11, jvp_fd_calls=0, jvp_eps_mean=0, jvp_eps_min=0, jvp_eps_max=0, jvp_eps_auto_calls=0, jvp_eps_manual_calls=0, ew_eta_enabled=yes, ew_eta=0.3, ew_eta_updated=yes, krylov_tol_final=0.3, krylov_tol_stage_override=no, budget_coupled=yes, budget_eta=0.3, budget_scale=0.85
+SDIRK3_TAYLOR_DEFECT stage=2 newton_iter=2 probe_gate=step_accepted accepted_so_far=3 rejected_so_far=0 tau=0.01821 alpha=0.3333 tau_alpha=0.00607 tau_alpha_over_tau=0.3333 R_k=5.335e+08 R_k1=4.77e+08 step_norm=422 As_norm=6.825e+07 achieved_eta=0.955 alpha_arm_measured=1 fd_fallback_free=1 linearity_residual=1.652e-07 tau_excited_block_max=0.1104 tau_excited_block_max_name=ru tau_excitation_share=0.001 tau_excitation_share_observed=0 tau_raw_block_max=0.1673 tau_raw_block_max_name=rv realized_step_fraction=1 realized_U_fraction=1 signal_to_roundoff=1.07e+06 tau_ru=0.110449 tauraw_ru=0.110449 share_ru=0.164641 excited_ru=1 tau_rv=0.047138 tauraw_rv=0.167289 share_rv=0.000282 excited_rv=0 tau_rw=0.015186 tauraw_rw=0.135025 share_rw=0.000112 excited_rw=0 tau_ph=0.000170 tauraw_ph=0.000170 share_ph=0.150209 excited_ph=1 tau_t=0.075241 tauraw_t=0.075241 share_t=0.009075 excited_t=1 tau_mu=0.000655 tauraw_mu=0.000655 share_mu=0.974807 excited_mu=1 tau_verdict=measured  (tau<<1: the AD tangent is faithful TO THE PRIMAL IT DIFFERENTIATES over this accepted step, and the inner solve is binding -- a wrong compute_rhs is invisible here; tau=O(1) with tau_alpha/tau~alpha: nonlinearity over the step; tau=O(1) with tau_alpha/tau~1: AD-vs-primal Jacobian defect)
+
+--- Newton iteration 3 starting ---
+[PRECOND] set_stage_state ENTRY: stage=2, mu_pert.defined()=1, mu_pert.dim()=2
+[PRECOND] set_stage_state: mu_base_2d.sizes()=[81, 41], mu_pert.sizes()=[81, 41]
+[Newton] iter 3: ||S⁻¹R||_rms=4.5784e-01 [scaled-RMS], ||R||=4.7704e+08 [unscaled-L2], tol=2.0000e-01
+[EISENSTAT-WALKER] Newton iter 3
+  ||R_k|| = 0.4578
+  ||R_{k-1}|| = 0.4855
+  Residual ratio = 0.943
+  gamma=0.9, alpha=1.5
+  Adaptive eta_k = 0.3 (range: 0.02 to 0.3)
+[BLOCK_RES] iter=3 ru=2.45e+03 rv=7.52e+03 rw=3.17e+04 ph=1.50e+05 t=1.93e+03 mu=4.05e+06 max=4.05e+06 ru_share=0.000
+[Newton] JVP method: FORWARD-MODE AD (compute_jvp_forward_mode)
+[Newton] JVP ready for GMRES (use_autograd=true)
+[JVP FORWARD] Call #1: forward-mode AD took 56 ms
+[JVP DIAG] call #1: ||dK||=421.9, ||v=dt*γ*dK||=1.103e+05, ||J*v||=6.793e+07, ||dK-J*v||=6.793e+07, ratio ||J*v||/||dK||=1.61e+05
+[JVP FORWARD] Call #2: forward-mode AD took 55 ms
+[JVP DIAG] call #2: ||dK||=468.7, ||v=dt*γ*dK||=1.226e+05, ||J*v||=7.903e+07, ||dK-J*v||=7.903e+07, ratio ||J*v||/||dK||=1.686e+05
+[JVP FORWARD] Call #3: forward-mode AD took 55 ms
+[JVP DIAG] call #3: ||dK||=468.7, ||v=dt*γ*dK||=1.226e+05, ||J*v||=7.903e+07, ||dK-J*v||=7.903e+07, ratio ||J*v||/||dK||=1.686e+05
+[GMRES BLOCK-SCALE] ru: ||r0||=43.01 → D_inv=0.02325
+[GMRES BLOCK-SCALE] rv: ||r0||=210.6 → D_inv=0.004749
+[GMRES BLOCK-SCALE] rw: ||r0||=174.3 → D_inv=0.005738
+[GMRES BLOCK-SCALE] ph: ||r0||=416.7 → D_inv=0.0024
+[GMRES BLOCK-SCALE] t: ||r0||=28.84 → D_inv=0.03467
+[GMRES BLOCK-SCALE] mu: ||r0||=27.12 → D_inv=0.03687
+[FGMRES] Z-basis memory budget: restart=7 x numel=1080491 => ~28.85 MiB per cycle
+[PRECOND DEBUG] Input residual ||r|| = 3.442e+06 (call #510)
+[PRECOND BLOCK NORMS] U: 1.604e+05, V: 180.6, MU: 5319
+[PRECOND BLOCK NORMS] PHI: 2.998e+04
+[PRECOND BLOCK NORMS] W: 7.775, THETA: 6900
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 1.633e+05 (α₀=0, ratio=0.4578, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.04746
+[GMRES REORTH] j=2 before=671 after1=426.5 after2=426.5 ratio=0.6356
+[GMRES] restart=1 j=6: hess_est=0.9296, true_err=0.9297
+[GMRES BLOCK r/b] restart=1 j=6 ru=5.9383 rv=95.6395 rw=79.3709 ph=187.8387 t=3.9226 mu=12.4253
+[FGMRES] NOT CONVERGED: ||x||=0.0091, ||r_true||=498.7409, ||b||=475.9098, rel_error=1.0480, tol=0.3000, restarts=1, arnoldi=7 (block-scaled)
+[NEWTON] GMRES failed badly (rel_error=1): FGMRES max iterations reached (7 Arnoldi)
+SDIRK3_GMRES_ESTIMATE_VS_TRUE internal_iters=7 final_residual=498.7 rel_error_UNSCALED=1.048 note=minimised_norm_is_block_scaled
+SDIRK3_GMRES_S_SCALE_RESIDUAL_TELEMETRY_ONLY scaled_rel=1.402 num=2.381 den=1.698  (TELEMETRY ONLY -- NOT the minimised norm: the internal convergence check uses D_inv block scaling, not S_diag. Ranking configurations by this number inverted the results twice; use error_tensor.)
+SDIRK3_GMRES_TRIVIALITY ||x||=0.009099 ||b||=475.9 ratio=1.912e-05
+[Newton] GMRES: 7 krylov iters, ||dK||=387.8, rel_error=1 (FAIL)
+[Newton] JVP calls: 11, total JVP time: 610.3 ms, avg: 55.48 ms/call
+[SOLVER TELEMETRY] stage=2, newton=3, gmres_iters=7, gmres_rel=1, jvp_calls=11, jvp_ms=610.3, warmstart=on, inn_status=gate_pass, inn_reason_code=10, inn_candidate=yes, inn_used=yes, inn_gate_pass=yes, inn_q=0.01092, inn_r_base=507.2, inn_r_cand=501.7, inn_x0_base_norm=0.01001, inn_x0_cand_norm=0.008725, inn_x0_delta_norm=0.002831, inn_x0_rel_delta=0.2828, inn_gate_rel_diff=-0.01092, inn_gate_non_degrade=yes, inn_gate_quality_ok=yes, inn_tol_ramped=no, inn_base_warmstart=yes, inn_prev_shape_ok=yes, inn_prev_quality_ok=yes, inn_prev_varpc_ok=yes, inn_prev_rel=0.8871, inn_ru_share_base=0.004514, inn_ru_share_cand=0.007347, inn_rw_share_base=0.1202, inn_rw_share_cand=0.1207, inn_ph_share_base=0.6653, inn_ph_share_cand=0.6896, variable_pc=no, jvp_mode=unlocked, jvp_fd_mode=none, jvp_ad_calls=11, jvp_fd_calls=0, jvp_eps_mean=0, jvp_eps_min=0, jvp_eps_max=0, jvp_eps_auto_calls=0, jvp_eps_manual_calls=0, ew_eta_enabled=yes, ew_eta=0.3, ew_eta_updated=yes, krylov_tol_final=0.3, krylov_tol_stage_override=no, budget_coupled=yes, budget_eta=0.3, budget_scale=0.85
+[TRUST OFF] GMRES failed (rel_error=1, raw=1.048), routing to GMRES total-failure handling.
+[PRECOND DEBUG] Input residual ||r|| = 4.77e+08 (call #515)
+[PRECOND BLOCK NORMS] U: 9.182e+06, V: 1.454e+04, MU: 3.24e+05
+[PRECOND BLOCK NORMS] PHI: 1.794e+06
+[PRECOND BLOCK NORMS] W: 5437, THETA: 2.228e+05
+[PRECOND TIMING] W-THETA coupled solve: 6 ms (3321 columns)
+[PRECOND DEBUG] Output preconditioned ||M⁻¹r|| = 9.363e+06 (α₀=0, ratio=0.4578, α_eff=0)
+[PRECOND DEBUG] Ratio ||M⁻¹r|| / ||r|| = 0.01963
+[TRUST REGION] GMRES failed (rel_error=1, raw=1.048), fallback rejected. K unchanged. radius=0.5
+[TRUST REGION] All attempts rejected. Keeping K unchanged, radius=0.5
+[Newton] GMRES total failure + zero update at iter 3. K unchanged → breaking early.
+
+=== NEWTON SOLVER FAILED TO CONVERGE ===
+  Stage: 2
+  Final residual: 4.5784e-01
+  Newton iterations: 4
+=======================================
+[PREDICTOR CACHE] Stage 2 non-converged but cache empty; seeding for timestep continuity.
+WARNING: Newton solver did not converge! Stage 2, residual = 0.4578
+         Message: Newton solver exited early (stall/stagnation) at iter 4
+
+[NEWTON NON-CONVERGENCE WARNING] Newton-Krylov solver failed to converge!
+  Final residual: 0.45784
+  Newton iterations: 4/12
+  Total Krylov iterations: 28
+  Time step: 600 seconds
+  SDIRK coefficient (a_ii): 0.435867
+  Continuing with best-effort K (hard_abort_on_newton_fail=false).
+  Set WRF_SDIRK3_HARD_ABORT_ON_NEWTON_FAIL=1 to abort on failure.
+[NEWTON DAMP] Stage 2: K damped by 0.001099 (step=1.006e+06 > 5*ref=221.1)
+[RESIDUAL_REEVAL] Stage 2 (IMEX mode>=2): ||R_fast||=4.205e+05, ||R_newton||=0.4578, ||K_fast||=4.228, rel_R_fast=9.946e+04, wrms=2.632e+05, wrms_growth=0.5001, finite_guard=off
+[NEWTON DAMP] Stage 2: accepted (||R|| 4.205e+05 → 4.205e+05, damp=0.5)
+[STAGE METRIC TELEMETRY] stage=2, split_mode=3, converged=0, gate_metric_mode=0, gate_metric_used=wrms_growth, gate_metric_value=0.5, rho_newton_scaled_exit=0.4578, rho_gate_current=9.946e+04, metric_mismatch=9.946e+04, rho_gate_raw=9.946e+04, rho_gate_abs_scaled=4.205e+05, wrms_norm=2.532e+05, wrms_growth=0.5, rho_pred=0.4578, rho_actual=4.205e+05, rho_ratio=9.185e+05, r0_unscaled_l2=8.742e+08, mypx=0, mypy=0
+SDIRK3_FIRST_FAILURE stage=2 signals_from_stage=2 signals_explicit=0 category=zero_update_after_total_failure layer=zero_update_bnorm_rule_or_step_recovery attribution=krylov_budget_exhausted attribution_layer=inner_budget_or_unresolved_stagnation attribution_measured=1 attribution_from_metric=1 specific_layer=n/a layer_receipt=n/a taylor_probe_iter=2 taylor_covers_last_newton_iter=0 event_basis=exit_receipt attribution_basis=krylov_r0_receipt retry=0 entry_finite=1 R0_measured=1 R0_finite=1 R_first=1 R_last=0.4578 newton_iters=4 newton_budget=12 newton_converged=0 best_krylov_rel=0.5526 krylov_iters=28 gmres_total_failures=1 gmres_non_total_failures=3 gmres_tolerance_reached=0 R_last_measured=1 krylov_diverged=0 steps_accepted=3 steps_rejected=1 first_krylov_failure_iter=3 best_krylov_rel_vs_r0=0.5526 worst_krylov_rel_vs_r0=0.9941 worst_krylov_rho_D=0.9297 worst_krylov_rho_S=1.048 worst_krylov_iter=3 krylov_solves_vs_r0=4 krylov_solves_trivial=0 worst_krylov_met_tol=0 worst_krylov_eta=0.3 worst_krylov_budget=7 worst_krylov_D_reached=0 worst_krylov_S_reached=0 worst_krylov_tol_source=ew_eta_clamp near_worst_all_met_tol=0 near_worst_mech_ambiguous=0 newton_exit=zero_update_after_total_failure exit_krylov_iter=3 exit_D_reached=0 exit_S_reached=0 exit_rho_stop=0.9297 exit_rho_S=1.048 exit_rho_E_entry_linear=0.8618 exit_E_entry_linear_reached=0 exit_stop_metric=block_D exit_tol_source=ew_eta_clamp krylov_r0_unmeasured=0 krylov_rule_fellback_to_b=0 krylov_no_progress_thr=0.900000 krylov_restart_budget=7 krylov_max_restarts=1 total_failure_vs_b=1 total_failure_vs_r0=1 krylov_failure_rule=b first_rejection_iter=3 argmin_residual_iter=2 gate_metric_ok=1  (the first gate to refuse, in causal order -- a later one will also be refusing, and acting on it sends the work to the wrong layer)
+[STAGE GATE] IMEX ARK Stage 2 failed (converged=0, rel_R_full=9.946e+04, gate_metric=0.5, gate_threshold=100, metric=wrms_growth, R_full_norm=4.205e+05, growth=0.5). ABORTING (severe non-convergence in mode3 safety gate).
+[STEP TELEMETRY] split_mode=3, gate_fail=1, gate_retry=0, gate_continue=0, gate_abort=1, gate_catastrophic=0, gate_severe=1, stage2_gate_fail=1, stage2_retry=0, stage2_abort=0, stage2_nonfinite=0, stage2_nonfinite_retryable=0, stage2_nonfinite_retry_exhaust=0, stage2_nonfinite_catastrophic=0, stage2_metric_only_fail=0, stage2_kfast_nonfinite=0, stage2_soft_continue=0, explicit_fallback=0, retry_sanitize=0, retry_handoff_clip=0, stage4_preclip=0, firsthit=0, stage3_gate_fail=0, stage3_retry=0, halo_mark=0, halo_verify=0, halo_stale=0, halo_mark_total=0, halo_verify_total=0, halo_stale_total=0, halo_fresh_entry=1, final_update_aborted=1, update_norm=0, k3_term_norm=0, k3_term_share=0, progress_ref_norm=0, progress_ratio=0, progress_streak=0
+[STEP OUTCOME] fail-closed outcome=20; skipping unifiedStep state publish before Fortran fatal gate.
+[STEP OUTCOME] fail-closed outcome=20; skipping advanceZeroCopy writeback before Fortran fatal gate.
+ === DEBUG: After calc_cq in solve_em ===
+ num_3d_m =            2
+ cqu(ips,k_start,jps) =    1.00000000    
+ cqv(ips,k_start,jps) =    1.00000000    
+ cqw(ips,k_start,jps) =    0.00000000    
+ cqu min/max:    1.00000000       1.00000000    
+SDIRK3 DEBUG: periodic_x=T, ids/ide/ims/ime/its/ite=    1   41   -4   46    1   41
+SDIRK3 SOLVE DEBUG: jte=   81, jde=   81, jte==jde=T
+SDIRK3 solve_em: Using nx/ny/nz=   41   81   64, nx_u/ny_v/nz_w=   42   82   65
+d01 0001-01-01_00:00:00 SDIRK3: First 5 msfty values from Fortran (tile start):       1.0000      1.0000      1.0000      1.0000      1.0000
+d01 0001-01-01_00:00:00 SDIRK3: msfty has        0 zeros out of     3321
+-------------- FATAL CALLED ---------------
+FATAL CALLED FROM FILE:  <stdin>  LINE:    1383
+SDIRK3 FAIL-CLOSED outcome=20 final_update_aborted=1 progress_ratio=  0.0000E+00 progress_ratio_valid=1 rk_step=1
+-------------------------------------------
+--------------------------------------------------------------------------
+MPI_ABORT was invoked on rank 0 in communicator MPI_COMM_WORLD
+  Proc: [[11892,0],0]
+  Errorcode: 1
+
+NOTE: invoking MPI_ABORT causes Open MPI to kill all MPI processes.
+You may or may not see output from other processes, depending on
+exactly when Open MPI kills them.
+--------------------------------------------------------------------------
