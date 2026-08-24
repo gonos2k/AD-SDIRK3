@@ -12587,6 +12587,91 @@ public:
                             std::cerr << "[Newton] GMRES total failure + zero update at iter "
                                       << newton_iter << ". K unchanged → breaking early." << std::endl;
                         }
+                        // R13.21 (external review section 10.3): THE TERMINAL CANDIDATE, MEASURED.
+                        //
+                        // The Taylor probe sits inside `if (step_accepted)`, so the iteration that
+                        // ENDS the loop here -- zero update, no accepted step -- is structurally
+                        // unmeasurable by it. This campaign measured that:
+                        // `taylor_covers_last_newton_iter = 0` at every rung of the stage-2 and
+                        // stage-3 budget ladders. So every tau on record describes a step that
+                        // SUCCEEDED, and the Jacobian fidelity of the solve that actually failed
+                        // was never established.
+                        //
+                        // The raw candidate survives: `dK_scaled` was zeroed at :11455, `dK` was
+                        // not. Evaluating tau on it changes nothing -- K is not advanced, the
+                        // trial state is local, and the whole block is under NoGradGuard -- so
+                        // this is diagnosis, not a step.
+                        //
+                        //   tau_exit(alpha) = ||G(K + alpha dK) - G(K) - alpha A dK||
+                        //                     / ||alpha A dK||
+                        //
+                        // with G(K) = K - compute_rhs(U_stage + dt*gamma*K), which is `R`.
+                        // alpha = 1/3 is non-dyadic on purpose: a power of two makes both the fwAD
+                        // linearity receipt and the FD epsilon cancel identically, a trap this
+                        // campaign recorded.
+                        //
+                        // Opt-in (one JVP + one RHS evaluation, once per stage, on a path that is
+                        // already terminal).
+                        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_TERMINAL_TAYLOR") &&
+                            dK.defined() && dK.numel() > 0 && R.defined()) {
+                            torch::NoGradGuard ng_term;
+                            constexpr double kAlphaTerm = 1.0 / 3.0;
+                            const auto s_term = (static_cast<float>(kAlphaTerm) * dK).detach();
+                            const auto A_s = apply_jacobian(s_term).detach();
+                            const double nAs =
+                                A_s.defined()
+                                    ? A_s.to(torch::kFloat64).norm().item<double>() : -1.0;
+                            const auto K_t = K.detach() + s_term;
+                            const auto U_t = U_stage + dt * gamma * K_t;
+                            const auto R_t = (K_t - compute_rhs(U_t)).detach();
+                            const auto dR = R_t - R.detach();
+                            const double tau_exit =
+                                (nAs > 0.0)
+                                    ? (dR - A_s).to(torch::kFloat64).norm().item<double>() / nAs
+                                    : -1.0;
+                            const double nR  = R.detach().to(torch::kFloat64).norm().item<double>();
+                            const double nRt = R_t.to(torch::kFloat64).norm().item<double>();
+                            const double n_dK =
+                                dK.detach().to(torch::kFloat64).norm().item<double>();
+                            // R13.21: the FULL step as well. tau is measured at alpha=1/3 (a
+                            // non-dyadic scale, deliberately), so "the candidate would have
+                            // reduced the residual" from that arm alone is a statement about a
+                            // THIRD of the step. A line search would have found it either way,
+                            // but the full step is the thing the solver actually discarded, so
+                            // it is measured rather than extrapolated.
+                            const auto K_full = K.detach() + dK.detach();
+                            const auto U_full = U_stage + dt * gamma * K_full;
+                            const auto R_full = (K_full - compute_rhs(U_full)).detach();
+                            const double nRfull =
+                                R_full.to(torch::kFloat64).norm().item<double>();
+                            std::cerr << "SDIRK3_TERMINAL_TAYLOR"
+                                      << " stage=" << stage
+                                      << " newton_iter=" << newton_iter
+                                      << " alpha=" << kAlphaTerm
+                                      << " tau_exit=" << tau_exit
+                                      << " As_norm=" << nAs
+                                      << " dK_raw_norm=" << n_dK
+                                      << " R_norm=" << nR
+                                      << " R_trial_norm=" << nRt
+                                      // Would the DISCARDED candidate have reduced the nonlinear
+                                      // residual? The total-failure rule threw it away on a
+                                      // ||r||/||b|| predicate; this says what it was worth.
+                                      << " R_full_step_norm=" << nRfull
+                                      << " candidate_alpha_would_reduce="
+                                      << ((std::isfinite(nRt) && std::isfinite(nR) && nRt < nR)
+                                              ? 1 : 0)
+                                      << " candidate_full_would_reduce="
+                                      << ((std::isfinite(nRfull) && std::isfinite(nR) &&
+                                           nRfull < nR) ? 1 : 0)
+                                      << " state_mutated=0"
+                                      << (tau_exit >= 0.0 && nAs > 0.0
+                                              ? "  (tau_exit<<1: the linear model was faithful AT"
+                                                " THE TERMINAL CANDIDATE and the solve was"
+                                                " discarded on a norm rule; tau_exit=O(1): the"
+                                                " model was wrong there)"
+                                              : "  (NO CONCLUSION: the matvec produced nothing)")
+                                      << std::endl;
+                        }
                         // R13.17: the exit `not_recorded` was reporting at dt=600.
                         // R13.18 (round 7, P0-B) -- NAMED FOR WHAT IT MEASURES. This site is
                         // gated by ||dK|| < 1e-15 (the accepted update is numerically ZERO) AND

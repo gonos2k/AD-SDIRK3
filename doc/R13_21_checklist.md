@@ -171,8 +171,37 @@ threshold_measured=1 threshold_sensitive=0` — far outside the band, layer reta
       preconditioner, Arnoldi 32/64/128/256/512.
 - [ ] **6.2** Stage-3 iteration 1 from a **common** first step, so the second solve is comparable
       across arms.
-- [ ] **6.3** Terminal-candidate Taylor probe on the raw `dK` before zeroing, diagnosis-only, so the
+- [x] **6.3** Terminal-candidate Taylor probe on the raw `dK` before zeroing, diagnosis-only, so the
       zero-update iteration is measured for the first time.
+
+**6.3 result — the terminal iteration, measured for the first time.**
+
+The Taylor probe sits inside `if (step_accepted)`, so the iteration that *ends* the loop is
+structurally invisible to it — `taylor_covers_last_newton_iter = 0` at every rung of both budget
+ladders. The raw candidate survives that exit (`dK_scaled` is zeroed; `dK` is not), so it can be
+evaluated without advancing anything. `dt=600`, `max_newton_iter=12`, stage 2, the iteration that
+broke the loop:
+
+```
+SDIRK3_TERMINAL_TAYLOR stage=2 newton_iter=3 alpha=0.3333
+  tau_exit=0.005558   As_norm=2.448e+07   dK_raw_norm=387.8   state_mutated=0
+  R_norm=4.77e+08  R_trial_norm(a=1/3)=4.567e+08  R_full_step_norm=4.173e+08
+  candidate_alpha_would_reduce=1   candidate_full_would_reduce=1
+```
+
+**The linear model at the terminal candidate is faithful to 0.56 %** — better than any *accepted*
+step in the same run (0.1192, 0.0645, 0.0182). **And the discarded full step would have reduced the
+nonlinear residual by 12.5 %** (4.77e8 → 4.173e8); the α = 1/3 arm by 4.3 %.
+
+So of the four outcomes the review's §10.3 lists for this exit, the measured one is the fourth:
+**a usable candidate that the total-failure rule discarded** — on a `‖r‖/‖b‖` predicate, the
+coordinate this campaign has repeatedly recorded as the wrong denominator. The zero-update exit at
+dt=600 is not a linear-solve failure in any useful sense: the solve produced a step that is
+accurately modelled *and* decreases the merit function, and the discard rule rejected it.
+
+**Limits, stated.** n = 1 — one stage, one iteration, one timestep, one configuration. A 12.5 %
+decrease is not convergence, and taking it would not obviously complete the step; what this
+establishes is that at that point the **rule**, not the **solve**, is what stopped the loop.
 
 ---
 
