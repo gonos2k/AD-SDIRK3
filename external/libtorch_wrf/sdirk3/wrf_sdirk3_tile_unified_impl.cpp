@@ -9212,6 +9212,19 @@ vertical_coefficients:
                               << " signals_explicit=" << (last_stage_signals_is_explicit_ ? 1 : 0)
                               << " category=" << wrf::sdirk3::stage_failure_name(first)
                               << " layer=" << wrf::sdirk3::stage_failure_layer(first)
+                              // R13.19 (precision review P0-4/P1-1): the SPECIFIC layer, derived
+                              // from the metric and the tolerance source the record carries. The
+                              // helpers existed and only the contract tests called them, so the
+                              // claim that "the recorded source selects the layer" was not
+                              // implemented end to end -- the emitter printed the neutral one.
+                              << " specific_layer="
+                              << (first == wrf::sdirk3::StageFailure::KrylovForcingTermLimited
+                                      ? wrf::sdirk3::krylov_forcing_layer_for(
+                                            sig.exit_tolerance_source)
+                                      : (first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch
+                                             ? wrf::sdirk3::krylov_stopping_layer_for(
+                                                   sig.exit_stopping_metric)
+                                             : "n/a"))
                               << " retry=" << (retry_used ? 1 : 0)
                               << " entry_finite=" << (sig.entry_state_finite ? 1 : 0)
                               << " R0_measured=" << (sig.initial_residual_measured ? 1 : 0)

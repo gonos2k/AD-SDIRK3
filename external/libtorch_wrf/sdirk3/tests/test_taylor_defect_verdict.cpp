@@ -236,7 +236,37 @@ int main() {
               "and a record without the U field keeps classifying as it did");
     }
 
-    constexpr int expected_checks = 20;
+    {
+        // R13.19 (precision review P1-3): every new gate fires only when its field was measured,
+        // so a record missing them returned Measured -- kept deliberately for logs taken before
+        // the fields existed, but it makes a NEW record that failed to populate them read as
+        // certified. A v2 receipt must CARRY the preconditions.
+        auto in = sound();
+        in.receipt_version = 2;
+        check(name_of(in) == "measured",
+              "a complete v2 receipt still classifies as measured");
+        for (int which = 0; which < 4; ++which) {
+            auto bad = sound();
+            bad.receipt_version = 2;
+            if (which == 0) bad.tau_block_max = -1.0;
+            if (which == 1) bad.realized_step_fraction = -1.0;
+            if (which == 2) bad.realized_U_fraction = -1.0;
+            if (which == 3) bad.signal_to_roundoff = -1.0;
+            if (name_of(bad) != "receipt_incomplete") {
+                check(false, "v2 receipt missing field " + std::to_string(which) +
+                             " must fail closed");
+            }
+        }
+        check(true, "each of the four v2 preconditions fails closed when absent");
+        auto legacy = sound();
+        legacy.receipt_version = 1;
+        legacy.tau_block_max = -1.0; legacy.realized_U_fraction = -1.0;
+        check(name_of(legacy) == "measured",
+              "and a v1 record keeps the legacy reading, so logs taken before the fields existed "
+              "are not retroactively invalidated");
+    }
+
+    constexpr int expected_checks = 23;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

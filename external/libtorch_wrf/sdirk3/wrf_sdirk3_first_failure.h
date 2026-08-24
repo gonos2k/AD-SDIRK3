@@ -77,7 +77,12 @@ enum class StageFailure {
     KrylovEntryMetricMismatch,
     // Neither tolerance met and the Arnoldi budget ran out. Distinct from stagnation: the solve
     // was still descending when it was cut off, so the work is the budget, not the operator.
-    KrylovBudgetLimited,
+    // R13.19 (precision review P1-2): renamed to the FACT it measures. "Limited" asserted that
+    // the residual was still descending when the budget cut it off, and nothing measures that --
+    // a solve flat from its first restart classifies identically. The tail slope would settle it;
+    // until then the category says only that the budget ran out, and its layer names the
+    // remaining ambiguity instead of resolving it.
+    KrylovBudgetExhausted,
     // R13.17 self-review: the linear solve THREW. That is a real event and it is not the outer
     // iteration's failure -- but it is also not divergence, which is a specific measured
     // behaviour (the residual grew) that an exception does not establish. Borrowing
@@ -154,8 +159,8 @@ inline const char* stage_failure_name(StageFailure f) {
             return "krylov_objective_mismatch";
         case StageFailure::KrylovEntryMetricMismatch:
             return "krylov_entry_metric_mismatch";
-        case StageFailure::KrylovBudgetLimited:
-            return "krylov_budget_limited";
+        case StageFailure::KrylovBudgetExhausted:
+            return "krylov_budget_exhausted";
         case StageFailure::KrylovSolveThrew:
             return "krylov_solve_threw";
         case StageFailure::ZeroUpdateAfterTotalFailure:
@@ -193,11 +198,15 @@ inline const char* stage_failure_layer(StageFailure f) {
             // `krylov_forcing_layer_for` turns it into a layer.
             return "krylov_tolerance_policy_or_inner_budget";
         case StageFailure::KrylovObjectiveMismatch:
-            return "krylov_objective_D_vs_newton_merit";
+            // R13.19 (precision review P0-4): SOURCE-NEUTRAL. This said "D_vs_newton_merit" while
+            // under the WRMS experiment the metric actually satisfied is E^-1 S at the Newton
+            // linearization point, not block D -- the enum was recorded and the layer ignored it.
+            // `krylov_stopping_layer_for` turns the recorded metric into the specific layer.
+            return "krylov_stop_metric_vs_newton_merit";
         case StageFailure::KrylovEntryMetricMismatch:
             return "krylov_entry_E_metric_vs_solver_metrics";
-        case StageFailure::KrylovBudgetLimited:
-            return "inner_krylov_budget";
+        case StageFailure::KrylovBudgetExhausted:
+            return "inner_budget_or_unresolved_stagnation";
         case StageFailure::KrylovSolveThrew:
             return "linear_solve_exception";
         case StageFailure::ZeroUpdateAfterTotalFailure:
@@ -292,6 +301,18 @@ inline bool near_worst_all_met(const NearWorstFold& st) {
 // call it D unconditionally, but `WRF_SDIRK3_KRYLOV_WRMS_METRIC` swaps the block-constant D^-1 for
 // E^-1 S and the objective becomes rho_E.
 enum class KrylovStoppingMetric { Unknown, IdentityS, BlockD, StageWRMS };
+
+// R13.19 (P0-4): the layer an objective mismatch should send work to, DERIVED from the metric the
+// solve actually stopped on. Consumed beside the category so the two cannot disagree.
+inline const char* krylov_stopping_layer_for(KrylovStoppingMetric m) {
+    switch (m) {
+        case KrylovStoppingMetric::IdentityS: return "identity_S_vs_newton_merit";
+        case KrylovStoppingMetric::BlockD:    return "block_D_vs_newton_merit";
+        case KrylovStoppingMetric::StageWRMS: return "newton_WRMS_E_vs_newton_merit";
+        case KrylovStoppingMetric::Unknown:   return "stop_metric_unrecorded";
+    }
+    return "stop_metric_unrecorded";
+}
 
 inline const char* krylov_stopping_metric_name(KrylovStoppingMetric m) {
     switch (m) {
@@ -663,7 +684,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
                     return StageFailure::KrylovForcingTermLimited;
                 }
                 if (s.worst_krylov_budget_exhausted) {
-                    return StageFailure::KrylovBudgetLimited;
+                    return StageFailure::KrylovBudgetExhausted;
                 }
                 return StageFailure::KrylovStagnated;
             }

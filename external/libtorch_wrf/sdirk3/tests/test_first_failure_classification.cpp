@@ -802,9 +802,24 @@ int main() {
               "D reached and S not is neither a stall (the solve worked) nor a forcing-term "
               "problem (tightening eta does not align two objectives) -- and it is exactly the "
               "InternalConvergenceStop state the round-6 rule sent back to krylov_stagnated");
+        // R13.19 (P0-4): the category's layer is metric-NEUTRAL, and the specific one is derived
+        // from the metric the solve actually stopped on -- it used to say "D" while the WRMS
+        // experiment makes the satisfied metric E^-1 S at the Newton linearization point.
         check(std::string(stage_failure_layer(StageFailure::KrylovObjectiveMismatch)) ==
-                  "krylov_objective_D_vs_newton_merit",
-              "and its layer names the D objective against the Newton merit, not the operator");
+                  "krylov_stop_metric_vs_newton_merit",
+              "the category's layer names the stop metric against the Newton merit without "
+              "asserting WHICH metric");
+        check(std::string(wrf::sdirk3::krylov_stopping_layer_for(
+                  wrf::sdirk3::KrylovStoppingMetric::StageWRMS)) ==
+                  "newton_WRMS_E_vs_newton_merit" &&
+              std::string(wrf::sdirk3::krylov_stopping_layer_for(
+                  wrf::sdirk3::KrylovStoppingMetric::BlockD)) ==
+                  "block_D_vs_newton_merit" &&
+              std::string(wrf::sdirk3::krylov_stopping_layer_for(
+                  wrf::sdirk3::KrylovStoppingMetric::Unknown)) ==
+                  "stop_metric_unrecorded",
+              "...and the RECORDED metric selects the specific one, with an unrecorded metric "
+              "saying so rather than defaulting to block D");
 
         s.worst_krylov_D_reached = true; s.worst_krylov_S_reached = true;
         check(name_of(s) == "krylov_forcing_term_limited",
@@ -814,7 +829,10 @@ int main() {
         s.worst_krylov_D_reached = false; s.worst_krylov_S_reached = false;
         s.worst_krylov_met_tolerance = false;
         s.worst_krylov_budget_exhausted = true;
-        check(name_of(s) == "krylov_budget_limited",
+        // R13.19 (P1-2): the category states the FACT (the budget ran out), not the CAUSE
+        // ("still descending when cut off"), which nothing measures -- a solve flat from its
+        // first restart reaches this branch identically.
+        check(name_of(s) == "krylov_budget_exhausted",
               "neither tolerance met and the budget gone is a solve cut off while still "
               "descending -- the inner budget, not the operator");
 
@@ -1063,7 +1081,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 88;
+    constexpr int expected_checks = 89;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

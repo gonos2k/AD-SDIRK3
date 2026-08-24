@@ -303,6 +303,12 @@ inline StageReferenceVerdict certify_stage_reference(
 //     measured with alpha = 1/3 the same probe reports 1.7e-07, about 1.5 float32 ulps.
 // A probe that prints a three-way causal conclusion in its own row needs all three on record.
 struct TaylorDefectInputs {
+    // R13.19 (precision review P1-3): the receipt VERSION. Every new gate below fires only when
+    // its field was measured, so a record missing them returned `Measured` -- and the contract
+    // pinned that, for compatibility with logs taken before the fields existed. The cost is that
+    // a NEW record which failed to populate them is indistinguishable from an old one, and reads
+    // as certified. Version 1 keeps the legacy behaviour; version 2 requires the fields.
+    int receipt_version = 1;
     bool   fd_fallback_free = false;   // the JVP was forward-mode for every matvec in the probe
     bool   alpha_arm_measured = false; // A(alpha*s) was computed, not scaled from A(s)
     double tau = -1.0;                 // -1 = not measured
@@ -329,7 +335,7 @@ struct TaylorDefectInputs {
 
 enum class TaylorVerdict { Unmeasured, FdFallback, AlphaArmAssumed, AlphaDyadic,
                            LinearityUnmeasured, OperatorNonlinear, StepNotRealized,
-                           RoundoffLimited, BlockDefect, Measured };
+                           RoundoffLimited, BlockDefect, ReceiptIncomplete, Measured };
 
 inline const char* taylor_verdict_name(TaylorVerdict v) {
     switch (v) {
@@ -342,6 +348,7 @@ inline const char* taylor_verdict_name(TaylorVerdict v) {
         case TaylorVerdict::StepNotRealized: return "step_not_realized";
         case TaylorVerdict::RoundoffLimited: return "roundoff_limited";
         case TaylorVerdict::BlockDefect:     return "block_defect";
+        case TaylorVerdict::ReceiptIncomplete: return "receipt_incomplete";
         case TaylorVerdict::Measured:        return "measured";
     }
     return "unknown";
@@ -420,6 +427,12 @@ inline TaylorVerdict taylor_defect_verdict(const TaylorDefectInputs& in) {
     // a conclusion may quote is the max of the two.
     if (is_measured(in.tau_block_max) && in.tau_block_max > kTaylorBlockDefect) {
         return TaylorVerdict::BlockDefect;
+    }
+    // A v2 record must CARRY the preconditions, not merely pass them when present.
+    if (in.receipt_version >= 2 &&
+        (!is_measured(in.tau_block_max) || !is_measured(in.realized_step_fraction) ||
+         !is_measured(in.realized_U_fraction) || !is_measured(in.signal_to_roundoff))) {
+        return TaylorVerdict::ReceiptIncomplete;
     }
     return TaylorVerdict::Measured;
 }

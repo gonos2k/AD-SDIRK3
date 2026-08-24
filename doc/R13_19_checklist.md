@@ -37,21 +37,21 @@ Legend: **[DONE]** · **[OPEN]**
 - [x] **P0-3 — the near-worst reducer is still order-dependent** (verified above), and separately
       the **mechanism** attribution is too: `worst_*` updates on strict `>`, so on an exact tie the
       first-arriving solve's D/S/source/budget receipt wins.
-- [ ] **P0-4 — the stopping-metric enum exists and the classifier still hardcodes D.** Under the
+- [x] **P0-4 — the stopping-metric enum exists and the classifier still hardcodes D.** Under the
       WRMS experiment `error_tensor` is the `E⁻¹S` objective and is stored in `rho_D_final` /
       `D_tolerance_reached`; the category and layer then say `..._D_vs_newton_merit`.
 
 ## P1
 
-- [ ] **P1-1 — tolerance provenance is not provenance.** `tol_source` keys `EisenstatWalker` off
+- [x] **P1-1 — tolerance provenance is not provenance.** `tol_source` keys `EisenstatWalker` off
       `policy.ew_applied`, which is whether E–W changed the **restart budget**, not whether it set
       the tolerance. The INN ramp multiplies `krylov_tol_adaptive` and is not in the selector at
       all (`InnRamp` has no producer). And the emitter never calls `krylov_forcing_layer_for` — it
       prints the source-neutral category layer, so the "recorded source selects the layer" claim is
       not implemented end to end.
-- [ ] **P1-2 — `KrylovBudgetLimited` still overclaims.** Exhaustion is measured; "still descending
+- [x] **P1-2 — `KrylovBudgetLimited` still overclaims.** Exhaustion is measured; "still descending
       when cut off" is not. A solve flat from the first restart classifies the same.
-- [ ] **P1-3 — the Taylor receipt fails OPEN on missing new fields**, and the contract test pins
+- [x] **P1-3 — the Taylor receipt fails OPEN on missing new fields**, and the contract test pins
       that. Needs receipt versioning so a v2 record must carry them.
 - [ ] **P1-4 — event and cause share one enum**, which is why the `ZeroUpdateAfterTotalFailure`
       branch both "outranks the reconstruction" and "must not override r₀ evidence" while the code
@@ -102,3 +102,49 @@ retract A once C arrives — the R13.18 fix had closed the 2-element case only. 
 maxima** (`worst`, `worst_unmet`) with the predicate evaluated once at the end
 (`near_worst_all_met`), which is order-independent by construction. All six permutations are
 asserted to agree, and to agree on `true`.
+
+
+---
+
+## Second batch — P0-4, P1-1, P1-2, P1-3
+
+```
+category=zero_update_after_total_failure  layer=zero_update_bnorm_rule_or_step_recovery
+specific_layer=n/a   exit_stop_metric=block_D   exit_tol_source=eisenstat_walker
+exit_rho_E_entry_linear=0.8618   near_worst_all_met_tol=0
+tau=0.1192  tau_excited_block_max=0.2008  tau_verdict=measured
+```
+
+**P0-4.** The objective-mismatch layer said `..._D_vs_newton_merit` while under the WRMS experiment
+the metric actually satisfied is `E⁻¹S` at the Newton linearization point — the enum was recorded
+and the layer ignored it. The category's layer is now metric-neutral
+(`krylov_stop_metric_vs_newton_merit`) and `krylov_stopping_layer_for` derives the specific one,
+with `stop_metric_unrecorded` when nothing was recorded.
+
+**P1-1.** `tol_source` keyed `EisenstatWalker` off `policy.ew_applied`, which is whether E–W changed
+the **restart budget** — so a run whose *tolerance* came from E–W with a budget multiplier of 1 was
+recorded as `Base`. It now keys on `ew_eta_used`, and the **INN ramp** is in the selector, giving
+`InnRamp` its first producer. **And the emitter now calls the helpers**: `specific_layer` is on the
+record, so "the recorded source selects the layer" is implemented end to end rather than only in
+the contract tests. It reads `n/a` here because this record's category is neither of the two that
+derive a layer — which is the honest output, not a missing one.
+
+**P1-2.** `KrylovBudgetLimited` → **`KrylovBudgetExhausted`**, layer
+`inner_budget_or_unresolved_stagnation`. "Limited" asserted the residual was still descending when
+the budget cut it off, and nothing measures that — a solve flat from its first restart reaches the
+same branch. The category now states the fact it has and its layer names the ambiguity instead of
+resolving it.
+
+**P1-3.** The Taylor receipt is **versioned**. Every new gate fires only when its field was
+measured, so a record missing them returned `Measured` — deliberate, for logs predating the fields,
+but it made a *new* record that failed to populate them read as certified. A `receipt_version = 2`
+record must carry all four preconditions or returns `ReceiptIncomplete`; v1 keeps the legacy
+reading. The live emitter declares v2, and all four omissions are pinned as failing closed.
+
+## Remaining
+
+- **P1-4** (event and cause share one enum) — a data-model refactor the review proposes; recorded
+  as agreed and deliberately not attempted in this batch, since renaming categories under a
+  classifier that four rounds of fixtures depend on is its own increment.
+- A/B shared preconditioner instance stays **HOLD**; `dt=600` forward, one-step tangent/adjoint,
+  exact 4D-Var and MPI production remain **NO-GO**.

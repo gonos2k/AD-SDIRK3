@@ -9724,12 +9724,21 @@ public:
                          gmres_result.arnoldi_spent >= gmres_result.arnoldi_allowed);
                     // Where the tolerance came from. A category that names Eisenstat-Walker must
                     // have READ this; the layer string used to assert it.
+                    // R13.19 (precision review P1-1): the source must key on what set the
+                    // TOLERANCE. `stage_budget_forcing_coupled` is `policy.ew_applied`, which is
+                    // whether Eisenstat-Walker changed the RESTART BUDGET -- so a run whose
+                    // tolerance came from E-W while the budget multiplier happened to be 1 was
+                    // recorded as `Base`. And the INN ramp multiplies krylov_tol_adaptive and was
+                    // not in the selector at all, leaving `InnRamp` with no producer. Last writer
+                    // wins, which is the order the tolerance is actually built in.
                     const int tol_source = static_cast<int>(
-                        krylov_tol_stage_override
-                            ? wrf::sdirk3::KrylovToleranceSource::StageOverride
-                            : (stage_budget_forcing_coupled
-                                   ? wrf::sdirk3::KrylovToleranceSource::EisenstatWalker
-                                   : wrf::sdirk3::KrylovToleranceSource::Base));
+                        gmres_inn_tol_ramped
+                            ? wrf::sdirk3::KrylovToleranceSource::InnRamp
+                            : (krylov_tol_stage_override
+                                   ? wrf::sdirk3::KrylovToleranceSource::StageOverride
+                                   : (stage_budget_forcing_eta > 0.0f
+                                          ? wrf::sdirk3::KrylovToleranceSource::EisenstatWalker
+                                          : wrf::sdirk3::KrylovToleranceSource::Base)));
                     // R13.18 (deep review P0-4): this solve's receipt, recorded where
                     // gmres_result is in scope. The Newton exit site is later in the same
                     // iteration and outside this scope; it promotes these into exit_* so a
@@ -11685,6 +11694,7 @@ public:
                         signal_to_roundoff = roundoff > 0.0 ? n_dR / roundoff : -1.0;
                     }
                     wrf::sdirk3::TaylorDefectInputs tin;
+                    tin.receipt_version = 2;   // this emitter populates every new field
                     tin.tau_block_max = tau_block_max;
                     tin.realized_step_fraction = realized_step_fraction;
                     tin.realized_U_fraction = realized_U_fraction;
