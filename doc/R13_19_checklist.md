@@ -207,14 +207,21 @@ evidence (worst = 0.9941), not a fallback. A fixture pins the converse.
 
 ### Checked and found sound (negative results)
 
-- **ρ_S at `InitialConverged`** is computed from `r_true_inner`, which is **halo-zeroed at creation**
-  (`:1189-1190`), and `bnorm_unscaled` uses the halo-zeroed `b` — so the new ρ_S is on the same
-  quantity the normal finaliser reports. The two paths do not disagree.
-- **The tolerance-source selector.** `ew_eta_used` is set only inside `apply_ew`, which returns
-  early unless `budget_active && ew_enabled && !tol_overridden` — so `> 0` genuinely means E–W
-  computed an η, and it is strictly better evidence than the old `ew_applied` (budget scaling).
-  E–W and a stage override are mutually exclusive by construction, so the selector's ordering is
-  harmless.
+- ~~**ρ_S at `InitialConverged`** is computed from `r_true_inner`, which is **halo-zeroed at
+  creation** (`:1189-1190`) …~~ — **REASON WITHDRAWN (round 9, R9-1).** The *conclusion* holds
+  (both paths report the same quantity) but not because either is halo-zeroed: `zero_halo_regions`
+  early-returns on `t.dim() < 3` and these are 1-D packed vectors, so **neither** is masked. They
+  agree because both are raw. This paragraph was cited as the precedent for the ρ_E "fix"; the
+  precedent was void.
+- ~~**The tolerance-source selector.** `ew_eta_used` … is strictly better evidence than the old
+  `ew_applied` …~~ — **REFUTED sixty lines below, by this same document** (§"Round 8, P0-D"):
+  `ew_eta_used` requires `budget_active`, which requires a stage knob, and they all default to 0.
+  The same fact, two opposite verdicts, and the first was left unmarked for a reader working
+  top-to-bottom. It is struck here.
+  **And the replacement inverted it** (round 9, R9-5): keying on `ew_set_tolerance` made that flag
+  a restatement of `options_.use_adaptive_tolerances` (default true), so `Base` lost its producer
+  instead. Fixed in R13.20 by deciding the source **at the site** from which candidate value bound
+  — see the R13.20 section.
 
 ### Now open, stated rather than closed
 

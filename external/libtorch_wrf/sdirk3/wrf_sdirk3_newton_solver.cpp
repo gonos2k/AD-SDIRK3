@@ -4598,10 +4598,15 @@ public:
     // Mask is always built as float32 on CPU (for safe accessor<float>),
     // then cast to target dtype/device at the end.
     //
-    // v20.14r27f: CURRENTLY UNUSED — build_halo_mask() is never called.
-    // halo_mask_initialized_ stays false, so all mask branches are no-ops.
-    // Reason: halo masking degraded single-tile accuracy (rel_error 0.5940 → 0.7984).
-    // Retained for potential multi-tile production use with enable_stage_halo_exchange.
+    // R13.20 (round 9, R9-9): the v20.14r27f note here said "CURRENTLY UNUSED -- build_halo_mask()
+    // is never called", and v20.14r27m added a call ten lines above it without correcting the
+    // claim. It IS called, from solve_stage_impl, under
+    //   options_.is_multi_tile && (!periodic_x || !periodic_y) && !halo_mask_initialized_ &&
+    //   layout_initialized_
+    // so the invariant holds for single-tile em_b_wave and is FALSE for exactly the multi-tile
+    // configuration the mask was retained for -- which is the reading a maintainer needs when
+    // deciding whether a 1-D halo no-op matters.
+    // Reason it stays gated: halo masking degraded single-tile accuracy (rel_error 0.5940 -> 0.7984).
     void build_halo_mask(torch::Device target_device, torch::Dtype target_dtype) {
         int hw = wrf::sdirk3::g_sdirk3_config.halo_width;
         // v20.14r21: Use options_ (instance state) instead of global config.
@@ -4737,8 +4742,9 @@ public:
 
     // Apply halo zeroing to a tensor (in-place).
     // 3D tensors: zero_halo_regions (direct boundary zeroing).
-    // 1D packed tensors: mul by halo_mask_ IF mask was built (currently never — see build_halo_mask).
-    // When halo_mask_initialized_=false (current default), 1D path is a no-op.
+    // 1D packed tensors: mul by halo_mask_ IF mask was built -- which happens only on multi-tile
+    // non-periodic runs (see build_halo_mask). When halo_mask_initialized_=false, which is the
+    // single-tile default, the 1D path is a no-op. R13.20: "currently never" was wrong here too.
     void apply_halo_zeroing(torch::Tensor& t) {
         if (t.dim() >= 3) {
             // Original 3D path
@@ -4971,13 +4977,6 @@ public:
         // Get adaptive parameters if enabled
         float newton_tol_adaptive = options_.newton_tol;
         float krylov_tol_adaptive = static_cast<float>(options_.krylov_tol);
-        // R13.19 SELF-REVIEW (round 8, P0-D): set where Eisenstat-Walker ACTUALLY writes the
-        // tolerance. The previous selector keyed on `stage_budget_forcing_eta`, which is written
-        // only inside the stage-budget resolver and only when `budget_active` -- and the stage
-        // knobs all default to 0, so in a STOCK run every solve recorded `tol_source=base` while
-        // E-W owned the tolerance. The claim "the selector keys on whether E-W set the tolerance"
-        // was true only for configurations that also set a stage budget knob.
-        bool ew_set_tolerance = false;
         float init_R0_norm = 0.0f;  // Captured at iter 0 for relative convergence criterion
         float last_res_scaled = 0.0f;  // v20.3: Last Newton residual (float) for adaptive α
 
@@ -5615,6 +5614,14 @@ public:
             float ew_eta_used_this_iter = -1.0f;
             bool ew_eta_updated_this_iter = false;
             const bool ew_eta_enabled_this_iter = options_.use_adaptive_tolerances;
+            // R13.20 (round 9, R9-5): which knob BOUND this iteration's inner tolerance.
+            // Declared here, inside the Newton loop body, so it cannot inherit the previous
+            // iteration's answer -- its predecessor was a bool declared outside the loop and
+            // never reset, inert only because both E-W arms happened to set it. Seeded `Base`
+            // because with adaptive tolerances off the tolerance IS `options_.krylov_tol`; the
+            // E-W block below overwrites it with the arm that bound.
+            wrf::sdirk3::KrylovToleranceSource ew_tol_source =
+                wrf::sdirk3::KrylovToleranceSource::Base;
             
             // Zero K's halo elements before forming U_eval.
             // compute_rhs does not apply halo/BC internally (WRF handles halos
@@ -6524,10 +6531,18 @@ public:
                     }
 
                     // Cap using stage-aware eta_min and eta_max.
+                    // R13.20 (round 9, R9-5): remember whether the cap BOUND. When it does, the
+                    // number in effect is ew_eta_max/min, not gamma*(ratio)^alpha, and a
+                    // tolerance-limited verdict must send work to that knob and not to the
+                    // forcing-term parameters. eta_max saturating in the failing regime is the
+                    // documented operational case, not a corner.
+                    const float eta_k_pre_clamp = eta_k;
                     eta_k = std::max(ew_eta_min_stage, std::min(ew_eta_max_stage, eta_k));
 
                     krylov_tol_adaptive = eta_k;
-                    ew_set_tolerance = true;
+                    ew_tol_source = (eta_k != eta_k_pre_clamp)
+                                        ? wrf::sdirk3::KrylovToleranceSource::EwEtaClamp
+                                        : wrf::sdirk3::KrylovToleranceSource::EisenstatWalker;
                     ew_prev_eta_ = eta_k;
                     ew_eta_used_this_iter = eta_k;
                     ew_eta_updated_this_iter = true;
@@ -6554,9 +6569,22 @@ public:
                             const char* v = std::getenv("WRF_SDIRK3_EW_ETA_INITIAL");
                             return v ? std::atof(v) : 0.40;
                         }();
-                        krylov_tol_adaptive = std::max(static_cast<float>(options_.krylov_tol), ew_eta_initial);
-                        krylov_tol_adaptive = std::max(ew_eta_min_stage, std::min(ew_eta_max_stage, krylov_tol_adaptive));
-                        ew_set_tolerance = true;
+                        // R13.20 (round 9, R9-5): no residual ratio is read on this arm --
+                        // `ew_eta_updated_this_iter = false` three lines below is the code's own
+                        // statement that E-W updated nothing. The value is one of three
+                        // constants, and the receipt must name the one that bound, or a
+                        // tolerance-limited verdict here routes a week of work to ew_gamma /
+                        // ew_alpha, neither of which was read.
+                        const float base_tol_this = static_cast<float>(options_.krylov_tol);
+                        const float floored_this  = std::max(base_tol_this, ew_eta_initial);
+                        krylov_tol_adaptive = std::max(ew_eta_min_stage,
+                                                       std::min(ew_eta_max_stage, floored_this));
+                        ew_tol_source =
+                            (krylov_tol_adaptive != floored_this)
+                                ? wrf::sdirk3::KrylovToleranceSource::EwEtaClamp
+                                : (floored_this > base_tol_this
+                                       ? wrf::sdirk3::KrylovToleranceSource::EwInitialFloor
+                                       : wrf::sdirk3::KrylovToleranceSource::Base);
                     }
                     ew_eta_used_this_iter = krylov_tol_adaptive;
                     ew_eta_updated_this_iter = false;
@@ -6967,8 +6995,13 @@ public:
                                 }
                                 for (size_t bi = 0; bi < eps_blocks.size(); ++bi) {
                                     const auto& blk = *eps_blocks[bi];
-                                    float U_blk_norm = u_blk_norm_cpu[static_cast<long>(bi)].item<float>();
-                                    float v_blk_norm = v_blk_norm_cpu[static_cast<long>(bi)].item<float>();
+                                    // R13.20 (hard-constraint audit): the tensors were built
+                                    // under a guard, but the EXTRACTION was not. The rule is
+                                    // unconditional and `guarded_item` is the established form.
+                                    float U_blk_norm =
+                                        guarded_item<float>(u_blk_norm_cpu[static_cast<long>(bi)]);
+                                    float v_blk_norm =
+                                        guarded_item<float>(v_blk_norm_cpu[static_cast<long>(bi)]);
                                     if (v_blk_norm < 1e-30f) continue;
                                     // Per-block: eps must resolve U_blk_rms for this block's v share
                                     float sqrt_N = std::sqrt(static_cast<float>(blk.size));
@@ -7028,7 +7061,9 @@ public:
                         for (size_t bi = 0; bi < blk_refs.size(); ++bi) {
                             const auto& blk = *blk_refs[bi];
                             auto v_blk = v.slice(0, blk.start, blk.start + blk.size);
-                            float blk_norm = v_blk_norm_cpu[static_cast<long>(bi)].item<float>();
+                            // R13.20 (hard-constraint audit): guarded extraction, same reason.
+                            float blk_norm =
+                                guarded_item<float>(v_blk_norm_cpu[static_cast<long>(bi)]);
                             float blk_scale = fd_base_eps * std::max(1.0f, blk_norm);
                             blk_scale = std::min(blk_scale, eps_clamp_hi);
                             v_scaled.slice(0, blk.start, blk.start + blk.size)
@@ -7374,10 +7409,12 @@ public:
                                    .to(K.device(), K.scalar_type())
                                    .detach();
 
-                float v_norm_val = bench_v.norm().to(torch::kCPU).item<float>();
+                // R13.20 (hard-constraint audit): both of these were bare `.item()` outside a
+                // guard, and each is also a GPU->CPU sync.
+                float v_norm_val = guarded_item<float>(bench_v.norm());
                 if (!(v_norm_val > 1e-20f)) {
                     bench_v = torch::ones_like(K).detach();
-                    v_norm_val = bench_v.norm().to(torch::kCPU).item<float>();
+                    v_norm_val = guarded_item<float>(bench_v.norm());
                 }
                 auto v_scaled = (eps_bench / std::max(v_norm_val, 1e-20f)) * bench_v;
                 const float inv_eps = v_norm_val / std::max(eps_bench, 1e-20f);
@@ -8036,6 +8073,28 @@ public:
                     // state, not of a coordinate choice.
                     std::string phys_block_rows;
                     int nb_pos = 0, nb_neg = 0;
+                    // R13.20 -- TWO defects fixed here.
+                    //
+                    // (1) HARD-CONSTRAINT VIOLATION: the two `.item<double>()` calls below ran
+                    //     OUTSIDE any NoGradGuard. `ng_red` is declared inside the sample loop
+                    //     and its scope closed with that iteration; this loop is after it. The
+                    //     repo's standing rule is that every `.item()` sits in a guard, and
+                    //     round 9 checked the Taylor probe for exactly this and reported it
+                    //     sound without checking this block.
+                    //
+                    // (2) R9-12 asked whether these six directions are genuinely DISTINCT
+                    //     probes, after three of them reported |q-1| identical to six figures.
+                    //     Support leakage -- the mechanism the review proposed -- is refuted BY
+                    //     CONSTRUCTION: `e_b` is exactly zero outside its block, so <v,Av> reads
+                    //     only block-b rows and no other block can contribute to q_b. That is
+                    //     now MEASURED (`vout` must be 0) instead of argued, and the response
+                    //     norms inside and outside the block are reported beside it -- which is
+                    //     where a shared-coefficient explanation for the coincidence would show.
+                    //     Until those rows are read, section 13's numbers carry no locality
+                    //     verdict and must not be built on again.
+                    torch::NoGradGuard ng_blocks;
+                    int nb_measured = 0;
+                    bool blocks_local = true;
                     if (S_diag_.defined() && layout_initialized_ && cached_layout_.is_exact &&
                         cached_layout_.total_size == R.numel()) {
                         for (const auto& blk : cached_layout_.blocks) {
@@ -8050,9 +8109,24 @@ public:
                             if (!(d > 0.0)) continue;
                             const double qb = v_p.dot(Av_p).item<double>() / d;
                             if (!std::isfinite(qb)) continue;
+                            const double v_in =
+                                v_p.slice(0, blk.start, blk.start + blk.size).norm().item<double>();
+                            const double v_all = v_p.norm().item<double>();
+                            const double v_out =
+                                std::sqrt(std::max(0.0, v_all * v_all - v_in * v_in));
+                            const double Av_in =
+                                Av_p.slice(0, blk.start, blk.start + blk.size).norm().item<double>();
+                            const double Av_all = Av_p.norm().item<double>();
+                            const double Av_out =
+                                std::sqrt(std::max(0.0, Av_all * Av_all - Av_in * Av_in));
+                            if (v_out > 0.0) blocks_local = false;
+                            ++nb_measured;
                             if (qb > 0.0) ++nb_pos; else if (qb < 0.0) ++nb_neg;
-                            phys_block_rows += " qphys_" + std::string(blk.name) + "=" +
-                                               std::to_string(qb);
+                            const std::string nm(blk.name);
+                            phys_block_rows += " qphys_" + nm + "=" + std::to_string(qb) +
+                                               " qphys_" + nm + "_vout=" + std::to_string(v_out) +
+                                               " qphys_" + nm + "_Avin=" + std::to_string(Av_in) +
+                                               " qphys_" + nm + "_Avout=" + std::to_string(Av_out);
                         }
                     }
                     // The raw physical operator, on the same directions.
@@ -8068,7 +8142,16 @@ public:
                                   // range straddles the origin. All one sign is not proof of the
                                   // converse -- it is a spanning sample, not a bound.
                                   << " phys_straddles_origin="
-                                  << ((nb_pos > 0 && nb_neg > 0) ? 1 : 0);
+                                  << ((nb_pos > 0 && nb_neg > 0) ? 1 : 0)
+                                  // R13.20 (round 9, R9-12): the probe's OWN precondition,
+                                  // measured. `blocks=0` means the block scan did not run, and
+                                  // then `local` says so rather than printing the initialiser
+                                  // as a verdict -- the class this file has been fixing since
+                                  // round 5.
+                                  << " phys_blocks_measured=" << nb_measured
+                                  << " phys_blocks_local="
+                                  << (nb_measured == 0 ? "unmeasured"
+                                                       : (blocks_local ? "1" : "0"));
                     }
                     if (nr_ok > 0) {
                         std::cerr << " | AM^-1(production): q_min=" << qr_min
@@ -9767,14 +9850,23 @@ public:
                     // recorded as `Base`. And the INN ramp multiplies krylov_tol_adaptive and was
                     // not in the selector at all, leaving `InnRamp` with no producer. Last writer
                     // wins, which is the order the tolerance is actually built in.
+                    // R13.20 (round 9, R9-5), two corrections to this selector:
+                    //  (a) `stage_budget_forcing_eta > 0` is DROPPED. It is `policy.ew_eta_used`,
+                    //      and `apply_ew` (wrf_sdirk3_stage_krylov_policy.h:114-134) writes the
+                    //      restart BUDGET and never `p.tol` -- only apply_stage2/apply_stage3
+                    //      write the tolerance, and both also set `tol_overridden`, which is the
+                    //      `krylov_tol_stage_override` arm above. So the disjunct could only fire
+                    //      with adaptive tolerances OFF and a stage budget knob set, where it
+                    //      labelled a plain `options_.krylov_tol` solve `eisenstat_walker`. Same
+                    //      category error as the P1-1 defect it replaced, one level up.
+                    //  (b) the E-W arm no longer collapses to one enum value: `ew_tol_source`
+                    //      carries which of {forcing term, eta clamp, initial floor, base} bound.
                     const int tol_source = static_cast<int>(
                         gmres_inn_tol_ramped
                             ? wrf::sdirk3::KrylovToleranceSource::InnRamp
                             : (krylov_tol_stage_override
                                    ? wrf::sdirk3::KrylovToleranceSource::StageOverride
-                                   : ((ew_set_tolerance || stage_budget_forcing_eta > 0.0f)
-                                          ? wrf::sdirk3::KrylovToleranceSource::EisenstatWalker
-                                          : wrf::sdirk3::KrylovToleranceSource::Base)));
+                                   : ew_tol_source));
                     // R13.18 (deep review P0-4): this solve's receipt, recorded where
                     // gmres_result is in scope. The Newton exit site is later in the same
                     // iteration and outside this scope; it promotes these into exit_* so a
@@ -11773,7 +11865,14 @@ public:
                         signal_to_roundoff = roundoff > 0.0 ? n_dR / roundoff : -1.0;
                     }
                     wrf::sdirk3::TaylorDefectInputs tin;
-                    tin.receipt_version = 2;   // this emitter populates every new field
+                    // R13.20 (round 9, R9-11): declares v2. It does NOT assert that all four
+                    // v2 fields were populated -- three of them are conditionally assigned above
+                    // (`tau_block_max` on an exact layout and an excited block,
+                    // `realized_step_fraction` on n_s > 0, `realized_U_fraction` on n_dU > 0) --
+                    // and when one is missing the verdict fails closed to `ReceiptIncomplete`,
+                    // which is what P1-3 was written for. The predecessor comment claimed the
+                    // unconditional version.
+                    tin.receipt_version = 2;
                     tin.tau_block_max = tau_block_max;
                     tin.realized_step_fraction = realized_step_fraction;
                     tin.realized_U_fraction = realized_U_fraction;

@@ -324,10 +324,34 @@ entirely on those four structured readings**, which are exactly the ones the cav
 as possibly degenerate for horizontally-uniform directions.
 
 The consequence is sharper than the original text: **in the physical metric the random evidence
-alone reads negative definite**, which for GMRES is as good as positive definite. The campaign's
-pivot-justifying "intrinsically indefinite" survives the coordinate objection **only through those
-four structured directions**, so the positive side — not `mu` — is what a further measurement must
+alone reads negative definite**, which for GMRES is as good as positive definite. So the straddle
+depends on the block scan, and the positive side — not `mu` — is what a further measurement must
 attack.
+
+~~…survives the coordinate objection **only through those four structured directions**~~ —
+**OVERSTATED IN THE OPPOSITE DIRECTION (round 9, R9-12), corrected.** The caveat below identifies
+degeneracy by `q ≈ 1`, and it says degeneracy makes a reading *understate* structure, i.e. the
+measured `|q − 1|` is a **lower bound**. By that test `ph` (1.000000) is degenerate and `ru`
+(7198.81), `rv` (7188.39), `rw` (14285.89) and `t` (7198.81) are **not** — the document's own
+non-degeneracy argument for `mu` ("nowhere near 1") applies verbatim to them. The straddle is
+witnessed by a non-degenerate positive **and** a non-degenerate negative. The correction traded an
+overclaim for its mirror image; what is actually true is narrower: *the random sample is one-sided
+and the straddle depends on the block scan; the block scan's positive readings are not `q≈1`
+degenerate, but uniform-fill directions are a restricted probe and a spanning sample of six is a
+witness, not a bound* — which is caveat (2) below, unchanged.
+
+**OPEN, and now instrumented (round 9, R9-12).** Three of the six report `|q − 1|` identical to six
+figures — `ru` 7197.81, `t` 7197.81, `mu` 7197.82 (opposite sign); `rv` differs by 0.15 %, `rw` is
+~1.98× the common value. Three nominally independent directions agreeing to ~1 part in 10⁵ in a
+stiff, heterogeneous operator wants an explanation before anything else is built on these numbers.
+The review's proposed mechanism — *the block directions are not block-local* — is **refuted by
+construction**: `e_b` is exactly zero outside its block, so `⟨v,Av⟩` reads only block-`b` rows and
+no other block can contribute to `q_b`. That leaves a shared coefficient or a genuine physical
+coincidence, and the probe now emits what discriminates them: per direction, `_vout` (the
+out-of-block support of `v`, which must be 0), `_Avin` and `_Avout` (where the response goes), plus
+`phys_blocks_measured` / `phys_blocks_local` so the precondition carries a verdict instead of an
+initialiser. **Until those rows are read, §13's numbers carry no locality verdict and must not be
+built on again.** Withdrawing a *reading* of a number is not validating the number.
 
 ~~Note the near-exact antisymmetry … the signature of a skew-like coupling.~~ **WITHDRAWN.**
 Single-block directions probe the *diagonal* blocks of the symmetric part; they cannot see the

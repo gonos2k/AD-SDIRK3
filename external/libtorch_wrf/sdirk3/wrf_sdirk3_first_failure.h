@@ -307,12 +307,29 @@ struct KrylovSolveMechanism {
     bool budget_exhausted = false;
     int  tolerance_source = 0;      // KrylovToleranceSource
 
-    bool same_mechanism_as(const KrylovSolveMechanism& o) const {
-        return met_tolerance == o.met_tolerance && D_reached == o.D_reached &&
-               S_reached == o.S_reached && budget_exhausted == o.budget_exhausted &&
-               tolerance_source == o.tolerance_source;
-    }
+    // R13.20 (round 9, R9-6): compares the CATEGORY the two receipts imply, not their fields.
+    // The predecessor also compared `tolerance_source` -- tolerance PROVENANCE, which the
+    // classifier does not branch on -- so two solves that both said "objective mismatch" were
+    // declared ambiguous when one had the INN ramp fire, and the refusal fell through to
+    // `KrylovStagnated`, i.e. to the operator/split layer. A refusal that fires on a difference
+    // which cannot change the answer, and fires TOWARD the split-explicit rebuild, is the same
+    // misrouting the four-way was built to stop.
+    bool implies_same_category_as(const KrylovSolveMechanism& o) const;
 };
+
+// The category ONE solve's receipt implies. Defined once and called from both the tie-set
+// ambiguity check and the classifier's four-way, so the two cannot drift apart -- the drift the
+// duplicated-threshold comment elsewhere in this file warns about.
+inline StageFailure krylov_mechanism_category(const KrylovSolveMechanism& m) {
+    if (m.D_reached && !m.S_reached)   return StageFailure::KrylovObjectiveMismatch;
+    if (m.S_reached || m.met_tolerance) return StageFailure::KrylovForcingTermLimited;
+    if (m.budget_exhausted)            return StageFailure::KrylovBudgetExhausted;
+    return StageFailure::KrylovStagnated;
+}
+
+inline bool KrylovSolveMechanism::implies_same_category_as(const KrylovSolveMechanism& o) const {
+    return krylov_mechanism_category(*this) == krylov_mechanism_category(o);
+}
 
 // True when the solves tied at the worst ratio do NOT agree on their mechanism -- in which case no
 // single mechanism may be named, whatever order they arrived in.
@@ -324,7 +341,7 @@ inline bool near_worst_mechanism_ambiguous(const std::vector<KrylovSolveMechanis
     for (const auto& x : solves) {
         if (!(x.progress >= worst * (1.0 - kNearWorstTieBand))) continue;
         if (first == nullptr) { first = &x; continue; }
-        if (!first->same_mechanism_as(x)) return true;
+        if (!first->implies_same_category_as(x)) return true;
     }
     return false;
 }
@@ -372,13 +389,34 @@ inline const char* krylov_stopping_metric_name(KrylovStoppingMetric m) {
     return "unknown";
 }
 
-enum class KrylovToleranceSource { Unknown, Base, EisenstatWalker, StageOverride, InnRamp, Other };
+// R13.20 (round 9, R9-5): `EisenstatWalker` used to cover THREE different levers, only one of
+// which is the forcing term. At Newton iteration 0 the E-W block does not compute
+// gamma*(||R_k||/||R_{k-1}||)^alpha at all -- it seeds `max(krylov_tol, WRF_SDIRK3_EW_ETA_INITIAL)`
+// and sets `ew_eta_updated_this_iter = false`, which is the code's own statement that E-W updated
+// nothing -- and BOTH arms then clamp into [ew_eta_min, ew_eta_max]. Recording all three as
+// `EisenstatWalker` routes a tolerance-limited verdict to `eisenstat_walker_forcing`, i.e. to
+// tuning ew_gamma/ew_alpha, on solves where neither knob was read. The clamp case is not
+// hypothetical: eta_max saturates exactly in the failing regime (see
+// converged-is-not-solved-adaptive-tolerance). Each value below is now decided AT the site by
+// comparing the candidate values, so the recorded source names the knob that actually bound.
+enum class KrylovToleranceSource {
+    Unknown,
+    Base,             // options_.krylov_tol is the binding value
+    EisenstatWalker,  // the computed forcing term eta_k is binding (neither clamped nor floored)
+    EwEtaClamp,       // the [ew_eta_min, ew_eta_max] clamp moved the value -- eta_max/min is the knob
+    EwInitialFloor,   // the iteration-0 seed constant WRF_SDIRK3_EW_ETA_INITIAL is binding
+    StageOverride,
+    InnRamp,
+    Other
+};
 
 // R13.18 (deep review P0-2): the layer a tolerance-limited verdict should send work to, DERIVED
 // from the recorded source. Consumed beside the category so the two cannot disagree.
 inline const char* krylov_forcing_layer_for(KrylovToleranceSource s) {
     switch (s) {
         case KrylovToleranceSource::EisenstatWalker: return "eisenstat_walker_forcing";
+        case KrylovToleranceSource::EwEtaClamp:      return "ew_eta_min_max_clamp";
+        case KrylovToleranceSource::EwInitialFloor:  return "ew_initial_eta_floor";
         case KrylovToleranceSource::StageOverride:   return "stage_tolerance_override";
         case KrylovToleranceSource::InnRamp:         return "inn_tolerance_ramp";
         case KrylovToleranceSource::Base:            return "base_inner_tolerance";
@@ -393,6 +431,8 @@ inline const char* krylov_tolerance_source_name(KrylovToleranceSource s) {
         case KrylovToleranceSource::Unknown:         return "unknown";
         case KrylovToleranceSource::Base:            return "base";
         case KrylovToleranceSource::EisenstatWalker: return "eisenstat_walker";
+        case KrylovToleranceSource::EwEtaClamp:      return "ew_eta_clamp";
+        case KrylovToleranceSource::EwInitialFloor:  return "ew_initial_floor";
         case KrylovToleranceSource::StageOverride:   return "stage_override";
         case KrylovToleranceSource::InnRamp:         return "inn_ramp";
         case KrylovToleranceSource::Other:           return "other";
@@ -573,6 +613,51 @@ inline bool measured(double v) {
     return v == v && v >= 0.0 && v < std::numeric_limits<double>::infinity();
 }
 
+// R13.20 (round 9, R9-2): WHICH BODY OF EVIDENCE the returned category came from.
+//
+// `attribution_from_metric` used to be inferred AFTER the fact, from `measured(worst_..._vs_r0)
+// || measured(best_..._vs_r0) || krylov_solves_measured_vs_r0 > 0` -- a test for "does an r0
+// reading exist anywhere on the record", not for "did an r0 reading decide this". The two come
+// apart in exactly the case the field was written for: when r0 IS measured and the worst ratio is
+// BELOW the no-progress threshold, the classifier falls through to the aggregate reconstruction
+// (`residual_first`/`residual_last`, iteration counts) -- and the flag read 1, because the branch
+// it fell through was entered on `measured(worst_..._vs_r0)`. It was 1 by construction in the one
+// case its own comment defines as 0.
+//
+// So the deciding clause now SAYS which evidence it used. Set at the top of each region that is
+// guaranteed to return, rather than at all ~25 return sites, to keep the classifier readable --
+// and never inferred from the signals afterwards, which is what went wrong.
+enum class StageDecisionBasis {
+    NotRecorded,
+    Precondition,             // provenance / explicit-stage / finiteness / absent measurement
+    NewtonResidualTrace,      // residual_first vs residual_last divergence growth
+    StepAcceptance,           // accepted/rejected step counters
+    KrylovDivergedFlag,       // the solver's own divergence flag
+    ExitReceipt,              // exit_* -- the solve that ENDED the loop
+    KrylovR0Receipt,          // the four-way: worst_krylov_* against r0-relative progress
+    LegacyKrylovAggregate,    // gmres_total_failures / best_krylov_rel_error, ||b|| coordinate
+    NewtonExitReason,         // s.newton_termination
+    AggregateReconstruction,  // residual trend + iteration counts; no Krylov receipt read
+    Postcondition             // gate / publish / converged
+};
+
+inline const char* stage_decision_basis_name(StageDecisionBasis b) {
+    switch (b) {
+        case StageDecisionBasis::NotRecorded:            return "not_recorded";
+        case StageDecisionBasis::Precondition:           return "precondition";
+        case StageDecisionBasis::NewtonResidualTrace:    return "newton_residual_trace";
+        case StageDecisionBasis::StepAcceptance:         return "step_acceptance";
+        case StageDecisionBasis::KrylovDivergedFlag:     return "krylov_diverged_flag";
+        case StageDecisionBasis::ExitReceipt:            return "exit_receipt";
+        case StageDecisionBasis::KrylovR0Receipt:        return "krylov_r0_receipt";
+        case StageDecisionBasis::LegacyKrylovAggregate:  return "legacy_krylov_aggregate";
+        case StageDecisionBasis::NewtonExitReason:       return "newton_exit_reason";
+        case StageDecisionBasis::AggregateReconstruction:return "aggregate_reconstruction";
+        case StageDecisionBasis::Postcondition:          return "postcondition";
+    }
+    return "not_recorded";
+}
+
 // FIRST in causal order, not worst. A run whose entry state is already non-finite will also
 // show a stagnating Krylov solve and a rejected step, and reporting either of those sends the
 // next week of work to the wrong layer.
@@ -599,6 +684,11 @@ struct StageDiagnosis {
     // have called a pure reconstruction "measured".
     bool attribution_from_metric = false;
     bool attribution_measured = false;   // the weaker "not an absence-of-evidence verdict"
+    // R13.20 (round 9, R9-2): the evidence class the deciding clause actually used, reported by
+    // that clause rather than inferred from the signals afterwards. `attribution_from_metric` is
+    // now a reading of `attribution_basis`, not an independent guess at it.
+    StageDecisionBasis primary_event_basis = StageDecisionBasis::NotRecorded;
+    StageDecisionBasis attribution_basis   = StageDecisionBasis::NotRecorded;
     // R13.19 SELF-REVIEW (round 8, P0-C): WHICH solve's receipt decided the category. The
     // emitter derived `specific_layer` from the EXIT solve's source/metric while the four-way
     // clauses can be reached from the STAGE-WORST receipt -- a layer describing one solve
@@ -607,7 +697,10 @@ struct StageDiagnosis {
     bool decided_by_exit_receipt = false;
 };
 
-inline StageFailure first_failure_of(const StageFailureSignals& s) {
+inline StageFailure first_failure_of(const StageFailureSignals& s,
+                                     StageDecisionBasis* basis = nullptr) {
+    // The default for every path below; each region that returns overwrites it.
+    if (basis) *basis = StageDecisionBasis::Precondition;
     // PROVENANCE FIRST. Classifying stage 3 from stage 2's signals produces a confident,
     // wrong layer -- and the record used to print exactly that, with the mismatch beside it.
     if (s.signals_from_stage < 0 || s.classifying_stage < 0) {
@@ -636,11 +729,13 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // separated first or "never ran" becomes "blew up".
         if (!s.final_residual_measured) return StageFailure::InsufficientEvidence;
         // A non-finite final residual IS divergence that overflowed.
+        if (basis) *basis = StageDecisionBasis::NewtonResidualTrace;
         if (!measured(s.residual_last)) return StageFailure::NewtonDiverged;
         if (measured(s.residual_first) && s.residual_first > 0.0 &&
             s.residual_last > kDivergenceGrowth * s.residual_first) {
             return StageFailure::NewtonDiverged;
         }
+        if (basis) *basis = StageDecisionBasis::Precondition;
         // The linear solve before the outer one: Newton cannot converge on top of a solve
         // that does not solve, so this is upstream of any statement about the iteration.
         // Time order, where the record has it. A rejection that happened BEFORE the first
@@ -649,8 +744,14 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         const bool rejection_first =
             (s.first_rejection_iter >= 0 && s.first_krylov_failure_iter >= 0 &&
              s.first_rejection_iter < s.first_krylov_failure_iter);
-        if (rejection_first && s.accepted_steps == 0) return StageFailure::AllStepsRejected;
-        if (s.krylov_diverged)          return StageFailure::KrylovDiverged;
+        if (rejection_first && s.accepted_steps == 0) {
+            if (basis) *basis = StageDecisionBasis::StepAcceptance;
+            return StageFailure::AllStepsRejected;
+        }
+        if (s.krylov_diverged) {
+            if (basis) *basis = StageDecisionBasis::KrylovDivergedFlag;
+            return StageFailure::KrylovDiverged;
+        }
         // R13.12 (red team R3-2): stagnation is a statement about PROGRESS, so it is measured
         // against where the solve started. Two quantities were being read as if they were one:
         //   ||r||/||b||  -- is the proposed step predicted to reduce the NONLINEAR residual?
@@ -693,6 +794,8 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // this event, computed from the same clauses with the recorded exit removed, so the r0
         // evidence is preserved on the record instead of discarded by the event that outranks it.
         if (s.newton_termination == NewtonTerminationReason::ZeroUpdateAfterTotalFailure) {
+            // Every path out of this block returns, and all three read `exit_*`.
+            if (basis) *basis = StageDecisionBasis::ExitReceipt;
             // R13.18 (deep review P0-4): subtype from the EXIT solve when its receipt is present.
             // A terminal event describes the solve that ended the loop; the stage-worst receipt
             // describes a possibly different iteration and is telemetry, not attribution.
@@ -704,6 +807,17 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
             // and it is NOT the stage gate -- so it may not be claimed while the gate itself is
             // recorded as having passed, and it must not be promoted over the event that actually
             // ended the loop. `gate_metric_ok` is read here so the two cannot disagree.
+            //
+            // R13.20 (round 9, R9-10): OPT-IN ONLY, and that is now PROVEN rather than suspected.
+            // Reaching this block needs `gmres_total_failure`. Under the DEFAULT rule
+            // (`krylov_failure_vs_r0_` off) that is `raw > 1 || rel >= 0.999` on rho_S, so it
+            // requires rho_S >= 0.999; and `exit_S_reached` is `rho_S < tol` with `tol` clamped
+            // into [ew_eta_min, ew_eta_max] = [0.02, 0.9]. rho_S < 0.9 and rho_S >= 0.999 cannot
+            // both hold, so this clause -- and its predecessor `StageGateMetricMismatch` -- has
+            // never fired on any measurement in this campaign and cannot under a stock config.
+            // It is reachable only under the opt-in vs-r0 rule, where `raw >= 0.99 * r0_ref` can
+            // fire at small rho_S when r0_ref is also small. Kept because that rule is a shipped
+            // option; recorded here so the next reader does not mistake it for a live classifier.
             if (s.exit_krylov_iter >= 0 && s.exit_D_reached && s.exit_S_reached &&
                 measured(s.exit_rho_E_final) && !s.exit_E_reached && !s.gate_metric_ok) {
                 return StageFailure::KrylovEntryMetricMismatch;
@@ -712,6 +826,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         }
         // ...and an exception in the linear solve is not the outer iteration's failure either.
         if (s.newton_termination == NewtonTerminationReason::Exception) {
+            if (basis) *basis = StageDecisionBasis::NewtonExitReason;
             return StageFailure::KrylovSolveThrew;
         }
         if (measured(s.worst_krylov_rel_error_vs_r0)) {
@@ -739,6 +854,9 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
             // the linear solve whatever the progress ratio reads, and WHICH kind is answered by
             // the same receipts below.
             if (s.worst_krylov_rel_error_vs_r0 >= no_progress) {
+                // Every path out of this block returns, and all of them read the stage-worst
+                // r0 receipt. This is the ONLY region that may be reported as r0-decided.
+                if (basis) *basis = StageDecisionBasis::KrylovR0Receipt;
                 // R13.16 (round 6, R6-2) / R13.17 (external review P0-2): WHY it made no
                 // progress. Four different answers, three of which are not the operator's fault,
                 // and they route to four different layers.
@@ -761,25 +879,38 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
                 // A tie on the worst ratio is refused rather than resolved: with eta saturated at
                 // its cap two solves can share the worst value and end for different reasons, and
                 // a strict `>` update let whichever came first name the layer.
-                if (!s.all_near_worst_met_tolerance) {
-                    return StageFailure::KrylovStagnated;
-                }
+                // R13.20 (self-review while fixing round 9's R9-6): a
+                // `!s.all_near_worst_met_tolerance -> KrylovStagnated` refusal stood here and
+                // made TWO of the four answers below unreachable in production.
+                //
+                // `near_worst_all_met` compares `worst_unmet` against `worst`. When the strictly
+                // -worst solve is itself an unmet one those are the SAME number, so the predicate
+                // is false by construction -- and `worst_krylov_met_tolerance` belongs to that
+                // same strictly-worst solve. Reaching the clauses below therefore implied
+                // `worst_krylov_met_tolerance == true`, which `S_reached || met_tolerance` always
+                // accepted. `KrylovBudgetExhausted` and the trailing `KrylovStagnated` had NO
+                // producer. The fixture that pinned `krylov_budget_exhausted` reached it from
+                // `all_near_worst_met_tolerance = true` (the struct default) with
+                // `worst_krylov_met_tolerance = false` -- a pair the solver cannot emit, so the
+                // category read as covered while never firing.
+                //
+                // What the refusal was FOR is tie DISAGREEMENT, and `near_worst_mechanism_ambiguous`
+                // -- added later, order-independent, and comparing exactly the fields the answer
+                // depends on -- does that and only that. The older approximation is retired from
+                // the classifier and stays on the record as telemetry.
+                //
                 // R13.19 SELF-REVIEW: solves tied at the worst ratio that hit DIFFERENT mechanisms
                 // cannot name one. Reporting the first arrival's was order-dependent; reporting
                 // the general category is not.
                 if (s.near_worst_mechanism_ambiguous) {
                     return StageFailure::KrylovStagnated;
                 }
-                if (s.worst_krylov_D_reached && !s.worst_krylov_S_reached) {
-                    return StageFailure::KrylovObjectiveMismatch;
-                }
-                if (s.worst_krylov_S_reached || s.worst_krylov_met_tolerance) {
-                    return StageFailure::KrylovForcingTermLimited;
-                }
-                if (s.worst_krylov_budget_exhausted) {
-                    return StageFailure::KrylovBudgetExhausted;
-                }
-                return StageFailure::KrylovStagnated;
+                KrylovSolveMechanism worst_receipt;
+                worst_receipt.met_tolerance    = s.worst_krylov_met_tolerance;
+                worst_receipt.D_reached        = s.worst_krylov_D_reached;
+                worst_receipt.S_reached        = s.worst_krylov_S_reached;
+                worst_receipt.budget_exhausted = s.worst_krylov_budget_exhausted;
+                return krylov_mechanism_category(worst_receipt);
             }
             // Every solve moved. Whatever refused the step is downstream, and the later
             // clauses name it.
@@ -792,6 +923,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
             // whether Krylov works, so there is no Krylov evidence and the later clauses get
             // their case. (An old record, or no solves at all, keeps the old precedence below.)
         } else {
+            if (basis) *basis = StageDecisionBasis::LegacyKrylovAggregate;
             if (s.gmres_total_failures > 0) return StageFailure::KrylovStagnated;
             if (measured(s.best_krylov_rel_error) &&
                 s.best_krylov_rel_error >= kKrylovNoProgress) {
@@ -800,6 +932,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         }
         // The linear solve worked and nothing it proposed was taken.
         if (s.accepted_steps == 0 && s.rejected_steps > 0) {
+            if (basis) *basis = StageDecisionBasis::StepAcceptance;
             return StageFailure::AllStepsRejected;
         }
         // R13.17 (external review P0-3): when the loop RECORDED why it stopped, that is the
@@ -807,6 +940,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // "the residual stopped moving" from "the budget ran out at a flat residual", and the
         // campaign's reading of the 12x-budget run ("the failure moved outward") rests on exactly
         // that distinction.
+        if (basis) *basis = StageDecisionBasis::NewtonExitReason;
         if (s.newton_termination == NewtonTerminationReason::BudgetExhausted) {
             return StageFailure::NewtonBudgetExhausted;
         }
@@ -820,6 +954,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
             measured(s.residual_first) && measured(s.residual_last) &&
             s.residual_first > 0.0 &&
             s.residual_last < kResidualStillFalling * s.residual_first;
+        if (basis) *basis = StageDecisionBasis::AggregateReconstruction;
         if (still_falling && s.newton_iteration_budget > 0 &&
             s.newton_iterations >= s.newton_iteration_budget) {
             return StageFailure::NewtonBudgetExhausted;
@@ -827,6 +962,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         return StageFailure::NewtonStagnated;
     }
 
+    if (basis) *basis = StageDecisionBasis::Postcondition;
     if (!s.gate_metric_ok)   return StageFailure::AdmissibilityRejected;
     if (!s.state_published)  return StageFailure::PublishRejected;
     return StageFailure::None;
@@ -837,10 +973,10 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
 // clauses instead of duplicating them, so the two answers cannot drift apart.
 inline StageDiagnosis stage_diagnosis_of(const StageFailureSignals& s) {
     StageDiagnosis d;
-    d.primary_event = first_failure_of(s);
+    d.primary_event = first_failure_of(s, &d.primary_event_basis);
     StageFailureSignals metric_only = s;
     metric_only.newton_termination = NewtonTerminationReason::NotRecorded;
-    d.attribution = first_failure_of(metric_only);
+    d.attribution = first_failure_of(metric_only, &d.attribution_basis);
     // The weak flag: the attribution is not itself an absence-of-evidence verdict.
     d.attribution_measured =
         (d.attribution != StageFailure::InsufficientEvidence) &&
@@ -848,18 +984,23 @@ inline StageDiagnosis stage_diagnosis_of(const StageFailureSignals& s) {
     // The one that matters: does the attribution rest on a real r0/Krylov reading, or on the
     // aggregate fallback the campaign spent four rounds moving away from? Without this a pure
     // reconstruction naming an operator layer would read as "measured".
-    // The exit-receipt subtypes are the only ones reached from `exit_*`; everything else in the
-    // four-way is decided by the stage-worst receipt.
-    d.decided_by_exit_receipt =
-        (d.primary_event == StageFailure::KrylovObjectiveMismatch ||
-         d.primary_event == StageFailure::KrylovEntryMetricMismatch) &&
-        s.exit_krylov_iter >= 0 &&
-        s.newton_termination == NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+    //
+    // R13.20 (round 9, R9-2): read from the clause that returned. The r0 four-way is the only
+    // region that reads the stage-worst r0 receipt, so it is the only basis that answers yes.
+    // `LegacyKrylovAggregate` is deliberately NOT included -- it is a Krylov reading, but in the
+    // ||b|| coordinate this line of work exists to stop trusting, and it is what the field's
+    // comment calls "the aggregate fallback". `metric_only` clears the termination, so
+    // `ExitReceipt` is unreachable here by construction; it is listed for the reader, not as a
+    // live arm.
     d.attribution_from_metric =
         d.attribution_measured &&
-        (measured(s.worst_krylov_rel_error_vs_r0) ||
-         measured(s.best_krylov_rel_error_vs_r0) ||
-         s.krylov_solves_measured_vs_r0 > 0);
+        d.attribution_basis == StageDecisionBasis::KrylovR0Receipt;
+    // R13.20 (round 9, R9-3): likewise derived from the basis the deciding clause reported,
+    // instead of re-testing the signals the clause read. The previous form re-derived the
+    // condition and could not be true for `KrylovForcingTermLimited`, leaving the emitter's
+    // `exit_tolerance_source` arm selectable by no input.
+    d.decided_by_exit_receipt =
+        (d.primary_event_basis == StageDecisionBasis::ExitReceipt);
     return d;
 }
 

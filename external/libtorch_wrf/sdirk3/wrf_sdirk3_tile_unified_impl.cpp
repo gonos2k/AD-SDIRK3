@@ -9210,6 +9210,41 @@ vertical_coefficients:
                     // recorded exit removed, so "the event outranks the reconstruction" no longer
                     // means "the reconstruction is thrown away".
                     const auto diag = wrf::sdirk3::stage_diagnosis_of(sig);
+                    // R13.20 (round 9, R9-3): the specific layer and the receipt it came from,
+                    // computed TOGETHER from the basis the deciding clause reported. Two defects
+                    // in the previous inline form:
+                    //   * `layer_receipt` printed unconditionally, so the ~13 categories whose
+                    //     `specific_layer` is `n/a` still carried `layer_receipt=stage_worst` --
+                    //     the struct default rendered as a measurement, on a row where no receipt
+                    //     was consulted. One commit message reported it as a finding.
+                    //   * the `KrylovForcingTermLimited` branch offered an `exit_tolerance_source`
+                    //     arm that no input can select: that category is returned only by the r0
+                    //     four-way, never by the exit-receipt block. It is gone rather than left
+                    //     as a live-looking alternative.
+                    using wrf::sdirk3::StageDecisionBasis;
+                    const bool layer_from_exit =
+                        (diag.primary_event_basis == StageDecisionBasis::ExitReceipt);
+                    const bool layer_from_worst =
+                        (diag.primary_event_basis == StageDecisionBasis::KrylovR0Receipt);
+                    const char* specific_layer = "n/a";
+                    if (first == wrf::sdirk3::StageFailure::KrylovForcingTermLimited) {
+                        specific_layer =
+                            layer_from_worst
+                                ? wrf::sdirk3::krylov_forcing_layer_for(
+                                      sig.worst_krylov_tolerance_source)
+                                : "inner_tolerance_source_unrecorded";
+                    } else if (first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
+                        specific_layer =
+                            layer_from_exit
+                                ? wrf::sdirk3::krylov_stopping_layer_for(sig.exit_stopping_metric)
+                                : (layer_from_worst ? "stop_metric_unrecorded_for_worst_solve"
+                                                    : "stop_metric_unrecorded");
+                    }
+                    const char* layer_receipt =
+                        (std::strcmp(specific_layer, "n/a") == 0)
+                            ? "n/a"
+                            : (layer_from_exit ? "exit"
+                                               : (layer_from_worst ? "stage_worst" : "none"));
                     std::cerr << "SDIRK3_FIRST_FAILURE stage=" << stage_id
                               // which stage actually populated the signals being classified --
                               // equal to stage_id or the record is classifying someone else
@@ -9235,23 +9270,15 @@ vertical_coefficients:
                               // read the EXIT solve's source/metric unconditionally, while the
                               // four-way clauses can be reached from the STAGE-WORST receipt --
                               // a layer describing one solve annotating a category decided by
-                              // another. When the deciding receipt is the stage-worst one, its
-                              // own recorded source is used; when neither matches, the record
-                              // says so instead of naming a mechanism.
-                              << " specific_layer="
-                              << (first == wrf::sdirk3::StageFailure::KrylovForcingTermLimited
-                                      ? wrf::sdirk3::krylov_forcing_layer_for(
-                                            diag.decided_by_exit_receipt
-                                                ? sig.exit_tolerance_source
-                                                : sig.worst_krylov_tolerance_source)
-                                      : (first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch
-                                             ? (diag.decided_by_exit_receipt
-                                                    ? wrf::sdirk3::krylov_stopping_layer_for(
-                                                          sig.exit_stopping_metric)
-                                                    : "stop_metric_unrecorded_for_worst_solve")
-                                             : "n/a"))
-                              << " layer_receipt="
-                              << (diag.decided_by_exit_receipt ? "exit" : "stage_worst")
+                              // another. Both are computed above from the reported basis.
+                              << " specific_layer=" << specific_layer
+                              << " layer_receipt=" << layer_receipt
+                              // R13.20: and the basis itself, so a reader can see WHICH body of
+                              // evidence answered without inferring it from the category.
+                              << " event_basis="
+                              << wrf::sdirk3::stage_decision_basis_name(diag.primary_event_basis)
+                              << " attribution_basis="
+                              << wrf::sdirk3::stage_decision_basis_name(diag.attribution_basis)
                               << " retry=" << (retry_used ? 1 : 0)
                               << " entry_finite=" << (sig.entry_state_finite ? 1 : 0)
                               << " R0_measured=" << (sig.initial_residual_measured ? 1 : 0)
