@@ -9230,14 +9230,28 @@ vertical_coefficients:
                               << (diag.attribution_measured ? 1 : 0)
                               << " attribution_from_metric="
                               << (diag.attribution_from_metric ? 1 : 0)
+                              // R13.19 SELF-REVIEW (round 8, P0-C): the layer must be derived
+                              // from the SAME receipt that decided the category. This used to
+                              // read the EXIT solve's source/metric unconditionally, while the
+                              // four-way clauses can be reached from the STAGE-WORST receipt --
+                              // a layer describing one solve annotating a category decided by
+                              // another. When the deciding receipt is the stage-worst one, its
+                              // own recorded source is used; when neither matches, the record
+                              // says so instead of naming a mechanism.
                               << " specific_layer="
                               << (first == wrf::sdirk3::StageFailure::KrylovForcingTermLimited
                                       ? wrf::sdirk3::krylov_forcing_layer_for(
-                                            sig.exit_tolerance_source)
+                                            diag.decided_by_exit_receipt
+                                                ? sig.exit_tolerance_source
+                                                : sig.worst_krylov_tolerance_source)
                                       : (first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch
-                                             ? wrf::sdirk3::krylov_stopping_layer_for(
-                                                   sig.exit_stopping_metric)
+                                             ? (diag.decided_by_exit_receipt
+                                                    ? wrf::sdirk3::krylov_stopping_layer_for(
+                                                          sig.exit_stopping_metric)
+                                                    : "stop_metric_unrecorded_for_worst_solve")
                                              : "n/a"))
+                              << " layer_receipt="
+                              << (diag.decided_by_exit_receipt ? "exit" : "stage_worst")
                               << " retry=" << (retry_used ? 1 : 0)
                               << " entry_finite=" << (sig.entry_state_finite ? 1 : 0)
                               << " R0_measured=" << (sig.initial_residual_measured ? 1 : 0)

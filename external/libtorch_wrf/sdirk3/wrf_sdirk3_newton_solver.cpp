@@ -7471,6 +7471,9 @@ public:
             // CRITICAL FIX (2025-11-28): Declare outside try block for use in trust region
             float gmres_rel_error = 1.0f;  // Default to 1.0 (no reduction) if GMRES fails
             float gmres_raw_rel_error = 1.0f;  // v20.14r27g: unclamped, may be >1 when GMRES diverges
+            // R13.19 SELF-REVIEW (round 8, P1-A): set where gmres_result is in scope; read by the
+            // total-failure predicate below, which is outside that scope.
+            bool gmres_converged_on_entry = false;
             float gmres_initial_rel_error = -1.0f;  // R13.11: ||r0||/||b|| from the same solve
             // R9 P0-D: the GMRES residual, kept only when the nonlinear ledger is armed. It is
             // what turns the linear model's prediction into a read rather than an operator
@@ -9810,6 +9813,8 @@ public:
                     stats_.last_E_reached =
                         (rho_E_final_this >= 0.0 &&
                          rho_E_final_this < static_cast<double>(krylov_tol_adaptive));
+                    gmres_converged_on_entry =
+                        (gmres_result.termination_reason == KTR_::InitialConverged);
                     stats_.last_solve_iter = newton_iter;
                     stats_.last_rho_stop_final = gmres_result.rho_D_final;
                     stats_.last_rho_S_final = gmres_result.rho_S_final;
@@ -10851,9 +10856,18 @@ public:
             // produced the round-4 P0 one deleted `r0_measured &&` away from returning.
             const float r0_ref = gmres_initial_rel_error;
             const bool total_failure_vs_b  =
+                !gmres_converged_on_entry &&
                 (gmres_raw_rel_error > 1.0f || gmres_rel_error >= 0.999f);
+            // R13.19 SELF-REVIEW (round 8, P1-A): a solve that CONVERGED ON ENTRY is not a
+            // total failure, and after the P0-1 fix it would otherwise be flagged as one
+            // UNCONDITIONALLY. `rel_error` now carries rho_S, and `initial_rel_error` is
+            // rn0/bn0 taken from the same halo-zeroed r and the same PRE-SCALING b -- the same
+            // two norms -- so their ratio is exactly 1 and `raw >= 0.99 * r0_ref` is always
+            // true. That would put every InitialConverged solve on the recovery / zero-step
+            // path under the opt-in r0 rule: a production side effect of a fix whose commit
+            // message claimed only to change what is REPORTED.
             const bool total_failure_vs_r0 =
-                r0_measured &&
+                r0_measured && !gmres_converged_on_entry &&
                 (gmres_raw_rel_error > r0_ref * (1.0f + 1.0e-4f) ||
                  gmres_raw_rel_error >= 0.99f * r0_ref);
             // With the flag on and r0 unmeasured the r0 rule cannot be evaluated. Falling back

@@ -599,6 +599,12 @@ struct StageDiagnosis {
     // have called a pure reconstruction "measured".
     bool attribution_from_metric = false;
     bool attribution_measured = false;   // the weaker "not an absence-of-evidence verdict"
+    // R13.19 SELF-REVIEW (round 8, P0-C): WHICH solve's receipt decided the category. The
+    // emitter derived `specific_layer` from the EXIT solve's source/metric while the four-way
+    // clauses can be reached from the STAGE-WORST receipt -- a layer describing one solve
+    // annotating a category decided by another. `worst_krylov_tolerance_source` was produced,
+    // plumbed and printed, and read by nothing.
+    bool decided_by_exit_receipt = false;
 };
 
 inline StageFailure first_failure_of(const StageFailureSignals& s) {
@@ -842,6 +848,13 @@ inline StageDiagnosis stage_diagnosis_of(const StageFailureSignals& s) {
     // The one that matters: does the attribution rest on a real r0/Krylov reading, or on the
     // aggregate fallback the campaign spent four rounds moving away from? Without this a pure
     // reconstruction naming an operator layer would read as "measured".
+    // The exit-receipt subtypes are the only ones reached from `exit_*`; everything else in the
+    // four-way is decided by the stage-worst receipt.
+    d.decided_by_exit_receipt =
+        (d.primary_event == StageFailure::KrylovObjectiveMismatch ||
+         d.primary_event == StageFailure::KrylovEntryMetricMismatch) &&
+        s.exit_krylov_iter >= 0 &&
+        s.newton_termination == NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
     d.attribution_from_metric =
         d.attribution_measured &&
         (measured(s.worst_krylov_rel_error_vs_r0) ||

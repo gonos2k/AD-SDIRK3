@@ -1194,6 +1194,40 @@ int main() {
               "operator/split layer, beside a receipt reading D_reached=1 S_reached=0");
     }
 
+    {
+        // R13.19 SELF-REVIEW (round 8, P0-C): the layer must come from the receipt that DECIDED
+        // the category. `specific_layer` read the EXIT solve's source/metric unconditionally,
+        // while the four-way clauses can be reached from the STAGE-WORST receipt.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.worst_krylov_rel_error_vs_r0 = 0.99;
+        s.krylov_solves_measured_vs_r0 = 2;
+        s.accepted_steps = 2;
+        s.worst_krylov_D_reached = true; s.worst_krylov_S_reached = false;
+        s.worst_krylov_met_tolerance = true;
+        // No exit receipt and no zero-update exit: this reached the clause via stage-worst.
+        s.exit_krylov_iter = -1;
+        const auto d = wrf::sdirk3::stage_diagnosis_of(s);
+        check(name_of(s) == "krylov_objective_mismatch" && !d.decided_by_exit_receipt,
+              "a category reached through the STAGE-WORST receipt must not be annotated with the "
+              "exit solve's source or metric -- that is a layer describing one solve attached to "
+              "a verdict decided by another");
+        // ...and when the exit receipt IS what decided it, the flag says so.
+        StageFailureSignals e = ok_stage();
+        e.newton_converged = false;
+        e.residual_first = 8.7e8; e.residual_last = 8.6e8;
+        e.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        e.exit_krylov_iter = 3;
+        e.exit_D_reached = true; e.exit_S_reached = false;
+        const auto de = wrf::sdirk3::stage_diagnosis_of(e);
+        check(de.primary_event == StageFailure::KrylovObjectiveMismatch &&
+              de.decided_by_exit_receipt,
+              "and a category reached through the exit receipt is flagged as such, so the "
+              "emitted layer and the verdict describe the same solve");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1210,7 +1244,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 101;
+    constexpr int expected_checks = 103;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

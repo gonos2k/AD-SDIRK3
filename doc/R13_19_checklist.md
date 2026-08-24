@@ -280,3 +280,46 @@ coupling at all.
 production-unreachable), `P1-F` (the measurement offered as evidence does not exercise the changed
 path), `P1-G` (`exit_*` promoted from `last_*`, which are written only inside the r₀-measured guard,
 so a stale receipt can be labelled "this solve's"). Recorded as open rather than claimed closed.
+
+### Round 8, remaining P0/P1 — closed
+
+**P1-A — an undisclosed PRODUCTION side effect of my own P0-1 fix, and it was unconditional.**
+After that fix `rel_error` carries ρ_S, and `initial_rel_error` is `rn0/bn0` taken from the same
+halo-zeroed `r` and the **same pre-scaling `b`** (`bn0` at `:1208`, the D-scaling at `:1254`) — *the
+same two norms*. So their ratio is exactly 1, and the opt-in r₀ rule's
+`raw >= 0.99 * r0_ref` is **unconditionally true for every `InitialConverged` solve**, putting all
+of them on the recovery / zero-step path. A commit whose message claimed to change only what is
+*reported* was changing what the solver *does*. A solve that converged on entry is now excluded from
+both total-failure rules.
+
+**P0-C — the layer described a different solve than the verdict.** `specific_layer` derived from
+the **exit** solve's source/metric unconditionally, while the four-way clauses can be reached from
+the **stage-worst** receipt — and `worst_krylov_tolerance_source` was produced, plumbed, printed and
+read by nothing. `StageDiagnosis::decided_by_exit_receipt` now says which receipt decided the
+category, the layer is derived from *that* one, and the record carries `layer_receipt=` so a reader
+can see it. Measured: `layer_receipt=stage_worst`.
+
+**P1-B — a consumer left behind.** `gmres_tolerance_reached` counted `InitialConverged`
+unconditionally; with that return now reporting two metrics, a solve meeting D and not S was being
+counted as finished.
+
+### Round 8's negative results, worth as much
+
+The reviewer tried and failed to break: the halo-zeroing of ρ_S at both `InitialConverged` sites
+(it matches the normal finaliser); `bnorm_unscaled` as the denominator; `arnoldi_allowed`
+(byte-identical to the normal finaliser); **the fold's order-independence** (checked equal values,
+single solve, exact band edge, zero/negative/NaN progress and the three-element chain); the
+`KrylovBudgetExhausted` rename (no stale references); the Taylor v2 receipt; `gate_metric_ok` as a
+real measurement; the per-solve stats reset; and AD hygiene (no new `.item()`/`.detach()`
+violations).
+
+### Still open, stated
+
+- **P1-E** — `KrylovEntryMetricMismatch` may be **production-unreachable by default**: D && S met
+  ⇒ ρ_S < tol ≤ 0.9 ⇒ not a total failure ⇒ the `ZeroUpdateAfterTotalFailure` exit is never taken,
+  so only fixtures reach it. Not yet confirmed by a run.
+- **P1-F** — `krylov_solves_trivial = 0` in every measurement means the P0-1 path **was not
+  exercised**, so "verdict and values unchanged" is *not* evidence that the change is safe. A run
+  that actually takes the `InitialConverged` branch is the missing measurement.
+- **P1-G** — `exit_*` is promoted from `last_*`, which are written only inside the r₀-measured
+  guard, so a stale receipt from an earlier iteration can be labelled "this solve's".
