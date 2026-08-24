@@ -491,7 +491,12 @@ struct AbComparison {
     // any internal state change that could alter a result is caught, and one that could not is
     // correctly ignored.
     bool fresh_wrapper_per_arm = false;         // the mutable wrapper is per-arm (measured)
-    bool shared_preconditioner_instance = true; // STATED, not hidden: the object is shared
+    // STATED, not hidden: the object is shared. R13.20 (adversarial loop, iteration 5): this is
+    // deliberately NOT a gate in `ab_attributable` -- sharing the instance is admissible precisely
+    // because `preconditioner_state_unchanged` below MEASURES that it did not move between the
+    // arms. It is emitted on the A/B row instead, which is its consumer; before R13.20 the row
+    // printed a compile-time `1` and this field was read by nothing at all.
+    bool shared_preconditioner_instance = true;
     bool preconditioner_state_unchanged = false;// M(probe) identical before and after the arms
     bool same_frozen_operator = false;          // one operator closure for every arm
     bool operator_state_unchanged = false;      // A(probe) identical before and after the arms

@@ -367,3 +367,34 @@ ratchets) passes `actionlint` locally.
 
 **What it does not prove**, stated: a guarded `.item()` can still be a GPU sync on a hot path, and
 a detached operand says nothing about whether the sync belongs there. This bounds one failure mode.
+
+### Iteration 5 — three constants under a comment that said "MEASURED, not asserted"
+
+The receipt-struct audit, finished. `TaylorDefectInputs` (11 fields) is clean. `AbComparison` (23)
+had **one field with a producer and no reader**: `shared_preconditioner_instance`, written `true`
+at one site and consulted by nothing — `ab_attributable` does not gate on it, and the A/B row
+printed **`shared_preconditioner_instance=1 fresh_wrapper_per_arm=1` as a compile-time literal**.
+That is the exact defect the tree already recorded for `published` (`tile_unified_impl:12408`,
+"a compile-time LITERAL at both call sites"), recurring one struct over: a change to
+`fresh_wrapper_per_arm` would have left the row reading `1`. Both now print from the fields, which
+gives `shared_preconditioner_instance` its first consumer, and the struct says **why** it is
+deliberately not a gate: sharing the instance is admissible precisely because
+`preconditioner_state_unchanged` measures that the object did not move between arms.
+
+And the comment above the assignments — *"MEASURED, not asserted (external review P0-1/P0-2)"* —
+stood above **three constants**. They are true, but true **by construction at that site** (one
+`gmres_op` closure handed to every arm; `make_fresh_M()` copies the wrapper per row; the
+preconditioner object is shared), not measured from anything. Relabelled rather than changed,
+because a constant dressed as a precondition is what round 5 removed from `alpha_arm_measured`.
+What *is* measured sits on the lines below, and the comment now says so.
+
+**Swept for the same class rather than fixing one instance.** Every `field=0`/`field=1` literal in
+a record line: `witness_confirmed=0` (inside the not-measured branch, correct — and its comment
+already explains the padding), `probe_interfered=1` (inside `if (after != before)`, correct),
+`accuracy_valid=0/1` (two branches, correct), `replaced_with=1`/`concurrent=1` (values, correct),
+`fresh_solver_per_arm=0` (a true-by-construction limitation, left as is and noted). One more was
+worth deriving: `tolerance_exit_disabled=1` sat beside fields read from real variables while the
+arms' tolerance is a literal `0.0f` argument. It is now `kAbArmTol`, passed to the arms and read by
+the record, so changing the argument moves the claim.
+
+Both ratchets green (from_blob 70/70, item-guard 100/100); ctest 62/62.

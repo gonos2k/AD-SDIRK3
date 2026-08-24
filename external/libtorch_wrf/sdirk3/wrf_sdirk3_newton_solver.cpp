@@ -9100,6 +9100,14 @@ public:
                     };
 
                     const int halo_width_for_probe = 0;   // packed 1-D Krylov vectors
+                    // R13.20 (adversarial loop, iteration 5): the arms' tolerance, NAMED so the
+                    // record can be derived from it. A residual is never < 0, so this disables
+                    // the tolerance exit and every arm runs its full Arnoldi dimension -- which
+                    // is what makes `same_budget` a comparison of equal work. The row used to
+                    // print `tolerance_exit_disabled=1` as a compile-time literal beside fields
+                    // read from real variables, so changing this argument would have left the
+                    // claim standing. Same shape as the `published` literal the tree recorded.
+                    constexpr float kAbArmTol = 0.0f;
                     // Each row gets its OWN fresh preconditioner, so rows are independent of
                     // each other as well as of production. R13.7 ran them through one aging
                     // closure, where only the first row started clean.
@@ -9121,7 +9129,7 @@ public:
                         auto res = krylov_methods::solve_fgmres(
                             std::function<torch::Tensor(const torch::Tensor&)>(counting_op),
                             gmres_rhs, gmres_x0, stage, ru_share,
-                            /*restart=*/m, /*tol=*/0.0f, /*max_iter=*/1,
+                            /*restart=*/m, /*tol=*/kAbArmTol, /*max_iter=*/1,
                             arm_M,
                             layout_initialized_ ? &cached_layout_ : nullptr,
                             halo_mask_initialized_ ? &halo_mask_ : nullptr,
@@ -9465,10 +9473,20 @@ public:
                     cmp.same_solver_path = (refinement_passes_now <= 1);
                     cmp.same_budget = iters_equal;
                     cmp.early_stop_disabled = early_stop_off;
-                    // MEASURED, not asserted (external review P0-1/P0-2).
-                    cmp.same_frozen_operator = true;   // one closure, handed to every arm
-                    cmp.fresh_wrapper_per_arm = true;  // make_fresh_M() copies it per row
-                    cmp.shared_preconditioner_instance = true;  // stated, not hidden
+                    // R13.20 (adversarial loop, iteration 5): "MEASURED, not asserted" stood
+                    // above THREE CONSTANTS. They are true, but true BY CONSTRUCTION AT THIS
+                    // SITE -- one `gmres_op` closure is passed to every arm, `make_fresh_M()`
+                    // copies the wrapper per row, and the preconditioner object is shared -- not
+                    // measured from anything. The label is corrected rather than the values,
+                    // because a constant dressed as a precondition is the defect this campaign
+                    // removed from `alpha_arm_measured` in round 5. What IS measured is the
+                    // consequence, on the lines below: `operator_state_unchanged` and
+                    // `preconditioner_state_unchanged` fingerprint the shared objects before and
+                    // after the arms, which is why sharing them is admissible at all.
+                    cmp.same_frozen_operator = true;   // by construction: one closure, every arm
+                    cmp.fresh_wrapper_per_arm = true;  // by construction: make_fresh_M() per row
+                    cmp.shared_preconditioner_instance = true;  // by construction: shared object
+                    // MEASURED (external review P0-1/P0-2):
                     cmp.operator_state_unchanged = operator_state_unchanged;
                     cmp.preconditioner_state_unchanged = precond_state_unchanged;
                     cmp.diagnostic_noninterfering = noninterfering;
@@ -9534,7 +9552,19 @@ public:
                               << " precond_state_unchanged=" << (precond_state_unchanged ? 1 : 0)
                               << " counters_restored=" << (counters_restored ? 1 : 0)
                               << " pc_event_moved=" << (pc_event_moved ? 1 : 0)
-                              << " shared_preconditioner_instance=1 fresh_wrapper_per_arm=1"
+                              // R13.20 (adversarial loop, iteration 5): from the FIELDS. These
+                              // were a compile-time literal -- the same defect the tree recorded
+                              // for `published` at tile_unified_impl:12408 -- so a change to
+                              // `fresh_wrapper_per_arm` would have left the row reading 1.
+                              // Printing `shared_preconditioner_instance` also gives it its first
+                              // consumer: it is deliberately NOT a gate in `ab_attributable`
+                              // (sharing is admissible because `preconditioner_state_unchanged`
+                              // measures that the object did not move), so without this it was a
+                              // field nothing read.
+                              << " shared_preconditioner_instance="
+                              << (cmp.shared_preconditioner_instance ? 1 : 0)
+                              << " fresh_wrapper_per_arm="
+                              << (cmp.fresh_wrapper_per_arm ? 1 : 0)
                               << " b_digests_agree=" << (b_digests_agree ? 1 : 0)
                               << " x0_digests_agree=" << (x0_digests_agree ? 1 : 0)
                               << " b_norm=" << b_norm
@@ -9543,7 +9573,8 @@ public:
                               << " rho0_D=" << rho0_D
                               << " refinement_passes=" << refinement_passes_now
                               << " metric=rho_S_unweighted"
-                              << " tolerance_exit_disabled=1"
+                              << " tolerance_exit_disabled="
+                              << ((kAbArmTol <= 0.0f) ? 1 : 0)
                               << " early_stop_disabled=" << (early_stop_off ? 1 : 0)
                               << " jvp_fd_fallback_free=" << (jvp_ok ? 1 : 0)
                               << " operator_linear=" << (operator_linear ? 1 : 0)
