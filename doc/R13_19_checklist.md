@@ -176,3 +176,49 @@ evidence, neither discarding the other — which is what the comment claimed all
 **Every item in the R13.18 precision review is now closed**, except the A/B shared preconditioner
 instance, which stays HOLD as a stated limitation. `dt=600` forward, one-step tangent/adjoint, exact
 4D-Var and MPI production remain NO-GO.
+
+---
+
+## Self-review of R13.19 — two defects in this batch's own work
+
+Asked whether this batch had introduced mistakes. It had.
+
+**1. `mixed_mechanism_in_band` had ZERO producers and ZERO consumers.** Declared on `NearWorstFold`
+with the comment *"set by the caller's two-pass check"* — **a caller that does not exist.** The
+recurring defect of this campaign, introduced by the very commit that fixed an instance of it
+(P0-3). **Removed rather than wired**, because the thing it was reaching for is a *separate* open
+item: the review's point that the **mechanism** attribution is still order-dependent — `worst_*`
+updates on strict `>`, so on an exact tie the first-arriving solve's D/S/source/budget receipt wins.
+That needs per-solve receipts and a two-pass reduction, not a boolean, and is now recorded as **open**
+rather than papered over with a field nothing sets.
+
+**2. `attribution` was named for something it is not.** `stage_diagnosis_of` computes it by clearing
+`newton_termination` and re-running the classifier — but with the termination cleared, the clauses
+that *consume* it (R13.17) fall back to the **aggregate reconstruction**, the thing this campaign
+spent four rounds moving away from. So on a stage with no r₀ evidence the field is the old
+precedence, not "what the metric evidence says". And the first `attribution_measured` merely
+excluded two enum values, so a pure reconstruction naming an operator layer would have read as
+*measured*.
+
+The field is now documented as **"the classification with the recorded exit removed"**, and
+`attribution_from_metric` says whether it rests on a real r₀/Krylov reading. Measured on the live
+case: **`attribution_from_metric=1`** — the `krylov_stagnated` attribution there is genuine metric
+evidence (worst = 0.9941), not a fallback. A fixture pins the converse.
+
+### Checked and found sound (negative results)
+
+- **ρ_S at `InitialConverged`** is computed from `r_true_inner`, which is **halo-zeroed at creation**
+  (`:1189-1190`), and `bnorm_unscaled` uses the halo-zeroed `b` — so the new ρ_S is on the same
+  quantity the normal finaliser reports. The two paths do not disagree.
+- **The tolerance-source selector.** `ew_eta_used` is set only inside `apply_ew`, which returns
+  early unless `budget_active && ew_enabled && !tol_overridden` — so `> 0` genuinely means E–W
+  computed an η, and it is strictly better evidence than the old `ew_applied` (budget scaling).
+  E–W and a stage override are mutually exclusive by construction, so the selector's ordering is
+  harmless.
+
+### Now open, stated rather than closed
+
+**Mechanism attribution on an exact tie remains order-dependent.** The `all_met` predicate is
+order-independent (two maxima); the D/S/source/budget receipt attached to `worst_*` is not, because
+it updates on strict `>`. Fixing it properly is the review's per-solve-receipt + two-pass reduction,
+which is its own increment.

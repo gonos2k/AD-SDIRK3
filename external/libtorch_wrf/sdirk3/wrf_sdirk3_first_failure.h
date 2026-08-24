@@ -276,8 +276,16 @@ struct NearWorstFold {
     // `false` on two of six permutations and `true` on four. Both fields here are MAXIMA, so the
     // fold is order-independent by construction and the predicate is evaluated at the end.
     double worst_unmet = -1.0;
-    bool mixed_mechanism_in_band = false;   // set by the caller's two-pass check
 };
+
+// R13.19 SELF-REVIEW: this struct briefly carried a `mixed_mechanism_in_band` flag whose comment
+// said "set by the caller's two-pass check" -- a caller that did not exist. Zero producers, zero
+// consumers: the recurring defect of this campaign, introduced by the very commit that fixed an
+// instance of it. Removed rather than wired, because the thing it was reaching for is a SEPARATE
+// open item (the review's point that the MECHANISM attribution is still order-dependent: worst_*
+// updates on strict `>`, so on an exact tie the first-arriving solve's D/S/source/budget receipt
+// wins). That needs per-solve receipts and a two-pass reduction, not a boolean, and it is recorded
+// as open rather than papered over with a field nothing sets.
 
 inline constexpr double kNearWorstTieBand = 1.0e-3;
 
@@ -535,9 +543,19 @@ inline bool measured(double v) {
 // discarded. A reader gets "the loop ended HERE, and the metric evidence says THIS", which is what
 // the comment always claimed and the code did not do.
 struct StageDiagnosis {
-    StageFailure primary_event = StageFailure::None;   // what actually ended the stage
-    StageFailure attribution = StageFailure::None;     // what the metric evidence says
-    bool attribution_measured = false;                 // false = no evidence, not "agrees"
+    // What actually ended the stage.
+    StageFailure primary_event = StageFailure::None;
+    // R13.19 SELF-REVIEW: named precisely. This is **the classification with the recorded exit
+    // event removed** -- NOT "what the metric evidence says", which is what an earlier comment
+    // claimed. The difference matters: with the termination cleared, the clauses that consume it
+    // fall back to the AGGREGATE RECONSTRUCTION, so on a stage with no r0 evidence this field is
+    // the old precedence, not a measurement. `attribution_from_metric` below says which it is.
+    StageFailure attribution = StageFailure::None;
+    // True only when the attribution rests on an actual r0/Krylov reading rather than on the
+    // aggregate fallback. Excluding two enum values -- which is all the first version did -- would
+    // have called a pure reconstruction "measured".
+    bool attribution_from_metric = false;
+    bool attribution_measured = false;   // the weaker "not an absence-of-evidence verdict"
 };
 
 inline StageFailure first_failure_of(const StageFailureSignals& s) {
@@ -768,10 +786,18 @@ inline StageDiagnosis stage_diagnosis_of(const StageFailureSignals& s) {
     StageFailureSignals metric_only = s;
     metric_only.newton_termination = NewtonTerminationReason::NotRecorded;
     d.attribution = first_failure_of(metric_only);
-    // "Measured" means the metric path had something to say beyond the absence of evidence.
+    // The weak flag: the attribution is not itself an absence-of-evidence verdict.
     d.attribution_measured =
         (d.attribution != StageFailure::InsufficientEvidence) &&
         (d.attribution != StageFailure::StageSignalMissing);
+    // The one that matters: does the attribution rest on a real r0/Krylov reading, or on the
+    // aggregate fallback the campaign spent four rounds moving away from? Without this a pure
+    // reconstruction naming an operator layer would read as "measured".
+    d.attribution_from_metric =
+        d.attribution_measured &&
+        (measured(s.worst_krylov_rel_error_vs_r0) ||
+         measured(s.best_krylov_rel_error_vs_r0) ||
+         s.krylov_solves_measured_vs_r0 > 0);
     return d;
 }
 

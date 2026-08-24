@@ -1082,7 +1082,8 @@ int main() {
                   "zero_update_after_total_failure",
               "the primary slot is what actually ended the stage");
         check(std::string(wrf::sdirk3::stage_failure_name(d.attribution)) ==
-                  "krylov_stagnated" && d.attribution_measured,
+                  "krylov_stagnated" && d.attribution_measured &&
+                  d.attribution_from_metric,
               "...and the r0 evidence is PRESERVED beside it rather than discarded by it -- the "
               "event outranking the reconstruction no longer means throwing it away");
         check(wrf::sdirk3::first_failure_of(s) == d.primary_event,
@@ -1102,6 +1103,28 @@ int main() {
               "event -- the rule this campaign has applied to every other field");
     }
 
+    {
+        // R13.19 SELF-REVIEW: `attribution` is the classification with the EXIT REMOVED, and with
+        // the termination cleared the clauses that consume it fall back to the AGGREGATE
+        // reconstruction. So on a stage with no r0 evidence the field is the old precedence, not a
+        // measurement -- and the first version of `attribution_measured` (excluding two enum
+        // values) would have called that "measured".
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        s.worst_krylov_rel_error_vs_r0 = -1.0;   // no r0 evidence at all
+        s.best_krylov_rel_error_vs_r0 = -1.0;
+        s.krylov_solves_measured_vs_r0 = 0;
+        s.accepted_steps = 3;
+        const auto d = wrf::sdirk3::stage_diagnosis_of(s);
+        check(d.attribution_measured && !d.attribution_from_metric,
+              "an attribution reached by the aggregate fallback is NOT metric evidence, and the "
+              "record says which -- a reconstruction naming an operator layer must not read as a "
+              "measurement");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1118,7 +1141,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 93;
+    constexpr int expected_checks = 94;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

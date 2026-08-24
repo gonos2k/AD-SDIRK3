@@ -9228,6 +9228,8 @@ vertical_coefficients:
                               << wrf::sdirk3::stage_failure_layer(diag.attribution)
                               << " attribution_measured="
                               << (diag.attribution_measured ? 1 : 0)
+                              << " attribution_from_metric="
+                              << (diag.attribution_from_metric ? 1 : 0)
                               << " specific_layer="
                               << (first == wrf::sdirk3::StageFailure::KrylovForcingTermLimited
                                       ? wrf::sdirk3::krylov_forcing_layer_for(
