@@ -189,13 +189,18 @@ both metrics the solver was steered by satisfied, and the **gate's** metric not.
 
 **Measured, dt=600 stage 2 — the exit solve's three metric readings.**
 
-*Corrected by the numerics referee (claim 5).* This said "three readings of the **SAME** residual",
-and that was **false as implemented**: ρ_D and ρ_S were computed on halo-zeroed copies while ρ_E
-used `gmres_result.r_true`, the **raw** residual, and normalised by a different `b`. So part of the
-spread below was halo content and denominator choice rather than metric disagreement. The identical
-halo check was run for ρ_S at `InitialConverged` and **recorded as a negative result** — and never
-run for ρ_E. The code now halo-zeroes both sides of ρ_E; the numbers below are the pre-fix reading
-and are retained as the record of what was measured when the claim was made.
+*Correction, twice — read both halves.* The numerics referee said "three readings of the **SAME**
+residual" was false because ρ_D and ρ_S use halo-zeroed copies while ρ_E used the raw
+`gmres_result.r_true`. **I accepted that without verifying it, and it is wrong** (round 9, R9-1):
+`zero_halo_regions` early-returns on `t.dim() < 3` and these are **1-D packed state vectors**, so
+*every* one of those calls is a no-op — the tree says so in three other places. ρ_D and ρ_S are
+produced by the **same** no-op and are equally raw. **There was never a halo asymmetry**, the
+"fix" I added was inert on every run, and it has been removed.
+
+What **does** survive from that exchange is the *denominator* half: the three ratios normalise by
+different `b`'s (D-scaled, unscaled, E-weighted), which is intrinsic to their being different
+metrics. So the honest wording is **"three metric readings of the exit solve"**, not "three readings
+of the same residual" — the residual is shared, the weightings and denominators are not.
 
 ```
 exit_rho_stop = 0.9297   (block_D — the metric the loop actually stopped on)

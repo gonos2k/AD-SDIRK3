@@ -9635,6 +9635,16 @@ public:
                     ledger_r_gmres = gmres_result.r_true.detach();
                 }
                 stats_.total_krylov_iterations += gmres_result.iterations;
+                // R13.19 SELF-REVIEW (round 8 P1-G, extended): set UNCONDITIONALLY, per solve.
+                // This flag and the `last_*` receipt were written inside the r0-measured guard,
+                // so a solve that did not measure r0 inherited the PREVIOUS iteration's values --
+                // and the exit site promotes `last_*` as "the receipt of THIS solve", which is
+                // exactly the misattribution the R13.18 P0-4 fix exists to prevent. A stale
+                // `gmres_converged_on_entry` would additionally suppress this solve's
+                // total-failure flag, a production effect.
+                gmres_converged_on_entry =
+                    (gmres_result.termination_reason ==
+                         WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged);
                 // R13.14 (round 5, R5-13): the INNER budget these solves were given. The
                 // no-progress ratio is budget-dependent -- a healthy operator on 7 Arnoldi
                 // vectors reads 0.92 -- so the ratio cannot be read without it, and the
@@ -9799,26 +9809,25 @@ public:
                                         S_diag_.numel() == v.numel())
                                            ? (S_diag_ * v) : v;
                             };
-                            // R13.19 SELF-REVIEW (numerics referee, claim 5A): HALO-ZERO the
-                            // residual. `gmres_result.r_true` is the RAW residual -- the
-                            // halo-zeroed copies are separate clones inside the solver -- so
-                            // rho_E was including halo content that rho_D and rho_S exclude,
-                            // and the "three readings of the SAME residual" headline was false
-                            // as implemented. The identical check WAS run for rho_S at
-                            // InitialConverged and recorded as a negative result; it was never
-                            // run for rho_E, and it does not pass.
-                            const int halo_w = wrf::sdirk3::g_sdirk3_config.halo_width;
-                            auto r_e = gmres_result.r_true.detach().clone();
-                            zero_halo_regions(r_e, halo_w,
-                                              options_.periodic_x, options_.periodic_y);
-                            auto b_e = gmres_rhs.detach().clone();
-                            zero_halo_regions(b_e, halo_w,
-                                              options_.periodic_x, options_.periodic_y);
+                            // R13.19 SELF-REVIEW, ROUND 9 (R9-1): the halo-zeroing added here
+                            // was INERT and has been removed. `zero_halo_regions` early-returns
+                            // on `t.dim() < 3` and these are 1-D PACKED state vectors, so both
+                            // calls returned at the first `if` on every run, for every halo
+                            // width and grid. The tree states this in three other places
+                            // ("1D packed tensors: raw norm", "zero_halo_regions is no-op on 1D
+                            // tensors").
+                            //
+                            // That also falsifies the premise I accepted from the numerics
+                            // referee: rho_D and rho_S are computed on copies produced by the
+                            // SAME no-op, so they are equally raw and there was never a halo
+                            // asymmetry between the three metrics to correct.
                             const auto e64 = E_inv_r.to(torch::kFloat64);
                             const auto rE =
-                                (to_phys(r_e).to(torch::kFloat64) * e64).norm().item<double>();
+                                (to_phys(gmres_result.r_true.detach()).to(torch::kFloat64) * e64)
+                                    .norm().item<double>();
                             const auto bE =
-                                (to_phys(b_e).to(torch::kFloat64) * e64).norm().item<double>();
+                                (to_phys(gmres_rhs.detach()).to(torch::kFloat64) * e64)
+                                    .norm().item<double>();
                             if (bE > 0.0) rho_E_final_this = rE / bE;
                         }
                     }
@@ -9826,8 +9835,6 @@ public:
                     stats_.last_E_reached =
                         (rho_E_final_this >= 0.0 &&
                          rho_E_final_this < static_cast<double>(krylov_tol_adaptive));
-                    gmres_converged_on_entry =
-                        (gmres_result.termination_reason == KTR_::InitialConverged);
                     stats_.last_solve_iter = newton_iter;
                     stats_.last_rho_stop_final = gmres_result.rho_D_final;
                     stats_.last_rho_S_final = gmres_result.rho_S_final;
@@ -12191,17 +12198,27 @@ public:
                         // evidence is how a category ends up describing a solve that did not
                         // end anything.
                         // Promote THIS iteration's solve receipt (recorded above, where
-                        // gmres_result was in scope) as the exit solve's.
-                        stats_.exit_krylov_iter = stats_.last_solve_iter;
-                        stats_.exit_rho_stop_final = stats_.last_rho_stop_final;
-                        stats_.exit_rho_S_final = stats_.last_rho_S_final;
-                        stats_.exit_D_reached = stats_.last_D_reached;
-                        stats_.exit_S_reached = stats_.last_S_reached;
-                        stats_.exit_stopping_metric = stats_.last_stopping_metric;
-                        stats_.exit_tolerance_source = stats_.last_tolerance_source;
-                        stats_.exit_budget_exhausted = stats_.last_budget_exhausted;
-                        stats_.exit_rho_E_final = stats_.last_rho_E_final;
-                        stats_.exit_E_reached = stats_.last_E_reached;
+                        // gmres_result was in scope) as the exit solve's -- and only if it IS
+                        // this iteration's. `last_*` is written per solve; a Newton iteration
+                        // that took a path without a solve would otherwise donate a stale
+                        // receipt to the exit event, labelled "the receipt of THIS solve".
+                        if (stats_.last_solve_iter != newton_iter) {
+                            // No solve receipt for THIS iteration: the exit event gets none
+                            // rather than the previous iteration's, which the classifier would
+                            // otherwise subtype from.
+                            stats_.exit_krylov_iter = -1;
+                        } else {
+                            stats_.exit_krylov_iter = stats_.last_solve_iter;
+                            stats_.exit_rho_stop_final = stats_.last_rho_stop_final;
+                            stats_.exit_rho_S_final = stats_.last_rho_S_final;
+                            stats_.exit_D_reached = stats_.last_D_reached;
+                            stats_.exit_S_reached = stats_.last_S_reached;
+                            stats_.exit_stopping_metric = stats_.last_stopping_metric;
+                            stats_.exit_tolerance_source = stats_.last_tolerance_source;
+                            stats_.exit_budget_exhausted = stats_.last_budget_exhausted;
+                            stats_.exit_rho_E_final = stats_.last_rho_E_final;
+                            stats_.exit_E_reached = stats_.last_E_reached;
+                        }
                         break;
                     }
                     // v20.14r36: Configurable zero-step stagnation limit (was hardcoded 3).

@@ -328,14 +328,21 @@ violations).
 
 ## Numerics referee — claims corrected
 
-**Claim 5A — "the exit solve's three readings of the SAME residual" was false as implemented.**
-ρ_D and ρ_S were computed on halo-zeroed copies; ρ_E used `gmres_result.r_true`, the **raw**
-residual. The identical halo check had been run for ρ_S at `InitialConverged` and written up as a
-negative result — **and never run for ρ_E**. Fixed: both sides of ρ_E are halo-zeroed now.
+**Claim 5A — I accepted a reviewer's finding without verifying it, and it was WRONG.** The referee
+said ρ_E used the raw residual while ρ_D and ρ_S used halo-zeroed copies. Round 9 (R9-1) checked the
+premise: `zero_halo_regions` early-returns on `t.dim() < 3`, and these are **1-D packed state
+vectors** — so *all* of those calls are no-ops, the tree states this in three other places, and
+**ρ_D and ρ_S are equally raw. There was never a halo asymmetry.** The "fix" was inert on every
+possible run and has been removed.
 
-Re-measured: **ρ_E = 0.8618, unchanged.** The fix *could* have moved it, so this is a real negative
-result — halo content was below the printed precision on this run — and not the "unchanged after a
-fix that provably cannot change anything" trap recorded earlier in this campaign.
+And my disclaimer — *"the fix could have moved it and did not, so this is a genuine negative
+result"* — **is the exact trap this campaign documented** (`dyadic-scale-makes-receipts-vacuous`:
+treat "unchanged after the fix" as suspect when the fix provably cannot change anything). I wrote
+the rule, cited it in the same paragraph to argue this case was different, and was wrong.
+
+**New failure mode, recorded:** for the previous eight rounds I replayed reviewer claims before
+acting on them — the three-element chain, round 8's P0-B, the `ew_eta_used` guard. For claim 5A I
+did not, and shipped a correction that was worse than the overstatement it replaced.
 
 **Claim 5B — "ρ_E = 0.8618 says the residual came down 14 %" was a BASELINE ERROR, and the fifth
 appearance of the ‖b‖-vs-‖r₀‖ class this campaign has caught four times.** ρ_E normalises by **b**,
