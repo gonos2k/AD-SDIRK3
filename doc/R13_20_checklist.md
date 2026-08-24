@@ -684,3 +684,46 @@ run, where it correctly refused a stale one. Both branches.
 either run: neither took a non-finite explicit tendency. Its producer is wired and contract-tested,
 and it is still unexercised in production. Same for `KrylovObjectiveMismatch` from the exit receipt
 (this record's exit solve had `D_reached=0`, so it took the `ZeroUpdateAfterTotalFailure` arm).
+
+### A single-variable budget ladder — the event is invariant, the attribution is not
+
+The record now names the lever (`attribution=krylov_budget_exhausted`,
+`worst_krylov_budget=7`), so: sweep `WRF_SDIRK3_STAGE2_GMRES_RESTART` with the Newton budget held
+at 12 and everything else fixed. **One variable**, which the 2-point experiment in
+`R13_8_checklist.md` was not (iteration 5, claim 4).
+
+| stage-2 restart | applied budget | category | attribution | basis | ρ_D (worst) | vs_r0 | newton_iters | τ covers exit |
+|---|---|---|---|---|---|---|---|---|
+| 8 | 7 | `zero_update_after_total_failure` | `krylov_budget_exhausted` | `krylov_r0_receipt` | 0.9297 | 0.9941 | 4 | **0** |
+| 32 | 27 | `zero_update_after_total_failure` | `newton_stagnated` | `aggregate_reconstruction` | 0.5951 | 0.7547 | 3 | **0** |
+| 96 | 82 | `zero_update_after_total_failure` | `krylov_budget_exhausted` | `krylov_r0_receipt` | **1.231** | 0.9087 | 3 | **0** |
+| 192 | 163 | `zero_update_after_total_failure` | `newton_stagnated` | `aggregate_reconstruction` | 0.8414 | 0.8943 | 2 | **0** |
+
+**1. The first-failure EVENT is invariant across a 24× budget change.** Every run ends at the same
+site: `zero_update_after_total_failure`. R13.17's P0-3 retraction ("the exit reason says the failure
+never moved outward") was argued from a 2-point comparison; this is a 4-point single-variable
+ladder saying the same thing, and the step completes at none of them.
+
+**2. The ATTRIBUTION oscillates, and the new fields show it is a threshold artifact.** It flips
+`budget_exhausted` → `newton_stagnated` → `budget_exhausted` → `newton_stagnated` as `vs_r0` wanders
+**non-monotonically** across the chosen 0.90 constant (0.9941, 0.7547, 0.9087, 0.8943). The basis
+flips with it — `krylov_r0_receipt` when the four-way is entered, `aggregate_reconstruction` when it
+is not — so **the record itself says which flips are metric-decided and which are a fallback**. That
+is the distinction R13.17 had to establish by hand; it is now on every row.
+
+**3. `worst_krylov_rho_D` is NON-MONOTONE in the budget** — 0.9297 → 0.5951 → **1.231** → 0.8414.
+At the 96 setting the worst solve's residual is **larger than ‖b‖**. More budget does not
+monotonically improve the worst solve, which is a sharper statement than the "23× improvement" this
+document corrected in iteration 5.
+
+**4. Raising the Krylov budget shortens the Newton trajectory** — 4 → 3 → 3 → 2 iterations. So the
+arms are **not the same experiment**, measured across four points rather than asserted from two.
+`worst_krylov_*` is a maximum over *different sets of different linear systems* at every rung.
+
+**5. `taylor_covers_last_newton_iter = 0` at every budget.** The τ evidence never reaches the
+failing iteration, at any rung of the ladder. The campaign's τ-based reading — "the linearization is
+faithful, the inner solve binds" — rests on accepted steps only, everywhere on this sweep.
+
+**What this does NOT establish.** It does not show the budget is irrelevant: ρ_D does improve at
+32 and 192 relative to 8, and no rung was run to convergence. It does not identify a mechanism for
+the non-monotonicity. And every rung is still n=1, one case, one stage, one timestep.
