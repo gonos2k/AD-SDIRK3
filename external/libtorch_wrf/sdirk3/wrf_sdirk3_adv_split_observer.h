@@ -37,6 +37,10 @@ inline double adv_cos64(const torch::Tensor& part, const torch::Tensor& total) {
     if (part.numel() == 0 || part.numel() != total.numel()) return -2.0;
     const auto a = part.detach().to(torch::kFloat64).reshape({-1});
     const auto b = total.detach().to(torch::kFloat64).reshape({-1});
+    // R13.20 (adversarial loop, iteration 4): the operands ARE detached above, so these three
+    // extractions were already graph-safe -- but the repo's rule is unconditional and a lint that
+    // has to reason about which operands were detached four lines up is a lint nobody can trust.
+    torch::NoGradGuard ng_obs;
     const double na = a.norm().item<double>();
     const double nb = b.norm().item<double>();
     if (!(na > 0.0) || !(nb > 0.0)) return -2.0;

@@ -203,6 +203,10 @@ private:
         }
 
         // Combined min/max in single pass using aminmax() - runs on original device
+        // R13.20 (adversarial loop, iteration 4): one guard over all six extractions below,
+        // per the repo's unconditional .item() rule. Statistics of a tensor are never a graph
+        // contribution, and this is the shape that says so.
+        torch::NoGradGuard ng_stats;
         auto minmax_result = torch::aminmax(flat);
         result.min_value = std::get<0>(minmax_result).to(torch::kCPU).item<float>();
         result.max_value = std::get<1>(minmax_result).to(torch::kCPU).item<float>();

@@ -15038,7 +15038,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 if (!t.defined() || t.numel() == 0) return;
                 const float eps = getAutocastAwareEps(t);
                 auto valid = torch::isfinite(t) & (t.abs() >= eps);
-                auto bad_count = (~valid).sum().item<int64_t>();
+                // R13.20 (adversarial loop, iteration 4): guarded. See the audit note above
+                // computeUnifiedRHS -- these 18 sites are the ones NOT behind a debug gate.
+                auto bad_count = wrf::sdirk3::guarded_item<int64_t>((~valid).sum());
                 if (bad_count > 0) {
                     t = torch::where(valid, t, torch::ones_like(t));
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
@@ -20406,7 +20408,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             try {
                                 auto tg = t._fw_grad(/*level=*/0);
                                 if (tg.defined() && tg.numel() > 0) {
-                                    float tg_norm = tg.norm().item<float>();
+                                    float tg_norm = wrf::sdirk3::guarded_item<float>(tg.norm());
                                     std::cerr << "[FWAD_CHECK] " << name << ": HAS tangent, ||tangent||=" << tg_norm << std::endl;
                                 } else {
                                     std::cerr << "[FWAD_CHECK] " << name << ": NO tangent" << std::endl;
@@ -20538,7 +20540,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         auto rw_k_has_nan_cpu = rw_tend_k_cpu.isnan().any();
                         auto rw_tend_k_min_cpu = rw_tend_k_cpu.min();
                         auto rw_tend_k_max_cpu = rw_tend_k_cpu.max();
-                        bool rw_k_has_nan = rw_k_has_nan_cpu.item<bool>();
+                        bool rw_k_has_nan = wrf::sdirk3::guarded_item<bool>(rw_k_has_nan_cpu);
                         if (!rw_k_has_nan) {
                             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                                 std::cerr << "[SDIRK3] W-PGF rw_tend_k: " << rw_tend_k_min_cpu.item<float>()
@@ -20615,15 +20617,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         }
 
                         // Check for NaN in inputs
-                        if (p_diff_has_nan_cpu.item<bool>()) {
+                        if (wrf::sdirk3::guarded_item<bool>(p_diff_has_nan_cpu)) {
                             std::cerr << "[SDIRK3] W-PGF WARNING: p_diff has NaN at k=" << k << std::endl;
                         }
-                        if (cq1_k_has_nan_cpu.item<bool>()) {
+                        if (wrf::sdirk3::guarded_item<bool>(cq1_k_has_nan_cpu)) {
                             std::cerr << "[SDIRK3] W-PGF WARNING: cq1_k has NaN at k=" << k << std::endl;
                         }
                         // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
                         auto muf_k_has_nan_cpu = muf_k_cpu.isnan().any();
-                        if (muf_k_has_nan_cpu.item<bool>()) {
+                        if (wrf::sdirk3::guarded_item<bool>(muf_k_has_nan_cpu)) {
                             std::cerr << "[SDIRK3] W-PGF WARNING: muf_k has NaN at k=" << k << std::endl;
                         }
                     }
@@ -20802,8 +20804,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
                         auto wpgf_has_nan_cpu = wpgf_cpu.isnan().any();
                         auto wpgf_has_inf_cpu = wpgf_cpu.isinf().any();
-                        auto has_nan = wpgf_has_nan_cpu.item<bool>();
-                        auto has_inf = wpgf_has_inf_cpu.item<bool>();
+                        auto has_nan = wrf::sdirk3::guarded_item<bool>(wpgf_has_nan_cpu);
+                        auto has_inf = wrf::sdirk3::guarded_item<bool>(wpgf_has_inf_cpu);
 
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
@@ -20889,7 +20891,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         auto rw_tend_k_after_has_nan_cpu = rw_tend_k_after_cpu.isnan().any();
                         auto rw_tend_k_after_min_cpu = rw_tend_k_after_cpu.min();
                         auto rw_tend_k_after_max_cpu = rw_tend_k_after_cpu.max();
-                        bool rw_tend_k_after_has_nan = rw_tend_k_after_has_nan_cpu.item<bool>();
+                        bool rw_tend_k_after_has_nan = wrf::sdirk3::guarded_item<bool>(rw_tend_k_after_has_nan_cpu);
                         if (!rw_tend_k_after_has_nan) {
                             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                                 std::cerr << "[SDIRK3] W-PGF rw_tend_k_after[k=" << k << "]: " << rw_tend_k_after_min_cpu.item<float>()
@@ -20943,7 +20945,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             try {
                                 auto tg = t._fw_grad(0);
                                 if (tg.defined() && tg.numel() > 0) {
-                                    float tg_norm = tg.norm().item<float>();
+                                    float tg_norm = wrf::sdirk3::guarded_item<float>(tg.norm());
                                     std::cerr << "[FWAD_CHECK] " << name << ": HAS tangent, ||tangent||=" << tg_norm << std::endl;
                                 } else {
                                     std::cerr << "[FWAD_CHECK] " << name << ": NO tangent" << std::endl;
@@ -24263,7 +24265,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // PERF FIX 2025-12-28: Pre-compute NaN checks with _cpu suffix
     auto ru_nan_cpu = torch::any(torch::isnan(ru_tend_val_cpu));
-    if (ru_nan_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(ru_nan_cpu)) {
         has_nan = true;
     }
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24276,7 +24278,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // PERF FIX 2025-12-28: Pre-compute NaN checks with _cpu suffix
     auto rv_nan_cpu = torch::any(torch::isnan(rv_tend_val_cpu));
-    if (rv_nan_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(rv_nan_cpu)) {
         has_nan = true;
     }
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24289,11 +24291,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // PERF FIX 2025-12-28: Pre-compute NaN/Inf checks with _cpu suffix
     auto rw_nan_cpu = torch::any(torch::isnan(rw_tend_val_cpu));
-    if (rw_nan_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(rw_nan_cpu)) {
         has_nan = true;
     }
     auto rw_inf_cpu = torch::any(torch::isinf(rw_tend_val_cpu));
-    if (rw_inf_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(rw_inf_cpu)) {
         has_inf = true;
     }
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24449,7 +24451,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 try {
                     auto tg = t._fw_grad(0);
                     if (tg.defined() && tg.numel() > 0) {
-                        float tg_norm = tg.norm().item<float>();
+                        float tg_norm = wrf::sdirk3::guarded_item<float>(tg.norm());
                         std::cerr << "[FWAD_CHECK] " << name << ": HAS tangent, ||tangent||=" << tg_norm << std::endl;
                     } else {
                         std::cerr << "[FWAD_CHECK] " << name << ": NO tangent" << std::endl;
@@ -28823,19 +28825,19 @@ void TileSDIRK3UnifiedSolver::checkTensorHealth(const torch::Tensor& tensor,
 
     // Check for NaN values
     auto nan_any_cpu = torch::isnan(tensor_cpu).any();
-    if (nan_any_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(nan_any_cpu)) {
         throw std::runtime_error("NaN in " + name);
     }
 
     // Check for Inf values
     auto inf_any_cpu = torch::isinf(tensor_cpu).any();
-    if (inf_any_cpu.item<bool>()) {
+    if (wrf::sdirk3::guarded_item<bool>(inf_any_cpu)) {
         throw std::runtime_error("Inf in " + name);
     }
 
     // Check magnitude
     auto max_abs_cpu = torch::max(torch::abs(tensor_cpu));
-    float max_abs = max_abs_cpu.item<float>();
+    float max_abs = wrf::sdirk3::guarded_item<float>(max_abs_cpu);
     if (max_abs > 1e10f) {
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
             std::cerr << "[SDIRK3] Large magnitude warning in " << name

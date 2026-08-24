@@ -244,7 +244,7 @@ jobs:
           /tmp/actionlint -version
           /tmp/actionlint
 
-      - name: from_blob ratchet (actual == head baseline, never above base branch)
+      - name: lint ratchets -- from_blob and .item()-outside-NoGradGuard (actual == head baseline, never above base branch)
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bash .github/ci/check_ratchets.sh "$BASE_SHA"

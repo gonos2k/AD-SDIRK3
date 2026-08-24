@@ -1279,7 +1279,9 @@ torch::Tensor checkBoundaryCFLTensor(
                 // FIX 2025-12-30 Batch28 Issue 2: Single D2H sync + C++ validity check
                 // Previous: is_valid.to(kCPU).item<bool>() + dz_min_0d.to(kCPU).item<float>() = 2 syncs
                 // Now: Single sync, check validity in C++ with std::isfinite
-                float dz_min_value = dz_min_0d.to(torch::kCPU).item<float>();
+                // R13.20 (adversarial loop, iteration 4): guarded; one sync, unchanged.
+                float dz_min_value;
+                { torch::NoGradGuard ng_dz; dz_min_value = dz_min_0d.to(torch::kCPU).item<float>(); }
                 if (std::isfinite(dz_min_value) && dz_min_value > 1e-10f) {
                     // Valid result - use GPU 0D tensor directly
                     dz_min = dz_min_0d.to(w.options());
@@ -1294,7 +1296,9 @@ torch::Tensor checkBoundaryCFLTensor(
                 // CPU path or small tensor: normalize on CPU
                 auto dz_cpu = metric_utils::normalize_positive(
                     grid.dz.to(torch::kCPU, torch::kFloat32), eps);
-                float dz_min_value = dz_cpu.min().item<float>();  // min() + .item() on CPU
+                // R13.20 (adversarial loop, iteration 4): guarded; min() + .item() on CPU.
+                float dz_min_value;
+                { torch::NoGradGuard ng_dzc; dz_min_value = dz_cpu.min().item<float>(); }
 
                 // FIX 2025-12-27: Fallback if NaN/Inf or too small
                 if (!std::isfinite(dz_min_value) || dz_min_value < 1e-10f) {

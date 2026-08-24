@@ -15,7 +15,9 @@ inline bool is_strong_acoustic_mode(const torch::Tensor& cs2_m_ref,
                                     double dx_min,
                                     double dz_min,
                                     double threshold = 0.8) {
-    double cs2_max = cs2_m_ref.max().to(torch::kCPU).item<double>();
+    // R13.20 (adversarial loop, iteration 4): guarded per the repo's unconditional .item() rule.
+    double cs2_max;
+    { torch::NoGradGuard ng_cs2; cs2_max = cs2_m_ref.max().to(torch::kCPU).item<double>(); }
     double cs_max = std::sqrt(std::max(0.0, cs2_max));
     double denom = std::max(1e-12, std::min(dx_min, dz_min));
     double chi = cs_max * dt / denom;

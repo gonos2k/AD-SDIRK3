@@ -333,3 +333,37 @@ unreachable branch, has to be an explicit edit.
 every reader and writer in the tree found exactly one with **neither**: `condition_number`. Its
 option `compute_condition_number` (default false) has no consumer either. It predates this
 campaign and the struct crosses the public API, so it is annotated in place rather than deleted.
+
+### Iteration 4 — the `.item()` rule is now counted instead of reviewed
+
+The rule CLAUDE.md states unconditionally, and the one the user has flagged as a repeated
+regression, was being held by review. Review cannot hold it, for two measured reasons:
+`NoGradGuard` is **RAII**, so one declared inside a loop stops protecting at the end of each
+iteration while remaining visible a few dozen lines above (that is exactly how the numrange block
+scan came to call `.item<double>()` twice unguarded, in a probe a review had just checked for this
+class); and the volume is beyond eyeballing.
+
+**Measured, with comments and string literals stripped and `.detach()`ed operands excluded: 129
+sites**, 118 of them in one 29k-line file. A naïve scan reports 225 — most of it prose *about*
+`.item()` inside doc comments — so the number is only meaningful with the stripping.
+
+Classified rather than dumped: **100 sit behind a `debug_level` / probe gate; 18 do not** and can
+run in a production step — NaN/Inf health checks and norm computations on the RHS path, i.e. the
+hot path, which is where the rule matters most. All 18 are now `guarded_item<T>()`. The remaining
+11 outside that file are guarded in place with an explicit `NoGradGuard` rather than a new include,
+to avoid pulling `wrf_sdirk3_autograd_utils.h` into five more headers.
+
+**And it is now a ratchet, not a one-time cleanup.** `.github/ci/lint_item_guard.py` does the
+brace-depth scan; `check_ratchets.sh` gains a second baseline
+(`tests/lint_item_guard_baseline.txt`, at **100**) with the same three conditions as `from_blob`:
+actual must equal the head baseline, the head baseline may never exceed the base branch's, and the
+file must be one integer line. Fixing sites *requires* lowering the baseline; adding one fails.
+
+**Negative-tested, because a receipt that cannot fail is not a receipt.** Appending one unguarded
+`.item()` to a header takes it to `actual=101 head_baseline=100 → FAIL`; removing it restores
+`OK`. Extending the script rather than the workflow keeps the YAML untouched — this repo has
+rotted a CI-side counter four times — and the one YAML edit (the step's name, now naming both
+ratchets) passes `actionlint` locally.
+
+**What it does not prove**, stated: a guarded `.item()` can still be a GPU sync on a hot path, and
+a detached operand says nothing about whether the sync belongs there. This bounds one failure mode.
