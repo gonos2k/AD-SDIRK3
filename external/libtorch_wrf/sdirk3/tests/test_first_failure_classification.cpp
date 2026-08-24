@@ -1102,9 +1102,15 @@ int main() {
               "reading the stage-worst receipt here would report an objective mismatch from an "
               "iteration that ended nothing");
         s.exit_D_reached = true;   // now the EXIT solve is the mismatch
-        check(name_of(s) == "krylov_objective_mismatch",
+        // R13.21 (external review P0-2): the event does not change; the ATTRIBUTION does. This
+        // check used to read the subtype out of `name_of`, i.e. out of the event.
+        check(name_of(s) == "zero_update_after_total_failure",
+              "the event is still the zero-update break -- a subtype earned by the exit solve is "
+              "a statement about WHY, not about what ended the stage");
+        check(wrf::sdirk3::stage_diagnosis_of(s).exit_attribution ==
+                  StageFailure::KrylovObjectiveMismatch,
               "and when the exit solve itself met D and not S, the subtype is earned by the "
-              "solve the event belongs to");
+              "solve the event belongs to -- carried as the exit attribution");
         s.exit_krylov_iter = -1;   // no exit receipt at all
         check(name_of(s) == "zero_update_after_total_failure",
               "with no exit receipt the event may not borrow the stage-worst one");
@@ -1127,10 +1133,20 @@ int main() {
         // reported the gate refusing while the record said it passed. The gate must actually
         // have refused, and the category is named for the ENTRY metric it measures, not the gate.
         s.gate_metric_ok = false;
-        check(name_of(s) == "krylov_entry_metric_mismatch",
-              "both metrics the solver was steered by are satisfied and the GATE's metric is not "
-              "-- not the operator, not the forcing term, not the budget, but the gate's norm "
-              "disagreeing with the solver's");
+        // R13.21 (external review P0-2): the EVENT stays the event. This fixture used to pin the
+        // subtype as `name_of(s)`, i.e. as the thing that ended the stage -- which is how a field
+        // documented "what actually ended the stage" came to report a cause. The subtype is now
+        // `exit_attribution`, checked below.
+        check(name_of(s) == "zero_update_after_total_failure",
+              "the loop ended at the zero-update break, and that is what the EVENT says -- the "
+              "metric subtype is a separate answer to a separate question");
+        {
+            const auto d_em = wrf::sdirk3::stage_diagnosis_of(s);
+            check(d_em.exit_attribution == StageFailure::KrylovEntryMetricMismatch,
+                  "both metrics the solver was steered by are satisfied and the GATE's metric is "
+                  "not -- not the operator, not the forcing term, not the budget, but the gate's "
+                  "norm disagreeing with the solver's, recorded as the exit attribution");
+        }
         check(std::string(stage_failure_layer(StageFailure::KrylovEntryMetricMismatch)) ==
                   "krylov_entry_E_metric_vs_solver_metrics",
               "and the layer names that disagreement rather than a component");
@@ -1319,10 +1335,14 @@ int main() {
         e.exit_krylov_iter = 3;
         e.exit_D_reached = true; e.exit_S_reached = false;
         const auto de = wrf::sdirk3::stage_diagnosis_of(e);
-        check(de.primary_event == StageFailure::KrylovObjectiveMismatch &&
+        // R13.21 (external review P0-2): event and cause, separately.
+        check(de.primary_event == StageFailure::ZeroUpdateAfterTotalFailure &&
               de.decided_by_exit_receipt,
-              "and a category reached through the exit receipt is flagged as such, so the "
+              "the event is the zero-update break and the exit receipt is what decided it, so the "
               "emitted layer and the verdict describe the same solve");
+        check(de.exit_attribution == StageFailure::KrylovObjectiveMismatch,
+              "...and the subtype the exit solve earned -- D met, S not -- is carried BESIDE the "
+              "event rather than replacing it, which is what `primary_event` used to report");
     }
 
     {
@@ -1459,7 +1479,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 124;
+    constexpr int expected_checks = 127;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

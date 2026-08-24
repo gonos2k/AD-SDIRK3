@@ -9240,14 +9240,27 @@ vertical_coefficients:
                                       sig.worst_krylov_tolerance_source)
                                 : "inner_tolerance_source_unrecorded";
                     } else if (first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
-                        // Two arms, both live: this category is returned by the exit-receipt
-                        // block and by the r0 four-way, and by nothing else. A third
-                        // "neither" arm would be exactly the unreachable alternative this
-                        // change removes one line above.
+                        // R13.21 (external review P0-2): ONE arm now. This category can only be
+                        // returned by the r0 four-way -- the exit-receipt block returns the EVENT
+                        // and carries its subtype as `exit_attribution`, whose layer is emitted
+                        // separately below. Keeping the exit arm here would be an alternative no
+                        // input can select, the defect this emitter removed one field over.
                         specific_layer =
-                            layer_from_exit
-                                ? wrf::sdirk3::krylov_stopping_layer_for(sig.exit_stopping_metric)
-                                : "stop_metric_unrecorded_for_worst_solve";
+                            layer_from_worst ? "stop_metric_unrecorded_for_worst_solve"
+                                             : "stop_metric_unrecorded";
+                    }
+                    // R13.21 (external review P0-2): the exit solve's metric attribution and the
+                    // layer THAT receipt supports, beside the event rather than replacing it.
+                    // Before this, a zero-update exit whose receipt said "objective mismatch"
+                    // reported that AS the event; now the row carries both, and the layer is
+                    // derived from `exit_stopping_metric`, which is the receipt it belongs to.
+                    const char* exit_attr_layer = "n/a";
+                    if (diag.exit_attribution == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
+                        exit_attr_layer =
+                            wrf::sdirk3::krylov_stopping_layer_for(sig.exit_stopping_metric);
+                    } else if (diag.exit_attribution ==
+                               wrf::sdirk3::StageFailure::KrylovEntryMetricMismatch) {
+                        exit_attr_layer = wrf::sdirk3::stage_failure_layer(diag.exit_attribution);
                     }
                     const char* layer_receipt =
                         (std::strcmp(specific_layer, "n/a") == 0)
@@ -9282,6 +9295,10 @@ vertical_coefficients:
                               // another. Both are computed above from the reported basis.
                               << " specific_layer=" << specific_layer
                               << " layer_receipt=" << layer_receipt
+                              // R13.21 (P0-2): event and cause as separate fields.
+                              << " exit_attribution="
+                              << wrf::sdirk3::stage_failure_name(diag.exit_attribution)
+                              << " exit_attribution_layer=" << exit_attr_layer
                               // R13.20: and the basis itself, so a reader can see WHICH body of
                               // evidence answered without inferring it from the category.
                               // R13.20 (numerics referee, claim 1): does the Taylor-defect

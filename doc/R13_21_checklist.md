@@ -63,14 +63,35 @@ it and renaming the wire format buys nothing.
 
 ### Phase 2 — P0-2: event and cause fully separated
 
-- [ ] **2.1** The zero-update branch returns `ZeroUpdateAfterTotalFailure` as `primary_event`,
+- [x] **2.1** The zero-update branch returns `ZeroUpdateAfterTotalFailure` as `primary_event`,
       always.
-- [ ] **2.2** Add `exit_attribution` to `StageDiagnosis`, carrying the metric subtype the branch
+- [x] **2.2** Add `exit_attribution` to `StageDiagnosis`, carrying the metric subtype the branch
       used to return.
-- [ ] **2.3** Emitter prints the event and the exit attribution as separate fields.
-- [ ] **2.4** Update the fixtures that currently *pin* the substitution — they encode the defect.
-- [ ] **2.5** Fixtures: `ZeroUpdate_RemainsPrimaryEvent`,
+- [x] **2.3** Emitter prints the event and the exit attribution as separate fields.
+- [x] **2.4** Update the fixtures that currently *pin* the substitution — they encode the defect.
+- [x] **2.5** Fixtures: `ZeroUpdate_RemainsPrimaryEvent`,
       `ExitObjectiveMismatch_IsSeparateAttribution`.
+
+**Phase 2 result.** `first_failure_of`'s zero-update branch returns the EVENT unconditionally; the
+subtype it used to return is `StageDiagnosis::exit_attribution`, computed by the pure
+`krylov_exit_attribution_of`. **Three fixtures were pinning the substitution** — they asserted the
+subtype through `name_of(s)`, i.e. as the thing that ended the stage — and are rewritten to check
+the event and the attribution separately. The emitter prints `exit_attribution` and
+`exit_attribution_layer`, the latter derived from `exit_stopping_metric`, the receipt it belongs to.
+The `KrylovObjectiveMismatch` arm of `specific_layer` loses its exit alternative, which after this
+change no input can select.
+
+**Verified on the live dt=600 record**, not just in fixtures:
+
+```
+category=zero_update_after_total_failure   event_basis=exit_receipt
+attribution=krylov_budget_exhausted        attribution_basis=krylov_r0_receipt
+exit_attribution=none                      exit_attribution_layer=n/a
+```
+
+Three distinct answers on one row. `exit_attribution=none` is the honest reading here — this exit
+solve had `exit_D_reached=0`, so its receipt cannot support a subtype, and the record says so
+rather than inventing one.
 
 ### Phase 3 — P0-3: an action-stable reducer
 

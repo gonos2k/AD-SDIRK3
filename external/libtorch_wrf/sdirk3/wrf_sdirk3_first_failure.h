@@ -661,6 +661,36 @@ inline bool entry_requires_nonlinear_decrease(const KrylovEntryVerdict& v) {
     return v.objective_mismatch;
 }
 
+// R13.21 (external review P0-2): the exit solve's METRIC ATTRIBUTION, as a separate answer to a
+// separate question. `first_failure_of` reports the EVENT that ended the stage; this reports what
+// the receipt of the solve that ended it says about WHY. Returns `None` when the exit receipt
+// cannot support a subtype -- absence of evidence, reported as such.
+inline StageFailure krylov_exit_attribution_of(const StageFailureSignals& s) {
+    if (s.newton_termination != NewtonTerminationReason::ZeroUpdateAfterTotalFailure) {
+        return StageFailure::None;
+    }
+    if (s.exit_krylov_iter < 0) return StageFailure::None;
+    // Minimised what it was asked to, and the result is still useless to the Newton merit.
+    if (s.exit_D_reached && !s.exit_S_reached) {
+        return StageFailure::KrylovObjectiveMismatch;
+    }
+    // Both solver metrics met and the ENTRY-weighted linear one not -- a real seam between the
+    // metrics the solve was steered by. NOT the stage gate, so it may not be claimed while the
+    // gate itself is recorded as having passed; `gate_metric_ok` is read so the two cannot
+    // disagree.
+    //
+    // R13.20 (round 9, R9-10): OPT-IN ONLY, PROVEN rather than suspected. Reaching the
+    // zero-update exit needs `gmres_total_failure`. Under the DEFAULT rule that is
+    // `raw > 1 || rel >= 0.999` on rho_S, so it requires rho_S >= 0.999; and `exit_S_reached` is
+    // `rho_S < tol` with `tol` clamped into [ew_eta_min, ew_eta_max] = [0.02, 0.9]. rho_S < 0.9
+    // and rho_S >= 0.999 cannot both hold. Reachable only under the opt-in vs-r0 rule.
+    if (s.exit_D_reached && s.exit_S_reached &&
+        measured(s.exit_rho_E_final) && !s.exit_E_reached && !s.gate_metric_ok) {
+        return StageFailure::KrylovEntryMetricMismatch;
+    }
+    return StageFailure::None;
+}
+
 // R13.20 (round 9, R9-2): WHICH BODY OF EVIDENCE the returned category came from.
 //
 // `attribution_from_metric` used to be inferred AFTER the fact, from `measured(worst_..._vs_r0)
@@ -738,6 +768,9 @@ struct StageDiagnosis {
     // that clause rather than inferred from the signals afterwards. `attribution_from_metric` is
     // now a reading of `attribution_basis`, not an independent guess at it.
     StageDecisionBasis primary_event_basis = StageDecisionBasis::NotRecorded;
+    // R13.21 (external review P0-2): what the EXIT solve's receipt says about why the loop ended,
+    // kept beside the event instead of replacing it. `None` = the receipt cannot support a subtype.
+    StageFailure exit_attribution = StageFailure::None;
     StageDecisionBasis attribution_basis   = StageDecisionBasis::NotRecorded;
     // R13.19 SELF-REVIEW (round 8, P0-C): WHICH solve's receipt decided the category. The
     // emitter derived `specific_layer` from the EXIT solve's source/metric while the four-way
@@ -870,32 +903,14 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
         if (s.newton_termination == NewtonTerminationReason::ZeroUpdateAfterTotalFailure) {
             // Every path out of this block returns, and all three read `exit_*`.
             if (basis) *basis = StageDecisionBasis::ExitReceipt;
-            // R13.18 (deep review P0-4): subtype from the EXIT solve when its receipt is present.
-            // A terminal event describes the solve that ended the loop; the stage-worst receipt
-            // describes a possibly different iteration and is telemetry, not attribution.
-            if (s.exit_krylov_iter >= 0 && s.exit_D_reached && !s.exit_S_reached) {
-                return StageFailure::KrylovObjectiveMismatch;
-            }
-            // R13.19 (precision review P0-2): both solver metrics met and the ENTRY-weighted
-            // linear one not. This is a real seam between the metrics the solve was steered by,
-            // and it is NOT the stage gate -- so it may not be claimed while the gate itself is
-            // recorded as having passed, and it must not be promoted over the event that actually
-            // ended the loop. `gate_metric_ok` is read here so the two cannot disagree.
-            //
-            // R13.20 (round 9, R9-10): OPT-IN ONLY, and that is now PROVEN rather than suspected.
-            // Reaching this block needs `gmres_total_failure`. Under the DEFAULT rule
-            // (`krylov_failure_vs_r0_` off) that is `raw > 1 || rel >= 0.999` on rho_S, so it
-            // requires rho_S >= 0.999; and `exit_S_reached` is `rho_S < tol` with `tol` clamped
-            // into [ew_eta_min, ew_eta_max] = [0.02, 0.9]. rho_S < 0.9 and rho_S >= 0.999 cannot
-            // both hold, so this clause -- and its predecessor `StageGateMetricMismatch` -- has
-            // never fired on any measurement in this campaign and cannot under a stock config.
-            // It is reachable only under the opt-in vs-r0 rule, where `raw >= 0.99 * r0_ref` can
-            // fire at small rho_S when r0_ref is also small. Kept because that rule is a shipped
-            // option; recorded here so the next reader does not mistake it for a live classifier.
-            if (s.exit_krylov_iter >= 0 && s.exit_D_reached && s.exit_S_reached &&
-                measured(s.exit_rho_E_final) && !s.exit_E_reached && !s.gate_metric_ok) {
-                return StageFailure::KrylovEntryMetricMismatch;
-            }
+            // R13.21 (external review P0-2): THE EVENT, ALWAYS. This branch used to return the
+            // exit solve's metric SUBTYPE here -- `KrylovObjectiveMismatch` or
+            // `KrylovEntryMetricMismatch` -- so a field documented as "what actually ended the
+            // stage" was overwritten by a CAUSE, and the fixtures pinned that as the contract.
+            // R13.19 added `attribution` and R13.20 added `event_basis` on the way to separating
+            // the two questions; this closes it. The subtype is preserved as
+            // `StageDiagnosis::exit_attribution`, computed by `krylov_exit_attribution_of` below,
+            // so nothing is lost -- it simply stops impersonating the event.
             return StageFailure::ZeroUpdateAfterTotalFailure;
         }
         // ...and an exception in the linear solve is not the outer iteration's failure either.
@@ -1084,6 +1099,8 @@ inline StageDiagnosis stage_diagnosis_of(const StageFailureSignals& s) {
     // `exit_tolerance_source` arm selectable by no input.
     d.decided_by_exit_receipt =
         (d.primary_event_basis == StageDecisionBasis::ExitReceipt);
+    // R13.21 (P0-2): the subtype the zero-update branch used to return as the event.
+    d.exit_attribution = krylov_exit_attribution_of(s);
     return d;
 }
 
