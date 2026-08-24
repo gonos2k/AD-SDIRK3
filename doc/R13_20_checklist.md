@@ -422,14 +422,42 @@ rots, sitting inside the gate that *is* the coverage. Same defect the README cte
 exists to stop.
 
 Fixed the way this repo already fixed the core-manifest count — **derive it, do not restate it**.
-`--self-test` now prints `CENSUS (derived, not stated): 95 gate + 3 skip; 56 inside … 39 after …`
-computed from its own source, together with what the split does and does not prove, and the YAML
-points at that output instead of carrying numbers. The census uses `note`, not `gate`, so the
-harness's own exact-count ratchet (44/44 without the contract binary) is untouched; `bash -n` and
-`actionlint` both pass.
+`--self-test` prints the census computed from its own source, together with what the split does and
+does not prove, and the YAML points at that output instead of carrying numbers. The census uses
+`note`, not `gate`, so the harness's own exact-count ratchet is untouched; `bash -n` and
+`actionlint` both pass. *(Iteration 7 then caught this replacement overstating — see below.)*
 
 **One simplification.** The emit site called `first_failure_of(sig)` for `first` *and*
 `stage_diagnosis_of(sig)` — which calls it again — for `primary_event`. Equal today because the
 function is pure, but the emitter now pairs `first` with `diag.primary_event_basis`, and a layer
 derived from one call annotating a category from another is the shape round 8's P0-C removed one
 field over. One call now.
+
+### Iteration 7 — the replacement census overstated, one iteration old
+
+Attacking iteration 6's own fix first. Its census said **`56 inside --self-test → exercised …
+in hosted CI`**. Measured: **12 of those 56 sit behind `if [ -x "$CBIN" ]`**, and the torch-free
+hosted job does not build that binary — the harness's own `SELF_TEST_EXPECTED_NO_LIVE=44` says so
+outright. So the line **overstated hosted-CI coverage by 12 gates**: a coverage claim larger than
+what runs, which is the same defect as the stale census it replaced, one layer down and one
+iteration old. Seventh consecutive round in which the fix contains the class it was written to
+close, and this one is mine.
+
+The census now leads with what it can never overstate — **`EXECUTED THIS RUN: $checks`**, the
+harness's own counter — beside `contract binary: present / ABSENT`, with the live-only count
+derived from `WITH_LIVE − NO_LIVE` rather than typed. Verified both ways locally: **44 / ABSENT**
+torch-free, **56 / present** with the binary.
+
+**And the same class again, in the step that consumes it.** The LIVE job grepped for
+`SELF-TEST: ALL PASS (56/56)` — putting the expected count in **two** places, the YAML and
+`SELF_TEST_EXPECTED_WITH_LIVE`, so adding a live gate needs two edits and the YAML lags. That is
+precisely what the *neighbouring* step's comment warns about (*"No count ratchet in this YAML on
+purpose … a YAML-side count has rotted here four times"*). Its own explanatory comment had already
+rotted: it justified the number as *"40-vs-28 is itself the proof"*, a pair from an older ratchet.
+The step now greps `contract binary: present` — a derived signal that proves what the step is
+actually for, the live path being taken — plus `ALL PASS`, leaving the count owned by the script
+alone. **Negative-tested:** it passes with the binary and fails without it.
+
+Checked and clean: the sibling `run_decomposition_matrix.sh` makes no numeric coverage claim
+(`SELF-TEST: assertion logic + manifest sane ($rows cases)` is derived), and no other workflow
+comment carries a live count — the remaining numbers are historical statements about past fixes.

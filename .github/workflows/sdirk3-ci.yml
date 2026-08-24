@@ -206,9 +206,15 @@ jobs:
       # HAND-WRITTEN and every number in it had drifted -- it claimed "42 gate
       # calls + 2 skip", "16 covered, lines 205-235", "26 not covered, lines
       # 263-434" and "--self-test exits at 239", against a measured 95 gates, 3
-      # skips, a self-test block spanning 187..474, 56 exercised and 39
-      # syntax-only. A coverage claim that drifts, inside the gate that IS the
-      # coverage, is the defect the README ctest-count ratchet exists to stop.
+      # skips and a self-test block spanning 187..474. A coverage claim that
+      # drifts, inside the gate that IS the coverage, is the defect the README
+      # ctest-count ratchet exists to stop.
+      #
+      # Iteration 7 then caught the REPLACEMENT overstating: counting the gates
+      # present in the block says 56, but 12 of them sit behind `-x "$CBIN"` and
+      # this torch-free job does not build that binary, so 44 actually run. The
+      # census headline is `EXECUTED THIS RUN` now -- what ran, not what is
+      # present -- with the live-only count derived from the ratchet constants.
       #
       # So it is DERIVED now, not restated: --self-test prints the census from
       # its own source (`CENSUS (derived, not stated): ...`) together with what
@@ -392,13 +398,20 @@ jobs:
           STAGE_OPERAND_CONTRACT_BIN="$PWD/$BIN" \
             bash -e external/libtorch_wrf/sdirk3/tests/stage_operand_runtime_acceptance.sh --self-test \
             | tee /tmp/live_selftest.log
-          # Key on the exact-count ratchet, not a gate title. A title is prose and
-          # silently drifts (this grep broke the moment the gate was renamed); the
-          # count is a contract, and 40-vs-28 is itself the proof that the live
-          # gates ran rather than skipped.
-          grep -q 'SELF-TEST: ALL PASS (56/56)' /tmp/live_selftest.log \
-            || { echo "FAIL: live gates did not run (expected the 56/56 ratchet)"; \
-                 tail -5 /tmp/live_selftest.log; exit 1; }
+          # Key on a DERIVED signal, not a duplicated number. The original keyed on a
+          # gate title, which drifted the moment the gate was renamed; the replacement
+          # keyed on `ALL PASS (56/56)`, which put the expected count in TWO places --
+          # here and SELF_TEST_EXPECTED_WITH_LIVE in the script -- so adding a live gate
+          # needed two edits and this one silently lagged. (Its own comment still said
+          # "40-vs-28", numbers from an older pair: the rot, in the sentence explaining
+          # the fix.) The script already fails when `checks != exp`, so the count stays
+          # owned there; what this step must prove is that the LIVE path was taken, and
+          # the census line says that directly.
+          grep -q 'contract binary: present' /tmp/live_selftest.log \
+            || { echo "FAIL: live gates skipped -- the contract binary was not picked up"; \
+                 tail -8 /tmp/live_selftest.log; exit 1; }
+          grep -q 'SELF-TEST: ALL PASS' /tmp/live_selftest.log \
+            || { echo "FAIL: self-test did not pass"; tail -8 /tmp/live_selftest.log; exit 1; }
 
       - name: CTest inventory (exact set, then run)
         run: |
