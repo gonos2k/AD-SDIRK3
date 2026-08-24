@@ -32,6 +32,24 @@ void check(bool ok, const std::string& what) {
     if (!ok) ++failures;
 }
 
+// R13.20 (adversarial loop, iteration 3): a pinned classification whose SIGNALS NO PRODUCTION
+// CALL SITE CAN EMIT. It still tests something real -- the classifier's precedence -- but it is
+// NOT coverage of production behaviour, and nothing here used to say so.
+//
+// That distinction is not pedantry: it is how a dead branch survived two increments. The
+// `krylov_budget_exhausted` fixture reached its clause from `all_near_worst_met_tolerance = true`
+// with `worst_krylov_met_tolerance = false`, a pair the solver cannot produce, so the category
+// read as covered in CI while never firing -- and it was even RENAMED, with a new fixture, on a
+// branch production never reached. Marking these in the OUTPUT, not just in a comment, means the
+// next reader sees the difference without re-deriving it.
+int reserved_count = 0;
+void check_reserved(bool ok, const std::string& what) {
+    ++check_count;
+    ++reserved_count;
+    std::cout << (ok ? "  ok(RESERVED) " : "  FAIL(RESERVED) ") << what << std::endl;
+    if (!ok) ++failures;
+}
+
 using wrf::sdirk3::first_failure_of;
 using wrf::sdirk3::StageFailure;
 using wrf::sdirk3::stage_failure_layer;
@@ -161,8 +179,13 @@ int main() {
     {
         auto s = ok_stage();
         s.state_published = false;
-        check(name_of(s) == "publish_rejected",
-              "everything converged and admissible, and the state was still not published");
+        check_reserved(name_of(s) == "publish_rejected",
+              "everything converged and admissible, and the state was still not published -- "
+              "RESERVED: the one production call site (handle_stage_gate) sets state_published "
+              "false unconditionally because it is upstream of any publish, AND is entered only "
+              "when the gate is already unhappy, so a converged stage there always answers "
+              "admissibility_rejected first. Kept for a publish-site classifier call that does "
+              "not exist yet");
     }
 
     // ---- THE CASE THE FIRST REAL RUN PRODUCED ----
@@ -670,15 +693,18 @@ int main() {
               "insufficient_evidence because it has no Newton residual to report");
         s.explicit_rhs_finite = true;
         s.gate_metric_ok = false;
-        check(name_of(s) == "explicit_admissibility_rejected",
-              "and its gate refusal is its own category, on its own layer");
+        check_reserved(name_of(s) == "explicit_admissibility_rejected",
+              "and its gate refusal is its own category, on its own layer -- RESERVED: reaching "
+              "it needs a FINITE explicit tendency with a bad gate metric, but a finite tendency "
+              "sets all three gate metrics to 0 and the gate early-returns");
         s.gate_metric_ok = true;
         s.state_published = false;
-        check(name_of(s) == "explicit_publish_rejected",
-              "as is its publish refusal");
+        check_reserved(name_of(s) == "explicit_publish_rejected",
+              "as is its publish refusal -- RESERVED, same reason as publish_rejected above");
         s.state_published = true;
-        check(name_of(s) == "none",
-              "a clean explicit stage is clean -- the branch must not manufacture a failure");
+        check_reserved(name_of(s) == "none",
+              "a clean explicit stage is clean -- the branch must not manufacture a failure. "
+              "RESERVED: the gate is not entered at all when nothing is wrong");
     }
     {
         StageFailureSignals s;
@@ -1404,6 +1430,15 @@ int main() {
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
               << std::endl;
     if (!count_ok) ++failures;
+
+    // R13.20: ratcheted like the case count, so converting a RESERVED pin into a live one -- or
+    // silently adding another unreachable branch -- has to be an explicit edit here.
+    constexpr int expected_reserved = 4;
+    const bool reserved_ok = (reserved_count == expected_reserved);
+    std::cout << (reserved_ok ? "  ok   " : "  FAIL ")
+              << "reserved-branch ratchet (" << reserved_count << "/" << expected_reserved
+              << " pinned classifications that NO production call site can produce)" << std::endl;
+    if (!reserved_ok) ++failures;
 
     if (failures == 0) {
         std::cout << "FIRST_FAILURE_CLASSIFICATION_CONTRACT: PASS" << std::endl;

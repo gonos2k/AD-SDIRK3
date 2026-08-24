@@ -299,3 +299,37 @@ so the warm-start value above 1 that this campaign measured is preserved rather 
 `worst_krylov_rho_D` is `‖D⁻¹r‖/‖D⁻¹b‖` with a **consistent** denominator (`bnorm_safe` is taken
 from the already-scaled `b_inner`), so it really is the ladder's coordinate and claim 7.4's
 comparison is well posed; and `res_norm_detached`'s exit `.item()` is inside a `NoGradGuard`.
+
+### Iteration 3 — a fixture that pins a reserved branch is not coverage, and nothing said which was which
+
+CI on iteration 2's head: **all four checks green** (`fast-contracts`, `core-linux`,
+`build-contract-negatives`, `required`).
+
+Two systematic audits, both closing the *other* half of iteration 2's work.
+
+**All 23 `StageFailure` enumerators have a return site** — no dead enum value. But reachability
+from the single production call site is a different question, and iteration 2 answered it only for
+the explicit branch. The implicit branch has the same hole and it is now written at the clause:
+reaching the tail means `newton_converged` was true, and `handle_stage_gate` is entered only when
+`stage_failed || gate_metric_bad`, so a converged stage there **necessarily** has
+`gate_metric_ok == false` and answers `AdmissibilityRejected`. **`PublishRejected` and `None` are
+unreachable from that site** — it sets `state_published = false` unconditionally, being upstream of
+any publish.
+
+**So four fixtures pin classifications no production signal combination can produce**
+(`publish_rejected`, `explicit_admissibility_rejected`, `explicit_publish_rejected`, explicit
+`none`). They are not wrong — they pin the classifier's *precedence*, which is real — but nothing
+distinguished them from coverage, and **that is exactly how a dead branch survived two
+increments**: the `krylov_budget_exhausted` fixture reached its clause from a signal pair the
+solver cannot emit, so CI read the category as covered while it never fired, and it was even
+*renamed* on a branch production never reached.
+
+Fixed **structurally, not with a comment**: `check_reserved()` prints `ok(RESERVED)` in the test
+output with the arithmetic for why, and a **reserved-branch ratchet (4/4)** sits beside the
+case-count ratchet — so converting a reserved pin into a live one, or quietly adding another
+unreachable branch, has to be an explicit edit.
+
+**One dead field, recorded not removed.** An audit of all 80 `ConvergenceStats` members against
+every reader and writer in the tree found exactly one with **neither**: `condition_number`. Its
+option `compute_condition_number` (default false) has no consumer either. It predates this
+campaign and the struct crosses the public API, so it is annotated in place rather than deleted.

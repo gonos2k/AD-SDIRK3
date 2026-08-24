@@ -381,6 +381,11 @@ public:
         float final_residual;
         float initial_unscaled_residual;  // v20.14r39: L2 ||R_0|| at Newton iter 0 (for diagnostics)
         torch::Tensor initial_residual_vector;  // Detached packed R_0 used by WRMS stage-gate growth metric
+        // R13.20 (adversarial loop, iteration 3): DEAD FIELD -- an audit of all 80
+        // ConvergenceStats members against every reader and writer in the tree found this is the
+        // only one with NEITHER. Its option `compute_condition_number` (defaulting false) has no
+        // consumer either. Predates this campaign; left in place because the struct crosses the
+        // public API, and recorded here so the next audit does not re-derive it.
         float condition_number;
         bool converged;
         // R13.2 (first-failure classification): the signals that separate "Newton diverged"

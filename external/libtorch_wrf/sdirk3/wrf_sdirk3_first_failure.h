@@ -997,6 +997,15 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
         return StageFailure::NewtonStagnated;
     }
 
+    // R13.20 (adversarial loop, iteration 3): the SAME reachability statement as the explicit
+    // branch above, which iteration 2 wrote for the explicit half and left off this one.
+    // Reaching here means `newton_converged` was true, and the single production call site
+    // (`handle_stage_gate`) is entered only when `stage_failed || gate_metric_bad` -- so a
+    // converged stage that got here necessarily has `gate_metric_ok == false` and answers
+    // `AdmissibilityRejected`. `PublishRejected` and `None` are therefore NOT reachable from
+    // that site: it sets `state_published = false` unconditionally because it is upstream of any
+    // publish. Both are kept for a publish-site classifier call that does not exist yet, and the
+    // contract test marks their fixtures RESERVED so a precedence pin is not read as coverage.
     if (basis) *basis = StageDecisionBasis::Postcondition;
     if (!s.gate_metric_ok)   return StageFailure::AdmissibilityRejected;
     if (!s.state_published)  return StageFailure::PublishRejected;
