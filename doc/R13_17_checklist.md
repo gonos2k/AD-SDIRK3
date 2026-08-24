@@ -300,6 +300,12 @@ A (S coords):   q_min=+5615.98  q_max=+5865.77  neg=0/24
 A (physical) :  q_min=-8043.13  q_max=-5232.09  neg=24/24
 ```
 
+*(R13.20, iteration 10: those two rows came off a single emitted line on which **all four arms used
+the key `q_min=` and three used `neg=`**, separated only by prose — so a keyed read of it returned
+whichever arm came last, and this section quotes two different `neg=` values from it. The keys are
+now per-arm: `A_q_min` / `A_neg`, `Aphys_q_min` / `Aphys_neg`, `AMinv_*`, `MinvA_*`. The numbers
+above are unchanged; only the row they will be re-read from is now unambiguous.)*
+
 The sign of the quadratic form of **the same operator** flips with the metric — which is the
 review's point, demonstrated rather than argued.
 

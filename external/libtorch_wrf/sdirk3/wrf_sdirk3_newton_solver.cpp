@@ -8102,8 +8102,15 @@ public:
                               << " one_sided_precond_arms=AM^-1,M^-1A"
                               << " stage=" << stage
                               << " samples=" << n_ok << "/" << n_samp
-                              << " A: q_min=" << q_min << " q_max=" << q_max
-                              << " neg=" << n_neg << "/" << n_ok;
+                              // R13.20 (adversarial loop, iteration 10): PER-ARM KEYS. This row
+                              // carries four arms and all four emitted `q_min=`, three of them
+                              // `neg=`, distinguished only by the prose separators between them --
+                              // so a grep for `neg=` on a row this campaign quotes as pivot-level
+                              // evidence returns whichever arm came last. Section 13 quotes BOTH
+                              // `neg=0/24` and `neg=24/24` from this single line. The prose labels
+                              // stay for a human reader; the keys are now unique.
+                              << " A: A_q_min=" << q_min << " A_q_max=" << q_max
+                              << " A_neg=" << n_neg << "/" << n_ok;
                     // R13.18: the random arm above is a ONE-SIDED sample. Random directions in
                     // high dimensions concentrate, so "negative on all 24" is no more a proof of
                     // definiteness than the probe's own caveat says "neg==0 proves nothing" is a
@@ -8171,9 +8178,9 @@ public:
                     }
                     // The raw physical operator, on the same directions.
                     if (np_ok > 0) {
-                        std::cerr << " | A_physical(raw, unscaled): q_min=" << qp_min
-                                  << " q_max=" << qp_max
-                                  << " neg=" << np_neg << "/" << np_ok
+                        std::cerr << " | A_physical(raw, unscaled): Aphys_q_min=" << qp_min
+                                  << " Aphys_q_max=" << qp_max
+                                  << " Aphys_neg=" << np_neg << "/" << np_ok
                                   << " indefinite=" << (qp_min < 0.0 ? 1 : 0)
                                   << phys_block_rows
                                   << " phys_blocks_pos=" << nb_pos
@@ -8194,12 +8201,12 @@ public:
                                                        : (blocks_local ? "1" : "0"));
                     }
                     if (nr_ok > 0) {
-                        std::cerr << " | AM^-1(production): q_min=" << qr_min
-                                  << " neg=" << nr_neg << "/" << nr_ok;
+                        std::cerr << " | AM^-1(production): AMinv_q_min=" << qr_min
+                                  << " AMinv_neg=" << nr_neg << "/" << nr_ok;
                     }
                     if (nl_ok > 0) {
-                        std::cerr << " | M^-1A: q_min=" << ql_min << " neg=" << nl_neg
-                                  << "/" << nl_ok;
+                        std::cerr << " | M^-1A: MinvA_q_min=" << ql_min
+                                  << " MinvA_neg=" << nl_neg << "/" << nl_ok;
                     }
                     // 9F.D121 (review 10, 10.1): both previous claims were too strong.
                     //

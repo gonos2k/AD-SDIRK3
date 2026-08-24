@@ -344,8 +344,14 @@ class); and the volume is beyond eyeballing.
 sites**, 118 of them in one 29k-line file. A naïve scan reports 225 — most of it prose *about*
 `.item()` inside doc comments — so the number is only meaningful with the stripping.
 
-Classified rather than dumped: **100 sit behind a `debug_level` / probe gate; 18 do not** and can
-run in a production step — NaN/Inf health checks and norm computations on the RHS path, i.e. the
+> **Name the denominator.** 129 was measured with the **four-line proximity** exclusion rule.
+> Iteration 9 replaced that with a **named-and-near data-flow** rule and re-measured the *post-fix*
+> tree at **74**. Those two numbers are not comparable as a before/after: 29 sites were fixed here
+> and a further 26 turned out to be false positives the narrow window could not resolve. Every
+> figure in this section is on the proximity rule; every figure in iteration 9 is on the shipped one.
+
+Classified rather than dumped (proximity rule): **100 sit behind a `debug_level` / probe gate; 18
+do not** and can run in a production step — NaN/Inf health checks and norm computations on the RHS path, i.e. the
 hot path, which is where the rule matters most. All 18 are now `guarded_item<T>()`. The remaining
 11 outside that file are guarded in place with an explicit `NoGradGuard` rather than a new include,
 to avoid pulling `wrf_sdirk3_autograd_utils.h` into five more headers.
@@ -534,3 +540,40 @@ narrow to see. Spot-checked by reading all 21 of the newly-excluded sites in the
 every one is `X_cpu = Y.detach().to(kCPU)` followed by a reduction. Baseline lowered 100 → 74, which
 is what the ratchet's "fixing violations REQUIRES lowering the baseline" clause is for, and
 re-negative-tested: one added unguarded `.item()` gives `75 vs 74 → FAIL`.
+
+### Iteration 10 — a record the campaign quotes as evidence could not be read by key
+
+Final pass. Acceptance first, after a **force-clean rebuild** of every sdirk3 object (the
+stale-object-on-header-change trap this project has recorded): **ctest 62/62**, both ratchets green
+(`from_blob` 70/70, item-guard 74/74), `actionlint` clean, both harness self-tests pass
+(`44/44`, `4 cases`), and `fast-contracts` **SUCCESS in CI on `4081db0`** — so the corrected lint
+and its lowered baseline are verified on the runner, not just locally.
+
+**The finding.** A duplicate-key check across the three emitted records: `SDIRK3_FIRST_FAILURE` has
+69 fields and **no** duplicates; `SDIRK3_NUMRANGE` had **`q_min=` on all four arms and `neg=` on
+three**, separated only by prose labels (`A:`, `| A_physical(raw, unscaled):`, `| AM^-1(production):`,
+`| M^-1A:`). A grep for `neg=` on that row returns whichever arm came last — and **§13 of
+`R13_17_checklist.md` quotes two different `neg=` values from that single line** as the evidence for
+the physical-numerical-range conclusion, one of the two readings that justified a campaign pivot.
+The emit site's own comment even argues that *"`neg=` carries a denominator on every arm so the
+three are comparable"* — comparable to a human reading the prose, unreadable to anything else.
+
+Keys are per-arm now (`A_q_min`/`A_neg`, `Aphys_*`, `AMinv_*`, `MinvA_*`), the prose labels stay for
+a human reader, and §13 records that its quoted numbers came off the ambiguous form. Safe to rename
+because iteration 6 established there is no offline parser for this record.
+
+---
+
+## Where this leaves the increment
+
+Ten adversarial iterations. **Three of them found the defect inside my own previous iteration** —
+the tolerance value left outside the loop after moving its receipt in (1), an overstated
+control-flow claim about the explicit stage (8), and a census that overstated what runs (7) — plus
+iteration 9, which found that the CI gate I had shipped over-counted by 26 and, in its first
+"more principled" rewrite, both degenerated to zero and took over five minutes on one file.
+
+**The one thing that has not changed: every new field is emitted and unread.** `phys_blocks_local`,
+`taylor_covers_last_newton_iter`, `tau_raw_block_max`, `worst_krylov_rho_D`, `event_basis`,
+`rhs_dir_is_first_arnoldi` and the per-arm numrange keys all need a dt=600 run. Nothing in this
+increment measures the solver's behaviour on `em_b_wave`; it is static analysis, contract tests and
+CI gates throughout. **Independent review: NOT RUN.**
