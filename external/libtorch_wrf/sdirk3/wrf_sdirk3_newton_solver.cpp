@@ -10292,10 +10292,29 @@ public:
                             // x=0 bounds the SCALED residual, not this one. Reporting progress in
                             // a norm the solver does not optimise is a category error, and every
                             // coefficient comparison in this campaign so far has been read off it.
+                            // R13.20 (dt=600 budget ladder, 2026-08-24): PROVENANCE. This row
+                            // carried no stage and no Newton iteration, and the number of rows a
+                            // run emits does not match its solve count -- it is emitted
+                            // conditionally. So a reader cannot tell WHICH solve a row describes,
+                            // and comparing "the same solve" across a budget sweep is impossible
+                            // from the log. I nearly drew a mechanism conclusion from the first
+                            // row of each run on the assumption that it was Newton iteration 0 of
+                            // stage 2; the assumption is unverifiable from the record, and the
+                            // back-computed ||b|| varying 3.6x across the sweep says it was
+                            // probably false. Same class as R13.10's stage-provenance fix for the
+                            // classifier: a diagnostic without provenance invites confident
+                            // cross-run comparisons of different things.
+                            //
+                            // `b_unscaled` is derived, not re-measured: final_residual / rel_error
+                            // is exactly the denominator this row's ratio used, so a reader can
+                            // see when a ratio moved because the RHS moved.
                             std::cerr << "SDIRK3_GMRES_ESTIMATE_VS_TRUE"
+                                      << " stage=" << stage
+                                      << " newton_iter=" << newton_iter
                                       << " internal_iters=" << gmres_result.iterations
                                       << " final_residual=" << gmres_result.final_residual
                                       << " rel_error_UNSCALED=" << gmres_result.rel_error
+                                      << " b_unscaled_derived=" << bn
                                       << " note=minimised_norm_is_block_scaled"
                                       << std::endl;
                             // NOT THE MINIMISED NORM -- retained as telemetry with its status in

@@ -699,10 +699,25 @@ at 12 and everything else fixed. **One variable**, which the 2-point experiment 
 | 96 | 82 | `zero_update_after_total_failure` | `krylov_budget_exhausted` | `krylov_r0_receipt` | **1.231** | 0.9087 | 3 | **0** |
 | 192 | 163 | `zero_update_after_total_failure` | `newton_stagnated` | `aggregate_reconstruction` | 0.8414 | 0.8943 | 2 | **0** |
 
-**1. The first-failure EVENT is invariant across a 24× budget change.** Every run ends at the same
-site: `zero_update_after_total_failure`. R13.17's P0-3 retraction ("the exit reason says the failure
-never moved outward") was argued from a 2-point comparison; this is a 4-point single-variable
-ladder saying the same thing, and the step completes at none of them.
+**1. ~~The first-failure EVENT is invariant across a 24× budget change.~~ RETRACTED — I read the
+table without its `stage` column.** The category is the same at every rung
+(`zero_update_after_total_failure`), but the **stage is not**:
+
+| restart | fails at | stage-2 solves | stage-3 solves |
+|---|---|---|---|
+| 8, 32, 96 | **stage 2** | 4, 2, 2 | 0 |
+| **192** | **stage 3** | 1 | **2** |
+
+**At restart 192 stage 2 PASSES and the failure relocates to stage 3.** So the budget does move the
+failure — in *location*, not in *kind* — and rows 1–3 of the table above compare stage-2 failures
+with a **stage-3** failure in row 4. `signals_from_stage` matches `stage` in both cases, so the
+classifier was right and the reading was mine.
+
+What survives: the *kind* of failure is invariant (`zero_update_after_total_failure` at every rung),
+and the step completes at none of them. What does not: the oscillating `attribution` and the
+non-monotone ρ_D in rows 1–4 mix two different stages, so neither is a clean statement about the
+budget. The stage-3 frontier is where restart 192 lands, and its second Newton iteration there is
+`rho_S = 1585` (‖r‖ = 1.5e6) — a different failure from anything at stage 2.
 
 **2. The ATTRIBUTION oscillates, and the new fields show it is a threshold artifact.** It flips
 `budget_exhausted` → `newton_stagnated` → `budget_exhausted` → `newton_stagnated` as `vs_r0` wanders
@@ -727,3 +742,38 @@ faithful, the inner solve binds" — rests on accepted steps only, everywhere on
 **What this does NOT establish.** It does not show the budget is irrelevant: ρ_D does improve at
 32 and 192 relative to 8, and no rung was run to convergence. It does not identify a mechanism for
 the non-monotonicity. And every rung is still n=1, one case, one stage, one timestep.
+
+### Provenance on the per-solve row — and what it immediately corrected
+
+Chasing the ρ_D non-monotonicity, I compared "the first `SDIRK3_GMRES_ESTIMATE_VS_TRUE` row of each
+budget" as if it were Newton iteration 0 of stage 2 at every rung. `final_residual` fell
+monotonically (574.4 → 346.5 → 229.3 → 147) while ρ_S wandered (0.5526 → 0.7381 → 0.6728 → 0.508),
+which back-computes to a right-hand side varying **3.6×** — impossible for one system, so the
+premise was false. **The row carried no stage and no Newton iteration**, and the number of rows a
+run emits does not match its solve count, so the premise was also *uncheckable from the log*.
+
+Same class as R13.10's stage-provenance fix for the classifier, one diagnostic over. Stamped now
+with `stage`, `newton_iter`, and `b_unscaled_derived` (the denominator the row's own ratio used, so
+a reader can see when a ratio moved because the RHS moved). Re-running the ladder with the stamp:
+
+```
+b=8    stage2 nit=0 j=7   |r|=574.4  rho_S=0.5526  |b|=1039
+       stage2 nit=1 j=7   |r|=510.8  rho_S=0.8871  |b|=575.8
+       stage2 nit=2 j=7   |r|=481.9  rho_S=0.955   |b|=504.7
+       stage2 nit=3 j=7   |r|=498.7  rho_S=1.048   |b|=475.9
+b=32   stage2 nit=1 j=32  |r|=346.5  rho_S=0.7381  |b|=469.5
+b=96   stage2 nit=1 j=96  |r|=229.3  rho_S=0.6728  |b|=340.9
+b=192  stage2 nit=1 j=211 |r|=147    rho_S=0.508   |b|=289.3
+       stage3 nit=0 j=163 |r|=929.5  rho_S=0.8943  |b|=1039
+       stage3 nit=1 j=82  |r|=1.504e+06 rho_S=1585 |b|=948.8
+```
+
+Three things the stamp shows that the unstamped rows could not:
+
+- **The rows I compared were stage-2 iteration 0 at b=8 against stage-2 iteration 1 at b=32/96/192.**
+  Different solves. The 3.6× spread in ‖b‖ was that, not an operator property.
+- **At b=8 the linear solve leaves a roughly CONSTANT absolute residual** (574 → 511 → 482 → 499)
+  while the RHS shrinks (1039 → 576 → 505 → 476), so ρ_S degrades 0.55 → 1.05 across the Newton
+  iterations. The ratio worsens because the denominator falls, not because the solve got worse —
+  visible only because `b_unscaled_derived` is on the row.
+- **b=192 reaches stage 3**, which is what forced the retraction above.
