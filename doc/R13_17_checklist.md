@@ -346,7 +346,50 @@ and the straddle depends on the block scan; the block scan's positive readings a
 degenerate, but uniform-fill directions are a restricted probe and a spanning sample of six is a
 witness, not a bound* — which is caveat (2) below, unchanged.
 
-**OPEN, and now instrumented (round 9, R9-12).** Three of the six report `|q − 1|` identical to six
+**RESOLVED BY MEASUREMENT (dt=600 run, 2026-08-24) — read this before the paragraph below it.**
+The probe now emits per-direction in/out-of-block norms, and the first run **falsified the
+instrument before it answered the question**: computing the out-of-block norm as
+`sqrt(‖x‖² − ‖x_in‖²)` is catastrophic cancellation when the out-of-block part is exactly zero, and
+it reported `qphys_ru_vout = 0.838` — accusing the probe of a defect it does not have — while
+elsewhere returning exactly `0.0` where the true residue is merely small. Taken directly (zero the
+block, measure what is left) on the re-run:
+
+```
+qphys_*_vout = 0.000000 for ALL SIX blocks        phys_blocks_local=1   phys_blocks_measured=6
+```
+
+**So the directions ARE block-local, measured, not argued.** Round 9's proposed mechanism (leakage)
+is refuted, and my own first metric was the only thing suggesting otherwise.
+
+**And the coincidence has an explanation.** With `q = ⟨v,Av⟩/‖v‖²` and `v` block-local, split it into
+the in-block gain `‖(Av)_in‖/‖v_in‖` and the alignment `q / gain`:
+
+| blk | q | gain = ‖Av_in‖/‖v_in‖ | q / gain | ‖Av_out‖/‖Av_in‖ |
+|---|---|---|---|---|
+| ru | +7198.814 | 43338.106 | +0.1661 | 1.6e-08 |
+| rv | +7188.386 | 43406.316 | +0.1656 | 2.8e-07 |
+| rw | +14285.893 | 86174.536 | +0.1658 | **5.9e+03** |
+| ph | +1.000000 | **1.000** | +1.0000 | **0.0** |
+| t  | +7198.814 | 43338.105 | +0.1661 | 2.1e-16 |
+| mu | **−7196.816** | 43337.774 | **−0.1661** | 1.1e-05 |
+
+**Both factors are shared.** The gain agrees between `ru` and `t` to **1 part in 5×10⁷**, with `mu`
+at 1 part in 1.3×10⁵ and `rv` 0.157 % away; `rw` is **1.9884×** it. The alignment is **±0.166 on
+every non-degenerate block**. That is the referee's "one shared mode or normalisation", measured.
+
+**What this does to §13's claim.** The straddle **survives**: `rw` (+14285.9) and `mu` (−7196.8) are
+both non-degenerate and their gains genuinely differ (2×). But *"a spanning sample of six
+directions"* is now measurably weaker than it reads — **five of the six sample essentially one
+gain**, with the sign carried by `mu` alone and `rw` at twice it. The uniform-fill family probes
+roughly **one mode**, and caveat (2) below should be read as that, not as six independent witnesses.
+`ph` is settled outright: gain exactly 1.000 and `‖Av_out‖ = 0.0` **exactly** — `A` acts as precisely
+the identity there and does not leak, so `J` has no component along it at all.
+
+*(Inferred, not measured: if `A = I − hγJ` with `hγ = 600γ ≈ 261.5`, these back out to a
+block-diagonal Rayleigh quotient of `J` of −27.52 s⁻¹ on ru/t, +27.52 on mu, −54.62 on rw and 0 on
+ph. The γ was not read from the code for this note; treat the s⁻¹ figures as illustrative.)*
+
+**Previously open (round 9, R9-12), retained for the audit trail.** Three of the six report `|q − 1|` identical to six
 figures — `ru` 7197.81, `t` 7197.81, `mu` 7197.82 (opposite sign); `rv` differs by 0.15 %, `rw` is
 ~1.98× the common value. Three nominally independent directions agreeing to ~1 part in 10⁵ in a
 stiff, heterogeneous operator wants an explanation before anything else is built on these numbers.

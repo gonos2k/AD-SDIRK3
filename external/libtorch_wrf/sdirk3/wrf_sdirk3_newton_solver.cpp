@@ -8156,21 +8156,34 @@ public:
                             if (!(d > 0.0)) continue;
                             const double qb = v_p.dot(Av_p).item<double>() / d;
                             if (!std::isfinite(qb)) continue;
+                            // R13.20 (dt=600 run, 2026-08-24): the out-of-block norms are taken
+                            // DIRECTLY, by zeroing the block and measuring what is left. The first
+                            // version computed them as sqrt(||x||^2 - ||x_in||^2), and the run
+                            // showed why that is wrong: when the out-of-block part is exactly zero
+                            // -- which is what `e_b` guarantees for `v` -- the subtraction is
+                            // catastrophic cancellation between two ~1e8 norms, and it reported
+                            // `qphys_ru_vout = 0.838` for a direction that is identically zero
+                            // outside its block. `phys_blocks_local` then read 0, i.e. the
+                            // instrument accused the probe of a defect the probe does not have.
+                            // Cancellation also hides the opposite case: `Av_out` came out
+                            // EXACTLY 0.0 where the true value is merely small relative to
+                            // `Av_in`. A difference of squares cannot measure a small residue.
+                            auto v_out_t = v_p.clone();
+                            v_out_t.slice(0, blk.start, blk.start + blk.size).zero_();
+                            auto Av_out_t = Av_p.clone();
+                            Av_out_t.slice(0, blk.start, blk.start + blk.size).zero_();
                             const double v_in =
                                 v_p.slice(0, blk.start, blk.start + blk.size).norm().item<double>();
-                            const double v_all = v_p.norm().item<double>();
-                            const double v_out =
-                                std::sqrt(std::max(0.0, v_all * v_all - v_in * v_in));
+                            const double v_out = v_out_t.norm().item<double>();
                             const double Av_in =
                                 Av_p.slice(0, blk.start, blk.start + blk.size).norm().item<double>();
-                            const double Av_all = Av_p.norm().item<double>();
-                            const double Av_out =
-                                std::sqrt(std::max(0.0, Av_all * Av_all - Av_in * Av_in));
+                            const double Av_out = Av_out_t.norm().item<double>();
                             if (v_out > 0.0) blocks_local = false;
                             ++nb_measured;
                             if (qb > 0.0) ++nb_pos; else if (qb < 0.0) ++nb_neg;
                             const std::string nm(blk.name);
                             phys_block_rows += " qphys_" + nm + "=" + std::to_string(qb) +
+                                               " qphys_" + nm + "_vin=" + std::to_string(v_in) +
                                                " qphys_" + nm + "_vout=" + std::to_string(v_out) +
                                                " qphys_" + nm + "_Avin=" + std::to_string(Av_in) +
                                                " qphys_" + nm + "_Avout=" + std::to_string(Av_out);

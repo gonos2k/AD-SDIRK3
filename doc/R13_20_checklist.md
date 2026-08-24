@@ -577,3 +577,60 @@ iteration 9, which found that the CI gate I had shipped over-counted by 26 and, 
 `rhs_dir_is_first_arnoldi` and the per-arm numrange keys all need a dt=600 run. Nothing in this
 increment measures the solver's behaviour on `em_b_wave`; it is static analysis, contract tests and
 CI gates throughout. **Independent review: NOT RUN.**
+
+---
+
+## The dt=600 run — every new field, read
+
+`em_b_wave`, dt=600, `imex_split_mode=3`, np=1, `max_newton_iter=3`, `stage2_gmres_restart=8`, all
+four probes on. Outcome **20 (HARD_STAGE_ABORT)**, zero steps completed — the expected dt=600
+behaviour. Binary verified by **emitted strings, not mtime**: all eight new field names are present
+in `main/wrf.exe`. Two runs, `SDIRK3_FIRST_FAILURE` and the three `SDIRK3_TAYLOR_DEFECT` rows
+**bit-identical**.
+
+### The instrument failed before the measurement did
+
+The first run returned `phys_blocks_local=0` — *the probe directions are not block-local*, the
+opposite of what iteration 9 argued by construction. It was **my metric, not the probe**: computing
+the out-of-block norm as `sqrt(‖x‖² − ‖x_in‖²)` is catastrophic cancellation when the out-of-block
+part is exactly zero, and at ‖v‖ ≈ 1.7e8 the residue is ~0.8. It also returned exactly `0.0` where
+the true value is merely small. Taken directly — zero the block, measure what is left — every
+`_vout` is **0.000000** and `phys_blocks_local=1`. Instrument fixed, then re-run.
+
+### What the fields say
+
+| field | value | what it settles |
+|---|---|---|
+| `phys_blocks_local` / `_vout` | **1** / all `0.000000` | block-locality **measured**; R9-12's leakage mechanism refuted |
+| gain, alignment (per block) | `ru`/`t` agree to **1 in 5×10⁷**; alignment **±0.166** on all five | the six-figure coincidence is **one shared gain**, not six independent readings — §13 updated |
+| `taylor_covers_last_newton_iter` | **1** (`taylor_probe_iter=2`, `newton_iters=3`) | on this run the probe **does** cover the exiting iteration — `rejected_so_far=0`, so the `step_accepted` gate cost nothing here |
+| `attribution_from_metric` | **0**, `attribution_basis=aggregate_reconstruction` | **the R9-2 fix changes the answer on the live case**: `worst_vs_r0 = 0.8795` is measured but **below** the 0.90 threshold, so the classifier fell through — the old inferred flag would have printed **1** |
+| `specific_layer` / `layer_receipt` | `n/a` / **`n/a`** | the R9-3 fix: no more `stage_worst` printed as provenance on a row with no specific layer |
+| `exit_krylov_iter` | **−1** | the R13.18 stamp check firing — the exiting iteration had no solve receipt, so it gets none instead of a stale one |
+| `tau_raw_block_max` vs `tau_excited_block_max` | iter 0: **0.207 (`rw`)** vs 0.2008 (`ru`); iter 2: **0.1673 (`rv`)** vs 0.1104 (`ru`) | **claim 7.1 confirmed and live**: the `1e-3` floor changes the number *and* the block the verdict names, on every iteration |
+| `rhs_dir_is_first_arnoldi` | **1** (`rho0_S = rho0_D = 1`) | a **cold** start here, so `b/‖b‖` really is Arnoldi vector #1 — the precondition the old `*_krylov` name asserted is now *verified* on the record rather than true by luck |
+| `worst_krylov_rho_D` | **0.8901** (`rho_S` 0.955, vs_r0 0.8795) | claim 7.4 delivered — see below |
+
+### Claim 7.4: the ladder and the production solve, on one axis at last
+
+```
+frozen ladder rho_D    j=4     j=8     j=16    j=32
+        arm=I         0.5497  0.3534  0.2853  0.2721
+        arm=M         0.7750  0.5879  0.5205  0.4617
+production worst solve rho_D = 0.8901
+```
+
+The production worst solve sits **above everything the ladder reaches, including j=4**. So the
+frozen ladder is **not** representative of the production solve at this budget. Two caveats, both
+on the record: `ab_valid=0 ab_reason=early_stop_enabled` on this run, so the arms are telemetry and
+not an attributable A/B; and the ladder measures a frozen operator at one iteration while
+`worst_krylov_rho_D` is a **max over solves**. They are the same coordinate now, which is what was
+missing; they are not yet the same experiment.
+
+### What is still not measured
+
+The exit here is `newton_budget_exhausted` (`max_newton_iter=3`), **not** the zero-update
+linear-solve failure the campaign's earlier dt=600 records show. So `taylor_covers_last_newton_iter`
+is **1 on this configuration only** — the concern that the `step_accepted` gate cannot see a
+zero-update exit is untested, because this run never took one. A configuration with a larger Newton
+budget would be the test.
