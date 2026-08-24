@@ -9204,12 +9204,18 @@ vertical_coefficients:
                     sig.signals_from_stage = last_stage_signals_populated_by_stage_;
                     sig.classifying_stage = stage_id;
                     sig.is_explicit_stage = last_stage_signals_is_explicit_;
-                    const auto first = wrf::sdirk3::first_failure_of(sig);
+                    // R13.20 (adversarial loop, iteration 6): ONE classifier call. `first` used
+                    // to be an independent `first_failure_of(sig)` beside `diag.primary_event`
+                    // computed from the same input -- equal today because the function is pure,
+                    // but the emitter now pairs `first` with `diag.primary_event_basis`, and a
+                    // layer derived from one call annotating a category from another is the
+                    // shape round 8's P0-C removed one field over.
                     // R13.19 (P1-4): the metric evidence, preserved beside the event rather than
                     // discarded by it. `attribution` is what the same clauses say with the
                     // recorded exit removed, so "the event outranks the reconstruction" no longer
                     // means "the reconstruction is thrown away".
                     const auto diag = wrf::sdirk3::stage_diagnosis_of(sig);
+                    const auto first = diag.primary_event;
                     // R13.20 (round 9, R9-3): the specific layer and the receipt it came from,
                     // computed TOGETHER from the basis the deciding clause reported. Two defects
                     // in the previous inline form:

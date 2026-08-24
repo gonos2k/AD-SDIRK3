@@ -460,6 +460,27 @@ if [ "${1:-}" = "--self-test" ]; then
   fi
 
   note "============================================================"
+  # R13.20 (adversarial loop, iteration 6): the COVERAGE CENSUS, DERIVED from this file
+  # rather than restated in the workflow. The YAML carried a hand-written census -- "42
+  # gate calls + 2 skip", "16 covered, lines 205-235", "26 not covered, lines 263-434",
+  # "--self-test exits at 239" -- and every one of those numbers had drifted: measured
+  # 95 gates, 3 skips, self-test block 187..474, 56 exercised and 39 syntax-only. A
+  # coverage claim that drifts, in the gate that IS the coverage, is the same defect the
+  # README ctest-count ratchet exists to stop. Printed from the source so it cannot rot;
+  # the workflow now points here instead of restating it.
+  _census_src="${BASH_SOURCE[0]}"
+  _st_open="$(grep -n 'if \[ "\${1:-}" = "--self-test" \]' "$_census_src" | head -1 | cut -d: -f1)"
+  _st_close="$(grep -n 'SELF-TEST: ALL PASS' "$_census_src" | head -1 | cut -d: -f1)"
+  _g_all="$(grep -cE '^[[:space:]]*gate ' "$_census_src")"
+  _s_all="$(grep -cE '^[[:space:]]*skip ' "$_census_src")"
+  _g_in="$(awk -v a="$_st_open" -v b="$_st_close" 'NR>=a && NR<=b && /^[[:space:]]*gate /' "$_census_src" | wc -l | tr -d ' ')"
+  _g_out=$((_g_all - _g_in))
+  note "CENSUS (derived, not stated): ${_g_all} gate + ${_s_all} skip;"
+  note "  ${_g_in} inside --self-test  -> exercised against synthetic fixtures in hosted CI"
+  note "  ${_g_out} after it           -> 'bash -n' SYNTAX CHECK ONLY in hosted CI"
+  note "  What that does NOT prove: the shared helpers ARE exercised, but the WIRING at each"
+  note "  production gate -- which helper, which argument, which comparison -- is not. An"
+  note "  inverted test, a stale variable, or a gate that can never fire still passes."
   # Exact-count ratchet. Without it a deleted gate leaves the suite green with one
   # fewer property enforced. Two expected counts because the live gates require the
   # contract binary, which the torch-free hosted job does not build.

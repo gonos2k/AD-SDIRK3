@@ -398,3 +398,38 @@ arms' tolerance is a literal `0.0f` argument. It is now `kAbArmTol`, passed to t
 the record, so changing the argument moves the claim.
 
 Both ratchets green (from_blob 70/70, item-guard 100/100); ctest 62/62.
+
+### Iteration 6 — a coverage claim that had drifted, inside the gate that IS the coverage
+
+**First, a decisive negative.** The `.item()` ratchet added in iteration 4 **ran in CI and passed**
+(`fast-contracts` SUCCESS on `0615b5d`), so `python3` on `ubuntu-24.04` and the whole new step are
+verified empirically, not assumed.
+
+**Two more negatives, checked rather than trusted.** No offline parser exists for
+`SDIRK3_FIRST_FAILURE`, `SDIRK3_TAYLOR_DEFECT`, `SDIRK3_NUMRANGE` or the A/B row — the two shell
+harnesses parse `SDIRK3_STAGE_*` / `SDIRK3_RHS_*` markers only — so this increment's **mid-line
+field insertions break nothing**, and the `identity_frac_krylov` → `_rhs_dir` rename has no
+consumer to break. And the implicit path resets `last_stage_signals_` to a fresh struct *before*
+its field-by-field copy, so the cross-stage staleness R13.10 fixed for the explicit path cannot
+recur on the implicit one.
+
+**The finding.** `sdirk3-ci.yml` carried a hand-written census of the stage-operand harness:
+*"42 `gate` calls + 2 `skip` total"*, *"COVERED — 16 gates, lines 205-235"*, *"NOT COVERED — the 26
+gates at lines 263-434"*, *"--self-test exits at 239"*. Measured: **95 gates, 3 skips**, self-test
+block **187..474**, **56 exercised** against synthetic fixtures and **39 syntax-only**. Every number
+had drifted, and this is the comment a reader uses to budget review effort — a coverage claim that
+rots, sitting inside the gate that *is* the coverage. Same defect the README ctest-count ratchet
+exists to stop.
+
+Fixed the way this repo already fixed the core-manifest count — **derive it, do not restate it**.
+`--self-test` now prints `CENSUS (derived, not stated): 95 gate + 3 skip; 56 inside … 39 after …`
+computed from its own source, together with what the split does and does not prove, and the YAML
+points at that output instead of carrying numbers. The census uses `note`, not `gate`, so the
+harness's own exact-count ratchet (44/44 without the contract binary) is untouched; `bash -n` and
+`actionlint` both pass.
+
+**One simplification.** The emit site called `first_failure_of(sig)` for `first` *and*
+`stage_diagnosis_of(sig)` — which calls it again — for `primary_event`. Equal today because the
+function is pure, but the emitter now pairs `first` with `diag.primary_event_basis`, and a layer
+derived from one call annotating a category from another is the shape round 8's P0-C removed one
+field over. One call now.
