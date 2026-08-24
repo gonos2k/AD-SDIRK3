@@ -53,7 +53,7 @@ Legend: **[DONE]** · **[OPEN]**
       when cut off" is not. A solve flat from the first restart classifies the same.
 - [x] **P1-3 — the Taylor receipt fails OPEN on missing new fields**, and the contract test pins
       that. Needs receipt versioning so a v2 record must carry them.
-- [ ] **P1-4 — event and cause share one enum**, which is why the `ZeroUpdateAfterTotalFailure`
+- [x] **P1-4 — event and cause share one enum**, which is why the `ZeroUpdateAfterTotalFailure`
       branch both "outranks the reconstruction" and "must not override r₀ evidence" while the code
       does the former.
 
@@ -143,8 +143,36 @@ reading. The live emitter declares v2, and all four omissions are pinned as fail
 
 ## Remaining
 
-- **P1-4** (event and cause share one enum) — a data-model refactor the review proposes; recorded
-  as agreed and deliberately not attempted in this batch, since renaming categories under a
-  classifier that four rounds of fixtures depend on is its own increment.
 - A/B shared preconditioner instance stays **HOLD**; `dt=600` forward, one-step tangent/adjoint,
   exact 4D-Var and MPI production remain **NO-GO**.
+
+
+---
+
+## Third batch — P1-4, the event/cause split
+
+The review's structural point: one enum answering two questions is *why* the
+`ZeroUpdateAfterTotalFailure` branch could carry both "a recorded event outranks the aggregate
+reconstruction" and "it must not override the r₀ evidence" — while **returning immediately**, which
+overrides it. The comment was aspirational and the code was not.
+
+Fixed **additively**, so the four rounds of fixtures built on `first_failure_of` keep their meaning:
+it still returns the **primary event**, and `stage_diagnosis_of` reports the **metric attribution**
+beside it — computed from the same clauses with the recorded exit removed, so the two answers cannot
+drift apart. Measured:
+
+```
+category=zero_update_after_total_failure   layer=zero_update_bnorm_rule_or_step_recovery
+attribution=krylov_stagnated
+attribution_layer=operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy
+attribution_measured=1
+```
+
+The record now says **both**: the loop ended at the zero-update guard (‖b‖-gated), *and* the r₀
+metric evidence independently reads `krylov_stagnated` (worst = 0.9941 ≥ 0.90). Two lines of
+evidence, neither discarding the other — which is what the comment claimed all along. And
+`attribution_measured` reports **absence as absence** rather than as agreement with the event.
+
+**Every item in the R13.18 precision review is now closed**, except the A/B shared preconditioner
+instance, which stays HOLD as a stated limitation. `dt=600` forward, one-step tangent/adjoint, exact
+4D-Var and MPI production remain NO-GO.

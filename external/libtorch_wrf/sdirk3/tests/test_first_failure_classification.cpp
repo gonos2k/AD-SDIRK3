@@ -1065,6 +1065,43 @@ int main() {
               "report one while the gate is recorded as having passed");
     }
 
+    {
+        // R13.19 (precision review P1-4): EVENT and CAUSE are two questions. The branch comment
+        // said a recorded event "must not override the r0 evidence" while the code returned,
+        // which overrides it. Both answers are now reported.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        s.worst_krylov_rel_error_vs_r0 = 0.999;     // the metric evidence says STALL
+        s.krylov_solves_measured_vs_r0 = 4;
+        s.accepted_steps = 3;
+        const auto d = wrf::sdirk3::stage_diagnosis_of(s);
+        check(std::string(wrf::sdirk3::stage_failure_name(d.primary_event)) ==
+                  "zero_update_after_total_failure",
+              "the primary slot is what actually ended the stage");
+        check(std::string(wrf::sdirk3::stage_failure_name(d.attribution)) ==
+                  "krylov_stagnated" && d.attribution_measured,
+              "...and the r0 evidence is PRESERVED beside it rather than discarded by it -- the "
+              "event outranking the reconstruction no longer means throwing it away");
+        check(wrf::sdirk3::first_failure_of(s) == d.primary_event,
+              "and first_failure_of still returns the primary event, so every fixture built on "
+              "it keeps its meaning");
+    }
+    {
+        // With no metric evidence at all, the attribution says so instead of agreeing.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.final_residual_measured = false;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        const auto d = wrf::sdirk3::stage_diagnosis_of(s);
+        check(!d.attribution_measured,
+              "absence of metric evidence is reported as absence, not as agreement with the "
+              "event -- the rule this campaign has applied to every other field");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1081,7 +1118,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 89;
+    constexpr int expected_checks = 93;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -9205,6 +9205,11 @@ vertical_coefficients:
                     sig.classifying_stage = stage_id;
                     sig.is_explicit_stage = last_stage_signals_is_explicit_;
                     const auto first = wrf::sdirk3::first_failure_of(sig);
+                    // R13.19 (P1-4): the metric evidence, preserved beside the event rather than
+                    // discarded by it. `attribution` is what the same clauses say with the
+                    // recorded exit removed, so "the event outranks the reconstruction" no longer
+                    // means "the reconstruction is thrown away".
+                    const auto diag = wrf::sdirk3::stage_diagnosis_of(sig);
                     std::cerr << "SDIRK3_FIRST_FAILURE stage=" << stage_id
                               // which stage actually populated the signals being classified --
                               // equal to stage_id or the record is classifying someone else
@@ -9217,6 +9222,12 @@ vertical_coefficients:
                               // helpers existed and only the contract tests called them, so the
                               // claim that "the recorded source selects the layer" was not
                               // implemented end to end -- the emitter printed the neutral one.
+                              << " attribution="
+                              << wrf::sdirk3::stage_failure_name(diag.attribution)
+                              << " attribution_layer="
+                              << wrf::sdirk3::stage_failure_layer(diag.attribution)
+                              << " attribution_measured="
+                              << (diag.attribution_measured ? 1 : 0)
                               << " specific_layer="
                               << (first == wrf::sdirk3::StageFailure::KrylovForcingTermLimited
                                       ? wrf::sdirk3::krylov_forcing_layer_for(

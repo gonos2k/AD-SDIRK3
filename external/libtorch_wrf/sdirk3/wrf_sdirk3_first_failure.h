@@ -525,6 +525,21 @@ inline bool measured(double v) {
 // FIRST in causal order, not worst. A run whose entry state is already non-finite will also
 // show a stagnating Krylov solve and a rejected step, and reporting either of those sends the
 // next week of work to the wrong layer.
+// R13.19 (precision review P1-4): EVENT and CAUSE are two questions, and one enum answering both
+// is why the ZeroUpdateAfterTotalFailure branch could simultaneously say "a recorded event
+// outranks the aggregate reconstruction" and "it must not override the r0 evidence" -- while
+// returning immediately, which overrides it.
+//
+// The fix keeps `first_failure_of` returning the PRIMARY EVENT (four rounds of fixtures depend on
+// it) and adds the metric attribution beside it, so the r0 evidence is PRESERVED rather than
+// discarded. A reader gets "the loop ended HERE, and the metric evidence says THIS", which is what
+// the comment always claimed and the code did not do.
+struct StageDiagnosis {
+    StageFailure primary_event = StageFailure::None;   // what actually ended the stage
+    StageFailure attribution = StageFailure::None;     // what the metric evidence says
+    bool attribution_measured = false;                 // false = no evidence, not "agrees"
+};
+
 inline StageFailure first_failure_of(const StageFailureSignals& s) {
     // PROVENANCE FIRST. Classifying stage 3 from stage 2's signals produces a confident,
     // wrong layer -- and the record used to print exactly that, with the mismatch beside it.
@@ -603,8 +618,13 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
         // R13.18 (round 7, P0-B): a RECORDED event outranks the aggregate reconstruction -- but
         // it may only claim what it observed. This one observed a zero update after a
         // total-failure flag, so it gets its own category and layer; it does NOT get to say the
-        // linear solve failed, and it must not override the r0 evidence, because the flag that
-        // gates it is the ||b|| predicate this classifier spent four rounds moving off.
+        // linear solve failed.
+        //
+        // R13.19 (precision review P1-4): "and it must not override the r0 evidence" used to be
+        // written here while this branch RETURNED, which is overriding it. That is now true
+        // rather than aspirational: `stage_diagnosis_of` reports the metric attribution beside
+        // this event, computed from the same clauses with the recorded exit removed, so the r0
+        // evidence is preserved on the record instead of discarded by the event that outranks it.
         if (s.newton_termination == NewtonTerminationReason::ZeroUpdateAfterTotalFailure) {
             // R13.18 (deep review P0-4): subtype from the EXIT solve when its receipt is present.
             // A terminal event describes the solve that ended the loop; the stage-worst receipt
@@ -737,6 +757,22 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
     if (!s.gate_metric_ok)   return StageFailure::AdmissibilityRejected;
     if (!s.state_published)  return StageFailure::PublishRejected;
     return StageFailure::None;
+}
+
+// The metric evidence on its own, with the recorded exit event REMOVED. Running the same
+// classifier over a copy whose termination is NotRecorded is deliberate: it reuses one set of
+// clauses instead of duplicating them, so the two answers cannot drift apart.
+inline StageDiagnosis stage_diagnosis_of(const StageFailureSignals& s) {
+    StageDiagnosis d;
+    d.primary_event = first_failure_of(s);
+    StageFailureSignals metric_only = s;
+    metric_only.newton_termination = NewtonTerminationReason::NotRecorded;
+    d.attribution = first_failure_of(metric_only);
+    // "Measured" means the metric path had something to say beyond the absence of evidence.
+    d.attribution_measured =
+        (d.attribution != StageFailure::InsufficientEvidence) &&
+        (d.attribution != StageFailure::StageSignalMissing);
+    return d;
 }
 
 }  // namespace sdirk3
