@@ -4993,8 +4993,10 @@ public:
         reset_stats();
         
         // Get adaptive parameters if enabled
+        // `newton_tol_adaptive` is DELIBERATELY cross-iteration: it is a monotone ratchet seeded
+        // from init_R0_norm at iteration 0 (see :6420). `krylov_tol_adaptive` is not -- it lives
+        // inside the loop now, see the Newton loop body.
         float newton_tol_adaptive = options_.newton_tol;
-        float krylov_tol_adaptive = static_cast<float>(options_.krylov_tol);
         float init_R0_norm = 0.0f;  // Captured at iter 0 for relative convergence criterion
         float last_res_scaled = 0.0f;  // v20.3: Last Newton residual (float) for adaptive α
 
@@ -5632,6 +5634,26 @@ public:
             float ew_eta_used_this_iter = -1.0f;
             bool ew_eta_updated_this_iter = false;
             const bool ew_eta_enabled_this_iter = options_.use_adaptive_tolerances;
+            // R13.20 (self-review, iteration 1 of the adversarial loop): the TOLERANCE itself is
+            // per-iteration, and it was declared outside the Newton loop -- the same defect the
+            // flag below was moved in to fix, one level down. My R9-5 fix moved the receipt and
+            // left the value it describes behind.
+            //
+            // Why it was inert on the default path: with `use_adaptive_tolerances` on (the
+            // default) the E-W block assigns this unconditionally at the top of every iteration,
+            // before any read, so the carried-over value is never observed and the default path
+            // is byte-identical either way.
+            //
+            // Why it was NOT inert with adaptive tolerances OFF: the INN ramp at :8591 is an
+            // IN-PLACE MULTIPLY (`krylov_tol_adaptive = gamma_eff * krylov_tol_adaptive`), and
+            // the policy round-trip at :7620/:7741 carries the value through unchanged unless a
+            // stage override fires. With nothing reseeding it, iteration k started from
+            // iteration k-1's post-ramp value and the ramp COMPOUNDED: gamma^k, not gamma. At
+            // gamma = 0.5 over a 12-iteration budget that is 2.4e-4 x base -- a tolerance no
+            // solve can reach, so every solve spends its whole budget. The ramp's own comment
+            // calls it "conservative" and describes a per-iteration tightening, not a geometric
+            // one. Seeded fresh here, it is what that comment says.
+            float krylov_tol_adaptive = static_cast<float>(options_.krylov_tol);
             // R13.20 (round 9, R9-5): which knob BOUND this iteration's inner tolerance.
             // Declared here, inside the Newton loop body, so it cannot inherit the previous
             // iteration's answer -- its predecessor was a bool declared outside the loop and
