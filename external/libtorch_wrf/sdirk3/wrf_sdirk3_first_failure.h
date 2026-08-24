@@ -739,6 +739,32 @@ inline StageFailure krylov_exit_attribution_of(const StageFailureSignals& s) {
     return StageFailure::None;
 }
 
+// R13.21 (external review P1-2): IS THIS RECEIPT COMPLETE?
+//
+// Six sites return a Krylov result. Four fill the metric/budget receipt R13.18-R13.20 added; the
+// two `NanRetryExhausted` early returns filled only the constructor fields plus
+// `initial_rel_error`, so every new field stayed at its sentinel. A terminal solve that ends on
+// that path therefore hands the classifier an exit receipt it cannot subtype, and the record falls
+// back to the generic event or to insufficient evidence -- the classifier reporting absence where
+// the solve knew the answer.
+//
+// The rule lives here, as a view over the values rather than over the type, so a fixture can
+// reject its negation without pulling in the solver header. `tolerance_applied` and the two
+// tolerance-reached flags are deliberately NOT required: a path that never evaluated a tolerance
+// has nothing to report, and demanding it would push a producer into inventing one.
+struct KrylovReceiptView {
+    double rho_D_final = -1.0;
+    double rho_S_final = -1.0;
+    int    stopping_metric = -1;   // KrylovStoppingMetric, or -1 for "not stamped"
+    int    arnoldi_spent = -1;
+    int    arnoldi_allowed = -1;
+};
+
+inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
+    return measured(r.rho_D_final) && measured(r.rho_S_final) &&
+           r.stopping_metric >= 0 && r.arnoldi_spent >= 0 && r.arnoldi_allowed > 0;
+}
+
 // R13.20 (round 9, R9-2): WHICH BODY OF EVIDENCE the returned category came from.
 //
 // `attribution_from_metric` used to be inferred AFTER the fact, from `measured(worst_..._vs_r0)

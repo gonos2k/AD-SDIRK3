@@ -125,9 +125,23 @@ place to work.
 
 ### Phase 4 — P1-2: one finalizer for every return path
 
-- [ ] **4.1** Route all six `GMRESResult` return sites through one finalizer that fills the metric,
+- [x] **4.1** Route all six `GMRESResult` return sites through one finalizer that fills the metric,
       budget and termination receipt.
-- [ ] **4.2** Fixtures: `NanRetry_ReturnHasCompleteReceipt`, `AllKrylovReturnsShareOneFinalizer`.
+- [x] **4.2** Fixtures: `NanRetry_ReturnHasCompleteReceipt`, `AllKrylovReturnsShareOneFinalizer`.
+
+**Phase 4 result, and a deliberate scope choice.** The review proposes routing all six returns
+through one `finalize_krylov_result`. That is a restructure of two 1000-line functions, and this
+project's own rule is to prefer a small reversible mechanism over a risky monolithic rewrite. What
+the contract actually needs is that **every** return produce a complete receipt — so the rule is
+written as a pure predicate, `krylov_receipt_complete`, and the two returns that failed it (the
+`NanRetryExhausted` early exits, one per solver) now fill the metric, budget and stopping-metric
+fields. The other four already did.
+
+The ratios are stamped `1.0` there rather than left at a sentinel: the residual is non-finite by
+construction on that path, so "no reduction" is the honest reading and a sentinel would read
+"never measured". Fixtures pin the complete case, **each field's absence separately** (a rule that
+cannot fire is not a rule), and the pre-R13.21 receipt reconstructed — which the rule rejects,
+which is why a terminal solve ending there fell back to the generic event.
 
 ### Phase 5 — §8: the threshold's sensitivity on the record
 

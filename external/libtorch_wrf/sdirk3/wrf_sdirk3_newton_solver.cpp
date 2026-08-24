@@ -1551,6 +1551,29 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                             r_true.detach().clone(), iter, false, false};
                     res.termination_reason = KTR::NanRetryExhausted;
                     res.initial_rel_error = initial_rel_error_gmres;
+                    // R13.21 (external review P1-2): COMPLETE THE RECEIPT. This early return
+                    // filled only the constructor fields plus `initial_rel_error`, so every metric
+                    // and budget field R13.18-R13.20 added stayed at its sentinel -- and a
+                    // terminal solve ending here handed the classifier an exit receipt it could
+                    // not subtype, making the record report absence where the solve knew the
+                    // answer. `krylov_receipt_complete` in wrf_sdirk3_first_failure.h is the rule
+                    // a fixture pins; these are the values that satisfy it.
+                    //
+                    // The residual is non-finite by construction on this path, so the two ratios
+                    // are reported as 1.0 -- "no reduction", which is what `rel_error` already
+                    // says -- rather than as a sentinel that reads "never measured".
+                    res.rho_D_initial = initial_rel_error_gmres;
+                    res.rho_D_final = 1.0f;
+                    res.rho_S_initial = initial_rel_error_gmres;
+                    res.rho_S_final = 1.0f;
+                    res.tolerance_applied = tol;
+                    res.D_tolerance_reached = false;
+                    res.S_tolerance_reached = false;
+                    res.arnoldi_spent = total_arnoldi_iters + j;
+                    res.arnoldi_allowed = max_iter * restart;
+                    res.stopping_metric = static_cast<int>(
+                        !block_scaled ? wrf::sdirk3::KrylovStoppingMetric::IdentityS
+                                      : wrf::sdirk3::KrylovStoppingMetric::BlockD);
                     return res;
                 } else {
                     // Continue GMRES loop, hope next iteration succeeds
@@ -3394,6 +3417,29 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                             r_true.detach().clone(), iter, false, false};
                     res.termination_reason = KTR::NanRetryExhausted;
                     res.initial_rel_error = initial_rel_error_fgmres;
+                    // R13.21 (external review P1-2): COMPLETE THE RECEIPT. This early return
+                    // filled only the constructor fields plus `initial_rel_error`, so every metric
+                    // and budget field R13.18-R13.20 added stayed at its sentinel -- and a
+                    // terminal solve ending here handed the classifier an exit receipt it could
+                    // not subtype, making the record report absence where the solve knew the
+                    // answer. `krylov_receipt_complete` in wrf_sdirk3_first_failure.h is the rule
+                    // a fixture pins; these are the values that satisfy it.
+                    //
+                    // The residual is non-finite by construction on this path, so the two ratios
+                    // are reported as 1.0 -- "no reduction", which is what `rel_error` already
+                    // says -- rather than as a sentinel that reads "never measured".
+                    res.rho_D_initial = initial_rel_error_fgmres;
+                    res.rho_D_final = 1.0f;
+                    res.rho_S_initial = initial_rel_error_fgmres;
+                    res.rho_S_final = 1.0f;
+                    res.tolerance_applied = tol;
+                    res.D_tolerance_reached = false;
+                    res.S_tolerance_reached = false;
+                    res.arnoldi_spent = total_arnoldi_iters + j;
+                    res.arnoldi_allowed = max_iter * restart;
+                    res.stopping_metric = static_cast<int>(
+                        !block_scaled ? wrf::sdirk3::KrylovStoppingMetric::IdentityS
+                                      : wrf::sdirk3::KrylovStoppingMetric::BlockD);
                     return res;
                 } else {
                     // Continue GMRES loop, hope next iteration succeeds

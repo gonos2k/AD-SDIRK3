@@ -1516,6 +1516,45 @@ int main() {
               "...which is exactly because that category names its layer from the category alone");
     }
 
+    {
+        // R13.21 (external review P1-2): a Krylov return is complete or it is not. Six sites
+        // return a result; four filled the metric/budget receipt and the two NanRetryExhausted
+        // early returns filled only the constructor fields, so a terminal solve ending there gave
+        // the classifier an exit receipt it could not subtype -- the record reporting ABSENCE
+        // where the solve knew the answer.
+        using wrf::sdirk3::KrylovReceiptView;
+        using wrf::sdirk3::krylov_receipt_complete;
+
+        KrylovReceiptView full;
+        full.rho_D_final = 1.0; full.rho_S_final = 1.0;
+        full.stopping_metric = static_cast<int>(wrf::sdirk3::KrylovStoppingMetric::BlockD);
+        full.arnoldi_spent = 7; full.arnoldi_allowed = 8;
+        check(krylov_receipt_complete(full),
+              "a return that stamps both ratios, the metric it stopped on, and the budget it "
+              "spent against what it was allowed is a complete receipt");
+
+        // Each field alone must be able to fail it -- a rule that cannot fire is not a rule.
+        { auto r = full; r.rho_D_final = -1.0;
+          check(!krylov_receipt_complete(r), "...an unstamped rho_D alone makes it incomplete"); }
+        { auto r = full; r.rho_S_final = -1.0;
+          check(!krylov_receipt_complete(r), "...an unstamped rho_S alone makes it incomplete"); }
+        { auto r = full; r.stopping_metric = -1;
+          check(!krylov_receipt_complete(r),
+                "...and without the metric it stopped on, nothing downstream can name the layer"); }
+        { auto r = full; r.arnoldi_spent = -1;
+          check(!krylov_receipt_complete(r), "...nor without the work actually spent"); }
+        { auto r = full; r.arnoldi_allowed = 0;
+          check(!krylov_receipt_complete(r),
+                "...nor with a zero budget, which cannot establish exhaustion"); }
+
+        // The pre-R13.21 NanRetryExhausted receipt, reconstructed: only the ctor fields.
+        KrylovReceiptView nan_retry_before;
+        nan_retry_before.rho_S_final = 1.0;   // rel_error was set; nothing else was
+        check(!krylov_receipt_complete(nan_retry_before),
+              "the NaN-retry return as it stood before R13.21 is incomplete by this rule, which "
+              "is why a terminal solve ending there fell back to the generic event");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1532,7 +1571,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 132;
+    constexpr int expected_checks = 139;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
