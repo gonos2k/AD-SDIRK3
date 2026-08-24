@@ -9262,8 +9262,11 @@ vertical_coefficients:
                               << " exit_S_reached=" << (sig.exit_S_reached ? 1 : 0)
                               << " exit_rho_stop=" << sig.exit_rho_stop_final
                               << " exit_rho_S=" << sig.exit_rho_S_final
-                              << " exit_rho_E=" << sig.exit_rho_E_final
-                              << " exit_E_reached=" << (sig.exit_E_reached ? 1 : 0)
+                              // R13.19 (P0-2): named for what it is -- the StageEntry-weighted
+                              // LINEAR Krylov residual, not the stage gate's nonlinear metric.
+                              << " exit_rho_E_entry_linear=" << sig.exit_rho_E_final
+                              << " exit_E_entry_linear_reached="
+                              << (sig.exit_E_reached ? 1 : 0)
                               << " exit_stop_metric="
                               << wrf::sdirk3::krylov_stopping_metric_name(sig.exit_stopping_metric)
                               << " exit_tol_source="

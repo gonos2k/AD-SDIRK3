@@ -66,7 +66,15 @@ enum class StageFailure {
     // met everything the classifier could see and the step was rejected anyway. That is not the
     // operator, not the forcing term and not the budget: it is the gate's metric disagreeing with
     // the ones the solve was steered by.
-    StageGateMetricMismatch,
+    // R13.19 (precision review P0-2): RENAMED. This was called StageGateMetricMismatch and it
+    // does not measure the stage gate. `exit_rho_E` is the StageEntry-weighted LINEAR Krylov
+    // residual; the real gate re-evaluates the NONLINEAR stage residual at U_new against
+    // `stage_gate_rel_threshold` under one of three gate_metric_modes -- a different residual, a
+    // different denominator, a different weighting point and a different threshold. The
+    // classifier also never read `gate_metric_ok`, and the fixture asserted the mismatch on a
+    // record whose gate was marked OK, so CI was pinning a contract that reported the gate
+    // refusing while the record said it passed.
+    KrylovEntryMetricMismatch,
     // Neither tolerance met and the Arnoldi budget ran out. Distinct from stagnation: the solve
     // was still descending when it was cut off, so the work is the budget, not the operator.
     KrylovBudgetLimited,
@@ -144,8 +152,8 @@ inline const char* stage_failure_name(StageFailure f) {
             return "krylov_forcing_term_limited";
         case StageFailure::KrylovObjectiveMismatch:
             return "krylov_objective_mismatch";
-        case StageFailure::StageGateMetricMismatch:
-            return "stage_gate_metric_mismatch";
+        case StageFailure::KrylovEntryMetricMismatch:
+            return "krylov_entry_metric_mismatch";
         case StageFailure::KrylovBudgetLimited:
             return "krylov_budget_limited";
         case StageFailure::KrylovSolveThrew:
@@ -186,8 +194,8 @@ inline const char* stage_failure_layer(StageFailure f) {
             return "krylov_tolerance_policy_or_inner_budget";
         case StageFailure::KrylovObjectiveMismatch:
             return "krylov_objective_D_vs_newton_merit";
-        case StageFailure::StageGateMetricMismatch:
-            return "stage_gate_E_metric_vs_solver_metrics";
+        case StageFailure::KrylovEntryMetricMismatch:
+            return "krylov_entry_E_metric_vs_solver_metrics";
         case StageFailure::KrylovBudgetLimited:
             return "inner_krylov_budget";
         case StageFailure::KrylovSolveThrew:
@@ -252,22 +260,32 @@ inline const char* newton_termination_name(NewtonTerminationReason r) {
 // band), or is ignored (clearly better than the worst).
 struct NearWorstFold {
     double worst = -1.0;
-    bool all_met = true;
+    // R13.19 (precision review P0-3): the largest progress among solves that met NO tolerance.
+    // The R13.18 state was (worst, all_met), and a running boolean cannot RETRACT a solve that
+    // leaves the band when a larger worst arrives later -- "near" is NON-TRANSITIVE (A~B and B~C
+    // with A!~C), so the three-element chain A(0.9985,not-met) B(0.9994,met) C(1.0,met) gave
+    // `false` on two of six permutations and `true` on four. Both fields here are MAXIMA, so the
+    // fold is order-independent by construction and the predicate is evaluated at the end.
+    double worst_unmet = -1.0;
+    bool mixed_mechanism_in_band = false;   // set by the caller's two-pass check
 };
 
 inline constexpr double kNearWorstTieBand = 1.0e-3;
 
-inline NearWorstFold near_worst_accumulate(NearWorstFold st, double progress, bool met_tolerance) {
+inline NearWorstFold near_worst_accumulate(NearWorstFold st, double progress,
+                                          bool met_tolerance) {
     if (!(progress >= 0.0)) return st;
-    if (st.worst < 0.0) return NearWorstFold{progress, met_tolerance};
-    const bool joins = (progress >= st.worst * (1.0 - kNearWorstTieBand));
-    const bool replaces = (progress > st.worst) &&
-                          (st.worst < progress * (1.0 - kNearWorstTieBand));
-    if (replaces) return NearWorstFold{progress, met_tolerance};
-    if (joins) {
-        return NearWorstFold{std::max(st.worst, progress), st.all_met && met_tolerance};
-    }
-    return st;   // clearly better than the worst: not in the set
+    st.worst = std::max(st.worst, progress);
+    if (!met_tolerance) st.worst_unmet = std::max(st.worst_unmet, progress);
+    return st;
+}
+
+// Evaluated once, at the end, from two maxima: no solve that met no tolerance lies within the tie
+// band of the final worst. Order-independent because max is.
+inline bool near_worst_all_met(const NearWorstFold& st) {
+    if (!(st.worst >= 0.0)) return true;              // no solves: nothing to contradict
+    if (!(st.worst_unmet >= 0.0)) return true;        // every solve met something
+    return st.worst_unmet < st.worst * (1.0 - kNearWorstTieBand);
 }
 
 // R13.18 (deep review P0-1): the metric the Krylov loop actually stopped on. The receipt used to
@@ -573,11 +591,14 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
             if (s.exit_krylov_iter >= 0 && s.exit_D_reached && !s.exit_S_reached) {
                 return StageFailure::KrylovObjectiveMismatch;
             }
-            // Both recorded metrics met and the GATE's metric not: the seam the receipt could not
-            // express until rho_E was carried. Only claimed when rho_E was actually measured.
+            // R13.19 (precision review P0-2): both solver metrics met and the ENTRY-weighted
+            // linear one not. This is a real seam between the metrics the solve was steered by,
+            // and it is NOT the stage gate -- so it may not be claimed while the gate itself is
+            // recorded as having passed, and it must not be promoted over the event that actually
+            // ended the loop. `gate_metric_ok` is read here so the two cannot disagree.
             if (s.exit_krylov_iter >= 0 && s.exit_D_reached && s.exit_S_reached &&
-                measured(s.exit_rho_E_final) && !s.exit_E_reached) {
-                return StageFailure::StageGateMetricMismatch;
+                measured(s.exit_rho_E_final) && !s.exit_E_reached && !s.gate_metric_ok) {
+                return StageFailure::KrylovEntryMetricMismatch;
             }
             return StageFailure::ZeroUpdateAfterTotalFailure;
         }

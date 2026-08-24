@@ -462,6 +462,9 @@ public:
         int   worst_krylov_tolerance_source = 0;   // KrylovToleranceSource
         bool  worst_krylov_budget_exhausted = false;
         bool  all_near_worst_met_tolerance = true;
+        // R13.19 (P0-3): the running MAXIMUM over solves that met no tolerance. Paired with the
+        // worst it makes the tie predicate order-independent; a running boolean could not be.
+        double near_worst_unmet = -1.0;
         // R13.18 (deep review P0-4): the receipt of the solve that ENDED THE LOOP. The `worst_*`
         // fields belong to the largest-ratio solve in the stage, which need not be the one that
         // exited -- so a terminal failure could be subtyped from a different iteration's evidence.

@@ -1,0 +1,104 @@
+# R13.19 — checklist for the R13.18 precision review
+
+Baseline: `main` merge `36d3506` (PR #179 merged). Branch `agent/r13-19-initial-stop-consistency`.
+
+**Two of the review's sharpest claims verified before writing anything:**
+
+1. **The near-worst fold is still order-dependent.** Replayed the reviewer's three-element chain
+   `A(0.9985, not-met) · B(0.9994, met) · C(1.0000, met)` over all six permutations of my R13.18
+   fold: **4 give `true`, 2 give `false`**, and the correct answer is `true` (A sits outside the
+   final band `≥ 0.999`). "Near" is **non-transitive** — A~B and B~C but A≁C — and a running
+   `(worst, all_met)` cannot retract A once C arrives. My R13.18 fix closed the 2-element case only.
+2. **The contract test pins a wrong gate contract.** `ok_stage()` sets `gate_metric_ok = true`
+   (`test_first_failure_classification.cpp:63`) and my fixture builds on it and asserts
+   `stage_gate_metric_mismatch` — so **CI actively fixes a contract that reports the stage gate
+   refused while the record says it passed**. The classifier's condition never reads
+   `gate_metric_ok`.
+
+Legend: **[DONE]** · **[OPEN]**
+
+## P0
+
+- [x] **P0-1 — `InitialConverged` merges the stop metric and the S metric back into one success.**
+      The early return sets `success = true` unconditionally and stores `error_val` — which is
+      ρ_D (or ρ_E under the WRMS experiment) — into `rel_error`, the **S-coordinate** field. So
+      ρ_stop = 0.85, ρ_S = 0.99, η = 0.90 returns *success* where the normal finaliser would return
+      failure and the classifier would say `KrylovObjectiveMismatch`. It also populates none of the
+      new receipt. **This is a production path**: the value feeds `gmres_success`,
+      `gmres_raw_rel_error`, the trust-region prediction, the total-failure rule and warm-start
+      quality — not a diagnostic.
+- [x] **P0-2 — `StageGateMetricMismatch` does not measure the stage gate.** `exit_rho_E` is the
+      **StageEntry-weighted linear Krylov residual**; the real gate re-evaluates the **nonlinear**
+      stage residual at `U_new` against `stage_gate_rel_threshold`, under one of three
+      `gate_metric_mode`s. Different residual, denominator, weighting point and threshold. The
+      classifier also never reads `gate_metric_ok`, and the fixture asserts the mismatch with the
+      gate recorded OK. Causal order compounds it: the gate is evaluated **after** the Newton loop
+      ended, so promoting it to the *first* refusal contradicts the taxonomy.
+- [x] **P0-3 — the near-worst reducer is still order-dependent** (verified above), and separately
+      the **mechanism** attribution is too: `worst_*` updates on strict `>`, so on an exact tie the
+      first-arriving solve's D/S/source/budget receipt wins.
+- [ ] **P0-4 — the stopping-metric enum exists and the classifier still hardcodes D.** Under the
+      WRMS experiment `error_tensor` is the `E⁻¹S` objective and is stored in `rho_D_final` /
+      `D_tolerance_reached`; the category and layer then say `..._D_vs_newton_merit`.
+
+## P1
+
+- [ ] **P1-1 — tolerance provenance is not provenance.** `tol_source` keys `EisenstatWalker` off
+      `policy.ew_applied`, which is whether E–W changed the **restart budget**, not whether it set
+      the tolerance. The INN ramp multiplies `krylov_tol_adaptive` and is not in the selector at
+      all (`InnRamp` has no producer). And the emitter never calls `krylov_forcing_layer_for` — it
+      prints the source-neutral category layer, so the "recorded source selects the layer" claim is
+      not implemented end to end.
+- [ ] **P1-2 — `KrylovBudgetLimited` still overclaims.** Exhaustion is measured; "still descending
+      when cut off" is not. A solve flat from the first restart classifies the same.
+- [ ] **P1-3 — the Taylor receipt fails OPEN on missing new fields**, and the contract test pins
+      that. Needs receipt versioning so a v2 record must carry them.
+- [ ] **P1-4 — event and cause share one enum**, which is why the `ZeroUpdateAfterTotalFailure`
+      branch both "outranks the reconstruction" and "must not override r₀ evidence" while the code
+      does the former.
+
+## Accepted / unchanged
+
+A/B shared preconditioner instance stays HOLD. `dt=600` forward, one-step tangent/adjoint, exact
+4D-Var and MPI production remain NO-GO.
+
+
+---
+
+## First batch — P0-1, P0-2, P0-3
+
+Measured after, dt=600 stage 2 (verdict and values unchanged; only the **claims** are now accurate):
+
+```
+category=zero_update_after_total_failure  layer=zero_update_bnorm_rule_or_step_recovery
+exit_krylov_iter=3  exit_rho_stop=0.9297  exit_rho_S=1.048  exit_rho_E_entry_linear=0.8618
+krylov_solves_trivial=0  near_worst_all_met_tol=0
+```
+
+**P0-1 — the production bug.** `InitialConverged` set `success = true` unconditionally and stored
+the **stop** metric into `rel_error`, the **S-coordinate** field. `success` is now the S question,
+the same one the normal exit answers; `rel_error` always carries ρ_S; the stop objective keeps its
+own field; and the full receipt (both ρ's, `tolerance_applied`, both reached flags, the stopping
+metric, `arnoldi_spent/allowed = 0/allowed`) is populated. The matching rule moved with it: an
+`InitialConverged` solve counts as **trivial** only when it met **both** metrics — one that met the
+stop objective and not S is not a zero-work success, it is exactly the objective mismatch, and
+excluding it hid the state the classifier exists to name.
+
+**P0-2 — false gate authority, removed.** `exit_rho_E` is the **StageEntry-weighted linear Krylov
+residual**; the stage gate re-evaluates the **nonlinear** stage residual at `U_new` against its own
+threshold under one of three modes. Different residual, denominator, weighting point, threshold.
+The category is renamed **`KrylovEntryMetricMismatch`** (layer
+`krylov_entry_E_metric_vs_solver_metrics`), the emitted field to
+`exit_rho_E_entry_linear`, and the clause now **requires `gate_metric_ok == false`** — because the
+fixture had been asserting the mismatch on a record inheriting `gate_metric_ok = true` from
+`ok_stage()`, i.e. **CI was pinning a contract that reported the gate refusing while the record said
+it passed.** A new fixture pins the converse: with the gate recorded as passing, the seam may not be
+reported as a refusal.
+
+**P0-3 — the reducer was still order-dependent, verified before fixing.** Replaying the reviewer's
+three-element chain over all six permutations of the R13.18 fold: **4 → `true`, 2 → `false`**, with
+`true` correct. "Near" is **non-transitive** (A~B, B~C, A≁C) and a running `(worst, all_met)` cannot
+retract A once C arrives — the R13.18 fix had closed the 2-element case only. The state is now **two
+maxima** (`worst`, `worst_unmet`) with the predicate evaluated once at the end
+(`near_worst_all_met`), which is order-independent by construction. All six permutations are
+asserted to agree, and to agree on `true`.

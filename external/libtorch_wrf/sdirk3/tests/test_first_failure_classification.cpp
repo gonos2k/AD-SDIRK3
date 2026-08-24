@@ -920,28 +920,52 @@ int main() {
             for (const auto& x : v) st = near_worst_accumulate(st, x.p, x.met);
             return st;
         };
+        auto all_met_of = [&](std::vector<Solve> v) {
+            return wrf::sdirk3::near_worst_all_met(fold(std::move(v)));
+        };
         const Solve A{0.90, false}, B{0.99, true};
         const auto ab = fold({A, B});
         const auto ba = fold({B, A});
-        check(ab.all_met == ba.all_met && ab.worst == ba.worst && ab.all_met,
+        check(all_met_of({A, B}) == all_met_of({B, A}) && ab.worst == ba.worst &&
+              all_met_of({A, B}),
               "A(0.90,not-met) then B(0.99,met) must equal B then A -- the streaming version gave "
               "false one way and true the other, and that verdict decides whether the "
               "forcing-term and objective-mismatch categories may be read at all");
 
         // A strictly worse solve outside the band REPLACES the set; it does not inherit it.
-        check(fold({{0.50, false}, {0.99, true}}).all_met,
+        check(all_met_of({{0.50, false}, {0.99, true}}),
               "a clearly-better earlier solve is not in the final tie set and must not poison it");
         // ...and a solve inside the band JOINS it.
-        check(!fold({{0.9895, false}, {0.99, true}}).all_met,
+        check(!all_met_of({{0.9895, false}, {0.99, true}}),
               "a solve within the tie band of the final worst IS in the set, so one that met no "
               "tolerance makes the set ambiguous");
         // Order-independence of the joining case too.
-        check(fold({{0.9895, false}, {0.99, true}}).all_met ==
-                  fold({{0.99, true}, {0.9895, false}}).all_met,
+        check(all_met_of({{0.9895, false}, {0.99, true}}) ==
+                  all_met_of({{0.99, true}, {0.9895, false}}),
               "and that holds in either arrival order");
+        // R13.19 (precision review P0-3): the THREE-ELEMENT CHAIN, all six permutations.
+        // "Near" is NON-TRANSITIVE -- A~B and B~C with A!~C -- so a running boolean cannot
+        // retract A once C arrives. The R13.18 fold gave `false` on two of these six and `true`
+        // on four; the correct answer is `true`, since the final worst is 1.0 and A at 0.9985
+        // sits outside the band (>= 0.999).
+        {
+            const Solve X{0.9985, false}, Y{0.9994, true}, Z{1.0000, true};
+            const std::vector<std::vector<Solve>> perms = {
+                {X, Y, Z}, {X, Z, Y}, {Y, X, Z}, {Y, Z, X}, {Z, X, Y}, {Z, Y, X}};
+            bool all_true = true, agree = true;
+            const bool first = all_met_of(perms[0]);
+            for (const auto& v : perms) {
+                const bool r = all_met_of(v);
+                agree = agree && (r == first);
+                all_true = all_true && r;
+            }
+            check(agree && all_true,
+                  "all six permutations of a three-element chain agree, and agree on TRUE -- the "
+                  "solve that met nothing is outside the final tie band, and a running boolean "
+                  "could not retract it because near-ness is not transitive");
+        }
         // A single solve is its own set.
-        check(near_worst_accumulate(NearWorstFold{}, 0.99, false).all_met == false &&
-              near_worst_accumulate(NearWorstFold{}, 0.99, true).all_met == true,
+        check(!all_met_of({{0.99, false}}) && all_met_of({{0.99, true}}),
               "the first solve starts the set rather than inheriting the `true` default");
     }
 
@@ -985,20 +1009,42 @@ int main() {
         s.exit_krylov_iter = 2;
         s.exit_D_reached = true; s.exit_S_reached = true;
         s.exit_rho_E_final = 0.7; s.exit_E_reached = false;
-        check(name_of(s) == "stage_gate_metric_mismatch",
+        // R13.19 (precision review P0-2): this fixture used to assert the mismatch on a record
+        // inheriting `gate_metric_ok = true` from ok_stage() -- CI pinning a contract that
+        // reported the gate refusing while the record said it passed. The gate must actually
+        // have refused, and the category is named for the ENTRY metric it measures, not the gate.
+        s.gate_metric_ok = false;
+        check(name_of(s) == "krylov_entry_metric_mismatch",
               "both metrics the solver was steered by are satisfied and the GATE's metric is not "
               "-- not the operator, not the forcing term, not the budget, but the gate's norm "
               "disagreeing with the solver's");
-        check(std::string(stage_failure_layer(StageFailure::StageGateMetricMismatch)) ==
-                  "stage_gate_E_metric_vs_solver_metrics",
+        check(std::string(stage_failure_layer(StageFailure::KrylovEntryMetricMismatch)) ==
+                  "krylov_entry_E_metric_vs_solver_metrics",
               "and the layer names that disagreement rather than a component");
         s.exit_E_reached = true;
-        check(name_of(s) != "stage_gate_metric_mismatch",
+        check(name_of(s) != "krylov_entry_metric_mismatch",
               "with the gate's metric also satisfied there is no mismatch to report");
         s.exit_E_reached = false; s.exit_rho_E_final = -1.0;
-        check(name_of(s) != "stage_gate_metric_mismatch",
+        check(name_of(s) != "krylov_entry_metric_mismatch",
               "and an UNMEASURED rho_E may not produce the finding -- absence of a measurement "
               "must not become one, here either");
+    }
+
+    {
+        // R13.19 (P0-2): with the gate recorded as PASSING, the entry-metric seam may not be
+        // reported as a failure -- the record would be claiming a refusal that did not happen.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        s.exit_krylov_iter = 2;
+        s.exit_D_reached = true; s.exit_S_reached = true;
+        s.exit_rho_E_final = 0.7; s.exit_E_reached = false;
+        s.gate_metric_ok = true;                 // the gate did NOT refuse
+        check(name_of(s) != "krylov_entry_metric_mismatch",
+              "a seam between the solver's metrics is not a refusal, and the classifier may not "
+              "report one while the gate is recorded as having passed");
     }
 
     // The layer mapping is the point of the exercise: it says where to work next.
@@ -1017,7 +1063,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 86;
+    constexpr int expected_checks = 88;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

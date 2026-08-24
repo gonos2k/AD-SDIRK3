@@ -1298,10 +1298,38 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         // v20.14r24: final_residual = ||r_true_inner|| (absolute), rel_error = error_val (relative).
         // r_true = RAW (not halo-zeroed), consistent with normal exit (line ~1127) and NaN paths.
         // Callers must apply halo zeroing to r_true before per-block analysis.
+        // R13.19 (precision review P0-1): the STOP metric and the S metric, kept apart.
+        //
+        // This return used to set success = true unconditionally and store `error_val` -- which is
+        // rho_D under block scaling, or rho_E under the WRMS experiment -- into `rel_error`, the
+        // S-COORDINATE field. So rho_stop = 0.85 with rho_S = 0.99 and eta = 0.90 returned SUCCESS,
+        // while the normal finaliser on the identical state returns failure and the classifier
+        // calls it KrylovObjectiveMismatch. The one state R13.17-R13.18 exist to separate was
+        // being merged back into a single success, on a PRODUCTION path: this value feeds
+        // gmres_success, gmres_raw_rel_error, the trust-region prediction, the total-failure rule
+        // and warm-start quality.
+        //
+        // `success` is the S-coordinate question, the same one the normal exit answers, and
+        // `rel_error` always carries rho_S. The stop metric keeps its own field.
+        const float bnorm_unscaled_val = guarded_item<float>(bnorm_unscaled);
+        const float rho_S_here = (bnorm_unscaled_val > BNORM_MIN_THRESHOLD)
+            ? (r_true_norm / bnorm_unscaled_val) : 1.0f;
+        const bool S_reached_here = (rho_S_here < tol);
         WRFNewtonKrylovSolver::GMRESResult res{
-                x, true, 0, r_true_norm, error_val,
+                x, S_reached_here, 0, r_true_norm, rho_S_here,
                 "Initial residual already converged",
                 r_true.detach().clone(), 0, false, false};
+        res.rho_S_initial = rho_S_here;
+        res.rho_S_final = rho_S_here;
+        res.rho_D_initial = error_val;      // the stop objective, named by stopping_metric
+        res.rho_D_final = error_val;
+        res.tolerance_applied = tol;
+        res.D_tolerance_reached = (error_val < tol);
+        res.S_tolerance_reached = S_reached_here;
+        res.arnoldi_spent = 0;
+        res.arnoldi_allowed = max_iter * restart;
+        res.stopping_metric = static_cast<int>((block_scaled ? wrf::sdirk3::KrylovStoppingMetric::BlockD
+                                          : wrf::sdirk3::KrylovStoppingMetric::IdentityS));
         res.termination_reason =
             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
         // R13.13 (red team round 4): the THIRD return path. R13.10 added the computation and
@@ -2870,10 +2898,39 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // v20.14r24: final_residual = ||r_true_inner|| (absolute), rel_error = error_val (relative).
         // r_true = RAW (not halo-zeroed), consistent with normal exit (line ~1127) and NaN paths.
         // Callers must apply halo zeroing to r_true before per-block analysis.
+        // R13.19 (precision review P0-1): the STOP metric and the S metric, kept apart.
+        //
+        // This return used to set success = true unconditionally and store `error_val` -- which is
+        // rho_D under block scaling, or rho_E under the WRMS experiment -- into `rel_error`, the
+        // S-COORDINATE field. So rho_stop = 0.85 with rho_S = 0.99 and eta = 0.90 returned SUCCESS,
+        // while the normal finaliser on the identical state returns failure and the classifier
+        // calls it KrylovObjectiveMismatch. The one state R13.17-R13.18 exist to separate was
+        // being merged back into a single success, on a PRODUCTION path: this value feeds
+        // gmres_success, gmres_raw_rel_error, the trust-region prediction, the total-failure rule
+        // and warm-start quality.
+        //
+        // `success` is the S-coordinate question, the same one the normal exit answers, and
+        // `rel_error` always carries rho_S. The stop metric keeps its own field.
+        const float bnorm_unscaled_val = guarded_item<float>(bnorm_unscaled);
+        const float rho_S_here = (bnorm_unscaled_val > BNORM_MIN_THRESHOLD)
+            ? (r_true_norm / bnorm_unscaled_val) : 1.0f;
+        const bool S_reached_here = (rho_S_here < tol);
         WRFNewtonKrylovSolver::GMRESResult res{
-                x, true, 0, r_true_norm, error_val,
+                x, S_reached_here, 0, r_true_norm, rho_S_here,
                 "Initial residual already converged",
                 r_true.detach().clone(), 0, false, false};
+        res.rho_S_initial = rho_S_here;
+        res.rho_S_final = rho_S_here;
+        res.rho_D_initial = error_val;      // the stop objective, named by stopping_metric
+        res.rho_D_final = error_val;
+        res.tolerance_applied = tol;
+        res.D_tolerance_reached = (error_val < tol);
+        res.S_tolerance_reached = S_reached_here;
+        res.arnoldi_spent = 0;
+        res.arnoldi_allowed = max_iter * restart;
+        res.stopping_metric = static_cast<int>((!block_scaled ? wrf::sdirk3::KrylovStoppingMetric::IdentityS
+                       : (wrms_metric_applied ? wrf::sdirk3::KrylovStoppingMetric::StageWRMS
+                                              : wrf::sdirk3::KrylovStoppingMetric::BlockD)));
         res.termination_reason =
             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
         res.initial_rel_error = initial_rel_error_fgmres;
@@ -9637,9 +9694,16 @@ public:
                     // tolerance keeps whatever progress it made, and the fact that it stopped
                     // because it was ASKED to is recorded separately (below) so the classifier
                     // can name the forcing term instead of the operator.
+                    // R13.19 (precision review P0-1): an InitialConverged solve is TRIVIAL
+                    // only when it satisfied BOTH metrics. One that met the stop objective and
+                    // not the S one is not a zero-work success -- it is exactly the objective
+                    // mismatch, and excluding it from the progress aggregate hides the state
+                    // this classifier exists to name.
                     const bool trivial_solve =
                         (gmres_result.termination_reason ==
-                             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged);
+                             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged) &&
+                        gmres_result.D_tolerance_reached &&
+                        gmres_result.S_tolerance_reached;
                     // R13.17 (external review P0-2): `ToleranceReached` is not the only
                     // termination that met a tolerance. `InternalConvergenceStop` means the
                     // D-objective was satisfied -- the loop stopped because it had minimised what
@@ -9740,12 +9804,17 @@ public:
                         // two verdicts, and the verdict decides whether the forcing-term / objective-mismatch
                         // categories may be read at all.
                         {
-                            wrf::sdirk3::NearWorstFold st{
-                                static_cast<double>(stats_.worst_krylov_rel_error_vs_r0),
-                                stats_.all_near_worst_met_tolerance};
+                            wrf::sdirk3::NearWorstFold st;
+                            st.worst =
+                                static_cast<double>(stats_.worst_krylov_rel_error_vs_r0);
+                            st.worst_unmet = stats_.near_worst_unmet;
                             st = wrf::sdirk3::near_worst_accumulate(
                                 st, static_cast<double>(progress), met_tolerance);
-                            stats_.all_near_worst_met_tolerance = st.all_met;
+                            stats_.near_worst_unmet = st.worst_unmet;
+                            // Evaluated from two MAXIMA at the end, so the answer cannot depend
+                            // on the order the solves arrived in.
+                            stats_.all_near_worst_met_tolerance =
+                                wrf::sdirk3::near_worst_all_met(st);
                         }
                         if (progress > stats_.worst_krylov_rel_error_vs_r0) {
                             stats_.worst_krylov_rel_error_vs_r0 = progress;
