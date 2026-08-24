@@ -777,3 +777,36 @@ Three things the stamp shows that the unstamped rows could not:
   iterations. The ratio worsens because the denominator falls, not because the solve got worse —
   visible only because `b_unscaled_derived` is on the row.
 - **b=192 reaches stage 3**, which is what forced the retraction above.
+
+### The stage-2 budget relocates the failure; the stage-3 budget does not
+
+`stage2 = 192` held fixed (the setting that gets past stage 2), sweeping
+`WRF_SDIRK3_STAGE3_GMRES_RESTART`:
+
+| stage-3 budget | applied | stage-3 solve nit=0 | stage-3 solve nit=1 | attribution | R_first → R_last |
+|---|---|---|---|---|---|
+| unset (inherits) | 163 | ρ_S=0.8943 (j=163) | — | `newton_stagnated` | 0.9999 → 0.9128 |
+| 192 | 192 | ρ_S=0.9064 (j=97) | ρ_S=1.038 (j=97) | `krylov_stagnated` | 0.9999 → 0.9038 |
+| 384 | 384 | ρ_S=0.8445 (j=384) | ρ_S=1.394 (j=193) | `newton_stagnated` | 0.9999 → 0.8440 |
+| 768 | — | — | — | — | **run exceeded 10 min; not completed** |
+
+**A 2.4× stage-3 budget buys 0.049 in ρ_S** (0.894 → 0.845) **and 0.069 in the outer residual**
+(0.913 → 0.844). `newton_iters = 2` and `steps_accepted=1, steps_rejected=1` at every setting, and
+the failure stays `zero_update_after_total_failure` at stage 3. Contrast the stage-2 sweep, where
+8 → 192 **moved the failure from stage 2 to stage 3** — a qualitative change. **The stage-2 budget
+relocates the failure; the stage-3 budget does not.** That is consistent with the campaign's
+"stage 3 is largely inherited from stage 2" note, now measured against its own budget rather than
+inferred.
+
+**The second stage-3 solve gets WORSE as the budget rises** — ρ_S = 1.038 at 192, **1.394** at 384,
+both above 1. More Arnoldi at stage 3 does not monotonically help the *stage*, even where it helps
+the first solve.
+
+**And the 0.90 threshold's fragility is now stark.** `vs_r0` = **0.907** at s3=192 and **0.8993** at
+s3=384 — a **0.8 % difference in the ratio** flips the category `krylov_stagnated` ↔
+`newton_stagnated` and the layer with it. The `attribution_basis` field shows which side of the
+boundary each landed on (`krylov_r0_receipt` vs `aggregate_reconstruction`), so the flip is legible
+as a boundary crossing rather than a mechanism change — which is exactly what it is for.
+
+**Cost, measured:** the 768 setting did not finish inside ten minutes, so the stage-3 budget ladder
+is bounded by wall-clock, not by the knob. Recorded rather than retried.
