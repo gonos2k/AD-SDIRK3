@@ -447,6 +447,12 @@ public:
         // Solves excluded from the max because they did no work (converged on entry) or
         // finished (reached tolerance). Reported so "the max is over 0 solves" is legible.
         int   krylov_solves_trivial = 0;
+        // R13.20 (numerics referee, claim 1): the last Newton iteration the Taylor-defect probe
+        // actually measured. The probe sits inside `if (step_accepted)`, so it CANNOT sample an
+        // iteration whose step was rejected -- including the one that ends the loop at dt=600
+        // (`gmres_total_failure && ||dK|| < 1e-15`, no accepted step). Every tau on record is
+        // therefore from a step that SUCCEEDED, and nothing said so. -1 = the probe never ran.
+        int   taylor_probe_last_iter = -1;
         // R13.16 (round 6, R6-2): did the WORST-progress solve stop because it MET its
         // (adaptive, 0.9-capped) tolerance? "Poor progress because the operator is hard" and
         // "poor progress because the forcing term did not ask for more" route to opposite
@@ -462,6 +468,13 @@ public:
         bool  worst_krylov_S_reached = false;
         int   worst_krylov_tolerance_source = 0;   // KrylovToleranceSource
         bool  worst_krylov_budget_exhausted = false;
+        // R13.20 (numerics referee, claim 7.4): the worst solve's ratio in the SAME coordinate
+        // the frozen A/B ladder reports (rho_D, b-normalised), so the ladder and the production
+        // solve can be put on one axis. Both quantities were already computed; only the
+        // r0-coordinate one reached the record, which is why the one comparison that would say
+        // whether the ladder is representative of production was never on it.
+        float worst_krylov_rho_D = -1.0f;
+        float worst_krylov_rho_S = -1.0f;
         bool  all_near_worst_met_tolerance = true;
         // R13.19 (P0-3): the running MAXIMUM over solves that met no tolerance. Paired with the
         // worst it makes the tie predicate order-independent; a running boolean could not be.

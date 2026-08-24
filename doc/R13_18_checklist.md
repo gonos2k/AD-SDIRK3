@@ -58,10 +58,16 @@ Legend: **[DONE]** · **[OPEN]**
 
 ## Scientific wording to correct
 
-- [ ] τ_max = 0.2008 must not be called "≪ 1". The honest statement: no dominant first-order
+- [x] τ_max = 0.2008 must not be called "≪ 1". The honest statement: no dominant first-order
       Jacobian defect in the measured directions, but the **full-step nonlinear remainder is ~20 %
       of the linear response in the worst excited block**.
-- [ ] `rw` must be reported as **not constrained** by this direction, not as accurate.
+      **DONE in R13.20** — the referee (claim 1D) found the retraction had been chased into R13.8's
+      "moved outward" point but NOT into the τ wording, which is older and more load-bearing: it
+      still stood at `R13_8_checklist.md:747, 752, 1204, 1325`, including the premise sentence of
+      the budget experiment. All four corrected, and the worst excited block is named: it is `ru`.
+- [x] `rw` must be reported as **not constrained** by this direction, not as accurate.
+      **Already done** in P1-1 above and in the measured block below (`tauraw_rw = 0.207042`,
+      `excited_rw = 0`); only the checkbox was left unticked. Ticked in R13.20.
 
 ---
 

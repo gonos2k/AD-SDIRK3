@@ -9275,6 +9275,17 @@ vertical_coefficients:
                               << " layer_receipt=" << layer_receipt
                               // R13.20: and the basis itself, so a reader can see WHICH body of
                               // evidence answered without inferring it from the category.
+                              // R13.20 (numerics referee, claim 1): does the Taylor-defect
+                              // evidence cover the iteration that ENDED this stage? The probe is
+                              // gated on `step_accepted`, so when the loop exits on a rejected or
+                              // zero update it structurally cannot -- and every tau this campaign
+                              // has quoted came from a step that succeeded.
+                              << " taylor_probe_iter=" << sig.taylor_probe_last_iter
+                              << " taylor_covers_last_newton_iter="
+                              << (sig.taylor_probe_last_iter < 0
+                                      ? "unmeasured"
+                                      : (sig.taylor_probe_last_iter == sig.newton_iterations - 1
+                                             ? "1" : "0"))
                               << " event_basis="
                               << wrf::sdirk3::stage_decision_basis_name(diag.primary_event_basis)
                               << " attribution_basis="
@@ -9304,6 +9315,14 @@ vertical_coefficients:
                               << " best_krylov_rel_vs_r0=" << sig.best_krylov_rel_error_vs_r0
                               << " worst_krylov_rel_vs_r0="
                               << sig.worst_krylov_rel_error_vs_r0
+                              // R13.20 (numerics referee, claim 7.4): the SAME solve in the
+                              // coordinate the frozen A/B ladder reports (rho_D, b-normalised)
+                              // and in the one `success` is judged by (rho_S). Both were already
+                              // computed; only the r0 one reached the record, so the comparison
+                              // that would say whether the ladder is representative of the
+                              // production solve could not be made from a log.
+                              << " worst_krylov_rho_D=" << sig.worst_krylov_rho_D
+                              << " worst_krylov_rho_S=" << sig.worst_krylov_rho_S
                               << " worst_krylov_iter=" << sig.worst_krylov_iter
                               << " krylov_solves_vs_r0="
                               << sig.krylov_solves_measured_vs_r0
@@ -13385,6 +13404,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.worst_krylov_budget_exhausted = stats.worst_krylov_budget_exhausted;
     last_stage_signals_.all_near_worst_met_tolerance = stats.all_near_worst_met_tolerance;
     last_stage_signals_.near_worst_mechanism_ambiguous = stats.near_worst_mechanism_ambiguous;
+    last_stage_signals_.taylor_probe_last_iter = stats.taylor_probe_last_iter;
+    last_stage_signals_.worst_krylov_rho_D = stats.worst_krylov_rho_D;
+    last_stage_signals_.worst_krylov_rho_S = stats.worst_krylov_rho_S;
     last_stage_signals_.exit_krylov_iter = stats.exit_krylov_iter;
     last_stage_signals_.exit_D_reached = stats.exit_D_reached;
     last_stage_signals_.exit_S_reached = stats.exit_S_reached;

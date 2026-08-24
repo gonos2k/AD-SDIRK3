@@ -145,3 +145,91 @@ No new ctest target, so the suite-count ratchets do not move.
 **Not run:** the model itself at dt=600 — the new `phys_blocks_*` and `event_basis` rows are emitted
 but unread. Every claim above is static or contract-test evidence; none of it is a measurement of
 the solver's behaviour on `em_b_wave`.
+
+---
+
+## Numerics-referee items, closed in the same increment
+
+These were recorded in R13.19 and not acted on. Each premise was re-checked in the tree first.
+
+**Claim 1B — what τ can and cannot see. CONFIRMED.** `As` is the AD JVP *of `compute_rhs`* and `dR`
+is a finite difference *of the same `compute_rhs`*, so τ measures AD-tangent-vs-primal consistency.
+**A defect in `compute_rhs` itself is invisible** — AD differentiates the wrong function faithfully
+and τ → 0. That is not hypothetical: the campaign's own standing root-cause note (`Omega := rom =
+mu*w` where WRF's Ω is `mu·dη/dt` from `calc_ww_cp`) is exactly such a defect and would leave every
+τ row untouched. Recorded at the probe and in the printed conclusion, which now says "AD-vs-primal
+Jacobian defect".
+
+**Claim 1C — the linearity receipts are blind to this. CONFIRMED.** `e_repeat`, `e_hom`, `e_add` and
+`linearity_residual` all test **linearity**, and a wrong-but-linear `A = J + E` passes every one
+*exactly*. `R13_8_checklist.md`'s *"the receipt behind it is now one that a broken operator would
+fail"* is **false for `linearity_residual`** and true only for `tau_alpha_over_tau`; the two are
+printed side by side and the sentence covered both. Struck in the doc, and the caveat is at
+`operator_linear`'s definition.
+
+**Claim 1 (main) — the sample excludes the failing iteration BY CONSTRUCTION. CONFIRMED by brace
+walk**: the probe is inside `if (step_accepted)` (`wrf_sdirk3_newton_solver.cpp:11709`), so it
+cannot sample the dt=600 exit, which takes the zero-update break with no accepted step. **Every τ
+this campaign has quoted came from a step that succeeded, and nothing said so.** The row now carries
+`probe_gate=step_accepted`, `accepted_so_far` and `rejected_so_far`; `SDIRK3_FIRST_FAILURE` carries
+`taylor_probe_iter` and `taylor_covers_last_newton_iter`.
+
+**Claim 1D — the retracted τ wording was still standing. CONFIRMED, four sites.** R13.18 retracted
+*"τ ≪ 1"* (τ_max = 0.2008) and the retraction was chased into R13.8's "moved outward" point but not
+into the τ wording, which is older and more load-bearing — it survived at `R13_8_checklist.md:747,
+752, 1204, 1325`, including the **premise sentence of the budget experiment**. All four corrected,
+both R13.18 wording boxes ticked, and the worst excited block is now named: `ru`, the block the
+campaign's own record says dominates the stage-3 entry norm.
+
+**Claim 2 — two unearned labels. CONFIRMED, and renamed.** The probe used `vb = gmres_rhs/‖gmres_rhs‖`
+and called it `*_krylov` on the strength of its own comment, *"at a cold start b/‖b‖ IS the first
+Arnoldi vector"* — **a precondition it never measured**, on a record (stage 2, iteration 3) that is a
+**warm start**, where the first Arnoldi vector is `r₀/‖r₀‖`. And even at a cold start it is Arnoldi
+vector **#1**; the later vectors, where cancellation lives, are not measured, so the plural in "the
+directions GMRES builds" was not earned either. Renamed `identity_frac_krylov` →
+`identity_frac_rhs_dir` (same quantity; past logs' `*_krylov` rows are these), with
+`rhs_dir_is_first_arnoldi` **measured** from `‖x₀‖`.
+
+**Claim 4 — "12× budget → 23×". SUPPORTED as arithmetic, corrected as an attribution.** Both
+endpoints are non-solves: ρ = 0.8622 is 0.064 decimal digits, and the run's own per-vector rate
+extrapolates to ~1400 vectors for ρ = 0.1 and ~2800 for ρ = 0.01 — another 16–33× on top of the 12×.
+More substantively the two arms are **not the same experiment**: the budget changed the Newton
+trajectory (4 → 3 iterations, 4 → 3 solves, 3 → 2 accepted steps), so `worst_krylov_rel_vs_r0` is a
+maximum over **different sets of different linear systems**. And `krylov_iters` is a stage aggregate
+printed beside a per-solve extremum — the same mixing this document caught for `best_krylov_rel`
+two hundred lines earlier. Written into `R13_8_checklist.md` with the two lesser confounds
+(three knobs, and the persistent `stage2_hopeless_*` members).
+
+**Claim 7.1 — an uncalibrated threshold doing load-bearing work. CONFIRMED and fixed.** The `1e-3`
+excitation floor **selects which block the verdict names**: `share_rw = 2.16e-04` is 4.6× below it,
+so `rw` is excluded and the headline reads 0.2008 (`ru`) — while `tauraw_rw = 0.207042` is *larger*.
+The campaign fixed the floor-*normalisation* trap and missed the floor-*value* trap, which is the
+same shape as the 0.90 no-progress boundary that got an override, an on-record value and its limits
+written at the constant. The floor now gets all three (`kTauExcitationShare`,
+`WRF_SDIRK3_TAU_EXCITATION_SHARE`, `tau_excitation_share` / `_observed` on the row) **plus** the
+counterfactual: `tau_raw_block_max` and `tau_raw_block_max_name` are emitted beside the excited max,
+so no future reader can quote the verdict without the number it suppressed.
+
+**Claim 7.2 — n = 1 everywhere. ACCEPTED.** One case, one stage, one timestep, one Newton loop; no
+dt ladder, no second configuration, no repeat of any physics run except the probe OFF/ON control.
+The denominator is now on the scope paragraph in `R13_8_checklist.md` rather than appearing once and
+nowhere in the conclusions.
+
+**Claim 7.3 — the priority was inverted. ACCEPTED.** The outer reduction ratio **tracks the achieved
+forcing term almost exactly** (η 0.55 → 0.89 → 0.955 against ratios 0.73, 0.83, 0.89) — the
+inexact-Newton bound being attained. That is a stronger and more direct argument for "the inner
+solve binds" than τ, it carries none of τ's selection caveats, and it was already on the record as a
+supporting remark under a τ headline. Inverted, with the implication the table always carried: **at
+ratio 0.89 even a perfect outer trajectory needs O(10²) Newton iterations against a budget of 12**,
+so the target is a forcing term small enough to change the ratio, not "a better solve".
+
+**Claim 7.4 — two quantities never put on the same axes. FIXED.** The frozen A/B ladder reports ρ_D;
+the live worst solve reported only the r₀ coordinate, so the one comparison that says whether the
+ladder is representative of the production solve could not be made from a log — although both
+numbers were already computed. `worst_krylov_rho_D` and `worst_krylov_rho_S` are now emitted beside
+`worst_krylov_rel_vs_r0`.
+
+**Still open.** Claim 7.4's comparison itself: the fields are emitted but **unread** — it needs a
+dt=600 run. Same for `phys_blocks_local`, `taylor_covers_last_newton_iter`, `tau_raw_block_max`,
+`event_basis` and `rhs_dir_is_first_arnoldi`. Everything in this document is static or contract-test
+evidence.

@@ -2263,7 +2263,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 // so the column norms ARE the operator's magnitude on the directions GMRES
                 // built, and 1/||Hbar e_i|| is the identity term's share of the operator there.
                 // The 10-30% figure this comment used to quote was an ESTIMATE and is REFUTED:
-                // measured directly (identity_frac_krylov / e_hom_krylov in the frozen A/B
+                // measured directly (identity_frac_rhs_dir / e_hom_rhs_dir in the frozen A/B
                 // probe) the identity term carries 0.39% relative error, not 5-20%.
                 double hcol_min = std::numeric_limits<double>::infinity(), hcol_max = 0.0;
                 for (int jj = 0; jj < m; ++jj) {
@@ -4450,6 +4450,11 @@ public:
     // test could not vary it; and its provenance was "the environment at the first solve" rather
     // than at construction. Accepted range (0, 1]; out of range warns and keeps the default.
     double krylov_no_progress_threshold_ = wrf::sdirk3::kKrylovNoProgressVsR0;
+    // R13.20 (numerics referee, claim 7.1): the Taylor excitation floor gets the same treatment
+    // as the no-progress threshold -- a per-run override, the value on the record, and its
+    // selection effect stated. It decides WHICH BLOCK `tau_excited_block_max` names.
+    double tau_excitation_share_ = wrf::sdirk3::kTauExcitationShare;
+    bool   tau_excitation_share_observed_ = false;
     // R13.17 (external review P1-4): the same treatment for the total-failure rule. It was a
     // function-local static, so the first solve in a process latched it for every solver in that
     // process -- the defect fixed for the threshold one commit earlier, left in its sibling.
@@ -4524,6 +4529,19 @@ public:
                     std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0='" << e
                               << "' is not in (0, 1]; keeping "
                               << krylov_no_progress_threshold_ << std::endl;
+                }
+            }
+            const char* ex = std::getenv("WRF_SDIRK3_TAU_EXCITATION_SHARE");
+            if (ex) {
+                char* end = nullptr;
+                const double v = std::strtod(ex, &end);
+                if (end && *end == '\0' && v > 0.0 && v <= 1.0) {
+                    tau_excitation_share_ = v;
+                    tau_excitation_share_observed_ = true;
+                } else {
+                    std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_TAU_EXCITATION_SHARE='" << ex
+                              << "' is not in (0, 1]; keeping "
+                              << tau_excitation_share_ << std::endl;
                 }
             }
         }
@@ -8854,12 +8872,32 @@ public:
                     // is therefore e_hom / identity_frac, and if that reaches 1 the identity is
                     // below the noise floor. The campaign's "5-20%" figure was an ESTIMATE from
                     // eps x scale-separation; these two numbers replace it with a measurement.
-                    // Measured on the RHS direction b/||b|| as well as a random one: at a cold
-                    // start b/||b|| IS the first Arnoldi vector, so it is a genuine Krylov
-                    // direction, and the random/Krylov pair is reported separately because this
-                    // operator is known to behave differently on the two.
-                    double identity_frac_rand = -1.0, identity_frac_krylov = -1.0;
-                    double e_hom_krylov = -1.0;
+                    // Measured on the RHS direction b/||b|| as well as a random one, and
+                    // reported separately because this operator behaves differently on the two.
+                    //
+                    // R13.20 (numerics referee, claim 2a): these were named `*_krylov` on the
+                    // strength of the comment right here -- "at a cold start b/||b|| IS the first
+                    // Arnoldi vector" -- which states a PRECONDITION THE PROBE NEVER MEASURED.
+                    // The record the campaign quoted (stage 2, iteration 3) is a WARM start; this
+                    // case has a measured r0/||b|| = 1.054, and at a warm start the first Arnoldi
+                    // vector is r0/||r0|| = (b - A x0)/||.||, not b/||b||. That is the campaign's
+                    // own rule -- a probe that prints a conclusion must carry a verdict over its
+                    // own preconditions -- recurring one probe over. Renamed to what it IS (the
+                    // RHS direction), with the cold-start condition MEASURED beside it.
+                    //
+                    // (2b) And even at a cold start this is Arnoldi vector #1. The later basis
+                    // vectors, formed by subtracting nearly-parallel projections, are where
+                    // cancellation lives and are NOT measured -- so "the directions GMRES builds"
+                    // was never earned either. The verdict below says `first_arnoldi`, singular.
+                    double identity_frac_rand = -1.0, identity_frac_rhs_dir = -1.0;
+                    double e_hom_rhs_dir = -1.0;
+                    // MEASURED, not asserted: b/||b|| coincides with the first Arnoldi vector
+                    // only when x0 = 0. -1 = the initial guess was not available to check.
+                    int rhs_dir_is_first_arnoldi = -1;
+                    if (gmres_x0.defined()) {
+                        rhs_dir_is_first_arnoldi =
+                            (guarded_item<float>(gmres_x0.norm()) == 0.0f) ? 1 : 0;
+                    }
                     // Probe-local generator (the file's own D121/D123 rule): the global stream
                     // must not shift for downstream one-shot diagnostics.
                     auto probe_gen = at::detail::createCPUGenerator(
@@ -8892,7 +8930,7 @@ public:
                                 v.detach().to(torch::kFloat64).norm().item<double>();
                             identity_frac_rand = (n_Av > 0.0) ? n_v / n_Av : -1.0;
                         }
-                        // Same pair on the RHS direction: the cold-start first Arnoldi vector.
+                        // Same pair on the RHS direction b/||b||.
                         if (gmres_rhs.defined()) {
                             const double n_b =
                                 gmres_rhs.detach().to(torch::kFloat64).norm().item<double>();
@@ -8904,8 +8942,8 @@ public:
                                 if (n_Avb > 0.0) {
                                     const double n_vb =
                                         vb.detach().to(torch::kFloat64).norm().item<double>();
-                                    identity_frac_krylov = n_vb / n_Avb;
-                                    e_hom_krylov =
+                                    identity_frac_rhs_dir = n_vb / n_Avb;
+                                    e_hom_rhs_dir =
                                         rel(gmres_op(alpha * vb) - alpha * Avb, alpha * n_Avb);
                                 }
                             }
@@ -8916,14 +8954,14 @@ public:
                         return (noise >= 0.0 && frac > 0.0) ? noise / frac : -1.0;
                     };
                     const double identity_resolution_rand = resolution(e_hom, identity_frac_rand);
-                    const double identity_resolution_krylov =
-                        resolution(e_hom_krylov, identity_frac_krylov);
+                    const double identity_resolution_rhs_dir =
+                        resolution(e_hom_rhs_dir, identity_frac_rhs_dir);
                     // "Resolved" = the identity term stands above the operator's noise floor.
                     // Unmeasured is NOT resolved: -1 fails the range test rather than passing it.
                     // Consumed by ab_attributable via cmp.identity_resolved below -- the rule
                     // lives in wrf_sdirk3_probe_validity.h so a fixture can reject its negation.
-                    const bool identity_resolved_krylov =
-                        (identity_resolution_krylov >= 0.0 && identity_resolution_krylov < 1.0);
+                    const bool identity_resolved_rhs_dir =
+                        (identity_resolution_rhs_dir >= 0.0 && identity_resolution_rhs_dir < 1.0);
                     // R13.9 (referee C5): the operator's linearity was measured; the
                     // PRECONDITIONER's was not, and the reading "Krylov space of D^-1 A M^-1"
                     // needs M linear too. Production M^-1 is a tridiagonal/column solve on
@@ -8964,6 +9002,13 @@ public:
                     const bool precond_linear =
                         (eM_hom >= 0.0 && eM_hom < kLinearTol) &&
                         (eM_add >= 0.0 && eM_add < kLinearTol);
+                    // R13.20 (numerics referee, claim 1C): these three test LINEARITY, and a
+                    // wrong-but-linear operator A = J + E passes ALL of them EXACTLY. So
+                    // `operator_linear = 1` must never be read as "the operator is accurate" --
+                    // it says the matvec is a linear map, deterministically evaluated. The only
+                    // instrument in this tree that can see a linear operator defect is
+                    // `tau_alpha_over_tau`, and that one is limited to accepted steps and cannot
+                    // see a defect in compute_rhs itself (claim 1B).
                     const bool operator_linear =
                         (e_repeat >= 0.0 && e_repeat < kLinearTol) &&
                         (e_hom    >= 0.0 && e_hom    < kLinearTol) &&
@@ -9405,7 +9450,7 @@ public:
                     cmp.operator_state_unchanged = operator_state_unchanged;
                     cmp.preconditioner_state_unchanged = precond_state_unchanged;
                     cmp.diagnostic_noninterfering = noninterfering;
-                    cmp.identity_resolved = identity_resolved_krylov;
+                    cmp.identity_resolved = identity_resolved_rhs_dir;
                     cmp.jvp_authoritative = jvp_ok && operator_linear && precond_linear;
                     cmp.rho_a_finite = cmp.rho_b_finite = all_finite;
                     cmp.termination_a_admissible = cmp.termination_b_admissible =
@@ -9484,11 +9529,15 @@ public:
                               << " e_homogeneity=" << e_hom
                               << " e_additivity=" << e_add
                               << " identity_frac_rand=" << identity_frac_rand
-                              << " identity_frac_krylov=" << identity_frac_krylov
-                              << " e_hom_krylov=" << e_hom_krylov
+                              // R13.20 (referee claim 2): renamed from `*_krylov`. Same
+                              // quantity, a name that no longer asserts an unmeasured
+                              // precondition; past logs' `identity_*_krylov` rows are these.
+                              << " identity_frac_rhs_dir=" << identity_frac_rhs_dir
+                              << " rhs_dir_is_first_arnoldi=" << rhs_dir_is_first_arnoldi
+                              << " e_hom_rhs_dir=" << e_hom_rhs_dir
                               << " identity_resolution_rand=" << identity_resolution_rand
-                              << " identity_resolution_krylov=" << identity_resolution_krylov
-                              << " identity_resolved_krylov=" << (identity_resolved_krylov ? 1 : 0)
+                              << " identity_resolution_rhs_dir=" << identity_resolution_rhs_dir
+                              << " identity_resolved_rhs_dir=" << (identity_resolved_rhs_dir ? 1 : 0)
                               << " precond_linear=" << (precond_linear ? 1 : 0)
                               << " eM_homogeneity=" << eM_hom
                               << " eM_additivity=" << eM_add
@@ -10003,6 +10052,9 @@ public:
                                 gmres_result.S_tolerance_reached;
                             stats_.worst_krylov_tolerance_source = tol_source;
                             stats_.worst_krylov_budget_exhausted = budget_exhausted;
+                            // R13.20 (claim 7.4): the same solve in the LADDER's coordinate.
+                            stats_.worst_krylov_rho_D = gmres_result.rho_D_final;
+                            stats_.worst_krylov_rho_S = gmres_result.rho_S_final;
                         }
                     } else {
                         stats_.krylov_solves_trivial++;
@@ -11710,7 +11762,22 @@ public:
                 stats_.accepted_steps++;
                 // Referee C8: the TAYLOR DEFECT of the stage function at the step actually
                 // taken. tau = ||G(K+s) - G(K) - A s|| / ||A s||, with A s one production
-                // matvec. tau << 1: the linear model is faithful here and the INNER solve is
+                // matvec.
+                //
+                // R13.20 (numerics referee, claim 1B) -- WHAT tau CAN AND CANNOT SEE. `As` is the
+                // AD JVP OF `compute_rhs`, and `dR` is a finite difference OF THE SAME
+                // `compute_rhs` (R = K - compute_rhs(U); the alpha arm re-evaluates
+                // compute_rhs(U_alpha)). So tau measures whether the AD tangent is consistent
+                // with the primal it differentiates. It CANNOT see a defect in `compute_rhs`
+                // itself: if the implemented RHS is physically wrong, AD differentiates the wrong
+                // function faithfully and tau -> 0. That is not hypothetical here -- the
+                // campaign's own standing root-cause note (Omega := rom = mu*w where WRF's Omega
+                // is mu*d(eta)/dt from calc_ww_cp) is exactly such a defect, and it would leave
+                // every tau row untouched. "Jacobian defect" below means AD-vs-primal, nothing
+                // wider.
+                //
+                // (1D) and it is gated on `step_accepted` -- see the coverage fields on the
+                // emitted row and on SDIRK3_FIRST_FAILURE. tau << 1: the linear model is faithful here and the INNER solve is
                 // the binding constraint. tau = O(1): the model is wrong at this step -- and
                 // the half-step arm separates the two ways it can be wrong: nonlinearity over
                 // the step (tau falls ~2x at s/2, the relative defect being ~linear in ||s||)
@@ -11788,6 +11855,14 @@ public:
                     // normalised by its OWN ||A s||, with a floor so a block the step barely
                     // touches cannot manufacture a huge ratio from noise.
                     double tau_block_max = -1.0;
+                    // R13.20 (claim 7.1): the counterfactual, on every row. `tau_block_max` is
+                    // gated by the excitation floor; this is the largest RAW block ratio with no
+                    // gate at all. On the dt=600 record they disagree -- 0.2008 (`ru`, excited)
+                    // vs 0.207042 (`rw`, share 2.16e-04) -- and the second is larger, so quoting
+                    // the verdict alone reports the floor's choice as a property of the operator.
+                    double tau_block_max_raw = -1.0;
+                    std::string tau_block_max_name = "none";
+                    std::string tau_block_max_raw_name = "none";
                     std::string tau_block_rows;
                     if (layout_initialized_ && cached_layout_.is_exact &&
                         cached_layout_.total_size == dR.numel()) {
@@ -11800,7 +11875,7 @@ public:
                             const double na = a_b.norm().item<double>();
                             // Floor: a block carrying <0.1% of ||A s|| is not being exercised by
                             // this step, and its ratio is noise over noise.
-                            const double floor_b = 1.0e-3 * n_As_all;
+                            const double floor_b = tau_excitation_share_ * n_As_all;
                             const bool excited = (na >= floor_b);
                             const double den = std::max(na, floor_b);
                             const double num = (d_b - a_b).norm().item<double>();
@@ -11813,7 +11888,14 @@ public:
                             // emitted 0.0447 whose RAW value is ~0.207, and the campaign doc read
                             // the emitted number as evidence of accuracy.
                             const double tb_raw = na > 0.0 ? num / na : -1.0;
-                            if (excited && tb > tau_block_max) tau_block_max = tb;
+                            if (excited && tb > tau_block_max) {
+                                tau_block_max = tb;
+                                tau_block_max_name = blk.name;
+                            }
+                            if (tb_raw > tau_block_max_raw) {
+                                tau_block_max_raw = tb_raw;
+                                tau_block_max_raw_name = blk.name;
+                            }
                             tau_block_rows += " tau_" + std::string(blk.name) + "=" +
                                               std::to_string(tb) +
                                               " tauraw_" + std::string(blk.name) + "=" +
@@ -11888,8 +11970,18 @@ public:
                     const auto tau_verdict = wrf::sdirk3::taylor_defect_verdict(tin);
                     const bool tau_measured =
                         (tau_verdict == wrf::sdirk3::TaylorVerdict::Measured);
+                    stats_.taylor_probe_last_iter = newton_iter;
                     std::cerr << "SDIRK3_TAYLOR_DEFECT stage=" << stage
                               << " newton_iter=" << newton_iter
+                              // R13.20 (numerics referee, claim 1): the probe's own GATE, and the
+                              // denominators it implies. This block is inside `if (step_accepted)`,
+                              // so a rejected iteration -- and the zero-update exit that ends the
+                              // loop at dt=600 -- is never sampled. A run that printed three tau
+                              // rows out of twelve iterations looked like a probe that fired three
+                              // times, not one that could not see nine of them.
+                              << " probe_gate=step_accepted"
+                              << " accepted_so_far=" << stats_.accepted_steps
+                              << " rejected_so_far=" << stats_.rejected_steps
                               << " tau=" << tau
                               << " alpha=" << kTauAlpha
                               << " tau_alpha=" << tau_alpha
@@ -11906,6 +11998,14 @@ public:
                               << " fd_fallback_free=" << (tin.fd_fallback_free ? 1 : 0)
                               << " linearity_residual=" << linearity_residual
                               << " tau_excited_block_max=" << tau_block_max
+                              << " tau_excited_block_max_name=" << tau_block_max_name
+                              // R13.20 (claim 7.1): the floor, its provenance, and what the
+                              // verdict would have named without it.
+                              << " tau_excitation_share=" << tau_excitation_share_
+                              << " tau_excitation_share_observed="
+                              << (tau_excitation_share_observed_ ? 1 : 0)
+                              << " tau_raw_block_max=" << tau_block_max_raw
+                              << " tau_raw_block_max_name=" << tau_block_max_raw_name
                               << " realized_step_fraction=" << realized_step_fraction
                               << " realized_U_fraction=" << realized_U_fraction
                               << " signal_to_roundoff=" << signal_to_roundoff
@@ -11918,9 +12018,12 @@ public:
                               // faithful to 2%" and "tau=0.018, we measured the noise floor"
                               // are the same row without this gate.
                               << (tau_measured
-                                  ? "  (tau<<1: linear model faithful, inner solve binding;"
+                                  ? "  (tau<<1: the AD tangent is faithful TO THE PRIMAL IT"
+                                    " DIFFERENTIATES over this accepted step, and the inner solve"
+                                    " is binding -- a wrong compute_rhs is invisible here;"
                                     " tau=O(1) with tau_alpha/tau~alpha: nonlinearity over the"
-                                    " step; tau=O(1) with tau_alpha/tau~1: Jacobian defect)"
+                                    " step; tau=O(1) with tau_alpha/tau~1: AD-vs-primal Jacobian"
+                                    " defect)"
                                   : "  (NO CONCLUSION: preconditions not met -- see"
                                     " tau_verdict; tau and the ratio are arithmetic, not"
                                     " evidence about the Jacobian)")

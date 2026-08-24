@@ -23,6 +23,24 @@
 namespace wrf {
 namespace sdirk3 {
 
+// R13.20 (numerics referee, claim 7.1): the EXCITATION FLOOR, promoted from a bare literal.
+//
+// A block carrying less than this share of ||A s|| is not being exercised by the step, and its
+// ratio is noise over noise -- so it is excluded from `tau_excited_block_max`. The campaign fixed
+// the floor-NORMALISATION trap (R13.18 P1-1: an unexcited block's tau is divided by the floor, so
+// a small value means "barely touched", not "accurate"). It did not fix the floor-VALUE trap: this
+// constant SELECTS WHICH BLOCK THE VERDICT NAMES. Measured on the dt=600 record, `share_rw` is
+// 2.16e-04, 4.6x below 1e-3, so `rw` is excluded and the verdict reads 0.2008 (`ru`) -- while
+// `tauraw_rw = 0.207042` is LARGER. At a floor of 1e-4 the headline number and the block it names
+// both change.
+//
+// Same treatment as kKrylovNoProgressVsR0, which had the identical shape: an override, the value
+// on the record, and the limits written at the constant. The raw max is now emitted beside the
+// excited max, so the counterfactual is on every row rather than reachable only by re-running.
+// Overridable per run via WRF_SDIRK3_TAU_EXCITATION_SHARE.
+inline constexpr double kTauExcitationShare = 1.0e-3;
+
+
 struct ProbeVerdict {
     bool valid = false;
     // Stable machine-greppable token, not prose: the record is parsed by gates.

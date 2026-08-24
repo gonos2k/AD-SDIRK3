@@ -518,6 +518,11 @@ struct StageFailureSignals {
     // Solves excluded from the max: zero-work (converged on entry) or finished (reached
     // tolerance). Neither is evidence about whether Krylov works.
     int    krylov_solves_trivial = 0;
+    // R13.20 (numerics referee, claim 1): the last Newton iteration the Taylor-defect probe
+    // measured, or -1. Reported, not classified on -- it says whether the campaign's tau evidence
+    // covers the iteration that ended the loop, which it structurally cannot when that iteration's
+    // step was rejected.
+    int    taylor_probe_last_iter = -1;
     // Did the WORST-progress solve stop because it met its (adaptive, 0.9-capped) tolerance?
     bool   worst_krylov_met_tolerance = false;
     double worst_krylov_eta = -1.0;
@@ -529,6 +534,10 @@ struct StageFailureSignals {
     bool   worst_krylov_S_reached = false;
     KrylovToleranceSource worst_krylov_tolerance_source = KrylovToleranceSource::Unknown;
     bool   worst_krylov_budget_exhausted = false;
+    // R13.20 (claim 7.4): the worst solve in the ladder's coordinate (rho_D, b-normalised) and in
+    // the success coordinate (rho_S). Reported, not classified on.
+    float  worst_krylov_rho_D = -1.0f;
+    float  worst_krylov_rho_S = -1.0f;
     // R13.17 (external review P0-2): with eta saturated at its cap, two solves can tie on the
     // worst ratio while ending for different reasons, and a strict `>` update let whichever came
     // first decide the category. True only if EVERY near-worst solve met a tolerance.
