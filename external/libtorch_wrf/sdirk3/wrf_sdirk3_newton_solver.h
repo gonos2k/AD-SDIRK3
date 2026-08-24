@@ -139,7 +139,13 @@ public:
      * classification report could not tell which policy actually fired.
      */
     enum class KrylovTerminationReason {
-        InitialConverged,            // ||b - A x0|| already under tolerance
+        // R13.21 (external review P0-1): RENAMED from `InitialConverged`. The loop returned
+        // before any Arnoldi step because the INNER STOPPING OBJECTIVE was already under
+        // tolerance -- which is not the same as converged. `rho_S` can be anything, including
+        // > 1, and R13.19 made the receipt say so; the old name read as S/Newton convergence and
+        // a downstream consumer duly treated it that way. The name now states exactly what was
+        // measured, and callers must read `S_tolerance_reached` to learn the rest.
+        InitialStopMetricReached,    // ||D^-1(b - A x0)|| already under tolerance
         ToleranceReached,            // converged during the Arnoldi sweep
         InternalConvergenceStop,     // D-objective tolerance met before budget; see rho_D/rho_S
         ArnoldiStagnation,           // consecutive true-residual ratio detector
@@ -151,7 +157,12 @@ public:
     };
     static const char* krylov_termination_reason_name(KrylovTerminationReason r) {
         switch (r) {
-            case KrylovTerminationReason::InitialConverged:           return "initial_converged";
+            case KrylovTerminationReason::InitialStopMetricReached:
+                // The STRING is unchanged on purpose: `tests/krylov_early_stop_ablation.py` and
+                // every archived log key on it. Renaming the symbol fixes what a code reader
+                // sees; renaming the wire format would silently break an offline consumer and
+                // every historical record, for no gain.
+                return "initial_converged";
             case KrylovTerminationReason::ToleranceReached:           return "tolerance_reached";
             case KrylovTerminationReason::InternalConvergenceStop:    return "internal_convergence_stop";
             case KrylovTerminationReason::ArnoldiStagnation:          return "arnoldi_stagnation";

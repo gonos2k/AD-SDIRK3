@@ -622,6 +622,45 @@ inline bool measured(double v) {
     return v == v && v >= 0.0 && v < std::numeric_limits<double>::infinity();
 }
 
+// R13.21 (external review P0-1): the entry verdict, as a PURE rule so a fixture can reject its
+// negation. The solver used to decide this inline from the termination LABEL, and the label cannot
+// tell a convergence from a stopping-objective hit.
+//
+// TWO STATES share one return path. The Krylov loop returns before any Arnoldi step whenever the
+// inner stopping objective is already under tolerance:
+//
+//   rho_stop < eta AND rho_S <  eta   -- converged; nothing downstream should second-guess it
+//   rho_stop < eta AND rho_S >= eta   -- an OBJECTIVE MISMATCH: it minimised what it was asked to
+//                                        and the result is still useless to the Newton merit
+//
+// R13.19 made the receipt distinguish them (`success` and `rel_error` carry the S coordinate).
+// This is the consumer catching up: only the first may exempt a solve from the total-failure
+// rules, and only the first may have its full step taken without a nonlinear check.
+struct KrylovEntryVerdict {
+    bool S_reached = false;           // converged in the coordinate `success` is judged by
+    bool objective_mismatch = false;  // stop metric met, S not met
+};
+
+inline KrylovEntryVerdict krylov_entry_verdict(bool stop_metric_reached_on_entry,
+                                               bool S_tolerance_reached) {
+    KrylovEntryVerdict v;
+    v.S_reached = stop_metric_reached_on_entry && S_tolerance_reached;
+    v.objective_mismatch = stop_metric_reached_on_entry && !S_tolerance_reached;
+    return v;
+}
+
+// The ONLY entry state that may exempt a solve from the total-failure rules. Deliberately not
+// `stop_metric_reached_on_entry`: that is the label, and reading it here was the defect.
+inline bool entry_exempts_total_failure(const KrylovEntryVerdict& v) {
+    return v.S_reached;
+}
+
+// An objective mismatch may still take its step -- but only against a measured nonlinear decrease,
+// which is what the other two acceptance sites in the Newton loop already require of everyone else.
+inline bool entry_requires_nonlinear_decrease(const KrylovEntryVerdict& v) {
+    return v.objective_mismatch;
+}
+
 // R13.20 (round 9, R9-2): WHICH BODY OF EVIDENCE the returned category came from.
 //
 // `attribution_from_metric` used to be inferred AFTER the fact, from `measured(worst_..._vs_r0)

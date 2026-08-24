@@ -1331,7 +1331,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         res.stopping_metric = static_cast<int>((block_scaled ? wrf::sdirk3::KrylovStoppingMetric::BlockD
                                           : wrf::sdirk3::KrylovStoppingMetric::IdentityS));
         res.termination_reason =
-            WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
+            WRFNewtonKrylovSolver::KrylovTerminationReason::InitialStopMetricReached;
         // R13.13 (red team round 4): the THIRD return path. R13.10 added the computation and
         // two of the three returns; this one kept the -1 sentinel, so a solve that converged
         // on entry was dropped from every r0-relative aggregate -- and it is solve_gmres, the
@@ -2932,7 +2932,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                        : (wrms_metric_applied ? wrf::sdirk3::KrylovStoppingMetric::StageWRMS
                                               : wrf::sdirk3::KrylovStoppingMetric::BlockD)));
         res.termination_reason =
-            WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged;
+            WRFNewtonKrylovSolver::KrylovTerminationReason::InitialStopMetricReached;
         res.initial_rel_error = initial_rel_error_fgmres;
         return res;
     }
@@ -7550,7 +7550,18 @@ public:
             float gmres_raw_rel_error = 1.0f;  // v20.14r27g: unclamped, may be >1 when GMRES diverges
             // R13.19 SELF-REVIEW (round 8, P1-A): set where gmres_result is in scope; read by the
             // total-failure predicate below, which is outside that scope.
-            bool gmres_converged_on_entry = false;
+            //
+            // R13.21 (external review P0-1): ONE flag was carrying TWO states. It was set from the
+            // termination LABEL alone -- `reason == InitialStopMetricReached` -- so a solve that met the
+            // inner stopping objective but NOT the S residual was exempted from the total-failure
+            // rules exactly like a genuinely converged one. R13.19 fixed the RECEIPT for that case
+            // (`success` and `rel_error` now carry the S coordinate) and left this consumer reading
+            // the label: the recurring "a rule is produced and its consumer reads something else"
+            // defect, inside the fix that produced the rule.
+            //
+            // Split, and both halves derived from the RECEIPT rather than the label.
+            bool gmres_S_reached_on_entry = false;
+            bool gmres_objective_mismatch_on_entry = false;
             float gmres_initial_rel_error = -1.0f;  // R13.11: ||r0||/||b|| from the same solve
             // R9 P0-D: the GMRES residual, kept only when the nonlinear ledger is armed. It is
             // what turns the linear model's prediction into a read rather than an operator
@@ -9845,11 +9856,23 @@ public:
                 // so a solve that did not measure r0 inherited the PREVIOUS iteration's values --
                 // and the exit site promotes `last_*` as "the receipt of THIS solve", which is
                 // exactly the misattribution the R13.18 P0-4 fix exists to prevent. A stale
-                // `gmres_converged_on_entry` would additionally suppress this solve's
-                // total-failure flag, a production effect.
-                gmres_converged_on_entry =
-                    (gmres_result.termination_reason ==
-                         WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged);
+                // a stale entry flag would additionally suppress this solve's total-failure
+                // flag, a production effect. (R13.21 renamed that flag to the two below.)
+                {
+                    // R13.21 (P0-1): the label says the loop returned before an Arnoldi step; the
+                    // RECEIPT says whether that return was a convergence. Only the second may
+                    // exempt anything.
+                    const bool stop_metric_reached_on_entry =
+                        (gmres_result.termination_reason ==
+                             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialStopMetricReached);
+                    // The rule lives in wrf_sdirk3_first_failure.h as a PURE function, so a
+                    // fixture can reject its negation -- the same reason `near_worst_all_met` and
+                    // `taylor_defect_verdict` live there rather than inline here.
+                    const auto entry_v = wrf::sdirk3::krylov_entry_verdict(
+                        stop_metric_reached_on_entry, gmres_result.S_tolerance_reached);
+                    gmres_S_reached_on_entry = entry_v.S_reached;
+                    gmres_objective_mismatch_on_entry = entry_v.objective_mismatch;
+                }
                 // R13.14 (round 5, R5-13): the INNER budget these solves were given. The
                 // no-progress ratio is budget-dependent -- a healthy operator on 7 Arnoldi
                 // vectors reads 0.92 -- so the ratio cannot be read without it, and the
@@ -9890,14 +9913,14 @@ public:
                     //
                     // R13.14 (red team round 5, P0): but the max must be over solves that DID
                     // WORK AND DID NOT FINISH, and it was over all of them.
-                    //   * InitialConverged does ZERO work and its progress is ~1.0, so under a
+                    //   * InitialStopMetricReached does ZERO work and its progress is ~1.0, so under a
                     //     max the best possible outcome would score as a total stall. Round 4
                     //     added initial_rel_error to that return BECAUSE dropping it from a MIN
                     //     manufactured a stall; the same commit then made a max the classifier's
                     //     input, where the same value manufactures the stall directly.
                     //     R13.19 (P0-1) narrowed the exclusion to solves that met BOTH metrics,
                     //     and R13.19 self-review (round 8, P0-B) had to follow it with
-                    //     `met_tolerance` including a D-satisfied InitialConverged -- otherwise
+                    //     `met_tolerance` including a D-satisfied InitialStopMetricReached -- otherwise
                     //     admitting the solve only moved the misclassification one clause over.
                     //   * A solve that REACHED TOLERANCE solved. Its progress is evidence about
                     //     the tolerance, not about whether Krylov works.
@@ -9923,14 +9946,14 @@ public:
                     // tolerance keeps whatever progress it made, and the fact that it stopped
                     // because it was ASKED to is recorded separately (below) so the classifier
                     // can name the forcing term instead of the operator.
-                    // R13.19 (precision review P0-1): an InitialConverged solve is TRIVIAL
+                    // R13.19 (precision review P0-1): an InitialStopMetricReached solve is TRIVIAL
                     // only when it satisfied BOTH metrics. One that met the stop objective and
                     // not the S one is not a zero-work success -- it is exactly the objective
                     // mismatch, and excluding it from the progress aggregate hides the state
                     // this classifier exists to name.
                     const bool trivial_solve =
                         (gmres_result.termination_reason ==
-                             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialConverged) &&
+                             WRFNewtonKrylovSolver::KrylovTerminationReason::InitialStopMetricReached) &&
                         gmres_result.D_tolerance_reached &&
                         gmres_result.S_tolerance_reached;
                     // R13.17 (external review P0-2): `ToleranceReached` is not the only
@@ -9939,7 +9962,7 @@ public:
                     // it was asked to -- and reading only the first sent exactly that state back
                     // to KrylovStagnated, the misclassification the category exists to prevent.
                     using KTR_ = WRFNewtonKrylovSolver::KrylovTerminationReason;
-                    // R13.19 SELF-REVIEW (round 8, P0-B): `InitialConverged` MET A TOLERANCE
+                    // R13.19 SELF-REVIEW (round 8, P0-B): `InitialStopMetricReached` MET A TOLERANCE
                     // -- the D objective; that branch is gated on `error_tensor < tol`. Leaving it
                     // out made the R13.19 P0-1 fix produce the INVERSION it was written to stop:
                     // a D-satisfied zero-work solve was admitted to the aggregate (correct), then
@@ -9952,7 +9975,7 @@ public:
                     const bool met_tolerance =
                         (gmres_result.termination_reason == KTR_::ToleranceReached) ||
                         (gmres_result.termination_reason == KTR_::InternalConvergenceStop) ||
-                        (gmres_result.termination_reason == KTR_::InitialConverged &&
+                        (gmres_result.termination_reason == KTR_::InitialStopMetricReached &&
                          gmres_result.D_tolerance_reached);
                     // R13.18 (deep review P0-5): MEASURED exhaustion, not the resolver's
                     // default reason. `MaxBudget` is what the resolver keeps when nothing else is
@@ -10162,12 +10185,12 @@ public:
                     }
                 }
                 // R13.8: what "success" was supposed to mean.
-                // R13.15 (external review P1-5): InitialConverged ALSO satisfied the tolerance
+                // R13.15 (external review P1-5): InitialStopMetricReached ALSO satisfied the tolerance
                 // -- it is the case where x0 already did -- and was excluded from the count of
                 // solves that reached it. That made "how many linear solves actually finished"
                 // an undercount precisely on the iterations where Newton was closest.
                 // R13.19 SELF-REVIEW (round 8, P1-B): a consumer left behind when its
-                // producer's meaning changed. R13.15 added InitialConverged here because it "did
+                // producer's meaning changed. R13.15 added InitialStopMetricReached here because it "did
                 // satisfy the tolerance" -- true when that return reported a single metric.
                 // R13.19 made it report two, and a solve can now reach this line having met the
                 // D objective and NOT the S one. Counting that as a finished solve overstates
@@ -10175,7 +10198,7 @@ public:
                 if (gmres_result.termination_reason ==
                         KrylovTerminationReason::ToleranceReached ||
                     (gmres_result.termination_reason ==
-                         KrylovTerminationReason::InitialConverged &&
+                         KrylovTerminationReason::InitialStopMetricReached &&
                      gmres_result.S_tolerance_reached)) {
                     stats_.gmres_tolerance_reached++;
                 }
@@ -11111,19 +11134,22 @@ public:
             // fallback was already dead -- but leaving the literal kept the constant that
             // produced the round-4 P0 one deleted `r0_measured &&` away from returning.
             const float r0_ref = gmres_initial_rel_error;
+            // R13.21 (P0-1): exempt on the MEASURED S convergence, not on the label. An entry
+            // whose stopping objective was met while rho_S >= eta is not converged and must be
+            // judged by the same rule as any other solve that returned that rho_S.
             const bool total_failure_vs_b  =
-                !gmres_converged_on_entry &&
+                !gmres_S_reached_on_entry &&
                 (gmres_raw_rel_error > 1.0f || gmres_rel_error >= 0.999f);
             // R13.19 SELF-REVIEW (round 8, P1-A): a solve that CONVERGED ON ENTRY is not a
             // total failure, and after the P0-1 fix it would otherwise be flagged as one
             // UNCONDITIONALLY. `rel_error` now carries rho_S, and `initial_rel_error` is
             // rn0/bn0 taken from the same halo-zeroed r and the same PRE-SCALING b -- the same
             // two norms -- so their ratio is exactly 1 and `raw >= 0.99 * r0_ref` is always
-            // true. That would put every InitialConverged solve on the recovery / zero-step
+            // true. That would put every InitialStopMetricReached solve on the recovery / zero-step
             // path under the opt-in r0 rule: a production side effect of a fix whose commit
             // message claimed only to change what is REPORTED.
             const bool total_failure_vs_r0 =
-                r0_measured && !gmres_converged_on_entry &&
+                r0_measured && !gmres_S_reached_on_entry &&
                 (gmres_raw_rel_error > r0_ref * (1.0f + 1.0e-4f) ||
                  gmres_raw_rel_error >= 0.99f * r0_ref);
             // With the flag on and r0 unmeasured the r0 rule cannot be evaluated. Falling back
@@ -11183,6 +11209,11 @@ public:
                     return torch::min(radius_tensor, relative_limit);
                 };
 
+            // R13.21 (P0-1): set when an initial objective mismatch failed its nonlinear check on
+            // the trust-off path. Routed to the SAME total-failure handling as any other unusable
+            // step rather than left as a silent no-step, which the comment below warns creates
+            // zero-update loops.
+            bool entry_mismatch_step_rejected = false;
             if (!wrf::sdirk3::g_sdirk3_config.nk_trust_region) {
                 // Trust-region disabled: accept full Newton step directly.
                 // GMRES total failure must NOT be treated as accepted zero-step because
@@ -11199,10 +11230,43 @@ public:
                     auto U_trial = U_stage + dt * gamma * K_trial;
                     auto F_trial = compute_rhs(U_trial);
                     auto R_trial = K_trial - F_trial;
-                    dK_scaled = dK;
-                    accepted_residual = R_trial;
-                    accepted_residual_norm = R_trial.norm();
-                    step_accepted = true;
+                    // R13.21 (external review P0-1, MEASURED before acting): with the trust region
+                    // off this branch accepted the full Newton step UNCONDITIONALLY -- `R_trial`
+                    // was computed, stored, and never compared with `R`. The other two acceptance
+                    // sites in this function both test a decrease (`residual_improved` at the
+                    // recovery site, `accept_step` at the trust site); this one did not.
+                    //
+                    // That is harmless for a solve that genuinely converged. It is not harmless for
+                    // an entry that met only the inner stopping objective: before the split above,
+                    // such a solve was exempted from the total-failure rules by its LABEL, so it
+                    // arrived here as a non-candidate and its step was taken with no test at all --
+                    // the same metric state getting a different policy than an identical rho_S
+                    // returned after Arnoldi iterations.
+                    //
+                    // Reachability, checked rather than assumed: `nk_trust_region` defaults to
+                    // TRUE and em_b_wave does not override it, so this is an opt-out path and the
+                    // shipped configuration never took it. Latent, not live -- and fixed as such.
+                    bool accept_full_step = true;
+                    if (gmres_objective_mismatch_on_entry) {
+                        torch::NoGradGuard ng_entry_mismatch;
+                        const float base_norm  = guarded_item<float>(R.norm());
+                        const float trial_norm = guarded_item<float>(R_trial.norm());
+                        accept_full_step = std::isfinite(trial_norm) && std::isfinite(base_norm) &&
+                                           trial_norm < base_norm;
+                        entry_mismatch_step_rejected = !accept_full_step;
+                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                            std::cerr << "[TRUST OFF] entry met the stop metric but not S"
+                                      << " (rho_S=" << gmres_raw_rel_error << "); nonlinear check "
+                                      << (accept_full_step ? "PASSED" : "FAILED")
+                                      << " |R|=" << base_norm << " -> " << trial_norm << std::endl;
+                        }
+                    }
+                    if (accept_full_step) {
+                        dK_scaled = dK;
+                        accepted_residual = R_trial;
+                        accepted_residual_norm = R_trial.norm();
+                        step_accepted = true;
+                    }
                 }
             }
 
@@ -11213,7 +11277,7 @@ public:
             // This avoids immediate zero-update exits in ru-dominant stiff stages.
             bool gmres_total_failure = false;
             if (!step_accepted &&
-                gmres_total_failure_candidate) {
+                (gmres_total_failure_candidate || entry_mismatch_step_rejected)) {
                 gmres_total_failure = true;
                 const auto& cfg = wrf::sdirk3::g_sdirk3_config;
                 const float fallback_accept_ratio =

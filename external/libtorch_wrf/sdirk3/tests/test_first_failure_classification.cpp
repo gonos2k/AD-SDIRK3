@@ -1408,6 +1408,41 @@ int main() {
               "...and the record prints them distinctly from eisenstat_walker");
     }
 
+    {
+        // R13.21 (external review P0-1): the entry verdict. A Krylov loop that returns before any
+        // Arnoldi step because the inner stopping objective was already met is NOT necessarily a
+        // convergence -- rho_S can be anything, including > 1. One flag used to carry both states,
+        // derived from the termination LABEL, and it exempted both from the total-failure rules.
+        using wrf::sdirk3::krylov_entry_verdict;
+        using wrf::sdirk3::entry_exempts_total_failure;
+        using wrf::sdirk3::entry_requires_nonlinear_decrease;
+
+        const auto converged = krylov_entry_verdict(/*stop_metric=*/true, /*S=*/true);
+        check(converged.S_reached && !converged.objective_mismatch &&
+              entry_exempts_total_failure(converged) &&
+              !entry_requires_nonlinear_decrease(converged),
+              "an entry that met BOTH the stopping objective and S is converged: it exempts the "
+              "total-failure rules and needs no extra nonlinear check");
+
+        const auto mismatch = krylov_entry_verdict(/*stop_metric=*/true, /*S=*/false);
+        check(mismatch.objective_mismatch && !mismatch.S_reached,
+              "an entry that met the stopping objective and NOT S is an objective mismatch, not a "
+              "convergence -- InitialStopMetricReached is named for the half it measures");
+        check(!entry_exempts_total_failure(mismatch),
+              "...and it does NOT bypass the total-failure policy: an identical rho_S returned "
+              "after Arnoldi iterations is judged by that policy, and a control-flow label must "
+              "not buy a different one");
+        check(entry_requires_nonlinear_decrease(mismatch),
+              "...and its step is taken only against a measured nonlinear decrease, which is what "
+              "the recovery and trust acceptance sites already require of every other step");
+
+        const auto not_on_entry = krylov_entry_verdict(/*stop_metric=*/false, /*S=*/true);
+        check(!not_on_entry.S_reached && !not_on_entry.objective_mismatch &&
+              !entry_exempts_total_failure(not_on_entry),
+              "a solve that did NOT return on entry is neither, whatever its S flag says -- the "
+              "verdict is about the entry return, not about S alone");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1424,7 +1459,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 119;
+    constexpr int expected_checks = 124;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
