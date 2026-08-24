@@ -187,7 +187,15 @@ comparable across iterations) with the residual mapped back to physical coordina
 `stage_gate_E_metric_vs_solver_metrics`, for the state the receipt previously could not express:
 both metrics the solver was steered by satisfied, and the **gate's** metric not.
 
-**Measured, dt=600 stage 2 — the exit solve's three readings of the SAME residual:**
+**Measured, dt=600 stage 2 — the exit solve's three metric readings.**
+
+*Corrected by the numerics referee (claim 5).* This said "three readings of the **SAME** residual",
+and that was **false as implemented**: ρ_D and ρ_S were computed on halo-zeroed copies while ρ_E
+used `gmres_result.r_true`, the **raw** residual, and normalised by a different `b`. So part of the
+spread below was halo content and denominator choice rather than metric disagreement. The identical
+halo check was run for ρ_S at `InitialConverged` and **recorded as a negative result** — and never
+run for ρ_E. The code now halo-zeroes both sides of ρ_E; the numbers below are the pre-fix reading
+and are retained as the record of what was measured when the claim was made.
 
 ```
 exit_rho_stop = 0.9297   (block_D — the metric the loop actually stopped on)
@@ -199,10 +207,19 @@ They span **0.86 to 1.05 on one residual — a 22 % spread**, and the ordering m
 
 - **ρ_S = 1.048 is the only one above 1**, and `> 1` is precisely what makes `total_failure_vs_b`
   fire — the flag that gates the `ZeroUpdateAfterTotalFailure` exit.
-- **ρ_E = 0.8618** says that in the gate's own metric this residual came down **14 %**.
+- ~~**ρ_E = 0.8618** says that in the gate's own metric this residual came down **14 %**.~~
+  **WITHDRAWN — a baseline error, and the fifth appearance of a class this campaign has caught four
+  times before.** ρ_E is `‖E⁻¹Sr‖ / ‖E⁻¹Sb‖` — normalised by **b**, not by **r₀** — so it cannot say
+  how far the residual "came down". This document's own table settles it: ‖r‖/‖b‖ asks *is the step
+  predicted to reduce the nonlinear residual*, ‖r‖/‖r₀‖ asks *did the solve move*, and **they
+  coincide only on a cold start**. The exit solve is Newton iteration 3, warm-started, with
+  `r₀/‖b‖ = 1.054` measured on this very case.
 
-So the solve that the ‖b‖ rule called a *total failure* had, in the metric the stage gate actually
-judges by, made real progress. That is round 7's P0-B as a measurement rather than an argument, and
+~~So the solve that the ‖b‖ rule called a *total failure* had, in the metric the stage gate actually
+judges by, made real progress.~~ **UNSUPPORTED** — progress is not what ρ_E measures, and (per
+R13.19 P0-2) ρ_E is not the stage gate's metric either. What survives is the weaker and still
+useful statement: **the three metrics disagree materially on the failing solve, and ρ_S is the only
+one above 1** — which is what makes it, and only it, trip the ‖b‖ total-failure rule. That is round 7's P0-B as a measurement rather than an argument, and
 it is the concrete reason the phrase "the linear solve produced nothing" had to be withdrawn.
 
 **What this does and does not establish.** It shows the three metrics disagree materially on the

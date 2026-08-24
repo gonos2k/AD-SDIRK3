@@ -323,3 +323,42 @@ violations).
   that actually takes the `InitialConverged` branch is the missing measurement.
 - **P1-G** — `exit_*` is promoted from `last_*`, which are written only inside the r₀-measured
   guard, so a stale receipt from an earlier iteration can be labelled "this solve's".
+
+---
+
+## Numerics referee — claims corrected
+
+**Claim 5A — "the exit solve's three readings of the SAME residual" was false as implemented.**
+ρ_D and ρ_S were computed on halo-zeroed copies; ρ_E used `gmres_result.r_true`, the **raw**
+residual. The identical halo check had been run for ρ_S at `InitialConverged` and written up as a
+negative result — **and never run for ρ_E**. Fixed: both sides of ρ_E are halo-zeroed now.
+
+Re-measured: **ρ_E = 0.8618, unchanged.** The fix *could* have moved it, so this is a real negative
+result — halo content was below the printed precision on this run — and not the "unchanged after a
+fix that provably cannot change anything" trap recorded earlier in this campaign.
+
+**Claim 5B — "ρ_E = 0.8618 says the residual came down 14 %" was a BASELINE ERROR, and the fifth
+appearance of the ‖b‖-vs-‖r₀‖ class this campaign has caught four times.** ρ_E normalises by **b**,
+not **r₀**, so it cannot speak to progress — and the exit solve is Newton iteration 3, warm-started,
+with `r₀/‖b‖ = 1.054` measured on this very case. The headline built on it — *"the solve the ‖b‖ rule
+called a total failure had made real progress in the metric the stage gate judges by"* — is
+**withdrawn on two counts**: ρ_E does not measure progress, and (per R13.19 P0-2) it is not the
+stage gate's metric either.
+
+**What survives, and it is still worth having:** the three metrics disagree materially on the
+failing solve, and **ρ_S is the only one above 1** — which is exactly why it, and only it, trips the
+‖b‖ total-failure rule that gates the exit.
+
+### Referee findings recorded, not yet acted on
+
+- **Claim 1 (OVERSTATED)** — the Taylor probe sits inside `if (step_accepted)`, so it **excludes the
+  failing iteration by construction**: the iteration that produced no step is never sampled. And
+  "Jacobian" there is scoped to AD-vs-primal consistency, not to the discretisation. The referee
+  also credits the α-arm as tighter than the campaign claims: measuring `0.3333` at α = 1/3 bounds
+  `‖Es‖ ≲ 1e-5…7e-4 × ‖As‖`.
+- **Claim 2** — "refuted" is supported *as narrowly stated*, with two unearned labels (`krylov`;
+  `e_hom` as an unqualified upper bound).
+- **Claim 4** — "23×" is defensible but misleading, and the budget experiment is **not
+  single-variable** (the namelist clamp and the EW scale both moved).
+- **Claim 6** — the retraction split is right and can be stated *more* strongly than the doc does.
+- **Claim 7** — the uncalibrated `1e-3` excitation floor, and **n = 1 everywhere**.

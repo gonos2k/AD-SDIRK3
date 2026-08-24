@@ -9799,13 +9799,26 @@ public:
                                         S_diag_.numel() == v.numel())
                                            ? (S_diag_ * v) : v;
                             };
+                            // R13.19 SELF-REVIEW (numerics referee, claim 5A): HALO-ZERO the
+                            // residual. `gmres_result.r_true` is the RAW residual -- the
+                            // halo-zeroed copies are separate clones inside the solver -- so
+                            // rho_E was including halo content that rho_D and rho_S exclude,
+                            // and the "three readings of the SAME residual" headline was false
+                            // as implemented. The identical check WAS run for rho_S at
+                            // InitialConverged and recorded as a negative result; it was never
+                            // run for rho_E, and it does not pass.
+                            const int halo_w = wrf::sdirk3::g_sdirk3_config.halo_width;
+                            auto r_e = gmres_result.r_true.detach().clone();
+                            zero_halo_regions(r_e, halo_w,
+                                              options_.periodic_x, options_.periodic_y);
+                            auto b_e = gmres_rhs.detach().clone();
+                            zero_halo_regions(b_e, halo_w,
+                                              options_.periodic_x, options_.periodic_y);
                             const auto e64 = E_inv_r.to(torch::kFloat64);
                             const auto rE =
-                                (to_phys(gmres_result.r_true.detach()).to(torch::kFloat64) * e64)
-                                    .norm().item<double>();
+                                (to_phys(r_e).to(torch::kFloat64) * e64).norm().item<double>();
                             const auto bE =
-                                (to_phys(gmres_rhs.detach()).to(torch::kFloat64) * e64)
-                                    .norm().item<double>();
+                                (to_phys(b_e).to(torch::kFloat64) * e64).norm().item<double>();
                             if (bE > 0.0) rho_E_final_this = rE / bE;
                         }
                     }
