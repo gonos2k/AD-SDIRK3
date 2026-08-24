@@ -627,10 +627,60 @@ not an attributable A/B; and the ladder measures a frozen operator at one iterat
 `worst_krylov_rho_D` is a **max over solves**. They are the same coordinate now, which is what was
 missing; they are not yet the same experiment.
 
+### The second configuration — `WRF_SDIRK3_MAX_NEWTON_ITER=12`
+
+The run above exits on `newton_budget_exhausted` (`max_newton_iter=3`), **not** the zero-update
+linear-solve failure the campaign's earlier dt=600 records show. So it left the sharpest question
+untested. Re-run at a 12-iteration budget, which reproduces the historical record exactly
+(`worst_krylov_rel_vs_r0 = 0.9941`, `worst_krylov_rho_D = 0.9297` — the referee's `exit_rho_stop`):
+
+```
+category=zero_update_after_total_failure   layer=zero_update_bnorm_rule_or_step_recovery
+attribution=krylov_budget_exhausted        attribution_basis=krylov_r0_receipt
+attribution_from_metric=1                  event_basis=exit_receipt
+newton_iters=4  newton_budget=12  exit_krylov_iter=3  steps_accepted=3  steps_rejected=1
+taylor_probe_iter=2  taylor_covers_last_newton_iter=0
+worst_krylov_met_tol=0  D_reached=0  S_reached=0  budget=7
+near_worst_all_met_tol=0  near_worst_mech_ambiguous=0
+worst_krylov_tol_source=ew_eta_clamp
+```
+
+**Claim 1 is now measured, not argued.** `taylor_covers_last_newton_iter=0`: the probe covered
+iteration 2, the loop ended at iteration 3, and that iteration took the zero-update break with **no
+accepted step**, so `step_accepted` was false and it was never sampled. **Every τ on this record
+describes a step that succeeded; the failing one is unmeasured.** The three τ rows show
+`rejected_so_far=0` while the failure record shows `steps_rejected=1` — the missing iteration is
+visible on the record instead of having to be inferred.
+
+**Three fixes change the answer here, and this is the campaign's central record.**
+
+1. **`attribution=krylov_budget_exhausted`.** The signals show `worst_krylov_met_tol=0`,
+   `D_reached=0`, `S_reached=0` — the worst solve met *nothing* — with `near_worst_mech_ambiguous=0`,
+   the tie set agreeing. And `near_worst_all_met_tol=0` **is on the record**, which is exactly the
+   condition the retired guard tested: `if (!all_near_worst_met_tolerance) return KrylovStagnated`
+   **would have fired**, on a stage where the tied solves agree. So before iteration 2's fix this
+   record read `krylov_stagnated`, layer
+   `operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy` — **routed to the
+   split-explicit rebuild**. It now reads the inner budget, with `worst_krylov_budget=7` beside it:
+   the seven-vector budget this campaign has flagged for rounds. A category that had **no producer
+   at all** two weeks ago is the one this record produces.
+2. **`worst_krylov_tol_source=ew_eta_clamp`.** The worst solve's tolerance came from the
+   **[ew_eta_min, ew_eta_max] clamp**, not the forcing term. Under the old selector this read
+   `eisenstat_walker` and routed a tolerance-limited verdict to `ew_gamma` / `ew_alpha` — knobs that
+   had no effect on that solve, because the clamp is what bound. `converged-is-not-solved-adaptive-tolerance`
+   predicted exactly this saturation in the failing regime; it is now **named on the record**.
+3. **`attribution_from_metric`** reads **1** here (`worst_vs_r0 = 0.9941 ≥ 0.90`, the four-way was
+   entered) and **0** in the budget run (0.8795, fell through to the reconstruction). The old
+   inferred flag would have printed **1 in both**. Both branches of the R9-2 fix are now exercised
+   on real data, each correct for its case.
+
+Also exercised on real data: `event_basis=exit_receipt` with `exit_krylov_iter=3 = newton_iters−1`
+— the R13.18 stamp check passing a receipt through — against `exit_krylov_iter=-1` in the budget
+run, where it correctly refused a stale one. Both branches.
+
 ### What is still not measured
 
-The exit here is `newton_budget_exhausted` (`max_newton_iter=3`), **not** the zero-update
-linear-solve failure the campaign's earlier dt=600 records show. So `taylor_covers_last_newton_iter`
-is **1 on this configuration only** — the concern that the `step_accepted` gate cannot see a
-zero-update exit is untested, because this run never took one. A configuration with a larger Newton
-budget would be the test.
+`ExplicitRhsNotFinite` — the explicit-stage category iterations 2 and 8 fixed — did not fire on
+either run: neither took a non-finite explicit tendency. Its producer is wired and contract-tested,
+and it is still unexercised in production. Same for `KrylovObjectiveMismatch` from the exit receipt
+(this record's exit solve had `D_reached=0`, so it took the `ZeroUpdateAfterTotalFailure` arm).
