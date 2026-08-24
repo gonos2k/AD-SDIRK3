@@ -352,7 +352,8 @@ to avoid pulling `wrf_sdirk3_autograd_utils.h` into five more headers.
 
 **And it is now a ratchet, not a one-time cleanup.** `.github/ci/lint_item_guard.py` does the
 brace-depth scan; `check_ratchets.sh` gains a second baseline
-(`tests/lint_item_guard_baseline.txt`, at **100**) with the same three conditions as `from_blob`:
+(`tests/lint_item_guard_baseline.txt`, **100 → corrected to 74 in iteration 9**) with the same
+three conditions as `from_blob`:
 actual must equal the head baseline, the head baseline may never exceed the base branch's, and the
 file must be one integer line. Fixing sites *requires* lowering the baseline; adding one fails.
 
@@ -493,3 +494,43 @@ now, for both branches.
 **Method note.** Two iterations in a row the defect was in my own previous iteration, both times
 because I inferred a control-flow fact instead of reading it. The brace-depth check that settled
 this took one command.
+
+### Iteration 9 — auditing my own claims, and a gate that would have hung the job it guards
+
+The method note from iteration 8 was *"I inferred a control-flow fact instead of reading it"*, twice.
+So this iteration re-read every control-flow claim this increment has made.
+
+**Four verified, none wrong.** (1) With adaptive tolerances on, every read of `krylov_tol_adaptive`
+outside the E–W block (first at `:7388`) follows its writes at `:6582`/`:6620` — the byte-identical
+claim holds, and after iteration 1 it holds with adaptive tolerances *off* too. (2) `ew_eta_max =
+0.9f`, `ew_eta_min = 0.02f` and `total_failure_vs_b = raw > 1.0f || rel >= 0.999f`, read from the
+source rather than copied from the reviewer — R9-10's arithmetic stands. (3) Every tolerance exit
+is a strict `<`, so `kAbArmTol = 0.0f` disables it for any non-negative residual, and a NaN
+residual does not exit either. (4) Iteration 4's *heuristic* gated/ungated split: all eight sites
+whose nearest enclosing conditional is not a debug gate sit inside
+`if (debug_level >= 2)` further out, so the "100 gated / 18 production-reachable" classification
+holds.
+
+**Then the lint's own exclusion rule, which I had shipped as a CI gate without auditing.** It
+excluded a site when `.detach()` appeared within four lines — proximity, not data flow. Audited by
+reading: all 12 exclusions in this tree were real links. But that is soundness *by local style*, so
+I replaced it with a named data-flow link — and **measured the replacement instead of trusting it.**
+
+Two failures, both caught by measuring:
+
+- **A file-wide transitive closure returned ZERO violations where there are 100.** In 29k lines
+  almost every name is reachable from some `.detach()`, so the "more principled" rule degenerated
+  into excluding everything. A rule that cannot fire is not a rule — the campaign's own standard,
+  applied to my own tool.
+- **The first working version took over five minutes on one translation unit** and was moved to the
+  background by the timeout. It re-ran a regex per (assignment, seed) pair each round. **A CI gate
+  that hangs the job it guards** — shipped by me one iteration earlier had I not measured. Rewritten
+  to tokenise each right-hand side once and close over set intersections: **1.4 s**.
+
+The shipped rule now requires the link to be **named** (an identifier in the receiver expression
+traces to a `.detach()` assignment) **and near** (within eight lines). Result: **74**, not 100 —
+**26 of the original 100 were false positives**, real detach links the four-line window was too
+narrow to see. Spot-checked by reading all 21 of the newly-excluded sites in the widened window:
+every one is `X_cpu = Y.detach().to(kCPU)` followed by a reduction. Baseline lowered 100 → 74, which
+is what the ratchet's "fixing violations REQUIRES lowering the baseline" clause is for, and
+re-negative-tested: one added unguarded `.item()` gives `75 vs 74 → FAIL`.

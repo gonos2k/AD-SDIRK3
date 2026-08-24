@@ -14,13 +14,28 @@ project has recorded it as a repeated regression. Two things make it hard to hol
 So it is counted, not reviewed. Ratcheted like the from_blob lint: fixing sites REQUIRES lowering
 the baseline, and adding one fails.
 
-WHAT COUNTS. A `.item<T>()` or `.item()` with no enclosing NoGradGuard at or above its brace depth
-and no `.detach()` in the four lines leading up to it. `guarded_item<T>()` is the sanctioned helper
-and is not counted. Comments and string literals are stripped first, so prose about `.item()` is
-not a violation. Test sources are excluded: they run no autograd graph and no hot path.
+WHAT COUNTS. A `.item<T>()` or `.item()` with no enclosing NoGradGuard at or above its brace depth,
+whose receiver is not reachable from a `.detach()`. `guarded_item<T>()` is the sanctioned helper and
+is not counted. Comments and string literals are stripped first, so prose about `.item()` is not a
+violation. Test sources are excluded: they run no autograd graph and no hot path.
+
+THE DETACH RULE, and why it is data-flow and not proximity. The first version excluded a site when
+`.detach()` appeared in the four preceding lines. Audited against this tree, all 12 exclusions were
+legitimate -- the idiom here is `auto x_cpu = y.detach().to(kCPU);` followed by reductions -- so it
+found no false negative. But it would have missed one BY LUCK: an `.item()` on an undetached tensor
+that happens to sit near an unrelated `.detach()` slips through, and a lint whose soundness depends
+on local style is a lint that fails the day the style changes. So the exclusion now follows the
+DATA FLOW, but LOCAL -- and the reason is a measurement, not a preference. A file-wide transitive
+closure returned ZERO violations where there are 100: in 29k lines almost every name is reachable
+from some detach, so the "more principled" rule degenerated into excluding everything. The
+proximity-only rule it replaced was audited by reading all 12 of its exclusions here, and each was a
+real data-flow link -- but that is soundness by local style. The shipped rule requires BOTH: the
+link must be NAMED (an identifier in the receiver expression comes from a `.detach()` assignment)
+and NEAR (within eight lines). See `detached_locals`.
 
 WHAT IT DOES NOT PROVE. A guarded `.item()` can still be a GPU sync on a hot path, and a detached
-operand says nothing about whether the sync belongs there. This bounds one failure mode.
+operand says nothing about whether the sync belongs there. Nor does it see `.data`, `.cpu()` or
+`.numpy()` in a graph region. This bounds one failure mode.
 """
 import os
 import re
@@ -57,6 +72,32 @@ def strip_comments_and_strings(src: str) -> str:
 
 ITEM = re.compile(r'\.item<|\.item\(\)')
 GUARD = re.compile(r'NoGradGuard\s+\w+\s*;')
+ASSIGN = re.compile(r'\b(?:auto|torch::Tensor|const\s+auto)\s+&?\s*(\w+)\s*=\s*(.+)$')
+IDENT = re.compile(r'\b([A-Za-z_]\w*)\b')
+
+
+def detached_locals(code, lineno, window=8):
+    """Names assigned from a `.detach()` in the `window` lines above `lineno`, plus names
+    derived from them within that same window.
+
+    WHY A WINDOW AND NOT THE WHOLE FILE. The first attempt took the transitive closure over every
+    assignment in the translation unit. Measured: it returned ZERO violations on a file with 100 --
+    in 29k lines almost every name is reachable from some detach, so the "more principled" rule
+    degenerated to excluding everything. A rule that cannot fire is not a rule. The second attempt
+    (proximity alone: any `.detach()` within four lines) was audited by reading all 12 of its
+    exclusions in this tree and every one was a real data-flow link -- but it is sound only by
+    local style. This keeps both halves: the link must be NAMED, and it must be NEAR.
+    """
+    seeded = set()
+    lo = max(0, lineno - 1 - window)
+    for line in code[lo:lineno - 1]:
+        m = ASSIGN.search(line)
+        if not m:
+            continue
+        name, rhs = m.group(1), m.group(2)
+        if '.detach()' in rhs or (seeded & set(IDENT.findall(rhs))):
+            seeded.add(name)
+    return seeded
 
 
 def violations(path: str):
@@ -76,7 +117,13 @@ def violations(path: str):
         if ITEM.search(line) and 'guarded_item' not in line:
             if guards:
                 continue
-            if '.detach()' in ' '.join(code[max(0, lineno - 4):lineno]):
+            if '.detach()' in line:
+                continue
+            # The receiver expression is everything before the FIRST `.item` on the line. If any
+            # identifier in it is reachable from a detach, the extraction is off-graph. Naming the
+            # link is the point: proximity to an unrelated `.detach()` is not evidence.
+            head = line[:line.index('.item')]
+            if set(IDENT.findall(head)) & detached_locals(code, lineno):
                 continue
             hits.append(lineno)
     return hits
