@@ -4971,6 +4971,13 @@ public:
         // Get adaptive parameters if enabled
         float newton_tol_adaptive = options_.newton_tol;
         float krylov_tol_adaptive = static_cast<float>(options_.krylov_tol);
+        // R13.19 SELF-REVIEW (round 8, P0-D): set where Eisenstat-Walker ACTUALLY writes the
+        // tolerance. The previous selector keyed on `stage_budget_forcing_eta`, which is written
+        // only inside the stage-budget resolver and only when `budget_active` -- and the stage
+        // knobs all default to 0, so in a STOCK run every solve recorded `tol_source=base` while
+        // E-W owned the tolerance. The claim "the selector keys on whether E-W set the tolerance"
+        // was true only for configurations that also set a stage budget knob.
+        bool ew_set_tolerance = false;
         float init_R0_norm = 0.0f;  // Captured at iter 0 for relative convergence criterion
         float last_res_scaled = 0.0f;  // v20.3: Last Newton residual (float) for adaptive α
 
@@ -6520,6 +6527,7 @@ public:
                     eta_k = std::max(ew_eta_min_stage, std::min(ew_eta_max_stage, eta_k));
 
                     krylov_tol_adaptive = eta_k;
+                    ew_set_tolerance = true;
                     ew_prev_eta_ = eta_k;
                     ew_eta_used_this_iter = eta_k;
                     ew_eta_updated_this_iter = true;
@@ -6548,6 +6556,7 @@ public:
                         }();
                         krylov_tol_adaptive = std::max(static_cast<float>(options_.krylov_tol), ew_eta_initial);
                         krylov_tol_adaptive = std::max(ew_eta_min_stage, std::min(ew_eta_max_stage, krylov_tol_adaptive));
+                        ew_set_tolerance = true;
                     }
                     ew_eta_used_this_iter = krylov_tol_adaptive;
                     ew_eta_updated_this_iter = false;
@@ -9663,13 +9672,15 @@ public:
                     //
                     // R13.14 (red team round 5, P0): but the max must be over solves that DID
                     // WORK AND DID NOT FINISH, and it was over all of them.
-                    //   * InitialConverged does ZERO work and returns rel_error == r0 ratio, so
-                    //     progress is EXACTLY 1.0 -- under a max, the best possible outcome
-                    //     scores as a total stall. Round 4 added initial_rel_error to that
-                    //     return BECAUSE dropping it from a MIN manufactured a stall; the same
-                    //     commit then made a max the classifier's input, and for a max the same
-                    //     value manufactures the stall directly. Two halves of one commit
-                    //     pointing opposite ways.
+                    //   * InitialConverged does ZERO work and its progress is ~1.0, so under a
+                    //     max the best possible outcome would score as a total stall. Round 4
+                    //     added initial_rel_error to that return BECAUSE dropping it from a MIN
+                    //     manufactured a stall; the same commit then made a max the classifier's
+                    //     input, where the same value manufactures the stall directly.
+                    //     R13.19 (P0-1) narrowed the exclusion to solves that met BOTH metrics,
+                    //     and R13.19 self-review (round 8, P0-B) had to follow it with
+                    //     `met_tolerance` including a D-satisfied InitialConverged -- otherwise
+                    //     admitting the solve only moved the misclassification one clause over.
                     //   * A solve that REACHED TOLERANCE solved. Its progress is evidence about
                     //     the tolerance, not about whether Krylov works.
                     // Excluding both means a stage where every solve either converged on entry
@@ -9710,9 +9721,21 @@ public:
                     // it was asked to -- and reading only the first sent exactly that state back
                     // to KrylovStagnated, the misclassification the category exists to prevent.
                     using KTR_ = WRFNewtonKrylovSolver::KrylovTerminationReason;
+                    // R13.19 SELF-REVIEW (round 8, P0-B): `InitialConverged` MET A TOLERANCE
+                    // -- the D objective; that branch is gated on `error_tensor < tol`. Leaving it
+                    // out made the R13.19 P0-1 fix produce the INVERSION it was written to stop:
+                    // a D-satisfied zero-work solve was admitted to the aggregate (correct), then
+                    // scored as an unmet solve at the maximum, which trips the tie refusal --
+                    // the FIRST clause of the four-way -- so `KrylovObjectiveMismatch`, the
+                    // category the fix exists to reach, became UNREACHABLE for exactly the solve
+                    // it was aiming at, and the layer emitted was the operator/split. The row even
+                    // carried `worst_krylov_D_reached=1 worst_krylov_S_reached=0` beside
+                    // `category=krylov_stagnated`: two mutually exclusive readings on one line.
                     const bool met_tolerance =
                         (gmres_result.termination_reason == KTR_::ToleranceReached) ||
-                        (gmres_result.termination_reason == KTR_::InternalConvergenceStop);
+                        (gmres_result.termination_reason == KTR_::InternalConvergenceStop) ||
+                        (gmres_result.termination_reason == KTR_::InitialConverged &&
+                         gmres_result.D_tolerance_reached);
                     // R13.18 (deep review P0-5): MEASURED exhaustion, not the resolver's
                     // default reason. `MaxBudget` is what the resolver keeps when nothing else is
                     // selected, and it coexists with the message "early exit before max restarts",
@@ -9736,7 +9759,7 @@ public:
                             ? wrf::sdirk3::KrylovToleranceSource::InnRamp
                             : (krylov_tol_stage_override
                                    ? wrf::sdirk3::KrylovToleranceSource::StageOverride
-                                   : (stage_budget_forcing_eta > 0.0f
+                                   : ((ew_set_tolerance || stage_budget_forcing_eta > 0.0f)
                                           ? wrf::sdirk3::KrylovToleranceSource::EisenstatWalker
                                           : wrf::sdirk3::KrylovToleranceSource::Base)));
                     // R13.18 (deep review P0-4): this solve's receipt, recorded where
@@ -9824,6 +9847,21 @@ public:
                             // on the order the solves arrived in.
                             stats_.all_near_worst_met_tolerance =
                                 wrf::sdirk3::near_worst_all_met(st);
+                            // R13.19 SELF-REVIEW: and the per-solve MECHANISM, so the layer named
+                            // is not whichever solve happened to arrive first at a tied worst.
+                            {
+                                wrf::sdirk3::KrylovSolveMechanism m;
+                                m.progress = static_cast<double>(progress);
+                                m.met_tolerance = met_tolerance;
+                                m.D_reached = gmres_result.D_tolerance_reached;
+                                m.S_reached = gmres_result.S_tolerance_reached;
+                                m.budget_exhausted = budget_exhausted;
+                                m.tolerance_source = tol_source;
+                                stats_.krylov_mechanisms.push_back(m);
+                                stats_.near_worst_mechanism_ambiguous =
+                                    wrf::sdirk3::near_worst_mechanism_ambiguous(
+                                        stats_.krylov_mechanisms);
+                            }
                         }
                         if (progress > stats_.worst_krylov_rel_error_vs_r0) {
                             stats_.worst_krylov_rel_error_vs_r0 = progress;
@@ -9886,10 +9924,17 @@ public:
                 // -- it is the case where x0 already did -- and was excluded from the count of
                 // solves that reached it. That made "how many linear solves actually finished"
                 // an undercount precisely on the iterations where Newton was closest.
+                // R13.19 SELF-REVIEW (round 8, P1-B): a consumer left behind when its
+                // producer's meaning changed. R13.15 added InitialConverged here because it "did
+                // satisfy the tolerance" -- true when that return reported a single metric.
+                // R13.19 made it report two, and a solve can now reach this line having met the
+                // D objective and NOT the S one. Counting that as a finished solve overstates
+                // exactly the case the objective-mismatch work exists to surface.
                 if (gmres_result.termination_reason ==
                         KrylovTerminationReason::ToleranceReached ||
-                    gmres_result.termination_reason ==
-                        KrylovTerminationReason::InitialConverged) {
+                    (gmres_result.termination_reason ==
+                         KrylovTerminationReason::InitialConverged &&
+                     gmres_result.S_tolerance_reached)) {
                     stats_.gmres_tolerance_reached++;
                 }
 

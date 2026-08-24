@@ -314,19 +314,32 @@ qphys_ph=+1.000000  qphys_t=+7198.81  qphys_mu=-7196.82
 phys_blocks_pos=5  phys_blocks_neg=1  phys_straddles_origin=1
 ```
 
-**MEASURED: `W(A)` straddles the origin in the physical Euclidean inner product, and the witness is
-the `mu` block.** The campaign's "intrinsically indefinite" therefore survives the coordinate
-objection — it is a property of the operator, not of `S` or `D`.
+**MEASURED: `W(A)` straddles the origin in the physical Euclidean inner product.**
 
-Note the near-exact antisymmetry: `ru`/`t` at **+7198.81** against `mu` at **−7196.82**. That is the
-signature of a skew-like coupling between the mass variable and the momentum/thermal ones — the
-continuity coupling — and it is consistent with the long-standing record that `mu` dominates the
-stage-2 residual.
+*Corrected by the numerics referee — the original reading here was **logically inverted**.* It said
+"the witness is the `mu` block" and that the negative reading "carries the conclusion". It does not:
+the **negative** side was already over-determined by the 24 random directions (`neg = 24/24`). What
+the block scan **adds** is the *positive* side — `ru`, `rv`, `rw`, `t` — and **the straddle rests
+entirely on those four structured readings**, which are exactly the ones the caveat below discounts
+as possibly degenerate for horizontally-uniform directions.
+
+The consequence is sharper than the original text: **in the physical metric the random evidence
+alone reads negative definite**, which for GMRES is as good as positive definite. The campaign's
+pivot-justifying "intrinsically indefinite" survives the coordinate objection **only through those
+four structured directions**, so the positive side — not `mu` — is what a further measurement must
+attack.
+
+~~Note the near-exact antisymmetry … the signature of a skew-like coupling.~~ **WITHDRAWN.**
+Single-block directions probe the *diagonal* blocks of the symmetric part; they cannot see the
+`mu`↔`(ru,t)` **coupling** at all, so a near-antisymmetric pair of diagonal readings is not evidence
+of a skew coupling between them. It says the two diagonal blocks have near-opposite symmetric parts,
+which is a different statement and does not identify a mechanism.
 
 **Two caveats, stated rather than buried.** (1) The block directions are uniform-fill, and this
 project has already recorded that horizontally-uniform structured directions are a **null space** for
 some blocks. `qphys_ph = 1.000000` *exactly* is that signature — `A = I − hγJ` acting as precisely the
 identity, i.e. `J` has no component along it — so the **positive** readings may understate structure.
-The negative witness is not degenerate (−7196.82, nowhere near 1) and is what carries the
-conclusion. (2) A spanning sample of six directions is a witness for straddling, not a bound on the
-range; "5 positive" is not a proof that only `mu` is negative.
+The `mu` reading is not degenerate (−7196.82, nowhere near 1) — but per the correction above it is
+**not what carries the conclusion**; the four positive readings are, and they are the ones this
+caveat applies to. (2) A spanning sample of six directions is a witness for straddling, not a bound
+on the range; "5 positive" is not a proof that only `mu` is negative.

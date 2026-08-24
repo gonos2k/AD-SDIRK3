@@ -25,6 +25,7 @@
 // re-derives the category from raw signals would be that defect again.
 
 #include <algorithm>
+#include <vector>
 #include <limits>
 
 namespace wrf {
@@ -289,6 +290,45 @@ struct NearWorstFold {
 
 inline constexpr double kNearWorstTieBand = 1.0e-3;
 
+// R13.19 SELF-REVIEW / deep-review P0-3 remainder: the MECHANISM attribution was still
+// order-dependent even after the `all_met` predicate became order-independent, because the
+// D/S/source/budget receipt rides on `worst_*`, which updates on strict `>` -- so two solves at the
+// SAME worst ratio let whichever arrived first name the layer:
+//   A: progress=0.99, D reached, S not  -> KrylovObjectiveMismatch
+//   B: progress=0.99, D reached, S reached -> KrylovForcingTermLimited
+// A boolean cannot fix that; the answer depends on the SET of near-worst solves, so the set has to
+// be carried. This is the per-solve receipt the review asked for, kept tiny (Newton budgets here
+// are single digits) and reduced in one pass at the end.
+struct KrylovSolveMechanism {
+    double progress = -1.0;
+    bool met_tolerance = false;
+    bool D_reached = false;
+    bool S_reached = false;
+    bool budget_exhausted = false;
+    int  tolerance_source = 0;      // KrylovToleranceSource
+
+    bool same_mechanism_as(const KrylovSolveMechanism& o) const {
+        return met_tolerance == o.met_tolerance && D_reached == o.D_reached &&
+               S_reached == o.S_reached && budget_exhausted == o.budget_exhausted &&
+               tolerance_source == o.tolerance_source;
+    }
+};
+
+// True when the solves tied at the worst ratio do NOT agree on their mechanism -- in which case no
+// single mechanism may be named, whatever order they arrived in.
+inline bool near_worst_mechanism_ambiguous(const std::vector<KrylovSolveMechanism>& solves) {
+    double worst = -1.0;
+    for (const auto& x : solves) worst = std::max(worst, x.progress);
+    if (!(worst >= 0.0)) return false;
+    const KrylovSolveMechanism* first = nullptr;
+    for (const auto& x : solves) {
+        if (!(x.progress >= worst * (1.0 - kNearWorstTieBand))) continue;
+        if (first == nullptr) { first = &x; continue; }
+        if (!first->same_mechanism_as(x)) return true;
+    }
+    return false;
+}
+
 inline NearWorstFold near_worst_accumulate(NearWorstFold st, double progress,
                                           bool met_tolerance) {
     if (!(progress >= 0.0)) return st;
@@ -453,6 +493,9 @@ struct StageFailureSignals {
     // worst ratio while ending for different reasons, and a strict `>` update let whichever came
     // first decide the category. True only if EVERY near-worst solve met a tolerance.
     bool   all_near_worst_met_tolerance = true;
+    // R13.19 SELF-REVIEW: the near-worst solves disagree about WHICH mechanism they hit, so naming
+    // one would be naming whichever arrived first.
+    bool   near_worst_mechanism_ambiguous = false;
     // R13.17 (external review P0-3): the loop's OWN exit reason, from the site that took it.
     NewtonTerminationReason newton_termination = NewtonTerminationReason::NotRecorded;
     // R13.18 (deep review P0-4): the receipt of the solve that ENDED the loop. The worst_* fields
@@ -713,6 +756,12 @@ inline StageFailure first_failure_of(const StageFailureSignals& s) {
                 // its cap two solves can share the worst value and end for different reasons, and
                 // a strict `>` update let whichever came first name the layer.
                 if (!s.all_near_worst_met_tolerance) {
+                    return StageFailure::KrylovStagnated;
+                }
+                // R13.19 SELF-REVIEW: solves tied at the worst ratio that hit DIFFERENT mechanisms
+                // cannot name one. Reporting the first arrival's was order-dependent; reporting
+                // the general category is not.
+                if (s.near_worst_mechanism_ambiguous) {
                     return StageFailure::KrylovStagnated;
                 }
                 if (s.worst_krylov_D_reached && !s.worst_krylov_S_reached) {

@@ -222,3 +222,61 @@ evidence (worst = 0.9941), not a fallback. A fixture pins the converse.
 order-independent (two maxima); the D/S/source/budget receipt attached to `worst_*` is not, because
 it updates on strict `>`. Fixing it properly is the review's per-solve-receipt + two-pass reduction,
 which is its own increment.
+
+---
+
+## Second adversarial pass — round 8 (code) and a numerics referee (claims)
+
+### Round 8, P0-B — my P0-1 fix produced the inversion again, the eighth time
+
+Narrowing `trivial_solve` admitted the D-satisfied zero-work solve to the aggregate — correct — but
+`met_tolerance` still excluded `InitialConverged`, so that solve was scored as an **unmet** solve at
+the maximum. The tie refusal is the **first** clause of the four-way, so `KrylovObjectiveMismatch`
+— **the category the fix exists to reach** — became unreachable for exactly the solve it was aiming
+at, and the emitted layer was the operator/split. The row even carried
+`worst_krylov_D_reached=1 worst_krylov_S_reached=0` beside `category=krylov_stagnated`: two
+mutually exclusive readings on one line.
+
+`InitialConverged` **did** meet a tolerance — the D objective; that branch is gated on
+`error_tensor < tol` — so it now counts as such, and two fixtures pin both the fixed behaviour and
+the broken one it replaces.
+
+### Round 8, P0-D — P1-1 was not fixed for the default configuration
+
+`stage_budget_forcing_eta` is written only inside the stage-budget resolver and only when
+`budget_active`, which requires a stage knob to be set — **and they all default to 0**. Meanwhile
+`use_adaptive_tolerances` defaults **true** and the E–W block writes `krylov_tol_adaptive`
+directly. So **every solve in a stock run recorded `tol_source=base`** while E–W owned the
+tolerance; my measured run only read `eisenstat_walker` because its namelist sets
+`stage2_gmres_restart = 8`. A flag is now set where E–W actually writes the tolerance.
+
+### Round 8, P1-B — a consumer left behind when its producer changed
+
+`gmres_tolerance_reached` counted `InitialConverged` unconditionally — added when that return
+reported *one* metric. R13.19 made it report two, so a solve meeting D and not S was being counted
+as a finished solve: overstating exactly the case the objective-mismatch work exists to surface.
+
+### Numerics referee — the physical-range claim was LOGICALLY INVERTED
+
+The referee's sharpest finding, and it is right. I wrote that the straddle's witness is `mu` and
+that the negative reading "carries the conclusion". **It does not.** The negative side was already
+over-determined by 24 random directions (`neg = 24/24`); what the block scan **adds** is the
+*positive* side, and **the straddle rests entirely on `ru`, `rv`, `rw`, `t`** — the four structured
+readings my own caveat discounts as possibly degenerate.
+
+The consequence is sharper than my original text: **in the physical metric the random evidence alone
+reads negative definite**, which for GMRES is as good as positive definite. "Intrinsically
+indefinite" survives the coordinate objection *only* through those four directions, so **the
+positive side — not `mu` — is what a further measurement must attack.**
+
+Also **withdrawn**: the "near-antisymmetry ⇒ skew continuity coupling" reading. Single-block
+directions probe the **diagonal** blocks of the symmetric part and cannot see the `mu`↔`(ru,t)`
+coupling at all.
+
+### Open from round 8, not closed here
+
+`P0-C` (`specific_layer` reads `exit_*` while the category it annotates can be decided by `worst_*`),
+`P1-A` (undisclosed production side effects of P0-1), `P1-E` (`KrylovEntryMetricMismatch` may be
+production-unreachable), `P1-F` (the measurement offered as evidence does not exercise the changed
+path), `P1-G` (`exit_*` promoted from `last_*`, which are written only inside the r₀-measured guard,
+so a stale receipt can be labelled "this solve's"). Recorded as open rather than claimed closed.

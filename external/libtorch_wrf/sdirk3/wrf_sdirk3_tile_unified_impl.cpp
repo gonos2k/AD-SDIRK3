@@ -9281,6 +9281,8 @@ vertical_coefficients:
                                      sig.worst_krylov_tolerance_source)
                               << " near_worst_all_met_tol="
                               << (sig.all_near_worst_met_tolerance ? 1 : 0)
+                              << " near_worst_mech_ambiguous="
+                              << (sig.near_worst_mechanism_ambiguous ? 1 : 0)
                               << " newton_exit="
                               << wrf::sdirk3::newton_termination_name(sig.newton_termination)
                               << " exit_krylov_iter=" << sig.exit_krylov_iter
@@ -13341,6 +13343,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         static_cast<wrf::sdirk3::KrylovToleranceSource>(stats.worst_krylov_tolerance_source);
     last_stage_signals_.worst_krylov_budget_exhausted = stats.worst_krylov_budget_exhausted;
     last_stage_signals_.all_near_worst_met_tolerance = stats.all_near_worst_met_tolerance;
+    last_stage_signals_.near_worst_mechanism_ambiguous = stats.near_worst_mechanism_ambiguous;
     last_stage_signals_.exit_krylov_iter = stats.exit_krylov_iter;
     last_stage_signals_.exit_D_reached = stats.exit_D_reached;
     last_stage_signals_.exit_S_reached = stats.exit_S_reached;

@@ -2,6 +2,7 @@
 #define WRF_SDIRK3_NEWTON_SOLVER_H
 
 #include <torch/torch.h>
+#include "wrf_sdirk3_first_failure.h"
 #include <limits>
 #include "wrf_sdirk3_state_layout.h"   // 9F.D93: THE packed-state layout
 #include "wrf_sdirk3_operator_contract.h"  // FrozenStageWeights: the stage gate's weighting
@@ -465,6 +466,11 @@ public:
         // R13.19 (P0-3): the running MAXIMUM over solves that met no tolerance. Paired with the
         // worst it makes the tie predicate order-independent; a running boolean could not be.
         double near_worst_unmet = -1.0;
+        // R13.19 SELF-REVIEW: the per-solve mechanism receipts, reduced in one pass at the end so
+        // the layer named does not depend on which solve arrived first. Newton budgets here are
+        // single digits, so this stays small; reset_per_solve value-initialises it with the rest.
+        std::vector<wrf::sdirk3::KrylovSolveMechanism> krylov_mechanisms;
+        bool  near_worst_mechanism_ambiguous = false;
         // R13.18 (deep review P0-4): the receipt of the solve that ENDED THE LOOP. The `worst_*`
         // fields belong to the largest-ratio solve in the stage, which need not be the one that
         // exited -- so a terminal failure could be subtyped from a different iteration's evidence.

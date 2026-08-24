@@ -1125,6 +1125,75 @@ int main() {
               "measurement");
     }
 
+    {
+        // R13.19 SELF-REVIEW: the MECHANISM attribution was order-dependent even after the
+        // all_met predicate became order-independent, because the D/S/source/budget receipt rides
+        // on worst_*, which updates on strict `>`. Two solves at the SAME worst ratio let
+        // whichever arrived first name the layer.
+        using wrf::sdirk3::KrylovSolveMechanism;
+        using wrf::sdirk3::near_worst_mechanism_ambiguous;
+        KrylovSolveMechanism A; A.progress = 0.99; A.met_tolerance = true;
+        A.D_reached = true;  A.S_reached = false;
+        KrylovSolveMechanism B; B.progress = 0.99; B.met_tolerance = true;
+        B.D_reached = true;  B.S_reached = true;
+        check(near_worst_mechanism_ambiguous({A, B}) &&
+              near_worst_mechanism_ambiguous({B, A}),
+              "two solves tied at the worst ratio with DIFFERENT mechanisms are ambiguous in "
+              "either order -- one of them is an objective mismatch and the other a forcing-term "
+              "limit, and reporting the first arrival's was order-dependent");
+        check(!near_worst_mechanism_ambiguous({A, A}) &&
+              !near_worst_mechanism_ambiguous({A}),
+              "agreeing solves, and a single solve, are not ambiguous");
+        KrylovSolveMechanism C = A; C.progress = 0.5;   // clearly better: outside the band
+        check(!near_worst_mechanism_ambiguous({B, C}) &&
+              !near_worst_mechanism_ambiguous({C, B}),
+              "and a solve outside the tie band is not in the set, so it cannot create ambiguity");
+    }
+    {
+        // ...and the classifier refuses to name a mechanism when they disagree.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.worst_krylov_rel_error_vs_r0 = 0.99;
+        s.krylov_solves_measured_vs_r0 = 2;
+        s.accepted_steps = 2;
+        s.exit_krylov_iter = 1;
+        s.worst_krylov_D_reached = true; s.worst_krylov_S_reached = false;
+        s.worst_krylov_met_tolerance = true;
+        check(name_of(s) == "krylov_objective_mismatch",
+              "with the near-worst solves agreeing, the specific mechanism is named");
+        s.near_worst_mechanism_ambiguous = true;
+        check(name_of(s) == "krylov_stagnated",
+              "and when they disagree the classifier reports the general category rather than "
+              "whichever solve arrived first");
+    }
+
+    {
+        // R13.19 SELF-REVIEW (round 8, P0-B): the D-satisfied zero-work solve must REACH the
+        // objective-mismatch clause. Admitting it to the aggregate without counting its D
+        // tolerance as "met" made it an unmet solve at the maximum, which trips the tie refusal --
+        // the FIRST clause of the four-way -- so the category the fix exists to name became
+        // unreachable and the layer emitted was the operator/split.
+        StageFailureSignals s = ok_stage();
+        s.newton_converged = false;
+        s.residual_first = 8.7e8; s.residual_last = 8.6e8;
+        s.worst_krylov_rel_error_vs_r0 = 1.0;     // zero-work solve: progress ~ 1
+        s.krylov_solves_measured_vs_r0 = 1;
+        s.accepted_steps = 1;
+        s.exit_krylov_iter = 0;
+        s.worst_krylov_D_reached = true;          // it met the D objective on entry
+        s.worst_krylov_S_reached = false;         // and not the S one
+        s.worst_krylov_met_tolerance = true;      // ...which IS meeting a tolerance
+        s.all_near_worst_met_tolerance = true;
+        check(name_of(s) == "krylov_objective_mismatch",
+              "a solve that converged on entry in the D objective and not in S is the objective "
+              "mismatch, and must reach that clause rather than being refused as an unmet tie");
+        s.all_near_worst_met_tolerance = false;   // as it was before the fix
+        check(name_of(s) == "krylov_stagnated",
+              "...which is exactly what the record said before: krylov_stagnated, on the "
+              "operator/split layer, beside a receipt reading D_reached=1 S_reached=0");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1141,7 +1210,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 94;
+    constexpr int expected_checks = 101;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
