@@ -638,7 +638,8 @@ inline bool measured(double v) {
 // and never inferred from the signals afterwards, which is what went wrong.
 enum class StageDecisionBasis {
     NotRecorded,
-    Precondition,             // provenance / explicit-stage / finiteness / absent measurement
+    Precondition,             // provenance / finiteness / absent measurement
+    ExplicitStageGate,        // the explicit stage's own RHS / admissibility / publish checks
     NewtonResidualTrace,      // residual_first vs residual_last divergence growth
     StepAcceptance,           // accepted/rejected step counters
     KrylovDivergedFlag,       // the solver's own divergence flag
@@ -654,6 +655,7 @@ inline const char* stage_decision_basis_name(StageDecisionBasis b) {
     switch (b) {
         case StageDecisionBasis::NotRecorded:            return "not_recorded";
         case StageDecisionBasis::Precondition:           return "precondition";
+        case StageDecisionBasis::ExplicitStageGate:      return "explicit_stage_gate";
         case StageDecisionBasis::NewtonResidualTrace:    return "newton_residual_trace";
         case StageDecisionBasis::StepAcceptance:         return "step_acceptance";
         case StageDecisionBasis::KrylovDivergedFlag:     return "krylov_diverged_flag";
@@ -720,6 +722,9 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
     }
     // An explicit stage has its own failure set; the implicit clauses below cannot speak to it.
     if (s.is_explicit_stage) {
+        // Every path out of this block returns, and none of them is a precondition on the
+        // implicit machinery -- they are the explicit stage's own gates.
+        if (basis) *basis = StageDecisionBasis::ExplicitStageGate;
         if (!s.explicit_rhs_measured) return StageFailure::InsufficientEvidence;
         if (!s.explicit_rhs_finite)   return StageFailure::ExplicitRhsNotFinite;
         if (!s.gate_metric_ok)        return StageFailure::ExplicitAdmissibilityRejected;

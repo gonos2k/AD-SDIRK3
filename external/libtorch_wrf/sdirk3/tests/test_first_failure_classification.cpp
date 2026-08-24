@@ -688,6 +688,16 @@ int main() {
         check(name_of(s) == "insufficient_evidence",
               "an explicit stage whose RHS was never measured is unmeasured, not finite -- "
               "absence of a measurement must not become a finding here either");
+        // R13.20: and the explicit stage's own gates are their OWN evidence class, not the
+        // implicit machinery's preconditions -- the record must not label them `precondition`.
+        const auto dx = wrf::sdirk3::stage_diagnosis_of(s);
+        check(dx.primary_event_basis == wrf::sdirk3::StageDecisionBasis::ExplicitStageGate &&
+              std::string(wrf::sdirk3::stage_decision_basis_name(
+                  wrf::sdirk3::StageDecisionBasis::ExplicitStageGate)) == "explicit_stage_gate",
+              "an explicit-stage verdict names the explicit-stage gate as its basis");
+        check(!dx.attribution_from_metric && !dx.decided_by_exit_receipt,
+              "...and claims neither r0 metric evidence nor an exit receipt, neither of which "
+              "an explicit stage has");
     }
 
     {
@@ -1369,7 +1379,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 116;
+    constexpr int expected_checks = 118;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

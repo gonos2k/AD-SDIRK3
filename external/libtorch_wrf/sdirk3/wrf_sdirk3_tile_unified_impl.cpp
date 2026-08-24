@@ -9234,11 +9234,14 @@ vertical_coefficients:
                                       sig.worst_krylov_tolerance_source)
                                 : "inner_tolerance_source_unrecorded";
                     } else if (first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
+                        // Two arms, both live: this category is returned by the exit-receipt
+                        // block and by the r0 four-way, and by nothing else. A third
+                        // "neither" arm would be exactly the unreachable alternative this
+                        // change removes one line above.
                         specific_layer =
                             layer_from_exit
                                 ? wrf::sdirk3::krylov_stopping_layer_for(sig.exit_stopping_metric)
-                                : (layer_from_worst ? "stop_metric_unrecorded_for_worst_solve"
-                                                    : "stop_metric_unrecorded");
+                                : "stop_metric_unrecorded_for_worst_solve";
                     }
                     const char* layer_receipt =
                         (std::strcmp(specific_layer, "n/a") == 0)
