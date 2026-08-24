@@ -10103,50 +10103,33 @@ vertical_coefficients:
                         //     the three categories below it were unreachable. The fix that closed
                         //     one instance of this class opened another.
                         //
-                        // (2) The bigger one, found by following (1): the gate could not fire on
-                        //     an explicit stage AT ALL. `last_stage_converged_` was hard-set true
-                        //     and all three gate metrics hard-set 0, so `handle_stage_gate`
-                        //     early-returned and NOTHING classified this stage. A non-finite
-                        //     explicit tendency therefore passed silently into the next stage's
-                        //     state, where `entry_state_finite` caught it -- one stage late and
-                        //     attributed to the wrong stage. That is precisely the
-                        //     "first, not worst" misattribution this classifier exists to prevent.
+                        // (2) RETRACTED in iteration 8, by reading the code I should have read
+                        //     before writing it. Iteration 2 claimed "the gate could not fire on
+                        //     an explicit stage AT ALL, so a non-finite tendency passed silently
+                        //     into the next stage". FALSE: the shared `k_fast_all_finite` check
+                        //     ~40 lines below runs after BOTH branches and already sets
+                        //     `last_stage_converged_ = false` on a non-finite tendency, which
+                        //     makes `stage_failed` true and the gate fire. What was true is (1):
+                        //     the gate fired and the classifier could not say WHY, because the
+                        //     two signals it branches on had no producer.
                         //
-                        // BEHAVIOUR CHANGE, stated: on any step whose explicit tendency is finite
-                        // this is byte-identical (finite -> converged=true, metrics 0, gate
-                        // early-returns, exactly as before). It differs ONLY when the tendency is
-                        // non-finite, where the previous behaviour was to advance a NaN.
-                        //
-                        // One GPU->CPU sync per timestep, inside a NoGradGuard, on a path that
-                        // just evaluated a full RHS -- the same shape and the same justification
-                        // as `last_stage_entry_finite_`.
-                        const bool expl_measured =
+                        // So `measured` is set here -- it is free, no sync -- and `finite` comes
+                        // from that shared check, which computes it once for both branches.
+                        // Duplicating the isfinite() reduction here, as iteration 2 did, bought a
+                        // second GPU->CPU sync per timestep for a fact already being measured.
+                        last_stage_signals_.explicit_rhs_measured =
                             k_fast[i].defined() && k_fast[i].numel() > 0;
-                        bool expl_finite = false;
-                        if (expl_measured) {
-                            torch::NoGradGuard ng_expl;
-                            expl_finite = torch::isfinite(k_fast[i]).all()
-                                              .detach().to(torch::kCPU).item<bool>();
-                        }
-                        last_stage_signals_.explicit_rhs_measured = expl_measured;
-                        last_stage_signals_.explicit_rhs_finite   = expl_finite;
                         if (stage_id == 1) {
                             newton_solver_->maybe_save_trajectory_checkpoint(U_stage, stage_id);
                         }
-                        // A stage whose tendency is not finite has not converged, and its gate
-                        // metric must say so in EVERY gate_metric_mode (0 reads wrms_growth, 1
-                        // reads R_full_norm, 2 reads rel_R_full) -- otherwise the mode chosen at
-                        // runtime decides whether a NaN is caught.
-                        const float expl_bad = std::numeric_limits<float>::infinity();
-                        last_stage_converged_ = expl_finite;
+                        last_stage_converged_ = true;
                         last_stage_residual_ = 0.0f;
                         last_stage_initial_R0_ = 0.0f;
-                        last_stage_rel_R_full_ = expl_finite ? 0.0f : expl_bad;
-                        last_stage_rel_R_full_raw_ = expl_finite ? 0.0f : expl_bad;
-                        last_stage_R_full_norm_ = expl_finite ? 0.0f : expl_bad;
-                        last_stage_wrms_norm_ = expl_finite ? 0.0f : expl_bad;
-                        last_stage_wrms_growth_ =
-                            expl_finite ? 0.0 : std::numeric_limits<double>::infinity();
+                        last_stage_rel_R_full_ = 0.0f;
+                        last_stage_rel_R_full_raw_ = 0.0f;
+                        last_stage_R_full_norm_ = 0.0f;
+                        last_stage_wrms_norm_ = 0.0f;
+                        last_stage_wrms_growth_ = 0.0f;
                     } else {
                         k_fast[i] = solveImplicitStage(U_stage, F_phys, dt, effective_aii, stage_id,
                                                        K_prev_attempt, U_full_exch_stage);
@@ -10174,6 +10157,14 @@ vertical_coefficients:
                         k_fast_all_finite = torch::isfinite(k_fast[i])
                             .all().detach().to(torch::kCPU).item<bool>();
                     }
+                    // R13.20 (adversarial loop, iterations 2 + 8): the single producer of
+                    // `explicit_rhs_finite`. It had NONE until iteration 2 -- only the test
+                    // fixtures wrote it -- so `first_failure_of` returned `insufficient_evidence`
+                    // at the first line of its explicit branch on EVERY explicit-stage gate
+                    // failure, and the three categories below it were unreachable. Fed from the
+                    // reduction this block already performs, for both branches, rather than from
+                    // a second one on the explicit path.
+                    last_stage_signals_.explicit_rhs_finite = k_fast_all_finite;
                     if (!k_fast_all_finite) {
                         probe_firsthit_nonfinite(stage_id, retry_used, "k_fast_nonfinite", k_fast[i]);
                         if (stage_id == 2) {
@@ -10187,6 +10178,16 @@ vertical_coefficients:
                         last_stage_rel_R_full_ = std::numeric_limits<float>::infinity();
                         last_stage_rel_R_full_raw_ = std::numeric_limits<float>::infinity();
                         last_stage_R_full_norm_ = std::numeric_limits<float>::infinity();
+                        // R13.20 (adversarial loop, iteration 8): the WRMS pair too. This block
+                        // set three of the five gate metrics to infinity and left
+                        // `wrms_growth_` -- which is the metric `stage_gate_metric_value()` reads
+                        // in the DEFAULT mode 0 -- untouched. `converged_ = false` above forces
+                        // the gate to fire either way, so nothing was missed; but which metrics
+                        // are infinite decided `gate_metric_ok`, and therefore whether the record
+                        // said "the tendency is not finite" or "the metric was fine". A runtime
+                        // mode should not change what a NaN looks like on the record.
+                        last_stage_wrms_norm_ = std::numeric_limits<float>::infinity();
+                        last_stage_wrms_growth_ = std::numeric_limits<double>::infinity();
                         if (!(last_stage_initial_R0_ > 0.0f) || !std::isfinite(last_stage_initial_R0_)) {
                             last_stage_initial_R0_ = 1.0f;
                         }

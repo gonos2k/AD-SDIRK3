@@ -265,21 +265,18 @@ fixtures wrote them. Both default `false`, and they gate the explicit branch —
 `first_failure_of` returned `InsufficientEvidence` on its first line **every time**, and three
 categories below it were unreachable.
 
-Following that found the larger one. The explicit branch hard-set `last_stage_converged_ = true`
-and all three gate metrics to `0`, so `handle_stage_gate` **early-returned on every explicit
-stage** — nothing classified it, and a non-finite explicit tendency passed silently into the next
-stage's state, where `entry_state_finite` caught it. **One stage late, attributed to the wrong
-stage**: exactly the "first, not worst" misattribution this classifier exists to prevent. This is
-live on `em_b_wave`/ARK324, where stage 1 is explicit on every timestep.
+~~Following that found the larger one: the explicit branch hard-set `last_stage_converged_ = true`
+… so `handle_stage_gate` early-returned on every explicit stage … and a non-finite explicit
+tendency passed silently into the next stage's state.~~ **RETRACTED in iteration 8 — see below.**
+The shared `k_fast_all_finite` check that runs after *both* branches already sets
+`last_stage_converged_ = false` on a non-finite tendency, which makes `stage_failed` true and the
+gate fire. I wrote that claim without reading forty lines further down.
 
-Both fixed. The signals are produced where the tendency is evaluated (one GPU→CPU sync per
-timestep inside a `NoGradGuard`, the same shape and justification as `last_stage_entry_finite_`),
-and a non-finite tendency now sets `converged = false` **and** all three metrics to infinity — all
-three, because otherwise the `gate_metric_mode` chosen at runtime decides whether a NaN is caught.
-
-**Behaviour change, stated plainly.** On any step whose explicit tendency is finite this is
-byte-identical: finite → `converged = true`, metrics 0, gate early-returns, exactly as before. It
-differs *only* when the tendency is non-finite, where the previous behaviour was to advance a NaN.
+**What survives is the finding above, and it is the one that mattered:** the gate fired and the
+classifier could not say *why*, because the two signals its explicit branch reads had no producer
+outside the fixtures. `explicit_rhs_measured` is set where the tendency is evaluated (free — no
+sync) and `explicit_rhs_finite` is fed from the shared reduction that was already computing it for
+both branches.
 
 **And the reachability is now on the record instead of implied.** From the single production call
 site the explicit branch can return `InsufficientEvidence` or `ExplicitRhsNotFinite` and nothing
@@ -461,3 +458,38 @@ alone. **Negative-tested:** it passes with the binary and fails without it.
 Checked and clean: the sibling `run_decomposition_matrix.sh` makes no numeric coverage claim
 (`SELF-TEST: assertion logic + manifest sane ($rows cases)` is derived), and no other workflow
 comment carries a live count — the remaining numbers are historical statements about past fixes.
+
+### Iteration 8 — I retract iteration 2's headline
+
+Attacking my own iteration-2 claim, which asserted a behaviour change I had not verified: *"a retry
+of an explicit stage re-evaluates the same RHS … acceptable"*, and above it, *"the gate could not
+fire on an explicit stage AT ALL"*.
+
+**Both were wrong, and reading forty lines further down was all it took.** A shared
+`k_fast_all_finite` reduction runs after *both* the explicit and implicit branches (verified by
+brace depth: same scope depth as the branch itself) and, on a non-finite tendency, already sets
+`last_stage_converged_ = false` plus three gate metrics to infinity — converting it to
+stage-failure semantics so `stage_fail_action` handles it. **So the gate did fire, and a NaN never
+"passed silently into the next stage".** Iteration 2's headline is retracted.
+
+What survives is iteration 2's *first* finding, unchanged and still the one that mattered: the gate
+fired and `first_failure_of` answered `insufficient_evidence`, because `explicit_rhs_measured` and
+`explicit_rhs_finite` had no producer outside the test fixtures.
+
+**And the fix is now smaller than the claim was.** Iteration 2 added a second
+`isfinite(k_fast).all().item<bool>()` on the explicit path — a duplicate GPU→CPU sync per timestep
+for a fact already being measured thirty lines later, in a commit that argued for the sync's cost.
+Removed. `explicit_rhs_measured` stays where the tendency is evaluated (free); `explicit_rhs_finite`
+is fed from the shared reduction, one producer for both branches.
+
+**One real improvement survives the retraction.** That shared handler set three of the five gate
+metrics to infinity and left `wrms_norm_` / `wrms_growth_` — and `wrms_growth_` is what
+`stage_gate_metric_value()` reads in the **default** mode 0. `converged_ = false` forces the gate to
+fire regardless, so nothing was ever missed; but which metrics are infinite decides
+`gate_metric_ok`, and therefore whether the record says *"the tendency is not finite"* or *"the
+metric was fine"*. A runtime mode should not change what a NaN looks like on the record. All five
+now, for both branches.
+
+**Method note.** Two iterations in a row the defect was in my own previous iteration, both times
+because I inferred a control-flow fact instead of reading it. The brace-depth check that settled
+this took one command.
