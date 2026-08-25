@@ -61,3 +61,31 @@ coordinate the loop runs eleven iterations and takes the residual down by two th
 many usable steps a run threw away is a field rather than a probe you have to re-run. (Written as
 counters first with no consumer — the class this campaign spent two self-review rounds closing —
 and wired before shipping.)
+
+## Where the r₀ arm actually stops — and the rule is right there
+
+`newton_exit=zero_update_after_total_failure`, `newton_iters=11`, `newton_budget=12`. So the loop
+did **not** exhaust the Newton budget: 10 of 11 solves produced accepted steps, then **one** was
+flagged and ended it. Raising `max_newton_iter` therefore cannot help.
+
+The probe recorded that one discard, and it is the mirror image of the ‖b‖ case:
+
+| rule | fired at | linear progress | candidate usable? | verdict |
+|---|---|---|---|---|
+| `‖b‖` | stage 3, iter 1 | **removed 32 %** (`vs_r0` 0.6773) | **yes** — ‖R‖ −60 % | **wrong discard** |
+| r₀ | stage 3, iter 10 | **diverged**, +0.3 % (`vs_r0` 1.003) | **no** — 1.836e14 → 1.837e14 | **correct discard** |
+
+So the r₀ rule fires only where the step is genuinely unusable, and the ‖b‖ rule fires where it is
+not. That is the case for the coordinate, made from both sides rather than from the failure alone.
+
+**n is 2.** One discard per run, two runs. This is two data points that point the same way, not a
+rate — and no case was measured in which the r₀ rule discards a usable step. That absence is a
+limit of the sample, not evidence.
+
+## The next wall, named
+
+With the discard rule corrected the stage-3 failure is no longer a rule artifact: at iteration 10 a
+linear solve's residual **grows** relative to its own r₀ and its step helps nothing. That is a real
+divergence and it is what now ends stage 3 at `R_last = 0.3337`. The question it poses —
+*why does a stage-3 solve diverge after ten descending iterations* — is about the operator, the
+preconditioner or the linearization, and it is a different question from the one this note closes.
