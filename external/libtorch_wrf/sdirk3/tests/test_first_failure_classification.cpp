@@ -1102,9 +1102,15 @@ int main() {
               "reading the stage-worst receipt here would report an objective mismatch from an "
               "iteration that ended nothing");
         s.exit_D_reached = true;   // now the EXIT solve is the mismatch
-        check(name_of(s) == "krylov_objective_mismatch",
+        // R13.21 (external review P0-2): the event does not change; the ATTRIBUTION does. This
+        // check used to read the subtype out of `name_of`, i.e. out of the event.
+        check(name_of(s) == "zero_update_after_total_failure",
+              "the event is still the zero-update break -- a subtype earned by the exit solve is "
+              "a statement about WHY, not about what ended the stage");
+        check(wrf::sdirk3::stage_diagnosis_of(s).exit_attribution ==
+                  StageFailure::KrylovObjectiveMismatch,
               "and when the exit solve itself met D and not S, the subtype is earned by the "
-              "solve the event belongs to");
+              "solve the event belongs to -- carried as the exit attribution");
         s.exit_krylov_iter = -1;   // no exit receipt at all
         check(name_of(s) == "zero_update_after_total_failure",
               "with no exit receipt the event may not borrow the stage-worst one");
@@ -1127,10 +1133,20 @@ int main() {
         // reported the gate refusing while the record said it passed. The gate must actually
         // have refused, and the category is named for the ENTRY metric it measures, not the gate.
         s.gate_metric_ok = false;
-        check(name_of(s) == "krylov_entry_metric_mismatch",
-              "both metrics the solver was steered by are satisfied and the GATE's metric is not "
-              "-- not the operator, not the forcing term, not the budget, but the gate's norm "
-              "disagreeing with the solver's");
+        // R13.21 (external review P0-2): the EVENT stays the event. This fixture used to pin the
+        // subtype as `name_of(s)`, i.e. as the thing that ended the stage -- which is how a field
+        // documented "what actually ended the stage" came to report a cause. The subtype is now
+        // `exit_attribution`, checked below.
+        check(name_of(s) == "zero_update_after_total_failure",
+              "the loop ended at the zero-update break, and that is what the EVENT says -- the "
+              "metric subtype is a separate answer to a separate question");
+        {
+            const auto d_em = wrf::sdirk3::stage_diagnosis_of(s);
+            check(d_em.exit_attribution == StageFailure::KrylovEntryMetricMismatch,
+                  "both metrics the solver was steered by are satisfied and the GATE's metric is "
+                  "not -- not the operator, not the forcing term, not the budget, but the gate's "
+                  "norm disagreeing with the solver's, recorded as the exit attribution");
+        }
         check(std::string(stage_failure_layer(StageFailure::KrylovEntryMetricMismatch)) ==
                   "krylov_entry_E_metric_vs_solver_metrics",
               "and the layer names that disagreement rather than a component");
@@ -1319,10 +1335,14 @@ int main() {
         e.exit_krylov_iter = 3;
         e.exit_D_reached = true; e.exit_S_reached = false;
         const auto de = wrf::sdirk3::stage_diagnosis_of(e);
-        check(de.primary_event == StageFailure::KrylovObjectiveMismatch &&
+        // R13.21 (external review P0-2): event and cause, separately.
+        check(de.primary_event == StageFailure::ZeroUpdateAfterTotalFailure &&
               de.decided_by_exit_receipt,
-              "and a category reached through the exit receipt is flagged as such, so the "
+              "the event is the zero-update break and the exit receipt is what decided it, so the "
               "emitted layer and the verdict describe the same solve");
+        check(de.exit_attribution == StageFailure::KrylovObjectiveMismatch,
+              "...and the subtype the exit solve earned -- D met, S not -- is carried BESIDE the "
+              "event rather than replacing it, which is what `primary_event` used to report");
     }
 
     {
@@ -1408,6 +1428,171 @@ int main() {
               "...and the record prints them distinctly from eisenstat_walker");
     }
 
+    {
+        // R13.21 (external review P0-1): the entry verdict. A Krylov loop that returns before any
+        // Arnoldi step because the inner stopping objective was already met is NOT necessarily a
+        // convergence -- rho_S can be anything, including > 1. One flag used to carry both states,
+        // derived from the termination LABEL, and it exempted both from the total-failure rules.
+        using wrf::sdirk3::krylov_entry_verdict;
+        using wrf::sdirk3::entry_exempts_total_failure;
+        using wrf::sdirk3::entry_requires_nonlinear_decrease;
+
+        const auto converged = krylov_entry_verdict(/*stop_metric=*/true, /*S=*/true);
+        check(converged.S_reached && !converged.objective_mismatch &&
+              entry_exempts_total_failure(converged) &&
+              !entry_requires_nonlinear_decrease(converged),
+              "an entry that met BOTH the stopping objective and S is converged: it exempts the "
+              "total-failure rules and needs no extra nonlinear check");
+
+        const auto mismatch = krylov_entry_verdict(/*stop_metric=*/true, /*S=*/false);
+        check(mismatch.objective_mismatch && !mismatch.S_reached,
+              "an entry that met the stopping objective and NOT S is an objective mismatch, not a "
+              "convergence -- InitialStopMetricReached is named for the half it measures");
+        check(!entry_exempts_total_failure(mismatch),
+              "...and it does NOT bypass the total-failure policy: an identical rho_S returned "
+              "after Arnoldi iterations is judged by that policy, and a control-flow label must "
+              "not buy a different one");
+        check(entry_requires_nonlinear_decrease(mismatch),
+              "...and its step is taken only against a measured nonlinear decrease, which is what "
+              "the recovery and trust acceptance sites already require of every other step");
+
+        const auto not_on_entry = krylov_entry_verdict(/*stop_metric=*/false, /*S=*/true);
+        check(!not_on_entry.S_reached && !not_on_entry.objective_mismatch &&
+              !entry_exempts_total_failure(not_on_entry),
+              "a solve that did NOT return on entry is neither, whatever its S flag says -- the "
+              "verdict is about the entry return, not about S alone");
+    }
+
+    {
+        // R13.21 (external review P0-3): two solves are interchangeable only if they send you to
+        // THE SAME PLACE. R13.20 narrowed the tie check to CATEGORY equality, which was right
+        // about the category and wrong about the consequence -- `specific_layer` is derived from
+        // the tolerance source (forcing) or the stopping metric (objective mismatch), and the
+        // stage-worst receipt updates on a strict `>`, so on an exact tie the FIRST ARRIVAL's
+        // provenance is what the emitter reads. Category was order-invariant; the next place to
+        // work was not.
+        using wrf::sdirk3::KrylovSolveMechanism;
+        using wrf::sdirk3::near_worst_mechanism_ambiguous;
+        using wrf::sdirk3::krylov_specific_layer_for;
+        using wrf::sdirk3::KrylovToleranceSource;
+        using wrf::sdirk3::KrylovStoppingMetric;
+
+        KrylovSolveMechanism F1; F1.progress = 0.99; F1.S_reached = true; F1.met_tolerance = true;
+        F1.tolerance_source = static_cast<int>(KrylovToleranceSource::EwEtaClamp);
+        KrylovSolveMechanism F2 = F1;
+        F2.tolerance_source = static_cast<int>(KrylovToleranceSource::InnRamp);
+        check(krylov_mechanism_category(F1) == krylov_mechanism_category(F2) &&
+              near_worst_mechanism_ambiguous({F1, F2}) &&
+              near_worst_mechanism_ambiguous({F2, F1}),
+              "two tied forcing-limited solves whose tolerance came from DIFFERENT knobs agree on "
+              "the category and disagree on the layer, so they are action-ambiguous in either "
+              "order -- R13.20 called them interchangeable and the emitted layer depended on "
+              "arrival order");
+        check(std::string(krylov_specific_layer_for(F1)) == "ew_eta_min_max_clamp" &&
+              std::string(krylov_specific_layer_for(F2)) == "inn_tolerance_ramp",
+              "...and those are the two different places the record would have sent the work");
+
+        KrylovSolveMechanism M1; M1.progress = 0.99; M1.D_reached = true; M1.S_reached = false;
+        M1.met_tolerance = true;
+        M1.stopping_metric = static_cast<int>(KrylovStoppingMetric::BlockD);
+        KrylovSolveMechanism M2 = M1;
+        M2.stopping_metric = static_cast<int>(KrylovStoppingMetric::StageWRMS);
+        check(near_worst_mechanism_ambiguous({M1, M2}) && near_worst_mechanism_ambiguous({M2, M1}),
+              "and two tied objective mismatches that stopped on DIFFERENT metrics are ambiguous "
+              "too -- the layer is derived from the stopping metric there");
+
+        // The gain R13.20 bought must survive: a category that derives no specific layer is not
+        // made ambiguous by provenance that cannot change the answer.
+        KrylovSolveMechanism S1; S1.progress = 0.99;   // met nothing -> KrylovStagnated
+        S1.tolerance_source = static_cast<int>(KrylovToleranceSource::EwEtaClamp);
+        KrylovSolveMechanism S2 = S1;
+        S2.tolerance_source = static_cast<int>(KrylovToleranceSource::Base);
+        S2.stopping_metric = static_cast<int>(KrylovStoppingMetric::IdentityS);
+        check(!near_worst_mechanism_ambiguous({S1, S2}) && !near_worst_mechanism_ambiguous({S2, S1}),
+              "but two tied stagnations derive no specific layer, so differing provenance does NOT "
+              "make them ambiguous -- the refusal must not fire toward the operator/split layer "
+              "for a difference that cannot change where the work goes");
+        check(std::string(krylov_specific_layer_for(S1)) == "n/a",
+              "...which is exactly because that category names its layer from the category alone");
+    }
+
+    {
+        // R13.21 (external review P1-2): a Krylov return is complete or it is not. Six sites
+        // return a result; four filled the metric/budget receipt and the two NanRetryExhausted
+        // early returns filled only the constructor fields, so a terminal solve ending there gave
+        // the classifier an exit receipt it could not subtype -- the record reporting ABSENCE
+        // where the solve knew the answer.
+        using wrf::sdirk3::KrylovReceiptView;
+        using wrf::sdirk3::krylov_receipt_complete;
+
+        KrylovReceiptView full;
+        full.rho_D_final = 1.0; full.rho_S_final = 1.0;
+        full.stopping_metric = static_cast<int>(wrf::sdirk3::KrylovStoppingMetric::BlockD);
+        full.arnoldi_spent = 7; full.arnoldi_allowed = 8;
+        check(krylov_receipt_complete(full),
+              "a return that stamps both ratios, the metric it stopped on, and the budget it "
+              "spent against what it was allowed is a complete receipt");
+
+        // Each field alone must be able to fail it -- a rule that cannot fire is not a rule.
+        { auto r = full; r.rho_D_final = -1.0;
+          check(!krylov_receipt_complete(r), "...an unstamped rho_D alone makes it incomplete"); }
+        { auto r = full; r.rho_S_final = -1.0;
+          check(!krylov_receipt_complete(r), "...an unstamped rho_S alone makes it incomplete"); }
+        { auto r = full; r.stopping_metric = -1;
+          check(!krylov_receipt_complete(r),
+                "...and without the metric it stopped on, nothing downstream can name the layer"); }
+        { auto r = full; r.arnoldi_spent = -1;
+          check(!krylov_receipt_complete(r), "...nor without the work actually spent"); }
+        { auto r = full; r.arnoldi_allowed = 0;
+          check(!krylov_receipt_complete(r),
+                "...nor with a zero budget, which cannot establish exhaustion"); }
+
+        // The pre-R13.21 NanRetryExhausted receipt, reconstructed: only the ctor fields.
+        KrylovReceiptView nan_retry_before;
+        nan_retry_before.rho_S_final = 1.0;   // rel_error was set; nothing else was
+        check(!krylov_receipt_complete(nan_retry_before),
+              "the NaN-retry return as it stood before R13.21 is incomplete by this rule, which "
+              "is why a terminal solve ending there fell back to the generic event");
+    }
+
+    {
+        // R13.21 (external review section 8): the no-progress boundary is a DECISION boundary, not
+        // a mechanism classifier. Measured on this campaign's own stage-3 budget sweep: vs_r0
+        // 0.907 at one setting and 0.8993 at the next -- 0.8 % apart -- flipped the attribution
+        // krylov_stagnated <-> newton_stagnated and the layer with it, while the primary event was
+        // stage-3 zero_update_after_total_failure in both.
+        using wrf::sdirk3::threshold_proximity;
+        using wrf::sdirk3::threshold_permits_specific_layer;
+
+        const auto near_above = threshold_proximity(0.907, 0.90);
+        const auto near_below = threshold_proximity(0.8993, 0.90);
+        check(near_above.measured_ && near_below.measured_ &&
+              near_above.distance > 0.0 && near_below.distance < 0.0,
+              "the distance is SIGNED, so the record says which side of the boundary the row "
+              "landed on as well as how far");
+        check(near_above.sensitive && near_below.sensitive,
+              "and both readings from the real sweep are inside the sensitivity band -- the flip "
+              "between them is a boundary crossing, not a change of mechanism");
+        check(!threshold_permits_specific_layer(near_above) &&
+              !threshold_permits_specific_layer(near_below),
+              "so neither may issue a specific layer: a work order that a 1 % change in the ratio "
+              "would have reversed is not a work order");
+
+        const auto far = threshold_proximity(0.9941, 0.90);
+        check(far.measured_ && !far.sensitive && threshold_permits_specific_layer(far),
+              "the dt=600 central record at 0.9941 is far from the boundary and keeps its layer");
+
+        const auto unmeasured = threshold_proximity(-1.0, 0.90);
+        check(!unmeasured.measured_ && threshold_permits_specific_layer(unmeasured),
+              "and a row with no r0 progress at all is not 'threshold sensitive' -- absence of a "
+              "measurement must not be reported as a near-boundary verdict");
+
+        const auto custom = threshold_proximity(0.86, 0.85);
+        check(custom.threshold == 0.85 && custom.sensitive,
+              "the band is applied to the threshold ACTUALLY used, not to the header constant -- "
+              "the boundary is overridable per run and the distance must follow it");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1424,7 +1609,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 119;
+    constexpr int expected_checks = 145;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

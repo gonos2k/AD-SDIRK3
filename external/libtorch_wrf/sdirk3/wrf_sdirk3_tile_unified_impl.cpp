@@ -9232,25 +9232,88 @@ vertical_coefficients:
                         (diag.primary_event_basis == StageDecisionBasis::ExitReceipt);
                     const bool layer_from_worst =
                         (diag.primary_event_basis == StageDecisionBasis::KrylovR0Receipt);
-                    const char* specific_layer = "n/a";
-                    if (first == wrf::sdirk3::StageFailure::KrylovForcingTermLimited) {
+                    // R13.21 (external review section 8): a specific layer is a WORK ORDER, and
+                    // this campaign measured the boundary flipping the category on a 0.8 % change
+                    // in the ratio (stage-3 sweep: vs_r0 0.907 vs 0.8993). A verdict that close to
+                    // the boundary still answers, but its specific layer must not be issued as an
+                    // instruction to another code layer.
+                    const bool layer_allowed =
+                        wrf::sdirk3::threshold_permits_specific_layer(diag.threshold);
+                    // R13.21 SELF-REVIEW: `layer_derived` is tracked EXPLICITLY, not inferred by
+                    // comparing the emitted string against one sentinel. R13.20's R9-3 fixed
+                    // `layer_receipt` printing `stage_worst` on a row that derived no layer, by
+                    // keying it on `specific_layer == "n/a"`. Phase 5 above then introduced a
+                    // SECOND no-layer sentinel (`threshold_sensitive_no_specific_layer`) that the
+                    // key does not match -- so a near-boundary row would have asserted receipt
+                    // provenance for a layer it never derived. The same defect, in the fix that
+                    // closed it, one PR later. A boolean cannot drift the way a string match can.
+                    bool layer_derived = false;
+                    const char* specific_layer =
+                        layer_allowed ? "n/a" : "threshold_sensitive_no_specific_layer";
+                    if (layer_allowed &&
+                        first == wrf::sdirk3::StageFailure::KrylovForcingTermLimited) {
                         specific_layer =
                             layer_from_worst
                                 ? wrf::sdirk3::krylov_forcing_layer_for(
                                       sig.worst_krylov_tolerance_source)
                                 : "inner_tolerance_source_unrecorded";
-                    } else if (first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
-                        // Two arms, both live: this category is returned by the exit-receipt
-                        // block and by the r0 four-way, and by nothing else. A third
-                        // "neither" arm would be exactly the unreachable alternative this
-                        // change removes one line above.
+                        layer_derived = layer_from_worst;
+                    } else if (layer_allowed &&
+                               first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
+                        // R13.21 (external review P0-2): ONE arm now. This category can only be
+                        // returned by the r0 four-way -- the exit-receipt block returns the EVENT
+                        // and carries its subtype as `exit_attribution`, whose layer is emitted
+                        // separately below. Keeping the exit arm here would be an alternative no
+                        // input can select, the defect this emitter removed one field over.
+                        //
+                        // R13.21 (external review P1-1): and it can now NAME the layer. The
+                        // stage-worst receipt gained `worst_krylov_stopping_metric`, the twin of
+                        // `exit_stopping_metric`; before it, this row could only say
+                        // "unrecorded_for_worst_solve" -- fail-closed and never actionable.
                         specific_layer =
-                            layer_from_exit
-                                ? wrf::sdirk3::krylov_stopping_layer_for(sig.exit_stopping_metric)
-                                : "stop_metric_unrecorded_for_worst_solve";
+                            layer_from_worst
+                                ? wrf::sdirk3::krylov_stopping_layer_for(
+                                      sig.worst_krylov_stopping_metric)
+                                : "stop_metric_unrecorded";
+                        layer_derived = layer_from_worst;
+                    }
+                    // R13.21 (external review P0-2): the exit solve's metric attribution and the
+                    // layer THAT receipt supports, beside the event rather than replacing it.
+                    // Before this, a zero-update exit whose receipt said "objective mismatch"
+                    // reported that AS the event; now the row carries both, and the layer is
+                    // derived from `exit_stopping_metric`, which is the receipt it belongs to.
+                    // R13.21 (external review P0-3): the ATTRIBUTION's own specific layer. The
+                    // emitter derived one only for the primary category, so a row reading
+                    // `attribution=krylov_forcing_term_limited` lost the source-specific place to
+                    // work and printed only the category-level layer.
+                    const char* attribution_specific_layer =
+                        layer_allowed ? "n/a" : "threshold_sensitive_no_specific_layer";
+                    if (layer_allowed &&
+                        diag.attribution == wrf::sdirk3::StageFailure::KrylovForcingTermLimited) {
+                        attribution_specific_layer =
+                            (diag.attribution_basis == StageDecisionBasis::KrylovR0Receipt)
+                                ? wrf::sdirk3::krylov_forcing_layer_for(
+                                      sig.worst_krylov_tolerance_source)
+                                : "inner_tolerance_source_unrecorded";
+                    } else if (layer_allowed &&
+                               diag.attribution ==
+                                   wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
+                        attribution_specific_layer =
+                            (diag.attribution_basis == StageDecisionBasis::KrylovR0Receipt)
+                                ? wrf::sdirk3::krylov_stopping_layer_for(
+                                      sig.worst_krylov_stopping_metric)
+                                : "stop_metric_unrecorded";
+                    }
+                    const char* exit_attr_layer = "n/a";
+                    if (diag.exit_attribution == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
+                        exit_attr_layer =
+                            wrf::sdirk3::krylov_stopping_layer_for(sig.exit_stopping_metric);
+                    } else if (diag.exit_attribution ==
+                               wrf::sdirk3::StageFailure::KrylovEntryMetricMismatch) {
+                        exit_attr_layer = wrf::sdirk3::stage_failure_layer(diag.exit_attribution);
                     }
                     const char* layer_receipt =
-                        (std::strcmp(specific_layer, "n/a") == 0)
+                        !layer_derived
                             ? "n/a"
                             : (layer_from_exit ? "exit"
                                                : (layer_from_worst ? "stage_worst" : "none"));
@@ -9282,6 +9345,31 @@ vertical_coefficients:
                               // another. Both are computed above from the reported basis.
                               << " specific_layer=" << specific_layer
                               << " layer_receipt=" << layer_receipt
+                              // R13.21 (P0-2): event and cause as separate fields.
+                              // R13.21 SELF-REVIEW ROUND 2: the completeness rule, CONSUMED.
+                              // It was written in the increment that closes the
+                              // producer-without-consumer class and had none of its own -- only
+                              // fixtures called it. An incomplete exit receipt now says so on the
+                              // record instead of silently degrading the classification.
+                              << " exit_receipt_complete="
+                              << (wrf::sdirk3::krylov_receipt_complete(
+                                      wrf::sdirk3::KrylovReceiptView{
+                                          sig.exit_rho_stop_final, sig.exit_rho_S_final,
+                                          static_cast<int>(sig.exit_stopping_metric),
+                                          sig.exit_arnoldi_spent, sig.exit_arnoldi_allowed})
+                                      ? 1 : 0)
+                              << " exit_attribution="
+                              << wrf::sdirk3::stage_failure_name(diag.exit_attribution)
+                              << " exit_attribution_layer=" << exit_attr_layer
+                              // R13.21 (P0-3): the attribution's own specific layer.
+                              << " attribution_specific_layer=" << attribution_specific_layer
+                              // R13.21 (section 8): the boundary that was applied, the signed
+                              // distance to it, and whether that distance is small enough that a
+                              // specific layer would be an unsafe work order.
+                              << " threshold_value=" << diag.threshold.threshold
+                              << " threshold_distance=" << diag.threshold.distance
+                              << " threshold_measured=" << (diag.threshold.measured_ ? 1 : 0)
+                              << " threshold_sensitive=" << (diag.threshold.sensitive ? 1 : 0)
                               // R13.20: and the basis itself, so a reader can see WHICH body of
                               // evidence answered without inferring it from the category.
                               // R13.20 (numerics referee, claim 1): does the Taylor-defect
@@ -13455,6 +13543,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.worst_krylov_S_reached = stats.worst_krylov_S_reached;
     last_stage_signals_.worst_krylov_tolerance_source =
         static_cast<wrf::sdirk3::KrylovToleranceSource>(stats.worst_krylov_tolerance_source);
+    last_stage_signals_.worst_krylov_stopping_metric =
+        static_cast<wrf::sdirk3::KrylovStoppingMetric>(stats.worst_krylov_stopping_metric);
     last_stage_signals_.worst_krylov_budget_exhausted = stats.worst_krylov_budget_exhausted;
     last_stage_signals_.all_near_worst_met_tolerance = stats.all_near_worst_met_tolerance;
     last_stage_signals_.near_worst_mechanism_ambiguous = stats.near_worst_mechanism_ambiguous;
@@ -13467,6 +13557,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.exit_budget_exhausted = stats.exit_budget_exhausted;
     last_stage_signals_.exit_rho_stop_final = stats.exit_rho_stop_final;
     last_stage_signals_.exit_rho_S_final = stats.exit_rho_S_final;
+    last_stage_signals_.exit_arnoldi_spent = stats.exit_arnoldi_spent;
+    last_stage_signals_.exit_arnoldi_allowed = stats.exit_arnoldi_allowed;
     last_stage_signals_.exit_rho_E_final = stats.exit_rho_E_final;
     last_stage_signals_.exit_E_reached = stats.exit_E_reached;
     last_stage_signals_.exit_stopping_metric =

@@ -1,0 +1,297 @@
+# R13.21 — initial-objective-mismatch control and action-stable stage diagnosis
+
+**Baseline** `607874d` (PR #180 merged) · **Source** external review of R13.19–R13.20 ·
+**Independent review: NOT RUN** (`/code-review ultra` is user-triggered; quota exhausted). CI green
+is not offered as a substitute.
+
+Every finding below was **re-verified in the tree before being accepted**. That discipline exists
+because this campaign once shipped a "correction" worse than the overstatement it replaced — the one
+time a reviewer's premise was taken on trust.
+
+---
+
+## Verification of the review's premises
+
+| # | Claim | Verified? | Evidence |
+|---|---|---|---|
+| P0-1 | `gmres_converged_on_entry` conflates true initial convergence with initial objective mismatch | **YES** | `newton_solver.cpp:9850` sets it from `termination_reason == InitialConverged` alone; `:11115` / `:11126` exempt both total-failure rules on it |
+| P0-2 | `primary_event` is replaced by a cause in the zero-update branch | **YES** | the zero-update block in `first_failure.h` returns `KrylovObjectiveMismatch` / `KrylovEntryMetricMismatch` instead of the event |
+| P0-3 | the actionable layer is order-dependent on exact ties | **YES** | strict `if (progress > worst)` at `:10105` keeps the first arrival's `worst_krylov_tolerance_source`; `implies_same_category_as` compares category only |
+| P1-1 | no stage-worst stopping metric | **YES** | `worst_krylov_stopping_metric` occurs **0** times; `exit_stopping_metric` exists |
+| P1-2 | early returns leave the new receipt at sentinels | **YES** | the `NanRetryExhausted` returns (`:1552`, `:3395`) fill only the ctor fields + `initial_rel_error`; 6 `return res;` sites in total |
+| §8 | the 0.90 boundary flips the category on a 0.8 % ratio difference | **YES — our own measurement** | stage-3 sweep: `vs_r0` 0.907 → `krylov_stagnated`, 0.8993 → `newton_stagnated` |
+| §9.2 | "stage 3 is inherited from stage 2" is not established | **ACCEPTED** | our own writeup already says the arms differ in Newton trajectory; the review states the consequence more precisely |
+
+**One qualification.** §3.2 says an objective-mismatch entry "can be accepted as a full Newton step
+without a decrease check" on the trust-off path. The *conflation* is real and is P0-1. Whether that
+particular acceptance path is reachable in the shipped configuration is a separate question, and
+item 1.3 measures it rather than assuming it.
+
+---
+
+## Checklist
+
+### Phase 1 — P0-1: the initial-stop consumer
+
+- [x] **1.1** Split `gmres_converged_on_entry` into `S_reached_on_entry` and
+      `objective_mismatch_on_entry`, both derived from the **receipt** (`S_tolerance_reached`),
+      not from the termination label.
+- [x] **1.2** Exempt the two total-failure rules on `S_reached_on_entry` only.
+- [x] **1.3** Measure whether the trust-off acceptance path is reachable, **then** choose what an
+      `objective_mismatch_on_entry` does (fail-closed vs require-decrease). Do not assume.
+- [x] **1.4** Rename the reason to `InitialStopMetricReached`, **or** record at its definition why
+      the name is kept. `InitialConverged` reads as S/Newton convergence, which it is not.
+- [x] **1.5** Fixtures: `InitialStop_ObjectiveMismatch_IsNotSConvergedOnEntry`,
+      `InitialStop_ObjectiveMismatch_DoesNotBypassFailurePolicy`.
+
+**Phase 1 result.** The chain is verified end to end: `gmres_converged_on_entry` (label) → exempts
+both total-failure rules → `gmres_total_failure_candidate = false` → under `!nk_trust_region` the
+`else` branch computes `R_trial`, **stores it, and never compares it with `R`** before
+`step_accepted = true`. The other two acceptance sites in that function both test a decrease. So
+the review's §3.2 is confirmed — with one qualification it did not have: **`nk_trust_region`
+defaults to `true` and `em_b_wave` does not override it**, so the shipped configuration never takes
+that path. Latent, not live.
+
+Fixed: the flag is split and both halves come from the receipt; only `S_reached_on_entry` exempts;
+an objective mismatch on the trust-off path must show a measured nonlinear decrease, and on failure
+routes to the **same** total-failure handling rather than becoming a silent no-step (which the
+block's own comment warns creates zero-update loops). The rule is a pure function in
+`wrf_sdirk3_first_failure.h` so a fixture can reject its negation — the pattern already used for
+`near_worst_all_met`. The reason is renamed `InitialStopMetricReached`; **the emitted string stays
+`initial_converged`**, because `tests/krylov_early_stop_ablation.py` and every archived log key on
+it and renaming the wire format buys nothing.
+
+### Phase 2 — P0-2: event and cause fully separated
+
+- [x] **2.1** The zero-update branch returns `ZeroUpdateAfterTotalFailure` as `primary_event`,
+      always.
+- [x] **2.2** Add `exit_attribution` to `StageDiagnosis`, carrying the metric subtype the branch
+      used to return.
+- [x] **2.3** Emitter prints the event and the exit attribution as separate fields.
+- [x] **2.4** Update the fixtures that currently *pin* the substitution — they encode the defect.
+- [x] **2.5** Fixtures: `ZeroUpdate_RemainsPrimaryEvent`,
+      `ExitObjectiveMismatch_IsSeparateAttribution`.
+
+**Phase 2 result.** `first_failure_of`'s zero-update branch returns the EVENT unconditionally; the
+subtype it used to return is `StageDiagnosis::exit_attribution`, computed by the pure
+`krylov_exit_attribution_of`. **Three fixtures were pinning the substitution** — they asserted the
+subtype through `name_of(s)`, i.e. as the thing that ended the stage — and are rewritten to check
+the event and the attribution separately. The emitter prints `exit_attribution` and
+`exit_attribution_layer`, the latter derived from `exit_stopping_metric`, the receipt it belongs to.
+The `KrylovObjectiveMismatch` arm of `specific_layer` loses its exit alternative, which after this
+change no input can select.
+
+**Verified on the live dt=600 record**, not just in fixtures:
+
+```
+category=zero_update_after_total_failure   event_basis=exit_receipt
+attribution=krylov_budget_exhausted        attribution_basis=krylov_r0_receipt
+exit_attribution=none                      exit_attribution_layer=n/a
+```
+
+Three distinct answers on one row. `exit_attribution=none` is the honest reading here — this exit
+solve had `exit_D_reached=0`, so its receipt cannot support a subtype, and the record says so
+rather than inventing one.
+
+### Phase 3 — P0-3: an action-stable reducer
+
+- [x] **3.1** Add `stopping_metric` to the per-solve `KrylovSolveMechanism` receipt.
+- [x] **3.2** Compare near-worst solves on the full **action key** — category + stopping metric +
+      tolerance source — not category alone.
+- [x] **3.3** Emit `attribution_specific_layer` beside the primary one.
+- [x] **3.4** Add `worst_krylov_stopping_metric` (P1-1) so a stage-worst objective mismatch can name
+      its layer instead of `stop_metric_unrecorded_for_worst_solve`.
+- [x] **3.5** Fixtures: `NearWorst_SameCategoryDifferentToleranceSource_IsActionAmbiguous`,
+      `NearWorst_SameCategoryDifferentStoppingMetric_IsActionAmbiguous`,
+      `SpecificLayer_IsPermutationInvariant`, `AttributionSpecificLayer_IsEmitted`.
+
+**Phase 3 result.** The tie check compares the **derived layer**, not the raw provenance fields.
+R13.20 narrowed it from field equality to *category* equality on the ground that the classifier does
+not branch on `tolerance_source` — right about the category, wrong about the consequence:
+`specific_layer` is derived from the tolerance source (forcing) or the stopping metric (objective
+mismatch), and the stage-worst receipt updates on a strict `>`, so on an exact tie the **first
+arrival's** provenance is what the emitter reads.
+
+Comparing the layer keeps R13.20's gain rather than reverting it: two tied solves that both imply
+`KrylovStagnated` derive **no** specific layer, so differing provenance does not make them
+ambiguous and the refusal still does not fire toward the operator/split layer for a difference that
+cannot change the answer. Fixtures pin both directions.
+
+`worst_krylov_stopping_metric` (P1-1) is added as the stage-worst twin of `exit_stopping_metric`,
+so a four-way objective mismatch names its layer instead of `stop_metric_unrecorded_for_worst_solve`
+— fail-closed before, actionable now. And `attribution_specific_layer` is emitted beside the
+primary one, so a row whose *attribution* is forcing-limited no longer loses the source-specific
+place to work.
+
+### Phase 4 — P1-2: one finalizer for every return path
+
+- [x] **4.1** Route all six `GMRESResult` return sites through one finalizer that fills the metric,
+      budget and termination receipt.
+- [x] **4.2** Fixtures: `NanRetry_ReturnHasCompleteReceipt`, `AllKrylovReturnsShareOneFinalizer`.
+
+**Phase 4 result, and a deliberate scope choice.** The review proposes routing all six returns
+through one `finalize_krylov_result`. That is a restructure of two 1000-line functions, and this
+project's own rule is to prefer a small reversible mechanism over a risky monolithic rewrite. What
+the contract actually needs is that **every** return produce a complete receipt — so the rule is
+written as a pure predicate, `krylov_receipt_complete`, and the two returns that failed it (the
+`NanRetryExhausted` early exits, one per solver) now fill the metric, budget and stopping-metric
+fields. The other four already did.
+
+The ratios are stamped `1.0` there rather than left at a sentinel: the residual is non-finite by
+construction on that path, so "no reduction" is the honest reading and a sentinel would read
+"never measured". Fixtures pin the complete case, **each field's absence separately** (a rule that
+cannot fire is not a rule), and the pre-R13.21 receipt reconstructed — which the rule rejects,
+which is why a terminal solve ending there fell back to the generic event.
+
+### Phase 5 — §8: the threshold's sensitivity on the record
+
+- [x] **5.1** Emit `threshold_value`, `threshold_distance`, `threshold_sensitive`.
+- [x] **5.2** A threshold-sensitive attribution must not route to a specific layer.
+- [x] **5.3** Fixtures: `ThresholdDistance_IsEmitted`,
+      `ThresholdSensitiveAttribution_DoesNotRouteToSpecificLayer`.
+
+**Phase 5 result.** `threshold_value`, `threshold_distance` (signed, so the side is readable),
+`threshold_measured` and `threshold_sensitive` are on the record, computed with the **same
+threshold resolution the classifier applies** — so the row cannot report a distance from a boundary
+other than the one used. A verdict inside the ±0.02 band no longer issues a specific layer:
+`specific_layer` and `attribution_specific_layer` both read
+`threshold_sensitive_no_specific_layer`, because a work order that a 1 % change in the ratio would
+reverse is not a work order. Absence of an r0 measurement is explicitly **not** reported as
+near-boundary.
+
+Fixtures use this campaign's own numbers: 0.907 and 0.8993 from the stage-3 sweep are both inside
+the band and both refused a layer, while 0.9941 from the dt=600 central record is not.
+
+**Verified live:** that record now reads `threshold_value=0.9 threshold_distance=0.09413
+threshold_measured=1 threshold_sensitive=0` — far outside the band, layer retained.
+
+### Phase 6 — the experiments (after Phases 1–5 land)
+
+- [x] **6.1** Stage-3 Newton iteration 0 on a **frozen** system, early-stop OFF, fresh
+      preconditioner, Arnoldi 32/64/128/256/512.
+- [x] **6.2** Stage-3 iteration 1 from a **common** first step, so the second solve is comparable
+      across arms.
+- [x] **6.3** Terminal-candidate Taylor probe on the raw `dK` before zeroing, diagnosis-only, so the
+      zero-update iteration is measured for the first time.
+
+**6.3 result — the terminal iteration, measured for the first time.**
+
+The Taylor probe sits inside `if (step_accepted)`, so the iteration that *ends* the loop is
+structurally invisible to it — `taylor_covers_last_newton_iter = 0` at every rung of both budget
+ladders. The raw candidate survives that exit (`dK_scaled` is zeroed; `dK` is not), so it can be
+evaluated without advancing anything. `dt=600`, `max_newton_iter=12`, stage 2, the iteration that
+broke the loop:
+
+```
+SDIRK3_TERMINAL_TAYLOR stage=2 newton_iter=3 alpha=0.3333
+  tau_exit=0.005558   As_norm=2.448e+07   dK_raw_norm=387.8   state_mutated=0
+  R_norm=4.77e+08  R_trial_norm(a=1/3)=4.567e+08  R_full_step_norm=4.173e+08
+  candidate_alpha_would_reduce=1   candidate_full_would_reduce=1
+```
+
+**The linear model at the terminal candidate is faithful to 0.56 %** — better than any *accepted*
+step in the same run (0.1192, 0.0645, 0.0182). **And the discarded full step would have reduced the
+nonlinear residual by 12.5 %** (4.77e8 → 4.173e8); the α = 1/3 arm by 4.3 %.
+
+So of the four outcomes the review's §10.3 lists for this exit, the measured one is the fourth:
+**a usable candidate that the total-failure rule discarded** — on a `‖r‖/‖b‖` predicate, the
+coordinate this campaign has repeatedly recorded as the wrong denominator. The zero-update exit at
+dt=600 is not a linear-solve failure in any useful sense: the solve produced a step that is
+accurately modelled *and* decreases the merit function, and the discard rule rejected it.
+
+**Limits, stated.** n = 1 — one stage, one iteration, one timestep, one configuration. A 12.5 %
+decrease is not convergence, and taking it would not obviously complete the step; what this
+establishes is that at that point the **rule**, not the **solve**, is what stopped the loop.
+
+**6.1 / 6.2 result — and the instrument refused, precisely.**
+
+Existing machinery does the frozen experiment: `WRF_SDIRK3_FROZEN_MI_AB` runs a j-ladder on the
+**frozen** system at one Newton iteration with a **fresh preconditioner per row**, `tol = 0`, and it
+is **not stage-gated**, so it reaches stage 3 once `stage2_gmres_restart = 192` gets the run there.
+`WRF_SDIRK3_NO_EARLY_STOP=1` supplies the review's early-stop-off condition, and
+`WRF_SDIRK3_FROZEN_MI_AB_ITER=1` aims it at iteration 1 — which makes 6.2 a **common-system
+comparison by construction**, since all arms run on one frozen system inside one run.
+
+**Turning early stop off made stage 2 attributable for the first time** — `ab_valid=1
+ab_reason=ok`, where every previous run read `ab_reason=early_stop_enabled`.
+
+**Stage 2, iteration 0** (ρ_D): I plateaus and M converges toward it — 4→192: M 0.775→0.2599,
+I 0.5497→0.2202, Msel 0.6952→0.2316. **Stage 2, iteration 1: the sign flips** — M 0.9023→0.5062
+beats I 0.8165→0.5932 by j=48. The preconditioner helps at one Newton iteration of a stage and
+hurts at another, on **attributable** rows.
+
+**Stage 3 is NOT attributable, and the reason is itself the finding.** Both iterations report
+`ab_valid=0 ab_reason=identity_below_noise_floor`, with `identity_resolution_rhs_dir = 8.531` at
+stage 3 against **0.0088** at stage 2 — i.e. the identity term of `A = I − hγJ` sits **8.5× below
+the operator's own float32 noise** on that direction (`identity_frac_rhs_dir = 1.8e-08`). The raw
+ladder shows I reaching ρ_D = 0.0815 at j=192 while M stalls at 0.825, a 10× gap — **and the
+receipt refuses to attribute it to the preconditioner**, naming why. That refusal is the fail-closed
+verdict working: without it this would have been written up as "the preconditioner is catastrophic
+at stage 3".
+
+**What 6.2 does settle.** On the frozen stage-3 system at iteration 1, ρ_D falls **monotonically**
+with j for every arm (I: 1.641 → 1.386 → 0.9907 → 0.7808 → 0.7258). So the production sweep's
+non-monotone second solve (ρ_S 1.038 → 1.394 as the budget rose) is a **trajectory effect, not a
+property of the linear system** — which is precisely the discrimination the review asked for. ρ_D > 1
+at small j is the warm start (x₀ ≠ 0 at iteration 1), not divergence.
+
+**Order-invariance**: the ladder is emitted forwards and backwards and every value is identical, so
+nothing in the rig is stateful across rows.
+
+---
+
+## Standing caveats
+
+The review's NO-GO list for `dt=600` forward completion, full-step tangent/adjoint, exact 4D-Var and
+MPI production is **accepted without argument** — none of those was claimed.
+
+---
+
+## Self-review of R13.21 — three defects, all mine
+
+Every round of this campaign has found a defect inside its own fix. This one is no exception.
+
+**1. `layer_receipt` asserted provenance for a layer that was never derived — the R9-3 defect,
+inside the fix that closed it.** R13.20 fixed `layer_receipt` printing `stage_worst` on a row with
+no specific layer, by keying it on `specific_layer == "n/a"`. Phase 5 then introduced a **second**
+no-layer sentinel, `threshold_sensitive_no_specific_layer`, which that key does not match — so a
+near-boundary row would have claimed receipt provenance for a layer it refused to issue. Now
+tracked by an explicit `layer_derived` boolean, which cannot drift the way a string match can.
+
+**Fired and verified, not merely reasoned about**: with the boundary moved to 0.99 so the record's
+`vs_r0 = 0.9941` lands inside the band (distance 0.0041), the row reads
+`threshold_sensitive=1 specific_layer=threshold_sensitive_no_specific_layer layer_receipt=n/a`.
+
+**2. Routing a new state into an existing block borrowed the block's entire policy.** Phase 1 sends
+a rejected entry mismatch to the total-failure handling — for the recovery attempt and the typed
+exit. That block also promotes `stage2_hopeless_detected` / `stage3_hopeless_detected`, which are
+**budget** statements; an entry mismatch did **zero Arnoldi work**, so calling its budget hopeless
+is a non-sequitur. Both promotions are gated on the original condition now. The lesson is the
+"coarse guard preempts its refinement" class in reverse: reusing a policy means re-checking each of
+its sub-decisions, not just its entry condition.
+
+**3. An orphaned method.** Phase 3 replaced the only caller of
+`KrylovSolveMechanism::implies_same_category_as` and left the declaration and definition behind — a
+symbol with a producer and no consumer, the class this campaign has been closing for ten rounds.
+Removed. Found by a mechanical audit of all 21 symbols R13.21 introduced; it was the only orphan.
+
+### Self-review round 2 — two more, both in round 1's fixes
+
+**4. The completeness rule had no production consumer.** `krylov_receipt_complete` was written in
+the increment that closes the producer-without-consumer class and had **only fixtures** calling it —
+so an incomplete exit receipt still degraded the classification silently, which is the thing the
+rule exists to prevent. Wired: `exit_arnoldi_spent` / `exit_arnoldi_allowed` are plumbed alongside
+the other `exit_*` fields, and the record carries `exit_receipt_complete`. **Verified live**: the
+dt=600 record reads `exit_receipt_complete=1`.
+
+**5. Re-gating one arm of an if/else chain changed which arm runs.** Round 1 gated the stage-3
+hopeless promotion on `gmres_total_failure_candidate` and left its `else if` ungated — so on the
+entry-mismatch route the `else` arm became reachable where it previously was not, and would have
+printed *"Stage 3 detection skipped due to variable preconditioner event"*: a wrong explanation,
+since the real reason is that the route is not a total-failure candidate at all. Both arms gated
+now.
+
+**Pattern, recorded.** Round 1 found three defects in the phase work; round 2 found two more inside
+round 1's fixes. Both rounds' findings are the same two classes this campaign has been closing all
+along — a rule without a consumer, and a guard whose change moved a decision it was not meant to
+touch.
