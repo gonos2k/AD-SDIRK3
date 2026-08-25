@@ -167,9 +167,9 @@ threshold_measured=1 threshold_sensitive=0` — far outside the band, layer reta
 
 ### Phase 6 — the experiments (after Phases 1–5 land)
 
-- [ ] **6.1** Stage-3 Newton iteration 0 on a **frozen** system, early-stop OFF, fresh
+- [x] **6.1** Stage-3 Newton iteration 0 on a **frozen** system, early-stop OFF, fresh
       preconditioner, Arnoldi 32/64/128/256/512.
-- [ ] **6.2** Stage-3 iteration 1 from a **common** first step, so the second solve is comparable
+- [x] **6.2** Stage-3 iteration 1 from a **common** first step, so the second solve is comparable
       across arms.
 - [x] **6.3** Terminal-candidate Taylor probe on the raw `dK` before zeroing, diagnosis-only, so the
       zero-update iteration is measured for the first time.
@@ -202,6 +202,41 @@ accurately modelled *and* decreases the merit function, and the discard rule rej
 **Limits, stated.** n = 1 — one stage, one iteration, one timestep, one configuration. A 12.5 %
 decrease is not convergence, and taking it would not obviously complete the step; what this
 establishes is that at that point the **rule**, not the **solve**, is what stopped the loop.
+
+**6.1 / 6.2 result — and the instrument refused, precisely.**
+
+Existing machinery does the frozen experiment: `WRF_SDIRK3_FROZEN_MI_AB` runs a j-ladder on the
+**frozen** system at one Newton iteration with a **fresh preconditioner per row**, `tol = 0`, and it
+is **not stage-gated**, so it reaches stage 3 once `stage2_gmres_restart = 192` gets the run there.
+`WRF_SDIRK3_NO_EARLY_STOP=1` supplies the review's early-stop-off condition, and
+`WRF_SDIRK3_FROZEN_MI_AB_ITER=1` aims it at iteration 1 — which makes 6.2 a **common-system
+comparison by construction**, since all arms run on one frozen system inside one run.
+
+**Turning early stop off made stage 2 attributable for the first time** — `ab_valid=1
+ab_reason=ok`, where every previous run read `ab_reason=early_stop_enabled`.
+
+**Stage 2, iteration 0** (ρ_D): I plateaus and M converges toward it — 4→192: M 0.775→0.2599,
+I 0.5497→0.2202, Msel 0.6952→0.2316. **Stage 2, iteration 1: the sign flips** — M 0.9023→0.5062
+beats I 0.8165→0.5932 by j=48. The preconditioner helps at one Newton iteration of a stage and
+hurts at another, on **attributable** rows.
+
+**Stage 3 is NOT attributable, and the reason is itself the finding.** Both iterations report
+`ab_valid=0 ab_reason=identity_below_noise_floor`, with `identity_resolution_rhs_dir = 8.531` at
+stage 3 against **0.0088** at stage 2 — i.e. the identity term of `A = I − hγJ` sits **8.5× below
+the operator's own float32 noise** on that direction (`identity_frac_rhs_dir = 1.8e-08`). The raw
+ladder shows I reaching ρ_D = 0.0815 at j=192 while M stalls at 0.825, a 10× gap — **and the
+receipt refuses to attribute it to the preconditioner**, naming why. That refusal is the fail-closed
+verdict working: without it this would have been written up as "the preconditioner is catastrophic
+at stage 3".
+
+**What 6.2 does settle.** On the frozen stage-3 system at iteration 1, ρ_D falls **monotonically**
+with j for every arm (I: 1.641 → 1.386 → 0.9907 → 0.7808 → 0.7258). So the production sweep's
+non-monotone second solve (ρ_S 1.038 → 1.394 as the budget rose) is a **trajectory effect, not a
+property of the linear system** — which is precisely the discrimination the review asked for. ρ_D > 1
+at small j is the warm start (x₀ ≠ 0 at iteration 1), not divergence.
+
+**Order-invariance**: the ladder is emitted forwards and backwards and every value is identical, so
+nothing in the rig is stateful across rows.
 
 ---
 
