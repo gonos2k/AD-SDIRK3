@@ -512,6 +512,12 @@ public:
         int   exit_krylov_iter = -1;
         double exit_rho_stop_final = -1.0;
         double exit_rho_S_final = -1.0;
+        // R13.21 SELF-REVIEW ROUND 2: the exit solve's Arnoldi budget, so the completeness rule
+        // has a production consumer instead of only fixtures.
+        int   exit_arnoldi_spent = -1;
+        int   exit_arnoldi_allowed = -1;
+        int   last_arnoldi_spent = -1;
+        int   last_arnoldi_allowed = -1;
         bool  exit_D_reached = false;
         bool  exit_S_reached = false;
         int   exit_stopping_metric = 0;

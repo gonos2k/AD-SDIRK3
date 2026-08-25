@@ -274,3 +274,24 @@ its sub-decisions, not just its entry condition.
 `KrylovSolveMechanism::implies_same_category_as` and left the declaration and definition behind — a
 symbol with a producer and no consumer, the class this campaign has been closing for ten rounds.
 Removed. Found by a mechanical audit of all 21 symbols R13.21 introduced; it was the only orphan.
+
+### Self-review round 2 — two more, both in round 1's fixes
+
+**4. The completeness rule had no production consumer.** `krylov_receipt_complete` was written in
+the increment that closes the producer-without-consumer class and had **only fixtures** calling it —
+so an incomplete exit receipt still degraded the classification silently, which is the thing the
+rule exists to prevent. Wired: `exit_arnoldi_spent` / `exit_arnoldi_allowed` are plumbed alongside
+the other `exit_*` fields, and the record carries `exit_receipt_complete`. **Verified live**: the
+dt=600 record reads `exit_receipt_complete=1`.
+
+**5. Re-gating one arm of an if/else chain changed which arm runs.** Round 1 gated the stage-3
+hopeless promotion on `gmres_total_failure_candidate` and left its `else if` ungated — so on the
+entry-mismatch route the `else` arm became reachable where it previously was not, and would have
+printed *"Stage 3 detection skipped due to variable preconditioner event"*: a wrong explanation,
+since the real reason is that the route is not a total-failure candidate at all. Both arms gated
+now.
+
+**Pattern, recorded.** Round 1 found three defects in the phase work; round 2 found two more inside
+round 1's fixes. Both rounds' findings are the same two classes this campaign has been closing all
+along — a rule without a consumer, and a guard whose change moved a decision it was not meant to
+touch.

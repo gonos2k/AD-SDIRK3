@@ -10121,6 +10121,8 @@ public:
                     stats_.last_solve_iter = newton_iter;
                     stats_.last_rho_stop_final = gmres_result.rho_D_final;
                     stats_.last_rho_S_final = gmres_result.rho_S_final;
+                    stats_.last_arnoldi_spent = gmres_result.arnoldi_spent;
+                    stats_.last_arnoldi_allowed = gmres_result.arnoldi_allowed;
                     stats_.last_D_reached = gmres_result.D_tolerance_reached;
                     stats_.last_S_reached = gmres_result.S_tolerance_reached;
                     stats_.last_stopping_metric = gmres_result.stopping_metric;
@@ -11332,6 +11334,13 @@ public:
                     cfg.trust_fallback_relax
                         ? std::clamp(cfg.trust_fallback_ratio, 0.0f, 1.0f)
                         : 0.98f;
+                // R13.21 SELF-REVIEW ROUND 2: the `else if` is gated too. Guarding only the
+                // `if` made the pair ASYMMETRIC -- on the entry-mismatch route the `else` arm
+                // became reachable where it previously was not, and it would have printed
+                // "Stage 3 detection skipped due to variable preconditioner event", a wrong
+                // explanation: the real reason is that the route is not a total-failure
+                // candidate at all. Re-gating one arm of an if/else chain changes which arm runs.
+                //
                 // R13.21 SELF-REVIEW: the hopeless promotions are BUDGET statements, and an
                 // entry mismatch routed here did ZERO Arnoldi work -- its stopping objective was
                 // already met on entry. Calling that budget hopeless is a non-sequitur, and
@@ -11352,7 +11361,8 @@ public:
                     cfg.stage2_max_krylov_restarts == 1 &&
                     !variable_pc_event_this_newton) {
                     stage3_hopeless_detected = true;
-                } else if (stage >= 3 && newton_iter == 0 &&
+                } else if (gmres_total_failure_candidate &&
+                           stage >= 3 && newton_iter == 0 &&
                            cfg.debug_level >= 1 &&
                            cfg.stage2_gmres_restart > 0 &&
                            cfg.stage2_max_krylov_restarts == 1 &&
@@ -12711,6 +12721,8 @@ public:
                             stats_.exit_krylov_iter = stats_.last_solve_iter;
                             stats_.exit_rho_stop_final = stats_.last_rho_stop_final;
                             stats_.exit_rho_S_final = stats_.last_rho_S_final;
+                            stats_.exit_arnoldi_spent = stats_.last_arnoldi_spent;
+                            stats_.exit_arnoldi_allowed = stats_.last_arnoldi_allowed;
                             stats_.exit_D_reached = stats_.last_D_reached;
                             stats_.exit_S_reached = stats_.last_S_reached;
                             stats_.exit_stopping_metric = stats_.last_stopping_metric;

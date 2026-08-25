@@ -589,6 +589,12 @@ struct StageFailureSignals {
     // belong to the stage's largest-ratio solve, which need not be the same iteration -- subtyping
     // a terminal event from another iteration's evidence describes a solve that ended nothing.
     int    exit_krylov_iter = -1;
+    // R13.21 SELF-REVIEW ROUND 2: the exit solve's Arnoldi budget, so `krylov_receipt_complete`
+    // has something to judge. Without these the completeness rule had no production consumer at
+    // all -- a rule with a producer and no consumer, written in the increment that closes that
+    // class.
+    int    exit_arnoldi_spent = -1;
+    int    exit_arnoldi_allowed = -1;
     bool   exit_D_reached = false;
     bool   exit_S_reached = false;
     bool   exit_budget_exhausted = false;

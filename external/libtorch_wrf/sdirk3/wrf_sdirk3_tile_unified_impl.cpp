@@ -9346,6 +9346,18 @@ vertical_coefficients:
                               << " specific_layer=" << specific_layer
                               << " layer_receipt=" << layer_receipt
                               // R13.21 (P0-2): event and cause as separate fields.
+                              // R13.21 SELF-REVIEW ROUND 2: the completeness rule, CONSUMED.
+                              // It was written in the increment that closes the
+                              // producer-without-consumer class and had none of its own -- only
+                              // fixtures called it. An incomplete exit receipt now says so on the
+                              // record instead of silently degrading the classification.
+                              << " exit_receipt_complete="
+                              << (wrf::sdirk3::krylov_receipt_complete(
+                                      wrf::sdirk3::KrylovReceiptView{
+                                          sig.exit_rho_stop_final, sig.exit_rho_S_final,
+                                          static_cast<int>(sig.exit_stopping_metric),
+                                          sig.exit_arnoldi_spent, sig.exit_arnoldi_allowed})
+                                      ? 1 : 0)
                               << " exit_attribution="
                               << wrf::sdirk3::stage_failure_name(diag.exit_attribution)
                               << " exit_attribution_layer=" << exit_attr_layer
@@ -13545,6 +13557,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.exit_budget_exhausted = stats.exit_budget_exhausted;
     last_stage_signals_.exit_rho_stop_final = stats.exit_rho_stop_final;
     last_stage_signals_.exit_rho_S_final = stats.exit_rho_S_final;
+    last_stage_signals_.exit_arnoldi_spent = stats.exit_arnoldi_spent;
+    last_stage_signals_.exit_arnoldi_allowed = stats.exit_arnoldi_allowed;
     last_stage_signals_.exit_rho_E_final = stats.exit_rho_E_final;
     last_stage_signals_.exit_E_reached = stats.exit_E_reached;
     last_stage_signals_.exit_stopping_metric =
