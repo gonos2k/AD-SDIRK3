@@ -11329,6 +11329,49 @@ public:
             if (!step_accepted &&
                 (gmres_total_failure_candidate || entry_mismatch_step_rejected)) {
                 gmres_total_failure = true;
+                // R13.22: WAS THE DISCARDED CANDIDATE A DESCENT DIRECTION?
+                //
+                // Setting this flag removes the candidate from the trust region entirely -- the
+                // loop at the trust site carries `!gmres_total_failure` in its condition, so the
+                // step is never offered to the mechanism whose job is to decide whether a step is
+                // usable. Only the `-M^-1 R` recovery below is tried.
+                //
+                // R13.21's terminal probe measured one instance: at the iteration that ended
+                // dt=600 the discarded candidate had tau = 0.0056 and would have reduced ||R|| by
+                // 12.5%. One instance is not a frequency, and a policy argument needs one. This
+                // counts, over every total-failure iteration in the run, how often the discarded
+                // candidate would have reduced the nonlinear residual.
+                //
+                // Diagnosis only: K is not advanced, the trial state is local, the block is under
+                // NoGradGuard. Opt-in -- one RHS evaluation per total-failure iteration.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_DISCARDED_CANDIDATE") &&
+                    dK.defined() && dK.numel() > 0 && R.defined()) {
+                    torch::NoGradGuard ng_disc;
+                    const auto K_c = K.detach() + dK.detach();
+                    const auto U_c = U_stage + dt * gamma * K_c;
+                    const auto R_c = (K_c - compute_rhs(U_c)).detach();
+                    const double nR  = R.detach().to(torch::kFloat64).norm().item<double>();
+                    const double nRc = R_c.to(torch::kFloat64).norm().item<double>();
+                    const bool would_reduce =
+                        std::isfinite(nRc) && std::isfinite(nR) && nRc < nR;
+                    stats_.discarded_candidates_seen++;
+                    if (would_reduce) stats_.discarded_candidates_descent++;
+                    std::cerr << "SDIRK3_DISCARDED_CANDIDATE"
+                              << " stage=" << stage
+                              << " newton_iter=" << newton_iter
+                              << " rho_S=" << gmres_raw_rel_error
+                              << " rho_vs_r0=" << (r0_measured && gmres_initial_rel_error > 0.0f
+                                                       ? gmres_raw_rel_error / gmres_initial_rel_error
+                                                       : -1.0f)
+                              << " dK_norm="
+                              << dK.detach().to(torch::kFloat64).norm().item<double>()
+                              << " R_norm=" << nR
+                              << " R_candidate_norm=" << nRc
+                              << " would_reduce=" << (would_reduce ? 1 : 0)
+                              << " trust_region_saw_it=0"
+                              << " state_mutated=0"
+                              << std::endl;
+                }
                 const auto& cfg = wrf::sdirk3::g_sdirk3_config;
                 const float fallback_accept_ratio =
                     cfg.trust_fallback_relax

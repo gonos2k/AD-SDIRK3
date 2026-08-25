@@ -554,6 +554,11 @@ struct StageFailureSignals {
     // Solves excluded from the max: zero-work (converged on entry) or finished (reached
     // tolerance). Neither is evidence about whether Krylov works.
     int    krylov_solves_trivial = 0;
+    // R13.22: candidates the total-failure rule discarded, and how many of those would have
+    // reduced the nonlinear residual had the trust region been allowed to test them. Reported,
+    // not classified on -- the counter answers "how often", the policy question is separate.
+    int    discarded_candidates_seen = 0;
+    int    discarded_candidates_descent = 0;
     // R13.20 (numerics referee, claim 1): the last Newton iteration the Taylor-defect probe
     // measured, or -1. Reported, not classified on -- it says whether the campaign's tau evidence
     // covers the iteration that ended the loop, which it structurally cannot when that iteration's

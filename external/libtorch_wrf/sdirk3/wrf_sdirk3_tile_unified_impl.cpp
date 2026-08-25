@@ -9351,6 +9351,9 @@ vertical_coefficients:
                               // producer-without-consumer class and had none of its own -- only
                               // fixtures called it. An incomplete exit receipt now says so on the
                               // record instead of silently degrading the classification.
+                              // R13.22: how many usable steps the discard rule threw away.
+                              << " discarded_candidates=" << sig.discarded_candidates_seen
+                              << " discarded_were_descent=" << sig.discarded_candidates_descent
                               << " exit_receipt_complete="
                               << (wrf::sdirk3::krylov_receipt_complete(
                                       wrf::sdirk3::KrylovReceiptView{
@@ -13536,6 +13539,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.worst_krylov_iter = stats.worst_krylov_iter;
     last_stage_signals_.krylov_solves_measured_vs_r0 = stats.krylov_solves_measured_vs_r0;
     last_stage_signals_.krylov_solves_trivial = stats.krylov_solves_trivial;
+    last_stage_signals_.discarded_candidates_seen = stats.discarded_candidates_seen;
+    last_stage_signals_.discarded_candidates_descent = stats.discarded_candidates_descent;
     last_stage_signals_.worst_krylov_met_tolerance = stats.worst_krylov_met_tolerance;
     last_stage_signals_.worst_krylov_eta = static_cast<double>(stats.worst_krylov_eta);
     last_stage_signals_.worst_krylov_restart_budget = stats.worst_krylov_restart_budget;

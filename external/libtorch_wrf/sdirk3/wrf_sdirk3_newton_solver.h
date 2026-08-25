@@ -463,6 +463,10 @@ public:
         // Solves excluded from the max because they did no work (converged on entry) or
         // finished (reached tolerance). Reported so "the max is over 0 solves" is legible.
         int   krylov_solves_trivial = 0;
+        // R13.22: how many candidates the total-failure rule discarded, and how many of those
+        // would have reduced the nonlinear residual had the trust region been allowed to see them.
+        int   discarded_candidates_seen = 0;
+        int   discarded_candidates_descent = 0;
         // R13.20 (numerics referee, claim 1): the last Newton iteration the Taylor-defect probe
         // actually measured. The probe sits inside `if (step_accepted)`, so it CANNOT sample an
         // iteration whose step was rejected -- including the one that ends the loop at dt=600
