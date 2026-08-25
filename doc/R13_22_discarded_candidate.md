@@ -1,5 +1,34 @@
 # R13.22 — the discard rule, not the solver, was ending stage 3
 
+> ## ⚠ HEADLINE RETRACTED (R13.23)
+>
+> Everything below measured the candidate in the **raw packed L₂**. The production trust region
+> does not use that norm — it scales by `S_inv`, and its own comment says so: *"norm ‖S⁻¹·r‖, so
+> trust-region actual/predicted must use the same norm"*. Measured in the norm production actually
+> judges by:
+>
+> | candidate | raw L₂ | **S-weighted (the trust norm)** |
+> |---|---|---|
+> | stage 2, iter 3 | 4.77e8 → 4.173e8 (**−12.5 %**) | 476 → **487.7** (**+2.5 %**) |
+> | stage 3, iter 1 | 1.35e15 → 5.42e14 (**−60 %**) | 948.9 → **4.396e4** (**46× worse**) |
+>
+> **Both candidates are descent directions only in the raw L₂. In the trust region's own norm both
+> are worse — one slightly, one by 46×.** So "the discard rule threw away usable steps" is
+> **withdrawn**: by the merit the production path judges by, both discards are defensible and the
+> stage-3 one is clearly correct.
+>
+> **What survives.** (1) `gmres_total_failure` removes the candidate from the trust region entirely
+> — a structural fact read from the source, unaffected. (2) The behavioural difference between the
+> two rules at `stage2_restart=192` — 2 vs 11 Newton iterations, `R_last` 0.9128 vs 0.3337 — is a
+> measurement and stands; but the **explanation** offered for it below is wrong, and why the r₀ arm
+> descends further is now an open question. (3) τ_exit = 0.0056 stands: it is a statement about the
+> linear model's fidelity, not about the step's usability.
+>
+> The error was mine and it is the class this campaign keeps recording: **naming a quantity
+> loosely**. "The merit function" was written for a number that is not the merit function.
+> See `doc/R13_23_checklist.md`.
+
+
 **Baseline** `c63927f` (PR #181 merged) · **Independent review: NOT RUN**.
 
 R13.21's terminal probe measured one instance: at the iteration that ends dt=600, the candidate the
