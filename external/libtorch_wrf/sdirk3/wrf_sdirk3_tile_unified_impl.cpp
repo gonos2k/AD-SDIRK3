@@ -9355,12 +9355,10 @@ vertical_coefficients:
                               << " discarded_candidates=" << sig.discarded_candidates_seen
                               << " discarded_were_descent=" << sig.discarded_candidates_descent
                               << " exit_receipt_complete="
+                              // R13.23 (P0-4): the SAME view the attribution is gated on, so
+                              // the emitted flag and the gate cannot judge different things.
                               << (wrf::sdirk3::krylov_receipt_complete(
-                                      wrf::sdirk3::KrylovReceiptView{
-                                          sig.exit_rho_stop_final, sig.exit_rho_S_final,
-                                          static_cast<int>(sig.exit_stopping_metric),
-                                          sig.exit_arnoldi_spent, sig.exit_arnoldi_allowed})
-                                      ? 1 : 0)
+                                      wrf::sdirk3::exit_receipt_view(sig)) ? 1 : 0)
                               << " exit_attribution="
                               << wrf::sdirk3::stage_failure_name(diag.exit_attribution)
                               << " exit_attribution_layer=" << exit_attr_layer
@@ -13562,6 +13560,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.exit_budget_exhausted = stats.exit_budget_exhausted;
     last_stage_signals_.exit_rho_stop_final = stats.exit_rho_stop_final;
     last_stage_signals_.exit_rho_S_final = stats.exit_rho_S_final;
+    last_stage_signals_.exit_tolerance_applied = stats.exit_tolerance_applied;
     last_stage_signals_.exit_arnoldi_spent = stats.exit_arnoldi_spent;
     last_stage_signals_.exit_arnoldi_allowed = stats.exit_arnoldi_allowed;
     last_stage_signals_.exit_rho_E_final = stats.exit_rho_E_final;

@@ -10121,6 +10121,7 @@ public:
                     stats_.last_solve_iter = newton_iter;
                     stats_.last_rho_stop_final = gmres_result.rho_D_final;
                     stats_.last_rho_S_final = gmres_result.rho_S_final;
+                    stats_.last_tolerance_applied = gmres_result.tolerance_applied;
                     stats_.last_arnoldi_spent = gmres_result.arnoldi_spent;
                     stats_.last_arnoldi_allowed = gmres_result.arnoldi_allowed;
                     stats_.last_D_reached = gmres_result.D_tolerance_reached;
@@ -12844,6 +12845,7 @@ public:
                             stats_.exit_krylov_iter = stats_.last_solve_iter;
                             stats_.exit_rho_stop_final = stats_.last_rho_stop_final;
                             stats_.exit_rho_S_final = stats_.last_rho_S_final;
+                            stats_.exit_tolerance_applied = stats_.last_tolerance_applied;
                             stats_.exit_arnoldi_spent = stats_.last_arnoldi_spent;
                             stats_.exit_arnoldi_allowed = stats_.last_arnoldi_allowed;
                             stats_.exit_D_reached = stats_.last_D_reached;

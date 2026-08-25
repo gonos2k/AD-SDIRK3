@@ -26,9 +26,9 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
 
 ### Phase 0 — the retraction (do first; it changes what P0-1 means)
 
-- [ ] **0.1** Correct `doc/R13_21_checklist.md` and the code comment at `newton_solver.cpp:11296`:
+- [x] **0.1** Correct `doc/R13_21_checklist.md` and the code comment at `newton_solver.cpp:11296`:
       the trust-off path is **live in `em_b_wave`**, not latent.
-- [ ] **0.2** Record the lesson: I read the C++ struct default and **inferred** the effective value
+- [x] **0.2** Record the lesson: I read the C++ struct default and **inferred** the effective value
       instead of reading the log I already had — the `read-the-control-flow-dont-infer-it` class,
       applied to configuration.
 
@@ -42,9 +42,10 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
 
 ### Phase 2 — P0-2: measure the merit the production path uses
 
-- [ ] **2.1** Verify what the trust region and the stage gate actually minimise.
-- [ ] **2.2** Terminal probe v2 reports raw / S-weighted / WRMS / worst-block, plus admissibility.
-- [ ] **2.3** Correct every place that says the discarded candidate "reduces the merit function" —
+- [x] **2.1** Verify what the trust region and the stage gate actually minimise.
+- [x] **2.2** Terminal probe v2 reports raw and S-weighted, with `gate_metric_evaluated=0` stated
+      rather than implied. WRMS/worst-block deferred — see the note below.
+- [x] **2.3** Correct every place that says the discarded candidate "reduces the merit function" —
       what was measured is raw packed L₂.
 
 ### Phase 3 — P0-3: candidate provenance
@@ -55,11 +56,11 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
 
 ### Phase 4 — P0-4: receipt authority
 
-- [ ] **4.1** `Unknown` stopping metric fails the completeness rule.
-- [ ] **4.2** Add the consistency conditions: reached flags vs ρ/tolerance, `spent ≤ allowed`,
+- [x] **4.1** `Unknown` stopping metric fails the completeness rule.
+- [x] **4.2** Add the consistency conditions: reached flags vs ρ/tolerance, `spent ≤ allowed`,
       receipt iteration == exit iteration.
-- [ ] **4.3** `krylov_exit_attribution_of` returns *unavailable* on an incomplete receipt.
-- [ ] **4.4** Fixtures: `IncompleteExitReceipt_CannotAttribute`, `UnknownStoppingMetric_FailsClosed`,
+- [x] **4.3** `krylov_exit_attribution_of` returns *unavailable* on an incomplete receipt.
+- [x] **4.4** Fixtures: `IncompleteExitReceipt_CannotAttribute`, `UnknownStoppingMetric_FailsClosed`,
       `ReachedFlagsMustMatchRhoAndTolerance`.
 
 ### Phase 5 — P0-5: NaN return consistency
@@ -70,7 +71,7 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
 
 ### Phase 6 — provenance and honesty of the probes
 
-- [ ] **6.1** Rename `state_mutated` → `K_mutated`; do not claim non-interference that was not
+- [x] **6.1** Rename `state_mutated` → `K_mutated`; do not claim non-interference that was not
       measured.
 - [ ] **6.2** Runtime provenance manifest: compiled default, Registry default, namelist request,
       effective value, authority — for the knobs that change control flow.
@@ -82,3 +83,44 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
 
 The NO-GO list for `dt=600` forward completion, full-step tangent/adjoint, exact 4D-Var and MPI
 production — none of those was claimed. The stage-3 A/B fail-close is correct and stays.
+
+
+---
+
+## Progress
+
+**Phase 0 — the retraction.** Three authorities disagree on `nk_trust_region`: C++ `true`, Registry
+**`.false.`**, `em_b_wave` unset, effective runtime **`false`** (`[TRUST OFF]` in the live log). My
+R13.21 note said the shipped configuration never takes that path — wrong, and corrected in the code
+comment and the R13.21 doc. **P0-1 was live.** I read a struct default and inferred the effective
+value instead of reading the log already on disk.
+
+**Phase 2 — and it broke my own headline.** The trust region minimises `‖S⁻¹R‖` — its own comment
+says so. The discarded candidates measured in that norm:
+
+| candidate | raw L₂ | **S-weighted** |
+|---|---|---|
+| stage 2, iter 3 | −12.5 % | **+2.5 %** |
+| stage 3, iter 1 | −60 % | **46× worse** |
+
+Both are descent directions **only in the raw L₂**. R13.22's "the discard rule threw away usable
+steps" is withdrawn; by the production merit both discards are defensible. One canonical evaluator
+now reports both norms at both probes, and `gate_metric_evaluated=0` says plainly that the stage
+gate metric was **not** evaluated — inventing it at a candidate would be the fabrication this work
+is closing elsewhere. WRMS and worst-block are deferred rather than guessed: the stage weights are
+a stage-level object and wiring them into a candidate probe is a separate change.
+
+**Phase 4 — the receipt now earns the attribution.** `Unknown` (= 0) passed a `>= 0` test, so an
+unstamped metric read as complete. The rule now rejects it, plus `spent > allowed`, reached flags
+that contradict ρ against the tolerance, a tolerance never applied but claimed reached, and a
+receipt stamped for another iteration. `krylov_exit_attribution_of` is gated on it, and the emitter
+uses the **same** view so the flag and the gate cannot judge different things.
+
+**Three fixtures failed when the gate went in** — they were asserting a subtype from a receipt
+carrying only the two reached flags. That is the rule working; they now supply complete receipts,
+and a new fixture pins that an incomplete one yields **no** subtype.
+
+**Phase 6.1** — `state_mutated` → `K_mutated`. The probe calls `apply_jacobian` and `compute_rhs`;
+`NoGradGuard` bounds the graph, not caches, counters or latches.
+
+**Live record**: `exit_receipt_complete=1`, `exit_attribution=none`, `category=zero_update_after_total_failure`.

@@ -56,6 +56,23 @@ using wrf::sdirk3::stage_failure_layer;
 using wrf::sdirk3::stage_failure_name;
 using wrf::sdirk3::StageFailureSignals;
 
+// R13.23 (deep review P0-4): a COMPLETE exit receipt. The attribution is gated on completeness
+// now, so a fixture that wants a subtype must supply a receipt that could have produced one --
+// which is the contract, not a chore. Three fixtures previously asserted an attribution from a
+// receipt carrying only the two reached flags.
+static void give_complete_exit_receipt(StageFailureSignals& s, double rho_D, double rho_S,
+                                       double tol, wrf::sdirk3::KrylovStoppingMetric metric) {
+    s.exit_rho_stop_final = rho_D;
+    s.exit_rho_S_final = rho_S;
+    s.exit_stopping_metric = metric;
+    s.exit_tolerance_applied = tol;
+    s.exit_D_reached = (rho_D < tol);
+    s.exit_S_reached = (rho_S < tol);
+    s.exit_arnoldi_spent = 7;
+    s.exit_arnoldi_allowed = 8;
+}
+
+
 // A clean, converged, published stage.
 StageFailureSignals ok_stage() {
     StageFailureSignals s;
@@ -1101,7 +1118,9 @@ int main() {
               "the exit solve met no tolerance, so the terminal event keeps its own name -- "
               "reading the stage-worst receipt here would report an objective mismatch from an "
               "iteration that ended nothing");
-        s.exit_D_reached = true;   // now the EXIT solve is the mismatch
+        // R13.23: a complete receipt -- D met, S not, judged against one tolerance.
+        give_complete_exit_receipt(s, /*rho_D=*/0.85, /*rho_S=*/1.05, /*tol=*/0.9,
+                                   wrf::sdirk3::KrylovStoppingMetric::BlockD);
         // R13.21 (external review P0-2): the event does not change; the ATTRIBUTION does. This
         // check used to read the subtype out of `name_of`, i.e. out of the event.
         check(name_of(s) == "zero_update_after_total_failure",
@@ -1126,7 +1145,8 @@ int main() {
         s.newton_termination =
             wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
         s.exit_krylov_iter = 2;
-        s.exit_D_reached = true; s.exit_S_reached = true;
+        give_complete_exit_receipt(s, /*rho_D=*/0.5, /*rho_S=*/0.6, /*tol=*/0.9,
+                                   wrf::sdirk3::KrylovStoppingMetric::BlockD);
         s.exit_rho_E_final = 0.7; s.exit_E_reached = false;
         // R13.19 (precision review P0-2): this fixture used to assert the mismatch on a record
         // inheriting `gate_metric_ok = true` from ok_stage() -- CI pinning a contract that
@@ -1168,7 +1188,8 @@ int main() {
         s.newton_termination =
             wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
         s.exit_krylov_iter = 2;
-        s.exit_D_reached = true; s.exit_S_reached = true;
+        give_complete_exit_receipt(s, /*rho_D=*/0.5, /*rho_S=*/0.6, /*tol=*/0.9,
+                                   wrf::sdirk3::KrylovStoppingMetric::BlockD);
         s.exit_rho_E_final = 0.7; s.exit_E_reached = false;
         s.gate_metric_ok = true;                 // the gate did NOT refuse
         check(name_of(s) != "krylov_entry_metric_mismatch",
@@ -1333,7 +1354,8 @@ int main() {
         e.newton_termination =
             wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
         e.exit_krylov_iter = 3;
-        e.exit_D_reached = true; e.exit_S_reached = false;
+        give_complete_exit_receipt(e, /*rho_D=*/0.85, /*rho_S=*/1.05, /*tol=*/0.9,
+                                   wrf::sdirk3::KrylovStoppingMetric::BlockD);
         const auto de = wrf::sdirk3::stage_diagnosis_of(e);
         // R13.21 (external review P0-2): event and cause, separately.
         check(de.primary_event == StageFailure::ZeroUpdateAfterTotalFailure &&
@@ -1593,6 +1615,64 @@ int main() {
               "the boundary is overridable per run and the distance must follow it");
     }
 
+    {
+        // R13.23 (deep review P0-4): THE RECEIPT MUST EARN THE ATTRIBUTION.
+        // `exit_receipt_complete` was computed and emitted but never consulted, so a row could
+        // read `exit_receipt_complete=0` beside a specific `exit_attribution` derived from that
+        // same receipt -- producer, emitter, no consumer, the shape this repository keeps fixing.
+        using wrf::sdirk3::KrylovReceiptView;
+        using wrf::sdirk3::krylov_receipt_complete;
+        using wrf::sdirk3::KrylovStoppingMetric;
+
+        KrylovReceiptView ok;
+        ok.rho_D_final = 0.85; ok.rho_S_final = 1.05; ok.tolerance_applied = 0.9;
+        ok.D_reached = true;   ok.S_reached = false;
+        ok.stopping_metric = static_cast<int>(KrylovStoppingMetric::BlockD);
+        ok.arnoldi_spent = 7;  ok.arnoldi_allowed = 8;
+        check(krylov_receipt_complete(ok),
+              "a receipt whose ratios, metric, budget and reached flags all agree is complete");
+
+        { auto r = ok; r.stopping_metric = static_cast<int>(KrylovStoppingMetric::Unknown);
+          check(!krylov_receipt_complete(r),
+                "an UNKNOWN stopping metric fails: the old test was `>= 0` and Unknown is 0, so an "
+                "unstamped metric passed as complete and an attribution named a layer the receipt "
+                "could not support"); }
+        { auto r = ok; r.arnoldi_spent = 9;
+          check(!krylov_receipt_complete(r),
+                "work spent cannot exceed work allowed -- a receipt that says so is not describing "
+                "one solve"); }
+        { auto r = ok; r.D_reached = false;
+          check(!krylov_receipt_complete(r),
+                "a reached flag that contradicts rho against the tolerance fails: the flags are "
+                "re-derived, not trusted"); }
+        { auto r = ok; r.tolerance_applied = -1.0;
+          check(!krylov_receipt_complete(r),
+                "and a tolerance that was never applied cannot have been reached -- claiming it is "
+                "the fabrication this rule exists to catch"); }
+        { auto r = ok; r.tolerance_applied = -1.0; r.D_reached = false; r.S_reached = false;
+          check(krylov_receipt_complete(r),
+                "...while a path that applied no tolerance and claims neither flag is complete, "
+                "because it reports exactly what it measured"); }
+        { auto r = ok; r.receipt_iter = 2; r.exit_iter = 3;
+          check(!krylov_receipt_complete(r),
+                "and a receipt stamped for another iteration is not this solve's"); }
+
+        // The gate itself: an incomplete receipt yields NO subtype, not a plausible one.
+        StageFailureSignals inc = ok_stage();
+        inc.newton_converged = false;
+        inc.residual_first = 8.7e8; inc.residual_last = 8.6e8;
+        inc.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        inc.exit_krylov_iter = 3;
+        inc.exit_D_reached = true; inc.exit_S_reached = false;   // the flags alone
+        const auto d_inc = wrf::sdirk3::stage_diagnosis_of(inc);
+        check(d_inc.primary_event == StageFailure::ZeroUpdateAfterTotalFailure &&
+              d_inc.exit_attribution == StageFailure::None,
+              "with only the reached flags set the receipt is incomplete, so the event stands and "
+              "NO subtype is attributed -- before this gate the same signals produced "
+              "krylov_objective_mismatch from a receipt that could not support it");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1609,7 +1689,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 145;
+    constexpr int expected_checks = 153;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

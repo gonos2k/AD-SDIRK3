@@ -598,6 +598,9 @@ struct StageFailureSignals {
     // has something to judge. Without these the completeness rule had no production consumer at
     // all -- a rule with a producer and no consumer, written in the increment that closes that
     // class.
+    // R13.23 (P0-4): the tolerance the exit solve actually applied, so the reached flags can be
+    // re-derived rather than trusted.
+    double exit_tolerance_applied = -1.0;
     int    exit_arnoldi_spent = -1;
     int    exit_arnoldi_allowed = -1;
     bool   exit_D_reached = false;
@@ -714,11 +717,84 @@ inline bool entry_requires_nonlinear_decrease(const KrylovEntryVerdict& v) {
 // separate question. `first_failure_of` reports the EVENT that ended the stage; this reports what
 // the receipt of the solve that ended it says about WHY. Returns `None` when the exit receipt
 // cannot support a subtype -- absence of evidence, reported as such.
+// R13.21 (external review P1-2): IS THIS RECEIPT COMPLETE?
+//
+// Six sites return a Krylov result. Four fill the metric/budget receipt R13.18-R13.20 added; the
+// two `NanRetryExhausted` early returns filled only the constructor fields plus
+// `initial_rel_error`, so every new field stayed at its sentinel. A terminal solve that ends on
+// that path therefore hands the classifier an exit receipt it cannot subtype, and the record falls
+// back to the generic event or to insufficient evidence -- the classifier reporting absence where
+// the solve knew the answer.
+//
+// The rule lives here, as a view over the values rather than over the type, so a fixture can
+// reject its negation without pulling in the solver header. `tolerance_applied` and the two
+// tolerance-reached flags are deliberately NOT required: a path that never evaluated a tolerance
+// has nothing to report, and demanding it would push a producer into inventing one.
+struct KrylovReceiptView {
+    double rho_D_final = -1.0;
+    double rho_S_final = -1.0;
+    int    stopping_metric = -1;   // KrylovStoppingMetric; 0 == Unknown, -1 == not stamped
+    int    arnoldi_spent = -1;
+    int    arnoldi_allowed = -1;
+    // R13.23 (deep review P0-4): the receipt must be SELF-CONSISTENT, not merely populated.
+    double tolerance_applied = -1.0;
+    bool   D_reached = false;
+    bool   S_reached = false;
+    int    receipt_iter = -1;      // which Newton iteration this receipt belongs to
+    int    exit_iter = -1;         // which iteration ended the loop
+};
+
+inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
+    if (!measured(r.rho_D_final) || !measured(r.rho_S_final)) return false;
+    // R13.23 (P0-4): `Unknown` is 0 and the old test was `>= 0`, so an UNSTAMPED metric passed as
+    // complete -- and an attribution derived from it named a layer the receipt could not support.
+    // The enum's own "I do not know" value must fail a completeness test.
+    if (r.stopping_metric <= static_cast<int>(KrylovStoppingMetric::Unknown)) return false;
+    if (r.arnoldi_spent < 0 || r.arnoldi_allowed <= 0) return false;
+    // Work spent cannot exceed work allowed. A receipt that says otherwise is not describing one
+    // solve.
+    if (r.arnoldi_spent > r.arnoldi_allowed) return false;
+    // The reached flags must follow from the numbers. A tolerance that was never applied cannot
+    // have been reached -- claiming otherwise is the fabrication this rule exists to catch.
+    if (!measured(r.tolerance_applied) || !(r.tolerance_applied > 0.0)) {
+        return !r.D_reached && !r.S_reached;
+    }
+    if (r.D_reached != (r.rho_D_final < r.tolerance_applied)) return false;
+    if (r.S_reached != (r.rho_S_final < r.tolerance_applied)) return false;
+    // And it must belong to the solve it is being read as. Both unstamped is the pre-R13.18 record
+    // and is allowed through; one stamped and disagreeing is not.
+    if (r.receipt_iter >= 0 && r.exit_iter >= 0 && r.receipt_iter != r.exit_iter) return false;
+    return true;
+}
+
+// R13.23 (P0-4): the exit receipt as the classifier sees it, in one place so the attribution and
+// the emitted `exit_receipt_complete` cannot judge different things.
+
+inline KrylovReceiptView exit_receipt_view(const StageFailureSignals& s) {
+    KrylovReceiptView v;
+    v.rho_D_final = s.exit_rho_stop_final;
+    v.rho_S_final = s.exit_rho_S_final;
+    v.stopping_metric = static_cast<int>(s.exit_stopping_metric);
+    v.arnoldi_spent = s.exit_arnoldi_spent;
+    v.arnoldi_allowed = s.exit_arnoldi_allowed;
+    v.tolerance_applied = s.exit_tolerance_applied;
+    v.D_reached = s.exit_D_reached;
+    v.S_reached = s.exit_S_reached;
+    v.receipt_iter = s.exit_krylov_iter;
+    v.exit_iter = s.exit_krylov_iter;
+    return v;
+}
+
 inline StageFailure krylov_exit_attribution_of(const StageFailureSignals& s) {
     if (s.newton_termination != NewtonTerminationReason::ZeroUpdateAfterTotalFailure) {
         return StageFailure::None;
     }
     if (s.exit_krylov_iter < 0) return StageFailure::None;
+    // R13.23 (deep review P0-4): THE RECEIPT MUST EARN THE ATTRIBUTION. `exit_receipt_complete`
+    // was computed and EMITTED but never consulted here, so a row could read
+    // `exit_receipt_complete=0` beside a specific `exit_attribution` derived from that same
+    // receipt -- the producer/emitter/no-consumer shape this repository has fixed repeatedly.
+    if (!krylov_receipt_complete(exit_receipt_view(s))) return StageFailure::None;
     // Minimised what it was asked to, and the result is still useless to the Newton merit.
     if (s.exit_D_reached && !s.exit_S_reached) {
         return StageFailure::KrylovObjectiveMismatch;
@@ -740,31 +816,6 @@ inline StageFailure krylov_exit_attribution_of(const StageFailureSignals& s) {
     return StageFailure::None;
 }
 
-// R13.21 (external review P1-2): IS THIS RECEIPT COMPLETE?
-//
-// Six sites return a Krylov result. Four fill the metric/budget receipt R13.18-R13.20 added; the
-// two `NanRetryExhausted` early returns filled only the constructor fields plus
-// `initial_rel_error`, so every new field stayed at its sentinel. A terminal solve that ends on
-// that path therefore hands the classifier an exit receipt it cannot subtype, and the record falls
-// back to the generic event or to insufficient evidence -- the classifier reporting absence where
-// the solve knew the answer.
-//
-// The rule lives here, as a view over the values rather than over the type, so a fixture can
-// reject its negation without pulling in the solver header. `tolerance_applied` and the two
-// tolerance-reached flags are deliberately NOT required: a path that never evaluated a tolerance
-// has nothing to report, and demanding it would push a producer into inventing one.
-struct KrylovReceiptView {
-    double rho_D_final = -1.0;
-    double rho_S_final = -1.0;
-    int    stopping_metric = -1;   // KrylovStoppingMetric, or -1 for "not stamped"
-    int    arnoldi_spent = -1;
-    int    arnoldi_allowed = -1;
-};
-
-inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
-    return measured(r.rho_D_final) && measured(r.rho_S_final) &&
-           r.stopping_metric >= 0 && r.arnoldi_spent >= 0 && r.arnoldi_allowed > 0;
-}
 
 // R13.21 (external review section 8): HOW CLOSE WAS THE CALL?
 //

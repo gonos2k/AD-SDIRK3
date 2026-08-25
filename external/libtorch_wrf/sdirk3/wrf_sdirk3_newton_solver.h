@@ -518,6 +518,9 @@ public:
         double exit_rho_S_final = -1.0;
         // R13.21 SELF-REVIEW ROUND 2: the exit solve's Arnoldi budget, so the completeness rule
         // has a production consumer instead of only fixtures.
+        // R13.23 (P0-4): the tolerance the exit solve applied.
+        float exit_tolerance_applied = -1.0f;
+        float last_tolerance_applied = -1.0f;
         int   exit_arnoldi_spent = -1;
         int   exit_arnoldi_allowed = -1;
         int   last_arnoldi_spent = -1;
