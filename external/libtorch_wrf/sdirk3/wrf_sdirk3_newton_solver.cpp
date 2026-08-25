@@ -11420,8 +11420,52 @@ public:
             // Before declaring a zero-step failure, try one cheap recovery update:
             //   dK_rec ~= -M^{-1}R (or -R when M unavailable), with the same trust clamp.
             // This avoids immediate zero-update exits in ru-dominant stiff stages.
+            // R13.23 (deep review P0-1): CANDIDATE ARBITRATION -- do not veto without evaluating.
+            //
+            // A total-failure signal is a statement about the LINEAR residual ratio. Using it to
+            // discard the step removes the candidate from the trust region entirely (that loop
+            // carries `!gmres_total_failure`), so the mechanism whose job is to decide whether a
+            // step is usable never sees it. The signal should be a warning that the candidate is
+            // probably bad, not a substitute for asking.
+            //
+            // When armed, the candidate is measured in the norm the trust region actually
+            // minimises -- ||S^-1 R||, not the raw packed L2 -- and only a genuine improvement
+            // clears the flag, handing the step to the ordinary globalization path to accept or
+            // reject on its own terms. It is not an auto-accept.
+            //
+            // OPT-IN, and measured to be behaviour-neutral on the records that motivated it: at
+            // dt=600 the discarded candidates improve the raw L2 by 12.5% and 60% while the
+            // S-weighted merit gets WORSE by 2.5% and 46x. So with this on, the arbitration
+            // evaluates and correctly declines to rescue them -- the same outcome, now reached by
+            // measurement instead of by assumption. It costs one RHS evaluation per total-failure
+            // iteration, which is why it is not on by default.
+            bool arbitration_rescued = false;
+            if (!step_accepted && gmres_total_failure_candidate &&
+                wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_CANDIDATE_ARBITRATION") &&
+                dK.defined() && dK.numel() > 0 && R.defined()) {
+                torch::NoGradGuard ng_arb;
+                const auto K_a = K.detach() + dK.detach();
+                const auto U_a = U_stage + dt * gamma * K_a;
+                const auto R_a = (K_a - compute_rhs(U_a)).detach();
+                double raw_b = -1.0, raw_a = -1.0, s_b = -1.0, s_a = -1.0;
+                bool s_ok = false;
+                candidate_merits(R.detach(), R_a, raw_b, raw_a, s_b, s_a, s_ok);
+                // The trust region's own norm decides. Without it there is no basis to overrule
+                // the signal, so the signal stands -- fail-closed.
+                arbitration_rescued = s_ok && std::isfinite(s_a) && std::isfinite(s_b) && s_a < s_b;
+                std::cerr << "SDIRK3_CANDIDATE_ARBITRATION"
+                          << " stage=" << stage
+                          << " newton_iter=" << newton_iter
+                          << " R_raw=" << raw_b << " R_raw_candidate=" << raw_a
+                          << " R_S=" << s_b << " R_S_candidate=" << s_a
+                          << " S_merit_measured=" << (s_ok ? 1 : 0)
+                          << " rescued=" << (arbitration_rescued ? 1 : 0)
+                          << " basis=trust_region_S_norm"
+                          << " K_mutated=0"
+                          << std::endl;
+            }
             bool gmres_total_failure = false;
-            if (!step_accepted &&
+            if (!step_accepted && !arbitration_rescued &&
                 (gmres_total_failure_candidate || entry_mismatch_step_rejected)) {
                 gmres_total_failure = true;
                 // R13.23 (deep review P0-2): ONE candidate-merit evaluator, so a probe reports the

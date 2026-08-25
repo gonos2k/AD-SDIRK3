@@ -34,8 +34,8 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
 
 ### Phase 1 — P0-1: no hard veto without a merit trial
 
-- [ ] **1.1** One canonical candidate-merit evaluator, used by trust, recovery, and the probes.
-- [ ] **1.2** A total-failure signal routes the candidate to globalization when the merit improves,
+- [x] **1.1** One canonical candidate-merit evaluator, used by trust, recovery, and the probes.
+- [x] **1.2** A total-failure signal routes the candidate to globalization when the merit improves,
       instead of discarding it unevaluated. Keep the signal as a *warning*, not a veto.
 - [ ] **1.3** Fixtures: `TotalFailureCandidate_WithNonlinearDecrease_IsGlobalized`,
       `TotalFailureVsBAndVsR0_CannotSkipMeritTrial`.
@@ -73,7 +73,7 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
 
 - [x] **6.1** Rename `state_mutated` → `K_mutated`; do not claim non-interference that was not
       measured.
-- [ ] **6.2** Runtime provenance manifest: compiled default, Registry default, namelist request,
+- [x] **6.2** Runtime provenance manifest: compiled default, Registry default, namelist request,
       effective value, authority — for the knobs that change control flow.
 - [ ] **6.3** Boundary receipt after the setter runs (`raw_*` vs `effective_*`).
 
@@ -142,3 +142,40 @@ a different candidate — and before those mutations, only when a probe is armed
 live record: `candidate_delta_vs_solve = 0` at both probes**, so on this configuration the probed
 candidate *is* the solve's. The concern is a real path that did not fire here, and the record now
 says so instead of the question going unasked.
+
+**Phase 1 — arbitration, and it declines.** A total-failure signal is a statement about the LINEAR
+residual ratio, and using it to discard the step removes the candidate from the trust region
+entirely. When armed (`WRF_SDIRK3_CANDIDATE_ARBITRATION`), the candidate is measured in the norm
+the trust region actually minimises and only a genuine improvement clears the flag — handing the
+step to ordinary globalization to accept or reject, not auto-accepting it.
+
+**Measured behaviour-neutral on the records that motivated it**, which is the point:
+
+```
+arb=off  cat=zero_update_after_total_failure  nit=4  acc=3  R_last=0.4578  outcome=20
+arb=on   cat=zero_update_after_total_failure  nit=4  acc=3  R_last=0.4578  outcome=20
+         R_raw=4.77e+08 -> 4.173e+08   R_S=476 -> 487.7   rescued=0
+```
+
+The arbitration evaluates, finds the raw L₂ better and the trust norm worse, and **correctly
+declines**. Same outcome as before — reached by measurement instead of by assumption. Opt-in
+because it costs one RHS evaluation per total-failure iteration for a rescue that (measured) does
+not fire.
+
+**Phase 6.2 — the authority manifest, and it immediately paid.** `[CONFIG AUTHORITY]` prints the
+compiled default beside the effective value for the knobs that change control flow, flagging
+disagreement. On the live run **three of five are overridden**:
+
+```
+nk_trust_region           compiled=true  effective=false  <-- OVERRIDDEN
+nk_line_search            compiled=false effective=true   <-- OVERRIDDEN
+use_autograd              compiled=false effective=true   <-- OVERRIDDEN
+hevi_split                compiled=false effective=false
+stage_require_convergence compiled=false effective=false
+```
+
+So `nk_trust_region` was not an isolated case: `nk_line_search` and `use_autograd` also run
+opposite to their compiled defaults, and nothing said so. **Writing that table from memory got four
+of five wrong on the first attempt** — they were corrected by reading `wrf_sdirk3_config.h`, and
+the line numbers are cited in the source. A manifest that prints a false `compiled_default` is
+worse than none, because it looks authoritative.
