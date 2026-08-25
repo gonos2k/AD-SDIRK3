@@ -9239,6 +9239,15 @@ vertical_coefficients:
                     // instruction to another code layer.
                     const bool layer_allowed =
                         wrf::sdirk3::threshold_permits_specific_layer(diag.threshold);
+                    // R13.21 SELF-REVIEW: `layer_derived` is tracked EXPLICITLY, not inferred by
+                    // comparing the emitted string against one sentinel. R13.20's R9-3 fixed
+                    // `layer_receipt` printing `stage_worst` on a row that derived no layer, by
+                    // keying it on `specific_layer == "n/a"`. Phase 5 above then introduced a
+                    // SECOND no-layer sentinel (`threshold_sensitive_no_specific_layer`) that the
+                    // key does not match -- so a near-boundary row would have asserted receipt
+                    // provenance for a layer it never derived. The same defect, in the fix that
+                    // closed it, one PR later. A boolean cannot drift the way a string match can.
+                    bool layer_derived = false;
                     const char* specific_layer =
                         layer_allowed ? "n/a" : "threshold_sensitive_no_specific_layer";
                     if (layer_allowed &&
@@ -9248,6 +9257,7 @@ vertical_coefficients:
                                 ? wrf::sdirk3::krylov_forcing_layer_for(
                                       sig.worst_krylov_tolerance_source)
                                 : "inner_tolerance_source_unrecorded";
+                        layer_derived = layer_from_worst;
                     } else if (layer_allowed &&
                                first == wrf::sdirk3::StageFailure::KrylovObjectiveMismatch) {
                         // R13.21 (external review P0-2): ONE arm now. This category can only be
@@ -9265,6 +9275,7 @@ vertical_coefficients:
                                 ? wrf::sdirk3::krylov_stopping_layer_for(
                                       sig.worst_krylov_stopping_metric)
                                 : "stop_metric_unrecorded";
+                        layer_derived = layer_from_worst;
                     }
                     // R13.21 (external review P0-2): the exit solve's metric attribution and the
                     // layer THAT receipt supports, beside the event rather than replacing it.
@@ -9302,7 +9313,7 @@ vertical_coefficients:
                         exit_attr_layer = wrf::sdirk3::stage_failure_layer(diag.exit_attribution);
                     }
                     const char* layer_receipt =
-                        (std::strcmp(specific_layer, "n/a") == 0)
+                        !layer_derived
                             ? "n/a"
                             : (layer_from_exit ? "exit"
                                                : (layer_from_worst ? "stage_worst" : "none"));

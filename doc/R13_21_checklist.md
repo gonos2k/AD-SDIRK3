@@ -244,3 +244,33 @@ nothing in the rig is stateful across rows.
 
 The review's NO-GO list for `dt=600` forward completion, full-step tangent/adjoint, exact 4D-Var and
 MPI production is **accepted without argument** — none of those was claimed.
+
+---
+
+## Self-review of R13.21 — three defects, all mine
+
+Every round of this campaign has found a defect inside its own fix. This one is no exception.
+
+**1. `layer_receipt` asserted provenance for a layer that was never derived — the R9-3 defect,
+inside the fix that closed it.** R13.20 fixed `layer_receipt` printing `stage_worst` on a row with
+no specific layer, by keying it on `specific_layer == "n/a"`. Phase 5 then introduced a **second**
+no-layer sentinel, `threshold_sensitive_no_specific_layer`, which that key does not match — so a
+near-boundary row would have claimed receipt provenance for a layer it refused to issue. Now
+tracked by an explicit `layer_derived` boolean, which cannot drift the way a string match can.
+
+**Fired and verified, not merely reasoned about**: with the boundary moved to 0.99 so the record's
+`vs_r0 = 0.9941` lands inside the band (distance 0.0041), the row reads
+`threshold_sensitive=1 specific_layer=threshold_sensitive_no_specific_layer layer_receipt=n/a`.
+
+**2. Routing a new state into an existing block borrowed the block's entire policy.** Phase 1 sends
+a rejected entry mismatch to the total-failure handling — for the recovery attempt and the typed
+exit. That block also promotes `stage2_hopeless_detected` / `stage3_hopeless_detected`, which are
+**budget** statements; an entry mismatch did **zero Arnoldi work**, so calling its budget hopeless
+is a non-sequitur. Both promotions are gated on the original condition now. The lesson is the
+"coarse guard preempts its refinement" class in reverse: reusing a policy means re-checking each of
+its sub-decisions, not just its entry condition.
+
+**3. An orphaned method.** Phase 3 replaced the only caller of
+`KrylovSolveMechanism::implies_same_category_as` and left the declaration and definition behind — a
+symbol with a producer and no consumer, the class this campaign has been closing for ten rounds.
+Removed. Found by a mechanical audit of all 21 symbols R13.21 introduced; it was the only orphan.

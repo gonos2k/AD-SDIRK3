@@ -312,14 +312,6 @@ struct KrylovSolveMechanism {
     // different metrics look identical to the tie check.
     int  stopping_metric = 0;       // KrylovStoppingMetric
 
-    // R13.20 (round 9, R9-6): compares the CATEGORY the two receipts imply, not their fields.
-    // The predecessor also compared `tolerance_source` -- tolerance PROVENANCE, which the
-    // classifier does not branch on -- so two solves that both said "objective mismatch" were
-    // declared ambiguous when one had the INN ramp fire, and the refusal fell through to
-    // `KrylovStagnated`, i.e. to the operator/split layer. A refusal that fires on a difference
-    // which cannot change the answer, and fires TOWARD the split-explicit rebuild, is the same
-    // misrouting the four-way was built to stop.
-    bool implies_same_category_as(const KrylovSolveMechanism& o) const;
 };
 
 // R13.21 (external review P0-3): the layer the record would emit for ONE solve's receipt.
@@ -350,9 +342,7 @@ inline StageFailure krylov_mechanism_category(const KrylovSolveMechanism& m) {
     return StageFailure::KrylovStagnated;
 }
 
-inline bool KrylovSolveMechanism::implies_same_category_as(const KrylovSolveMechanism& o) const {
-    return krylov_mechanism_category(*this) == krylov_mechanism_category(o);
-}
+
 
 // True when the solves tied at the worst ratio do NOT agree on their mechanism -- in which case no
 // single mechanism may be named, whatever order they arrived in.

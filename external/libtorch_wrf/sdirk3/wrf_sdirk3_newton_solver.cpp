@@ -11332,12 +11332,21 @@ public:
                     cfg.trust_fallback_relax
                         ? std::clamp(cfg.trust_fallback_ratio, 0.0f, 1.0f)
                         : 0.98f;
-                if (stage == 2 && newton_iter == 0 &&
+                // R13.21 SELF-REVIEW: the hopeless promotions are BUDGET statements, and an
+                // entry mismatch routed here did ZERO Arnoldi work -- its stopping objective was
+                // already met on entry. Calling that budget hopeless is a non-sequitur, and
+                // routing a new state into an existing block borrows the block's ENTIRE policy
+                // unless each sub-decision is re-checked. These two are gated on the original
+                // condition, so the entry-mismatch route gets the recovery attempt and the typed
+                // exit without also capping a budget it never spent.
+                if (gmres_total_failure_candidate &&
+                    stage == 2 && newton_iter == 0 &&
                     cfg.stage2_gmres_restart > 0 &&
                     cfg.stage2_max_krylov_restarts == 1) {
                     stage2_hopeless_detected = true;
                 }
-                if (stage >= 3 && newton_iter == 0 &&
+                if (gmres_total_failure_candidate &&
+                    stage >= 3 && newton_iter == 0 &&
                     last_ru_share_ > 0.98f &&
                     cfg.stage2_gmres_restart > 0 &&
                     cfg.stage2_max_krylov_restarts == 1 &&
