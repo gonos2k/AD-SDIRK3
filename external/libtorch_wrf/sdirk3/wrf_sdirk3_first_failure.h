@@ -767,6 +767,29 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
     return true;
 }
 
+// R13.23 (deep review P0-5): a Krylov return must hand back a solution and a residual that belong
+// to the SAME solve. The NaN-retry path returned `x = 0` beside the current iterate's residual, so
+// `r_true != b - A(x)` and one result carried two solves -- downstream that residual feeds trust
+// prediction, per-block analysis and the exit receipt, none of which correspond to the x handed
+// back.
+//
+// Stated over the two norms a caller can see, so a fixture can reject its negation. At `x = 0` the
+// residual is `b`, hence ||r|| == ||b|| and rho == 1 exactly; any other pairing with a zero
+// solution is inconsistent.
+struct KrylovReturnPairing {
+    bool   x_is_zero = false;
+    double r_norm = -1.0;
+    double b_norm = -1.0;
+};
+
+inline bool krylov_return_pairing_consistent(const KrylovReturnPairing& p) {
+    if (!measured(p.r_norm) || !measured(p.b_norm)) return false;
+    if (!p.x_is_zero) return true;          // only the zero-solution case is pinned here
+    if (!(p.b_norm > 0.0)) return p.r_norm == 0.0;
+    const double ratio = p.r_norm / p.b_norm;
+    return ratio > 1.0 - 1.0e-6 && ratio < 1.0 + 1.0e-6;
+}
+
 // R13.23 (P0-4): the exit receipt as the classifier sees it, in one place so the attribution and
 // the emitted `exit_receipt_complete` cannot judge different things.
 

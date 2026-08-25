@@ -14,8 +14,8 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
 | **§8** | C++ default, Registry default and effective runtime disagree on `nk_trust_region` | **YES — and it retracts my own merged claim** | `wrf_sdirk3_config.h:880` = `true`; `Registry.EM_SDIRK3_OPTIMIZATIONS:60` = **`.false.`**; `em_b_wave` does not set it; the live log records `nk_trust_region = false` and `[TRUST OFF]` |
 | P0-1 | total-failure is a hard veto — the candidate is discarded with no nonlinear trial | **YES** | `gmres_total_failure = true` at `:11331`; the trust loop at `:11492` carries `!gmres_total_failure` |
 | P0-1b | changing the denominator does not fix it — both rules flagged the live candidate | **PARTLY — scope matters** | true on the **default** budget (`vs_r0 = 0.9941 ≥ 0.99`); **false** at `stage2_restart=192`, where R13.22 measured `vs_r0 = 0.6773`, the r₀ rule not firing, and stage 3 going 8.7 % → 66.6 % |
-| P0-2 | the terminal probe measures raw packed L₂, not the production merit | **to verify (item 2.1)** | probe uses `R.norm()`; trust/stage metrics are S-weighted / WRMS / gate |
-| P0-3 | the `dK` the probe evaluates may not be the `dK` GMRES produced | **to verify (item 3.1)** | post-solve halo/direct-U/clamp stages exist between them |
+| P0-2 | the terminal probe measures raw packed L₂, not the production merit | **YES** | probe uses `R.norm()`; trust/stage metrics are S-weighted / WRMS / gate |
+| P0-3 | the `dK` the probe evaluates may not be the `dK` GMRES produced | **YES structurally; delta measured 0 here** | post-solve halo/direct-U/clamp stages exist between them |
 | P0-4 | `exit_receipt_complete` is emitted but does not gate attribution; `Unknown` metric passes | **YES** | `krylov_exit_attribution_of` never consults it; `krylov_receipt_complete` tests `stopping_metric >= 0` and `Unknown == 0` |
 | P0-5 | the NaN early return pairs `x = 0` with the *current* residual | **YES** | the return builds `zeros_like(x0)` while `r_true` is the live residual; R13.21 then stamped `rho = 1.0` on top |
 | §12 | `state_mutated=0` overclaims | **YES** | the probe calls `apply_jacobian` and `compute_rhs`; `NoGradGuard` bounds the graph, not caches or counters |
@@ -50,8 +50,8 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
 
 ### Phase 3 — P0-3: candidate provenance
 
-- [ ] **3.1** Verify whether post-solve processing can change `dK` between the solve and the probe.
-- [ ] **3.2** Emit `candidate_source`, digests, and the relative delta; only call it "the GMRES
+- [x] **3.1** Verify whether post-solve processing can change `dK` between the solve and the probe.
+- [x] **3.2** Emit `candidate_source`, digests, and the relative delta; only call it "the GMRES
       candidate" when that delta is 0.
 
 ### Phase 4 — P0-4: receipt authority
@@ -65,9 +65,9 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
 
 ### Phase 5 — P0-5: NaN return consistency
 
-- [ ] **5.1** Return a solution and a residual that belong together.
-- [ ] **5.2** Stop stamping `rho = 1.0`; fail closed with sentinels when nothing was measured.
-- [ ] **5.3** Fixtures: `NanRetry_ReturnedXMatchesReturnedResidual`, `NanRetry_DoesNotFabricateRhoOne`.
+- [x] **5.1** Return a solution and a residual that belong together.
+- [x] **5.2** Stop stamping `rho = 1.0`; fail closed with sentinels when nothing was measured.
+- [x] **5.3** Fixtures: `NanRetry_ReturnedXMatchesReturnedResidual`, `NanRetry_DoesNotFabricateRhoOne`.
 
 ### Phase 6 — provenance and honesty of the probes
 
@@ -124,3 +124,21 @@ and a new fixture pins that an incomplete one yields **no** subtype.
 `NoGradGuard` bounds the graph, not caches, counters or latches.
 
 **Live record**: `exit_receipt_complete=1`, `exit_attribution=none`, `category=zero_update_after_total_failure`.
+
+**Phase 5 — the NaN return now hands back one solve.** It returned `x = 0` beside the *current
+iterate's* residual, so `r_true ≠ b − A(x)` and one result carried two solves — and downstream that
+residual feeds trust prediction, per-block analysis and the exit receipt, none of which correspond
+to the `x` handed back. Option B: keep the zero solution (which is what `NanRetryExhausted` means)
+and return the residual that belongs to it, `b` — exactly what this file already writes at `:1154`
+and `:2592` for the same situation. **A consequence worth naming: with `x = 0` the ratios ρ_D =
+ρ_S = 1 are now arithmetically true**, where R13.21 stamped `1.0` on top of a mismatched pair and
+the review correctly called that fabricated. A pure rule pins it, with the pre-R13.23 pairing as
+the negative case.
+
+**Phase 3 — provenance measured, not argued.** The tree's own comment names two post-solve
+mutations of `dK` (halo zeroing and the direct-U override of the `ru` block), so what a probe
+evaluates need not be what GMRES returned. Captured after the S-scaling — a coordinate change, not
+a different candidate — and before those mutations, only when a probe is armed. **Measured on the
+live record: `candidate_delta_vs_solve = 0` at both probes**, so on this configuration the probed
+candidate *is* the solve's. The concern is a real path that did not fire here, and the record now
+says so instead of the question going unasked.

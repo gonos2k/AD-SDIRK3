@@ -1673,6 +1673,37 @@ int main() {
               "krylov_objective_mismatch from a receipt that could not support it");
     }
 
+    {
+        // R13.23 (deep review P0-5): the returned solution and the returned residual must be the
+        // same solve's. The NaN-retry path returned x = 0 beside the CURRENT iterate's residual.
+        using wrf::sdirk3::KrylovReturnPairing;
+        using wrf::sdirk3::krylov_return_pairing_consistent;
+
+        KrylovReturnPairing fixed;                 // x = 0, r = b  -> the post-R13.23 return
+        fixed.x_is_zero = true; fixed.r_norm = 1039.0; fixed.b_norm = 1039.0;
+        check(krylov_return_pairing_consistent(fixed),
+              "a zero solution paired with r = b is consistent -- and it makes rho = 1 true by "
+              "arithmetic rather than stamped");
+
+        KrylovReturnPairing before;                // x = 0, r = the current iterate's residual
+        before.x_is_zero = true; before.r_norm = 574.4; before.b_norm = 1039.0;
+        check(!krylov_return_pairing_consistent(before),
+              "the pre-R13.23 NaN return is inconsistent: x = 0 with a residual that belongs to a "
+              "different iterate, and downstream trust prediction and per-block analysis read it "
+              "as if it described the x handed back");
+
+        KrylovReturnPairing nonzero;               // a real solve: not pinned by this rule
+        nonzero.x_is_zero = false; nonzero.r_norm = 574.4; nonzero.b_norm = 1039.0;
+        check(krylov_return_pairing_consistent(nonzero),
+              "...while a nonzero solution is not pinned here -- this rule is about the one case "
+              "where the residual is determined by the solution alone");
+
+        KrylovReturnPairing unmeasured;
+        unmeasured.x_is_zero = true; unmeasured.b_norm = 1039.0;   // r_norm left at -1
+        check(!krylov_return_pairing_consistent(unmeasured),
+              "and an unmeasured norm fails rather than passing: absence is not consistency");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1689,7 +1720,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 153;
+    constexpr int expected_checks = 157;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

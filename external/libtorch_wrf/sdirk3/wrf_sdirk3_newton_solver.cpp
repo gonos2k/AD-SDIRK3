@@ -1539,7 +1539,21 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                     std::cerr << "[GMRES FAILURE] Exceeded max NaN retries (" << max_nan_failures
                               << "), returning failure status to trigger trust-region fallback" << std::endl;
                     // v20.14r25: Use halo-zeroed norm for final_residual (contract: all paths consistent).
-                    auto r_true_nan = r_true.clone();
+                    // R13.23 (deep review P0-5): THE SOLUTION AND THE RESIDUAL MUST BE THE SAME
+                    // SOLVE'S. This returned `x = zeros_like(x0)` alongside the CURRENT iterate's
+                    // residual, so `r_true != b - A(x_returned)` -- one GMRESResult carrying two
+                    // different solves. Downstream that residual feeds trust prediction, per-block
+                    // analysis and the exit receipt, none of which correspond to the x handed back.
+                    //
+                    // Option B from the review: keep the zero solution -- which is what
+                    // NanRetryExhausted means, "no usable step" -- and return the residual that
+                    // belongs to it. At x = 0 that is `b`, which is exactly what this file already
+                    // writes at :1154 and :2592 for the same situation.
+                    //
+                    // A consequence worth naming: with x = 0 the ratios rho_D = rho_S = 1 are now
+                    // ARITHMETICALLY TRUE (||b||/||b||), where R13.21 stamped 1.0 on top of a
+                    // mismatched pair and the review correctly called that fabricated.
+                    auto r_true_nan = b.detach().clone();
                     zero_halo_regions(r_true_nan, halo_width, periodic_x, periodic_y);
                     float r_norm = guarded_item<float>(safe_tensor_norm(r_true_nan));
                     // v20.14r37: Include current restart's j (same fix as early-breakdown path).
@@ -1548,7 +1562,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                             torch::zeros_like(x0), false,
                             total_arnoldi_iters + j, r_norm, 1.0f,
                             "NaN failures exceeded max retries",
-                            r_true.detach().clone(), iter, false, false};
+                            b.detach().clone(), iter, false, false};
                     res.termination_reason = KTR::NanRetryExhausted;
                     res.initial_rel_error = initial_rel_error_gmres;
                     // R13.21 (external review P1-2): COMPLETE THE RECEIPT. This early return
@@ -3405,7 +3419,21 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                     std::cerr << "[GMRES FAILURE] Exceeded max NaN retries (" << max_nan_failures
                               << "), returning failure status to trigger trust-region fallback" << std::endl;
                     // v20.14r25: Use halo-zeroed norm for final_residual (contract: all paths consistent).
-                    auto r_true_nan = r_true.clone();
+                    // R13.23 (deep review P0-5): THE SOLUTION AND THE RESIDUAL MUST BE THE SAME
+                    // SOLVE'S. This returned `x = zeros_like(x0)` alongside the CURRENT iterate's
+                    // residual, so `r_true != b - A(x_returned)` -- one GMRESResult carrying two
+                    // different solves. Downstream that residual feeds trust prediction, per-block
+                    // analysis and the exit receipt, none of which correspond to the x handed back.
+                    //
+                    // Option B from the review: keep the zero solution -- which is what
+                    // NanRetryExhausted means, "no usable step" -- and return the residual that
+                    // belongs to it. At x = 0 that is `b`, which is exactly what this file already
+                    // writes at :1154 and :2592 for the same situation.
+                    //
+                    // A consequence worth naming: with x = 0 the ratios rho_D = rho_S = 1 are now
+                    // ARITHMETICALLY TRUE (||b||/||b||), where R13.21 stamped 1.0 on top of a
+                    // mismatched pair and the review correctly called that fabricated.
+                    auto r_true_nan = b.detach().clone();
                     zero_halo_regions(r_true_nan, halo_width, periodic_x, periodic_y);
                     float r_norm = guarded_item<float>(safe_tensor_norm(r_true_nan));
                     // v20.14r37: Include current restart's j (same fix as early-breakdown path).
@@ -3414,7 +3442,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                             torch::zeros_like(x0), false,
                             total_arnoldi_iters + j, r_norm, 1.0f,
                             "NaN failures exceeded max retries",
-                            r_true.detach().clone(), iter, false, false};
+                            b.detach().clone(), iter, false, false};
                     res.termination_reason = KTR::NanRetryExhausted;
                     res.initial_rel_error = initial_rel_error_fgmres;
                     // R13.21 (external review P1-2): COMPLETE THE RECEIPT. This early return
@@ -5700,6 +5728,45 @@ public:
             // calls it "conservative" and describes a per-iteration tightening, not a geometric
             // one. Seeded fresh here, it is what that comment says.
             float krylov_tol_adaptive = static_cast<float>(options_.krylov_tol);
+            // R13.23 (P0-3): the post-scaled solve candidate, before halo zeroing and the
+            // direct-U override, so a probe can report how far what it measured is from what the
+            // solve produced. Empty unless a probe is armed.
+            torch::Tensor probe_dK_from_solve;
+            // R13.23 (P0-3): how far the probed candidate is from the one the solve produced.
+            // -1 when the capture is absent, which is "not measured", not "identical".
+            auto candidate_delta = [&](const torch::Tensor& probed) -> double {
+                torch::NoGradGuard ng_delta;
+                if (!probe_dK_from_solve.defined() || !probed.defined() ||
+                    probe_dK_from_solve.numel() != probed.numel()) {
+                    return -1.0;
+                }
+                const double base =
+                    probe_dK_from_solve.to(torch::kFloat64).norm().item<double>();
+                if (!(base > 0.0)) return -1.0;
+                return (probed.detach() - probe_dK_from_solve)
+                           .to(torch::kFloat64).norm().item<double>() / base;
+            };
+            auto candidate_merits = [&](const torch::Tensor& R_ref, const torch::Tensor& R_cand,
+                                        double& raw_before, double& raw_after,
+                                        double& s_before, double& s_after,
+                                        bool& s_measured) {
+                // R13.23: the guard lives INSIDE the lambda. Defined at loop-body scope, its
+                // protection would otherwise depend on the call site -- which is exactly the
+                // scope trap this project recorded (a NoGradGuard whose block had already closed).
+                torch::NoGradGuard ng_merit;
+                raw_before = R_ref.to(torch::kFloat64).norm().item<double>();
+                raw_after  = R_cand.to(torch::kFloat64).norm().item<double>();
+                s_measured = S_inv_diag_.defined() &&
+                             S_inv_diag_.numel() == R_ref.numel();
+                if (s_measured) {
+                    s_before = (S_inv_diag_ * R_ref).to(torch::kFloat64).norm().item<double>();
+                    s_after  = (S_inv_diag_ * R_cand).to(torch::kFloat64).norm().item<double>();
+                } else {
+                    s_before = -1.0;
+                    s_after = -1.0;
+                }
+            };
+
             // R13.20 (round 9, R9-5): which knob BOUND this iteration's inner tolerance.
             // Declared here, inside the Newton loop body, so it cannot inherit the previous
             // iteration's answer -- its predecessor was a bool declared outside the loop and
@@ -9841,6 +9908,20 @@ public:
                     torch::NoGradGuard ng_snap;
                     ledger_dK_solve = dK.detach().clone();
                 }
+                // R13.23 (deep review P0-3): CANDIDATE PROVENANCE. The probes evaluate `dK`, and
+                // the comment directly above names two mutations that happen to it after the
+                // solve -- halo zeroing, and the direct-U override of the `ru` block. So the thing
+                // a probe measures is not necessarily the thing GMRES returned, and calling it
+                // "the GMRES candidate" is unearned until the difference is measured. Captured
+                // here, after the S-scaling (a coordinate change, not a different candidate) and
+                // before those two mutations. Only when a probe is armed -- a full state clone per
+                // Newton iteration is not free.
+                if (dK.defined() &&
+                    (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_TERMINAL_TAYLOR") ||
+                     wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_DISCARDED_CANDIDATE"))) {
+                    torch::NoGradGuard ng_prov;
+                    probe_dK_from_solve = dK.detach().clone();
+                }
 
                 // Zero halo components in dK before K += dK update.
                 // v20.14r27g: Halo mask is DISABLED in GMRES operator (v20.14r26),
@@ -11356,26 +11437,6 @@ public:
             // The stage GATE metric is deliberately not evaluated here: it is a stage-level
             // quantity computed after the solve completes, and inventing it at a candidate would
             // be exactly the fabrication this increment is closing elsewhere.
-            auto candidate_merits = [&](const torch::Tensor& R_ref, const torch::Tensor& R_cand,
-                                        double& raw_before, double& raw_after,
-                                        double& s_before, double& s_after,
-                                        bool& s_measured) {
-                // R13.23: the guard lives INSIDE the lambda. Defined at loop-body scope, its
-                // protection would otherwise depend on the call site -- which is exactly the
-                // scope trap this project recorded (a NoGradGuard whose block had already closed).
-                torch::NoGradGuard ng_merit;
-                raw_before = R_ref.to(torch::kFloat64).norm().item<double>();
-                raw_after  = R_cand.to(torch::kFloat64).norm().item<double>();
-                s_measured = S_inv_diag_.defined() &&
-                             S_inv_diag_.numel() == R_ref.numel();
-                if (s_measured) {
-                    s_before = (S_inv_diag_ * R_ref).to(torch::kFloat64).norm().item<double>();
-                    s_after  = (S_inv_diag_ * R_cand).to(torch::kFloat64).norm().item<double>();
-                } else {
-                    s_before = -1.0;
-                    s_after = -1.0;
-                }
-            };
 
             // R13.22: WAS THE DISCARDED CANDIDATE A DESCENT DIRECTION?
                 //
@@ -11426,6 +11487,8 @@ public:
                               << " would_reduce_S_merit=" << (would_reduce_S ? 1 : 0)
                               << " gate_metric_evaluated=0"
                               << " trust_region_saw_it=0"
+                              // R13.23 (P0-3): 0 means the probed candidate IS the solve's.
+                              << " candidate_delta_vs_solve=" << candidate_delta(dK)
                               << " K_mutated=0"
                               << std::endl;
                 }
@@ -12800,6 +12863,7 @@ public:
                                       << ((s_ok && std::isfinite(sRfull) && std::isfinite(sR) &&
                                            sRfull < sR) ? 1 : 0)
                                       << " gate_metric_evaluated=0"
+                                      << " candidate_delta_vs_solve=" << candidate_delta(dK)
                                       // R13.23 (section 12): NAMED FOR WHAT IT MEASURES. This said
                                       // `state_mutated=0`, which claims non-interference the probe
                                       // never established: it calls apply_jacobian and compute_rhs,
