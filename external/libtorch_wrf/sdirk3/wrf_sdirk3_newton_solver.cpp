@@ -11702,6 +11702,36 @@ public:
 
             float prev_candidate_norm_val = -1.0f;  // v20.14r27l: track for short-circuit
             bool forced_scaled_tried = false;  // v20.14r27m: one forced-scale attempt on same-candidate
+            // R13.23 (self-review round 3): the derivation this increment reasons from --
+            //
+            //     step_accepted = !candidate && !entry_mismatch_rejected
+            //     total_failure = !step_accepted && !rescued
+            //     loop entered  = !step_accepted && !total_failure  ==  rescued
+            //
+            // -- is a MODEL of the direct-accept path, and a model with no consumer is a comment.
+            // Production evaluates it here against the flags as they actually stand, and says so
+            // the moment they diverge: if a third site learns to set `step_accepted`, or the
+            // total-failure predicate gains a term, the conclusion that "a rescue is the sole
+            // entry into the trust loop" silently stops being true. Silent when correct.
+            if (!wrf::sdirk3::g_sdirk3_config.nk_trust_region) {
+                const bool modelled = wrf::sdirk3::shortcut_path_enters_trust_loop(
+                    gmres_total_failure_candidate, entry_mismatch_step_rejected,
+                    arbitration_rescued);
+                const bool actual = !step_accepted && !gmres_total_failure;
+                if (modelled != actual) {
+                    std::cerr << "SDIRK3_SHORTCUT_MODEL_MISMATCH stage=" << stage
+                              << " newton_iter=" << newton_iter
+                              << " modelled=" << (modelled ? 1 : 0)
+                              << " actual=" << (actual ? 1 : 0)
+                              << " candidate=" << (gmres_total_failure_candidate ? 1 : 0)
+                              << " entry_mismatch_rejected=" << (entry_mismatch_step_rejected ? 1 : 0)
+                              << " rescued=" << (arbitration_rescued ? 1 : 0)
+                              << " step_accepted=" << (step_accepted ? 1 : 0)
+                              << " total_failure=" << (gmres_total_failure ? 1 : 0)
+                              << std::endl;
+                }
+            }
+
             // R13.23 (self-review): the loop condition is a fixtured rule, because it is what
             // makes a rescued candidate land somewhere. Note this loop is NOT gated on
             // nk_trust_region -- only the direct-accept shortcut above is.

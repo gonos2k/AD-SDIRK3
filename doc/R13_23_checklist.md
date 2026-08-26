@@ -383,3 +383,48 @@ Manifest corrected and verified on the live dt=600 run:
 ```
 
 ctest 62/62; ratchets green; fixtures 180 → **185**. **Independent review: NOT RUN.**
+
+---
+
+## Fourth self-review round — I committed the defect I had just corrected
+
+Six of the seven rules added across this increment are consumed by production. The seventh —
+`shortcut_path_enters_trust_loop`, added in round 3 **while writing about the importance of
+wiring** — had fixtures and no caller. That is the campaign's signature class, committed by me in
+the increment that corrected someone else's version of it.
+
+A rule with no consumer is a comment with a test. The derivation it encodes is a **model** of the
+direct-accept path, so production now evaluates it against the flags as they actually stand and
+speaks only when they diverge:
+
+```cpp
+if (!nk_trust_region) {
+    const bool modelled = shortcut_path_enters_trust_loop(candidate, entry_mismatch_rejected,
+                                                          arbitration_rescued);
+    const bool actual = !step_accepted && !gmres_total_failure;
+    if (modelled != actual) std::cerr << "SDIRK3_SHORTCUT_MODEL_MISMATCH ...";
+}
+```
+
+If a third site learns to set `step_accepted`, or the total-failure predicate gains a term, the
+conclusion *"a rescue is the sole entry into the trust loop"* stops being true — and now says so
+instead of quietly becoming false. This is a **contract, not a measurement**: silence means the
+model still matches, not that anything was measured.
+
+**Two preconditions of that model checked rather than assumed.** Both flags it reads are
+iteration-local: `gmres_total_failure_candidate` is a `const bool` initialised at `:11290` and
+`entry_mismatch_step_rejected` is declared with `= false` at `:11348`, both inside the
+`newton_iter` loop body (that variable is in scope throughout the region). A flag that survived an
+iteration would have made the model wrong from the second Newton step onward.
+
+**Also checked, and clean:** `rhs_budget` is a per-mechanism pool for trust attempts and the line
+search — the direct-accept shortcut's own `compute_rhs` does not charge it either, so the
+arbitration not charging is consistent, not an evasion. No README or CI manifest states a check
+count that the 157 → 185 growth would have invalidated. One solver instance is constructed in the
+live run, so the unconditional `[BC RECEIPT]` cannot multiply.
+
+**Default-path invariance MEASURED, not asserted.** The dt=600 run was repeated with the model
+check compiled in and every `SDIRK3_*` telemetry line is **byte-identical** to the run before it;
+`SDIRK3_SHORTCUT_MODEL_MISMATCH` fired **0** times.
+
+ctest 62/62; ratchets green; fixtures **185**. **Independent review: NOT RUN.**
