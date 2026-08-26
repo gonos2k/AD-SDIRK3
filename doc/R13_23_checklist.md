@@ -338,3 +338,48 @@ loop not entered — is now unrepresentable.
 Both manifest rows verified on the live dt=600 run. ctest 62/62; ratchets green; fixtures 175 → **180**.
 
 **Independent review: NOT RUN.**
+
+---
+
+## Third self-review round — two of my own claims corrected, one hypothesis refuted
+
+**Refuted: "a rejected candidate would be applied anyway."** The chase looked strong. `dK_scaled`
+initialises to `dK`, not zero (`newton_solver.cpp:11231`); the update `K = K + alpha * dK_scaled`
+(`:12645`) is **not** enclosed by any block testing `step_accepted`; and inside the trust loop
+`dK_scaled` is assigned at exactly one site (`:12131`), together with `step_accepted = true`. So a
+loop that rejected everything looked like it would still apply the full untested step. **It does
+not** — `:12188` zeroes `dK_scaled` when `!step_accepted`, and the comment above it says why. Third
+time this session that reading forty lines further retracted a claim before it was made.
+
+**Corrected: "the trust loop still runs up to 3 attempts."** That was my round-1 manifest note, and
+it is true syntactically and misleading in practice. On the direct-accept path every outcome that
+does not accept *also* raises the total-failure flag, and the loop needs **both** false. So the
+loop body does not execute — which the shortcut's own comment already stated plainly
+(`:12169`: *"trust neither accepted nor rejected, it never ran"*). I had read the absence of a
+syntactic gate as evidence of execution.
+
+**What survives is sharper than what I claimed.** On the shipped configuration the entry condition
+reduces exactly:
+
+```
+step_accepted = !candidate && !entry_mismatch_rejected
+total_failure = !step_accepted && !rescued
+loop entered  = !step_accepted && !total_failure   ==   rescued
+```
+
+The arbitration rescue is the **sole entry into the trust loop**. So the rescue is not "handing the
+step back to a mechanism that was running anyway" — it **starts a mechanism this configuration
+otherwise never runs**. That is a stronger statement about the feature than the one it replaces,
+and it is now a fixtured rule with the unreachable input (`rescued` without a `candidate`) pinned
+so it cannot manufacture an entry.
+
+Manifest corrected and verified on the live dt=600 run:
+
+```
+[CONFIG AUTHORITY] nk_trust_region compiled_default=true effective=false  <-- OVERRIDDEN
+  [false = DIRECT-ACCEPT SHORTCUT: the trust loop is not syntactically gated on this flag, but
+   every non-accepting path here also raises the total-failure flag, so the loop body does NOT
+   execute -- trust neither accepts nor rejects, it never runs]
+```
+
+ctest 62/62; ratchets green; fixtures 180 → **185**. **Independent review: NOT RUN.**

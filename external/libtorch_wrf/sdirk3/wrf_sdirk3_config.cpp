@@ -2065,8 +2065,9 @@ void SDIRK3Config::load_from_env() {
         // of five wrong on the first attempt -- a manifest that prints a false "compiled_default"
         // is worse than none, because it looks authoritative.
         row("nk_trust_region",           true,  nk_trust_region,             // :880
-            "  [false = DIRECT-ACCEPT SHORTCUT FIRST, not 'no trust region': the trust loop is not"
-            " gated on this flag and still runs up to 3 attempts]");
+            "  [false = DIRECT-ACCEPT SHORTCUT: the trust loop is not syntactically gated on this"
+            " flag, but every non-accepting path here also raises the total-failure flag, so the"
+            " loop body does NOT execute -- trust neither accepts nor rejects, it never runs]");
         row("nk_line_search",            false, nk_line_search,              // :841
             "  [NO REACHABLE CONSUMER: the Armijo guard is closed -- see line_search_skipped()]");
         row("use_autograd",              false, use_autograd);               // :220

@@ -1829,6 +1829,30 @@ int main() {
               "does not have");
     }
 
+    {
+        // R13.23 (self-review round 2): CORRECTS round 1. The trust loop is not syntactically
+        // gated on nk_trust_region, but on the direct-accept path every non-accepting outcome
+        // also raises the total-failure flag -- and the loop needs BOTH false. So the loop body
+        // does not execute, exactly as the shortcut's own comment says ("it never ran"), and the
+        // arbitration rescue is the SOLE entry into it on the shipped configuration.
+        using wrf::sdirk3::shortcut_path_enters_trust_loop;
+
+        check(shortcut_path_enters_trust_loop(/*candidate=*/true, /*mismatch=*/false,
+                                              /*rescued=*/true),
+              "a rescued total-failure candidate is the ONE input that leaves both flags false, "
+              "so the rescue does not hand the step back to a running mechanism -- it STARTS a "
+              "mechanism this configuration otherwise never runs");
+        check(!shortcut_path_enters_trust_loop(true, false, /*rescued=*/false),
+              "an unrescued candidate raises total-failure, which blocks the loop");
+        check(!shortcut_path_enters_trust_loop(/*candidate=*/false, /*mismatch=*/false, false),
+              "the ordinary path accepts the full step, so the loop condition is already false");
+        check(!shortcut_path_enters_trust_loop(false, /*mismatch=*/true, false),
+              "a failed entry-mismatch decrease check routes to total-failure, not to the loop");
+        check(!shortcut_path_enters_trust_loop(/*candidate=*/false, false, /*rescued=*/true),
+              "and a rescue without a candidate is not a reachable input: the arbitration only "
+              "fires on one, so this must not manufacture an entry");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1845,7 +1869,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 180;
+    constexpr int expected_checks = 185;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

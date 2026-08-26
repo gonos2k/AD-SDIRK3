@@ -767,6 +767,35 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
     return true;
 }
 
+// R13.23 (self-review, round 2): on the direct-accept path, WHEN is the trust loop entered?
+//
+// This corrects the round-1 note. "The loop is not gated on nk_trust_region" is true
+// syntactically and misleading in practice: with the flag false, every path through the shortcut
+// that does NOT accept also raises the total-failure flag, and the loop's condition needs both to
+// be false. So the loop body does not execute -- which is what the shortcut's own comment already
+// says ("trust neither accepted nor rejected, it never ran").
+//
+// The one exception is the arbitration rescue, and that makes it the SOLE entry into the trust
+// loop on the shipped configuration:
+//
+//     step_accepted  = !candidate && !entry_mismatch_rejected
+//     total_failure  = !step_accepted && !rescued
+//     loop entered   = !step_accepted && !total_failure   ==   rescued
+//
+// Worth stating plainly because it sets what the rescue is really doing: not "handing the step
+// back to a mechanism that was running anyway", but STARTING a mechanism this configuration
+// otherwise never runs.
+inline bool shortcut_path_enters_trust_loop(bool total_failure_candidate,
+                                            bool entry_mismatch_rejected,
+                                            bool arbitration_rescued) {
+    // The arbitration only fires on a total-failure candidate, so a rescue without one is not a
+    // reachable input; treat it as no rescue rather than inventing an entry.
+    const bool rescued = arbitration_rescued && total_failure_candidate;
+    const bool step_accepted = !total_failure_candidate && !entry_mismatch_rejected;
+    const bool total_failure = !step_accepted && !rescued;
+    return !step_accepted && !total_failure;
+}
+
 // R13.23 (self-review): where does a RESCUED candidate go?
 //
 // The arbitration clears the total-failure veto without accepting the step, which is only
