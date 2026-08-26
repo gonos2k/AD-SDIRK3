@@ -428,3 +428,36 @@ check compiled in and every `SDIRK3_*` telemetry line is **byte-identical** to t
 `SDIRK3_SHORTCUT_MODEL_MISMATCH` fired **0** times.
 
 ctest 62/62; ratchets green; fixtures **185**. **Independent review: NOT RUN.**
+
+---
+
+## Fifth self-review round — a receipt that suppresses changes to fields it prints
+
+The boundary receipt re-emits only when its content changes, which makes its dedup key a
+**contract**: every field the receipt prints must be in it, or a change to that field is silently
+suppressed and the record keeps showing the old value. Comparing the printed fields against the
+hand-packed key found **three that were printed and not keyed**:
+
+| printed | keyed | consequence |
+|---|---|---|
+| `my=(mypx,mypy)` | **no** | an interior-rank move that leaves the effective flags alone goes unreported, and the record shows a stale rank |
+| `eff_x` / `eff_y`, `specified`, `nested` | **no** | the effective side could move without the raw side and be suppressed — precisely the np>1 case the receipt exists for |
+| `setter_call=N` | no (correctly) | but the label was wrong — see below |
+
+Bit-packing is what made this easy to get wrong: each new field needs a free range, and the
+question "is everything in here?" has no natural answer. The key is now a mixing hash in
+`wrf_sdirk3_first_failure.h` that production consumes, and **eight fixtures pin the contract by
+varying each printed field alone and requiring the key to move** — including a check that identical
+content still dedups, so the fix cannot degenerate into re-emitting on every call.
+
+**The counter was mislabelled, and I quoted it.** `bc_setter_calls_` must *not* be keyed — keying it
+would re-emit on every call and destroy the dedup — but that means it freezes at the call that
+first produced the content. `setter_call=1` therefore never meant "the setter ran once"; it meant
+"this content was first seen at call 1". It is now printed as `first_emit_at_setter_call`, with the
+dedup stated at the site. The ordering conclusion in round 1 is unaffected: that rested on line
+numbers in the log (`:138`/`:145` before, `:283` receipt, `:289` setter), not on the counter.
+
+Verified on the live dt=600 run, and the default path is **measured** unchanged: every `SDIRK3_*`
+telemetry line is byte-identical to the previous run.
+
+ctest 62/62; ratchets green; fixtures 185 → **193**. **Independent review: NOT RUN.**

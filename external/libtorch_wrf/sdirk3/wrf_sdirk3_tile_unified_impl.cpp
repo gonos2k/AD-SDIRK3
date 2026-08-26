@@ -30633,21 +30633,27 @@ void TileSDIRK3UnifiedSolver::setBoundaryConditions(
 // (SDIRK3_MPI_STAGE_HALO_UNSUPPORTED), verified in the tree, not assumed -- and `gcfg_matches_
 // effective` is the field that will say so the moment that refusal is lifted.
 void TileSDIRK3UnifiedSolver::emitBoundaryReceipt_() {
+    // R13.23 (self-review round 5): the key is a CONTRACT -- every field printed below must be in
+    // it, or a change to that field is silently suppressed. The first version keyed the flags and
+    // the proc grid but printed `my=(mypx,mypy)` unkeyed. It lives in wrf_sdirk3_first_failure.h
+    // where fixtures vary each printed field alone and require the key to move.
     auto bit = [](bool b, int shift) { return b ? (uint64_t{1} << shift) : uint64_t{0}; };
-    const uint64_t key =
+    const uint64_t raw_bits =
         bit(raw_flags_periodic_x_, 0)  | bit(raw_flags_periodic_y_, 1)  |
         bit(raw_flags_symmetric_xs_, 2)| bit(raw_flags_symmetric_xe_, 3)|
         bit(raw_flags_symmetric_ys_, 4)| bit(raw_flags_symmetric_ye_, 5)|
         bit(raw_flags_open_xs_, 6)     | bit(raw_flags_open_xe_, 7)     |
         bit(raw_flags_open_ys_, 8)     | bit(raw_flags_open_ye_, 9)     |
-        bit(raw_flags_specified_, 10)  | bit(raw_flags_nested_, 11)     |
-        bit(config_flags_symmetric_xs_, 12) | bit(config_flags_symmetric_xe_, 13) |
-        bit(config_flags_symmetric_ys_, 14) | bit(config_flags_symmetric_ye_, 15) |
-        bit(config_flags_open_xs_, 16)      | bit(config_flags_open_xe_, 17)      |
-        bit(config_flags_open_ys_, 18)      | bit(config_flags_open_ye_, 19)      |
-        (static_cast<uint64_t>(nprocx_ & 0xFFFF) << 20) |
-        (static_cast<uint64_t>(nprocy_ & 0xFFFF) << 36) |
-        (uint64_t{1} << 63);   // marks "emitted", so an all-false first call is not mistaken for none
+        bit(raw_flags_specified_, 10)  | bit(raw_flags_nested_, 11);
+    const uint64_t effective_bits =
+        bit(config_flags_periodic_x_, 0) | bit(config_flags_periodic_y_, 1) |
+        bit(config_flags_symmetric_xs_, 2) | bit(config_flags_symmetric_xe_, 3) |
+        bit(config_flags_symmetric_ys_, 4) | bit(config_flags_symmetric_ye_, 5) |
+        bit(config_flags_open_xs_, 6)      | bit(config_flags_open_xe_, 7)      |
+        bit(config_flags_open_ys_, 8)      | bit(config_flags_open_ye_, 9)      |
+        bit(config_flags_specified_, 10)   | bit(config_flags_nested_, 11);
+    const uint64_t key = wrf::sdirk3::boundary_receipt_key(
+        raw_bits, effective_bits, nprocx_, nprocy_, mypx_, mypy_);
 
     // First call always speaks; later calls only when something they report actually changed.
     // A setter that is called repeatedly with identical flags is not news; one that changes a
@@ -30673,7 +30679,9 @@ void TileSDIRK3UnifiedSolver::emitBoundaryReceipt_() {
         gcfg.periodic_y == config_flags_periodic_y_;
 
     auto b = [](bool v) { return v ? 1 : 0; };
-    std::cerr << "[BC RECEIPT] setter_call=" << bc_setter_calls_
+    // NOT a tally: the receipt is content-deduped, so this is frozen at the call that first
+    // produced this content. Identical later calls are silent by design.
+    std::cerr << "[BC RECEIPT] first_emit_at_setter_call=" << bc_setter_calls_
               << " proc_grid=" << nprocx_ << "x" << nprocy_
               << " my=(" << mypx_ << "," << mypy_ << ")"
               << " projection_is_identity=" << b(projection_is_identity)

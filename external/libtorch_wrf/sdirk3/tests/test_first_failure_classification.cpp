@@ -1853,6 +1853,37 @@ int main() {
               "fires on one, so this must not manufacture an entry");
     }
 
+    {
+        // R13.23 (self-review round 5): the receipt's dedup key is a CONTRACT -- every field the
+        // receipt prints must be in it, or a change to that field is silently suppressed and the
+        // record keeps showing the old value. Each check varies ONE printed field and requires the
+        // key to move. The first version printed the rank position unkeyed; this is what would
+        // have caught it.
+        using wrf::sdirk3::boundary_receipt_key;
+        const uint64_t base = boundary_receipt_key(0x0A5, 0x0A5, 2, 3, 1, 2);
+
+        check(base != 0,
+              "an all-false, all-zero state must not hash to the 'nothing emitted yet' sentinel, "
+              "or the very first receipt would re-emit forever");
+        check(boundary_receipt_key(0x0A4, 0x0A5, 2, 3, 1, 2) != base,
+              "a change in the RAW flags moves the key");
+        check(boundary_receipt_key(0x0A5, 0x0A4, 2, 3, 1, 2) != base,
+              "...and so does a change in the EFFECTIVE flags alone, which is the whole point of "
+              "printing both: at np>1 they diverge without the raw side moving");
+        check(boundary_receipt_key(0x0A5, 0x0A5, 4, 3, 1, 2) != base,
+              "a change in nprocx moves the key");
+        check(boundary_receipt_key(0x0A5, 0x0A5, 2, 4, 1, 2) != base,
+              "a change in nprocy moves the key");
+        check(boundary_receipt_key(0x0A5, 0x0A5, 2, 3, 0, 2) != base,
+              "a change in mypx moves the key -- this is the field the hand-packed version PRINTED "
+              "but did not key, so an interior-rank move would have gone unreported");
+        check(boundary_receipt_key(0x0A5, 0x0A5, 2, 3, 1, 0) != base,
+              "and a change in mypy moves it too");
+        check(boundary_receipt_key(0x0A5, 0x0A5, 2, 3, 1, 2) == base,
+              "while identical content gives an identical key -- otherwise the dedup would be a "
+              "re-emit on every call and the receipt would drown its own signal");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1869,7 +1900,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 185;
+    constexpr int expected_checks = 193;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

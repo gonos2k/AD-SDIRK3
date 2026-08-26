@@ -767,6 +767,36 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
     return true;
 }
 
+// R13.23 (self-review round 5): the boundary receipt's dedup key.
+//
+// The receipt re-emits only when its content changes. That makes the key a CONTRACT: every field
+// the receipt prints must be in it, or a change to that field is silently suppressed and the
+// record keeps showing the old value. Hand-packing bit ranges made this easy to get wrong -- the
+// first version printed the rank position `my=(mypx,mypy)` without keying it, so an interior-rank
+// move that left the effective flags alone would have gone unreported.
+//
+// A mixing hash removes the bit-budget question entirely, and the fixtures pin the contract by
+// varying each printed field ALONE and requiring the key to move.
+//
+// The setter call counter is deliberately NOT keyed: including it would re-emit on every call and
+// destroy the dedup. Which is exactly why the receipt labels it `first_emit_at_setter_call` --
+// frozen at first emission, it is not a tally of how many times the setter ran.
+inline uint64_t boundary_receipt_key(uint64_t raw_flag_bits, uint64_t effective_flag_bits,
+                                     int nprocx, int nprocy, int mypx, int mypy) {
+    auto mix = [](uint64_t h, uint64_t v) {
+        h ^= v + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        return h;
+    };
+    uint64_t h = 0x9e3779b97f4a7c15ULL;   // nonzero seed: an all-false state must not look "never emitted"
+    h = mix(h, raw_flag_bits);
+    h = mix(h, effective_flag_bits);
+    h = mix(h, static_cast<uint64_t>(static_cast<uint32_t>(nprocx)));
+    h = mix(h, static_cast<uint64_t>(static_cast<uint32_t>(nprocy)));
+    h = mix(h, static_cast<uint64_t>(static_cast<uint32_t>(mypx)));
+    h = mix(h, static_cast<uint64_t>(static_cast<uint32_t>(mypy)));
+    return h == 0 ? 1 : h;               // 0 is the "nothing emitted yet" sentinel
+}
+
 // R13.23 (self-review, round 2): on the direct-accept path, WHEN is the trust loop entered?
 //
 // This corrects the round-1 note. "The loop is not gated on nk_trust_region" is true
