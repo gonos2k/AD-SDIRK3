@@ -12519,9 +12519,12 @@ public:
 
             // v20.14r27g: Skip line search when step is zero (all trust-region attempts rejected)
             // or dK_scaled is negligible. Running Armijo on a zero step wastes 10 RHS evals.
-            bool skip_line_search = !step_accepted;
-            // Phase 3C: Skip LS when TR accepted (step quality validated by rho) or budget exhausted
-            if (step_accepted || rhs_budget <= 0) skip_line_search = true;
+            // Phase 3C: Skip LS when TR accepted (step quality validated by rho) or budget
+            // exhausted. R13.23 (self-review): these two conditions together cover BOTH values of
+            // step_accepted, so this is unconditionally true and the line search below is
+            // unreachable. The guard now lives in wrf_sdirk3_first_failure.h where fixtures pin
+            // that fact -- unchanged in behaviour, and deliberately not repaired here.
+            bool skip_line_search = wrf::sdirk3::line_search_skipped(step_accepted, rhs_budget);
             if (!skip_line_search) {
                 torch::NoGradGuard no_grad;
                 float dK_scaled_norm_check = dK_scaled.norm().to(torch::kCPU).item<float>();

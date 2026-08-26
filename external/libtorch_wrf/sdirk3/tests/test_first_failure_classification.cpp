@@ -1780,6 +1780,31 @@ int main() {
               "per-edge, not per-rank");
     }
 
+    {
+        // R13.23 (self-review): the Armijo line search is UNREACHABLE, and these pins record that
+        // as a finding rather than repairing it. `nk_line_search` is fully wired -- Registry,
+        // Fortran bridge, C++ config, env, and forwarded to options_.use_line_search -- and the
+        // authority manifest reports it effective=true on the live run. None of that matters:
+        // the guard in front of it is closed.
+        using wrf::sdirk3::line_search_skipped;
+
+        check(line_search_skipped(true, 100),
+              "step accepted, budget available: skipped by (B) -- trust-region rho already "
+              "validated the step");
+        check(line_search_skipped(false, 100),
+              "step NOT accepted, budget available: skipped by (A) -- and this is the case the "
+              "line search would exist to serve, so the two guards together close the door");
+        check(line_search_skipped(true, 0),
+              "step accepted, budget exhausted: skipped");
+        check(line_search_skipped(false, 0),
+              "step NOT accepted, budget exhausted: skipped");
+        check(line_search_skipped(true, 100) && line_search_skipped(false, 100),
+              "(A) covers !step_accepted and (B) covers step_accepted, so the guard is a CLOSURE "
+              "over both values -- no input reaches the line search. If someone deliberately "
+              "reopens the path this pin fails, which is the point: reopening a globalization "
+              "strategy is a numerics change to be measured, not a drive-by fix");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1796,7 +1821,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 170;
+    constexpr int expected_checks = 175;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

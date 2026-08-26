@@ -236,3 +236,67 @@ probe env, so it is not the same configuration as the arbitration A/B above. Its
 exit has no complete Krylov exit receipt, and the record declines to invent a subtype.
 
 **Independent review: NOT RUN.**
+
+---
+
+## Self-review after the checklist closed
+
+Four claims from the two closing phases were attacked. Three held; the fourth turned up a defect
+that neither the external review nor the checklist had asked about.
+
+**Held — "the gcfg sync move is behaviour-identical."** The two consumers that now run *after* the
+sync instead of before it read `g_sdirk3_config` only for `debug_level`
+(`update_boundary_periodicity`, `newton_solver.cpp:13797`); the `grid_info_` assignment reads no
+global at all. The claim was checked rather than repeated.
+
+**Held — "`measured()` is not weaker than the `std::isfinite` it replaced."** `measured(v)` is
+`v == v && v >= 0 && v < inf`: it rejects NaN and infinity like `isfinite`, and additionally
+rejects the −1.0 sentinel. The extraction strengthened the guard rather than loosening it.
+
+**Held — the changed log strings have no consumer.** The `initial_converged` lesson says a wire
+string with a reader must not be renamed. `Boundary conditions:` and the `periodic_x=` lines were
+grepped across `tests/`, `.github/` and the contract suite: no test or CI job keys on either, so
+the `PRE-SETTER` labels are safe. (One correction to my own reasoning along the way: a first
+brace-depth scan said the line-search block sat inside the trust-OFF branch. Recomputed properly,
+that block closes at `newton_solver.cpp:11416` and the line search is on the trust-ON path.)
+
+**FAILED — "the rescued candidate goes to the line search."** It does not, and the reason is worse
+than the mistake. `nk_line_search` is fully wired (Registry → Fortran bridge → C++ config → env →
+`options_.use_line_search`) and the authority manifest reports it **effective=true**. But the guard
+in front of the Armijo block is a closure:
+
+```cpp
+bool skip = !step_accepted;                          // (A) covers not-accepted
+if (step_accepted || rhs_budget <= 0) skip = true;   // (B) covers accepted
+```
+
+(A) and (B) together cover both values of `step_accepted`, so `skip` is **unconditionally true**:
+the dK-magnitude refinement under it is dead, and the line search cannot run on any input. This is
+the *coarse guard preempts its refinement* shape — (A) was the original skip, (B) was added later
+for a different reason, and together they closed the door. It is also the campaign's signature
+class: **a knob wired end to end whose consumer is unreachable**, reported as ON.
+
+Deliberately **not repaired.** Reopening a globalization strategy inside a solver whose convergence
+is under measurement is a numerics change that must be opt-in and measured, not a drive-by fix. So
+the finding is pinned instead: the guard moved into `wrf_sdirk3_first_failure.h`, **production
+consumes it** (so it cannot drift from the pins), and five fixtures assert it is true on all four
+`(step_accepted × rhs_budget)` corners. If anyone reopens the path, the pins fail and say why.
+
+And the manifest is corrected, because **a value is not an effect** — printing `effective=true` for
+a knob that cannot change anything is the same trap 6.2 was written to close, one level up:
+
+```
+[CONFIG AUTHORITY] nk_line_search compiled_default=false effective=true  <-- OVERRIDDEN
+  [NO REACHABLE CONSUMER: the Armijo guard is closed -- see line_search_skipped()]
+```
+
+**Verified on the live dt=600 run**, not just compiled — the manifest note, both `PRE-SETTER`
+labels and the receipt all appear in `rsl.error.0000`:
+
+```
+  periodic_x=0, periodic_y=0  (PRE-SETTER defaults)
+  Boundary conditions (PRE-SETTER defaults; see [BC RECEIPT] for effective):
+[BC RECEIPT] setter_call=1 proc_grid=1x1 projection_is_identity=1 gcfg_matches_effective=1
+```
+
+ctest 62/62; ratchets green; fixtures 170 → **175**. **Independent review: NOT RUN.**

@@ -767,6 +767,30 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
     return true;
 }
 
+// R13.23 (self-review): is the Armijo line search reachable? MEASURED: no.
+//
+// The production guard is two lines and they form a closure:
+//
+//     bool skip = !step_accepted;                          // (A) covers the not-accepted case
+//     if (step_accepted || rhs_budget <= 0) skip = true;   // (B) covers the accepted case
+//
+// (A) and (B) between them cover both values of step_accepted, so `skip` is unconditionally true
+// and neither the dK-magnitude refinement below it nor the line search itself can run. This is
+// the "coarse guard preempts its refinement" shape: (A) was the original coarse skip, (B) was
+// added later for a different reason, and together they close the door.
+//
+// The rule is extracted here -- and CONSUMED by the solver, so it cannot drift from what the
+// fixtures pin -- deliberately WITHOUT repairing it. Making the line search reachable would put
+// a globalization strategy back into a solver whose convergence behaviour is under measurement,
+// which is a numerics change that has to be opt-in and measured, not a drive-by fix. What the
+// fixtures pin is the FINDING: as shipped, `nk_line_search` has no reachable consumer, whatever
+// the Registry sets it to. If someone deliberately reopens the path, the pins fail and say so.
+inline bool line_search_skipped(bool step_accepted, int rhs_budget) {
+    bool skip = !step_accepted;                           // (A)
+    if (step_accepted || rhs_budget <= 0) skip = true;    // (B)
+    return skip;
+}
+
 // R13.23 6.3: the boundary-flag projection, as a rule a fixture can reject.
 //
 // Two flag sets exist and conflating them is the whole hazard: `raw` is global-domain metadata
