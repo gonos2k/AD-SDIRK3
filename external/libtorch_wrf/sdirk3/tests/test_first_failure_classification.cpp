@@ -1780,6 +1780,110 @@ int main() {
               "per-edge, not per-rank");
     }
 
+    {
+        // R13.23 (self-review): the Armijo line search is UNREACHABLE, and these pins record that
+        // as a finding rather than repairing it. `nk_line_search` is fully wired -- Registry,
+        // Fortran bridge, C++ config, env, and forwarded to options_.use_line_search -- and the
+        // authority manifest reports it effective=true on the live run. None of that matters:
+        // the guard in front of it is closed.
+        using wrf::sdirk3::line_search_skipped;
+
+        check(line_search_skipped(true, 100),
+              "step accepted, budget available: skipped by (B) -- trust-region rho already "
+              "validated the step");
+        check(line_search_skipped(false, 100),
+              "step NOT accepted, budget available: skipped by (A) -- and this is the case the "
+              "line search would exist to serve, so the two guards together close the door");
+        check(line_search_skipped(true, 0),
+              "step accepted, budget exhausted: skipped");
+        check(line_search_skipped(false, 0),
+              "step NOT accepted, budget exhausted: skipped");
+        check(line_search_skipped(true, 100) && line_search_skipped(false, 100),
+              "(A) covers !step_accepted and (B) covers step_accepted, so the guard is a CLOSURE "
+              "over both values -- no input reaches the line search. If someone deliberately "
+              "reopens the path this pin fails, which is the point: reopening a globalization "
+              "strategy is a numerics change to be measured, not a drive-by fix");
+    }
+
+    {
+        // R13.23 (self-review): a rescued candidate must LAND somewhere. The arbitration clears
+        // the veto without accepting the step, so the state it produces -- no step, no signal --
+        // has to enter the trust loop. If it did not, the rescue would be a silent zero update
+        // with no failure signal: the zero-update loop the direct-accept shortcut's own comment
+        // warns about, reintroduced by the very mechanism meant to be more careful.
+        using wrf::sdirk3::trust_loop_continues;
+
+        check(trust_loop_continues(/*step_accepted=*/false, /*total_failure=*/false, 3, 100),
+              "the state a rescue produces (veto cleared, step not taken) ENTERS the trust loop, "
+              "so the candidate is judged rather than silently dropped -- and this holds on the "
+              "shipped config, because the loop is not gated on nk_trust_region");
+        check(!trust_loop_continues(false, /*total_failure=*/true, 3, 100),
+              "the signal standing removes the candidate from the loop entirely -- this is the "
+              "veto the arbitration exists to reconsider, and it still bites when not rescued");
+        check(!trust_loop_continues(/*step_accepted=*/true, false, 3, 100),
+              "an accepted step does not re-enter the loop");
+        check(!trust_loop_continues(false, false, /*attempts_remaining=*/0, 100),
+              "attempts exhausted stops the loop");
+        check(!trust_loop_continues(false, false, 3, /*rhs_budget=*/0),
+              "and so does an exhausted RHS budget -- the loop cannot borrow evaluations it "
+              "does not have");
+    }
+
+    {
+        // R13.23 (self-review round 2): CORRECTS round 1. The trust loop is not syntactically
+        // gated on nk_trust_region, but on the direct-accept path every non-accepting outcome
+        // also raises the total-failure flag -- and the loop needs BOTH false. So the loop body
+        // does not execute, exactly as the shortcut's own comment says ("it never ran"), and the
+        // arbitration rescue is the SOLE entry into it on the shipped configuration.
+        using wrf::sdirk3::shortcut_path_enters_trust_loop;
+
+        check(shortcut_path_enters_trust_loop(/*candidate=*/true, /*mismatch=*/false,
+                                              /*rescued=*/true),
+              "a rescued total-failure candidate is the ONE input that leaves both flags false, "
+              "so the rescue does not hand the step back to a running mechanism -- it STARTS a "
+              "mechanism this configuration otherwise never runs");
+        check(!shortcut_path_enters_trust_loop(true, false, /*rescued=*/false),
+              "an unrescued candidate raises total-failure, which blocks the loop");
+        check(!shortcut_path_enters_trust_loop(/*candidate=*/false, /*mismatch=*/false, false),
+              "the ordinary path accepts the full step, so the loop condition is already false");
+        check(!shortcut_path_enters_trust_loop(false, /*mismatch=*/true, false),
+              "a failed entry-mismatch decrease check routes to total-failure, not to the loop");
+        check(!shortcut_path_enters_trust_loop(/*candidate=*/false, false, /*rescued=*/true),
+              "and a rescue without a candidate is not a reachable input: the arbitration only "
+              "fires on one, so this must not manufacture an entry");
+    }
+
+    {
+        // R13.23 (self-review round 5): the receipt's dedup key is a CONTRACT -- every field the
+        // receipt prints must be in it, or a change to that field is silently suppressed and the
+        // record keeps showing the old value. Each check varies ONE printed field and requires the
+        // key to move. The first version printed the rank position unkeyed; this is what would
+        // have caught it.
+        using wrf::sdirk3::boundary_receipt_key;
+        const uint64_t base = boundary_receipt_key(0x0A5, 0x0A5, 2, 3, 1, 2);
+
+        check(base != 0,
+              "an all-false, all-zero state must not hash to the 'nothing emitted yet' sentinel, "
+              "or the very first receipt would re-emit forever");
+        check(boundary_receipt_key(0x0A4, 0x0A5, 2, 3, 1, 2) != base,
+              "a change in the RAW flags moves the key");
+        check(boundary_receipt_key(0x0A5, 0x0A4, 2, 3, 1, 2) != base,
+              "...and so does a change in the EFFECTIVE flags alone, which is the whole point of "
+              "printing both: at np>1 they diverge without the raw side moving");
+        check(boundary_receipt_key(0x0A5, 0x0A5, 4, 3, 1, 2) != base,
+              "a change in nprocx moves the key");
+        check(boundary_receipt_key(0x0A5, 0x0A5, 2, 4, 1, 2) != base,
+              "a change in nprocy moves the key");
+        check(boundary_receipt_key(0x0A5, 0x0A5, 2, 3, 0, 2) != base,
+              "a change in mypx moves the key -- this is the field the hand-packed version PRINTED "
+              "but did not key, so an interior-rank move would have gone unreported");
+        check(boundary_receipt_key(0x0A5, 0x0A5, 2, 3, 1, 0) != base,
+              "and a change in mypy moves it too");
+        check(boundary_receipt_key(0x0A5, 0x0A5, 2, 3, 1, 2) == base,
+              "while identical content gives an identical key -- otherwise the dedup would be a "
+              "re-emit on every call and the receipt would drown its own signal");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1796,7 +1900,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 170;
+    constexpr int expected_checks = 193;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

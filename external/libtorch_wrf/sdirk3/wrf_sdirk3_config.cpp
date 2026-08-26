@@ -2045,11 +2045,18 @@ void SDIRK3Config::load_from_env() {
     // CONTROL FLOW. A disagreement is not an error -- the Registry is entitled to win -- but it
     // must be visible in the record instead of requiring a reader to know which layer wins.
     {
-        auto row = [](const char* name, bool compiled, bool effective) {
+        // R13.23 (self-review): a value is not an effect. `nk_line_search` reports effective=true
+        // on the live run and yet cannot change anything -- the guard in front of the Armijo block
+        // is a closure over both values of step_accepted (see line_search_skipped() in
+        // wrf_sdirk3_first_failure.h, pinned by fixtures). A manifest that prints only the value
+        // would have a reader conclude a line search is running. So reachability is printed too,
+        // and it is stated for every row rather than only the surprising one.
+        auto row = [](const char* name, bool compiled, bool effective, const char* note = nullptr) {
             std::cerr << "[CONFIG AUTHORITY] " << name
                       << " compiled_default=" << (compiled ? "true" : "false")
                       << " effective=" << (effective ? "true" : "false")
                       << (compiled == effective ? "" : "  <-- OVERRIDDEN (registry/namelist/env)")
+                      << (note ? note : "")
                       << std::endl;
         };
         // The compiled defaults are the initialisers in wrf_sdirk3_config.h; repeated here as
@@ -2057,8 +2064,12 @@ void SDIRK3Config::load_from_env() {
         // READ FROM wrf_sdirk3_config.h, not remembered. Writing this table from memory got four
         // of five wrong on the first attempt -- a manifest that prints a false "compiled_default"
         // is worse than none, because it looks authoritative.
-        row("nk_trust_region",           true,  nk_trust_region);            // :880
-        row("nk_line_search",            false, nk_line_search);             // :841
+        row("nk_trust_region",           true,  nk_trust_region,             // :880
+            "  [false = DIRECT-ACCEPT SHORTCUT: the trust loop is not syntactically gated on this"
+            " flag, but every non-accepting path here also raises the total-failure flag, so the"
+            " loop body does NOT execute -- trust neither accepts nor rejects, it never runs]");
+        row("nk_line_search",            false, nk_line_search,              // :841
+            "  [NO REACHABLE CONSUMER: the Armijo guard is closed -- see line_search_skipped()]");
         row("use_autograd",              false, use_autograd);               // :220
         row("hevi_split",                false, hevi_split);                 // :587
         row("stage_require_convergence", false, stage_require_convergence);  // :576

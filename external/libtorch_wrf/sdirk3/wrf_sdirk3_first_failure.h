@@ -28,6 +28,9 @@
 #include <vector>
 #include <limits>
 #include <cstring>
+#include <cstdint>   // uint64_t: libc++ pulls it in transitively, libstdc++ does not -- a header
+                     // that names fixed-width types must say so, or it builds on macOS and fails
+                     // on the Linux CI runner.
 
 namespace wrf {
 namespace sdirk3 {
@@ -765,6 +768,111 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
     // and is allowed through; one stamped and disagreeing is not.
     if (r.receipt_iter >= 0 && r.exit_iter >= 0 && r.receipt_iter != r.exit_iter) return false;
     return true;
+}
+
+// R13.23 (self-review round 5): the boundary receipt's dedup key.
+//
+// The receipt re-emits only when its content changes. That makes the key a CONTRACT: every field
+// the receipt prints must be in it, or a change to that field is silently suppressed and the
+// record keeps showing the old value. Hand-packing bit ranges made this easy to get wrong -- the
+// first version printed the rank position `my=(mypx,mypy)` without keying it, so an interior-rank
+// move that left the effective flags alone would have gone unreported.
+//
+// A mixing hash removes the bit-budget question entirely, and the fixtures pin the contract by
+// varying each printed field ALONE and requiring the key to move.
+//
+// The setter call counter is deliberately NOT keyed: including it would re-emit on every call and
+// destroy the dedup. Which is exactly why the receipt labels it `first_emit_at_setter_call` --
+// frozen at first emission, it is not a tally of how many times the setter ran.
+inline uint64_t boundary_receipt_key(uint64_t raw_flag_bits, uint64_t effective_flag_bits,
+                                     int nprocx, int nprocy, int mypx, int mypy) {
+    auto mix = [](uint64_t h, uint64_t v) {
+        h ^= v + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
+        return h;
+    };
+    uint64_t h = 0x9e3779b97f4a7c15ULL;   // nonzero seed: an all-false state must not look "never emitted"
+    h = mix(h, raw_flag_bits);
+    h = mix(h, effective_flag_bits);
+    h = mix(h, static_cast<uint64_t>(static_cast<uint32_t>(nprocx)));
+    h = mix(h, static_cast<uint64_t>(static_cast<uint32_t>(nprocy)));
+    h = mix(h, static_cast<uint64_t>(static_cast<uint32_t>(mypx)));
+    h = mix(h, static_cast<uint64_t>(static_cast<uint32_t>(mypy)));
+    return h == 0 ? 1 : h;               // 0 is the "nothing emitted yet" sentinel
+}
+
+// R13.23 (self-review, round 2): on the direct-accept path, WHEN is the trust loop entered?
+//
+// This corrects the round-1 note. "The loop is not gated on nk_trust_region" is true
+// syntactically and misleading in practice: with the flag false, every path through the shortcut
+// that does NOT accept also raises the total-failure flag, and the loop's condition needs both to
+// be false. So the loop body does not execute -- which is what the shortcut's own comment already
+// says ("trust neither accepted nor rejected, it never ran").
+//
+// The one exception is the arbitration rescue, and that makes it the SOLE entry into the trust
+// loop on the shipped configuration:
+//
+//     step_accepted  = !candidate && !entry_mismatch_rejected
+//     total_failure  = !step_accepted && !rescued
+//     loop entered   = !step_accepted && !total_failure   ==   rescued
+//
+// Worth stating plainly because it sets what the rescue is really doing: not "handing the step
+// back to a mechanism that was running anyway", but STARTING a mechanism this configuration
+// otherwise never runs.
+inline bool shortcut_path_enters_trust_loop(bool total_failure_candidate,
+                                            bool entry_mismatch_rejected,
+                                            bool arbitration_rescued) {
+    // The arbitration only fires on a total-failure candidate, so a rescue without one is not a
+    // reachable input; treat it as no rescue rather than inventing an entry.
+    const bool rescued = arbitration_rescued && total_failure_candidate;
+    const bool step_accepted = !total_failure_candidate && !entry_mismatch_rejected;
+    const bool total_failure = !step_accepted && !rescued;
+    return !step_accepted && !total_failure;
+}
+
+// R13.23 (self-review): where does a RESCUED candidate go?
+//
+// The arbitration clears the total-failure veto without accepting the step, which is only
+// coherent if something downstream then judges it. The worry was that on the shipped
+// configuration nothing does -- `nk_trust_region` is effectively FALSE there, so the direct-accept
+// shortcut is what runs, and it has already been skipped by the time the arbitration fires.
+//
+// MEASURED, by reading the control flow rather than the flag name: the trust loop is NOT gated on
+// `nk_trust_region`. Only the shortcut is. The loop's own condition is the gate, `max_trust_attempts`
+// is 3 unconditionally, and no enclosing block between the shortcut and the loop tests the flag. So
+// a rescue lands in a real globalizer on every configuration, and `nk_trust_region = false` means
+// "try a direct accept first", not "no trust region".
+//
+// The rule is extracted so the loop's condition is the same object a fixture pins: the state a
+// rescue produces (no step, no signal) must ENTER the loop. A fourth, silent outcome -- veto
+// cleared, step not taken, loop not entered -- would be the zero-update loop the shortcut's own
+// comment warns about, and the pins make it unrepresentable.
+inline bool trust_loop_continues(bool step_accepted, bool gmres_total_failure,
+                                 int attempts_remaining, int rhs_budget) {
+    return !step_accepted && !gmres_total_failure && attempts_remaining > 0 && rhs_budget > 0;
+}
+
+// R13.23 (self-review): is the Armijo line search reachable? MEASURED: no.
+//
+// The production guard is two lines and they form a closure:
+//
+//     bool skip = !step_accepted;                          // (A) covers the not-accepted case
+//     if (step_accepted || rhs_budget <= 0) skip = true;   // (B) covers the accepted case
+//
+// (A) and (B) between them cover both values of step_accepted, so `skip` is unconditionally true
+// and neither the dK-magnitude refinement below it nor the line search itself can run. This is
+// the "coarse guard preempts its refinement" shape: (A) was the original coarse skip, (B) was
+// added later for a different reason, and together they close the door.
+//
+// The rule is extracted here -- and CONSUMED by the solver, so it cannot drift from what the
+// fixtures pin -- deliberately WITHOUT repairing it. Making the line search reachable would put
+// a globalization strategy back into a solver whose convergence behaviour is under measurement,
+// which is a numerics change that has to be opt-in and measured, not a drive-by fix. What the
+// fixtures pin is the FINDING: as shipped, `nk_line_search` has no reachable consumer, whatever
+// the Registry sets it to. If someone deliberately reopens the path, the pins fail and say so.
+inline bool line_search_skipped(bool step_accepted, int rhs_budget) {
+    bool skip = !step_accepted;                           // (A)
+    if (step_accepted || rhs_budget <= 0) skip = true;    // (B)
+    return skip;
 }
 
 // R13.23 6.3: the boundary-flag projection, as a rule a fixture can reject.

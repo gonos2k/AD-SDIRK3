@@ -236,3 +236,236 @@ probe env, so it is not the same configuration as the arbitration A/B above. Its
 exit has no complete Krylov exit receipt, and the record declines to invent a subtype.
 
 **Independent review: NOT RUN.**
+
+---
+
+## Self-review after the checklist closed
+
+Four claims from the two closing phases were attacked. Three held; the fourth turned up a defect
+that neither the external review nor the checklist had asked about.
+
+**Held — "the gcfg sync move is behaviour-identical."** The two consumers that now run *after* the
+sync instead of before it read `g_sdirk3_config` only for `debug_level`
+(`update_boundary_periodicity`, `newton_solver.cpp:13797`); the `grid_info_` assignment reads no
+global at all. The claim was checked rather than repeated.
+
+**Held — "`measured()` is not weaker than the `std::isfinite` it replaced."** `measured(v)` is
+`v == v && v >= 0 && v < inf`: it rejects NaN and infinity like `isfinite`, and additionally
+rejects the −1.0 sentinel. The extraction strengthened the guard rather than loosening it.
+
+**Held — the changed log strings have no consumer.** The `initial_converged` lesson says a wire
+string with a reader must not be renamed. `Boundary conditions:` and the `periodic_x=` lines were
+grepped across `tests/`, `.github/` and the contract suite: no test or CI job keys on either, so
+the `PRE-SETTER` labels are safe. (One correction to my own reasoning along the way: a first
+brace-depth scan said the line-search block sat inside the trust-OFF branch. Recomputed properly,
+that block closes at `newton_solver.cpp:11416` and the line search is on the trust-ON path.)
+
+**FAILED — "the rescued candidate goes to the line search."** It does not, and the reason is worse
+than the mistake. `nk_line_search` is fully wired (Registry → Fortran bridge → C++ config → env →
+`options_.use_line_search`) and the authority manifest reports it **effective=true**. But the guard
+in front of the Armijo block is a closure:
+
+```cpp
+bool skip = !step_accepted;                          // (A) covers not-accepted
+if (step_accepted || rhs_budget <= 0) skip = true;   // (B) covers accepted
+```
+
+(A) and (B) together cover both values of `step_accepted`, so `skip` is **unconditionally true**:
+the dK-magnitude refinement under it is dead, and the line search cannot run on any input. This is
+the *coarse guard preempts its refinement* shape — (A) was the original skip, (B) was added later
+for a different reason, and together they closed the door. It is also the campaign's signature
+class: **a knob wired end to end whose consumer is unreachable**, reported as ON.
+
+Deliberately **not repaired.** Reopening a globalization strategy inside a solver whose convergence
+is under measurement is a numerics change that must be opt-in and measured, not a drive-by fix. So
+the finding is pinned instead: the guard moved into `wrf_sdirk3_first_failure.h`, **production
+consumes it** (so it cannot drift from the pins), and five fixtures assert it is true on all four
+`(step_accepted × rhs_budget)` corners. If anyone reopens the path, the pins fail and say why.
+
+And the manifest is corrected, because **a value is not an effect** — printing `effective=true` for
+a knob that cannot change anything is the same trap 6.2 was written to close, one level up:
+
+```
+[CONFIG AUTHORITY] nk_line_search compiled_default=false effective=true  <-- OVERRIDDEN
+  [NO REACHABLE CONSUMER: the Armijo guard is closed -- see line_search_skipped()]
+```
+
+**Verified on the live dt=600 run**, not just compiled — the manifest note, both `PRE-SETTER`
+labels and the receipt all appear in `rsl.error.0000`:
+
+```
+  periodic_x=0, periodic_y=0  (PRE-SETTER defaults)
+  Boundary conditions (PRE-SETTER defaults; see [BC RECEIPT] for effective):
+[BC RECEIPT] setter_call=1 proc_grid=1x1 projection_is_identity=1 gcfg_matches_effective=1
+```
+
+ctest 62/62; ratchets green; fixtures 170 → **175**. **Independent review: NOT RUN.**
+
+---
+
+## Second self-review round — the suspicion was wrong, and that is the finding
+
+The sentence attacked was my own: *"the rescue hands the step to the ordinary globalization path to
+accept or reject on its own terms."* On the shipped configuration `nk_trust_region` is **false**, so
+the direct-accept shortcut is what runs — and by the time the arbitration fires, that shortcut has
+already been skipped. If nothing downstream judged the candidate, clearing the veto would leave
+**neither a step nor a signal**: precisely the zero-update loop the shortcut's own comment warns
+about, reintroduced by the mechanism meant to be more careful.
+
+**Measured by reading the control flow, not the flag name: the claim holds.** Every block open
+between the shortcut and the trust loop was enumerated; **none tests `nk_trust_region`**. Only the
+shortcut is gated on it. `max_trust_attempts` is `3` unconditionally. So the loop's own condition is
+the gate, and a rescued candidate enters a real globalizer on **every** configuration.
+
+**But the check turned up something the flag name hides.** `nk_trust_region = false` does **not**
+disable the trust region — it installs a direct-accept shortcut in front of it, and the loop still
+runs up to three attempts when that shortcut does not accept. The manifest said `effective=false`,
+which reads as *no trust region*. That is the **same class as the line-search finding, in the
+opposite direction**: one knob reads ON and cannot act, the other reads OFF and still does.
+
+```
+[CONFIG AUTHORITY] nk_trust_region  compiled_default=true effective=false  <-- OVERRIDDEN
+  [false = DIRECT-ACCEPT SHORTCUT FIRST, not 'no trust region': the trust loop is not gated
+   on this flag and still runs up to 3 attempts]
+```
+
+The loop's condition is now a fixtured rule that **production consumes**, so the state a rescue
+produces is pinned to enter it. Five checks: the rescue state enters; a standing signal does not
+(the veto still bites when not rescued); an accepted step does not re-enter; exhausted attempts and
+an exhausted RHS budget each stop it. The fourth, silent outcome — veto cleared, step not taken,
+loop not entered — is now unrepresentable.
+
+Both manifest rows verified on the live dt=600 run. ctest 62/62; ratchets green; fixtures 175 → **180**.
+
+**Independent review: NOT RUN.**
+
+---
+
+## Third self-review round — two of my own claims corrected, one hypothesis refuted
+
+**Refuted: "a rejected candidate would be applied anyway."** The chase looked strong. `dK_scaled`
+initialises to `dK`, not zero (`newton_solver.cpp:11231`); the update `K = K + alpha * dK_scaled`
+(`:12645`) is **not** enclosed by any block testing `step_accepted`; and inside the trust loop
+`dK_scaled` is assigned at exactly one site (`:12131`), together with `step_accepted = true`. So a
+loop that rejected everything looked like it would still apply the full untested step. **It does
+not** — `:12188` zeroes `dK_scaled` when `!step_accepted`, and the comment above it says why. Third
+time this session that reading forty lines further retracted a claim before it was made.
+
+**Corrected: "the trust loop still runs up to 3 attempts."** That was my round-1 manifest note, and
+it is true syntactically and misleading in practice. On the direct-accept path every outcome that
+does not accept *also* raises the total-failure flag, and the loop needs **both** false. So the
+loop body does not execute — which the shortcut's own comment already stated plainly
+(`:12169`: *"trust neither accepted nor rejected, it never ran"*). I had read the absence of a
+syntactic gate as evidence of execution.
+
+**What survives is sharper than what I claimed.** On the shipped configuration the entry condition
+reduces exactly:
+
+```
+step_accepted = !candidate && !entry_mismatch_rejected
+total_failure = !step_accepted && !rescued
+loop entered  = !step_accepted && !total_failure   ==   rescued
+```
+
+The arbitration rescue is the **sole entry into the trust loop**. So the rescue is not "handing the
+step back to a mechanism that was running anyway" — it **starts a mechanism this configuration
+otherwise never runs**. That is a stronger statement about the feature than the one it replaces,
+and it is now a fixtured rule with the unreachable input (`rescued` without a `candidate`) pinned
+so it cannot manufacture an entry.
+
+Manifest corrected and verified on the live dt=600 run:
+
+```
+[CONFIG AUTHORITY] nk_trust_region compiled_default=true effective=false  <-- OVERRIDDEN
+  [false = DIRECT-ACCEPT SHORTCUT: the trust loop is not syntactically gated on this flag, but
+   every non-accepting path here also raises the total-failure flag, so the loop body does NOT
+   execute -- trust neither accepts nor rejects, it never runs]
+```
+
+ctest 62/62; ratchets green; fixtures 180 → **185**. **Independent review: NOT RUN.**
+
+---
+
+## Fourth self-review round — I committed the defect I had just corrected
+
+Six of the seven rules added across this increment are consumed by production. The seventh —
+`shortcut_path_enters_trust_loop`, added in round 3 **while writing about the importance of
+wiring** — had fixtures and no caller. That is the campaign's signature class, committed by me in
+the increment that corrected someone else's version of it.
+
+A rule with no consumer is a comment with a test. The derivation it encodes is a **model** of the
+direct-accept path, so production now evaluates it against the flags as they actually stand and
+speaks only when they diverge:
+
+```cpp
+if (!nk_trust_region) {
+    const bool modelled = shortcut_path_enters_trust_loop(candidate, entry_mismatch_rejected,
+                                                          arbitration_rescued);
+    const bool actual = !step_accepted && !gmres_total_failure;
+    if (modelled != actual) std::cerr << "SDIRK3_SHORTCUT_MODEL_MISMATCH ...";
+}
+```
+
+If a third site learns to set `step_accepted`, or the total-failure predicate gains a term, the
+conclusion *"a rescue is the sole entry into the trust loop"* stops being true — and now says so
+instead of quietly becoming false. This is a **contract, not a measurement**: silence means the
+model still matches, not that anything was measured.
+
+**Two preconditions of that model checked rather than assumed.** Both flags it reads are
+iteration-local: `gmres_total_failure_candidate` is a `const bool` initialised at `:11290` and
+`entry_mismatch_step_rejected` is declared with `= false` at `:11348`, both inside the
+`newton_iter` loop body (that variable is in scope throughout the region). A flag that survived an
+iteration would have made the model wrong from the second Newton step onward.
+
+**Also checked, and clean:** `rhs_budget` is a per-mechanism pool for trust attempts and the line
+search — the direct-accept shortcut's own `compute_rhs` does not charge it either, so the
+arbitration not charging is consistent, not an evasion. No README or CI manifest states a check
+count that the 157 → 185 growth would have invalidated. One solver instance is constructed in the
+live run, so the unconditional `[BC RECEIPT]` cannot multiply.
+
+**Default-path invariance MEASURED, not asserted.** The dt=600 run was repeated with the model
+check compiled in and every `SDIRK3_*` telemetry line is **byte-identical** to the run before it;
+`SDIRK3_SHORTCUT_MODEL_MISMATCH` fired **0** times.
+
+ctest 62/62; ratchets green; fixtures **185**. **Independent review: NOT RUN.**
+
+---
+
+## Fifth self-review round — a receipt that suppresses changes to fields it prints
+
+The boundary receipt re-emits only when its content changes, which makes its dedup key a
+**contract**: every field the receipt prints must be in it, or a change to that field is silently
+suppressed and the record keeps showing the old value. Comparing the printed fields against the
+hand-packed key found **three that were printed and not keyed**:
+
+| printed | keyed | consequence |
+|---|---|---|
+| `my=(mypx,mypy)` | **no** | an interior-rank move that leaves the effective flags alone goes unreported, and the record shows a stale rank |
+| `eff_x` / `eff_y`, `specified`, `nested` | **no** | the effective side could move without the raw side and be suppressed — precisely the np>1 case the receipt exists for |
+| `setter_call=N` | no (correctly) | but the label was wrong — see below |
+
+Bit-packing is what made this easy to get wrong: each new field needs a free range, and the
+question "is everything in here?" has no natural answer. The key is now a mixing hash in
+`wrf_sdirk3_first_failure.h` that production consumes, and **eight fixtures pin the contract by
+varying each printed field alone and requiring the key to move** — including a check that identical
+content still dedups, so the fix cannot degenerate into re-emitting on every call.
+
+**The counter was mislabelled, and I quoted it.** `bc_setter_calls_` must *not* be keyed — keying it
+would re-emit on every call and destroy the dedup — but that means it freezes at the call that
+first produced the content. `setter_call=1` therefore never meant "the setter ran once"; it meant
+"this content was first seen at call 1". It is now printed as `first_emit_at_setter_call`, with the
+dedup stated at the site. The ordering conclusion in round 1 is unaffected: that rested on line
+numbers in the log (`:138`/`:145` before, `:283` receipt, `:289` setter), not on the counter.
+
+Verified on the live dt=600 run, and the default path is **measured** unchanged: every `SDIRK3_*`
+telemetry line is byte-identical to the previous run.
+
+ctest 62/62; ratchets green; fixtures 185 → **193**. **Independent review: NOT RUN.**
+
+**And CI caught what no local gate could.** `core-linux` failed to build `8971b2e`:
+`'uint64_t' does not name a type`. The new key uses `uint64_t`/`uint32_t` and the header never
+included `<cstdint>` — macOS clang's libc++ pulls it in transitively from `<algorithm>`/`<limits>`,
+gcc's libstdc++ does not. **Local `ctest` passed 62/62 and could not have failed**, by construction.
+Worth stating plainly because "ctest 62/62" has been offered throughout this increment as the basis
+for claims: it is silent on portability, not evidence of it. Fixed by including `<cstdint>`, and
+recorded as a lesson.
