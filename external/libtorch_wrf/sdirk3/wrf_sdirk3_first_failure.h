@@ -767,6 +767,28 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
     return true;
 }
 
+// R13.23 (self-review): where does a RESCUED candidate go?
+//
+// The arbitration clears the total-failure veto without accepting the step, which is only
+// coherent if something downstream then judges it. The worry was that on the shipped
+// configuration nothing does -- `nk_trust_region` is effectively FALSE there, so the direct-accept
+// shortcut is what runs, and it has already been skipped by the time the arbitration fires.
+//
+// MEASURED, by reading the control flow rather than the flag name: the trust loop is NOT gated on
+// `nk_trust_region`. Only the shortcut is. The loop's own condition is the gate, `max_trust_attempts`
+// is 3 unconditionally, and no enclosing block between the shortcut and the loop tests the flag. So
+// a rescue lands in a real globalizer on every configuration, and `nk_trust_region = false` means
+// "try a direct accept first", not "no trust region".
+//
+// The rule is extracted so the loop's condition is the same object a fixture pins: the state a
+// rescue produces (no step, no signal) must ENTER the loop. A fourth, silent outcome -- veto
+// cleared, step not taken, loop not entered -- would be the zero-update loop the shortcut's own
+// comment warns about, and the pins make it unrepresentable.
+inline bool trust_loop_continues(bool step_accepted, bool gmres_total_failure,
+                                 int attempts_remaining, int rhs_budget) {
+    return !step_accepted && !gmres_total_failure && attempts_remaining > 0 && rhs_budget > 0;
+}
+
 // R13.23 (self-review): is the Armijo line search reachable? MEASURED: no.
 //
 // The production guard is two lines and they form a closure:

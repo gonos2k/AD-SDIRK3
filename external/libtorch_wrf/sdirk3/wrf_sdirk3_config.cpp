@@ -2064,7 +2064,9 @@ void SDIRK3Config::load_from_env() {
         // READ FROM wrf_sdirk3_config.h, not remembered. Writing this table from memory got four
         // of five wrong on the first attempt -- a manifest that prints a false "compiled_default"
         // is worse than none, because it looks authoritative.
-        row("nk_trust_region",           true,  nk_trust_region);            // :880
+        row("nk_trust_region",           true,  nk_trust_region,             // :880
+            "  [false = DIRECT-ACCEPT SHORTCUT FIRST, not 'no trust region': the trust loop is not"
+            " gated on this flag and still runs up to 3 attempts]");
         row("nk_line_search",            false, nk_line_search,              // :841
             "  [NO REACHABLE CONSUMER: the Armijo guard is closed -- see line_search_skipped()]");
         row("use_autograd",              false, use_autograd);               // :220

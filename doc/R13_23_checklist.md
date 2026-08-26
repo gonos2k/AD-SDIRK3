@@ -300,3 +300,41 @@ labels and the receipt all appear in `rsl.error.0000`:
 ```
 
 ctest 62/62; ratchets green; fixtures 170 → **175**. **Independent review: NOT RUN.**
+
+---
+
+## Second self-review round — the suspicion was wrong, and that is the finding
+
+The sentence attacked was my own: *"the rescue hands the step to the ordinary globalization path to
+accept or reject on its own terms."* On the shipped configuration `nk_trust_region` is **false**, so
+the direct-accept shortcut is what runs — and by the time the arbitration fires, that shortcut has
+already been skipped. If nothing downstream judged the candidate, clearing the veto would leave
+**neither a step nor a signal**: precisely the zero-update loop the shortcut's own comment warns
+about, reintroduced by the mechanism meant to be more careful.
+
+**Measured by reading the control flow, not the flag name: the claim holds.** Every block open
+between the shortcut and the trust loop was enumerated; **none tests `nk_trust_region`**. Only the
+shortcut is gated on it. `max_trust_attempts` is `3` unconditionally. So the loop's own condition is
+the gate, and a rescued candidate enters a real globalizer on **every** configuration.
+
+**But the check turned up something the flag name hides.** `nk_trust_region = false` does **not**
+disable the trust region — it installs a direct-accept shortcut in front of it, and the loop still
+runs up to three attempts when that shortcut does not accept. The manifest said `effective=false`,
+which reads as *no trust region*. That is the **same class as the line-search finding, in the
+opposite direction**: one knob reads ON and cannot act, the other reads OFF and still does.
+
+```
+[CONFIG AUTHORITY] nk_trust_region  compiled_default=true effective=false  <-- OVERRIDDEN
+  [false = DIRECT-ACCEPT SHORTCUT FIRST, not 'no trust region': the trust loop is not gated
+   on this flag and still runs up to 3 attempts]
+```
+
+The loop's condition is now a fixtured rule that **production consumes**, so the state a rescue
+produces is pinned to enter it. Five checks: the rescue state enters; a standing signal does not
+(the veto still bites when not rescued); an accepted step does not re-enter; exhausted attempts and
+an exhausted RHS budget each stop it. The fourth, silent outcome — veto cleared, step not taken,
+loop not entered — is now unrepresentable.
+
+Both manifest rows verified on the live dt=600 run. ctest 62/62; ratchets green; fixtures 175 → **180**.
+
+**Independent review: NOT RUN.**

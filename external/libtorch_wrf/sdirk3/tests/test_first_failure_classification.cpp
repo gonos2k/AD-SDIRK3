@@ -1805,6 +1805,30 @@ int main() {
               "strategy is a numerics change to be measured, not a drive-by fix");
     }
 
+    {
+        // R13.23 (self-review): a rescued candidate must LAND somewhere. The arbitration clears
+        // the veto without accepting the step, so the state it produces -- no step, no signal --
+        // has to enter the trust loop. If it did not, the rescue would be a silent zero update
+        // with no failure signal: the zero-update loop the direct-accept shortcut's own comment
+        // warns about, reintroduced by the very mechanism meant to be more careful.
+        using wrf::sdirk3::trust_loop_continues;
+
+        check(trust_loop_continues(/*step_accepted=*/false, /*total_failure=*/false, 3, 100),
+              "the state a rescue produces (veto cleared, step not taken) ENTERS the trust loop, "
+              "so the candidate is judged rather than silently dropped -- and this holds on the "
+              "shipped config, because the loop is not gated on nk_trust_region");
+        check(!trust_loop_continues(false, /*total_failure=*/true, 3, 100),
+              "the signal standing removes the candidate from the loop entirely -- this is the "
+              "veto the arbitration exists to reconsider, and it still bites when not rescued");
+        check(!trust_loop_continues(/*step_accepted=*/true, false, 3, 100),
+              "an accepted step does not re-enter the loop");
+        check(!trust_loop_continues(false, false, /*attempts_remaining=*/0, 100),
+              "attempts exhausted stops the loop");
+        check(!trust_loop_continues(false, false, 3, /*rhs_budget=*/0),
+              "and so does an exhausted RHS budget -- the loop cannot borrow evaluations it "
+              "does not have");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1821,7 +1845,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 175;
+    constexpr int expected_checks = 180;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

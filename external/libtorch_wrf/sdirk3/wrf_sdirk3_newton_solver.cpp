@@ -11702,7 +11702,13 @@ public:
 
             float prev_candidate_norm_val = -1.0f;  // v20.14r27l: track for short-circuit
             bool forced_scaled_tried = false;  // v20.14r27m: one forced-scale attempt on same-candidate
-            for (int attempt = 0; !step_accepted && !gmres_total_failure && attempt < max_trust_attempts && rhs_budget > 0; ++attempt) {
+            // R13.23 (self-review): the loop condition is a fixtured rule, because it is what
+            // makes a rescued candidate land somewhere. Note this loop is NOT gated on
+            // nk_trust_region -- only the direct-accept shortcut above is.
+            for (int attempt = 0;
+                 wrf::sdirk3::trust_loop_continues(step_accepted, gmres_total_failure,
+                                                   max_trust_attempts - attempt, rhs_budget);
+                 ++attempt) {
                 auto dK_norm = dK.norm();
                 auto K_norm = K.norm();
 
