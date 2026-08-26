@@ -48,9 +48,15 @@ item 1.3 measures it rather than assuming it.
 both total-failure rules → `gmres_total_failure_candidate = false` → under `!nk_trust_region` the
 `else` branch computes `R_trial`, **stores it, and never compares it with `R`** before
 `step_accepted = true`. The other two acceptance sites in that function both test a decrease. So
-the review's §3.2 is confirmed — with one qualification it did not have: **`nk_trust_region`
-defaults to `true` and `em_b_wave` does not override it**, so the shipped configuration never takes
-that path. Latent, not live.
+the review's §3.2 is confirmed. ~~With one qualification it did not have: `nk_trust_region`
+defaults to `true` and `em_b_wave` does not override it, so the shipped configuration never takes
+that path. Latent, not live.~~ **THAT QUALIFICATION IS WRONG — RETRACTED in R13.23.** Three
+authorities disagree: the C++ struct default is `true`, but
+`Registry.EM_SDIRK3_OPTIMIZATIONS:60` declares `sdirk3_nk_trust_region = .false.`, `em_b_wave` does
+not set it, and the **live log records `nk_trust_region = false` and `[TRUST OFF]`**. In a
+WRF-integrated run the Registry default wins. **The path is live, and P0-1 was a live defect** —
+I read the struct default and inferred the effective value instead of reading the log I already
+had. See `doc/R13_23_checklist.md`.
 
 Fixed: the flag is split and both halves come from the receipt; only `S_reached_on_entry` exempts;
 an objective mismatch on the trust-off path must show a measured nonlinear decrease, and on failure

@@ -463,6 +463,10 @@ public:
         // Solves excluded from the max because they did no work (converged on entry) or
         // finished (reached tolerance). Reported so "the max is over 0 solves" is legible.
         int   krylov_solves_trivial = 0;
+        // R13.22: how many candidates the total-failure rule discarded, and how many of those
+        // would have reduced the nonlinear residual had the trust region been allowed to see them.
+        int   discarded_candidates_seen = 0;
+        int   discarded_candidates_descent = 0;
         // R13.20 (numerics referee, claim 1): the last Newton iteration the Taylor-defect probe
         // actually measured. The probe sits inside `if (step_accepted)`, so it CANNOT sample an
         // iteration whose step was rejected -- including the one that ends the loop at dt=600
@@ -514,6 +518,9 @@ public:
         double exit_rho_S_final = -1.0;
         // R13.21 SELF-REVIEW ROUND 2: the exit solve's Arnoldi budget, so the completeness rule
         // has a production consumer instead of only fixtures.
+        // R13.23 (P0-4): the tolerance the exit solve applied.
+        float exit_tolerance_applied = -1.0f;
+        float last_tolerance_applied = -1.0f;
         int   exit_arnoldi_spent = -1;
         int   exit_arnoldi_allowed = -1;
         int   last_arnoldi_spent = -1;

@@ -56,6 +56,23 @@ using wrf::sdirk3::stage_failure_layer;
 using wrf::sdirk3::stage_failure_name;
 using wrf::sdirk3::StageFailureSignals;
 
+// R13.23 (deep review P0-4): a COMPLETE exit receipt. The attribution is gated on completeness
+// now, so a fixture that wants a subtype must supply a receipt that could have produced one --
+// which is the contract, not a chore. Three fixtures previously asserted an attribution from a
+// receipt carrying only the two reached flags.
+static void give_complete_exit_receipt(StageFailureSignals& s, double rho_D, double rho_S,
+                                       double tol, wrf::sdirk3::KrylovStoppingMetric metric) {
+    s.exit_rho_stop_final = rho_D;
+    s.exit_rho_S_final = rho_S;
+    s.exit_stopping_metric = metric;
+    s.exit_tolerance_applied = tol;
+    s.exit_D_reached = (rho_D < tol);
+    s.exit_S_reached = (rho_S < tol);
+    s.exit_arnoldi_spent = 7;
+    s.exit_arnoldi_allowed = 8;
+}
+
+
 // A clean, converged, published stage.
 StageFailureSignals ok_stage() {
     StageFailureSignals s;
@@ -1101,7 +1118,9 @@ int main() {
               "the exit solve met no tolerance, so the terminal event keeps its own name -- "
               "reading the stage-worst receipt here would report an objective mismatch from an "
               "iteration that ended nothing");
-        s.exit_D_reached = true;   // now the EXIT solve is the mismatch
+        // R13.23: a complete receipt -- D met, S not, judged against one tolerance.
+        give_complete_exit_receipt(s, /*rho_D=*/0.85, /*rho_S=*/1.05, /*tol=*/0.9,
+                                   wrf::sdirk3::KrylovStoppingMetric::BlockD);
         // R13.21 (external review P0-2): the event does not change; the ATTRIBUTION does. This
         // check used to read the subtype out of `name_of`, i.e. out of the event.
         check(name_of(s) == "zero_update_after_total_failure",
@@ -1126,7 +1145,8 @@ int main() {
         s.newton_termination =
             wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
         s.exit_krylov_iter = 2;
-        s.exit_D_reached = true; s.exit_S_reached = true;
+        give_complete_exit_receipt(s, /*rho_D=*/0.5, /*rho_S=*/0.6, /*tol=*/0.9,
+                                   wrf::sdirk3::KrylovStoppingMetric::BlockD);
         s.exit_rho_E_final = 0.7; s.exit_E_reached = false;
         // R13.19 (precision review P0-2): this fixture used to assert the mismatch on a record
         // inheriting `gate_metric_ok = true` from ok_stage() -- CI pinning a contract that
@@ -1168,7 +1188,8 @@ int main() {
         s.newton_termination =
             wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
         s.exit_krylov_iter = 2;
-        s.exit_D_reached = true; s.exit_S_reached = true;
+        give_complete_exit_receipt(s, /*rho_D=*/0.5, /*rho_S=*/0.6, /*tol=*/0.9,
+                                   wrf::sdirk3::KrylovStoppingMetric::BlockD);
         s.exit_rho_E_final = 0.7; s.exit_E_reached = false;
         s.gate_metric_ok = true;                 // the gate did NOT refuse
         check(name_of(s) != "krylov_entry_metric_mismatch",
@@ -1333,7 +1354,8 @@ int main() {
         e.newton_termination =
             wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
         e.exit_krylov_iter = 3;
-        e.exit_D_reached = true; e.exit_S_reached = false;
+        give_complete_exit_receipt(e, /*rho_D=*/0.85, /*rho_S=*/1.05, /*tol=*/0.9,
+                                   wrf::sdirk3::KrylovStoppingMetric::BlockD);
         const auto de = wrf::sdirk3::stage_diagnosis_of(e);
         // R13.21 (external review P0-2): event and cause, separately.
         check(de.primary_event == StageFailure::ZeroUpdateAfterTotalFailure &&
@@ -1593,6 +1615,171 @@ int main() {
               "the boundary is overridable per run and the distance must follow it");
     }
 
+    {
+        // R13.23 (deep review P0-4): THE RECEIPT MUST EARN THE ATTRIBUTION.
+        // `exit_receipt_complete` was computed and emitted but never consulted, so a row could
+        // read `exit_receipt_complete=0` beside a specific `exit_attribution` derived from that
+        // same receipt -- producer, emitter, no consumer, the shape this repository keeps fixing.
+        using wrf::sdirk3::KrylovReceiptView;
+        using wrf::sdirk3::krylov_receipt_complete;
+        using wrf::sdirk3::KrylovStoppingMetric;
+
+        KrylovReceiptView ok;
+        ok.rho_D_final = 0.85; ok.rho_S_final = 1.05; ok.tolerance_applied = 0.9;
+        ok.D_reached = true;   ok.S_reached = false;
+        ok.stopping_metric = static_cast<int>(KrylovStoppingMetric::BlockD);
+        ok.arnoldi_spent = 7;  ok.arnoldi_allowed = 8;
+        check(krylov_receipt_complete(ok),
+              "a receipt whose ratios, metric, budget and reached flags all agree is complete");
+
+        { auto r = ok; r.stopping_metric = static_cast<int>(KrylovStoppingMetric::Unknown);
+          check(!krylov_receipt_complete(r),
+                "an UNKNOWN stopping metric fails: the old test was `>= 0` and Unknown is 0, so an "
+                "unstamped metric passed as complete and an attribution named a layer the receipt "
+                "could not support"); }
+        { auto r = ok; r.arnoldi_spent = 9;
+          check(!krylov_receipt_complete(r),
+                "work spent cannot exceed work allowed -- a receipt that says so is not describing "
+                "one solve"); }
+        { auto r = ok; r.D_reached = false;
+          check(!krylov_receipt_complete(r),
+                "a reached flag that contradicts rho against the tolerance fails: the flags are "
+                "re-derived, not trusted"); }
+        { auto r = ok; r.tolerance_applied = -1.0;
+          check(!krylov_receipt_complete(r),
+                "and a tolerance that was never applied cannot have been reached -- claiming it is "
+                "the fabrication this rule exists to catch"); }
+        { auto r = ok; r.tolerance_applied = -1.0; r.D_reached = false; r.S_reached = false;
+          check(krylov_receipt_complete(r),
+                "...while a path that applied no tolerance and claims neither flag is complete, "
+                "because it reports exactly what it measured"); }
+        { auto r = ok; r.receipt_iter = 2; r.exit_iter = 3;
+          check(!krylov_receipt_complete(r),
+                "and a receipt stamped for another iteration is not this solve's"); }
+
+        // The gate itself: an incomplete receipt yields NO subtype, not a plausible one.
+        StageFailureSignals inc = ok_stage();
+        inc.newton_converged = false;
+        inc.residual_first = 8.7e8; inc.residual_last = 8.6e8;
+        inc.newton_termination =
+            wrf::sdirk3::NewtonTerminationReason::ZeroUpdateAfterTotalFailure;
+        inc.exit_krylov_iter = 3;
+        inc.exit_D_reached = true; inc.exit_S_reached = false;   // the flags alone
+        const auto d_inc = wrf::sdirk3::stage_diagnosis_of(inc);
+        check(d_inc.primary_event == StageFailure::ZeroUpdateAfterTotalFailure &&
+              d_inc.exit_attribution == StageFailure::None,
+              "with only the reached flags set the receipt is incomplete, so the event stands and "
+              "NO subtype is attributed -- before this gate the same signals produced "
+              "krylov_objective_mismatch from a receipt that could not support it");
+    }
+
+    {
+        // R13.23 (deep review P0-5): the returned solution and the returned residual must be the
+        // same solve's. The NaN-retry path returned x = 0 beside the CURRENT iterate's residual.
+        using wrf::sdirk3::KrylovReturnPairing;
+        using wrf::sdirk3::krylov_return_pairing_consistent;
+
+        KrylovReturnPairing fixed;                 // x = 0, r = b  -> the post-R13.23 return
+        fixed.x_is_zero = true; fixed.r_norm = 1039.0; fixed.b_norm = 1039.0;
+        check(krylov_return_pairing_consistent(fixed),
+              "a zero solution paired with r = b is consistent -- and it makes rho = 1 true by "
+              "arithmetic rather than stamped");
+
+        KrylovReturnPairing before;                // x = 0, r = the current iterate's residual
+        before.x_is_zero = true; before.r_norm = 574.4; before.b_norm = 1039.0;
+        check(!krylov_return_pairing_consistent(before),
+              "the pre-R13.23 NaN return is inconsistent: x = 0 with a residual that belongs to a "
+              "different iterate, and downstream trust prediction and per-block analysis read it "
+              "as if it described the x handed back");
+
+        KrylovReturnPairing nonzero;               // a real solve: not pinned by this rule
+        nonzero.x_is_zero = false; nonzero.r_norm = 574.4; nonzero.b_norm = 1039.0;
+        check(krylov_return_pairing_consistent(nonzero),
+              "...while a nonzero solution is not pinned here -- this rule is about the one case "
+              "where the residual is determined by the solution alone");
+
+        KrylovReturnPairing unmeasured;
+        unmeasured.x_is_zero = true; unmeasured.b_norm = 1039.0;   // r_norm left at -1
+        check(!krylov_return_pairing_consistent(unmeasured),
+              "and an unmeasured norm fails rather than passing: absence is not consistency");
+    }
+
+    {
+        // R13.23 (deep review P0-1): a total-failure signal may be overruled only by the norm the
+        // TRUST REGION judges by. Deciding on the raw packed L2 would have rescued two steps the
+        // trust region then rejects -- at dt=600 the discarded candidates improve the raw L2 by
+        // 12.5% and 60% while the S-weighted merit gets worse by 2.5% and 46x.
+        using wrf::sdirk3::CandidateArbitration;
+        using wrf::sdirk3::candidate_arbitration_rescues;
+
+        CandidateArbitration improves;
+        improves.s_merit_measured = true; improves.s_before = 476.0; improves.s_after = 400.0;
+        check(candidate_arbitration_rescues(improves),
+              "a candidate that improves the trust region's own norm is handed to globalization "
+              "instead of being discarded unevaluated -- the rescue clears the veto, it does not "
+              "accept the step");
+
+        // The two real dt=600 candidates, in the norm that decides.
+        CandidateArbitration stage2;
+        stage2.s_merit_measured = true; stage2.s_before = 476.0; stage2.s_after = 487.7;
+        check(!candidate_arbitration_rescues(stage2),
+              "the stage-2 terminal candidate is NOT rescued: raw L2 -12.5% but the trust norm "
+              "476 -> 487.7, so the discard stands");
+        CandidateArbitration stage3;
+        stage3.s_merit_measured = true; stage3.s_before = 948.9; stage3.s_after = 4.396e4;
+        check(!candidate_arbitration_rescues(stage3),
+              "...and the stage-3 one even less: raw L2 -60% but the trust norm 46x worse");
+
+        CandidateArbitration unmeasured;
+        unmeasured.s_before = 476.0; unmeasured.s_after = 400.0;   // measured flag left false
+        check(!candidate_arbitration_rescues(unmeasured),
+              "without the S norm there is no basis to overrule the signal, so it stands -- "
+              "fail-closed, not fail-open on an unmeasured merit");
+
+        CandidateArbitration tie;
+        tie.s_merit_measured = true; tie.s_before = 476.0; tie.s_after = 476.0;
+        check(!candidate_arbitration_rescues(tie),
+              "and a tie is not an improvement: overruling a failure signal needs a strict gain");
+    }
+
+    {
+        // R13.23 6.3: raw vs effective boundary flags. At np=1 the projection is the identity,
+        // which is why the distinction has never bitten -- and exactly why a fixture has to pin
+        // it before np>1 is enabled.
+        using wrf::sdirk3::rank_edge_ownership;
+        using wrf::sdirk3::effective_edge_flag;
+        using wrf::sdirk3::effective_periodic_flag;
+
+        const auto serial = rank_edge_ownership(1, 1, 0, 0);
+        check(serial.on_west && serial.on_east && serial.on_south && serial.on_north,
+              "at np=1 the single rank owns every physical edge, so raw == effective and the "
+              "projection is the identity");
+        check(effective_edge_flag(true, serial.on_west),
+              "...so a raw open_xs survives the projection in serial");
+
+        // 3x1 decomposition: the middle rank touches neither the west nor the east edge.
+        const auto middle = rank_edge_ownership(3, 1, 1, 0);
+        check(!middle.on_west && !middle.on_east,
+              "an interior rank of a 3x1 decomposition owns no x edge");
+        check(!effective_edge_flag(true, middle.on_west),
+              "so its effective open_xs is FALSE even though the raw flag is true -- reading the "
+              "raw flag there would apply a physical boundary in the middle of the domain");
+        check(middle.on_south && middle.on_north,
+              "while the undecomposed y axis still leaves it owning both y edges");
+
+        // Periodicity is global-domain metadata and must NOT be masked by rank position.
+        check(effective_periodic_flag(true, middle),
+              "periodicity is global: an interior rank keeps periodic_x=true, because masking it "
+              "would silently un-wrap the domain on every rank but two");
+        check(!effective_periodic_flag(false, serial),
+              "...and a false raw periodicity is never manufactured into a true effective one");
+
+        const auto corner = rank_edge_ownership(2, 2, 1, 0);
+        check(!corner.on_west && corner.on_east && corner.on_south && !corner.on_north,
+              "a 2x2 corner rank owns exactly the two edges it touches -- the projection is "
+              "per-edge, not per-rank");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1609,7 +1796,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 145;
+    constexpr int expected_checks = 170;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

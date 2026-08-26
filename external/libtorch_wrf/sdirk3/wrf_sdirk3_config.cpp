@@ -2032,6 +2032,37 @@ void SDIRK3Config::load_from_env() {
     std::cerr << "[CONFIG EFFECTIVE] hevi_split="
               << (hevi_split ? "ON (horizontal-acoustic explicit, vertical implicit)" : "off (full implicit)")
               << std::endl;
+    // R13.23 (deep review, section 8): THE AUTHORITY MANIFEST.
+    //
+    // Three authorities can disagree, and one of them silently won: the C++ struct default here,
+    // the Registry default that the WRF namelist machinery applies, and any namelist or env
+    // override. `nk_trust_region` is the case that cost this campaign a wrong claim -- the struct
+    // says `true`, `Registry.EM_SDIRK3_OPTIMIZATIONS` declares `.false.`, `em_b_wave` sets
+    // neither, and the run takes the trust-OFF path. A note in a merged PR said the opposite,
+    // because the struct default was read and the effective value inferred rather than looked up.
+    //
+    // So the effective value is printed beside the compiled default for the knobs that change
+    // CONTROL FLOW. A disagreement is not an error -- the Registry is entitled to win -- but it
+    // must be visible in the record instead of requiring a reader to know which layer wins.
+    {
+        auto row = [](const char* name, bool compiled, bool effective) {
+            std::cerr << "[CONFIG AUTHORITY] " << name
+                      << " compiled_default=" << (compiled ? "true" : "false")
+                      << " effective=" << (effective ? "true" : "false")
+                      << (compiled == effective ? "" : "  <-- OVERRIDDEN (registry/namelist/env)")
+                      << std::endl;
+        };
+        // The compiled defaults are the initialisers in wrf_sdirk3_config.h; repeated here as
+        // literals because the struct has already been overwritten by the time this runs.
+        // READ FROM wrf_sdirk3_config.h, not remembered. Writing this table from memory got four
+        // of five wrong on the first attempt -- a manifest that prints a false "compiled_default"
+        // is worse than none, because it looks authoritative.
+        row("nk_trust_region",           true,  nk_trust_region);            // :880
+        row("nk_line_search",            false, nk_line_search);             // :841
+        row("use_autograd",              false, use_autograd);               // :220
+        row("hevi_split",                false, hevi_split);                 // :587
+        row("stage_require_convergence", false, stage_require_convergence);  // :576
+    }
     std::cerr << "[CONFIG EFFECTIVE] mu_horizontal_div_only="
               << (mu_horizontal_div_only
                       ? "ON (mu tendency = horizontal divergence only, advance_mu_t parity)"

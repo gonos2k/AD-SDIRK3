@@ -3383,7 +3383,9 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
         std::cerr << "\n=== TileSDIRK3UnifiedSolver CONSTRUCTOR ===" << std::endl;
         std::cerr << "  nx=" << nx_ << ", ny=" << ny_ << ", nz=" << nz_ << std::endl;
         std::cerr << "  ny_v_=" << ny_v_ << ", nx_u_=" << nx_u_ << ", nz_w_=" << nz_w_ << std::endl;
-        std::cerr << "  periodic_x=" << config_flags_periodic_x_ << ", periodic_y=" << config_flags_periodic_y_ << std::endl;
+        // R13.23 6.3: constructor-time, i.e. pre-setter defaults -- see [BC RECEIPT].
+        std::cerr << "  periodic_x=" << config_flags_periodic_x_ << ", periodic_y=" << config_flags_periodic_y_
+                  << "  (PRE-SETTER defaults)" << std::endl;
         std::cerr << "  About to set PyTorch threads to " << wrf::sdirk3::g_sdirk3_config.n_threads << std::endl;
     }
 
@@ -3520,7 +3522,13 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     uv_vfrac_target_ = wrf::sdirk3::g_sdirk3_config.precond_uv_vertical_fraction;
 
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-        std::cerr << "  Boundary conditions:" << std::endl;
+        // R13.23 6.3: this dump runs in the CONSTRUCTOR, before setBoundaryConditions() has been
+        // called, so it prints the struct defaults and not what Fortran configured. It read as
+        // authoritative ("Boundary conditions:") and cost a reader the conclusion that
+        // periodic_x was 0 when the namelist says .true. -- the values arrive later. The title
+        // now says which lifecycle point it belongs to; [BC RECEIPT] is the post-setter record.
+        std::cerr << "  Boundary conditions (PRE-SETTER defaults; see [BC RECEIPT] for effective):"
+                  << std::endl;
         std::cerr << "    periodic_x=" << config_flags_periodic_x_ << std::endl;
         std::cerr << "    periodic_y=" << config_flags_periodic_y_ << std::endl;
         std::cerr << "    symmetric_xs=" << config_flags_symmetric_xs_ << std::endl;
@@ -9351,13 +9359,14 @@ vertical_coefficients:
                               // producer-without-consumer class and had none of its own -- only
                               // fixtures called it. An incomplete exit receipt now says so on the
                               // record instead of silently degrading the classification.
+                              // R13.22: how many usable steps the discard rule threw away.
+                              << " discarded_candidates=" << sig.discarded_candidates_seen
+                              << " discarded_were_descent=" << sig.discarded_candidates_descent
                               << " exit_receipt_complete="
+                              // R13.23 (P0-4): the SAME view the attribution is gated on, so
+                              // the emitted flag and the gate cannot judge different things.
                               << (wrf::sdirk3::krylov_receipt_complete(
-                                      wrf::sdirk3::KrylovReceiptView{
-                                          sig.exit_rho_stop_final, sig.exit_rho_S_final,
-                                          static_cast<int>(sig.exit_stopping_metric),
-                                          sig.exit_arnoldi_spent, sig.exit_arnoldi_allowed})
-                                      ? 1 : 0)
+                                      wrf::sdirk3::exit_receipt_view(sig)) ? 1 : 0)
                               << " exit_attribution="
                               << wrf::sdirk3::stage_failure_name(diag.exit_attribution)
                               << " exit_attribution_layer=" << exit_attr_layer
@@ -13536,6 +13545,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.worst_krylov_iter = stats.worst_krylov_iter;
     last_stage_signals_.krylov_solves_measured_vs_r0 = stats.krylov_solves_measured_vs_r0;
     last_stage_signals_.krylov_solves_trivial = stats.krylov_solves_trivial;
+    last_stage_signals_.discarded_candidates_seen = stats.discarded_candidates_seen;
+    last_stage_signals_.discarded_candidates_descent = stats.discarded_candidates_descent;
     last_stage_signals_.worst_krylov_met_tolerance = stats.worst_krylov_met_tolerance;
     last_stage_signals_.worst_krylov_eta = static_cast<double>(stats.worst_krylov_eta);
     last_stage_signals_.worst_krylov_restart_budget = stats.worst_krylov_restart_budget;
@@ -13557,6 +13568,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.exit_budget_exhausted = stats.exit_budget_exhausted;
     last_stage_signals_.exit_rho_stop_final = stats.exit_rho_stop_final;
     last_stage_signals_.exit_rho_S_final = stats.exit_rho_S_final;
+    last_stage_signals_.exit_tolerance_applied = stats.exit_tolerance_applied;
     last_stage_signals_.exit_arnoldi_spent = stats.exit_arnoldi_spent;
     last_stage_signals_.exit_arnoldi_allowed = stats.exit_arnoldi_allowed;
     last_stage_signals_.exit_rho_E_final = stats.exit_rho_E_final;
@@ -30511,30 +30523,36 @@ void TileSDIRK3UnifiedSolver::setExternalFields(
 }
 
 void TileSDIRK3UnifiedSolver::refreshProcessAwareBoundaryFlags_() {
-    // Process-local physical boundaries in Cartesian decomposition.
-    const bool on_west = (nprocx_ <= 1) || (mypx_ == 0);
-    const bool on_east = (nprocx_ <= 1) || (mypx_ == nprocx_ - 1);
-    const bool on_south = (nprocy_ <= 1) || (mypy_ == 0);
-    const bool on_north = (nprocy_ <= 1) || (mypy_ == nprocy_ - 1);
+    // R13.23 6.3: the projection rule lives in wrf_sdirk3_first_failure.h so a fixture can reject
+    // its negation -- in particular that periodicity is NOT masked by rank position while the
+    // edge flags are. Process-local physical boundaries in Cartesian decomposition.
+    const auto edges = wrf::sdirk3::rank_edge_ownership(nprocx_, nprocy_, mypx_, mypy_);
+    using wrf::sdirk3::effective_edge_flag;
 
     // Periodicity is global-domain metadata.
-    config_flags_periodic_x_ = raw_flags_periodic_x_;
-    config_flags_periodic_y_ = raw_flags_periodic_y_;
+    config_flags_periodic_x_ = wrf::sdirk3::effective_periodic_flag(raw_flags_periodic_x_, edges);
+    config_flags_periodic_y_ = wrf::sdirk3::effective_periodic_flag(raw_flags_periodic_y_, edges);
 
     // Only apply physical-edge BC flags on ranks that touch the physical edge.
-    config_flags_symmetric_xs_ = raw_flags_symmetric_xs_ && on_west;
-    config_flags_symmetric_xe_ = raw_flags_symmetric_xe_ && on_east;
-    config_flags_symmetric_ys_ = raw_flags_symmetric_ys_ && on_south;
-    config_flags_symmetric_ye_ = raw_flags_symmetric_ye_ && on_north;
+    config_flags_symmetric_xs_ = effective_edge_flag(raw_flags_symmetric_xs_, edges.on_west);
+    config_flags_symmetric_xe_ = effective_edge_flag(raw_flags_symmetric_xe_, edges.on_east);
+    config_flags_symmetric_ys_ = effective_edge_flag(raw_flags_symmetric_ys_, edges.on_south);
+    config_flags_symmetric_ye_ = effective_edge_flag(raw_flags_symmetric_ye_, edges.on_north);
 
-    config_flags_open_xs_ = raw_flags_open_xs_ && on_west;
-    config_flags_open_xe_ = raw_flags_open_xe_ && on_east;
-    config_flags_open_ys_ = raw_flags_open_ys_ && on_south;
-    config_flags_open_ye_ = raw_flags_open_ye_ && on_north;
+    config_flags_open_xs_ = effective_edge_flag(raw_flags_open_xs_, edges.on_west);
+    config_flags_open_xe_ = effective_edge_flag(raw_flags_open_xe_, edges.on_east);
+    config_flags_open_ys_ = effective_edge_flag(raw_flags_open_ys_, edges.on_south);
+    config_flags_open_ye_ = effective_edge_flag(raw_flags_open_ye_, edges.on_north);
 
     // These remain domain-level mode flags.
     config_flags_specified_ = raw_flags_specified_;
     config_flags_nested_ = raw_flags_nested_;
+
+    // The receipt is emitted HERE, not at the setter, because this function -- not the setter --
+    // is what computes the effective flags, and three of its four callers are proc-grid updates
+    // that change the projection without the setter running at all. Emitting at the setter would
+    // have left those three silent.
+    emitBoundaryReceipt_();
 }
 
 void TileSDIRK3UnifiedSolver::setBoundaryConditions(
@@ -30559,6 +30577,30 @@ void TileSDIRK3UnifiedSolver::setBoundaryConditions(
     raw_flags_specified_ = specified;
     raw_flags_nested_ = nested;
 
+    ++bc_setter_calls_;
+
+    // v20.14r26: Also sync global config so any code that still reads
+    // g_sdirk3_config.* gets the correct Fortran-provided values.
+    // NOTE: g_sdirk3_config defaults (periodic_x=false, specified=true) were
+    // never synced from Fortran, causing silent behavior bugs in tile methods.
+    //
+    // R13.23 6.3: moved AHEAD of the refresh. It reads only raw_flags_* and config_flags_polar_
+    // (which the refresh does not touch), so the move is behaviour-identical -- and it lets the
+    // receipt inside the refresh compare a SYNCED gcfg against the effective flags instead of
+    // reporting the previous step's value.
+    {
+        auto& gcfg = wrf::sdirk3::g_sdirk3_config;
+        gcfg.periodic_x = raw_flags_periodic_x_;
+        gcfg.periodic_y = raw_flags_periodic_y_;
+        gcfg.open_xs = raw_flags_open_xs_;
+        gcfg.open_xe = raw_flags_open_xe_;
+        gcfg.open_ys = raw_flags_open_ys_;
+        gcfg.open_ye = raw_flags_open_ye_;
+        gcfg.specified = raw_flags_specified_;
+        gcfg.nested = raw_flags_nested_;
+        gcfg.polar = config_flags_polar_;  // polar not in this call, keep instance value
+    }
+
     refreshProcessAwareBoundaryFlags_();
 
     // v20.14r27z: Sync periodic flags to grid_info_ (used by preconditioner stagger boundary).
@@ -30572,22 +30614,88 @@ void TileSDIRK3UnifiedSolver::setBoundaryConditions(
         newton_solver_->update_boundary_periodicity(config_flags_periodic_x_, config_flags_periodic_y_);
     }
 
-    // v20.14r26: Also sync global config so any code that still reads
-    // g_sdirk3_config.* gets the correct Fortran-provided values.
-    // NOTE: g_sdirk3_config defaults (periodic_x=false, specified=true) were
-    // never synced from Fortran, causing silent behavior bugs in tile methods.
-    {
-        auto& gcfg = wrf::sdirk3::g_sdirk3_config;
-        gcfg.periodic_x = raw_flags_periodic_x_;
-        gcfg.periodic_y = raw_flags_periodic_y_;
-        gcfg.open_xs = raw_flags_open_xs_;
-        gcfg.open_xe = raw_flags_open_xe_;
-        gcfg.open_ys = raw_flags_open_ys_;
-        gcfg.open_ye = raw_flags_open_ye_;
-        gcfg.specified = raw_flags_specified_;
-        gcfg.nested = raw_flags_nested_;
-        gcfg.polar = config_flags_polar_;  // polar not in this call, keep instance value
-    }
+}
+
+// R13.23 6.3: the boundary receipt -- emitted AFTER the setter has run, which is the only point
+// at which the question it answers is well posed.
+//
+// Two flag sets exist and they are not interchangeable. `raw_*` is global-domain metadata as
+// Fortran passed it; `config_flags_*` is that projected onto THIS rank by
+// refreshProcessAwareBoundaryFlags_(), which masks the symmetric/open edge flags by whether the
+// rank owns the physical edge. Periodicity is passed through unprojected. So at np=1 every
+// projection is the identity and the two agree; at np>1 an interior rank's effective open_xs is
+// false while its raw one is true.
+//
+// The receipt also records a real asymmetry rather than leaving it to be discovered: the
+// per-rank consumers (grid_info_, newton_solver_) are handed the EFFECTIVE flags, while the
+// global `g_sdirk3_config` is handed the RAW ones. Those disagree exactly when the projection
+// bites. It is latent today -- np>1 refuses to start at module_implicit_sdirk3.F:925
+// (SDIRK3_MPI_STAGE_HALO_UNSUPPORTED), verified in the tree, not assumed -- and `gcfg_matches_
+// effective` is the field that will say so the moment that refusal is lifted.
+void TileSDIRK3UnifiedSolver::emitBoundaryReceipt_() {
+    auto bit = [](bool b, int shift) { return b ? (uint64_t{1} << shift) : uint64_t{0}; };
+    const uint64_t key =
+        bit(raw_flags_periodic_x_, 0)  | bit(raw_flags_periodic_y_, 1)  |
+        bit(raw_flags_symmetric_xs_, 2)| bit(raw_flags_symmetric_xe_, 3)|
+        bit(raw_flags_symmetric_ys_, 4)| bit(raw_flags_symmetric_ye_, 5)|
+        bit(raw_flags_open_xs_, 6)     | bit(raw_flags_open_xe_, 7)     |
+        bit(raw_flags_open_ys_, 8)     | bit(raw_flags_open_ye_, 9)     |
+        bit(raw_flags_specified_, 10)  | bit(raw_flags_nested_, 11)     |
+        bit(config_flags_symmetric_xs_, 12) | bit(config_flags_symmetric_xe_, 13) |
+        bit(config_flags_symmetric_ys_, 14) | bit(config_flags_symmetric_ye_, 15) |
+        bit(config_flags_open_xs_, 16)      | bit(config_flags_open_xe_, 17)      |
+        bit(config_flags_open_ys_, 18)      | bit(config_flags_open_ye_, 19)      |
+        (static_cast<uint64_t>(nprocx_ & 0xFFFF) << 20) |
+        (static_cast<uint64_t>(nprocy_ & 0xFFFF) << 36) |
+        (uint64_t{1} << 63);   // marks "emitted", so an all-false first call is not mistaken for none
+
+    // First call always speaks; later calls only when something they report actually changed.
+    // A setter that is called repeatedly with identical flags is not news; one that changes a
+    // flag mid-run is.
+    if (bc_receipt_last_key_ != 0 && bc_receipt_last_key_ == key) return;
+    bc_receipt_last_key_ = key;
+
+    const bool projection_is_identity =
+        raw_flags_symmetric_xs_ == config_flags_symmetric_xs_ &&
+        raw_flags_symmetric_xe_ == config_flags_symmetric_xe_ &&
+        raw_flags_symmetric_ys_ == config_flags_symmetric_ys_ &&
+        raw_flags_symmetric_ye_ == config_flags_symmetric_ye_ &&
+        raw_flags_open_xs_ == config_flags_open_xs_ &&
+        raw_flags_open_xe_ == config_flags_open_xe_ &&
+        raw_flags_open_ys_ == config_flags_open_ys_ &&
+        raw_flags_open_ye_ == config_flags_open_ye_;
+
+    const auto& gcfg = wrf::sdirk3::g_sdirk3_config;
+    const bool gcfg_matches_effective =
+        gcfg.open_xs == config_flags_open_xs_ && gcfg.open_xe == config_flags_open_xe_ &&
+        gcfg.open_ys == config_flags_open_ys_ && gcfg.open_ye == config_flags_open_ye_ &&
+        gcfg.periodic_x == config_flags_periodic_x_ &&
+        gcfg.periodic_y == config_flags_periodic_y_;
+
+    auto b = [](bool v) { return v ? 1 : 0; };
+    std::cerr << "[BC RECEIPT] setter_call=" << bc_setter_calls_
+              << " proc_grid=" << nprocx_ << "x" << nprocy_
+              << " my=(" << mypx_ << "," << mypy_ << ")"
+              << " projection_is_identity=" << b(projection_is_identity)
+              << " gcfg_matches_effective=" << b(gcfg_matches_effective) << std::endl;
+    std::cerr << "[BC RECEIPT] periodic     raw_x=" << b(raw_flags_periodic_x_)
+              << " raw_y=" << b(raw_flags_periodic_y_)
+              << " | eff_x=" << b(config_flags_periodic_x_)
+              << " eff_y=" << b(config_flags_periodic_y_)
+              << "  (unprojected: global-domain metadata)" << std::endl;
+    std::cerr << "[BC RECEIPT] symmetric    raw=" << b(raw_flags_symmetric_xs_) << b(raw_flags_symmetric_xe_)
+              << b(raw_flags_symmetric_ys_) << b(raw_flags_symmetric_ye_)
+              << " | eff=" << b(config_flags_symmetric_xs_) << b(config_flags_symmetric_xe_)
+              << b(config_flags_symmetric_ys_) << b(config_flags_symmetric_ye_)
+              << "  (xs,xe,ys,ye)" << std::endl;
+    std::cerr << "[BC RECEIPT] open         raw=" << b(raw_flags_open_xs_) << b(raw_flags_open_xe_)
+              << b(raw_flags_open_ys_) << b(raw_flags_open_ye_)
+              << " | eff=" << b(config_flags_open_xs_) << b(config_flags_open_xe_)
+              << b(config_flags_open_ys_) << b(config_flags_open_ye_)
+              << "  (xs,xe,ys,ye)" << std::endl;
+    std::cerr << "[BC RECEIPT] mode         specified=" << b(raw_flags_specified_)
+              << " nested=" << b(raw_flags_nested_)
+              << "  consumers: grid_info_/newton<-EFFECTIVE, g_sdirk3_config<-RAW" << std::endl;
 }
 
 // v10: Epoch-based comm change detection helper

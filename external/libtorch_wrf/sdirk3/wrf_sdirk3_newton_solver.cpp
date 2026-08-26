@@ -1539,7 +1539,21 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                     std::cerr << "[GMRES FAILURE] Exceeded max NaN retries (" << max_nan_failures
                               << "), returning failure status to trigger trust-region fallback" << std::endl;
                     // v20.14r25: Use halo-zeroed norm for final_residual (contract: all paths consistent).
-                    auto r_true_nan = r_true.clone();
+                    // R13.23 (deep review P0-5): THE SOLUTION AND THE RESIDUAL MUST BE THE SAME
+                    // SOLVE'S. This returned `x = zeros_like(x0)` alongside the CURRENT iterate's
+                    // residual, so `r_true != b - A(x_returned)` -- one GMRESResult carrying two
+                    // different solves. Downstream that residual feeds trust prediction, per-block
+                    // analysis and the exit receipt, none of which correspond to the x handed back.
+                    //
+                    // Option B from the review: keep the zero solution -- which is what
+                    // NanRetryExhausted means, "no usable step" -- and return the residual that
+                    // belongs to it. At x = 0 that is `b`, which is exactly what this file already
+                    // writes at :1154 and :2592 for the same situation.
+                    //
+                    // A consequence worth naming: with x = 0 the ratios rho_D = rho_S = 1 are now
+                    // ARITHMETICALLY TRUE (||b||/||b||), where R13.21 stamped 1.0 on top of a
+                    // mismatched pair and the review correctly called that fabricated.
+                    auto r_true_nan = b.detach().clone();
                     zero_halo_regions(r_true_nan, halo_width, periodic_x, periodic_y);
                     float r_norm = guarded_item<float>(safe_tensor_norm(r_true_nan));
                     // v20.14r37: Include current restart's j (same fix as early-breakdown path).
@@ -1548,7 +1562,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                             torch::zeros_like(x0), false,
                             total_arnoldi_iters + j, r_norm, 1.0f,
                             "NaN failures exceeded max retries",
-                            r_true.detach().clone(), iter, false, false};
+                            b.detach().clone(), iter, false, false};
                     res.termination_reason = KTR::NanRetryExhausted;
                     res.initial_rel_error = initial_rel_error_gmres;
                     // R13.21 (external review P1-2): COMPLETE THE RECEIPT. This early return
@@ -3405,7 +3419,21 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                     std::cerr << "[GMRES FAILURE] Exceeded max NaN retries (" << max_nan_failures
                               << "), returning failure status to trigger trust-region fallback" << std::endl;
                     // v20.14r25: Use halo-zeroed norm for final_residual (contract: all paths consistent).
-                    auto r_true_nan = r_true.clone();
+                    // R13.23 (deep review P0-5): THE SOLUTION AND THE RESIDUAL MUST BE THE SAME
+                    // SOLVE'S. This returned `x = zeros_like(x0)` alongside the CURRENT iterate's
+                    // residual, so `r_true != b - A(x_returned)` -- one GMRESResult carrying two
+                    // different solves. Downstream that residual feeds trust prediction, per-block
+                    // analysis and the exit receipt, none of which correspond to the x handed back.
+                    //
+                    // Option B from the review: keep the zero solution -- which is what
+                    // NanRetryExhausted means, "no usable step" -- and return the residual that
+                    // belongs to it. At x = 0 that is `b`, which is exactly what this file already
+                    // writes at :1154 and :2592 for the same situation.
+                    //
+                    // A consequence worth naming: with x = 0 the ratios rho_D = rho_S = 1 are now
+                    // ARITHMETICALLY TRUE (||b||/||b||), where R13.21 stamped 1.0 on top of a
+                    // mismatched pair and the review correctly called that fabricated.
+                    auto r_true_nan = b.detach().clone();
                     zero_halo_regions(r_true_nan, halo_width, periodic_x, periodic_y);
                     float r_norm = guarded_item<float>(safe_tensor_norm(r_true_nan));
                     // v20.14r37: Include current restart's j (same fix as early-breakdown path).
@@ -3414,7 +3442,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                             torch::zeros_like(x0), false,
                             total_arnoldi_iters + j, r_norm, 1.0f,
                             "NaN failures exceeded max retries",
-                            r_true.detach().clone(), iter, false, false};
+                            b.detach().clone(), iter, false, false};
                     res.termination_reason = KTR::NanRetryExhausted;
                     res.initial_rel_error = initial_rel_error_fgmres;
                     // R13.21 (external review P1-2): COMPLETE THE RECEIPT. This early return
@@ -5700,6 +5728,45 @@ public:
             // calls it "conservative" and describes a per-iteration tightening, not a geometric
             // one. Seeded fresh here, it is what that comment says.
             float krylov_tol_adaptive = static_cast<float>(options_.krylov_tol);
+            // R13.23 (P0-3): the post-scaled solve candidate, before halo zeroing and the
+            // direct-U override, so a probe can report how far what it measured is from what the
+            // solve produced. Empty unless a probe is armed.
+            torch::Tensor probe_dK_from_solve;
+            // R13.23 (P0-3): how far the probed candidate is from the one the solve produced.
+            // -1 when the capture is absent, which is "not measured", not "identical".
+            auto candidate_delta = [&](const torch::Tensor& probed) -> double {
+                torch::NoGradGuard ng_delta;
+                if (!probe_dK_from_solve.defined() || !probed.defined() ||
+                    probe_dK_from_solve.numel() != probed.numel()) {
+                    return -1.0;
+                }
+                const double base =
+                    probe_dK_from_solve.to(torch::kFloat64).norm().item<double>();
+                if (!(base > 0.0)) return -1.0;
+                return (probed.detach() - probe_dK_from_solve)
+                           .to(torch::kFloat64).norm().item<double>() / base;
+            };
+            auto candidate_merits = [&](const torch::Tensor& R_ref, const torch::Tensor& R_cand,
+                                        double& raw_before, double& raw_after,
+                                        double& s_before, double& s_after,
+                                        bool& s_measured) {
+                // R13.23: the guard lives INSIDE the lambda. Defined at loop-body scope, its
+                // protection would otherwise depend on the call site -- which is exactly the
+                // scope trap this project recorded (a NoGradGuard whose block had already closed).
+                torch::NoGradGuard ng_merit;
+                raw_before = R_ref.to(torch::kFloat64).norm().item<double>();
+                raw_after  = R_cand.to(torch::kFloat64).norm().item<double>();
+                s_measured = S_inv_diag_.defined() &&
+                             S_inv_diag_.numel() == R_ref.numel();
+                if (s_measured) {
+                    s_before = (S_inv_diag_ * R_ref).to(torch::kFloat64).norm().item<double>();
+                    s_after  = (S_inv_diag_ * R_cand).to(torch::kFloat64).norm().item<double>();
+                } else {
+                    s_before = -1.0;
+                    s_after = -1.0;
+                }
+            };
+
             // R13.20 (round 9, R9-5): which knob BOUND this iteration's inner tolerance.
             // Declared here, inside the Newton loop body, so it cannot inherit the previous
             // iteration's answer -- its predecessor was a bool declared outside the loop and
@@ -9841,6 +9908,20 @@ public:
                     torch::NoGradGuard ng_snap;
                     ledger_dK_solve = dK.detach().clone();
                 }
+                // R13.23 (deep review P0-3): CANDIDATE PROVENANCE. The probes evaluate `dK`, and
+                // the comment directly above names two mutations that happen to it after the
+                // solve -- halo zeroing, and the direct-U override of the `ru` block. So the thing
+                // a probe measures is not necessarily the thing GMRES returned, and calling it
+                // "the GMRES candidate" is unearned until the difference is measured. Captured
+                // here, after the S-scaling (a coordinate change, not a different candidate) and
+                // before those two mutations. Only when a probe is armed -- a full state clone per
+                // Newton iteration is not free.
+                if (dK.defined() &&
+                    (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_TERMINAL_TAYLOR") ||
+                     wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_DISCARDED_CANDIDATE"))) {
+                    torch::NoGradGuard ng_prov;
+                    probe_dK_from_solve = dK.detach().clone();
+                }
 
                 // Zero halo components in dK before K += dK update.
                 // v20.14r27g: Halo mask is DISABLED in GMRES operator (v20.14r26),
@@ -10121,6 +10202,7 @@ public:
                     stats_.last_solve_iter = newton_iter;
                     stats_.last_rho_stop_final = gmres_result.rho_D_final;
                     stats_.last_rho_S_final = gmres_result.rho_S_final;
+                    stats_.last_tolerance_applied = gmres_result.tolerance_applied;
                     stats_.last_arnoldi_spent = gmres_result.arnoldi_spent;
                     stats_.last_arnoldi_allowed = gmres_result.arnoldi_allowed;
                     stats_.last_D_reached = gmres_result.D_tolerance_reached;
@@ -11293,9 +11375,22 @@ public:
                     // the same metric state getting a different policy than an identical rho_S
                     // returned after Arnoldi iterations.
                     //
-                    // Reachability, checked rather than assumed: `nk_trust_region` defaults to
-                    // TRUE and em_b_wave does not override it, so this is an opt-out path and the
-                    // shipped configuration never took it. Latent, not live -- and fixed as such.
+                    // Reachability. R13.21 wrote here that `nk_trust_region` "defaults to TRUE
+                    // and em_b_wave does not override it, so this is an opt-out path and the
+                    // shipped configuration never took it. Latent, not live." THAT IS WRONG, and
+                    // R13.23 retracts it.
+                    //
+                    // THREE AUTHORITIES, THREE VALUES:
+                    //   wrf_sdirk3_config.h:880              nk_trust_region = true
+                    //   Registry.EM_SDIRK3_OPTIMIZATIONS:60  sdirk3_nk_trust_region = .false.
+                    //   em_b_wave namelist                   not set -> Registry default applies
+                    //   effective runtime                    false   ("nk_trust_region = false",
+                    //                                        "[TRUST OFF]" in the live log)
+                    //
+                    // In a WRF-integrated run the REGISTRY default wins, so this branch is the one
+                    // em_b_wave actually takes. The fix below is therefore live, not latent. The
+                    // error was reading the C++ struct default and INFERRING the effective value
+                    // instead of reading the log that was already on disk.
                     bool accept_full_step = true;
                     if (gmres_objective_mismatch_on_entry) {
                         torch::NoGradGuard ng_entry_mismatch;
@@ -11325,10 +11420,128 @@ public:
             // Before declaring a zero-step failure, try one cheap recovery update:
             //   dK_rec ~= -M^{-1}R (or -R when M unavailable), with the same trust clamp.
             // This avoids immediate zero-update exits in ru-dominant stiff stages.
+            // R13.23 (deep review P0-1): CANDIDATE ARBITRATION -- do not veto without evaluating.
+            //
+            // A total-failure signal is a statement about the LINEAR residual ratio. Using it to
+            // discard the step removes the candidate from the trust region entirely (that loop
+            // carries `!gmres_total_failure`), so the mechanism whose job is to decide whether a
+            // step is usable never sees it. The signal should be a warning that the candidate is
+            // probably bad, not a substitute for asking.
+            //
+            // When armed, the candidate is measured in the norm the trust region actually
+            // minimises -- ||S^-1 R||, not the raw packed L2 -- and only a genuine improvement
+            // clears the flag, handing the step to the ordinary globalization path to accept or
+            // reject on its own terms. It is not an auto-accept.
+            //
+            // OPT-IN, and measured to be behaviour-neutral on the records that motivated it: at
+            // dt=600 the discarded candidates improve the raw L2 by 12.5% and 60% while the
+            // S-weighted merit gets WORSE by 2.5% and 46x. So with this on, the arbitration
+            // evaluates and correctly declines to rescue them -- the same outcome, now reached by
+            // measurement instead of by assumption. It costs one RHS evaluation per total-failure
+            // iteration, which is why it is not on by default.
+            bool arbitration_rescued = false;
+            if (!step_accepted && gmres_total_failure_candidate &&
+                wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_CANDIDATE_ARBITRATION") &&
+                dK.defined() && dK.numel() > 0 && R.defined()) {
+                torch::NoGradGuard ng_arb;
+                const auto K_a = K.detach() + dK.detach();
+                const auto U_a = U_stage + dt * gamma * K_a;
+                const auto R_a = (K_a - compute_rhs(U_a)).detach();
+                double raw_b = -1.0, raw_a = -1.0, s_b = -1.0, s_a = -1.0;
+                bool s_ok = false;
+                candidate_merits(R.detach(), R_a, raw_b, raw_a, s_b, s_a, s_ok);
+                // The trust region's own norm decides. Without it there is no basis to overrule
+                // the signal, so the signal stands -- fail-closed.
+                // The rule lives in wrf_sdirk3_first_failure.h so a fixture can reject its
+                // negation -- the pattern this file uses for every other decision that matters.
+                wrf::sdirk3::CandidateArbitration arb;
+                arb.s_merit_measured = s_ok;
+                arb.s_before = s_b;
+                arb.s_after = s_a;
+                arbitration_rescued = wrf::sdirk3::candidate_arbitration_rescues(arb);
+                std::cerr << "SDIRK3_CANDIDATE_ARBITRATION"
+                          << " stage=" << stage
+                          << " newton_iter=" << newton_iter
+                          << " R_raw=" << raw_b << " R_raw_candidate=" << raw_a
+                          << " R_S=" << s_b << " R_S_candidate=" << s_a
+                          << " S_merit_measured=" << (s_ok ? 1 : 0)
+                          << " rescued=" << (arbitration_rescued ? 1 : 0)
+                          << " basis=trust_region_S_norm"
+                          << " K_mutated=0"
+                          << std::endl;
+            }
             bool gmres_total_failure = false;
-            if (!step_accepted &&
+            if (!step_accepted && !arbitration_rescued &&
                 (gmres_total_failure_candidate || entry_mismatch_step_rejected)) {
                 gmres_total_failure = true;
+                // R13.23 (deep review P0-2): ONE candidate-merit evaluator, so a probe reports the
+            // norm the PRODUCTION path actually judges by.
+            //
+            // R13.22 measured `||R||` -- the raw packed L2 -- and called a reduction in it "the
+            // merit function". The trust region does not use that norm: it scales by S_inv and its
+            // own comment says so ("norm ||S^-1 r||, so trust-region actual/predicted must use the
+            // same norm"). Raw L2, S-weighted L2 and the stage gate's WRMS are three different
+            // quantities, and a candidate can move them differently. So both are reported and
+            // neither is called "the merit" alone.
+            //
+            // The stage GATE metric is deliberately not evaluated here: it is a stage-level
+            // quantity computed after the solve completes, and inventing it at a candidate would
+            // be exactly the fabrication this increment is closing elsewhere.
+
+            // R13.22: WAS THE DISCARDED CANDIDATE A DESCENT DIRECTION?
+                //
+                // Setting this flag removes the candidate from the trust region entirely -- the
+                // loop at the trust site carries `!gmres_total_failure` in its condition, so the
+                // step is never offered to the mechanism whose job is to decide whether a step is
+                // usable. Only the `-M^-1 R` recovery below is tried.
+                //
+                // R13.21's terminal probe measured one instance: at the iteration that ended
+                // dt=600 the discarded candidate had tau = 0.0056 and would have reduced ||R|| by
+                // 12.5%. One instance is not a frequency, and a policy argument needs one. This
+                // counts, over every total-failure iteration in the run, how often the discarded
+                // candidate would have reduced the nonlinear residual.
+                //
+                // Diagnosis only: K is not advanced, the trial state is local, the block is under
+                // NoGradGuard. Opt-in -- one RHS evaluation per total-failure iteration.
+                if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_DISCARDED_CANDIDATE") &&
+                    dK.defined() && dK.numel() > 0 && R.defined()) {
+                    torch::NoGradGuard ng_disc;
+                    const auto K_c = K.detach() + dK.detach();
+                    const auto U_c = U_stage + dt * gamma * K_c;
+                    const auto R_c = (K_c - compute_rhs(U_c)).detach();
+                    double nR = -1.0, nRc = -1.0, sR = -1.0, sRc = -1.0;
+                    bool s_measured = false;
+                    candidate_merits(R.detach(), R_c, nR, nRc, sR, sRc, s_measured);
+                    const bool would_reduce =
+                        std::isfinite(nRc) && std::isfinite(nR) && nRc < nR;
+                    const bool would_reduce_S =
+                        s_measured && std::isfinite(sRc) && std::isfinite(sR) && sRc < sR;
+                    stats_.discarded_candidates_seen++;
+                    if (would_reduce) stats_.discarded_candidates_descent++;
+                    std::cerr << "SDIRK3_DISCARDED_CANDIDATE"
+                              << " stage=" << stage
+                              << " newton_iter=" << newton_iter
+                              << " rho_S=" << gmres_raw_rel_error
+                              << " rho_vs_r0=" << (r0_measured && gmres_initial_rel_error > 0.0f
+                                                       ? gmres_raw_rel_error / gmres_initial_rel_error
+                                                       : -1.0f)
+                              << " dK_norm="
+                              << dK.detach().to(torch::kFloat64).norm().item<double>()
+                              << " R_norm=" << nR
+                              << " R_candidate_norm=" << nRc
+                              // R13.23 (P0-2): RAW is not the trust region's norm. Both, named.
+                              << " would_reduce_rawL2=" << (would_reduce ? 1 : 0)
+                              << " R_S_norm=" << sR
+                              << " R_S_candidate_norm=" << sRc
+                              << " S_merit_measured=" << (s_measured ? 1 : 0)
+                              << " would_reduce_S_merit=" << (would_reduce_S ? 1 : 0)
+                              << " gate_metric_evaluated=0"
+                              << " trust_region_saw_it=0"
+                              // R13.23 (P0-3): 0 means the probed candidate IS the solve's.
+                              << " candidate_delta_vs_solve=" << candidate_delta(dK)
+                              << " K_mutated=0"
+                              << std::endl;
+                }
                 const auto& cfg = wrf::sdirk3::g_sdirk3_config;
                 const float fallback_accept_ratio =
                     cfg.trust_fallback_relax
@@ -12663,6 +12876,15 @@ public:
                             const auto R_full = (K_full - compute_rhs(U_full)).detach();
                             const double nRfull =
                                 R_full.to(torch::kFloat64).norm().item<double>();
+                            // R13.23 (P0-2): the norm the trust region actually judges by.
+                            const bool s_ok = S_inv_diag_.defined() &&
+                                              S_inv_diag_.numel() == R.numel();
+                            const double sR = s_ok
+                                ? (S_inv_diag_ * R.detach()).to(torch::kFloat64).norm().item<double>()
+                                : -1.0;
+                            const double sRfull = s_ok
+                                ? (S_inv_diag_ * R_full).to(torch::kFloat64).norm().item<double>()
+                                : -1.0;
                             std::cerr << "SDIRK3_TERMINAL_TAYLOR"
                                       << " stage=" << stage
                                       << " newton_iter=" << newton_iter
@@ -12679,10 +12901,26 @@ public:
                                       << " candidate_alpha_would_reduce="
                                       << ((std::isfinite(nRt) && std::isfinite(nR) && nRt < nR)
                                               ? 1 : 0)
-                                      << " candidate_full_would_reduce="
+                                      // R13.23 (P0-2): named for the norm each one is in. The
+                                      // raw L2 is NOT what trust or the stage gate minimise.
+                                      << " candidate_full_would_reduce_rawL2="
                                       << ((std::isfinite(nRfull) && std::isfinite(nR) &&
                                            nRfull < nR) ? 1 : 0)
-                                      << " state_mutated=0"
+                                      << " R_S_norm=" << sR
+                                      << " R_S_full_step_norm=" << sRfull
+                                      << " S_merit_measured=" << (s_ok ? 1 : 0)
+                                      << " candidate_full_would_reduce_S_merit="
+                                      << ((s_ok && std::isfinite(sRfull) && std::isfinite(sR) &&
+                                           sRfull < sR) ? 1 : 0)
+                                      << " gate_metric_evaluated=0"
+                                      << " candidate_delta_vs_solve=" << candidate_delta(dK)
+                                      // R13.23 (section 12): NAMED FOR WHAT IT MEASURES. This said
+                                      // `state_mutated=0`, which claims non-interference the probe
+                                      // never established: it calls apply_jacobian and compute_rhs,
+                                      // and NoGradGuard bounds the autograd graph, not caches,
+                                      // counters, reference state or diagnostic latches. What is
+                                      // true is that K was not overwritten.
+                                      << " K_mutated=0"
                                       << (tau_exit >= 0.0 && nAs > 0.0
                                               ? "  (tau_exit<<1: the linear model was faithful AT"
                                                 " THE TERMINAL CANDIDATE and the solve was"
@@ -12721,6 +12959,7 @@ public:
                             stats_.exit_krylov_iter = stats_.last_solve_iter;
                             stats_.exit_rho_stop_final = stats_.last_rho_stop_final;
                             stats_.exit_rho_S_final = stats_.last_rho_S_final;
+                            stats_.exit_tolerance_applied = stats_.last_tolerance_applied;
                             stats_.exit_arnoldi_spent = stats_.last_arnoldi_spent;
                             stats_.exit_arnoldi_allowed = stats_.last_arnoldi_allowed;
                             stats_.exit_D_reached = stats_.last_D_reached;

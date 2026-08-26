@@ -554,6 +554,11 @@ struct StageFailureSignals {
     // Solves excluded from the max: zero-work (converged on entry) or finished (reached
     // tolerance). Neither is evidence about whether Krylov works.
     int    krylov_solves_trivial = 0;
+    // R13.22: candidates the total-failure rule discarded, and how many of those would have
+    // reduced the nonlinear residual had the trust region been allowed to test them. Reported,
+    // not classified on -- the counter answers "how often", the policy question is separate.
+    int    discarded_candidates_seen = 0;
+    int    discarded_candidates_descent = 0;
     // R13.20 (numerics referee, claim 1): the last Newton iteration the Taylor-defect probe
     // measured, or -1. Reported, not classified on -- it says whether the campaign's tau evidence
     // covers the iteration that ended the loop, which it structurally cannot when that iteration's
@@ -593,6 +598,9 @@ struct StageFailureSignals {
     // has something to judge. Without these the completeness rule had no production consumer at
     // all -- a rule with a producer and no consumer, written in the increment that closes that
     // class.
+    // R13.23 (P0-4): the tolerance the exit solve actually applied, so the reached flags can be
+    // re-derived rather than trusted.
+    double exit_tolerance_applied = -1.0;
     int    exit_arnoldi_spent = -1;
     int    exit_arnoldi_allowed = -1;
     bool   exit_D_reached = false;
@@ -709,11 +717,162 @@ inline bool entry_requires_nonlinear_decrease(const KrylovEntryVerdict& v) {
 // separate question. `first_failure_of` reports the EVENT that ended the stage; this reports what
 // the receipt of the solve that ended it says about WHY. Returns `None` when the exit receipt
 // cannot support a subtype -- absence of evidence, reported as such.
+// R13.21 (external review P1-2): IS THIS RECEIPT COMPLETE?
+//
+// Six sites return a Krylov result. Four fill the metric/budget receipt R13.18-R13.20 added; the
+// two `NanRetryExhausted` early returns filled only the constructor fields plus
+// `initial_rel_error`, so every new field stayed at its sentinel. A terminal solve that ends on
+// that path therefore hands the classifier an exit receipt it cannot subtype, and the record falls
+// back to the generic event or to insufficient evidence -- the classifier reporting absence where
+// the solve knew the answer.
+//
+// The rule lives here, as a view over the values rather than over the type, so a fixture can
+// reject its negation without pulling in the solver header. `tolerance_applied` and the two
+// tolerance-reached flags are deliberately NOT required: a path that never evaluated a tolerance
+// has nothing to report, and demanding it would push a producer into inventing one.
+struct KrylovReceiptView {
+    double rho_D_final = -1.0;
+    double rho_S_final = -1.0;
+    int    stopping_metric = -1;   // KrylovStoppingMetric; 0 == Unknown, -1 == not stamped
+    int    arnoldi_spent = -1;
+    int    arnoldi_allowed = -1;
+    // R13.23 (deep review P0-4): the receipt must be SELF-CONSISTENT, not merely populated.
+    double tolerance_applied = -1.0;
+    bool   D_reached = false;
+    bool   S_reached = false;
+    int    receipt_iter = -1;      // which Newton iteration this receipt belongs to
+    int    exit_iter = -1;         // which iteration ended the loop
+};
+
+inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
+    if (!measured(r.rho_D_final) || !measured(r.rho_S_final)) return false;
+    // R13.23 (P0-4): `Unknown` is 0 and the old test was `>= 0`, so an UNSTAMPED metric passed as
+    // complete -- and an attribution derived from it named a layer the receipt could not support.
+    // The enum's own "I do not know" value must fail a completeness test.
+    if (r.stopping_metric <= static_cast<int>(KrylovStoppingMetric::Unknown)) return false;
+    if (r.arnoldi_spent < 0 || r.arnoldi_allowed <= 0) return false;
+    // Work spent cannot exceed work allowed. A receipt that says otherwise is not describing one
+    // solve.
+    if (r.arnoldi_spent > r.arnoldi_allowed) return false;
+    // The reached flags must follow from the numbers. A tolerance that was never applied cannot
+    // have been reached -- claiming otherwise is the fabrication this rule exists to catch.
+    if (!measured(r.tolerance_applied) || !(r.tolerance_applied > 0.0)) {
+        return !r.D_reached && !r.S_reached;
+    }
+    if (r.D_reached != (r.rho_D_final < r.tolerance_applied)) return false;
+    if (r.S_reached != (r.rho_S_final < r.tolerance_applied)) return false;
+    // And it must belong to the solve it is being read as. Both unstamped is the pre-R13.18 record
+    // and is allowed through; one stamped and disagreeing is not.
+    if (r.receipt_iter >= 0 && r.exit_iter >= 0 && r.receipt_iter != r.exit_iter) return false;
+    return true;
+}
+
+// R13.23 6.3: the boundary-flag projection, as a rule a fixture can reject.
+//
+// Two flag sets exist and conflating them is the whole hazard: `raw` is global-domain metadata
+// as Fortran passed it, `effective` is that projected onto ONE rank. The projection is not
+// uniform -- periodicity is global and passes through untouched, while a symmetric/open EDGE
+// flag applies only on a rank that owns that edge. A rank in the interior of the decomposition
+// has effective open_xs = false while raw open_xs = true, and code that reads the raw flag there
+// would apply a physical boundary condition in the middle of the domain.
+struct RankEdgeOwnership {
+    bool on_west = true, on_east = true, on_south = true, on_north = true;
+};
+
+inline RankEdgeOwnership rank_edge_ownership(int nprocx, int nprocy, int mypx, int mypy) {
+    RankEdgeOwnership e;
+    e.on_west  = (nprocx <= 1) || (mypx == 0);
+    e.on_east  = (nprocx <= 1) || (mypx == nprocx - 1);
+    e.on_south = (nprocy <= 1) || (mypy == 0);
+    e.on_north = (nprocy <= 1) || (mypy == nprocy - 1);
+    return e;
+}
+
+inline bool effective_edge_flag(bool raw_flag, bool rank_owns_edge) {
+    return raw_flag && rank_owns_edge;
+}
+
+inline bool effective_periodic_flag(bool raw_flag, const RankEdgeOwnership&) {
+    return raw_flag;   // global-domain metadata: never masked by rank position
+}
+
+// R13.23 (deep review P0-1): may a total-failure signal be OVERRULED for this candidate?
+//
+// The signal is a statement about the LINEAR residual ratio. Using it to discard the step removes
+// the candidate from the trust region entirely, so the mechanism whose job is to judge a step
+// never sees it. The rule below decides whether to hand it to globalization instead -- and it is
+// deliberately narrow:
+//
+//   * the decision is made in the norm the TRUST REGION minimises (||S^-1 R||), not the raw packed
+//     L2. Those disagree: at dt=600 the discarded candidates improve the raw L2 by 12.5% and 60%
+//     while the S-weighted merit gets worse by 2.5% and 46x. Deciding on the raw norm would have
+//     rescued two steps the trust region would then have rejected;
+//   * without the S norm there is no basis to overrule the signal, so the signal stands;
+//   * a rescue is NOT an acceptance. It clears the veto so the ordinary globalization path can
+//     accept or reject on its own terms.
+struct CandidateArbitration {
+    bool   s_merit_measured = false;
+    double s_before = -1.0;
+    double s_after = -1.0;
+};
+
+inline bool candidate_arbitration_rescues(const CandidateArbitration& a) {
+    if (!a.s_merit_measured) return false;              // fail-closed
+    if (!measured(a.s_before) || !measured(a.s_after)) return false;
+    return a.s_after < a.s_before;                      // strict: a tie is not an improvement
+}
+
+// R13.23 (deep review P0-5): a Krylov return must hand back a solution and a residual that belong
+// to the SAME solve. The NaN-retry path returned `x = 0` beside the current iterate's residual, so
+// `r_true != b - A(x)` and one result carried two solves -- downstream that residual feeds trust
+// prediction, per-block analysis and the exit receipt, none of which correspond to the x handed
+// back.
+//
+// Stated over the two norms a caller can see, so a fixture can reject its negation. At `x = 0` the
+// residual is `b`, hence ||r|| == ||b|| and rho == 1 exactly; any other pairing with a zero
+// solution is inconsistent.
+struct KrylovReturnPairing {
+    bool   x_is_zero = false;
+    double r_norm = -1.0;
+    double b_norm = -1.0;
+};
+
+inline bool krylov_return_pairing_consistent(const KrylovReturnPairing& p) {
+    if (!measured(p.r_norm) || !measured(p.b_norm)) return false;
+    if (!p.x_is_zero) return true;          // only the zero-solution case is pinned here
+    if (!(p.b_norm > 0.0)) return p.r_norm == 0.0;
+    const double ratio = p.r_norm / p.b_norm;
+    return ratio > 1.0 - 1.0e-6 && ratio < 1.0 + 1.0e-6;
+}
+
+// R13.23 (P0-4): the exit receipt as the classifier sees it, in one place so the attribution and
+// the emitted `exit_receipt_complete` cannot judge different things.
+
+inline KrylovReceiptView exit_receipt_view(const StageFailureSignals& s) {
+    KrylovReceiptView v;
+    v.rho_D_final = s.exit_rho_stop_final;
+    v.rho_S_final = s.exit_rho_S_final;
+    v.stopping_metric = static_cast<int>(s.exit_stopping_metric);
+    v.arnoldi_spent = s.exit_arnoldi_spent;
+    v.arnoldi_allowed = s.exit_arnoldi_allowed;
+    v.tolerance_applied = s.exit_tolerance_applied;
+    v.D_reached = s.exit_D_reached;
+    v.S_reached = s.exit_S_reached;
+    v.receipt_iter = s.exit_krylov_iter;
+    v.exit_iter = s.exit_krylov_iter;
+    return v;
+}
+
 inline StageFailure krylov_exit_attribution_of(const StageFailureSignals& s) {
     if (s.newton_termination != NewtonTerminationReason::ZeroUpdateAfterTotalFailure) {
         return StageFailure::None;
     }
     if (s.exit_krylov_iter < 0) return StageFailure::None;
+    // R13.23 (deep review P0-4): THE RECEIPT MUST EARN THE ATTRIBUTION. `exit_receipt_complete`
+    // was computed and EMITTED but never consulted here, so a row could read
+    // `exit_receipt_complete=0` beside a specific `exit_attribution` derived from that same
+    // receipt -- the producer/emitter/no-consumer shape this repository has fixed repeatedly.
+    if (!krylov_receipt_complete(exit_receipt_view(s))) return StageFailure::None;
     // Minimised what it was asked to, and the result is still useless to the Newton merit.
     if (s.exit_D_reached && !s.exit_S_reached) {
         return StageFailure::KrylovObjectiveMismatch;
@@ -735,31 +894,6 @@ inline StageFailure krylov_exit_attribution_of(const StageFailureSignals& s) {
     return StageFailure::None;
 }
 
-// R13.21 (external review P1-2): IS THIS RECEIPT COMPLETE?
-//
-// Six sites return a Krylov result. Four fill the metric/budget receipt R13.18-R13.20 added; the
-// two `NanRetryExhausted` early returns filled only the constructor fields plus
-// `initial_rel_error`, so every new field stayed at its sentinel. A terminal solve that ends on
-// that path therefore hands the classifier an exit receipt it cannot subtype, and the record falls
-// back to the generic event or to insufficient evidence -- the classifier reporting absence where
-// the solve knew the answer.
-//
-// The rule lives here, as a view over the values rather than over the type, so a fixture can
-// reject its negation without pulling in the solver header. `tolerance_applied` and the two
-// tolerance-reached flags are deliberately NOT required: a path that never evaluated a tolerance
-// has nothing to report, and demanding it would push a producer into inventing one.
-struct KrylovReceiptView {
-    double rho_D_final = -1.0;
-    double rho_S_final = -1.0;
-    int    stopping_metric = -1;   // KrylovStoppingMetric, or -1 for "not stamped"
-    int    arnoldi_spent = -1;
-    int    arnoldi_allowed = -1;
-};
-
-inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
-    return measured(r.rho_D_final) && measured(r.rho_S_final) &&
-           r.stopping_metric >= 0 && r.arnoldi_spent >= 0 && r.arnoldi_allowed > 0;
-}
 
 // R13.21 (external review section 8): HOW CLOSE WAS THE CALL?
 //
