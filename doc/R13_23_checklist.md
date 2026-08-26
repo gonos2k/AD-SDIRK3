@@ -461,3 +461,11 @@ Verified on the live dt=600 run, and the default path is **measured** unchanged:
 telemetry line is byte-identical to the previous run.
 
 ctest 62/62; ratchets green; fixtures 185 → **193**. **Independent review: NOT RUN.**
+
+**And CI caught what no local gate could.** `core-linux` failed to build `8971b2e`:
+`'uint64_t' does not name a type`. The new key uses `uint64_t`/`uint32_t` and the header never
+included `<cstdint>` — macOS clang's libc++ pulls it in transitively from `<algorithm>`/`<limits>`,
+gcc's libstdc++ does not. **Local `ctest` passed 62/62 and could not have failed**, by construction.
+Worth stating plainly because "ctest 62/62" has been offered throughout this increment as the basis
+for claims: it is silent on portability, not evidence of it. Fixed by including `<cstdint>`, and
+recorded as a lesson.

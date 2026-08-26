@@ -28,6 +28,9 @@
 #include <vector>
 #include <limits>
 #include <cstring>
+#include <cstdint>   // uint64_t: libc++ pulls it in transitively, libstdc++ does not -- a header
+                     // that names fixed-width types must say so, or it builds on macOS and fails
+                     // on the Linux CI runner.
 
 namespace wrf {
 namespace sdirk3 {
