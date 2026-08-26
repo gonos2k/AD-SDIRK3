@@ -1884,6 +1884,78 @@ int main() {
               "re-emit on every call and the receipt would drown its own signal");
     }
 
+    {
+        // R13.24 (external review P0-1): the END-TO-END contract, which is what the previous
+        // increment's per-rule fixtures could not see. R13.23 pinned "admission clears the derived
+        // flag" and "that state enters the trust loop", and both were true -- while trust
+        // acceptance went on reading the ORIGINAL veto and refused every attempt. Two green rules
+        // with a broken composition. These checks follow the candidate all the way to acceptance.
+        using wrf::sdirk3::effective_total_failure_veto;
+        using wrf::sdirk3::candidate_disposition;
+        using wrf::sdirk3::CandidateDisposition;
+        using wrf::sdirk3::counts_as_linear_total_failure;
+        using wrf::sdirk3::trust_loop_continues;
+
+        check(!effective_total_failure_veto(/*candidate=*/true, /*admitted=*/true),
+              "admission LIFTS the veto at every consumer, trust acceptance included -- without "
+              "this the candidate entered the trial and lost every attempt to the signal its "
+              "admission had just reconsidered");
+        check(effective_total_failure_veto(true, /*admitted=*/false),
+              "an unadmitted candidate keeps the veto");
+        check(!effective_total_failure_veto(/*candidate=*/false, false),
+              "and no signal means no veto");
+
+        // The composition R13.23 was missing: admitted -> loop entered -> acceptance REACHABLE.
+        const bool admitted_veto = effective_total_failure_veto(true, true);
+        check(trust_loop_continues(/*step_accepted=*/false, /*total_failure=*/false, 3, 100) &&
+              !admitted_veto,
+              "admitted -> the loop is entered AND the acceptance test can say yes: the step is "
+              "genuinely offered, not merely admitted to a trial with a predetermined verdict");
+
+        check(counts_as_linear_total_failure(candidate_disposition(true, /*admitted=*/true)),
+              "an ADMITTED candidate still counts as a linear total-failure signal: whether the "
+              "linear solve failed is a property of that solve, not of what a globalizer later "
+              "decided about it");
+        check(counts_as_linear_total_failure(candidate_disposition(true, false)),
+              "...and so does a vetoed one");
+        check(!counts_as_linear_total_failure(candidate_disposition(false, false)),
+              "while an ordinary proposal is not a failure of any kind");
+        check(candidate_disposition(true, true) == CandidateDisposition::AdmittedToTrial &&
+              candidate_disposition(true, false) == CandidateDisposition::LinearFailureVetoed,
+              "the three states are one value, not three booleans that can disagree -- which is "
+              "how 'signalled', 'admitted' and 'accepted' came to be conflated");
+    }
+
+    {
+        // R13.24 (external review, section 11 + P1-3): landmines pinned without reopening the path.
+        using wrf::sdirk3::line_search_alpha_is_trustworthy;
+        using wrf::sdirk3::KrylovReceiptView;
+        using wrf::sdirk3::krylov_receipt_complete;
+
+        check(line_search_alpha_is_trustworthy(/*armijo=*/true, 3, 2),
+              "only a satisfied Armijo condition earns the step");
+        check(!line_search_alpha_is_trustworthy(/*armijo=*/false, 4, /*budget=*/0),
+              "budget exhaustion is a REJECT -- today alpha would still be 1.0 and the full step "
+              "Armijo just refused would be applied, because alpha is assigned only on success or "
+              "at the ninth arm and the budget (5) runs out first");
+        check(!line_search_alpha_is_trustworthy(/*armijo=*/false, /*arms=*/9, 3),
+              "and so is running out of arms: 'use the last alpha tried' is not a line search");
+
+        // P1-3: the completeness rule can now actually see a promoted receipt, because the two
+        // iteration fields come from two authorities instead of one field read twice.
+        KrylovReceiptView v;
+        v.rho_D_final = 0.4; v.rho_S_final = 0.4; v.stopping_metric = 1;
+        v.arnoldi_spent = 5; v.arnoldi_allowed = 10;
+        v.tolerance_applied = 0.9; v.D_reached = true; v.S_reached = true;
+        v.receipt_iter = 2; v.exit_iter = 2;
+        check(krylov_receipt_complete(v),
+              "a receipt stamped for the iteration that ended the loop is complete");
+        v.exit_iter = 3;
+        check(!krylov_receipt_complete(v),
+              "while a receipt from ANOTHER iteration is not -- a test that was unreachable in "
+              "production until the exit iteration got an authority independent of the receipt");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1900,7 +1972,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 193;
+    constexpr int expected_checks = 206;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

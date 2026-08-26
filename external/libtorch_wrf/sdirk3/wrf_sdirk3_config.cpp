@@ -2069,7 +2069,9 @@ void SDIRK3Config::load_from_env() {
             " flag, but every non-accepting path here also raises the total-failure flag, so the"
             " loop body does NOT execute -- trust neither accepts nor rejects, it never runs]");
         row("nk_line_search",            false, nk_line_search,              // :841
-            "  [NO REACHABLE CONSUMER: the Armijo guard is closed -- see line_search_skipped()]");
+            "  [NO REACHABLE CONSUMER: the Armijo guard is closed -- see line_search_skipped();"
+            " R13.24 forces the solver option to FALSE rather than advertising a globalization"
+            " strategy it does not apply]");
         row("use_autograd",              false, use_autograd);               // :220
         row("hevi_split",                false, hevi_split);                 // :587
         row("stage_require_convergence", false, stage_require_convergence);  // :576
