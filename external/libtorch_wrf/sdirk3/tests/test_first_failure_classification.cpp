@@ -1704,6 +1704,82 @@ int main() {
               "and an unmeasured norm fails rather than passing: absence is not consistency");
     }
 
+    {
+        // R13.23 (deep review P0-1): a total-failure signal may be overruled only by the norm the
+        // TRUST REGION judges by. Deciding on the raw packed L2 would have rescued two steps the
+        // trust region then rejects -- at dt=600 the discarded candidates improve the raw L2 by
+        // 12.5% and 60% while the S-weighted merit gets worse by 2.5% and 46x.
+        using wrf::sdirk3::CandidateArbitration;
+        using wrf::sdirk3::candidate_arbitration_rescues;
+
+        CandidateArbitration improves;
+        improves.s_merit_measured = true; improves.s_before = 476.0; improves.s_after = 400.0;
+        check(candidate_arbitration_rescues(improves),
+              "a candidate that improves the trust region's own norm is handed to globalization "
+              "instead of being discarded unevaluated -- the rescue clears the veto, it does not "
+              "accept the step");
+
+        // The two real dt=600 candidates, in the norm that decides.
+        CandidateArbitration stage2;
+        stage2.s_merit_measured = true; stage2.s_before = 476.0; stage2.s_after = 487.7;
+        check(!candidate_arbitration_rescues(stage2),
+              "the stage-2 terminal candidate is NOT rescued: raw L2 -12.5% but the trust norm "
+              "476 -> 487.7, so the discard stands");
+        CandidateArbitration stage3;
+        stage3.s_merit_measured = true; stage3.s_before = 948.9; stage3.s_after = 4.396e4;
+        check(!candidate_arbitration_rescues(stage3),
+              "...and the stage-3 one even less: raw L2 -60% but the trust norm 46x worse");
+
+        CandidateArbitration unmeasured;
+        unmeasured.s_before = 476.0; unmeasured.s_after = 400.0;   // measured flag left false
+        check(!candidate_arbitration_rescues(unmeasured),
+              "without the S norm there is no basis to overrule the signal, so it stands -- "
+              "fail-closed, not fail-open on an unmeasured merit");
+
+        CandidateArbitration tie;
+        tie.s_merit_measured = true; tie.s_before = 476.0; tie.s_after = 476.0;
+        check(!candidate_arbitration_rescues(tie),
+              "and a tie is not an improvement: overruling a failure signal needs a strict gain");
+    }
+
+    {
+        // R13.23 6.3: raw vs effective boundary flags. At np=1 the projection is the identity,
+        // which is why the distinction has never bitten -- and exactly why a fixture has to pin
+        // it before np>1 is enabled.
+        using wrf::sdirk3::rank_edge_ownership;
+        using wrf::sdirk3::effective_edge_flag;
+        using wrf::sdirk3::effective_periodic_flag;
+
+        const auto serial = rank_edge_ownership(1, 1, 0, 0);
+        check(serial.on_west && serial.on_east && serial.on_south && serial.on_north,
+              "at np=1 the single rank owns every physical edge, so raw == effective and the "
+              "projection is the identity");
+        check(effective_edge_flag(true, serial.on_west),
+              "...so a raw open_xs survives the projection in serial");
+
+        // 3x1 decomposition: the middle rank touches neither the west nor the east edge.
+        const auto middle = rank_edge_ownership(3, 1, 1, 0);
+        check(!middle.on_west && !middle.on_east,
+              "an interior rank of a 3x1 decomposition owns no x edge");
+        check(!effective_edge_flag(true, middle.on_west),
+              "so its effective open_xs is FALSE even though the raw flag is true -- reading the "
+              "raw flag there would apply a physical boundary in the middle of the domain");
+        check(middle.on_south && middle.on_north,
+              "while the undecomposed y axis still leaves it owning both y edges");
+
+        // Periodicity is global-domain metadata and must NOT be masked by rank position.
+        check(effective_periodic_flag(true, middle),
+              "periodicity is global: an interior rank keeps periodic_x=true, because masking it "
+              "would silently un-wrap the domain on every rank but two");
+        check(!effective_periodic_flag(false, serial),
+              "...and a false raw periodicity is never manufactured into a true effective one");
+
+        const auto corner = rank_edge_ownership(2, 2, 1, 0);
+        check(!corner.on_west && corner.on_east && corner.on_south && !corner.on_north,
+              "a 2x2 corner rank owns exactly the two edges it touches -- the projection is "
+              "per-edge, not per-rank");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1720,7 +1796,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 157;
+    constexpr int expected_checks = 170;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

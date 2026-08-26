@@ -2175,6 +2175,8 @@ private:
     // This prevents physical Y-boundary conditions from being applied on
     // interior MPI tile boundaries.
     void refreshProcessAwareBoundaryFlags_();
+    // R13.23 6.3: prints raw vs effective BC flags after the setter has run.
+    void emitBoundaryReceipt_();
     
     // Boundary condition flags (to be set from WRF configuration)
     bool config_flags_periodic_x_ = false;
@@ -2234,6 +2236,14 @@ private:
     bool raw_flags_open_ye_ = false;
     bool raw_flags_specified_ = false;
     bool raw_flags_nested_ = false;
+
+    // R13.23 6.3: the boundary receipt. `raw_*` is what Fortran passed; the `config_flags_*`
+    // above are what the solver actually uses, and the two are NOT the same object -- see
+    // refreshProcessAwareBoundaryFlags_(). A reader who sees `periodic_x=0` in a log cannot tell
+    // whether Fortran said 0, or whether the setter had not run yet and the struct default was
+    // showing. The call counter separates those two, which no existing field could.
+    int      bc_setter_calls_ = 0;
+    uint64_t bc_receipt_last_key_ = 0;   // 0 = nothing emitted yet
 
     // Default halo size matching WRF memory domain structure
     // WRF uses 5 halo points: ims = ids - 5, ime = ide + 5

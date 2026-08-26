@@ -37,7 +37,7 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
 - [x] **1.1** One canonical candidate-merit evaluator, used by trust, recovery, and the probes.
 - [x] **1.2** A total-failure signal routes the candidate to globalization when the merit improves,
       instead of discarding it unevaluated. Keep the signal as a *warning*, not a veto.
-- [ ] **1.3** Fixtures: `TotalFailureCandidate_WithNonlinearDecrease_IsGlobalized`,
+- [x] **1.3** Fixtures: `TotalFailureCandidate_WithNonlinearDecrease_IsGlobalized`,
       `TotalFailureVsBAndVsR0_CannotSkipMeritTrial`.
 
 ### Phase 2 — P0-2: measure the merit the production path uses
@@ -75,7 +75,7 @@ Premises verified in the tree before being accepted. One of them **retracts a cl
       measured.
 - [x] **6.2** Runtime provenance manifest: compiled default, Registry default, namelist request,
       effective value, authority — for the knobs that change control flow.
-- [ ] **6.3** Boundary receipt after the setter runs (`raw_*` vs `effective_*`).
+- [x] **6.3** Boundary receipt after the setter runs (`raw_*` vs `effective_*`).
 
 ---
 
@@ -179,3 +179,60 @@ opposite to their compiled defaults, and nothing said so. **Writing that table f
 of five wrong on the first attempt** — they were corrected by reading `wrf_sdirk3_config.h`, and
 the line numbers are cited in the source. A manifest that prints a false `compiled_default` is
 worse than none, because it looks authoritative.
+
+**Phase 1.3 — the rule, not just the code path.** The arbitration decision is a pure function in
+`wrf_sdirk3_first_failure.h`, so a fixture can reject its negation. Five checks pin it, and three
+carry the **live dt=600 numbers** rather than synthetic ones: the stage-2 candidate (raw L₂ −12.5 %,
+trust norm 476 → 487.7) and the stage-3 one (raw −60 %, trust norm 46× worse) must both be
+**refused**. Anyone who moves the judgement back to the raw norm — the mistake R13.22 made in
+prose — breaks those two immediately. The remaining checks pin the two ways a rescue must not
+happen: an unmeasured S norm is fail-closed, and a tie is not an improvement.
+
+**Phase 6.3 — the receipt, and it resolves a standing discrepancy.** `raw_*` (what Fortran passed)
+and `config_flags_*` (what this rank uses) are different objects: `refreshProcessAwareBoundaryFlags_`
+masks each symmetric/open **edge** flag by whether the rank owns that edge, while periodicity passes
+through unprojected. The projection rule is now a fixtured pure function that production
+**consumes**, so it cannot drift from what the tests pin — eight checks, including that an interior
+rank of a 3×1 decomposition has effective `open_xs = false` against a raw `true`, and that
+periodicity is never masked (doing so would silently un-wrap the domain on every rank but two).
+
+The receipt is emitted from the **refresh**, not the setter: three of the refresh's four callers are
+proc-grid updates that change the projection *without* the setter running, and emitting at the
+setter would have left those silent. The `g_sdirk3_config` sync moved ahead of the refresh — it
+reads only `raw_flags_*` and `config_flags_polar_`, which the refresh does not touch, so the move is
+behaviour-identical — and that lets the receipt compare a **synced** gcfg instead of the previous
+value.
+
+**Live dt=600 record**, which settles the `periodic_x` question the summary carried:
+
+```
+[BC RECEIPT] setter_call=1 proc_grid=1x1 my=(0,0) projection_is_identity=1 gcfg_matches_effective=1
+[BC RECEIPT] periodic     raw_x=1 raw_y=0 | eff_x=1 eff_y=0  (unprojected: global-domain metadata)
+[BC RECEIPT] symmetric    raw=0011 | eff=0011  (xs,xe,ys,ye)
+[BC RECEIPT] open         raw=0000 | eff=0000  (xs,xe,ys,ye)
+```
+
+Fortran passed exactly what `namelist.input` declares (`periodic_x=.true., periodic_y=.false.`, with
+symmetric `ys/ye` — a channel), and the solver uses it. **So the values were never wrong.** The
+`periodic_x=0` seen in the log is a *lifecycle* artefact, confirmed by ORDER rather than inferred:
+`rsl.error.0000:138` and `:145` print at **construction**, the receipt is `:283`, and the setter's
+own log at `:289` reads `periodic_x=1`. Line 145's title was literally `Boundary conditions:` — a
+pre-authority printout that reads as authoritative, the same trap 6.2 found in the config dump. Both
+constructor dumps are now labelled `PRE-SETTER`.
+
+One asymmetry is recorded rather than left to be rediscovered: the per-rank consumers
+(`grid_info_`, `newton_solver_`) receive the **effective** flags while the global `g_sdirk3_config`
+receives the **raw** ones. Those diverge exactly when the projection bites, so it is latent at np=1
+— and np>1 refuses to start at `dyn_em/module_implicit_sdirk3.F:925`
+(`SDIRK3_MPI_STAGE_HALO_UNSUPPORTED`), **read in the tree, not assumed**, which is the discipline
+Phase 0 was written about. `gcfg_matches_effective` is the field that will say so the moment that
+refusal is lifted.
+
+**Checklist complete: 24/24.** ctest 62/62; ratchets green (`from_blob` 70/70, item-guard 74/74);
+classification fixtures 157 → **170**. The dt=600 run still fails to converge
+(`category=newton_budget_exhausted`) — unchanged and not claimed otherwise; note this run carries no
+probe env, so it is not the same configuration as the arbitration A/B above. Its
+`exit_receipt_complete=0` with `exit_attribution=none` is the Phase 4 gate working: a Newton-budget
+exit has no complete Krylov exit receipt, and the record declines to invent a subtype.
+
+**Independent review: NOT RUN.**

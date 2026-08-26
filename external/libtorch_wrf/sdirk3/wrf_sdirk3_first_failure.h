@@ -767,6 +767,61 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
     return true;
 }
 
+// R13.23 6.3: the boundary-flag projection, as a rule a fixture can reject.
+//
+// Two flag sets exist and conflating them is the whole hazard: `raw` is global-domain metadata
+// as Fortran passed it, `effective` is that projected onto ONE rank. The projection is not
+// uniform -- periodicity is global and passes through untouched, while a symmetric/open EDGE
+// flag applies only on a rank that owns that edge. A rank in the interior of the decomposition
+// has effective open_xs = false while raw open_xs = true, and code that reads the raw flag there
+// would apply a physical boundary condition in the middle of the domain.
+struct RankEdgeOwnership {
+    bool on_west = true, on_east = true, on_south = true, on_north = true;
+};
+
+inline RankEdgeOwnership rank_edge_ownership(int nprocx, int nprocy, int mypx, int mypy) {
+    RankEdgeOwnership e;
+    e.on_west  = (nprocx <= 1) || (mypx == 0);
+    e.on_east  = (nprocx <= 1) || (mypx == nprocx - 1);
+    e.on_south = (nprocy <= 1) || (mypy == 0);
+    e.on_north = (nprocy <= 1) || (mypy == nprocy - 1);
+    return e;
+}
+
+inline bool effective_edge_flag(bool raw_flag, bool rank_owns_edge) {
+    return raw_flag && rank_owns_edge;
+}
+
+inline bool effective_periodic_flag(bool raw_flag, const RankEdgeOwnership&) {
+    return raw_flag;   // global-domain metadata: never masked by rank position
+}
+
+// R13.23 (deep review P0-1): may a total-failure signal be OVERRULED for this candidate?
+//
+// The signal is a statement about the LINEAR residual ratio. Using it to discard the step removes
+// the candidate from the trust region entirely, so the mechanism whose job is to judge a step
+// never sees it. The rule below decides whether to hand it to globalization instead -- and it is
+// deliberately narrow:
+//
+//   * the decision is made in the norm the TRUST REGION minimises (||S^-1 R||), not the raw packed
+//     L2. Those disagree: at dt=600 the discarded candidates improve the raw L2 by 12.5% and 60%
+//     while the S-weighted merit gets worse by 2.5% and 46x. Deciding on the raw norm would have
+//     rescued two steps the trust region would then have rejected;
+//   * without the S norm there is no basis to overrule the signal, so the signal stands;
+//   * a rescue is NOT an acceptance. It clears the veto so the ordinary globalization path can
+//     accept or reject on its own terms.
+struct CandidateArbitration {
+    bool   s_merit_measured = false;
+    double s_before = -1.0;
+    double s_after = -1.0;
+};
+
+inline bool candidate_arbitration_rescues(const CandidateArbitration& a) {
+    if (!a.s_merit_measured) return false;              // fail-closed
+    if (!measured(a.s_before) || !measured(a.s_after)) return false;
+    return a.s_after < a.s_before;                      // strict: a tie is not an improvement
+}
+
 // R13.23 (deep review P0-5): a Krylov return must hand back a solution and a residual that belong
 // to the SAME solve. The NaN-retry path returned `x = 0` beside the current iterate's residual, so
 // `r_true != b - A(x)` and one result carried two solves -- downstream that residual feeds trust

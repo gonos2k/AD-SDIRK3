@@ -11452,7 +11452,13 @@ public:
                 candidate_merits(R.detach(), R_a, raw_b, raw_a, s_b, s_a, s_ok);
                 // The trust region's own norm decides. Without it there is no basis to overrule
                 // the signal, so the signal stands -- fail-closed.
-                arbitration_rescued = s_ok && std::isfinite(s_a) && std::isfinite(s_b) && s_a < s_b;
+                // The rule lives in wrf_sdirk3_first_failure.h so a fixture can reject its
+                // negation -- the pattern this file uses for every other decision that matters.
+                wrf::sdirk3::CandidateArbitration arb;
+                arb.s_merit_measured = s_ok;
+                arb.s_before = s_b;
+                arb.s_after = s_a;
+                arbitration_rescued = wrf::sdirk3::candidate_arbitration_rescues(arb);
                 std::cerr << "SDIRK3_CANDIDATE_ARBITRATION"
                           << " stage=" << stage
                           << " newton_iter=" << newton_iter
