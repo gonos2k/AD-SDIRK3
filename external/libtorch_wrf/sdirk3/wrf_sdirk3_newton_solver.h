@@ -514,6 +514,10 @@ public:
         // exited -- so a terminal failure could be subtyped from a different iteration's evidence.
         // -1 / false = the exit was not a linear-solve event.
         int   exit_krylov_iter = -1;
+        // R13.24 (external review P1-3): the iteration the Newton loop actually broke at, stamped
+        // at the exit site and NOT derived from any receipt -- the second authority the
+        // completeness rule needs to compare against `exit_krylov_iter`.
+        int   newton_exit_event_iter = -1;
         double exit_rho_stop_final = -1.0;
         double exit_rho_S_final = -1.0;
         // R13.21 SELF-REVIEW ROUND 2: the exit solve's Arnoldi budget, so the completeness rule

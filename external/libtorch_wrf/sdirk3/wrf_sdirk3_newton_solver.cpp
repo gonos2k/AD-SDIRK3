@@ -1576,7 +1576,12 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                     // The residual is non-finite by construction on this path, so the two ratios
                     // are reported as 1.0 -- "no reduction", which is what `rel_error` already
                     // says -- rather than as a sentinel that reads "never measured".
-                    res.rho_D_initial = initial_rel_error_gmres;
+                    // R13.24 (external review P1-4): do NOT copy the S ratio into the D slot.
+                    // The normal return path fills these from two different sources
+                    // (initial_rel_error_gmres / initial_rho_D_gmres); this one made them equal by
+                    // construction, so a reader could not tell a genuinely equal pair from a
+                    // fabricated one. A D coordinate that was never measured is a sentinel.
+                    res.rho_D_initial = wrf::sdirk3::kMetricNotMeasured;
                     res.rho_D_final = 1.0f;
                     res.rho_S_initial = initial_rel_error_gmres;
                     res.rho_S_final = 1.0f;
@@ -5746,6 +5751,9 @@ public:
                 return (probed.detach() - probe_dK_from_solve)
                            .to(torch::kFloat64).norm().item<double>() / base;
             };
+            // R13.24 (external review P1-1): `s_halo_masked` travels with the merit so a value
+            // computed WITHOUT the mask can never be read as the trust merit. Reset per call.
+            bool s_halo_masked = false;
             auto candidate_merits = [&](const torch::Tensor& R_ref, const torch::Tensor& R_cand,
                                         double& raw_before, double& raw_after,
                                         double& s_before, double& s_after,
@@ -5754,13 +5762,29 @@ public:
                 // protection would otherwise depend on the call site -- which is exactly the
                 // scope trap this project recorded (a NoGradGuard whose block had already closed).
                 torch::NoGradGuard ng_merit;
+                s_halo_masked = false;
                 raw_before = R_ref.to(torch::kFloat64).norm().item<double>();
                 raw_after  = R_cand.to(torch::kFloat64).norm().item<double>();
                 s_measured = S_inv_diag_.defined() &&
                              S_inv_diag_.numel() == R_ref.numel();
                 if (s_measured) {
-                    s_before = (S_inv_diag_ * R_ref).to(torch::kFloat64).norm().item<double>();
-                    s_after  = (S_inv_diag_ * R_cand).to(torch::kFloat64).norm().item<double>();
+                    // R13.24 (external review P1-1): the SAME quantity the trust region judges by.
+                    // This computed ||S^-1 R|| unmasked while trust acceptance zeroes the halo
+                    // first (masked_fill_) -- two different numbers under one name, so a candidate
+                    // could pass here and fail there. At np=1 with no halo mask the two coincide,
+                    // which is why the divergence stayed invisible; it would appear the moment
+                    // this runs multi-tile.
+                    auto sb = (S_inv_diag_ * R_ref).to(torch::kFloat64);
+                    auto sa = (S_inv_diag_ * R_cand).to(torch::kFloat64);
+                    if (halo_mask_initialized_ && halo_mask_.defined() &&
+                        halo_mask_.numel() == sb.numel()) {
+                        const auto halo = halo_mask_.to(torch::kBool).logical_not();
+                        sb = sb.masked_fill(halo, 0.0);
+                        sa = sa.masked_fill(halo, 0.0);
+                        s_halo_masked = true;
+                    }
+                    s_before = sb.norm().item<double>();
+                    s_after  = sa.norm().item<double>();
                 } else {
                     s_before = -1.0;
                     s_after = -1.0;
@@ -11394,16 +11418,38 @@ public:
                     bool accept_full_step = true;
                     if (gmres_objective_mismatch_on_entry) {
                         torch::NoGradGuard ng_entry_mismatch;
-                        const float base_norm  = guarded_item<float>(R.norm());
-                        const float trial_norm = guarded_item<float>(R_trial.norm());
-                        accept_full_step = std::isfinite(trial_norm) && std::isfinite(base_norm) &&
-                                           trial_norm < base_norm;
+                        // R13.24 (external review P0-3): judge in the coordinate that RAISED the
+                        // objection. An entry mismatch means the solve met the inner stopping
+                        // metric but NOT the S tolerance -- an S-coordinate disagreement by
+                        // definition -- so accepting it because the raw packed L2 fell answers a
+                        // different question than the one asked. R13.23 measured two candidates
+                        // that fall in raw L2 (-12.5%, -60%) while the S merit gets WORSE (+2.5%,
+                        // 46x): exactly the shape this branch would have waved through.
+                        //
+                        // Fail-closed: without the S coordinate there is no basis to overrule the
+                        // mismatch, so the step is rejected rather than accepted on a norm that
+                        // was not in question.
+                        double raw_b = -1.0, raw_a = -1.0, s_b = -1.0, s_a = -1.0;
+                        bool s_ok = false;
+                        candidate_merits(R.detach(), R_trial.detach(),
+                                         raw_b, raw_a, s_b, s_a, s_ok);
+                        wrf::sdirk3::CandidateArbitration entry_merit;
+                        entry_merit.s_merit_measured = s_ok;
+                        entry_merit.s_before = s_b;
+                        entry_merit.s_after  = s_a;
+                        accept_full_step =
+                            wrf::sdirk3::candidate_arbitration_rescues(entry_merit);
+                        const float base_norm  = static_cast<float>(s_b);
+                        const float trial_norm = static_cast<float>(s_a);
                         entry_mismatch_step_rejected = !accept_full_step;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                             std::cerr << "[TRUST OFF] entry met the stop metric but not S"
                                       << " (rho_S=" << gmres_raw_rel_error << "); nonlinear check "
                                       << (accept_full_step ? "PASSED" : "FAILED")
-                                      << " |R|=" << base_norm << " -> " << trial_norm << std::endl;
+                                      << " basis=S_merit s_measured=" << (s_ok ? 1 : 0)
+                                      << " ||S^-1 R||=" << base_norm << " -> " << trial_norm
+                                      << "  (raw L2 " << raw_b << " -> " << raw_a
+                                      << ", NOT the criterion)" << std::endl;
                         }
                     }
                     if (accept_full_step) {
@@ -11439,7 +11485,7 @@ public:
             // evaluates and correctly declines to rescue them -- the same outcome, now reached by
             // measurement instead of by assumption. It costs one RHS evaluation per total-failure
             // iteration, which is why it is not on by default.
-            bool arbitration_rescued = false;
+            bool arbitration_admitted = false;
             if (!step_accepted && gmres_total_failure_candidate &&
                 wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_CANDIDATE_ARBITRATION") &&
                 dK.defined() && dK.numel() > 0 && R.defined()) {
@@ -11458,21 +11504,31 @@ public:
                 arb.s_merit_measured = s_ok;
                 arb.s_before = s_b;
                 arb.s_after = s_a;
-                arbitration_rescued = wrf::sdirk3::candidate_arbitration_rescues(arb);
+                arbitration_admitted = wrf::sdirk3::candidate_arbitration_rescues(arb);
                 std::cerr << "SDIRK3_CANDIDATE_ARBITRATION"
                           << " stage=" << stage
                           << " newton_iter=" << newton_iter
                           << " R_raw=" << raw_b << " R_raw_candidate=" << raw_a
                           << " R_S=" << s_b << " R_S_candidate=" << s_a
                           << " S_merit_measured=" << (s_ok ? 1 : 0)
-                          << " rescued=" << (arbitration_rescued ? 1 : 0)
+                          << " s_halo_masked=" << (s_halo_masked ? 1 : 0)
+                          << " admitted=" << (arbitration_admitted ? 1 : 0)
                           << " basis=trust_region_S_norm"
                           << " K_mutated=0"
                           << std::endl;
             }
+            // R13.24 (external review P0-1): ONE veto. `gmres_total_failure_candidate` is const
+            // and several consumers read it directly -- including trust acceptance, which R13.23
+            // did not notice. Every one of them must read this instead, or an admitted candidate
+            // enters the trial and is refused by a veto the admission was supposed to lift.
+            const bool effective_veto = wrf::sdirk3::effective_total_failure_veto(
+                gmres_total_failure_candidate, arbitration_admitted);
+            const auto candidate_disposition = wrf::sdirk3::candidate_disposition(
+                gmres_total_failure_candidate, arbitration_admitted);
+
             bool gmres_total_failure = false;
-            if (!step_accepted && !arbitration_rescued &&
-                (gmres_total_failure_candidate || entry_mismatch_step_rejected)) {
+            if (!step_accepted &&
+                (effective_veto || entry_mismatch_step_rejected)) {
                 gmres_total_failure = true;
                 // R13.23 (deep review P0-2): ONE candidate-merit evaluator, so a probe reports the
             // norm the PRODUCTION path actually judges by.
@@ -11716,7 +11772,7 @@ public:
             if (!wrf::sdirk3::g_sdirk3_config.nk_trust_region) {
                 const bool modelled = wrf::sdirk3::shortcut_path_enters_trust_loop(
                     gmres_total_failure_candidate, entry_mismatch_step_rejected,
-                    arbitration_rescued);
+                    arbitration_admitted);
                 const bool actual = !step_accepted && !gmres_total_failure;
                 if (modelled != actual) {
                     std::cerr << "SDIRK3_SHORTCUT_MODEL_MISMATCH stage=" << stage
@@ -11725,7 +11781,7 @@ public:
                               << " actual=" << (actual ? 1 : 0)
                               << " candidate=" << (gmres_total_failure_candidate ? 1 : 0)
                               << " entry_mismatch_rejected=" << (entry_mismatch_step_rejected ? 1 : 0)
-                              << " rescued=" << (arbitration_rescued ? 1 : 0)
+                              << " admitted=" << (arbitration_admitted ? 1 : 0)
                               << " step_accepted=" << (step_accepted ? 1 : 0)
                               << " total_failure=" << (gmres_total_failure ? 1 : 0)
                               << std::endl;
@@ -12046,10 +12102,16 @@ public:
                 // Trust-region should REJECT and shrink, not force-accept.
                 if (!std::isfinite(rho_val)) {
                     accept_step = false;  // Non-finite rho: always reject
-                } else if (gmres_total_failure_candidate) {
+                } else if (effective_veto) {
                     // v20.14r27h: GMRES diverged (raw > 1) or essentially failed (e ≥ 0.999).
                     // When e ≈ 1, the correction dK carries no useful signal — the predicted
                     // model is unreliable and tiny α steps would be accepted spuriously.
+                    //
+                    // R13.24 (external review P0-1): this read `gmres_total_failure_candidate`
+                    // directly, so an arbitration-ADMITTED candidate was refused here on the very
+                    // signal its admission had reconsidered -- it entered the loop and lost every
+                    // attempt. Reading the single effective veto is what makes admission mean
+                    // anything; with the arbitration off the two are identical.
                     accept_step = false;
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                         std::cerr << "[TRUST REGION] GMRES failed (rel_error="
@@ -12527,6 +12589,18 @@ public:
             } else {
                 stats_.gmres_non_total_failures++;
             }
+            // R13.24 (external review, section 4.3): the counters above read the DERIVED flag, so
+            // an arbitration-admitted candidate moved from `gmres_total_failures` to
+            // `gmres_non_total_failures` -- the LINEAR signal disappearing from the record because
+            // a nonlinear mechanism was given a chance to look at it. Those two questions are
+            // different and both matter: "did the linear solve fail?" is a property of the solve,
+            // not of what any globalizer decided afterwards. Corrected here rather than by
+            // changing the counters, so records taken before this remain comparable.
+            if (wrf::sdirk3::counts_as_linear_total_failure(candidate_disposition) &&
+                !gmres_total_failure) {
+                stats_.gmres_non_total_failures--;   // undo the miscount above
+                stats_.gmres_total_failures++;       // the linear signal is what this counts
+            }
 
 
             // FIX (2025-12-05): Conditional diagnostics for autograd compatibility
@@ -12989,6 +13063,13 @@ public:
                         // this iteration's. `last_*` is written per solve; a Newton iteration
                         // that took a path without a solve would otherwise donate a stale
                         // receipt to the exit event, labelled "the receipt of THIS solve".
+                        // R13.24 (external review P1-3): the SECOND authority. `newton_exit_event_iter`
+                        // is the iteration the Newton loop actually broke at, stamped here and not
+                        // derived from any receipt. The completeness rule compares it against the
+                        // receipt's own iteration; filling both from one field (which is what the
+                        // view did) made that comparison an identity that only a fixture could
+                        // ever fail.
+                        stats_.newton_exit_event_iter = newton_iter;
                         if (stats_.last_solve_iter != newton_iter) {
                             // No solve receipt for THIS iteration: the exit event gets none
                             // rather than the previous iteration's, which the classifier would

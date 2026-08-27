@@ -597,6 +597,12 @@ struct StageFailureSignals {
     // belong to the stage's largest-ratio solve, which need not be the same iteration -- subtyping
     // a terminal event from another iteration's evidence describes a solve that ended nothing.
     int    exit_krylov_iter = -1;
+    // R13.24 (external review P1-3): a SECOND, independent authority for "which Newton iteration
+    // ended the loop". The exit receipt's own iteration is `exit_krylov_iter`; comparing that
+    // field with itself -- which is what the view did -- can never detect a receipt promoted from
+    // another iteration, the very thing the completeness rule was written to catch.
+    // -1 = never stamped, in which case the comparison is skipped rather than passed.
+    int    newton_exit_event_iter = -1;
     // R13.21 SELF-REVIEW ROUND 2: the exit solve's Arnoldi budget, so `krylov_receipt_complete`
     // has something to judge. Without these the completeness rule had no production consumer at
     // all -- a rule with a producer and no consumer, written in the increment that closes that
@@ -673,6 +679,10 @@ inline constexpr double kKrylovNoProgressVsR0 = 0.90;
 // Below it, the iteration was still working and being cut off is a budget statement.
 inline constexpr double kResidualStillFalling = 0.95;
 
+// R13.24: the sentinel `measured()` rejects. Named because "-1.0" appears at a dozen call sites
+// and a reader cannot tell a sentinel from a legitimate negative without knowing the convention.
+constexpr double kMetricNotMeasured = -1.0;
+
 inline bool measured(double v) {
     return v == v && v >= 0.0 && v < std::numeric_limits<double>::infinity();
 }
@@ -744,7 +754,7 @@ struct KrylovReceiptView {
     bool   D_reached = false;
     bool   S_reached = false;
     int    receipt_iter = -1;      // which Newton iteration this receipt belongs to
-    int    exit_iter = -1;         // which iteration ended the loop
+    int    exit_iter = -1;         // which iteration ended the loop (independent authority)
 };
 
 inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
@@ -768,6 +778,78 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
     // and is allowed through; one stamped and disagreeing is not.
     if (r.receipt_iter >= 0 && r.exit_iter >= 0 && r.receipt_iter != r.exit_iter) return false;
     return true;
+}
+
+// R13.24 (external review, section 11): the line-search landmines, PINNED not opened.
+//
+// The Armijo path is unreachable today. Flipping its guard would not restore it -- three separate
+// defects fire the moment it runs, and each is recorded here as a rule so a future reopening has
+// to confront them instead of discovering them in a dt=600 run:
+//
+//   (1) BUDGET EXHAUSTION. `alpha` is only assigned on Armijo success or at ls_iter == 9. The
+//       loop also stops when `rhs_budget` hits 0, which happens first (budget starts at 5, the
+//       loop assumes 9 arms). Neither assignment runs, so `alpha` keeps its initial 1.0 and the
+//       FULL step -- the one Armijo just rejected -- is applied.
+//   (2) MAX ITERATIONS. At ls_iter == 9 the last trial alpha is taken whether or not it satisfied
+//       the Armijo condition. The search is "use the last thing tried", not fail-closed.
+//   (3) STALE BOOKKEEPING. A successful backtrack updates `residual_after_step` but not
+//       `accepted_residual` / `accepted_residual_norm`, so the ledger and the Newton diagnostics
+//       describe a step at alpha=1 while alpha < 1 was applied.
+//
+// A correct line search must return "did Armijo accept?" as its own answer, not leave it implicit
+// in whatever alpha survived.
+inline bool line_search_alpha_is_trustworthy(bool armijo_satisfied, int arms_tried,
+                                             int rhs_budget_remaining) {
+    if (armijo_satisfied) return true;          // the only case that earns the step
+    (void)arms_tried; (void)rhs_budget_remaining;
+    return false;                                // exhausting budget or arms is a REJECT
+}
+
+// R13.24 (external review P0-1): ONE veto, read by every consumer.
+//
+// R13.23 cleared the DERIVED flag `gmres_total_failure` when the arbitration admitted a candidate,
+// and concluded the candidate was "handed to the globalizer to accept or reject on its own terms".
+// It is not. Trust acceptance reads the ORIGINAL `gmres_total_failure_candidate`, which is `const`
+// and which the arbitration never touched, and rejects on it unconditionally
+// (newton_solver.cpp:12049). So an admitted candidate entered the loop and was refused by every
+// attempt: admission, not rescue.
+//
+// That is this campaign's signature defect -- a rule whose producer and first consumer agree while
+// a LATER consumer still reads the old quantity -- committed one level below where R13.23 fixed
+// it. The correction is not another flag but a single function every consumer calls, so a future
+// reader cannot find two vetoes to choose between.
+//
+// Naming matters here and the old name was doing damage: `rescued` asserts an outcome the
+// mechanism cannot deliver. Admission to a trial is what it actually grants.
+inline bool effective_total_failure_veto(bool total_failure_candidate, bool arbitration_admitted) {
+    return total_failure_candidate && !arbitration_admitted;
+}
+
+// The disposition of a candidate, as one value instead of three booleans that can disagree.
+// `AdmittedThenRejected` is the state R13.23 could not express: the linear solve DID signal total
+// failure, the arbitration DID admit the candidate, and the globalizer then refused it. Counting
+// that as a non-total-failure -- which is what reading the cleared derived flag does -- loses the
+// linear signal from the statistics entirely.
+enum class CandidateDisposition {
+    OrdinaryProposal,        // no total-failure signal; the usual path
+    LinearFailureVetoed,     // signalled and not admitted: the veto stands
+    AdmittedToTrial,         // signalled, admitted, outcome not yet known
+};
+
+inline CandidateDisposition candidate_disposition(bool total_failure_candidate,
+                                                  bool arbitration_admitted) {
+    if (!total_failure_candidate) return CandidateDisposition::OrdinaryProposal;
+    return arbitration_admitted ? CandidateDisposition::AdmittedToTrial
+                                : CandidateDisposition::LinearFailureVetoed;
+}
+
+// Did the LINEAR solve signal total failure? This is what the statistics must count, and it is
+// independent of what any globalizer later decided. R13.23 made the counter read the derived flag,
+// so an admitted candidate silently moved from `gmres_total_failures` to `gmres_non_total_failures`
+// -- the linear signal disappearing because a nonlinear mechanism was given a chance.
+inline bool counts_as_linear_total_failure(CandidateDisposition d) {
+    return d == CandidateDisposition::LinearFailureVetoed ||
+           d == CandidateDisposition::AdmittedToTrial;
 }
 
 // R13.23 (self-review round 5): the boundary receipt's dedup key.
@@ -966,8 +1048,15 @@ inline KrylovReceiptView exit_receipt_view(const StageFailureSignals& s) {
     v.tolerance_applied = s.exit_tolerance_applied;
     v.D_reached = s.exit_D_reached;
     v.S_reached = s.exit_S_reached;
+    // R13.24 (external review P1-3): these were BOTH filled from `exit_krylov_iter`, so the
+    // completeness rule's `receipt_iter != exit_iter` test was an identity in production -- it
+    // could only ever fire in a fixture, which is the "verifying a state the producer cannot
+    // emit" shape this repository has flagged before. `newton_exit_event_iter` is stamped
+    // independently at the Newton exit site; when it was never stamped the comparison is skipped
+    // rather than satisfied by construction.
     v.receipt_iter = s.exit_krylov_iter;
-    v.exit_iter = s.exit_krylov_iter;
+    v.exit_iter = (s.newton_exit_event_iter >= 0) ? s.newton_exit_event_iter
+                                                  : s.exit_krylov_iter;
     return v;
 }
 
