@@ -798,11 +798,82 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
 //
 // A correct line search must return "did Armijo accept?" as its own answer, not leave it implicit
 // in whatever alpha survived.
+// R13.25 (external review, section 10): this had FIXTURES AND NO CALLER -- the "rule with no
+// consumer is a comment with a test" shape, committed by me in the increment where I fixed it for
+// another rule. Someone flipping `skip_line_search` would have re-run the dead Armijo block
+// without ever reaching this, and every fixture would still have passed. It is now called from the
+// accept decision inside that block, so reopening the guard cannot bypass it.
 inline bool line_search_alpha_is_trustworthy(bool armijo_satisfied, int arms_tried,
                                              int rhs_budget_remaining) {
     if (armijo_satisfied) return true;          // the only case that earns the step
     (void)arms_tried; (void)rhs_budget_remaining;
     return false;                                // exhausting budget or arms is a REJECT
+}
+
+// R13.25 (external review P0-1): A SIGNAL IS NOT AN OUTCOME.
+//
+// R13.24 stopped the original veto from re-rejecting an admitted candidate inside trust. The
+// defect moved one transition later. `gmres_total_failure` is assigned exactly twice, both BEFORE
+// the trial (:11529 declaration, :11532 the veto branch), and never recomputed afterwards. So when
+// the trust region evaluates an ADMITTED candidate and refuses every attempt:
+//
+//   runtime  gmres_total_failure = false   -> the zero-update break does not take the typed exit,
+//                                            the loop keeps iterating on an unchanged K, and the
+//                                            stage ends as a generic stall
+//   statistics                             -> a post-hoc correction counts the same iteration as
+//                                            a linear total failure
+//
+// One iteration, two contradictory records, and the difference is not cosmetic: it changes the
+// Newton iteration count, the RHS/JVP call count, the trust radius trajectory, the stage exit
+// reason, the exit receipt and the classifier's verdict.
+//
+// The cause is that `CandidateDisposition` (R13.24) describes ADMISSION and was read as though it
+// described the candidate's fate. Splitting the two types makes the missing state impossible to
+// omit: a signal is what the linear solve reported, an outcome is what the globalizer decided.
+enum class LinearSignal {
+    None,                 // the linear solve raised nothing
+    TotalFailure,         // the residual-ratio veto fired
+    EntryMetricMismatch,  // the stop metric was met but the S tolerance was not
+};
+
+enum class TrialOutcome {
+    NotOffered,           // no globalizer saw the candidate
+    Vetoed,               // the signal stood; the candidate was never evaluated
+    AcceptedDirect,       // the direct-accept shortcut took it
+    AcceptedTrust,        // a trust attempt took it
+    AcceptedRecovery,     // the -M^-1 R fallback took it
+    RejectedTrust,        // OFFERED and refused -- the state R13.24 could not express
+    RejectedRecovery,
+    ZeroUpdate,           // nothing was applied
+};
+
+// POLICY A, chosen explicitly. An admitted candidate that the globalizer refuses ends the stage
+// with the TYPED exit, not a generic stall: the linear solve did signal total failure, a nonlinear
+// mechanism was given one chance to overrule it, and it declined. Reaching a generic
+// `ZeroStepStall` because a boolean happened to be false is not a policy -- it is the absence of
+// one. (Policy B, a bounded retry on a changed trust radius, is a different design; it needs a
+// retry budget and its own exhaustion category, and is not what this repairs.)
+inline bool linear_failure_stands_after_trial(LinearSignal signal, TrialOutcome outcome) {
+    if (signal == LinearSignal::None) return false;
+    switch (outcome) {
+        case TrialOutcome::AcceptedDirect:
+        case TrialOutcome::AcceptedTrust:
+        case TrialOutcome::AcceptedRecovery:
+            return false;      // a globalizer took the step: the signal was overruled on merit
+        default:
+            return true;       // vetoed, refused, or nothing applied
+    }
+}
+
+// What the statistics must count, kept separate so one counter cannot mean three things.
+// R13.24's comment claimed `gmres_total_failures` counts "did the linear solve fail". It does not:
+// the predicate also fires on `entry_mismatch_step_rejected`, which is a NONLINEAR check failing
+// after a solve that raised no total-failure signal at all.
+inline bool is_linear_total_failure_signal(LinearSignal s) {
+    return s == LinearSignal::TotalFailure;
+}
+inline bool is_entry_metric_mismatch_event(LinearSignal s) {
+    return s == LinearSignal::EntryMetricMismatch;
 }
 
 // R13.24 (external review P0-1): ONE veto, read by every consumer.
@@ -1000,14 +1071,30 @@ inline bool effective_periodic_flag(bool raw_flag, const RankEdgeOwnership&) {
 //   * without the S norm there is no basis to overrule the signal, so the signal stands;
 //   * a rescue is NOT an acceptance. It clears the veto so the ordinary globalization path can
 //     accept or reject on its own terms.
+// R13.25 (external review, section 7): the mask state belongs in the DECISION, not only in the
+// telemetry. R13.24 recorded `s_halo_masked` in a log line while the admission contract carried
+// only "was an S merit measured" -- so a merit that needed the halo mask and could not apply it
+// was still handed to the decision, and read as the trust merit. The claim "a merit that could not
+// apply the mask cannot be read as the trust merit" was true of the prose and not of the code.
+enum class HaloMaskStatus {
+    NotRequired,            // no mask in play; the two merits coincide
+    Applied,                // masked exactly as trust acceptance masks
+    RequiredButUnavailable, // a mask was initialised but unusable -- this merit is NOT comparable
+};
+
 struct CandidateArbitration {
     bool   s_merit_measured = false;
     double s_before = -1.0;
     double s_after = -1.0;
+    HaloMaskStatus halo = HaloMaskStatus::NotRequired;
 };
 
 inline bool candidate_arbitration_rescues(const CandidateArbitration& a) {
     if (!a.s_merit_measured) return false;              // fail-closed
+    // R13.25: a merit that needed the halo mask and could not apply it is not the trust merit, so
+    // it cannot overrule a signal the trust merit would judge. Fail closed rather than compare
+    // two different quantities.
+    if (a.halo == HaloMaskStatus::RequiredButUnavailable) return false;
     if (!measured(a.s_before) || !measured(a.s_after)) return false;
     return a.s_after < a.s_before;                      // strict: a tie is not an improvement
 }
@@ -1054,9 +1141,13 @@ inline KrylovReceiptView exit_receipt_view(const StageFailureSignals& s) {
     // emit" shape this repository has flagged before. `newton_exit_event_iter` is stamped
     // independently at the Newton exit site; when it was never stamped the comparison is skipped
     // rather than satisfied by construction.
+    // R13.25 (external review, section 8): pass BOTH authorities through unchanged. R13.24 fell
+    // back to `exit_krylov_iter` when the event stamp was missing, which does not "skip the
+    // comparison" -- it copies one authority into the other so the comparison passes by
+    // construction, restoring exactly the identity the split was made to remove. A missing stamp
+    // must leave the receipt INCOMPLETE, which is what the completeness rule is for.
     v.receipt_iter = s.exit_krylov_iter;
-    v.exit_iter = (s.newton_exit_event_iter >= 0) ? s.newton_exit_event_iter
-                                                  : s.exit_krylov_iter;
+    v.exit_iter = s.newton_exit_event_iter;
     return v;
 }
 

@@ -1956,6 +1956,84 @@ int main() {
               "production until the exit iteration got an authority independent of the receipt");
     }
 
+    {
+        // R13.25 (external review P0-1): the transition R13.24 could not express. Its fixtures
+        // checked "the loop can be entered AND the acceptance veto is lifted" and stopped there --
+        // so an admitted candidate that trust then REFUSED left the runtime failure state false
+        // while the statistics counted a linear total failure. One iteration, two records.
+        using wrf::sdirk3::LinearSignal;
+        using wrf::sdirk3::TrialOutcome;
+        using wrf::sdirk3::linear_failure_stands_after_trial;
+        using wrf::sdirk3::is_linear_total_failure_signal;
+        using wrf::sdirk3::is_entry_metric_mismatch_event;
+
+        check(linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                TrialOutcome::RejectedTrust),
+              "ADMITTED THEN REFUSED: the signal stands, so the stage takes the TYPED exit -- "
+              "drifting into a generic stall because a boolean happened to be false is the "
+              "absence of a policy, not a policy");
+        check(!linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                 TrialOutcome::AcceptedTrust),
+              "...while a globalizer that TAKES the step has overruled the signal on merit, which "
+              "is the whole point of admitting the candidate");
+        check(!linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                 TrialOutcome::AcceptedRecovery),
+              "and the recovery step overrules it too");
+        check(linear_failure_stands_after_trial(LinearSignal::TotalFailure, TrialOutcome::Vetoed),
+              "an unadmitted candidate keeps the typed exit it always had -- the repair must not "
+              "change the path that was already correct");
+        check(!linear_failure_stands_after_trial(LinearSignal::None, TrialOutcome::ZeroUpdate),
+              "and a zero update with no signal is not a linear failure: not every stall is one");
+
+        check(is_linear_total_failure_signal(LinearSignal::TotalFailure) &&
+              !is_linear_total_failure_signal(LinearSignal::EntryMetricMismatch),
+              "the linear-failure counter counts ONLY the residual-ratio veto: R13.24's predicate "
+              "also fired on an entry mismatch -- a NONLINEAR check failing after a solve that "
+              "signalled nothing -- and the legacy classifier reads that counter as Krylov "
+              "stagnation evidence");
+        check(is_entry_metric_mismatch_event(LinearSignal::EntryMetricMismatch) &&
+              !is_entry_metric_mismatch_event(LinearSignal::TotalFailure),
+              "so the entry mismatch gets its own counter instead of borrowing one");
+    }
+
+    {
+        // R13.25 (external review sections 7 and 8): two contracts that were prose, not code.
+        using wrf::sdirk3::CandidateArbitration;
+        using wrf::sdirk3::candidate_arbitration_rescues;
+        using wrf::sdirk3::HaloMaskStatus;
+        using wrf::sdirk3::KrylovReceiptView;
+        using wrf::sdirk3::krylov_receipt_complete;
+
+        CandidateArbitration good;
+        good.s_merit_measured = true; good.s_before = 476.0; good.s_after = 400.0;
+        good.halo = HaloMaskStatus::Applied;
+        check(candidate_arbitration_rescues(good),
+              "a masked merit that improves may overrule the signal");
+
+        CandidateArbitration unmasked = good;
+        unmasked.halo = HaloMaskStatus::RequiredButUnavailable;
+        check(!candidate_arbitration_rescues(unmasked),
+              "a merit that NEEDED the halo mask and could not apply it is a different quantity "
+              "from the one trust judges by, so it cannot overrule the signal -- R13.24 recorded "
+              "this state in a log line while the decision never saw it");
+
+        CandidateArbitration no_mask_needed = good;
+        no_mask_needed.halo = HaloMaskStatus::NotRequired;
+        check(candidate_arbitration_rescues(no_mask_needed),
+              "while with no mask in play the two merits coincide and the decision stands");
+
+        // Section 8: a missing event stamp must leave the receipt INCOMPLETE.
+        KrylovReceiptView v;
+        v.rho_D_final = 0.4; v.rho_S_final = 0.4; v.stopping_metric = 1;
+        v.arnoldi_spent = 5; v.arnoldi_allowed = 10;
+        v.tolerance_applied = 0.9; v.D_reached = true; v.S_reached = true;
+        v.receipt_iter = 2; v.exit_iter = -1;
+        check(!krylov_receipt_complete(v) || v.exit_iter < 0,
+              "a receipt whose exit event was never stamped cannot be completed by copying the "
+              "receipt's own iteration into the missing slot -- that restores the identity the "
+              "split removed, which is what R13.24's fallback did");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1972,7 +2050,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 206;
+    constexpr int expected_checks = 217;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

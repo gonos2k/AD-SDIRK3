@@ -518,6 +518,14 @@ public:
         // at the exit site and NOT derived from any receipt -- the second authority the
         // completeness rule needs to compare against `exit_krylov_iter`.
         int   newton_exit_event_iter = -1;
+        // R13.25 (external review section 6): counters that mean ONE thing each. R13.24's
+        // `gmres_total_failures` fired on `effective_veto || entry_mismatch_step_rejected`, so it
+        // mixed a LINEAR residual-ratio failure with a NONLINEAR check failing after a solve that
+        // signalled nothing -- and the legacy classifier branch reads it as Krylov stagnation
+        // evidence.
+        int   linear_total_failure_signals = 0;   // the residual-ratio veto fired
+        int   entry_metric_mismatch_events = 0;   // stop metric met, S tolerance not
+        int   globalization_rejections = 0;       // offered to a globalizer and refused
         double exit_rho_stop_final = -1.0;
         double exit_rho_S_final = -1.0;
         // R13.21 SELF-REVIEW ROUND 2: the exit solve's Arnoldi budget, so the completeness rule

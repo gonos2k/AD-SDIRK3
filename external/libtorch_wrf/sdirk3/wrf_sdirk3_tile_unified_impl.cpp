@@ -3601,9 +3601,9 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     // the last alpha regardless; `accepted_residual` is never updated to the alpha applied). Those
     // are pinned by fixtures and belong to a state-machine rebuild, not to a guard flip.
     if (wrf::sdirk3::g_sdirk3_config.nk_line_search) {
-        std::cerr << "[CONFIG UNSUPPORTED] sdirk3_nk_line_search=true requested, forcing effective"
-                  << "=false: the Armijo consumer is unreachable (see line_search_skipped())."
-                  << " Set it false to silence this." << std::endl;
+        std::cerr << "[CONFIG UNSUPPORTED] sdirk3_nk_line_search requested=true supported=false"
+                  << " solver_effective=false: the Armijo consumer is unreachable (see"
+                  << " line_search_skipped()). Set it false to silence this." << std::endl;
     }
     nk_options.use_line_search = false;
     nk_options.use_preconditioner = (wrf::sdirk3::g_sdirk3_config.precond_type > 0);
