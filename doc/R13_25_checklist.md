@@ -262,3 +262,40 @@ in the previous round.
 dt=600 re-run: `SDIRK3_*` telemetry **byte-identical**, and `SDIRK3_RETURN_PAIRING_VIOLATION` fires
 **0** times. ctest 62/62; ratchets green (from_blob 70/70, item-guard 74/74, **rule-consumer
 31/31**); fixtures **220**. **Independent review: NOT RUN.**
+
+---
+
+## Fourth self-review — the gate I built overstated its own coverage
+
+The lint from the previous round was the first thing attacked, and it had **two** defects.
+
+**It could not see nine rules.** Its pattern required a word return type, so every
+`inline const char* foo(...)` was invisible: it reported *"31 rules, 0 orphans"* over two thirds
+of the header. A gate that overstates its coverage is the defect it exists to catch, one level up.
+The header has 48 `inline` declaration lines; the lint now accounts for **all** of them —
+42 rule lines (40 distinct rules + 2 forward-declaration duplicates) + 6 constants — and **fails on
+any declaration it cannot classify**, so a new style cannot slip past unseen. The rule count is
+ratcheted at 40: a drop means either rules were deleted (lower it in the same commit) or the
+pattern stopped matching, which silently exempts them.
+
+**And then my first fix was itself the same shape.** I widened the *detection* regex and left the
+*definition-exclusion* regex on the old pattern — so for those nine rules the definition was never
+located, the definition line counted as an "internal call", and every one of them **exempted
+itself automatically**. Producer updated, consumer left behind, inside the lint written to catch
+exactly that.
+
+The second attempt was also wrong: a character-offset window around a multi-line match compared
+the wrong pair. It is now line-based — a line that matches `^\s*inline` **declares** the rule and
+is not a call of it — which is checkable by reading it, rather than by trusting an offset
+arithmetic I had already got wrong twice.
+
+**Verified by removing consumers, not by renaming definitions.** My first negative test renamed a
+definition, which leaves the production call site referring to the old name — the compile breaks
+but the lint is *correct* to pass. Removing the actual calls is the test that matters: the lint
+now names `stage_decision_basis_name`, `entry_exempts_total_failure` and
+`krylov_return_pairing_consistent` and exits 1, and `check_ratchets.sh` propagates it (gate exit
+1 → 0 on restore).
+
+dt=600 re-run: `SDIRK3_*` telemetry **byte-identical**. ctest 62/62; ratchets green (from_blob
+70/70, item-guard 74/74, **rule-consumer 40/40 with full coverage accounting**).
+**Independent review: NOT RUN.**
