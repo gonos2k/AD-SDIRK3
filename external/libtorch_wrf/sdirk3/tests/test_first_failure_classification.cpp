@@ -2034,6 +2034,38 @@ int main() {
               "split removed, which is what R13.24's fallback did");
     }
 
+    {
+        // R13.25 SELF-REVIEW: three acceptance paths must stay DISTINGUISHABLE. `step_accepted`
+        // becomes true at the direct-accept shortcut, the recovery fallback and a trust attempt;
+        // the first version of the lifecycle derived the outcome from that one boolean and
+        // labelled all three AcceptedTrust. Today's policy treats them alike, so nothing broke --
+        // which is precisely how R13.24's CandidateDisposition failed: a state the type could not
+        // express, believed later by a consumer that needed it.
+        using wrf::sdirk3::LinearSignal;
+        using wrf::sdirk3::TrialOutcome;
+        using wrf::sdirk3::linear_failure_stands_after_trial;
+
+        check(TrialOutcome::AcceptedDirect != TrialOutcome::AcceptedTrust &&
+              TrialOutcome::AcceptedTrust != TrialOutcome::AcceptedRecovery &&
+              TrialOutcome::AcceptedDirect != TrialOutcome::AcceptedRecovery,
+              "the three acceptance paths are three values, so a record cannot claim a step came "
+              "from the trust region when the direct shortcut or the recovery fallback took it");
+
+        // All three overrule the signal today -- pinned so a future policy change has to face
+        // every path explicitly instead of inheriting one path's verdict for all of them.
+        check(!linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                 TrialOutcome::AcceptedDirect) &&
+              !linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                 TrialOutcome::AcceptedTrust) &&
+              !linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                 TrialOutcome::AcceptedRecovery),
+              "under the current policy every acceptance overrules the signal -- stated per path "
+              "rather than once, because that is the equivalence the mislabelling hid");
+        check(linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                TrialOutcome::RejectedRecovery),
+              "while a refused recovery keeps the signal, like a refused trust attempt");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -2050,7 +2082,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 217;
+    constexpr int expected_checks = 220;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

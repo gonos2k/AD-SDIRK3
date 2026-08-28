@@ -153,3 +153,37 @@ run, and `SDIRK3_RECOVERY_MERIT` / `SDIRK3_CANDIDATE_LIFECYCLE` fire **0** times
 paths do not execute in this configuration, which is what the A/B confirms rather than assumes.
 
 ctest 62/62; ratchets green; fixtures 206 → **217**. **Independent review: NOT RUN.**
+
+---
+
+## Self-review of this increment — I folded the type back down
+
+The first thing attacked was the type I had just introduced. `TrialOutcome` exists to tell three
+acceptance paths apart, and I derived it from a single boolean:
+
+```cpp
+step_accepted ? TrialOutcome::AcceptedTrust : ...
+```
+
+`step_accepted` becomes true at **three** places — the direct-accept shortcut (`:11474`), the
+recovery fallback (`:11791`) and a trust attempt (`:12291`). All three were labelled
+`AcceptedTrust`. The recovery path's own marker, `recovered_with_fallback`, is block-local and dead
+by the time the outcome is derived (its block closes at `:11826`), so the information was not
+merely unused — it was **unrecoverable** at the point that needed it.
+
+Under today's policy this changes nothing: all three overrule the signal. That is exactly the
+trap. R13.24's `CandidateDisposition` was also harmless when written, and became a P0 once a later
+consumer needed the state it could not express. **A label that is false is believed by whoever
+reads it next.**
+
+Each acceptance site now stamps its own outcome, and three fixtures pin that the paths stay
+distinguishable — including the current equivalence stated **per path**, so a future policy change
+has to face each one instead of inheriting a single verdict for all three.
+
+**Also checked, and clean.** All three consumers of `s_halo_status` read it immediately after their
+own `candidate_merits` call with no intervening call (`:11460→:11466`, `:11526→:11535`,
+`:11772→:11778`), and the lambda resets it on entry — so no decision can inherit a previous call's
+mask state. The fourth caller (`:11607`) is diagnostic only and guards on `s_measured`.
+
+dt=600 re-run: `SDIRK3_*` telemetry **byte-identical**. ctest 62/62; ratchets green; fixtures
+217 → **220**. **Independent review: NOT RUN.**

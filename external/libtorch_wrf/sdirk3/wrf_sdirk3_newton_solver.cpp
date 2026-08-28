@@ -11267,6 +11267,18 @@ public:
             // Implement full accept/reject logic with adaptive radius updates.
             // v20.14r27g: Trust-region is now conditional on config nk_trust_region.
             torch::Tensor dK_scaled = dK;
+            // R13.25 SELF-REVIEW: each acceptance site stamps its OWN outcome.
+            //
+            // `step_accepted` becomes true at three different places -- the direct-accept shortcut
+            // (:11474), the recovery fallback (:11791) and a trust attempt (:12291) -- and the
+            // first version of this derived the outcome from that single boolean, labelling all
+            // three `AcceptedTrust`. Harmless for today's policy, since all three are "accepted"
+            // and the signal is overruled either way. But that is exactly how R13.24's
+            // `CandidateDisposition` failed: a state the type could not express, believed by a
+            // later consumer. `recovered_with_fallback` is block-local and dead by :12360, so the
+            // outcome cannot be recovered after the fact -- it has to be recorded where it happens.
+            wrf::sdirk3::TrialOutcome accepted_via = wrf::sdirk3::TrialOutcome::NotOffered;
+
             torch::Tensor accepted_residual;
             torch::Tensor accepted_residual_norm;
             float alpha = 1.0f;
@@ -11472,6 +11484,7 @@ public:
                         accepted_residual = R_trial;
                         accepted_residual_norm = R_trial.norm();
                         step_accepted = true;
+                        accepted_via = wrf::sdirk3::TrialOutcome::AcceptedDirect;
                     }
                 }
             }
@@ -11789,6 +11802,7 @@ public:
                                 accepted_residual = R_trial;
                                 accepted_residual_norm = trial_norm_tensor;
                                 step_accepted = true;
+                                accepted_via = wrf::sdirk3::TrialOutcome::AcceptedRecovery;
                                 recovered_with_fallback = true;
                                 last_rho = 0.0f;
                             }
@@ -12289,6 +12303,7 @@ public:
 
                 if (accept_step) {
                     step_accepted = true;
+                    accepted_via = wrf::sdirk3::TrialOutcome::AcceptedTrust;
                     dK_scaled = dK_scaled_candidate;
                     accepted_residual = R_trial;
                     accepted_residual_norm = res_trial_tensor;
@@ -12359,7 +12374,7 @@ public:
             // arbitration is armed AND admitted a candidate, so the default path cannot reach it.
             const wrf::sdirk3::TrialOutcome trial_outcome =
                 step_accepted
-                    ? (wrf::sdirk3::TrialOutcome::AcceptedTrust)
+                    ? accepted_via   // stamped where the acceptance happened, not inferred here
                     : (arbitration_admitted ? wrf::sdirk3::TrialOutcome::RejectedTrust
                                             : wrf::sdirk3::TrialOutcome::ZeroUpdate);
             if (arbitration_admitted && !step_accepted &&
