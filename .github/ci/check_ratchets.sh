@@ -78,4 +78,11 @@ if [ -n "$BASE_SHA" ]; then
   fi
 fi
 
+# R13.25 SELF-REVIEW: every rule in wrf_sdirk3_first_failure.h must have a consumer that is not a
+# test. Caught by hand three times in three increments -- once where the unguarded copy of the
+# logic WAS the defect the rule had been written to fix. A gate is cheaper than a fourth census.
+if ! python3 .github/ci/lint_rule_consumers.py; then
+  exit 1
+fi
+
 echo "OK: ratchets respected"

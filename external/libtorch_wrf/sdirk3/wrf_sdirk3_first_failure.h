@@ -924,14 +924,10 @@ inline CandidateDisposition candidate_disposition(bool total_failure_candidate,
                                 : CandidateDisposition::LinearFailureVetoed;
 }
 
-// Did the LINEAR solve signal total failure? This is what the statistics must count, and it is
-// independent of what any globalizer later decided. R13.23 made the counter read the derived flag,
-// so an admitted candidate silently moved from `gmres_total_failures` to `gmres_non_total_failures`
-// -- the linear signal disappearing because a nonlinear mechanism was given a chance.
-inline bool counts_as_linear_total_failure(CandidateDisposition d) {
-    return d == CandidateDisposition::LinearFailureVetoed ||
-           d == CandidateDisposition::AdmittedToTrial;
-}
+// R13.25 SELF-REVIEW (census): `counts_as_linear_total_failure` lived here until the lifecycle
+// split replaced it with `is_linear_total_failure_signal`, which takes the SIGNAL rather than an
+// admission state. It survived with only fixtures holding it up -- a retired rule with live tests
+// reads as current guidance to the next person who greps for one.
 
 // R13.23 (self-review round 5): the boundary receipt's dedup key.
 //

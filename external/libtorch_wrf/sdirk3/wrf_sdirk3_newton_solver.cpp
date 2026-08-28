@@ -1565,6 +1565,27 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                             b.detach().clone(), iter, false, false};
                     res.termination_reason = KTR::NanRetryExhausted;
                     res.initial_rel_error = initial_rel_error_gmres;
+                    // R13.25 SELF-REVIEW (census): the pairing rule now CHECKS this return.
+                    // `krylov_return_pairing_consistent` had fixtures and no production caller --
+                    // it pinned the invariant in a test while the site that must satisfy it went
+                    // unexamined. The pair here is x = 0 with r = b, so the rule must hold; if a
+                    // future edit changes one without the other, this says so instead of shipping
+                    // a result whose x and r come from different solves.
+                    {
+                        torch::NoGradGuard ng_pairing;
+                        wrf::sdirk3::KrylovReturnPairing pairing;
+                        pairing.x_is_zero = true;
+                        pairing.r_norm = static_cast<double>(r_norm);
+                        pairing.b_norm = static_cast<double>(
+                            guarded_item<float>(safe_tensor_norm(b.detach())));
+                        if (!wrf::sdirk3::krylov_return_pairing_consistent(pairing)) {
+                            std::cerr << "SDIRK3_RETURN_PAIRING_VIOLATION path=nan_retry"
+                                      << " x_is_zero=1 r_norm=" << pairing.r_norm
+                                      << " b_norm=" << pairing.b_norm
+                                      << "  (x and r do not belong to the same solve)"
+                                      << std::endl;
+                        }
+                    }
                     // R13.21 (external review P1-2): COMPLETE THE RECEIPT. This early return
                     // filled only the constructor fields plus `initial_rel_error`, so every metric
                     // and budget field R13.18-R13.20 added stayed at its sentinel -- and a
@@ -10035,8 +10056,15 @@ public:
                     // `taylor_defect_verdict` live there rather than inline here.
                     const auto entry_v = wrf::sdirk3::krylov_entry_verdict(
                         stop_metric_reached_on_entry, gmres_result.S_tolerance_reached);
-                    gmres_S_reached_on_entry = entry_v.S_reached;
-                    gmres_objective_mismatch_on_entry = entry_v.objective_mismatch;
+                    // R13.25 SELF-REVIEW (census): go THROUGH the rules. These read the verdict's
+                    // fields directly, so `entry_exempts_total_failure` and
+                    // `entry_requires_nonlinear_decrease` had fixtures and no production caller --
+                    // the pins guarded a copy of the logic, not the logic that runs. Identical
+                    // today by inspection, which is exactly why the drift would be silent.
+                    gmres_S_reached_on_entry =
+                        wrf::sdirk3::entry_exempts_total_failure(entry_v);
+                    gmres_objective_mismatch_on_entry =
+                        wrf::sdirk3::entry_requires_nonlinear_decrease(entry_v);
                 }
                 // R13.14 (round 5, R5-13): the INNER budget these solves were given. The
                 // no-progress ratio is budget-dependent -- a healthy operator on 7 Arnoldi

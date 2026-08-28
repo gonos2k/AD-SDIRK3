@@ -1893,7 +1893,6 @@ int main() {
         using wrf::sdirk3::effective_total_failure_veto;
         using wrf::sdirk3::candidate_disposition;
         using wrf::sdirk3::CandidateDisposition;
-        using wrf::sdirk3::counts_as_linear_total_failure;
         using wrf::sdirk3::trust_loop_continues;
 
         check(!effective_total_failure_veto(/*candidate=*/true, /*admitted=*/true),
@@ -1912,14 +1911,11 @@ int main() {
               "admitted -> the loop is entered AND the acceptance test can say yes: the step is "
               "genuinely offered, not merely admitted to a trial with a predetermined verdict");
 
-        check(counts_as_linear_total_failure(candidate_disposition(true, /*admitted=*/true)),
-              "an ADMITTED candidate still counts as a linear total-failure signal: whether the "
-              "linear solve failed is a property of that solve, not of what a globalizer later "
-              "decided about it");
-        check(counts_as_linear_total_failure(candidate_disposition(true, false)),
-              "...and so does a vetoed one");
-        check(!counts_as_linear_total_failure(candidate_disposition(false, false)),
-              "while an ordinary proposal is not a failure of any kind");
+        // R13.25 SELF-REVIEW (census): `counts_as_linear_total_failure` was SUPERSEDED by
+        // `is_linear_total_failure_signal`, which takes the signal itself rather than an
+        // admission state -- and the old rule stayed in the header with only these fixtures
+        // holding it up. A retired rule with live tests reads as current guidance. Removed; the
+        // replacement is pinned in the lifecycle block above.
         check(candidate_disposition(true, true) == CandidateDisposition::AdmittedToTrial &&
               candidate_disposition(true, false) == CandidateDisposition::LinearFailureVetoed,
               "the three states are one value, not three booleans that can disagree -- which is "
@@ -2118,7 +2114,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 223;
+    constexpr int expected_checks = 220;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

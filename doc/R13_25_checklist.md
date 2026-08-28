@@ -224,3 +224,41 @@ that fell behind the struct for three increments is already gone.
 
 dt=600 re-run: `SDIRK3_*` telemetry **byte-identical**, `category=newton_budget_exhausted`
 unchanged. ctest 62/62; ratchets green; fixtures 220 → **223**. **Independent review: NOT RUN.**
+
+---
+
+## Third self-review — I stopped hunting instances and counted them all
+
+Three increments, three orphan rules, each found by hand. So instead of looking for a fourth, a
+**census of every rule in the header**:
+
+```
+inline rules: 32   ·   no production caller: 8
+```
+
+Four of the eight are consumed by other rules inside the header — legitimate internal helpers, and
+the reason a naive "grep production" check would have been wrong. **The other four had fixtures and
+nothing else**, on top of the three already fixed this session:
+
+| rule | disposition |
+|---|---|
+| `entry_exempts_total_failure` | **wired** — production read `entry_v.S_reached` directly, so the pins guarded a *copy* of the logic |
+| `entry_requires_nonlinear_decrease` | **wired** — same site, same shape |
+| `krylov_return_pairing_consistent` | **wired** at the NaN return, which is the site that must satisfy it; a violation now says so |
+| `counts_as_linear_total_failure` | **deleted** — superseded by `is_linear_total_failure_signal`, and a retired rule with live tests reads as current guidance |
+
+The first two are identical to their inline copies *today*. That is precisely why the drift would
+have been silent.
+
+**So the gate is now automated**, because catching this by hand three times is evidence the process
+does not scale: `.github/ci/lint_rule_consumers.py` fails when a rule has neither a production nor
+a header-internal caller, and it runs inside `check_ratchets.sh`. Its allowlist requires a written
+reason per entry — an allowlist without reasons is where the next orphan hides.
+
+**The lint was verified to reject the defect, not merely to pass.** Un-wiring one rule makes it
+name that rule and exit 1; restoring it passes. Same discipline applied to the classifier fixture
+in the previous round.
+
+dt=600 re-run: `SDIRK3_*` telemetry **byte-identical**, and `SDIRK3_RETURN_PAIRING_VIOLATION` fires
+**0** times. ctest 62/62; ratchets green (from_blob 70/70, item-guard 74/74, **rule-consumer
+31/31**); fixtures **220**. **Independent review: NOT RUN.**
