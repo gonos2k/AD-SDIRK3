@@ -13580,6 +13580,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.worst_krylov_rho_S = stats.worst_krylov_rho_S;
     last_stage_signals_.exit_krylov_iter = stats.exit_krylov_iter;
     last_stage_signals_.newton_exit_event_iter = stats.newton_exit_event_iter;
+    // R13.25 SELF-REVIEW: carry the split counters to the classifier, which is the consumer whose
+    // misreading motivated splitting them in the first place.
+    last_stage_signals_.linear_total_failure_signals = stats.linear_total_failure_signals;
+    last_stage_signals_.entry_metric_mismatch_events = stats.entry_metric_mismatch_events;
+    last_stage_signals_.globalization_rejections = stats.globalization_rejections;
     last_stage_signals_.exit_D_reached = stats.exit_D_reached;
     last_stage_signals_.exit_S_reached = stats.exit_S_reached;
     last_stage_signals_.exit_budget_exhausted = stats.exit_budget_exhausted;

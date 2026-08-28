@@ -187,3 +187,40 @@ mask state. The fourth caller (`:11607`) is diagnostic only and guards on `s_mea
 
 dt=600 re-run: `SDIRK3_*` telemetry **byte-identical**. ctest 62/62; ratchets green; fixtures
 217 → **220**. **Independent review: NOT RUN.**
+
+---
+
+## Second self-review — I split the counters and left the consumer reading the old one
+
+Phase 3 created `linear_total_failure_signals`, `entry_metric_mismatch_events` and
+`globalization_rejections`. A census of their readers:
+
+```
+linear_total_failure_signals : writes=1  readers_elsewhere=0
+entry_metric_mismatch_events : writes=1  readers_elsewhere=0
+globalization_rejections     : writes=1  readers_elsewhere=0
+```
+
+**Zero consumers — the third recurrence of this shape in as many increments.** And it is worse than
+the usual version: the review's §6.2 named the consumer whose misreading was the entire point —
+`first_failure.h:1548`, `if (s.gmres_total_failures > 0) return KrylovStagnated` — and that line
+went on reading the **mixed** counter. So an entry mismatch (a *nonlinear* decrease check failing
+after a solve that raised no total-failure signal) still arrived as evidence that **Krylov
+stagnated**, sending the next investigation at the wrong layer. Splitting the producer while the
+misreading consumer is untouched fixes nothing.
+
+The counters are now carried into `StageFailureSignals` and the classifier reads the linear one.
+A record predating the split reports `-1` — *"this record cannot answer"*, not *"no failures"* — and
+keeps the legacy reading, so archived logs classify exactly as before.
+
+**The fixture was verified to reject the defect, not merely to pass.** With the fix reverted
+in-place, exactly one check fails — the entry-mismatch one — and restoring it passes again. Two
+companion checks pin that a genuine linear failure still reaches `krylov_stagnated` (the repair
+must not blunt the signal it protects) and that a pre-split record is unchanged.
+
+**Also checked, and clean.** `reset_per_solve` is `s = ConvergenceStats{}` — value-initialised, so
+the new fields reset with the rest and cannot accumulate across stages; the field-by-field list
+that fell behind the struct for three increments is already gone.
+
+dt=600 re-run: `SDIRK3_*` telemetry **byte-identical**, `category=newton_budget_exhausted`
+unchanged. ctest 62/62; ratchets green; fixtures 220 → **223**. **Independent review: NOT RUN.**

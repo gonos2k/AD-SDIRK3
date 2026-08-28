@@ -516,6 +516,16 @@ struct StageFailureSignals {
     double best_krylov_rel_error = -1.0;
     int    krylov_iterations = 0;
     int    gmres_total_failures = 0;
+    // R13.25 SELF-REVIEW: the counters R13.25 produced and NOTHING read -- the third recurrence of
+    // this shape in as many increments. Splitting the counters in the solver fixed the producer
+    // while the consumer that actually misreads them (the legacy aggregate below) went on reading
+    // the mixed one. `linear_total_failure_signals` counts ONLY the residual-ratio veto;
+    // `entry_metric_mismatch_events` is a NONLINEAR check failing after a solve that signalled
+    // nothing, and reading it as Krylov stagnation evidence is the defect. -1 = an old record that
+    // predates the split, which keeps the legacy reading.
+    int    linear_total_failure_signals = -1;
+    int    entry_metric_mismatch_events = -1;
+    int    globalization_rejections = -1;
     // NOT successes. This counts solves that were not TOTAL failures, so a solve that ended
     // at rho = 0.5 without meeting tolerance is included. Named for what it counts.
     int    gmres_non_total_failures = 0;
@@ -1545,7 +1555,17 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
             // their case. (An old record, or no solves at all, keeps the old precedence below.)
         } else {
             if (basis) *basis = StageDecisionBasis::LegacyKrylovAggregate;
-            if (s.gmres_total_failures > 0) return StageFailure::KrylovStagnated;
+            // R13.25 SELF-REVIEW: read the LINEAR signal, not the mixed aggregate. R13.24's
+            // predicate set `gmres_total_failures` on `effective_veto || entry_mismatch_step_
+            // rejected`, so a NONLINEAR decrease check failing after a solve that raised no
+            // total-failure signal arrived here as evidence that KRYLOV STAGNATED. R13.25 split
+            // the counters in the solver and left this -- the one consumer whose misreading was
+            // the point -- untouched. A record from before the split reports -1 and keeps the
+            // legacy reading, so archived logs classify exactly as they did.
+            const int linear_failures = (s.linear_total_failure_signals >= 0)
+                                            ? s.linear_total_failure_signals
+                                            : s.gmres_total_failures;
+            if (linear_failures > 0) return StageFailure::KrylovStagnated;
             if (measured(s.best_krylov_rel_error) &&
                 s.best_krylov_rel_error >= kKrylovNoProgress) {
                 return StageFailure::KrylovStagnated;

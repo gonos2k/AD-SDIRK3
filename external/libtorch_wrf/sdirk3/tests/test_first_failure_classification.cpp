@@ -2066,6 +2066,42 @@ int main() {
               "while a refused recovery keeps the signal, like a refused trust attempt");
     }
 
+    {
+        // R13.25 SELF-REVIEW: splitting the counters in the solver was only HALF the fix. The
+        // consumer whose misreading motivated the split -- this legacy aggregate -- went on
+        // reading the mixed counter, so an entry mismatch (a NONLINEAR decrease check failing
+        // after a solve that raised no total-failure signal) still arrived as evidence that
+        // KRYLOV STAGNATED, sending the next investigation at the wrong layer. Built the same way
+        // as the fixture at the top of this file that reaches the same branch.
+        auto s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.gmres_total_failures = 2;              // the MIXED legacy counter says "failures"
+        s.linear_total_failure_signals = 0;      // ...but the linear solve signalled nothing
+        s.entry_metric_mismatch_events = 2;      // both were entry mismatches
+        check(name_of(s) != "krylov_stagnated",
+              "an entry mismatch is not Krylov stagnation: the linear solve raised nothing, and "
+              "the counter that said otherwise was mixing a nonlinear check's failure into it");
+
+        auto lin = ok_stage();
+        lin.newton_converged = false;
+        lin.residual_last = 9.0e-3;
+        lin.gmres_total_failures = 2;
+        lin.linear_total_failure_signals = 2;    // a real residual-ratio veto
+        lin.entry_metric_mismatch_events = 0;
+        check(name_of(lin) == "krylov_stagnated",
+              "while a genuine linear failure still reaches krylov_stagnated -- the repair must "
+              "not blunt the signal it was protecting");
+
+        auto old_rec = ok_stage();
+        old_rec.newton_converged = false;
+        old_rec.residual_last = 9.0e-3;
+        old_rec.gmres_total_failures = 2;        // fields left at -1: a pre-split record
+        check(name_of(old_rec) == "krylov_stagnated",
+              "and an archived record from before the split classifies exactly as it used to: "
+              "-1 means 'this record cannot answer', not 'no failures'");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -2082,7 +2118,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 220;
+    constexpr int expected_checks = 223;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
