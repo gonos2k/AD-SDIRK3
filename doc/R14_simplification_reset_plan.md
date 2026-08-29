@@ -1,6 +1,6 @@
 # R14 — simplification reset
 
-**Status** PLAN, awaiting the user's go · **Baseline** `main@6f4a861` + PR #189 (open) ·
+**Status** R14.1 DONE (this branch); R14.2/R14.3 awaiting go · **Baseline** `main@6f4a861` + PR #189 (open) ·
 **Independent review: NOT RUN.**
 
 The user's diagnosis, accepted in full: the repository is in **assurance inversion** —
@@ -81,10 +81,14 @@ state is not a production-correctness gate.
 
 ### R14.3 — five gates, one CI job
 
-- Keep/extend: `test_operational_primal_tangent`, `test_ad_tangent_contract`,
-  `test_discrete_adjoint_pair`, `test_failed_step_map_invalid`. Add the forward-completion gate
-  (currently nothing asserts a published step, because none exists) and the OFF/ON
-  reproducibility gate. MPI gate stays NO-GO until np>1 is unblocked.
+- **Correction from the R14.1 survey:** the four tests the plan called "end-to-end" are unit
+  contracts — `operational_primal_tangent` exercises `compute_jvp_fwad_or_fd`, `failed_step_map_
+  invalid` exercises the pure `step_map_verdict` rule, the other two include `hydrostatic_pressure.h`
+  and `unified_rhs.h`. **No test in the tree drives the production stage or step.** All five gates
+  are new: a harness that constructs the tile solver on a small synthetic domain and calls the
+  same stage entry `module_implicit_sdirk3.F` calls. Forward-completion first (nothing asserts a
+  published step, because none exists at dt=600 — the gate is written to FAIL until R14.4 makes it
+  pass). MPI gate stays NO-GO until np>1 is unblocked.
 - Retire ctest targets that test intermediates the result object removed. Target: 59 → ~25.
 
 ### R14.4 — dt=600, first complete step
@@ -98,3 +102,34 @@ work restarts from that measurement with a solver that has one execution path.
 Whether R14.1 deletes the HEVI-off / full-implicit paths (`imex_split_mode` 0/2) that the
 operational mode-3 configuration never takes. Same principle applies; larger blast radius;
 decide after R14.1 lands.
+
+## R14.1 — executed
+
+Four commits on `agent/r14-1-delete-unreached`, each three-reviewed (execution census on the
+dt=600 record → cross-reference in CI/Registry/Fortran/tests → the compiler), **−4,046 lines**:
+
+| | before | after |
+|---|---|---|
+| `read_experiment_flag` sites in the solver | 30 | **0** |
+| `newton_solver.cpp` | 14,190 | 11,838 |
+| `probe_validity.h` | 540 | 179 |
+| ctest targets | 62 | 58 (four probe-only tests removed) |
+| classification fixtures | 235 | 210 |
+
+Removed: all 17 opt-in flags and their blocks, the Armijo path, the arbitration/admission
+machinery, the probe verdict rules and types, the `nk_line_search` knob across all five layers,
+and `fortran_registry_interface.f90` (an ABI with no implementation and no caller). The
+rule-consumer lint found each next orphan as the previous one went — five chained removals.
+
+Verification: `clean -a` + full rebuild 0 errors, `wrf.exe` and `ideal.exe` present, dt=600
+`SDIRK3_*` telemetry byte-identical, ctest 58/58, lint 87/87.
+
+Two environment traps met on the way, both recorded to memory: automatic block-cutting broke the
+build twice (a static-lambda initialiser is not an if-statement; an upward search for `if (` can
+land on the enclosing one) — fixed by walking up only inside the condition, bottom-up; and
+`./clean -a` deletes six git-tracked files, so `ideal.exe` silently fails to link while the build
+reports 0 errors.
+
+**R14.2 scope, measured:** 14 iteration-local variables (92 read sites) collapse into one
+`NewtonIterationResult`; `StageFailureSignals` has 76 fields of which the classifier reads 36 —
+the other 40 are telemetry-only and split off, none is dead.
