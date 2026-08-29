@@ -2195,13 +2195,6 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
             ? safe_tensor_norm(D_inv * r_true_inner) / bnorm_safe
             : safe_tensor_norm(r_true_inner) / bnorm_safe;
 
-        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY")) {
-            torch::NoGradGuard ng_traj_u;
-            std::cerr << "SDIRK3_KRYLOV_TRAJECTORY_UNPRECOND restart=" << iter
-                      << " scaled=" << (block_scaled ? 1 : 0)
-                      << " error=" << guarded_item<float>(error_tensor)
-                      << std::endl << std::flush;
-        }
 
         if (ritz_capture_on() && !ritz_H.empty()) {   // M = I numerical range
             torch::NoGradGuard ng_ritz_analysis;
@@ -2716,18 +2709,6 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     }
     bool wrms_metric_applied = false;
 
-    // A scientific knob that silently runs the baseline is worse than one that fails: the
-    // first WRMS-metric run did exactly that (byte-identical trajectory was the only tell).
-    // The weighting is installed inside the block-scaling gate below, so every precondition
-    // of that gate is also a precondition of the experiment.
-    if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_WRMS_METRIC")) {
-        TORCH_CHECK(wrf::sdirk3::g_sdirk3_config.gmres_block_scale &&
-                        wrf::sdirk3::g_sdirk3_config.use_autograd &&
-                        layout && layout->is_valid() &&
-                        layout->total_size == r_true_inner.numel(),
-                    "WRF_SDIRK3_KRYLOV_WRMS_METRIC requested but the left-weighting path is "
-                    "unavailable (needs gmres_block_scale, use_autograd and a matching layout)");
-    }
     if (wrf::sdirk3::g_sdirk3_config.gmres_block_scale &&
         wrf::sdirk3::g_sdirk3_config.use_autograd &&
         layout && layout->is_valid() && layout->total_size == r_true_inner.numel()) {
@@ -2815,84 +2796,6 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
             if (d_inv_out) {
                 torch::NoGradGuard ng_dinv;
                 *d_inv_out = D_inv.detach().clone();
-            }
-            // WHY the two weightings behave so differently -- their STRUCTURE, not just their values.
-            //
-            //   D_q = ||r_0,q||          BLOCK-CONSTANT, set by the initial residual
-            //   E_i = rtol|y_i| + atol   POINTWISE, set by the state magnitude
-            //
-            // Pointwise weighting has a failure mode block-constant weighting cannot have: where the
-            // state is near zero, E_i -> atol_q and E^-1 -> 1/atol (1e6 for the velocity blocks), so
-            // physically negligible components acquire enormous weight and can dominate the
-            // minimiser. The dynamic range max(w)/min(w) measures exactly that exposure, and it is
-            // the quantity that decides whether an aligned objective is well-posed.
-            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY")) {
-                torch::NoGradGuard ng_dr;
-                const auto w = D_inv.detach().abs();
-                const double wmax = w.max().to(torch::kCPU).item<double>();
-                const double wmin = w.min().to(torch::kCPU).item<double>();
-                    // PER-BLOCK ALIGNMENT.
-                //
-                // RETRACTED: the kappa(D)=2.07e6 / kappa(E)=3.98e9 comparison, and the
-                // "rho_unscaled/rho_L is 18-343 for D and 5.5 for E" it was weighed against.
-                // Both numbers came from the mixed-denominator ratio, and kappa(E) was the
-                // condition of E^-1 when the left weight FGMRES would actually apply is E^-1 S.
-                // The dynamic_range printed below is the condition number of the weighting
-                // ACTUALLY installed (a diagonal weight has kappa = max/min), so it is the
-                // measured quantity rather than a recomputed one.
-                //
-                // What the per-block distributions are for: a weighting that is large exactly
-                // where the residual is small contributes nothing to the minimised norm while
-                // another norm is dominated by blocks the objective barely sees. That is a
-                // statement about ALIGNMENT, and it needs the shares below, not a scalar.
-                // OBJECTIVE SHARES, EACH IN A NAMED COORDINATE SYSTEM.
-                //
-                // The retracted table called ||r~_q||^2 / sum_p ||r~_p||^2 the "physical
-                // residual share". It is not: r~ = S^-1 R, so that ratio is the share in the
-                // (S) coordinates FGMRES iterates. S is block-constant and spans orders of
-                // magnitude, so the (S) share and the physical share can attribute the residual
-                // to DIFFERENT blocks -- and attribution was the whole claim.
-                //
-                // All four come from the same r_true_inner, so nothing has to be inferred about
-                // which coordinate a number lives in.
-                const auto sh_krylov =
-                    wrf::sdirk3::block_energy_shares(*layout, r_true_inner, torch::Tensor{});
-                const auto sh_phys =
-                    wrf::sdirk3::block_energy_shares(*layout, r_true_inner, L_phys);
-                const auto sh_D =
-                    wrf::sdirk3::block_energy_shares(*layout, r_true_inner, L_D);
-                const auto sh_wrms =
-                    wrf::sdirk3::block_energy_shares(*layout, r_true_inner, L_E);
-                // A share is only reported when its computation says it is valid. The helper
-                // now fails closed on a non-partition layout or a non-positive/mismatched
-                // weight, and printing -1 with the reason is the alternative to printing
-                // plausible numbers that sum to 1 and mean nothing.
-                auto share_of = [](const wrf::sdirk3::BlockShares& b, std::size_t i,
-                                   bool weight_present) {
-                    return (b.valid && weight_present) ? b.shares[i] : -1.0;
-                };
-                for (std::size_t i = 0; i < layout->blocks.size(); ++i) {
-                    std::cerr << "SDIRK3_OBJECTIVE_SHARE " << layout->blocks[i].name
-                              << " s_krylov=" << share_of(sh_krylov, i, true)
-                              << " s_physical=" << share_of(sh_phys, i, L_phys.defined())
-                              << " s_D=" << share_of(sh_D, i, L_D.defined())
-                              << " s_wrms=" << share_of(sh_wrms, i, L_E.defined())
-                              << std::endl;
-                }
-                if (!sh_krylov.valid || (L_phys.defined() && !sh_phys.valid) ||
-                    (L_D.defined() && !sh_D.valid) || (L_E.defined() && !sh_wrms.valid)) {
-                    std::cerr << "SDIRK3_OBJECTIVE_SHARE_INVALID"
-                              << " krylov=\"" << sh_krylov.reason << "\""
-                              << " physical=\"" << sh_phys.reason << "\""
-                              << " D=\"" << sh_D.reason << "\""
-                              << " wrms=\"" << sh_wrms.reason << "\""
-                              << std::endl;
-                }
-                std::cerr << "SDIRK3_WEIGHT_STRUCTURE metric="
-                          << (wrms_metric_applied ? "E_pointwise" : "D_blockconst")
-                          << " max=" << wmax << " min=" << wmin
-                          << " dynamic_range=" << (wmin > 0.0 ? wmax / wmin : -1.0)
-                          << std::endl << std::flush;
             }
 
 
@@ -4136,46 +4039,6 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // keeps each report a genuine single-cycle projection.
         ritz_H.clear();
 
-        // F1: the per-RESTART trajectory of the minimised norm. 0.14% total reduction over 51
-        // Arnoldi directions can mean two different things -- flat from the first step (the
-        // leading Krylov direction is useless, which the cos_P = 0.003 measurement predicts) or
-        // an initial drop then a plateau (stagnation after real progress). Different causes, so
-        // print the value at every restart instead of only at exit.
-        if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_KRYLOV_TRAJECTORY")) {
-            torch::NoGradGuard ng_traj;
-            // PAIRED TRAJECTORY -- the scientific question, not a diagnostic nicety.
-            //
-            // FGMRES minimises ||D^-1 r~|| / ||D^-1 b~|| on the vectors r~ = S^-1 R it holds.
-            // The stage gate accepts or rejects on ||E^-1 R||, a physically weighted WRMS.
-            // Those are different objective functions over the same residual, so on a finite
-            // Krylov budget the solver could reduce its own norm while the gate's norm GROWS.
-            // Whether it DOES is what these four ratios measure.
-            //
-            // Reporting all four is the point: with three coordinate systems in play (physical
-            // R, Krylov r~ = S^-1 R, objective L r~), a single "unscaled" number is ambiguous
-            // enough that the previous version of this emit compared two quantities normalised
-            // differently and read the mismatch as a physical finding.
-            // Four relative residuals, one residual, one RHS, one helper. Each ratio carries
-            // the SAME weight above and below the line -- the property the retracted
-            // "rho_unscaled" lacked, which is why its ratio against rho_D reduced to
-            // ||D^-1 r~||/||r~|| with the RHS cancelled out entirely.
-            const auto rho_D    = wrf::sdirk3::relative_residual(r_true_inner, b_krylov, L_D);
-            const auto rho_S    = wrf::sdirk3::relative_residual(r_true_inner, b_krylov, torch::Tensor{});
-            const auto rho_phys = wrf::sdirk3::relative_residual(r_true_inner, b_krylov, L_phys);
-            const auto rho_E    = wrf::sdirk3::relative_residual(r_true_inner, b_krylov, L_E);
-            std::cerr << "SDIRK3_KRYLOV_TRAJECTORY restart=" << iter
-                      << " metric=" << (wrms_metric_applied ? "E_S" : "D_blockconst")
-                      << " scaled=" << (block_scaled ? 1 : 0)
-                      << " rho_D=" << (rho_D.valid ? rho_D.value : -1.0)
-                      << " rho_S=" << (rho_S.valid ? rho_S.value : -1.0)
-                      << " rho_phys=" << (rho_phys.valid && L_phys.defined() ? rho_phys.value : -1.0)
-                      << " rho_wrms=" << (rho_E.valid && L_E.defined() ? rho_E.value : -1.0)
-                      // Cross-check: rho_D from the helper must equal the solver's own
-                      // error_tensor. If it does not, the helper and the solve disagree about
-                      // what is being minimised, and every number on this line is suspect.
-                      << " solver_error=" << guarded_item<float>(error_tensor)
-                      << std::endl << std::flush;
-        }
 
         // NUMERICAL STABILITY: Detect NaN in residual error after update
         if (guarded_item<bool>(torch::isnan(error_tensor).any())) {
@@ -9436,10 +9299,6 @@ public:
                     // cluster-plus-outliers preconditioner loses at small j and wins past the
                     // outlier count; the ladder must reach where a crossing could live.
                     std::vector<int> ladder{4, 8, 16, 32, 48};
-                    if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_FROZEN_MI_AB_EXTEND")) {
-                        ladder.push_back(96);
-                        ladder.push_back(192);
-                    }
                     for (int m : ladder) {
                         run(Arm::M, m); run(Arm::I, m); run(Arm::Sel, m);
                     }
@@ -12347,33 +12206,6 @@ public:
                 }
             }
 
-            // FIX 2026-01-31: When all trust-region attempts fail, do NOT force-accept.
-            // Keep K unchanged (zero update) so Newton can try again next iteration
-            // with the same residual. This prevents divergence from accepting bad steps.
-            // M6: DID THE STEP HAPPEN? "The stage gate exceeded 1, therefore a large Krylov
-            // update grew the residual" does not follow. When every trust attempt is rejected
-            // this branch sets dK_scaled = 0 and K is unchanged, so the stage keeps its entering
-            // residual -- a gate above 1 then reports a step that was never taken. Opposite
-            // diagnoses, and the gate value alone cannot separate them.
-            //
-            // BUT step_accepted DOES NOT MEAN TRUST ACCEPTED. With nk_trust_region = false the
-            // solver takes the full Newton step unconditionally and sets the same flag, having
-            // evaluated nothing -- and em_b_wave runs with it FALSE at runtime despite the struct
-            // default being true. Reading "accepted" as a trust verdict there is exactly wrong:
-            // trust neither accepted nor rejected, it never ran. rho = 0 in every record is the
-            // tell, and the trust state is printed alongside so the flag cannot be read alone.
-            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STEP_LEDGER")) {
-                torch::NoGradGuard ng_ledger;
-                std::cerr << "SDIRK3_STEP_LEDGER stage=" << stage
-                          << " newton_iter=" << newton_iter
-                          << " step_accepted=" << (step_accepted ? 1 : 0)
-                          << " R_norm=" << R.detach().norm().to(torch::kCPU).item<double>()
-                          << " dK_norm=" << dK.detach().norm().to(torch::kCPU).item<double>()
-                          << " rho=" << last_rho
-                          << " trust_enabled="
-                          << (wrf::sdirk3::g_sdirk3_config.nk_trust_region ? 1 : 0)
-                          << std::endl << std::flush;
-            }
 
             // R13.25 (external review P0-1): THE OUTCOME, and the state it must produce.
             //
@@ -12905,130 +12737,6 @@ public:
             // Update K with damped and scaled step
             K = K + alpha * dK_scaled;  // Functional operation to preserve autograd graph
 
-            // ================================================================
-            // R9 P0-D: NONLINEAR LEDGER (opt-in, default OFF)
-            // ================================================================
-            // "The stage failed" conflates two different failures:
-            //
-            //   (a) the LINEAR system was not solved -- Krylov made no progress, so the step
-            //       is not a Newton step at all; the lever is the operator/preconditioner.
-            //   (b) the linear system WAS solved and the nonlinear residual still did not
-            //       fall -- the local linear model does not describe the map; the lever is
-            //       the step (damping, trust radius) or the formulation.
-            //
-            // Separating them needs the linear model's PREDICTION and the nonlinear TRUTH from
-            // the SAME trial, in the norm the stage gate judges:
-            //
-            //   predicted   (1-a) R - a r_g        (= R + a A dK, since b = -R and r_g = b - A dK)
-            //   actual      R(K + a dK)
-            //
-            // The prediction needs no operator call -- the identity above turns it into the
-            // GMRES residual, which the solve already produced. The actual is `accepted_residual`,
-            // which production already computed at the trial point. So this costs no RHS and no
-            // JVP; it only reads.
-            //
-            // BUT THE IDENTITY IS ONLY VALID FOR THE STEP a dK. Production applies
-            // `alpha * dK_scaled`, and dK_scaled is NOT always dK: the trust region can shrink
-            // it, the GMRES-total-failure path zeroes it, and the fallback path replaces it with
-            // a DIFFERENT vector (dK_recovery). Predicting for a dK the run never took and
-            // printing it beside the actual for the step it did take is the same
-            // compare-two-different-things error this review is about.
-            //
-            // So the applied step is projected onto the dK THE SOLVE RETURNED (snapshotted
-            // before the post-solve mutations). If it is parallel -- which covers the
-            // full step (c=1), any trust shrink (0<c<1) and the zero step (c=0, where the
-            // prediction correctly collapses to R) -- the identity holds with the EFFECTIVE
-            // alpha, alpha*c. If it is not parallel, the step is not a multiple of the GMRES
-            // solution at all and there IS no free prediction: the row reports -1 and says why,
-            // rather than a number that describes a different step.
-            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_NONLINEAR_LEDGER")) {
-                torch::NoGradGuard ng_led;
-                // The STAGE-ENTRY weights, not a per-iteration recapture.
-                //
-                // newton_weights_for() re-captures E at the current linearization point, so a
-                // ledger built on it would weight each row by a DIFFERENT norm -- valid within
-                // a row, silently incomparable ACROSS rows, which is exactly the mistake this
-                // whole review is about. One E per stage makes the iteration sequence readable.
-                const auto* w_led = stage_weights_for(stage);
-                torch::Tensor E_inv;
-                if (w_led != nullptr && layout_initialized_ &&
-                    cached_layout_.is_valid() && cached_layout_.total_size == R.numel()) {
-                    E_inv = wrf::sdirk3::inverse_scale_vector(cached_layout_, w_led->scale, R);
-                    if (E_inv.defined() && E_inv.numel() != R.numel()) E_inv = torch::Tensor{};
-                }
-                auto wnorm = [&](const torch::Tensor& v) -> double {
-                    if (!v.defined()) return -1.0;
-                    const auto v64 = v.detach().to(torch::kFloat64);
-                    const auto z = E_inv.defined() ? v64 * E_inv.to(torch::kFloat64) : v64;
-                    return z.norm().item<double>() /
-                           std::sqrt(static_cast<double>(z.numel()));
-                };
-                // r_g lives in the SCALED space the solve runs in; S maps it back.
-                torch::Tensor r_g_phys;
-                if (ledger_r_gmres.defined()) {
-                    r_g_phys = scaling_initialized_ && S_diag_.defined() &&
-                               S_diag_.numel() == ledger_r_gmres.numel()
-                                   ? S_diag_ * ledger_r_gmres
-                                   : ledger_r_gmres;
-                }
-                // Is the applied step a multiple of the GMRES solution?
-                double step_c = 0.0;              // dK_scaled = step_c * dK
-                bool   step_parallel = false;
-                if (ledger_dK_solve.defined() &&
-                    ledger_dK_solve.numel() == dK_scaled.numel()) {
-                    const auto a64 = dK_scaled.detach().to(torch::kFloat64);
-                    const auto b64 = ledger_dK_solve.to(torch::kFloat64);
-                    const double bb = b64.dot(b64).item<double>();
-                    const double an = a64.norm().item<double>();
-                    if (bb > 0.0) {
-                        step_c = a64.dot(b64).item<double>() / bb;
-                        const double resid = (a64 - step_c * b64).norm().item<double>();
-                        // Scale the tolerance by the step itself; a zero step is exactly parallel.
-                        step_parallel = (resid <= 1.0e-6 * std::max(an, 1.0e-30));
-                    } else {
-                        step_parallel = (an == 0.0);
-                    }
-                }   // no snapshot -> step_parallel stays false -> pred_valid = 0
-                const double alpha_eff = alpha * step_c;
-                torch::Tensor R_pred;
-                if (step_parallel && r_g_phys.defined() && r_g_phys.numel() == R.numel()) {
-                    R_pred = (1.0 - alpha_eff) * R.detach() - alpha_eff * r_g_phys;
-                }
-                const double pred = wnorm(R_pred);
-                const double actual = wnorm(accepted_residual);
-                // THE NORM RATIO IS NOT AN ACCURACY CLAIM.
-                //
-                // ||r_actual|| / ||r_pred|| ~ 1 says the two vectors are the same LENGTH; it
-                // says nothing about direction, and two vectors of equal norm can be
-                // orthogonal. Reporting only the ratio is how "the linearization is faithful
-                // to 0.5%" got written from evidence that does not support it. The defect
-                // ||r_actual - r_pred|| / ||r_pred|| is the quantity that does.
-                double pred_defect_rel = -1.0;
-                if (R_pred.defined() && accepted_residual.defined() &&
-                    R_pred.numel() == accepted_residual.numel() && pred > 0.0) {
-                    const auto d = accepted_residual.detach() - R_pred.detach();
-                    pred_defect_rel = wnorm(d) / pred;
-                }
-                std::cerr << "SDIRK3_NONLINEAR_LEDGER stage=" << stage
-                          << " iter=" << newton_iter
-                          << " alpha=" << alpha
-                          << " step_over_dK=" << step_c
-                          << " alpha_eff=" << alpha_eff
-                          << " step_is_multiple_of_dK=" << (step_parallel ? 1 : 0)
-                          << " dk_norm=" << dK_scaled.detach().norm()
-                                                .to(torch::kFloat64).item<double>()
-                          << " E_weighted=" << (E_inv.defined() ? 1 : 0)
-                          << " R_before=" << wnorm(R)
-                          << " R_pred_linear=" << pred
-                          << " R_actual=" << actual
-                          << " actual_over_pred=" << ((pred > 0.0 && actual >= 0.0)
-                                                          ? actual / pred : -1.0)
-                          << " pred_defect_rel=" << pred_defect_rel
-                          << " pred_valid=" << (R_pred.defined() ? 1 : 0)
-                          << " gmres_rel_error=" << gmres_raw_rel_error
-                          << " gmres_iters=" << gmres_iters
-                          << std::endl;
-            }
 
             // PR 8: per-iteration update record (opt-in). Emitted after the
             // update is applied; reads only.
@@ -13849,28 +13557,6 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
         }
     }
 
-    // R9 P0-C: the one link in the stage-entry chain that was inferred rather than measured.
-    // The next stage's base is Y_{s+1} = U_n + dt*sum(a_{s+1,j} K_j), so if Y_3 is orders of
-    // magnitude larger than Y_2, the accepted K of THIS stage is where that came from -- but
-    // "the accepted K must be large" is an inference until the norm is on the record next to
-    // the convergence flag it was accepted under.
-    if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STAGE_ENTRY_LEDGER")) {
-        torch::NoGradGuard ng_exit;
-        std::cerr << "SDIRK3_STAGE_EXIT stage=" << stage
-                  << " converged=" << (result.converged ? 1 : 0)
-                  << " newton_iters=" << result.iterations
-                  << " final_res=" << result.final_residual
-                  << " K_norm=" << (result.K.defined()
-                                        ? result.K.detach().norm()
-                                              .to(torch::kFloat64).item<double>()
-                                        : -1.0)
-                  << " dt_gamma_K_norm=" << (result.K.defined()
-                                        ? (dt * gamma * result.K.detach()).norm()
-                                              .to(torch::kFloat64).item<double>()
-                                        : -1.0)
-                  << " msg=\"" << result.message << "\""
-                  << std::endl;
-    }
 
     // Warn if convergence failed but still returning K
     if (!result.converged) {
