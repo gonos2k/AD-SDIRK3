@@ -2181,6 +2181,30 @@ int main() {
               "meaning");
     }
 
+    {
+        // R13.26 SELF-REVIEW: an accepted step and a standing runtime failure flag cannot both be
+        // true. `gmres_total_failure` is raised before any nonlinear trial; a recovery that then
+        // succeeds overrules it, and R13.26 fixed the classifier's counter while leaving the flag
+        // -- so a successful recovery still incremented `gmres_total_failures` and read as a
+        // failure to every later consumer.
+        using wrf::sdirk3::TrialOutcome;
+        using wrf::sdirk3::runtime_failure_flag_consistent;
+
+        check(!runtime_failure_flag_consistent(true, TrialOutcome::AcceptedRecovery),
+              "a recovery that took the step while the failure flag still stands is INCONSISTENT: "
+              "the residual fell and the state advanced, so the flag is describing a different "
+              "iteration than the control flow did");
+        check(!runtime_failure_flag_consistent(true, TrialOutcome::AcceptedTrust) &&
+              !runtime_failure_flag_consistent(true, TrialOutcome::AcceptedDirect),
+              "...and the same for the trust and direct acceptances");
+        check(runtime_failure_flag_consistent(false, TrialOutcome::AcceptedRecovery),
+              "clearing the flag on acceptance is the consistent state");
+        check(runtime_failure_flag_consistent(true, TrialOutcome::RejectedTrust) &&
+              runtime_failure_flag_consistent(true, TrialOutcome::Vetoed),
+              "while a refused or vetoed candidate SHOULD leave the flag standing -- the repair "
+              "must not clear a failure nothing overruled");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -2197,7 +2221,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 231;
+    constexpr int expected_checks = 235;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

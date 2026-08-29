@@ -11862,6 +11862,19 @@ public:
                 }
 
                 if (recovered_with_fallback) {
+                    // R13.26 SELF-REVIEW: the recovery step OVERRULED the signal, so the runtime
+                    // failure flag must stop saying otherwise. It is raised at :11610, before this
+                    // point, and R13.25/R13.26 left it standing here -- so a successful recovery
+                    // (residual down, state advanced, `step_accepted = true`) still incremented
+                    // `gmres_total_failures` at the unconditional counter below, and still read as
+                    // a failure to every later consumer of this flag. Fixing the classifier's
+                    // counter while the runtime flag kept the old answer is the producer/consumer
+                    // split again, one field over.
+                    //
+                    // `gmres_total_failure_candidate` is deliberately untouched: whether the
+                    // LINEAR solve signalled is a property of that solve, and the statistics that
+                    // count signals read it.
+                    gmres_total_failure = false;
                     trust_radius_ = std::max(trust_radius_ * 0.8f, trust_radius_min_);
                     if (cfg.debug_level >= 1) {
                         std::cerr << "[TRUST REGION] GMRES total failure recovered by fallback step: "
@@ -12771,6 +12784,16 @@ public:
             // R13.26 (external review section 5): and separately, whether it went UNRESOLVED.
             if (wrf::sdirk3::linear_failure_unresolved(linear_signal, trial_outcome)) {
                 stats_.unresolved_linear_failures++;
+            }
+            // R13.26 SELF-REVIEW: the runtime flag and the lifecycle verdict must agree. Silent
+            // when they do; if they ever diverge again, this says so rather than letting the
+            // statistics and the control flow describe different iterations.
+            if (!wrf::sdirk3::runtime_failure_flag_consistent(gmres_total_failure, trial_outcome)) {
+                std::cerr << "SDIRK3_LIFECYCLE_FLAG_MISMATCH stage=" << stage
+                          << " newton_iter=" << newton_iter
+                          << " runtime_total_failure=1 outcome=accepted"
+                          << "  (a globalizer took the step while the failure flag still stands)"
+                          << std::endl;
             }
             if (wrf::sdirk3::is_entry_metric_mismatch_event(linear_signal)) {
                 stats_.entry_metric_mismatch_events++;

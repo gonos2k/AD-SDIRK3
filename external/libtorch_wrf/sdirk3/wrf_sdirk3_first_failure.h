@@ -891,6 +891,24 @@ enum class TrialOutcome {
 // R13.24's comment claimed `gmres_total_failures` counts "did the linear solve fail". It does not:
 // the predicate also fires on `entry_mismatch_step_rejected`, which is a NONLINEAR check failing
 // after a solve that raised no total-failure signal at all.
+// R13.26 SELF-REVIEW: the RUNTIME flag must agree with the lifecycle verdict.
+//
+// `gmres_total_failure` is raised before any nonlinear trial and read by the statistics, the
+// zero-update exit and the outcome derivation. When a globalizer then accepts the step, the
+// lifecycle says the signal was overruled -- but the flag kept saying "failure", so a successful
+// recovery still counted as one. R13.26 fixed the classifier's counter and left the flag: the
+// producer/consumer split again, one field over.
+//
+// This states the invariant the solver must maintain, so a fixture can reject its negation:
+// an accepted step and a standing runtime failure flag cannot both be true.
+[[nodiscard]] inline bool runtime_failure_flag_consistent(bool runtime_total_failure,
+                                                          TrialOutcome outcome) {
+    const bool accepted = outcome == TrialOutcome::AcceptedDirect ||
+                          outcome == TrialOutcome::AcceptedTrust ||
+                          outcome == TrialOutcome::AcceptedRecovery;
+    return !(accepted && runtime_total_failure);
+}
+
 // R13.26 (external review section 5): was the signal OVERRULED? The classifier's legacy branch
 // read the signal COUNT, which increments whether or not a globalizer went on to accept the step.
 // So a Newton iteration whose recovery step was accepted -- residual down, state advanced -- could

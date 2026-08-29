@@ -143,3 +143,29 @@ helper into a dead block does not repair the apply path — `alpha` stays 1 and 
 **§10's single `CandidateLifecycle` struct.** Phases 2–4 gave each field a real producer first;
 collapsing them into one receipt is a refactor with no behaviour to verify, and doing it before the
 producers were right would have moved the same gaps into a new shape.
+
+---
+
+## Self-review — the counter was fixed and the runtime flag was not
+
+Phase 3 made the classifier read `unresolved_linear_failures`. But `gmres_total_failure` is raised
+at `:11610`, **before** the recovery site at `:11856`, and a successful recovery never cleared it.
+So a recovery that took the step — residual down, state advanced, `step_accepted = true` — still
+hit the **unconditional** counter at `:12747` (`gmres_total_failures++`) and still read as a
+failure to every later consumer of the flag. I fixed the classifier's *counter* while the runtime
+*flag* kept the old answer: the producer/consumer split again, one field over, in the increment
+whose title is about exactly that.
+
+The flag is now cleared where recovery overrules the signal; `gmres_total_failure_candidate` is
+deliberately untouched, because whether the *linear* solve signalled is a property of that solve
+and the signal statistics read it. `runtime_failure_flag_consistent()` states the invariant — an
+accepted step and a standing failure flag cannot both be true — production evaluates it and speaks
+only on divergence, and four fixtures pin it including the negative direction (a refused or vetoed
+candidate must *keep* the flag).
+
+**What this run can and cannot show.** dt=600 telemetry is byte-identical and
+`SDIRK3_LIFECYCLE_FLAG_MISMATCH` fires 0 times — but so does `recovered by fallback`: the recovery
+path does not execute in this configuration, so the contract's *firing* was not measured here.
+The fixtures pin the rule; the production check is the net for a path this run does not reach.
+
+ctest 62/62; ratchets green; fixtures 231 → **235**. **Independent review: NOT RUN.**
