@@ -827,24 +827,6 @@ inline bool is_entry_metric_mismatch_event(LinearSignal s) {
     return total_failure_candidate && !arbitration_admitted;
 }
 
-// The disposition of a candidate, as one value instead of three booleans that can disagree.
-// `AdmittedThenRejected` is the state a single boolean cannot express: the linear solve DID signal total
-// failure, the arbitration DID admit the candidate, and the globalizer then refused it. Counting
-// that as a non-total-failure -- which is what reading the cleared derived flag does -- loses the
-// linear signal from the statistics entirely.
-enum class CandidateDisposition {
-    OrdinaryProposal,        // no total-failure signal; the usual path
-    LinearFailureVetoed,     // signalled and not admitted: the veto stands
-    AdmittedToTrial,         // signalled, admitted, outcome not yet known
-};
-
-[[nodiscard]] inline CandidateDisposition candidate_disposition(bool total_failure_candidate,
-                                                  bool arbitration_admitted) {
-    if (!total_failure_candidate) return CandidateDisposition::OrdinaryProposal;
-    return arbitration_admitted ? CandidateDisposition::AdmittedToTrial
-                                : CandidateDisposition::LinearFailureVetoed;
-}
-
 // `counts_as_linear_total_failure` lived here until the lifecycle
 // split replaced it with `is_linear_total_failure_signal`, which takes the SIGNAL rather than an
 // admission state. It survived with only fixtures holding it up -- a retired rule with live tests

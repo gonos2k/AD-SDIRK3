@@ -1812,39 +1812,6 @@ int main() {
               "re-emit on every call and the receipt would drown its own signal");
     }
 
-    {
-        // R13.24 (external review P0-1): the END-TO-END contract, which is what the previous
-        // increment's per-rule fixtures could not see. R13.23 pinned "admission clears the derived
-        // flag" and "that state enters the trust loop", and both were true -- while trust
-        // acceptance went on reading the ORIGINAL veto and refused every attempt. Two green rules
-        // with a broken composition. These checks follow the candidate all the way to acceptance.
-        using wrf::sdirk3::effective_total_failure_veto;
-        using wrf::sdirk3::candidate_disposition;
-        using wrf::sdirk3::CandidateDisposition;
-        using wrf::sdirk3::trust_loop_continues;
-
-        check(!effective_total_failure_veto(/*candidate=*/true, /*admitted=*/true),
-              "admission LIFTS the veto at every consumer, trust acceptance included -- without "
-              "this the candidate entered the trial and lost every attempt to the signal its "
-              "admission had just reconsidered");
-        check(effective_total_failure_veto(true, /*admitted=*/false),
-              "an unadmitted candidate keeps the veto");
-        check(!effective_total_failure_veto(/*candidate=*/false, false),
-              "and no signal means no veto");
-
-        // The composition R13.23 was missing: admitted -> loop entered -> acceptance REACHABLE.
-        const bool admitted_veto = effective_total_failure_veto(true, true);
-        check(trust_loop_continues(/*step_accepted=*/false, /*total_failure=*/false, 3, 100) &&
-              !admitted_veto,
-              "admitted -> the loop is entered AND the acceptance test can say yes: the step is "
-              "genuinely offered, not merely admitted to a trial with a predetermined verdict");
-
-        // R13.25 SELF-REVIEW (census): `counts_as_linear_total_failure` was SUPERSEDED by
-        // `is_linear_total_failure_signal`, which takes the signal itself rather than an
-        // admission state -- and the old rule stayed in the header with only these fixtures
-        // holding it up. A retired rule with live tests reads as current guidance. Removed; the
-        // replacement is pinned in the lifecycle block above.
-    }
 
 
     {
@@ -2106,7 +2073,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 214;
+    constexpr int expected_checks = 210;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

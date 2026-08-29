@@ -10180,8 +10180,6 @@ public:
             // enters the trial and is refused by a veto the admission was supposed to lift.
             const bool effective_veto = wrf::sdirk3::effective_total_failure_veto(
                 gmres_total_failure_candidate, arbitration_admitted);
-            const auto candidate_disposition = wrf::sdirk3::candidate_disposition(
-                gmres_total_failure_candidate, arbitration_admitted);
 
             // R13.25 (external review P0-1 / section 6): the SIGNAL, named for what raised it.
             // `entry_mismatch_step_rejected` is a NONLINEAR check failing after a solve that
