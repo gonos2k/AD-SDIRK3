@@ -348,14 +348,10 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
             // Newton-Krylov Options
             } else if (key == "sdirk3_nk_adaptive_tol") {
                 nk_adaptive_tol = parse_fortran_bool_value(value);
-            } else if (key == "sdirk3_nk_line_search") {
-                nk_line_search = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_nk_trust_region") {
                 nk_trust_region = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_nk_trust_radius") {
                 nk_trust_radius = std::max(0.01f, std::stof(value));
-            } else if (key == "sdirk3_nk_line_search_alpha") {
-                nk_line_search_alpha = std::clamp(std::stof(value), 1e-6f, 0.5f);
             } else if (key == "sdirk3_nk_forcing_eta_max") {
                 nk_forcing_eta_max = std::clamp(std::stof(value), 0.01f, 1.0f);
             } else if (key == "sdirk3_nk_gmres_max_nan_retries") {
@@ -1848,10 +1844,6 @@ void SDIRK3Config::load_from_env() {
         nk_trust_radius = std::max(0.01f, static_cast<float>(std::atof(env_val)));
         std::cerr << "[CONFIG ENV] nk_trust_radius = " << nk_trust_radius << std::endl;
     }
-    if ((env_val = std::getenv("WRF_SDIRK3_NK_LINE_SEARCH_ALPHA"))) {
-        nk_line_search_alpha = std::clamp(static_cast<float>(std::atof(env_val)), 1e-6f, 0.5f);
-        std::cerr << "[CONFIG ENV] nk_line_search_alpha = " << nk_line_search_alpha << std::endl;
-    }
     // v20.14: Adaptive tuning constants
     if ((env_val = std::getenv("WRF_SDIRK3_ADAPTIVE_HIGH_THRESHOLD"))) {
         adaptive_high_threshold = static_cast<float>(std::atof(env_val));
@@ -2045,12 +2037,9 @@ void SDIRK3Config::load_from_env() {
     // CONTROL FLOW. A disagreement is not an error -- the Registry is entitled to win -- but it
     // must be visible in the record instead of requiring a reader to know which layer wins.
     {
-        // R13.23 (self-review): a value is not an effect. `nk_line_search` reports effective=true
-        // on the live run and yet cannot change anything -- the guard in front of the Armijo block
-        // is a closure over both values of step_accepted (see line_search_skipped() in
-        // wrf_sdirk3_first_failure.h, pinned by fixtures). A manifest that prints only the value
-        // would have a reader conclude a line search is running. So reachability is printed too,
-        // and it is stated for every row rather than only the surprising one.
+        // Compiled default beside the effective value, for the knobs that change control flow.
+        // A disagreement is not an error -- the Registry is entitled to win -- but it must be
+        // visible in the record.
         auto row = [](const char* name, bool compiled, bool effective, const char* note = nullptr) {
             std::cerr << "[CONFIG AUTHORITY] " << name
                       << " compiled_default=" << (compiled ? "true" : "false")
@@ -2068,18 +2057,6 @@ void SDIRK3Config::load_from_env() {
             "  [false = DIRECT-ACCEPT SHORTCUT: the trust loop is not syntactically gated on this"
             " flag, but every non-accepting path here also raises the total-failure flag, so the"
             " loop body does NOT execute -- trust neither accepts nor rejects, it never runs]");
-        // R13.25 (external review, section 9): three values, three names. R13.24 printed
-        // `effective=true` here from the global config while the tile solver printed
-        // `[CONFIG UNSUPPORTED] forcing effective=false` in the SAME run -- one word, two answers.
-        // `effective` was in fact the REQUESTED value; what the solver runs is a third thing.
-        std::cerr << "[CONFIG AUTHORITY] nk_line_search"
-                  << " compiled_default=false"                      // wrf_sdirk3_config.h:841
-                  << " requested=" << (nk_line_search ? "true" : "false")
-                  << " supported=false"
-                  << " solver_effective=false"
-                  << "  [the Armijo consumer is unreachable -- see line_search_skipped();"
-                  << " requested!=solver_effective is the contract this states honestly]"
-                  << std::endl;
         row("use_autograd",              false, use_autograd);               // :220
         row("hevi_split",                false, hevi_split);                 // :587
         row("stage_require_convergence", false, stage_require_convergence);  // :576
@@ -3658,8 +3635,6 @@ void wrf_sdirk3_set_config_float(const char* name, float value) {
     } else if (key == "nk_trust_radius") {
         g_sdirk3_config.nk_trust_radius = std::max(0.01f, value);
     // v20.14r27i: Armijo sufficient decrease parameter
-    } else if (key == "nk_line_search_alpha") {
-        g_sdirk3_config.nk_line_search_alpha = std::clamp(value, 1e-6f, 0.5f);
     // v20.14: Adaptive tuning constants via runtime setter
     } else if (key == "adaptive_high_threshold") {
         g_sdirk3_config.adaptive_high_threshold = value;
@@ -3918,8 +3893,6 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
         g_sdirk3_config.check_cfl = (value != 0);
     } else if (key == "nk_adaptive_tol") {
         g_sdirk3_config.nk_adaptive_tol = (value != 0);
-    } else if (key == "nk_line_search") {
-        g_sdirk3_config.nk_line_search = (value != 0);
     } else if (key == "implicit_acoustic") {
         g_sdirk3_config.implicit_acoustic = (value != 0);
     } else if (key == "implicit_gravity") {

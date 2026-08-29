@@ -838,7 +838,6 @@ struct SDIRK3Config {
     float nk_forcing_eta_min = 0.02f;      // Raised from 1e-4: prevents GMRES from chasing unachievable tight tolerances
     float nk_forcing_gamma = 0.9f;         // Eisenstat-Walker gamma parameter
     float nk_forcing_alpha = 1.5f;         // Eisenstat-Walker alpha parameter
-    bool nk_line_search = false;           // Use line search for Newton steps (default false for performance)
     // v20.14r26: Newton non-convergence policy.
     // false (default) = warn + return best-effort K (matches unified_solver.cpp behavior).
     // true = throw std::runtime_error (old tile_unified_impl.cpp behavior).
@@ -879,7 +878,6 @@ struct SDIRK3Config {
     float scale_mu = 1.0f;
     bool nk_trust_region = true;           // Use trust region to handle GMRES failures (enabled by default)
     float nk_trust_radius = 1.0f;          // Initial trust region radius
-    float nk_line_search_alpha = 1e-4f;    // Armijo sufficient decrease parameter (c)
     int nk_gmres_max_nan_retries = 2;      // Max NaN/Inf in apply_jacobian before marking GMRES as failed
     
     // Memory Optimization Options

@@ -56,8 +56,6 @@ struct WRFNewtonKrylovOptions {
     PrecondType precond_type;
     
     // Line search
-    bool use_line_search;
-    float line_search_alpha;
     
     // Diagnostics
     bool verbose;
@@ -113,8 +111,6 @@ struct WRFNewtonKrylovOptions {
         krylov_tol(1e-3f),        // Relaxed from 1e-4f
         use_preconditioner(true),
         precond_type(BLOCK_JACOBI),
-        use_line_search(true),    // Enabled for better convergence
-        line_search_alpha(1e-4f),
         verbose(false),
         compute_condition_number(false),
         save_trajectory(false),

@@ -102,7 +102,6 @@
 
  sdirk3_use_autograd                 = .true.,
  sdirk3_jvp_epsilon                  = 1.0e-4,
- sdirk3_nk_line_search               = .true.,
  sdirk3_gmres_warmstart                 = .true.,
  sdirk3_inn_warmstart_enable                 = .true.,
  sdirk3_inn_residual_gate_enable                 = .true.,

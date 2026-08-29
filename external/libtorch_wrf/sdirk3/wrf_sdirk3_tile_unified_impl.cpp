@@ -3589,23 +3589,6 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     nk_options.krylov_tol = wrf::sdirk3::g_sdirk3_config.krylov_tol;
     nk_options.gmres_restart = wrf::sdirk3::g_sdirk3_config.gmres_restart;
     nk_options.use_adaptive_tolerances = wrf::sdirk3::g_sdirk3_config.nk_adaptive_tol;
-    // R13.24 (external review P0-2): FAIL CLOSED. `nk_line_search` is wired end to end and the
-    // Registry turns it ON for em_b_wave, but the Armijo guard downstream is a closure over both
-    // values of `step_accepted`, so the feature cannot run. Forwarding `true` into the options
-    // advertises a globalization strategy the solver does not apply -- a configuration contract
-    // violated silently. Reporting it honestly (R13.23) was right and not sufficient: a knob whose
-    // consumer is unreachable must read false, not true-with-a-footnote.
-    //
-    // NOT a repair of the line search: reopening that path fires three further defects the review
-    // enumerates (budget exhaustion leaves alpha=1 on an Armijo-FAILED step; max-iterations uses
-    // the last alpha regardless; `accepted_residual` is never updated to the alpha applied). Those
-    // are pinned by fixtures and belong to a state-machine rebuild, not to a guard flip.
-    if (wrf::sdirk3::g_sdirk3_config.nk_line_search) {
-        std::cerr << "[CONFIG UNSUPPORTED] sdirk3_nk_line_search requested=true supported=false"
-                  << " solver_effective=false: the Armijo consumer is unreachable (see"
-                  << " line_search_skipped()). Set it false to silence this." << std::endl;
-    }
-    nk_options.use_line_search = false;
     nk_options.use_preconditioner = (wrf::sdirk3::g_sdirk3_config.precond_type > 0);
     nk_options.verbose = (wrf::sdirk3::g_sdirk3_config.debug_level >= 2);
     nk_options.save_trajectory = wrf::sdirk3::g_sdirk3_config.save_trajectory;
@@ -3625,7 +3608,6 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     nk_options.scale_mu = wrf::sdirk3::g_sdirk3_config.scale_mu;
 
     // v20.14r27i: Armijo parameter from config
-    nk_options.line_search_alpha = wrf::sdirk3::g_sdirk3_config.nk_line_search_alpha;
 
     // DIAGNOSTIC: Print config values received from Fortran
     // PERFORMANCE FIX: Guard configuration banner to eliminate I/O overhead
@@ -3634,8 +3616,6 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
                   << wrf::sdirk3::g_sdirk3_config.debug_level << std::endl;
         std::cerr << "[CONFIG DIAGNOSTIC] g_sdirk3_config.nk_adaptive_tol = "
                   << (wrf::sdirk3::g_sdirk3_config.nk_adaptive_tol ? "TRUE" : "FALSE") << std::endl;
-        std::cerr << "[CONFIG DIAGNOSTIC] g_sdirk3_config.nk_line_search = "
-                  << (wrf::sdirk3::g_sdirk3_config.nk_line_search ? "TRUE" : "FALSE") << std::endl;
         std::cerr << "[CONFIG DIAGNOSTIC] g_sdirk3_config.precond_type = "
                   << wrf::sdirk3::g_sdirk3_config.precond_type << std::endl;
         std::cerr << "[CONFIG DIAGNOSTIC] g_sdirk3_config.max_krylov_iter = "
@@ -3657,8 +3637,6 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
         std::cerr << "[NEWTON SOLVER CONFIG] Krylov tol (base): " << nk_options.krylov_tol << std::endl;
         std::cerr << "[NEWTON SOLVER CONFIG] Eisenstat-Walker: "
                   << (nk_options.use_adaptive_tolerances ? "ENABLED" : "DISABLED") << std::endl;
-        std::cerr << "[NEWTON SOLVER CONFIG] Line search: "
-                  << (nk_options.use_line_search ? "ENABLED" : "DISABLED") << std::endl;
         std::cerr << "[NEWTON SOLVER CONFIG] 4DVAR replay: save_trajectory="
                   << (nk_options.save_trajectory ? "ENABLED" : "DISABLED")
                   << ", checkpoint_interval=" << nk_options.checkpoint_interval
