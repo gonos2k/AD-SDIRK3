@@ -13583,6 +13583,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     // R13.25 SELF-REVIEW: carry the split counters to the classifier, which is the consumer whose
     // misreading motivated splitting them in the first place.
     last_stage_signals_.linear_total_failure_signals = stats.linear_total_failure_signals;
+    last_stage_signals_.unresolved_linear_failures = stats.unresolved_linear_failures;
     last_stage_signals_.entry_metric_mismatch_events = stats.entry_metric_mismatch_events;
     last_stage_signals_.globalization_rejections = stats.globalization_rejections;
     last_stage_signals_.exit_D_reached = stats.exit_D_reached;

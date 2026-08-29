@@ -524,6 +524,9 @@ struct StageFailureSignals {
     // nothing, and reading it as Krylov stagnation evidence is the defect. -1 = an old record that
     // predates the split, which keeps the legacy reading.
     int    linear_total_failure_signals = -1;
+    // R13.26 (external review section 5): signals that NO globalizer overruled. This -- not the
+    // raw signal count -- is Krylov-stagnation evidence. -1 = a record predating the split.
+    int    unresolved_linear_failures = -1;
     int    entry_metric_mismatch_events = -1;
     int    globalization_rejections = -1;
     // NOT successes. This counts solves that were not TOTAL failures, so a solve that ended
@@ -767,7 +770,7 @@ struct KrylovReceiptView {
     int    exit_iter = -1;         // which iteration ended the loop (independent authority)
 };
 
-inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
+[[nodiscard]] inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
     if (!measured(r.rho_D_final) || !measured(r.rho_S_final)) return false;
     // R13.23 (P0-4): `Unknown` is 0 and the old test was `>= 0`, so an UNSTAMPED metric passed as
     // complete -- and an attribution derived from it named a layer the receipt could not support.
@@ -786,7 +789,16 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
     if (r.S_reached != (r.rho_S_final < r.tolerance_applied)) return false;
     // And it must belong to the solve it is being read as. Both unstamped is the pre-R13.18 record
     // and is allowed through; one stamped and disagreeing is not.
-    if (r.receipt_iter >= 0 && r.exit_iter >= 0 && r.receipt_iter != r.exit_iter) return false;
+    // R13.26 (external review section 7): BOTH stamped, or neither. R13.25 guarded the
+    // comparison on both being present, so `exit_iter = -1` skipped it and a receipt with one
+    // authority missing read as complete -- the opposite of what its own comment claimed. A
+    // record predating the split has neither and keeps the legacy reading.
+    {
+        const bool receipt_stamped = r.receipt_iter >= 0;
+        const bool exit_stamped = r.exit_iter >= 0;
+        if (receipt_stamped != exit_stamped) return false;
+        if (receipt_stamped && r.receipt_iter != r.exit_iter) return false;
+    }
     return true;
 }
 
@@ -813,7 +825,7 @@ inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
 // another rule. Someone flipping `skip_line_search` would have re-run the dead Armijo block
 // without ever reaching this, and every fixture would still have passed. It is now called from the
 // accept decision inside that block, so reopening the guard cannot bypass it.
-inline bool line_search_alpha_is_trustworthy(bool armijo_satisfied, int arms_tried,
+[[nodiscard]] inline bool line_search_alpha_is_trustworthy(bool armijo_satisfied, int arms_tried,
                                              int rhs_budget_remaining) {
     if (armijo_satisfied) return true;          // the only case that earns the step
     (void)arms_tried; (void)rhs_budget_remaining;
@@ -863,7 +875,7 @@ enum class TrialOutcome {
 // `ZeroStepStall` because a boolean happened to be false is not a policy -- it is the absence of
 // one. (Policy B, a bounded retry on a changed trust radius, is a different design; it needs a
 // retry budget and its own exhaustion category, and is not what this repairs.)
-inline bool linear_failure_stands_after_trial(LinearSignal signal, TrialOutcome outcome) {
+[[nodiscard]] inline bool linear_failure_stands_after_trial(LinearSignal signal, TrialOutcome outcome) {
     if (signal == LinearSignal::None) return false;
     switch (outcome) {
         case TrialOutcome::AcceptedDirect:
@@ -879,6 +891,19 @@ inline bool linear_failure_stands_after_trial(LinearSignal signal, TrialOutcome 
 // R13.24's comment claimed `gmres_total_failures` counts "did the linear solve fail". It does not:
 // the predicate also fires on `entry_mismatch_step_rejected`, which is a NONLINEAR check failing
 // after a solve that raised no total-failure signal at all.
+// R13.26 (external review section 5): was the signal OVERRULED? The classifier's legacy branch
+// read the signal COUNT, which increments whether or not a globalizer went on to accept the step.
+// So a Newton iteration whose recovery step was accepted -- residual down, state advanced -- could
+// still make the stage report KrylovStagnated, contradicting this file's own lifecycle rule that
+// an acceptance overrules the signal. Stagnation evidence is an UNRESOLVED failure, not a raised
+// one; the raw count stays as telemetry.
+[[nodiscard]] inline bool linear_failure_unresolved(LinearSignal signal, TrialOutcome outcome) {
+    if (signal != LinearSignal::TotalFailure) return false;
+    return outcome != TrialOutcome::AcceptedDirect &&
+           outcome != TrialOutcome::AcceptedTrust &&
+           outcome != TrialOutcome::AcceptedRecovery;
+}
+
 inline bool is_linear_total_failure_signal(LinearSignal s) {
     return s == LinearSignal::TotalFailure;
 }
@@ -902,7 +927,7 @@ inline bool is_entry_metric_mismatch_event(LinearSignal s) {
 //
 // Naming matters here and the old name was doing damage: `rescued` asserts an outcome the
 // mechanism cannot deliver. Admission to a trial is what it actually grants.
-inline bool effective_total_failure_veto(bool total_failure_candidate, bool arbitration_admitted) {
+[[nodiscard]] inline bool effective_total_failure_veto(bool total_failure_candidate, bool arbitration_admitted) {
     return total_failure_candidate && !arbitration_admitted;
 }
 
@@ -917,7 +942,7 @@ enum class CandidateDisposition {
     AdmittedToTrial,         // signalled, admitted, outcome not yet known
 };
 
-inline CandidateDisposition candidate_disposition(bool total_failure_candidate,
+[[nodiscard]] inline CandidateDisposition candidate_disposition(bool total_failure_candidate,
                                                   bool arbitration_admitted) {
     if (!total_failure_candidate) return CandidateDisposition::OrdinaryProposal;
     return arbitration_admitted ? CandidateDisposition::AdmittedToTrial
@@ -1005,7 +1030,7 @@ inline bool shortcut_path_enters_trust_loop(bool total_failure_candidate,
 // rescue produces (no step, no signal) must ENTER the loop. A fourth, silent outcome -- veto
 // cleared, step not taken, loop not entered -- would be the zero-update loop the shortcut's own
 // comment warns about, and the pins make it unrepresentable.
-inline bool trust_loop_continues(bool step_accepted, bool gmres_total_failure,
+[[nodiscard]] inline bool trust_loop_continues(bool step_accepted, bool gmres_total_failure,
                                  int attempts_remaining, int rhs_budget) {
     return !step_accepted && !gmres_total_failure && attempts_remaining > 0 && rhs_budget > 0;
 }
@@ -1095,7 +1120,7 @@ struct CandidateArbitration {
     HaloMaskStatus halo = HaloMaskStatus::NotRequired;
 };
 
-inline bool candidate_arbitration_rescues(const CandidateArbitration& a) {
+[[nodiscard]] inline bool candidate_arbitration_rescues(const CandidateArbitration& a) {
     if (!a.s_merit_measured) return false;              // fail-closed
     // R13.25: a merit that needed the halo mask and could not apply it is not the trust merit, so
     // it cannot overrule a signal the trust merit would judge. Fail closed rather than compare
@@ -1104,6 +1129,37 @@ inline bool candidate_arbitration_rescues(const CandidateArbitration& a) {
     if (!measured(a.s_before) || !measured(a.s_after)) return false;
     return a.s_after < a.s_before;                      // strict: a tie is not an improvement
 }
+
+// R13.26 (external review section 3): a RATIO gate, not a bare decrease.
+//
+// R13.25 routed recovery acceptance through `candidate_arbitration_rescues`, which asks only
+// `after < before`. That helper is an ADMISSION rule -- passing it grants a candidate entry to a
+// trust trial, which then judges it again -- and reusing it at a site that sets
+// `step_accepted = true` turned an entry ticket into a final verdict. The configured
+// `trust_fallback_ratio` stopped being consulted whenever the S merit existed, so a step
+// improving the merit by one ULP was adopted while the log still printed `ratio_gate=0.98`.
+//
+// Acceptance that MUTATES STATE must clear the configured bar. Fail-closed: no S merit, or a halo
+// mask that was required and unavailable, means no basis to accept.
+struct RecoveryAcceptance {
+    bool   s_merit_measured = false;
+    double s_before = -1.0;
+    double s_after = -1.0;
+    double ratio_gate = -1.0;      // fallback_accept_ratio, e.g. 0.98
+    HaloMaskStatus halo = HaloMaskStatus::NotRequired;
+    bool   ru_guard_ok = true;     // an AND guard, never an OR escape
+};
+
+[[nodiscard]] inline bool recovery_step_is_acceptable(const RecoveryAcceptance& a) {
+    if (!a.s_merit_measured) return false;
+    if (a.halo == HaloMaskStatus::RequiredButUnavailable) return false;
+    if (!measured(a.s_before) || !measured(a.s_after)) return false;
+    if (!(a.s_before > 0.0)) return false;
+    if (!measured(a.ratio_gate) || !(a.ratio_gate > 0.0)) return false;
+    if (!a.ru_guard_ok) return false;
+    return a.s_after <= a.ratio_gate * a.s_before;
+}
+
 
 // R13.23 (deep review P0-5): a Krylov return must hand back a solution and a residual that belong
 // to the SAME solve. The NaN-retry path returned `x = 0` beside the current iterate's residual, so
@@ -1558,9 +1614,14 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
             // the counters in the solver and left this -- the one consumer whose misreading was
             // the point -- untouched. A record from before the split reports -1 and keeps the
             // legacy reading, so archived logs classify exactly as they did.
-            const int linear_failures = (s.linear_total_failure_signals >= 0)
-                                            ? s.linear_total_failure_signals
-                                            : s.gmres_total_failures;
+            // R13.26 (external review section 5): prefer the UNRESOLVED count. A signal that a
+            // trust or recovery step went on to overrule is not evidence that Krylov stagnated --
+            // the step was taken and the state advanced. Older records fall back through the
+            // signal count to the mixed legacy counter, so archived logs classify unchanged.
+            const int linear_failures =
+                (s.unresolved_linear_failures >= 0)   ? s.unresolved_linear_failures
+              : (s.linear_total_failure_signals >= 0) ? s.linear_total_failure_signals
+                                                      : s.gmres_total_failures;
             if (linear_failures > 0) return StageFailure::KrylovStagnated;
             if (measured(s.best_krylov_rel_error) &&
                 s.best_krylov_rel_error >= kKrylovNoProgress) {

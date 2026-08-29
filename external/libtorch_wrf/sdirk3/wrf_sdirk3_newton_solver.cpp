@@ -11306,6 +11306,13 @@ public:
             // later consumer. `recovered_with_fallback` is block-local and dead by :12360, so the
             // outcome cannot be recovered after the fact -- it has to be recorded where it happens.
             wrf::sdirk3::TrialOutcome accepted_via = wrf::sdirk3::TrialOutcome::NotOffered;
+            // R13.26 (external review section 4): which globalizer actually SAW the candidate.
+            // R13.25 inferred the rejected branch from `arbitration_admitted` alone, so an
+            // ordinary trust rejection recorded `ZeroUpdate` and `RejectedRecovery` had no
+            // producer at all -- `globalization_rejections` then counted a subset of what its
+            // name claims. These say what was tried; the outcome is derived from them below.
+            bool trust_attempted = false;
+            bool recovery_attempted = false;
 
             torch::Tensor accepted_residual;
             torch::Tensor accepted_residual_norm;
@@ -11588,8 +11595,14 @@ public:
             // raised no total-failure signal at all, and R13.24 counted both under one name.
             const wrf::sdirk3::LinearSignal linear_signal =
                 gmres_total_failure_candidate ? wrf::sdirk3::LinearSignal::TotalFailure
-                : (entry_mismatch_step_rejected ? wrf::sdirk3::LinearSignal::EntryMetricMismatch
-                                                : wrf::sdirk3::LinearSignal::None);
+                // R13.26 (external review section 6): the SIGNAL, and only the signal. R13.25
+                // raised this on `entry_mismatch_step_rejected`, i.e. the mismatch AND the
+                // nonlinear check failing -- so a mismatch that the check then accepted was
+                // recorded as `None`, and one enum value meant two things. Whether it was
+                // accepted or refused is the OUTCOME's job.
+                : (gmres_objective_mismatch_on_entry
+                       ? wrf::sdirk3::LinearSignal::EntryMetricMismatch
+                       : wrf::sdirk3::LinearSignal::None);
 
             bool gmres_total_failure = false;
             if (!step_accepted &&
@@ -11760,6 +11773,7 @@ public:
 
                         recovery_step_norm = safe_tensor_norm(dK_recovery).to(torch::kCPU).item<float>();
                         if (recovery_step_norm > 1e-20f && std::isfinite(recovery_step_norm)) {
+                            recovery_attempted = true;   // a nonlinear residual IS evaluated below
                             auto K_trial = K + dK_recovery;
                             auto U_trial = U_stage + dt * gamma * K_trial;
                             auto F_trial = compute_rhs(U_trial);
@@ -11804,14 +11818,23 @@ public:
                             rec_merit.s_before = rec_s_b;
                             rec_merit.s_after  = rec_s_a;
                             rec_merit.halo     = s_halo_status;
-                            const bool s_merit_improved =
-                                wrf::sdirk3::candidate_arbitration_rescues(rec_merit);
-                            const bool canonical_ok =
-                                rec_s_ok ? s_merit_improved
-                                         : (residual_improved ||
-                                            (last_ru_share_ > 0.95f && ru_improved));
+                            // R13.26 (external review section 3): the CONFIGURED gate decides.
+                            // R13.25 asked `candidate_arbitration_rescues` -- an ADMISSION rule
+                            // whose pass grants entry to a trial that judges again -- at a site
+                            // that sets `step_accepted = true` outright. So `fallback_accept_ratio`
+                            // stopped being consulted whenever the S merit existed: a one-ULP
+                            // improvement was adopted while the log still printed `ratio_gate=`.
                             const bool ru_guard_ok =
                                 (last_ru_share_ > 0.95f && base_ru_norm > 0.0f) ? ru_improved : true;
+                            wrf::sdirk3::RecoveryAcceptance rec_accept;
+                            rec_accept.s_merit_measured = rec_s_ok;
+                            rec_accept.s_before   = rec_s_b;
+                            rec_accept.s_after    = rec_s_a;
+                            rec_accept.ratio_gate = static_cast<double>(fallback_accept_ratio);
+                            rec_accept.halo       = s_halo_status;
+                            rec_accept.ru_guard_ok = ru_guard_ok;
+                            const bool canonical_ok =
+                                wrf::sdirk3::recovery_step_is_acceptable(rec_accept);
                             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                                 std::cerr << "SDIRK3_RECOVERY_MERIT stage=" << stage
                                           << " newton_iter=" << newton_iter
@@ -11825,7 +11848,7 @@ public:
                                           << (rec_s_ok ? "trust_region_S_norm" : "legacy_raw")
                                           << std::endl;
                             }
-                            if (canonical_ok && ru_guard_ok) {
+                            if (canonical_ok) {   // ru_guard_ok is inside the rule
                                 dK_scaled = dK_recovery;
                                 accepted_residual = R_trial;
                                 accepted_residual_norm = trial_norm_tensor;
@@ -11906,6 +11929,7 @@ public:
                  wrf::sdirk3::trust_loop_continues(step_accepted, gmres_total_failure,
                                                    max_trust_attempts - attempt, rhs_budget);
                  ++attempt) {
+                trust_attempted = true;   // the body runs: this candidate WAS offered to trust
                 auto dK_norm = dK.norm();
                 auto K_norm = K.norm();
 
@@ -12400,11 +12424,18 @@ public:
             // nonlinear mechanism was given a chance to overrule it, and it declined -- so the
             // signal stands and the stage takes the typed exit. This runs only when the
             // arbitration is armed AND admitted a candidate, so the default path cannot reach it.
+            // R13.26 (external review section 4): a REJECTION names the mechanism that refused,
+            // taken from what actually ran. Trust is checked first because a candidate offered to
+            // both ends on the trust verdict. `ZeroUpdate` now means what it says -- no globalizer
+            // evaluated the candidate -- and `Vetoed` covers a signal that stood without any
+            // trial, which R13.25 could not express either.
             const wrf::sdirk3::TrialOutcome trial_outcome =
                 step_accepted
                     ? accepted_via   // stamped where the acceptance happened, not inferred here
-                    : (arbitration_admitted ? wrf::sdirk3::TrialOutcome::RejectedTrust
-                                            : wrf::sdirk3::TrialOutcome::ZeroUpdate);
+                    : (trust_attempted    ? wrf::sdirk3::TrialOutcome::RejectedTrust
+                     : recovery_attempted ? wrf::sdirk3::TrialOutcome::RejectedRecovery
+                     : gmres_total_failure ? wrf::sdirk3::TrialOutcome::Vetoed
+                                           : wrf::sdirk3::TrialOutcome::ZeroUpdate);
             if (arbitration_admitted && !step_accepted &&
                 wrf::sdirk3::linear_failure_stands_after_trial(linear_signal, trial_outcome) &&
                 !gmres_total_failure) {
@@ -12736,6 +12767,10 @@ public:
             // The legacy pair is left untouched so archived records stay comparable.
             if (wrf::sdirk3::is_linear_total_failure_signal(linear_signal)) {
                 stats_.linear_total_failure_signals++;
+            }
+            // R13.26 (external review section 5): and separately, whether it went UNRESOLVED.
+            if (wrf::sdirk3::linear_failure_unresolved(linear_signal, trial_outcome)) {
+                stats_.unresolved_linear_failures++;
             }
             if (wrf::sdirk3::is_entry_metric_mismatch_event(linear_signal)) {
                 stats_.entry_metric_mismatch_events++;
