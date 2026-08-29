@@ -191,7 +191,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 62-test CTest inventory** (pinned by
+The CMake tree registers an **exact 58-test CTest inventory** (pinned by
 `.github/ci/expected_ctest_names.txt`; any drift fails hosted CI). This number had
 drifted to 37 while the pinned file held 61: the CI gate that derives the claim from
 the file it cites was reading only the repo-root README, so this copy of the same claim
