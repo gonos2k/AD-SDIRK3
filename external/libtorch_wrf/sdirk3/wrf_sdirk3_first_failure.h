@@ -65,20 +65,12 @@ enum class StageFailure {
     // (the solve worked) nor a forcing-term problem (tightening eta does not align two different
     // objectives): it is the two metrics disagreeing, which is a formulation question about D.
     KrylovObjectiveMismatch,
-    // R13.18 (deep review P0-1 remainder): both RECORDED metrics were satisfied and the STAGE
-    // GATE still refuses. The gate accepts on ||E^-1 R||, a third metric the receipt did not
-    // carry, so rho_D < eta and rho_S < eta with rho_E >= eta had no category at all -- the solve
-    // met everything the classifier could see and the step was rejected anyway. That is not the
-    // operator, not the forcing term and not the budget: it is the gate's metric disagreeing with
-    // the ones the solve was steered by.
-    // R13.19 (precision review P0-2): RENAMED. This was called StageGateMetricMismatch and it
-    // does not measure the stage gate. `exit_rho_E` is the StageEntry-weighted LINEAR Krylov
-    // residual; the real gate re-evaluates the NONLINEAR stage residual at U_new against
-    // `stage_gate_rel_threshold` under one of three gate_metric_modes -- a different residual, a
-    // different denominator, a different weighting point and a different threshold. The
-    // classifier also never read `gate_metric_ok`, and the fixture asserted the mismatch on a
-    // record whose gate was marked OK, so CI was pinning a contract that reported the gate
-    // refusing while the record said it passed.
+    // Both recorded metrics satisfied (rho_D < eta, rho_S < eta) and the ENTRY-weighted linear
+    // residual rho_E >= eta: the solve met everything the classifier could see and the step was still
+    // refused. Not the operator, not the forcing term, not the budget -- a seam between the metrics
+    // the solve was steered by. NOT the stage gate: `exit_rho_E` is a LINEAR Krylov residual, while the
+    // gate re-evaluates the NONLINEAR stage residual at U_new under its own mode and threshold. So this
+    // may not be claimed while `gate_metric_ok` says the gate passed.
     KrylovEntryMetricMismatch,
     // Neither tolerance met and the Arnoldi budget ran out. Distinct from stagnation: the solve
     // was still descending when it was cut off, so the work is the budget, not the operator.
@@ -263,15 +255,11 @@ inline const char* newton_termination_name(NewtonTerminationReason r) {
     return "not_recorded";
 }
 
-// R13.18 (deep review P0-3): the near-worst tie fold, as a PURE FUNCTION so its
-// order-independence can be tested. The streaming version inside the solver never dropped the old
-// tie set when a strictly larger worst arrived, so A(0.90, not-met) then B(0.99, met) gave false
-// while B then A gave true -- the same solve set, two verdicts, and the verdict decides whether
-// the forcing-term / objective-mismatch categories may be read at all.
-//
-// The state is (worst_so_far, all_near_worst_met). A solve either: starts the set, joins it (its
-// ratio is within the band of the current worst), replaces it (strictly worse and outside the
-// band), or is ignored (clearly better than the worst).
+// The near-worst tie fold as a PURE FUNCTION, so order-independence is testable. State is
+// (worst_so_far, all_near_worst_met). A solve either starts the set, joins it (within the band of
+// the current worst), replaces it (strictly worse and outside the band), or is ignored. The verdict
+// decides whether the forcing-term / objective-mismatch categories may be read at all, so the same
+// solve set must give one answer in any order.
 struct NearWorstFold {
     double worst = -1.0;
     // R13.19 (precision review P0-3): the largest progress among solves that met NO tolerance.
@@ -294,15 +282,11 @@ struct NearWorstFold {
 
 inline constexpr double kNearWorstTieBand = 1.0e-3;
 
-// R13.19 SELF-REVIEW / deep-review P0-3 remainder: the MECHANISM attribution was still
-// order-dependent even after the `all_met` predicate became order-independent, because the
-// D/S/source/budget receipt rides on `worst_*`, which updates on strict `>` -- so two solves at the
-// SAME worst ratio let whichever arrived first name the layer:
-//   A: progress=0.99, D reached, S not  -> KrylovObjectiveMismatch
-//   B: progress=0.99, D reached, S reached -> KrylovForcingTermLimited
-// A boolean cannot fix that; the answer depends on the SET of near-worst solves, so the set has to
-// be carried. This is the per-solve receipt the review asked for, kept tiny (Newton budgets here
-// are single digits) and reduced in one pass at the end.
+// Per-solve receipt. Mechanism attribution depends on the SET of near-worst solves, not on
+// whichever arrived first: two solves at the same worst ratio can end for different reasons
+// (D reached / S not -> objective mismatch; D and S reached -> forcing-term limited), and a strict
+// `>` update would let arrival order name the layer. Kept tiny (Newton budgets are single digits)
+// and reduced in one pass at the end.
 struct KrylovSolveMechanism {
     double progress = -1.0;
     bool met_tolerance = false;
@@ -321,18 +305,11 @@ struct KrylovSolveMechanism {
 // Defined after the layer maps; declared here because the tie reducer below needs it.
 inline const char* krylov_specific_layer_for(const KrylovSolveMechanism& m);
 
-// R13.21 (external review P0-3): TWO SOLVES ARE INTERCHANGEABLE ONLY IF THEY SEND YOU TO THE SAME
-// PLACE. R13.20 narrowed the tie check from field equality to CATEGORY equality, on the ground
-// that the classifier does not branch on `tolerance_source`. That was right about the category and
-// wrong about the consequence: `specific_layer` for `KrylovForcingTermLimited` IS derived from the
-// tolerance source, and for `KrylovObjectiveMismatch` from the stopping metric -- and the
-// stage-worst receipt is updated on a STRICT `>`, so on an exact tie the first arrival's source is
-// what the emitter reads. Category was order-invariant; the next place to work was not.
-//
-// Comparing the DERIVED LAYER rather than the raw fields keeps R13.20's gain: two solves that both
-// imply `KrylovStagnated` derive no specific layer, so a differing tolerance source does not make
-// them ambiguous and the refusal does not fire toward the operator/split layer for a difference
-// that cannot change the answer.
+// Two near-worst solves are interchangeable only if they send the reader to the SAME PLACE.
+// The category alone is not enough: `specific_layer` for KrylovForcingTermLimited is derived from
+// the tolerance source and for KrylovObjectiveMismatch from the stopping metric. Comparing the
+// DERIVED LAYER keeps the useful narrowing -- two solves that both imply KrylovStagnated derive no
+// specific layer, so a differing tolerance source does not make them ambiguous.
 inline bool implies_same_action_as(const KrylovSolveMechanism& a, const KrylovSolveMechanism& b);
 
 // The category ONE solve's receipt implies. Defined once and called from both the tie-set
@@ -405,16 +382,12 @@ inline const char* krylov_stopping_metric_name(KrylovStoppingMetric m) {
     return "unknown";
 }
 
-// R13.20 (round 9, R9-5): `EisenstatWalker` used to cover THREE different levers, only one of
-// which is the forcing term. At Newton iteration 0 the E-W block does not compute
-// gamma*(||R_k||/||R_{k-1}||)^alpha at all -- it seeds `max(krylov_tol, WRF_SDIRK3_EW_ETA_INITIAL)`
-// and sets `ew_eta_updated_this_iter = false`, which is the code's own statement that E-W updated
-// nothing -- and BOTH arms then clamp into [ew_eta_min, ew_eta_max]. Recording all three as
-// `EisenstatWalker` routes a tolerance-limited verdict to `eisenstat_walker_forcing`, i.e. to
-// tuning ew_gamma/ew_alpha, on solves where neither knob was read. The clamp case is not
-// hypothetical: eta_max saturates exactly in the failing regime (see
-// converged-is-not-solved-adaptive-tolerance). Each value below is now decided AT the site by
-// comparing the candidate values, so the recorded source names the knob that actually bound.
+// Which knob BOUND the inner tolerance. Three different levers can set it and only one is the
+// forcing term: at Newton iteration 0 the E-W block seeds `max(krylov_tol, EW_ETA_INITIAL)` without
+// computing the ratio, and both arms then clamp into [ew_eta_min, ew_eta_max] -- and eta_max
+// saturates exactly in the failing regime. Recording all three as EisenstatWalker would route a
+// tolerance-limited verdict to tuning ew_gamma/ew_alpha on solves where neither was read. Each
+// value is decided AT the site by comparing the candidate values.
 enum class KrylovToleranceSource {
     Unknown,
     Base,             // options_.krylov_tol is the binding value
@@ -667,26 +640,13 @@ inline constexpr double kDivergenceGrowth = 2.0;
 // ||r||/||b|| this close to 1 means the step is predicted to leave the nonlinear residual
 // where it is. Calibrated in ||b|| coordinates, where a healthy solve reads ~1e-3.
 inline constexpr double kKrylovNoProgress = 0.99;
-// ||r||/||r0|| at or above this means the solve did not solve. This is a SEPARATE constant
-// because the coordinate change invalidates the calibration of the one above: in r0
-// coordinates a healthy solve reads ~0.55 (em_b_wave iteration 0) and a solve that reaches
-// tolerance reads ~1e-3, while twelve consecutive solves each removing 2% of their own
-// residual read 0.98 -- a stall by any operational standard, and one that a 0.99 threshold
-// inherited from ||b|| coordinates would call healthy and route to "the split". A linear
-// solve that cannot remove a tenth of its own residual is not solving.
-//
-// R13.14 (red team round 5): this value is a JUDGMENT, and the honest statement of its evidence
-// is that the calibration argues for SOME constant in (0.55, 0.98) and does not select 0.90 over
-// 0.85 or 0.95. Two facts make that matter. The tree's own default-budget run reads 0.8795 --
-// 2.3% below the boundary, inside run-to-run variation -- and the two sides of the boundary are
-// the campaign's two competing explanations (`newton_iteration_budget` vs the operator and the
-// preconditioner). And rho_vs_r0 is BUDGET-dependent: a healthy operator given 7 Arnoldi vectors
-// on a hard RHS reads 0.92, so this constant cannot by itself separate "the operator is hard"
-// from "the inner budget is small" -- which is why the layer string for KrylovStagnated ends in
-// `_or_policy` and why `krylov_restart_budget` / `krylov_max_restarts` are on the record beside
-// the ratio. (Round 5 caught that sentence naming a field NOTHING PRODUCED -- the recurring class,
-// in the comment written to close an instance of it. The fields exist now.) Overridable per run
-// via WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0.
+// This value is a JUDGMENT: the calibration argues for some constant in (0.55, 0.98) and does
+// not select 0.90 over 0.85 or 0.95. That matters because the default-budget run reads 0.8795 --
+// 2.3% below the boundary, inside run-to-run variation -- and the two sides are the campaign's two
+// competing explanations. rho_vs_r0 is also BUDGET-dependent (a healthy operator on 7 Arnoldi
+// vectors reads 0.92), so this constant cannot separate "the operator is hard" from "the inner
+// budget is small"; hence the `_or_policy` layer suffix and the budget fields beside the ratio.
+// Overridable per run via WRF_SDIRK3_KRYLOV_NOPROGRESS_VS_R0.
 inline constexpr double kKrylovNoProgressVsR0 = 0.90;
 // A residual that ended at or above this fraction of where it started has stopped moving.
 // Below it, the iteration was still working and being cut off is a budget statement.
@@ -700,20 +660,13 @@ inline bool measured(double v) {
     return v == v && v >= 0.0 && v < std::numeric_limits<double>::infinity();
 }
 
-// R13.21 (external review P0-1): the entry verdict, as a PURE rule so a fixture can reject its
-// negation. The solver used to decide this inline from the termination LABEL, and the label cannot
-// tell a convergence from a stopping-objective hit.
-//
-// TWO STATES share one return path. The Krylov loop returns before any Arnoldi step whenever the
-// inner stopping objective is already under tolerance:
-//
+// The entry verdict as a PURE rule. The Krylov loop returns before any Arnoldi step whenever the
+// inner stopping objective is already under tolerance, and TWO states share that return path:
 //   rho_stop < eta AND rho_S <  eta   -- converged; nothing downstream should second-guess it
-//   rho_stop < eta AND rho_S >= eta   -- an OBJECTIVE MISMATCH: it minimised what it was asked to
-//                                        and the result is still useless to the Newton merit
-//
-// R13.19 made the receipt distinguish them (`success` and `rel_error` carry the S coordinate).
-// This is the consumer catching up: only the first may exempt a solve from the total-failure
-// rules, and only the first may have its full step taken without a nonlinear check.
+//   rho_stop < eta AND rho_S >= eta   -- an OBJECTIVE MISMATCH: minimised what it was asked to and
+//                                        the result is still useless to the Newton merit
+// Only the first may exempt a solve from the total-failure rules or have its full step taken
+// without a nonlinear check. The termination LABEL cannot tell them apart; the receipt can.
 struct KrylovEntryVerdict {
     bool S_reached = false;           // converged in the coordinate `success` is judged by
     bool objective_mismatch = false;  // stop metric met, S not met
@@ -739,23 +692,13 @@ inline bool entry_requires_nonlinear_decrease(const KrylovEntryVerdict& v) {
     return v.objective_mismatch;
 }
 
-// R13.21 (external review P0-2): the exit solve's METRIC ATTRIBUTION, as a separate answer to a
-// separate question. `first_failure_of` reports the EVENT that ended the stage; this reports what
-// the receipt of the solve that ended it says about WHY. Returns `None` when the exit receipt
-// cannot support a subtype -- absence of evidence, reported as such.
-// R13.21 (external review P1-2): IS THIS RECEIPT COMPLETE?
-//
-// Six sites return a Krylov result. Four fill the metric/budget receipt R13.18-R13.20 added; the
-// two `NanRetryExhausted` early returns filled only the constructor fields plus
-// `initial_rel_error`, so every new field stayed at its sentinel. A terminal solve that ends on
-// that path therefore hands the classifier an exit receipt it cannot subtype, and the record falls
-// back to the generic event or to insufficient evidence -- the classifier reporting absence where
-// the solve knew the answer.
-//
-// The rule lives here, as a view over the values rather than over the type, so a fixture can
-// reject its negation without pulling in the solver header. `tolerance_applied` and the two
-// tolerance-reached flags are deliberately NOT required: a path that never evaluated a tolerance
-// has nothing to report, and demanding it would push a producer into inventing one.
+// The exit solve's METRIC ATTRIBUTION -- a separate answer to a separate question from the
+// EVENT `first_failure_of` reports. Returns None when the exit receipt cannot support a subtype:
+// absence of evidence, reported as such.
+// IS THIS RECEIPT COMPLETE? A view over the values rather than the type, so a fixture can reject
+// its negation without the solver header. `tolerance_applied` and the reached flags are NOT
+// required -- a path that never evaluated a tolerance has nothing to report, and demanding it
+// would push a producer into inventing one.
 struct KrylovReceiptView {
     double rho_D_final = -1.0;
     double rho_S_final = -1.0;
@@ -819,26 +762,12 @@ struct KrylovReceiptView {
     return false;                                // exhausting budget or arms is a REJECT
 }
 
-// R13.25 (external review P0-1): A SIGNAL IS NOT AN OUTCOME.
-//
-// R13.24 stopped the original veto from re-rejecting an admitted candidate inside trust. The
-// defect moved one transition later. `gmres_total_failure` is assigned exactly twice, both BEFORE
-// the trial (:11529 declaration, :11532 the veto branch), and never recomputed afterwards. So when
-// the trust region evaluates an ADMITTED candidate and refuses every attempt:
-//
-//   runtime  gmres_total_failure = false   -> the zero-update break does not take the typed exit,
-//                                            the loop keeps iterating on an unchanged K, and the
-//                                            stage ends as a generic stall
-//   statistics                             -> a post-hoc correction counts the same iteration as
-//                                            a linear total failure
-//
-// One iteration, two contradictory records, and the difference is not cosmetic: it changes the
-// Newton iteration count, the RHS/JVP call count, the trust radius trajectory, the stage exit
-// reason, the exit receipt and the classifier's verdict.
-//
-// The cause is that `CandidateDisposition` (R13.24) describes ADMISSION and was read as though it
-// described the candidate's fate. Splitting the two types makes the missing state impossible to
-// omit: a signal is what the linear solve reported, an outcome is what the globalizer decided.
+// A SIGNAL IS NOT AN OUTCOME. A signal is what the linear solve reported; an outcome is what a
+// globalizer decided. Conflating them through one runtime boolean produced an iteration with two
+// contradictory records -- the control flow treating an admitted-then-refused candidate as a
+// generic stall while the statistics counted a linear failure -- and the difference changes the
+// Newton iteration count, RHS/JVP calls, trust radius, exit reason and classifier verdict. Two
+// types make the missing state impossible to omit.
 enum class LinearSignal {
     None,                 // the linear solve raised nothing
     TotalFailure,         // the residual-ratio veto fired
@@ -874,20 +803,10 @@ enum class TrialOutcome {
     }
 }
 
-// What the statistics must count, kept separate so one counter cannot mean three things.
-// R13.24's comment claimed `gmres_total_failures` counts "did the linear solve fail". It does not:
-// the predicate also fires on `entry_mismatch_step_rejected`, which is a NONLINEAR check failing
-// after a solve that raised no total-failure signal at all.
-// R13.26 SELF-REVIEW: the RUNTIME flag must agree with the lifecycle verdict.
-//
-// `gmres_total_failure` is raised before any nonlinear trial and read by the statistics, the
-// zero-update exit and the outcome derivation. When a globalizer then accepts the step, the
-// lifecycle says the signal was overruled -- but the flag kept saying "failure", so a successful
-// recovery still counted as one. R13.26 fixed the classifier's counter and left the flag: the
-// producer/consumer split again, one field over.
-//
-// This states the invariant the solver must maintain, so a fixture can reject its negation:
-// an accepted step and a standing runtime failure flag cannot both be true.
+// Counters that mean one thing each. `gmres_total_failures` also fires on a NONLINEAR decrease
+// check failing after a solve that raised no signal, so it cannot answer "did the linear solve
+// fail". The runtime flag must agree with the lifecycle verdict: an accepted step and a standing
+// failure flag cannot both be true, and this rule lets a fixture reject that state.
 [[nodiscard]] inline bool runtime_failure_flag_consistent(bool runtime_total_failure,
                                                           TrialOutcome outcome) {
     const bool accepted = outcome == TrialOutcome::AcceptedDirect ||
@@ -916,22 +835,11 @@ inline bool is_entry_metric_mismatch_event(LinearSignal s) {
     return s == LinearSignal::EntryMetricMismatch;
 }
 
-// R13.24 (external review P0-1): ONE veto, read by every consumer.
-//
-// R13.23 cleared the DERIVED flag `gmres_total_failure` when the arbitration admitted a candidate,
-// and concluded the candidate was "handed to the globalizer to accept or reject on its own terms".
-// It is not. Trust acceptance reads the ORIGINAL `gmres_total_failure_candidate`, which is `const`
-// and which the arbitration never touched, and rejects on it unconditionally
-// (newton_solver.cpp:12049). So an admitted candidate entered the loop and was refused by every
-// attempt: admission, not rescue.
-//
-// That is this campaign's signature defect -- a rule whose producer and first consumer agree while
-// a LATER consumer still reads the old quantity -- committed one level below where R13.23 fixed
-// it. The correction is not another flag but a single function every consumer calls, so a future
-// reader cannot find two vetoes to choose between.
-//
-// Naming matters here and the old name was doing damage: `rescued` asserts an outcome the
-// mechanism cannot deliver. Admission to a trial is what it actually grants.
+// ONE veto, read by every consumer. `gmres_total_failure_candidate` is const and the original
+// signal; the arbitration may lift the veto by ADMITTING the candidate to a trial. Every consumer
+// -- the failure predicate and trust acceptance alike -- must read the effective veto, or an
+// admitted candidate enters the trial and is refused by the signal its admission reconsidered.
+// "Admitted" is the honest name: it grants entry to a trial, not an outcome.
 [[nodiscard]] inline bool effective_total_failure_veto(bool total_failure_candidate, bool arbitration_admitted) {
     return total_failure_candidate && !arbitration_admitted;
 }
@@ -959,20 +867,11 @@ enum class CandidateDisposition {
 // admission state. It survived with only fixtures holding it up -- a retired rule with live tests
 // reads as current guidance to the next person who greps for one.
 
-// R13.23 (self-review round 5): the boundary receipt's dedup key.
-//
-// The receipt re-emits only when its content changes. That makes the key a CONTRACT: every field
-// the receipt prints must be in it, or a change to that field is silently suppressed and the
-// record keeps showing the old value. Hand-packing bit ranges made this easy to get wrong -- the
-// first version printed the rank position `my=(mypx,mypy)` without keying it, so an interior-rank
-// move that left the effective flags alone would have gone unreported.
-//
-// A mixing hash removes the bit-budget question entirely, and the fixtures pin the contract by
-// varying each printed field ALONE and requiring the key to move.
-//
-// The setter call counter is deliberately NOT keyed: including it would re-emit on every call and
-// destroy the dedup. Which is exactly why the receipt labels it `first_emit_at_setter_call` --
-// frozen at first emission, it is not a tally of how many times the setter ran.
+// The boundary receipt's dedup key. The receipt re-emits only when its content changes, so the
+// key is a CONTRACT: every field the receipt prints must be in it, or a change to that field is
+// silently suppressed. A mixing hash removes the bit-budget question; the fixtures vary each printed
+// field alone and require the key to move. The setter call counter is deliberately NOT keyed
+// (it would re-emit on every call), which is why it is labelled `first_emit_at_setter_call`.
 inline uint64_t boundary_receipt_key(uint64_t raw_flag_bits, uint64_t effective_flag_bits,
                                      int nprocx, int nprocy, int mypx, int mypy) {
     auto mix = [](uint64_t h, uint64_t v) {
@@ -989,46 +888,25 @@ inline uint64_t boundary_receipt_key(uint64_t raw_flag_bits, uint64_t effective_
     return h == 0 ? 1 : h;               // 0 is the "nothing emitted yet" sentinel
 }
 
-// R13.23 (self-review): where does a RESCUED candidate go?
-//
-// The arbitration clears the total-failure veto without accepting the step, which is only
-// coherent if something downstream then judges it. The worry was that on the shipped
-// configuration nothing does -- `nk_trust_region` is effectively FALSE there, so the direct-accept
-// shortcut is what runs, and it has already been skipped by the time the arbitration fires.
-//
-// MEASURED, by reading the control flow rather than the flag name: the trust loop is NOT gated on
-// `nk_trust_region`. Only the shortcut is. The loop's own condition is the gate, `max_trust_attempts`
-// is 3 unconditionally, and no enclosing block between the shortcut and the loop tests the flag. So
-// a rescue lands in a real globalizer on every configuration, and `nk_trust_region = false` means
-// "try a direct accept first", not "no trust region".
-//
-// The rule is extracted so the loop's condition is the same object a fixture pins: the state a
-// rescue produces (no step, no signal) must ENTER the loop. A fourth, silent outcome -- veto
-// cleared, step not taken, loop not entered -- would be the zero-update loop the shortcut's own
-// comment warns about, and the pins make it unrepresentable.
+// Where an ADMITTED candidate goes. The trust loop is NOT gated on `nk_trust_region` -- only the
+// direct-accept shortcut is -- so `nk_trust_region = false` means "try a direct accept first", not
+// "no trust region". On the shipped path every non-accepting shortcut outcome also raises the
+// failure flag, so the loop body runs only for an admitted candidate. The loop condition is this
+// rule, so the state admission produces (no step, no standing veto) is pinned to ENTER the loop;
+// a fourth silent outcome -- veto lifted, step not taken, loop not entered -- is unrepresentable.
 [[nodiscard]] inline bool trust_loop_continues(bool step_accepted, bool gmres_total_failure,
                                  int attempts_remaining, int rhs_budget) {
     return !step_accepted && !gmres_total_failure && attempts_remaining > 0 && rhs_budget > 0;
 }
 
-// R13.23 (self-review): is the Armijo line search reachable? MEASURED: no.
-//
-// The production guard is two lines and they form a closure:
-//
-//     bool skip = !step_accepted;                          // (A) covers the not-accepted case
-//     if (step_accepted || rhs_budget <= 0) skip = true;   // (B) covers the accepted case
-//
-// (A) and (B) between them cover both values of step_accepted, so `skip` is unconditionally true
-// and neither the dK-magnitude refinement below it nor the line search itself can run. This is
-// the "coarse guard preempts its refinement" shape: (A) was the original coarse skip, (B) was
-// added later for a different reason, and together they close the door.
-//
-// The rule is extracted here -- and CONSUMED by the solver, so it cannot drift from what the
-// fixtures pin -- deliberately WITHOUT repairing it. Making the line search reachable would put
-// a globalization strategy back into a solver whose convergence behaviour is under measurement,
-// which is a numerics change that has to be opt-in and measured, not a drive-by fix. What the
-// fixtures pin is the FINDING: as shipped, `nk_line_search` has no reachable consumer, whatever
-// the Registry sets it to. If someone deliberately reopens the path, the pins fail and say so.
+// Is the Armijo line search reachable? No. The production guard is a closure over both values of
+// `step_accepted`:
+//     bool skip = !step_accepted;                          // covers the not-accepted case
+//     if (step_accepted || rhs_budget <= 0) skip = true;   // covers the accepted case
+// so `skip` is unconditionally true. The rule is extracted and CONSUMED by the solver, deliberately
+// WITHOUT repairing it: reopening a globalization strategy is a numerics change to be opt-in and
+// measured. What the fixtures pin is the finding -- `nk_line_search` has no reachable consumer
+// whatever the Registry sets. Reopening the path fails the pins and says so.
 inline bool line_search_skipped(bool step_accepted, int rhs_budget) {
     bool skip = !step_accepted;                           // (A)
     if (step_accepted || rhs_budget <= 0) skip = true;    // (B)
@@ -1064,25 +942,16 @@ inline bool effective_periodic_flag(bool raw_flag, const RankEdgeOwnership&) {
     return raw_flag;   // global-domain metadata: never masked by rank position
 }
 
-// R13.23 (deep review P0-1): may a total-failure signal be OVERRULED for this candidate?
-//
-// The signal is a statement about the LINEAR residual ratio. Using it to discard the step removes
-// the candidate from the trust region entirely, so the mechanism whose job is to judge a step
-// never sees it. The rule below decides whether to hand it to globalization instead -- and it is
-// deliberately narrow:
-//
-//   * the decision is made in the norm the TRUST REGION minimises (||S^-1 R||), not the raw packed
-//     L2. Those disagree: at dt=600 the discarded candidates improve the raw L2 by 12.5% and 60%
-//     while the S-weighted merit gets worse by 2.5% and 46x. Deciding on the raw norm would have
-//     rescued two steps the trust region would then have rejected;
-//   * without the S norm there is no basis to overrule the signal, so the signal stands;
-//   * a rescue is NOT an acceptance. It clears the veto so the ordinary globalization path can
-//     accept or reject on its own terms.
-// R13.25 (external review, section 7): the mask state belongs in the DECISION, not only in the
-// telemetry. R13.24 recorded `s_halo_masked` in a log line while the admission contract carried
-// only "was an S merit measured" -- so a merit that needed the halo mask and could not apply it
-// was still handed to the decision, and read as the trust merit. The claim "a merit that could not
-// apply the mask cannot be read as the trust merit" was true of the prose and not of the code.
+// May a total-failure signal be OVERRULED for this candidate? The signal is a statement about
+// the LINEAR residual ratio; discarding on it removes the candidate from the trust region entirely.
+// This rule decides whether to ADMIT it to a trial instead, and it is deliberately narrow:
+//   * decided in the norm the TRUST REGION minimises (||S^-1 R||), not the raw packed L2 -- at
+//     dt=600 the discarded candidates improve raw L2 by 12.5% and 60% while the S merit gets
+//     worse by 2.5% and 46x;
+//   * without the S norm there is no basis to overrule, so the signal stands;
+//   * the halo-mask state is part of the decision: a merit that needed the mask and could not
+//     apply it is not the quantity trust judges by;
+//   * admission is NOT acceptance. It lifts the veto so ordinary globalization can judge.
 enum class HaloMaskStatus {
     NotRequired,            // no mask in play; the two merits coincide
     Applied,                // masked exactly as trust acceptance masks
@@ -1106,17 +975,10 @@ struct CandidateArbitration {
     return a.s_after < a.s_before;                      // strict: a tie is not an improvement
 }
 
-// R13.26 (external review section 3): a RATIO gate, not a bare decrease.
-//
-// R13.25 routed recovery acceptance through `candidate_arbitration_rescues`, which asks only
-// `after < before`. That helper is an ADMISSION rule -- passing it grants a candidate entry to a
-// trust trial, which then judges it again -- and reusing it at a site that sets
-// `step_accepted = true` turned an entry ticket into a final verdict. The configured
-// `trust_fallback_ratio` stopped being consulted whenever the S merit existed, so a step
-// improving the merit by one ULP was adopted while the log still printed `ratio_gate=0.98`.
-//
-// Acceptance that MUTATES STATE must clear the configured bar. Fail-closed: no S merit, or a halo
-// mask that was required and unavailable, means no basis to accept.
+// A RATIO gate, not a bare decrease. Recovery acceptance MUTATES STATE, so it must clear the
+// configured `trust_fallback_ratio` -- reusing the admission rule (`after < before`) here would
+// adopt a one-ULP improvement while the log printed the gate. Fail-closed: no S merit, or a halo
+// mask that was required and unavailable, means no basis to accept. `ru` is an AND guard.
 struct RecoveryAcceptance {
     bool   s_merit_measured = false;
     double s_before = -1.0;
@@ -1150,17 +1012,10 @@ inline KrylovReceiptView exit_receipt_view(const StageFailureSignals& s) {
     v.tolerance_applied = s.exit_tolerance_applied;
     v.D_reached = s.exit_D_reached;
     v.S_reached = s.exit_S_reached;
-    // R13.24 (external review P1-3): these were BOTH filled from `exit_krylov_iter`, so the
-    // completeness rule's `receipt_iter != exit_iter` test was an identity in production -- it
-    // could only ever fire in a fixture, which is the "verifying a state the producer cannot
-    // emit" shape this repository has flagged before. `newton_exit_event_iter` is stamped
-    // independently at the Newton exit site; when it was never stamped the comparison is skipped
-    // rather than satisfied by construction.
-    // R13.25 (external review, section 8): pass BOTH authorities through unchanged. R13.24 fell
-    // back to `exit_krylov_iter` when the event stamp was missing, which does not "skip the
-    // comparison" -- it copies one authority into the other so the comparison passes by
-    // construction, restoring exactly the identity the split was made to remove. A missing stamp
-    // must leave the receipt INCOMPLETE, which is what the completeness rule is for.
+    // Two INDEPENDENT authorities: the receipt's own iteration and the iteration the Newton loop
+    // actually broke at, stamped at the exit site. Filling both from one field -- or falling back from
+    // one to the other when a stamp is missing -- makes the completeness comparison an identity that
+    // only a fixture could fail. A missing stamp leaves the receipt INCOMPLETE.
     v.receipt_iter = s.exit_krylov_iter;
     v.exit_iter = s.newton_exit_event_iter;
     return v;
@@ -1180,16 +1035,9 @@ inline StageFailure krylov_exit_attribution_of(const StageFailureSignals& s) {
     if (s.exit_D_reached && !s.exit_S_reached) {
         return StageFailure::KrylovObjectiveMismatch;
     }
-    // Both solver metrics met and the ENTRY-weighted linear one not -- a real seam between the
-    // metrics the solve was steered by. NOT the stage gate, so it may not be claimed while the
-    // gate itself is recorded as having passed; `gate_metric_ok` is read so the two cannot
-    // disagree.
-    //
-    // R13.20 (round 9, R9-10): OPT-IN ONLY, PROVEN rather than suspected. Reaching the
-    // zero-update exit needs `gmres_total_failure`. Under the DEFAULT rule that is
-    // `raw > 1 || rel >= 0.999` on rho_S, so it requires rho_S >= 0.999; and `exit_S_reached` is
-    // `rho_S < tol` with `tol` clamped into [ew_eta_min, ew_eta_max] = [0.02, 0.9]. rho_S < 0.9
-    // and rho_S >= 0.999 cannot both hold. Reachable only under the opt-in vs-r0 rule.
+    // OPT-IN ONLY, by arithmetic. Reaching the zero-update exit needs `gmres_total_failure`, which
+    // under the DEFAULT rule requires rho_S >= 0.999; `exit_S_reached` is rho_S < tol with tol clamped
+    // into [0.02, 0.9]. Both cannot hold, so this branch is reachable only under the opt-in vs-r0 rule.
     if (s.exit_D_reached && s.exit_S_reached &&
         measured(s.exit_rho_E_final) && !s.exit_E_reached && !s.gate_metric_ok) {
         return StageFailure::KrylovEntryMetricMismatch;
@@ -1198,17 +1046,11 @@ inline StageFailure krylov_exit_attribution_of(const StageFailureSignals& s) {
 }
 
 
-// R13.21 (external review section 8): HOW CLOSE WAS THE CALL?
-//
-// The no-progress boundary is a DECISION BOUNDARY, not a mechanism classifier, and this campaign
-// measured how sharp that is: on the stage-3 budget sweep `vs_r0` read 0.907 at one setting and
-// 0.8993 at the next -- a 0.8 % difference in the ratio -- and the attribution flipped
-// `krylov_stagnated` <-> `newton_stagnated`, taking the layer with it, while the primary event was
-// stage-3 `zero_update_after_total_failure` in both. `attribution_basis` already exposes WHICH
-// side of the boundary a row landed on. This says HOW FAR from it.
-//
-// A row inside the band is not wrong -- the classifier still answers -- but its specific layer is
-// not a safe work order for another code layer, so `threshold_sensitive` gates that.
+// HOW CLOSE WAS THE CALL? The no-progress boundary is a DECISION BOUNDARY, not a mechanism
+// classifier: on the stage-3 budget sweep `vs_r0` read 0.907 at one setting and 0.8993 at the next
+// -- 0.8% apart -- and the attribution flipped krylov_stagnated <-> newton_stagnated, taking the
+// layer with it. `attribution_basis` says WHICH side; this says HOW FAR. A row inside the band is
+// not wrong, but its specific layer is not a safe work order, so `threshold_sensitive` gates it.
 inline constexpr double kThresholdSensitivityBand = 0.02;
 
 struct ThresholdProximity {
@@ -1235,20 +1077,11 @@ inline bool threshold_permits_specific_layer(const ThresholdProximity& t) {
     return !(t.measured_ && t.sensitive);
 }
 
-// R13.20 (round 9, R9-2): WHICH BODY OF EVIDENCE the returned category came from.
-//
-// `attribution_from_metric` used to be inferred AFTER the fact, from `measured(worst_..._vs_r0)
-// || measured(best_..._vs_r0) || krylov_solves_measured_vs_r0 > 0` -- a test for "does an r0
-// reading exist anywhere on the record", not for "did an r0 reading decide this". The two come
-// apart in exactly the case the field was written for: when r0 IS measured and the worst ratio is
-// BELOW the no-progress threshold, the classifier falls through to the aggregate reconstruction
-// (`residual_first`/`residual_last`, iteration counts) -- and the flag read 1, because the branch
-// it fell through was entered on `measured(worst_..._vs_r0)`. It was 1 by construction in the one
-// case its own comment defines as 0.
-//
-// So the deciding clause now SAYS which evidence it used. Set at the top of each region that is
-// guaranteed to return, rather than at all ~25 return sites, to keep the classifier readable --
-// and never inferred from the signals afterwards, which is what went wrong.
+// WHICH BODY OF EVIDENCE the returned category came from. Inferring this afterwards from "does
+// an r0 reading exist anywhere on the record" is wrong in exactly the case the field exists for:
+// r0 measured, worst ratio below threshold, classifier falls through to the aggregate -- and the
+// inferred flag reads 1. So the deciding clause SAYS which evidence it used, set at the top of each
+// region guaranteed to return, never inferred from the signals afterwards.
 enum class StageDecisionBasis {
     NotRecorded,
     Precondition,             // provenance / finiteness / absent measurement
@@ -1282,18 +1115,10 @@ inline const char* stage_decision_basis_name(StageDecisionBasis b) {
     return "not_recorded";
 }
 
-// FIRST in causal order, not worst. A run whose entry state is already non-finite will also
-// show a stagnating Krylov solve and a rejected step, and reporting either of those sends the
-// next week of work to the wrong layer.
-// R13.19 (precision review P1-4): EVENT and CAUSE are two questions, and one enum answering both
-// is why the ZeroUpdateAfterTotalFailure branch could simultaneously say "a recorded event
-// outranks the aggregate reconstruction" and "it must not override the r0 evidence" -- while
-// returning immediately, which overrides it.
-//
-// The fix keeps `first_failure_of` returning the PRIMARY EVENT (four rounds of fixtures depend on
-// it) and adds the metric attribution beside it, so the r0 evidence is PRESERVED rather than
-// discarded. A reader gets "the loop ended HERE, and the metric evidence says THIS", which is what
-// the comment always claimed and the code did not do.
+// EVENT and CAUSE are two questions. `first_failure_of` returns the PRIMARY EVENT (the loop
+// ended HERE); the metric attribution beside it says what the receipts say about WHY, computed
+// from the same clauses with the recorded exit removed -- so the r0 evidence is PRESERVED rather
+// than discarded by the event that outranks it.
 struct StageDiagnosis {
     // What actually ended the stage.
     StageFailure primary_event = StageFailure::None;
@@ -1442,18 +1267,12 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
                  s.krylov_no_progress_threshold > 0.0 &&
                  s.krylov_no_progress_threshold <= 1.0)
                     ? s.krylov_no_progress_threshold : kKrylovNoProgressVsR0;
-            // R13.17 (external review P0-3), MEASURED: the loop's own exit outranks the ratio.
-            //
-            // At dt=600 BOTH the default and the 12x-budget runs exit with
-            // `newton_exit=linear_solve_failure` -- the solver's own message is "[Newton] GMRES
-            // total failure + zero update". Only the ratio moved (0.9941 -> 0.8622), and it
-            // crossed the 0.90 boundary, so the 12x run was classified `newton_stagnated`, layer
-            // `residual_floor_or_split` -- routing to the split-explicit rebuild a run whose loop
-            // stopped because THE LINEAR SOLVE GAVE IT NOTHING. The campaign read that flip as
-            // "the failure moved outward to the Newton iteration"; the exit reason says it never
-            // moved. A loop that stopped because the linear solve failed has its first failure in
-            // the linear solve whatever the progress ratio reads, and WHICH kind is answered by
-            // the same receipts below.
+            // The loop's own exit outranks the ratio. At dt=600 both the default and the 12x-budget runs
+            // exit with `newton_exit=linear_solve_failure`; only the ratio moved (0.9941 -> 0.8622), crossing
+            // 0.90, so the 12x run was classified newton_stagnated -- routing to the split-explicit rebuild a
+            // run whose loop stopped because THE LINEAR SOLVE GAVE IT NOTHING. A loop that stopped because the
+            // linear solve failed has its first failure there whatever the ratio reads; WHICH kind is answered
+            // by the receipts below.
             if (s.worst_krylov_rel_error_vs_r0 >= no_progress) {
                 // Every path out of this block returns, and all of them read the stage-worst
                 // r0 receipt. This is the ONLY region that may be reported as r0-decided.
@@ -1493,17 +1312,10 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
             // their case. (An old record, or no solves at all, keeps the old precedence below.)
         } else {
             if (basis) *basis = StageDecisionBasis::LegacyKrylovAggregate;
-            // R13.25 SELF-REVIEW: read the LINEAR signal, not the mixed aggregate. R13.24's
-            // predicate set `gmres_total_failures` on `effective_veto || entry_mismatch_step_
-            // rejected`, so a NONLINEAR decrease check failing after a solve that raised no
-            // total-failure signal arrived here as evidence that KRYLOV STAGNATED. R13.25 split
-            // the counters in the solver and left this -- the one consumer whose misreading was
-            // the point -- untouched. A record from before the split reports -1 and keeps the
-            // legacy reading, so archived logs classify exactly as they did.
-            // R13.26 (external review section 5): prefer the UNRESOLVED count. A signal that a
-            // trust or recovery step went on to overrule is not evidence that Krylov stagnated --
-            // the step was taken and the state advanced. Older records fall back through the
-            // signal count to the mixed legacy counter, so archived logs classify unchanged.
+            // Prefer the UNRESOLVED count: a signal that a trust or recovery step went on to overrule is not
+            // evidence that Krylov stagnated -- the step was taken and the state advanced. Then the linear
+            // signal count (which excludes nonlinear-check failures the mixed legacy counter includes). Older
+            // records fall back through both to the legacy counter, so archived logs classify unchanged.
             const int linear_failures =
                 (s.unresolved_linear_failures >= 0)   ? s.unresolved_linear_failures
               : (s.linear_total_failure_signals >= 0) ? s.linear_total_failure_signals
@@ -1546,15 +1358,12 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
         return StageFailure::NewtonStagnated;
     }
 
-    // R13.20 (adversarial loop, iteration 3): the SAME reachability statement as the explicit
-    // branch above, which iteration 2 wrote for the explicit half and left off this one.
-    // Reaching here means `newton_converged` was true, and the single production call site
-    // (`handle_stage_gate`) is entered only when `stage_failed || gate_metric_bad` -- so a
-    // converged stage that got here necessarily has `gate_metric_ok == false` and answers
-    // `AdmissibilityRejected`. `PublishRejected` and `None` are therefore NOT reachable from
-    // that site: it sets `state_published = false` unconditionally because it is upstream of any
-    // publish. Both are kept for a publish-site classifier call that does not exist yet, and the
-    // contract test marks their fixtures RESERVED so a precedence pin is not read as coverage.
+    // Reachability from the single production call site (`handle_stage_gate`, entered only when
+    // `stage_failed || gate_metric_bad`): a converged stage that gets here necessarily has
+    // `gate_metric_ok == false` and answers AdmissibilityRejected. PublishRejected and None are NOT
+    // reachable from it -- it sets `state_published = false` unconditionally, being upstream of any
+    // publish. Both are kept for a publish-site classifier that does not exist yet; their fixtures are
+    // marked RESERVED so a precedence pin is not read as coverage.
     if (basis) *basis = StageDecisionBasis::Postcondition;
     if (!s.gate_metric_ok)   return StageFailure::AdmissibilityRejected;
     if (!s.state_published)  return StageFailure::PublishRejected;
@@ -1574,17 +1383,11 @@ inline StageDiagnosis stage_diagnosis_of(const StageFailureSignals& s) {
     d.attribution_measured =
         (d.attribution != StageFailure::InsufficientEvidence) &&
         (d.attribution != StageFailure::StageSignalMissing);
-    // The one that matters: does the attribution rest on a real r0/Krylov reading, or on the
-    // aggregate fallback the campaign spent four rounds moving away from? Without this a pure
-    // reconstruction naming an operator layer would read as "measured".
-    //
-    // R13.20 (round 9, R9-2): read from the clause that returned. The r0 four-way is the only
-    // region that reads the stage-worst r0 receipt, so it is the only basis that answers yes.
-    // `LegacyKrylovAggregate` is deliberately NOT included -- it is a Krylov reading, but in the
-    // ||b|| coordinate this line of work exists to stop trusting, and it is what the field's
-    // comment calls "the aggregate fallback". `metric_only` clears the termination, so
-    // `ExitReceipt` is unreachable here by construction; it is listed for the reader, not as a
-    // live arm.
+    // Read from the clause that returned. The r0 four-way is the only region that reads the
+    // stage-worst r0 receipt, so it is the only basis that answers yes. `LegacyKrylovAggregate` is NOT
+    // included: it is a Krylov reading in the ||b|| coordinate this line of work exists to stop
+    // trusting. `metric_only` clears the termination, so `ExitReceipt` is unreachable here; listed for
+    // the reader, not as a live arm.
     d.attribution_from_metric =
         d.attribution_measured &&
         d.attribution_basis == StageDecisionBasis::KrylovR0Receipt;
