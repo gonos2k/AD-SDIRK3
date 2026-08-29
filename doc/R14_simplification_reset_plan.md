@@ -1,0 +1,100 @@
+# R14 — simplification reset
+
+**Status** PLAN, awaiting the user's go · **Baseline** `main@6f4a861` + PR #189 (open) ·
+**Independent review: NOT RUN.**
+
+The user's diagnosis, accepted in full: the repository is in **assurance inversion** —
+correctness machinery has outgrown the execution path it guards. Every link in
+
+    defect → local rule → rule consumer → negative fixture → consumer lint → coverage ratchet
+
+was individually correct, and the chain drifted from the only goal that matters:
+
+    SDIRK3 advances one timestep at dt=600, correctly and stably.   ← still zero successes
+
+PR #189 cut narrative and two monitors. It did not change the structure. R14 does.
+
+## Measured scope (main + #189)
+
+| | value |
+|---|---|
+| opt-in experiment flags in `newton_solver.cpp` | **17**, ~1,247 lines (8.8% of the file) |
+| types re-interpreting one Krylov result in `first_failure.h` | **19** enums/structs |
+| classification fixtures | 224 checks / 2,185 lines |
+| `newton_solver.cpp` | 14,190 lines |
+| end-to-end tests that already exist | tangent, adjoint (×3), primal-tangent, failed-step-map |
+| dt=600 | `newton_budget_exhausted`, stage 2, unchanged |
+
+One Krylov result currently passes through ten representations before it reaches a log line:
+raw signal → derived veto → disposition → trial outcome → Newton termination → stage failure →
+attribution → specific layer → telemetry record → offline classification. Every recent defect
+was a later consumer reading an earlier representation.
+
+## Principles (the user's, adopted verbatim)
+
+1. **No new gates.** No new pure-rule helper, receipt field, taxonomy value, lint, ratchet or
+   checklist layer. Simplify the executing code instead.
+2. **One fact, one struct.** A Newton iteration produces one `NewtonIterationResult`; statistics,
+   termination, logging and classification are *derived from it*, never reconstructed beside it.
+3. **Two states only: production-supported or absent.** "Present, configurable, forced OFF,
+   guarded by fixtures and a lint" is not a state.
+4. **Transition tests over pure-helper tests.** Fake `A`, `b`, RHS → FGMRES result → candidate →
+   trust reject → K unchanged → Newton exit → stage outcome.
+5. **Five authorities at the top**: forward completes and publishes a finite admissible state;
+   diagnostics OFF/ON give the same trajectory; tangent matches central FD on a successful map;
+   adjoint satisfies ⟨Jv,w⟩=⟨v,Jᵀw⟩ on the same map; np=1/2/4 publish the same state.
+
+**Hard rules:** adding a gate requires deleting one. A rule that does not change production
+state is not a production-correctness gate.
+
+## Phases — deletion first, consolidation second, dt=600 last
+
+### R14.1 — delete what does not execute (pure removal, byte-identical dt=600)
+
+- Armijo line search: code, `nk_line_search` config across Registry/Fortran/C++, its fixtures,
+  `line_search_skipped`, `line_search_alpha_is_trustworthy`. Re-add as an independent
+  implementation if ever needed.
+- Candidate arbitration (`WRF_SDIRK3_CANDIDATE_ARBITRATION`) and the admission machinery:
+  `effective_total_failure_veto`, `CandidateDisposition`, `candidate_arbitration_rescues`,
+  `CandidateArbitration`. Measured behaviour-neutral on every record that motivated it.
+- Diagnostic probes that are not needed to reach a first dt=600 step: `TAYLOR_DEFECT`,
+  `TERMINAL_TAYLOR`, `DISCARDED_CANDIDATE`, `FROZEN_MI_AB(_EXTEND)`, `STAGE_REFERENCE`,
+  `KRYLOV_TRAJECTORY`, `POLICY_MANIFEST`, ledgers. Keep `NUMRANGE`-class measurement only if it
+  is the tool the dt=600 work will use next; decide per flag, listed in the PR.
+- `lint_rule_consumers.py` and its ratchet; `lint_item_guard.py` stays (it guards a real AD
+  constraint on the executing path).
+- **Verification:** ctest, full WRF build, dt=600 telemetry byte-identical. Expected: several
+  thousand lines removed.
+
+### R14.2 — one result object (behaviour-preserving refactor)
+
+- `NewtonIterationResult { LinearSolveResult linear; CandidateResult candidate;
+  NewtonIterationOutcome outcome; }` produced once per iteration at the site where the
+  outcome is known.
+- `gmres_total_failure`, `linear_signal`, `trial_outcome`, `accepted_via`, the split counters,
+  `gmres_total_failures`/`non_total_failures` all become reads of that object or disappear.
+- `StageFailureSignals` shrinks to what the stage-level classification actually consumes; the
+  offline classifier (`first_failure_of` + `stage_diagnosis_of` and the 19 types) collapses to
+  one function over the result objects, or is removed if the telemetry line already says it.
+- **Verification:** the existing dt=600 record classifies identically; one transition test
+  (principle 4) replaces the pure-helper fixtures that pinned the deleted intermediates.
+
+### R14.3 — five gates, one CI job
+
+- Keep/extend: `test_operational_primal_tangent`, `test_ad_tangent_contract`,
+  `test_discrete_adjoint_pair`, `test_failed_step_map_invalid`. Add the forward-completion gate
+  (currently nothing asserts a published step, because none exists) and the OFF/ON
+  reproducibility gate. MPI gate stays NO-GO until np>1 is unblocked.
+- Retire ctest targets that test intermediates the result object removed. Target: 59 → ~25.
+
+### R14.4 — dt=600, first complete step
+
+Only after the above. The failure is stage 2 `newton_budget_exhausted` on the shipped config;
+the campaign's own measurements say `stage2_gmres_restart=192` relocates it to stage 3. The
+work restarts from that measurement with a solver that has one execution path.
+
+## What this plan does not decide
+
+Whether R14.1 deletes the HEVI-off / full-implicit paths (`imex_split_mode` 0/2) that the
+operational mode-3 configuration never takes. Same principle applies; larger blast radius;
+decide after R14.1 lands.

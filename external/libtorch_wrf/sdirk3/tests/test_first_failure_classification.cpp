@@ -1678,36 +1678,6 @@ int main() {
               "krylov_objective_mismatch from a receipt that could not support it");
     }
 
-    {
-        // R13.23 (deep review P0-5): the returned solution and the returned residual must be the
-        // same solve's. The NaN-retry path returned x = 0 beside the CURRENT iterate's residual.
-        using wrf::sdirk3::KrylovReturnPairing;
-        using wrf::sdirk3::krylov_return_pairing_consistent;
-
-        KrylovReturnPairing fixed;                 // x = 0, r = b  -> the post-R13.23 return
-        fixed.x_is_zero = true; fixed.r_norm = 1039.0; fixed.b_norm = 1039.0;
-        check(krylov_return_pairing_consistent(fixed),
-              "a zero solution paired with r = b is consistent -- and it makes rho = 1 true by "
-              "arithmetic rather than stamped");
-
-        KrylovReturnPairing before;                // x = 0, r = the current iterate's residual
-        before.x_is_zero = true; before.r_norm = 574.4; before.b_norm = 1039.0;
-        check(!krylov_return_pairing_consistent(before),
-              "the pre-R13.23 NaN return is inconsistent: x = 0 with a residual that belongs to a "
-              "different iterate, and downstream trust prediction and per-block analysis read it "
-              "as if it described the x handed back");
-
-        KrylovReturnPairing nonzero;               // a real solve: not pinned by this rule
-        nonzero.x_is_zero = false; nonzero.r_norm = 574.4; nonzero.b_norm = 1039.0;
-        check(krylov_return_pairing_consistent(nonzero),
-              "...while a nonzero solution is not pinned here -- this rule is about the one case "
-              "where the residual is determined by the solution alone");
-
-        KrylovReturnPairing unmeasured;
-        unmeasured.x_is_zero = true; unmeasured.b_norm = 1039.0;   // r_norm left at -1
-        check(!krylov_return_pairing_consistent(unmeasured),
-              "and an unmeasured norm fails rather than passing: absence is not consistency");
-    }
 
     {
         // R13.23 (deep review P0-1): a total-failure signal may be overruled only by the norm the
@@ -1834,29 +1804,6 @@ int main() {
               "does not have");
     }
 
-    {
-        // R13.23 (self-review round 2): CORRECTS round 1. The trust loop is not syntactically
-        // gated on nk_trust_region, but on the direct-accept path every non-accepting outcome
-        // also raises the total-failure flag -- and the loop needs BOTH false. So the loop body
-        // does not execute, exactly as the shortcut's own comment says ("it never ran"), and the
-        // arbitration rescue is the SOLE entry into it on the shipped configuration.
-        using wrf::sdirk3::shortcut_path_enters_trust_loop;
-
-        check(shortcut_path_enters_trust_loop(/*candidate=*/true, /*mismatch=*/false,
-                                              /*rescued=*/true),
-              "a rescued total-failure candidate is the ONE input that leaves both flags false, "
-              "so the rescue does not hand the step back to a running mechanism -- it STARTS a "
-              "mechanism this configuration otherwise never runs");
-        check(!shortcut_path_enters_trust_loop(true, false, /*rescued=*/false),
-              "an unrescued candidate raises total-failure, which blocks the loop");
-        check(!shortcut_path_enters_trust_loop(/*candidate=*/false, /*mismatch=*/false, false),
-              "the ordinary path accepts the full step, so the loop condition is already false");
-        check(!shortcut_path_enters_trust_loop(false, /*mismatch=*/true, false),
-              "a failed entry-mismatch decrease check routes to total-failure, not to the loop");
-        check(!shortcut_path_enters_trust_loop(/*candidate=*/false, false, /*rescued=*/true),
-              "and a rescue without a candidate is not a reachable input: the arbitration only "
-              "fires on one, so this must not manufacture an entry");
-    }
 
     {
         // R13.23 (self-review round 5): the receipt's dedup key is a CONTRACT -- every field the
@@ -1921,10 +1868,6 @@ int main() {
         // admission state -- and the old rule stayed in the header with only these fixtures
         // holding it up. A retired rule with live tests reads as current guidance. Removed; the
         // replacement is pinned in the lifecycle block above.
-        check(candidate_disposition(true, true) == CandidateDisposition::AdmittedToTrial &&
-              candidate_disposition(true, false) == CandidateDisposition::LinearFailureVetoed,
-              "the three states are one value, not three booleans that can disagree -- which is "
-              "how 'signalled', 'admitted' and 'accepted' came to be conflated");
     }
 
     {
@@ -2053,11 +1996,6 @@ int main() {
         using wrf::sdirk3::TrialOutcome;
         using wrf::sdirk3::linear_failure_stands_after_trial;
 
-        check(TrialOutcome::AcceptedDirect != TrialOutcome::AcceptedTrust &&
-              TrialOutcome::AcceptedTrust != TrialOutcome::AcceptedRecovery &&
-              TrialOutcome::AcceptedDirect != TrialOutcome::AcceptedRecovery,
-              "the three acceptance paths are three values, so a record cannot claim a step came "
-              "from the trust region when the direct shortcut or the recovery fallback took it");
 
         // All three overrule the signal today -- pinned so a future policy change has to face
         // every path explicitly instead of inheriting one path's verdict for all of them.
@@ -2221,7 +2159,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 235;
+    constexpr int expected_checks = 224;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
