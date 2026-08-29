@@ -37,12 +37,12 @@ namespace sdirk3 {
 
 enum class StageFailure {
     None = 0,
-    // R13.15 (external review P1-4): the signals belong to a DIFFERENT stage than the one being
+    // The signals belong to a DIFFERENT stage than the one being
     // classified. `signals_from_stage` was emitted beside the category and the category was
     // computed anyway, so a record could name a layer from another stage's evidence. A
     // provenance mismatch is not weak evidence, it is the wrong evidence.
     StageSignalMismatch,
-    // R13.17 (external review P0-4): the stamp is ABSENT. The mismatch gate required both stamps
+    // The stamp is ABSENT. The mismatch gate required both stamps
     // to be >= 0, so the documented "-1 = not stamped" sentinel skipped it entirely and the rest
     // of the classifier ran on signals whose owner is unknown -- fail-closed on disagreement,
     // fail-OPEN on absence, which is the weaker half of the same contract.
@@ -53,13 +53,13 @@ enum class StageFailure {
     ExplicitRhsNotFinite,
     ExplicitAdmissibilityRejected,
     ExplicitPublishRejected,
-    // R13.16 (round 6, R6-2): the linear solve made little progress AND stopped because it met
+    // The linear solve made little progress AND stopped because it met
     // its own adaptive tolerance. That is the Eisenstat-Walker forcing term, capped at 0.9 and
     // saturating there exactly when the Newton residual stops falling -- so "reached tolerance"
     // can mean "removed 10%". Naming this KrylovStagnated sends the work to the operator and the
     // preconditioner; the layer actually responsible had no category at all.
     KrylovForcingTermLimited,
-    // R13.17 (external review P0-2): the D-objective tolerance was met and the S-coordinate
+    // The D-objective tolerance was met and the S-coordinate
     // residual was not. The solve ENDED ITS SEARCH legitimately -- it minimised what it was asked
     // to minimise -- and is nonetheless useless to the Newton merit. That is neither a stall
     // (the solve worked) nor a forcing-term problem (tightening eta does not align two different
@@ -74,22 +74,22 @@ enum class StageFailure {
     KrylovEntryMetricMismatch,
     // Neither tolerance met and the Arnoldi budget ran out. Distinct from stagnation: the solve
     // was still descending when it was cut off, so the work is the budget, not the operator.
-    // R13.19 (precision review P1-2): renamed to the FACT it measures. "Limited" asserted that
+    // Renamed to the FACT it measures. "Limited" asserted that
     // the residual was still descending when the budget cut it off, and nothing measures that --
     // a solve flat from its first restart classifies identically. The tail slope would settle it;
     // until then the category says only that the budget ran out, and its layer names the
     // remaining ambiguity instead of resolving it.
     KrylovBudgetExhausted,
-    // R13.17 self-review: the linear solve THREW. That is a real event and it is not the outer
+    // The linear solve THREW. That is a real event and it is not the outer
     // iteration's failure -- but it is also not divergence, which is a specific measured
     // behaviour (the residual grew) that an exception does not establish. Borrowing
     // KrylovDiverged for it would name a mechanism nothing measured.
     KrylovSolveThrew,
-    // R13.18 (round 7, P0-B): the Newton loop broke because the accepted update was numerically
+    // The Newton loop broke because the accepted update was numerically
     // ZERO and the solve had been flagged a total failure. Naming that `KrylovStagnated` -- as an
     // earlier version of this file did -- claims the linear solve produced nothing, and it did
     // not: under the default configuration the flag is `raw > 1 || rel >= 0.999` on ||r||/||b||,
-    // the very coordinate R13.12-R13.16 moved this classifier OFF, and the run it was used to
+    // the very coordinate this classifier was moved OFF, and the run it was used to
     // reclassify had a worst solve that removed 13.8% of its own residual. What is observed is
     // the zero update; the cause is ambiguous between the ||b|| rule firing on a warm start it
     // was retracted for and a genuine failure to produce a step. The layer says so.
@@ -189,13 +189,13 @@ inline const char* stage_failure_layer(StageFailure f) {
             return "explicit_stage_gate_threshold";
         case StageFailure::ExplicitPublishRejected: return "explicit_publish_gate";
         case StageFailure::KrylovForcingTermLimited:
-            // R13.18 (deep review P0-2): SOURCE-NEUTRAL. This used to name Eisenstat-Walker while
+            // SOURCE-NEUTRAL. This used to name Eisenstat-Walker while
             // the tolerance could have come from a stage override or a ramp -- the source was
             // produced, emitted, and read by nothing. The specific source is on the record and
             // `krylov_forcing_layer_for` turns it into a layer.
             return "krylov_tolerance_policy_or_inner_budget";
         case StageFailure::KrylovObjectiveMismatch:
-            // R13.19 (precision review P0-4): SOURCE-NEUTRAL. This said "D_vs_newton_merit" while
+            // SOURCE-NEUTRAL. This said "D_vs_newton_merit" while
             // under the WRMS experiment the metric actually satisfied is E^-1 S at the Newton
             // linearization point, not block D -- the enum was recorded and the layer ignored it.
             // `krylov_stopping_layer_for` turns the recorded metric into the specific layer.
@@ -226,12 +226,12 @@ inline const char* stage_failure_layer(StageFailure f) {
 
 // Where a Krylov tolerance actually came from. A category that names Eisenstat-Walker must have
 // read this, not assumed it.
-// R13.17 (external review P0-3): why the Newton loop ACTUALLY stopped, recorded at the site that
+// Why the Newton loop ACTUALLY stopped, recorded at the site that
 // stopped it. The classifier reconstructed this from accepted/rejected counts, residual first/last
 // and budget usage -- a fixed precedence over aggregates, which cannot tell "the residual stopped
 // moving" from "the budget ran out at a residual that happened to be flat".
 enum class NewtonTerminationReason {
-    // R13.18 (deep review P1-5): `TrustRejected` and `NonfiniteResidual` were removed -- both had
+    // `TrustRejected` and `NonfiniteResidual` were removed -- both had
     // ZERO producers, and neither corresponds to an actual Newton-loop exit: the trust region's
     // "all attempts rejected" path keeps K and CONTINUES, and no non-finite-residual site breaks
     // the loop. An enum value nothing writes is the same defect as a field nothing reads, and
@@ -262,8 +262,8 @@ inline const char* newton_termination_name(NewtonTerminationReason r) {
 // solve set must give one answer in any order.
 struct NearWorstFold {
     double worst = -1.0;
-    // R13.19 (precision review P0-3): the largest progress among solves that met NO tolerance.
-    // The R13.18 state was (worst, all_met), and a running boolean cannot RETRACT a solve that
+    // The largest progress among solves that met NO tolerance.
+    // A running (worst, all_met) boolean cannot RETRACT a solve that
     // leaves the band when a larger worst arrives later -- "near" is NON-TRANSITIVE (A~B and B~C
     // with A!~C), so the three-element chain A(0.9985,not-met) B(0.9994,met) C(1.0,met) gave
     // `false` on two of six permutations and `true` on four. Both fields here are MAXIMA, so the
@@ -271,7 +271,7 @@ struct NearWorstFold {
     double worst_unmet = -1.0;
 };
 
-// R13.19 SELF-REVIEW: this struct briefly carried a `mixed_mechanism_in_band` flag whose comment
+// This struct briefly carried a `mixed_mechanism_in_band` flag whose comment
 // said "set by the caller's two-pass check" -- a caller that did not exist. Zero producers, zero
 // consumers: the recurring defect of this campaign, introduced by the very commit that fixed an
 // instance of it. Removed rather than wired, because the thing it was reaching for is a SEPARATE
@@ -294,14 +294,14 @@ struct KrylovSolveMechanism {
     bool S_reached = false;
     bool budget_exhausted = false;
     int  tolerance_source = 0;      // KrylovToleranceSource
-    // R13.21 (external review P1-1 / P0-3): the metric this solve STOPPED on. Without it a
+    // The metric this solve STOPPED on. Without it a
     // stage-worst objective mismatch cannot name its layer, and two tied solves that stopped on
     // different metrics look identical to the tie check.
     int  stopping_metric = 0;       // KrylovStoppingMetric
 
 };
 
-// R13.21 (external review P0-3): the layer the record would emit for ONE solve's receipt.
+// The layer the record would emit for ONE solve's receipt.
 // Defined after the layer maps; declared here because the tie reducer below needs it.
 inline const char* krylov_specific_layer_for(const KrylovSolveMechanism& m);
 
@@ -355,12 +355,12 @@ inline bool near_worst_all_met(const NearWorstFold& st) {
     return st.worst_unmet < st.worst * (1.0 - kNearWorstTieBand);
 }
 
-// R13.18 (deep review P0-1): the metric the Krylov loop actually stopped on. The receipt used to
+// The metric the Krylov loop actually stopped on. The receipt used to
 // call it D unconditionally, but `WRF_SDIRK3_KRYLOV_WRMS_METRIC` swaps the block-constant D^-1 for
 // E^-1 S and the objective becomes rho_E.
 enum class KrylovStoppingMetric { Unknown, IdentityS, BlockD, StageWRMS };
 
-// R13.19 (P0-4): the layer an objective mismatch should send work to, DERIVED from the metric the
+// The layer an objective mismatch should send work to, DERIVED from the metric the
 // solve actually stopped on. Consumed beside the category so the two cannot disagree.
 inline const char* krylov_stopping_layer_for(KrylovStoppingMetric m) {
     switch (m) {
@@ -399,7 +399,7 @@ enum class KrylovToleranceSource {
     Other
 };
 
-// R13.18 (deep review P0-2): the layer a tolerance-limited verdict should send work to, DERIVED
+// The layer a tolerance-limited verdict should send work to, DERIVED
 // from the recorded source. Consumed beside the category so the two cannot disagree.
 inline const char* krylov_forcing_layer_for(KrylovToleranceSource s) {
     switch (s) {
@@ -415,7 +415,7 @@ inline const char* krylov_forcing_layer_for(KrylovToleranceSource s) {
     return "inner_tolerance_source_unrecorded";
 }
 
-// R13.21 (external review P0-3): the definitions promised above, now that both layer maps exist.
+// The definitions promised above, now that both layer maps exist.
 inline const char* krylov_specific_layer_for(const KrylovSolveMechanism& m) {
     switch (krylov_mechanism_category(m)) {
         case StageFailure::KrylovForcingTermLimited:
@@ -453,7 +453,7 @@ inline const char* krylov_tolerance_source_name(KrylovToleranceSource s) {
 }
 
 struct StageFailureSignals {
-    // R13.15 (external review P1-4): PROVENANCE, consumed rather than printed. -1 = the tile
+    // PROVENANCE, consumed rather than printed. -1 = the tile
     // layer did not stamp it, which is itself not a licence to classify.
     int    signals_from_stage = -1;
     int    classifying_stage = -1;
@@ -471,7 +471,7 @@ struct StageFailureSignals {
     bool initial_residual_finite = false;
     // Newton's residual at its first and last iteration. -1 = not measured.
     double residual_first = -1.0;
-    // R13.8: measured BEFORE finite, here too. R13.6 fixed this for R0 and left it for the
+    // Measured BEFORE finite, here too -- the same rule as for R0, applied to the
     // FINAL residual, where -1.0 (the not-measured sentinel) was mapped to NewtonDiverged
     // alongside NaN/Inf -- absence of a measurement reported as the strongest finding
     // available.
@@ -489,7 +489,7 @@ struct StageFailureSignals {
     double best_krylov_rel_error = -1.0;
     int    krylov_iterations = 0;
     int    gmres_total_failures = 0;
-    // R13.25 SELF-REVIEW: the counters R13.25 produced and NOTHING read -- the third recurrence of
+    // Counters that must have a reader -- a split producer with an unsplit consumer is the recurrence of
     // this shape in as many increments. Splitting the counters in the solver fixed the producer
     // while the consumer that actually misreads them (the legacy aggregate below) went on reading
     // the mixed one. `linear_total_failure_signals` counts ONLY the residual-ratio veto;
@@ -497,7 +497,7 @@ struct StageFailureSignals {
     // nothing, and reading it as Krylov stagnation evidence is the defect. -1 = an old record that
     // predates the split, which keeps the legacy reading.
     int    linear_total_failure_signals = -1;
-    // R13.26 (external review section 5): signals that NO globalizer overruled. This -- not the
+    // Signals that NO globalizer overruled. This -- not the
     // raw signal count -- is Krylov-stagnation evidence. -1 = a record predating the split.
     int    unresolved_linear_failures = -1;
     int    entry_metric_mismatch_events = -1;
@@ -513,14 +513,14 @@ struct StageFailureSignals {
     // Trust-region / line-search accounting.
     int    accepted_steps = 0;
     int    rejected_steps = 0;
-    // R13.11 (referee C7): iteration indices of the first events, so that when two signals
+    // Iteration indices of the first events, so that when two signals
     // are both true the one that happened FIRST can be named. -1 = did not happen. Without
     // these the classifier is a fixed precedence over aggregates, which the header used to
     // call "causal order" and is not.
     int    first_krylov_failure_iter = -1;
     int    first_rejection_iter = -1;
     int    argmin_residual_iter = -1;
-    // R13.12 (red team R3-1/R3-2): the two readings of the production total-failure
+    // The two readings of the production total-failure
     // predicate and the rule that was in force. They were computed in the solver and read by
     // nothing -- the ninth instance in this tree of a measurement added and never consumed.
     // On the record they make a disagreement between the rules visible instead of silent.
@@ -532,7 +532,7 @@ struct StageFailureSignals {
     // Krylov solve make progress". -1 = not measured, in which case the classifier says so
     // rather than substituting the other coordinate.
     double best_krylov_rel_error_vs_r0 = -1.0;
-    // R13.13: the WORST r0-relative error over the stage's solves, and where it happened.
+    // The WORST r0-relative error over the stage's solves, and where it happened.
     // `best_krylov_rel_error_vs_r0` is a MIN over the same solves: it answers "did any solve
     // work", which a late stall behind an early success passes. "Did the linear solve stop
     // working" is a max question. -1 = no solve measured r0.
@@ -543,12 +543,12 @@ struct StageFailureSignals {
     // Solves excluded from the max: zero-work (converged on entry) or finished (reached
     // tolerance). Neither is evidence about whether Krylov works.
     int    krylov_solves_trivial = 0;
-    // R13.22: candidates the total-failure rule discarded, and how many of those would have
+    // Candidates the total-failure rule discarded, and how many of those would have
     // reduced the nonlinear residual had the trust region been allowed to test them. Reported,
     // not classified on -- the counter answers "how often", the policy question is separate.
     int    discarded_candidates_seen = 0;
     int    discarded_candidates_descent = 0;
-    // R13.20 (numerics referee, claim 1): the last Newton iteration the Taylor-defect probe
+    // The last Newton iteration the Taylor-defect probe
     // measured, or -1. Reported, not classified on -- it says whether the campaign's tau evidence
     // covers the iteration that ended the loop, which it structurally cannot when that iteration's
     // step was rejected.
@@ -556,44 +556,44 @@ struct StageFailureSignals {
     // Did the WORST-progress solve stop because it met its (adaptive, 0.9-capped) tolerance?
     bool   worst_krylov_met_tolerance = false;
     double worst_krylov_eta = -1.0;
-    // R13.17 (external review P0-2): which METRIC the worst solve satisfied, and where its
+    // Which METRIC the worst solve satisfied, and where its
     // tolerance came from. `met_tolerance` alone cannot separate "met the D objective" from "met
     // the S one", and the layer string hardcoded Eisenstat-Walker while the value can come from a
     // stage override or a ramp -- a category must not name a source it did not read.
     bool   worst_krylov_D_reached = false;
     bool   worst_krylov_S_reached = false;
     KrylovToleranceSource worst_krylov_tolerance_source = KrylovToleranceSource::Unknown;
-    // R13.21 (external review P1-1): the stage-worst twin of `exit_stopping_metric`.
+    // The stage-worst twin of `exit_stopping_metric`.
     KrylovStoppingMetric worst_krylov_stopping_metric = KrylovStoppingMetric::Unknown;
     bool   worst_krylov_budget_exhausted = false;
-    // R13.20 (claim 7.4): the worst solve in the ladder's coordinate (rho_D, b-normalised) and in
+    // The worst solve in the ladder's coordinate (rho_D, b-normalised) and in
     // the success coordinate (rho_S). Reported, not classified on.
     float  worst_krylov_rho_D = -1.0f;
     float  worst_krylov_rho_S = -1.0f;
-    // R13.17 (external review P0-2): with eta saturated at its cap, two solves can tie on the
+    // With eta saturated at its cap, two solves can tie on the
     // worst ratio while ending for different reasons, and a strict `>` update let whichever came
     // first decide the category. True only if EVERY near-worst solve met a tolerance.
     bool   all_near_worst_met_tolerance = true;
-    // R13.19 SELF-REVIEW: the near-worst solves disagree about WHICH mechanism they hit, so naming
+    // The near-worst solves disagree about WHICH mechanism they hit, so naming
     // one would be naming whichever arrived first.
     bool   near_worst_mechanism_ambiguous = false;
-    // R13.17 (external review P0-3): the loop's OWN exit reason, from the site that took it.
+    // The loop's OWN exit reason, from the site that took it.
     NewtonTerminationReason newton_termination = NewtonTerminationReason::NotRecorded;
-    // R13.18 (deep review P0-4): the receipt of the solve that ENDED the loop. The worst_* fields
+    // The receipt of the solve that ENDED the loop. The worst_* fields
     // belong to the stage's largest-ratio solve, which need not be the same iteration -- subtyping
     // a terminal event from another iteration's evidence describes a solve that ended nothing.
     int    exit_krylov_iter = -1;
-    // R13.24 (external review P1-3): a SECOND, independent authority for "which Newton iteration
+    // A SECOND, independent authority for "which Newton iteration
     // ended the loop". The exit receipt's own iteration is `exit_krylov_iter`; comparing that
     // field with itself -- which is what the view did -- can never detect a receipt promoted from
     // another iteration, the very thing the completeness rule was written to catch.
     // -1 = never stamped, in which case the comparison is skipped rather than passed.
     int    newton_exit_event_iter = -1;
-    // R13.21 SELF-REVIEW ROUND 2: the exit solve's Arnoldi budget, so `krylov_receipt_complete`
+    // The exit solve's Arnoldi budget, so `krylov_receipt_complete`
     // has something to judge. Without these the completeness rule had no production consumer at
     // all -- a rule with a producer and no consumer, written in the increment that closes that
     // class.
-    // R13.23 (P0-4): the tolerance the exit solve actually applied, so the reached flags can be
+    // The tolerance the exit solve actually applied, so the reached flags can be
     // re-derived rather than trusted.
     double exit_tolerance_applied = -1.0;
     int    exit_arnoldi_spent = -1;
@@ -652,7 +652,7 @@ inline constexpr double kKrylovNoProgressVsR0 = 0.90;
 // Below it, the iteration was still working and being cut off is a budget statement.
 inline constexpr double kResidualStillFalling = 0.95;
 
-// R13.24: the sentinel `measured()` rejects. Named because "-1.0" appears at a dozen call sites
+// The sentinel `measured()` rejects. Named because "-1.0" appears at a dozen call sites
 // and a reader cannot tell a sentinel from a legitimate negative without knowing the convention.
 constexpr double kMetricNotMeasured = -1.0;
 
@@ -705,7 +705,7 @@ struct KrylovReceiptView {
     int    stopping_metric = -1;   // KrylovStoppingMetric; 0 == Unknown, -1 == not stamped
     int    arnoldi_spent = -1;
     int    arnoldi_allowed = -1;
-    // R13.23 (deep review P0-4): the receipt must be SELF-CONSISTENT, not merely populated.
+    // The receipt must be SELF-CONSISTENT, not merely populated.
     double tolerance_applied = -1.0;
     bool   D_reached = false;
     bool   S_reached = false;
@@ -715,7 +715,7 @@ struct KrylovReceiptView {
 
 [[nodiscard]] inline bool krylov_receipt_complete(const KrylovReceiptView& r) {
     if (!measured(r.rho_D_final) || !measured(r.rho_S_final)) return false;
-    // R13.23 (P0-4): `Unknown` is 0 and the old test was `>= 0`, so an UNSTAMPED metric passed as
+    // `Unknown` is 0 and the old test was `>= 0`, so an UNSTAMPED metric passed as
     // complete -- and an attribution derived from it named a layer the receipt could not support.
     // The enum's own "I do not know" value must fail a completeness test.
     if (r.stopping_metric <= static_cast<int>(KrylovStoppingMetric::Unknown)) return false;
@@ -730,9 +730,9 @@ struct KrylovReceiptView {
     }
     if (r.D_reached != (r.rho_D_final < r.tolerance_applied)) return false;
     if (r.S_reached != (r.rho_S_final < r.tolerance_applied)) return false;
-    // And it must belong to the solve it is being read as. Both unstamped is the pre-R13.18 record
+    // And it must belong to the solve it is being read as. Both unstamped is an older record
     // and is allowed through; one stamped and disagreeing is not.
-    // R13.26 (external review section 7): BOTH stamped, or neither. R13.25 guarded the
+    // BOTH stamped, or neither. Guarding the
     // comparison on both being present, so `exit_iter = -1` skipped it and a receipt with one
     // authority missing read as complete -- the opposite of what its own comment claimed. A
     // record predating the split has neither and keeps the legacy reading.
@@ -815,7 +815,7 @@ enum class TrialOutcome {
     return !(accepted && runtime_total_failure);
 }
 
-// R13.26 (external review section 5): was the signal OVERRULED? The classifier's legacy branch
+// Was the signal OVERRULED? The classifier's legacy branch
 // read the signal COUNT, which increments whether or not a globalizer went on to accept the step.
 // So a Newton iteration whose recovery step was accepted -- residual down, state advanced -- could
 // still make the stage report KrylovStagnated, contradicting this file's own lifecycle rule that
@@ -845,7 +845,7 @@ inline bool is_entry_metric_mismatch_event(LinearSignal s) {
 }
 
 // The disposition of a candidate, as one value instead of three booleans that can disagree.
-// `AdmittedThenRejected` is the state R13.23 could not express: the linear solve DID signal total
+// `AdmittedThenRejected` is the state a single boolean cannot express: the linear solve DID signal total
 // failure, the arbitration DID admit the candidate, and the globalizer then refused it. Counting
 // that as a non-total-failure -- which is what reading the cleared derived flag does -- loses the
 // linear signal from the statistics entirely.
@@ -862,7 +862,7 @@ enum class CandidateDisposition {
                                 : CandidateDisposition::LinearFailureVetoed;
 }
 
-// R13.25 SELF-REVIEW (census): `counts_as_linear_total_failure` lived here until the lifecycle
+// `counts_as_linear_total_failure` lived here until the lifecycle
 // split replaced it with `is_linear_total_failure_signal`, which takes the SIGNAL rather than an
 // admission state. It survived with only fixtures holding it up -- a retired rule with live tests
 // reads as current guidance to the next person who greps for one.
@@ -913,7 +913,7 @@ inline bool line_search_skipped(bool step_accepted, int rhs_budget) {
     return skip;
 }
 
-// R13.23 6.3: the boundary-flag projection, as a rule a fixture can reject.
+// The boundary-flag projection, as a rule a fixture can reject.
 //
 // Two flag sets exist and conflating them is the whole hazard: `raw` is global-domain metadata
 // as Fortran passed it, `effective` is that projected onto ONE rank. The projection is not
@@ -967,7 +967,7 @@ struct CandidateArbitration {
 
 [[nodiscard]] inline bool candidate_arbitration_rescues(const CandidateArbitration& a) {
     if (!a.s_merit_measured) return false;              // fail-closed
-    // R13.25: a merit that needed the halo mask and could not apply it is not the trust merit, so
+    // A merit that needed the halo mask and could not apply it is not the trust merit, so
     // it cannot overrule a signal the trust merit would judge. Fail closed rather than compare
     // two different quantities.
     if (a.halo == HaloMaskStatus::RequiredButUnavailable) return false;
@@ -999,7 +999,7 @@ struct RecoveryAcceptance {
 }
 
 
-// R13.23 (P0-4): the exit receipt as the classifier sees it, in one place so the attribution and
+// The exit receipt as the classifier sees it, in one place so the attribution and
 // the emitted `exit_receipt_complete` cannot judge different things.
 
 inline KrylovReceiptView exit_receipt_view(const StageFailureSignals& s) {
@@ -1026,7 +1026,7 @@ inline StageFailure krylov_exit_attribution_of(const StageFailureSignals& s) {
         return StageFailure::None;
     }
     if (s.exit_krylov_iter < 0) return StageFailure::None;
-    // R13.23 (deep review P0-4): THE RECEIPT MUST EARN THE ATTRIBUTION. `exit_receipt_complete`
+    // THE RECEIPT MUST EARN THE ATTRIBUTION. `exit_receipt_complete`
     // was computed and EMITTED but never consulted here, so a row could read
     // `exit_receipt_complete=0` beside a specific `exit_attribution` derived from that same
     // receipt -- the producer/emitter/no-consumer shape this repository has fixed repeatedly.
@@ -1122,29 +1122,29 @@ inline const char* stage_decision_basis_name(StageDecisionBasis b) {
 struct StageDiagnosis {
     // What actually ended the stage.
     StageFailure primary_event = StageFailure::None;
-    // R13.19 SELF-REVIEW: named precisely. This is **the classification with the recorded exit
+    // Named precisely. This is **the classification with the recorded exit
     // event removed** -- NOT "what the metric evidence says", which is what an earlier comment
     // claimed. The difference matters: with the termination cleared, the clauses that consume it
     // fall back to the AGGREGATE RECONSTRUCTION, so on a stage with no r0 evidence this field is
     // the old precedence, not a measurement. `attribution_from_metric` below says which it is.
     StageFailure attribution = StageFailure::None;
     // True only when the attribution rests on an actual r0/Krylov reading rather than on the
-    // aggregate fallback. Excluding two enum values -- which is all the first version did -- would
+    // aggregate fallback. Excluding two enum values -- would
     // have called a pure reconstruction "measured".
     bool attribution_from_metric = false;
     bool attribution_measured = false;   // the weaker "not an absence-of-evidence verdict"
-    // R13.20 (round 9, R9-2): the evidence class the deciding clause actually used, reported by
+    // The evidence class the deciding clause actually used, reported by
     // that clause rather than inferred from the signals afterwards. `attribution_from_metric` is
     // now a reading of `attribution_basis`, not an independent guess at it.
     StageDecisionBasis primary_event_basis = StageDecisionBasis::NotRecorded;
-    // R13.21 (external review P0-2): what the EXIT solve's receipt says about why the loop ended,
+    // What the EXIT solve's receipt says about why the loop ended,
     // kept beside the event instead of replacing it. `None` = the receipt cannot support a subtype.
     StageFailure exit_attribution = StageFailure::None;
-    // R13.21 (external review section 8): how close the r0 progress was to the boundary that
+    // How close the r0 progress was to the boundary that
     // decided the attribution.
     ThresholdProximity threshold = {};
     StageDecisionBasis attribution_basis   = StageDecisionBasis::NotRecorded;
-    // R13.19 SELF-REVIEW (round 8, P0-C): WHICH solve's receipt decided the category. The
+    // WHICH solve's receipt decided the category. The
     // emitter derived `specific_layer` from the EXIT solve's source/metric while the four-way
     // clauses can be reached from the STAGE-WORST receipt -- a layer describing one solve
     // annotating a category decided by another. `worst_krylov_tolerance_source` was produced,
@@ -1240,11 +1240,11 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
         if (s.newton_termination == NewtonTerminationReason::ZeroUpdateAfterTotalFailure) {
             // Every path out of this block returns, and all three read `exit_*`.
             if (basis) *basis = StageDecisionBasis::ExitReceipt;
-            // R13.21 (external review P0-2): THE EVENT, ALWAYS. This branch used to return the
+            // THE EVENT, ALWAYS. This branch used to return the
             // exit solve's metric SUBTYPE here -- `KrylovObjectiveMismatch` or
             // `KrylovEntryMetricMismatch` -- so a field documented as "what actually ended the
             // stage" was overwritten by a CAUSE, and the fixtures pinned that as the contract.
-            // R13.19 added `attribution` and R13.20 added `event_basis` on the way to separating
+            // `attribution` and `event_basis` were added on the way to separating
             // the two questions; this closes it. The subtype is preserved as
             // `StageDiagnosis::exit_attribution`, computed by `krylov_exit_attribution_of` below,
             // so nothing is lost -- it simply stops impersonating the event.
@@ -1256,10 +1256,10 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
             return StageFailure::KrylovSolveThrew;
         }
         if (measured(s.worst_krylov_rel_error_vs_r0)) {
-            // R13.14 (round 5): the boundary is a judgment and must be movable per run without
+            // The boundary is a judgment and must be movable per run without
             // a rebuild. An unset/invalid value falls back to the header constant, so records
             // taken before the knob existed classify exactly as they did then.
-            // R13.16 (round 6, R6-4): the threshold the classifier APPLIES and the one the
+            // The threshold the classifier APPLIES and the one the
             // emitter PRINTS were two predicates on two different fields, so a row could say
             // `not_reached` while 0.90 silently decided the category. Both key on the same flag.
             const double no_progress =
@@ -1303,7 +1303,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
             // Every solve moved. Whatever refused the step is downstream, and the later
             // clauses name it.
         } else if (s.krylov_r0_unmeasured_solves > 0 || s.krylov_solves_trivial > 0) {
-            // R13.16 (round 6, R6-3): `worst == -1` has FOUR causes and they were collapsed into
+            // `worst == -1` has FOUR causes and they were collapsed into
             // one branch applying the ||b||-coordinate rule -- the very rule this line of work
             // exists to get away from. Two are now separated by counters that were added in the
             // commits that created the ambiguity and then read by nothing: every solve did zero
@@ -1331,7 +1331,7 @@ inline StageFailure first_failure_of(const StageFailureSignals& s,
             if (basis) *basis = StageDecisionBasis::StepAcceptance;
             return StageFailure::AllStepsRejected;
         }
-        // R13.17 (external review P0-3): when the loop RECORDED why it stopped, that is the
+        // When the loop RECORDED why it stopped, that is the
         // answer -- not a precedence over aggregates. The reconstruction below cannot separate
         // "the residual stopped moving" from "the budget ran out at a flat residual", and the
         // campaign's reading of the 12x-budget run ("the failure moved outward") rests on exactly
@@ -1391,15 +1391,15 @@ inline StageDiagnosis stage_diagnosis_of(const StageFailureSignals& s) {
     d.attribution_from_metric =
         d.attribution_measured &&
         d.attribution_basis == StageDecisionBasis::KrylovR0Receipt;
-    // R13.20 (round 9, R9-3): likewise derived from the basis the deciding clause reported,
+    // Likewise derived from the basis the deciding clause reported,
     // instead of re-testing the signals the clause read. The previous form re-derived the
     // condition and could not be true for `KrylovForcingTermLimited`, leaving the emitter's
     // `exit_tolerance_source` arm selectable by no input.
     d.decided_by_exit_receipt =
         (d.primary_event_basis == StageDecisionBasis::ExitReceipt);
-    // R13.21 (P0-2): the subtype the zero-update branch used to return as the event.
+    // The subtype the zero-update branch used to return as the event.
     d.exit_attribution = krylov_exit_attribution_of(s);
-    // R13.21 (section 8): the same threshold resolution the classifier applies, so the record
+    // The same threshold resolution the classifier applies, so the record
     // cannot report a distance from a boundary other than the one that was used.
     {
         const double applied =

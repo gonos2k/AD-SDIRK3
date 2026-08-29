@@ -48,4 +48,16 @@ fixture**. Contracts, receipts, monitors and ratchets are reserved for the defau
 
 - **Step 1** — monitors, rules, struct, 11 fixtures removed; ratchet consolidated. −184 lines.
   ctest 62/62, telemetry byte-identical.
-- **Step 2** — header narrative rewritten block by block (in progress; the four largest first).
+- **Step 2** — header narrative rewritten block by block: 4 largest (132 → 52), 25 mid-size
+  (1615 → 1418), 60 small prefixes stripped, 9 in-line references reworded by hand. Every block
+  read in full before editing. **`first_failure.h`: 1,746 → 1,418 lines; comment/code
+  1.19 → 0.81.** ctest 62/62, lint 98/98, telemetry byte-identical.
+
+## What was NOT done, deliberately
+
+- No new gate, monitor, receipt or ratchet was added during the cleanup. The one temptation --
+  a lint that flags campaign markers in comments -- was declined: it would be a fourth
+  meta-level on a problem that a rule of conduct (below) already addresses.
+- The remaining 599 comment lines are contracts, decision tables and measured counterexamples.
+  They are the documentation the fixtures' description strings duplicate; a later pass could
+  pick one home for each, but that is a judgement call per rule, not a sweep.
