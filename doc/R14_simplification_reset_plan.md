@@ -133,3 +133,49 @@ reports 0 errors.
 **R14.2 scope, measured:** 14 iteration-local variables (92 read sites) collapse into one
 `NewtonIterationResult`; `StageFailureSignals` has 76 fields of which the classifier reads 36 —
 the other 40 are telemetry-only and split off, none is dead.
+
+## R14.2 — design, measured (awaiting go)
+
+**What one Newton iteration currently keeps as separate state** (13 variables after R14.1d):
+
+| decides control flow | derived / recorded only |
+|---|---|
+| `gmres_total_failure` — trust-loop condition (L10449), statistics branch (L10971), zero-update exit (L11094), consistency check (L11002) | `linear_signal`, `trial_outcome`, `accepted_via`, `effective_veto` |
+| `step_accepted` — 5 branches | `trust_attempted`, `recovery_attempted` |
+| `gmres_total_failure_candidate` — 4 branches, `const` | `entry_mismatch_step_rejected`, `gmres_S_reached_on_entry`, `gmres_objective_mismatch_on_entry`, `arbitration_admitted` (now always false) |
+
+**The object:**
+```cpp
+struct NewtonIterationResult {
+    // what the linear solve reported -- written once, at the solve
+    struct { bool total_failure_signal; bool entry_S_reached; bool entry_objective_mismatch; } linear;
+    // what the globalizer decided -- written once, at the accepting/refusing site
+    struct { TrialOutcome outcome; bool trust_attempted; bool recovery_attempted; } candidate;
+    // derived, never stored separately
+    bool step_applied()      const;   // outcome is one of the Accepted* values
+    bool failure_stands()    const;   // linear.total_failure_signal && !step_applied()
+};
+```
+`gmres_total_failure` becomes `result.failure_stands()`; `step_accepted` becomes
+`result.step_applied()`; the four decision sites read the method, and the post-hoc
+"reassert the flag after the trial" block (R13.25) disappears because the answer is computed
+from the outcome instead of patched after it.
+
+**Statistics and telemetry** derive from the object at one site after the trial:
+`linear_total_failure_signals += linear.total_failure_signal`,
+`unresolved_linear_failures += failure_stands()`, `globalization_rejections += (outcome is a
+Rejected*)`. The legacy `gmres_total_failures / non_total_failures` pair keeps its meaning
+(`failure_stands()`) so archived records compare.
+
+**`StageFailureSignals`**: 76 fields, filled at 72 sites, **69 of them inside
+`solveImplicitStage`** (from L13504) -- one function, so the fill collapses to one block. The 36
+fields the classifier reads stay; the 40 telemetry-only fields move to a `StageTelemetry` the
+emitter serialises, so the classifier's input is exactly what it consumes.
+
+**Verification for the refactor:** the dt=600 record must classify identically and every
+`SDIRK3_*` line must be byte-identical -- this is behaviour-preserving by construction, and the
+A/B is the proof. One transition test (fake `A`, `b`, RHS -> solve -> refuse -> K unchanged ->
+typed exit) replaces the pure-helper fixtures that pinned the removed intermediates.
+
+**Estimated edit surface:** ~90 read sites in `newton_solver.cpp`, one fill block in
+`tile_unified_impl.cpp`, the `StageFailureSignals` split in `first_failure.h`.
