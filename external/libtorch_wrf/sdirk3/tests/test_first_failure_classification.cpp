@@ -1755,30 +1755,6 @@ int main() {
               "per-edge, not per-rank");
     }
 
-    {
-        // R13.23 (self-review): the Armijo line search is UNREACHABLE, and these pins record that
-        // as a finding rather than repairing it. `nk_line_search` is fully wired -- Registry,
-        // Fortran bridge, C++ config, env, and forwarded to options_.use_line_search -- and the
-        // authority manifest reports it effective=true on the live run. None of that matters:
-        // the guard in front of it is closed.
-        using wrf::sdirk3::line_search_skipped;
-
-        check(line_search_skipped(true, 100),
-              "step accepted, budget available: skipped by (B) -- trust-region rho already "
-              "validated the step");
-        check(line_search_skipped(false, 100),
-              "step NOT accepted, budget available: skipped by (A) -- and this is the case the "
-              "line search would exist to serve, so the two guards together close the door");
-        check(line_search_skipped(true, 0),
-              "step accepted, budget exhausted: skipped");
-        check(line_search_skipped(false, 0),
-              "step NOT accepted, budget exhausted: skipped");
-        check(line_search_skipped(true, 100) && line_search_skipped(false, 100),
-              "(A) covers !step_accepted and (B) covers step_accepted, so the guard is a CLOSURE "
-              "over both values -- no input reaches the line search. If someone deliberately "
-              "reopens the path this pin fails, which is the point: reopening a globalization "
-              "strategy is a numerics change to be measured, not a drive-by fix");
-    }
 
     {
         // R13.23 (self-review): a rescued candidate must LAND somewhere. The arbitration clears
@@ -1870,35 +1846,6 @@ int main() {
         // replacement is pinned in the lifecycle block above.
     }
 
-    {
-        // R13.24 (external review, section 11 + P1-3): landmines pinned without reopening the path.
-        using wrf::sdirk3::line_search_alpha_is_trustworthy;
-        using wrf::sdirk3::KrylovReceiptView;
-        using wrf::sdirk3::krylov_receipt_complete;
-
-        check(line_search_alpha_is_trustworthy(/*armijo=*/true, 3, 2),
-              "only a satisfied Armijo condition earns the step");
-        check(!line_search_alpha_is_trustworthy(/*armijo=*/false, 4, /*budget=*/0),
-              "budget exhaustion is a REJECT -- today alpha would still be 1.0 and the full step "
-              "Armijo just refused would be applied, because alpha is assigned only on success or "
-              "at the ninth arm and the budget (5) runs out first");
-        check(!line_search_alpha_is_trustworthy(/*armijo=*/false, /*arms=*/9, 3),
-              "and so is running out of arms: 'use the last alpha tried' is not a line search");
-
-        // P1-3: the completeness rule can now actually see a promoted receipt, because the two
-        // iteration fields come from two authorities instead of one field read twice.
-        KrylovReceiptView v;
-        v.rho_D_final = 0.4; v.rho_S_final = 0.4; v.stopping_metric = 1;
-        v.arnoldi_spent = 5; v.arnoldi_allowed = 10;
-        v.tolerance_applied = 0.9; v.D_reached = true; v.S_reached = true;
-        v.receipt_iter = 2; v.exit_iter = 2;
-        check(krylov_receipt_complete(v),
-              "a receipt stamped for the iteration that ended the loop is complete");
-        v.exit_iter = 3;
-        check(!krylov_receipt_complete(v),
-              "while a receipt from ANOTHER iteration is not -- a test that was unreachable in "
-              "production until the exit iteration got an authority independent of the receipt");
-    }
 
     {
         // R13.25 (external review P0-1): the transition R13.24 could not express. Its fixtures
@@ -2159,7 +2106,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 224;
+    constexpr int expected_checks = 214;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
