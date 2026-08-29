@@ -70,6 +70,11 @@ static void give_complete_exit_receipt(StageFailureSignals& s, double rho_D, dou
     s.exit_S_reached = (rho_S < tol);
     s.exit_arnoldi_spent = 7;
     s.exit_arnoldi_allowed = 8;
+    // R13.26 (external review section 7): a COMPLETE receipt needs BOTH iteration authorities.
+    // This helper is named for completeness and left `newton_exit_event_iter` unstamped, which
+    // R13.25's guard tolerated. Three fixtures broke the moment the rule was tightened -- the
+    // rule working, not the fixtures being wrong about the finding they assert.
+    s.newton_exit_event_iter = s.exit_krylov_iter;
 }
 
 
@@ -2023,11 +2028,18 @@ int main() {
         v.rho_D_final = 0.4; v.rho_S_final = 0.4; v.stopping_metric = 1;
         v.arnoldi_spent = 5; v.arnoldi_allowed = 10;
         v.tolerance_applied = 0.9; v.D_reached = true; v.S_reached = true;
+        // R13.26 (external review section 7.1): THIS FIXTURE COULD NOT FAIL. With
+        // `v.exit_iter = -1` the right disjunct is always true, so `krylov_receipt_complete`
+        // could return anything and the check passed. A pin that cannot reject is a comment.
         v.receipt_iter = 2; v.exit_iter = -1;
-        check(!krylov_receipt_complete(v) || v.exit_iter < 0,
-              "a receipt whose exit event was never stamped cannot be completed by copying the "
-              "receipt's own iteration into the missing slot -- that restores the identity the "
-              "split removed, which is what R13.24's fallback did");
+        check(!krylov_receipt_complete(v),
+              "a receipt stamped for an iteration whose exit event was never stamped is "
+              "INCOMPLETE -- one authority present and one missing is exactly the state the "
+              "two-stamp split exists to detect");
+        v.receipt_iter = -1; v.exit_iter = 3;
+        check(!krylov_receipt_complete(v),
+              "...and the mirror case too: a missing receipt stamp is not excused by a present "
+              "exit stamp");
     }
 
     {
@@ -2098,6 +2110,101 @@ int main() {
               "-1 means 'this record cannot answer', not 'no failures'");
     }
 
+    {
+        // R13.26 (external review section 3): the recovery gate. R13.25 routed this through the
+        // ADMISSION rule (`after < before`), so the configured `trust_fallback_ratio` stopped
+        // being consulted whenever the S merit existed -- a one-ULP improvement was adopted at a
+        // site that MUTATES STATE, while the log still printed `ratio_gate=`.
+        using wrf::sdirk3::RecoveryAcceptance;
+        using wrf::sdirk3::recovery_step_is_acceptable;
+        using wrf::sdirk3::HaloMaskStatus;
+
+        RecoveryAcceptance a;
+        a.s_merit_measured = true; a.s_before = 1000.0; a.ratio_gate = 0.98;
+        a.halo = HaloMaskStatus::Applied;
+
+        a.s_after = 999.0;    // a 0.1% decrease: passes a strict-decrease test
+        check(!recovery_step_is_acceptable(a),
+              "a 0.999 ratio under a 0.98 gate is REJECTED -- the configured bar decides, not a "
+              "bare decrease, because this acceptance mutates the state rather than granting "
+              "entry to a trial that would judge again");
+        a.s_after = 970.0;
+        check(recovery_step_is_acceptable(a),
+              "...while 0.97 clears the same gate");
+
+        a.ratio_gate = 0.5;   // the same candidate under a stricter configuration
+        check(!recovery_step_is_acceptable(a),
+              "and the config value demonstrably changes the verdict: 0.97 fails a 0.5 gate, "
+              "which is what 'trust_fallback_ratio' was set to mean");
+
+        RecoveryAcceptance unmeasured = a;
+        unmeasured.ratio_gate = 0.98; unmeasured.s_after = 100.0;
+        unmeasured.s_merit_measured = false;
+        check(!recovery_step_is_acceptable(unmeasured),
+              "no S merit is fail-closed, not a silent fall back to the raw predicate");
+
+        RecoveryAcceptance masked = a;
+        masked.ratio_gate = 0.98; masked.s_after = 100.0;
+        masked.halo = HaloMaskStatus::RequiredButUnavailable;
+        check(!recovery_step_is_acceptable(masked),
+              "and a merit that needed the halo mask and could not apply it is not the quantity "
+              "trust judges by, so it cannot carry a state mutation");
+
+        RecoveryAcceptance ru = a;
+        ru.ratio_gate = 0.98; ru.s_after = 100.0; ru.ru_guard_ok = false;
+        check(!recovery_step_is_acceptable(ru),
+              "the ru guard is an AND, never an OR escape: a large S gain does not license a step "
+              "that worsens the block the stage is dominated by");
+    }
+
+    {
+        // R13.26 (external review section 5): a RESOLVED signal is not stagnation evidence.
+        using wrf::sdirk3::LinearSignal;
+        using wrf::sdirk3::TrialOutcome;
+        using wrf::sdirk3::linear_failure_unresolved;
+
+        check(!linear_failure_unresolved(LinearSignal::TotalFailure,
+                                         TrialOutcome::AcceptedRecovery),
+              "a signal the recovery step overruled is RESOLVED: the residual fell and the state "
+              "advanced, so reporting KrylovStagnated for that iteration contradicts the very "
+              "lifecycle rule that let the step through");
+        check(!linear_failure_unresolved(LinearSignal::TotalFailure, TrialOutcome::AcceptedTrust) &&
+              !linear_failure_unresolved(LinearSignal::TotalFailure, TrialOutcome::AcceptedDirect),
+              "...and so is one overruled by trust or by the direct path");
+        check(linear_failure_unresolved(LinearSignal::TotalFailure, TrialOutcome::RejectedTrust) &&
+              linear_failure_unresolved(LinearSignal::TotalFailure, TrialOutcome::RejectedRecovery),
+              "while a refused trial leaves it UNRESOLVED -- which is the evidence the classifier "
+              "should have been reading all along");
+        check(!linear_failure_unresolved(LinearSignal::EntryMetricMismatch,
+                                         TrialOutcome::RejectedTrust),
+              "an entry mismatch is not a linear total failure however it ends: one signal, one "
+              "meaning");
+    }
+
+    {
+        // R13.26 SELF-REVIEW: an accepted step and a standing runtime failure flag cannot both be
+        // true. `gmres_total_failure` is raised before any nonlinear trial; a recovery that then
+        // succeeds overrules it, and R13.26 fixed the classifier's counter while leaving the flag
+        // -- so a successful recovery still incremented `gmres_total_failures` and read as a
+        // failure to every later consumer.
+        using wrf::sdirk3::TrialOutcome;
+        using wrf::sdirk3::runtime_failure_flag_consistent;
+
+        check(!runtime_failure_flag_consistent(true, TrialOutcome::AcceptedRecovery),
+              "a recovery that took the step while the failure flag still stands is INCONSISTENT: "
+              "the residual fell and the state advanced, so the flag is describing a different "
+              "iteration than the control flow did");
+        check(!runtime_failure_flag_consistent(true, TrialOutcome::AcceptedTrust) &&
+              !runtime_failure_flag_consistent(true, TrialOutcome::AcceptedDirect),
+              "...and the same for the trust and direct acceptances");
+        check(runtime_failure_flag_consistent(false, TrialOutcome::AcceptedRecovery),
+              "clearing the flag on acceptance is the consistent state");
+        check(runtime_failure_flag_consistent(true, TrialOutcome::RejectedTrust) &&
+              runtime_failure_flag_consistent(true, TrialOutcome::Vetoed),
+              "while a refused or vetoed candidate SHOULD leave the flag standing -- the repair "
+              "must not clear a failure nothing overruled");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -2114,7 +2221,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 220;
+    constexpr int expected_checks = 235;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

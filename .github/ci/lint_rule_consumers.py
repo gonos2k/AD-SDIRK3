@@ -21,7 +21,7 @@ SDIR = ROOT / "external" / "libtorch_wrf" / "sdirk3"
 # headers carry pure decision rules (57 of them), and a gate silent on those reports a clean bill
 # of health it has not earned. Each entry carries its own rule-count ratchet.
 HEADERS = {
-    "wrf_sdirk3_first_failure.h": 40,
+    "wrf_sdirk3_first_failure.h": 42,
     "wrf_sdirk3_probe_validity.h": 13,
     "wrf_sdirk3_stage_history_diag.h": 38,
     "wrf_sdirk3_krylov_metrics.h": 6,
@@ -53,20 +53,25 @@ def check_header(name: str, expected_rules: int, prod: str) -> int:
     # own coverage is the defect it exists to catch, one level up. Count what is SKIPPED too, and
     # ratchet it, so a future declaration style cannot slip past unseen.
     decls = [(i + 1, ln) for i, ln in enumerate(hdr.split("\n"))
-             if re.match(r"^\s*inline\s", ln)]
-    rule_re = re.compile(r"^inline\s+(?:const\s+)?[\w:<>, ]+?[\s*&]+(\w+)\s*\(", re.M)
+             if re.match(r"^\s*(?:\[\[[\w:, ]+\]\]\s*)?inline\s", ln)]
+    # R13.26: attributes may precede `inline` -- `[[nodiscard]] inline bool foo(...)`. The
+    # coverage ratchet caught this the moment [[nodiscard]] was added (40 -> 33), which is exactly
+    # what it is for: the rules did not disappear, the pattern stopped seeing them.
+    rule_re = re.compile(r"^(?:\[\[[\w:, ]+\]\]\s*)?inline\s+(?:const\s+)?[\w:<>, ]+?[\s*&]+(\w+)\s*\(",
+                         re.M)
     rules = sorted(set(rule_re.findall(hdr)))
 
     # `inline constexpr <type> kName = ...;` is a CONSTANT, not a rule: it has no body to bypass,
     # so "is it called" is not the question for it.
-    consts = [n for n, ln in decls if re.match(r"^\s*inline\s+constexpr\s", ln)]
+    consts = [n for n, ln in decls
+              if re.match(r"^\s*(?:\[\[[\w:, ]+\]\]\s*)?inline\s+constexpr\s", ln)]
     accounted = set()
     for _, ln in decls:
         m = re.search(r"\b(\w+)\s*\(", ln)
         if m and m.group(1) in rules:
             accounted.add(id(ln))
     unseen = [(n, ln.strip()) for n, ln in decls
-              if not re.match(r"^\s*inline\s+constexpr\s", ln)
+              if not re.match(r"^\s*(?:\[\[[\w:, ]+\]\]\s*)?inline\s+constexpr\s", ln)
               and not (re.search(r"\b(\w+)\s*\(", ln)
                        and re.search(r"\b(\w+)\s*\(", ln).group(1) in rules)]
     if unseen:
@@ -124,7 +129,7 @@ def check_header(name: str, expected_rules: int, prod: str) -> int:
         # actually occupies here, and the test is then trivially checkable by reading it.
         internal = False
         for ln in hdr.split("\n"):
-            if re.match(r"^\s*inline\s", ln):
+            if re.match(r"^\s*(?:\[\[[\w:, ]+\]\]\s*)?inline\s", ln):
                 continue          # this line DECLARES the rule; it is not a use of it
             # A call, or an address-of: registering a rule as a callback inside its own header
             # (`set_pre_abort_hook(&sdirk3_rhs_run_emit_end_fatal)`) is consumption, and treating
