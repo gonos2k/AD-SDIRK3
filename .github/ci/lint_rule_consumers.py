@@ -17,9 +17,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SDIR = ROOT / "external" / "libtorch_wrf" / "sdirk3"
-HEADER = SDIR / "wrf_sdirk3_first_failure.h"
-PRODUCTION = ["wrf_sdirk3_newton_solver.cpp", "wrf_sdirk3_tile_unified_impl.cpp",
-              "wrf_sdirk3_config.cpp"]
+# R13.25 SELF-REVIEW: checking ONE header was itself a coverage overstatement -- three other
+# headers carry pure decision rules (57 of them), and a gate silent on those reports a clean bill
+# of health it has not earned. Each entry carries its own rule-count ratchet.
+HEADERS = {
+    "wrf_sdirk3_first_failure.h": 40,
+    "wrf_sdirk3_probe_validity.h": 13,
+    "wrf_sdirk3_stage_history_diag.h": 38,
+    "wrf_sdirk3_krylov_metrics.h": 6,
+}
+
+# R13.25 SELF-REVIEW: production is EVERY solver translation unit, not the three this started
+# with. A rule called only from a .cpp outside that list would have been reported as an orphan --
+# a false alarm, and a gate that cries wolf gets ignored, which is how it stops working at all.
+PRODUCTION_GLOB = "*.cpp"
+# ...but NOT the ten test_*.cpp that live in the same directory. R13.25 SELF-REVIEW: widening the
+# glob to every .cpp swept those in, so a rule called ONLY from a contract test would have counted
+# as consumed -- which is exactly the state this lint exists to reject. The whole point is
+# "something that RUNS calls it", and a fixture is not that.
+TEST_PREFIX = "test_"
 
 # Rules deliberately without a production caller. Each needs a REASON, not just a name --
 # an allowlist without reasons becomes a place to hide the next orphan.
@@ -28,8 +44,8 @@ ALLOWLIST = {
 }
 
 
-def main() -> int:
-    hdr = HEADER.read_text()
+def check_header(name: str, expected_rules: int, prod: str) -> int:
+    hdr = (SDIR / name).read_text()
 
     # R13.25 SELF-REVIEW: the first version of this pattern required the return type to be a
     # word, so it silently skipped every `inline const char* foo(...)` -- nine real rules -- and
@@ -64,7 +80,7 @@ def main() -> int:
     # the name count differ legitimately. State both rather than a single number that has to be
     # reconciled by hand -- 48 = 40 + 6 does not add up until you know two names appear twice.
     rule_lines = len(decls) - len(consts)
-    print(f"coverage: {len(decls)} inline declaration lines = {rule_lines} rule lines "
+    print(f"[{name}] coverage: {len(decls)} inline declaration lines = {rule_lines} rule lines "
           f"({len(rules)} distinct rules, {rule_lines - len(rules)} forward-decl duplicates) "
           f"+ {len(consts)} constants; nothing unclassified")
 
@@ -72,20 +88,27 @@ def main() -> int:
     # reported "31 rules, 0 orphans" while nine `const char*` rules were invisible to it -- a
     # clean bill of health over two thirds of the header. If the rule count drops without an
     # edit that removes rules, the pattern has stopped matching something again.
-    expected_rules = 40
     if len(rules) < expected_rules:
         print(f"\nFAIL: rule count fell to {len(rules)} (expected >= {expected_rules}).")
         print("Either rules were deleted -- then lower this number in the same commit -- or the")
         print("declaration pattern stopped matching some, which silently exempts them.")
         return 1
 
-    prod = "\n".join((SDIR / f).read_text() for f in PRODUCTION if (SDIR / f).exists())
-
     orphans = []
     for r in rules:
         if r in ALLOWLIST:
             continue
-        if re.search(r"\b" + re.escape(r) + r"\s*\(", prod):
+        # A call `foo(...)` OR an address-of reference `&foo` / a bare function-pointer
+        # argument. R13.25 SELF-REVIEW: a rule registered as a callback (`set_pre_abort_hook(
+        # &sdirk3_rhs_run_emit_end_fatal)`) is consumed, and counting only `name(` reported it as
+        # an orphan. False alarms are how a gate stops being read.
+        # Two shapes count as consumption, checked separately so neither weakens the other:
+        #   a CALL            `foo(`      -- possibly namespace-qualified, hence \b not a
+        #                                    character class (a preceding ':' broke that)
+        #   an ADDRESS-OF     `&foo`      -- a rule registered as a callback is consumed
+        called = re.search(r"\b" + re.escape(r) + r"\s*\(", prod)
+        referenced = re.search(r"&(?:[\w:]*::)?" + re.escape(r) + r"\b", prod)
+        if called or referenced:
             continue
         # A call inside the header that is not a declaration of the rule itself.
         #
@@ -101,17 +124,20 @@ def main() -> int:
         # actually occupies here, and the test is then trivially checkable by reading it.
         internal = False
         for ln in hdr.split("\n"):
-            if not re.search(r"\b" + re.escape(r) + r"\s*\(", ln):
-                continue
             if re.match(r"^\s*inline\s", ln):
-                continue          # this line DECLARES the rule; it is not a call of it
-            internal = True
-            break
+                continue          # this line DECLARES the rule; it is not a use of it
+            # A call, or an address-of: registering a rule as a callback inside its own header
+            # (`set_pre_abort_hook(&sdirk3_rhs_run_emit_end_fatal)`) is consumption, and treating
+            # it as an orphan is a false alarm -- which is how a gate stops being read at all.
+            if re.search(r"\b" + re.escape(r) + r"\s*\(", ln) or \
+               re.search(r"&(?:[\w:]*::)?" + re.escape(r) + r"\b", ln):
+                internal = True
+                break
         if internal:
             continue
         orphans.append(r)
 
-    print(f"rule-consumer lint: {len(rules)} rules, {len(ALLOWLIST)} allowlisted, "
+    print(f"[{name}] {len(rules)} rules, {len(ALLOWLIST)} allowlisted, "
           f"{len(orphans)} without any consumer")
     if orphans:
         print("\nFAIL: these rules have fixtures but nothing that runs calls them.")
@@ -122,8 +148,18 @@ def main() -> int:
         print("\nFix by EITHER wiring the rule into the code that makes the decision, OR")
         print("deleting it if superseded, OR adding it to ALLOWLIST with the reason.")
         return 1
-    print("OK: every rule has a production or header-internal consumer")
     return 0
+
+
+def main() -> int:
+    prod = "\n".join(p.read_text() for p in sorted(SDIR.glob(PRODUCTION_GLOB))
+                     if not p.name.startswith(TEST_PREFIX))
+    rc = 0
+    for name, expected in HEADERS.items():
+        rc |= check_header(name, expected, prod)
+    if rc == 0:
+        print("OK: every rule in every checked header has a consumer")
+    return rc
 
 
 if __name__ == "__main__":

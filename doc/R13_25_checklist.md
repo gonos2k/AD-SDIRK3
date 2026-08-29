@@ -299,3 +299,36 @@ now names `stage_decision_basis_name`, `entry_exempts_total_failure` and
 dt=600 re-run: `SDIRK3_*` telemetry **byte-identical**. ctest 62/62; ratchets green (from_blob
 70/70, item-guard 74/74, **rule-consumer 40/40 with full coverage accounting**).
 **Independent review: NOT RUN.**
+
+---
+
+## Fifth self-review — the gate checked one header out of four
+
+**It watched 40 rules while 57 more went unexamined.** Three other headers carry pure decision
+rules — `probe_validity.h` (13), `stage_history_diag.h` (38), `krylov_metrics.h` (6) — and a gate
+silent on them reports a clean bill of health it has not earned. That is the *same* coverage
+overstatement as the previous round, one level out: there I had fixed which declarations it sees,
+here which files. All four are now checked, each with its own rule-count ratchet: **97 rules**.
+
+**Two false-alarm defects, found before they could fire.** A gate that cries wolf gets ignored, and
+an ignored gate is worse than none:
+
+- **Address-of consumption.** `sdirk3_rhs_run_emit_end_fatal` is registered as a callback
+  (`set_pre_abort_hook(&…)`) and never called by name. Counting only `name(` reported it as an
+  orphan. Calls and address-of references are now checked separately, so neither weakens the other.
+- **Namespace-qualified calls.** My first attempt at the above used a character class that a
+  preceding `::` broke — **26 of 40 rules** suddenly reported as orphans. Caught by running it,
+  not by reading it.
+
+**And one defect that would have silently disabled the lint.** Widening production to every `.cpp`
+swept in the **ten `test_*.cpp` that live in the sdirk3 directory itself**. A rule called only from
+a contract test would then have counted as consumed — precisely the state this lint exists to
+reject. `test_*` is excluded: the question is whether something that **runs** calls the rule, and a
+fixture is not that.
+
+**Verified on a newly covered header**, not just the original: removing `relative_residual`'s
+production calls makes the lint name it and exit 1, and `check_ratchets.sh` propagates it.
+
+Only the lint script changed, so no rebuild was needed and the previous dt=600 measurement stands.
+ctest 62/62; ratchets green (from_blob 70/70, item-guard 74/74, **rule-consumer 97/97 across four
+headers**). **Independent review: NOT RUN.**
