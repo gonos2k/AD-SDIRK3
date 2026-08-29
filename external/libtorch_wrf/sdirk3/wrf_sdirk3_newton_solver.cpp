@@ -1565,6 +1565,27 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                             b.detach().clone(), iter, false, false};
                     res.termination_reason = KTR::NanRetryExhausted;
                     res.initial_rel_error = initial_rel_error_gmres;
+                    // R13.25 SELF-REVIEW (census): the pairing rule now CHECKS this return.
+                    // `krylov_return_pairing_consistent` had fixtures and no production caller --
+                    // it pinned the invariant in a test while the site that must satisfy it went
+                    // unexamined. The pair here is x = 0 with r = b, so the rule must hold; if a
+                    // future edit changes one without the other, this says so instead of shipping
+                    // a result whose x and r come from different solves.
+                    {
+                        torch::NoGradGuard ng_pairing;
+                        wrf::sdirk3::KrylovReturnPairing pairing;
+                        pairing.x_is_zero = true;
+                        pairing.r_norm = static_cast<double>(r_norm);
+                        pairing.b_norm = static_cast<double>(
+                            guarded_item<float>(safe_tensor_norm(b.detach())));
+                        if (!wrf::sdirk3::krylov_return_pairing_consistent(pairing)) {
+                            std::cerr << "SDIRK3_RETURN_PAIRING_VIOLATION path=nan_retry"
+                                      << " x_is_zero=1 r_norm=" << pairing.r_norm
+                                      << " b_norm=" << pairing.b_norm
+                                      << "  (x and r do not belong to the same solve)"
+                                      << std::endl;
+                        }
+                    }
                     // R13.21 (external review P1-2): COMPLETE THE RECEIPT. This early return
                     // filled only the constructor fields plus `initial_rel_error`, so every metric
                     // and budget field R13.18-R13.20 added stayed at its sentinel -- and a
@@ -5753,7 +5774,7 @@ public:
             };
             // R13.24 (external review P1-1): `s_halo_masked` travels with the merit so a value
             // computed WITHOUT the mask can never be read as the trust merit. Reset per call.
-            bool s_halo_masked = false;
+            wrf::sdirk3::HaloMaskStatus s_halo_status = wrf::sdirk3::HaloMaskStatus::NotRequired;
             auto candidate_merits = [&](const torch::Tensor& R_ref, const torch::Tensor& R_cand,
                                         double& raw_before, double& raw_after,
                                         double& s_before, double& s_after,
@@ -5762,7 +5783,7 @@ public:
                 // protection would otherwise depend on the call site -- which is exactly the
                 // scope trap this project recorded (a NoGradGuard whose block had already closed).
                 torch::NoGradGuard ng_merit;
-                s_halo_masked = false;
+                s_halo_status = wrf::sdirk3::HaloMaskStatus::NotRequired;
                 raw_before = R_ref.to(torch::kFloat64).norm().item<double>();
                 raw_after  = R_cand.to(torch::kFloat64).norm().item<double>();
                 s_measured = S_inv_diag_.defined() &&
@@ -5774,17 +5795,31 @@ public:
                     // could pass here and fail there. At np=1 with no halo mask the two coincide,
                     // which is why the divergence stayed invisible; it would appear the moment
                     // this runs multi-tile.
-                    auto sb = (S_inv_diag_ * R_ref).to(torch::kFloat64);
-                    auto sa = (S_inv_diag_ * R_cand).to(torch::kFloat64);
-                    if (halo_mask_initialized_ && halo_mask_.defined() &&
-                        halo_mask_.numel() == sb.numel()) {
-                        const auto halo = halo_mask_.to(torch::kBool).logical_not();
-                        sb = sb.masked_fill(halo, 0.0);
-                        sa = sa.masked_fill(halo, 0.0);
-                        s_halo_masked = true;
+                    // R13.25 (external review, section 11): the SAME reduction the trust region
+                    // uses. This reduced in FP64 while trust acceptance takes the norm in the
+                    // tensor's own dtype (`guarded_item<float>(R_scaled.norm())`, FP32). Same
+                    // formula, different arithmetic -- and at the strict `after < before` boundary
+                    // that decides admission, a roundoff-level disagreement decides differently.
+                    // The entry-mismatch path is the sharp case: trust never re-checks it, so an
+                    // FP64-only decrease became a full-step acceptance.
+                    auto sb = (S_inv_diag_ * R_ref);
+                    auto sa = (S_inv_diag_ * R_cand);
+                    if (halo_mask_initialized_) {
+                        if (halo_mask_.defined() && halo_mask_.numel() == sb.numel()) {
+                            const auto halo = halo_mask_.to(torch::kBool).logical_not();
+                            sb = sb.masked_fill(halo, 0.0);
+                            sa = sa.masked_fill(halo, 0.0);
+                            s_halo_status = wrf::sdirk3::HaloMaskStatus::Applied;
+                        } else {
+                            // R13.25 (section 7): a mask is in play and this one cannot use it, so
+                            // the number below is NOT the quantity trust judges by. Say so rather
+                            // than returning it as if it were.
+                            s_halo_status = wrf::sdirk3::HaloMaskStatus::RequiredButUnavailable;
+                        }
                     }
-                    s_before = sb.norm().item<double>();
-                    s_after  = sa.norm().item<double>();
+                    // norm() in the native dtype first (as trust does), THEN widen.
+                    s_before = static_cast<double>(sb.norm().item<float>());
+                    s_after  = static_cast<double>(sa.norm().item<float>());
                 } else {
                     s_before = -1.0;
                     s_after = -1.0;
@@ -10021,8 +10056,15 @@ public:
                     // `taylor_defect_verdict` live there rather than inline here.
                     const auto entry_v = wrf::sdirk3::krylov_entry_verdict(
                         stop_metric_reached_on_entry, gmres_result.S_tolerance_reached);
-                    gmres_S_reached_on_entry = entry_v.S_reached;
-                    gmres_objective_mismatch_on_entry = entry_v.objective_mismatch;
+                    // R13.25 SELF-REVIEW (census): go THROUGH the rules. These read the verdict's
+                    // fields directly, so `entry_exempts_total_failure` and
+                    // `entry_requires_nonlinear_decrease` had fixtures and no production caller --
+                    // the pins guarded a copy of the logic, not the logic that runs. Identical
+                    // today by inspection, which is exactly why the drift would be silent.
+                    gmres_S_reached_on_entry =
+                        wrf::sdirk3::entry_exempts_total_failure(entry_v);
+                    gmres_objective_mismatch_on_entry =
+                        wrf::sdirk3::entry_requires_nonlinear_decrease(entry_v);
                 }
                 // R13.14 (round 5, R5-13): the INNER budget these solves were given. The
                 // no-progress ratio is budget-dependent -- a healthy operator on 7 Arnoldi
@@ -11253,6 +11295,18 @@ public:
             // Implement full accept/reject logic with adaptive radius updates.
             // v20.14r27g: Trust-region is now conditional on config nk_trust_region.
             torch::Tensor dK_scaled = dK;
+            // R13.25 SELF-REVIEW: each acceptance site stamps its OWN outcome.
+            //
+            // `step_accepted` becomes true at three different places -- the direct-accept shortcut
+            // (:11474), the recovery fallback (:11791) and a trust attempt (:12291) -- and the
+            // first version of this derived the outcome from that single boolean, labelling all
+            // three `AcceptedTrust`. Harmless for today's policy, since all three are "accepted"
+            // and the signal is overruled either way. But that is exactly how R13.24's
+            // `CandidateDisposition` failed: a state the type could not express, believed by a
+            // later consumer. `recovered_with_fallback` is block-local and dead by :12360, so the
+            // outcome cannot be recovered after the fact -- it has to be recorded where it happens.
+            wrf::sdirk3::TrialOutcome accepted_via = wrf::sdirk3::TrialOutcome::NotOffered;
+
             torch::Tensor accepted_residual;
             torch::Tensor accepted_residual_norm;
             float alpha = 1.0f;
@@ -11437,6 +11491,7 @@ public:
                         entry_merit.s_merit_measured = s_ok;
                         entry_merit.s_before = s_b;
                         entry_merit.s_after  = s_a;
+                        entry_merit.halo     = s_halo_status;
                         accept_full_step =
                             wrf::sdirk3::candidate_arbitration_rescues(entry_merit);
                         const float base_norm  = static_cast<float>(s_b);
@@ -11457,6 +11512,7 @@ public:
                         accepted_residual = R_trial;
                         accepted_residual_norm = R_trial.norm();
                         step_accepted = true;
+                        accepted_via = wrf::sdirk3::TrialOutcome::AcceptedDirect;
                     }
                 }
             }
@@ -11504,6 +11560,7 @@ public:
                 arb.s_merit_measured = s_ok;
                 arb.s_before = s_b;
                 arb.s_after = s_a;
+                arb.halo = s_halo_status;
                 arbitration_admitted = wrf::sdirk3::candidate_arbitration_rescues(arb);
                 std::cerr << "SDIRK3_CANDIDATE_ARBITRATION"
                           << " stage=" << stage
@@ -11511,7 +11568,7 @@ public:
                           << " R_raw=" << raw_b << " R_raw_candidate=" << raw_a
                           << " R_S=" << s_b << " R_S_candidate=" << s_a
                           << " S_merit_measured=" << (s_ok ? 1 : 0)
-                          << " s_halo_masked=" << (s_halo_masked ? 1 : 0)
+                          << " s_halo_status=" << static_cast<int>(s_halo_status)
                           << " admitted=" << (arbitration_admitted ? 1 : 0)
                           << " basis=trust_region_S_norm"
                           << " K_mutated=0"
@@ -11525,6 +11582,14 @@ public:
                 gmres_total_failure_candidate, arbitration_admitted);
             const auto candidate_disposition = wrf::sdirk3::candidate_disposition(
                 gmres_total_failure_candidate, arbitration_admitted);
+
+            // R13.25 (external review P0-1 / section 6): the SIGNAL, named for what raised it.
+            // `entry_mismatch_step_rejected` is a NONLINEAR check failing after a solve that
+            // raised no total-failure signal at all, and R13.24 counted both under one name.
+            const wrf::sdirk3::LinearSignal linear_signal =
+                gmres_total_failure_candidate ? wrf::sdirk3::LinearSignal::TotalFailure
+                : (entry_mismatch_step_rejected ? wrf::sdirk3::LinearSignal::EntryMetricMismatch
+                                                : wrf::sdirk3::LinearSignal::None);
 
             bool gmres_total_failure = false;
             if (!step_accepted &&
@@ -11715,11 +11780,57 @@ public:
 
                             const bool residual_improved = std::isfinite(recovery_ratio) &&
                                                            (recovery_ratio <= fallback_accept_ratio);
-                            if (residual_improved || (last_ru_share_ > 0.95f && ru_improved)) {
+
+                            // R13.25 (external review, section 5): the CANONICAL merit decides
+                            // here too. This site MUTATES THE STATE, and it accepted on raw packed
+                            // L2 -- or, as an OR escape, on the raw `ru` block alone -- while
+                            // every other acceptance in this solver was moved to ||S^-1 R||. The
+                            // repository has already measured candidates that fall in raw L2
+                            // (-12.5%, -60%) while the S merit WORSENS (+2.5%, 46x); nothing makes
+                            // a recovery vector immune to that shape.
+                            //
+                            // `ru` becomes an AND guard, not an OR escape: a step may not be
+                            // adopted because one block improved while the merit the trust region
+                            // judges by got worse. Fail-closed when the S merit is unavailable --
+                            // and when it is, the legacy raw predicate is what remains, so this
+                            // cannot silently become more permissive than before.
+                            double rec_raw_b = -1.0, rec_raw_a = -1.0;
+                            double rec_s_b = -1.0, rec_s_a = -1.0;
+                            bool rec_s_ok = false;
+                            candidate_merits(R.detach(), R_trial.detach(),
+                                             rec_raw_b, rec_raw_a, rec_s_b, rec_s_a, rec_s_ok);
+                            wrf::sdirk3::CandidateArbitration rec_merit;
+                            rec_merit.s_merit_measured = rec_s_ok;
+                            rec_merit.s_before = rec_s_b;
+                            rec_merit.s_after  = rec_s_a;
+                            rec_merit.halo     = s_halo_status;
+                            const bool s_merit_improved =
+                                wrf::sdirk3::candidate_arbitration_rescues(rec_merit);
+                            const bool canonical_ok =
+                                rec_s_ok ? s_merit_improved
+                                         : (residual_improved ||
+                                            (last_ru_share_ > 0.95f && ru_improved));
+                            const bool ru_guard_ok =
+                                (last_ru_share_ > 0.95f && base_ru_norm > 0.0f) ? ru_improved : true;
+                            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                                std::cerr << "SDIRK3_RECOVERY_MERIT stage=" << stage
+                                          << " newton_iter=" << newton_iter
+                                          << " s_measured=" << (rec_s_ok ? 1 : 0)
+                                          << " R_S=" << rec_s_b << " -> " << rec_s_a
+                                          << " raw_ratio=" << recovery_ratio
+                                          << " ru_ratio=" << recovery_ru_ratio
+                                          << " canonical_ok=" << (canonical_ok ? 1 : 0)
+                                          << " ru_guard_ok=" << (ru_guard_ok ? 1 : 0)
+                                          << " basis="
+                                          << (rec_s_ok ? "trust_region_S_norm" : "legacy_raw")
+                                          << std::endl;
+                            }
+                            if (canonical_ok && ru_guard_ok) {
                                 dK_scaled = dK_recovery;
                                 accepted_residual = R_trial;
                                 accepted_residual_norm = trial_norm_tensor;
                                 step_accepted = true;
+                                accepted_via = wrf::sdirk3::TrialOutcome::AcceptedRecovery;
                                 recovered_with_fallback = true;
                                 last_rho = 0.0f;
                             }
@@ -12220,6 +12331,7 @@ public:
 
                 if (accept_step) {
                     step_accepted = true;
+                    accepted_via = wrf::sdirk3::TrialOutcome::AcceptedTrust;
                     dK_scaled = dK_scaled_candidate;
                     accepted_residual = R_trial;
                     accepted_residual_norm = res_trial_tensor;
@@ -12275,6 +12387,33 @@ public:
                           << " trust_enabled="
                           << (wrf::sdirk3::g_sdirk3_config.nk_trust_region ? 1 : 0)
                           << std::endl << std::flush;
+            }
+
+            // R13.25 (external review P0-1): THE OUTCOME, and the state it must produce.
+            //
+            // `gmres_total_failure` was assigned only before the trial, so an ADMITTED candidate
+            // that trust then refused left it `false`: the zero-update break below skipped its
+            // typed exit and the stage drifted into a generic stall, while the statistics counted
+            // the same iteration as a linear total failure. One iteration, two records.
+            //
+            // POLICY A (see linear_failure_stands_after_trial): the linear solve signalled, one
+            // nonlinear mechanism was given a chance to overrule it, and it declined -- so the
+            // signal stands and the stage takes the typed exit. This runs only when the
+            // arbitration is armed AND admitted a candidate, so the default path cannot reach it.
+            const wrf::sdirk3::TrialOutcome trial_outcome =
+                step_accepted
+                    ? accepted_via   // stamped where the acceptance happened, not inferred here
+                    : (arbitration_admitted ? wrf::sdirk3::TrialOutcome::RejectedTrust
+                                            : wrf::sdirk3::TrialOutcome::ZeroUpdate);
+            if (arbitration_admitted && !step_accepted &&
+                wrf::sdirk3::linear_failure_stands_after_trial(linear_signal, trial_outcome) &&
+                !gmres_total_failure) {
+                gmres_total_failure = true;
+                std::cerr << "SDIRK3_CANDIDATE_LIFECYCLE stage=" << stage
+                          << " newton_iter=" << newton_iter
+                          << " signal=total_failure outcome=rejected_trust"
+                          << " policy=A_typed_exit"
+                          << "  (admitted, evaluated, refused -- the signal stands)" << std::endl;
             }
 
             if (!step_accepted) {
@@ -12589,17 +12728,21 @@ public:
             } else {
                 stats_.gmres_non_total_failures++;
             }
-            // R13.24 (external review, section 4.3): the counters above read the DERIVED flag, so
-            // an arbitration-admitted candidate moved from `gmres_total_failures` to
-            // `gmres_non_total_failures` -- the LINEAR signal disappearing from the record because
-            // a nonlinear mechanism was given a chance to look at it. Those two questions are
-            // different and both matter: "did the linear solve fail?" is a property of the solve,
-            // not of what any globalizer decided afterwards. Corrected here rather than by
-            // changing the counters, so records taken before this remain comparable.
-            if (wrf::sdirk3::counts_as_linear_total_failure(candidate_disposition) &&
-                !gmres_total_failure) {
-                stats_.gmres_non_total_failures--;   // undo the miscount above
-                stats_.gmres_total_failures++;       // the linear signal is what this counts
+            // R13.25 (external review, section 6): R13.24 patched the legacy counters AFTER the
+            // fact -- decrementing one and incrementing another to make an aggregate agree with a
+            // runtime state that disagreed with it. A post-hoc correction is not a record; it is
+            // two answers reconciled by arithmetic. These three counters each answer exactly one
+            // question, taken from the signal and the outcome rather than from a derived boolean.
+            // The legacy pair is left untouched so archived records stay comparable.
+            if (wrf::sdirk3::is_linear_total_failure_signal(linear_signal)) {
+                stats_.linear_total_failure_signals++;
+            }
+            if (wrf::sdirk3::is_entry_metric_mismatch_event(linear_signal)) {
+                stats_.entry_metric_mismatch_events++;
+            }
+            if (trial_outcome == wrf::sdirk3::TrialOutcome::RejectedTrust ||
+                trial_outcome == wrf::sdirk3::TrialOutcome::RejectedRecovery) {
+                stats_.globalization_rejections++;
             }
 
 
@@ -12697,7 +12840,13 @@ public:
                                       << (res_new_val <= target_trial ? " ACCEPT" : " reject") << std::endl;
                         }
 
-                        if (res_new_val <= target_trial) {
+                        // R13.25 (external review, section 10): the accept decision now GOES
+                        // THROUGH the rule. It had fixtures and no caller, so reopening the guard
+                        // would have re-run this block without ever consulting it and every pin
+                        // would still have passed.
+                        const bool armijo_ok = (res_new_val <= target_trial);
+                        if (wrf::sdirk3::line_search_alpha_is_trustworthy(
+                                armijo_ok, ls_iter, rhs_budget)) {
                             alpha = alpha_trial;
                             residual_after_step = R_new;
                             residual_after_step_val = res_new_val;
@@ -12705,12 +12854,13 @@ public:
                         }
 
                         if (ls_iter == 9) {
-                            alpha = alpha_trial;
-                            residual_after_step = R_new;
-                            residual_after_step_val = res_new_val;
+                            // R13.25: exhausting the arms is a REJECT, not a licence to keep the
+                            // last alpha tried. Taking it applied a step Armijo had just refused
+                            // -- the search reporting "use whatever I tried last" as a result.
+                            // `alpha` is left at its entry value and the step is not adopted here.
                             if (ls_verbose) {
-                                std::cerr << "[LINE SEARCH] Reached max iterations, using alpha="
-                                          << alpha << std::endl;
+                                std::cerr << "[LINE SEARCH] arms exhausted without an Armijo"
+                                          << " decrease: REJECTED (alpha unchanged)" << std::endl;
                             }
                         }
                     }

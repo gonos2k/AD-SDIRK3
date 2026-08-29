@@ -2068,10 +2068,18 @@ void SDIRK3Config::load_from_env() {
             "  [false = DIRECT-ACCEPT SHORTCUT: the trust loop is not syntactically gated on this"
             " flag, but every non-accepting path here also raises the total-failure flag, so the"
             " loop body does NOT execute -- trust neither accepts nor rejects, it never runs]");
-        row("nk_line_search",            false, nk_line_search,              // :841
-            "  [NO REACHABLE CONSUMER: the Armijo guard is closed -- see line_search_skipped();"
-            " R13.24 forces the solver option to FALSE rather than advertising a globalization"
-            " strategy it does not apply]");
+        // R13.25 (external review, section 9): three values, three names. R13.24 printed
+        // `effective=true` here from the global config while the tile solver printed
+        // `[CONFIG UNSUPPORTED] forcing effective=false` in the SAME run -- one word, two answers.
+        // `effective` was in fact the REQUESTED value; what the solver runs is a third thing.
+        std::cerr << "[CONFIG AUTHORITY] nk_line_search"
+                  << " compiled_default=false"                      // wrf_sdirk3_config.h:841
+                  << " requested=" << (nk_line_search ? "true" : "false")
+                  << " supported=false"
+                  << " solver_effective=false"
+                  << "  [the Armijo consumer is unreachable -- see line_search_skipped();"
+                  << " requested!=solver_effective is the contract this states honestly]"
+                  << std::endl;
         row("use_autograd",              false, use_autograd);               // :220
         row("hevi_split",                false, hevi_split);                 // :587
         row("stage_require_convergence", false, stage_require_convergence);  // :576

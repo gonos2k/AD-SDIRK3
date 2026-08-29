@@ -1893,7 +1893,6 @@ int main() {
         using wrf::sdirk3::effective_total_failure_veto;
         using wrf::sdirk3::candidate_disposition;
         using wrf::sdirk3::CandidateDisposition;
-        using wrf::sdirk3::counts_as_linear_total_failure;
         using wrf::sdirk3::trust_loop_continues;
 
         check(!effective_total_failure_veto(/*candidate=*/true, /*admitted=*/true),
@@ -1912,14 +1911,11 @@ int main() {
               "admitted -> the loop is entered AND the acceptance test can say yes: the step is "
               "genuinely offered, not merely admitted to a trial with a predetermined verdict");
 
-        check(counts_as_linear_total_failure(candidate_disposition(true, /*admitted=*/true)),
-              "an ADMITTED candidate still counts as a linear total-failure signal: whether the "
-              "linear solve failed is a property of that solve, not of what a globalizer later "
-              "decided about it");
-        check(counts_as_linear_total_failure(candidate_disposition(true, false)),
-              "...and so does a vetoed one");
-        check(!counts_as_linear_total_failure(candidate_disposition(false, false)),
-              "while an ordinary proposal is not a failure of any kind");
+        // R13.25 SELF-REVIEW (census): `counts_as_linear_total_failure` was SUPERSEDED by
+        // `is_linear_total_failure_signal`, which takes the signal itself rather than an
+        // admission state -- and the old rule stayed in the header with only these fixtures
+        // holding it up. A retired rule with live tests reads as current guidance. Removed; the
+        // replacement is pinned in the lifecycle block above.
         check(candidate_disposition(true, true) == CandidateDisposition::AdmittedToTrial &&
               candidate_disposition(true, false) == CandidateDisposition::LinearFailureVetoed,
               "the three states are one value, not three booleans that can disagree -- which is "
@@ -1956,6 +1952,152 @@ int main() {
               "production until the exit iteration got an authority independent of the receipt");
     }
 
+    {
+        // R13.25 (external review P0-1): the transition R13.24 could not express. Its fixtures
+        // checked "the loop can be entered AND the acceptance veto is lifted" and stopped there --
+        // so an admitted candidate that trust then REFUSED left the runtime failure state false
+        // while the statistics counted a linear total failure. One iteration, two records.
+        using wrf::sdirk3::LinearSignal;
+        using wrf::sdirk3::TrialOutcome;
+        using wrf::sdirk3::linear_failure_stands_after_trial;
+        using wrf::sdirk3::is_linear_total_failure_signal;
+        using wrf::sdirk3::is_entry_metric_mismatch_event;
+
+        check(linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                TrialOutcome::RejectedTrust),
+              "ADMITTED THEN REFUSED: the signal stands, so the stage takes the TYPED exit -- "
+              "drifting into a generic stall because a boolean happened to be false is the "
+              "absence of a policy, not a policy");
+        check(!linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                 TrialOutcome::AcceptedTrust),
+              "...while a globalizer that TAKES the step has overruled the signal on merit, which "
+              "is the whole point of admitting the candidate");
+        check(!linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                 TrialOutcome::AcceptedRecovery),
+              "and the recovery step overrules it too");
+        check(linear_failure_stands_after_trial(LinearSignal::TotalFailure, TrialOutcome::Vetoed),
+              "an unadmitted candidate keeps the typed exit it always had -- the repair must not "
+              "change the path that was already correct");
+        check(!linear_failure_stands_after_trial(LinearSignal::None, TrialOutcome::ZeroUpdate),
+              "and a zero update with no signal is not a linear failure: not every stall is one");
+
+        check(is_linear_total_failure_signal(LinearSignal::TotalFailure) &&
+              !is_linear_total_failure_signal(LinearSignal::EntryMetricMismatch),
+              "the linear-failure counter counts ONLY the residual-ratio veto: R13.24's predicate "
+              "also fired on an entry mismatch -- a NONLINEAR check failing after a solve that "
+              "signalled nothing -- and the legacy classifier reads that counter as Krylov "
+              "stagnation evidence");
+        check(is_entry_metric_mismatch_event(LinearSignal::EntryMetricMismatch) &&
+              !is_entry_metric_mismatch_event(LinearSignal::TotalFailure),
+              "so the entry mismatch gets its own counter instead of borrowing one");
+    }
+
+    {
+        // R13.25 (external review sections 7 and 8): two contracts that were prose, not code.
+        using wrf::sdirk3::CandidateArbitration;
+        using wrf::sdirk3::candidate_arbitration_rescues;
+        using wrf::sdirk3::HaloMaskStatus;
+        using wrf::sdirk3::KrylovReceiptView;
+        using wrf::sdirk3::krylov_receipt_complete;
+
+        CandidateArbitration good;
+        good.s_merit_measured = true; good.s_before = 476.0; good.s_after = 400.0;
+        good.halo = HaloMaskStatus::Applied;
+        check(candidate_arbitration_rescues(good),
+              "a masked merit that improves may overrule the signal");
+
+        CandidateArbitration unmasked = good;
+        unmasked.halo = HaloMaskStatus::RequiredButUnavailable;
+        check(!candidate_arbitration_rescues(unmasked),
+              "a merit that NEEDED the halo mask and could not apply it is a different quantity "
+              "from the one trust judges by, so it cannot overrule the signal -- R13.24 recorded "
+              "this state in a log line while the decision never saw it");
+
+        CandidateArbitration no_mask_needed = good;
+        no_mask_needed.halo = HaloMaskStatus::NotRequired;
+        check(candidate_arbitration_rescues(no_mask_needed),
+              "while with no mask in play the two merits coincide and the decision stands");
+
+        // Section 8: a missing event stamp must leave the receipt INCOMPLETE.
+        KrylovReceiptView v;
+        v.rho_D_final = 0.4; v.rho_S_final = 0.4; v.stopping_metric = 1;
+        v.arnoldi_spent = 5; v.arnoldi_allowed = 10;
+        v.tolerance_applied = 0.9; v.D_reached = true; v.S_reached = true;
+        v.receipt_iter = 2; v.exit_iter = -1;
+        check(!krylov_receipt_complete(v) || v.exit_iter < 0,
+              "a receipt whose exit event was never stamped cannot be completed by copying the "
+              "receipt's own iteration into the missing slot -- that restores the identity the "
+              "split removed, which is what R13.24's fallback did");
+    }
+
+    {
+        // R13.25 SELF-REVIEW: three acceptance paths must stay DISTINGUISHABLE. `step_accepted`
+        // becomes true at the direct-accept shortcut, the recovery fallback and a trust attempt;
+        // the first version of the lifecycle derived the outcome from that one boolean and
+        // labelled all three AcceptedTrust. Today's policy treats them alike, so nothing broke --
+        // which is precisely how R13.24's CandidateDisposition failed: a state the type could not
+        // express, believed later by a consumer that needed it.
+        using wrf::sdirk3::LinearSignal;
+        using wrf::sdirk3::TrialOutcome;
+        using wrf::sdirk3::linear_failure_stands_after_trial;
+
+        check(TrialOutcome::AcceptedDirect != TrialOutcome::AcceptedTrust &&
+              TrialOutcome::AcceptedTrust != TrialOutcome::AcceptedRecovery &&
+              TrialOutcome::AcceptedDirect != TrialOutcome::AcceptedRecovery,
+              "the three acceptance paths are three values, so a record cannot claim a step came "
+              "from the trust region when the direct shortcut or the recovery fallback took it");
+
+        // All three overrule the signal today -- pinned so a future policy change has to face
+        // every path explicitly instead of inheriting one path's verdict for all of them.
+        check(!linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                 TrialOutcome::AcceptedDirect) &&
+              !linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                 TrialOutcome::AcceptedTrust) &&
+              !linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                 TrialOutcome::AcceptedRecovery),
+              "under the current policy every acceptance overrules the signal -- stated per path "
+              "rather than once, because that is the equivalence the mislabelling hid");
+        check(linear_failure_stands_after_trial(LinearSignal::TotalFailure,
+                                                TrialOutcome::RejectedRecovery),
+              "while a refused recovery keeps the signal, like a refused trust attempt");
+    }
+
+    {
+        // R13.25 SELF-REVIEW: splitting the counters in the solver was only HALF the fix. The
+        // consumer whose misreading motivated the split -- this legacy aggregate -- went on
+        // reading the mixed counter, so an entry mismatch (a NONLINEAR decrease check failing
+        // after a solve that raised no total-failure signal) still arrived as evidence that
+        // KRYLOV STAGNATED, sending the next investigation at the wrong layer. Built the same way
+        // as the fixture at the top of this file that reaches the same branch.
+        auto s = ok_stage();
+        s.newton_converged = false;
+        s.residual_last = 9.0e-3;
+        s.gmres_total_failures = 2;              // the MIXED legacy counter says "failures"
+        s.linear_total_failure_signals = 0;      // ...but the linear solve signalled nothing
+        s.entry_metric_mismatch_events = 2;      // both were entry mismatches
+        check(name_of(s) != "krylov_stagnated",
+              "an entry mismatch is not Krylov stagnation: the linear solve raised nothing, and "
+              "the counter that said otherwise was mixing a nonlinear check's failure into it");
+
+        auto lin = ok_stage();
+        lin.newton_converged = false;
+        lin.residual_last = 9.0e-3;
+        lin.gmres_total_failures = 2;
+        lin.linear_total_failure_signals = 2;    // a real residual-ratio veto
+        lin.entry_metric_mismatch_events = 0;
+        check(name_of(lin) == "krylov_stagnated",
+              "while a genuine linear failure still reaches krylov_stagnated -- the repair must "
+              "not blunt the signal it was protecting");
+
+        auto old_rec = ok_stage();
+        old_rec.newton_converged = false;
+        old_rec.residual_last = 9.0e-3;
+        old_rec.gmres_total_failures = 2;        // fields left at -1: a pre-split record
+        check(name_of(old_rec) == "krylov_stagnated",
+              "and an archived record from before the split classifies exactly as it used to: "
+              "-1 means 'this record cannot answer', not 'no failures'");
+    }
+
     // The layer mapping is the point of the exercise: it says where to work next.
     check(std::string(stage_failure_layer(StageFailure::KrylovStagnated)) ==
               "operator_or_timestep_or_jvp_or_scaling_or_preconditioner_or_policy" &&
@@ -1972,7 +2114,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 206;
+    constexpr int expected_checks = 220;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
