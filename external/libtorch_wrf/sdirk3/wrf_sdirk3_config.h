@@ -653,7 +653,7 @@ struct SDIRK3Config {
         DiagnosticOmegaOnly = 2,  // measurement only: incomplete
         DiagnosticMuOnly    = 3,  // measurement only: incomplete
     };
-    int mass_coordinate_mode = 0;
+    int mass_coordinate_mode = 1;   // R14: WRFParity by default -- Omega from calc_ww_cp, mu tendency horizontal-only (measured 2026-08-30)
 
     // 9F.D123 (review 3.1/3.2/5): ONE strict parser, and a fail-CLOSED resolution.
     //
