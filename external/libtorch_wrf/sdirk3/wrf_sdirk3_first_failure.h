@@ -745,23 +745,6 @@ struct KrylovReceiptView {
     return true;
 }
 
-// The Armijo path is unreachable today (see line_search_skipped). Reopening it is NOT a
-// guard flip: three defects fire the moment it runs, each stated here so a rebuild has to
-// confront them --
-//   (1) budget exhaustion: `alpha` is assigned only on Armijo success or at arm 9, but the
-//       RHS budget (5) runs out first, so alpha stays 1.0 and the step Armijo refused is applied;
-//   (2) max arms: arm 9 takes the last alpha tried whether or not Armijo held;
-//   (3) stale ledger: a successful backtrack updates `residual_after_step` but not
-//       `accepted_residual`, so diagnostics describe alpha=1 while alpha<1 was applied.
-// A correct line search returns "did Armijo accept?" as its own answer. This rule is that
-// answer, and the accept decision inside the Armijo block calls it.
-[[nodiscard]] inline bool line_search_alpha_is_trustworthy(bool armijo_satisfied, int arms_tried,
-                                             int rhs_budget_remaining) {
-    if (armijo_satisfied) return true;          // the only case that earns the step
-    (void)arms_tried; (void)rhs_budget_remaining;
-    return false;                                // exhausting budget or arms is a REJECT
-}
-
 // A SIGNAL IS NOT AN OUTCOME. A signal is what the linear solve reported; an outcome is what a
 // globalizer decided. Conflating them through one runtime boolean produced an iteration with two
 // contradictory records -- the control flow treating an admitted-then-refused candidate as a
@@ -844,24 +827,6 @@ inline bool is_entry_metric_mismatch_event(LinearSignal s) {
     return total_failure_candidate && !arbitration_admitted;
 }
 
-// The disposition of a candidate, as one value instead of three booleans that can disagree.
-// `AdmittedThenRejected` is the state a single boolean cannot express: the linear solve DID signal total
-// failure, the arbitration DID admit the candidate, and the globalizer then refused it. Counting
-// that as a non-total-failure -- which is what reading the cleared derived flag does -- loses the
-// linear signal from the statistics entirely.
-enum class CandidateDisposition {
-    OrdinaryProposal,        // no total-failure signal; the usual path
-    LinearFailureVetoed,     // signalled and not admitted: the veto stands
-    AdmittedToTrial,         // signalled, admitted, outcome not yet known
-};
-
-[[nodiscard]] inline CandidateDisposition candidate_disposition(bool total_failure_candidate,
-                                                  bool arbitration_admitted) {
-    if (!total_failure_candidate) return CandidateDisposition::OrdinaryProposal;
-    return arbitration_admitted ? CandidateDisposition::AdmittedToTrial
-                                : CandidateDisposition::LinearFailureVetoed;
-}
-
 // `counts_as_linear_total_failure` lived here until the lifecycle
 // split replaced it with `is_linear_total_failure_signal`, which takes the SIGNAL rather than an
 // admission state. It survived with only fixtures holding it up -- a retired rule with live tests
@@ -897,20 +862,6 @@ inline uint64_t boundary_receipt_key(uint64_t raw_flag_bits, uint64_t effective_
 [[nodiscard]] inline bool trust_loop_continues(bool step_accepted, bool gmres_total_failure,
                                  int attempts_remaining, int rhs_budget) {
     return !step_accepted && !gmres_total_failure && attempts_remaining > 0 && rhs_budget > 0;
-}
-
-// Is the Armijo line search reachable? No. The production guard is a closure over both values of
-// `step_accepted`:
-//     bool skip = !step_accepted;                          // covers the not-accepted case
-//     if (step_accepted || rhs_budget <= 0) skip = true;   // covers the accepted case
-// so `skip` is unconditionally true. The rule is extracted and CONSUMED by the solver, deliberately
-// WITHOUT repairing it: reopening a globalization strategy is a numerics change to be opt-in and
-// measured. What the fixtures pin is the finding -- `nk_line_search` has no reachable consumer
-// whatever the Registry sets. Reopening the path fails the pins and says so.
-inline bool line_search_skipped(bool step_accepted, int rhs_budget) {
-    bool skip = !step_accepted;                           // (A)
-    if (step_accepted || rhs_budget <= 0) skip = true;    // (B)
-    return skip;
 }
 
 // The boundary-flag projection, as a rule a fixture can reject.

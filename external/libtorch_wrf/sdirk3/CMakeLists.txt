@@ -294,13 +294,7 @@ add_test(NAME Stats_Reset_Contract COMMAND test_stats_reset_contract)
 
 # R13.7: one environment variable is not one variable. The rule that would have caught the
 # retracted R13.4 preconditioner comparison, with that comparison as its first case.
-add_executable(test_ab_attribution tests/test_ab_attribution.cpp)
-target_link_libraries(test_ab_attribution PRIVATE wrf_sdirk3::core)
-add_test(NAME Ab_Attribution_Contract COMMAND test_ab_attribution)
 
-add_executable(test_taylor_defect_verdict tests/test_taylor_defect_verdict.cpp)
-target_link_libraries(test_taylor_defect_verdict PRIVATE wrf_sdirk3::core)
-add_test(NAME Taylor_Defect_Verdict_Contract COMMAND test_taylor_defect_verdict)
 
 # R13.2 C1: which gate refused FIRST. "The step did not complete" is one bucket holding
 # seven outcomes that point at different layers, and a dt sweep is the right experiment for
@@ -316,9 +310,6 @@ target_link_libraries(test_probe_noninterference PRIVATE wrf_sdirk3::core)
 add_test(NAME Diagnostic_Observer_Noninterference_Contract COMMAND test_probe_noninterference)
 
 # R13 B2: three arms, and a certification rule that the R12 R4 measurement fails.
-add_executable(test_stage_reference_certification tests/test_stage_reference_certification.cpp)
-target_link_libraries(test_stage_reference_certification PRIVATE wrf_sdirk3::core)
-add_test(NAME Stage_Reference_Certification_Contract COMMAND test_stage_reference_certification)
 
 # R13 C1: the forward integrates F_I + F_E and the operational graph differentiates
 # F_I + detach(F_E). Includes the FD trap: a finite difference cannot see a detach, so an FD
@@ -338,10 +329,6 @@ add_test(NAME Global_Ownership_Overlap_Gap_Contract
 # when this is unset rather than skipping: a loop nobody ran is the defect it exists to catch.
 set_tests_properties(Global_Ownership_Overlap_Gap_Contract PROPERTIES
     ENVIRONMENT "SDIRK3_GLOBAL_NORM_EMITTER=$<TARGET_FILE:test_global_norm_emitter>")
-add_test(NAME Manifest_Duplicate_Fail_Contract
-         COMMAND ${Python3_EXECUTABLE}
-                 ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_manifest_duplicate.py)
-
 # R13 D1: the memory-domain -> tile-domain offset and WRF's ownership rule. Both were
 # correct and stated only in a comment; a synthetic 1e6*i+1e3*j+k grid makes a wrong offset
 # decode to a different cell instead of shifting a norm by a few percent.

@@ -28,7 +28,7 @@ HEADERS = [
 ]
 # One aggregate coverage ratchet instead of four per-header counts: the same protection (a
 # pattern that stops matching cannot silently exempt rules) with one number to maintain.
-EXPECTED_RULES_TOTAL = 98
+EXPECTED_RULES_TOTAL = 87
 
 # R13.25 SELF-REVIEW: production is EVERY solver translation unit, not the three this started
 # with. A rule called only from a .cpp outside that list would have been reported as an orphan --

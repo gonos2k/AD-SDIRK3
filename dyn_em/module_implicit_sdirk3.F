@@ -1896,9 +1896,6 @@ CONTAINS
       config_name = "nk_adaptive_tol"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_nk_adaptive_tol))
 
-      ! FIX v16: Pass nk_line_search from namelist to C++
-      config_name = "nk_line_search"//C_NULL_CHAR
-      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_nk_line_search))
 
       ! Trust-region globalization controls
       config_name = "nk_trust_region"//C_NULL_CHAR
