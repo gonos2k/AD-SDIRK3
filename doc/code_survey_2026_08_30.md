@@ -73,3 +73,27 @@ It did not re-derive the SDIRK3/ARK324 tableau, the preconditioner Schur blocks,
 split against the WRF reference — those are the P0/P1 items above and each is a measurement, not
 a read. It did not run dt=600 under mode 1. It did not audit `tile_unified_impl.cpp`'s 42k lines
 line by line; the sweeps above are pattern searches with every hit read in context.
+
+## P0 follow-up — measured (three verified dt=600 runs, same binary)
+
+| run | Ω | stage-2 Krylov budget | first solve `‖b‖ → ‖r‖` (ratio) | outcome |
+|---|---|---|---|---|
+| shipped | mode 0, `μ·w` | 7 vectors | 1039 → 574 (**0.55**) | `newton_budget_exhausted`, 12 iters |
+| P0 test | mode 1, `calc_ww_cp` | 7 vectors | 465 → 465 (**1.00**) | `zero_update_after_total_failure`, iter 1 |
+| budget | mode 1 | 85 vectors | 465 → 463 (**0.9965**), then 0.989, 0.988 | `krylov_budget_exhausted` |
+
+Every knob was read back from `[CONFIG EFFECTIVE]` before a number was read. A fourth run whose
+namelist edit silently did not apply was discarded — it measured mode 0 and would have been
+reported as mode 1.
+
+**What it settles.** The correct Ω is a *different operator*, not a perturbation of the shipped
+one: the stage-2 residual halves and its momentum share drops from 0.037 to **0.000** — the
+residual now lives entirely in the mass/geopotential/thermo blocks the Ω term enters. On that
+operator the shipped preconditioned GMRES is **not budget-limited**: twelve times the Krylov
+vectors buys 0.35 % per solve, against 33 % on mode 0 at the same budget. Mode 0's apparent
+progress was progress on the wrong operator.
+
+**Consequence.** GMRES/Newton budget tuning for dt=600 is measured dead on the correct operator.
+The next lever is the preconditioner's mass/geopotential coupling under mode 1 — which is the P1
+above (`D_mu`, the open re-derivation), now with a measurement behind it. Every prior dt=600
+preconditioner measurement in this campaign was taken on `Ω = μ·w` and carries that caveat.
