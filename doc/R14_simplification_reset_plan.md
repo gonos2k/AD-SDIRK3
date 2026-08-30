@@ -179,3 +179,35 @@ typed exit) replaces the pure-helper fixtures that pinned the removed intermedia
 
 **Estimated edit surface:** ~90 read sites in `newton_solver.cpp`, one fill block in
 `tile_unified_impl.cpp`, the `StageFailureSignals` split in `first_failure.h`.
+
+### R14.2a — executed (pending the dt=600 A/B)
+
+`NewtonIterationResult` introduced; the solver's 13 iteration-local variables collapse to it.
+`step_accepted` → `it.step_applied()`, `gmres_total_failure` → `it.failure_stands()`; the three
+acceptance sites write `it.candidate.outcome`; the R13.25 "reassert the flag after the trial"
+block and the R13.26 "clear the flag on recovery" line **disappear** because both answers are
+now computed from the outcome. Three rules the object supersedes are removed with their
+fixtures (`effective_total_failure_veto`, `linear_failure_stands_after_trial`,
+`runtime_failure_flag_consistent` — the last became a tautology the moment both of its inputs
+derived from one object). One fixture pins the derived methods against the old decision table.
+Source: −74 lines net; ctest 58/58; lint 84/84.
+
+### R14.2b — the `StageFailureSignals` split, refined
+
+The first survey said 36 read / 40 unread. Counting **indirect** readers (`exit_receipt_view`
+consumes twelve `exit_*` fields on the classifier's behalf) the real split is:
+
+- **48 classifier-input fields** — stay in `StageFailureSignals`
+- **28 telemetry-only fields** — `krylov_iterations`, `entry_metric_mismatch_events`,
+  `globalization_rejections`, `gmres_non_total_failures`, `gmres_tolerance_reached`,
+  `argmin_residual_iter`, `total_failure_vs_{b,r0}_count`, `krylov_failure_vs_r0`,
+  `best_krylov_rel_error_vs_r0`, `worst_krylov_{iter,eta,tolerance_source,stopping_metric,rho_D,
+  rho_S,restart_budget}`, `krylov_solves_measured_vs_r0`, `discarded_candidates_{seen,descent}`,
+  `taylor_probe_last_iter`, `all_near_worst_met_tolerance`, `exit_{budget_exhausted,
+  tolerance_source}`, `krylov_rule_{fellback_to_b,observed}`, `krylov_{restart_budget,max_restarts}`
+  — move to a `StageTelemetry` the emitter serialises. Several of these describe probes R14.1
+  deleted (`discarded_candidates_*`, `taylor_probe_last_iter`) and are candidates for outright
+  removal once the emitter is checked.
+
+The fill sites span L10181–L13589 of `solveImplicitStage`; the split collapses them to one
+block each.

@@ -768,36 +768,6 @@ enum class TrialOutcome {
     ZeroUpdate,           // nothing was applied
 };
 
-// POLICY A, chosen explicitly. An admitted candidate that the globalizer refuses ends the stage
-// with the TYPED exit, not a generic stall: the linear solve did signal total failure, a nonlinear
-// mechanism was given one chance to overrule it, and it declined. Reaching a generic
-// `ZeroStepStall` because a boolean happened to be false is not a policy -- it is the absence of
-// one. (Policy B, a bounded retry on a changed trust radius, is a different design; it needs a
-// retry budget and its own exhaustion category, and is not what this repairs.)
-[[nodiscard]] inline bool linear_failure_stands_after_trial(LinearSignal signal, TrialOutcome outcome) {
-    if (signal == LinearSignal::None) return false;
-    switch (outcome) {
-        case TrialOutcome::AcceptedDirect:
-        case TrialOutcome::AcceptedTrust:
-        case TrialOutcome::AcceptedRecovery:
-            return false;      // a globalizer took the step: the signal was overruled on merit
-        default:
-            return true;       // vetoed, refused, or nothing applied
-    }
-}
-
-// Counters that mean one thing each. `gmres_total_failures` also fires on a NONLINEAR decrease
-// check failing after a solve that raised no signal, so it cannot answer "did the linear solve
-// fail". The runtime flag must agree with the lifecycle verdict: an accepted step and a standing
-// failure flag cannot both be true, and this rule lets a fixture reject that state.
-[[nodiscard]] inline bool runtime_failure_flag_consistent(bool runtime_total_failure,
-                                                          TrialOutcome outcome) {
-    const bool accepted = outcome == TrialOutcome::AcceptedDirect ||
-                          outcome == TrialOutcome::AcceptedTrust ||
-                          outcome == TrialOutcome::AcceptedRecovery;
-    return !(accepted && runtime_total_failure);
-}
-
 // Was the signal OVERRULED? The classifier's legacy branch
 // read the signal COUNT, which increments whether or not a globalizer went on to accept the step.
 // So a Newton iteration whose recovery step was accepted -- residual down, state advanced -- could
@@ -816,15 +786,6 @@ inline bool is_linear_total_failure_signal(LinearSignal s) {
 }
 inline bool is_entry_metric_mismatch_event(LinearSignal s) {
     return s == LinearSignal::EntryMetricMismatch;
-}
-
-// ONE veto, read by every consumer. `gmres_total_failure_candidate` is const and the original
-// signal; the arbitration may lift the veto by ADMITTING the candidate to a trial. Every consumer
-// -- the failure predicate and trust acceptance alike -- must read the effective veto, or an
-// admitted candidate enters the trial and is refused by the signal its admission reconsidered.
-// "Admitted" is the honest name: it grants entry to a trial, not an outcome.
-[[nodiscard]] inline bool effective_total_failure_veto(bool total_failure_candidate, bool arbitration_admitted) {
-    return total_failure_candidate && !arbitration_admitted;
 }
 
 // `counts_as_linear_total_failure` lived here until the lifecycle
@@ -863,6 +824,51 @@ inline uint64_t boundary_receipt_key(uint64_t raw_flag_bits, uint64_t effective_
                                  int attempts_remaining, int rhs_budget) {
     return !step_accepted && !gmres_total_failure && attempts_remaining > 0 && rhs_budget > 0;
 }
+
+// R14.2: ONE object per Newton iteration. The linear solve writes `linear` once; the site that
+// accepts or refuses the candidate writes `candidate` once; everything else -- control flow,
+// statistics, termination, telemetry, classification -- is DERIVED from these two by the methods
+// below and never stored beside them. The defect class this replaces: a later consumer reading an
+// earlier representation of the same fact.
+struct NewtonIterationResult {
+    struct Linear {
+        bool total_failure_signal = false;    // the residual-ratio veto fired
+        bool entry_S_reached = false;         // converged on entry, before any Arnoldi step
+        bool entry_objective_mismatch = false;// stop metric met on entry, S tolerance not
+    } linear;
+    struct Candidate {
+        TrialOutcome outcome = TrialOutcome::NotOffered;
+        bool trust_attempted = false;
+        bool recovery_attempted = false;
+        bool entry_check_rejected = false;    // the direct path's nonlinear decrease test refused
+    } candidate;
+
+    [[nodiscard]] bool step_applied() const {
+        return candidate.outcome == TrialOutcome::AcceptedDirect ||
+               candidate.outcome == TrialOutcome::AcceptedTrust ||
+               candidate.outcome == TrialOutcome::AcceptedRecovery;
+    }
+    // The linear signal stands unless a globalizer overruled it by taking the step. A direct-path
+    // candidate refused by its own decrease test is treated the same way: no step, failure stands.
+    [[nodiscard]] bool failure_stands() const {
+        if (step_applied()) return false;
+        return linear.total_failure_signal || candidate.entry_check_rejected;
+    }
+    [[nodiscard]] LinearSignal signal() const {
+        if (linear.total_failure_signal) return LinearSignal::TotalFailure;
+        if (linear.entry_objective_mismatch) return LinearSignal::EntryMetricMismatch;
+        return LinearSignal::None;
+    }
+    // Refusal names the mechanism that refused; trust first because a candidate offered to both
+    // ends on the trust verdict.
+    [[nodiscard]] TrialOutcome resolved_outcome() const {
+        if (step_applied()) return candidate.outcome;
+        if (candidate.trust_attempted)    return TrialOutcome::RejectedTrust;
+        if (candidate.recovery_attempted) return TrialOutcome::RejectedRecovery;
+        if (failure_stands())             return TrialOutcome::Vetoed;
+        return TrialOutcome::ZeroUpdate;
+    }
+};
 
 // The boundary-flag projection, as a rule a fixture can reject.
 //

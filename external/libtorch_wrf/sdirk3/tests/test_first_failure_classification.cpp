@@ -1814,45 +1814,6 @@ int main() {
 
 
 
-    {
-        // R13.25 (external review P0-1): the transition R13.24 could not express. Its fixtures
-        // checked "the loop can be entered AND the acceptance veto is lifted" and stopped there --
-        // so an admitted candidate that trust then REFUSED left the runtime failure state false
-        // while the statistics counted a linear total failure. One iteration, two records.
-        using wrf::sdirk3::LinearSignal;
-        using wrf::sdirk3::TrialOutcome;
-        using wrf::sdirk3::linear_failure_stands_after_trial;
-        using wrf::sdirk3::is_linear_total_failure_signal;
-        using wrf::sdirk3::is_entry_metric_mismatch_event;
-
-        check(linear_failure_stands_after_trial(LinearSignal::TotalFailure,
-                                                TrialOutcome::RejectedTrust),
-              "ADMITTED THEN REFUSED: the signal stands, so the stage takes the TYPED exit -- "
-              "drifting into a generic stall because a boolean happened to be false is the "
-              "absence of a policy, not a policy");
-        check(!linear_failure_stands_after_trial(LinearSignal::TotalFailure,
-                                                 TrialOutcome::AcceptedTrust),
-              "...while a globalizer that TAKES the step has overruled the signal on merit, which "
-              "is the whole point of admitting the candidate");
-        check(!linear_failure_stands_after_trial(LinearSignal::TotalFailure,
-                                                 TrialOutcome::AcceptedRecovery),
-              "and the recovery step overrules it too");
-        check(linear_failure_stands_after_trial(LinearSignal::TotalFailure, TrialOutcome::Vetoed),
-              "an unadmitted candidate keeps the typed exit it always had -- the repair must not "
-              "change the path that was already correct");
-        check(!linear_failure_stands_after_trial(LinearSignal::None, TrialOutcome::ZeroUpdate),
-              "and a zero update with no signal is not a linear failure: not every stall is one");
-
-        check(is_linear_total_failure_signal(LinearSignal::TotalFailure) &&
-              !is_linear_total_failure_signal(LinearSignal::EntryMetricMismatch),
-              "the linear-failure counter counts ONLY the residual-ratio veto: R13.24's predicate "
-              "also fired on an entry mismatch -- a NONLINEAR check failing after a solve that "
-              "signalled nothing -- and the legacy classifier reads that counter as Krylov "
-              "stagnation evidence");
-        check(is_entry_metric_mismatch_event(LinearSignal::EntryMetricMismatch) &&
-              !is_entry_metric_mismatch_event(LinearSignal::TotalFailure),
-              "so the entry mismatch gets its own counter instead of borrowing one");
-    }
 
     {
         // R13.25 (external review sections 7 and 8): two contracts that were prose, not code.
@@ -1899,32 +1860,6 @@ int main() {
               "exit stamp");
     }
 
-    {
-        // R13.25 SELF-REVIEW: three acceptance paths must stay DISTINGUISHABLE. `step_accepted`
-        // becomes true at the direct-accept shortcut, the recovery fallback and a trust attempt;
-        // the first version of the lifecycle derived the outcome from that one boolean and
-        // labelled all three AcceptedTrust. Today's policy treats them alike, so nothing broke --
-        // which is precisely how R13.24's CandidateDisposition failed: a state the type could not
-        // express, believed later by a consumer that needed it.
-        using wrf::sdirk3::LinearSignal;
-        using wrf::sdirk3::TrialOutcome;
-        using wrf::sdirk3::linear_failure_stands_after_trial;
-
-
-        // All three overrule the signal today -- pinned so a future policy change has to face
-        // every path explicitly instead of inheriting one path's verdict for all of them.
-        check(!linear_failure_stands_after_trial(LinearSignal::TotalFailure,
-                                                 TrialOutcome::AcceptedDirect) &&
-              !linear_failure_stands_after_trial(LinearSignal::TotalFailure,
-                                                 TrialOutcome::AcceptedTrust) &&
-              !linear_failure_stands_after_trial(LinearSignal::TotalFailure,
-                                                 TrialOutcome::AcceptedRecovery),
-              "under the current policy every acceptance overrules the signal -- stated per path "
-              "rather than once, because that is the equivalence the mislabelling hid");
-        check(linear_failure_stands_after_trial(LinearSignal::TotalFailure,
-                                                TrialOutcome::RejectedRecovery),
-              "while a refused recovery keeps the signal, like a refused trust attempt");
-    }
 
     {
         // R13.25 SELF-REVIEW: splitting the counters in the solver was only HALF the fix. The
@@ -2033,28 +1968,37 @@ int main() {
               "meaning");
     }
 
-    {
-        // R13.26 SELF-REVIEW: an accepted step and a standing runtime failure flag cannot both be
-        // true. `gmres_total_failure` is raised before any nonlinear trial; a recovery that then
-        // succeeds overrules it, and R13.26 fixed the classifier's counter while leaving the flag
-        // -- so a successful recovery still incremented `gmres_total_failures` and read as a
-        // failure to every later consumer.
-        using wrf::sdirk3::TrialOutcome;
-        using wrf::sdirk3::runtime_failure_flag_consistent;
 
-        check(!runtime_failure_flag_consistent(true, TrialOutcome::AcceptedRecovery),
-              "a recovery that took the step while the failure flag still stands is INCONSISTENT: "
-              "the residual fell and the state advanced, so the flag is describing a different "
-              "iteration than the control flow did");
-        check(!runtime_failure_flag_consistent(true, TrialOutcome::AcceptedTrust) &&
-              !runtime_failure_flag_consistent(true, TrialOutcome::AcceptedDirect),
-              "...and the same for the trust and direct acceptances");
-        check(runtime_failure_flag_consistent(false, TrialOutcome::AcceptedRecovery),
-              "clearing the flag on acceptance is the consistent state");
-        check(runtime_failure_flag_consistent(true, TrialOutcome::RejectedTrust) &&
-              runtime_failure_flag_consistent(true, TrialOutcome::Vetoed),
-              "while a refused or vetoed candidate SHOULD leave the flag standing -- the repair "
-              "must not clear a failure nothing overruled");
+    {
+        // R14.2: the result object's DERIVED answers must match the decision table the four
+        // separate flags used to implement. This is the contract that lets the flags go.
+        using wrf::sdirk3::NewtonIterationResult;
+        using wrf::sdirk3::TrialOutcome;
+        using wrf::sdirk3::LinearSignal;
+        NewtonIterationResult r;
+        r.linear.total_failure_signal = true;
+        check(r.failure_stands() && r.resolved_outcome() == TrialOutcome::Vetoed &&
+              r.signal() == LinearSignal::TotalFailure,
+              "a linear signal with no trial: the failure stands and the outcome is Vetoed");
+        r.candidate.trust_attempted = true;
+        check(r.failure_stands() && r.resolved_outcome() == TrialOutcome::RejectedTrust,
+              "offered to trust and refused: still stands, and the refusal names trust");
+        r.candidate.outcome = TrialOutcome::AcceptedRecovery;
+        check(!r.failure_stands() && r.step_applied() &&
+              r.resolved_outcome() == TrialOutcome::AcceptedRecovery,
+              "a recovery that took the step OVERRULES the signal -- the flag R13.26 had to clear "
+              "by hand is now a consequence of the outcome");
+        NewtonIterationResult m;
+        m.linear.entry_objective_mismatch = true; m.candidate.entry_check_rejected = true;
+        check(m.failure_stands() && m.signal() == LinearSignal::EntryMetricMismatch &&
+              m.resolved_outcome() == TrialOutcome::Vetoed,
+              "an entry mismatch whose decrease check refused: the signal is the mismatch (not a "
+              "total failure), and no step means the failure stands");
+        NewtonIterationResult z;
+        check(!z.failure_stands() && z.resolved_outcome() == TrialOutcome::ZeroUpdate &&
+              z.signal() == LinearSignal::None,
+              "nothing signalled, nothing tried, nothing applied: a zero update that is not a "
+              "failure of any kind");
     }
 
     // The layer mapping is the point of the exercise: it says where to work next.
@@ -2073,7 +2017,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 210;
+    constexpr int expected_checks = 202;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

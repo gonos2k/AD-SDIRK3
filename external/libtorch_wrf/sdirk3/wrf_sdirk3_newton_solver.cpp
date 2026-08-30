@@ -5530,6 +5530,8 @@ public:
         stats_.final_residual_measured = false;
         frozen_ab_fired_this_solve_ = false;
         for (int newton_iter = 0; newton_iter < options_.max_newton_iter; ++newton_iter) {
+            // R14.2: the one record of this iteration -- see NewtonIterationResult.
+            wrf::sdirk3::NewtonIterationResult it;
             actual_newton_iters = newton_iter + 1;
             // Debug: print Newton iteration start
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
@@ -7433,8 +7435,6 @@ public:
             // defect, inside the fix that produced the rule.
             //
             // Split, and both halves derived from the RECEIPT rather than the label.
-            bool gmres_S_reached_on_entry = false;
-            bool gmres_objective_mismatch_on_entry = false;
             float gmres_initial_rel_error = -1.0f;  // R13.11: ||r0||/||b|| from the same solve
             // R9 P0-D: the GMRES residual, kept only when the nonlinear ledger is armed. It is
             // what turns the linear model's prediction into a read rather than an operator
@@ -8686,9 +8686,9 @@ public:
                     // `entry_requires_nonlinear_decrease` had fixtures and no production caller --
                     // the pins guarded a copy of the logic, not the logic that runs. Identical
                     // today by inspection, which is exactly why the drift would be silent.
-                    gmres_S_reached_on_entry =
+                    it.linear.entry_S_reached =
                         wrf::sdirk3::entry_exempts_total_failure(entry_v);
-                    gmres_objective_mismatch_on_entry =
+                    it.linear.entry_objective_mismatch =
                         wrf::sdirk3::entry_requires_nonlinear_decrease(entry_v);
                 }
                 // R13.14 (round 5, R5-13): the INNER budget these solves were given. The
@@ -9922,7 +9922,7 @@ public:
             torch::Tensor dK_scaled = dK;
             // R13.25 SELF-REVIEW: each acceptance site stamps its OWN outcome.
             //
-            // `step_accepted` becomes true at three different places -- the direct-accept shortcut
+            // `it.step_applied()` becomes true at three different places -- the direct-accept shortcut
             // (:11474), the recovery fallback (:11791) and a trust attempt (:12291) -- and the
             // first version of this derived the outcome from that single boolean, labelling all
             // three `AcceptedTrust`. Harmless for today's policy, since all three are "accepted"
@@ -9930,21 +9930,11 @@ public:
             // `CandidateDisposition` failed: a state the type could not express, believed by a
             // later consumer. `recovered_with_fallback` is block-local and dead by :12360, so the
             // outcome cannot be recovered after the fact -- it has to be recorded where it happens.
-            wrf::sdirk3::TrialOutcome accepted_via = wrf::sdirk3::TrialOutcome::NotOffered;
-            // R13.26 (external review section 4): which globalizer actually SAW the candidate.
-            // R13.25 inferred the rejected branch from `arbitration_admitted` alone, so an
-            // ordinary trust rejection recorded `ZeroUpdate` and `RejectedRecovery` had no
-            // producer at all -- `globalization_rejections` then counted a subset of what its
-            // name claims. These say what was tried; the outcome is derived from them below.
-            bool trust_attempted = false;
-            bool recovery_attempted = false;
-
-            torch::Tensor accepted_residual;
+             torch::Tensor accepted_residual;
             torch::Tensor accepted_residual_norm;
             float alpha = 1.0f;
             float last_rho = 0.0f;
             const int max_trust_attempts = 3;
-            bool step_accepted = false;
             // Phase 3C: Combined TR + LS RHS evaluation budget.
             // Trust region (3 evals) + line search (10 evals) = up to 13 RHS per Newton.
             // Cap at 5 total to reduce cost; skip LS when TR already accepted.
@@ -9980,7 +9970,7 @@ public:
             // whose stopping objective was met while rho_S >= eta is not converged and must be
             // judged by the same rule as any other solve that returned that rho_S.
             const bool total_failure_vs_b  =
-                !gmres_S_reached_on_entry &&
+                !it.linear.entry_S_reached &&
                 (gmres_raw_rel_error > 1.0f || gmres_rel_error >= 0.999f);
             // R13.19 SELF-REVIEW (round 8, P1-A): a solve that CONVERGED ON ENTRY is not a
             // total failure, and after the P0-1 fix it would otherwise be flagged as one
@@ -9991,13 +9981,13 @@ public:
             // path under the opt-in r0 rule: a production side effect of a fix whose commit
             // message claimed only to change what is REPORTED.
             const bool total_failure_vs_r0 =
-                r0_measured && !gmres_S_reached_on_entry &&
+                r0_measured && !it.linear.entry_S_reached &&
                 (gmres_raw_rel_error > r0_ref * (1.0f + 1.0e-4f) ||
                  gmres_raw_rel_error >= 0.99f * r0_ref);
             // With the flag on and r0 unmeasured the r0 rule cannot be evaluated. Falling back
             // to ||b|| is the only thing the solver can do, and it is COUNTED so the record
             // never claims a rule it did not apply.
-            const bool gmres_total_failure_candidate =
+            it.linear.total_failure_signal =
                 failure_vs_r0 ? (r0_measured ? total_failure_vs_r0 : total_failure_vs_b)
                               : total_failure_vs_b;
             stats_.total_failure_vs_b_count  += total_failure_vs_b  ? 1 : 0;
@@ -10024,11 +10014,11 @@ public:
             // distinction `krylov_rule_observed` twenty lines up exists to make.
             stats_.krylov_threshold_observed = true;
             // R13.12 (red team R3-2): the first iteration whose SOLVE was a total failure,
-            // which is what the field name says. `gmres_total_failure` below additionally
+            // which is what the field name says. `it.failure_stands()` below additionally
             // requires that no step was accepted, so indexing off it made this "the first
             // failure that also produced no step" -- a different event, and one that can
             // never precede a rejection, which silently disabled the time-order clause.
-            if (gmres_total_failure_candidate && stats_.first_krylov_failure_iter < 0) {
+            if (it.linear.total_failure_signal && stats_.first_krylov_failure_iter < 0) {
                 stats_.first_krylov_failure_iter = newton_iter;
             }
             // Unified trust-region step bound:
@@ -10055,12 +10045,11 @@ public:
             // the trust-off path. Routed to the SAME total-failure handling as any other unusable
             // step rather than left as a silent no-step, which the comment below warns creates
             // zero-update loops.
-            bool entry_mismatch_step_rejected = false;
             if (!wrf::sdirk3::g_sdirk3_config.nk_trust_region) {
                 // Trust-region disabled: accept full Newton step directly.
                 // GMRES total failure must NOT be treated as accepted zero-step because
-                // that bypasses gmres_total_failure handling and creates zero-update loops.
-                if (gmres_total_failure_candidate) {
+                // that bypasses it.failure_stands() handling and creates zero-update loops.
+                if (it.linear.total_failure_signal) {
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                         std::cerr << "[TRUST OFF] GMRES failed (rel_error="
                                   << gmres_rel_error << ", raw=" << gmres_raw_rel_error
@@ -10102,7 +10091,7 @@ public:
                     // error was reading the C++ struct default and INFERRING the effective value
                     // instead of reading the log that was already on disk.
                     bool accept_full_step = true;
-                    if (gmres_objective_mismatch_on_entry) {
+                    if (it.linear.entry_objective_mismatch) {
                         torch::NoGradGuard ng_entry_mismatch;
                         // R13.24 (external review P0-3): judge in the coordinate that RAISED the
                         // objection. An entry mismatch means the solve met the inner stopping
@@ -10128,7 +10117,7 @@ public:
                             wrf::sdirk3::candidate_arbitration_rescues(entry_merit);
                         const float base_norm  = static_cast<float>(s_b);
                         const float trial_norm = static_cast<float>(s_a);
-                        entry_mismatch_step_rejected = !accept_full_step;
+                        it.candidate.entry_check_rejected = !accept_full_step;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                             std::cerr << "[TRUST OFF] entry met the stop metric but not S"
                                       << " (rho_S=" << gmres_raw_rel_error << "); nonlinear check "
@@ -10143,8 +10132,7 @@ public:
                         dK_scaled = dK;
                         accepted_residual = R_trial;
                         accepted_residual_norm = R_trial.norm();
-                        step_accepted = true;
-                        accepted_via = wrf::sdirk3::TrialOutcome::AcceptedDirect;
+                        it.candidate.outcome = wrf::sdirk3::TrialOutcome::AcceptedDirect;
                     }
                 }
             }
@@ -10158,7 +10146,7 @@ public:
             //
             // A total-failure signal is a statement about the LINEAR residual ratio. Using it to
             // discard the step removes the candidate from the trust region entirely (that loop
-            // carries `!gmres_total_failure`), so the mechanism whose job is to decide whether a
+            // carries `!it.failure_stands()`), so the mechanism whose job is to decide whether a
             // step is usable never sees it. The signal should be a warning that the candidate is
             // probably bad, not a substitute for asking.
             //
@@ -10173,32 +10161,9 @@ public:
             // evaluates and correctly declines to rescue them -- the same outcome, now reached by
             // measurement instead of by assumption. It costs one RHS evaluation per total-failure
             // iteration, which is why it is not on by default.
-            bool arbitration_admitted = false;
-            // R13.24 (external review P0-1): ONE veto. `gmres_total_failure_candidate` is const
-            // and several consumers read it directly -- including trust acceptance, which R13.23
-            // did not notice. Every one of them must read this instead, or an admitted candidate
-            // enters the trial and is refused by a veto the admission was supposed to lift.
-            const bool effective_veto = wrf::sdirk3::effective_total_failure_veto(
-                gmres_total_failure_candidate, arbitration_admitted);
-
-            // R13.25 (external review P0-1 / section 6): the SIGNAL, named for what raised it.
-            // `entry_mismatch_step_rejected` is a NONLINEAR check failing after a solve that
-            // raised no total-failure signal at all, and R13.24 counted both under one name.
-            const wrf::sdirk3::LinearSignal linear_signal =
-                gmres_total_failure_candidate ? wrf::sdirk3::LinearSignal::TotalFailure
-                // R13.26 (external review section 6): the SIGNAL, and only the signal. R13.25
-                // raised this on `entry_mismatch_step_rejected`, i.e. the mismatch AND the
-                // nonlinear check failing -- so a mismatch that the check then accepted was
-                // recorded as `None`, and one enum value meant two things. Whether it was
-                // accepted or refused is the OUTCOME's job.
-                : (gmres_objective_mismatch_on_entry
-                       ? wrf::sdirk3::LinearSignal::EntryMetricMismatch
-                       : wrf::sdirk3::LinearSignal::None);
-
-            bool gmres_total_failure = false;
-            if (!step_accepted &&
-                (effective_veto || entry_mismatch_step_rejected)) {
-                gmres_total_failure = true;
+            // R14.2: the veto is DERIVED (it.failure_stands()) from the linear signal and the
+            // candidate's outcome, never assigned here and re-assigned after the trial.
+            if (it.failure_stands()) {
                 // R13.23 (deep review P0-2): ONE candidate-merit evaluator, so a probe reports the
             // norm the PRODUCTION path actually judges by.
             //
@@ -10232,20 +10197,20 @@ public:
                 // unless each sub-decision is re-checked. These two are gated on the original
                 // condition, so the entry-mismatch route gets the recovery attempt and the typed
                 // exit without also capping a budget it never spent.
-                if (gmres_total_failure_candidate &&
+                if (it.linear.total_failure_signal &&
                     stage == 2 && newton_iter == 0 &&
                     cfg.stage2_gmres_restart > 0 &&
                     cfg.stage2_max_krylov_restarts == 1) {
                     stage2_hopeless_detected = true;
                 }
-                if (gmres_total_failure_candidate &&
+                if (it.linear.total_failure_signal &&
                     stage >= 3 && newton_iter == 0 &&
                     last_ru_share_ > 0.98f &&
                     cfg.stage2_gmres_restart > 0 &&
                     cfg.stage2_max_krylov_restarts == 1 &&
                     !variable_pc_event_this_newton) {
                     stage3_hopeless_detected = true;
-                } else if (gmres_total_failure_candidate &&
+                } else if (it.linear.total_failure_signal &&
                            stage >= 3 && newton_iter == 0 &&
                            cfg.debug_level >= 1 &&
                            cfg.stage2_gmres_restart > 0 &&
@@ -10310,7 +10275,7 @@ public:
 
                         recovery_step_norm = safe_tensor_norm(dK_recovery).to(torch::kCPU).item<float>();
                         if (recovery_step_norm > 1e-20f && std::isfinite(recovery_step_norm)) {
-                            recovery_attempted = true;   // a nonlinear residual IS evaluated below
+                            it.candidate.recovery_attempted = true;   // a nonlinear residual IS evaluated below
                             auto K_trial = K + dK_recovery;
                             auto U_trial = U_stage + dt * gamma * K_trial;
                             auto F_trial = compute_rhs(U_trial);
@@ -10358,7 +10323,7 @@ public:
                             // R13.26 (external review section 3): the CONFIGURED gate decides.
                             // R13.25 asked `candidate_arbitration_rescues` -- an ADMISSION rule
                             // whose pass grants entry to a trial that judges again -- at a site
-                            // that sets `step_accepted = true` outright. So `fallback_accept_ratio`
+                            // that sets `it.step_applied() = true` outright. So `fallback_accept_ratio`
                             // stopped being consulted whenever the S merit existed: a one-ULP
                             // improvement was adopted while the log still printed `ratio_gate=`.
                             const bool ru_guard_ok =
@@ -10389,8 +10354,7 @@ public:
                                 dK_scaled = dK_recovery;
                                 accepted_residual = R_trial;
                                 accepted_residual_norm = trial_norm_tensor;
-                                step_accepted = true;
-                                accepted_via = wrf::sdirk3::TrialOutcome::AcceptedRecovery;
+                                it.candidate.outcome = wrf::sdirk3::TrialOutcome::AcceptedRecovery;
                                 recovered_with_fallback = true;
                                 last_rho = 0.0f;
                             }
@@ -10402,16 +10366,15 @@ public:
                     // R13.26 SELF-REVIEW: the recovery step OVERRULED the signal, so the runtime
                     // failure flag must stop saying otherwise. It is raised at :11610, before this
                     // point, and R13.25/R13.26 left it standing here -- so a successful recovery
-                    // (residual down, state advanced, `step_accepted = true`) still incremented
+                    // (residual down, state advanced, `it.step_applied() = true`) still incremented
                     // `gmres_total_failures` at the unconditional counter below, and still read as
                     // a failure to every later consumer of this flag. Fixing the classifier's
                     // counter while the runtime flag kept the old answer is the producer/consumer
                     // split again, one field over.
                     //
-                    // `gmres_total_failure_candidate` is deliberately untouched: whether the
+                    // `it.linear.total_failure_signal` is deliberately untouched: whether the
                     // LINEAR solve signalled is a property of that solve, and the statistics that
                     // count signals read it.
-                    gmres_total_failure = false;
                     trust_radius_ = std::max(trust_radius_ * 0.8f, trust_radius_min_);
                     if (cfg.debug_level >= 1) {
                         std::cerr << "[TRUST REGION] GMRES total failure recovered by fallback step: "
@@ -10446,10 +10409,10 @@ public:
             // makes a rescued candidate land somewhere. Note this loop is NOT gated on
             // nk_trust_region -- only the direct-accept shortcut above is.
             for (int attempt = 0;
-                 wrf::sdirk3::trust_loop_continues(step_accepted, gmres_total_failure,
+                 wrf::sdirk3::trust_loop_continues(it.step_applied(), it.failure_stands(),
                                                    max_trust_attempts - attempt, rhs_budget);
                  ++attempt) {
-                trust_attempted = true;   // the body runs: this candidate WAS offered to trust
+                it.candidate.trust_attempted = true;   // the body runs: this candidate WAS offered to trust
                 auto dK_norm = dK.norm();
                 auto K_norm = K.norm();
 
@@ -10757,12 +10720,12 @@ public:
                 // Trust-region should REJECT and shrink, not force-accept.
                 if (!std::isfinite(rho_val)) {
                     accept_step = false;  // Non-finite rho: always reject
-                } else if (effective_veto) {
+                } else if (it.failure_stands()) {
                     // v20.14r27h: GMRES diverged (raw > 1) or essentially failed (e ≥ 0.999).
                     // When e ≈ 1, the correction dK carries no useful signal — the predicted
                     // model is unreliable and tiny α steps would be accepted spuriously.
                     //
-                    // R13.24 (external review P0-1): this read `gmres_total_failure_candidate`
+                    // R13.24 (external review P0-1): this read `it.linear.total_failure_signal`
                     // directly, so an arbitration-ADMITTED candidate was refused here on the very
                     // signal its admission had reconsidered -- it entered the loop and lost every
                     // attempt. Reading the single effective veto is what makes admission mean
@@ -10874,8 +10837,7 @@ public:
                 }
 
                 if (accept_step) {
-                    step_accepted = true;
-                    accepted_via = wrf::sdirk3::TrialOutcome::AcceptedTrust;
+                    it.candidate.outcome = wrf::sdirk3::TrialOutcome::AcceptedTrust;
                     dK_scaled = dK_scaled_candidate;
                     accepted_residual = R_trial;
                     accepted_residual_norm = res_trial_tensor;
@@ -10908,7 +10870,7 @@ public:
 
             // R13.25 (external review P0-1): THE OUTCOME, and the state it must produce.
             //
-            // `gmres_total_failure` was assigned only before the trial, so an ADMITTED candidate
+            // `it.failure_stands()` was assigned only before the trial, so an ADMITTED candidate
             // that trust then refused left it `false`: the zero-update break below skipped its
             // typed exit and the stage drifted into a generic stall, while the statistics counted
             // the same iteration as a linear total failure. One iteration, two records.
@@ -10917,30 +10879,9 @@ public:
             // nonlinear mechanism was given a chance to overrule it, and it declined -- so the
             // signal stands and the stage takes the typed exit. This runs only when the
             // arbitration is armed AND admitted a candidate, so the default path cannot reach it.
-            // R13.26 (external review section 4): a REJECTION names the mechanism that refused,
-            // taken from what actually ran. Trust is checked first because a candidate offered to
-            // both ends on the trust verdict. `ZeroUpdate` now means what it says -- no globalizer
-            // evaluated the candidate -- and `Vetoed` covers a signal that stood without any
-            // trial, which R13.25 could not express either.
-            const wrf::sdirk3::TrialOutcome trial_outcome =
-                step_accepted
-                    ? accepted_via   // stamped where the acceptance happened, not inferred here
-                    : (trust_attempted    ? wrf::sdirk3::TrialOutcome::RejectedTrust
-                     : recovery_attempted ? wrf::sdirk3::TrialOutcome::RejectedRecovery
-                     : gmres_total_failure ? wrf::sdirk3::TrialOutcome::Vetoed
-                                           : wrf::sdirk3::TrialOutcome::ZeroUpdate);
-            if (arbitration_admitted && !step_accepted &&
-                wrf::sdirk3::linear_failure_stands_after_trial(linear_signal, trial_outcome) &&
-                !gmres_total_failure) {
-                gmres_total_failure = true;
-                std::cerr << "SDIRK3_CANDIDATE_LIFECYCLE stage=" << stage
-                          << " newton_iter=" << newton_iter
-                          << " signal=total_failure outcome=rejected_trust"
-                          << " policy=A_typed_exit"
-                          << "  (admitted, evaluated, refused -- the signal stands)" << std::endl;
-            }
+            const wrf::sdirk3::TrialOutcome trial_outcome = it.resolved_outcome();
 
-            if (!step_accepted) {
+            if (!it.step_applied()) {
                 dK_scaled = torch::zeros_like(dK);
                 accepted_residual = R.detach();  // Keep current residual
                 accepted_residual_norm = R.detach().norm();
@@ -10955,7 +10896,7 @@ public:
             // R13.2: the accounting the first-failure classifier needs. "Every step was
             // rejected" is a trust-region policy statement, and it is indistinguishable from
             // a stalled solve unless the two are counted separately.
-            if (step_accepted) {
+            if (it.step_applied()) {
                 stats_.accepted_steps++;
                 if (stats_.argmin_residual_iter < 0 ||
                     (!stats_.newton_residuals.empty() &&
@@ -10968,14 +10909,14 @@ public:
                 stats_.rejected_steps++;
                 if (stats_.first_rejection_iter < 0) stats_.first_rejection_iter = newton_iter;
             }
-            if (gmres_total_failure) {
+            if (it.failure_stands()) {
                 // RETRACTED (red team round 4). R13.12 moved the first-event index here from
-                // the predicate on the claim that `gmres_total_failure` "additionally requires
+                // the predicate on the claim that `it.failure_stands()` "additionally requires
                 // that no step was accepted", making it a different event. That conjunction is
-                // VACUOUS: `step_accepted` is false at the point `gmres_total_failure` is
+                // VACUOUS: `it.step_applied()` is false at the point `it.failure_stands()` is
                 // formed under the trust region (the attempt loop that can set it runs later)
-                // and is exactly `!candidate` without it, so `gmres_total_failure ==
-                // gmres_total_failure_candidate` in both configurations. The move is a
+                // and is exactly `!candidate` without it, so `it.failure_stands() ==
+                // it.linear.total_failure_signal` in both configurations. The move is a
                 // no-op refactor; records taken before it are NOT untrustworthy. Kept at the
                 // predicate because that is where the quantity is defined, not because the old
                 // site was wrong.
@@ -10989,24 +10930,14 @@ public:
             // two answers reconciled by arithmetic. These three counters each answer exactly one
             // question, taken from the signal and the outcome rather than from a derived boolean.
             // The legacy pair is left untouched so archived records stay comparable.
-            if (wrf::sdirk3::is_linear_total_failure_signal(linear_signal)) {
+            if (wrf::sdirk3::is_linear_total_failure_signal(it.signal())) {
                 stats_.linear_total_failure_signals++;
             }
             // R13.26 (external review section 5): and separately, whether it went UNRESOLVED.
-            if (wrf::sdirk3::linear_failure_unresolved(linear_signal, trial_outcome)) {
+            if (wrf::sdirk3::linear_failure_unresolved(it.signal(), trial_outcome)) {
                 stats_.unresolved_linear_failures++;
             }
-            // R13.26 SELF-REVIEW: the runtime flag and the lifecycle verdict must agree. Silent
-            // when they do; if they ever diverge again, this says so rather than letting the
-            // statistics and the control flow describe different iterations.
-            if (!wrf::sdirk3::runtime_failure_flag_consistent(gmres_total_failure, trial_outcome)) {
-                std::cerr << "SDIRK3_LIFECYCLE_FLAG_MISMATCH stage=" << stage
-                          << " newton_iter=" << newton_iter
-                          << " runtime_total_failure=1 outcome=accepted"
-                          << "  (a globalizer took the step while the failure flag still stands)"
-                          << std::endl;
-            }
-            if (wrf::sdirk3::is_entry_metric_mismatch_event(linear_signal)) {
+            if (wrf::sdirk3::is_entry_metric_mismatch_event(it.signal())) {
                 stats_.entry_metric_mismatch_events++;
             }
             if (trial_outcome == wrf::sdirk3::TrialOutcome::RejectedTrust ||
@@ -11021,7 +10952,7 @@ public:
                 torch::NoGradGuard no_grad;
                 float accepted_norm = dK_scaled.norm().to(torch::kCPU).item<float>();
                 float new_residual = accepted_residual_norm.to(torch::kCPU).item<float>();
-                if (step_accepted) {
+                if (it.step_applied()) {
                     std::cerr << "[TRUST REGION] Accepted step summary: ||dK_scaled||=" << accepted_norm
                               << ", ||R_new||=" << new_residual
                               << ", rho=" << last_rho << std::endl;
@@ -11066,13 +10997,13 @@ public:
                           << " stage=" << stage
                           << " iter=" << newton_iter
                           << " event=update"
-                          << " accepted=" << (step_accepted ? 1 : 0)
+                          << " accepted=" << (it.step_applied() ? 1 : 0)
                           << std::scientific
                           << " alpha=" << alpha
                           << " dk_norm=" << diag_norm(dK_scaled)
                           << " res_after=" << diag_norm(accepted_residual)
                           << std::defaultfloat
-                          << " gmres_total_failure=" << (gmres_total_failure ? 1 : 0)
+                          << " it.failure_stands()=" << (it.failure_stands() ? 1 : 0)
                           << " state_finite=" << (diag_all_finite(K) ? 1 : 0)
                           << "\n";
                 });
@@ -11091,7 +11022,7 @@ public:
                     stagnation_count++;
                     // v7-fix: GMRES total failure → K unchanged → next iter identical.
                     // Break immediately instead of waiting for stall_limit (saves ~4s/iter).
-                    if (gmres_total_failure) {
+                    if (it.failure_stands()) {
                         // v20.14r62: Stage-2 hopeless promotion at N=0.
                         // Promote capped Stage-2 budget mode immediately so the next
                         // solve enters reduced budget without waiting for end-of-solve state
@@ -11120,7 +11051,7 @@ public:
                         // R13.17: the exit `not_recorded` was reporting at dt=600.
                         // R13.18 (round 7, P0-B) -- NAMED FOR WHAT IT MEASURES. This site is
                         // gated by ||dK|| < 1e-15 (the accepted update is numerically ZERO) AND
-                        // `gmres_total_failure`, which under the default configuration is
+                        // `it.failure_stands()`, which under the default configuration is
                         // `raw > 1 || rel >= 0.999` on ||r||/||b||. It therefore does NOT mean
                         // "the linear solve produced nothing": in the 12x-budget run that carried
                         // this stamp the worst solve removed 13.8% of its own residual. It was
