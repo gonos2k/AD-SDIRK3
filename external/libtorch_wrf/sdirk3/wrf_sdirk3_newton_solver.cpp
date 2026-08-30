@@ -5562,24 +5562,6 @@ public:
             // calls it "conservative" and describes a per-iteration tightening, not a geometric
             // one. Seeded fresh here, it is what that comment says.
             float krylov_tol_adaptive = static_cast<float>(options_.krylov_tol);
-            // R13.23 (P0-3): the post-scaled solve candidate, before halo zeroing and the
-            // direct-U override, so a probe can report how far what it measured is from what the
-            // solve produced. Empty unless a probe is armed.
-            torch::Tensor probe_dK_from_solve;
-            // R13.23 (P0-3): how far the probed candidate is from the one the solve produced.
-            // -1 when the capture is absent, which is "not measured", not "identical".
-            auto candidate_delta = [&](const torch::Tensor& probed) -> double {
-                torch::NoGradGuard ng_delta;
-                if (!probe_dK_from_solve.defined() || !probed.defined() ||
-                    probe_dK_from_solve.numel() != probed.numel()) {
-                    return -1.0;
-                }
-                const double base =
-                    probe_dK_from_solve.to(torch::kFloat64).norm().item<double>();
-                if (!(base > 0.0)) return -1.0;
-                return (probed.detach() - probe_dK_from_solve)
-                           .to(torch::kFloat64).norm().item<double>() / base;
-            };
             // R13.24 (external review P1-1): `s_halo_masked` travels with the merit so a value
             // computed WITHOUT the mask can never be read as the trust merit. Reset per call.
             wrf::sdirk3::HaloMaskStatus s_halo_status = wrf::sdirk3::HaloMaskStatus::NotRequired;
@@ -5805,7 +5787,9 @@ public:
                 // AUTOGRAD FIX: Check state change without using .item() to maintain autodiff graph
                 auto state_diff_norm = (U_eval - jacobian_cache_.U_cached).norm();
                 auto u_eval_norm = U_eval.norm();
-                auto state_change_tensor = state_diff_norm / u_eval_norm;
+                // A zero state makes this 0/0 -> NaN, and every comparison below then reads
+                // false. Guard the denominator so the ratio is defined.
+                auto state_change_tensor = state_diff_norm / u_eval_norm.clamp_min(1e-30f);
                 // Use tensor comparison to maintain autodiff compatibility
                 auto reuse_tensor = (state_change_tensor < 0.1f).all();
                 can_reuse_jacobian = reuse_tensor.allclose(torch::tensor(true, reuse_tensor.options()));
