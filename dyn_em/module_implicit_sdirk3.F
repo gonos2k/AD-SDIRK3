@@ -1689,6 +1689,9 @@ CONTAINS
       ! &dynamics entries (Registry defaults 0 / 0 / 1.0), NOT sdirk3 knobs.
       config_name = "wrf_w_damping"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_int(config_name, config_flags%w_damping)
+
+      config_name = "wrf_damp_opt"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_int(config_name, config_flags%damp_opt)
       config_name = "wrf_zadvect_implicit"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_int(config_name, config_flags%zadvect_implicit)
       ! NOTE: wired as wrf_w_crit_cfl (its own field) — the legacy sdirk3

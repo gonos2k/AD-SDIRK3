@@ -5955,87 +5955,70 @@ public:
             auto R_inner = R.clone();
             apply_halo_zeroing(R_inner);
 
-            // FIX 2026-02-03: At iter 0, rebuild S from R₀ (initial residual).
-            // The placeholder S=I (lines 1597-1621) is overwritten here with actual
-            // tendency-scale magnitudes. S is then FIXED for the rest of this Newton stage.
-            // v19: Skip R₀-based rebuild when physics scaling is active.
+            // ONE physical scale, from the STATE, once per stage:
+            //     S_b = rms|y over the unit group of b| / (dt*gamma)
+            // so ||S^-1 R|| is the RELATIVE STATE-INCREMENT DEFECT of the stage equation
+            // K = F(U_n + dt*gamma*K) -- dimensionless, and the same quantity for GMRES's
+            // coordinates, Newton's convergence test and the trust region.
+            //
+            // This replaces a scale rebuilt from the initial RESIDUAL. At a balanced entry with
+            // WRF's Omega the residual is ~0 in every block but phi, so a residual-derived scale
+            // (and the GMRES block scaling built the same way) put a reciprocal of ~1e-6 on the
+            // momentum blocks and GMRES spent its entire Krylov space holding those blocks at
+            // noise level instead of reducing phi -- measured: 0.35% per solve at 85 vectors.
+            // The state does not have that problem: u, v, w share one scale because they carry
+            // the same units, and w being exactly zero at a balanced entry no longer matters.
             if (newton_iter == 0 && scaling_initialized_ && !physics_scaling_set_ &&
                 layout_initialized_ && cached_layout_.total_size == K.numel()) {
                 torch::NoGradGuard no_grad;
-                auto R_cpu = R_inner.detach().to(torch::kCPU).contiguous();
+                TORCH_CHECK(U_n.defined() && U_n.numel() == K.numel(),
+                            "state scale: U_n (", U_n.defined() ? U_n.numel() : -1,
+                            ") does not match the packed state (", K.numel(), ")");
+                const auto y = U_n.detach().reshape({-1}).to(torch::kCPU).to(torch::kFloat64);
+                const double h = static_cast<double>(dt) * static_cast<double>(gamma);
+                TORCH_CHECK(h > 0.0, "state scale: dt*gamma must be positive, got ", h);
+                auto is_momentum = [](const std::string& n) {
+                    return n == "ru" || n == "rv" || n == "rw";
+                };
+                double sumsq_uvw = 0.0; double n_uvw = 0.0;
+                for (const auto& blk : cached_layout_.blocks) {
+                    if (!is_momentum(blk.name)) continue;
+                    sumsq_uvw += y.slice(0, blk.start, blk.start + blk.size).square().sum().item<double>();
+                    n_uvw += static_cast<double>(blk.size);
+                }
                 if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                    std::cerr << "[SCALING] Rebuilding S from R₀ (iter 0):" << std::endl;
+                    std::cerr << "[SCALING] S from the state (rms|y| / dt*gamma, dt*gamma=" << h
+                              << "):" << std::endl;
                 }
                 for (const auto& blk : cached_layout_.blocks) {
-                    if (blk.start + blk.size > R_cpu.numel()) continue;
-                    auto blk_data = R_cpu.slice(0, blk.start, blk.start + blk.size);
-                    float blk_rms = blk_data.norm().item<float>()
-                                    / std::sqrt(static_cast<float>(blk.size));
-                    // Floor: use per-variable scale from options, default 1.0
-                    float floor_val = 1.0f;
-                    if (blk.name == "ru" || blk.name == "rv" || blk.name == "rw") {
-                        floor_val = options_.scale_u;
-                    } else if (blk.name == "ph") {
-                        floor_val = options_.scale_ph;
-                    } else if (blk.name == "t") {
-                        floor_val = options_.scale_t;
-                    } else if (blk.name == "mu") {
-                        floor_val = options_.scale_mu;
+                    if (blk.start + blk.size > y.numel()) continue;
+                    double ss, n;
+                    if (is_momentum(blk.name)) { ss = sumsq_uvw; n = n_uvw; }
+                    else {
+                        ss = y.slice(0, blk.start, blk.start + blk.size).square().sum().item<double>();
+                        n = static_cast<double>(blk.size);
                     }
-                    float scale = std::max(blk_rms, floor_val);
+                    const double rms = std::sqrt(ss / std::max(n, 1.0));
+                    // Fail closed: a block whose state has no magnitude gives no scale to judge a
+                    // residual against, and inventing one is how every previous scale went wrong.
+                    TORCH_CHECK(std::isfinite(rms) && rms > 0.0,
+                                "state scale for block '", blk.name, "' is not positive (rms=", rms,
+                                "); refusing to invent one");
+                    const float scale = static_cast<float>(rms / h);
                     S_diag_.slice(0, blk.start, blk.start + blk.size).fill_(scale);
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                         std::cerr << "  S[" << blk.name << "] = " << scale
-                                  << " (RMS=" << blk_rms << ", floor=" << floor_val << ")" << std::endl;
+                                  << "  (rms|y|=" << rms << (is_momentum(blk.name) ? ", momentum group" : "")
+                                  << ")" << std::endl;
                     }
                 }
                 S_inv_diag_ = S_diag_.reciprocal();
-                // Ensure device consistency
                 if (S_diag_.device() != K.device()) {
                     S_diag_ = S_diag_.to(K.device());
                     S_inv_diag_ = S_inv_diag_.to(K.device());
                 }
-                // P1-1 SHADOW: freeze S_0 (the iter-0 scale) so the monotonic growth of
-                // S over later iterations can be compared against a fixed reference.
-                // PR 9F.9.2: only when the shadow is ON. Cloning a full-state tensor on
-                // EVERY production solve just to feed a default-off diagnostic is a
-                // default-path regression (the numerics were unchanged, but the default
-                // path paid a full-state alloc + copy). Gate it on the flag.
                 if (numerical_shadow_enabled())
                     S0_inv_diag_ = S_inv_diag_.detach().clone();
-            }
-
-            // r50-F3: Monotonic S update for iter > 0.
-            // S[block] = max(S_old[block], rms(R[block])). S only grows, preserving
-            // rtol consistency. Tracks growing residual components (e.g., ru stagnation).
-            if (newton_iter > 0 && scaling_initialized_ && !physics_scaling_set_ &&
-                layout_initialized_ && cached_layout_.is_exact &&
-                cached_layout_.total_size == K.numel()) {
-                torch::NoGradGuard no_grad;
-                auto R_cpu = R_inner.detach().to(torch::kCPU).contiguous();
-                bool s_updated = false;
-                for (const auto& blk : cached_layout_.blocks) {
-                    if (blk.start + blk.size > R_cpu.numel()) continue;
-                    auto blk_data = R_cpu.slice(0, blk.start, blk.start + blk.size);
-                    float blk_rms = blk_data.norm().item<float>()
-                                    / std::sqrt(static_cast<float>(blk.size));
-                    float current_s = S_diag_.slice(0, blk.start, blk.start + 1).item<float>();
-                    if (blk_rms > current_s) {
-                        S_diag_.slice(0, blk.start, blk.start + blk.size).fill_(blk_rms);
-                        s_updated = true;
-                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                            std::cerr << "[SCALING] S[" << blk.name << "] " << current_s
-                                      << " -> " << blk_rms << " (monotonic, iter " << newton_iter << ")" << std::endl;
-                        }
-                    }
-                }
-                if (s_updated) {
-                    S_inv_diag_ = S_diag_.reciprocal();
-                    if (S_diag_.device() != K.device()) {
-                        S_diag_ = S_diag_.to(K.device());
-                        S_inv_diag_ = S_inv_diag_.to(K.device());
-                    }
-                }
             }
 
             // FIX 2026-02-03: Use SCALED RMS norm ||S⁻¹·R||/√N for Newton convergence check.

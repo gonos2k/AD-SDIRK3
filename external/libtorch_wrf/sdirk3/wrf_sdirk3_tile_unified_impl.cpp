@@ -598,6 +598,7 @@ using wrf::sdirk3::RhsMode;
 // X*(dmdt - mu_tend_RHS) is a w-activated spurious frozen tendency (measured ~x100/step
 // growth, theta-weighted, upper-level). Set ONLY around the split driver's K_exp calls
 // via CoupledSlowGuard; default false => baseline byte-identical.
+constexpr float kWrfT0 = 300.0f;   // WRF t0 (module_model_constants)
 static thread_local bool g_export_coupled_slow = false;
 struct CoupledSlowGuard {
     CoupledSlowGuard() { g_export_coupled_slow = true; }
@@ -7437,7 +7438,7 @@ vertical_coefficients:
                         const torch::Tensor& se_t = std::get<4>(se_comp);   // theta perturbation
                         const torch::Tensor& se_mu = std::get<5>(se_comp);  // mu perturbation
                         torch::Tensor mu_full_se = se_mu + mu_base_;        // muts = mub + mu'
-                        torch::Tensor t_full_se = se_t + th_base_;          // full potential temperature
+                        torch::Tensor t_full_se = se_t + kWrfT0;          // full potential temperature
                         auto dev = t_full_se.device();
                         auto dtp = t_full_se.scalar_type();
                         auto rdnw_se = getRdnwTensor(dev, dtp, nz_);
@@ -14785,7 +14786,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                      << " vs th_base_ x-dim=" << th_base_.size(2) << std::endl;
         }
 
-        t_full = t_pert + th_base_;
+        t_full = t_pert + kWrfT0;   // WRF: theta = t0 + t (t_2 is theta - 300, NOT theta - theta_base)
     } else {
         // If base state not set, this is a critical error for implicit solver
         throw std::runtime_error("Base state not initialized");
@@ -15020,6 +15021,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     auto& ru_tend = ru_tend_;
     auto& rv_tend = rv_tend_;
     torch::Tensor rw_tend = rw_tend_.clone();
+
     torch::Tensor t_tend = t_tend_.clone();
     // PARITY FIX 2025-12-13: Add qv_tend for moisture vertical diffusion accumulation
     torch::Tensor qv_tend = qv_tend_.clone();
@@ -16230,7 +16232,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // JVP FIX: Blend reference and current state for omega to prevent zero-flux linearization
         float blend_u = wrf::sdirk3::g_sdirk3_config.omega_w_blend;
         auto w_blended_u = blend_u * w + (1.0f - blend_u) * w_ref;
-        auto rom = mu_at_w * w_blended_u;   // legacy form (split path routed to wrf_vert_adv3 below)
+        auto rom = wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp()
+                       ? wrf_ww_cp()                       // WRF: advect_u receives wwE (calc_ww_cp Omega)
+                       : (mu_at_w * w_blended_u);          // legacy mu*w (mass_coordinate_mode=0)
 
         // AUTOGRAD FIX: Build ru_adv_z functionally instead of mutating zeros_like tensor
         // This ensures gradient flow through vertical advection term
@@ -16542,7 +16546,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         float blend_v = wrf::sdirk3::g_sdirk3_config.omega_w_blend;
         auto w_blended_v = blend_v * w + (1.0f - blend_v) * w_ref;
         // D2 FIX (2026-07-11): split path uses the driver-supplied OMEGA (see u-channel note).
-        auto rom = mu_at_w * w_blended_v;   // legacy form (split path routed to wrf_vert_adv3 below)
+        auto rom = wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp()
+                       ? wrf_ww_cp()                       // WRF: advect_v receives wwE (calc_ww_cp Omega)
+                       : (mu_at_w * w_blended_v);          // legacy mu*w (mass_coordinate_mode=0)
 
         // AUTOGRAD FIX: Build V_adv_z functionally instead of mutating zeros_like tensor
         torch::Tensor V_adv_z;
@@ -16858,7 +16864,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // w_at_mass_for_adv = avg_w_to_mass(w_blended_w) computed at line ~8995
             // D2 FIX (2026-07-11): split path uses OMEGA averaged to mass levels
             // (0.5*(ww(k)+ww(k+1)), WRF advect_w); legacy mu*w form otherwise.
-            auto rom = mu_full.unsqueeze(1).expand({-1, t.size(1), -1}) * w_at_mass_for_adv;   // legacy form (split path routed above)
+            // WRF advect_w takes Omega at MASS levels: 0.5*(ww(k)+ww(k+1)).
+            auto rom = wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp()
+                           ? avg_w_to_mass(wrf_ww_cp())
+                           : (mu_full.unsqueeze(1).expand({-1, t.size(1), -1}) * w_at_mass_for_adv);
 
             // Vertical flux: rom * w_blended = μ * w_blended²
             auto w_flux = rom * w_at_mass_for_adv;
@@ -17097,7 +17106,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             float blend_t = wrf::sdirk3::g_sdirk3_config.omega_w_blend;
             auto w_blended_t = blend_t * w + (1.0f - blend_t) * w_ref;
             // D2 FIX (2026-07-11): split path uses the driver-supplied OMEGA (see u-channel note).
-            auto rom = mu_at_w * w_blended_t;   // legacy form (split path routed to wrf_vert_adv3 above)
+            auto rom = wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp()
+                           ? wrf_ww_cp()                   // WRF: advect_scalar receives wwE (calc_ww_cp Omega)
+                           : (mu_at_w * w_blended_t);      // legacy mu*w (mass_coordinate_mode=0)
 
             // Handle case where t_at_w might be 2D
             torch::Tensor flux_w;
@@ -18865,6 +18876,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // CRITICAL: Declare p_pert_mass at outer scope so it's available to both U and W momentum sections
     torch::Tensor p_pert_mass;  // Perturbation pressure at mass levels [ny, nz, nx]
+    torch::Tensor al_pert_mass_fs, alt_mass_fs;  // WRF al' and alt at mass points (calc_p_rho)
 
     // --- 5.1: U-Momentum PGF ---
     {
@@ -18899,22 +18911,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
             // Compute perturbation pressure using WRF's hydrostatic integration
             // Store in outer-scope variable so it's available to W-momentum section
-            p_pert_mass = wrf::sdirk3::compute_pressure_hydrostatic(
-                t_full,         // Full potential temperature at mass points
-                mu_full,        // Full column mass
-                mu_base_,       // Base state column mass
-                p_base_,        // Base state pressure
-                muts_tensor,    // Dry column mass at base state
-                c1h_,           // Vertical coordinate coefficient (device tensor)
-                c2h_,           // Vertical coordinate coefficient (device tensor)
-                rdnw_tensor,    // 1/(dnw[k]) (device tensor)
-                rdn_tensor,     // 1/(dn[k]) (device tensor)
-                rd_,            // Gas constant
-                cv_,            // Specific heat at constant volume
-                cp_,            // Specific heat at constant pressure
-                p0_,            // Reference pressure
-                100000.0f       // 1000 mb in Pa
-            );
+            // WRF calc_p_rho: alpha' from the layer thickness, p from the equation of state.
+            torch::Tensor alb_mass = wrf::sdirk3::compute_inverse_density(
+                th_base_, p_base_, rd_, cv_, cp_, 100000.0f);
+            auto prho = wrf::sdirk3::calc_p_rho_wrf(ph, t, mu, mu_base_, alb_mass, p_base_,
+                                                    rdnw_tensor, c1h_, c2h_,
+                                                    rd_, cv_, cp_, p0_, kWrfT0);
+            p_pert_mass = prho.p_pert;
+            al_pert_mass_fs = prho.al_pert;
+            alt_mass_fs = prho.alt;
 
             // Keep perturbation pressure synchronized with the current solve state.
             // This tensor is reused by V/W PGF paths and zero-copy write-back.
@@ -18951,23 +18956,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // 9F.D47: Exner-correct base EOS (was rd*th/p, high by 1/Pi). This one
             // CANCELLED in alt (helper subtracts it, caller adds it back) but the
             // perturbation `al` it produces is used ALONE against dpb, where it does not.
-            torch::Tensor alb_mass = wrf::sdirk3::compute_inverse_density(
-                th_base_, p_base_, rd_, cv_, cp_, 100000.0f);
-            
-            // Compute inverse densities at mass points using WRF formula
-            auto al = wrf::sdirk3::compute_inverse_density_hydrostatic(
-                t_full,     // Full potential temperature
-                p_full_mass,    // Full pressure
-                p_base_,        // Base state pressure
-                th_base_,       // Base state potential temperature
-                alb_mass,       // Base state inverse density
-                rd_,            // Gas constant
-                cv_,            // Specific heat at constant volume
-                cp_,            // Specific heat at constant pressure
-                100000.0f       // 1000 mb in Pa
-            );
-            
-            auto al_full_mass = al + alb_mass;
+            auto al = al_pert_mass_fs;
+            auto al_full_mass = alt_mass_fs;
             auto alt = al_full_mass;  // Total inverse density (WRF: alt)
             
             // Get base state at u-points
@@ -19345,7 +19335,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 }
 
                 // Average mu to u-points using runtime dimension
-                auto mu_u = avg_x_to_u_2d(mu_full, dpn_nx_u);
+                auto mu_u = avg_x_to_u_2d(mu, dpn_nx_u);   // WRF: perturbation mu
                 auto mu_u_3d = mu_u.unsqueeze(1).expand({-1, dpn_nz, -1});
 
                 // Compute the vertical factor
@@ -19365,7 +19355,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto c1_3d = c1h_work.view({dpn_nz, 1, 1}).expand({dpn_nz, dpn_ny, dpn_nx_u}).contiguous();
                 // Permute to [ny, nz, nx_u] for correct broadcast
                 c1_3d = c1_3d.permute({1, 0, 2});
-                auto vertical_factor = dpn_diff - 0.5f * c1_3d * mu_u_3d;
+                auto vertical_factor = -dpn_diff - 0.5f * c1_3d * mu_u_3d;   // WRF rdnw < 0; dpn_diff carries |rdnw|
 
                 // Add non-hydrostatic correction
                 auto nh_correction = msf_ratio * rdx * dphp_dx * vertical_factor;
@@ -19631,14 +19621,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // correct helper) there was no cancellation: alt was high by 1/Pi, up to
             // +87% at model top, and it multiplies dp_pert_dy in the pressure gradient.
             // The same physical quantity was computed two different ways in one function.
-            auto al_base = wrf::sdirk3::compute_inverse_density(
-                th_base_at_v, p_base_at_v, rd_, cv_, cp_, 100000.0f);
-            auto al_full = wrf::sdirk3::compute_inverse_density(
-                t_full_at_v, p_full_at_v, rd_, cv_, cp_, 100000.0f);
-            auto al_pert = al_full - al_base;
-            
-            auto alt = al_full;
-            auto al = al_pert;
+            // WRF: (alt(i,k,j)+alt(i,k,j-1)) -- average the mass-point calc_p_rho values to v points
+            auto alt = avg_y_to_v(alt_mass_fs, v.size(0));
+            auto al = avg_y_to_v(al_pert_mass_fs, v.size(0));
             
             // AUTOGRAD OPTIMIZATION: Hybrid vectorization for V-momentum pressure gradient
             // Vectorize interior computation (90% of points) while maintaining exact WRF physics
@@ -19884,7 +19869,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 }
 
                 // Average mu to v-points using runtime dimension
-                auto mu_v = avg_y_to_v_2d(mu_full, dpn_ny_v);
+                auto mu_v = avg_y_to_v_2d(mu, dpn_ny_v);   // WRF: perturbation mu
                 auto mu_v_3d = mu_v.unsqueeze(1).expand({-1, dpn_nz, -1});
 
                 // Compute the vertical factor
@@ -19902,7 +19887,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     c1h_work = c1h_sliced;
                 }
                 auto c1_3d = c1h_work.view({1, dpn_nz, 1}).expand({dpn_ny_v, dpn_nz, dpn_nx}).contiguous();
-                auto vertical_factor = dpn_diff - 0.5f * c1_3d * mu_v_3d;
+                auto vertical_factor = -dpn_diff - 0.5f * c1_3d * mu_v_3d;   // WRF rdnw < 0; dpn_diff carries |rdnw|
 
                 // Add non-hydrostatic correction
                 auto nh_correction = msf_ratio_v * rdy * dphp_dy * vertical_factor;
@@ -20759,7 +20744,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         auto p_lower_cpu = p_lower.detach().to(torch::kCPU);
                         auto p_diff = p_upper - p_lower;
                         auto p_diff_cpu = p_diff.detach().to(torch::kCPU);
-                        auto pgf_term = cq1.select(1, k) * rdn_k_scalar * p_diff;
+                        auto pgf_term = cq1.select(1, k) * (-rdn_k_scalar) * p_diff;   // WRF rdn(k) < 0; ours is |rdn|
                         auto pgf_term_cpu = pgf_term.detach().to(torch::kCPU);
                         auto buoy_term1 = c1f_3d.select(1, k) * muf.select(1, k);
                         auto buoy_term1_cpu = buoy_term1.detach().to(torch::kCPU);
@@ -20806,7 +20791,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
                     // Pressure gradient force term: cq1*rdn(k)*(p(k)-p(k-1))
                     // Using mass-level perturbation pressure (p_pert), not W-level or full pressure
-                    auto pressure_gradient = cq1.select(1, k) * rdn_k * (p_upper - p_lower);
+                    auto pressure_gradient = cq1.select(1, k) * (-rdn_k) * (p_upper - p_lower);   // WRF rdn(k) < 0; ours is |rdn|
                     
                     // Column mass terms (these are NEGATIVE in WRF):
                     // -c1f(k)*muf
@@ -21199,7 +21184,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
                     // PARITY FIX 2025-12-24: Use g_val_wpgf instead of hardcoded 9.81f.
                     auto w_pgf_buoy_top = msfty_inv * g_val_wpgf * (
-                        cq1_top * 2.0f * rdnw_km1 * (-p_lower) -
+                        cq1_top * 2.0f * (-rdnw_km1) * (-p_lower) -   // WRF rdnw(k-1) < 0; ours is |rdnw|
                         (c1f_3d.select(1, k) * muf_top) -
                         cq2_top * (c1f_3d.select(1, k) * mubf_top + c2f_3d.select(1, k))
                     );
@@ -24764,7 +24749,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // legacy default-on term is non-WRF there (measured: top-layer u-tendency ramp to ~28 m/s^2 at
     // the balanced IC, = -gamma(z)*u in the damping layer). Skip it for the split core only; the
     // default (split_explicit off) path is unchanged.
+    // WRF calls rk_rayleigh_damp ONLY when damp_opt == 2 (module_em.F:959). This port used to
+    // apply the sponge unconditionally, which put a damping term in the slow tendency that WRF
+    // does not have (MEASURED on em_b_wave, damp_opt=0: it was the ENTIRE stage-1 explicit u
+    // tendency, |k_slow| 1771 -> 1.5 once gated).
     if (do_explicit && !wrf::sdirk3::g_sdirk3_config.split_explicit &&
+        wrf::sdirk3::g_sdirk3_config.wrf_damp_opt == 2 &&
         wrf::sdirk3::g_sdirk3_config.rayleigh_damp_coef > 0.0f &&
         wrf::sdirk3::g_sdirk3_config.rayleigh_damp_depth > 0.0f) {
         applyRayleighDamping(RHS, U);

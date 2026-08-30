@@ -645,7 +645,11 @@ struct SDIRK3Config {
     // correction ALONE is what showed it carries the whole effect (all six blocks collapse
     // before the mu term is touched). Removing them would remove that measurement.
     //
-    // Default Legacy = no behavior change (repo guardrail).
+    // Default WRFParity (R14, 2026-08-30). The opt-in guardrail is deliberately overridden
+    // here: Legacy aliases Omega := mu*w, which this repo's own measurements identified as a
+    // defect, so shipping it by default is a wrong behaviour, not "no behaviour change".
+    // The Registry default field and its description must both say 1 -- they disagreed once,
+    // and a user recording an unset run as "Legacy" would have been wrong.
     // Set via env WRF_SDIRK3_MASS_COORDINATE_MODE or namelist sdirk3_mass_coordinate_mode.
     enum class MassCoordinateMode : int {
         Legacy              = 0,  // Omega = mu*w; mu tendency keeps the vertical term
@@ -707,15 +711,18 @@ struct SDIRK3Config {
         }
     }
 
-    // The mode is the authority; the two booleans are the legacy wire format and are honoured
-    // ONLY while the mode is Legacy, so an explicit mode can never be silently overridden by a
-    // stale namelist boolean.
+    // ONE authority: the effective operator is f(mode), full stop.
+    //
+    // These two used to read the raw booleans in the Legacy branch, so mode 0 was not one
+    // operator but four, and the pair (mode, booleans) was a second configuration authority for
+    // the same physics. The booleans are now a DEPRECATED WIRE FORMAT: resolved into the mode
+    // once by resolve_legacy_mass_coordinate_flags(), then never read by production again.
     bool effective_wrf_omega_ww_cp() const {
         switch (static_cast<MassCoordinateMode>(mass_coordinate_mode)) {
             case MassCoordinateMode::WRFParity:
             case MassCoordinateMode::DiagnosticOmegaOnly: return true;
-            case MassCoordinateMode::DiagnosticMuOnly:    return false;
-            case MassCoordinateMode::Legacy:              return wrf_omega_ww_cp;
+            case MassCoordinateMode::DiagnosticMuOnly:
+            case MassCoordinateMode::Legacy:              return false;
             default:                                      assert_mode_valid(); return false;
         }
     }
@@ -723,10 +730,36 @@ struct SDIRK3Config {
         switch (static_cast<MassCoordinateMode>(mass_coordinate_mode)) {
             case MassCoordinateMode::WRFParity:
             case MassCoordinateMode::DiagnosticMuOnly:    return true;
-            case MassCoordinateMode::DiagnosticOmegaOnly: return false;
-            case MassCoordinateMode::Legacy:              return mu_horizontal_div_only;
+            case MassCoordinateMode::DiagnosticOmegaOnly:
+            case MassCoordinateMode::Legacy:              return false;
             default:                                      assert_mode_valid(); return false;
         }
+    }
+
+    // Translate the deprecated booleans into the mode. (omega, mu) -> mode is a BIJECTION onto
+    // the four declared modes, so the wire format loses nothing. Applied only when the mode is
+    // still Legacy (0), i.e. the caller named no mode; a named mode is an explicit choice.
+    //
+    // This is a finalisation step, not setter-time translation: Fortran sets the booleans and
+    // the mode in a fixed but arbitrary order (module_implicit_sdirk3.F sets the mode LAST), so
+    // translating inside a setter would make the result depend on that order. Idempotent.
+    void resolve_legacy_mass_coordinate_flags() {
+        if (static_cast<MassCoordinateMode>(mass_coordinate_mode) != MassCoordinateMode::Legacy) return;
+        if (!wrf_omega_ww_cp && !mu_horizontal_div_only) return;
+
+        const MassCoordinateMode implied =
+            (wrf_omega_ww_cp && mu_horizontal_div_only) ? MassCoordinateMode::WRFParity
+          : wrf_omega_ww_cp                             ? MassCoordinateMode::DiagnosticOmegaOnly
+                                                        : MassCoordinateMode::DiagnosticMuOnly;
+        mass_coordinate_mode = static_cast<int>(implied);
+        std::cerr << "[CONFIG DEPRECATED] sdirk3_wrf_omega_ww_cp="
+                  << (wrf_omega_ww_cp ? ".true." : ".false.")
+                  << ", sdirk3_mu_horizontal_div_only="
+                  << (mu_horizontal_div_only ? ".true." : ".false.")
+                  << " with sdirk3_mass_coordinate_mode=0 -> resolved to mode "
+                  << mass_coordinate_mode << " (" << mass_coordinate_mode_name() << "). "
+                  << "These booleans are a legacy wire format and are not read again; "
+                  << "set sdirk3_mass_coordinate_mode directly." << std::endl;
     }
     const char* mass_coordinate_mode_name() const {
         switch (static_cast<MassCoordinateMode>(mass_coordinate_mode)) {
@@ -813,7 +846,7 @@ struct SDIRK3Config {
     // D[block] = ||r0[block]||₂, so D⁻¹r₀ has each block normalized to 1.
     // 1 = enabled (default), 0 = off.
     // Set via env: WRF_SDIRK3_GMRES_BLOCK_SCALE
-    int gmres_block_scale = 1;
+    int gmres_block_scale = 0;   // off: the block scale divided by near-zero residual blocks; S now carries the physical scale
 
     // v20.14: Adaptive theta tuning constants (configurable for different cases).
     // Defaults tuned for em_b_wave (dt=600, 41x81x64).
@@ -2343,6 +2376,7 @@ struct SDIRK3Config {
     // parity-gated damping is OFF unless the WRF namelist enables it —
     // exactly WRF's own default behavior.
     int wrf_w_damping = 0;          // config_flags%w_damping (Registry default 0)
+    int wrf_damp_opt = 0;           // config_flags%damp_opt: WRF runs rk_rayleigh_damp only when ==2
     int wrf_zadvect_implicit = 0;   // config_flags%zadvect_implicit / ieva (default 0)
     // The WRF namelist w_crit_cfl (Registry default 1.0) — a SEPARATE field
     // from the legacy sdirk3 w_crit_cfl knob above, because the bridge sets

@@ -626,6 +626,8 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 w_crit_cfl = std::clamp(std::stof(value), 0.1f, 10.0f);
             } else if (key == "wrf_w_damping") {
                 wrf_w_damping = std::clamp(std::stoi(value), 0, 1);
+            } else if (key == "wrf_damp_opt") {
+                wrf_damp_opt = std::clamp(std::stoi(value), 0, 3);
             } else if (key == "wrf_zadvect_implicit") {
                 wrf_zadvect_implicit = std::clamp(std::stoi(value), 0, 2);
             } else if (key == "wrf_w_crit_cfl") {
@@ -1285,6 +1287,10 @@ void SDIRK3Config::load_from_env() {
     if (const char* env_val = std::getenv("WRF_SDIRK3_WRF_W_DAMPING")) {
         wrf_w_damping = std::clamp(std::atoi(env_val), 0, 1);
         std::cerr << "[CONFIG ENV] wrf_w_damping = " << wrf_w_damping << std::endl;
+    }
+    if (const char* env_val = std::getenv("WRF_SDIRK3_WRF_DAMP_OPT")) {
+        wrf_damp_opt = std::clamp(std::atoi(env_val), 0, 3);
+        std::cerr << "[CONFIG ENV] wrf_damp_opt = " << wrf_damp_opt << std::endl;
     }
     if (const char* env_val = std::getenv("WRF_SDIRK3_WRF_ZADVECT_IMPLICIT")) {
         wrf_zadvect_implicit = std::clamp(std::atoi(env_val), 0, 2);
@@ -2010,6 +2016,9 @@ void SDIRK3Config::load_from_env() {
               << "/" << precond_du_weak_ru_thresh
               << (precond_du_weak_factor < 0.999f ? " (dual-phase)" : "")
               << std::endl;
+    std::cerr << "[CONFIG EFFECTIVE] rayleigh: wrf_damp_opt=" << wrf_damp_opt
+              << " (WRF applies rk_rayleigh_damp only when ==2) coef=" << rayleigh_damp_coef
+              << " depth=" << rayleigh_damp_depth << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] wdamp_parity: wrf_w_damping=" << wrf_w_damping
               << " wrf_zadvect_implicit=" << wrf_zadvect_implicit
               << " w_damp_alpha=" << w_damp_alpha
@@ -2061,10 +2070,20 @@ void SDIRK3Config::load_from_env() {
         row("hevi_split",                false, hevi_split);                 // :587
         row("stage_require_convergence", false, stage_require_convergence);  // :576
     }
-    std::cerr << "[CONFIG EFFECTIVE] mu_horizontal_div_only="
+    // ONE authority (review P1-2): fold the deprecated booleans into the mode BEFORE anything
+    // reads the effective operator. load_from_env() is the single point that runs after every
+    // config source -- Fortran set_config, the namelist file, then the environment -- which the
+    // runtime log confirms (the [CONFIG] setter echoes precede this block).
+    resolve_legacy_mass_coordinate_flags();
+
+    // (raw), and annotated when the mode overrides it -- exactly like the wrf_omega_ww_cp twin
+    // below. Printing the RAW value under an "EFFECTIVE" label sent a reader to the wrong layer:
+    // under mass_coordinate_mode=1 this said "off" while the term was in fact ON.
+    std::cerr << "[CONFIG EFFECTIVE] mu_horizontal_div_only(raw)="
               << (mu_horizontal_div_only
                       ? "ON (mu tendency = horizontal divergence only, advance_mu_t parity)"
                       : "off (mu tendency also carries the omega*rdnw column sum div_z)")
+              << (mass_coordinate_mode != 0 ? "  [IGNORED: mode is the authority]" : "")
               << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] mass_coordinate_mode=" << mass_coordinate_mode
               << " (" << mass_coordinate_mode_name() << ")"
@@ -3191,6 +3210,9 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
 
     if (key == "max_newton_iter") {
         g_sdirk3_config.max_newton_iter = value;
+    } else if (key == "wrf_damp_opt") {
+        g_sdirk3_config.wrf_damp_opt = std::clamp(value, 0, 3);
+        std::cerr << "[CONFIG] wrf_damp_opt = " << g_sdirk3_config.wrf_damp_opt << std::endl;
     } else if (key == "wrf_w_damping") {
         g_sdirk3_config.wrf_w_damping = std::clamp(value, 0, 1);
         std::cerr << "[CONFIG] wrf_w_damping = " << g_sdirk3_config.wrf_w_damping << std::endl;
