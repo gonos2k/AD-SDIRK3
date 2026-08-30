@@ -75,6 +75,33 @@ torch::Tensor compute_pressure_hydrostatic(
     const torch::Tensor& rdn,
     float rd, float cv, float cp, float p0, float p1000mb);
 
+// WRF calc_p_rho (module_big_step_utilities_em.F, dry): the inverse density comes from the
+// layer thickness and the pressure from the equation of state -- NOT from a hydrostatic
+// integral of mu'. rdnw_abs is |1/dnw| (WRF's rdnw is negative: dnw < 0).
+struct WrfPRho { torch::Tensor al_pert, alt, p_pert; };
+inline WrfPRho calc_p_rho_wrf(const torch::Tensor& ph_pert,   // [ny, nz+1, nx]  phi' at w levels
+                              const torch::Tensor& t_pert,    // [ny, nz, nx]    theta - t0
+                              const torch::Tensor& mu_pert,   // [ny, nx]
+                              const torch::Tensor& mu_base,   // [ny, nx]
+                              const torch::Tensor& alb,       // [ny, nz, nx]
+                              const torch::Tensor& p_base,    // [ny, nz, nx]
+                              const torch::Tensor& rdnw_abs,  // [nz]
+                              const torch::Tensor& c1h,       // [nz]
+                              const torch::Tensor& c2h,       // [nz]
+                              float rd, float cv, float cp, float p0, float t0) {
+    const int64_t nz = t_pert.size(1);
+    auto c1 = c1h.slice(0, 0, nz).view({1, nz, 1});
+    auto c2 = c2h.slice(0, 0, nz).view({1, nz, 1});
+    auto muts = (mu_base + mu_pert).unsqueeze(1);                        // WRF muts = mub + mu
+    auto dph = ph_pert.slice(1, 1, nz + 1) - ph_pert.slice(1, 0, nz);    // phi'(k+1) - phi'(k)
+    auto rdnw_wrf = -rdnw_abs.slice(0, 0, nz).view({1, nz, 1});          // WRF sign (dnw < 0)
+    auto al_pert = -(alb * c1 * mu_pert.unsqueeze(1) + rdnw_wrf * dph) / (c1 * muts + c2);
+    auto alt = al_pert + alb;
+    const double cpovcv = static_cast<double>(cp) / static_cast<double>(cv);
+    auto p = static_cast<double>(p0) * torch::pow(rd * (t_pert + t0) / (p0 * alt), cpovcv);
+    return {al_pert, alt, p - p_base};
+}
+
 }  // namespace sdirk3
 }  // namespace wrf
 

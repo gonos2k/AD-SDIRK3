@@ -17,7 +17,10 @@
 
 #include "../wrf_sdirk3_config.h"
 
+#include <cstdlib>   // std::atoi on the Registry default token
+#include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 
 namespace {
@@ -107,20 +110,51 @@ int main() {
         check(m.effective_mu_horizontal_div_only(), "DiagnosticMuOnly: mu correction on");
     }
 
-    // ------------------------------- 5. Legacy mode DEFERS to the booleans (back-compatibility)
-    // The two namelist booleans already shipped. Legacy must keep honouring them or existing
-    // runs change meaning silently -- which is the failure this whole file is about.
+    // ---------------- 5. the legacy booleans are a WIRE FORMAT, resolved into the mode once
+    // They used to be a SECOND authority: effective_*() read them in the Legacy branch, so
+    // mode 0 was four operators, not one. Now production reads the mode alone and the booleans
+    // are folded in by resolve_legacy_mass_coordinate_flags(). The old behaviour is preserved
+    // exactly, because (omega, mu) -> mode is a bijection onto the four declared modes.
     {
-        check(with_mode(Mode::Legacy, true, false).effective_wrf_omega_ww_cp(),
-              "Legacy honours the shipped wrf_omega_ww_cp boolean");
-        check(with_mode(Mode::Legacy, false, true).effective_mu_horizontal_div_only(),
-              "Legacy honours the shipped mu_horizontal_div_only boolean");
-        check(!with_mode(Mode::Legacy, false, false).effective_wrf_omega_ww_cp() &&
-                  !with_mode(Mode::Legacy, false, false).effective_mu_horizontal_div_only(),
-              "Legacy with both booleans off is the untouched baseline");
-        check(with_mode(Mode::Legacy, true, true).effective_wrf_omega_ww_cp() &&
-                  with_mode(Mode::Legacy, true, true).effective_mu_horizontal_div_only(),
-              "Legacy with both booleans on reproduces the WRF-parity pair");
+        // Before resolution the raws do NOTHING -- that is the single-authority property.
+        check(!with_mode(Mode::Legacy, true, true).effective_wrf_omega_ww_cp() &&
+                  !with_mode(Mode::Legacy, true, true).effective_mu_horizontal_div_only(),
+              "unresolved: Legacy ignores the raw booleans entirely (one authority)");
+
+        struct Row { bool omega; bool mu; Mode expect; const char* what; };
+        const Row rows[] = {
+            {true,  true,  Mode::WRFParity,           "(omega, mu) -> WRFParity"},
+            {true,  false, Mode::DiagnosticOmegaOnly, "(omega only) -> DiagnosticOmegaOnly"},
+            {false, true,  Mode::DiagnosticMuOnly,    "(mu only) -> DiagnosticMuOnly"},
+        };
+        for (const auto& r : rows) {
+            auto c = with_mode(Mode::Legacy, r.omega, r.mu);
+            c.resolve_legacy_mass_coordinate_flags();
+            check(c.mass_coordinate_mode == static_cast<int>(r.expect) &&
+                      c.effective_wrf_omega_ww_cp() == r.omega &&
+                      c.effective_mu_horizontal_div_only() == r.mu,
+                  std::string("legacy wire format resolves ") + r.what +
+                      ", preserving the shipped meaning");
+        }
+
+        auto none = with_mode(Mode::Legacy, false, false);
+        none.resolve_legacy_mass_coordinate_flags();
+        check(none.mass_coordinate_mode == static_cast<int>(Mode::Legacy),
+              "both booleans off stays Legacy: nothing to migrate, no warning");
+
+        // A named mode is an explicit choice and must survive a stale boolean.
+        auto named = with_mode(Mode::WRFParity, false, false);
+        named.resolve_legacy_mass_coordinate_flags();
+        check(named.mass_coordinate_mode == static_cast<int>(Mode::WRFParity),
+              "a named mode is never rewritten by the legacy booleans");
+
+        // Twice must equal once, or a second config pass would migrate a migrated value.
+        auto twice = with_mode(Mode::Legacy, true, false);
+        twice.resolve_legacy_mass_coordinate_flags();
+        const int after_first = twice.mass_coordinate_mode;
+        twice.resolve_legacy_mass_coordinate_flags();
+        check(twice.mass_coordinate_mode == after_first,
+              "resolution is idempotent");
     }
 
     // --------------------------------- 6. every mode resolves; none falls through to garbage
@@ -158,7 +192,8 @@ int main() {
     // edit makes a consumer read the raw boolean again, the effective value and the raw value
     // diverge and this catches it.
     {
-        for (Mode m : {Mode::WRFParity, Mode::DiagnosticOmegaOnly, Mode::DiagnosticMuOnly}) {
+        for (Mode m : {Mode::Legacy, Mode::WRFParity, Mode::DiagnosticOmegaOnly,
+                       Mode::DiagnosticMuOnly}) {
             auto a = with_mode(m, false, false);
             auto b = with_mode(m, true, true);
             check(a.effective_wrf_omega_ww_cp() == b.effective_wrf_omega_ww_cp() &&
@@ -169,7 +204,49 @@ int main() {
         }
     }
 
-    constexpr int expected_checks = 22;
+    // ------------- 8. the Registry default FIELD and its description agree with this default
+    // They disagreed: the field said 1 while the description said "default 0=Legacy". A user
+    // who left the knob unset would have recorded the run as Legacy and got WRFParity. The
+    // Registry is a second authority for the same value, so bind it here rather than trust it.
+#ifdef SDIRK3_REGISTRY_FILE
+    {
+        std::ifstream reg(SDIRK3_REGISTRY_FILE);
+        check(reg.is_open(), "Registry file is readable: " SDIRK3_REGISTRY_FILE);
+        // Match the NAME FIELD, not "the line mentions the name" -- the sibling booleans'
+        // descriptions now name this knob, so a substring search picked up the wrong rconfig
+        // line and read ".false." as the default. (Caught by this very check.)
+        //   rconfig <type> <name> <how-set> <nentries> <default> ...
+        std::string line, entry, default_tok;
+        while (std::getline(reg, line)) {
+            std::istringstream f(line);
+            std::string kw, type, name;
+            if (!(f >> kw >> type >> name)) continue;
+            if (kw != "rconfig" || name != "sdirk3_mass_coordinate_mode") continue;
+            std::string how_set, nentries;
+            if (f >> how_set >> nentries >> default_tok) entry = line;
+            break;
+        }
+        check(!entry.empty(), "Registry declares rconfig sdirk3_mass_coordinate_mode");
+
+        // Reject a non-integer default outright; atoi would have read ".false." as 0.
+        const bool default_is_int =
+            !default_tok.empty() &&
+            default_tok.find_first_not_of("0123456789") == std::string::npos;
+        wrf::sdirk3::SDIRK3Config c;
+        check(default_is_int && std::atoi(default_tok.c_str()) == c.mass_coordinate_mode,
+              "Registry default field == C++ default (\"" + default_tok + "\" vs " +
+                  std::to_string(c.mass_coordinate_mode) + ")");
+
+        // The prose must not contradict the field. "default 0" was the exact stale wording.
+        const bool prose_ok = entry.find("default 0") == std::string::npos &&
+                              entry.find("[DEFAULT]") != std::string::npos;
+        check(prose_ok, "Registry description marks the real default and no longer says 'default 0'");
+    }
+#else
+    check(false, "SDIRK3_REGISTRY_FILE must be defined so the Registry default is checked");
+#endif
+
+    constexpr int expected_checks = 30;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

@@ -382,6 +382,10 @@ add_test(NAME State_Layout_Contract COMMAND test_state_layout)
 # authority actually rejects the alternatives.
 add_executable(test_mass_coordinate_mode tests/test_mass_coordinate_mode.cpp)
 target_link_libraries(test_mass_coordinate_mode PRIVATE wrf_sdirk3_build_config)
+# The Registry is a SECOND authority for sdirk3_mass_coordinate_mode's default. Its field said 1
+# while its description said "default 0=Legacy"; bind the two so they cannot drift again.
+target_compile_definitions(test_mass_coordinate_mode PRIVATE
+    SDIRK3_REGISTRY_FILE="${CMAKE_CURRENT_SOURCE_DIR}/../../../Registry/Registry.EM_SDIRK3_OPTIMIZATIONS")
 add_test(NAME Mass_Coordinate_Mode_Contract COMMAND test_mass_coordinate_mode)
 
 # 9F.D140 (review 13.3): the mu<->phi coupling has ONE source and the asymmetry is REACHABLE.
