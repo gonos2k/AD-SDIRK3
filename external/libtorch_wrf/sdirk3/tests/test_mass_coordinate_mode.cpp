@@ -48,15 +48,23 @@ wrf::sdirk3::SDIRK3Config with_mode(Mode m, bool raw_omega, bool raw_mu) {
 int main() {
     std::cout << "=== Mass_Coordinate_Mode_Contract ===" << std::endl;
 
-    // ------------------------------------------------------------ 1. default is no change
+    // ------------------------------------------------------------ 1. default is WRF parity
+    // R14 (2026-08-30): the opt-in guardrail is deliberately OVERRIDDEN for this knob. Legacy
+    // aliases Omega := mu*w, which this repository's own measurements identified as the root
+    // cause of the stage-2 mu/phi/theta anomalies; WRFParity uses calc_ww_cp and the
+    // horizontal-only mu tendency, i.e. WRF's definitions. A default that is known to be
+    // wrong is not "no behaviour change" -- it is a wrong behaviour shipped by default.
+    // Measured on em_b_wave dt=600: mode 1 halves the stage-2 entry residual and moves it
+    // entirely into the phi block, where the shipped preconditioner then fails outright.
+    // That is the honest failure; the Legacy one was progress on the wrong operator.
     {
         wrf::sdirk3::SDIRK3Config c;
-        check(c.mass_coordinate_mode == static_cast<int>(Mode::Legacy),
-              "default mode is Legacy (repo guardrail: opt-in, no behavior change)");
-        check(!c.effective_wrf_omega_ww_cp() && !c.effective_mu_horizontal_div_only(),
-              "default resolves to BOTH corrections off");
-        check(std::string(c.mass_coordinate_mode_name()) == "Legacy",
-              "default names itself Legacy");
+        check(c.mass_coordinate_mode == static_cast<int>(Mode::WRFParity),
+              "default mode is WRFParity: WRF's Omega and mu tendency, not the mu*w alias");
+        check(c.effective_wrf_omega_ww_cp() && c.effective_mu_horizontal_div_only(),
+              "default resolves to BOTH corrections on");
+        check(std::string(c.mass_coordinate_mode_name()) == "WRFParity",
+              "default names itself WRFParity");
     }
 
     // -------------------------------------------- 2. WRFParity forces BOTH, whatever the raws

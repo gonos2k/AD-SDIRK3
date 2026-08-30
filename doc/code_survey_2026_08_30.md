@@ -97,3 +97,19 @@ progress was progress on the wrong operator.
 The next lever is the preconditioner's mass/geopotential coupling under mode 1 — which is the P1
 above (`D_mu`, the open re-derivation), now with a measurement behind it. Every prior dt=600
 preconditioner measurement in this campaign was taken on `Ω = μ·w` and carries that caveat.
+
+## P0 follow-up 2 — the φ preconditioner row is exonerated
+
+`WRF_SDIRK3_PHI_SCHUR_DENOM_UNITY=1` sets M = I on φ (`D_phi_top=1` read back from the log):
+
+| φ row of M | Krylov | solve 0 | solve 1 | outcome |
+|---|---|---|---|---|
+| acoustic, D_φ ≈ 436–532 | 85 vec | 0.9965 | 0.989 | budget exhausted |
+| identity | 7 vec | 1.000 | — | zero update |
+| identity | 85 vec | **0.9986** | **1.002 (diverges)** | `krylov_diverged` |
+
+Removing M's φ row does not help and slightly hurts. The φ residual (share 0.997) is untouched
+by GMRES in every configuration tested. **The wall is A's φ block itself under the correct Ω.**
+What remains open is that block's spectrum under WRFParity — the Ritz / numerical-range
+measurement the campaign recorded as undone. That is the next measurement; it is not another
+preconditioner variant.
