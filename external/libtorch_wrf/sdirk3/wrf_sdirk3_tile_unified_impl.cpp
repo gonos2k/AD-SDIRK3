@@ -17784,7 +17784,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // Target: Δμ' < 10⁴ Pa per Newton step
             // γ·Δt ≈ 261.52 for SDIRK3 with 600s timestep
             // Therefore: |μ_tend| < 10⁴/261.52 ≈ 38 Pa/s
-            float gamma_dt = 261.52f;  // SDIRK3 coefficient × timestep
+            const float gamma_dt = dt_stage_ * static_cast<float>(gamma_);   // was a hardcoded 600*gamma
             float target_delta_mu = 1e4f;  // Target max Δμ' per Newton step (Pa)
             float mu_tend_threshold = target_delta_mu / gamma_dt;  // ~38 Pa/s
 
@@ -17869,7 +17869,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
                 // Estimate μ' change in one Newton step (γ·Δt·μ_tend)
                 // γ ≈ 0.43586652, Δt ≈ 600s → γ·Δt ≈ 261.52
-                float gamma_dt = 261.52f;  // Typical for SDIRK3 with 600s timestep
+                const float gamma_dt = dt_stage_ * static_cast<float>(gamma_);   // was a hardcoded 600*gamma
                 float delta_mu_estimate = gamma_dt * mu_tend_abs_max_cpu.item<float>();
                 std::cerr << "[SDIRK3] Estimated delta_mu per Newton step: "
                           << delta_mu_estimate << " Pa" << std::endl;
@@ -24712,7 +24712,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     if (mu_scaling_applied && wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
         // DIAGNOSTIC ONLY: .item() calls are safe here as they're for logging only, not computation
         // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
-        float gamma_dt = 261.52f;
+        const float gamma_dt = dt_stage_ * static_cast<float>(gamma_);   // was a hardcoded 600*gamma
         auto mu_tend_cpu = mu_tend.detach().to(torch::kCPU);
         auto mu_tend_scaled_cpu = mu_tend_scaled.detach().to(torch::kCPU);
         // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
