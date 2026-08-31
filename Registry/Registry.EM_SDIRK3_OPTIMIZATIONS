@@ -61,6 +61,7 @@ rconfig   real    sdirk3_nk_trust_radius       namelist,dynamics  1  1.0      rh
 
 # v20.14 r49: Stage-aware GMRES budget and JVP auto-bench
 rconfig   integer sdirk3_stage2_gmres_restart          namelist,dynamics  1  0        rh   "sdirk3_stage2_gmres_restart"          "Stage>=2 GMRES restart override (0=off)"   ""
+rconfig   integer sdirk3_acoustic_equilibration     namelist,dynamics  1  0        rh   "sdirk3_acoustic_equilibration"        "Equilibrate the rw<->ph acoustic pair in the Krylov objective: s_rw/s_ph = sqrt(|A_rw,ph|/|A_ph,rw|), measured from the operator with two matvecs per solve, so it is tuning-free. Applied ONLY to rw and ph; ru/rv/t/mu stay at 1. 0=off (DEFAULT, byte-identical), 1=on. Mutually exclusive with gmres_block_scale"   ""
 rconfig   integer sdirk3_stage2_max_krylov_restarts    namelist,dynamics  1  0        rh   "sdirk3_stage2_max_krylov_restarts"    "Stage>=2 max Krylov restarts override (0=off)"   ""
 rconfig   real    sdirk3_stage2_krylov_tol             namelist,dynamics  1  0.0      rh   "sdirk3_stage2_krylov_tol"             "Stage>=2 Krylov tolerance override (0=off)"   ""
 rconfig   real    sdirk3_stage2_ew_eta_min             namelist,dynamics  1  0.0      rh   "sdirk3_stage2_ew_eta_min"             "Stage>=2 EW eta_min override (0=off)"   ""
