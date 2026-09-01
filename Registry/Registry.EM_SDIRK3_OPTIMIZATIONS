@@ -56,7 +56,6 @@ rconfig   real    sdirk3_nk_forcing_gamma      namelist,dynamics  1  0.9      rh
 rconfig   real    sdirk3_nk_forcing_alpha      namelist,dynamics  1  1.5      rh   "sdirk3_nk_forcing_alpha"   "EW alpha parameter"   ""
 
 # Globalization Strategy
-rconfig   logical sdirk3_nk_trust_region       namelist,dynamics  1  .false.  rh   "sdirk3_nk_trust_region"    "Use trust region method"   ""
 rconfig   real    sdirk3_nk_trust_radius       namelist,dynamics  1  1.0      rh   "sdirk3_nk_trust_radius"    "Initial trust region radius"   ""
 
 # v20.14 r49: Stage-aware GMRES budget and JVP auto-bench
@@ -204,7 +203,6 @@ rconfig   integer sdirk3_benchmark_measure     namelist,dynamics  1  20       rh
 
 # # Newton-Krylov packages
 # package   sdirk3_nk_adaptive       sdirk3_nk_adaptive_tol        -    state:nk_krylov_basis
-# package   sdirk3_nk_trust          sdirk3_nk_trust_region        -    state:nk_trust_state
 
 # # Memory optimization packages
 # package   sdirk3_memory_opt        sdirk3_memory_pool            -    state:memory_pool_data

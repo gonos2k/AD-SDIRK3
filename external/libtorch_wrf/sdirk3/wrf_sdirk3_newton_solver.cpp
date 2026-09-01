@@ -9916,7 +9916,11 @@ public:
 
             // CRITICAL FIX (2025-10-26): Trust-region must evaluate step quality before acceptance.
             // Implement full accept/reject logic with adaptive radius updates.
-            // v20.14r27g: Trust-region is now conditional on config nk_trust_region.
+            // The trust region is the ONLY acceptance path. The direct-accept shortcut it
+            // used to sit beside took a non-converged full step with no nonlinear check;
+            // measured at dt=600 that diverges (residual x340/step, then NaN), while
+            // requiring a strict decrease instead stalls at once. Accepting on measured
+            // model agreement is what this loop already does.
             torch::Tensor dK_scaled = dK;
             // R13.25 SELF-REVIEW: each acceptance site stamps its OWN outcome.
             //
@@ -10044,97 +10048,6 @@ public:
             // the trust-off path. Routed to the SAME total-failure handling as any other unusable
             // step rather than left as a silent no-step, which the comment below warns creates
             // zero-update loops.
-            if (!wrf::sdirk3::g_sdirk3_config.nk_trust_region) {
-                // Trust-region disabled: accept full Newton step directly.
-                // GMRES total failure must NOT be treated as accepted zero-step because
-                // that bypasses it.failure_stands() handling and creates zero-update loops.
-                if (it.linear.total_failure_signal) {
-                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                        std::cerr << "[TRUST OFF] GMRES failed (rel_error="
-                                  << gmres_rel_error << ", raw=" << gmres_raw_rel_error
-                                  << "), routing to GMRES total-failure handling."
-                                  << std::endl;
-                    }
-                } else {
-                    auto K_trial = K + dK;
-                    auto U_trial = U_stage + dt * gamma * K_trial;
-                    auto F_trial = compute_rhs(U_trial);
-                    auto R_trial = K_trial - F_trial;
-                    // R13.21 (external review P0-1, MEASURED before acting): with the trust region
-                    // off this branch accepted the full Newton step UNCONDITIONALLY -- `R_trial`
-                    // was computed, stored, and never compared with `R`. The other two acceptance
-                    // sites in this function both test a decrease (`residual_improved` at the
-                    // recovery site, `accept_step` at the trust site); this one did not.
-                    //
-                    // That is harmless for a solve that genuinely converged. It is not harmless for
-                    // an entry that met only the inner stopping objective: before the split above,
-                    // such a solve was exempted from the total-failure rules by its LABEL, so it
-                    // arrived here as a non-candidate and its step was taken with no test at all --
-                    // the same metric state getting a different policy than an identical rho_S
-                    // returned after Arnoldi iterations.
-                    //
-                    // Reachability. R13.21 wrote here that `nk_trust_region` "defaults to TRUE
-                    // and em_b_wave does not override it, so this is an opt-out path and the
-                    // shipped configuration never took it. Latent, not live." THAT IS WRONG, and
-                    // R13.23 retracts it.
-                    //
-                    // THREE AUTHORITIES, THREE VALUES:
-                    //   wrf_sdirk3_config.h:880              nk_trust_region = true
-                    //   Registry.EM_SDIRK3_OPTIMIZATIONS:60  sdirk3_nk_trust_region = .false.
-                    //   em_b_wave namelist                   not set -> Registry default applies
-                    //   effective runtime                    false   ("nk_trust_region = false",
-                    //                                        "[TRUST OFF]" in the live log)
-                    //
-                    // In a WRF-integrated run the REGISTRY default wins, so this branch is the one
-                    // em_b_wave actually takes. The fix below is therefore live, not latent. The
-                    // error was reading the C++ struct default and INFERRING the effective value
-                    // instead of reading the log that was already on disk.
-                    bool accept_full_step = true;
-                    if (it.linear.entry_objective_mismatch) {
-                        torch::NoGradGuard ng_entry_mismatch;
-                        // R13.24 (external review P0-3): judge in the coordinate that RAISED the
-                        // objection. An entry mismatch means the solve met the inner stopping
-                        // metric but NOT the S tolerance -- an S-coordinate disagreement by
-                        // definition -- so accepting it because the raw packed L2 fell answers a
-                        // different question than the one asked. R13.23 measured two candidates
-                        // that fall in raw L2 (-12.5%, -60%) while the S merit gets WORSE (+2.5%,
-                        // 46x): exactly the shape this branch would have waved through.
-                        //
-                        // Fail-closed: without the S coordinate there is no basis to overrule the
-                        // mismatch, so the step is rejected rather than accepted on a norm that
-                        // was not in question.
-                        double raw_b = -1.0, raw_a = -1.0, s_b = -1.0, s_a = -1.0;
-                        bool s_ok = false;
-                        candidate_merits(R.detach(), R_trial.detach(),
-                                         raw_b, raw_a, s_b, s_a, s_ok);
-                        wrf::sdirk3::CandidateArbitration entry_merit;
-                        entry_merit.s_merit_measured = s_ok;
-                        entry_merit.s_before = s_b;
-                        entry_merit.s_after  = s_a;
-                        entry_merit.halo     = s_halo_status;
-                        accept_full_step =
-                            wrf::sdirk3::candidate_arbitration_rescues(entry_merit);
-                        const float base_norm  = static_cast<float>(s_b);
-                        const float trial_norm = static_cast<float>(s_a);
-                        it.candidate.entry_check_rejected = !accept_full_step;
-                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                            std::cerr << "[TRUST OFF] entry met the stop metric but not S"
-                                      << " (rho_S=" << gmres_raw_rel_error << "); nonlinear check "
-                                      << (accept_full_step ? "PASSED" : "FAILED")
-                                      << " basis=S_merit s_measured=" << (s_ok ? 1 : 0)
-                                      << " ||S^-1 R||=" << base_norm << " -> " << trial_norm
-                                      << "  (raw L2 " << raw_b << " -> " << raw_a
-                                      << ", NOT the criterion)" << std::endl;
-                        }
-                    }
-                    if (accept_full_step) {
-                        dK_scaled = dK;
-                        accepted_residual = R_trial;
-                        accepted_residual_norm = R_trial.norm();
-                        it.candidate.outcome = wrf::sdirk3::TrialOutcome::AcceptedDirect;
-                    }
-                }
-            }
 
             // v20.14r27j: GMRES total failure path.
             // When e ≥ 0.999 (or raw > 1), GMRES dK is often unusable.
@@ -10406,7 +10319,6 @@ public:
             bool forced_scaled_tried = false;  // v20.14r27m: one forced-scale attempt on same-candidate
             // R13.23 (self-review): the loop condition is a fixtured rule, because it is what
             // makes a rescued candidate land somewhere. Note this loop is NOT gated on
-            // nk_trust_region -- only the direct-accept shortcut above is.
             for (int attempt = 0;
                  wrf::sdirk3::trust_loop_continues(it.step_applied(), it.failure_stands(),
                                                    max_trust_attempts - attempt, rhs_budget);

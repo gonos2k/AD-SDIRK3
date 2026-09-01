@@ -1901,8 +1901,6 @@ CONTAINS
 
 
       ! Trust-region globalization controls
-      config_name = "nk_trust_region"//C_NULL_CHAR
-      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_nk_trust_region))
 
       config_name = "nk_trust_radius"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_float(config_name, config_flags%sdirk3_nk_trust_radius)

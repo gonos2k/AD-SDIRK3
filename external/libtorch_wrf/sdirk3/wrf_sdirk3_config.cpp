@@ -348,8 +348,6 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
             // Newton-Krylov Options
             } else if (key == "sdirk3_nk_adaptive_tol") {
                 nk_adaptive_tol = parse_fortran_bool_value(value);
-            } else if (key == "sdirk3_nk_trust_region") {
-                nk_trust_region = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_nk_trust_radius") {
                 nk_trust_radius = std::max(0.01f, std::stof(value));
             } else if (key == "sdirk3_nk_forcing_eta_max") {
@@ -1841,10 +1839,6 @@ void SDIRK3Config::load_from_env() {
         precond_relaxation = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
         std::cerr << "[CONFIG ENV] precond_relaxation = " << precond_relaxation << std::endl;
     }
-    if ((env_val = std::getenv("WRF_SDIRK3_NK_TRUST_REGION"))) {
-        nk_trust_region = parse_bool_env(env_val);
-        std::cerr << "[CONFIG ENV] nk_trust_region = " << (nk_trust_region ? "true" : "false") << std::endl;
-    }
     // v20.14r27h: Trust-region initial radius
     if ((env_val = std::getenv("WRF_SDIRK3_NK_TRUST_RADIUS"))) {
         nk_trust_radius = std::max(0.01f, static_cast<float>(std::atof(env_val)));
@@ -2037,7 +2031,7 @@ void SDIRK3Config::load_from_env() {
     //
     // Three authorities can disagree, and one of them silently won: the C++ struct default here,
     // the Registry default that the WRF namelist machinery applies, and any namelist or env
-    // override. `nk_trust_region` is the case that cost this campaign a wrong claim -- the struct
+    // override. `nk_trust_region` (since removed) is the case that cost this campaign a wrong claim -- the struct
     // says `true`, `Registry.EM_SDIRK3_OPTIMIZATIONS` declares `.false.`, `em_b_wave` sets
     // neither, and the run takes the trust-OFF path. A note in a merged PR said the opposite,
     // because the struct default was read and the effective value inferred rather than looked up.
@@ -2062,10 +2056,6 @@ void SDIRK3Config::load_from_env() {
         // READ FROM wrf_sdirk3_config.h, not remembered. Writing this table from memory got four
         // of five wrong on the first attempt -- a manifest that prints a false "compiled_default"
         // is worse than none, because it looks authoritative.
-        row("nk_trust_region",           true,  nk_trust_region,             // :880
-            "  [false = DIRECT-ACCEPT SHORTCUT: the trust loop is not syntactically gated on this"
-            " flag, but every non-accepting path here also raises the total-failure flag, so the"
-            " loop body does NOT execute -- trust neither accepts nor rejects, it never runs]");
         row("use_autograd",              false, use_autograd);               // :220
         row("hevi_split",                false, hevi_split);                 // :587
         row("stage_require_convergence", false, stage_require_convergence);  // :576
@@ -4153,12 +4143,6 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
                   << (g_sdirk3_config.hard_abort_on_newton_fail ? "true" : "false") << std::endl;
 
     // v20.14r27i: Trust-region enable/disable
-    } else if (key == "nk_trust_region") {
-        g_sdirk3_config.nk_trust_region = (value != 0);
-        std::cerr << "[CONFIG] nk_trust_region = "
-                  << (g_sdirk3_config.nk_trust_region ? "true" : "false") << std::endl;
-
-    // v20.14 Phase 2: Coupled Φ-W preconditioner
     } else if (key == "precond_coupled_phi_w") {
         g_sdirk3_config.precond_coupled_phi_w = (value != 0);
         std::cerr << "[CONFIG] precond_coupled_phi_w = "

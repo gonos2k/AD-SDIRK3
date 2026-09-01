@@ -909,7 +909,6 @@ struct SDIRK3Config {
     float scale_ph = 1.0f;
     float scale_t  = 1.0f;
     float scale_mu = 1.0f;
-    bool nk_trust_region = true;           // Use trust region to handle GMRES failures (enabled by default)
     float nk_trust_radius = 1.0f;          // Initial trust region radius
     int nk_gmres_max_nan_retries = 2;      // Max NaN/Inf in apply_jacobian before marking GMRES as failed
     
