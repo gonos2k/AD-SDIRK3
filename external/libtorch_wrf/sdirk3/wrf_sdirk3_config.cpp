@@ -407,8 +407,6 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 // 9F.D123 (review 3.2): stoi() without a consumed-length check accepted
                 // "1abc" as 1. Whole-string or reject.
                 mass_coordinate_mode = parse_mode_strict(value);
-            } else if (key == "sdirk3_acoustic_equilibration" || key == "acoustic_equilibration") {
-                acoustic_equilibration = std::clamp(std::atoi(value.c_str()), 0, 1);
             } else if (key == "sdirk3_split_explicit_time_step_sound" || key == "split_explicit_time_step_sound") {
                 split_explicit_time_step_sound = std::clamp(std::atoi(value.c_str()), 0, 1000);
             } else if (key == "sdirk3_split_explicit_epssm" || key == "split_explicit_epssm") {
@@ -1773,11 +1771,6 @@ void SDIRK3Config::load_from_env() {
         gmres_block_scale = std::atoi(env_val);
         std::cerr << "[CONFIG ENV] gmres_block_scale = " << gmres_block_scale << std::endl;
     }
-    if ((env_val = std::getenv("WRF_SDIRK3_ACOUSTIC_EQUILIBRATION"))) {
-        acoustic_equilibration = std::clamp(std::atoi(env_val), 0, 1);
-        std::cerr << "[CONFIG ENV] acoustic_equilibration = " << acoustic_equilibration
-                  << std::endl;
-    }
     // v20.14r67/P2: Stagnation gate (opt-in, default OFF)
     if ((env_val = std::getenv("WRF_SDIRK3_STAGNATION_GATE_ENABLE"))) {
         stagnation_gate_enable = parse_bool_env(env_val);
@@ -2199,8 +2192,7 @@ void SDIRK3Config::load_from_env() {
               << ", tr_fb_ratio=" << trust_fallback_ratio
               << ", direct_u=" << direct_u_solve_thresh
               << ", blk_scale=" << gmres_block_scale
-              << ", acoustic_equilibration=" << acoustic_equilibration
-              << ", block_scale_source=" << block_scale_source()
+
               << std::endl;
 }
 
@@ -2240,21 +2232,6 @@ bool SDIRK3Config::validate() const {
         valid = false;
     }
 
-    if (acoustic_equilibration < 0 || acoustic_equilibration > 1) {
-        std::cerr << "SDIRK3 Config Error: acoustic_equilibration must be 0 (off) or 1; got "
-                  << acoustic_equilibration << std::endl;
-        valid = false;
-    }
-    // Two producers, one D. Enabling both is not a stronger scaling, it is a contradiction
-    // about where D comes from -- and whichever the code happened to apply, the log would
-    // name a source the run did not use. Refuse instead of silently picking.
-    if (acoustic_equilibration != 0 && gmres_block_scale != 0) {
-        std::cerr << "SDIRK3 Config Error: acoustic_equilibration=1 and gmres_block_scale=1 "
-                     "both set. They are two sources for the SAME block scale D; pick one "
-                     "(acoustic_equilibration derives D from the operator, gmres_block_scale "
-                     "from the residual norm)." << std::endl;
-        valid = false;
-    }
     // v20.14r48: GMRES performance params (validate is const → const_cast for clamping)
     {
         auto* self = const_cast<SDIRK3Config*>(this);
@@ -3505,10 +3482,6 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
         g_sdirk3_config.mass_coordinate_mode = value;
         std::cerr << "[CONFIG] mass_coordinate_mode = " << value << " ("
                   << g_sdirk3_config.mass_coordinate_mode_name() << ")" << std::endl;
-    } else if (key == "acoustic_equilibration") {
-        g_sdirk3_config.acoustic_equilibration = (value != 0) ? 1 : 0;
-        std::cerr << "[CONFIG] acoustic_equilibration = "
-                  << g_sdirk3_config.acoustic_equilibration << std::endl;
     } else if (key == "imex_split_mode") {
         if (value < 0 || value > 3) {
             std::cerr << "[CONFIG WARNING] imex_split_mode=" << value
