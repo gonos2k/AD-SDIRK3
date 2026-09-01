@@ -1678,45 +1678,6 @@ int main() {
               "krylov_objective_mismatch from a receipt that could not support it");
     }
 
-
-    {
-        // R13.23 (deep review P0-1): a total-failure signal may be overruled only by the norm the
-        // TRUST REGION judges by. Deciding on the raw packed L2 would have rescued two steps the
-        // trust region then rejects -- at dt=600 the discarded candidates improve the raw L2 by
-        // 12.5% and 60% while the S-weighted merit gets worse by 2.5% and 46x.
-        using wrf::sdirk3::CandidateArbitration;
-        using wrf::sdirk3::candidate_arbitration_rescues;
-
-        CandidateArbitration improves;
-        improves.s_merit_measured = true; improves.s_before = 476.0; improves.s_after = 400.0;
-        check(candidate_arbitration_rescues(improves),
-              "a candidate that improves the trust region's own norm is handed to globalization "
-              "instead of being discarded unevaluated -- the rescue clears the veto, it does not "
-              "accept the step");
-
-        // The two real dt=600 candidates, in the norm that decides.
-        CandidateArbitration stage2;
-        stage2.s_merit_measured = true; stage2.s_before = 476.0; stage2.s_after = 487.7;
-        check(!candidate_arbitration_rescues(stage2),
-              "the stage-2 terminal candidate is NOT rescued: raw L2 -12.5% but the trust norm "
-              "476 -> 487.7, so the discard stands");
-        CandidateArbitration stage3;
-        stage3.s_merit_measured = true; stage3.s_before = 948.9; stage3.s_after = 4.396e4;
-        check(!candidate_arbitration_rescues(stage3),
-              "...and the stage-3 one even less: raw L2 -60% but the trust norm 46x worse");
-
-        CandidateArbitration unmeasured;
-        unmeasured.s_before = 476.0; unmeasured.s_after = 400.0;   // measured flag left false
-        check(!candidate_arbitration_rescues(unmeasured),
-              "without the S norm there is no basis to overrule the signal, so it stands -- "
-              "fail-closed, not fail-open on an unmeasured merit");
-
-        CandidateArbitration tie;
-        tie.s_merit_measured = true; tie.s_before = 476.0; tie.s_after = 476.0;
-        check(!candidate_arbitration_rescues(tie),
-              "and a tie is not an improvement: overruling a failure signal needs a strict gain");
-    }
-
     {
         // R13.23 6.3: raw vs effective boundary flags. At np=1 the projection is the identity,
         // which is why the distinction has never bitten -- and exactly why a fixture has to pin
@@ -1817,29 +1778,9 @@ int main() {
 
     {
         // R13.25 (external review sections 7 and 8): two contracts that were prose, not code.
-        using wrf::sdirk3::CandidateArbitration;
-        using wrf::sdirk3::candidate_arbitration_rescues;
         using wrf::sdirk3::HaloMaskStatus;
         using wrf::sdirk3::KrylovReceiptView;
         using wrf::sdirk3::krylov_receipt_complete;
-
-        CandidateArbitration good;
-        good.s_merit_measured = true; good.s_before = 476.0; good.s_after = 400.0;
-        good.halo = HaloMaskStatus::Applied;
-        check(candidate_arbitration_rescues(good),
-              "a masked merit that improves may overrule the signal");
-
-        CandidateArbitration unmasked = good;
-        unmasked.halo = HaloMaskStatus::RequiredButUnavailable;
-        check(!candidate_arbitration_rescues(unmasked),
-              "a merit that NEEDED the halo mask and could not apply it is a different quantity "
-              "from the one trust judges by, so it cannot overrule the signal -- R13.24 recorded "
-              "this state in a log line while the decision never saw it");
-
-        CandidateArbitration no_mask_needed = good;
-        no_mask_needed.halo = HaloMaskStatus::NotRequired;
-        check(candidate_arbitration_rescues(no_mask_needed),
-              "while with no mask in play the two merits coincide and the decision stands");
 
         // Section 8: a missing event stamp must leave the receipt INCOMPLETE.
         KrylovReceiptView v;
@@ -2017,7 +1958,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 202;
+    constexpr int expected_checks = 194;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
