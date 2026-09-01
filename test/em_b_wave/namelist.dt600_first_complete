@@ -1,0 +1,43 @@
+! The exact SDIRK3 settings under which em_b_wave first completed dt=600 steps.
+! Merge these into &dynamics of namelist.input; everything not listed is the Registry default.
+!
+! MEASURED 2026-08-31 on AD-SDIRK3 main @ 1139d169 (PR #194): two 600 s steps complete
+! (model clock 00:20:00), then step 3 stage 4 produces a NaN. This is NOT a stable
+! integration -- see the PR #194 discussion. The file exists so the result is reproducible,
+! not because the configuration is recommended.
+!
+! "mode 3" here is sdirk3_imex_split_mode. sdirk3_mass_coordinate_mode is NOT set, so it
+! takes the Registry default 1 (WRFParity). sdirk3_nk_trust_region is also unset -> .false.
+
+ time_step                           = 600,
+
+ sdirk3_imex_split_mode              = 3,
+ sdirk3_use_autograd                 = .true.,
+ sdirk3_jvp_epsilon                  = 1.0e-4,
+
+ sdirk3_precond_type                 = 0,
+ sdirk3_precond_mu_coupling_damping  = 0.1,
+
+ sdirk3_max_newton_iter              = 24,
+ sdirk3_newton_tol                   = 0.02,
+
+ sdirk3_gmres_restart                = 10,
+ sdirk3_max_krylov_iter              = 2,
+ sdirk3_krylov_tol                   = 0.1,
+ sdirk3_gmres_warmstart              = .true.,
+ sdirk3_gmres_warmstart_quality_gate = 1.0,
+
+ sdirk3_stage2_gmres_restart         = 100,
+ sdirk3_stage2_max_krylov_restarts   = 1,
+ sdirk3_stage2_krylov_tol            = 0.0,
+ sdirk3_stage3_gmres_restart         = 0,
+ sdirk3_stage3_max_krylov_restarts   = 0,
+ sdirk3_stage3_krylov_tol            = 0.0,
+
+ sdirk3_inn_warmstart_enable         = .true.,
+ sdirk3_inn_residual_gate_enable     = .true.,
+ sdirk3_inn_gate_rel_tol             = 1.0e-6,
+ sdirk3_inn_gate_q_noise             = 5.0e-7,
+
+ sdirk3_debug_level                  = 1,
+ sdirk3_solver_telemetry             = .true.,

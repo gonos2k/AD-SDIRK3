@@ -848,30 +848,6 @@ struct SDIRK3Config {
     // Set via env: WRF_SDIRK3_GMRES_BLOCK_SCALE
     int gmres_block_scale = 0;   // off: the block scale divided by near-zero residual blocks; S now carries the physical scale
 
-    // Acoustic-pair equilibration: the OTHER producer of the same D, and the reason
-    // gmres_block_scale above is off. That one derives D from the RESIDUAL
-    // (D[block]=||r0[block]||), which divides by near-zero blocks and measured WORSE.
-    // This one derives it from the OPERATOR: s_rw/s_ph = sqrt(||A_rw,ph|| / ||A_ph,rw||),
-    // the exact symmetrisation of the rw<->ph off-diagonal pair. It is tuning-free -- there
-    // is no constant to pick -- and it is applied ONLY to that pair, because equilibration
-    // is well-posed only where the coupling is two-way; ru/rv/t/mu stay at 1 so they cannot
-    // be starved. Costs two matvecs per linear solve.
-    // 0 = off (DEFAULT, baseline byte-identical), 1 = on.
-    // Set via namelist sdirk3_acoustic_equilibration or env WRF_SDIRK3_ACOUSTIC_EQUILIBRATION.
-    int acoustic_equilibration = 0;
-
-    // The two are producers of ONE quantity, so asking "is a block scale in force" has one
-    // answer and not two. A caller that tested only gmres_block_scale would silently ignore
-    // this one; a caller that tested both with || would not know which source to report.
-    bool block_scale_enabled() const {
-        return gmres_block_scale != 0 || acoustic_equilibration != 0;
-    }
-    const char* block_scale_source() const {
-        if (acoustic_equilibration != 0) return "acoustic_equilibration";
-        if (gmres_block_scale != 0) return "residual_norm";
-        return "none";
-    }
-
     // v20.14: Adaptive theta tuning constants (configurable for different cases).
     // Defaults tuned for em_b_wave (dt=600, 41x81x64).
     // Set via env: WRF_SDIRK3_ADAPTIVE_*
@@ -933,7 +909,6 @@ struct SDIRK3Config {
     float scale_ph = 1.0f;
     float scale_t  = 1.0f;
     float scale_mu = 1.0f;
-    bool nk_trust_region = true;           // Use trust region to handle GMRES failures (enabled by default)
     float nk_trust_radius = 1.0f;          // Initial trust region radius
     int nk_gmres_max_nan_retries = 2;      // Max NaN/Inf in apply_jacobian before marking GMRES as failed
     

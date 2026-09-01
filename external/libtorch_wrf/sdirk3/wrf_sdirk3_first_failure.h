@@ -915,22 +915,13 @@ enum class HaloMaskStatus {
     RequiredButUnavailable, // a mask was initialised but unusable -- this merit is NOT comparable
 };
 
+
 struct CandidateArbitration {
     bool   s_merit_measured = false;
     double s_before = -1.0;
     double s_after = -1.0;
     HaloMaskStatus halo = HaloMaskStatus::NotRequired;
 };
-
-[[nodiscard]] inline bool candidate_arbitration_rescues(const CandidateArbitration& a) {
-    if (!a.s_merit_measured) return false;              // fail-closed
-    // A merit that needed the halo mask and could not apply it is not the trust merit, so
-    // it cannot overrule a signal the trust merit would judge. Fail closed rather than compare
-    // two different quantities.
-    if (a.halo == HaloMaskStatus::RequiredButUnavailable) return false;
-    if (!measured(a.s_before) || !measured(a.s_after)) return false;
-    return a.s_after < a.s_before;                      // strict: a tie is not an improvement
-}
 
 // A RATIO gate, not a bare decrease. Recovery acceptance MUTATES STATE, so it must clear the
 // configured `trust_fallback_ratio` -- reusing the admission rule (`after < before`) here would

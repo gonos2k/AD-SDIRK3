@@ -1123,129 +1123,6 @@ static bool apinv_probe_armed() {
 
 namespace krylov_methods {
 
-// Acoustic-pair equilibration: D built from the OPERATOR, not from the residual.
-//
-// The rw<->ph coupling is two-way but wildly asymmetric, and GMRES minimises an L2 norm in
-// which the larger direction sets the search. The symmetrising weight for a pair is
-// s_rw/s_ph = sqrt(||A_rw,ph|| / ||A_ph,rw||); it is split geometrically so the pair's product
-// is exactly 1 and the overall scale of the objective is untouched. It is TUNING-FREE -- the
-// ratio is measured, there is no constant to choose.
-//
-// ONLY rw and ph are touched. Equilibration is well-posed where the coupling is two-way, and
-// scaling every block is what the residual-norm producer does -- it divides by near-zero blocks
-// and measured worse, which is why that one is off.
-//
-// WHAT THIS IS NOT: D is applied on the LEFT only (to r and b), so this reweights the Krylov
-// OBJECTIVE. It is not a similarity transform and does not literally symmetrise A. Same
-// solution x, different search path.
-//
-// The probe direction is r0 RESTRICTED TO THE BLOCK, never a constant vector: a horizontally
-// uniform direction is a null space of this operator, so a constant probe would return ~0 and
-// a meaningless ratio.
-//
-// Returns an UNDEFINED tensor when it cannot be measured. That is the same path as knob-off:
-// a pair we cannot measure must not become a silent scale of 1 that the log then reports as an
-// equilibration which happened. Costs two matvecs per linear solve.
-static torch::Tensor acoustic_equilibration_D_inv(
-    const std::function<torch::Tensor(const torch::Tensor&)>& A,
-    const torch::Tensor& r0,
-    const StateLayout* layout)
-{
-    if (!wrf::sdirk3::g_sdirk3_config.acoustic_equilibration) return torch::Tensor{};
-    if (!layout || !layout->is_valid() || layout->total_size != r0.numel()) return torch::Tensor{};
-
-    // DELIBERATELY NOT under a blanket NoGradGuard. A(v) is the Newton matvec
-    // v - dt*gamma*(J*v), and J*v is a forward-mode directional derivative; holding a
-    // NoGradGuard across that call risks suppressing the tangent, in which case A(v) would
-    // quietly reduce to v, both couplings would measure the IDENTITY, and the ratio would
-    // come back a plausible 1 with no error anywhere. Scalars are extracted with
-    // guarded_item<T>, which establishes its own guard, and the probe direction is detached
-    // below so no graph is built here.
-    auto index_of = [&](const char* want) -> int {
-        for (std::size_t i = 0; i < layout->blocks.size(); ++i) {
-            if (layout->blocks[i].name == want) return static_cast<int>(i);
-        }
-        return -1;
-    };
-    const int i_rw = index_of("rw");
-    const int i_ph = index_of("ph");
-    if (i_rw < 0 || i_ph < 0) return torch::Tensor{};
-
-    // ||A_to,from||: apply A to a unit vector supported on `from`, measure the `to` block.
-    auto coupling = [&](int from, int to, double& out) -> bool {
-        const auto& bf = layout->blocks[static_cast<std::size_t>(from)];
-        const auto& bt = layout->blocks[static_cast<std::size_t>(to)];
-        if (bf.start + bf.size > r0.numel() || bt.start + bt.size > r0.numel()) return false;
-        // detach: this is a probe DIRECTION, not part of the solution's graph.
-        auto src = r0.detach().slice(0, bf.start, bf.start + bf.size);
-        const double nrm = static_cast<double>(guarded_item<float>(src.norm()));
-        if (!(nrm > 0.0) || !std::isfinite(nrm)) return false;
-        auto v = torch::zeros_like(r0.detach());
-        v.slice(0, bf.start, bf.start + bf.size).copy_(src / nrm);
-        auto w = A(v);
-        if (!w.defined() || w.numel() != r0.numel()) return false;
-        // A(v) = v - dt*gamma*(J*v). If the tangent is dead, A(v) is EXACTLY v and this
-        // probe is measuring the identity -- which would still yield finite, positive,
-        // plausible norms and a ratio near 1. Nothing downstream could tell. So measure the
-        // one quantity that separates the two and refuse on it.
-        const double jv = static_cast<double>(guarded_item<float>((w - v).norm()));
-        if (!(jv > 0.0) || !std::isfinite(jv)) {
-            std::cerr << "[ACOUSTIC EQUILIBRATION] REFUSED: ||A(v)-v||=" << jv
-                      << " -- the matvec returned its own argument, so the JVP tangent is "
-                         "dead and this probe would be measuring the identity" << std::endl;
-            return false;
-        }
-        out = static_cast<double>(
-            guarded_item<float>(w.slice(0, bt.start, bt.start + bt.size).norm()));
-        return std::isfinite(out) && out > 0.0;
-    };
-
-    double a_rw_ph = 0.0, a_ph_rw = 0.0;
-    if (!coupling(i_ph, i_rw, a_rw_ph) || !coupling(i_rw, i_ph, a_ph_rw)) {
-        std::cerr << "[ACOUSTIC EQUILIBRATION] not applied: a block norm was zero or "
-                     "non-finite; continuing UNSCALED" << std::endl;
-        return torch::Tensor{};
-    }
-    // TWO conditions, and it is easy to satisfy only the first:
-    //   symmetrising:   s_rw / s_ph = sqrt(|A_rw,ph| / |A_ph,rw|)
-    //   scale-neutral:  s_rw * s_ph = 1        (the pair is reweighted against each other,
-    //                                           the objective's overall scale is untouched)
-    // Solving both gives s_rw = (|A_rw,ph|/|A_ph,rw|)^(1/4), NOT the square root. Setting
-    // s_rw = sqrt(...) with s_ph = 1/s_rw satisfies scale-neutrality but makes the RATIO the
-    // square of what symmetrisation asks for -- measured here as s_rw=87.4 where the earlier
-    // hand-tuned selector had 8.738, a clean factor of 10 that is sqrt(87.4)=9.35.
-    const double ratio_A = a_rw_ph / a_ph_rw;          // the operator's asymmetry
-    const double s_rw = std::pow(ratio_A, 0.25);       // (ratio_A)^(1/4)
-    if (!std::isfinite(s_rw) || !(s_rw > 0.0)) {
-        std::cerr << "[ACOUSTIC EQUILIBRATION] not applied: scale not finite/positive; "
-                     "continuing UNSCALED" << std::endl;
-        return torch::Tensor{};
-    }
-
-    std::array<double, 6> f;
-    f.fill(1.0);
-    f[static_cast<std::size_t>(i_rw)] = s_rw;
-    f[static_cast<std::size_t>(i_ph)] = 1.0 / s_rw;
-
-    auto D_inv = torch::ones_like(r0.detach());
-    for (std::size_t i = 0; i < layout->blocks.size() && i < f.size(); ++i) {
-        const auto& blk = layout->blocks[i];
-        D_inv.slice(0, blk.start, blk.start + blk.size)
-             .fill_(static_cast<float>(1.0 / f[i]));
-    }
-    if (!guarded_item<bool>(torch::isfinite(D_inv).all())) return torch::Tensor{};
-
-    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-        std::cerr << "[ACOUSTIC EQUILIBRATION] |A_rw,ph|=" << a_rw_ph
-                  << " |A_ph,rw|=" << a_ph_rw
-                  << " asymmetry=" << ratio_A
-                  << " s_rw=" << s_rw << " s_ph=" << (1.0 / s_rw)
-                  << " (s_rw/s_ph=" << (s_rw * s_rw) << " = sqrt(asymmetry); 2 matvecs)"
-                  << std::endl;
-    }
-    return D_inv;
-}
-
 WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     const std::function<torch::Tensor(const torch::Tensor&)>& A,
     const torch::Tensor& b,
@@ -1351,16 +1228,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
     // v20.14 r50-fix: Block-scaling requires AUTOGRAD JVP. With FD JVP, D_inv amplifies
     // directional noise (D_inv can reach ~800 for small-residual blocks like w/mu),
     // causing ||x||→0. Only enable when forward-mode AD provides exact JVP.
-    // Producer 1 of D: the OPERATOR's acoustic pair. Runs first, and the residual-norm
-    // producer below is gated on !block_scaled, so the two can never both write D.
-    D_inv = acoustic_equilibration_D_inv(A, r_true_inner, layout);
-    if (D_inv.defined()) {
-        block_scaled = true;
-        r_precond = r_precond * D_inv;
-        b_inner = b_inner * D_inv;
-    }
-    if (!block_scaled &&
-        wrf::sdirk3::g_sdirk3_config.gmres_block_scale &&
+    if (wrf::sdirk3::g_sdirk3_config.gmres_block_scale &&
         wrf::sdirk3::g_sdirk3_config.use_autograd &&
         layout && layout->is_valid() && layout->total_size == r_true_inner.numel()) {
         torch::NoGradGuard no_grad;
@@ -2838,24 +2706,7 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
     }
     bool wrms_metric_applied = false;
 
-    // Producer 1 of D: the OPERATOR's acoustic pair. Runs first, and the residual-norm
-    // producer below is gated on !block_scaled, so the two can never both write D.
-    D_inv = acoustic_equilibration_D_inv(A, r_true_inner, layout);
-    if (D_inv.defined()) {
-        block_scaled = true;
-        L_D = D_inv;
-        // R13.9: publish the weight, once, where it is finalised -- same duty the
-        // residual-norm producer performs below, so a caller reading d_inv_out gets the
-        // weight actually applied whichever producer built it.
-        if (d_inv_out) {
-            torch::NoGradGuard ng_dinv;
-            *d_inv_out = D_inv.detach().clone();
-        }
-        r_precond = r_precond * D_inv;
-        b_inner = b_inner * D_inv;
-    }
-    if (!block_scaled &&
-        wrf::sdirk3::g_sdirk3_config.gmres_block_scale &&
+    if (wrf::sdirk3::g_sdirk3_config.gmres_block_scale &&
         wrf::sdirk3::g_sdirk3_config.use_autograd &&
         layout && layout->is_valid() && layout->total_size == r_true_inner.numel()) {
         torch::NoGradGuard no_grad;
@@ -6159,6 +6010,14 @@ public:
                     std::cerr << "[SCALING] S from the state (rms|y| / dt*gamma, dt*gamma=" << h
                               << "):" << std::endl;
                 }
+                double max_rms = 0.0;
+                for (const auto& blk : cached_layout_.blocks) {
+                    if (blk.start + blk.size > y.numel()) continue;
+                    const double n_b = static_cast<double>(blk.size);
+                    max_rms = std::max(max_rms, std::sqrt(
+                        y.slice(0, blk.start, blk.start + blk.size).square().sum().item<double>()
+                        / std::max(n_b, 1.0)));
+                }
                 for (const auto& blk : cached_layout_.blocks) {
                     if (blk.start + blk.size > y.numel()) continue;
                     double ss, n;
@@ -6168,12 +6027,15 @@ public:
                         n = static_cast<double>(blk.size);
                     }
                     const double rms = std::sqrt(ss / std::max(n, 1.0));
-                    // Fail closed: a block whose state has no magnitude gives no scale to judge a
-                    // residual against, and inventing one is how every previous scale went wrong.
-                    TORCH_CHECK(std::isfinite(rms) && rms > 0.0,
-                                "state scale for block '", blk.name, "' is not positive (rms=", rms,
-                                "); refusing to invent one");
-                    const float scale = static_cast<float>(rms / h);
+                    // t', mu' and ph' are PERTURBATIONS (t-t0, mu-mub, ph-phb), so zero is a
+                    // legitimate reference state, not an error -- aborting on it refused a valid
+                    // run. Floor each block well below every healthy scale (measured at dt=600:
+                    // 0.032 .. 15.5) so a vanishing block still has a scale and S^-1 cannot blow
+                    // up, while a healthy metric is untouched.
+                    TORCH_CHECK(std::isfinite(rms), "state scale for block '", blk.name,
+                                "' is not finite (rms=", rms, ")");
+                    const float scale = static_cast<float>(
+                        std::max(rms / h, 1.0e-6 * max_rms / h));
                     S_diag_.slice(0, blk.start, blk.start + blk.size).fill_(scale);
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                         std::cerr << "  S[" << blk.name << "] = " << scale
@@ -10054,7 +9916,11 @@ public:
 
             // CRITICAL FIX (2025-10-26): Trust-region must evaluate step quality before acceptance.
             // Implement full accept/reject logic with adaptive radius updates.
-            // v20.14r27g: Trust-region is now conditional on config nk_trust_region.
+            // The trust region is the ONLY acceptance path. The direct-accept shortcut it
+            // used to sit beside took a non-converged full step with no nonlinear check;
+            // measured at dt=600 that diverges (residual x340/step, then NaN), while
+            // requiring a strict decrease instead stalls at once. Accepting on measured
+            // model agreement is what this loop already does.
             torch::Tensor dK_scaled = dK;
             // R13.25 SELF-REVIEW: each acceptance site stamps its OWN outcome.
             //
@@ -10118,8 +9984,9 @@ public:
             // message claimed only to change what is REPORTED.
             const bool total_failure_vs_r0 =
                 r0_measured && !it.linear.entry_S_reached &&
-                (gmres_raw_rel_error > r0_ref * (1.0f + 1.0e-4f) ||
-                 gmres_raw_rel_error >= 0.99f * r0_ref);
+                // "the solve did not reduce its own starting residual by 1%". The old first
+                // clause (raw > 1.0001*r0_ref) was dead: it implies this one.
+                gmres_raw_rel_error >= 0.99f * r0_ref;
             // With the flag on and r0 unmeasured the r0 rule cannot be evaluated. Falling back
             // to ||b|| is the only thing the solver can do, and it is COUNTED so the record
             // never claims a rule it did not apply.
@@ -10181,97 +10048,6 @@ public:
             // the trust-off path. Routed to the SAME total-failure handling as any other unusable
             // step rather than left as a silent no-step, which the comment below warns creates
             // zero-update loops.
-            if (!wrf::sdirk3::g_sdirk3_config.nk_trust_region) {
-                // Trust-region disabled: accept full Newton step directly.
-                // GMRES total failure must NOT be treated as accepted zero-step because
-                // that bypasses it.failure_stands() handling and creates zero-update loops.
-                if (it.linear.total_failure_signal) {
-                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                        std::cerr << "[TRUST OFF] GMRES failed (rel_error="
-                                  << gmres_rel_error << ", raw=" << gmres_raw_rel_error
-                                  << "), routing to GMRES total-failure handling."
-                                  << std::endl;
-                    }
-                } else {
-                    auto K_trial = K + dK;
-                    auto U_trial = U_stage + dt * gamma * K_trial;
-                    auto F_trial = compute_rhs(U_trial);
-                    auto R_trial = K_trial - F_trial;
-                    // R13.21 (external review P0-1, MEASURED before acting): with the trust region
-                    // off this branch accepted the full Newton step UNCONDITIONALLY -- `R_trial`
-                    // was computed, stored, and never compared with `R`. The other two acceptance
-                    // sites in this function both test a decrease (`residual_improved` at the
-                    // recovery site, `accept_step` at the trust site); this one did not.
-                    //
-                    // That is harmless for a solve that genuinely converged. It is not harmless for
-                    // an entry that met only the inner stopping objective: before the split above,
-                    // such a solve was exempted from the total-failure rules by its LABEL, so it
-                    // arrived here as a non-candidate and its step was taken with no test at all --
-                    // the same metric state getting a different policy than an identical rho_S
-                    // returned after Arnoldi iterations.
-                    //
-                    // Reachability. R13.21 wrote here that `nk_trust_region` "defaults to TRUE
-                    // and em_b_wave does not override it, so this is an opt-out path and the
-                    // shipped configuration never took it. Latent, not live." THAT IS WRONG, and
-                    // R13.23 retracts it.
-                    //
-                    // THREE AUTHORITIES, THREE VALUES:
-                    //   wrf_sdirk3_config.h:880              nk_trust_region = true
-                    //   Registry.EM_SDIRK3_OPTIMIZATIONS:60  sdirk3_nk_trust_region = .false.
-                    //   em_b_wave namelist                   not set -> Registry default applies
-                    //   effective runtime                    false   ("nk_trust_region = false",
-                    //                                        "[TRUST OFF]" in the live log)
-                    //
-                    // In a WRF-integrated run the REGISTRY default wins, so this branch is the one
-                    // em_b_wave actually takes. The fix below is therefore live, not latent. The
-                    // error was reading the C++ struct default and INFERRING the effective value
-                    // instead of reading the log that was already on disk.
-                    bool accept_full_step = true;
-                    if (it.linear.entry_objective_mismatch) {
-                        torch::NoGradGuard ng_entry_mismatch;
-                        // R13.24 (external review P0-3): judge in the coordinate that RAISED the
-                        // objection. An entry mismatch means the solve met the inner stopping
-                        // metric but NOT the S tolerance -- an S-coordinate disagreement by
-                        // definition -- so accepting it because the raw packed L2 fell answers a
-                        // different question than the one asked. R13.23 measured two candidates
-                        // that fall in raw L2 (-12.5%, -60%) while the S merit gets WORSE (+2.5%,
-                        // 46x): exactly the shape this branch would have waved through.
-                        //
-                        // Fail-closed: without the S coordinate there is no basis to overrule the
-                        // mismatch, so the step is rejected rather than accepted on a norm that
-                        // was not in question.
-                        double raw_b = -1.0, raw_a = -1.0, s_b = -1.0, s_a = -1.0;
-                        bool s_ok = false;
-                        candidate_merits(R.detach(), R_trial.detach(),
-                                         raw_b, raw_a, s_b, s_a, s_ok);
-                        wrf::sdirk3::CandidateArbitration entry_merit;
-                        entry_merit.s_merit_measured = s_ok;
-                        entry_merit.s_before = s_b;
-                        entry_merit.s_after  = s_a;
-                        entry_merit.halo     = s_halo_status;
-                        accept_full_step =
-                            wrf::sdirk3::candidate_arbitration_rescues(entry_merit);
-                        const float base_norm  = static_cast<float>(s_b);
-                        const float trial_norm = static_cast<float>(s_a);
-                        it.candidate.entry_check_rejected = !accept_full_step;
-                        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                            std::cerr << "[TRUST OFF] entry met the stop metric but not S"
-                                      << " (rho_S=" << gmres_raw_rel_error << "); nonlinear check "
-                                      << (accept_full_step ? "PASSED" : "FAILED")
-                                      << " basis=S_merit s_measured=" << (s_ok ? 1 : 0)
-                                      << " ||S^-1 R||=" << base_norm << " -> " << trial_norm
-                                      << "  (raw L2 " << raw_b << " -> " << raw_a
-                                      << ", NOT the criterion)" << std::endl;
-                        }
-                    }
-                    if (accept_full_step) {
-                        dK_scaled = dK;
-                        accepted_residual = R_trial;
-                        accepted_residual_norm = R_trial.norm();
-                        it.candidate.outcome = wrf::sdirk3::TrialOutcome::AcceptedDirect;
-                    }
-                }
-            }
 
             // v20.14r27j: GMRES total failure path.
             // When e ≥ 0.999 (or raw > 1), GMRES dK is often unusable.
@@ -10543,7 +10319,6 @@ public:
             bool forced_scaled_tried = false;  // v20.14r27m: one forced-scale attempt on same-candidate
             // R13.23 (self-review): the loop condition is a fixtured rule, because it is what
             // makes a rescued candidate land somewhere. Note this loop is NOT gated on
-            // nk_trust_region -- only the direct-accept shortcut above is.
             for (int attempt = 0;
                  wrf::sdirk3::trust_loop_continues(it.step_applied(), it.failure_stands(),
                                                    max_trust_attempts - attempt, rhs_budget);

@@ -56,12 +56,10 @@ rconfig   real    sdirk3_nk_forcing_gamma      namelist,dynamics  1  0.9      rh
 rconfig   real    sdirk3_nk_forcing_alpha      namelist,dynamics  1  1.5      rh   "sdirk3_nk_forcing_alpha"   "EW alpha parameter"   ""
 
 # Globalization Strategy
-rconfig   logical sdirk3_nk_trust_region       namelist,dynamics  1  .false.  rh   "sdirk3_nk_trust_region"    "Use trust region method"   ""
 rconfig   real    sdirk3_nk_trust_radius       namelist,dynamics  1  1.0      rh   "sdirk3_nk_trust_radius"    "Initial trust region radius"   ""
 
 # v20.14 r49: Stage-aware GMRES budget and JVP auto-bench
 rconfig   integer sdirk3_stage2_gmres_restart          namelist,dynamics  1  0        rh   "sdirk3_stage2_gmres_restart"          "Stage>=2 GMRES restart override (0=off)"   ""
-rconfig   integer sdirk3_acoustic_equilibration     namelist,dynamics  1  0        rh   "sdirk3_acoustic_equilibration"        "Equilibrate the rw<->ph acoustic pair in the Krylov objective: s_rw/s_ph = sqrt(|A_rw,ph|/|A_ph,rw|), measured from the operator with two matvecs per solve, so it is tuning-free. Applied ONLY to rw and ph; ru/rv/t/mu stay at 1. 0=off (DEFAULT, byte-identical), 1=on. Mutually exclusive with gmres_block_scale"   ""
 rconfig   integer sdirk3_stage2_max_krylov_restarts    namelist,dynamics  1  0        rh   "sdirk3_stage2_max_krylov_restarts"    "Stage>=2 max Krylov restarts override (0=off)"   ""
 rconfig   real    sdirk3_stage2_krylov_tol             namelist,dynamics  1  0.0      rh   "sdirk3_stage2_krylov_tol"             "Stage>=2 Krylov tolerance override (0=off)"   ""
 rconfig   real    sdirk3_stage2_ew_eta_min             namelist,dynamics  1  0.0      rh   "sdirk3_stage2_ew_eta_min"             "Stage>=2 EW eta_min override (0=off)"   ""
@@ -205,7 +203,6 @@ rconfig   integer sdirk3_benchmark_measure     namelist,dynamics  1  20       rh
 
 # # Newton-Krylov packages
 # package   sdirk3_nk_adaptive       sdirk3_nk_adaptive_tol        -    state:nk_krylov_basis
-# package   sdirk3_nk_trust          sdirk3_nk_trust_region        -    state:nk_trust_state
 
 # # Memory optimization packages
 # package   sdirk3_memory_opt        sdirk3_memory_pool            -    state:memory_pool_data

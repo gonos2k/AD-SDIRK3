@@ -28,7 +28,10 @@ HEADERS = [
 ]
 # One aggregate coverage ratchet instead of four per-header counts: the same protection (a
 # pattern that stops matching cannot silently exempt rules) with one number to maintain.
-EXPECTED_RULES_TOTAL = 84
+# 84 -> 83: candidate_arbitration_rescues deleted with its only consumer, the
+# direct-accept shortcut. The ratchet exists to stop a rule vanishing SILENTLY;
+# it did its job -- it is what caught the orphan.
+EXPECTED_RULES_TOTAL = 83
 
 # R13.25 SELF-REVIEW: production is EVERY solver translation unit, not the three this started
 # with. A rule called only from a .cpp outside that list would have been reported as an orphan --
