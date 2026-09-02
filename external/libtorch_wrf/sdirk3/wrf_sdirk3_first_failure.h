@@ -821,9 +821,14 @@ inline uint64_t boundary_receipt_key(uint64_t raw_flag_bits, uint64_t effective_
 // failure flag, so the loop body runs only for an admitted candidate. The loop condition is this
 // rule, so the state admission produces (no step, no standing veto) is pinned to ENTER the loop;
 // a fourth silent outcome -- veto lifted, step not taken, loop not entered -- is unrepresentable.
-[[nodiscard]] inline bool trust_loop_continues(bool step_accepted, bool gmres_total_failure,
+// R14.3: the total-failure signal is NO LONGER a parameter. It answers "did Krylov reduce its
+// own starting residual by 1%", which is a statement about the LINEAR solve -- not about whether
+// a small fraction of this direction lowers the NONLINEAR merit. Deciding that is the trust
+// region's job, and gating the loop on the signal removed the candidate before the mechanism
+// that judges it ever ran. The signal is still recorded; it just stops deciding.
+[[nodiscard]] inline bool trust_loop_continues(bool step_accepted,
                                  int attempts_remaining, int rhs_budget) {
-    return !step_accepted && !gmres_total_failure && attempts_remaining > 0 && rhs_budget > 0;
+    return !step_accepted && attempts_remaining > 0 && rhs_budget > 0;
 }
 
 // R14.2: ONE object per Newton iteration. The linear solve writes `linear` once; the site that

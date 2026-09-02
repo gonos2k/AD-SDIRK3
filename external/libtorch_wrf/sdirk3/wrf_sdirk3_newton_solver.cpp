@@ -10335,7 +10335,7 @@ public:
             // R13.23 (self-review): the loop condition is a fixtured rule, because it is what
             // makes a rescued candidate land somewhere. Note this loop is NOT gated on
             for (int attempt = 0;
-                 wrf::sdirk3::trust_loop_continues(it.step_applied(), it.failure_stands(),
+                 wrf::sdirk3::trust_loop_continues(it.step_applied(),
                                                    max_trust_attempts - attempt, rhs_budget);
                  ++attempt) {
                 it.candidate.trust_attempted = true;   // the body runs: this candidate WAS offered to trust
@@ -10618,22 +10618,6 @@ public:
                 // Trust-region should REJECT and shrink, not force-accept.
                 if (!std::isfinite(rho_val)) {
                     accept_step = false;  // Non-finite rho: always reject
-                } else if (it.failure_stands()) {
-                    // v20.14r27h: GMRES diverged (raw > 1) or essentially failed (e ≥ 0.999).
-                    // When e ≈ 1, the correction dK carries no useful signal — the predicted
-                    // model is unreliable and tiny α steps would be accepted spuriously.
-                    //
-                    // R13.24 (external review P0-1): this read `it.linear.total_failure_signal`
-                    // directly, so an arbitration-ADMITTED candidate was refused here on the very
-                    // signal its admission had reconsidered -- it entered the loop and lost every
-                    // attempt. Reading the single effective veto is what makes admission mean
-                    // anything; with the arbitration off the two are identical.
-                    accept_step = false;
-                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                        std::cerr << "[TRUST REGION] GMRES failed (rel_error="
-                                  << gmres_rel_error << ", raw=" << gmres_raw_rel_error
-                                  << "), rejecting" << std::endl;
-                    }
                 } else if (gmres_rel_error > 0.99f) {
                     // v20.14r35: Near-fail GMRES (0.99 < e < 0.999). The step carries
                     // almost no signal. Require minimum actual residual decrease.

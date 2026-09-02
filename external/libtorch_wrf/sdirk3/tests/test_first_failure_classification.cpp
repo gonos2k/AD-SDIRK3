@@ -1725,20 +1725,21 @@ int main() {
         // warns about, reintroduced by the very mechanism meant to be more careful.
         using wrf::sdirk3::trust_loop_continues;
 
-        check(trust_loop_continues(/*step_accepted=*/false, /*total_failure=*/false, 3, 100),
-              "the state a rescue produces (veto cleared, step not taken) ENTERS the trust loop, "
-              "so the candidate is judged rather than silently dropped -- and this holds on the "
-              "shipped config, because the loop is not gated on nk_trust_region");
-        check(!trust_loop_continues(false, /*total_failure=*/true, 3, 100),
-              "the signal standing removes the candidate from the loop entirely -- this is the "
-              "veto the arbitration exists to reconsider, and it still bites when not rescued");
-        check(!trust_loop_continues(/*step_accepted=*/true, false, 3, 100),
+        check(trust_loop_continues(/*step_accepted=*/false, 3, 100),
+              "a candidate that has not been accepted ENTERS the trust loop, so it is judged "
+              "rather than silently dropped");
+        check(!trust_loop_continues(/*step_accepted=*/true, 3, 100),
               "an accepted step does not re-enter the loop");
-        check(!trust_loop_continues(false, false, /*attempts_remaining=*/0, 100),
+        check(!trust_loop_continues(false, /*attempts_remaining=*/0, 100),
               "attempts exhausted stops the loop");
-        check(!trust_loop_continues(false, false, 3, /*rhs_budget=*/0),
+        check(!trust_loop_continues(false, 3, /*rhs_budget=*/0),
               "and so does an exhausted RHS budget -- the loop cannot borrow evaluations it "
               "does not have");
+        // R14.3: the total-failure signal is GONE from this predicate. It said the Krylov solve
+        // failed to reduce its own starting residual by 1% -- a fact about the LINEAR solve --
+        // and used it to remove the candidate before the mechanism that judges NONLINEAR merit
+        // ran at all. Whether a fraction of that direction descends is the trust region's
+        // question, and it now gets to answer it.
     }
 
 
@@ -1958,7 +1959,7 @@ int main() {
           "excludes a NaN/Inf first residual, not a wrong RHS, a wrong Jacobian, a bad scale "
           "or a JVP inconsistency");
 
-    constexpr int expected_checks = 194;
+    constexpr int expected_checks = 193;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"
