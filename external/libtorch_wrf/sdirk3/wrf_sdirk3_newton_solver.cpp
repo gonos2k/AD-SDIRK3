@@ -6043,6 +6043,14 @@ public:
                                   << ")" << std::endl;
                     }
                 }
+                // Every block zero leaves max_rms = 0, so the floor above is 0 too and
+                // reciprocal() would hand back Inf silently. A SINGLE zero block is a
+                // legitimate reference state and is floored; an ENTIRELY zero state gives
+                // nothing to derive a scale from, so say so rather than emit an infinite
+                // weight the caller cannot see.
+                TORCH_CHECK(guarded_item<bool>((S_diag_ > 0).all()),
+                            "state scale is not positive: every block of U_n has zero RMS, "
+                            "so there is no magnitude to judge a residual against");
                 S_inv_diag_ = S_diag_.reciprocal();
                 if (S_diag_.device() != K.device()) {
                     S_diag_ = S_diag_.to(K.device());
@@ -8548,11 +8556,18 @@ public:
                 // PR 9F.9.1 SHADOW: save r_g = b_s - A_s*x for the exact trust model at
                 // the later trust-region scope (where gmres_result is gone). r_g is in the
                 // SCALED space (gmres_rhs=-S^-1 R, x=S^-1 dK -> r_true=S^-1(-R-A dK)); the
-                // trust shadow consumes it as scaled and does NOT re-apply S^-1. Cleared
+                // trust region consumes it as scaled and does NOT re-apply S^-1. Cleared
                 // FIRST so a solve that ends before the trust trial cannot leak a stale r_g
-                // from a previous iteration into this one. Diagnosis-only (own env flag).
+                // from a previous iteration into this one.
+                //
+                // PRODUCTION, not diagnosis: the trust region's predicted reduction IS
+                // (1-a)R_s - a r_g, so without r_g there is no linear model and every
+                // attempt is rejected. This was behind `numerical_shadow_enabled()` while
+                // only the shadow consumed it; keeping that flag after promoting the
+                // consumer made the model unavailable in exactly the runs that need it.
+                // The cost is a detach (a view), not a copy.
                 last_gmres_r_true_ = torch::Tensor();
-                if (numerical_shadow_enabled() && gmres_result.r_true.defined()) {
+                if (gmres_result.r_true.defined()) {
                     last_gmres_r_true_ = gmres_result.r_true.detach();
                 }
 
@@ -10320,12 +10335,25 @@ public:
             // R13.23 (self-review): the loop condition is a fixtured rule, because it is what
             // makes a rescued candidate land somewhere. Note this loop is NOT gated on
             for (int attempt = 0;
-                 wrf::sdirk3::trust_loop_continues(it.step_applied(), it.failure_stands(),
+                 wrf::sdirk3::trust_loop_continues(it.step_applied(),
                                                    max_trust_attempts - attempt, rhs_budget);
                  ++attempt) {
                 it.candidate.trust_attempted = true;   // the body runs: this candidate WAS offered to trust
-                auto dK_norm = dK.norm();
-                auto K_norm = K.norm();
+                // Trust GEOMETRY in the same coordinates as the trust MERIT. K packs blocks
+                // with different physical units (mass-weighted momentum, geopotential,
+                // potential temperature, column mass), so a raw Euclidean norm sums squares
+                // of unlike quantities: the radius then means something different depending
+                // on how the state happens to be represented, while acceptance is judged on
+                // ||S^-1 R||. S^-1 is the one scaling that makes the two agree.
+                //
+                // The limiter returns a RATIO, so applying it to the raw dK is still correct:
+                // scaling dK by a scales S^-1 dK by the same a.
+                const bool trust_scaled_coords =
+                    S_inv_diag_.defined() && S_inv_diag_.numel() == dK.numel() &&
+                    K.numel() == dK.numel();
+                auto dK_norm_raw = dK.norm();
+                auto dK_norm = trust_scaled_coords ? (S_inv_diag_ * dK).norm() : dK_norm_raw;
+                auto K_norm   = trust_scaled_coords ? (S_inv_diag_ * K).norm()  : K.norm();
 
                 // Shared trust-region limiter (same rule as fallback path above).
                 auto effective_limit = compute_effective_trust_limit(K_norm, dK);
@@ -10338,7 +10366,12 @@ public:
                     dK_scaled_candidate = dK * scale_factor;
                 }
 
-                auto dK_scaled_norm_tensor = dK_scaled_candidate.norm();
+                // SAME coordinates as dK_norm above: tr_alpha is the ratio of these two
+                // and feeds the linear model, so mixing S with raw makes a 9.7% step
+                // report as a full one and the model predict a reduction it never tried.
+                auto dK_scaled_norm_tensor = trust_scaled_coords
+                    ? (S_inv_diag_ * dK_scaled_candidate).norm()
+                    : dK_scaled_candidate.norm();
 
                 // v20.14r27n: Same-candidate detection with forced-scale fallback.
                 // When dK fits within all radii, shrinking the radius doesn't change
@@ -10362,7 +10395,9 @@ public:
                             float max_alpha = (dk_norm_f > 1e-14f) ? (eff_lim_f / dk_norm_f) : 1.0f;
                             float forced_alpha = std::min(0.5f, max_alpha);
                             dK_scaled_candidate = dK * forced_alpha;
-                            dK_scaled_norm_tensor = dK_scaled_candidate.norm();
+                            dK_scaled_norm_tensor = trust_scaled_coords
+                                ? (S_inv_diag_ * dK_scaled_candidate).norm()
+                                : dK_scaled_candidate.norm();
                             curr_cand_norm = guarded_item<float>(dK_scaled_norm_tensor);
                             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                                 std::cerr << "[TRUST REGION] Same candidate on attempt " << attempt
@@ -10449,127 +10484,78 @@ public:
                 dK_scaled_norm_val = guarded_item<float>(dK_scaled_norm_tensor);
                 effective_limit_val = guarded_item<float>(effective_limit);
 
-                // FIX 2026-01-29: Correct quadratic model for scaled steps.
-                // For full step: R_new ≈ r_gmres, so ||R||²_predicted = e²||R_old||²
-                //   predicted_full = ||R_old||² - e²||R_old||² = ||R_old||²(1-e²)
-                // For scaled step αδK: R_new ≈ (1-α)R_old + α*r_gmres
-                //   ||R_new||² ≈ (1-α)²||R_old||² + α²*e²*||R_old||²  (cross-term ≈ 0)
-                //   predicted_scaled = ||R_old||² - [(1-α)² + α²*e²]*||R_old||²
-                //                    = ||R_old||² * [1 - (1-α)² - α²*e²]
-                //                    = ||R_old||² * α * [2 - α - α*e²]
-                // Previous code used linear scaling (predicted_full * α) which is incorrect.
-                float e = gmres_rel_error;  // Already clamped to [0,1]
-                // v20.14r27h: Renamed from alpha to tr_alpha to avoid shadowing
-                // the outer line-search alpha (line 3477).
+                // The EXACT linear model, in the coordinates the merit already uses.
+                // GMRES returns r_g = b_s - A_s x (already S-scaled), so the residual the
+                // model predicts at fraction a is R_lin_s = (1-a)R_s - a r_g, and the
+                // predicted reduction is ||R_s||^2 - ||R_lin_s||^2 -- no extra JVP.
+                //
+                // This REPLACES ||R||^2 a(2-a-a e^2), which approximated the same thing by
+                // dropping the cross term 2a(1-a)<R_s,r_g> and substituting the scalar
+                // gmres_rel_error for the residual VECTOR. Neither is justified for a
+                // non-normal operator, and the dropped term is not small in general. The
+                // exact form and its acceptance policy were already implemented and tested
+                // in wrf_sdirk3_trust_model.h; only the production path was still using the
+                // approximation, with a full-step cap on top that shrank the denominator and
+                // inflated rho.
                 float tr_alpha = (dK_norm_val > 1e-14f) ? (dK_scaled_norm_val / dK_norm_val) : 1.0f;
-                tr_alpha = std::min(tr_alpha, 1.0f);  // α ∈ [0,1]
-                predicted_val = res_old_val * res_old_val * tr_alpha * (2.0f - tr_alpha - tr_alpha * e * e);
+                tr_alpha = std::min(tr_alpha, 1.0f);
+                float e = gmres_rel_error;  // reported only
 
-                // v20.14r27l: Cap predicted at full-step value (1-e²)*||R||².
-                // The quadratic model α*(2-α-αe²) has a maximum at α=1/(1+e²)≈0.5
-                // for e≈1, so reducing α can INCREASE predicted — causing rho to
-                // drop artificially and reject valid steps. Cap ensures predicted
-                // never exceeds what the full step would predict.
-                float predicted_full_step = res_old_val * res_old_val * std::max(1.0f - e * e, 0.0f);
-                if (predicted_val > predicted_full_step) {
-                    predicted_val = predicted_full_step;
-                }
+                float actual_reduction = std::numeric_limits<float>::quiet_NaN();
+                wrf::sdirk3::TrustAssessment assess{};
+                assess.status = wrf::sdirk3::TrustAssessmentStatus::DegeneratePrediction;
+                assess.rho = std::numeric_limits<double>::quiet_NaN();
+                const char* trust_model_failure = nullptr;
 
-                // Guard against degenerate cases
-                if (!std::isfinite(predicted_val) || predicted_val < 0.0f) {
-                    predicted_val = 0.0f;
-                }
-
-                // CRITICAL FIX (2025-11-28): Use squared norm reduction for consistency with predicted
-                // Both actual and predicted now measure reduction in ||R||²
-                float actual_reduction = res_old_val * res_old_val - res_new_val * res_new_val;
-
-                // STABILITY FIX (2025-11-29): Clamp predicted to avoid rho explosion
-                // When GMRES rel_error ≈ 1, predicted ≈ 0 → rho = ±inf
-                float predicted_clamped = std::max(predicted_val, 1e-6f * res_old_val * res_old_val);
-                float rho_val = actual_reduction / predicted_clamped;
-
-                // PR 9F.9 P1-4 SHADOW (diagnosis-only; env flag WRF_SDIRK3_NUMERICAL_SHADOW).
-                // The production predicted reduction ||R||^2*[1-(1-a)^2-a^2*e^2] approximates
-                // the fractional-step model in TWO ways: (1) it DROPS the cross term
-                // 2a(1-a)<R_s,r_g>, valid only if R_s _|_ r_g -- not guaranteed for the
-                // non-normal WRF operator; (2) it uses the SCALAR gmres_rel_error e in place
-                // of the true residual VECTOR r_g. (Note: e is NOT unscaled -- the outer
-                // Newton hands GMRES the S-scaled system, so e is the S-scaled relative
-                // residual; the earlier "unscaled e" note was wrong.) The EXACT model needs
-                // no extra JVP: GMRES already returns r_g = b_s - A_s*x (already S-scaled),
-                // so R_lin_s(a) = (1-a)R_s - a*r_g and the predicted reduction is
-                // ||mask R_s||^2 - ||mask R_lin_s||^2 in the SAME norm as res_old_val. Emit
-                // both so the divergence can be MEASURED. Read-only; the acceptance still
-                // uses rho_val, so the numerical path is byte-identical.
-                if (numerical_shadow_enabled() &&
-                    scaling_initialized_ && S_inv_diag_.defined() &&
+                if (scaling_initialized_ && S_inv_diag_.defined() &&
                     S_inv_diag_.numel() == R.numel() &&
                     last_gmres_r_true_.defined() &&
                     last_gmres_r_true_.numel() == R.numel()) {
                     torch::NoGradGuard no_grad;
-                    // FIX (PR 9F.9.1): compute ENTIRELY in the scaled space. r_g
-                    // (last_gmres_r_true_) is ALREADY S-scaled (b_s=-S^-1 R, x=S^-1 dK),
-                    // so scale R once (R_s = S^-1 R) and do NOT re-scale r_g. The trust
-                    // region's res_old/new are ||S^-1 R . mask||_2 (L2 of scaled masked),
-                    // so match that norm and reuse res_old_val for perfect consistency.
-                    const auto R_s = S_inv_diag_ * R;
-                    const auto mask = halo_mask_initialized_ ? halo_mask_
-                                                             : torch::Tensor();
-                    const auto pred = sdirk3_trust_predicted_reduction(
+                    const auto R_s   = S_inv_diag_ * R;
+                    const auto mask  = halo_mask_initialized_ ? halo_mask_ : torch::Tensor();
+                    const auto pred  = sdirk3_trust_predicted_reduction(
                         R_s, last_gmres_r_true_, static_cast<double>(tr_alpha), mask);
                     if (!pred.ok()) {
-                        // PR 9F.9.3: a contract violation is NOT laundered into a finite
-                        // rho. Emit an explicit INVALID marker naming the reason and skip
-                        // this trust record. (The parser treats it as a shadow failure,
-                        // not evidence.)
-                        char inv[128];
-                        std::snprintf(inv, sizeof inv,
-                            "SDIRK3_TRUST_SHADOW_INVALID stage=%d iter=%d reason=%s\n",
-                            stage, newton_iter, trust_prediction_error_name(pred.error()));
-                        emit_numerical_shadow_line(inv);
+                        trust_model_failure = trust_prediction_error_name(pred.error());
                     } else {
-                        // PR 9F.9.6: the helper returns the LINEAR-MODEL reduction AND its two
-                        // merits merit_old=m(R_s), merit_model=m((1-a)R_s - a r_g). The ACTUAL
-                        // reduction is merit_old MINUS the NONLINEAR trial merit m(R_trial_s);
-                        // reuse merit_old from the helper (no recompute). The degeneracy
-                        // threshold is scaled by the LINEAR-model merits (assess_trust_model),
-                        // NOT the nonlinear trial -- a blown-up trial belongs in `actual`, and
-                        // must not inflate the linear model's cancellation floor.
-                        const double pred_exact  = pred.reduction();
-                        const double merit_old   = pred.merit_old();
-                        const double merit_model = pred.merit_model();
+                        // actual and predicted through the SAME FP64 merit authority, so rho
+                        // is not an FP32 numerator over an FP64 denominator.
                         const auto R_trial_s = S_inv_diag_ * R_trial;
                         const double merit_trial =
                             wrf::sdirk3::detail::scaled_merit_sq_unchecked(R_trial_s, mask);
-                        const double actual_exact = merit_old - merit_trial;
-                        const auto assess = assess_trust_model(
-                            pred_exact, merit_old, merit_model, actual_exact);
-
-                        // PR 9F.9.6 (P1): emit the ACTUAL production ratio, not a recomputed
-                        // one. Production accept/reject uses rho_val = actual_reduction /
-                        // predicted_clamped with predicted_clamped = max(predicted_val,
-                        // 1e-6*||R||^2). The old rho_heur re-divided by predicted_val (no
-                        // clamp), so it could differ from the real decision by many orders
-                        // when predicted_val is tiny. Emit the production numerator and
-                        // denominator too so the decision is reproducible from the record.
-                        char tb[512];  // 15 fields incl. %.6e / nan / inf -- generous margin
-                        std::snprintf(tb, sizeof tb,
-                            "SDIRK3_TRUST_SHADOW stage=%d iter=%d alpha=%.4f e=%.4e "
-                            "actual_prod=%.6e pred_prod=%.6e pred_clamped=%.6e rho_prod=%.4f "
-                            "actual_exact=%.6e pred_exact=%.6e merit_old=%.6e "
-                            "merit_model=%.6e rho_exact=%.4f tol=%.3e status=%s\n",
-                            stage, newton_iter, tr_alpha, e,
-                            static_cast<double>(actual_reduction),
-                            static_cast<double>(predicted_val),
-                            static_cast<double>(predicted_clamped),
-                            static_cast<double>(rho_val),
-                            assess.actual, pred_exact, merit_old, merit_model,
-                            assess.rho, assess.prediction_tolerance,
-                            trust_assessment_status_name(assess.status));
-                        emit_numerical_shadow_line(tb);
+                        assess = assess_trust_model(pred.reduction(), pred.merit_old(),
+                                                    pred.merit_model(),
+                                                    pred.merit_old() - merit_trial);
+                        actual_reduction = static_cast<float>(assess.actual);
                     }
+                } else {
+                    // Name the condition that failed. "inputs_unavailable" alone sent me
+                    // guessing twice.
+                    static char why[160];
+                    std::snprintf(why, sizeof why,
+                        "scaling_init=%d S_inv_def=%d S_inv_n=%lld r_g_def=%d r_g_n=%lld R_n=%lld",
+                        scaling_initialized_ ? 1 : 0,
+                        S_inv_diag_.defined() ? 1 : 0,
+                        S_inv_diag_.defined() ? (long long)S_inv_diag_.numel() : -1LL,
+                        last_gmres_r_true_.defined() ? 1 : 0,
+                        last_gmres_r_true_.defined() ? (long long)last_gmres_r_true_.numel() : -1LL,
+                        (long long)R.numel());
+                    trust_model_failure = why;
                 }
+
+                // rho is meaningful ONLY for a descent model. Anything else leaves it
+                // non-finite, which the acceptance test below already treats as a reject --
+                // the trust region then shrinks and retries, which is the right response to
+                // "the model cannot be trusted here", and needs no separate branch.
+                predicted_val = static_cast<float>(assess.predicted);
+                float rho_val = static_cast<float>(assess.rho);
+                if (trust_model_failure && wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+                    std::cerr << "[TRUST REGION] no usable linear model ("
+                              << trust_model_failure << "); rejecting this attempt"
+                              << std::endl;
+                }
+
 
                 // force_accept removed (2026-02-16 GR v8 F6: computed but unused since 2026-01-31)
                 float rho_accept_threshold = 0.25f;
@@ -10594,9 +10580,10 @@ public:
                               << ", gmres_rel_error=" << gmres_rel_error
                               << " (raw=" << gmres_raw_rel_error << ")"
                               << ", ||dK||=" << dK_norm_val
+                              << ", ||dK||_raw=" << guarded_item<float>(dK_norm_raw)
                               << ", ||dK_scaled||=" << dK_scaled_norm_val
                               << ", actual=" << actual_reduction
-                              << ", predicted=" << predicted_clamped
+                              << ", predicted=" << predicted_val
                               << ", rho=" << rho_val
                               << ", rho_accept_threshold=" << rho_accept_threshold
                               << ", rho_force_accept_min=" << rho_force_accept_min
@@ -10631,22 +10618,6 @@ public:
                 // Trust-region should REJECT and shrink, not force-accept.
                 if (!std::isfinite(rho_val)) {
                     accept_step = false;  // Non-finite rho: always reject
-                } else if (it.failure_stands()) {
-                    // v20.14r27h: GMRES diverged (raw > 1) or essentially failed (e ≥ 0.999).
-                    // When e ≈ 1, the correction dK carries no useful signal — the predicted
-                    // model is unreliable and tiny α steps would be accepted spuriously.
-                    //
-                    // R13.24 (external review P0-1): this read `it.linear.total_failure_signal`
-                    // directly, so an arbitration-ADMITTED candidate was refused here on the very
-                    // signal its admission had reconsidered -- it entered the loop and lost every
-                    // attempt. Reading the single effective veto is what makes admission mean
-                    // anything; with the arbitration off the two are identical.
-                    accept_step = false;
-                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                        std::cerr << "[TRUST REGION] GMRES failed (rel_error="
-                                  << gmres_rel_error << ", raw=" << gmres_raw_rel_error
-                                  << "), rejecting" << std::endl;
-                    }
                 } else if (gmres_rel_error > 0.99f) {
                     // v20.14r35: Near-fail GMRES (0.99 < e < 0.999). The step carries
                     // almost no signal. Require minimum actual residual decrease.
