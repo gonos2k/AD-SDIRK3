@@ -519,6 +519,7 @@ struct StageFailureSignals {
     // call "causal order" and is not.
     int    first_krylov_failure_iter = -1;
     int    first_rejection_iter = -1;
+    float  trust_radius_final = -1.0f;
     int    argmin_residual_iter = -1;
     // The two readings of the production total-failure
     // predicate and the rule that was in force. They were computed in the solver and read by
