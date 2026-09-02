@@ -9444,6 +9444,7 @@ vertical_coefficients:
                               << (sig.all_near_worst_met_tolerance ? 1 : 0)
                               << " near_worst_mech_ambiguous="
                               << (sig.near_worst_mechanism_ambiguous ? 1 : 0)
+                              << " trust_radius_final=" << sig.trust_radius_final
                               << " newton_exit="
                               << wrf::sdirk3::newton_termination_name(sig.newton_termination)
                               << " exit_krylov_iter=" << sig.exit_krylov_iter
@@ -13529,6 +13530,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     last_stage_signals_.rejected_steps = stats.rejected_steps;
     last_stage_signals_.first_krylov_failure_iter = stats.first_krylov_failure_iter;
     last_stage_signals_.first_rejection_iter = stats.first_rejection_iter;
+    last_stage_signals_.trust_radius_final = stats.trust_radius_final;
     last_stage_signals_.argmin_residual_iter = stats.argmin_residual_iter;
     last_stage_signals_.total_failure_vs_b_count = stats.total_failure_vs_b_count;
     last_stage_signals_.total_failure_vs_r0_count = stats.total_failure_vs_r0_count;

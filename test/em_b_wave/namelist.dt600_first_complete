@@ -1,10 +1,21 @@
 ! The exact SDIRK3 settings under which em_b_wave first completed dt=600 steps.
 ! Merge these into &dynamics of namelist.input; everything not listed is the Registry default.
 !
-! MEASURED 2026-08-31 on AD-SDIRK3 main @ 1139d169 (PR #194): two 600 s steps complete
-! (model clock 00:20:00), then step 3 stage 4 produces a NaN. This is NOT a stable
-! integration -- see the PR #194 discussion. The file exists so the result is reproducible,
-! not because the configuration is recommended.
+! MEASURED 2026-09-02 on main @ f6c6ac7 (after PR #195 made the trust region the only
+! step-acceptance path): two 600 s steps complete (model clock 00:20:00) and ALL EIGHT
+! Newton solves converge to newton_tol -- 49/39/32/46/33/39/47/32 iterations. Step 3
+! stage 4 then fails with a non-finite entry residual.
+!
+! Three settings differ from the first version of this file, each measured:
+!   newton_tol 0.02 -> 0.005      0.02 sat just above the reachable residual, so solves
+!                                 "converged" by grazing it; 0.005 is reached honestly.
+!   max_newton_iter 24 -> 64      24 stopped solves mid trust-radius recovery, which reads
+!                                 as a plateau and is not one (see PR #195 discussion).
+!   stage3_gmres_restart 0 -> 100 0 fell back to the default 10, so stages 3 AND 4 threw
+!                                 the Krylov subspace away every 10 vectors while stage 2
+!                                 kept 100. gmres_rel 0.925 -> 0.28 for those stages.
+!
+! It is still NOT a stable integration. The file records what reproduces the result.
 !
 ! "mode 3" here is sdirk3_imex_split_mode. sdirk3_mass_coordinate_mode is NOT set, so it
 ! takes the Registry default 1 (WRFParity). sdirk3_nk_trust_region is also unset -> .false.
@@ -18,8 +29,8 @@
  sdirk3_precond_type                 = 0,
  sdirk3_precond_mu_coupling_damping  = 0.1,
 
- sdirk3_max_newton_iter              = 24,
- sdirk3_newton_tol                   = 0.02,
+ sdirk3_max_newton_iter              = 64,
+ sdirk3_newton_tol                   = 0.005,
 
  sdirk3_gmres_restart                = 10,
  sdirk3_max_krylov_iter              = 2,
@@ -30,8 +41,8 @@
  sdirk3_stage2_gmres_restart         = 100,
  sdirk3_stage2_max_krylov_restarts   = 1,
  sdirk3_stage2_krylov_tol            = 0.0,
- sdirk3_stage3_gmres_restart         = 0,
- sdirk3_stage3_max_krylov_restarts   = 0,
+ sdirk3_stage3_gmres_restart         = 100,
+ sdirk3_stage3_max_krylov_restarts   = 1,
  sdirk3_stage3_krylov_tol            = 0.0,
 
  sdirk3_inn_warmstart_enable         = .true.,

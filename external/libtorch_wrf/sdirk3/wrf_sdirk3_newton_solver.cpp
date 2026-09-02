@@ -11068,6 +11068,7 @@ public:
 
         // Failed to converge — record actual iterations performed, not max.
         stats_.newton_iterations = actual_newton_iters;
+        stats_.trust_radius_final = trust_radius_;
         stats_.converged = false;
         // R13.17 (external review P0-3): only if no site inside the loop already said why, AND
         // the loop actually reached its bound.

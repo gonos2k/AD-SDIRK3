@@ -433,6 +433,10 @@ public:
         // never happened in this solve.
         int   first_krylov_failure_iter = -1;
         int   first_rejection_iter = -1;
+        // The trust radius the loop ended on. `budget_exhausted` alone cannot tell a
+        // solve that ran out of iterations while DESCENDING from one frozen at the
+        // radius floor -- same label, opposite fix. This is the number that separates them.
+        float trust_radius_final = -1.0f;
         int   argmin_residual_iter = -1;
         float min_residual_seen = std::numeric_limits<float>::infinity();
         // R13.11 (referee C7): both readings of the production total-failure predicate, so the
