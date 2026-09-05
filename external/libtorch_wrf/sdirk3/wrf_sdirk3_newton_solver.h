@@ -636,7 +636,10 @@ public:
     /**
      * Set physics-based scaling vector for GMRES conditioning.
      * Called by tile solver before each solve_stage when scaling_mode=PHYSICS.
-     * Overwrites S_diag_/S_inv_diag_ and prevents R₀-based rebuild.
+     * Owns a packed FP32/FP64 snapshot matching the initialized layout. The scale
+     * and its reciprocal must be finite and positive. A rejected replacement
+     * leaves the previous pair unchanged. Device/dtype must match the stage state.
+     * Installing a valid scale prevents R₀-based rebuild.
      */
     void set_physics_scaling(const torch::Tensor& S_diag);
 

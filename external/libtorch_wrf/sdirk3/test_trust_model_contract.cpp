@@ -11,6 +11,7 @@
 #include "wrf_sdirk3_trust_model.h"
 #include "wrf_sdirk3_newton_solver.h"
 #include "wrf_sdirk3_config.h"
+#include "wrf_sdirk3_first_failure.h"
 
 #include <torch/torch.h>
 #include <cmath>
@@ -104,6 +105,58 @@ run_linear_newton(float direct_u, bool provide_scale, bool exact_layout = true,
         std::cerr.rdbuf(saved_stream);
         throw;
     }
+}
+
+static void test_physics_scaling() {
+    using namespace wrf::sdirk3;
+    const auto saved_config = g_sdirk3_config;
+    g_sdirk3_config.debug_level = 0;
+    g_sdirk3_config.precond_type = 0;
+    g_sdirk3_config.direct_u_solve_thresh = 0;
+    WRFNewtonKrylovOptions options;
+    options.nx = options.ny = options.nz = 1;
+    options.nx_u = options.ny_v = options.nz_w = 2;
+    options.use_preconditioner = false;
+    options.use_adaptive_tolerances = false;
+    options.max_newton_iter = 12;
+    options.gmres_restart = 10;
+    options.max_krylov_iter = 20;
+    options.newton_tol = options.krylov_tol = 1e-6f;
+    const auto layout = StateLayout::from_grid_dims(1, 1, 1, 2, 2, 2);
+    for (auto dtype : {torch::kFloat32, torch::kFloat64}) {
+        auto state = torch::ones({layout.total_size}, dtype);
+        WRFNewtonKrylovSolver solver(options);
+        auto scale = torch::full_like(state, 2.0);
+        solver.set_physics_scaling(scale);
+        scale.fill_(std::numeric_limits<double>::infinity());
+        const double tiny = dtype == torch::kFloat32
+            ? std::numeric_limits<float>::denorm_min()
+            : std::numeric_limits<double>::denorm_min();
+        const std::vector<torch::Tensor> invalid = {
+            {}, torch::empty({0}, dtype), torch::ones({layout.total_size, 1}, dtype),
+            torch::ones({layout.total_size - 1}, dtype), state.to(torch::kInt32),
+            torch::zeros_like(state), -state,
+            torch::full_like(state, std::numeric_limits<double>::quiet_NaN()),
+            scale, torch::full_like(state, tiny)};
+        for (const auto& candidate : invalid) {
+            bool rejected = false;
+            try { solver.set_physics_scaling(candidate); }
+            catch (const c10::Error&) { rejected = true; }
+            check(rejected, "invalid scale is rejected before replacing the installed pair");
+        }
+        const auto rhs = [](const torch::Tensor& x) { return 0.9 * x; };
+        const auto solved = solver.solve_stage_with_status(state, {}, rhs, 1, 1, 1);
+        const double physical_residual =
+            (solved.K - rhs(state + solved.K)).to(torch::kFloat64).norm().item<double>();
+        check(solved.converged && physical_residual < 1e-4,
+              "owned scale survives caller mutation/rejected replacements and solves the physical equation");
+    }
+    WRFNewtonKrylovSolver no_layout{WRFNewtonKrylovOptions{}};
+    bool rejected = false;
+    try { no_layout.set_physics_scaling(torch::ones({layout.total_size})); }
+    catch (const c10::Error&) { rejected = true; }
+    check(rejected, "external scale requires an initialized exact state layout");
+    g_sdirk3_config = saved_config;
 }
 
 int main() {
@@ -543,7 +596,25 @@ int main() {
               "negative squared-norm merits are invalid input");
     }
 
-    const int kExpected = 60;
+    test_physics_scaling();
+
+    // Recovery must use the same FP64 merit even at the actual FP32 gate boundary.
+    {
+        using namespace wrf::sdirk3;
+        auto before = torch::tensor({100000000.0f, 100000000.0f});
+        auto after = torch::tensor({97999904.0f, 98000104.0f});
+        RecoveryAcceptance a;
+        a.s_merit_measured = true;
+        a.ratio_gate = static_cast<float>(0.98);
+        a.s_before = before.norm().item<float>();
+        a.s_after = after.norm().item<float>();
+        check(recovery_step_is_acceptable(a), "fixture: native FP32 reduction admits the boundary candidate");
+        a.s_before = std::sqrt(wrf::sdirk3::detail::scaled_merit_sq_unchecked(before, {}));
+        a.s_after = std::sqrt(wrf::sdirk3::detail::scaled_merit_sq_unchecked(after, {}));
+        check(!recovery_step_is_acceptable(a), "FP64 trust merit rejects the insufficient recovery decrease");
+    }
+
+    const int kExpected = 85;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;

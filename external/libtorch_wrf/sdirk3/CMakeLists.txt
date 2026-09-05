@@ -169,7 +169,6 @@ install(TARGETS wrf_sdirk3_lib DESTINATION lib)
 set(WRF_SDIRK3_INSTALL_HEADER_CANDIDATES
     wrf_sdirk3_state_vector.h
     wrf_sdirk3_zero_copy_interface.h
-    wrf_sdirk3_gmres_fixed.h
     wrf_sdirk3_newton_krylov_fixed.h
     wrf_sdirk3_jvp_router.h
     wrf_sdirk3_vertical_preconditioner.h
@@ -495,6 +494,28 @@ add_test(NAME ARK324_Production_Composition COMMAND test_ark324_composition)
 add_executable(test_krylov_budget_config tests/test_krylov_budget_config.cpp)
 target_link_libraries(test_krylov_budget_config PRIVATE wrf_sdirk3::core)
 add_test(NAME Krylov_Budget_Config COMMAND test_krylov_budget_config)
+
+add_executable(test_config_numeric_contract tests/test_config_numeric_contract.cpp)
+target_link_libraries(test_config_numeric_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Config_Numeric_Contract COMMAND test_config_numeric_contract)
+
+add_executable(test_scalar_advection_contract tests/test_scalar_advection_contract.cpp)
+target_link_libraries(test_scalar_advection_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Scalar_Advection_Contract COMMAND test_scalar_advection_contract)
+
+add_executable(test_ad_safe_math tests/test_ad_safe_math.cpp)
+target_link_libraries(test_ad_safe_math PRIVATE wrf_sdirk3::core)
+add_test(NAME AD_Safe_Math_Contract COMMAND test_ad_safe_math)
+
+add_executable(test_fnm_fnp_geometry_contract
+    tests/test_fnm_fnp_geometry_contract.cpp tests/test_fnm_fnp_rhs_contract.cpp)
+target_link_libraries(test_fnm_fnp_geometry_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME FNM_FNP_Geometry_Contract COMMAND test_fnm_fnp_geometry_contract)
+
+add_executable(test_rhs_preconditioner_contract tests/test_rhs_preconditioner_contract.cpp)
+target_link_libraries(test_rhs_preconditioner_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME RHS_Preconditioner_Contract COMMAND test_rhs_preconditioner_contract)
+set_tests_properties(RHS_Preconditioner_Contract PROPERTIES TIMEOUT 180)
 
 add_executable(test_full_tile_step tests/test_full_tile_step.cpp)
 target_link_libraries(test_full_tile_step PRIVATE wrf_sdirk3::core)

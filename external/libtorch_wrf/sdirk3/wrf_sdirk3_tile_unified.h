@@ -736,7 +736,12 @@ public:
     // Set non-hydrostatic mode flag
     void setNonHydrostatic(bool non_hydrostatic) { non_hydrostatic_ = non_hydrostatic; }
     
-    // Set vertical interpolation coefficients for non-hydrostatic dpn
+    // Set vertical interpolation coefficients for non-hydrostatic dpn.
+    // The raw-pointer ABI has no length parameter: callers must provide at
+    // least nz_ entries. Storage is kept at nz_w_ so w-staggered RHS paths
+    // never silently select the simple-average fallback; the final endpoint
+    // is an explicit zero because WRF's interior fnm/fnp formula does not
+    // define that boundary slot and the corresponding vertical gradient is 0.
     void setVerticalInterpolationCoefficients(const float* fnm, const float* fnp,
                                             float cf1, float cf2, float cf3);
     
@@ -2276,8 +2281,8 @@ private:
                               const torch::Tensor& q_im1, const torch::Tensor& q_i,
                               const torch::Tensor& q_ip1, const torch::Tensor& q_ip2,
                               const torch::Tensor& vel);
-    torch::Tensor flux3_upwind(const torch::Tensor& q_im1, const torch::Tensor& q_i,
-                              const torch::Tensor& q_ip1, const torch::Tensor& q_ip2,
+    torch::Tensor flux3_upwind(const torch::Tensor& q_im2, const torch::Tensor& q_im1,
+                              const torch::Tensor& q_i, const torch::Tensor& q_ip1,
                               const torch::Tensor& vel);
     torch::Tensor flux2_centered(const torch::Tensor& q_im1, const torch::Tensor& q_i,
                                 const torch::Tensor& vel);
@@ -2308,7 +2313,6 @@ private:
     
     // Diffusion and mixing helpers
     torch::Tensor compute_horizontal_diffusion(const torch::Tensor& f, float Kh, float rdx, float rdy);
-    torch::Tensor compute_horizontal_diffusion_3d(const torch::Tensor& f, const torch::Tensor& Kh, float rdx, float rdy);
     // PARITY FIX 2025-12-07: Added msfvx and mut parameters for Fortran parity
     torch::Tensor compute_horizontal_diffusion_scalar_wrf(const torch::Tensor& var, const torch::Tensor& Kh,
                                                           float rdx, float rdy, const torch::Tensor& msftx,
@@ -2357,7 +2361,6 @@ private:
     torch::Tensor compute_vertical_mixing_scalar(const torch::Tensor& scalar, const torch::Tensor& Kv_mass, const torch::Tensor& rdnw,
                                                 const torch::Tensor& rho, const torch::Tensor& theta_full, const torch::Tensor& mu_full,
                                                 bool is_qv, bool mix_full_fields, const torch::Tensor& qv_base);
-    torch::Tensor compute_numerical_filter(const torch::Tensor& f, float alpha);
     
     // Deformation tensor components (for stress tensor calculation)
     torch::Tensor compute_defor11(const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w, 

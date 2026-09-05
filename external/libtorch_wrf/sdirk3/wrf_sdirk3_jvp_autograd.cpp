@@ -103,8 +103,10 @@ torch::Tensor compute_jvp_finite_diff(
 torch::Tensor compute_vjp_autograd(
     const std::function<torch::Tensor(const torch::Tensor&)>& F,
     const torch::Tensor& u,
-    const torch::Tensor& v,
-    int halo_width) {  // Default argument only in header
+    const torch::Tensor& v) {
+    // Build the reverse graph even when called under an ambient NoGradGuard;
+    // restore the caller's mode when this helper returns.
+    torch::AutoGradMode enable_grad(true);
     
     // Track performance
     // FIX Round160: Gate periodic log with debug_level >= 2
@@ -120,30 +122,28 @@ torch::Tensor compute_vjp_autograd(
         anomaly_guard.emplace();
     }
 
-    // Original autograd implementation (accurate but slow)
-    // FIX 2025-01-25: Use detach().clone() to ensure u_var is a fresh leaf tensor
-    // - detach(): Prevents upstream graph from being pulled into JVP computation
-    // - clone(): Avoids in-place modification of original tensor
-    // - requires_grad_(true): Makes u_var a leaf that tracks gradients
-    // For higher-order derivatives (4DVAR), use ad_strict_mode to preserve upstream graph.
+    // Isolate the input by default; strict mode preserves its upstream graph.
+    // This helper returns a first-order VJP (create_graph=false below).
     torch::Tensor u_var = g_sdirk3_config.ad_strict_mode
         ? u.clone().requires_grad_(true)           // Preserves upstream graph for higher-order AD
-        : u.detach().clone().requires_grad_(true); // Isolates JVP (default for Newton-Krylov)
-    torch::Tensor v_normalized = v;
-    
-    // Create a wrapper that properly handles gradients
-    [[maybe_unused]] auto F_wrapper = [&F](const torch::Tensor& x) -> torch::Tensor {
-        return F(x);
-    };
-    
-    // PyTorch C++ API doesn't have torch::jvp, use reverse-mode autodiff
+        : u.detach().clone().requires_grad_(true);
+
     torch::Tensor F_u = F(u_var);
+
+    TORCH_CHECK(F_u.defined(), "compute_vjp_autograd: function returned undefined output");
+    TORCH_CHECK(F_u.sizes() == v.sizes() && F_u.device() == v.device() &&
+                F_u.scalar_type() == v.scalar_type(),
+                "compute_vjp_autograd: cotangent shape/device/dtype mismatch");
+
+    // A detached constant output is a valid zero-Jacobian function.  Calling
+    // autograd::grad on it throws before allow_unused can apply, so return the
+    // correctly input-shaped zero VJP explicitly.
+    if (!F_u.requires_grad()) {
+        return torch::zeros_like(u_var, u_var.options().requires_grad(false));
+    }
     
-    // Compute JVP using reverse-mode autodiff
-    // NOTE 2025-01-25: allow_unused=true policy
-    // If F(u) doesn't depend on some input elements (e.g., boundary values excluded
-    // from physics), autograd returns undefined. We convert undefined → zeros.
-    // This is the correct mathematical behavior: ∂F/∂u_i = 0 for unused inputs.
+    // If the output is independent of the whole input, autograd may return an
+    // undefined gradient. Its VJP is the input-shaped zero vector.
     auto grad_result = torch::autograd::grad(
         {F_u},           // outputs
         {u_var},         // inputs
@@ -159,7 +159,7 @@ torch::Tensor compute_vjp_autograd(
         // Undefined result means F doesn't depend on input → gradient is zero
         // This is mathematically correct, not an error
         // FIX 2025-01-25: Use requires_grad(false) to prevent graph pollution
-        return torch::zeros(v.sizes(), v.options().requires_grad(false));
+        return torch::zeros_like(u_var, u_var.options().requires_grad(false));
     }
 }
 

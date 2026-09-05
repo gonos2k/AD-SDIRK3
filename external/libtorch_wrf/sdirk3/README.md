@@ -10,11 +10,8 @@ active investigation (see the repository root `README.md` and `doc/`).
 
 - **Newton–Krylov solver** with Eisenstat–Walker forcing and a trust-region
   fallback (`wrf_sdirk3_newton_solver.cpp`).
-- **FGMRES** (flexible, right-preconditioned) as the linear solver. The earlier
-  fixed-preconditioner GMRES was replaced during the full-repo review; the
-  legacy `wrf_sdirk3_gmres_fixed.h` / `wrf_sdirk3_gmres_ad_safe.h` headers
-  remain in-tree for history but the production Krylov loop is the FGMRES
-  implementation inside the Newton solver.
+- **FGMRES** (flexible, right-preconditioned) for the production Newton loop.
+  The unused fixed-GMRES header has been removed.
 - **JVP** via forward-mode autodiff (dual numbers) with an explicit,
   counted finite-difference fallback (`wrf_sdirk3_jvp_autograd.{cpp,h}`,
   `wrf_sdirk3_jvp_fwad_or_fd.h`). The FGMRES matvec is
@@ -181,9 +178,11 @@ dynamic-state violations; absent env leaves every operand untouched.
 
 ### 4DVAR operation note
 
-For long windows, use `retain_graph_for_adjoint = .false.` with trajectory/checkpoint
-replay (`save_trajectory`, `checkpoint_interval`). Retaining the full graph is intended
-for short debug windows only.
+`save_trajectory` retains sampled stage-1 states. The legacy replay applies an
+implicit-only transpose at those states; it is not the derivative of the full ARK
+trajectory. With `retain_graph_for_adjoint = .true.`, the supported dry, single-tile
+mode-3 path exposes the last completed tile-step pullback. Neither API currently
+provides a complete WRF/4D-Var window adjoint.
 
 When observation-aware replay is enabled, enforce endpoint semantics:
 - `x0` (window-start state) must be present for replay-enabled windows.
@@ -191,12 +190,9 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 58-test CTest inventory** (pinned by
-`.github/ci/expected_ctest_names.txt`; any drift fails hosted CI). This number had
-drifted to 37 while the pinned file held 61: the CI gate that derives the claim from
-the file it cites was reading only the repo-root README, so this copy of the same claim
-was never checked. It is checked now. The breakdown below is a guide to the categories,
-not an inventory — the pinned file is the inventory:
+The CMake tree registers an **exact 70-test CTest inventory**, pinned by
+`.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
+the pinned file defines the inventory.
 
 - core contracts (geometry matrix, MSF stats, VJP semantics, FGMRES
   contract, WRMS gate metric, acoustic-substep AD, the W-damping forward-mode

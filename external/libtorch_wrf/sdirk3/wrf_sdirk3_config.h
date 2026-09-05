@@ -1399,71 +1399,7 @@ struct SDIRK3Config {
     // │   }                                                                    │
     // └────────────────────────────────────────────────────────────────────────┘
     //
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ 6. NON-AD WORKSPACE REUSE PATH SEPARATION (FUTURE API)                 │
-    // ├────────────────────────────────────────────────────────────────────────┤
-    // │ CONTEXT:                                                               │
-    // │   Current TensorFactory::create_*() uses use_pool=true by default.     │
-    // │   Pooled tensors are pre-allocated and reused, saving allocation time. │
-    // │   However, pooled tensors cannot be used in AD paths because:          │
-    // │     1. Reuse breaks gradient tape continuity                           │
-    // │     2. In-place ops on pooled tensors cause grad_fn corruption         │
-    // │                                                                        │
-    // │ CURRENT WORKAROUND:                                                    │
-    // │   Callers must manually specify use_pool=false for AD paths:           │
-    // │     auto tensor = TensorFactory::create_3d(ny, nz, nx, opts, false);   │
-    // │                                                                        │
-    // │ PROPOSED FUTURE API:                                                   │
-    // │   Split into explicit function variants:                               │
-    // │                                                                        │
-    // │   // For non-AD paths (workspace, temporaries)                         │
-    // │   auto ws = TensorFactory::create_workspace_3d(ny, nz, nx, opts);      │
-    // │                                                                        │
-    // │   // For AD paths (gradient-tracked tensors)                           │
-    // │   auto t = TensorFactory::create_ad_3d(ny, nz, nx, opts);              │
-    // │                                                                        │
-    // │ BENEFITS:                                                              │
-    // │   - Compile-time clarity: API name documents intent                    │
-    // │   - Static analysis: Can grep for misuse patterns                      │
-    // │   - Default safety: create_ad_*() never uses pool                      │
-    // │                                                                        │
-    // │ MIGRATION PATH:                                                        │
-    // │   1. Add new create_workspace_*() and create_ad_*() functions          │
-    // │   2. Deprecate use_pool parameter on create_*() functions              │
-    // │   3. Grep for create_3d(..., true) → create_workspace_3d(...)          │
-    // │   4. Grep for create_3d(..., false) → create_ad_3d(...)                │
-    // │   5. Remove use_pool parameter in next major version                   │
-    // │                                                                        │
-    // │ TEST PLAN (OPT Pass34):                                                │
-    // │   Before implementing, validate with these autograd test cases:        │
-    // │                                                                        │
-    // │   TEST 1: AD path gradient flow                                        │
-    // │     auto t = create_ad_3d(ny, nz, nx, opts);                           │
-    // │     t.requires_grad_(true);                                            │
-    // │     auto y = t.sum();                                                  │
-    // │     y.backward();                                                      │
-    // │     ASSERT(t.grad().defined());  // grad must exist                    │
-    // │     ASSERT(t.grad().sum().item<float>() == ny*nz*nx); // all ones      │
-    // │                                                                        │
-    // │   TEST 2: Workspace path no grad pollution                             │
-    // │     auto ws = create_workspace_3d(ny, nz, nx, opts);                   │
-    // │     ASSERT(!ws.requires_grad());  // no grad tracking                  │
-    // │     ws.fill_(1.0f);               // in-place op should not fail       │
-    // │     release(ws);                  // should return to pool             │
-    // │     auto ws2 = create_workspace_3d(ny, nz, nx, opts);                  │
-    // │     ASSERT(ws2.sum().item<float>() == 0.0f);  // zeroed on reuse       │
-    // │                                                                        │
-    // │   TEST 3: Mixed path isolation                                         │
-    // │     auto t = create_ad_3d(...);  t.requires_grad_(true);               │
-    // │     auto ws = create_workspace_3d(...);                                │
-    // │     ws = t * 2;  // intermediate result in workspace                   │
-    // │     auto y = ws.sum();                                                 │
-    // │     y.backward();                                                      │
-    // │     ASSERT(t.grad().defined());  // AD path still has grad             │
-    // │     // ws should not retain grad_fn after release                      │
-    // │                                                                        │
-    // │ STATUS: TEST PLAN READY - IMPLEMENTATION PENDING                       │
-    // └────────────────────────────────────────────────────────────────────────┘
+    // Section 6 removed: it described a nonexistent TensorFactory API and a speculative migration plan.
     //
     // ┌────────────────────────────────────────────────────────────────────────┐
     // │ 7. InferenceMode vs NoGradGuard SELECTION GUIDE (OPT Pass34)           │

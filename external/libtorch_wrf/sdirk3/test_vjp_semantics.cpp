@@ -31,6 +31,7 @@
 //     wrf_sdirk3_config.cpp -I. $(torch include/lib flags) -o t && ./t
 
 #include "wrf_sdirk3_jvp_autograd.h"
+#include "wrf_sdirk3_imex_adjoint_linear_solve.h"
 
 #include <torch/torch.h>
 
@@ -122,6 +123,76 @@ int main() {
         expect_close(vjp, ATv,
                      "compute_vjp_autograd == A^T v even with FD toggle ON (dispatch removed)");
         set_use_finite_diff_jvp(false);
+    }
+
+    // A detached constant is a valid zero-Jacobian operator.  The reverse
+    // helpers must handle it explicitly because autograd::grad cannot operate
+    // on an output with no grad_fn, even with allow_unused=true.
+    {
+        auto constant = [](const torch::Tensor& x) {
+            return torch::zeros_like(x);
+        };
+        auto zero = compute_vjp_autograd(constant, u, v);
+        expect_close(zero, torch::zeros_like(u),
+                     "compute_vjp_autograd detached constant == zero");
+        if (zero.requires_grad()) {
+            std::printf("FAIL  detached constant VJP unexpectedly requires grad\n");
+            ++g_failures;
+        } else {
+            std::printf("PASS  detached constant VJP has no grad edge\n");
+        }
+        bool threw = false;
+        try {
+            (void)compute_vjp_autograd(constant, u, torch::zeros({3}, u.options()));
+        } catch (const c10::Error&) {
+            threw = true;
+        }
+        if (threw) {
+            std::printf("PASS  detached constant rejects cotangent shape mismatch\n");
+        } else {
+            std::printf("FAIL  detached constant accepted cotangent shape mismatch\n");
+            ++g_failures;
+        }
+
+        auto captured = torch::tensor(7.0f).requires_grad_(true);
+        auto independent = [&captured](const torch::Tensor& x) {
+            return captured.expand_as(x);
+        };
+        auto independent_vjp = wrf::sdirk3::compute_vjp_reverse_mode(
+            independent, u, v);
+        expect_close(independent_vjp, torch::zeros_like(u),
+                     "reverse VJP independent of input == input-shaped zero");
+
+        auto rectangular = [](const torch::Tensor& x) {
+            return torch::zeros({3}, x.options());
+        };
+        auto rectangular_vjp = compute_vjp_autograd(
+            rectangular, u, torch::zeros({3}));
+        if (rectangular_vjp.sizes() == u.sizes() &&
+            torch::count_nonzero(rectangular_vjp).item<int>() == 0) {
+            std::printf("PASS  rectangular constant VJP is input-shaped zero\n");
+        } else {
+            std::printf("FAIL  rectangular constant VJP shape/value\n");
+            ++g_failures;
+        }
+    }
+
+    // The production transpose solve can invoke a VJP while diagnostics hold
+    // NoGradGuard.  A linear graph must still be recorded in that context;
+    // only a genuinely detached output is a zero Jacobian.
+    {
+        torch::NoGradGuard no_grad;
+        auto linear = [](const torch::Tensor& x) { return 3.0f * x; };
+        auto got = compute_vjp_autograd(linear, u, v);
+        expect_close(got, 3.0f * v,
+                     "compute_vjp_autograd re-enables graph under NoGradGuard");
+        auto got_reverse = wrf::sdirk3::compute_vjp_reverse_mode(linear, u, v);
+        expect_close(got_reverse, 3.0f * v,
+                     "compute_vjp_reverse_mode re-enables graph under NoGradGuard");
+        auto zero = compute_vjp_autograd(
+            [](const torch::Tensor& x) { return torch::zeros_like(x); }, u, v);
+        expect_close(zero, torch::zeros_like(u),
+                     "detached constant remains zero under NoGradGuard");
     }
 
     if (g_failures == 0) {

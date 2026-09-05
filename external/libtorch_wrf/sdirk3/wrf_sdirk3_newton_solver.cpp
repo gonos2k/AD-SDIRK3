@@ -5593,37 +5593,22 @@ public:
                 s_measured = S_inv_diag_.defined() &&
                              S_inv_diag_.numel() == R_ref.numel();
                 if (s_measured) {
-                    // R13.24 (external review P1-1): the SAME quantity the trust region judges by.
-                    // This computed ||S^-1 R|| unmasked while trust acceptance zeroes the halo
-                    // first (masked_fill_) -- two different numbers under one name, so a candidate
-                    // could pass here and fail there. At np=1 with no halo mask the two coincide,
-                    // which is why the divergence stayed invisible; it would appear the moment
-                    // this runs multi-tile.
-                    // R13.25 (external review, section 11): the SAME reduction the trust region
-                    // uses. This reduced in FP64 while trust acceptance takes the norm in the
-                    // tensor's own dtype (`guarded_item<float>(R_scaled.norm())`, FP32). Same
-                    // formula, different arithmetic -- and at the strict `after < before` boundary
-                    // that decides admission, a roundoff-level disagreement decides differently.
-                    // The entry-mismatch path is the sharp case: trust never re-checks it, so an
-                    // FP64-only decrease became a full-step acceptance.
                     auto sb = (S_inv_diag_ * R_ref);
                     auto sa = (S_inv_diag_ * R_cand);
+                    torch::Tensor active_mask;
                     if (halo_mask_initialized_) {
-                        if (halo_mask_.defined() && halo_mask_.numel() == sb.numel()) {
-                            const auto halo = halo_mask_.to(torch::kBool).logical_not();
-                            sb = sb.masked_fill(halo, 0.0);
-                            sa = sa.masked_fill(halo, 0.0);
+                        if (halo_mask_.defined() && halo_mask_.sizes() == sb.sizes() &&
+                            halo_mask_.device() == sb.device()) {
+                            active_mask = halo_mask_;
                             s_halo_status = wrf::sdirk3::HaloMaskStatus::Applied;
                         } else {
-                            // R13.25 (section 7): a mask is in play and this one cannot use it, so
-                            // the number below is NOT the quantity trust judges by. Say so rather
-                            // than returning it as if it were.
                             s_halo_status = wrf::sdirk3::HaloMaskStatus::RequiredButUnavailable;
                         }
                     }
-                    // norm() in the native dtype first (as trust does), THEN widen.
-                    s_before = static_cast<double>(sb.norm().item<float>());
-                    s_after  = static_cast<double>(sa.norm().item<float>());
+                    // Recovery and ordinary trust acceptance share the masked FP64 merit.
+                    // The recovery gate compares norms, so take sqrt only after that reduction.
+                    s_before = std::sqrt(wrf::sdirk3::detail::scaled_merit_sq_unchecked(sb, active_mask));
+                    s_after = std::sqrt(wrf::sdirk3::detail::scaled_merit_sq_unchecked(sa, active_mask));
                 } else {
                     s_before = -1.0;
                     s_after = -1.0;
@@ -11579,12 +11564,26 @@ void sdirk3::WRFNewtonKrylovSolver::update_boundary_periodicity(
 
 void sdirk3::WRFNewtonKrylovSolver::set_physics_scaling(const torch::Tensor& S_diag) {
     torch::NoGradGuard no_grad;
-    // v19.1: detach() without clone() — caller's tensor is alive through solve_stage().
-    // reciprocal() creates a new tensor, so S_inv_diag_ is independent.
-    // CONTRACT: Caller must NOT mutate S_diag after this call. If that invariant
-    // changes in future, revert to S_diag.detach().clone().
-    pImpl->S_diag_ = S_diag.detach();
-    pImpl->S_inv_diag_ = pImpl->S_diag_.reciprocal();
+    TORCH_CHECK(S_diag.defined() && S_diag.dim() == 1 && S_diag.numel() > 0 &&
+                (S_diag.scalar_type() == torch::kFloat32 ||
+                 S_diag.scalar_type() == torch::kFloat64),
+                "SDIRK3: physics scale must be a nonempty packed FP32/FP64 vector");
+    TORCH_CHECK(pImpl->layout_initialized_ &&
+                S_diag.numel() == pImpl->cached_layout_.total_size,
+                "SDIRK3: physics scale must match the initialized state layout");
+
+    // A finite, invertible scale is required for ||S^-1 R||=0 to imply R=0.
+    // Own the pair so later caller mutation cannot change S without changing S^-1.
+    auto scale = S_diag.detach().clone();
+    TORCH_CHECK((torch::isfinite(scale) & (scale > 0)).all().item<bool>(),
+                "SDIRK3: physics scale must contain only finite positive values");
+    auto inverse = scale.reciprocal();
+    TORCH_CHECK((torch::isfinite(inverse) & (inverse > 0)).all().item<bool>(),
+                "SDIRK3: physics scale reciprocal must be finite and positive");
+
+    // Publish only after all checks pass; a rejected replacement preserves the old pair.
+    pImpl->S_diag_ = std::move(scale);
+    pImpl->S_inv_diag_ = std::move(inverse);
     pImpl->scaling_initialized_ = true;
     pImpl->physics_scaling_set_ = true;
     pImpl->scaling_device_ = pImpl->S_diag_.device();

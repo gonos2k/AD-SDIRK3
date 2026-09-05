@@ -612,7 +612,7 @@ struct CoupledSlowGuard {
 //   kf=2..nz-2:  vflux = Omega * flux3(q(kf-2..kf+1), ua=-Omega)
 //     flux3 = flux4 + sign(ua)*((q_ip1-q_im2) - 3(q_i-q_im1))/12,
 //     flux4 = (7(q_i+q_im1) - (q_ip1+q_im2))/12               [WRF :195-204 exact — NOT the
-//     file's flux3_upwind helper, whose flux4 is a "simplified" deviation]
+//     flux3_upwind helper's horizontal implementation below uses the same stencil.
 //   kf=0, nz: zero boundary fluxes.
 // tendency(k=0..nz-1) = +|rdnw(k)| * (vflux(k+1)-vflux(k))  [WRF passes NEGATIVE rdnw as
 // rdzw and writes tendency -= rdzw*d, module_em.F:630] — INCLUDING the top mass level.
@@ -6171,42 +6171,6 @@ vertical_coefficients:
         std::cerr << "\n--- Initial state diagnostics ---" << std::endl;
         std::cerr << "Total energy: " << initial_energy << std::endl;
         std::cerr << "Total mass: " << initial_mass << std::endl;
-    }
-    
-    // Compute and cache boundary fluxes for neighboring tiles
-    // TEMPORARILY DISABLED: Boundary optimizer needs fixes for staggered grid handling
-    if (false && boundary_optimizer_ && flux_computer_) {
-        // Extract state components for boundary computation with proper staggered dimensions
-        // FIX Round192: Use int64_t to prevent overflow on large grids
-        int64_t size_u = static_cast<int64_t>(nx_u_) * ny_ * nz_;
-        int64_t size_v = static_cast<int64_t>(nx_) * ny_v_ * nz_;
-        int64_t size_w = static_cast<int64_t>(nx_) * ny_ * nz_w_;
-
-        int64_t offset = 0;
-        // Use correct tensor shape [nz, ny, nx] to match rest of the code
-        auto u_tensor = U_n.slice(0, offset, offset + size_u).view({nz_, ny_, nx_u_});
-        offset += size_u;
-        auto v_tensor = U_n.slice(0, offset, offset + size_v).view({nz_, ny_v_, nx_});
-        offset += size_v;
-        auto w_tensor = U_n.slice(0, offset, offset + size_w).view({nz_w_, ny_, nx_});
-        
-        // Compute pressure from state (simplified for demonstration)
-        auto p_tensor = torch::zeros({nz_, ny_, nx_}, torch::kFloat32);
-        
-        // Check and compute boundaries for each neighbor
-        std::vector<std::pair<int, wrf::sdirk3::TileBoundaryData::BoundaryType>> neighbors = {
-            {tile_id_ - 1, wrf::sdirk3::TileBoundaryData::WEST},
-            {tile_id_ + 1, wrf::sdirk3::TileBoundaryData::EAST},
-            {tile_id_ - 100, wrf::sdirk3::TileBoundaryData::SOUTH},
-            {tile_id_ + 100, wrf::sdirk3::TileBoundaryData::NORTH}
-        };
-        
-        for (const auto& [neighbor_id, boundary_type] : neighbors) {
-            boundary_optimizer_->compute_shared_boundary(
-                u_tensor, v_tensor, w_tensor, p_tensor,
-                neighbor_id, boundary_type, dx_, dy_
-            );
-        }
     }
     
     try {
@@ -18720,39 +18684,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         int64_t ph_nz_w = w_ref.size(1);   // k dimension (w-staggered levels)
         int64_t ph_nx = w_ref.size(2);     // i dimension
 
-        if (fnm_.defined() && fnp_.defined() && fnm_.size(0) >= ph_nz_w && fnp_.size(0) >= ph_nz_w) {
-            // Use proper fnm/fnp weights from WRF terrain-following coordinates
-            // Slice to runtime nz_w in case coefficient array is longer than runtime dimension
-            auto fnm_sliced = fnm_.slice(0, 0, ph_nz_w);
-            auto fnp_sliced = fnp_.slice(0, 0, ph_nz_w);
-            auto fnm_3d = fnm_sliced.view({1, ph_nz_w, 1}).expand({ph_ny, ph_nz_w, ph_nx}).contiguous();
-            auto fnp_3d = fnp_sliced.view({1, ph_nz_w, 1}).expand({ph_ny, ph_nz_w, ph_nx}).contiguous();
+        TORCH_CHECK(fnm_.defined() && fnp_.defined() && fnm_.dim() == 1 && fnp_.dim() == 1 &&
+                    fnm_.numel() >= ph_nz_w && fnp_.numel() >= ph_nz_w,
+                    "geopotential advection requires fnm/fnp at every w level");
+        const auto fnm_3d = fnm_.slice(0, 0, ph_nz_w).view({1, ph_nz_w, 1});
+        const auto fnp_3d = fnp_.slice(0, 0, ph_nz_w).view({1, ph_nz_w, 1});
+        // Omega is the coupled vertical mass flux, not the physical w velocity.
+        ph_tend_z_adv = -omega * (fnm_3d * wdwn_upper + fnp_3d * wdwn_lower);
 
-            // CRITICAL: Use Omega ((μ/my)·w), not w!
-            // Apply weighted vertical advection: -Omega * (fnm*wdwn_upper + fnp*wdwn_lower)
-            ph_tend_z_adv = -omega * (fnm_3d * wdwn_upper + fnp_3d * wdwn_lower);
-
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-                torch::NoGradGuard no_grad;  // Protect .item() calls in debug output
-                // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
-                auto fnm_cpu = fnm_.detach().to(torch::kCPU);
-                auto fnp_cpu = fnp_.detach().to(torch::kCPU);
-                // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-                auto fnm_min_cpu = fnm_cpu.min();
-                auto fnm_max_cpu = fnm_cpu.max();
-                auto fnp_min_cpu = fnp_cpu.min();
-                auto fnp_max_cpu = fnp_cpu.max();
-                auto weight_sum_cpu = (fnm_cpu.slice(0, 0, std::min(fnm_cpu.size(0), ph_nz_w)) +
-                                  fnp_cpu.slice(0, 0, std::min(fnp_cpu.size(0), ph_nz_w))).mean();
-            }
-        } else {
-            // FALLBACK: Use simple average if fnm/fnp not properly sized
-            // This should not happen in production WRF runs
-            auto vert_grad_avg = 0.5f * (wdwn_upper + wdwn_lower);
-            // CRITICAL: Still use Omega (μ·w), not w!
-            ph_tend_z_adv = -omega * vert_grad_avg;
-        }
-        
         // --- 4.3 Buoyancy term ---
         // Note: WRF has positive sign, not negative!
         // PARITY FIX 2025-12-14: Use runtime tensor sizes (ph_ny, ph_nz_w, ph_nx) from above
@@ -26042,16 +25981,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::flux5_upwind(
 }
 
 torch::Tensor TileSDIRK3UnifiedSolver::flux3_upwind(
-    const torch::Tensor& q_im1, const torch::Tensor& q_i,
-    const torch::Tensor& q_ip1, const torch::Tensor& q_ip2,
+    const torch::Tensor& q_im2, const torch::Tensor& q_im1,
+    const torch::Tensor& q_i, const torch::Tensor& q_ip1,
     const torch::Tensor& vel) {
     // WRF 3rd-order upwind-biased flux (used near boundaries)
-    // flux3 = flux4 - sign(1,time_step)*sign(1,vel)*((q_ip2-q_im1)-3*(q_ip1-q_i))/12
-    // where flux4 = 7/12*(q_i+q_im1) - 1/12*(q_ip1+q_im2)
-    // But q_im2 is not available, so use simplified form
-
-    // 4th-order centered flux (simplified without q_im2)
-    auto flux4 = (7.0f*(q_i + q_im1) - (q_ip1 + q_im1)) / 12.0f;
+    // WRF flux3(q_im2,q_im1,q_i,q_ip1): flux4 plus the upwind correction.
+    // The caller supplies the same face stencil as module_advect_em.F.
+    auto flux4 = (7.0f*(q_i + q_im1) - (q_ip1 + q_im2)) / 12.0f;
 
     // Upwind correction
     // v20.8: Smooth sign — same fix as flux5_upwind (see comment there)
@@ -26068,9 +26004,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::flux3_upwind(
         wrf::sdirk3::g_mask_counters.sign_vel_zero += (vel == 0).sum().item<int64_t>();
         wrf::sdirk3::g_mask_counters.sign_vel_total += vel.numel();
     }
-    auto upwind_term = sign_vel * ((q_ip2 - q_im1) - 3.0f*(q_ip1 - q_i)) / 12.0f;
+    auto upwind_term = sign_vel * ((q_ip1 - q_im2) - 3.0f*(q_i - q_im1)) / 12.0f;
 
-    return vel * (flux4 - upwind_term);
+    return vel * (flux4 + upwind_term);
 }
 
 torch::Tensor TileSDIRK3UnifiedSolver::flux2_centered(
@@ -26246,12 +26182,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_x(const torch::Tensor& f, c
                 // Vectorized 3rd-order upwind flux
                 auto u_interior = u.index({Slice(), Slice(), Slice(i_start_3rd, i_end_3rd)});
                 
+                auto q_im2 = f.index({Slice(), Slice(), Slice(i_start_3rd-2, i_end_3rd-2)});
                 auto q_im1 = f.index({Slice(), Slice(), Slice(i_start_3rd-1, i_end_3rd-1)});
                 auto q_i   = f.index({Slice(), Slice(), Slice(i_start_3rd, i_end_3rd)});
                 auto q_ip1 = f.index({Slice(), Slice(), Slice(i_start_3rd+1, i_end_3rd+1)});
-                auto q_ip2 = f.index({Slice(), Slice(), Slice(i_start_3rd+2, i_end_3rd+2)});
                 
-                auto flux_interior = flux3_upwind(q_im1, q_i, q_ip1, q_ip2, u_interior);
+                auto flux_interior = flux3_upwind(q_im2, q_im1, q_i, q_ip1, u_interior);
                 
                 flux.index_put_({Slice(), Slice(), Slice(i_start_3rd, i_end_3rd)}, flux_interior);
                 
@@ -26554,12 +26490,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, c
                 // For [ny, nz, nx] layout, Y is dimension 0
                 auto v_interior = v.index({Slice(j_start_3rd, j_end_3rd), Slice(), Slice()});
                 
+                auto q_jm2 = f.index({Slice(j_start_3rd-2, j_end_3rd-2), Slice(), Slice()});
                 auto q_jm1 = f.index({Slice(j_start_3rd-1, j_end_3rd-1), Slice(), Slice()});
                 auto q_j   = f.index({Slice(j_start_3rd, j_end_3rd), Slice(), Slice()});
                 auto q_jp1 = f.index({Slice(j_start_3rd+1, j_end_3rd+1), Slice(), Slice()});
-                auto q_jp2 = f.index({Slice(j_start_3rd+2, j_end_3rd+2), Slice(), Slice()});
                 
-                auto flux_interior = flux3_upwind(q_jm1, q_j, q_jp1, q_jp2, v_interior);
+                auto flux_interior = flux3_upwind(q_jm2, q_jm1, q_j, q_jp1, v_interior);
                 
                 flux.index_put_({Slice(j_start_3rd, j_end_3rd), Slice(), Slice()}, flux_interior);
                 
@@ -27391,37 +27327,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_v_point_scalar_x(const torch::Tens
 }
 
 // Diffusion and mixing helper functions
-torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_3d(
-    const torch::Tensor& f, const torch::Tensor& Kh, float rdx, float rdy) {
-    // Compute horizontal diffusion with spatially varying coefficient
-    // f: (ny, nz, nx) field to diffuse - per WRF-SDIRK3-design.md layout
-    // Kh: (ny, nz, nx) diffusion coefficient
-    
-    [[maybe_unused]] auto options = f.options();
-    torch::Tensor diff = torch::zeros_like(f);
-    
-    // x-direction: d/dx(Kh * df/dx)
-    auto df_dx = torch::zeros_like(f);
-    df_dx.slice(2, 1, -1).copy_((f.slice(2, 2, -0) - f.slice(2, 0, -2)) * 0.5f * rdx);
-    
-    auto Kh_df_dx = Kh * df_dx;
-    auto d_Kh_df_dx = torch::zeros_like(f);
-    d_Kh_df_dx.slice(2, 1, -1).copy_((Kh_df_dx.slice(2, 2, -0) - Kh_df_dx.slice(2, 0, -2)) * 0.5f * rdx);
-    
-    // y-direction: d/dy(Kh * df/dy)
-    // For [ny, nz, nx] layout, Y is dimension 0
-    auto df_dy = torch::zeros_like(f);
-    df_dy.slice(0, 1, -1).copy_((f.slice(0, 2, -0) - f.slice(0, 0, -2)) * 0.5f * rdy);
-    
-    auto Kh_df_dy = Kh * df_dy;
-    auto d_Kh_df_dy = torch::zeros_like(f);
-    d_Kh_df_dy.slice(0, 1, -1).copy_((Kh_df_dy.slice(0, 2, -0) - Kh_df_dy.slice(0, 0, -2)) * 0.5f * rdy);
-    
-    diff = d_Kh_df_dx + d_Kh_df_dy;
-    
-    return diff;
-}
-
 torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion(
     const torch::Tensor& f, float Kh, float rdx, float rdy) {
     // Compute 2nd-order horizontal diffusion: Kh * ∇²f
@@ -28549,31 +28454,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_mixing(
     mix.select(1, nz-1).zero_();
 
     return mix;
-}
-
-torch::Tensor TileSDIRK3UnifiedSolver::compute_numerical_filter(
-    const torch::Tensor& f, float alpha) {
-    // Apply numerical smoothing filter to reduce grid-scale noise
-    // Simple 1-2-1 filter in horizontal
-    
-    [[maybe_unused]] auto options = f.options();
-    torch::Tensor filtered = f.clone();
-    
-    // Apply filter multiple times for stronger smoothing
-    for (int iter = 0; iter < 2; ++iter) {
-        auto f_smooth = filtered.clone();
-
-        // x-direction smoothing
-        f_smooth.slice(2, 1, -1).copy_((1.0f - 2.0f*alpha) * filtered.slice(2, 1, -1) +
-                                   alpha * (filtered.slice(2, 0, -2) + filtered.slice(2, 2, -0)));
-
-        // y-direction smoothing
-        filtered = f_smooth.clone();
-        filtered.slice(1, 1, -1).copy_((1.0f - 2.0f*alpha) * f_smooth.slice(1, 1, -1) +
-                                   alpha * (f_smooth.slice(1, 0, -2) + f_smooth.slice(1, 2, -0)));
-    }
-    
-    return filtered - f;  // Return the filtered tendency
 }
 
 // Helper function to perform halo exchange on a packed state vector.
@@ -38796,30 +38676,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_3d_divergence(
     auto v_f32 = v.to(torch::kFloat32);
     auto w_f32 = w.to(torch::kFloat32);
 
-    // MPI/non-debug stability: remove non-finite velocity values before any divergence algebra.
-    // This keeps transient NaN/Inf from contaminating compressibility (theta) tendency.
-    auto u_finite = torch::isfinite(u_f32);
-    auto v_finite = torch::isfinite(v_f32);
-    auto w_finite = torch::isfinite(w_f32);
-    u_f32 = torch::where(u_finite, u_f32, torch::zeros_like(u_f32));
-    v_f32 = torch::where(v_finite, v_f32, torch::zeros_like(v_f32));
-    w_f32 = torch::where(w_finite, w_f32, torch::zeros_like(w_f32));
-
-    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        static int vel_nonfinite_warn_count = 0;
-        if (vel_nonfinite_warn_count < 8) {
-            torch::NoGradGuard no_grad;
-            auto bad_u = (~u_finite).sum().item<int64_t>();
-            auto bad_v = (~v_finite).sum().item<int64_t>();
-            auto bad_w = (~w_finite).sum().item<int64_t>();
-            if (bad_u > 0 || bad_v > 0 || bad_w > 0) {
-                std::cerr << "[SDIRK3] compute_3d_divergence velocity sanitize: bad_u=" << bad_u
-                          << " bad_v=" << bad_v
-                          << " bad_w=" << bad_w << std::endl;
-                ++vel_nonfinite_warn_count;
-            }
-        }
-    }
+    // Preserve fail-closed finite semantics.  Do not sanitize here: only the
+    // interior/seam slices consumed below should affect the result, so checking
+    // or rewriting the full halo would both hide the source and reject unused
+    // halo entries.  A non-finite consumed value propagates to the RHS and is
+    // rejected by the existing stage/RHS finite policy.
 
     // PARITY FIX 2025-12-14: Derive common vertical extent from u, v, w
     int64_t nz_u = u.size(1);
@@ -41051,119 +40912,41 @@ void TileSDIRK3UnifiedSolver::compute_nonhydrostatic_terms(const torch::Tensor& 
 
 void TileSDIRK3UnifiedSolver::setVerticalInterpolationCoefficients(const float* fnm, const float* fnp,
                                                                   float cf1, float cf2, float cf3) {
-    // Store vertical interpolation coefficients for non-hydrostatic dpn computation
-    if (fnm && fnp) {
-        // Create tensors from arrays
-        // FIX Round193: Explicit CPU device to ensure accessor safety
-        fnm_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
-        fnp_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
-
-        // Copy values
-        // FIX Round193: accessor() is CPU-only (verified by explicit kCPU allocation above)
-        auto fnm_accessor = fnm_.accessor<float, 1>();
-        auto fnp_accessor = fnp_.accessor<float, 1>();
-        
+    TORCH_CHECK((fnm == nullptr) == (fnp == nullptr),
+                "fnm and fnp must be supplied together");
+    TORCH_CHECK(nz_ > 0 && nz_w_ >= nz_, "invalid vertical interpolation dimensions");
+    const auto options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    auto next_fnm = torch::zeros({nz_w_}, options);
+    auto next_fnp = torch::zeros({nz_w_}, options);
+    auto* m = next_fnm.data_ptr<float>();
+    auto* p = next_fnp.data_ptr<float>();
+    if (fnm) {
+        // This lengthless API historically reads nz values. The extra w-top
+        // slot stays zero; both endpoint gradient operands in the RHS are zero.
         for (int k = 0; k < nz_; ++k) {
-            fnm_accessor[k] = fnm[k];
-            fnp_accessor[k] = fnp[k];
-        }
-        
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-            // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
-            torch::NoGradGuard no_grad;
-            auto fnm_dbg = fnm_.detach().to(torch::kCPU);
-            auto fnp_dbg = fnp_.detach().to(torch::kCPU);
-            // PERF FIX 2025-12-28: Pre-compute indexed values with _cpu suffix
-            auto fnm_1_cpu = fnm_dbg.index({1});
-            auto fnp_1_cpu = fnp_dbg.index({1});
+            TORCH_CHECK(std::isfinite(fnm[k]) && std::isfinite(fnp[k]),
+                        "fnm and fnp must be finite");
+            m[k] = fnm[k];
+            p[k] = fnp[k];
         }
     } else {
-        // Compute fnm and fnp from rdnw_ if not provided
-        // Based on WRF Fortran calc_fnp subroutine:
-        // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw > 0, dnw = 1/rdnw > 0
-        // fnp[k] = dnw[k-1] / (dnw[k-1] + dnw[k])  <- weight for lower level (k-1)
-        // fnm[k] = dnw[k]   / (dnw[k-1] + dnw[k])  <- weight for upper level (k)
-        // Verify: fnm[k] + fnp[k] = 1.0
-
-        // PARITY FIX 2025-12-20: Use getRdnwTensor() fallback chain instead of rdnw_ vector.
-        // This ensures we use grid_info_->rdnw or computed fallback when rdnw_ is empty.
-        torch::Tensor rdnw_for_fnm = getRdnwTensor(torch::kCPU, torch::kFloat32, nz_);
-        if (rdnw_for_fnm.defined() && rdnw_for_fnm.numel() >= nz_) {
-            fnm_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
-            fnp_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
-
-            auto fnm_accessor = fnm_.accessor<float, 1>();
-            auto fnp_accessor = fnp_.accessor<float, 1>();
-
-            // PARITY FIX 2025-12-21: Pre-copy rdnw to CPU and use data_ptr for loop access.
-            // Using .index({k}).item<float>() in loops is slow in AMP mode due to implicit
-            // CUDA synchronization. Use contiguous().data_ptr<float>() for direct indexing.
-            torch::Tensor rdnw_cpu_fnm;
-            const float* rdnw_ptr_fnm = nullptr;
-            int64_t rdnw_numel_fnm = 0;
-            {
-                torch::NoGradGuard no_grad;
-                rdnw_cpu_fnm = rdnw_for_fnm.to(torch::kCPU, torch::kFloat32).contiguous();
-                rdnw_ptr_fnm = rdnw_cpu_fnm.data_ptr<float>();
-                rdnw_numel_fnm = rdnw_cpu_fnm.numel();
-            }
-
-            // k=0 is special case (ground level, w=0 boundary)
-            fnm_accessor[0] = 0.0f;
-            fnp_accessor[0] = 1.0f;  // All weight on lower boundary
-
-            // Compute for k=1 to k=nz-1
-            // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw > 0, dnw = 1/rdnw > 0
-            constexpr float rdnw_eps = 1e-10f;
-            constexpr float denom_eps = 1e-10f;
-            for (int k = 1; k < nz_; ++k) {
-                // Direct pointer indexing for efficiency
-                float rdnw_k = (rdnw_ptr_fnm && k < rdnw_numel_fnm) ? rdnw_ptr_fnm[k] : 1.0f;
-                float rdnw_km1 = (rdnw_ptr_fnm && k-1 < rdnw_numel_fnm) ? rdnw_ptr_fnm[k-1] : 1.0f;
-
-                // Protect against division by zero: ensure rdnw >= eps (positive)
-                float rdnw_k_safe = (rdnw_k < rdnw_eps) ? rdnw_eps : rdnw_k;
-                float rdnw_km1_safe = (rdnw_km1 < rdnw_eps) ? rdnw_eps : rdnw_km1;
-
-                float dnw_k = 1.0f / rdnw_k_safe;
-                float dnw_km1 = 1.0f / rdnw_km1_safe;
-
-                float denom = dnw_km1 + dnw_k;
-
-                // Protect against near-zero denominator (shouldn't happen with valid eta coords)
-                if (std::abs(denom) < denom_eps) {
-                    // Fallback to equal weights if denominator is degenerate
-                    fnp_accessor[k] = 0.5f;
-                    fnm_accessor[k] = 0.5f;
-                } else {
-                    // fnp[k] = dnw[k-1] / (dnw[k-1] + dnw[k])  (weight for level k-1)
-                    fnp_accessor[k] = dnw_km1 / denom;
-                    // fnm[k] = dnw[k] / (dnw[k-1] + dnw[k])    (weight for level k)
-                    fnm_accessor[k] = dnw_k / denom;
-                }
-            }
-
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
-                torch::NoGradGuard no_grad;
-                auto fnm_dbg = fnm_.detach().to(torch::kCPU);
-                auto fnp_dbg = fnp_.detach().to(torch::kCPU);
-                if (nz_ > 1) {
-                    // PERF FIX 2025-12-28: Pre-compute indexed values with _cpu suffix
-                    auto fnm_1_cpu = fnm_dbg.index({1});
-                    auto fnp_1_cpu = fnp_dbg.index({1});
-                    float fnm_1_val = fnm_1_cpu.item<float>();
-                    float fnp_1_val = fnp_1_cpu.item<float>();
-                    std::cerr << "[SDIRK3] fnm[1]+fnp[1]=" << (fnm_1_val + fnp_1_val)
-                              << " (should be 1.0)" << std::endl;
-                }
-            }
-        } else {
-            // Fallback to zeros if rdnw is not available from any source
-            fnm_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
-            fnp_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
+        const auto rdnw = getRdnwTensor(torch::kCPU, torch::kFloat32, nz_).contiguous();
+        TORCH_CHECK(rdnw.dim() == 1 && rdnw.numel() == nz_ &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(rdnw).all()) &&
+                    wrf::sdirk3::guarded_item<bool>((rdnw > 0).all()),
+                    "fnm/fnp require finite positive rdnw at every mass level");
+        const auto* r = rdnw.data_ptr<float>();
+        p[0] = 1.0f;
+        for (int k = 1; k < nz_; ++k) {
+            // WRF: fnm=dnw(k-1)/(dnw(k-1)+dnw(k)), fnp=1-fnm.
+            // With rdnw=1/dnw, this equivalent ratio avoids reciprocal overflow.
+            const double denominator = static_cast<double>(r[k-1]) + r[k];
+            m[k] = static_cast<float>(r[k] / denominator);
+            p[k] = static_cast<float>(r[k-1] / denominator);
         }
     }
+    fnm_ = std::move(next_fnm);
+    fnp_ = std::move(next_fnp);
 
     // PARITY FIX 2025-12-19: Invalidate fnm/fnp view caches on update
     fnm_view_cache_ = torch::Tensor();

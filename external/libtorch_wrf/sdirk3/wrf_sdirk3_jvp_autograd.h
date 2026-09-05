@@ -405,12 +405,10 @@ namespace sdirk3 {
 // Jacobians, silently wrong for WRF's nonsymmetric operators. No production
 // caller ever used it (the Newton/GMRES matvec uses the true forward-mode
 // JVP, compute_jvp_fwad_or_fd); the rename prevents future misuse.
-// halo_width: Zero perturbations in halo regions to prevent artificial gradients
 torch::Tensor compute_vjp_autograd(
     const std::function<torch::Tensor(const torch::Tensor&)>& F,
     const torch::Tensor& u,
-    const torch::Tensor& v,
-    int halo_width = 0
+    const torch::Tensor& v
 );
 
 // True JVP via forward finite difference. RENAMED from compute_jvp_dual

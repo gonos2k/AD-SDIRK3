@@ -306,6 +306,29 @@ extern "C" void sdirk3_tile_unified_step_zerocopy_v2(
         return;
     }
 
+    // The tendency ABI has two valid modes: solver-owned temporary tendencies
+    // (all eight pointers null), or caller-owned tendencies (all eight set).
+    // The tile implementation consumes the primary tendency set as a unit;
+    // accepting a mixed set would make null writeback/diagnostic accesses
+    // depend on which member happened to be supplied.
+    const bool any_tendency_ptr =
+        ru_tend_ptr || rv_tend_ptr || rw_tend_ptr || ph_tend_ptr ||
+        al_tend_ptr || mu_tend_ptr || p_tend_ptr || t_tend_ptr;
+    const bool all_tendency_ptrs =
+        ru_tend_ptr && rv_tend_ptr && rw_tend_ptr && ph_tend_ptr &&
+        al_tend_ptr && mu_tend_ptr && p_tend_ptr && t_tend_ptr;
+    if (any_tendency_ptr && !all_tendency_ptrs) {
+        std::cerr << "=== FATAL: Mixed nullable tendency pointers in v2 ==="
+                  << std::endl;
+        set_solver_step_outcome_if_present(
+            solver_ptr,
+            SDIRK3_STEP_OUTCOME_FATAL_INPUT,
+            1,
+            0.0f,
+            0);
+        return;
+    }
+
     // Retrieve the solver from the registry
     std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
     auto it = g_tile_solvers.find(solver_ptr);

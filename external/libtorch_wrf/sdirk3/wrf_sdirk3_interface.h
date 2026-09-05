@@ -1223,7 +1223,9 @@ void sdirk3_tile_set_base_state_zerocopy_v2(
  * @param solver_ptr Solver handle from sdirk3_tile_solver_create_zerocopy()
  * @param u_ptr...t_ptr State variable pointers (8 3D arrays)
  * @param moist_ptr,n_moist Moisture array and count
- * @param ru_tend_ptr...t_tend_ptr Tendency pointers (8 3D arrays)
+ * @param ru_tend_ptr...t_tend_ptr Tendency pointers (8 3D arrays). These
+ *        pointers are an all-or-none group: pass all eight as NULL for
+ *        solver-owned temporary tendencies, or provide all eight arrays.
  * @param rdnw_ptr...cosa_ptr Grid metric arrays (18 pointers)
  * @param cqu_ptr,cqv_ptr,cqw_ptr Moisture correction factors
  * @param u_bdy_xs...mu_btend_ye Boundary arrays (48 pointers)

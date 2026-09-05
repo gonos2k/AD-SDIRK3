@@ -20,8 +20,22 @@ inline torch::Tensor compute_vjp_reverse_mode(
     const std::function<torch::Tensor(const torch::Tensor&)>& function,
     const torch::Tensor& y,
     const torch::Tensor& vector) {
+    // VJP construction is valid even when the caller is in a diagnostic
+    // NoGradGuard (the transpose solve is commonly reached from one).  Keep
+    // this scope local so the caller's grad-mode state is restored on return.
+    torch::AutoGradMode enable_grad(true);
     auto y_req = y.detach().clone().requires_grad_(true);
     auto f_y = function(y_req);
+    TORCH_CHECK(f_y.defined(), "compute_vjp_reverse_mode: function returned undefined output");
+    TORCH_CHECK(f_y.sizes() == vector.sizes() && f_y.device() == vector.device() &&
+                f_y.scalar_type() == vector.scalar_type(),
+                "compute_vjp_reverse_mode: cotangent shape/device/dtype mismatch");
+    // A detached constant output is a valid zero-Jacobian operator.  PyTorch
+    // cannot call autograd::grad on a scalar with no grad_fn, even with
+    // allow_unused=true, so handle this case before constructing the scalar.
+    if (!f_y.requires_grad()) {
+        return torch::zeros(y_req.sizes(), y_req.options().requires_grad(false));
+    }
     auto scalar = (f_y * vector).sum();
 
     auto gradients = torch::autograd::grad(
@@ -30,8 +44,10 @@ inline torch::Tensor compute_vjp_reverse_mode(
         {},
         /*retain_graph=*/false,
         /*create_graph=*/false,
-        /*allow_unused=*/false);
-    return gradients[0];
+        /*allow_unused=*/true);
+    return (!gradients.empty() && gradients[0].defined())
+        ? gradients[0]
+        : torch::zeros(y_req.sizes(), y_req.options().requires_grad(false));
 }
 
 // 9F.D99 (review section 6): the reverse visit order, as a pure testable function.

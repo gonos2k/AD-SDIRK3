@@ -127,31 +127,6 @@ static constexpr double b(int i) {
 }
 
 /**
- * Compute stability function R(z) for SDIRK3
- * For L-stable stiffly accurate scheme: R(∞) = 0
- */
-inline double compute_stability_function(double z) {
-    double g = WRFCoefficients::gamma;
-    // For stiffly accurate L-stable SDIRK3, R(z) = P(z)/(1-gz)³
-    // where P is a degree-3 polynomial matching the exponential to 3rd order
-    double gz = g * z;
-    double denom = (1.0 - gz) * (1.0 - gz) * (1.0 - gz);
-    if (std::abs(denom) < 1e-30) return 0.0;
-
-    // Compute numerator from Butcher tableau
-    // R(z) = 1 + z*b^T*(I-zA)^{-1}*e
-    // For stiffly accurate: R(z) = e_3^T*(I-zA)^{-1}*e (last row of resolvent)
-    // At z→∞: R(∞) = 0 (L-stable)
-    double z2 = z * z;
-    double p1 = WRFCoefficients::b1 + WRFCoefficients::b2 + WRFCoefficients::b3 - 3.0*g;
-    double p2 = 3.0*g*g - (WRFCoefficients::b1*WRFCoefficients::c1 +
-                WRFCoefficients::b2*WRFCoefficients::c2 + WRFCoefficients::b3*WRFCoefficients::c3)*2.0;
-
-    double numerator = 1.0 + p1*z + p2*z2;
-    return numerator / denom;
-}
-
-/**
  * Compute acoustic CFL condition
  */
 inline float compute_acoustic_cfl(
