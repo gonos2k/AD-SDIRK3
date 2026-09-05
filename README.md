@@ -25,7 +25,7 @@ The differentiable implicit solve converges at small timesteps; making it conver
 stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
 it is **unresolved**.
 
-Verification is an **exact 58-test CTest inventory** pinned by
+Verification is an **exact 61-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
@@ -46,8 +46,9 @@ proven byte-identical.
 - **Instantaneous perturbation equilibrium.** The assembled production RHS returns **exactly
   zero** in every channel and every `RhsMode` at zero perturbation, paired with a non-zero
   control so the measurement cannot be confused with a dead probe. This is *not*
-  well-balancedness: `F(U) = 1000U` also satisfies `F(0) = 0`. Multi-step rest preservation
-  (1 / 10 / 100 steps, with mass, energy and hydrostatic-residual drift) is **not** measured.
+  well-balancedness: `F(U) = 1000U` also satisfies `F(0) = 0`. The full-tile test now measures
+  1 / 10 / 100 steps: uniform dry mass is unchanged, but small W/Phi/theta drift remains.
+  These measurements do not establish exact equilibrium preservation.
 - **The RHS Jacobian shows nothing anomalous at the first RHS base point.** Its implicit part is
   state-invariant to six digits (predictably: the coefficient is `mu`, which moves 0.01% between
   rest and jet); its explicit part is proportional to base-state amplitude with a measured
@@ -56,17 +57,31 @@ proven byte-identical.
 - **AD.** Forward-mode duals, reverse-mode VJPs and the `<Jv,w> == <v,J^T w>` identity hold on
   the EOS and the pressure integrator; the reverse pass runs through the whole production RHS.
   Production `J_FD` and `J_AD^T` agree to **1.198e-06**.
+- **Production ARK composition and converged-stage pullbacks.**
+  `ARK324_Production_Composition` uses the shared production stage/final sums and actual
+  Newton–GMRES solves on noncommuting and time-dependent manufactured systems, including
+  timestep refinement and a tighter-Newton control. Its one/three-step pullbacks agree with
+  dense implicit roots and pass dot/Taylor tests. This is not a whole-WRF temporal-order claim.
+  `Full_Tile_Temporal_Order` additionally refines an actual dry tile's vertical-wave trajectory,
+  checks W/Phi/theta separately against a finer reference, and repeats with tighter Newton tolerance.
+- **Last completed tile-step pullback.** With `retain_graph_for_adjoint=true`, mode 3,
+  `use_autograd=true`, and `imex_slow_in_tangent=true`, `pullbackLastStep(cotangent)` evaluates
+  a first-order VJP of the last completed single-rank, single-tile step. Converged RHS graphs
+  are saved at their stage points; transpose solves must pass a true-residual check. A new
+  forward step invalidates the saved graph. `Full_Tile_Step_Adjoint` calls `unifiedStep` and
+  checks a non-identity derivative, finite-difference dots, objective Taylor remainders,
+  invalid/zero cotangents, and identical forward results with retention off. The validated
+  scope is a dry CPU tile with fixed timestep, forcing and boundary branches; second
+  derivatives and a complete WRF/4D-Var trajectory are not implemented by this API.
 
 ### What is NOT measured, and matters
 
-- **The full timestep map `DG` is unmeasured.** All Jacobian analysis above is of the RHS `F`.
-  Stability is governed by `DG`, which additionally contains the ARK stage composition, the
-  implicit resolvents and the acoustic substep maps. `DF` behaving normally does **not** bound
-  `DG`.
-- **Implicit-stage differentiation is an algebra contract, not production.** The implicit
-  function theorem forms (`dK/dU = A^-1 J`, adjoint `J^T A^-T`) are pinned against closed-form
-  Jacobians but are **not wired** into the stage solve.
-- **The 4D-Var adjoint replay does not converge.** The RHS is differentiable and the transpose
+- **Operational full-timestep stability remains unverified.** The tile-step derivative test
+  above does not bound `DG` along the WRF forecast trajectory or include split-explicit
+  acoustic substeps. RHS `DF` measurements alone also cannot establish that bound.
+- **The legacy 4D-Var adjoint replay is not a completed full-ARK trajectory adjoint.** The
+  opt-in last-step API above attaches the implicit-function pullback to converged production
+  Newton roots; it does not complete the separate checkpoint replay. The RHS is differentiable and the transpose
   operator is correct (rel 1.198e-06).
 
   The remediation ordering that used to stand here — try a frozen `M^-1`, then flexible
@@ -139,11 +154,11 @@ proven byte-identical.
     "correction" degrades it. Two earlier readings of these experiments — off the unscaled
     `rel_error`, then off a residual scaled with the wrong vector — ranked them the other way
     round; both are retracted. All on the open experiment PR rather than on `main`. See `AcousticGravity_Shadow_Contract`.
-  - the **full ARK adjoint** and the **full-timestep `DG`/`DG^T`**
+  - the **full WRF/4D-Var trajectory adjoint**, beyond the retained tile-step API above
   - the **acoustic–gravity coefficient re-derivation** (`D_mu`, `D_phi`, `c_s^2+N^2`,
     direct/Schur double-count, theta–W)
-- **No multi-step well-balancedness, geostrophic/thermal-wind balance, mass/energy/PV budgets,
-  or formal temporal-order verification.**
+- **No certified multi-step well-balancedness, geostrophic/thermal-wind balance, exact
+  mass/energy/PV budgets, or whole-WRF temporal-order verification.**
 - Support boundary: **dry, single-rank, single-tile, idealised map factors.** MPI halo primitives
   are contract-tested; the integrated multi-rank SDIRK solve is not supported.
 

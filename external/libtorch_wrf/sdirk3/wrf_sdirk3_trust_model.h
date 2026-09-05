@@ -145,7 +145,7 @@ namespace detail {
 // device/dtype/mask/finiteness. Inputs MUST already be validated compatible (the predicted
 // helper validates; the caller shares the production halo mask). It lives in `detail` and
 // carries the `_unchecked` suffix so it does not read as a safe public merit function.
-// NoGradGuard: diagnostic-only.
+// NoGradGuard: the acceptance metric is outside the differentiable residual graph.
 inline double scaled_merit_sq_unchecked(const torch::Tensor& residual_scaled,
                                         const torch::Tensor& mask) {
     torch::NoGradGuard no_grad;
@@ -235,20 +235,22 @@ inline double scaled_merit_sq_unchecked(const torch::Tensor& residual_scaled,
              .all().item<bool>())
         return TrustPrediction::failure(E::NonFiniteInput);
 
-    const auto R_lin_s = (1.0 - alpha) * R_active - alpha * r_g_active;
+    // Promote before forming the model; FP64 accumulation cannot recover a
+    // small correction already rounded away by an FP32 linear combination.
+    const auto a64 = R_active.to(torch::kFloat64);
+    const auto g64 = r_g_active.to(torch::kFloat64);
+    const auto b64 = (1.0 - alpha) * a64 - alpha * g64;
     // A = m(R_s), B = m(R_lin_s) -- the two LINEAR-MODEL merits. They are returned so the
-    // caller can scale the degeneracy threshold by max(A,B,1) (both linear-model), and they
-    // FP64-accumulate through the shared merit authority. R_active/R_lin_s already have the
-    // halo zeroed, so merit needs no further mask. Diagnostic-only, so the FP64 reductions
-    // (GPU->CPU syncs) are an accepted cost.
-    const double A = detail::scaled_merit_sq_unchecked(R_active, torch::Tensor());
-    const double B = detail::scaled_merit_sq_unchecked(R_lin_s, torch::Tensor());
+    // caller can scale the degeneracy threshold by max(A,B) (both linear-model), and they
+    // FP64-accumulate through the shared merit authority. a64/b64 already have the
+    // halo zeroed, so merit needs no further mask. These FP64 reductions feed
+    // production acceptance as well as diagnostics.
+    const double A = detail::scaled_merit_sq_unchecked(a64, torch::Tensor());
+    const double B = detail::scaled_merit_sq_unchecked(b64, torch::Tensor());
     // PR 9F.9.6: compute the REDUCTION as an elementwise difference-of-squares
     // sum((a-b)(a+b)) rather than (sum a^2) - (sum b^2). When A and B are large and the
     // reduction is small, forming the two big sums first and subtracting loses digits even
     // in FP64; the factored form keeps the small result accurate. Mathematically A - B.
-    const auto a64 = R_active.to(torch::kFloat64);
-    const auto b64 = R_lin_s.to(torch::kFloat64);
     const double reduction = ((a64 - b64) * (a64 + b64)).sum().item<double>();
     // Finite inputs can still overflow the squared sum to Inf, or the reduction to NaN.
     // ok() must never promise a finite reduction the arithmetic did not produce. A and B are
@@ -266,7 +268,9 @@ enum class TrustAssessmentStatus {
     Valid,                 // descent model, rho = actual / predicted is meaningful
     NonDescentModel,       // predicted <= -tol: the linear model predicts NO decrease
     DegeneratePrediction,  // |predicted| <= tol: predicted reduction is at the roundoff floor
-    NonFiniteActual        // the actual reduction is not finite (trial residual/metric failed)
+    NonFiniteActual,       // the actual reduction is not finite (trial residual/metric failed)
+    InvalidModel,          // non-finite prediction or invalid squared-norm merits
+    NonFiniteRatio        // finite actual/predicted overflow when divided
 };
 inline const char* trust_assessment_status_name(TrustAssessmentStatus s) {
     switch (s) {
@@ -274,6 +278,8 @@ inline const char* trust_assessment_status_name(TrustAssessmentStatus s) {
         case TrustAssessmentStatus::NonDescentModel:      return "non_descent";
         case TrustAssessmentStatus::DegeneratePrediction: return "degenerate";
         case TrustAssessmentStatus::NonFiniteActual:      return "actual_nonfinite";
+        case TrustAssessmentStatus::InvalidModel:         return "invalid_model";
+        case TrustAssessmentStatus::NonFiniteRatio:       return "ratio_nonfinite";
     }
     return "unknown";
 }
@@ -284,7 +290,7 @@ struct TrustAssessment {
     double prediction_tolerance;   // the scale-relative degeneracy floor
     TrustAssessmentStatus status;
 };
-// The threshold is RELATIVE to the LINEAR-MODEL merits (max(merit_old, merit_model, 1)) --
+// The threshold is RELATIVE to the LINEAR-MODEL merits (max(merit_old, merit_model)) --
 // NOT the nonlinear trial merit. A blown-up nonlinear trial belongs in `actual`, and must
 // NOT inflate the linear model's cancellation floor (which would misclassify a well-resolved
 // predicted reduction as degenerate). tol = 64*eps_fp64*scale is the roundoff floor of A - B.
@@ -292,14 +298,10 @@ struct TrustAssessment {
                                           double merit_old,
                                           double merit_model,
                                           double actual_reduction) {
-    // Guard the merits: a non-finite merit (e.g. a success(reduction)-only prediction whose
-    // merits default to NaN) must NOT poison max()/tol into NaN -- a NaN tol makes every
-    // comparison below false and falls through to a spurious Valid with a bogus rho. Merits
-    // are sums-of-squares (>= 0); abs is belt-and-suspenders. Unknown merit -> 0 -> the
-    // scale floors at 1 (tol = 64*eps).
-    const double m_old   = std::isfinite(merit_old)   ? std::abs(merit_old)   : 0.0;
-    const double m_model = std::isfinite(merit_model) ? std::abs(merit_model) : 0.0;
-    const double scale = std::max({m_old, m_model, 1.0});
+    const bool model_valid = std::isfinite(predicted_reduction) &&
+        std::isfinite(merit_old) && merit_old >= 0.0 &&
+        std::isfinite(merit_model) && merit_model >= 0.0;
+    const double scale = model_valid ? std::max(merit_old, merit_model) : 0.0;
     const double tol = 64.0 * std::numeric_limits<double>::epsilon() * scale;
     TrustAssessment a;
     a.actual = actual_reduction;
@@ -308,17 +310,17 @@ struct TrustAssessment {
     a.rho = std::numeric_limits<double>::quiet_NaN();
     if (!std::isfinite(actual_reduction)) {
         a.status = TrustAssessmentStatus::NonFiniteActual;
-    } else if (!std::isfinite(predicted_reduction)) {
-        // A non-finite predicted reduction is not a usable descent model -- never Valid,
-        // never a rho. (Same NaN-fall-through class as the merits above.)
-        a.status = TrustAssessmentStatus::DegeneratePrediction;
+    } else if (!model_valid) {
+        a.status = TrustAssessmentStatus::InvalidModel;
     } else if (predicted_reduction < -tol) {
         a.status = TrustAssessmentStatus::NonDescentModel;
     } else if (std::abs(predicted_reduction) <= tol) {
         a.status = TrustAssessmentStatus::DegeneratePrediction;
     } else {
-        a.status = TrustAssessmentStatus::Valid;
-        a.rho = actual_reduction / predicted_reduction;
+        const double ratio = actual_reduction / predicted_reduction;
+        a.status = std::isfinite(ratio) ? TrustAssessmentStatus::Valid
+                                      : TrustAssessmentStatus::NonFiniteRatio;
+        if (a.status == TrustAssessmentStatus::Valid) a.rho = ratio;
     }
     return a;
 }

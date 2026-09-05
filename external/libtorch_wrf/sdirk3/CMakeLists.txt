@@ -484,8 +484,20 @@ add_test(NAME FGMRES_Contract COMMAND test_fgmres_contract)
 add_executable(test_trust_model_contract test_trust_model_contract.cpp)
 target_include_directories(test_trust_model_contract PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 set_property(TARGET test_trust_model_contract PROPERTY CXX_STANDARD 17)
-target_link_libraries(test_trust_model_contract "${TORCH_LIBRARIES}")
+target_link_libraries(test_trust_model_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Trust_Model_Contract COMMAND test_trust_model_contract)
+
+# Shared production ARK composition with actual Newton/GMRES stage solves.
+add_executable(test_ark324_composition tests/test_ark324_composition.cpp)
+target_link_libraries(test_ark324_composition PRIVATE wrf_sdirk3::core)
+add_test(NAME ARK324_Production_Composition COMMAND test_ark324_composition)
+
+add_executable(test_full_tile_step tests/test_full_tile_step.cpp)
+target_link_libraries(test_full_tile_step PRIVATE wrf_sdirk3::core)
+add_test(NAME Full_Tile_Step_Adjoint COMMAND test_full_tile_step)
+set_tests_properties(Full_Tile_Step_Adjoint PROPERTIES TIMEOUT 180)
+add_test(NAME Full_Tile_Temporal_Order COMMAND test_full_tile_step --temporal-order)
+set_tests_properties(Full_Tile_Temporal_Order PROPERTIES TIMEOUT 300)
 
 # R9 P0-A/B: a Krylov metric's coordinate system is part of the metric.
 add_executable(test_krylov_metric_coordinate_contract test_krylov_metric_coordinate_contract.cpp)

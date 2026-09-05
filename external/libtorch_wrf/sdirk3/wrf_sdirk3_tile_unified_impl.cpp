@@ -280,7 +280,7 @@ inline const char* rhs_mode_name(wrf::sdirk3::RhsMode m) {
 #include "wrf_sdirk3_profiler.h"
 #include "wrf_sdirk3_autograd_utils.h"
 #include "wrf_sdirk3_wrms_norm.h"
-#include "wrf_sdirk3_imex_ark324_coeffs.h"
+#include "wrf_sdirk3_ark324_composition.h"
 #include "wrf_sdirk3_imex_adjoint_linear_solve.h"
 #include "wrf_sdirk3_acoustic_substep.h"
 #include "wrf_sdirk3_u_slow_diagnostics.h"
@@ -3932,6 +3932,11 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     int nx, int ny, int nz,
     int nx_u, int ny_v, int nz_w) {
 
+    if (rk_step == 1) {
+        last_step_input_graph_ = torch::Tensor();
+        last_step_output_graph_ = torch::Tensor();
+    }
+
     // R2: a quantity that does NOT depend on how the domain was decomposed.
     //
     // Every probe in this campaign so far reports a TILE-LOCAL number, and two runs at
@@ -5956,6 +5961,17 @@ vertical_coefficients:
     
     // Pack current state with staggered dimensions
     torch::Tensor U_n = packState(u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
+    if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
+        const auto& cfg = wrf::sdirk3::g_sdirk3_config;
+        TORCH_CHECK(cfg.use_autograd && cfg.imex_slow_in_tangent &&
+                    cfg.imex_split_mode == 3 && !cfg.split_explicit &&
+                    nprocx_ * nprocy_ == 1 &&
+                    its_ <= ids_ && ite_ >= ide_ - 1 &&
+                    jts_ <= jds_ && jte_ >= jde_ - 1,
+                    "Full-step pullback requires mode 3, AD, explicit-stage gradients, ",
+                    "and one tile covering a single-rank domain");
+        U_n = U_n.detach().clone().requires_grad_(true);
+    }
 
     // 9F.D66/D81: the adjoint driver, opt-in via WRF_SDIRK3_ADJOINT_DRIVER.
     //
@@ -9739,15 +9755,8 @@ vertical_coefficients:
                 const bool capture_deltas =
                     stage_operand_diag_on && (stage_idx == 1 || stage_idx == 2);
                 if (capture_deltas) stage_operand_stage_states.clear();
-                // R9 P0-C: the ARK stage base, TERM BY TERM.
-                //
-                //     Y_s = U_n + h*sum_j a^E_sj k_slow[j] + h*sum_j a^I_sj k_fast[j]
-                //
-                // Measured: ||Y_3|| = 1.251e10 against ||Y_2|| = 2.100e6 and ||U_n|| ~ 2.1e6,
-                // while the accepted stage-2 K has ||K_2|| = 4806, i.e. h*gamma*||K_2|| ~ 1.3e6.
-                // The implicit history cannot supply four of those orders, so the term that
-                // does has to be named rather than deduced. This OBSERVES the production
-                // tensors -- no extra RHS evaluation, no change to the assembly statement.
+                // Observe the actual running state after each source's add.
+                // The shared composition kernel owns the production arithmetic.
                 const bool decompose_stage_base =
                     wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STAGE_ENTRY_LEDGER");
                 if (decompose_stage_base) {
@@ -9757,12 +9766,7 @@ vertical_coefficients:
                               << U_n.detach().to(torch::kFloat64).norm().item<double>()
                               << std::endl;
                 }
-                torch::Tensor rhs = U_n;
-                for (int j = 0; j < stage_idx; ++j) {
-                    // UNCHANGED production assembly statement (not decomposed).
-                    rhs = rhs
-                        + dt * static_cast<float>(Ark::a_explicit[stage_idx][j]) * k_slow[j]
-                        + dt * static_cast<float>(Ark::a_implicit[stage_idx][j]) * k_fast[j];
+                auto observe = [&](int j, const torch::Tensor& rhs) {
                     if (capture_deltas) {
                         torch::NoGradGuard no_grad;
                         // Running FP32 state after source j's actual add.
@@ -9786,8 +9790,9 @@ vertical_coefficients:
                                   << rhs.detach().to(torch::kFloat64).norm().item<double>()
                                   << std::endl;
                     }
-                }
-                return rhs;
+                };
+                return wrf::sdirk3::ark324_stage_base(
+                    U_n, dt, stage_idx, k_slow, k_fast, observe);
             };
 
             auto compute_fast_rhs = [&](const torch::Tensor& U_interior,
@@ -11752,10 +11757,7 @@ vertical_coefficients:
                 k2 = k_full[1];
                 k3 = k_full[2];
                 k4 = k_full[3];
-                U_new = U_n;
-                for (int i = 0; i < Ark::stages; ++i) {
-                    U_new = U_new + dt * static_cast<float>(Ark::b[i]) * k_full[i];
-                }
+                U_new = wrf::sdirk3::ark324_final_state(U_n, dt, k_full);
             }
             checkTensorHealth(U_new, "U_new");
             } // !split_explicit: end ARK324 fallback
@@ -12492,6 +12494,10 @@ vertical_coefficients:
     
     // Unpack updated state with staggered dimensions
     unpackState(U_new, u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
+    if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
+        last_step_input_graph_ = U_n;
+        last_step_output_graph_ = U_new;
+    }
 
     // R13.1: THE np-equivalence record, and the only one entitled to that claim.
     //
@@ -41418,12 +41424,36 @@ int64_t TileSDIRK3UnifiedSolver::getStateVectorSize() const {
 // 9F.D81: the adjoint driver body, moved out of unifiedStep. Opt-in via
 // WRF_SDIRK3_ADJOINT_DRIVER; unifiedStep keeps only the RAII shim that fires it at
 // scope exit, because the replay needs the forward's checkpoints to exist.
+torch::Tensor TileSDIRK3UnifiedSolver::pullbackLastStep(
+    const torch::Tensor& terminal_cotangent) {
+    TORCH_CHECK(last_step_input_graph_.defined() && last_step_output_graph_.defined() &&
+                last_step_input_graph_.requires_grad() && last_step_output_graph_.requires_grad() &&
+                getLastStepOutcomeCode() == static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED),
+                "pullbackLastStep: no completed differentiable step is available");
+    TORCH_CHECK(terminal_cotangent.sizes() == last_step_output_graph_.sizes() &&
+                terminal_cotangent.options().type_equal(last_step_output_graph_.options()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(terminal_cotangent).all()),
+                "pullbackLastStep: invalid terminal cotangent");
+    return torch::autograd::grad({last_step_output_graph_}, {last_step_input_graph_},
+                                 {terminal_cotangent}, /*retain_graph=*/true)[0];
+}
+
 bool TileSDIRK3UnifiedSolver::runAdjointDriverProbe(const torch::Tensor& U_n) {
     // Entry marker + explicit flushes. An earlier iteration produced NO output at all
     // while the process died on an autograd error, which left it ambiguous whether the
     // driver had even run.
     std::cerr << "SDIRK3_ADJOINT_DRIVER: entered" << std::endl << std::flush;
     try {
+        if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
+            auto gen = at::detail::createCPUGenerator(20260905);
+            auto terminal = torch::randn(U_n.numel(), gen, U_n.options().requires_grad(false));
+            terminal = terminal / terminal.norm();
+            const auto initial = pullbackLastStep(terminal);
+            std::cerr << "SDIRK3_ADJOINT_DRIVER kind=FullTileStep"
+                      << " terminal_norm=" << terminal.detach().norm().item<double>()
+                      << " initial_norm=" << initial.detach().norm().item<double>() << std::endl;
+            return true;
+        }
         // NO blanket NoGradGuard. solve_transpose_linear_system_gmres forms A^T w
         // through a VJP, so a guard around this whole block disables it and the
         // replay dies with "element 0 of tensors does not require grad".

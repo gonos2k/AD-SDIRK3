@@ -9,12 +9,16 @@
 // term 2*alpha*(1-alpha)*<R_s,r_g> is INCLUDED (the exact model), unlike the production
 // heuristic that drops it.
 #include "wrf_sdirk3_trust_model.h"
+#include "wrf_sdirk3_newton_solver.h"
+#include "wrf_sdirk3_config.h"
 
 #include <torch/torch.h>
 #include <cmath>
 #include <cstdio>
 #include <limits>
 #include <type_traits>
+#include <iostream>
+#include <sstream>
 
 using wrf::sdirk3::TrustPredictionError;
 using wrf::sdirk3::TrustPrediction;
@@ -56,6 +60,50 @@ static double ref_pred(const torch::Tensor& R_s, const torch::Tensor& r_g,
     double n0 = a0.norm().item<double>();
     double n1 = a1.norm().item<double>();
     return n0 * n0 - n1 * n1;
+}
+
+// Drive the actual Newton/GMRES/trust path on a linear RHS with only ru excited.
+// The expected implicit solution is analytic; stderr exposes the production rho.
+static std::pair<wrf::sdirk3::WRFNewtonKrylovSolver::NewtonResult, std::string>
+run_linear_newton(float direct_u, bool provide_scale, bool exact_layout = true,
+                  double initial_u = 1.0, bool fp32 = false, double physics_scale = 1.0) {
+    using namespace wrf::sdirk3;
+    const auto saved_config = g_sdirk3_config;
+    std::ostringstream log;
+    auto* saved_stream = std::cerr.rdbuf(log.rdbuf());
+    try {
+        g_sdirk3_config.debug_level = fp32 ? 2 : 1;
+        g_sdirk3_config.jvp_method = decltype(g_sdirk3_config)::JVP_DUAL_NUMBER;
+        g_sdirk3_config.direct_u_solve_thresh = direct_u;
+        g_sdirk3_config.use_autograd = false;
+        g_sdirk3_config.precond_type = 0;
+        WRFNewtonKrylovOptions options;
+        options.use_preconditioner = false;
+        options.use_adaptive_tolerances = false;
+        options.max_newton_iter = direct_u > 0 ? 1 : 12;
+        options.gmres_restart = 10;
+        options.max_krylov_iter = 20;
+        options.newton_tol = 1e-6f;
+        options.krylov_tol = 1e-6f;
+        if (exact_layout) {
+            options.nx = options.ny = options.nz = 1;
+            options.nx_u = options.ny_v = options.nz_w = 2;
+        }
+        const auto layout = StateLayout::from_grid_dims(1, 1, 1, 2, 2, 2);
+        auto U = torch::zeros({layout.total_size}, fp32 ? torch::kFloat32 : torch::kFloat64);
+        U.slice(0, 0, 2).fill_(initial_u);
+        WRFNewtonKrylovSolver solver(options);
+        if (provide_scale) solver.set_physics_scaling(torch::full_like(U, physics_scale));
+        const auto rhs = [](const torch::Tensor& state) { return 0.9 * state; };
+        auto result = solver.solve_stage_with_status(U, torch::Tensor(), rhs, 1.0f, 1.0f, 1);
+        g_sdirk3_config = saved_config;
+        std::cerr.rdbuf(saved_stream);
+        return {result, log.str()};
+    } catch (...) {
+        g_sdirk3_config = saved_config;
+        std::cerr.rdbuf(saved_stream);
+        throw;
+    }
 }
 
 int main() {
@@ -403,9 +451,9 @@ int main() {
         {
             const double nan = std::numeric_limits<double>::quiet_NaN();
             const auto a = assess_trust_model(0.0, nan, nan, 0.5);
-            check(a.status == TrustAssessmentStatus::DegeneratePrediction
+            check(a.status == TrustAssessmentStatus::InvalidModel
                       && std::isfinite(a.prediction_tolerance),
-                  "assess: NaN merits -> finite tol, no spurious Valid (pred=0 stays Degenerate)");
+                  "assess: NaN merits -> InvalidModel, never a spurious Valid");
         }
         // A non-finite predicted reduction is never Valid.
         {
@@ -416,7 +464,86 @@ int main() {
         }
     }
 
-    const int kExpected = 44;
+    // R2: changing the direction changes its linear residual, even for a linear RHS.
+    {
+        const auto one = torch::ones({1}, torch::kFloat64);
+        const auto final_g = -one - 0.1 * (-one);
+        const auto pred = wrf::sdirk3::sdirk3_trust_predicted_reduction(one, final_g, 1.0, {});
+        const auto assessment = assess_trust_model(pred.reduction(), pred.merit_old(),
+                                                   pred.merit_model(), 0.19);
+        check(std::abs(pred.reduction()-0.19) < 1e-14 && std::abs(assessment.rho-1.0) < 1e-14,
+              "R=1, A=0.1, final dK=-1 has prediction 0.19 and rho=1");
+        const auto direct = run_linear_newton(0.5f, true);
+        std::printf("DIRECT_U_PRODUCTION_LOG\n%s\n", direct.second.c_str());
+        check(direct.second.find("[DIRECT U SOLVE]") != std::string::npos &&
+              direct.second.find(", rho=1,") != std::string::npos,
+              "production Direct U trial retains rho=1 for a linear operator");
+        const auto scaled_direct = run_linear_newton(0.5f, true, true, 1.0, false, 4.0);
+        check(scaled_direct.second.find("[DIRECT U SOLVE]") != std::string::npos &&
+              scaled_direct.second.find(", rho=1,") != std::string::npos,
+              "production Direct U residual is scaled exactly once when S=4I");
+        const auto identity = run_linear_newton(0.0f, true);
+        std::printf("IDENTITY_PRODUCTION_LOG\n%s\n", identity.second.c_str());
+        std::printf("NEWTON_OFF_RESULT converged=%d iterations=%d residual=%a K=",
+                    identity.first.converged, identity.first.iterations,
+                    static_cast<double>(identity.first.final_residual));
+        for (int64_t i = 0; i < identity.first.K.numel(); ++i)
+            std::printf("%a,", identity.first.K[i].item<double>());
+        std::printf("\n");
+        check(identity.first.converged &&
+              (identity.first.K.slice(0, 0, 2)-9.0).abs().max().item<double>() < 1e-4,
+              "production Newton accepts initialized S=I and solves the linear stage");
+        const auto zero_state = run_linear_newton(0.0f, false, true, 0.0);
+        check(zero_state.first.converged && zero_state.first.K.norm().item<double>() == 0.0,
+              "production Newton preserves zero equilibrium without an external scale");
+        const auto missing_layout = run_linear_newton(0.0f, false, false);
+        check(!missing_layout.first.converged && missing_layout.first.iterations == 0 &&
+              missing_layout.first.message.find("layout not initialized") != std::string::npos &&
+              missing_layout.second.find("[TRUST REGION] attempt") == std::string::npos,
+              "production Newton explicitly rejects missing layout before trust retries");
+        const auto lost = run_linear_newton(0.0f, true, true, 1.0e4, true);
+        check(lost.second.find("[UNINFORMATIVE] Jacobian validation: unresolved_perturbation")
+                  != std::string::npos &&
+              lost.second.find("[OK] Jacobian validation passed") == std::string::npos,
+              "production JVP diagnostic cannot pass the FP32 vanished-perturbation case");
+    }
+
+    // R4: promotion must precede the linear combination, and the assessment
+    // must not impose an absolute merit floor on a scale-relative model.
+    {
+        const auto r = torch::ones({1}, torch::kFloat32);
+        const auto zero = torch::zeros_like(r);
+        const double tiny_alpha = 1.0e-8;
+        const double expected_tiny = tiny_alpha * (2.0-tiny_alpha);
+        check(std::abs(pval(r, zero, tiny_alpha, {})-expected_tiny) < 2e-16,
+              "FP32 inputs preserve a small alpha in the FP64 linear model");
+        const auto g = torch::tensor({-(1.0f-std::ldexp(1.0f, -24))});
+        const double delta = std::ldexp(1.0, -25);
+        check(std::abs(pval(r, g, 0.5, {})-delta*(2.0-delta)) < 1e-16,
+              "FP64 promotion preserves a half-ULP FP32 cancellation");
+        const auto small = torch::tensor({1.0e-8}, torch::kFloat64);
+        const auto p = wrf::sdirk3::sdirk3_trust_predicted_reduction(small, torch::zeros_like(small), 1.0, {});
+        const auto a = assess_trust_model(p.reduction(), p.merit_old(), p.merit_model(), p.merit_old());
+        check(a.status == TrustAssessmentStatus::Valid && a.rho == 1.0,
+              "a full reduction of a 1e-8 residual is informative");
+        for (double scale : {1.0e-8, 1.0, 1.0e8}) {
+            const auto scaled = torch::tensor({scale}, torch::kFloat64);
+            const auto prediction = wrf::sdirk3::sdirk3_trust_predicted_reduction(scaled, 0.5*scaled, 0.5, {});
+            const auto assessment = assess_trust_model(prediction.reduction(), prediction.merit_old(),
+                                                       prediction.merit_model(), 0.75*prediction.reduction());
+            check(assessment.status == TrustAssessmentStatus::Valid && std::abs(assessment.rho-0.75) < 1e-14,
+                  "uniform residual scaling preserves assessment and rho");
+        }
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        check(assess_trust_model(1.0, nan, nan, 1.0).status != TrustAssessmentStatus::Valid,
+              "unknown linear merits cannot authorize a finite rho");
+        check(assess_trust_model(1.0e-300, 1.0e-300, 0.0, 1.0e300).status != TrustAssessmentStatus::Valid,
+              "overflow in actual/predicted cannot report a valid assessment");
+        check(assess_trust_model(1.0, -1.0, 0.0, 1.0).status != TrustAssessmentStatus::Valid,
+              "negative squared-norm merits are invalid input");
+    }
+
+    const int kExpected = 60;
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count %d expected %d\n", g_cases, kExpected);
         ++g_fail;

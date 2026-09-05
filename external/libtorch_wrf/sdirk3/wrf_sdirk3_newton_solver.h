@@ -64,7 +64,7 @@ struct WRFNewtonKrylovOptions {
     // 4DVAR support
     bool save_trajectory;       // Save state for adjoint
     int checkpoint_interval;    // Steps between checkpoints (e.g., 360 = 1 hour)
-    bool retain_graph_for_adjoint;  // Keep autograd graph for 4DVAR
+    bool retain_graph_for_adjoint;  // Attach first-order implicit pullbacks to converged roots
 
     // Block diagonal scaling for GMRES conditioning
     // S transforms A·dK = -R into S⁻¹·A·S·(S⁻¹·dK) = -S⁻¹·R
@@ -72,8 +72,8 @@ struct WRFNewtonKrylovOptions {
     // CRITICAL: The Newton equation A·dK = -R operates in TENDENCY space (K = dU/dt),
     // NOT state space (U). The scaling S must reflect tendency magnitudes.
     //
-    // S is computed per-block from R₀ at each Newton solve (iter 0),
-    // with these values as lower bounds to prevent zero-scaling.
+    // S is computed once per stage from state RMS/(dt*gamma), with momentum
+    // blocks sharing one RMS. These tendency-unit lower bounds also cover rest.
     // v20.14r27f: Wired to config env vars WRF_SDIRK3_SCALE_{U,PH,T,MU}.
     float scale_u  = 1.0f;     // Floor for momentum tendency blocks (ru, rv, rw)
     float scale_ph = 1.0f;     // Floor for geopotential tendency block
@@ -81,8 +81,8 @@ struct WRFNewtonKrylovOptions {
     float scale_mu = 1.0f;     // Floor for mass tendency block
 
     // Grid dimensions for exact state layout computation
-    // If set to 0 (default), layout will be inferred heuristically from state size
-    // For exact per-block epsilon scaling, set these to actual grid dimensions
+    // Required by solve_stage; missing/mismatched dimensions are rejected.
+    // S=I is supported as an initialized identity scale, not as a missing layout.
     int nx = 0;      // Number of mass points in x-direction
     int ny = 0;      // Number of mass points in y-direction
     int nz = 0;      // Number of mass points in z-direction (vertical levels)

@@ -228,6 +228,57 @@ int main() {
         }
     }
 
+    // Controlled comparisons: fixed A, b, S=I and x0; change only the PC or
+    // the number of restart cycles. Always measure b-A*x independently.
+    {
+        std::function<torch::Tensor(const torch::Tensor&)> M_none;
+        const auto no_pc = solve_fgmres(A_op, b, x0_zero, 0, 0.0f, 3, tol,
+                                        1, M_none, nullptr, nullptr, false, false);
+        const auto diagonal = solve_fgmres(A_op, b, x0_zero, 0, 0.0f, 3, tol,
+                                           1, M_diag, nullptr, nullptr, false, false);
+        const auto more_cycles = solve_fgmres(A_op, b, x0_zero, 0, 0.0f, 3, tol,
+                                              8, M_none, nullptr, nullptr, false, false);
+        const float r_none = true_rel_residual(A_mat, b, no_pc.x);
+        const float r_diag = true_rel_residual(A_mat, b, diagonal.x);
+        const float r_more = true_rel_residual(A_mat, b, more_cycles.x);
+        expect(r_diag < r_none,
+               "H: changing only the PC reduces true residual on this diagonal-dominant fixture");
+        expect(more_cycles.success && r_more <= tol && r_more < r_none,
+               "H: changing only the restart budget reaches the true-residual tolerance");
+        std::printf("CONTROLLED_FGMRES pc=none cycles=1 iterations=%d true_rel=%.9g\n",
+                    no_pc.iterations, r_none);
+        std::printf("CONTROLLED_FGMRES pc=diagonal cycles=1 iterations=%d true_rel=%.9g\n",
+                    diagonal.iterations, r_diag);
+        std::printf("CONTROLLED_FGMRES pc=none cycles=8 iterations=%d true_rel=%.9g\n",
+                    more_cycles.iterations, r_more);
+    }
+
+    // A small, representable residual still carries a useful Arnoldi direction.
+    // The RHS is above the solver's documented denominator floor; this tests
+    // only V[0] normalization after a nearly exact initial guess.
+    {
+        const auto matrix = A_mat.to(torch::kFloat64);
+        const auto rhs = b.to(torch::kFloat64) * 1e-9;
+        const auto exact = torch::linalg_solve(matrix, rhs);
+        const auto near = exact + torch::ones_like(exact)*1e-18;
+        const auto apply = [&](const torch::Tensor& x) { return matrix.matmul(x); };
+        expect((rhs-apply(near)).norm().item<double>() > 0 &&
+               (rhs-apply(near)).norm().item<double>() < 1e-12,
+               "I: initial residual is nonzero and below the old absolute V0 floor");
+        for (bool flexible : {false, true}) {
+            bool accurate = false;
+            try {
+                const auto result = flexible
+                    ? solve_fgmres(apply,rhs,near,0,0,8,1e-11f,3,nullptr,nullptr,nullptr,false,false)
+                    : solve_gmres(apply,rhs,near,0,0,8,1e-11f,3,nullptr,nullptr,nullptr,false,false);
+                accurate = result.success && (rhs-apply(result.x)).norm().item<double>()
+                           / rhs.norm().item<double>() < 1e-11;
+            } catch (const std::exception&) {}
+            expect(accurate, flexible ? "I: FGMRES resolves a tiny finite residual"
+                                     : "I: GMRES resolves a tiny finite residual");
+        }
+    }
+
     if (g_failures == 0) {
         std::printf("ALL fgmres_contract assertions PASSED\n");
         return 0;

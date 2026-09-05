@@ -769,6 +769,9 @@ public:
         }
     }
     int64_t getStateVectorSize() const;
+    // Last completed mode-3 tile step, with fixed timestep, forcing and branches.
+    // Requires retain_graph_for_adjoint; invalidated by the next forward step.
+    torch::Tensor pullbackLastStep(const torch::Tensor& terminal_cotangent);
     torch::Tensor runAdjointReplay(const torch::Tensor& lambda_terminal,
                                    float dt,
                                    float gamma,
@@ -2200,6 +2203,8 @@ private:
     // knowledge of the split forward map (composite VJP lands in Inc 7), so replaying
     // implicit checkpoints after a split forward would return a stale/wrong adjoint.
     bool split_forward_ran_ = false;
+    torch::Tensor last_step_input_graph_;
+    torch::Tensor last_step_output_graph_;
     // Raw U-staggered map-factor verification (external review rounds 3/3b/3c):
     // the periodic-x preprocessing repairs raw zero msfux/msfuy entries to a fallback
     // value, so the split guard cannot trust the (repaired) member tensors. These flags

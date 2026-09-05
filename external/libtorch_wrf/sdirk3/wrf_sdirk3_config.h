@@ -922,7 +922,7 @@ struct SDIRK3Config {
     // Keep default-off for regression neutrality in forecast mode.
     bool save_trajectory = false;          // Save detached forward states for replay
     int checkpoint_interval = 360;         // Timesteps between saved checkpoints
-    bool retain_graph_for_adjoint = false; // Debug-only: retain graph in short windows
+    bool retain_graph_for_adjoint = false; // Retain the last tile step and converged-root pullbacks
     // PR 9E: diagnosis-only stage-operand decomposition capture. Default OFF;
     // when ON it OBSERVES the exact production evaluations (no extra RHS/JVP
     // calls, no numerical branch change) at record stage 2/3 Newton iter-0 on
