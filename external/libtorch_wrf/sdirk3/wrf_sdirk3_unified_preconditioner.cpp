@@ -1928,19 +1928,24 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         for (int k = 1; k < nz_local; ++k) {
             int k_lo = std::min(k - 1, dz_sz - 1);
             int k_hi = std::min(k, dz_sz - 1);
-            float dz_w = 0.5f * (dz_effective_cached_[k_lo] + dz_effective_cached_[k_hi]);
-            dz_w = std::max(dz_w, 1.0f);
+            const float dz_w_builder =
+                0.5f * (dz_effective_cached_[k_lo] + dz_effective_cached_[k_hi]);
+            TORCH_CHECK(std::isfinite(dz_w_builder) && dz_w_builder > 0.0f,
+                        "invalid builder W-level dz at k=", k);
 
             float D_phi = phi_diag_ptr[k];
             float D_W_full = w_diag_ptr[k];
 
-            float acfl = dt_gamma * c_s / dz_w;
+            float acfl = dt_gamma * c_s / dz_w_builder;
             float acfl_sq = acfl * acfl;
-            float A_phi_diag = 1.0f + dt_gamma * c_s * c_s / (dz_w * dz_w);
+            float A_phi_diag = wrf::sdirk3::phi_diagonal_value(
+                dt_gamma, c_s, 1.0f / (dz_w_builder * dz_w_builder),
+                phi_diag_unity_experiment());
             float schur = acfl_sq / A_phi_diag;
             float schur_boosted = schur * w_acoustic_boost_cached_;
             float D_W_nosboost = D_W_full - schur_boosted;
 
+            const float dz_w = std::max(dz_w_builder, 1.0f);
             float GS_A_w_phi = 0.0f;
             if (k < mc_sz) {
                 float mc_k = momentum_coupling_k_cached_[k];
@@ -4900,7 +4905,7 @@ void UnifiedPreconditioner::solve_coupled_w_theta_batched(
     bool phase2_active = (phi_block != nullptr && phi_diag != nullptr && A_eff != nullptr);
 
     // Precompute Thomas c_prime scalars (same for all columns)
-    // Phase 2: vd_w_eff[k] = vd_w[k] + A_eff[k]²/D_phi[k]
+    // Phase 2 replaces the builder Schur term: D_w_eff = cached D0 + A_eff²/D_phi.
     std::vector<float> c_prime_w(nz_w), denom_w(nz_w);
 
     // v20.14 r47c: ablation flag — boost can be independently disabled
@@ -4913,8 +4918,14 @@ void UnifiedPreconditioner::solve_coupled_w_theta_batched(
         if (!boost_on || k <= 0 || k >= nz || k >= phase2_nz_w) return vd;
         float D_phi_k = phi_diag[k];
         if (D_phi_k <= 1e-6f) return vd;
+        TORCH_CHECK(phi_w_cached_gen_ == coefficient_generation_ &&
+                    k >= 0 && static_cast<size_t>(k) < phi_w_D_w_nosboost_.size(),
+                    "Phase 2 requires a current phi_w_D_w_nosboost_ cache");
+        // The cache owns D0, including its configured floor. Do not subtract a
+        // newly recomputed builder Schur term from D_W_full here.
+        const float D_w0 = phi_w_D_w_nosboost_[k];
         float A = A_eff[k];
-        return vd + A * A / D_phi_k;
+        return D_w0 + A * A / D_phi_k;
     };
 
     denom_w[0] = safe_denom(get_vd_eff(0));
@@ -5073,7 +5084,12 @@ bool UnifiedPreconditioner::compute_phi_w_coupling_coefficients(int nz, int nz_w
         ++interior_count;
         int k_lo = std::min(k - 1, dz_sz - 1);
         int k_hi = std::min(k, dz_sz - 1);
-        float dz_w = std::max(0.5f * (dz_effective_cached_[k_lo] + dz_effective_cached_[k_hi]), 1.0f);
+        const float dz_w_builder =
+            0.5f * (dz_effective_cached_[k_lo] + dz_effective_cached_[k_hi]);
+        TORCH_CHECK(std::isfinite(dz_w_builder) && dz_w_builder > 0.0f,
+                    "invalid builder W-level dz at k=", k);
+        // Preserve the existing safety clamp for the heuristic A_wphi scale.
+        const float dz_w = std::max(dz_w_builder, 1.0f);
 
         // Compute A_wφ based on coupling scale
         float A_wph = 0.0f;
@@ -5093,8 +5109,11 @@ bool UnifiedPreconditioner::compute_phi_w_coupling_coefficients(int nz, int nz_w
         phi_w_coupling_wph_[k] = A_wph;
 
         // D_W_nosboost = D_W_full - schur_boosted
-        float acfl_sq = (dt_gamma * c_s / dz_w) * (dt_gamma * c_s / dz_w);
-        float A_phi_diag = 1.0f + dt_gamma * c_s * c_s / (dz_w * dz_w);
+        const float acfl_builder = dt_gamma * c_s / dz_w_builder;
+        float acfl_sq = acfl_builder * acfl_builder;
+        float A_phi_diag = wrf::sdirk3::phi_diagonal_value(
+            dt_gamma, c_s, 1.0f / (dz_w_builder * dz_w_builder),
+            phi_diag_unity_experiment());
         float schur = acfl_sq / A_phi_diag;
         float schur_boosted = schur * w_acoustic_boost_cached_;
         float D_W_nosboost = w_diag_ptr[k] - schur_boosted;

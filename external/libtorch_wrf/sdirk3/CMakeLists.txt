@@ -546,6 +546,13 @@ add_executable(test_w_damping_coordinate_contract tests/test_w_damping_coordinat
 target_link_libraries(test_w_damping_coordinate_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME W_Damping_Coordinate_Contract COMMAND test_w_damping_coordinate_contract)
 
+add_executable(test_consistent_d0_phase2 tests/test_consistent_d0_phase2.cpp)
+target_link_libraries(test_consistent_d0_phase2 PRIVATE wrf_sdirk3::core)
+add_test(NAME Phase2_D0_Contract COMMAND test_consistent_d0_phase2)
+add_test(NAME Phase2_D0_Uncapped COMMAND test_consistent_d0_phase2 --uncapped)
+add_test(NAME Phase2_D0_Floor COMMAND test_consistent_d0_phase2 --floor-hit)
+add_test(NAME Phase2_D0_Phi_Unity COMMAND test_consistent_d0_phase2 --phi-unity)
+
 add_executable(test_two_step_tile_adjoint tests/test_two_step_tile_adjoint.cpp)
 target_link_libraries(test_two_step_tile_adjoint PRIVATE wrf_sdirk3::core)
 add_test(NAME Two_Step_Tile_Adjoint COMMAND test_two_step_tile_adjoint)

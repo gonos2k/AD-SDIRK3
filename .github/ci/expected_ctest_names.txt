@@ -80,3 +80,7 @@ Two_Step_Tile_Adjoint
 Coriolis_Contract
 Phi_Coordinate_Contract
 W_Damping_Coordinate_Contract
+Phase2_D0_Contract
+Phase2_D0_Uncapped
+Phase2_D0_Floor
+Phase2_D0_Phi_Unity
