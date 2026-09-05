@@ -532,6 +532,12 @@ add_executable(test_horizontal_momentum_contract tests/test_horizontal_momentum_
 target_link_libraries(test_horizontal_momentum_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Horizontal_Momentum_Contract COMMAND test_horizontal_momentum_contract)
 
+add_executable(test_coriolis_contract
+  tests/test_coriolis_contract.cpp
+  tests/test_coriolis_coefficients.cpp)
+target_link_libraries(test_coriolis_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Coriolis_Contract COMMAND test_coriolis_contract)
+
 add_executable(test_two_step_tile_adjoint tests/test_two_step_tile_adjoint.cpp)
 target_link_libraries(test_two_step_tile_adjoint PRIVATE wrf_sdirk3::core)
 add_test(NAME Two_Step_Tile_Adjoint COMMAND test_two_step_tile_adjoint)

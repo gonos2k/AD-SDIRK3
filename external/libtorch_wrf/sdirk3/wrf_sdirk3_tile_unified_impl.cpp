@@ -125,6 +125,7 @@
 // =========================================================================
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
+#include "wrf_sdirk3_coriolis.h"
 #include "wrf_sdirk3_horizontal_momentum.h"
 #include "wrf_sdirk3_metric_policy.h"
 #include "wrf_sdirk3_transpose_probe.h"
@@ -21777,7 +21778,53 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             }
         }
         
-        // --- U-momentum Coriolis ---
+        // Canonical WRF Coriolis on the physical periodic-X,
+        // symmetric-Y core.  The legacy ru/rv/rw tensors above remain
+        // untouched because curvature below consumes them.
+        const bool canonical_coriolis =
+            canonical_horizontal && use_spatially_varying_coriolis &&
+            f_.defined() && e_.defined() && sina_.defined() && cosa_.defined() &&
+            f_.dim() == 2 && e_.dim() == 2 && sina_.dim() == 2 && cosa_.dim() == 2;
+        if (canonical_coriolis) {
+            const auto m = momentum_m;
+            const auto n = momentum_n;
+            const auto uc = u.slice(0, 0, m).slice(2, 0, n + 1);
+            const auto vc = v.slice(0, 0, m + 1).slice(2, 0, n);
+            const auto wc = w.slice(0, 0, m).slice(2, 0, n);
+            const auto map_u_x = msfux_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n + 1);
+            const auto map_u_y = msfuy_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n + 1);
+            const auto map_v_x = msfvx_.to(v.device(), v.scalar_type()).slice(0, 0, m + 1).slice(1, 0, n);
+            const auto map_v_y = msfvy_.to(v.device(), v.scalar_type()).slice(0, 0, m + 1).slice(1, 0, n);
+            const auto map_w_x = msftx_.to(w.device(), w.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto map_w_y = msfty_.to(w.device(), w.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto alpha_u = level_mass_u.slice(0, 0, m).slice(2, 0, n + 1) /
+                                 map_u_y.unsqueeze(1);
+            const auto alpha_v = level_mass_v.slice(0, 0, m + 1).slice(2, 0, n) /
+                                 map_v_x.unsqueeze(1);
+            const auto alpha_w = level_mass_w.slice(0, 0, m).slice(2, 0, n) /
+                                 map_w_y.unsqueeze(1);
+            const auto f_core = f_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto e_core = e_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto sina_core = sina_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto cosa_core = cosa_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto raw = wrf::sdirk3::wrf_coriolis_tendencies(
+                uc, vc, wc, alpha_u, alpha_v, alpha_w,
+                map_u_x, map_u_y, map_v_x, map_v_y, map_w_x, map_w_y,
+                f_core, e_core, sina_core, cosa_core,
+                fnm_.to(w.device(), w.scalar_type()), fnp_.to(w.device(), w.scalar_type()));
+            const auto raw_u = extend_u(raw.u);
+            const auto raw_v = extend_v(raw.v, true);
+            const auto raw_w = extend_w(raw.w);
+            // Convert the canonical raw rate to the existing coupled
+            // accumulator; the final division by velocity_mass restores the
+            // physical velocity rate.
+            const auto map_u_y_full = msfuy_.to(u.device(), u.scalar_type()).unsqueeze(1).expand_as(level_mass_u);
+            const auto map_v_x_full = msfvx_.to(v.device(), v.scalar_type()).unsqueeze(1).expand_as(level_mass_v);
+            const auto map_w_y_full = msfty_.to(w.device(), w.scalar_type()).unsqueeze(1).expand_as(level_mass_w);
+            ru_tend = ru_tend + raw_u * (velocity_mass_u / (level_mass_u / map_u_y_full));
+            rv_tend = rv_tend + raw_v * (velocity_mass_v / (level_mass_v / map_v_x_full));
+            rw_tend = rw_tend + raw_w * (velocity_mass_w / (level_mass_w / map_w_y_full));
+        } else {
         // ru_tend = +(msfux/msfuy)*f*rv_at_u - e*cosa*rw_at_u
         // WRF-CONSISTENT: Use coupled momentum (rv = mu*v/mx) for Coriolis per Fortran L3727
         {
@@ -22455,6 +22502,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             rw_tend = rw_tend + e_3d * (
                 0.5f * cosa_3d * ru_at_w - 0.5f * msf_ratio_mass_3d * sina_3d * rv_at_w
             );
+        }
         }
     }
     
