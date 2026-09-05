@@ -25,7 +25,7 @@ The differentiable implicit solve converges at small timesteps; making it conver
 stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
 it is **unresolved**.
 
-Verification is an **exact 62-test CTest inventory** pinned by
+Verification is an **exact 64-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
@@ -41,6 +41,12 @@ correction. They are historical measurements, not new forecast or stability cert
   then tests actual tile X/Y accelerations from separate geopotential and thermal gradients
   at two grid spacings. This catches the former V double-spacing factor and U half-pressure
   term; unused V pressure interpolation and base-geopotential differences were removed.
+- **Fixed symmetric walls and observational diagnostics.** State, forcing and RHS use the
+  same orthogonal normal-velocity projection, including physical wall indices in full-halo
+  fields. The retained step differentiates both input and output projections. The production
+  wall test verifies zero normal velocity and zero wall-output VJP while preserving interior
+  Coriolis response. Debug levels 0/2 produce identical finite results and both reject an
+  undefined EOS; logging no longer replaces a non-finite RHS with zero.
 - **Base-state EOS and hydrostatic pressure.** WRF's Exner form
   `alpha = (R_d/p0)*theta*(p/p0)^(-cv/cp)` is a single authority, contract-tested forward *and*
   in its tangent. The pressure integrator's eta orientation is pinned against WRF's own algebra

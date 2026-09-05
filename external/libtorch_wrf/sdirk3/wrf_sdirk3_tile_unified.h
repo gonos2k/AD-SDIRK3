@@ -2123,6 +2123,8 @@ private:
                                      const torch::Tensor& K_prev = torch::Tensor(),
                                      const torch::Tensor& U_full_exchanged = torch::Tensor());
 
+    torch::Tensor projectSymmetricNormalVelocity(const torch::Tensor& state);
+
     torch::Tensor computeUnifiedRHS(const torch::Tensor& U, wrf::sdirk3::RhsMode mode = wrf::sdirk3::RhsMode::Full);
 
     // Full-halo RHS computation for AD halo path (Step 7c)

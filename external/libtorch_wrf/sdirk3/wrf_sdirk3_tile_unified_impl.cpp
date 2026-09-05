@@ -249,6 +249,7 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#include "wrf_sdirk3_boundary_ad.h"
 #include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_owned_box.h"
 #include "wrf_sdirk3_halo_c_api.h"
@@ -5973,6 +5974,10 @@ vertical_coefficients:
         U_n = U_n.detach().clone().requires_grad_(true);
     }
 
+    // Keep the original leaf so the full-step VJP includes the input projection.
+    const auto step_input_graph = U_n;
+    U_n = projectSymmetricNormalVelocity(U_n);
+
     // 9F.D66/D81: the adjoint driver, opt-in via WRF_SDIRK3_ADJOINT_DRIVER.
     //
     // runAdjointReplay is unreachable from em_b_wave -- it is entered through
@@ -6144,6 +6149,8 @@ vertical_coefficients:
                           ph_tend, t_tend, mu_tend, nx_u, ny_v, nz_w);
     }
     
+    F_phys = projectSymmetricNormalVelocity(F_phys);
+
     // SDIRK3 Stage computations
     // k2/k3 initialized to zero so partial updates are safe if stages are aborted.
     torch::Tensor k1;
@@ -12492,10 +12499,12 @@ vertical_coefficients:
         throw;
     }
     
+    // The full map is P G(P U): fixed wall values are not control variables.
+    U_new = projectSymmetricNormalVelocity(U_new);
     // Unpack updated state with staggered dimensions
     unpackState(U_new, u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
     if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
-        last_step_input_graph_ = U_n;
+        last_step_input_graph_ = step_input_graph;
         last_step_output_graph_ = U_new;
     }
 
@@ -14171,6 +14180,20 @@ static uint64_t sdirk3_rhs_operand_digest(const torch::Tensor& t) {
     return h;
 }
 
+torch::Tensor TileSDIRK3UnifiedSolver::projectSymmetricNormalVelocity(const torch::Tensor& state) {
+    if ((!config_flags_symmetric_xs_ && !config_flags_symmetric_xe_ &&
+         !config_flags_symmetric_ys_ && !config_flags_symmetric_ye_) || !state.defined())
+        return state;
+    auto [u, v, w, ph, t, mu] = extractStateVariables(state);
+    const auto pu = wrf::sdirk3::project_symmetric_normal_velocity(
+        u, 2, its_, ids_, ide_, config_flags_symmetric_xs_ && !config_flags_periodic_x_,
+                              config_flags_symmetric_xe_ && !config_flags_periodic_x_);
+    const auto pv = wrf::sdirk3::project_symmetric_normal_velocity(
+        v, 0, jts_, jds_, jde_, config_flags_symmetric_ys_ && !config_flags_periodic_y_,
+                              config_flags_symmetric_ye_ && !config_flags_periodic_y_);
+    return combineStateVariables(pu, pv, w, ph, t, mu);
+}
+
 torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U, RhsMode mode) {
     // Step 7b: Detect full-halo input and redirect
     {
@@ -14368,7 +14391,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // FIX Round153: Removed orphan flush() from hot path
 
     PROFILE_START(rhs_unpack);
-    auto [u, v, w, ph, t, mu] = extractStateVariables(U);
+    const auto constrained_state = projectSymmetricNormalVelocity(U);
+    auto [u, v, w, ph, t, mu] = extractStateVariables(constrained_state);
     PROFILE_END(rhs_unpack);
 
     // CRITICAL FIX: Extract w_ref from reference state for BOTH:
@@ -24664,7 +24688,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         wrf::sdirk3::g_sdirk3_config.wrf_damp_opt == 2 &&
         wrf::sdirk3::g_sdirk3_config.rayleigh_damp_coef > 0.0f &&
         wrf::sdirk3::g_sdirk3_config.rayleigh_damp_depth > 0.0f) {
-        applyRayleighDamping(RHS, U);
+        applyRayleighDamping(RHS, constrained_state);
     }
 
     // Divergence damping: applied in do_implicit for acoustic mode stabilization (2026-02-01)
@@ -24678,35 +24702,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         applyDivergenceDamping(RHS, u, v, w);
     }
 
-    // Final RHS validation
-    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        torch::NoGradGuard no_grad;
-        // PERF FIX 2025-12-28: Pre-copy to CPU with _cpu suffix for consistency
-        auto RHS_cpu = RHS.detach().to(torch::kCPU);
-        // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-        auto rhs_norm_cpu = RHS_cpu.norm();
-        auto rhs_norm = rhs_norm_cpu.item<float>();
-
-        if (std::isnan(rhs_norm) || std::isinf(rhs_norm)) {
-            return torch::zeros_like(RHS);
-        } else if (rhs_norm > 1e7f) {
-            // AUTOGRAD: No clamping per user requirement - preserve computation graph
-        }
-    }    
-    // Rayleigh damping: moved to do_explicit block (2026-02-01) for precond-RHS consistency.
-    // See Step 7-10 section above.
-
-    // Final check - PERF FIX 2025-12-27: Gate behind debug_level >= 1 to avoid production sync
-    // Use !isfinite().all() to combine NaN+Inf check in one reduction
-    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        torch::NoGradGuard no_grad;
-        // Pre-copy RHS to CPU once for all checks
-        auto RHS_cpu = RHS.detach().to(torch::kCPU);
-        // PERF FIX 2025-12-28: Pre-compute boolean check with _cpu suffix
-        auto RHS_finite_cpu = torch::isfinite(RHS_cpu).all();
-        [[maybe_unused]] bool has_bad = !RHS_finite_cpu.item<bool>();
-        // has_bad check available for future debug output
-    }
+    // Logging must not replace an invalid RHS with zero: the stage solver must
+    // see the same residual and failure status at every debug level.
 
     // DIAGNOSTIC 2026-02-01: Log mask activation summary for JVP discontinuity diagnosis
     // v20.14r27: Raised to debug_level >= 2 (hot-path RHS, 1 line per call)
@@ -24720,7 +24717,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                   << std::endl;
     }
 
-    return RHS;
+    return projectSymmetricNormalVelocity(RHS);
 }
 
 void TileSDIRK3UnifiedSolver::applyRayleighDamping(torch::Tensor& rhs,
@@ -38105,6 +38102,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHSFullHalo(
 
     // Unpack full-halo fields via views (Finding #6)
     auto fields = wrf::sdirk3::viewFullHaloFields(U_full, nj_mem_, nz_, ni_mem_, nz_w_);
+    // Constrain physical wall entries before both interior and ghost-stencil paths.
+    fields.u = wrf::sdirk3::project_symmetric_normal_velocity(
+        fields.u, 2, ims_, ids_, ide_, config_flags_symmetric_xs_ && !config_flags_periodic_x_,
+                                     config_flags_symmetric_xe_ && !config_flags_periodic_x_);
+    fields.v = wrf::sdirk3::project_symmetric_normal_velocity(
+        fields.v, 0, jms_, jds_, jde_, config_flags_symmetric_ys_ && !config_flags_periodic_y_,
+                                     config_flags_symmetric_ye_ && !config_flags_periodic_y_);
 
     // Interior bounds in full-halo coordinates
     const int64_t j_s = j_off_;
@@ -38476,7 +38480,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHSFullHalo(
     }
 #endif
 
-    return result;
+    return projectSymmetricNormalVelocity(result);
 }
 
 // =========================================================================

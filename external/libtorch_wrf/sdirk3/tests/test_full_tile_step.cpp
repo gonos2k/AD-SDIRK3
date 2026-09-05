@@ -3,8 +3,10 @@
 #include "../wrf_sdirk3_hydrostatic_balance.h"
 #include "../wrf_hydrostatic_pressure.h"
 #include "../wrf_sdirk3_acoustic_substep.h"
+#include "../wrf_sdirk3_boundary_ad.h"
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <sstream>
 
 namespace {
@@ -28,11 +30,13 @@ struct TileCase {
     std::vector<float> half = std::vector<float>(nw, 0.5f);
     std::vector<float> setup_state = std::vector<float>(nv*nw*nu, 0.0f);
     std::vector<float> setup_density = std::vector<float>(nv*nw*nu, 1.0f);
+    std::vector<float> setup_f = std::vector<float>((nv+1)*(nu+1), 0.0f);
+    std::vector<float> setup_zero = std::vector<float>((nv+1)*(nu+1), 0.0f);
     std::vector<float> setup_map = std::vector<float>((nv+1)*(nu+1), 1.0f);
     float spacing;
     TileSDIRK3UnifiedSolver solver;
 
-    explicit TileCase(float grid_spacing = 100000.0f)
+    explicit TileCase(float grid_spacing = 100000.0f, float coriolis = 0.0f)
         : spacing(grid_spacing), solver(nx, ny, nz, spacing, spacing,
                        {1.0f/spacing}, {1.0f/spacing}, std::vector<float>(nz, nz), 0) {
         solver.setWRFIndices(1, nx+1, 1, ny+1, 1, nz,
@@ -78,6 +82,9 @@ struct TileCase {
             setup.msfvx_ptr=setup.msfvy_ptr=setup_map.data();
         setup.c1f_ptr=setup.c1h_ptr=one.data(); setup.c2f_ptr=setup.c2h_ptr=zero.data();
         setup.fnm_ptr=setup.fnp_ptr=half.data();
+        std::fill(setup_f.begin(),setup_f.end(),coriolis);
+        setup.f_ptr=setup_f.data(); setup.e_ptr=setup.sina_ptr=setup_zero.data();
+        setup.cosa_ptr=setup_map.data();
         solver.advanceZeroCopy(setup, 2, 0.1f);
     }
 
@@ -188,6 +195,112 @@ void check_horizontal_pgf() {
     TORCH_CHECK(valid, "production horizontal PGF violates its metric/averaging contract");
 }
 
+void check_symmetric_walls() {
+    // An internal tile edge is not a physical wall; P is self-adjoint and
+    // idempotent on fixed boundaries, and removes only the constrained entries.
+    const auto a = torch::arange(24,torch::kFloat64).view({2,3,4});
+    const auto b = torch::sin(a);
+    const auto project = [](const torch::Tensor& x) {
+        return wrf::sdirk3::project_symmetric_normal_velocity(x,2,4,4,7,true,true);
+    };
+    TORCH_CHECK(torch::equal(project(project(a)),project(a)), "boundary projection is not idempotent");
+    TORCH_CHECK(std::abs(((project(a)*b)-(a*project(b))).sum().item<double>()) < 1e-14,
+                "boundary projection is not self-adjoint");
+    TORCH_CHECK(torch::equal(a,wrf::sdirk3::project_symmetric_normal_velocity(a,2,4,1,9,true,true)),
+                "an internal tile edge was mistaken for a physical wall");
+    const auto halo = wrf::sdirk3::project_symmetric_normal_velocity(a,2,0,1,9,true,true);
+    TORCH_CHECK(torch::equal(halo.select(2,1),torch::zeros_like(a.select(2,1))) &&
+                torch::equal(halo.select(2,0),a.select(2,0)) &&
+                torch::equal(halo.slice(2,2,4),a.slice(2,2,4)),
+                "full-halo origin placed the physical wall on the wrong local index");
+    auto masked_nan = a.clone();
+    masked_nan.select(2,0).fill_(std::numeric_limits<double>::quiet_NaN());
+    TORCH_CHECK(torch::isfinite(project(masked_nan)).all().item<bool>(), "inactive boundary NaN leaked");
+    masked_nan.select(2,1).fill_(std::numeric_limits<double>::quiet_NaN());
+    TORCH_CHECK(!torch::isfinite(project(masked_nan)).all().item<bool>(), "active NaN was hidden");
+    constexpr float f = 1e-4f, speed = 10.0f, dt = 0.01f;
+    bool valid = true;
+    for (bool y_wall : {false, true}) {
+        TileCase tile(100000.0f, f);
+        if (y_wall) {
+            std::fill(tile.u.begin(), tile.u.end(), speed);
+        } else {
+            tile.solver.setBoundaryConditions(false, true, true, true, false, false,
+                                               false, false, false, false);
+            std::fill(tile.v.begin(), tile.v.end(), speed);
+        }
+        tile.step(dt);
+        double wall_max = 0, interior_sum = 0;
+        int count = 0;
+        auto terminal = torch::zeros(total, torch::kFloat32);
+        for (int j=0; j<(y_wall ? nv : ny); ++j)
+            for (int k=0; k<nz; ++k)
+                for (int i=0; i<(y_wall ? nx : nu); ++i) {
+                    const int local = y_wall ? (j*nz+k)*nx+i : (j*nz+k)*nu+i;
+                    const double value = y_wall ? tile.v[local] : tile.u[local];
+                    const bool wall = y_wall ? (j==0 || j==nv-1) : (i==0 || i==nu-1);
+                    if (wall) {
+                        wall_max = std::max(wall_max,std::abs(value));
+                        terminal.index_put_({(y_wall ? su : 0)+local},1.0f);
+                    } else if (j>1 && j<ny-1 && i>1 && i<nx-1) {
+                        interior_sum += value; ++count;
+                    }
+                }
+        const double expected = (y_wall ? -1 : 1)*f*speed*dt;
+        const double error = std::abs(interior_sum/count/expected-1);
+        const double wall_pullback = tile.solver.pullbackLastStep(terminal).abs().max().item<double>();
+        std::cout << "SYMMETRIC_WALL axis=" << (y_wall ? 'y' : 'x')
+                  << " wall_max=" << wall_max << " interior_error=" << error
+                  << " wall_pullback=" << wall_pullback << '\n';
+        TileCase contaminated(100000.0f,f);
+        if (y_wall) {
+            std::fill(contaminated.u.begin(),contaminated.u.end(),speed);
+            for (int j : {0,nv-1})
+                for (int k=0; k<nz; ++k)
+                    for (int i=0; i<nx; ++i) contaminated.v[(j*nz+k)*nx+i] = 3.0f;
+        } else {
+            contaminated.solver.setBoundaryConditions(false,true,true,true,false,false,
+                                                      false,false,false,false);
+            std::fill(contaminated.v.begin(),contaminated.v.end(),speed);
+            for (int j=0; j<ny; ++j)
+                for (int k=0; k<nz; ++k)
+                    for (int i : {0,nu-1}) contaminated.u[(j*nz+k)*nu+i] = 3.0f;
+        }
+        contaminated.step(dt);
+        const bool input_projected = torch::equal(tile.state(),contaminated.state());
+        std::cout << "SYMMETRIC_WALL input_projection_equal=" << input_projected << '\n';
+        valid = valid && wall_max == 0 && wall_pullback == 0 && input_projected
+                      && std::isfinite(error) && error < 1e-3;
+    }
+    TORCH_CHECK(valid, "fixed symmetric boundary or its full-step derivative is inconsistent");
+}
+
+void check_rhs_debug_invariance() {
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg.retain_graph_for_adjoint = false;
+    cfg.nan_sanitize_mode = 0;
+    std::vector<torch::Tensor> valid_states;
+    bool all_rejected = true;
+    for (int level : {0,2}) {
+        cfg.debug_level = level;
+        TileCase valid;
+        valid.step(0.01f);
+        valid_states.push_back(valid.state());
+        TileCase invalid;
+        // Finite input, but negative absolute theta makes the fractional EOS
+        // power undefined. Logging must not turn that invalid RHS into zero.
+        std::fill(invalid.theta.begin(),invalid.theta.end(),-400.0f);
+        bool rejected = false;
+        try { invalid.step(0.01f); }
+        catch (const std::exception&) { rejected = true; }
+        std::cout << "RHS_DEBUG level=" << level << " invalid_rejected=" << rejected << '\n';
+        all_rejected = all_rejected && rejected;
+    }
+    cfg.debug_level = 0;
+    TORCH_CHECK(torch::equal(valid_states[0],valid_states[1]), "debug level changed the finite forward result");
+    TORCH_CHECK(all_rejected, "debug level converted an invalid RHS into successful integration");
+}
+
 void check_temporal_order() {
     const auto integrate = [](int steps, float tolerance) {
         wrf::sdirk3::g_sdirk3_config.newton_tol = tolerance;
@@ -244,6 +357,16 @@ int main(int argc, char** argv) {
     std::ostringstream log;
     auto* previous = std::cerr.rdbuf(log.rdbuf());
     try {
+        if (argc == 2 && std::string(argv[1]) == "--symmetric-walls") {
+            check_symmetric_walls();
+            std::cerr.rdbuf(previous);
+            return 0;
+        }
+        if (argc == 2 && std::string(argv[1]) == "--rhs-debug-invariance") {
+            check_rhs_debug_invariance();
+            std::cerr.rdbuf(previous);
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--horizontal-pgf") {
             cfg.retain_graph_for_adjoint = false;
             check_horizontal_pgf();

@@ -8,11 +8,33 @@
 
 #include <torch/torch.h>
 #include <string>
+#include <vector>
 #include "wrf_config_flags.h"
 #include "wrf_sdirk3_types.h"
 
 namespace wrf {
 namespace sdirk3 {
+
+// Orthogonal projection onto fixed zero normal-velocity values at physical
+// symmetric walls. Global indices distinguish a wall from an internal tile edge.
+// This operation is its own transpose; where also removes inactive NaN values.
+inline torch::Tensor project_symmetric_normal_velocity(
+    const torch::Tensor& field, int axis, int global_first,
+    int domain_lower, int domain_upper, bool lower_wall, bool upper_wall) {
+    TORCH_CHECK(field.dim() == 3 && (axis == 0 || axis == 2),
+                "normal-velocity projection requires a horizontal axis of a 3D field");
+    const auto extent = field.size(axis);
+    lower_wall = lower_wall && domain_lower >= global_first && domain_lower < global_first+extent;
+    upper_wall = upper_wall && domain_upper >= global_first && domain_upper < global_first+extent;
+    if (!lower_wall && !upper_wall) return field;
+    const auto indices = torch::arange(extent, field.options().dtype(torch::kInt64)) + global_first;
+    auto active = torch::ones({extent}, field.options().dtype(torch::kBool));
+    if (lower_wall) active = active & (indices != domain_lower);
+    if (upper_wall) active = active & (indices != domain_upper);
+    std::vector<int64_t> shape{1,1,1};
+    shape[axis] = extent;
+    return torch::where(active.view(shape), field, torch::zeros_like(field));
+}
 
 // Core boundary operations
 void applyPeriodicBoundaryAD(

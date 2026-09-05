@@ -60,3 +60,5 @@ ARK324_Production_Composition
 Full_Tile_Step_Adjoint
 Full_Tile_Temporal_Order
 Full_Tile_Horizontal_PGF
+Full_Tile_Symmetric_Walls
+Full_Tile_RHS_Debug_Invariance
