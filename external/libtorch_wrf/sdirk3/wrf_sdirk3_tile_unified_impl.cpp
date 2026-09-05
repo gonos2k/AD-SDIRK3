@@ -26726,19 +26726,20 @@ TileSDIRK3UnifiedSolver::advectPackedPeriodicMomentumX(
     };
     auto pad_v = [&](const torch::Tensor& q) {
         const auto x = torch::cat({q, q.slice(2, 0, 1)}, 2);
-        return torch::cat({x, x.slice(0, m, m + 1)}, 0);
+        // WRF symmetric_ye: V[jde+1] = -V[jde-1].  The wall is row m.
+        return torch::cat({x, -x.slice(0, m - 1, m)}, 0);
     };
-    auto du = pad_u(divergence(ut, transport_u,
-        msfux_.slice(0, 0, m).slice(1, 0, n)));
-    auto dv = pad_v(divergence(vt, transport_v,
-        msfvy_.slice(0, 0, m + 1).slice(1, 0, n)));
+    auto du = divergence(ut, transport_u,
+        msfux_.slice(0, 0, m).slice(1, 0, n));
+    auto dv = divergence(vt, transport_v,
+        msfvy_.slice(0, 0, m + 1).slice(1, 0, n));
     if (!wrf_coupled_output) {
         // Return the physical velocity contribution.  The caller reweights it
         // with its exact shared denominator before combining legacy terms.
-        du = du / pad_u(alpha_u);
-        dv = dv / pad_v(alpha_v);
+        du = du / alpha_u;
+        dv = dv / alpha_v;
     }
-    return {du, dv};
+    return {pad_u(du), pad_v(dv)};
 }
 
 // Advection functions for already-staggered variables

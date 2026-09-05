@@ -235,8 +235,8 @@ Fields make_fields(float transport_sign, bool varying_mu, bool constant_field,
         }
     }
 
-    // Packed identities are the true-domain aliases used by pad3u/pad3v and
-    // the new helper.  The mass last row repeats the last true row.
+    // WRF packed boundary values: periodic X and symmetric Y.
+    // Mass/U are even; the V ghost north of the wall is odd.
     for (int j = 0; j < kPackedMassY; ++j) {
         const int source_j = std::min(j, kM - 1);
         for (int k = 0; k < kNz; ++k) {
@@ -275,14 +275,14 @@ Fields make_fields(float transport_sign, bool varying_mu, bool constant_field,
     }
     for (int k = 0; k < kNz; ++k) {
         for (int i = 0; i < kPackedV; ++i) {
-            f.v[v_index(kM + 1, k, i)] = f.v[v_index(kM, k, i)];
+            f.v[v_index(kM + 1, k, i)] = -f.v[v_index(kM - 1, k, i)];
         }
     }
     for (int i = 0; i < kPackedV; ++i) {
         f.msfvx[static_cast<size_t>(kM + 1) * kPackedV + i] =
-            f.msfvx[static_cast<size_t>(kM) * kPackedV + i];
+            f.msfvx[static_cast<size_t>(kM - 1) * kPackedV + i];
         f.msfvy[static_cast<size_t>(kM + 1) * kPackedV + i] =
-            f.msfvy[static_cast<size_t>(kM) * kPackedV + i];
+            f.msfvy[static_cast<size_t>(kM - 1) * kPackedV + i];
     }
     return f;
 }
@@ -410,7 +410,7 @@ Oracle make_oracle(const Fields& f, const Coefficients& c, int order,
         }
     }
 
-    // Copy every packed alias, including the repeated y row.  The core
+    // Copy periodic aliases and apply even U / odd V north reflection. The core
     // columns/rows were computed above on the true domain; aliases must copy
     // those values rather than remain at the vector's zero initialization.
     for (int j = 0; j < kPackedMassY; ++j) {
@@ -426,13 +426,13 @@ Oracle make_oracle(const Fields& f, const Coefficients& c, int order,
         }
     }
     for (int j = 0; j < kPackedVY; ++j) {
-        const int source_j = std::min(j, kM);
+        const int source_j = j > kM ? kM - 1 : j;
         for (int k = 0; k < kNz; ++k) {
             for (int i = 0; i < kPackedV; ++i) {
                 if (j > kM || i >= kN) {
                     const int source_i = i < kN ? i : 0;
                     out.canonical_v[packed_v_index(j, k, i)] =
-                        out.canonical_v[packed_v_index(source_j, k, source_i)];
+                        (j > kM ? -1.0f : 1.0f) * out.canonical_v[packed_v_index(source_j, k, source_i)];
                 }
             }
         }
@@ -450,7 +450,7 @@ Oracle make_oracle(const Fields& f, const Coefficients& c, int order,
         }
     }
     for (int j = 0; j < kPackedVY; ++j) {
-        const int source_j = std::min(j, kM);
+        const int source_j = j > kM ? kM - 1 : j;
         for (int k = 0; k < kNz; ++k) {
             for (int i = 0; i < kPackedV; ++i) {
                 if (j > kM || i >= kN) {
@@ -544,9 +544,9 @@ void check_aliases(const std::pair<torch::Tensor, torch::Tensor>& out,
     TORCH_CHECK(std::abs(out.second[0][0][kN].item<float>() -
                          out.second[0][0][0].item<float>()) < tolerance,
                 "V seam alias V[N] != V[0]");
-    TORCH_CHECK(std::abs(out.second[kM + 1][0][0].item<float>() -
-                         out.second[kM][0][0].item<float>()) < tolerance,
-                "V y pad alias != last true V row");
+    TORCH_CHECK(std::abs(out.second[kM + 1][0][0].item<float>() +
+                         out.second[kM - 1][0][0].item<float>()) < tolerance,
+                "V north ghost is not the odd reflection of the interior row");
     (void)oracle;
 }
 
