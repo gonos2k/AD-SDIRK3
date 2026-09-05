@@ -75,6 +75,8 @@ double run_case(const Case& c, RhsMode mode, bool hevi) {
 
 void check_w_pgf_coordinates();
 void check_pgf_debug_contract();
+void check_v_pgf_nonfinite_contract();
+void check_u_norm_overflow_sanitize_contract();
 
 int main() {
     torch::set_num_threads(1);
@@ -103,5 +105,7 @@ int main() {
     }
     check_w_pgf_coordinates();
     check_pgf_debug_contract();
+    check_v_pgf_nonfinite_contract();
+    check_u_norm_overflow_sanitize_contract();
     return 0;
 }

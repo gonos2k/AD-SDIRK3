@@ -19925,13 +19925,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             const auto alpha_v = (c1 * muv_3d + c2) / msfvx_3d;
             rv_tend_pgf = rv_tend_pgf * (velocity_mass_v / alpha_v);
         }
-        // Guard V-PGF against non-finite halo/boundary artifacts to prevent NaN
-        // propagation into Newton scaling (S[rv]=nan).
-        {
-            auto rv_pgf_finite = torch::isfinite(rv_tend_pgf);
-            rv_tend_pgf = torch::where(rv_pgf_finite, rv_tend_pgf, torch::zeros_like(rv_tend_pgf));
-        }
-
         // AUTOGRAD DEBUG: Check tensor shapes before addition
         rv_tend = rv_tend + rv_tend_pgf;    }
     
@@ -24408,8 +24401,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         auto check_tend = [&nan_cnt, do_sanitize](const torch::Tensor& tend,
                                     const char* name) -> torch::Tensor {
             auto tend_cpu = tend.detach().to(torch::kCPU);
-            float norm = tend_cpu.norm().item<float>();
-            if (std::isnan(norm) || std::isinf(norm)) {
+            if (!torch::isfinite(tend_cpu).all().item<bool>()) {
+                const float norm = tend_cpu.norm().item<float>();
                 if (nan_cnt < 10) {
                     if (do_sanitize) {
                         std::cerr << "[RHS NaN SANITIZE] " << name
