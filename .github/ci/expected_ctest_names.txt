@@ -69,3 +69,4 @@ AD_Safe_Math_Contract
 FNM_FNP_Geometry_Contract
 RHS_Preconditioner_Contract
 MSF_Cache_Reset_Contract
+Periodic_Staggered_Advection

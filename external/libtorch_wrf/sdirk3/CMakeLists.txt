@@ -503,6 +503,10 @@ add_executable(test_scalar_advection_contract tests/test_scalar_advection_contra
 target_link_libraries(test_scalar_advection_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Scalar_Advection_Contract COMMAND test_scalar_advection_contract)
 
+add_executable(test_periodic_staggered_advection tests/test_periodic_staggered_advection.cpp)
+target_link_libraries(test_periodic_staggered_advection PRIVATE wrf_sdirk3::core)
+add_test(NAME Periodic_Staggered_Advection COMMAND test_periodic_staggered_advection)
+
 add_executable(test_ad_safe_math tests/test_ad_safe_math.cpp)
 target_link_libraries(test_ad_safe_math PRIVATE wrf_sdirk3::core)
 add_test(NAME AD_Safe_Math_Contract COMMAND test_ad_safe_math)

@@ -2352,6 +2352,11 @@ private:
     torch::Tensor advect_scalar_y(const torch::Tensor& f, const torch::Tensor& v, float rdy);
     
     // Advection functions for already-staggered variables
+    // Whole-domain packed periodic-X/symmetric-Y contract, including endpoint aliases.
+    // Output is WRF coupled momentum or the physical velocity contribution.
+    std::pair<torch::Tensor, torch::Tensor> advectPackedPeriodicMomentumX(
+        const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& mu_full,
+        float rdx, bool wrf_coupled_output);
     torch::Tensor advect_u_point_scalar_x(const torch::Tensor& f, const torch::Tensor& u, float rdx);
     torch::Tensor advect_v_point_scalar_y(const torch::Tensor& f, const torch::Tensor& v, float rdy);
     torch::Tensor advect_u_point_scalar_y(const torch::Tensor& f, const torch::Tensor& v, float rdy);

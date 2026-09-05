@@ -16167,7 +16167,58 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     auto v_at_mass = avg_v_to_mass(v);
     auto w_at_mass = avg_w_to_mass(w);
 
+    // Share the exact conversion denominators with periodic momentum advection.
+    // Get mu at staggered points
+    auto mu_at_u = avg_x_to_u_2d(mu, nx_u_);
+    auto mu_at_v = avg_y_to_v_2d(mu, ny_v_);
+    auto mu_at_w = mu;  // W is at mass points horizontally
+
+    // Get mu_base at staggered points for correct total dry air mass
+    auto mu_base_at_u = avg_x_to_u_2d(mu_base_, nx_u_);
+    auto mu_base_at_v = avg_y_to_v_2d(mu_base_, ny_v_);
+    auto mu_base_at_w = mu_base_;  // W is at mass points
+
+    // Expand mu to 3D for each staggered grid
+    auto mu_at_u_3d = mu_at_u.unsqueeze(1).expand({-1, nz_, -1});
+    auto mu_at_v_3d = mu_at_v.unsqueeze(1).expand({-1, nz_, -1});
+    auto mu_at_w_3d = mu_at_w.unsqueeze(1).expand({-1, nz_w_, -1});
+
+    // Expand mu_base to 3D for each staggered grid
+    auto mu_base_at_u_3d = mu_base_at_u.unsqueeze(1).expand({-1, nz_, -1});
+    auto mu_base_at_v_3d = mu_base_at_v.unsqueeze(1).expand({-1, nz_, -1});
+    auto mu_base_at_w_3d = mu_base_at_w.unsqueeze(1).expand({-1, nz_w_, -1});
+
+    const float eps_u = getAutocastAwareEps(mu_at_u_3d);
+    const float eps_v = getAutocastAwareEps(mu_at_v_3d);
+    const float eps_w = getAutocastAwareEps(mu_at_w_3d);
+    const auto velocity_mass_u = mu_at_u_3d + mu_base_at_u_3d + eps_u;
+    const auto velocity_mass_v = mu_at_v_3d + mu_base_at_v_3d + eps_v;
+
     if (do_explicit) {  // Step 3: ADVECTION (slow-mode / explicit)
+
+    // The Fortran whole-domain tile includes one mass endpoint in each axis.
+    // Physical-dimension fixtures and full-halo arrays have different origins/extents.
+    const bool packed_periodic_x = grid_info_ && nprocx_ * nprocy_ == 1 &&
+        !wrf::sdirk3::g_sdirk3_config.enable_ad_halo_exchange && config_flags_periodic_x_ &&
+        !config_flags_periodic_y_ && config_flags_symmetric_ys_ && config_flags_symmetric_ye_ &&
+        !config_flags_open_xs_ && !config_flags_open_xe_ &&
+        !config_flags_open_ys_ && !config_flags_open_ye_ &&
+        !config_flags_specified_ && !config_flags_nested_ &&
+        grid_info_->its == grid_info_->ids && grid_info_->ite == grid_info_->ide &&
+        grid_info_->jts == grid_info_->jds && grid_info_->jte == grid_info_->jde &&
+        nx_ == grid_info_->ide - grid_info_->ids + 1 &&
+        ny_ == grid_info_->jde - grid_info_->jds + 1 && nx_ >= 3 && ny_ >= 3 &&
+        u.size(0) == ny_ && u.size(2) == nx_ + 1 &&
+        v.size(0) == ny_ + 1 && v.size(2) == nx_;
+    std::pair<torch::Tensor, torch::Tensor> periodic_momentum_x;
+    if (packed_periodic_x) {
+        periodic_momentum_x = advectPackedPeriodicMomentumX(
+            u, v, mu_full, rdx, g_export_coupled_slow);
+        if (!g_export_coupled_slow) {
+            periodic_momentum_x.first = periodic_momentum_x.first * velocity_mass_u;
+            periodic_momentum_x.second = periodic_momentum_x.second * velocity_mass_v;
+        }
+    }
 
     // --- 3.1: U-Momentum Advection ---
     {
@@ -16198,7 +16249,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         
         // X-advection: -∂(ru*u)/∂x (WRF formulation)
         // NOTE: Map scale factors will be applied INSIDE the advection functions
-        auto ru_adv_x = advect_u_point_scalar_x(ru, u, rdx);
+        auto ru_adv_x = packed_periodic_x ? periodic_momentum_x.first
+                                          : advect_u_point_scalar_x(ru, u, rdx);
         
         // Y-advection: -∂(rv*u)/∂y (WRF formulation)  
         // NOTE: Map scale factors will be applied INSIDE the advection functions
@@ -16512,7 +16564,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
         
         // X-advection: -∂(ru*v)/∂x (WRF formulation)
-        auto rv_adv_x = advect_v_point_scalar_x(rv, u, rdx);
+        auto rv_adv_x = packed_periodic_x ? periodic_momentum_x.second
+                                          : advect_v_point_scalar_x(rv, u, rdx);
         
         // Y-advection: -∂(rv*v)/∂y (WRF formulation)
         auto rv_adv_y = advect_v_point_scalar_y(rv, v, rdy);
@@ -24335,26 +24388,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // Using product rule: d(mu*u)/dt = mu*du/dt + u*dmu/dt
     // Therefore: du/dt = (1/mu)*[d(mu*u)/dt - u*dmu/dt]
 
-    // Get mu at staggered points
-    auto mu_at_u = avg_x_to_u_2d(mu, nx_u_);
-    auto mu_at_v = avg_y_to_v_2d(mu, ny_v_);
-    auto mu_at_w = mu;  // W is at mass points horizontally
-
-    // Get mu_base at staggered points for correct total dry air mass
-    auto mu_base_at_u = avg_x_to_u_2d(mu_base_, nx_u_);
-    auto mu_base_at_v = avg_y_to_v_2d(mu_base_, ny_v_);
-    auto mu_base_at_w = mu_base_;  // W is at mass points
-
-    // Expand mu to 3D for each staggered grid
-    auto mu_at_u_3d = mu_at_u.unsqueeze(1).expand({-1, nz_, -1});
-    auto mu_at_v_3d = mu_at_v.unsqueeze(1).expand({-1, nz_, -1});
-    auto mu_at_w_3d = mu_at_w.unsqueeze(1).expand({-1, nz_w_, -1});
-
-    // Expand mu_base to 3D for each staggered grid
-    auto mu_base_at_u_3d = mu_base_at_u.unsqueeze(1).expand({-1, nz_, -1});
-    auto mu_base_at_v_3d = mu_base_at_v.unsqueeze(1).expand({-1, nz_, -1});
-    auto mu_base_at_w_3d = mu_base_at_w.unsqueeze(1).expand({-1, nz_w_, -1});
-
     // mu_tend for product rule subtraction (unscaled dmu/dt)
     auto mu_tend_at_u = avg_x_to_u_2d(mu_tend_for_conversion, nx_u_);
     auto mu_tend_at_v = avg_y_to_v_2d(mu_tend_for_conversion, ny_v_);
@@ -24368,9 +24401,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // CRITICAL FIX: Use total dry air mass (mu + mu_base) not just perturbation
     // Add small epsilon to prevent division by zero
     // PARITY FIX 2025-12-24: Autocast-aware eps per variable (handles FP16 autocast and dtype differences).
-    const float eps_u = getAutocastAwareEps(mu_at_u_3d);
-    const float eps_v = getAutocastAwareEps(mu_at_v_3d);
-    const float eps_w = getAutocastAwareEps(mu_at_w_3d);
     // 9F.D18: last mutation of ru_tend_ in this function -- everything downstream
     // works on the PACKED RHS, not on ru_tend_. So the coverage residual measured
     // against this snapshot is exact for ru_tend_ and only for ru_tend_.
@@ -24393,8 +24423,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         v_tend = rv_tend;
         w_tend = rw_tend;
     } else {
-        u_tend = ru_tend / (mu_at_u_3d + mu_base_at_u_3d + eps_u) - u * mu_tend_at_u_3d / (mu_at_u_3d + mu_base_at_u_3d + eps_u);
-        v_tend = rv_tend / (mu_at_v_3d + mu_base_at_v_3d + eps_v) - v * mu_tend_at_v_3d / (mu_at_v_3d + mu_base_at_v_3d + eps_v);
+        u_tend = ru_tend / velocity_mass_u - u * mu_tend_at_u_3d / velocity_mass_u;
+        v_tend = rv_tend / velocity_mass_v - v * mu_tend_at_v_3d / velocity_mass_v;
         w_tend = rw_tend / (mu_at_w_3d + mu_base_at_w_3d + eps_w) - w * mu_tend_at_w_3d / (mu_at_w_3d + mu_base_at_w_3d + eps_w);
     }
 
@@ -26633,6 +26663,82 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, c
     }
     
     return advect;
+}
+
+std::pair<torch::Tensor, torch::Tensor>
+TileSDIRK3UnifiedSolver::advectPackedPeriodicMomentumX(
+    const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& mu_full,
+    float rdx, bool wrf_coupled_output) {
+    const int64_t n = nx_ - 1;
+    const int64_t m = ny_ - 1;
+    TORCH_CHECK(n >= 2 && m >= 2 && u.dim() == 3 && v.dim() == 3 &&
+                    mu_full.dim() == 2 && u.size(0) == m + 1 && u.size(2) == n + 2 &&
+                    v.size(0) == m + 2 && v.size(2) == n + 1 &&
+                    u.size(1) == v.size(1) && mu_full.size(0) == m + 1 &&
+                    mu_full.size(1) == n + 1,
+                "periodic momentum X requires the whole-domain packed WRF layout");
+
+    // Compute on independent columns only.  U[n] is the seam; U[n+1] and
+    // mass/V[n] are aliases, not additional cells of the periodic domain.
+    const auto ut = u.slice(0, 0, m).slice(2, 0, n);
+    const auto vt = v.slice(0, 0, m + 1).slice(2, 0, n);
+    const auto mt = mu_full.slice(0, 0, m).slice(1, 0, n);
+    const auto mu_u = 0.5f * (mt + torch::roll(mt, 1, 1));
+    const auto mu_v = torch::cat({mt.slice(0, 0, 1),
+        0.5f * (mt.slice(0, 0, m - 1) + mt.slice(0, 1, m)),
+        mt.slice(0, m - 1, m)}, 0);
+    const auto c1 = ensureC1hDevCached(u.device(), u.scalar_type())
+                        .slice(0, 0, u.size(1)).view({1, -1, 1});
+    const auto c2 = ensureC2hDevCached(u.device(), u.scalar_type())
+                        .slice(0, 0, u.size(1)).view({1, -1, 1});
+    const auto alpha_u = (c1 * mu_u.unsqueeze(1) + c2) /
+                        msfuy_.slice(0, 0, m).slice(1, 0, n).unsqueeze(1);
+    const auto alpha_v = (c1 * mu_v.unsqueeze(1) + c2) /
+                        msfvx_.slice(0, 0, m + 1).slice(1, 0, n).unsqueeze(1);
+
+    // WRF couple_momentum and advect_u/advect_v: reconstruct velocity;
+    // transport it with coupled U momentum.  V's X flux averages only in Y.
+    const auto ru = alpha_u * ut;
+    const auto transport_u = 0.5f * (ru + torch::roll(ru, 1, 2));
+    const auto transport_v = torch::cat({ru.slice(0, 0, 1),
+        0.5f * (ru.slice(0, 0, m - 1) + ru.slice(0, 1, m)),
+        ru.slice(0, m - 1, m)}, 0);
+    const int order = wrf::sdirk3::g_sdirk3_config.advection_order;
+    auto divergence = [&](const torch::Tensor& q, const torch::Tensor& transport,
+                          const torch::Tensor& map) {
+        torch::Tensor flux;
+        if (order >= 5) {
+            flux = flux5_upwind(torch::roll(q, 3, 2), torch::roll(q, 2, 2),
+                torch::roll(q, 1, 2), q, torch::roll(q, -1, 2),
+                torch::roll(q, -2, 2), transport);
+        } else if (order >= 3) {
+            flux = flux3_upwind(torch::roll(q, 2, 2), torch::roll(q, 1, 2),
+                q, torch::roll(q, -1, 2), transport);
+        } else {
+            flux = flux2_centered(torch::roll(q, 1, 2), q, transport);
+        }
+        // flux[i] is the west face: WRF fqx(i+1)-fqx(i).
+        return -(torch::roll(flux, -1, 2) - flux) * map.unsqueeze(1) * rdx;
+    };
+    auto pad_u = [&](const torch::Tensor& q) {
+        const auto x = torch::cat({q, q.slice(2, 0, 2)}, 2);
+        return torch::cat({x, x.slice(0, m - 1, m)}, 0);
+    };
+    auto pad_v = [&](const torch::Tensor& q) {
+        const auto x = torch::cat({q, q.slice(2, 0, 1)}, 2);
+        return torch::cat({x, x.slice(0, m, m + 1)}, 0);
+    };
+    auto du = pad_u(divergence(ut, transport_u,
+        msfux_.slice(0, 0, m).slice(1, 0, n)));
+    auto dv = pad_v(divergence(vt, transport_v,
+        msfvy_.slice(0, 0, m + 1).slice(1, 0, n)));
+    if (!wrf_coupled_output) {
+        // Return the physical velocity contribution.  The caller reweights it
+        // with its exact shared denominator before combining legacy terms.
+        du = du / pad_u(alpha_u);
+        dv = dv / pad_v(alpha_v);
+    }
+    return {du, dv};
 }
 
 // Advection functions for already-staggered variables
