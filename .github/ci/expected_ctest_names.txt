@@ -59,3 +59,4 @@ WW_CP_Parity_Contract
 ARK324_Production_Composition
 Full_Tile_Step_Adjoint
 Full_Tile_Temporal_Order
+Full_Tile_Horizontal_PGF

@@ -2,6 +2,7 @@
 #include "../wrf_sdirk3_config.h"
 #include "../wrf_sdirk3_hydrostatic_balance.h"
 #include "../wrf_hydrostatic_pressure.h"
+#include "../wrf_sdirk3_acoustic_substep.h"
 #include <cmath>
 #include <iostream>
 #include <sstream>
@@ -28,10 +29,12 @@ struct TileCase {
     std::vector<float> setup_state = std::vector<float>(nv*nw*nu, 0.0f);
     std::vector<float> setup_density = std::vector<float>(nv*nw*nu, 1.0f);
     std::vector<float> setup_map = std::vector<float>((nv+1)*(nu+1), 1.0f);
+    float spacing;
     TileSDIRK3UnifiedSolver solver;
 
-    TileCase() : solver(nx, ny, nz, 100000.0f, 100000.0f,
-                       {1e-5f}, {1e-5f}, std::vector<float>(nz, nz), 0) {
+    explicit TileCase(float grid_spacing = 100000.0f)
+        : spacing(grid_spacing), solver(nx, ny, nz, spacing, spacing,
+                       {1.0f/spacing}, {1.0f/spacing}, std::vector<float>(nz, nz), 0) {
         solver.setWRFIndices(1, nx+1, 1, ny+1, 1, nz,
                              1, nx+1, 1, ny+1, 1, nz+1,
                              -2, nx+4, -2, ny+4, 1, nz+1);
@@ -70,7 +73,7 @@ struct TileCase {
         setup.kds=setup.kts=setup.kms=1; setup.kde=setup.kme=nw; setup.kte=nz;
         setup.u_ptr=setup.v_ptr=setup.w_ptr=setup.ph_ptr=setup.t_ptr=setup.p_ptr=setup_state.data();
         setup.mu_ptr=setup_state.data(); setup.al_ptr=setup_density.data();
-        setup.rdx=setup.rdy=1e-5f; setup.rdnw_ptr=setup.rdn_ptr=metric.data();
+        setup.rdx=setup.rdy=1.0f/spacing; setup.rdnw_ptr=setup.rdn_ptr=metric.data();
         setup.msftx_ptr=setup.msfty_ptr=setup.msfux_ptr=setup.msfuy_ptr=
             setup.msfvx_ptr=setup.msfvy_ptr=setup_map.data();
         setup.c1f_ptr=setup.c1h_ptr=one.data(); setup.c2f_ptr=setup.c2h_ptr=zero.data();
@@ -97,13 +100,93 @@ struct TileCase {
     void step(float dt) {
         solver.unifiedStep(u.data(),v.data(),w.data(),ph.data(),theta.data(),mu.data(),
             ru.data(),rv.data(),rw.data(),rph.data(),rt.data(),rm.data(),
-            1e-5f,1e-5f,metric.data(),metric.data(),mass_map.data(),mass_map.data(),
+            1.0f/spacing,1.0f/spacing,metric.data(),metric.data(),mass_map.data(),mass_map.data(),
             u_map.data(),u_map.data(),v_map.data(),v_map.data(),
             one.data(),zero.data(),one.data(),zero.data(),half.data(),half.data(),
             1,dt,nx,ny,nz,nu,nv,nw);
         TORCH_CHECK(solver.getLastStepOutcomeCode() == 0, "tile step did not complete");
     }
 };
+
+void check_horizontal_pgf() {
+    // Fortran horizontal_pressure_gradient, with p'=al'=0:
+    // dV/dt = -dPhi/dy. Constant vertical offsets preserve the base pressure.
+    bool valid = true;
+    constexpr float slope = 2e-5f, dt = 0.01f;
+    for (float spacing : {100000.0f, 200000.0f}) {
+        // Independent scalar anchors from the three Fortran terms, isolated so
+        // compensating errors cannot hide an extra averaging factor.
+        const double expected[] = {1.6, 288.0, 16.0};
+        for (int term=0; term<3; ++term) {
+            auto amplitude = torch::tensor(1.0, torch::kFloat64).requires_grad_(true);
+            const auto scalar = [&](double value) { return torch::full_like(amplitude, value); };
+            const auto force = wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                1.0f/spacing, scalar(80000),
+                (term == 0 ? 4e-5*spacing : 0)*amplitude, scalar(2.4),
+                (term == 1 ? 3e-3*spacing : 0)*amplitude, scalar(0.2),
+                (term == 2 ? 2e-3*spacing : 0)*amplitude);
+            const auto derivative = torch::autograd::grad({force}, {amplitude})[0];
+            const double value_error = std::abs(force.item<double>()/expected[term]-1);
+            const double gradient_error = std::abs(derivative.item<double>()/expected[term]-1);
+            std::cout << "PGF_PRIMARY term=" << term << " spacing=" << spacing
+                      << " force=" << force.item<double>() << " expected=" << expected[term]
+                      << " gradient_error=" << gradient_error << '\n';
+            valid = valid && value_error < 2e-7 && gradient_error < 2e-7;
+        }
+        for (bool y_direction : {false, true}) {
+            TileCase tile(spacing);
+            for (int j=0; j<ny; ++j)
+                for (int k=0; k<nw; ++k)
+                    for (int i=0; i<nx; ++i)
+                        tile.ph[(j*nw+k)*nx+i] = slope*spacing*(y_direction ? j : i);
+            tile.step(dt);
+            double sum = 0;
+            int count = 0;
+            for (int j=2; j<ny-1; ++j)
+                for (int k=1; k<nz-1; ++k)
+                    for (int i=2; i<nx-2; ++i) {
+                        sum += y_direction ? tile.v[(j*nz+k)*nx+i] : tile.u[(j*nz+k)*nu+i];
+                        ++count;
+                    }
+            const double measured = sum/count/dt;
+            const double relative_error = std::abs(measured+slope)/slope;
+            std::cout << "PGF_ANCHOR direction=" << (y_direction ? 'y' : 'x')
+                      << " spacing=" << spacing << " acceleration=" << measured
+                      << " expected=" << -slope << " relative_error=" << relative_error << '\n';
+            valid = valid && std::isfinite(relative_error) && relative_error < 1e-3;
+
+            // At phi'=mu'=0, alpha=alpha_base and the dry equation of state
+            // gives p=pb*(theta/300)^(cp/cv). This tests the pressure term through
+            // the full tile, independently of the shared PGF helper.
+            TileCase thermal(spacing);
+            for (int j=0; j<ny; ++j)
+                for (int k=0; k<nz; ++k)
+                    for (int i=0; i<nx; ++i)
+                        thermal.theta[(j*nz+k)*nx+i] = y_direction ? j : i;
+            constexpr float thermal_dt = 0.001f;
+            thermal.step(thermal_dt);
+            double measured_pressure = 0, expected_pressure = 0;
+            for (int j=2; j<ny-1; ++j)
+                for (int k=1; k<nz-1; ++k)
+                    for (int i=2; i<nx-2; ++i) {
+                        const int coordinate = y_direction ? j : i;
+                        const double pb = 100000.0-(k+0.5)*80000.0/nz;
+                        const double alpha = 287.0*300.0/pb*std::pow(pb/100000.0,287.0/1004.5);
+                        const double dp = pb*(std::pow(1+coordinate/300.0,1004.5/717.5)
+                            - std::pow(1+(coordinate-1)/300.0,1004.5/717.5));
+                        expected_pressure -= alpha*dp/spacing;
+                        measured_pressure += (y_direction ? thermal.v[(j*nz+k)*nx+i]
+                            : thermal.u[(j*nz+k)*nu+i])/thermal_dt;
+                    }
+            const double pressure_error = std::abs(measured_pressure/expected_pressure-1);
+            std::cout << "PGF_PRESSURE direction=" << (y_direction ? 'y' : 'x')
+                      << " spacing=" << spacing << " acceleration=" << measured_pressure/count
+                      << " expected=" << expected_pressure/count << " relative_error=" << pressure_error << '\n';
+            valid = valid && std::isfinite(pressure_error) && pressure_error < 1e-3;
+        }
+    }
+    TORCH_CHECK(valid, "production horizontal PGF violates its metric/averaging contract");
+}
 
 void check_temporal_order() {
     const auto integrate = [](int steps, float tolerance) {
@@ -161,13 +244,19 @@ int main(int argc, char** argv) {
     std::ostringstream log;
     auto* previous = std::cerr.rdbuf(log.rdbuf());
     try {
+        if (argc == 2 && std::string(argv[1]) == "--horizontal-pgf") {
+            cfg.retain_graph_for_adjoint = false;
+            check_horizontal_pgf();
+            std::cerr.rdbuf(previous);
+            return 0;
+        }
         if (argc == 2 && std::string(argv[1]) == "--temporal-order") {
             cfg.retain_graph_for_adjoint = false;
             check_temporal_order();
             std::cerr.rdbuf(previous);
             return 0;
         }
-        TORCH_CHECK(argc == 1, "expected no arguments or --temporal-order");
+        TORCH_CHECK(argc == 1, "unsupported tile test mode");
         TileCase base;
         const auto initial = base.state();
         base.step(0.1f);

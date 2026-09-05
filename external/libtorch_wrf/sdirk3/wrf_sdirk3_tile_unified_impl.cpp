@@ -19118,10 +19118,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto dpb_dx = p_base_cont.index({Slice(), Slice(), right_slice}) - 
                               p_base_cont.index({Slice(), Slice(), left_slice});
                 
-                // Average inverse densities
-                auto alt_avg = 0.5f * (alt_cont.index({Slice(), Slice(), right_slice}) + 
+                // Fortran uses neighbor sums; the shared kernel applies the half once.
+                auto alt_sum = (alt_cont.index({Slice(), Slice(), right_slice}) +
                                        alt_cont.index({Slice(), Slice(), left_slice}));
-                auto al_avg = 0.5f * (al_pert_cont.index({Slice(), Slice(), right_slice}) + 
+                auto al_sum = (al_pert_cont.index({Slice(), Slice(), right_slice}) +
                                       al_pert_cont.index({Slice(), Slice(), left_slice}));
                 
                 // Apply WRF formula for interior points
@@ -19129,10 +19129,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 //   (ph gradient) + (alt × p' gradient) + (al × pb gradient)
                 // where ph is PERTURBATION geopotential only, NOT ph+phb.
                 // The base state geopotential gradient is NOT included.
-                auto dpx_interior = msf_ratio.index({Slice(), Slice(), interior_slice}) *
-                                   0.5f * rdx *
-                                   vert_coupling_3d.index({Slice(), Slice(), interior_slice}) *
-                                   (dph_dx + alt_avg * dp_dx + al_avg * dpb_dx);
+                auto dpx_interior = wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                    rdx, msf_ratio.index({Slice(), Slice(), interior_slice}) *
+                         vert_coupling_3d.index({Slice(), Slice(), interior_slice}),
+                    dph_dx, alt_sum, dp_dx, al_sum, dpb_dx);
                 
                 // AUTOGRAD FIX: Use functional operation instead of direct assignment
                 // Note: dpx is [ny, nz, nx_u], so dimension 2 is x-direction
@@ -19198,21 +19198,23 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     auto dph_dx_left = (ph_top_i1 - ph_top_i0) + (ph_bot_i1 - ph_bot_i0);
                     auto dp_dx_left = p_pert_i1 - p_pert_i0;
                     auto dpb_dx_left = p_base_i1 - p_base_i0;
-                    auto alt_avg_left = 0.5f * (alt_i1 + alt_i0);
-                    auto al_avg_left = 0.5f * (al_i1 + al_i0);
+                    auto alt_sum_left = (alt_i1 + alt_i0);
+                    auto al_sum_left = (al_i1 + al_i0);
 
                     auto dph_dx_right = (ph_top_im1 - ph_top_im2) + (ph_bot_im1 - ph_bot_im2);
                     auto dp_dx_right = p_pert_im1 - p_pert_im2;
                     auto dpb_dx_right = p_base_im1 - p_base_im2;
-                    auto alt_avg_right = 0.5f * (alt_im1 + alt_im2);
-                    auto al_avg_right = 0.5f * (al_im1 + al_im2);
+                    auto alt_sum_right = (alt_im1 + alt_im2);
+                    auto al_sum_right = (al_im1 + al_im2);
 
                     dpx.index_put_({Slice(), Slice(), 0},
-                                   msf_ratio_bdy_0 * 0.5f * rdx * vert_coupling_bdy_0 *
-                                   (dph_dx_left + alt_avg_left * dp_dx_left + al_avg_left * dpb_dx_left));
+                                   wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                                       rdx, msf_ratio_bdy_0 * vert_coupling_bdy_0, dph_dx_left,
+                                       alt_sum_left, dp_dx_left, al_sum_left, dpb_dx_left));
                     dpx.index_put_({Slice(), Slice(), u_nx-1},
-                                   msf_ratio_bdy_end * 0.5f * rdx * vert_coupling_bdy_end *
-                                   (dph_dx_right + alt_avg_right * dp_dx_right + al_avg_right * dpb_dx_right));
+                                   wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                                       rdx, msf_ratio_bdy_end * vert_coupling_bdy_end, dph_dx_right,
+                                       alt_sum_right, dp_dx_right, al_sum_right, dpb_dx_right));
                 } else {
                     // Baseline behavior: periodic wrap gradients at boundaries.
                     auto ph_top_ip0 = ph_cont.index({Slice(), Slice(1, u_nz+1), 0});        // [ny, nz]
@@ -19233,15 +19235,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     auto dph_dx_bdy = (ph_top_ip0 - ph_top_im1) + (ph_bot_ip0 - ph_bot_im1);  // [ny, nz]
                     auto dp_dx_bdy = p_pert_ip0 - p_pert_im1;                                  // [ny, nz]
                     auto dpb_dx_bdy = p_base_ip0 - p_base_im1;                                 // [ny, nz]
-                    auto alt_avg_bdy = 0.5f * (alt_ip0 + alt_im1);                             // [ny, nz]
-                    auto al_avg_bdy = 0.5f * (al_ip0 + al_im1);                                // [ny, nz]
+                    auto alt_sum_bdy = (alt_ip0 + alt_im1);                             // [ny, nz]
+                    auto al_sum_bdy = (al_ip0 + al_im1);                                // [ny, nz]
 
-                    auto dpx_bdy = msf_ratio_bdy_0 * 0.5f * rdx * vert_coupling_bdy_0 *
-                                   (dph_dx_bdy + alt_avg_bdy * dp_dx_bdy + al_avg_bdy * dpb_dx_bdy);
+                    auto dpx_bdy = wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                        rdx, msf_ratio_bdy_0 * vert_coupling_bdy_0, dph_dx_bdy,
+                        alt_sum_bdy, dp_dx_bdy, al_sum_bdy, dpb_dx_bdy);
                     dpx.index_put_({Slice(), Slice(), 0}, dpx_bdy);
                     dpx.index_put_({Slice(), Slice(), u_nx-1},
-                                   msf_ratio_bdy_end * 0.5f * rdx * vert_coupling_bdy_end *
-                                   (dph_dx_bdy + alt_avg_bdy * dp_dx_bdy + al_avg_bdy * dpb_dx_bdy));
+                                   wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                                       rdx, msf_ratio_bdy_end * vert_coupling_bdy_end, dph_dx_bdy,
+                                       alt_sum_bdy, dp_dx_bdy, al_sum_bdy, dpb_dx_bdy));
                 }
             }
             
@@ -19520,114 +19524,22 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // PERF 2025-12-28: Removed local shadowing - uses outer-scope cached msfvy_3d/msfvx_3d
         // The outer-scope tensors were created at line ~7228 with same nz_actual dimension.
         
-        // AUTOGRAD FIX: Compute t_full for V-momentum section
-        // t_full is not defined in this scope, need to compute it
-        torch::Tensor t_full_v;
-        if (th_base_.defined() && th_base_.numel() > 0) {
-            if (th_base_.dim() == 2) {
-                // Base state is 2D - expand to 3D
-                auto th_base_3d = th_base_.unsqueeze(1).expand({-1, nz_actual, -1});
-                t_full_v = t + th_base_3d;
-            } else {
-                // Base state is already 3D
-                t_full_v = t + th_base_;
-            }
-        } else {
-            // No base state
-            t_full_v = t;
-        }
-        
-        // Get t at v-points
-        // AUTOGRAD DEBUG: Check t_full shape before avg_y_to_v
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        }
-        
-        auto t_at_v = avg_y_to_v(t_full_v, ny_v_);
-        
-        
         torch::Tensor rv_tend_pgf;
         
         if (p_base_.defined() && p_base_.numel() > 0 &&
             th_base_.defined() && th_base_.numel() > 0 &&
             ph_base_.defined() && ph_base_.numel() > 0) {
             
-            // Get base state at v-points
-            torch::Tensor p_base_at_v, th_base_at_v;
-            
-            if (p_base_.dim() == 2) {
-                // Fix: Use v.size(0) which is ny_v, not v.size(1) which is nz
-                auto p_base_2d_v = avg_y_to_v_2d(p_base_, v.size(0));
-                p_base_at_v = p_base_2d_v.unsqueeze(1).expand({-1, nz_actual, -1});
-            } else {
-                // Fix: Use v.size(0) which is ny_v, not v.size(1) which is nz
-                p_base_at_v = avg_y_to_v(p_base_, v.size(0));
-            }
-            
-            if (th_base_.dim() == 2) {
-                // Fix: Use v.size(0) which is ny_v, not v.size(1) which is nz
-                auto th_base_2d_v = avg_y_to_v_2d(th_base_, v.size(0));
-                th_base_at_v = th_base_2d_v.unsqueeze(1).expand({-1, nz_actual, -1});
-            } else {
-                // Fix: Use v.size(0) which is ny_v, not v.size(1) which is nz
-                th_base_at_v = avg_y_to_v(th_base_, v.size(0));
-            }
-
-            // AUTOGRAD DEBUG: Check shapes before addition            
-            // ULTRATHINK FIX: WRF 정합성을 위한 차원 재배치
-            // avg_y_to_v는 [ny, nz, nx] -> [ny_v, nz, nx] 변환
-            // 하지만 실제로는 잘못된 차원 순서일 가능성
-            
-            // AUTOGRAD FIX: Remove detach() to maintain gradient flow
-            // Direct addition preserves gradients properly
-            torch::Tensor t_full_at_v = t_at_v + th_base_at_v;
-
-            // Use WRF-calculated pressure if available
-            torch::Tensor p_full_at_v, p_pert_at_v;
-            if (p_pert_.defined()) {
-                // Use the perturbation pressure from WRF
-                p_pert_at_v = avg_y_to_v(p_pert_, v.size(0));
-                p_full_at_v = p_pert_at_v + p_base_at_v;
-
-                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-                    torch::NoGradGuard no_grad;
-                    auto p_pert_at_v_cpu = p_pert_at_v.detach().to(torch::kCPU);
-                    auto p_pert_at_v_min_cpu = p_pert_at_v_cpu.min();
-                    auto p_pert_at_v_max_cpu = p_pert_at_v_cpu.max();
-                    std::cerr << "[SDIRK3] V-momentum p_pert: " << p_pert_at_v_min_cpu.item<float>()
-                              << " / " << p_pert_at_v_max_cpu.item<float>() << " Pa" << std::endl;
-                }
-            } else {
-                // Fallback: compute diagnostic pressure (not recommended)
-                float gamma = cp_ / cv_;
-
-                // AUTOGRAD FIX: Remove detach() to maintain gradient flow through pow operation
-                auto t_for_pow = t_full_at_v;
-                auto rd_t = rd_ * t_for_pow;
-                auto rd_t_div_p0 = rd_t / p0_;
-                auto pi_full = torch::pow(rd_t_div_p0, gamma);
-                auto p_full_diag = p0_ * pi_full;
-
-                // Apply mass coupling for pressure
-                auto mu_full_at_v = avg_y_to_v_2d(mu_full, v.size(0));
-                torch::Tensor mu_base_at_v;
-                if (mu_base_.defined() && mu_base_.numel() > 0) {
-                    mu_base_at_v = avg_y_to_v_2d(mu_base_, v.size(0));
-                } else {
-                    mu_base_at_v = torch::full({mu_full_at_v.size(0), mu_full_at_v.size(1)},
-                                              89083.9219f, mu_full_at_v.options());
-                }
-
-                auto mu_full_3d_v = mu_full_at_v.unsqueeze(1).expand({-1, nz_actual, -1});
-                auto mu_base_3d_v = mu_base_at_v.unsqueeze(1).expand({-1, nz_actual, -1});
-                p_full_at_v = p_full_diag * (mu_full_3d_v / mu_base_3d_v);
-                p_pert_at_v = p_full_at_v - p_base_at_v;
-            }
+            TORCH_CHECK(p_pert_.defined(), "V-PGF requires diagnosed mass-point pressure");
+            const auto p_mass = p_pert_;
+            const auto pb_mass = p_base_.dim() == 2
+                ? p_base_.unsqueeze(1).expand({ny_, nz_actual, nx_}) : p_base_;
 
             // Compute inverse densities
             // 9F.D47: THE LIVE ONE. V-momentum used these inline non-Exner forms and
             // assigned alt DIRECTLY, so unlike U-momentum (which gets alt from the
             // correct helper) there was no cancellation: alt was high by 1/Pi, up to
-            // +87% at model top, and it multiplies dp_pert_dy in the pressure gradient.
+            // +87% at model top, and it multiplies dp_diff in the pressure gradient.
             // The same physical quantity was computed two different ways in one function.
             // WRF: (alt(i,k,j)+alt(i,k,j-1)) -- average the mass-point calc_p_rho values to v points
             auto alt = avg_y_to_v(alt_mass_fs, v.size(0));
@@ -19640,10 +19552,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             using namespace torch::indexing;
             
             // Geopotential gradient - note ph is already perturbation
-            auto ph_base_at_mass = avg_w_to_mass(ph_base_);
             
             // Initialize gradient tensors
-            torch::Tensor dph_dy, dphb_dy, dp_pert_dy, dpb_dy;
+            torch::Tensor dph_diff, dp_diff, dpb_diff;
             
             // Determine interior range for v-momentum (symmetric boundaries)
             int j_start_interior = 1;  // Skip first j point
@@ -19662,77 +19573,70 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto mass_lower_slice = Slice(j_start_interior - 1, j_end_interior - 1);  // mass j=0..ny_v-3
                 
                 // Compute geopotential gradients (vectorized)
-                auto ph_pert_upper = ph_pert_at_mass.index({mass_upper_slice, Slice(), Slice()});
-                auto ph_pert_lower = ph_pert_at_mass.index({mass_lower_slice, Slice(), Slice()});
-                auto ph_base_upper = ph_base_at_mass.index({mass_upper_slice, Slice(), Slice()});
-                auto ph_base_lower = ph_base_at_mass.index({mass_lower_slice, Slice(), Slice()});
+                const auto ph_upper_top = ph.index({mass_upper_slice, Slice(1,nz_actual+1), Slice()});
+                const auto ph_lower_top = ph.index({mass_lower_slice, Slice(1,nz_actual+1), Slice()});
+                const auto ph_upper_bottom = ph.index({mass_upper_slice, Slice(0,nz_actual), Slice()});
+                const auto ph_lower_bottom = ph.index({mass_lower_slice, Slice(0,nz_actual), Slice()});
                 
-                auto dph_dy_interior = (ph_pert_upper - ph_pert_lower) * rdy;
-                auto dphb_dy_interior = (ph_base_upper - ph_base_lower) * rdy;
+                auto dph_diff_interior = (ph_upper_top - ph_lower_top) + (ph_upper_bottom - ph_lower_bottom);
                 
                 // Initialize full gradient tensors
-                dph_dy = torch::zeros({ny_v_, nz_, nx_}, v.options());
-                dphb_dy = torch::zeros({ny_v_, nz_, nx_}, v.options());
+                dph_diff = torch::zeros({ny_v_, nz_, nx_}, v.options());
                 
                 // AUTOGRAD FIX: Use functional operations instead of direct assignment
-                dph_dy = combineInteriorBoundary(dph_dy_interior, dph_dy,
+                dph_diff = combineInteriorBoundary(dph_diff_interior, dph_diff,
                                                 j_start_interior, j_end_interior, 0);
-                dphb_dy = combineInteriorBoundary(dphb_dy_interior, dphb_dy,
-                                                 j_start_interior, j_end_interior, 0);
                 
                 // Compute pressure gradients (vectorized)
-                auto p_pert_at_mass = avg_v_to_mass(p_pert_at_v);
-                auto p_base_at_mass = avg_v_to_mass(p_base_at_v);
+                const auto& p_pert_at_mass = p_mass;
+                const auto& p_base_at_mass = pb_mass;
                 
                 auto p_pert_upper = p_pert_at_mass.index({mass_upper_slice, Slice(), Slice()});
                 auto p_pert_lower = p_pert_at_mass.index({mass_lower_slice, Slice(), Slice()});
                 auto p_base_upper = p_base_at_mass.index({mass_upper_slice, Slice(), Slice()});
                 auto p_base_lower = p_base_at_mass.index({mass_lower_slice, Slice(), Slice()});
                 
-                auto dp_pert_dy_interior = (p_pert_upper - p_pert_lower) * rdy;
-                auto dpb_dy_interior = (p_base_upper - p_base_lower) * rdy;
+                auto dp_diff_interior = p_pert_upper - p_pert_lower;
+                auto dpb_diff_interior = p_base_upper - p_base_lower;
                 
                 // Initialize full pressure gradient tensors
                 // PARITY FIX 2025-12-14: Use runtime tensor sizes for V-momentum
                 int64_t v_ny = v.size(0);   // j dimension (v-staggered)
                 int64_t v_nz = v.size(1);   // k dimension
                 int64_t v_nx = v.size(2);   // i dimension
-                dp_pert_dy = torch::zeros({v_ny, v_nz, v_nx}, v.options());
-                dpb_dy = torch::zeros({v_ny, v_nz, v_nx}, v.options());
+                dp_diff = torch::zeros({v_ny, v_nz, v_nx}, v.options());
+                dpb_diff = torch::zeros({v_ny, v_nz, v_nx}, v.options());
                 
                 // AUTOGRAD FIX: Use functional operations instead of direct assignment
-                dp_pert_dy = combineInteriorBoundary(dp_pert_dy_interior, dp_pert_dy,
+                dp_diff = combineInteriorBoundary(dp_diff_interior, dp_diff,
                                                     j_start_interior, j_end_interior, 0);
-                dpb_dy = combineInteriorBoundary(dpb_dy_interior, dpb_dy,
+                dpb_diff = combineInteriorBoundary(dpb_diff_interior, dpb_diff,
                                                 j_start_interior, j_end_interior, 0);
                 
             } else {
                 // Fallback to accessor-based for small grids
-                // AUTOGRAD FIX: avg_v_to_mass produces [ny, nz, nx] but d_dy_v expects [nz, ny, nx]
+                // Mass fields are [ny, nz, nx]; d_dy_v expects [nz, ny, nx]
                 // Need to permute dimensions from [j,k,i] to [k,j,i]
                 auto ph_pert_at_mass_permuted = ph_pert_at_mass.permute({1, 0, 2});  // [ny,nz,nx] -> [nz,ny,nx]
-                auto ph_base_at_mass_permuted = ph_base_at_mass.permute({1, 0, 2});  // [ny,nz,nx] -> [nz,ny,nx]
-                auto dph_dy_temp = d_dy_v(ph_pert_at_mass_permuted, rdy, v.size(0));
-                auto dphb_dy_temp = d_dy_v(ph_base_at_mass_permuted, rdy, v.size(0));
+                auto dph_diff_temp = 2.0f * d_dy_v(ph_pert_at_mass_permuted, 1.0f, v.size(0));
                 
                 // AUTOGRAD FIX: d_dy_v returns [nz, ny_v, nx], permute back to [ny_v, nz, nx]
-                dph_dy = dph_dy_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
-                dphb_dy = dphb_dy_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
+                dph_diff = dph_diff_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
                 
-                auto p_pert_at_mass = avg_v_to_mass(p_pert_at_v);
-                auto p_base_at_mass = avg_v_to_mass(p_base_at_v);
+                const auto& p_pert_at_mass = p_mass;
+                const auto& p_base_at_mass = pb_mass;
                 
-                // AUTOGRAD FIX: avg_v_to_mass produces [ny, nz, nx] but d_dy_v expects [nz, ny, nx]
+                // Mass fields are [ny, nz, nx]; d_dy_v expects [nz, ny, nx]
                 // Need to permute dimensions from [j,k,i] to [k,j,i]
                 auto p_pert_at_mass_permuted = p_pert_at_mass.permute({1, 0, 2});  // [ny,nz,nx] -> [nz,ny,nx]
                 auto p_base_at_mass_permuted = p_base_at_mass.permute({1, 0, 2});  // [ny,nz,nx] -> [nz,ny,nx]
                 
-                auto dp_pert_dy_temp = d_dy_v(p_pert_at_mass_permuted, rdy, v.size(0));
-                auto dpb_dy_temp = d_dy_v(p_base_at_mass_permuted, rdy, v.size(0));
+                auto dp_diff_temp = d_dy_v(p_pert_at_mass_permuted, 1.0f, v.size(0));
+                auto dpb_diff_temp = d_dy_v(p_base_at_mass_permuted, 1.0f, v.size(0));
                 
                 // AUTOGRAD FIX: d_dy_v returns [nz, ny_v, nx], permute back to [ny_v, nz, nx]
-                dp_pert_dy = dp_pert_dy_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
-                dpb_dy = dpb_dy_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
+                dp_diff = dp_diff_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
+                dpb_diff = dpb_diff_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
             }
             
             // BOUNDARY HANDLING: Symmetric boundaries at j=0 and j=v_ny-1
@@ -19745,16 +19649,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // AUTOGRAD FIX: Use functional operations for boundary conditions
                 // Southern boundary (j=0): zero gradient for symmetric BC
                 auto zero_slice = torch::zeros({v_nz, v_nx}, v.options());
-                dph_dy = setSlice2D(dph_dy, 0, 0, zero_slice);
-                dphb_dy = setSlice2D(dphb_dy, 0, 0, zero_slice);
-                dp_pert_dy = setSlice2D(dp_pert_dy, 0, 0, zero_slice);
-                dpb_dy = setSlice2D(dpb_dy, 0, 0, zero_slice);
+                dph_diff = setSlice2D(dph_diff, 0, 0, zero_slice);
+                dp_diff = setSlice2D(dp_diff, 0, 0, zero_slice);
+                dpb_diff = setSlice2D(dpb_diff, 0, 0, zero_slice);
 
                 // Northern boundary (j=v_ny-1): zero gradient for symmetric BC
-                dph_dy = setSlice2D(dph_dy, 0, static_cast<int>(v_ny-1), zero_slice);
-                dphb_dy = setSlice2D(dphb_dy, 0, static_cast<int>(v_ny-1), zero_slice);
-                dp_pert_dy = setSlice2D(dp_pert_dy, 0, static_cast<int>(v_ny-1), zero_slice);
-                dpb_dy = setSlice2D(dpb_dy, 0, static_cast<int>(v_ny-1), zero_slice);
+                dph_diff = setSlice2D(dph_diff, 0, static_cast<int>(v_ny-1), zero_slice);
+                dp_diff = setSlice2D(dp_diff, 0, static_cast<int>(v_ny-1), zero_slice);
+                dpb_diff = setSlice2D(dpb_diff, 0, static_cast<int>(v_ny-1), zero_slice);
             }
 
             if (wrf::sdirk3::g_sdirk3_config.debug_level > 0) {
@@ -19785,15 +19687,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // First three terms of horizontal pressure gradient
             auto vert_coupling = c1h_3d * muv_3d + c2h_3d;
 
-            // WRF-CONSISTENT: Fortran horizontal_pressure_gradient (L2385-2388) uses:
-            //   (ph gradient) + (alt × p' gradient) + (al × pb gradient)
-            // where ph is PERTURBATION geopotential only, NOT ph+phb.
-            // The base state geopotential gradient is NOT included.
-            auto grad_sum = dph_dy + alt * dp_pert_dy + al * dpb_dy;
-            // Note: dphb_dy is computed but intentionally NOT included in grad_sum
-            
-            auto dpy = msf_ratio_v * 0.5f * rdy * vert_coupling * grad_sum;
-            
+            // dph_diff sums both w levels; pressure differences stay on mass points.
+            // alt/al are face means, so recover the neighbor sums for the shared kernel.
+            auto dpy = wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                rdy, msf_ratio_v * vert_coupling, dph_diff,
+                2.0f * alt, dp_diff, 2.0f * al, dpb_diff);
+
             // Add non-hydrostatic term if configured
             if (non_hydrostatic_ && php_.defined() && dpn_v_.defined()) {
                 // PARITY FIX 2025-12-14: Extract runtime dimensions from dpn_v_ tensor

@@ -528,8 +528,8 @@ std::pair<torch::Tensor, torch::Tensor> horizontal_pgf(
     // --- u: all u-points 0..nx-1 (periodic wrap), then alias the seam column u[nx]=u[0] ---
     auto muu_u = muu.index({SL(), Slice(0, nx)});
     auto coef_u = c1h.view({1, nz, 1}) * muu_u.unsqueeze(1) + c2h.view({1, nz, 1});
-    auto dpx = 0.5f * rdx * coef_u
-               * (wrap_d(ph_kp1) + wrap_d(ph_k) + wrap_s(alt) * wrap_d(p) + wrap_s(al) * wrap_d(pb));
+    auto dpx = horizontal_pgf_primary(rdx, coef_u, wrap_d(ph_kp1) + wrap_d(ph_k),
+                                      wrap_s(alt), wrap_d(p), wrap_s(al), wrap_d(pb));
     // WRF's rdnw is NEGATIVE; the module receives positive |rdnw| -> negate the odd-power use.
     dpx = dpx + rdx * wrap_d(php)
           * (-rdnw.view({1, nz, 1}) * dpn_diff(wrap_s(p))
@@ -538,8 +538,8 @@ std::pair<torch::Tensor, torch::Tensor> horizontal_pgf(
     // --- v: interior v rows 1..ny-1 only (symmetric walls excluded, :790-797); wall rows ZERO ---
     auto muv_int = muv.index({Slice(1, ny), SL()});
     auto coef_v = c1h.view({1, nz, 1}) * muv_int.unsqueeze(1) + c2h.view({1, nz, 1});
-    auto dpy_int = 0.5f * rdy * coef_v
-                   * (dj(ph_kp1) + dj(ph_k) + sj(alt) * dj(p) + sj(al) * dj(pb));
+    auto dpy_int = horizontal_pgf_primary(rdy, coef_v, dj(ph_kp1) + dj(ph_k),
+                                          sj(alt), dj(p), sj(al), dj(pb));
     dpy_int = dpy_int + rdy * dj(php)
               * (-rdnw.view({1, nz, 1}) * dpn_diff(sj(p))
                  - 0.5f * c1h.view({1, nz, 1}) * sj(mu.unsqueeze(1)));

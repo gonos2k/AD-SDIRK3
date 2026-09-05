@@ -498,6 +498,7 @@ add_test(NAME Full_Tile_Step_Adjoint COMMAND test_full_tile_step)
 set_tests_properties(Full_Tile_Step_Adjoint PROPERTIES TIMEOUT 180)
 add_test(NAME Full_Tile_Temporal_Order COMMAND test_full_tile_step --temporal-order)
 set_tests_properties(Full_Tile_Temporal_Order PROPERTIES TIMEOUT 300)
+add_test(NAME Full_Tile_Horizontal_PGF COMMAND test_full_tile_step --horizontal-pgf)
 
 # R9 P0-A/B: a Krylov metric's coordinate system is part of the metric.
 add_executable(test_krylov_metric_coordinate_contract test_krylov_metric_coordinate_contract.cpp)

@@ -25,13 +25,22 @@ The differentiable implicit solve converges at small timesteps; making it conver
 stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
 it is **unresolved**.
 
-Verification is an **exact 61-test CTest inventory** pinned by
+Verification is an **exact 62-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
 
+Earlier RHS singular-value and solver-probe amplitudes below predate the horizontal-PGF
+correction. They are historical measurements, not new forecast or stability certifications.
+
 ### What is measured
 
+- **Horizontal pressure gradients.** The full and acoustic RHS share the first three WRF
+  PGF terms with raw neighbor differences and sums. Grid inverse spacing and the common
+  half are applied once. `Full_Tile_Horizontal_PGF` isolates Phi/p/pb and their derivatives,
+  then tests actual tile X/Y accelerations from separate geopotential and thermal gradients
+  at two grid spacings. This catches the former V double-spacing factor and U half-pressure
+  term; unused V pressure interpolation and base-geopotential differences were removed.
 - **Base-state EOS and hydrostatic pressure.** WRF's Exner form
   `alpha = (R_d/p0)*theta*(p/p0)^(-cv/cp)` is a single authority, contract-tested forward *and*
   in its tangent. The pressure integrator's eta orientation is pinned against WRF's own algebra
