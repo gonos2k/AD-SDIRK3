@@ -21,13 +21,15 @@ HVP via double-backward is a design goal). The goal is a differentiable dynamica
 ## Status
 
 The model **builds and runs** (`main/wrf.exe`, `main/ideal.exe`,
-`external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a`). An archived stock-RK3 reference exists;
-comparison with the current source remains pending.
-The differentiable implicit solve converges at small timesteps; making it converge and remain
-stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
-it is **unresolved**.
+`external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a`). Frozen revision `cc66520`
+completed six `dt=600` steps on `em_b_wave` through 3600 seconds with finite output and
+all 18 implicit stages below scaled RMS `1e-4`. Its seven output frames were compared
+with the restored stock-RK3 archive using identical primary initial fields; see
+[the frozen-run receipt](docs/(202609060337)_ad_sdirk3_dt600_rk3_comparison.md).
+This validates that run and configuration. Long-duration stability, whole-WRF third-order
+accuracy, forecast quality and the full trajectory adjoint remain **unverified**.
 
-Verification is an **exact 75-test CTest inventory** pinned by
+Verification is an **exact 76-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
@@ -66,6 +68,9 @@ or stability certifications.
   then tests actual tile X/Y accelerations from separate geopotential and thermal gradients
   at two grid spacings. This catches the former V double-spacing factor and U half-pressure
   term; unused V pressure interpolation and base-geopotential differences were removed.
+  `PGF_Coordinate_Contract` checks U/V/W force-to-velocity conversion using the
+  corresponding hybrid mass and map factor, including the separate W lid force.
+  Independent stencils exercise nonunit maps, hybrid coefficients and HEVI decomposition.
 - **Packed boundaries and observational diagnostics.** State, forcing and RHS share the
   normal-velocity wall constraint. A single whole-domain packed tile with periodic X,
   symmetric Y and AD halo exchange off also uses the same copy/reflection map at RHS input

@@ -528,6 +528,12 @@ add_executable(test_vertical_momentum_contract tests/test_vertical_momentum_cont
 target_link_libraries(test_vertical_momentum_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Vertical_Momentum_Contract COMMAND test_vertical_momentum_contract)
 
+add_executable(test_pgf_coordinate_contract
+    tests/test_pgf_coordinate_contract.cpp tests/test_w_pgf_coordinate_contract.cpp
+    tests/test_pgf_debug_contract.cpp)
+target_link_libraries(test_pgf_coordinate_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME PGF_Coordinate_Contract COMMAND test_pgf_coordinate_contract)
+
 add_executable(test_rhs_preconditioner_contract tests/test_rhs_preconditioner_contract.cpp)
 target_link_libraries(test_rhs_preconditioner_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME RHS_Preconditioner_Contract COMMAND test_rhs_preconditioner_contract)

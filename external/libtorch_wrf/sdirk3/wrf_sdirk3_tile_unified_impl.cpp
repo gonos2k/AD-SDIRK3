@@ -19520,25 +19520,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             u_tend_pgf = -msf_ratio_u * 0.5f * rdx * vert_coupling * dph_dx;
         }
         
-        // Convert to u tendency and add to total
-        // Note: u_tend_pgf already includes the map scale factor and vertical coupling
-        // In WRF, ru_tend is updated directly, not divided by muu again
-        
-        // SDIRK3 VALIDATION: Check pressure gradient force for abnormal values
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-            torch::NoGradGuard no_grad;
-            // PERF FIX 2025-12-28: Pre-copy to CPU with _cpu suffix for consistency
-            auto u_tend_pgf_cpu = u_tend_pgf.detach().to(torch::kCPU);
-            // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-            auto pgf_norm_cpu = u_tend_pgf_cpu.norm();
-            float pgf_norm = pgf_norm_cpu.item<float>();
-            if (std::isnan(pgf_norm) || std::isinf(pgf_norm)) {
-                u_tend_pgf = torch::zeros_like(u_tend_pgf);
-            } else if (pgf_norm > 1e6f) {
-                // AUTOGRAD: No clamping per user requirement - preserve computation graph
-            }
+        if (use_wrf_mass_flux) {
+            // WRF supplies d(alpha*u)/dt. Convert its force to physical
+            // acceleration before storing it in the legacy M*u accumulator.
+            const auto c1 = ensureC1hDevCached(u.device(), u.scalar_type())
+                .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+            const auto c2 = ensureC2hDevCached(u.device(), u.scalar_type())
+                .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+            const auto alpha_u = (c1 * muu_3d + c2) / msfuy_3d;
+            u_tend_pgf = u_tend_pgf * (velocity_mass_u / alpha_u);
         }
-        
+
         ru_tend = ru_tend + u_tend_pgf;    }
     uterm_site(wrf::sdirk3::USlowSiteKind::PressureGradient);
 
@@ -19914,12 +19906,25 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             msf_ratio_v = torch::where(bad_msfvx,
                                       torch::zeros_like(msf_ratio_v),
                                       msf_ratio_v);
-            rv_tend_pgf = -msf_ratio_v * muv_3d * dph_dy;
+            auto mass_coupling = muv_3d;
+            if (use_wrf_mass_flux) {
+                const auto c1 = ensureC1hDevCached(v.device(), v.scalar_type())
+                    .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+                const auto c2 = ensureC2hDevCached(v.device(), v.scalar_type())
+                    .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+                mass_coupling = c1 * muv_3d + c2;
+            }
+            rv_tend_pgf = -msf_ratio_v * mass_coupling * dph_dy;
         }
         
-        // Convert to v tendency and add to total
-        // Note: rv_tend_pgf already includes the map scale factor and vertical coupling
-        // In WRF, rv_tend is updated directly, not divided by muv again.
+        if (use_wrf_mass_flux) {
+            const auto c1 = ensureC1hDevCached(v.device(), v.scalar_type())
+                .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+            const auto c2 = ensureC2hDevCached(v.device(), v.scalar_type())
+                .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+            const auto alpha_v = (c1 * muv_3d + c2) / msfvx_3d;
+            rv_tend_pgf = rv_tend_pgf * (velocity_mass_v / alpha_v);
+        }
         // Guard V-PGF against non-finite halo/boundary artifacts to prevent NaN
         // propagation into Newton scaling (S[rv]=nan).
         {
@@ -19946,6 +19951,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         
         if (p_base_.defined() && p_base_.numel() > 0 &&
             th_base_.defined() && th_base_.numel() > 0) {            
+            torch::Tensor w_pgf_to_legacy;
+            if (use_wrf_mass_flux) {
+                const auto c1 = ensureC1fDevCached(w.device(), w.scalar_type())
+                    .slice(0, 0, nz_w_).view({1, nz_w_, 1});
+                const auto c2 = ensureC2fDevCached(w.device(), w.scalar_type())
+                    .slice(0, 0, nz_w_).view({1, nz_w_, 1});
+                const auto alpha_w = (c1 * mu_full.unsqueeze(1) + c2) /
+                    msfty_.to(w.device(), w.scalar_type()).unsqueeze(1);
+                w_pgf_to_legacy = velocity_mass_w / alpha_w;
+            }
+
             // === Use hydrostatic pressure already computed ===
             // We already have p_pert and p_full_mass from the hydrostatic integration
             // computed at the beginning of the pressure gradient force section
@@ -20946,6 +20962,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // Stack all levels together (dimension 1 is the vertical dimension)
                 auto w_pgf_buoy_all = torch::stack(w_pgf_buoy_levels, 1);
 
+                if (use_wrf_mass_flux)
+                    w_pgf_buoy_all = w_pgf_buoy_all * w_pgf_to_legacy;
+
                 if (rw_cap.armed) {
                     auto rw_cap_pad = [&](std::vector<torch::Tensor>& v) {
                         while (v.size() < (size_t)nz_w_) {
@@ -20956,14 +20975,21 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     rw_cap_pad(rw_cap_pg);
                     rw_cap_pad(rw_cap_b1);
                     rw_cap_pad(rw_cap_b2);
-                    rw_cap.add("pg", torch::stack(rw_cap_pg, 1));
-                    rw_cap.add("buoy_mu1", torch::stack(rw_cap_b1, 1));
-                    rw_cap.add("buoy_mu2", torch::stack(rw_cap_b2, 1));
+                    auto pg = torch::stack(rw_cap_pg, 1);
+                    auto b1 = torch::stack(rw_cap_b1, 1);
+                    auto b2 = torch::stack(rw_cap_b2, 1);
+                    if (use_wrf_mass_flux) {
+                        pg = pg * w_pgf_to_legacy;
+                        b1 = b1 * w_pgf_to_legacy;
+                        b2 = b2 * w_pgf_to_legacy;
+                    }
+                    rw_cap.add("pg", pg);
+                    rw_cap.add("buoy_mu1", b1);
+                    rw_cap.add("buoy_mu2", b2);
                     rw_cap.add("rw_pre_pgf", rw_tend);
                     rw_cap.add("w_pgf_buoy_all", w_pgf_buoy_all);
                 }
 
-                // Add all contributions at once
                 rw_tend = rw_tend + w_pgf_buoy_all;
 
                 // v18 DIAG: Check tangent after PGF addition (only during forward-mode AD)
@@ -21153,6 +21179,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         }
                     }
                     auto w_top_contrib = torch::cat(top_contrib_levels, 1);
+                    if (use_wrf_mass_flux)
+                        w_top_contrib = w_top_contrib * w_pgf_to_legacy;
                     rw_tend = rw_tend + w_top_contrib;
                     {
                         auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
