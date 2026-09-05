@@ -25,7 +25,7 @@ The differentiable implicit solve converges at small timesteps; making it conver
 stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
 it is **unresolved**.
 
-Verification is an **exact 70-test CTest inventory** pinned by
+Verification is an **exact 71-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.

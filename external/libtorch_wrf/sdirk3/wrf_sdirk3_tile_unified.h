@@ -536,25 +536,31 @@ public:
      *    - Location: wrf_sdirk3_pressure_gradient.cpp thread_local
      *    - Contents: rdx/rdy scalars, c1h/c2h/c1f/c2f/rdnw/rdn arrays
      *
+     * 5. RAW MAP-FACTOR SOURCE/DEVICE VIEWS (invalidateMapFactorCaches)
+     *    - Location: TileSDIRK3UnifiedSolver members
+     *    - Contents: six WRF-owned from_blob views, six device copies, metadata,
+     *      and any retained full-step pullback graph that may save those tensors
+     *    - Lifetime: released at full reset before restart or moving-nest republish
+     *
      * GRID METRIC CACHES (via grid_info_->invalidateVerticalMetricCaches):
      *
-     * 5. STATIC METRIC CACHES (metric_utils::invalidateStaticMetricCaches)
+     * 6. STATIC METRIC CACHES (metric_utils::invalidateStaticMetricCaches)
      *    - Location: SpatialDerivativesAutograd thread_local
      *    - Contents: rdz, dnw, dn vertical metrics (via global epoch)
      *
-     * 6. Z1D PROFILE CACHE (invalidateZ1DCache)
+     * 7. Z1D PROFILE CACHE (invalidateZ1DCache)
      *    - Location: wrf_sdirk3_rayleigh_damping_ad.cpp
      *    - Purpose: Rayleigh damping z1d profiles
      *
-     * 7. DZ MIN CACHE (invalidateDzMinCache)
+     * 8. DZ MIN CACHE (invalidateDzMinCache)
      *    - Location: wrf_sdirk3_boundary_ad.cpp
      *    - Purpose: CFL check min(dz) values
      *
-     * 8. LAT CPU CACHE (invalidateLatCpuCache)
+     * 9. LAT CPU CACHE (invalidateLatCpuCache)
      *    - Location: wrf_sdirk3_boundary_ad.cpp
      *    - Purpose: Boundary condition latitude values
      *
-     * 9. SCALAR MEAN CACHE (invalidateScalarMeanCache)
+     * 10. SCALAR MEAN CACHE (invalidateScalarMeanCache)
      *    - Location: wrf_sdirk3_unified_preconditioner.cpp
      *    - Contents: mub/c1f/c2f/msfty/mu_base .mean() values (via scalar epoch)
      *
@@ -569,7 +575,7 @@ public:
      *
      * DESIGN DECISION (FIX Round82): Full invalidation vs "light invalidate" path
      * ─────────────────────────────────────────────────────────────────────────────
-     * This function always invalidates ALL 9 caches. A "light invalidate" path
+     * This function always invalidates ALL 10 caches. A "light invalidate" path
      * (only solver caches, skip grid metric caches) was considered but rejected:
      *
      *   1. SIMPLICITY: One code path easier to maintain/debug than two
@@ -586,8 +592,13 @@ public:
      * Caches #2 (MSF 3D) and #4 (pressure gradient) are thread_local.
      * This function only invalidates caches in the CALLING THREAD.
      * In multi-threaded execution (e.g., OpenMP parallel regions):
-     *   - Each thread must call invalidateCaches() independently, OR
-     *   - Use epoch-based invalidation (caches #5-9) which uses global atomics
+     *   - Call invalidateGlobalCachesOnly() on the master and
+     *     invalidateThreadLocalCachesOnly() on each worker, OR
+     *   - Call invalidateCaches() once at an idle serial reset boundary
+     *     (not concurrently from every worker)
+     * Raw map-factor views (#5) are solver-shared; full invalidation must run
+     * once at an idle restart/moving-nest boundary, before any worker republishes
+     * or consumes the WRF arrays.
      * For WRF's typical usage (single-threaded solver per tile), this is safe.
      *
      * FIX Round88: TLS CACHE SHARING BETWEEN SOLVERS
@@ -648,6 +659,11 @@ public:
 
         // 5. Coefficient device tensor cache (c1f/c2f/rdnw) (PERF FIX 2026-01-31)
         invalidateCoeffDeviceCache();
+
+        // 6. Raw map-factor source views and device copies.  A full reset is a
+        // restart/moving-nest boundary, so the next advance must republish all
+        // six WRF-owned map arrays before any consumer can reuse them.
+        invalidateMapFactorCaches();
     }
 
     /**
@@ -709,7 +725,8 @@ public:
      * Global caches invalidated:
      *   - #1 Divergence cache (member variable)
      *   - #3 Acoustic metric cache (member variable)
-     *   - #5-9 Grid metric caches (via global epochs)
+     *   - #5 Raw map-factor source/device views and metadata (member variables)
+     *   - #6-10 Grid metric caches (via global epochs)
      *
      * NULL SAFETY (FIX Round87): All member accesses are guarded with null checks.
      * Safe to call even if solver is partially initialized (grid_info_ or
@@ -728,6 +745,11 @@ public:
         if (unified_rhs_) {
             unified_rhs_->invalidate_acoustic_metric_cache();
         }
+
+        // Map factors are solver-owned zero-copy views, not GridInfo state.  The
+        // global half of reset_full_parallel must release them before a restart
+        // or moving nest can republish/reallocate the WRF arrays.
+        invalidateMapFactorCaches();
     }
 
     // Set MPI process information for parallel halo exchange
@@ -775,7 +797,8 @@ public:
     }
     int64_t getStateVectorSize() const;
     // Last completed mode-3 tile step, with fixed timestep, forcing and branches.
-    // Requires retain_graph_for_adjoint; invalidated by the next forward step.
+    // Requires retain_graph_for_adjoint; invalidated by the next forward step or
+    // by a full reset before any source buffers are republished.
     torch::Tensor pullbackLastStep(const torch::Tensor& terminal_cotangent);
     torch::Tensor runAdjointReplay(const torch::Tensor& lambda_terminal,
                                    float dt,
@@ -894,6 +917,43 @@ public:
     }
 
 private:
+    // Release both sides of the map-factor cache at a full reset boundary.
+    // The CPU tensors are from_blob views into WRF-owned storage; retaining one
+    // across restart or nest movement can leave a dangling view after Fortran
+    // reallocates that storage.  The retained pullback graph can also keep
+    // tensors saved by autograd alive, so it is dropped at the same boundary.
+    // The next advanceZeroCopy call republishes all six views and recreates the
+    // device copies.  Keep this out of
+    // resetPerSolverState()/invalidateThreadLocalCachesOnly(): those paths are
+    // intentionally lightweight and do not publish new WRF pointers.
+    // msf_epoch_ is a local generation key; both callers invalidate the
+    // divergence cache first.  Advance the generation rather than resetting it
+    // to avoid an epoch ABA if an old key is inspected during diagnostics.
+    void invalidateMapFactorCaches() {
+        msftx_cpu_ = torch::Tensor();
+        msfty_cpu_ = torch::Tensor();
+        msfux_cpu_ = torch::Tensor();
+        msfuy_cpu_ = torch::Tensor();
+        msfvx_cpu_ = torch::Tensor();
+        msfvy_cpu_ = torch::Tensor();
+
+        msftx_ = torch::Tensor();
+        msfty_ = torch::Tensor();
+        msfux_ = torch::Tensor();
+        msfuy_ = torch::Tensor();
+        msfvx_ = torch::Tensor();
+        msfvy_ = torch::Tensor();
+
+        ++msf_epoch_;
+        msf_epoch_cached_ = 0;
+        msf_signature_ = 0.0f;
+
+        // A full reset starts a new source lifetime.  Do not leave a retained
+        // graph usable across that boundary or it can retain old map tensors.
+        last_step_input_graph_ = torch::Tensor();
+        last_step_output_graph_ = torch::Tensor();
+    }
+
     // 9F.D33 (review section 3): configuration is OBJECT STATE, read once at
     // construction -- not a function-local static latched on the first numerical
     // call. The lazy-static form meant F(U) was really F(U; environment at first

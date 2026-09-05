@@ -517,6 +517,10 @@ target_link_libraries(test_rhs_preconditioner_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME RHS_Preconditioner_Contract COMMAND test_rhs_preconditioner_contract)
 set_tests_properties(RHS_Preconditioner_Contract PROPERTIES TIMEOUT 180)
 
+add_executable(test_msf_cache_reset_contract tests/test_msf_cache_reset_contract.cpp)
+target_link_libraries(test_msf_cache_reset_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME MSF_Cache_Reset_Contract COMMAND test_msf_cache_reset_contract)
+
 add_executable(test_full_tile_step tests/test_full_tile_step.cpp)
 target_link_libraries(test_full_tile_step PRIVATE wrf_sdirk3::core)
 add_test(NAME Full_Tile_Step_Adjoint COMMAND test_full_tile_step)
