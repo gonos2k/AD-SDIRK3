@@ -492,6 +492,10 @@ add_executable(test_ark324_composition tests/test_ark324_composition.cpp)
 target_link_libraries(test_ark324_composition PRIVATE wrf_sdirk3::core)
 add_test(NAME ARK324_Production_Composition COMMAND test_ark324_composition)
 
+add_executable(test_krylov_budget_config tests/test_krylov_budget_config.cpp)
+target_link_libraries(test_krylov_budget_config PRIVATE wrf_sdirk3::core)
+add_test(NAME Krylov_Budget_Config COMMAND test_krylov_budget_config)
+
 add_executable(test_full_tile_step tests/test_full_tile_step.cpp)
 target_link_libraries(test_full_tile_step PRIVATE wrf_sdirk3::core)
 add_test(NAME Full_Tile_Step_Adjoint COMMAND test_full_tile_step)

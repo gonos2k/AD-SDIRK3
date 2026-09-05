@@ -20,6 +20,9 @@
 namespace wrf {
 namespace sdirk3 {
 
+// Shared ceiling for global and stage-specific GMRES restart lengths.
+constexpr int kMaxGmresRestart = 1000;
+
 // THE spelling authority for boolean text, shared by the namelist path, the env path, and any
 // diagnostic gate. Recognises what this project has always recognised -- 1 / true / .true. / t /
 // yes and their false counterparts, case-insensitive, Fortran dots stripped -- and says so when a

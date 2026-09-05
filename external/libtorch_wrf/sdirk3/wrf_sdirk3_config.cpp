@@ -182,7 +182,7 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 // which is how a measurement gets attributed to a budget it never had. One
                 // maximum, and a clamp that says it clamped.
                 stage2_gmres_restart =
-                    clamp_int_warn("sdirk3_stage2_gmres_restart", std::stoi(value), 0, 1000);
+                    clamp_int_warn("sdirk3_stage2_gmres_restart", std::stoi(value), 0, kMaxGmresRestart);
             } else if (key == "sdirk3_stage2_max_krylov_restarts") {
                 stage2_max_krylov_restarts = std::clamp(std::stoi(value), 0, 20);
             } else if (key == "sdirk3_stage2_krylov_tol") {
@@ -193,7 +193,7 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 stage2_ew_eta_max = std::clamp(std::strtof(value.c_str(), nullptr), 0.0f, 1.0f);
             } else if (key == "sdirk3_stage3_gmres_restart") {
                 stage3_gmres_restart =
-                    clamp_int_warn("sdirk3_stage3_gmres_restart", std::stoi(value), 0, 1000);
+                    clamp_int_warn("sdirk3_stage3_gmres_restart", std::stoi(value), 0, kMaxGmresRestart);
             } else if (key == "sdirk3_stage3_max_krylov_restarts") {
                 stage3_max_krylov_restarts = std::clamp(std::stoi(value), 0, 20);
             } else if (key == "sdirk3_stage3_krylov_tol") {
@@ -923,7 +923,7 @@ void SDIRK3Config::load_from_env() {
             int parsed_budget = 0;
             if (wrf::sdirk3::parse_whole_int(env_val, parsed_budget)) {
                 stage2_gmres_restart = clamp_int_warn(
-                    "WRF_SDIRK3_STAGE2_GMRES_RESTART", parsed_budget, 0, 1000);
+                    "WRF_SDIRK3_STAGE2_GMRES_RESTART", parsed_budget, 0, kMaxGmresRestart);
             } else {
                 std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_STAGE2_GMRES_RESTART='" << env_val
                           << "' is not a whole integer; keeping stage2_gmres_restart = "
@@ -956,7 +956,7 @@ void SDIRK3Config::load_from_env() {
             int parsed_budget = 0;
             if (wrf::sdirk3::parse_whole_int(env_val, parsed_budget)) {
                 stage3_gmres_restart = clamp_int_warn(
-                    "WRF_SDIRK3_STAGE3_GMRES_RESTART", parsed_budget, 0, 1000);
+                    "WRF_SDIRK3_STAGE3_GMRES_RESTART", parsed_budget, 0, kMaxGmresRestart);
             } else {
                 std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_STAGE3_GMRES_RESTART='" << env_val
                           << "' is not a whole integer; keeping stage3_gmres_restart = "
@@ -2217,8 +2217,8 @@ bool SDIRK3Config::validate() const {
         valid = false;
     }
     
-    if (gmres_restart < 1 || gmres_restart > 1000) {
-        std::cerr << "SDIRK3 Config Error: gmres_restart must be between 1 and 1000" << std::endl;
+    if (gmres_restart < 1 || gmres_restart > kMaxGmresRestart) {
+        std::cerr << "SDIRK3 Config Error: gmres_restart must be between 1 and " << kMaxGmresRestart << std::endl;
         valid = false;
     }
 
@@ -2230,7 +2230,7 @@ bool SDIRK3Config::validate() const {
         self->gmres_arnoldi_stag_window = std::clamp(gmres_arnoldi_stag_window, 1, 20);
         self->gmres_arnoldi_stag_ratio = std::clamp(gmres_arnoldi_stag_ratio, 0.5f, 1.0f);
         // v20.14 r49/r59
-        self->stage2_gmres_restart = std::clamp(stage2_gmres_restart, 0, 100);
+        self->stage2_gmres_restart = std::clamp(stage2_gmres_restart, 0, kMaxGmresRestart);
         self->stage2_max_krylov_restarts = std::clamp(stage2_max_krylov_restarts, 0, 20);
         self->stage2_krylov_tol = std::clamp(stage2_krylov_tol, 0.0f, 1.0f);
         self->stage2_ew_eta_min = std::clamp(stage2_ew_eta_min, 0.0f, 1.0f);
@@ -2239,7 +2239,7 @@ bool SDIRK3Config::validate() const {
             self->stage2_ew_eta_max < self->stage2_ew_eta_min) {
             std::swap(self->stage2_ew_eta_min, self->stage2_ew_eta_max);
         }
-        self->stage3_gmres_restart = std::clamp(stage3_gmres_restart, 0, 100);
+        self->stage3_gmres_restart = std::clamp(stage3_gmres_restart, 0, kMaxGmresRestart);
         self->stage3_max_krylov_restarts = std::clamp(stage3_max_krylov_restarts, 0, 20);
         self->stage3_krylov_tol = std::clamp(stage3_krylov_tol, 0.0f, 1.0f);
         self->stage3_ew_eta_min = std::clamp(stage3_ew_eta_min, 0.0f, 1.0f);
@@ -3226,13 +3226,13 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
         g_sdirk3_config.jvp_mixed_fd_newton_switch = value;
     // v20.14 r49/r59: Stage-aware GMRES budget + JVP auto-bench
     } else if (key == "stage2_gmres_restart") {
-        g_sdirk3_config.stage2_gmres_restart = std::clamp(value, 0, 100);
+        g_sdirk3_config.stage2_gmres_restart = std::clamp(value, 0, kMaxGmresRestart);
         std::cerr << "[CONFIG] stage2_gmres_restart = " << g_sdirk3_config.stage2_gmres_restart << std::endl;
     } else if (key == "stage2_max_krylov_restarts") {
         g_sdirk3_config.stage2_max_krylov_restarts = std::clamp(value, 0, 20);
         std::cerr << "[CONFIG] stage2_max_krylov_restarts = " << g_sdirk3_config.stage2_max_krylov_restarts << std::endl;
     } else if (key == "stage3_gmres_restart") {
-        g_sdirk3_config.stage3_gmres_restart = std::clamp(value, 0, 100);
+        g_sdirk3_config.stage3_gmres_restart = std::clamp(value, 0, kMaxGmresRestart);
         std::cerr << "[CONFIG] stage3_gmres_restart = " << g_sdirk3_config.stage3_gmres_restart << std::endl;
     } else if (key == "stage3_max_krylov_restarts") {
         g_sdirk3_config.stage3_max_krylov_restarts = std::clamp(value, 0, 20);
