@@ -538,6 +538,14 @@ add_executable(test_coriolis_contract
 target_link_libraries(test_coriolis_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Coriolis_Contract COMMAND test_coriolis_contract)
 
+add_executable(test_phi_coordinate_contract tests/test_phi_coordinate_contract.cpp)
+target_link_libraries(test_phi_coordinate_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Phi_Coordinate_Contract COMMAND test_phi_coordinate_contract)
+
+add_executable(test_w_damping_coordinate_contract tests/test_w_damping_coordinate_contract.cpp)
+target_link_libraries(test_w_damping_coordinate_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME W_Damping_Coordinate_Contract COMMAND test_w_damping_coordinate_contract)
+
 add_executable(test_two_step_tile_adjoint tests/test_two_step_tile_adjoint.cpp)
 target_link_libraries(test_two_step_tile_adjoint PRIVATE wrf_sdirk3::core)
 add_test(NAME Two_Step_Tile_Adjoint COMMAND test_two_step_tile_adjoint)

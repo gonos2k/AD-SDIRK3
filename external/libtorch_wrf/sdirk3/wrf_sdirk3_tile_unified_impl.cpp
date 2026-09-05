@@ -21554,7 +21554,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             auto w_damp_padded = wrf::sdirk3::compute_w_damping_term(
                 ww, w, damp_mu_arg, c1f_, c2f_, damp_rdnw_arg, dt, w_alpha,
                 gate_threshold, w_crit_cfl, k_start, k_end, nz_w_);
-            rw_tend = rw_tend - w_damp_padded;
+            if (canonical_horizontal) {
+                // The raw damping is a WRF coupled force. Preserve raw/alpha_w
+                // through the later division by the legacy velocity mass.
+                const auto alpha_w = level_mass_w /
+                    msfty_.to(w.device(), w.scalar_type()).unsqueeze(1);
+                rw_tend = rw_tend - w_damp_padded * (velocity_mass_w / alpha_w);
+            } else {
+                rw_tend = rw_tend - w_damp_padded;
+            }
             {
                 auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
                 rw_cap2.add("w_damp_padded", w_damp_padded);
@@ -24584,11 +24592,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                   << " / " << w_tend_comb_max_cpu.item<float>() << std::endl;
     }
 
-    // CRITICAL FIX: Convert ph_tend from mass-weighted to physical tendency
-    // Currently: ph_tend = μ/msfty · ∂φ/∂t (mass-weighted form)
-    // Need: ph_tend = ∂φ/∂t (physical tendency for Newton solver)
-    // Fortran does this conversion at state update time (module_small_step_em.F:1822-1823)
-    // But implicit solver needs it in RHS
+    // rhs_ph accumulates coupled tendencies. The ordinary WRF advance_w
+    // divides the complete PH equation by alpha_w=(c1f*M+c2f)/msfty.
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
         // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
         auto ph_tend_conv_cpu = ph_tend.detach().to(torch::kCPU);
@@ -24611,10 +24616,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         msfty_3d_ph = torch::ones_like(mut_at_w);
     }
 
-    // Convert: ph_tend_physical = ph_tend_weighted * msfty / mut
-    // PARITY FIX 2025-12-24: FP16 only - BF16 has float32 exponent range so 1e-10 is safe.
     const float mut_safe_eps = getAutocastAwareEps(mut_at_w);
-    ph_tend = ph_tend * msfty_3d_ph / (mut_at_w + mut_safe_eps);
+    const auto ph_conversion = canonical_horizontal
+        ? msfty_.to(ph_tend.device(), ph_tend.scalar_type()).unsqueeze(1) / level_mass_w
+        : msfty_3d_ph / (mut_at_w + mut_safe_eps);
+    ph_tend = ph_tend * ph_conversion;
 
     // DIAGNOSTIC: Convert each contribution to physical units for comparison
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24628,8 +24634,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
         // Convert individual contributions to diagnose which term is problematic
         // Note: These are computed from saved tensors, conversion factor is same
-        auto conversion_factor = msfty_3d_ph / (mut_at_w + mut_safe_eps);
-        auto conversion_factor_cpu = conversion_factor.detach().to(torch::kCPU);
+        auto conversion_factor_cpu = ph_conversion.detach().to(torch::kCPU);
         auto conv_factor_max_cpu = conversion_factor_cpu.max();
         auto conv_factor_min_cpu = conversion_factor_cpu.min();
         std::cerr << "[SDIRK3] Conversion factor: " << conv_factor_max_cpu.item<float>()

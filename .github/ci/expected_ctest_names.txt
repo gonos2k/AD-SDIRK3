@@ -78,3 +78,5 @@ Horizontal_Momentum_Contract
 Horizontal_Mass_Contract
 Two_Step_Tile_Adjoint
 Coriolis_Contract
+Phi_Coordinate_Contract
+W_Damping_Coordinate_Contract
