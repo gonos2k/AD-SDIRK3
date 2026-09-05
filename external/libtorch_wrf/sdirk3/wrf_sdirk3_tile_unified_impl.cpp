@@ -125,6 +125,7 @@
 // =========================================================================
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
+#include "wrf_sdirk3_horizontal_momentum.h"
 #include "wrf_sdirk3_metric_policy.h"
 #include "wrf_sdirk3_transpose_probe.h"
 
@@ -16228,19 +16229,88 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     const auto velocity_mass_v = mu_at_v_3d + mu_base_at_v_3d + eps_v;
     const auto velocity_mass_w = mu_at_w_3d + mu_base_at_w_3d + eps_w;
 
+    const bool canonical_horizontal = use_wrf_mass_flux &&
+        wdamp_contract_.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic &&
+        wdamp_contract_.y_policy == wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate;
+    const bool momentum_packed = isPackedPeriodicDomain();
+    const int64_t momentum_m = ny_ - (momentum_packed ? 1 : 0);
+    const int64_t momentum_n = nx_ - (momentum_packed ? 1 : 0);
+    const auto extend_u = [&](const torch::Tensor& q) {
+        if (!momentum_packed) return q;
+        const auto x = torch::cat({q,q.slice(2,1,2)},2);
+        return torch::cat({x,x.slice(0,momentum_m-1,momentum_m)},0);
+    };
+    const auto extend_v = [&](const torch::Tensor& q, bool odd) {
+        if (!momentum_packed) return q;
+        const auto x = torch::cat({q,q.slice(2,0,1)},2);
+        const auto last = x.slice(0,momentum_m-1,momentum_m);
+        return torch::cat({x,odd ? -last : last},0);
+    };
+    const auto extend_w = [&](const torch::Tensor& q) {
+        if (!momentum_packed) return q;
+        const auto x = torch::cat({q,q.slice(2,0,1)},2);
+        return torch::cat({x,x.slice(0,momentum_m-1,momentum_m)},0);
+    };
+    torch::Tensor level_mass_u, level_mass_v, level_mass_w;
+    if (canonical_horizontal) {
+        const auto mass = mu_full.slice(0,0,momentum_m).slice(1,0,momentum_n);
+        const auto mass_u = stagger_wrf_mass_field(mass,1,wdamp_contract_.x_policy);
+        const auto mass_v = stagger_wrf_mass_field(mass,0,wdamp_contract_.y_policy);
+        const auto c1h = c1h_.to(u.device(),u.scalar_type()).slice(0,0,nz_).view({1,-1,1});
+        const auto c2h = c2h_.to(u.device(),u.scalar_type()).slice(0,0,nz_).view({1,-1,1});
+        const auto c1f = c1f_.to(w.device(),w.scalar_type()).slice(0,0,nz_w_).view({1,-1,1});
+        const auto c2f = c2f_.to(w.device(),w.scalar_type()).slice(0,0,nz_w_).view({1,-1,1});
+        level_mass_u = extend_u(c1h*mass_u.unsqueeze(1)+c2h);
+        level_mass_v = extend_v(c1h*mass_v.unsqueeze(1)+c2h,false);
+        level_mass_w = extend_w(c1f*mass.unsqueeze(1)+c2f);
+    }
+
     if (do_explicit) {  // Step 3: ADVECTION (slow-mode / explicit)
 
     const bool packed_periodic_x = isPackedPeriodicDomain() &&
         u.size(0) == ny_ && u.size(2) == nx_ + 1 &&
         v.size(0) == ny_ + 1 && v.size(2) == nx_;
     std::pair<torch::Tensor, torch::Tensor> periodic_momentum_x;
-    if (packed_periodic_x) {
+    if (packed_periodic_x && !canonical_horizontal) {
         periodic_momentum_x = advectPackedPeriodicMomentumX(
             u, v, mu_full, rdx, g_export_coupled_slow);
         if (!g_export_coupled_slow) {
             periodic_momentum_x.first = periodic_momentum_x.first * velocity_mass_u;
             periodic_momentum_x.second = periodic_momentum_x.second * velocity_mass_v;
         }
+    }
+
+    wrf::sdirk3::HorizontalMomentumFluxes horizontal;
+    if (canonical_horizontal) {
+        const auto& mass_flux = wrf_mass_flux();
+        const auto flux = [&](const std::array<torch::Tensor,6>& q,const torch::Tensor& transport) {
+            const int order = wrf::sdirk3::g_sdirk3_config.advection_order;
+            if (order >= 5) return flux5_upwind(q[0],q[1],q[2],q[3],q[4],q[5],transport);
+            if (order >= 3) return flux3_upwind(q[1],q[2],q[3],q[4],transport);
+            return flux2_centered(q[2],q[3],transport);
+        };
+        const auto m=momentum_m, n=momentum_n;
+        horizontal = wrf::sdirk3::wrf_horizontal_momentum(
+            u.slice(0,0,m).slice(2,0,n+1),v.slice(0,0,m+1).slice(2,0,n),
+            w.slice(0,0,m).slice(2,0,n),
+            mass_flux.u.slice(0,0,m).slice(2,0,n+1),
+            mass_flux.v.slice(0,0,m+1).slice(2,0,n),
+            msfux_.to(u.device(),u.scalar_type()).slice(0,0,m).slice(1,0,n+1),
+            msfvy_.to(v.device(),v.scalar_type()).slice(0,0,m+1).slice(1,0,n),
+            msftx_.to(w.device(),w.scalar_type()).slice(0,0,m).slice(1,0,n),
+            fnm_.to(w.device(),w.scalar_type()),fnp_.to(w.device(),w.scalar_type()),rdx,rdy,flux);
+        const auto factor_u = velocity_mass_u /
+            (level_mass_u/msfuy_.to(u.device(),u.scalar_type()).unsqueeze(1));
+        const auto factor_v = velocity_mass_v /
+            (level_mass_v/msfvx_.to(v.device(),v.scalar_type()).unsqueeze(1));
+        const auto factor_w = velocity_mass_w /
+            (level_mass_w/msfty_.to(w.device(),w.scalar_type()).unsqueeze(1));
+        horizontal.ux = extend_u(horizontal.ux)*factor_u;
+        horizontal.uy = extend_u(horizontal.uy)*factor_u;
+        horizontal.vx = extend_v(horizontal.vx,true)*factor_v;
+        horizontal.vy = extend_v(horizontal.vy,true)*factor_v;
+        horizontal.wx = extend_w(horizontal.wx)*factor_w;
+        horizontal.wy = extend_w(horizontal.wy)*factor_w;
     }
 
     std::pair<torch::Tensor, torch::Tensor> wrf_vertical_uv;
@@ -16312,12 +16382,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         
         // X-advection: -∂(ru*u)/∂x (WRF formulation)
         // NOTE: Map scale factors will be applied INSIDE the advection functions
-        auto ru_adv_x = packed_periodic_x ? periodic_momentum_x.first
+        auto ru_adv_x = canonical_horizontal ? horizontal.ux
+                         : packed_periodic_x ? periodic_momentum_x.first
                                           : advect_u_point_scalar_x(ru, u, rdx);
         
         // Y-advection: -∂(rv*u)/∂y (WRF formulation)  
         // NOTE: Map scale factors will be applied INSIDE the advection functions
-        auto ru_adv_y = advect_u_point_scalar_y(ru, v, rdy);
+        auto ru_adv_y = canonical_horizontal ? horizontal.uy
+                         : advect_u_point_scalar_y(ru, v, rdy);
         
         // Combine horizontal advection (map factors already included)
         auto ru_adv_horiz = ru_adv_x + ru_adv_y;  // WRF: horizontal advection
@@ -16630,11 +16702,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
         
         // X-advection: -∂(ru*v)/∂x (WRF formulation)
-        auto rv_adv_x = packed_periodic_x ? periodic_momentum_x.second
+        auto rv_adv_x = canonical_horizontal ? horizontal.vx
+                         : packed_periodic_x ? periodic_momentum_x.second
                                           : advect_v_point_scalar_x(rv, u, rdx);
         
         // Y-advection: -∂(rv*v)/∂y (WRF formulation)
-        auto rv_adv_y = advect_v_point_scalar_y(rv, v, rdy);
+        auto rv_adv_y = canonical_horizontal ? horizontal.vy
+                         : advect_v_point_scalar_y(rv, v, rdy);
         
         // Combine horizontal advection (map factors already included in advection functions)
         auto rv_adv_horiz = rv_adv_x + rv_adv_y;  // WRF: horizontal advection
@@ -16876,6 +16950,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             }
         }
         
+        torch::Tensor rw_adv_horiz;
+        if (canonical_horizontal) {
+            rw_adv_horiz = horizontal.wx + horizontal.wy;
+        } else {
         // X-advection: -∂(ru*w)/∂x (WRF formulation)
         auto muu_2d_w = avg_x_to_u_2d(mu_full, u.size(2));
         auto muu_w = muu_2d_w.unsqueeze(1).expand({-1, u.size(1), -1});
@@ -16940,8 +17018,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         auto rw_adv_horiz_mass = map_product * rw_adv_sum;
         
         // Interpolate horizontal advection back to w-points
-        auto rw_adv_horiz = avg_mass_to_w(rw_adv_horiz_mass);
+        rw_adv_horiz = avg_mass_to_w(rw_adv_horiz_mass);
         
+        }
+
         // AUTOGRAD FIX: Build rw_adv_z functionally instead of mutating zeros_like tensor
         torch::Tensor rw_adv_z;
 
@@ -24325,6 +24405,20 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         u_tend = ru_tend;
         v_tend = rv_tend;
         w_tend = rw_tend;
+    } else if (canonical_horizontal) {
+        // Maps and hybrid coefficients are fixed: alpha_dot/alpha =
+        // c1*Mdot/(c1*M+c2). Use the same physical face averaging as the flux.
+        const auto mass_dot = mu_tend_for_conversion.slice(0,0,momentum_m).slice(1,0,momentum_n);
+        const auto c1h = c1h_.to(u.device(),u.scalar_type()).slice(0,0,nz_).view({1,-1,1});
+        const auto c1f = c1f_.to(w.device(),w.scalar_type()).slice(0,0,nz_w_).view({1,-1,1});
+        const auto rate_u = extend_u(c1h*stagger_wrf_mass_field(
+            mass_dot,1,wdamp_contract_.x_policy).unsqueeze(1))/level_mass_u;
+        const auto rate_v = extend_v(c1h*stagger_wrf_mass_field(
+            mass_dot,0,wdamp_contract_.y_policy).unsqueeze(1),false)/level_mass_v;
+        const auto rate_w = extend_w(c1f*mass_dot.unsqueeze(1))/level_mass_w;
+        u_tend = ru_tend/velocity_mass_u-u*rate_u;
+        v_tend = rv_tend/velocity_mass_v-v*rate_v;
+        w_tend = rw_tend/velocity_mass_w-w*rate_w;
     } else {
         u_tend = ru_tend / velocity_mass_u - u * mu_tend_at_u_3d / velocity_mass_u;
         v_tend = rv_tend / velocity_mass_v - v * mu_tend_at_v_3d / velocity_mass_v;

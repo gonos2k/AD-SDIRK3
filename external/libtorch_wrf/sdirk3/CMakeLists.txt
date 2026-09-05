@@ -528,6 +528,14 @@ add_executable(test_vertical_momentum_contract tests/test_vertical_momentum_cont
 target_link_libraries(test_vertical_momentum_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Vertical_Momentum_Contract COMMAND test_vertical_momentum_contract)
 
+add_executable(test_horizontal_momentum_contract tests/test_horizontal_momentum_contract.cpp)
+target_link_libraries(test_horizontal_momentum_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Horizontal_Momentum_Contract COMMAND test_horizontal_momentum_contract)
+
+add_executable(test_horizontal_mass_contract tests/test_horizontal_mass_contract.cpp)
+target_link_libraries(test_horizontal_mass_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Horizontal_Mass_Contract COMMAND test_horizontal_mass_contract)
+
 add_executable(test_pgf_coordinate_contract
     tests/test_pgf_coordinate_contract.cpp tests/test_w_pgf_coordinate_contract.cpp
     tests/test_pgf_debug_contract.cpp)

@@ -74,3 +74,5 @@ Periodic_Staggered_Advection
 Packed_Boundary_Contract
 Vertical_Momentum_Contract
 PGF_Coordinate_Contract
+Horizontal_Momentum_Contract
+Horizontal_Mass_Contract
