@@ -415,7 +415,7 @@ void wrf_sdirk3_destroy_tile_solver(void* solver);
 //
 // 3. sdirk3_tile_solver_reset_full() [Per-solver + all caches]
 //    - Resets: Everything in reset_state() + all solver caches
-//    - Cache types: Divergence, MSF 3D, metric, pressure gradient
+//    - Cache types: MSF 3D, metric, pressure gradient
 //    - Use for: Testing/debugging with full state isolation
 //    - Overhead: Moderate (epoch increments, cache flag resets)
 //    - Thread scope: Per-solver + calling thread TLS only
@@ -598,7 +598,7 @@ void sdirk3_tile_solver_reset_state(void* solver_ptr);
  *   consider destroying and recreating the solver, or implementing a pool clear API.
  *
  * THREAD POLICY (FIX Round84 - synced from wrf_sdirk3_tile_unified.h):
- *   Thread-local caches (#2 MSF 3D, #4 pressure gradient) are only invalidated
+ *   Thread-local caches (MSF 3D, pressure gradient) are only invalidated
  *   in the CALLING THREAD. In multi-threaded execution (OpenMP):
  *   - Worker threads' caches remain valid after reset_full from main thread
  *   - Each thread must call invalidateCaches() independently for full reset

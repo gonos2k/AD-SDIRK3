@@ -144,7 +144,22 @@ inline const char* wwcp_policy_name(WWCPBoundaryPolicy p) {
     return "?";
 }
 
-inline torch::Tensor compute_wrf_ww_cp(
+// Full diagnostic output of WRF calc_ww_cp.  `u` and `v` are the map-coupled
+// mass fluxes at their native staggered faces (cu and cv in the Fortran
+// kernel). `omega` is the w-staggered diagnosed vertical mass flux. The
+// continuity diagnostic is dmdt = sum_k divv(k), i.e. the horizontal column
+// mass tendency divided by the y-direction map factor (Mdot/msfty) in WRF's
+// map-scaled continuity equation. It has pressure/time units (Pa/s);
+// it is the quantity used by the omega recurrence, not an independently
+// rescaled physical Mdot.
+struct WRFMassFlux {
+    torch::Tensor u;  // cu: map-coupled x-face mass flux, [ny,nz,nx+1]
+    torch::Tensor v;  // cv: map-coupled y-face mass flux, [ny+1,nz,nx]
+    torch::Tensor omega;  // diagnosed w-staggered mass flux, [ny,nz+1,nx]
+    torch::Tensor mass_tendency_over_map_y;  // dmdt=Mdot/msfty, [ny,nx]
+};
+
+inline WRFMassFlux diagnose_wrf_mass_flux(
     const torch::Tensor& u,          // [ny, nz, nx_u]
     const torch::Tensor& v,          // [ny_v, nz, nx]
     const torch::Tensor& mup,        // [ny, nx] perturbation column mass
@@ -300,7 +315,35 @@ inline torch::Tensor compute_wrf_ww_cp(
                    divv.slice(1, 0, nz - 1);            // [ny, nz-1, nx]
     auto zeros_lvl = torch::zeros({ny, 1, nx}, mut.options());
     // Interior levels k=1..nz-1; explicit WRF BCs ww(0)=0 and ww(top)=0.
-    return torch::cat({zeros_lvl, -contrib.cumsum(1), zeros_lvl}, 1);
+    return WRFMassFlux{
+        cu,
+        cv,
+        torch::cat({zeros_lvl, -contrib.cumsum(1), zeros_lvl}, 1),
+        dmdt};
+}
+
+// Compatibility API: existing callers consume only WRF's diagnosed omega.
+// Keep this wrapper as the sole legacy entry point so the structured
+// diagnostic and the production omega path cannot drift apart.
+inline torch::Tensor compute_wrf_ww_cp(
+    const torch::Tensor& u,
+    const torch::Tensor& v,
+    const torch::Tensor& mup,
+    const torch::Tensor& mub,
+    const torch::Tensor& c1h,
+    const torch::Tensor& c2h,
+    const torch::Tensor& dnw,
+    float rdx,
+    float rdy,
+    const torch::Tensor& msftx,
+    const torch::Tensor& msfuy,
+    const torch::Tensor& msfvx_inv,
+    WWCPBoundaryPolicy x_policy,
+    WWCPBoundaryPolicy y_policy)
+{
+    return diagnose_wrf_mass_flux(u, v, mup, mub, c1h, c2h, dnw,
+                                  rdx, rdy, msftx, msfuy, msfvx_inv,
+                                  x_policy, y_policy).omega;
 }
 
 }  // namespace sdirk3

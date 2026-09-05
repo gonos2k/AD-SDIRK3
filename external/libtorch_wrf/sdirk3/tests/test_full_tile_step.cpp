@@ -200,14 +200,18 @@ void check_temporal_order() {
         for (int step=0; step<steps; ++step) tile.step(64.0f/steps);
         return tile.state().to(torch::kFloat64);
     };
-    const auto coarse = integrate(32, 1e-7f);
-    const auto fine = integrate(64, 1e-7f);
-    const auto reference = integrate(256, 1e-7f);
-    const auto tighter = integrate(64, 1e-8f);
-    const int starts[] = {su+sv, su+sv+sw, su+sv+2*sw};
-    const int sizes[] = {sw, sw, st};
-    const char* names[] = {"w", "ph", "t"};
-    for (int block=0; block<3; ++block) {
+    constexpr float temporal_tolerance = 1e-7f;
+    const int coarse_steps = 64;
+    const int fine_steps = 128;
+    const int reference_steps = 512;
+    const auto coarse = integrate(coarse_steps, temporal_tolerance);
+    const auto fine = integrate(fine_steps, temporal_tolerance);
+    const auto reference = integrate(reference_steps, temporal_tolerance);
+    const auto tighter = integrate(fine_steps, 1e-9f);
+    const int starts[] = {su+sv, su+sv+sw};
+    const int sizes[] = {sw, sw};
+    const char* names[] = {"w", "ph"};
+    for (int block=0; block<2; ++block) {
         const auto norm = [&](const torch::Tensor& difference) {
             return difference.slice(0,starts[block],starts[block]+sizes[block]).norm().item<double>();
         };
@@ -215,13 +219,23 @@ void check_temporal_order() {
         const double fine_error = norm(fine-reference);
         const double solve_change = norm(tighter-fine);
         const double order = std::log2(coarse_error/fine_error);
-        std::cout << "TILE_ORDER field=" << names[block] << " coarse_error=" << coarse_error
+        std::cout << "TILE_ORDER field=" << names[block]
+                  << " steps=" << coarse_steps << "/" << fine_steps
+                  << "/" << reference_steps << " tolerance=" << temporal_tolerance
+                  << " coarse_error=" << coarse_error
                   << " fine_error=" << fine_error << " order=" << order
                   << " tighter_solve_change=" << solve_change << '\n';
         TORCH_CHECK(std::isfinite(order) && fine_error > 0 && order > 2.7 && order < 3.4,
                     "full tile temporal convergence is not third order in ", names[block]);
         TORCH_CHECK(std::isfinite(solve_change) && solve_change < 0.01*fine_error,
                     "Newton error obscures temporal convergence in ", names[block]);
+    }
+    // This horizontally uniform dry column has theta'=0 and diagnosed Omega=0.
+    // Potential temperature stays constant during vertical acoustic motion; a
+    // nonzero theta signal here would measure a spurious source, not time order.
+    for (const auto& state : {coarse, fine, reference, tighter}) {
+        TORCH_CHECK(state.slice(0, su+sv+2*sw, total-sm).abs().max().item<double>() == 0.0,
+                    "vertical acoustic motion changed constant potential temperature");
     }
 }
 }

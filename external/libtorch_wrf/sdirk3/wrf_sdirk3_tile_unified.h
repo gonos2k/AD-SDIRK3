@@ -520,23 +520,19 @@ public:
      *
      * SOLVER CACHES (invalidated directly):
      *
-     * 1. DIVERGENCE CACHE (invalidateDivergenceCache)
-     *    - Location: TileSDIRK3UnifiedSolver member
-     *    - Purpose: Cached divergence computations for advection
-     *
-     * 2. MSF 3D EXPANSION CACHE (wrf::sdirk3::invalidateMsf3DCache)
+     * 1. MSF 3D EXPANSION CACHE (wrf::sdirk3::invalidateMsf3DCache)
      *    - Location: wrf_sdirk3_unified_rhs.cpp thread_local
      *    - Purpose: Expanded 3D map scale factors from 2D inputs
      *
-     * 3. UNIFIED RHS ACOUSTIC METRIC CACHE (unified_rhs_->invalidate_acoustic_metric_cache)
+     * 2. UNIFIED RHS ACOUSTIC METRIC CACHE (unified_rhs_->invalidate_acoustic_metric_cache)
      *    - Location: UnifiedRHS member
      *    - Contents: rdzw/rdz device tensors for acoustic computations
      *
-     * 4. PRESSURE GRADIENT CACHES (wrf::sdirk3::pg_detail::invalidateAllCaches)
+     * 3. PRESSURE GRADIENT CACHES (wrf::sdirk3::pg_detail::invalidateAllCaches)
      *    - Location: wrf_sdirk3_pressure_gradient.cpp thread_local
      *    - Contents: rdx/rdy scalars, c1h/c2h/c1f/c2f/rdnw/rdn arrays
      *
-     * 5. RAW MAP-FACTOR SOURCE/DEVICE VIEWS (invalidateMapFactorCaches)
+     * 4. RAW MAP-FACTOR SOURCE/DEVICE VIEWS (invalidateMapFactorCaches)
      *    - Location: TileSDIRK3UnifiedSolver members
      *    - Contents: six WRF-owned from_blob views, six device copies, metadata,
      *      and any retained full-step pullback graph that may save those tensors
@@ -544,23 +540,23 @@ public:
      *
      * GRID METRIC CACHES (via grid_info_->invalidateVerticalMetricCaches):
      *
-     * 6. STATIC METRIC CACHES (metric_utils::invalidateStaticMetricCaches)
+     * 5. STATIC METRIC CACHES (metric_utils::invalidateStaticMetricCaches)
      *    - Location: SpatialDerivativesAutograd thread_local
      *    - Contents: rdz, dnw, dn vertical metrics (via global epoch)
      *
-     * 7. Z1D PROFILE CACHE (invalidateZ1DCache)
+     * 6. Z1D PROFILE CACHE (invalidateZ1DCache)
      *    - Location: wrf_sdirk3_rayleigh_damping_ad.cpp
      *    - Purpose: Rayleigh damping z1d profiles
      *
-     * 8. DZ MIN CACHE (invalidateDzMinCache)
+     * 7. DZ MIN CACHE (invalidateDzMinCache)
      *    - Location: wrf_sdirk3_boundary_ad.cpp
      *    - Purpose: CFL check min(dz) values
      *
-     * 9. LAT CPU CACHE (invalidateLatCpuCache)
+     * 8. LAT CPU CACHE (invalidateLatCpuCache)
      *    - Location: wrf_sdirk3_boundary_ad.cpp
      *    - Purpose: Boundary condition latitude values
      *
-     * 10. SCALAR MEAN CACHE (invalidateScalarMeanCache)
+     * 9. SCALAR MEAN CACHE (invalidateScalarMeanCache)
      *    - Location: wrf_sdirk3_unified_preconditioner.cpp
      *    - Contents: mub/c1f/c2f/msfty/mu_base .mean() values (via scalar epoch)
      *
@@ -575,7 +571,7 @@ public:
      *
      * DESIGN DECISION (FIX Round82): Full invalidation vs "light invalidate" path
      * ─────────────────────────────────────────────────────────────────────────────
-     * This function always invalidates ALL 10 caches. A "light invalidate" path
+     * This function invalidates every cache listed above. A "light invalidate" path
      * (only solver caches, skip grid metric caches) was considered but rejected:
      *
      *   1. SIMPLICITY: One code path easier to maintain/debug than two
@@ -589,14 +585,14 @@ public:
      *
      * THREAD POLICY (FIX Round83/Round84/Round88):
      * ─────────────────────────────────────────────────────────────────────────────
-     * Caches #2 (MSF 3D) and #4 (pressure gradient) are thread_local.
+     * Caches (MSF 3D) and (pressure gradient) are thread_local.
      * This function only invalidates caches in the CALLING THREAD.
      * In multi-threaded execution (e.g., OpenMP parallel regions):
      *   - Call invalidateGlobalCachesOnly() on the master and
      *     invalidateThreadLocalCachesOnly() on each worker, OR
      *   - Call invalidateCaches() once at an idle serial reset boundary
      *     (not concurrently from every worker)
-     * Raw map-factor views (#5) are solver-shared; full invalidation must run
+     * Raw map-factor views are solver-shared; full invalidation must run
      * once at an idle restart/moving-nest boundary, before any worker republishes
      * or consumes the WRF arrays.
      * For WRF's typical usage (single-threaded solver per tile), this is safe.
@@ -642,25 +638,23 @@ public:
             grid_info_->invalidateVerticalMetricCaches();
         }
 
-        // 1. Divergence cache (PARITY FIX 2025-12-16)
-        invalidateDivergenceCache();
 
-        // 2. MSF 3D expansion cache (FIX 2025-12-28)
+        // MSF 3D expansion cache (FIX 2025-12-28)
         wrf::sdirk3::invalidateMsf3DCache();
 
-        // 3. UnifiedRHS acoustic metric cache - rdzw/rdz device tensors (FIX 2025-01-10 Round5)
+        // UnifiedRHS acoustic metric cache - rdzw/rdz device tensors (FIX 2025-01-10 Round5)
         // FIX Round83: Null check for partial initialization (unified_rhs_ may not exist yet)
         if (unified_rhs_) {
             unified_rhs_->invalidate_acoustic_metric_cache();
         }
 
-        // 4. Pressure gradient caches - scalars and arrays (FIX 2025-01-11 Round58)
+        // Pressure gradient caches - scalars and arrays (FIX 2025-01-11 Round58)
         wrf::sdirk3::pg_detail::invalidateAllCaches();
 
-        // 5. Coefficient device tensor cache (c1f/c2f/rdnw) (PERF FIX 2026-01-31)
+        // Coefficient device tensor cache (c1f/c2f/rdnw) (PERF FIX 2026-01-31)
         invalidateCoeffDeviceCache();
 
-        // 6. Raw map-factor source views and device copies.  A full reset is a
+        // Raw map-factor source views and device copies.  A full reset is a
         // restart/moving-nest boundary, so the next advance must republish all
         // six WRF-owned map arrays before any consumer can reuse them.
         invalidateMapFactorCaches();
@@ -674,8 +668,8 @@ public:
      * invalidateCaches() called N times increments global epochs N times.
      *
      * Thread-local caches invalidated:
-     *   - #2 MSF 3D expansion cache
-     *   - #4 Pressure gradient caches
+     *   - MSF 3D expansion cache
+     *   - Pressure gradient caches
      *
      * NULL SAFETY (FIX Round87): This function calls namespace-scope functions only,
      * not member functions. Safe to call even if solver is partially initialized.
@@ -704,10 +698,10 @@ public:
         }
 #endif
 
-        // 2. MSF 3D expansion cache (thread_local)
+        // MSF 3D expansion cache (thread_local)
         wrf::sdirk3::invalidateMsf3DCache();
 
-        // 4. Pressure gradient caches (thread_local)
+        // Pressure gradient caches (thread_local)
         wrf::sdirk3::pg_detail::invalidateAllCaches();
 
         // OPT Pass33+: TLS TensorViewCache (thread_local from_blob cache)
@@ -723,10 +717,9 @@ public:
      * when combined with invalidateThreadLocalCachesOnly() in parallel region.
      *
      * Global caches invalidated:
-     *   - #1 Divergence cache (member variable)
-     *   - #3 Acoustic metric cache (member variable)
-     *   - #5 Raw map-factor source/device views and metadata (member variables)
-     *   - #6-10 Grid metric caches (via global epochs)
+     *   - Acoustic metric cache (member variable)
+     *   - Raw map-factor source/device views and metadata (member variables)
+     *   - Grid metric caches (via global epochs)
      *
      * NULL SAFETY (FIX Round87): All member accesses are guarded with null checks.
      * Safe to call even if solver is partially initialized (grid_info_ or
@@ -738,10 +731,7 @@ public:
             grid_info_->invalidateVerticalMetricCaches();
         }
 
-        // 1. Divergence cache (member variable, not thread_local)
-        invalidateDivergenceCache();
-
-        // 3. Acoustic metric cache (member variable, not thread_local)
+        // Acoustic metric cache (member variable, not thread_local)
         if (unified_rhs_) {
             unified_rhs_->invalidate_acoustic_metric_cache();
         }
@@ -926,8 +916,7 @@ private:
     // device copies.  Keep this out of
     // resetPerSolverState()/invalidateThreadLocalCachesOnly(): those paths are
     // intentionally lightweight and do not publish new WRF pointers.
-    // msf_epoch_ is a local generation key; both callers invalidate the
-    // divergence cache first.  Advance the generation rather than resetting it
+    // msf_epoch_ is a local generation key. Advance it rather than resetting it
     // to avoid an epoch ABA if an old key is inspected during diagnostics.
     void invalidateMapFactorCaches() {
         msftx_cpu_ = torch::Tensor();
@@ -1022,7 +1011,7 @@ private:
     // PARITY FIX 2025-12-19: Track which source was used to build rdnw_dev_ and its pointer.
     // This enables refresh when source changes (e.g., grid_info_->dnw pointer swap).
     // Uses int encoding: 0=Fallback, 1=GridRdnw, 2=VecRdnw, 3=GridDnw, 4=GridRdn
-    mutable int rdnw_dev_src_type_ = 0;  // Which source built rdnw_dev_ (RdnwSource encoded as int)
+    mutable int rdnw_dev_src_type_ = 0;  // Which source built rdnw_dev_ (source code)
     mutable const void* rdnw_dev_src_ptr_ = nullptr;  // Source data pointer for cache invalidation
     // PARITY FIX 2025-12-20: Track source-specific epoch for in-place change detection.
     // When using GridDnw/GridRdn, pointer may stay same while values change in-place.
@@ -1065,7 +1054,7 @@ private:
     //   - nz changes from padding/slicing that alter the mean without source change
     //   - Fallback ph_base changes that rebuild rdnw_dev_ with same source type/epoch
     mutable float rdnw_ref_v_cached_ = 0.0f;
-    mutable int rdnw_ref_v_src_type_ = 0;          // Which source built cache (RdnwSource as int)
+    mutable int rdnw_ref_v_src_type_ = 0;          // Which source built cache (source code)
     mutable const void* rdnw_ref_v_src_ptr_ = nullptr;  // Source data pointer
     mutable uint64_t rdnw_ref_v_src_epoch_ = 0;    // Source-specific epoch when cache was built
     mutable int64_t rdnw_ref_v_nz_ = 0;            // nz when cache was built (detect padding changes)
@@ -1104,7 +1093,7 @@ private:
     mutable int rdn_ref_w_dev_index_ = -1;
 
     // PARITY FIX 2025-12-20: Helper to refresh grid_info_ epochs for in-place change detection.
-    // Called at top of getRdnwTensor() and ensureDivergenceCache() to ensure consistent
+    // Called by getRdnwTensor() to ensure consistent
     // epoch tracking regardless of which code path accesses the cached tensors.
     void refreshGridMetricEpochs() const;
 
@@ -1854,118 +1843,8 @@ private:
     }
 
     // =========================================================================
-    // PERF FIX 2025-12-15: Cached map factors and rdnw for compute_3d_divergence
-    // Avoids repeated to(device, dtype) calls and H2D copies per invocation.
-    // Cache is invalidated when device, dtype, dimensions, or source data pointers change.
-    // PARITY FIX 2025-12-16: Include data pointers in key to detect map factor updates
-    // (e.g., moving nests, regridding, or refreshed map factors with same shape).
-    // =========================================================================
-
-    // PARITY FIX 2025-12-19: Track which rdnw source was used for cache key.
-    // Only include relevant pointer in key to avoid false cache misses.
-    enum class RdnwSource {
-        GridRdnw,   // grid_info_->rdnw tensor (priority 1)
-        VecRdnw,    // rdnw_ member vector (priority 2)
-        GridDnw,    // grid_info_->dnw tensor fallback (priority 3)
-        GridRdn,    // grid_info_->rdn tensor fallback (priority 4)
-        Fallback    // Physical fallback computed internally (priority 5)
-    };
-
-    struct DivergenceCacheKey {
-        torch::Device device{torch::kCPU};
-        torch::ScalarType dtype{torch::kFloat32};
-        int64_t ny_mass{0};
-        int64_t nx_mass{0};
-        int64_t nz{0};
-        // PARITY FIX 2025-12-16: Track source tensor data pointers to detect content changes
-        // If caller passes new tensor with same shape but different data, cache must invalidate.
-        const void* msftx_data_ptr{nullptr};
-        const void* msfty_data_ptr{nullptr};
-        const void* msfuy_data_ptr{nullptr};
-        const void* msfvx_data_ptr{nullptr};
-        // PARITY FIX 2025-12-19: Track msfuy/msfvx shape to detect re-wrapping at same pointer.
-        // WRF may reuse same memory address with different staggered grid dimensions.
-        int64_t msfuy_ny{0}, msfuy_nx{0};
-        int64_t msfvx_ny{0}, msfvx_nx{0};
-        // PARITY FIX 2025-12-19: Track strides to detect different memory layouts at same ptr/shape.
-        // Same pointer + same shape can have different strides (e.g., transposed view).
-        int64_t msftx_stride0{0}, msftx_stride1{0};
-        int64_t msfty_stride0{0}, msfty_stride1{0};
-        int64_t msfuy_stride0{0}, msfuy_stride1{0};
-        int64_t msfvx_stride0{0}, msfvx_stride1{0};
-        // PARITY FIX 2025-12-19: Track which rdnw source is used and only relevant pointer.
-        // Avoids false cache misses when unused rdn/dnw pointers change.
-        RdnwSource rdnw_src{RdnwSource::Fallback};
-        const void* rdnw_src_ptr{nullptr};  // Pointer for the chosen rdnw source
-        // PARITY FIX 2025-12-19: Track rdnw version to detect coefficient updates.
-        // rdnw_epoch_ increments when rdnw_ vector is updated, invalidating rdnw_broadcast.
-        uint64_t rdnw_epoch{0};
-        // PARITY FIX 2025-12-19: Track source-specific epochs for fallback sources.
-        // When using GridRdn/GridDnw as rdnw source, their in-place changes must invalidate cache.
-        uint64_t rdn_epoch{0};   // Used when rdnw_src == GridRdn
-        uint64_t dnw_epoch{0};   // Used when rdnw_src == GridDnw
-        // PARITY FIX 2025-12-20: Track ph_base for Fallback source.
-        // Fallback uses ph_base to compute ztop = max(1000, max(ph_base)/g) for rdnw approximation.
-        // PERF FIX 2025-12-23: ph_base_ptr is for debugging only, NOT used in comparison.
-        // Invalidation is based on ph_base_signature (clamped ztop) and rdnw_epoch.
-        const void* ph_base_ptr{nullptr};   // Debug only - NOT compared
-        uint64_t ph_base_signature{0};      // Clamped ztop signature for invalidation
-        // PARITY FIX 2025-12-19: Track map factor version for in-place value changes.
-        // Even with same pointer/shape, WRF may modify values between timesteps.
-        uint64_t msf_epoch{0};
-
-        bool operator==(const DivergenceCacheKey& other) const {
-            return device == other.device && dtype == other.dtype &&
-                   ny_mass == other.ny_mass && nx_mass == other.nx_mass && nz == other.nz &&
-                   msftx_data_ptr == other.msftx_data_ptr &&
-                   msfty_data_ptr == other.msfty_data_ptr &&
-                   msfuy_data_ptr == other.msfuy_data_ptr &&
-                   msfvx_data_ptr == other.msfvx_data_ptr &&
-                   msfuy_ny == other.msfuy_ny && msfuy_nx == other.msfuy_nx &&
-                   msfvx_ny == other.msfvx_ny && msfvx_nx == other.msfvx_nx &&
-                   msftx_stride0 == other.msftx_stride0 && msftx_stride1 == other.msftx_stride1 &&
-                   msfty_stride0 == other.msfty_stride0 && msfty_stride1 == other.msfty_stride1 &&
-                   msfuy_stride0 == other.msfuy_stride0 && msfuy_stride1 == other.msfuy_stride1 &&
-                   msfvx_stride0 == other.msfvx_stride0 && msfvx_stride1 == other.msfvx_stride1 &&
-                   rdnw_src == other.rdnw_src && rdnw_src_ptr == other.rdnw_src_ptr &&
-                   rdnw_epoch == other.rdnw_epoch &&
-                   rdn_epoch == other.rdn_epoch && dnw_epoch == other.dnw_epoch &&
-                   // PERF FIX 2025-12-23: Removed ph_base_ptr from comparison (debug only).
-                   // Invalidation uses ph_base_signature (clamped ztop) only.
-                   ph_base_signature == other.ph_base_signature &&
-                   msf_epoch == other.msf_epoch;
-        }
-        bool operator!=(const DivergenceCacheKey& other) const { return !(*this == other); }
-    };
-
-    struct DivergenceCache {
-        DivergenceCacheKey key;
-        torch::Tensor msftx_aligned;   // [ny_mass, nx_mass] on target device/dtype
-        torch::Tensor msfty_aligned;   // [ny_mass, nx_mass] on target device/dtype
-        torch::Tensor msfuy_aligned;   // [ny_u, nx_u] on target device/dtype (optional)
-        torch::Tensor msfvx_aligned;   // [ny_v, nx_v] on target device/dtype (optional)
-        // PERF FIX 2025-12-19: Pre-sized rdnw_broadcast [nz_common] replaces rdnw_ref.
-        // Built once per cache key with exact size, eliminating per-call slice/pad/cat.
-        // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw > 0 (WRF standard, positive)
-        torch::Tensor rdnw_broadcast;      // [nz_common] pre-sized, on target device/dtype (positive)
-        // LEGACY: rdnw_broadcast_abs retained for backward compatibility but now equals rdnw_broadcast
-        torch::Tensor rdnw_broadcast_abs;  // [nz_common] = rdnw_broadcast (already positive)
-        bool valid{false};
-    };
-    mutable DivergenceCache div_cache_;  // Mutable for lazy initialization in const methods
-
-    // Helper to compute/retrieve cached divergence tensors
-    void ensureDivergenceCache(const torch::Device& device, torch::ScalarType dtype,
-                               int64_t ny_mass, int64_t nx_mass, int64_t nz,
-                               const torch::Tensor& msftx, const torch::Tensor& msfty,
-                               const torch::Tensor& msfuy, const torch::Tensor& msfvx) const;
-
-    // Explicit cache invalidation for map factor updates (moving nests, regridding)
-    void invalidateDivergenceCache() const { div_cache_.valid = false; }
-
-    // =========================================================================
     // PERF FIX 2025-12-15: Interior bounds helper for boundary reduction
-    // Reusable across divergence, diffusion, and other routines.
+    // Reusable across staggered spatial operators.
     // =========================================================================
     struct InteriorBounds {
         int64_t i_start{0};   // West boundary (inclusive)
@@ -1991,8 +1870,8 @@ private:
     // Populated from halo_exchange_get_neighbors() after halo_exchange_init()
     int neighbor_north_ = -1, neighbor_south_ = -1;
     int neighbor_east_ = -1,  neighbor_west_ = -1;
-    // Valid flag — false until init + cache succeeds (Finding #57).
-    // Co-invalidated with halo_exchange_initialized_ (Finding #58).
+    // Valid flag — false until init + cache succeeds (Finding #47).
+    // Co-invalidated with halo_exchange_initialized_ (Finding #48).
     bool neighbor_cache_valid_ = false;
 
     // v10: Epoch-based comm change detection
@@ -2441,19 +2320,6 @@ private:
     torch::Tensor compute_defor23(const torch::Tensor& v, const torch::Tensor& w, 
                                   const torch::Tensor& rdy, const torch::Tensor& rdnw);
     torch::Tensor compute_defor33(const torch::Tensor& w, const torch::Tensor& rdnw);
-
-    // 3D divergence for compressibility correction (vectorized GPU version)
-    // Computes: ∇·V = mx*my*(∂(u/my)/∂x + ∂(v/mx)/∂y) + ∂w/∂z
-    // PARITY FIX 2025-12-14: Use staggered map factors (msfuy, msfvx) for u/v components,
-    //                        mass map factors (msftx, msfty) for combined weighting only
-    // PARITY FIX 2025-12-16: Added keep_float32 parameter for AMP/fp16 stability
-    // When keep_float32=true, returns divergence in float32 for downstream calculations
-    // that benefit from higher precision (e.g., compressibility term multiplication).
-    // When keep_float32=false (default), casts result back to input dtype for compatibility.
-    torch::Tensor compute_3d_divergence(const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w,
-                                        const torch::Tensor& msftx, const torch::Tensor& msfty,
-                                        const torch::Tensor& msfuy, const torch::Tensor& msfvx,
-                                        float rdx, float rdy, bool keep_float32 = false);
 
     // Stress tensor based vertical diffusion (physics-accurate)
     torch::Tensor compute_vertical_diffusion_u_stress(const torch::Tensor& u, const torch::Tensor& defor13,

@@ -27,15 +27,27 @@ The differentiable implicit solve converges at small timesteps; making it conver
 stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
 it is **unresolved**.
 
-Verification is an **exact 73-test CTest inventory** pinned by
+Verification is an **exact 74-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
 
 Earlier RHS singular-value and solver-probe amplitudes below predate the horizontal-PGF
-correction. They are historical measurements, not new forecast or stability certifications.
+and dry-theta corrections. They are historical measurements, not current operator, forecast
+or stability certifications.
 
 ### What is measured
+
+- **Dry potential temperature and continuity.** Ordinary ARK in WRFParity mode uses one
+  hybrid/map-aware face-flux diagnosis for column mass, Omega, and theta transport.
+  Periodic and symmetric stencils cover every physical face; packed aliases are excluded
+  from the mass diagnosis and restored afterwards. Vertical theta flux uses WRF's eta
+  sign and includes the top cell. The final product rule uses level mass `c1h*M+c2h`.
+  The extra `-theta*div(u,v,w)` source and its unused private divergence cache were removed.
+  `Potential_Temperature_Contract` checks constant theta, nonzero mass/Omega controls,
+  and an independent column-divergence oracle with varying mass, hybrid coefficients,
+  nonunit maps, orders 2/3/5, HEVI on/off, and physical/packed single-rank layouts.
+  Split export retains its separate driver-supplied tendency convention.
 
 - **Horizontal pressure gradients.** The full and acoustic RHS share the first three WRF
   PGF terms with raw neighbor differences and sums. Grid inverse spacing and the common
@@ -66,7 +78,7 @@ correction. They are historical measurements, not new forecast or stability cert
   zero** in every channel and every `RhsMode` at zero perturbation, paired with a non-zero
   control so the measurement cannot be confused with a dead probe. This is *not*
   well-balancedness: `F(U) = 1000U` also satisfies `F(0) = 0`. The full-tile test now measures
-  1 / 10 / 100 steps: uniform dry mass is unchanged, but small W/Phi/theta drift remains.
+  1 / 10 / 100 steps: uniform dry mass is unchanged; W/Phi drift is also measured.
   These measurements do not establish exact equilibrium preservation.
 - **The RHS Jacobian shows nothing anomalous at the first RHS base point.** Its implicit part is
   state-invariant to six digits (predictably: the coefficient is `mu`, which moves 0.01% between
@@ -82,7 +94,11 @@ correction. They are historical measurements, not new forecast or stability cert
   timestep refinement and a tighter-Newton control. Its one/three-step pullbacks agree with
   dense implicit roots and pass dot/Taylor tests. This is not a whole-WRF temporal-order claim.
   `Full_Tile_Temporal_Order` additionally refines an actual dry tile's vertical-wave trajectory,
-  checks W/Phi/theta separately against a finer reference, and repeats with tighter Newton tolerance.
+  checks W/Phi against a finer reference, repeats with tighter Newton tolerance, and requires
+  constant theta to stay constant. With the corrected dry physics, the `h=1/0.5/0.125`
+  family at final time 64 observes W order 2.789 and Phi order 3.029. Tightening Newton
+  tolerance from 1e-7 to 1e-9 leaves the fine state unchanged. The earlier h=2/1 W order
+  of 2.479 was pre-asymptotic in this test; this remains a tile test, not a whole-WRF claim.
 - **Last completed tile-step pullback.** With `retain_graph_for_adjoint=true`, mode 3,
   `use_autograd=true`, and `imex_slow_in_tangent=true`, `pullbackLastStep(cotangent)` evaluates
   a first-order VJP of the last completed single-rank, single-tile step. Converged RHS graphs

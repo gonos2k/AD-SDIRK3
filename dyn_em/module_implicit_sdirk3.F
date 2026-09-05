@@ -2539,7 +2539,6 @@ CONTAINS
             ! - Vertical metric caches (dnw, c1h, c2h, etc.)
             ! - MSF caches (map scale factors)
             ! - Pressure gradient caches
-            ! - Divergence caches
             CALL sdirk3_tile_solver_reset_full(tile_solvers(ij))
 
             IF (solver_valid(ij)) THEN

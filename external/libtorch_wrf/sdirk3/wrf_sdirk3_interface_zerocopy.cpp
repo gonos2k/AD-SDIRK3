@@ -1042,7 +1042,6 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
  *   - Device cache
  *
  * What it does NOT reset (use sdirk3_tile_solver_reset_full for these):
- *   - Divergence cache
  *   - MSF 3D expansion cache
  *   - Static metric caches
  *   - Pressure gradient caches
@@ -1115,7 +1114,6 @@ void sdirk3_tile_solver_reset_state(void* solver_ptr)
  * What it resets:
  *   1. Per-solver state (warning flags, device cache, logging state)
  *   2. Solver internal caches via invalidateCaches():
- *      - Divergence cache
  *      - MSF 3D expansion cache
  *      - Static metric caches (rdz, dnw, dn)
  *      - UnifiedRHS acoustic metric caches
