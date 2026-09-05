@@ -25990,7 +25990,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_x(const torch::Tensor& f, c
             nx_u_actual == nx_u_ && u.size(0) == f.size(0) && u.size(1) == f.size(1);
         const bool packed_periodic = isPackedPeriodicDomain() && matching_shape;
         const bool physical_periodic = !g_export_coupled_slow && matching_shape &&
-            wdamp_contract_.active &&
+            !wrf::sdirk3::g_sdirk3_config.enable_ad_halo_exchange && grid_info_ &&
+            nx_ == grid_info_->ide - grid_info_->ids &&
+            ny_ == grid_info_->jde - grid_info_->jds && wdamp_contract_.active &&
             wdamp_contract_.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic;
         const bool split_periodic = g_export_coupled_slow &&
             config_flags_periodic_x_ && advect_order >= 5 && nx >= 8;
@@ -26282,7 +26284,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, c
             ny_v_actual == ny_v_ && v.size(1) == f.size(1) && v.size(2) == f.size(2);
         const bool packed_symmetric = isPackedPeriodicDomain() && matching_shape;
         const bool physical_symmetric = !g_export_coupled_slow && matching_shape &&
-            wdamp_contract_.active &&
+            !wrf::sdirk3::g_sdirk3_config.enable_ad_halo_exchange && grid_info_ &&
+            nx_ == grid_info_->ide - grid_info_->ids &&
+            ny_ == grid_info_->jde - grid_info_->jds && wdamp_contract_.active &&
             wdamp_contract_.y_policy == wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate;
         const bool split_symmetric = g_export_coupled_slow &&
             !config_flags_periodic_y_ && advect_order >= 5 && ny >= 8;
