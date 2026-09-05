@@ -4,7 +4,9 @@
 #include <torch/torch.h>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <utility>
 #include <stdexcept>
 
@@ -34,6 +36,38 @@ struct WRMSNormConfig {
     float atol_mu = 1.0e-8f;
     float floor = 1.0e-12f;
 };
+
+// Euclidean RMS in a common FP64 reduction domain.  Relative stage defects must
+// use this same coordinate for both operands; mixing RMS and L2 makes the result
+// depend on the packed state size.
+inline torch::Tensor rms_norm_fp64(const torch::Tensor& v) {
+    if (!v.defined() || v.dim() != 1 || v.numel() == 0 ||
+        (v.scalar_type() != torch::kFloat32 && v.scalar_type() != torch::kFloat64)) {
+        throw std::invalid_argument("rms_norm_fp64: expected a nonempty FP32/FP64 vector");
+    }
+    const auto x = v.to(torch::kFloat64);
+    const auto n = static_cast<double>(x.numel());
+    return torch::sqrt((x * x).sum() / n);
+}
+
+// Relative residual contract: RMS(R) / max(RMS(K), K_floor), with K_floor
+// expressed in RMS units. With no floor, 0/0 denotes an exact zero defect and
+// nonzero/0 is invalid. A configured positive floor defines a separate, floored
+// metric; it must never replace the raw ratio used by predictor/damping policy.
+inline double relative_rms_residual(double residual_rms,
+                                    double reference_rms,
+                                    double k_floor = 0.0) {
+    if (!std::isfinite(k_floor) || k_floor < 0.0) {
+        throw std::invalid_argument("relative_rms_residual: invalid RMS floor");
+    }
+    if (!std::isfinite(residual_rms) || !std::isfinite(reference_rms) ||
+        residual_rms < 0.0 || reference_rms < 0.0) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const double denominator = std::max(reference_rms, k_floor);
+    if (denominator > 0.0) return residual_rms / denominator;
+    return residual_rms == 0.0 ? 0.0 : std::numeric_limits<double>::infinity();
+}
 
 namespace detail {
 

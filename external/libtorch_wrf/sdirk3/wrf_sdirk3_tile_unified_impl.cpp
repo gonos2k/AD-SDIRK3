@@ -13747,7 +13747,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         try {
             torch::NoGradGuard no_grad_diag;
             auto U_new = (U_stage + dt * a_ii * k).detach();
-            float K_norm = k.detach().to(torch::kCPU).norm().item<float>();
+            // Relative residuals use RMS for both operands.  The floor is in
+            // the same RMS units; do not mix it with the raw L2 norm.
+            const double K_rms = wrf::sdirk3::guarded_item<double>(
+                wrf::sdirk3::rms_norm_fp64(k.detach()));
 
             if (split_mode >= 2) {
                 // Mode>=2: K is fast-only. R_fast is the meaningful convergence metric.
@@ -13851,17 +13854,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                     }
                 }
 
-                float fast_resid_unscaled = R_fast_vec.norm().item<float>();
-                // GR5 FIX 2026-02-16: Use scaled RMS (consistent with Mode 1 and Newton solver)
-                float sqrt_N_mode2 = std::sqrt(static_cast<float>(R_fast_vec.numel()));
-                float fast_resid = (sqrt_N_mode2 > 0.0f) ? (fast_resid_unscaled / sqrt_N_mode2) : fast_resid_unscaled;
-                if (!std::isfinite(fast_resid)) {
-                    fast_resid = 1.0e8f;
-                }
-                float rel_R_fast = (K_norm > 1e-15f) ? fast_resid / K_norm : fast_resid;
-                if (!std::isfinite(rel_R_fast)) {
-                    rel_R_fast = 1.0e8f;
-                }
+                const double fast_resid = wrf::sdirk3::guarded_item<double>(
+                    wrf::sdirk3::rms_norm_fp64(R_fast_vec));
+                const double rel_R_fast = wrf::sdirk3::relative_rms_residual(fast_resid, K_rms);
                 last_stage_rel_R_full_ = rel_R_fast;
                 last_stage_rel_R_full_raw_ = rel_R_fast;  // v20.14r41: mode>=2 has no K_floor, raw=floored
                 // v20.14r27y: Also update R_full_norm for mode>=2 so post-damp
@@ -13873,7 +13868,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                     std::cerr << "[RESIDUAL_REEVAL] Stage " << stage
                               << " (IMEX mode>=2): ||R_fast||=" << fast_resid
                               << ", ||R_newton||=" << stats.final_residual
-                              << ", ||K_fast||=" << K_norm
+                              << ", ||K_fast||_rms=" << K_rms
                               << ", rel_R_fast=" << rel_R_fast
                               << ", wrms=" << last_stage_wrms_norm_
                               << ", wrms_growth=" << last_stage_wrms_growth_
@@ -13895,19 +13890,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 auto F_full_check = computeUnifiedRHS(U_new, RhsMode::Full);
                 if (has_physics) F_full_check = F_full_check + F_phys;
                 auto R_full_cpu = (k.detach() - F_full_check).detach().to(torch::kCPU);
-                float R_full_norm_unscaled = R_full_cpu.norm().item<float>();
-                // v20.14r50-fix3: Use scaled RMS (same metric as Newton solver) for
-                // coherent thresholds. Unscaled L2 grows with √N, making fixed thresholds
-                // meaningless (Newton reports 0.3, REEVAL reports 825 for same residual).
-                float sqrt_N_reeval = std::sqrt(static_cast<float>(R_full_cpu.numel()));
-                float R_full_norm = R_full_norm_unscaled / sqrt_N_reeval;  // Scaled RMS
+                const double R_full_norm = wrf::sdirk3::guarded_item<double>(
+                    wrf::sdirk3::rms_norm_fp64(R_full_cpu));
                 // v20.14r40: Dual indicators — floored for gate, raw for diagnostics.
                 // Gate uses max(||K||, K_floor) to prevent rel_R_full explosion when ||K|| is small.
                 // Raw ratio logged separately for diagnostics.
                 float K_floor = wrf::sdirk3::g_sdirk3_config.stage_gate_K_floor;
-                float K_denom = std::max(K_norm, K_floor);
-                float rel_R_full = R_full_norm / K_denom;
-                float rel_R_full_raw = (K_norm > 1e-15f) ? R_full_norm / K_norm : R_full_norm;
+                const double rel_R_full = wrf::sdirk3::relative_rms_residual(
+                    R_full_norm, K_rms, K_floor);
+                const double rel_R_full_raw = wrf::sdirk3::relative_rms_residual(R_full_norm, K_rms);
                 last_stage_rel_R_full_ = rel_R_full;
                 last_stage_rel_R_full_raw_ = rel_R_full_raw;  // v20.14r41: raw for post-damp
                 last_stage_R_full_norm_ = R_full_norm;
@@ -13916,9 +13907,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                     std::cerr << "[RESIDUAL_REEVAL] Stage " << stage << ": "
                               << "||R_full||_rms=" << R_full_norm
-                              << " (unscaled=" << R_full_norm_unscaled << ")"
                               << ", ||R_newton||=" << stats.final_residual
-                              << ", ||K||=" << K_norm
+                              << ", ||K||_rms=" << K_rms
                               << ", rel_R_full=" << rel_R_full
                               << " (raw=" << rel_R_full_raw << ")"
                               << ", wrms=" << last_stage_wrms_norm_
@@ -14006,8 +13996,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 auto F_post = computeUnifiedRHS(U_new_post, post_damp_mode);
                 if (post_damp_mode == RhsMode::Full && has_physics) F_post = F_post + F_phys;
                 auto R_post_vec = (k.detach() - F_post).detach();
-                float R_post_abs = R_post_vec.norm().item<float>() /
-                    std::sqrt(static_cast<float>(R_post_vec.numel()));  // Scaled RMS
+                // The stored absolute metric is FP32; use the same FP64 reduction
+                // and final conversion as the pre-damp metric.
+                const float R_post_abs = static_cast<float>(wrf::sdirk3::guarded_item<double>(
+                    wrf::sdirk3::rms_norm_fp64(R_post_vec)));
 #ifdef DMPARALLEL
                 const float R_post_abs_global = stage_metric_global_max_mpi(R_post_abs);
 #else
@@ -14038,11 +14030,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                               << std::endl;
                 }
             } catch (const std::exception& e) {
-                // Re-eval failed: keep damped K, estimate absolute norm proportionally.
-                // v20.14r34c: Don't overwrite rel_R_full (keep pre-damp Newton ratio).
-                last_stage_R_full_norm_ = R_pre_abs_global * extra_damp;
+                // An unevaluated direction has no valid decrease estimate.
+                // Restore the previously evaluated stage and its metric.
+                k = k_pre_damp;
+                last_stage_R_full_norm_ = R_pre_abs_global;
                 std::cerr << "[NEWTON DAMP] Stage " << stage
-                          << ": damp by " << extra_damp
+                          << ": reverted unevaluated damp=" << extra_damp
                           << " (pre=" << pre_damp_rel
                           << ", re-eval failed: " << e.what() << ")" << std::endl;
             }

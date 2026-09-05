@@ -21,6 +21,10 @@ float scalar(const torch::Tensor& t) {
     return t.detach().to(torch::kCPU).item<float>();
 }
 
+void require_true(bool value, const std::string& label) {
+    if (!value) throw std::runtime_error(label);
+}
+
 }  // namespace
 
 int main() {
@@ -81,6 +85,53 @@ int main() {
     const float block_growth = scalar(wrf::sdirk3::wrms_growth_packed(
         r1_blocks, r0_blocks, y_blocks, multi_blocks, block_cfg));
     require_close(block_growth, 0.25f, 2.0e-4f, "block-aware WRMS growth");
+
+    // Relative RMS contract: duplicating every component cannot change the
+    // ratio, and opposite signs must not cancel in the norm.
+    auto k = torch::tensor({1.0f, -2.0f, 3.0f});
+    auto r = torch::tensor({0.1f, -0.2f, 0.3f});
+    auto k2 = torch::cat({k, k});
+    auto r2 = torch::cat({r, r});
+    const auto relative = [](const torch::Tensor& residual, const torch::Tensor& reference,
+                             double floor = 0.0) {
+        return wrf::sdirk3::relative_rms_residual(
+            wrf::sdirk3::rms_norm_fp64(residual).item<double>(),
+            wrf::sdirk3::rms_norm_fp64(reference).item<double>(), floor);
+    };
+    const double ratio = relative(r, k);
+    const double ratio2 = relative(r2, k2);
+    require_close(ratio, 0.1f, 2.0e-6f, "relative RMS ratio");
+    require_close(ratio2, ratio, 2.0e-6f, "N replication invariance");
+    const float no_cancel = scalar(wrf::sdirk3::rms_norm_fp64(torch::tensor({1.0f, -1.0f})));
+    require_close(no_cancel, 1.0f, 2.0e-6f, "opposite-sign RMS");
+
+    auto zero = torch::zeros({3});
+    require_close(relative(zero, zero),
+                  0.0f, 0.0f, "zero over zero relative residual");
+    require_true(std::isinf(relative(r, zero)),
+                 "nonzero over zero must fail closed");
+    const double floored = relative(r, k, 10.0);
+    require_close(floored, scalar(wrf::sdirk3::rms_norm_fp64(r)) / 10.0f,
+                  2.0e-6f, "finite K_floor RMS denominator");
+    require_close(relative(r, zero, 10.0), scalar(wrf::sdirk3::rms_norm_fp64(r)) / 10.0f,
+                  2.0e-6f, "explicit floor defines zero-reference metric");
+    require_true(std::isinf(relative(torch::full({3}, NAN), k)),
+                 "nonfinite residual must fail closed");
+    require_true(std::isinf(relative(r, torch::full({3}, INFINITY))),
+                 "nonfinite reference must not produce false zero");
+    for (double floor : {-1.0, static_cast<double>(NAN), static_cast<double>(INFINITY)}) {
+        bool rejected = false;
+        try { (void)relative(r, k, floor); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        require_true(rejected, "invalid RMS floor must be rejected");
+    }
+    for (const auto& invalid : {torch::Tensor{}, torch::empty({0}), torch::ones({2, 2}),
+                                torch::ones({3}, torch::kInt64)}) {
+        bool rejected = false;
+        try { (void)wrf::sdirk3::rms_norm_fp64(invalid); }
+        catch (const std::invalid_argument&) { rejected = true; }
+        require_true(rejected, "invalid RMS vector must be rejected");
+    }
 
     std::cout << "WRMS gate metric scale-invariance tests passed" << std::endl;
     return 0;

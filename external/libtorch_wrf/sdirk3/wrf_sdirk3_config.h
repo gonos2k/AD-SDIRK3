@@ -543,7 +543,8 @@ struct SDIRK3Config {
 
     // v20.14r40: Stage gate K_norm floor for rel_R_full computation.
     // Prevents rel_R_full = R_full/K_norm from exploding when ||K|| is small.
-    // Gate uses max(||K||, K_floor) as denominator; raw ratio logged separately.
+    // K_floor has RMS units: the gate uses max(RMS(K), K_floor).
+    // The raw ratio and mode>=2 fast residual never use this floor.
     // Set via env: WRF_SDIRK3_STAGE_GATE_K_FLOOR
     float stage_gate_K_floor = 1.0f;
 
