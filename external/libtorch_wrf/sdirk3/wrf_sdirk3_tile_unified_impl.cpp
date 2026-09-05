@@ -126,6 +126,7 @@
 
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_coriolis.h"
+#include "wrf_sdirk3_curvature.h"
 #include "wrf_sdirk3_horizontal_momentum.h"
 #include "wrf_sdirk3_metric_policy.h"
 #include "wrf_sdirk3_transpose_probe.h"
@@ -22521,11 +22522,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // Curvature terms for spherical coordinates
         // Following WRF implementation in module_big_step_utilities_em.F
 
-        // PARITY FIX (2025-12-05): Use do_curvature config flag (like Fortran) instead of only map_proj==0
-        // Fortran enables curvature for all map projections when do_curvature=.true.
+        // The C++ curvature opt-in is independent of the Fortran namelist.
         bool do_curvature = wrf::sdirk3::g_sdirk3_config.do_curvature;
 
-        if (do_curvature) {
+        // Canonical mass-coordinate curvature is supplied
+        // by the tensor core below. Keep the existing implementation for
+        // noncanonical/open/nested modes unchanged.
+        if (do_curvature && !canonical_horizontal) {
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                 std::cerr << "[SDIRK3] Curvature terms enabled (map_proj="
                           << wrf::sdirk3::g_sdirk3_config.map_proj << ")" << std::endl;
@@ -23284,6 +23287,57 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         [[maybe_unused]] float v_velocity_tend = rv_tend_curv_max_cpu.item<float>() / mu_typical;
     }
     
+    // The canonical curvature tensor core returns rates in
+    // Fortran's coupled alpha units. The existing accumulator still uses the
+    // legacy velocity-mass denominator, so convert by velocity_mass/alpha here.
+    if (wrf::sdirk3::g_sdirk3_config.do_curvature && canonical_horizontal) {
+        const auto map_u_y = msfuy_.to(u.device(), u.scalar_type());
+        const auto map_v_x = msfvx_.to(v.device(), v.scalar_type());
+        const auto map_w_y = msfty_.to(w.device(), w.scalar_type());
+        const auto alpha_u = level_mass_u / map_u_y.unsqueeze(1);
+        const auto alpha_v = level_mass_v / map_v_x.unsqueeze(1);
+        const auto alpha_w = level_mass_w / map_w_y.unsqueeze(1);
+
+        const auto grid = grid_info_;
+        TORCH_CHECK(grid && grid->fzm.defined() && grid->fzp.defined(),
+                    "curvature canonical requires grid_info_->fzm/fzp");
+        const int map_proj = grid->map_proj;
+        torch::Tensor xlat_radians;
+        if (grid->xlat.defined() && grid->xlat.numel() > 0) {
+            xlat_radians = grid->xlat.to(u.device(), u.scalar_type()) *
+                           (M_PI / 180.0);
+        } else if (map_proj == 6 || config_flags_polar_) {
+            TORCH_CHECK(false,
+                        "curvature canonical requires grid_info_->xlat for projection 6/polar");
+        }
+
+        const auto fzm = grid->fzm.to(w.device(), w.scalar_type());
+        const auto fzp = grid->fzp.to(w.device(), w.scalar_type());
+        const float reradius = grid->reradius;
+        wrf::sdirk3::CurvatureTendencies curvature;
+        if (momentum_packed) {
+            curvature = wrf::sdirk3::wrf_curvature_tendencies_packed(
+                u, v, w, alpha_u, alpha_v, alpha_w,
+                msfux_.to(u.device(), u.scalar_type()), map_u_y,
+                map_v_x, msfvy_.to(v.device(), v.scalar_type()),
+                msftx_.to(w.device(), w.scalar_type()), map_w_y,
+                xlat_radians, fzm, fzp,
+                momentum_m, momentum_n, rdx, rdy, reradius,
+                map_proj, config_flags_polar_);
+        } else {
+            curvature = wrf::sdirk3::wrf_curvature_tendencies(
+                u, v, w, alpha_u, alpha_v, alpha_w,
+                msfux_.to(u.device(), u.scalar_type()), map_u_y,
+                map_v_x, msfvy_.to(v.device(), v.scalar_type()),
+                msftx_.to(w.device(), w.scalar_type()), map_w_y,
+                xlat_radians, fzm, fzp,
+                rdx, rdy, reradius, map_proj, config_flags_polar_);
+        }
+        ru_tend = ru_tend + curvature.u * (velocity_mass_u / alpha_u);
+        rv_tend = rv_tend + curvature.v * (velocity_mass_v / alpha_v);
+        rw_tend = rw_tend + curvature.w * (velocity_mass_w / alpha_w);
+    }
+
     // ========================================================================
     // Step 9: HORIZONTAL DIFFUSION
     // ========================================================================

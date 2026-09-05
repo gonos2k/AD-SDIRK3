@@ -929,3 +929,11 @@ message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  LibTorch: ${TORCH_LIBRARIES}")
 message(STATUS "  Install prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "  Lint targets: lint_from_blob, lint_libtorch_patterns, lint_all")
+
+add_executable(test_curvature_coordinate_contract tests/test_curvature_coordinate_contract.cpp)
+target_link_libraries(test_curvature_coordinate_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Curvature_Coordinate_Contract COMMAND test_curvature_coordinate_contract)
+
+add_executable(test_curvature_kernel_contract tests/test_curvature_kernel_contract.cpp)
+target_link_libraries(test_curvature_kernel_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Curvature_Kernel_Contract COMMAND test_curvature_kernel_contract)

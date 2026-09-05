@@ -2297,9 +2297,8 @@ struct SDIRK3Config {
     // Map projection and coordinate system
     int map_proj = 1;               // 0=lat-lon, 1=Lambert, 2=polar stereographic, 3=Mercator
 
-    // Curvature term control (2025-12-05 PARITY FIX)
-    // Fortran: do_curvature in namelist controls curvature for all map projections
-    // TEMPORARILY DISABLED for debugging - vxgm boundary logic needs fixes
+    // Independent C++ curvature opt-in; the Fortran do_curvature namelist
+    // is not forwarded here. Canonical periodic-X/symmetric-Y uses alpha units.
     bool do_curvature = false;       // Enable curvature terms for momentum equations
     bool polar = false;             // Polar boundary condition flag (affects curvature formula choice)
     // NOTE: Fortran map_proj values: 1=Lambert, 2=Polar Stereo, 3=Mercator, 6=lat-lon(Cassini)
