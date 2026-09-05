@@ -18591,64 +18591,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             auto ph_total_min_cpu = ph_total_cpu.min();
         }
 
-        // FORTRAN PARITY (2025-12-05): Use rdnw (eta coords) for Fortran match
-        // WRF Fortran code (module_big_step_utilities_em.F:1466) uses rdnw:
-        //   wdwn(i,k) = rdnw(k-1)*(ph(i,k,j)-ph(i,k-1,j)+phb(i,k,j)-phb(i,k-1,j))
-        // rdnw is 1/dnw (eta coordinate spacing), NOT physical 1/dz
-        // Using physical 1/dz gives ∂φ/∂z, but Fortran computes ∂φ/∂η
-
-        torch::Tensor vert_deriv_scale;  // Either rdnw (eta) or rdzw (physical)
-
+        // WRF eta decreases upward. Storage holds |rdnw|, so dPhi/deta
+        // requires -|rdnw| * Delta(Phi); the outer -Omega is retained below.
+        torch::Tensor vert_deriv_scale;
         if (wrf::sdirk3::g_sdirk3_config.ph_use_rdnw_not_rdzw) {
-            // FORTRAN PARITY: Use rdnw (1/dη) like Fortran
-            // PARITY FIX 2025-12-20: Use getRdnwTensor() fallback chain instead of rdnw_ vector.
-            // 9F.D62 (review P0-A): nz_, not nz_w_. WRF's authority
-            // (module_big_step_utilities_em.F:1421,1470) declares
-            //     REAL, DIMENSION(its:ite,kts:kte) :: wdwn        <- MASS levels
-            //     wdwn(i,k) = rdnw(k-1)*(ph(i,k,j)-ph(i,k-1,j)+...)
-            // so rdnw is read at MASS indices only. And the consumer below reads
-            // vert_deriv_scale at most at index nz_w_-2 = nz_-1: the top w slot the pad
-            // used to invent is NEVER READ. Requesting nz_ removes the need for it.
-            torch::Tensor rdnw_for_scale = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
-            if (rdnw_for_scale.defined() && rdnw_for_scale.numel() > 0) {
-                // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw > 0 (WRF standard), no abs() needed
-                // WRF vertical advection (wdwn = rdnw(k-1)*(ph(k)-ph(k-1))) uses positive rdnw directly
-                // Pad to nz_w_ if needed
-                // 9F.D67 (review P0-1): the length branch below was DEAD after D62.
-                //
-                // D62 changed this caller from nz_w_ to nz_ but left the consumption
-                // condition alone. getRdnwTensor now returns EXACTLY nz_ (it slices when
-                // longer and throws when shorter), and nz_w_ = nz_+1, so
-                //     rdnw_numel >= nz_w_   <=>   nz_ >= nz_+1
-                // is always false. The `if` arm could not execute and the `else` arm did
-                // all the work.
-                //
-                // Behaviour was unaffected -- which is why the fingerprint matched and why
-                // nothing caught it. Before D62 the padded array made the condition true
-                // and it sliced [rdnw..., pad]; after D62 it zero-fills to [rdnw..., 0].
-                // The two differ ONLY at index nz_, and the consumer reads at most
-                // nz_w_-2 = nz_-1. A dead branch whose deadness is invisible in the output
-                // is exactly the shape that survives review, so it is removed rather than
-                // left to be re-derived.
-                //
-                // vert_deriv_scale stays nz_w_ long because its consumers slice it that
-                // way; index nz_ is deliberately zero and deliberately never read.
-                TORCH_CHECK(rdnw_for_scale.numel() == nz_,
-                            "vert_deriv_scale: expected exactly nz_=", nz_,
-                            " mass-level rdnw values, got ", rdnw_for_scale.numel());
-                vert_deriv_scale = torch::zeros({nz_w_}, options);
-                vert_deriv_scale.slice(0, 0, nz_).copy_(
-                    rdnw_for_scale.to(options.device(), options.dtype().toScalarType()));
-            } else {
-                vert_deriv_scale = torch::zeros({nz_w_}, options);
-            }
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-                // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-                torch::NoGradGuard no_grad;
-                auto vert_deriv_scale_cpu = vert_deriv_scale.detach().to(torch::kCPU);
-                auto rdnw_max_cpu = vert_deriv_scale_cpu.max();
-                auto rdnw_min_cpu = vert_deriv_scale_cpu.min();
-            }
+            const auto rdnw = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
+            // Consumers read mass levels only; the final w-level slot is unused.
+            vert_deriv_scale = torch::cat({-rdnw, torch::zeros({1}, options)}, 0);
         } else {
             // PARITY FIX 2025-12-11: Use physical 1/dz for debugging/physical interpretation.
             // Priority: grid_info_->dz (from computeVerticalMetrics) > rdzw_3d_ (horizontal mean) > rdnw fallback
@@ -18684,23 +18633,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     std::cerr << "WARNING: grid_info_->dz not initialized, falling back to rdnw for vert_deriv_scale"
                               << " (this warning will not repeat)" << std::endl;
                 }
-                // 9F.D62 (review P0-A): nz_, not nz_w_ -- same reason as the site above.
-                torch::Tensor rdnw_fallback = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
-                if (rdnw_fallback.defined() && rdnw_fallback.numel() > 0) {
-                    // 9F.D67 (review P0-1): the SAME dead branch, in the dz-fallback twin.
-                    // D62 fixed the caller here too and left this condition, so both copies
-                    // carried it. That makes five times in this campaign that a block was
-                    // corrected in one place and its twin left behind; the grep for the
-                    // condition, not for the caller, is what finds them.
-                    TORCH_CHECK(rdnw_fallback.numel() == nz_,
-                                "vert_deriv_scale (dz fallback): expected exactly nz_=", nz_,
-                                " mass-level rdnw values, got ", rdnw_fallback.numel());
-                    vert_deriv_scale = torch::zeros({nz_w_}, options);
-                    vert_deriv_scale.slice(0, 0, nz_).copy_(
-                        rdnw_fallback.to(options.device(), options.dtype().toScalarType()));
-                } else {
-                    vert_deriv_scale = torch::zeros({nz_w_}, options);
-                }
+                const auto rdnw = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
+                vert_deriv_scale = torch::cat({-rdnw, torch::zeros({1}, options)}, 0);
             }
         }
 
@@ -18722,25 +18656,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             wdwn_lower.slice(1, 1, nz_w_-1).copy_(scale_lower * ph_diff_lower);
         }
         
-        // CRITICAL FIX: Use proper fnm/fnp weighting AND Omega instead of w
-        // Reference: dyn_em/module_big_step_utilities_em.F:1470-1475
-        //   ph_tend(i,k,j) -= ww(i,k,j) * (fnm(k)*wdwn(i,k+1) + fnp(k)*wdwn(i,k))
-        // where ww = Omega = (μ/my)·w (mass flux with map-scale factor), not just w!
-        // wdwn_upper corresponds to wdwn(k+1) and wdwn_lower to wdwn(k)
-
-        // Compute Omega = (μ/my)·w at w-points (WRF: rom = ww = mass flux)
-        // CRITICAL: Must divide by msfty_ to get correct mass flux ww = (μ/my)·w
-        // CRITICAL FIX: Use w_ref (from U_ref_stage_) instead of w to avoid Newton feedback loop!
-        // This is the SAME fix we applied to W-momentum advection and mass continuity
-        // Using w from current Newton iteration causes instability in geopotential tendency
-        // CRITICAL FIX: Use w.size(1) not t.size(1) - w has nz_w levels (65), t has nz_w levels (65)
+        // rhs_ph: -Omega * (fnm*dPhi/deta_upper + fnp*dPhi/deta_lower).
+        // Mode 1 diagnoses eta mass flux with calc_ww_cp; it is not physical w.
         auto mu_3d = mu_full.unsqueeze(1).expand({-1, w_ref.size(1), -1});
         auto msfty_3d = msfty_.unsqueeze(1).expand({-1, w_ref.size(1), -1});
         // JVP FIX: Blend reference and current state for omega to prevent zero-flux linearization
         float blend = wrf::sdirk3::g_sdirk3_config.omega_w_blend;
         auto w_blended = blend * w + (1.0f - blend) * w_ref;
-        // 9F.D118: same substitution as the mu channel. rhs_ph's -omega*dphi/d_eta is a
-        // LEGITIMATE term (unlike the mass equation's div_z); what was wrong is omega.
         auto omega = wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp()
                          ? wrf_ww_cp()
                          : ((mu_3d / msfty_3d) * w_blended);
