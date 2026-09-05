@@ -27,7 +27,7 @@ The differentiable implicit solve converges at small timesteps; making it conver
 stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
 it is **unresolved**.
 
-Verification is an **exact 74-test CTest inventory** pinned by
+Verification is an **exact 75-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
@@ -48,6 +48,17 @@ or stability certifications.
   and an independent column-divergence oracle with varying mass, hybrid coefficients,
   nonunit maps, orders 2/3/5, HEVI on/off, and physical/packed single-rank layouts.
   Split export retains its separate driver-supplied tendency convention.
+
+- **Vertical momentum and geopotential transport.** Ordinary WRFParity uses the shared
+  WRF order-3 vertical operators with the signed eta orientation and all U/V mass levels
+  plus the W lid flux. Omega and hybrid coupled masses use the same boundary averaging;
+  packed aliases are excluded before averaging. The raw WRF transport is converted to
+  the legacy momentum accumulator so final division yields the correct velocity term.
+  `Vertical_Momentum_Contract` compares independent scalar U/V/W flux oracles with
+  nonunit anisotropic maps, layer-dependent hybrid coefficients and physical/packed layouts.
+  The PH eta gradient uses `-|rdnw|` with the WRF outer `-Omega`; the production-linked
+  FNM/FNP test checks its sign, boundaries and HEVI decomposition. These component
+  contracts do not certify the whole momentum RHS or whole-WRF time order.
 
 - **Horizontal pressure gradients.** The full and acoustic RHS share the first three WRF
   PGF terms with raw neighbor differences and sums. Grid inverse spacing and the common

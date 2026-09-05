@@ -524,6 +524,10 @@ add_executable(test_fnm_fnp_geometry_contract
 target_link_libraries(test_fnm_fnp_geometry_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME FNM_FNP_Geometry_Contract COMMAND test_fnm_fnp_geometry_contract)
 
+add_executable(test_vertical_momentum_contract tests/test_vertical_momentum_contract.cpp)
+target_link_libraries(test_vertical_momentum_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Vertical_Momentum_Contract COMMAND test_vertical_momentum_contract)
+
 add_executable(test_rhs_preconditioner_contract tests/test_rhs_preconditioner_contract.cpp)
 target_link_libraries(test_rhs_preconditioner_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME RHS_Preconditioner_Contract COMMAND test_rhs_preconditioner_contract)

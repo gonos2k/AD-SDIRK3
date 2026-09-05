@@ -159,6 +159,25 @@ struct WRFMassFlux {
     torch::Tensor mass_tendency_over_map_y;  // dmdt=Mdot/msfty, [ny,nx]
 };
 
+// Average independent mass cells to staggered faces. Packed aliases must be
+// removed by the caller; they are not additional cells at a periodic seam.
+inline torch::Tensor stagger_wrf_mass_field(
+    const torch::Tensor& field, int64_t axis, WWCPBoundaryPolicy policy) {
+    TORCH_CHECK(policy == WWCPBoundaryPolicy::Periodic ||
+                policy == WWCPBoundaryPolicy::SymmetricReplicate,
+                "mass-to-face averaging requires an authoritative boundary policy");
+    const auto n = field.size(axis);
+    TORCH_CHECK(n > 0, "mass-to-face averaging requires nonempty cells");
+    const auto first = field.slice(axis, 0, 1);
+    const auto last = field.slice(axis, n - 1, n);
+    const auto middle = 0.5f * (field.slice(axis, 1, n) + field.slice(axis, 0, n - 1));
+    if (policy == WWCPBoundaryPolicy::Periodic) {
+        const auto seam = 0.5f * (first + last);
+        return torch::cat({seam, middle, seam}, axis);
+    }
+    return torch::cat({first, middle, last}, axis);
+}
+
 inline WRFMassFlux diagnose_wrf_mass_flux(
     const torch::Tensor& u,          // [ny, nz, nx_u]
     const torch::Tensor& v,          // [ny_v, nz, nx]
@@ -265,32 +284,8 @@ inline WRFMassFlux diagnose_wrf_mass_flux(
 
     auto mut = mup + mub;  // [ny, nx]
 
-    // muu at u-points [ny, nx+1] — assembled out-of-place (cat), never by
-    // slice/select assignment, so the autograd graph stays intact. The seam
-    // columns carry the boundary policy: periodic wraps to the opposite
-    // edge, symmetric degenerates to the edge value.
-    auto muu_interior = 0.5f * (mut.slice(1, 1, nx) + mut.slice(1, 0, nx - 1));
-    torch::Tensor muu;
-    if (x_policy == WWCPBoundaryPolicy::Periodic) {
-        auto seam =
-            0.5f * (mut.slice(1, 0, 1) + mut.slice(1, nx - 1, nx));
-        muu = torch::cat({seam, muu_interior, seam}, 1);
-    } else {  // SymmetricReplicate
-        muu = torch::cat(
-            {mut.slice(1, 0, 1), muu_interior, mut.slice(1, nx - 1, nx)}, 1);
-    }
-
-    // muv at v-points [ny+1, nx] (same per-policy seam handling)
-    auto muv_interior = 0.5f * (mut.slice(0, 1, ny) + mut.slice(0, 0, ny - 1));
-    torch::Tensor muv;
-    if (y_policy == WWCPBoundaryPolicy::Periodic) {
-        auto seam =
-            0.5f * (mut.slice(0, 0, 1) + mut.slice(0, ny - 1, ny));
-        muv = torch::cat({seam, muv_interior, seam}, 0);
-    } else {  // SymmetricReplicate
-        muv = torch::cat(
-            {mut.slice(0, 0, 1), muv_interior, mut.slice(0, ny - 1, ny)}, 0);
-    }
+    const auto muu = stagger_wrf_mass_field(mut, 1, x_policy);
+    const auto muv = stagger_wrf_mass_field(mut, 0, y_policy);
 
     auto c1k = c1h.view({1, nz, 1});
     auto c2k = c2h.view({1, nz, 1});

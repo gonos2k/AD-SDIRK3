@@ -626,30 +626,26 @@ static torch::Tensor wrf_vert_adv3(const torch::Tensor& q, const torch::Tensor& 
     auto dnv = torch::reciprocal(rdn_pos.slice(0, 1, nz));                  // |dn0[1..nz-1]|
     auto fzm = (0.5f * dnw.slice(0, 0, nz - 1) / dnv).view({1, nz - 1, 1}); // idx kf-1
     auto fzp = (0.5f * dnw.slice(0, 1, nz) / dnv).view({1, nz - 1, 1});
-    // interior w-levels kf=2..nz-2
-    auto q_im2 = q.slice(1, 0, nz - 3);
-    auto q_im1 = q.slice(1, 1, nz - 2);
-    auto q_i   = q.slice(1, 2, nz - 1);
-    auto q_ip1 = q.slice(1, 3, nz);
-    auto romI  = omega.slice(1, 2, nz - 1);
-    torch::Tensor s_ua;   // sign(ua) with ua = -Omega (eta decreases upward); smooth for AD
-    if (sign_delta > 0.0f) {
-        s_ua = (-romI) / torch::sqrt(romI * romI + sign_delta * sign_delta);
-    } else {
-        s_ua = torch::sign(-romI).detach();
+    if (nz == 1) return torch::zeros_like(q); // both boundary fluxes are zero
+    auto interior = omega.slice(1, 1, nz) *
+        (fzm * q.slice(1, 1, nz) + fzp * q.slice(1, 0, nz - 1));
+    if (nz >= 4) {
+        const auto qm2 = q.slice(1, 0, nz - 3);
+        const auto qm1 = q.slice(1, 1, nz - 2);
+        const auto qi = q.slice(1, 2, nz - 1);
+        const auto qp1 = q.slice(1, 3, nz);
+        const auto om = omega.slice(1, 2, nz - 1);
+        const auto direction = sign_delta > 0.0f
+            ? -om / torch::sqrt(om * om + sign_delta * sign_delta)
+            : torch::sign(-om).detach();
+        const auto flux4 = (7.0f * (qi + qm1) - (qp1 + qm2)) / 12.0f;
+        const auto flux3 = flux4 + direction * ((qp1 - qm2) - 3.0f * (qi - qm1)) / 12.0f;
+        interior = torch::cat({interior.slice(1, 0, 1), om * flux3,
+                              interior.slice(1, nz - 2, nz - 1)}, 1);
     }
-    auto flux4 = (7.0f * (q_i + q_im1) - (q_ip1 + q_im2)) / 12.0f;
-    auto fl3   = flux4 + s_ua * ((q_ip1 - q_im2) - 3.0f * (q_i - q_im1)) / 12.0f;
-    auto vf_int = romI * fl3;                                               // {ny,nz-3,nx}
-    // edge w-levels kf=1 and kf=nz-1 (2nd-order stretch-weighted)
-    auto vf_k1 = omega.slice(1, 1, 2)
-                 * (fzm.slice(1, 0, 1) * q.slice(1, 1, 2) + fzp.slice(1, 0, 1) * q.slice(1, 0, 1));
-    auto vf_kt = omega.slice(1, nz - 1, nz)
-                 * (fzm.slice(1, nz - 2, nz - 1) * q.slice(1, nz - 1, nz)
-                    + fzp.slice(1, nz - 2, nz - 1) * q.slice(1, nz - 2, nz - 1));
-    auto zerof = torch::zeros_like(vf_k1);
-    auto vflux = torch::cat({zerof, vf_k1, vf_int, vf_kt, zerof}, 1);       // {ny,nz+1,nx}
-    return (vflux.slice(1, 1, nz + 1) - vflux.slice(1, 0, nz))
+    const auto boundary = torch::zeros_like(q.slice(1, 0, 1));
+    const auto flux = torch::cat({boundary, interior, boundary}, 1);
+    return (flux.slice(1, 1, nz + 1) - flux.slice(1, 0, nz))
            * rdnw_pos.slice(0, 0, nz).view({1, nz, 1});
 }
 
@@ -664,6 +660,7 @@ static torch::Tensor wrf_vert_adv3_w(const torch::Tensor& wf, const torch::Tenso
                                      const torch::Tensor& rdn_pos, float sign_delta) {
     const int64_t nzw = wf.size(1);
     const int64_t nzm = nzw - 1;
+    if (nzm == 1) return torch::zeros_like(wf); // zero Omega at both faces
     auto romm = 0.5f * (omega.slice(1, 0, nzm) + omega.slice(1, 1, nzw));   // {ny,nzm,nx}
     auto q_im2 = wf.slice(1, 0, nzm - 2);
     auto q_im1 = wf.slice(1, 1, nzm - 1);
@@ -16229,6 +16226,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     const float eps_w = getAutocastAwareEps(mu_at_w_3d);
     const auto velocity_mass_u = mu_at_u_3d + mu_base_at_u_3d + eps_u;
     const auto velocity_mass_v = mu_at_v_3d + mu_base_at_v_3d + eps_v;
+    const auto velocity_mass_w = mu_at_w_3d + mu_base_at_w_3d + eps_w;
 
     if (do_explicit) {  // Step 3: ADVECTION (slow-mode / explicit)
 
@@ -16243,6 +16241,46 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             periodic_momentum_x.first = periodic_momentum_x.first * velocity_mass_u;
             periodic_momentum_x.second = periodic_momentum_x.second * velocity_mass_v;
         }
+    }
+
+    std::pair<torch::Tensor, torch::Tensor> wrf_vertical_uv;
+    if (use_wrf_mass_flux) {
+        // Use physical cells for both Omega and coupled masses. The same
+        // boundary averaging is used by calc_ww_cp, then aliases are restored.
+        const bool packed = isPackedPeriodicDomain();
+        const int64_t m = ny_ - (packed ? 1 : 0);
+        const int64_t n = nx_ - (packed ? 1 : 0);
+        const auto om = wrf_ww_cp().slice(0, 0, m).slice(2, 0, n);
+        const auto mass = mu_full.slice(0, 0, m).slice(1, 0, n);
+        using wrf::sdirk3::stagger_wrf_mass_field;
+        const auto omega_u = stagger_wrf_mass_field(om, 2, wdamp_contract_.x_policy);
+        const auto omega_v = stagger_wrf_mass_field(om, 0, wdamp_contract_.y_policy);
+        const auto mass_u = stagger_wrf_mass_field(mass, 1, wdamp_contract_.x_policy);
+        const auto mass_v = stagger_wrf_mass_field(mass, 0, wdamp_contract_.y_policy);
+        const auto c1 = c1h_.to(u.device(), u.scalar_type()).slice(0, 0, nz_).view({1, nz_, 1});
+        const auto c2 = c2h_.to(u.device(), u.scalar_type()).slice(0, 0, nz_).view({1, nz_, 1});
+        const auto uy = msfuy_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n + 1).unsqueeze(1);
+        const auto vx = msfvx_.to(u.device(), u.scalar_type()).slice(0, 0, m + 1).slice(1, 0, n).unsqueeze(1);
+        const auto vy = msfvy_.to(u.device(), u.scalar_type()).slice(0, 0, m + 1).slice(1, 0, n).unsqueeze(1);
+        const auto alpha_u = (c1 * mass_u.unsqueeze(1) + c2) / uy;
+        const auto alpha_v = (c1 * mass_v.unsqueeze(1) + c2) / vx;
+        const auto rdnw = getRdnwTensor(u.device(), u.scalar_type(), nz_);
+        const auto rdn = getRdnTensor(u.device(), u.scalar_type(), nz_);
+        const float delta = wrf::sdirk3::g_sdirk3_config.sign_smooth_delta;
+        auto du = wrf_vert_adv3(u.slice(0, 0, m).slice(2, 0, n + 1),
+                               omega_u, rdnw, rdn, delta) / alpha_u;
+        auto dv = wrf_vert_adv3(v.slice(0, 0, m + 1).slice(2, 0, n),
+                               omega_v, rdnw, rdn, delta) * (vy / vx) / alpha_v;
+        if (packed) {
+            const auto ux = torch::cat({du, du.slice(2, 1, 2)}, 2);
+            du = torch::cat({ux, ux.slice(0, m - 1, m)}, 0);
+            const auto vx = torch::cat({dv, dv.slice(2, 0, 1)}, 2);
+            dv = torch::cat({vx, -vx.slice(0, m - 1, m)}, 0);
+        }
+        // Other contributions still use a legacy M*q accumulator. Reweight
+        // these physical tendencies with its exact final denominator so the
+        // later division by M returns the WRF raw/alpha contribution.
+        wrf_vertical_uv = {du * velocity_mass_u, dv * velocity_mass_v};
     }
 
     // --- 3.1: U-Momentum Advection ---
@@ -16310,7 +16348,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // rdnw_ may be empty while grid_info_->rdnw is valid.
         torch::Tensor rdnw_for_u_adv = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
         bool have_rdnw_u = rdnw_for_u_adv.defined() && rdnw_for_u_adv.numel() >= nz_ - 1;
-        if (g_export_coupled_slow && split_omega_ww_.defined() && have_rdnw_u && nz_ > 3) {
+        if (use_wrf_mass_flux) {
+            ru_adv_z = wrf_vertical_uv.first;
+            ru_adv_z_work_ = ru_adv_z;
+        } else if (g_export_coupled_slow && split_omega_ww_.defined() && have_rdnw_u && nz_ > 3) {
             // SPLIT PATH (2026-07-11): WRF vertical order-3 for u (v_mom_adv_order=3) via
             // wrf_vert_adv3 with Omega x-averaged to u-points (WRF advect_u:
             // 0.5*(rom(i)+rom(i-1))). Omega's ghost col (= col 0 copy) makes the seam pair
@@ -16624,7 +16665,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // rdnw_ may be empty while grid_info_->rdnw is valid.
         torch::Tensor rdnw_for_v_adv = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
         bool have_rdnw_v = rdnw_for_v_adv.defined() && rdnw_for_v_adv.numel() >= nz_ - 1;
-        if (g_export_coupled_slow && split_omega_ww_.defined() && have_rdnw_v && nz_ > 3) {
+        if (use_wrf_mass_flux) {
+            V_adv_z = wrf_vertical_uv.second;
+            rv_adv_z_work_ = V_adv_z;
+        } else if (g_export_coupled_slow && split_omega_ww_.defined() && have_rdnw_v && nz_ > 3) {
             // SPLIT PATH (2026-07-11): WRF vertical order-3 for v via wrf_vert_adv3 with
             // Omega y-averaged to v-points (WRF advect_v: 0.5*(rom(j)+rom(j-1))); wall
             // v-rows take the adjacent interior value (symmetric-y; wall v is frozen by
@@ -16907,7 +16951,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         torch::Tensor rdn_for_w_adv = getRdnTensor(options.device(), options.dtype().toScalarType(), nz_);
         bool have_vert_metrics_w = (rdnw_for_w_adv.defined() && rdnw_for_w_adv.numel() >= nz_ - 1) ||
                                    (rdn_for_w_adv.defined() && rdn_for_w_adv.numel() >= nz_);
-        if (g_export_coupled_slow && split_omega_ww_.defined() && have_vert_metrics_w && nz_ > 3) {
+        if (use_wrf_mass_flux) {
+            const auto c1 = c1f_.to(w.device(), w.scalar_type()).slice(0, 0, nz_w_).view({1, nz_w_, 1});
+            const auto c2 = c2f_.to(w.device(), w.scalar_type()).slice(0, 0, nz_w_).view({1, nz_w_, 1});
+            const auto alpha = (c1 * mu_full.unsqueeze(1) + c2) /
+                               msfty_.to(w.device(), w.scalar_type()).unsqueeze(1);
+            // WRF's W-staggered operator includes the upper-lid flux pickup.
+            // Convert raw WRF coupled units to the legacy accumulator units.
+            rw_adv_z = wrf_vert_adv3_w(w, wrf_ww_cp(), rdn_for_w_adv,
+                wrf::sdirk3::g_sdirk3_config.sign_smooth_delta) / alpha * velocity_mass_w;
+            rw_adv_z_work_ = rw_adv_z;
+        } else if (g_export_coupled_slow && split_omega_ww_.defined() && have_vert_metrics_w && nz_ > 3) {
             // SPLIT PATH (2026-07-11): WRF advect_w vertical order-3 (wrf_vert_adv3_w) —
             // mass-level fluxes from 0.5*(Omega(k)+Omega(k+1)), flux3 upwind (ua=-vel),
             // +|rdn|*d tendency at interior w-levels and the WRF LID pickup term (legacy
@@ -24253,7 +24307,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     } else {
         u_tend = ru_tend / velocity_mass_u - u * mu_tend_at_u_3d / velocity_mass_u;
         v_tend = rv_tend / velocity_mass_v - v * mu_tend_at_v_3d / velocity_mass_v;
-        w_tend = rw_tend / (mu_at_w_3d + mu_base_at_w_3d + eps_w) - w * mu_tend_at_w_3d / (mu_at_w_3d + mu_base_at_w_3d + eps_w);
+        w_tend = rw_tend / velocity_mass_w - w * mu_tend_at_w_3d / velocity_mass_w;
     }
 
     // v18 DIAG: Check tangent after coupled-to-velocity conversion (only during forward-mode AD)
