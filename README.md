@@ -6,7 +6,8 @@ interface and autodiff (JVP and VJP are implemented and contract-tested on the s
 HVP via double-backward is a design goal). The goal is a differentiable dynamical core for
 **4D-Var adjoint** modeling.
 
-- **IMEX split** (mode 3 = ARK324L2SA): horizontal/slow terms explicit, vertical acoustic implicit.
+- **IMEX split** (mode 3 = ARK324L2SA): slow advection/Coriolis/diffusion terms explicit,
+  acoustic/gravity terms implicit. The optional HEVI split also moves horizontal acoustic terms explicit.
 - **Matrix-free Newton–Krylov** implicit solve: **FGMRES** (flexible, right-preconditioned — the
   earlier fixed-preconditioner GMRES was replaced during the full-repo review) with Eisenstat–Walker
   adaptive forcing, a vertical preconditioner, and a trust-region fallback. `A·v = v − dt·γ·J·v` is
@@ -20,12 +21,13 @@ HVP via double-backward is a design goal). The goal is a differentiable dynamica
 ## Status
 
 The model **builds and runs** (`main/wrf.exe`, `main/ideal.exe`,
-`external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a`). The stock-RK3 baseline is validated.
+`external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a`). An archived stock-RK3 reference exists;
+comparison with the current source remains pending.
 The differentiable implicit solve converges at small timesteps; making it converge and remain
 stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
 it is **unresolved**.
 
-Verification is an **exact 72-test CTest inventory** pinned by
+Verification is an **exact 73-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
@@ -41,12 +43,14 @@ correction. They are historical measurements, not new forecast or stability cert
   then tests actual tile X/Y accelerations from separate geopotential and thermal gradients
   at two grid spacings. This catches the former V double-spacing factor and U half-pressure
   term; unused V pressure interpolation and base-geopotential differences were removed.
-- **Fixed symmetric walls and observational diagnostics.** State, forcing and RHS use the
-  same orthogonal normal-velocity projection, including physical wall indices in full-halo
-  fields. The retained step differentiates both input and output projections. The production
-  wall test verifies zero normal velocity and zero wall-output VJP while preserving interior
-  Coriolis response. Debug levels 0/2 produce identical finite results and both reject an
-  undefined EOS; logging no longer replaces a non-finite RHS with zero.
+- **Packed boundaries and observational diagnostics.** State, forcing and RHS share the
+  normal-velocity wall constraint. A single whole-domain packed tile with periodic X,
+  symmetric Y and AD halo exchange off also uses the same copy/reflection map at RHS input
+  and output. It closes periodic aliases and the odd V north ghost within the ARK stage
+  equations. This map is oblique: its pullback accumulates the transpose of each copy and
+  reflection. Full-halo paths retain their separate exchange and wall contract.
+  Debug levels 0/2 produce identical finite results and both reject an undefined EOS;
+  logging no longer replaces a non-finite RHS with zero.
 - **Base-state EOS and hydrostatic pressure.** WRF's Exner form
   `alpha = (R_d/p0)*theta*(p/p0)^(-cv/cp)` is a single authority, contract-tested forward *and*
   in its tangent. The pressure integrator's eta orientation is pinned against WRF's own algebra
@@ -126,6 +130,11 @@ correction. They are historical measurements, not new forecast or stability cert
     production instance is untouched across the replay rather than restoring it. **Cleanup
     incomplete**: a receipt-equality contract pinning strict no-write isolation is not yet in
     place.
+### Historical solver experiments (2026-08-17; earlier source)
+
+The results below describe their recorded configurations. They are not current-source
+convergence or stability claims; later validation is recorded in timestamped `docs/` reports.
+
 - **STAGE 2 CONVERGES at a real Krylov budget** (2026-08-17). At `stage2_gmres_restart=600`
   (510 Arnoldi) stage 2 converges — with the production preconditioner (gate 0.095) *and* without
   it (gate 0.058). It had never converged in this configuration before; the shipped budget is 7

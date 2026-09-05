@@ -5976,7 +5976,7 @@ vertical_coefficients:
 
     // Keep the original leaf so the full-step VJP includes the input projection.
     const auto step_input_graph = U_n;
-    U_n = projectSymmetricNormalVelocity(U_n);
+    U_n = projectStateBoundaries(U_n);
 
     // 9F.D66/D81: the adjoint driver, opt-in via WRF_SDIRK3_ADJOINT_DRIVER.
     //
@@ -6149,7 +6149,7 @@ vertical_coefficients:
                           ph_tend, t_tend, mu_tend, nx_u, ny_v, nz_w);
     }
     
-    F_phys = projectSymmetricNormalVelocity(F_phys);
+    F_phys = projectStateBoundaries(F_phys);
 
     // SDIRK3 Stage computations
     // k2/k3 initialized to zero so partial updates are safe if stages are aborted.
@@ -12464,7 +12464,7 @@ vertical_coefficients:
     }
     
     // The full map is P G(P U): fixed wall values are not control variables.
-    U_new = projectSymmetricNormalVelocity(U_new);
+    U_new = projectStateBoundaries(U_new);
     // Unpack updated state with staggered dimensions
     unpackState(U_new, u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
     if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
@@ -14137,7 +14137,24 @@ static uint64_t sdirk3_rhs_operand_digest(const torch::Tensor& t) {
     return h;
 }
 
-torch::Tensor TileSDIRK3UnifiedSolver::projectSymmetricNormalVelocity(const torch::Tensor& state) {
+bool TileSDIRK3UnifiedSolver::isPackedPeriodicDomain() const {
+    // WRF's single whole-domain tile includes one mass endpoint per axis.
+    // Physical-dimension fixtures and full-halo views use another layout.
+    return grid_info_ && nprocx_ * nprocy_ == 1 &&
+        !wrf::sdirk3::g_sdirk3_config.enable_ad_halo_exchange &&
+        config_flags_periodic_x_ && !config_flags_periodic_y_ &&
+        config_flags_symmetric_ys_ && config_flags_symmetric_ye_ &&
+        !config_flags_open_xs_ && !config_flags_open_xe_ &&
+        !config_flags_open_ys_ && !config_flags_open_ye_ &&
+        !config_flags_specified_ && !config_flags_nested_ &&
+        grid_info_->its == grid_info_->ids && grid_info_->ite == grid_info_->ide &&
+        grid_info_->jts == grid_info_->jds && grid_info_->jte == grid_info_->jde &&
+        nx_ == grid_info_->ide - grid_info_->ids + 1 &&
+        ny_ == grid_info_->jde - grid_info_->jds + 1 && nx_ >= 3 && ny_ >= 3 &&
+        nx_u_ == nx_ + 1 && ny_v_ == ny_ + 1;
+}
+
+torch::Tensor TileSDIRK3UnifiedSolver::projectStateBoundaries(const torch::Tensor& state) {
     if ((!config_flags_symmetric_xs_ && !config_flags_symmetric_xe_ &&
          !config_flags_symmetric_ys_ && !config_flags_symmetric_ye_) || !state.defined())
         return state;
@@ -14148,6 +14165,26 @@ torch::Tensor TileSDIRK3UnifiedSolver::projectSymmetricNormalVelocity(const torc
     const auto pv = wrf::sdirk3::project_symmetric_normal_velocity(
         v, 0, jts_, jds_, jde_, config_flags_symmetric_ys_ && !config_flags_periodic_y_,
                               config_flags_symmetric_ye_ && !config_flags_periodic_y_);
+    if (isPackedPeriodicDomain()) {
+        // Q extends the physical core with WRF periodic-X aliases and
+        // symmetric-Y ghosts. Applying Q to both RHS input and output closes
+        // the stage equation under those constraints: F_c(U) = Q F(Q U).
+        // Q is a copy/reflection map, so autograd must accumulate Q^T on pullback.
+        const int64_t n = nx_ - 1, m = ny_ - 1;
+        auto mass = [&](const torch::Tensor& q) {
+            const auto core = q.slice(0, 0, m).slice(2, 0, n);
+            const auto x = torch::cat({core, core.slice(2, 0, 1)}, 2);
+            return torch::cat({x, x.slice(0, m - 1, m)}, 0);
+        };
+        const auto uc = pu.slice(0, 0, m).slice(2, 0, n);
+        const auto ux = torch::cat({uc, uc.slice(2, 0, 2)}, 2);
+        const auto ub = torch::cat({ux, ux.slice(0, m - 1, m)}, 0);
+        const auto vc = pv.slice(0, 0, m + 1).slice(2, 0, n);
+        const auto vx = torch::cat({vc, vc.slice(2, 0, 1)}, 2);
+        const auto vb = torch::cat({vx, -vx.slice(0, m - 1, m)}, 0);
+        return combineStateVariables(ub, vb, mass(w), mass(ph), mass(t),
+                                     mass(mu.unsqueeze(1)).squeeze(1));
+    }
     return combineStateVariables(pu, pv, w, ph, t, mu);
 }
 
@@ -14348,7 +14385,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // FIX Round153: Removed orphan flush() from hot path
 
     PROFILE_START(rhs_unpack);
-    const auto constrained_state = projectSymmetricNormalVelocity(U);
+    const auto constrained_state = projectStateBoundaries(U);
     auto [u, v, w, ph, t, mu] = extractStateVariables(constrained_state);
     PROFILE_END(rhs_unpack);
 
@@ -16196,18 +16233,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     if (do_explicit) {  // Step 3: ADVECTION (slow-mode / explicit)
 
-    // The Fortran whole-domain tile includes one mass endpoint in each axis.
-    // Physical-dimension fixtures and full-halo arrays have different origins/extents.
-    const bool packed_periodic_x = grid_info_ && nprocx_ * nprocy_ == 1 &&
-        !wrf::sdirk3::g_sdirk3_config.enable_ad_halo_exchange && config_flags_periodic_x_ &&
-        !config_flags_periodic_y_ && config_flags_symmetric_ys_ && config_flags_symmetric_ye_ &&
-        !config_flags_open_xs_ && !config_flags_open_xe_ &&
-        !config_flags_open_ys_ && !config_flags_open_ye_ &&
-        !config_flags_specified_ && !config_flags_nested_ &&
-        grid_info_->its == grid_info_->ids && grid_info_->ite == grid_info_->ide &&
-        grid_info_->jts == grid_info_->jds && grid_info_->jte == grid_info_->jde &&
-        nx_ == grid_info_->ide - grid_info_->ids + 1 &&
-        ny_ == grid_info_->jde - grid_info_->jds + 1 && nx_ >= 3 && ny_ >= 3 &&
+    const bool packed_periodic_x = isPackedPeriodicDomain() &&
         u.size(0) == ny_ && u.size(2) == nx_ + 1 &&
         v.size(0) == ny_ + 1 && v.size(2) == nx_;
     std::pair<torch::Tensor, torch::Tensor> periodic_momentum_x;
@@ -24679,7 +24705,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                   << std::endl;
     }
 
-    return projectSymmetricNormalVelocity(RHS);
+    return projectStateBoundaries(RHS);
 }
 
 void TileSDIRK3UnifiedSolver::applyRayleighDamping(torch::Tensor& rhs,
@@ -38460,7 +38486,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHSFullHalo(
     }
 #endif
 
-    return projectSymmetricNormalVelocity(result);
+    return projectStateBoundaries(result);
 }
 
 // =========================================================================

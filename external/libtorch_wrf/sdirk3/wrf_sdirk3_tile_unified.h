@@ -2188,12 +2188,14 @@ private:
                                      const torch::Tensor& K_prev = torch::Tensor(),
                                      const torch::Tensor& U_full_exchanged = torch::Tensor());
 
-    torch::Tensor projectSymmetricNormalVelocity(const torch::Tensor& state);
+    bool isPackedPeriodicDomain() const;
+    torch::Tensor projectStateBoundaries(const torch::Tensor& state);
 
     torch::Tensor computeUnifiedRHS(const torch::Tensor& U, wrf::sdirk3::RhsMode mode = wrf::sdirk3::RhsMode::Full);
 
     // Full-halo RHS computation for AD halo path (Step 7c)
-    // Requires neighbor_cache_valid_==true. Uses view-based field extraction
+    // Called through use_ad_halo; requires enable_ad_halo_exchange and
+    // neighbor_cache_valid_==true. Uses view-based field extraction
     // and slice-only policy for stencil operations.
     torch::Tensor computeUnifiedRHSFullHalo(const torch::Tensor& U_full,
                                              wrf::sdirk3::RhsMode mode = wrf::sdirk3::RhsMode::Full);

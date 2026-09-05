@@ -507,6 +507,10 @@ add_executable(test_periodic_staggered_advection tests/test_periodic_staggered_a
 target_link_libraries(test_periodic_staggered_advection PRIVATE wrf_sdirk3::core)
 add_test(NAME Periodic_Staggered_Advection COMMAND test_periodic_staggered_advection)
 
+add_executable(test_packed_boundary_contract tests/test_packed_boundary_contract.cpp)
+target_link_libraries(test_packed_boundary_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Packed_Boundary_Contract COMMAND test_packed_boundary_contract)
+
 add_executable(test_ad_safe_math tests/test_ad_safe_math.cpp)
 target_link_libraries(test_ad_safe_math PRIVATE wrf_sdirk3::core)
 add_test(NAME AD_Safe_Math_Contract COMMAND test_ad_safe_math)
