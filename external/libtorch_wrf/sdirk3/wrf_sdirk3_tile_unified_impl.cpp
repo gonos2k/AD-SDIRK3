@@ -252,6 +252,7 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#include "wrf_sdirk3_phi_horizontal.h"
 #include "wrf_sdirk3_boundary_ad.h"
 #include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_owned_box.h"
@@ -18163,6 +18164,59 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             }
         }  // end if (nx_ > 1 || ny_ > 1)
 
+        // WRF native-W PH advection on a periodic-X/symmetric-Y tile.
+        // C++ momentum orders 1/2, 3, 5 select centered PH orders 2, 4, 6.
+        if (canonical_horizontal) {
+            int phi_order = 0;
+            switch (wrf::sdirk3::g_sdirk3_config.advection_order) {
+                case 1:
+                case 2: phi_order = 2; break;
+                case 3: phi_order = 4; break;
+                case 5: phi_order = 6; break;
+                default:
+                    TORCH_CHECK(false,
+                                "native-W PH horizontal requires explicit "
+                                "advection_order 1, 2, 3, or 5; got ",
+                                wrf::sdirk3::g_sdirk3_config.advection_order);
+            }
+            TORCH_CHECK(base_state_initialized_ && ph_base_.defined() &&
+                        ph_base_.sizes() == ph.sizes(),
+                        "native-W PH horizontal requires initialized "
+                        "ph_base_ base-state contract");
+            auto phi_total = ph + ph_base_.to(ph.device(), ph.scalar_type());
+            TORCH_CHECK(nz_w_ >= 3 && c1f_.defined() && c2f_.defined() &&
+                        c1f_.dim() == 1 && c2f_.dim() == 1 &&
+                        c1f_.numel() >= nz_w_ && c2f_.numel() >= nz_w_,
+                        "native-W PH horizontal requires c1f/c2f at every W level");
+            auto phi_c1f = c1f_.to(ph.device(), ph.scalar_type()).slice(0, 0, nz_w_);
+            auto phi_c2f = c2f_.to(ph.device(), ph.scalar_type()).slice(0, 0, nz_w_);
+            auto phi_rdnw = getRdnwTensor(ph.device(), ph.scalar_type(), nz_);
+            // rdnw is a mass-level vector of length nz_w-1; the top rule reads
+            // entries nz_w-2 and nz_w-3, so the bound is >= nz_w-1.
+            TORCH_CHECK(phi_rdnw.defined() && phi_rdnw.dim() == 1 &&
+                        phi_rdnw.numel() >= nz_w_ - 1,
+                        "native-W PH horizontal requires rdnw through k=kte-1");
+            // WRF dn(top) is the mean of the last two dnw intervals.
+            // Compute the equivalent ratio in double before the tensor stencil.
+            const double r_top = phi_rdnw.index({nz_w_ - 2}).item<double>();
+            const double r_below = phi_rdnw.index({nz_w_ - 3}).item<double>();
+            TORCH_CHECK(std::isfinite(r_top) && r_top > 0.0 &&
+                        std::isfinite(r_below) && r_below > 0.0 &&
+                        std::isfinite(r_top + r_below),
+                        "native-W PH horizontal received invalid top rdnw");
+            const double phi_cfn1 = -r_below / (r_top + r_below);
+            const double phi_cfn = 1.0 - phi_cfn1;
+            const auto horizontal_phi =
+                wrf::sdirk3::phi_horizontal::native_w_phi_horizontal(
+                    phi_total, mu_full, u, v,
+                    msfux_.to(ph.device(), ph.scalar_type()),
+                    msfvy_.to(ph.device(), ph.scalar_type()),
+                    msfty_.to(ph.device(), ph.scalar_type()),
+                    phi_c1f, phi_c2f, phi_order, rdx, rdy,
+                    phi_cfn, phi_cfn1, momentum_packed);
+            ph_tend_x_adv = horizontal_phi.x;
+            ph_tend_y_adv = horizontal_phi.y;
+        } else {
         // X-direction: -(1/my)*μu*∂(Φ+Φb)/∂x
         if (nx_ > 1) {
             // Get mu at u-points (muuf in WRF)
@@ -18700,7 +18754,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // Stack all k-level contributions to create the final tensor
             ph_tend_y_adv = torch::stack(ph_tend_y_all_k, 1);
         }
-        
+        }
+
         // --- 4.2 Vertical advection of geopotential ---
         // AUTOGRAD FIX: Use batch operations to avoid in-place modifications
         // Compute all vertical advection contributions at once

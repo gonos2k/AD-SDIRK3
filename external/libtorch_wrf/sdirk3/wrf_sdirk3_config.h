@@ -2104,7 +2104,7 @@ struct SDIRK3Config {
     int64_t spatial_async_min_elems = 0;
 
     // Numerical scheme options
-    int advection_order = 5;        // Advection order (1, 3, 5)
+    int advection_order = 5;        // Momentum: 1/2 centered, 3/5 upwind; PH: 2/4/6
     int diffusion_option = 0;       // 0=none, 1=2nd order, 2=4th order
 
     // PARITY FIX 2025-12-23: Configurable ztop parameters for fallback rdnw/rdn computation
@@ -2625,7 +2625,7 @@ extern SDIRK3Config g_sdirk3_config;
 // │ precond_block_size     │ Block size for block Jacobi                   │
 // │ jvp_method             │ JVP method (0=FD, 1=AD, 2=dual, 3=optimized)  │
 // │ n_threads              │ Number of threads                             │
-// │ advection_order        │ Advection order (1, 3, 5)                     │
+// │ advection_order        │ Advection order (1/2, 3, 5)                   │
 // │ diffusion_option       │ Diffusion option (0=none, 1=2nd, 2=4th)       │
 // │ lateral_bc_option      │ Lateral boundary condition option             │
 // │ top_bc_option          │ Top boundary condition option                 │
