@@ -95,3 +95,7 @@ Nonhydrostatic_Pressure_Coordinate_Contract
 WRF_Dynamics_Config
 Fixed_Trajectory_Derivative
 Fixed_Trajectory_Lifecycle
+Raw_Principal_Contract
+Raw_Principal_Actual_Tile_Oracle
+Raw_Principal_Factory
+Raw_Principal_Disabled

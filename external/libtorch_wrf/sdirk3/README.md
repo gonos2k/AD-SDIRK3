@@ -25,6 +25,28 @@ active investigation (see the repository root `README.md` and `doc/`).
   This layout is verified — do not change it.
 - Cross-platform CPU / CUDA / MPS.
 
+## Vertical principal preconditioner
+
+The canonical type-2, mode-3 WRF mass-coordinate profile uses a dry vertical
+principal approximation in the packed velocity/Phi/theta/mass coordinates.
+It binds a complete Newton stage snapshot and derives its pressure/Phi/W
+couplings from authoritative hybrid mass and vertical metrics. The Schur solve
+and its transpose share the same coefficients. Nonprincipal terms, including
+horizontal transport and NH/curvature contributions, remain in the true
+Newton operator; the approximation does not claim to equal that operator.
+
+`precond_type=2` is the existing default, so selecting this model changes the
+preconditioned path. Type 0 disables preconditioning. Explicit legacy tuning
+selects the legacy model; ignored type-2 options do not affect selection.
+The historical C++/archived-run damping default (0.1) and the WRF Registry
+default (0.7) both identify supported default profiles, without changing their
+values on the legacy path. Invalid or moist inputs after canonical selection
+are rejected. Coefficients and column solves use FP32 on CPU, with results
+returned to the input device/dtype. Higher precision inputs therefore use a
+mixed precision preconditioner, and convergence is judged on the true Krylov
+residual. Full GPU execution and broad performance claims require separate
+validation.
+
 ## Key files
 
 | File | Role |
@@ -39,7 +61,7 @@ active investigation (see the repository root `README.md` and `doc/`).
 | `wrf_sdirk3_mpi_safety.h`, `wrf_sdirk3_mpi_safety_impl.cpp` | MPI fail-close contracts: baseline thread, single-flight scope, freshness guard |
 | `jvp_bridge.F90` | Fortran↔C++ AD bridge |
 
-The production archive is `libwrf_sdirk3_libtorch.a` (exact 21-TU manifest in
+The production archive is `libwrf_sdirk3_libtorch.a` (authoritative source manifest in
 `wrf_sdirk3_core_sources.txt`, enforced by `tests/check_core_archive.sh`). The
 sole Fortran bridge is `dyn_em/module_implicit_sdirk3.F` — the dormant
 `module_implicit_sdirk3_zerocopy.F` duplicate was removed and a build contract
@@ -194,7 +216,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 97-test CTest inventory**, pinned by
+The CMake tree registers an **exact 101-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 

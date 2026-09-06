@@ -407,6 +407,7 @@ namespace wrf {
 namespace sdirk3 {
 namespace test {
     struct TileCase;
+    struct PrincipalFactoryCase;
 }
 }
 }
@@ -414,6 +415,7 @@ namespace test {
 class TileSDIRK3UnifiedSolver : public wrf::sdirk3::TileSDIRK3Solver {
 private:
     friend struct wrf::sdirk3::test::TileCase;
+    friend struct wrf::sdirk3::test::PrincipalFactoryCase;
     // UnifiedRHS for physics computation (FINAL_DESIGN.md compliant)
     std::unique_ptr<wrf::sdirk3::UnifiedRHS> unified_rhs_;
     

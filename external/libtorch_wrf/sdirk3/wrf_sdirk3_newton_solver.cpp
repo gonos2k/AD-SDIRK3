@@ -5288,22 +5288,28 @@ public:
 
         // v20.5: Set stage-specific state for preconditioner adaptation
         // Extract mu_pert from U_stage and pass to preconditioner for mu_full computation
-        if (preconditioner_ && layout_initialized_ && cached_layout_.blocks.size() >= 6) {
-            // mu is the last block (index 5): {"mu", offset, size}
-            const auto& mu_block = cached_layout_.blocks[5];
-            if (mu_block.name == "mu" && mu_block.size > 0 &&
-                mu_block.start + mu_block.size <= U_stage.numel()) {
-                // Extract mu_pert as 1D slice
-                auto mu_pert_1d = U_stage.slice(0, mu_block.start, mu_block.start + mu_block.size);
-                // Reshape to 2D (ny, nx) - mu is 2D field (no k dimension)
-                int64_t ny = options_.ny;
-                int64_t nx = options_.nx;
-                if (ny > 0 && nx > 0 && mu_block.size == ny * nx) {
-                    auto mu_pert_2d = mu_pert_1d.reshape({ny, nx});
-                    // Set stage state (preconditioner internally computes mu_full = mu_base + mu_pert)
-                    auto* unified_precond = dynamic_cast<UnifiedPreconditioner*>(preconditioner_);
-                    if (unified_precond) {
-                        unified_precond->set_stage_state(mu_pert_2d, stage);
+        if (preconditioner_) {
+            auto* unified_precond = dynamic_cast<UnifiedPreconditioner*>(preconditioner_);
+            if (unified_precond && unified_precond->raw_principal_enabled()) {
+                // The raw model owns the full Newton linearization point.  Bind it
+                // before the first apply even if a legacy packed-layout helper is absent.
+                unified_precond->bind_raw_principal_state_or_throw(
+                    U_stage, stage, "U_stage");
+                unified_precond->update_time_coefficients(dt, gamma);
+            } else if (layout_initialized_ && cached_layout_.blocks.size() >= 6) {
+                // mu is the last block (index 5): {"mu", offset, size}
+                const auto& mu_block = cached_layout_.blocks[5];
+                if (mu_block.name == "mu" && mu_block.size > 0 &&
+                    mu_block.start + mu_block.size <= U_stage.numel()) {
+                    // Extract mu_pert as 1D slice
+                    auto mu_pert_1d = U_stage.slice(0, mu_block.start, mu_block.start + mu_block.size);
+                    // Reshape to 2D (ny, nx) - mu is 2D field (no k dimension)
+                    int64_t ny = options_.ny;
+                    int64_t nx = options_.nx;
+                    if (ny > 0 && nx > 0 && mu_block.size == ny * nx) {
+                        auto mu_pert_2d = mu_pert_1d.reshape({ny, nx});
+                        // Set stage state (preconditioner internally computes mu_full = mu_base + mu_pert)
+                        if (unified_precond) unified_precond->set_stage_state(mu_pert_2d, stage);
                     }
                 }
             }
@@ -5684,18 +5690,22 @@ public:
             // Pre-loop set_stage_state uses U_stage (fixed K=0 linearization point).
             // At iter 0, U_eval = U_stage + dt*gamma*K where K is the initial guess;
             // at iter >= 1, K has been updated by GMRES. Both need fresh mu.
-            if (preconditioner_ && layout_initialized_ &&
-                cached_layout_.blocks.size() >= 6) {
-                const auto& mu_block = cached_layout_.blocks[5];
-                if (mu_block.name == "mu" && mu_block.size > 0 &&
-                    mu_block.start + mu_block.size <= U_eval.numel()) {
-                    auto mu_pert_1d = U_eval.slice(0, mu_block.start, mu_block.start + mu_block.size);
-                    int64_t ny = options_.ny;
-                    int64_t nx = options_.nx;
-                    if (ny > 0 && nx > 0 && mu_block.size == ny * nx) {
-                        auto mu_pert_2d = mu_pert_1d.reshape({ny, nx});
-                        auto* unified_precond = dynamic_cast<UnifiedPreconditioner*>(preconditioner_);
-                        if (unified_precond) {
+            if (preconditioner_) {
+                auto* unified_precond = dynamic_cast<UnifiedPreconditioner*>(preconditioner_);
+                if (unified_precond && unified_precond->raw_principal_enabled()) {
+                    unified_precond->bind_raw_principal_state_or_throw(
+                        U_eval, stage, "U_eval");
+                    unified_precond->update_time_coefficients(dt, gamma);
+                } else if (unified_precond && layout_initialized_ &&
+                           cached_layout_.blocks.size() >= 6) {
+                    const auto& mu_block = cached_layout_.blocks[5];
+                    if (mu_block.name == "mu" && mu_block.size > 0 &&
+                        mu_block.start + mu_block.size <= U_eval.numel()) {
+                        auto mu_pert_1d = U_eval.slice(0, mu_block.start, mu_block.start + mu_block.size);
+                        int64_t ny = options_.ny;
+                        int64_t nx = options_.nx;
+                        if (ny > 0 && nx > 0 && mu_block.size == ny * nx) {
+                            auto mu_pert_2d = mu_pert_1d.reshape({ny, nx});
                             unified_precond->set_stage_state(mu_pert_2d, stage);
                         }
                     }

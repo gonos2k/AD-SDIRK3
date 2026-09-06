@@ -142,7 +142,10 @@ int main(int argc, char** argv) {
     auto physics = std::make_shared<wrf::sdirk3::PhysicsConfig>();
     UnifiedPreconditioner P(grid, physics, 0.1f, 0.4358665215f);
     const auto mu_pert = U.slice(0, total-sm, total).reshape({ny,nx});
-    P.bind_stage_state_or_throw(mu_pert, 1);
+    if (P.raw_principal_enabled())
+        P.bind_raw_principal_state_or_throw(U, 1, "fixed RHS contract state");
+    else
+        P.bind_stage_state_or_throw(mu_pert, 1);
     P.update(U, 0.1f, 0.4358665215f);
     std::function<torch::Tensor(const torch::Tensor&)> M =
         [&](const torch::Tensor& v) { return P.apply(v); };
@@ -183,13 +186,16 @@ int main(int argc, char** argv) {
     const float m_v_phi_zero = M_v_phi_column_zero[probe_j][probe_k][probe_i].item<float>();
     const float current_M_u_phi_model = -h / (fixture_mu0 * tile.spacing);
     const float current_M_v_phi_model = -h / (fixture_mu0 * tile.spacing);
-    std::cout << "RHS_PRECOND_PHI_COLUMN input_j=" << probe_j
+    std::cout << "RHS_PRECOND_PHI_COLUMN model="
+              << (P.raw_principal_enabled() ? "raw_principal" : "legacy")
+              << " legacy_mu_phi_switch_active=" << !P.raw_principal_enabled()
+              << " input_j=" << probe_j
               << " input_k=" << probe_k << " input_i=" << probe_i
               << " M_u_phi=" << m_u_phi << " M_v_phi=" << m_v_phi
               << " M_u_phi_mu_schur_zero=" << m_u_phi_zero
               << " M_v_phi_mu_schur_zero=" << m_v_phi_zero
-              << " shipped_local_model_u=" << current_M_u_phi_model
-              << " shipped_local_model_v=" << current_M_v_phi_model << '\n';
+              << " legacy_local_model_u=" << current_M_u_phi_model
+              << " legacy_local_model_v=" << current_M_v_phi_model << '\n';
     TORCH_CHECK(std::isfinite(m_u_phi) && std::isfinite(m_v_phi) &&
                 std::isfinite(m_u_phi_zero) && std::isfinite(m_v_phi_zero),
                 "Phi-column preconditioner response is non-finite");

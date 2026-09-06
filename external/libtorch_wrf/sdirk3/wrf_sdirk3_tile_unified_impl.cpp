@@ -3768,7 +3768,7 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
         // Don't create or set preconditioner
     } else if (wrf::sdirk3::g_sdirk3_config.precond_type == 2) {
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-            std::cerr << "[PRECOND SELECTION] UnifiedPreconditioner with W-θ coupling (precond_type=2)" << std::endl;
+            std::cerr << "[PRECOND SELECTION] UnifiedPreconditioner (precond_type=2)" << std::endl;
         }
 
         // UnifiedPreconditioner: Advanced Block-Jacobi with:
@@ -5789,6 +5789,10 @@ vertical_coefficients:
     c1h_ = torch::from_blob(c1h, {nz}, options);    // LINT_EXCEPTION: At mass levels - zero-copy
         TORCH_CHECK(nz > 0 && nz <= 1000, "Invalid nz for c2h: ", nz);
     c2h_ = torch::from_blob(c2h, {nz}, options);    // LINT_EXCEPTION: At mass levels - zero-copy
+    if (grid_info_) {
+        grid_info_->c1h = c1h_.clone();
+        grid_info_->c2h = c2h_.clone();
+    }
 
     // FIX 2025-01-11 Round59: Invalidate aligned tensor cache after c1f/c2f/c1h/c2h updates
     // This ensures GPU tensors (which skip signature check) pick up the new values
@@ -30305,6 +30309,15 @@ void TileSDIRK3UnifiedSolver::setVerticalCoordinateCoefficients(
         c2h_ = torch::from_blob(const_cast<float*>(c2h), {nz_}, options).clone();  // LINT_EXCEPTION: CPU opts
     }
 
+    // Keep the authoritative GridInfo source in lockstep with the public WRF
+    // coefficient setter.  The raw principal model reads GridInfo, while
+    // RHS kernels retain these tile-owned tensors; publishing both closes the
+    // stale c1h/c2h ownership split after a runtime refresh.
+    if (grid_info_) {
+        if (c1h_.defined()) grid_info_->c1h = c1h_.clone();
+        if (c2h_.defined()) grid_info_->c2h = c2h_.clone();
+    }
+
     // FIX 2025-01-11 Round59: Invalidate aligned tensor cache after c1f/c2f/c1h/c2h updates
     // This ensures GPU tensors (which skip signature check) pick up the new values
     wrf::sdirk3::pg_detail::invalidateAlignedTensorCache();
@@ -41017,7 +41030,19 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                 "runAdjointReplay: no checkpoints recorded (run a forward with "
                 "save_trajectory enabled first) — refusing to return an identity adjoint");
 
-    const float dt_prev = dt_stage_;
+    // Install this guard before changing dt_stage_ and before any allocation or
+    // constructor that can throw.  The replay-owned preconditioner is built
+    // before the main try block, so a guard created later would leak this
+    // per-solver value on an allocation/constructor exception.
+    struct ScopedReplayDt {
+        TileSDIRK3UnifiedSolver& solver;
+        const float saved;
+        explicit ScopedReplayDt(TileSDIRK3UnifiedSolver& s)
+            : solver(s), saved(s.dt_stage_) {}
+        ~ScopedReplayDt() noexcept { solver.dt_stage_ = saved; }
+        ScopedReplayDt(const ScopedReplayDt&) = delete;
+        ScopedReplayDt& operator=(const ScopedReplayDt&) = delete;
+    } replay_dt_guard(*this);
     dt_stage_ = dt;
 
     // 9F.D109 (review section 9): RESTORE THE PRODUCTION STATE ON EVERY EXIT.
@@ -41118,7 +41143,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     }
     wrf::sdirk3::UnifiedPreconditioner* const replay_precond = replay_precond_owned.get();
 
-    try {
+    {
         // 9F.D99 (review section 6): the order comes from a pure, unit-tested function, and
         // a bind counter below asserts one bind per checkpoint. Together they close the
         // regression window on D94 -- per-checkpoint work drifting back inside a one-shot --
@@ -41146,100 +41171,25 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             // Keep replay in the same state basis as the forward stage reference.
             U_ref_stage_ = linearization_point.clone();
 
-            // 9F.D87 (review section 3): rebuild the preconditioner for THIS replay's alpha.
-            // Without this the transpose solve is preconditioned by an operator built for a
-            // DIFFERENT problem, and D84's dt-ladder was exactly that.
-            //
-            // 9F.D91 CORRECTION (review P0-2): D87 said "alpha AND STATE". The state half was
-            // WRONG. update(state, dt, gamma) DOES NOT READ `state` -- across its 140-line
-            // body the identifier appears only in the signature, in a debug string about
-            // BASE-state generation, and in one comment. What it rebuilds on is dt/gamma plus
-            // base-state / metric / config generation counters.
-            //
-            // So this call makes the preconditioner match the replay's ALPHA, which is what
-            // D84 needed and is measured (261.5 / 26.15 / 2.179 at dt 600/60/5). It does NOT
-            // make it match the checkpoint STATE. Stage-state adaptation lives in a separate
-            // path, set_stage_state(mu_pert, stage), which this replay never calls -- so the
-            // preconditioner is still built around the forward step's stage state.
-            //
-            // The unused `state` parameter is what made D87 believe otherwise. Extracting
-            // mu_pert from the packed checkpoint and splitting the API into
-            // update_time_coefficients() / bind_stage_state() is the real fix and is open.
-            //
-            // update() is called once per forward step (unifiedStep, :5577) with the
-            // FORWARD dt. runAdjointReplay never called it, and set_alpha() is a no-op in
-            // all three transpose-preconditioner wrappers, so nothing re-derived the
-            // coefficients. With WRF_SDIRK3_ADJOINT_DT=5 against a namelist dt of 600 that
-            // is alpha = 2.18 solved against a preconditioner built for alpha = 261.5 --
-            // a 120x mismatch. The horizontal smoothing factor alone carries dt*gamma*cs^2.
-            //
-            // So "a correct M^-T does not help" was measured against the exact transpose of
-            // the WRONG preconditioner. The AD transpose was faithful to what it was given;
-            // what it was given did not match A.
-            //
-            // Safe for the forward path: unifiedStep re-updates at the top of every step,
-            // and the replay only runs after one has completed.
-            if (replay_precond) {
-                replay_precond->update(linearization_point, dt, gamma);
-
-                // 9F.D95 (review section 4): BIND EVERY CHECKPOINT, AND FAIL CLOSED.
-                //
-                // D94 put this binding INSIDE the one-shot provenance block, so it ran on the
-                // FIRST checkpoint only and every earlier checkpoint silently reused that
-                // first preconditioner state. Worse, prov_said is a function-local static, so
-                // it is PROCESS-wide: a second solver instance would never bind at all.
-                //
-                // That is not a missing log line, it is a missing preconditioner state
-                // update -- exactly the partial-sweep shape this campaign keeps producing,
-                // and I introduced it while fixing something else. The binding is
-                // unconditional now; only the LOG is one-shot.
-                //
-                // FAIL-CLOSED, per the review: D94 measured that P genuinely depends on the
-                // mass state, so a layout that does not match is not a reason to skip the
-                // binding and continue -- it means the adjoint would run against a
-                // preconditioner bound to the wrong state, and a wrong gradient is worse
-                // than no gradient. The old form silently did nothing when the shape checks
-                // failed.
-                {
-                    const auto lay = wrf::sdirk3::StateLayout::from_grid_dims(
-                        nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
-                    const int64_t ny64 = ny_, nx64 = nx_;
-                    torch::NoGradGuard ng_bind;
-                    // Checked extraction lives in the layout header so it can be a standing
-                    // contract; the replay only says WHEN to bind, not how to find mu.
-                    auto mu_pert = wrf::sdirk3::extract_mu_pert_2d(
-                        lay, linearization_point, ny64, nx64);
-                    // STAGE INDEX IS A KNOWN GAP. The packed checkpoint records no ARK stage,
-                    // so this passes 1. D94 MEASURED stage1_vs_stage3 = 0 in this
-                    // configuration, so the guess is currently harmless -- but that is a
-                    // statement about one config, not about the design: current_stage_ does
-                    // gate stage-dependent policy elsewhere in the preconditioner. Only the
-                    // stage tape can remove the guess.
-                    // 9F.D98 (review section 5): the CHECKED bind. set_stage_state() returns
-                    // silently on five internal failures, so D95's fail-closed extraction was
-                    // still fail-OPEN one call deeper -- extraction could succeed and the bind
-                    // be skipped, leaving the replay preconditioned by the wrong mass state.
-                    // The receipt is read back FROM the preconditioner, so this verifies the
-                    // bind took rather than assuming the setter did something.
-                    const auto receipt =
-                        replay_precond->bind_stage_state_or_throw(mu_pert, 1);
-                    ++binds_performed;
-                    static std::atomic<bool> bind_said{false};
-                    bool bind_expected = false;
-                    if (bind_said.compare_exchange_strong(bind_expected, true)) {
-                        std::cerr << "SDIRK3_ADJOINT_BIND_RECEIPT"
-                                  << " stage=" << receipt.stage
-                                  << " mu_numel=" << receipt.mu_numel
-                                  << " mu_full_mean=" << receipt.mu_full_mean
-                                  << " mu_min=" << receipt.mu_full_min
-                                  << " mu_max=" << receipt.mu_full_max
-                                  << " bind_err=" << receipt.max_binding_error
-                                  << " stage_gen=" << receipt.stage_state_generation
-                                  << " coeff_gen=" << receipt.coefficient_generation
-                                  << "  (verified read-back; logged once)"
-                                  << std::endl << std::flush;
-                    }
+            // Bind every checkpoint before rebuilding M for the replay's alpha.
+            // This legacy replay has no stage tape and uses stage 1. The raw
+            // principal model is stage-agnostic; full ARK replay needs the tape.
+            const auto replay_layout = wrf::sdirk3::StateLayout::from_grid_dims(
+                nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
+            auto bind_replay_state = [&](const torch::Tensor& state, int stage) {
+                if (replay_precond->raw_principal_enabled()) {
+                    replay_precond->bind_raw_principal_state_or_throw(
+                        state, stage, "adjoint checkpoint");
+                } else {
+                    replay_precond->bind_stage_state_or_throw(
+                        wrf::sdirk3::extract_mu_pert_2d(replay_layout, state, ny_, nx_),
+                        stage);
                 }
+                replay_precond->update_time_coefficients(dt, gamma);
+            };
+            if (replay_precond) {
+                bind_replay_state(linearization_point, 1);
+                ++binds_performed;
 
                 // The LOG is one-shot; the binding above is not.
                 static std::atomic<bool> prov_said{false};
@@ -41357,67 +41307,34 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                         }
                     }
 
-                    // 9F.D94 (review section 4, the standing contract): IS THE
-                    // PRECONDITIONER ACTUALLY STATE-DEPENDENT?
-                    //
-                    // The review's test, run before wiring anything: hold shape, dt and gamma
-                    // fixed and change only the mass state. If the design is state-dependent,
-                    // P(Y_a)v != P(Y_b)v. If it does not move, then either P is effectively
-                    // state-independent or the binding is broken -- and in EITHER case
-                    // update(state,...) is the wrong API, because it takes a state it ignores.
-                    //
-                    // Measure before wiring: if P does not respond to mu_pert at all, then
-                    // "the preconditioner is not matched to the checkpoint state" is a defect
-                    // in the API's honesty rather than in the numerics, and extracting mu_pert
-                    // would buy nothing.
-                    //
-                    // Production binds this per Newton stage from the same StateLayout
-                    // (newton_solver.cpp:4311), so the forward re-establishes it next step.
+                    // Hold alpha fixed and perturb only checkpoint column mass.
+                    // Restore the checkpoint and stage before the transpose solve.
                     {
-                        const auto layout = wrf::sdirk3::StateLayout::from_grid_dims(
-                            nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
-                        const auto& mu_blk = layout.blocks.back();   // "mu", 2-D, last
-                        const int64_t ny64 = ny_, nx64 = nx_;
-                        if (mu_blk.name == "mu" && mu_blk.size == ny64 * nx64) {
-                            torch::NoGradGuard ng_probe;
-                            auto v_probe = torch::randn(linearization_point.numel(),
-                                                        linearization_point.options());
-                            auto z_before = replay_precond->apply(v_probe);
-
-                            auto mu_a = linearization_point
-                                            .slice(0, mu_blk.start, mu_blk.start + mu_blk.size)
-                                            .reshape({ny64, nx64}).clone();
-                            replay_precond->set_stage_state(mu_a, 1);
-                            auto z_a = replay_precond->apply(v_probe);
-
-                            // +1000 Pa on the column mass: physically large, ~1% of mu.
-                            auto mu_b = mu_a + 1000.0f;
-                            replay_precond->set_stage_state(mu_b, 1);
-                            auto z_b = replay_precond->apply(v_probe);
-
-                            auto rel = [](const torch::Tensor& x, const torch::Tensor& y) {
-                                return ((x - y).norm() / y.norm().clamp_min(1e-30))
-                                    .item<double>();
-                            };
-                            // Does the STAGE INDEX matter? The checkpoint carries no stage,
-                            // so if it does, binding with a guessed stage is its own error.
-                            replay_precond->set_stage_state(mu_a, 1);
-                            auto z_s1 = replay_precond->apply(v_probe);
-                            replay_precond->set_stage_state(mu_a, 3);
-                            auto z_s3 = replay_precond->apply(v_probe);
-
-                            const double d_bind = rel(z_a, z_before);
-                            const double d_state = rel(z_b, z_a);
-                            std::cerr << "SDIRK3_PRECOND_STATE_DEPENDENCE"
-                                      << " bind_changed=" << d_bind
-                                      << " dmu_1000Pa_changed=" << d_state
-                                      << " stage1_vs_stage3=" << rel(z_s3, z_s1)
-                                      << (d_state > 1e-9
-                                              ? "  STATE-DEPENDENT: the replay MUST bind mu_pert"
-                                              : "  NO RESPONSE: P ignores mu_pert here, so"
-                                                " update(state,...) takes a state it cannot use")
-                                      << std::endl << std::flush;
-                        }
+                        torch::NoGradGuard ng_probe;
+                        const auto& mu_block = replay_layout.blocks.back();
+                        auto v_probe = torch::randn_like(linearization_point);
+                        auto z_before = replay_precond->apply(v_probe);
+                        bind_replay_state(linearization_point, 1);
+                        auto z_a = replay_precond->apply(v_probe);
+                        auto perturbed = linearization_point.clone();
+                        perturbed.slice(0, mu_block.start, mu_block.start + mu_block.size)
+                            .add_(1000.0f);
+                        bind_replay_state(perturbed, 1);
+                        auto z_b = replay_precond->apply(v_probe);
+                        bind_replay_state(linearization_point, 3);
+                        auto z_s3 = replay_precond->apply(v_probe);
+                        bind_replay_state(linearization_point, 1);
+                        auto z_restored = replay_precond->apply(v_probe);
+                        auto rel = [](const torch::Tensor& x, const torch::Tensor& y) {
+                            return ((x - y).norm() / y.norm().clamp_min(1e-30))
+                                .item<double>();
+                        };
+                        std::cerr << "SDIRK3_PRECOND_STATE_DEPENDENCE"
+                                  << " bind_changed=" << rel(z_a, z_before)
+                                  << " dmu_1000Pa_changed=" << rel(z_b, z_a)
+                                  << " stage1_vs_stage3=" << rel(z_s3, z_a)
+                                  << " restore_error=" << rel(z_restored, z_a)
+                                  << std::endl << std::flush;
                     }
 
                     // 9F.D85: the same instrument, pointed at the OPERATOR instead of the
@@ -41584,12 +41501,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                         " time(s) for ", checkpoints.size(), " checkpoints -- every "
                         "checkpoint must bind its own mass state");
         }
-    } catch (...) {
-        dt_stage_ = dt_prev;
-        throw;
     }
 
-    dt_stage_ = dt_prev;
     replay_guard.verify_or_throw();
     return lambda;
 }

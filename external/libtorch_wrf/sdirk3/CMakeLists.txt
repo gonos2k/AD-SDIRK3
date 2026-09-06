@@ -976,3 +976,19 @@ add_test(NAME Nonhydrostatic_Pressure_Coordinate_Contract COMMAND test_nh_pressu
 add_executable(test_wrf_dynamics_config tests/test_wrf_dynamics_config.cpp)
 target_link_libraries(test_wrf_dynamics_config PRIVATE wrf_sdirk3::core)
 add_test(NAME WRF_Dynamics_Config COMMAND test_wrf_dynamics_config)
+
+add_executable(test_raw_principal_contract tests/raw_principal_contract.cpp)
+target_link_libraries(test_raw_principal_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Raw_Principal_Contract COMMAND test_raw_principal_contract)
+
+add_executable(test_raw_principal_actual_tile_oracle tests/raw_principal_actual_tile_oracle.cpp)
+target_link_libraries(test_raw_principal_actual_tile_oracle PRIVATE wrf_sdirk3::core)
+add_test(NAME Raw_Principal_Actual_Tile_Oracle COMMAND test_raw_principal_actual_tile_oracle)
+
+add_executable(test_raw_principal_factory tests/raw_principal_factory.cpp)
+target_link_libraries(test_raw_principal_factory PRIVATE wrf_sdirk3::core)
+add_test(NAME Raw_Principal_Factory COMMAND test_raw_principal_factory)
+
+add_executable(test_raw_principal_default_off tests/raw_principal_default_off.cpp)
+target_link_libraries(test_raw_principal_default_off PRIVATE wrf_sdirk3::core)
+add_test(NAME Raw_Principal_Disabled COMMAND test_raw_principal_default_off)
