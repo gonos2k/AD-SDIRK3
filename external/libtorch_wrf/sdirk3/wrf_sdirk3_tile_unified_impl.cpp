@@ -124,6 +124,7 @@
 // they have been reviewed for const-correctness safety.
 // =========================================================================
 
+#include <array>
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
 #include "wrf_sdirk3_coriolis.h"
 #include "wrf_sdirk3_curvature.h"
@@ -253,6 +254,7 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
 #include "wrf_sdirk3_phi_horizontal.h"
+#include "wrf_sdirk3_nonhydrostatic_pressure.h"
 #include "wrf_sdirk3_boundary_ad.h"
 #include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_owned_box.h"
@@ -14252,6 +14254,41 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
     }
 
+    const bool use_wrf_mass_flux = !g_export_coupled_slow &&
+        wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp();
+    const bool canonical_horizontal = use_wrf_mass_flux &&
+        wdamp_contract_.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic &&
+        wdamp_contract_.y_policy == wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate;
+    // Native NH term 4 requires the ordinary ARK face geometry and the
+    // pressure/EOS branch. Reject missing prerequisites before RHS arithmetic.
+    if (non_hydrostatic_) {
+        TORCH_CHECK(canonical_horizontal,
+                    "SDIRK3_NH_GEOMETRY_UNSUPPORTED: require ordinary ARK, "
+                    "periodic X and symmetric Y");
+        const std::array<int64_t, 3> mass_shape{ny_, nz_, nx_};
+        const std::array<int64_t, 3> w_shape{ny_, nz_w_, nx_};
+        TORCH_CHECK(p_base_.defined() && p_base_.sizes() == torch::IntArrayRef(mass_shape) &&
+                    th_base_.defined() && th_base_.sizes() == torch::IntArrayRef(mass_shape) &&
+                    ph_base_.defined() && ph_base_.sizes() == torch::IntArrayRef(w_shape) &&
+                    mu_base_.defined() &&
+                    mu_base_.sizes() == torch::IntArrayRef({ny_, nx_}),
+                    "SDIRK3_NH_BASE_STATE_MISSING: require native pressure, theta, Phi and mass base state");
+        for (const auto* q : {&fnm_, &fnp_, &c1h_, &c2h_}) {
+            TORCH_CHECK(q->defined() && q->dim() == 1 && q->numel() >= nz_,
+                        "SDIRK3_NH_INPUT_INVALID: missing vertical coefficients");
+        }
+        for (const auto* q : {&msfux_, &msfuy_}) {
+            TORCH_CHECK(q->defined() &&
+                        q->sizes() == torch::IntArrayRef({ny_, nx_u_}),
+                        "SDIRK3_NH_INPUT_INVALID: require native U face maps");
+        }
+        for (const auto* q : {&msfvx_, &msfvy_}) {
+            TORCH_CHECK(q->defined() &&
+                        q->sizes() == torch::IntArrayRef({ny_v_, nx_}),
+                        "SDIRK3_NH_INPUT_INVALID: require native V face maps");
+        }
+    }
+
     // PR 9F.8: RHS OPERAND DIGEST. A matching RHS count and matching Newton/FGMRES/Stage
     // NORMS do not prove the RHS was evaluated on the SAME state vectors -- equal counts
     // can compute different states, and equal norms can hold for different vectors. This
@@ -14661,8 +14698,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // Ordinary ARK uses one hybrid/map-aware mass-flux diagnosis for Omega,
     // column continuity, and potential-temperature transport. Split export
     // retains its driver-supplied flux/tendency convention.
-    const bool use_wrf_mass_flux = !g_export_coupled_slow &&
-        wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp();
     wrf::sdirk3::WRFMassFlux mass_flux_memo;
     auto wrf_mass_flux = [&]() -> const wrf::sdirk3::WRFMassFlux& {
         if (mass_flux_memo.omega.defined()) return mass_flux_memo;
@@ -16232,9 +16267,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     const auto velocity_mass_v = mu_at_v_3d + mu_base_at_v_3d + eps_v;
     const auto velocity_mass_w = mu_at_w_3d + mu_base_at_w_3d + eps_w;
 
-    const bool canonical_horizontal = use_wrf_mass_flux &&
-        wdamp_contract_.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic &&
-        wdamp_contract_.y_policy == wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate;
     const bool momentum_packed = isPackedPeriodicDomain();
     const int64_t momentum_m = ny_ - (momentum_packed ? 1 : 0);
     const int64_t momentum_n = nx_ - (momentum_packed ? 1 : 0);
@@ -19052,6 +19084,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // CRITICAL: Declare p_pert_mass at outer scope so it's available to both U and W momentum sections
     torch::Tensor p_pert_mass;  // Perturbation pressure at mass levels [ny, nz, nx]
     torch::Tensor al_pert_mass_fs, alt_mass_fs;  // WRF al' and alt at mass points (calc_p_rho)
+    const bool native_nh = non_hydrostatic_ && canonical_horizontal;
+    torch::Tensor native_nh_u, native_nh_v;
 
     // --- 5.1: U-Momentum PGF ---
     {
@@ -19123,8 +19157,38 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             auto p_full_mass = p_pert_mass + p_base_;
             
             // Compute non-hydrostatic pressure terms if configured
-            if (non_hydrostatic_) {
-                compute_nonhydrostatic_terms(ph, ph_base_, p_pert_mass);
+            if (native_nh) {
+                // Add WRF pressure-gradient term 4 in native face coordinates
+                // before the outer -cq/alpha conversion. Use the existing
+                // WRF top_lid setting for the top pressure extrapolation.
+                const auto dev = p_pert_mass.device();
+                const auto dtype = p_pert_mass.scalar_type();
+                const auto core3 = [&](const torch::Tensor& q) {
+                    return q.slice(0, 0, momentum_m).slice(2, 0, momentum_n);
+                };
+                const auto metric = [&](const torch::Tensor& q, int64_t m, int64_t n) {
+                    return q.to(dev, dtype).slice(0, 0, m).slice(1, 0, n);
+                };
+                TORCH_CHECK(fnm_.defined() && fnp_.defined() &&
+                            fnm_.dim() == 1 && fnp_.dim() == 1 &&
+                            fnm_.numel() >= nz_actual && fnp_.numel() >= nz_actual,
+                            "native NH requires every interior fnm/fnp coefficient");
+                const auto nh = wrf::sdirk3::nonhydrostatic_pressure::
+                    native_nonhydrostatic_pressure_core(
+                        core3(p_pert_mass), core3(compute_php(ph, ph_base_)),
+                        metric(msfux_, momentum_m, momentum_n + 1),
+                        metric(msfuy_, momentum_m, momentum_n + 1),
+                        metric(msfvx_, momentum_m + 1, momentum_n),
+                        metric(msfvy_, momentum_m + 1, momentum_n),
+                        mu.slice(0, 0, momentum_m).slice(1, 0, momentum_n),
+                        c1h_.to(dev, dtype).slice(0, 0, nz_actual),
+                        -getRdnwTensor(dev, dtype, nz_actual), rdx, rdy,
+                        cf1_, cf2_, cf3_,
+                        fnm_.to(dev, dtype).slice(0, 1, nz_actual),
+                        fnp_.to(dev, dtype).slice(0, 1, nz_actual),
+                        wrf::sdirk3::g_sdirk3_config.split_explicit_top_lid, cfn_, cfn1_);
+                native_nh_u = extend_u(nh.term4_u);
+                native_nh_v = extend_v(nh.term4_v, true);
             }
             
             // Compute base state inverse density: alb = rd * th_base / p_base
@@ -19250,7 +19314,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // Already defined c1h_3d and c2h_3d above, use them directly
                 // PARITY FIX 2025-12-14: Use runtime tensor sizes for muu_3d expansion
                 auto muu_3d = muu.unsqueeze(1).expand({u_ny, u_nz, u_nx});
-                auto vert_coupling_3d = c1h_3d * muu_3d + c2h_3d;
+                auto vert_coupling_3d = canonical_horizontal ? level_mass_u : c1h_3d * muu_3d + c2h_3d;
                 
                 // Map scale factor ratio - already defined as msf_ratio above
                 
@@ -19330,7 +19394,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto msf_ratio_bdy_end = msfux_bdy_end / msfuy_bdy_end;
 
                 auto muu_3d_full = muu.unsqueeze(1).expand({u_ny, u_nz, u_nx});
-                auto vert_coupling_3d_full = c1h_3d * muu_3d_full + c2h_3d;
+                auto vert_coupling_3d_full = canonical_horizontal ? level_mass_u : c1h_3d * muu_3d_full + c2h_3d;
                 auto vert_coupling_bdy_0 = vert_coupling_3d_full.index({Slice(), Slice(), 0});
                 auto vert_coupling_bdy_end = vert_coupling_3d_full.index({Slice(), Slice(), u_nx-1});
 
@@ -19428,118 +19492,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     }
                 }
             }
-            if (non_hydrostatic_ && php_.defined() && dpn_u_.defined()) {
-                // PARITY FIX 2025-12-14: Extract runtime dimensions from dpn_u_ tensor
-                // This ensures correct behavior for sub-tiles or halo-trimmed inputs
-                int64_t dpn_ny = dpn_u_.size(0);      // j dimension
-                int64_t dpn_nz_w = dpn_u_.size(1);    // k dimension (w-levels)
-                int64_t dpn_nx_u = dpn_u_.size(2);    // i dimension (u-staggered)
-                int64_t dpn_nz = dpn_nz_w - 1;        // mass levels = w-levels - 1
+            if (native_nh) {
+                TORCH_CHECK(native_nh_u.sizes() == dpx.sizes(),
+                            "native NH U term shape mismatch");
+                dpx = dpx + native_nh_u;
+            }
 
-                // DEBUG: Check php_ dimensions before d_dx_u
-                if (wrf::sdirk3::g_sdirk3_config.debug_level > 0) {
-                }
-
-                // Compute php gradient at u-points using runtime dimension
-                auto dphp_dx = d_dx_u(php_, rdx, dpn_nx_u);
-
-                // Vertical difference of dpn
-                // Memory reuse optimization: Use pre-allocated working tensor
-                // AUTOGRAD FIX: dpn_diff should be [ny, nz, nx_u] following WRF [j,k,i] convention
-                // PARITY FIX 2025-12-14: Use runtime dimensions from dpn_u_ for cache validation
-                if (!dpn_diff_work_.defined() ||
-                    dpn_diff_work_.size(0) != dpn_ny ||
-                    dpn_diff_work_.size(1) != dpn_nz ||
-                    dpn_diff_work_.size(2) != dpn_nx_u ||
-                    dpn_diff_work_.device() != dpn_u_.device()) {
-                    dpn_diff_work_ = torch::zeros({dpn_ny, dpn_nz, dpn_nx_u}, dpn_u_.options());
-                } else {
-                    dpn_diff_work_.zero_();  // Zero existing tensor in-place
-                }
-                auto& dpn_diff = dpn_diff_work_;
-
-                // AUTOGRAD DEBUG: Check dpn_u_ dimensions
-                // Compute vertical difference using runtime dimensions
-                // dpn_u_ has w-levels, compute difference to get mass-level values
-                // PARITY FIX 2025-12-20: Use getRdnwTensor() fallback chain instead of rdnw_ vector.
-                // rdnw_ may be empty while grid_info_->rdnw is valid, so use unified fallback.
-                // PARITY FIX 2025-12-21: Use data_ptr for loop access instead of .index({k}).item()
-                // PARITY FIX 2025-12-21: Get CPU-cached tensor directly to avoid GPU->CPU copy each call.
-                torch::Tensor rdnw_cpu_dpn;
-                const float* rdnw_ptr_dpn = nullptr;
-                int64_t rdnw_numel_dpn = 0;
-                {
-                    torch::NoGradGuard no_grad;
-                    rdnw_cpu_dpn = getRdnwTensor(torch::kCPU, torch::kFloat32, dpn_nz);
-                    if (rdnw_cpu_dpn.defined() && rdnw_cpu_dpn.numel() > 0) {
-                        rdnw_cpu_dpn = rdnw_cpu_dpn.contiguous();
-                        rdnw_ptr_dpn = rdnw_cpu_dpn.data_ptr<float>();
-                        rdnw_numel_dpn = rdnw_cpu_dpn.numel();
-                    }
-                }
-                // FIX 2026-01-31: Vectorized dpn_diff (U-momentum) computation.
-                {
-                    auto dpn_upper = dpn_u_.slice(1, 1, dpn_nz + 1);
-                    auto dpn_lower = dpn_u_.slice(1, 0, dpn_nz);
-                    auto diff = dpn_upper - dpn_lower;
-
-                    if (rdnw_ptr_dpn && rdnw_numel_dpn >= dpn_nz) {
-                        // PERF FIX 2026-01-31: Cache rdnw device tensor for U pressure gradient
-                        if (!rdnw_dev_u_cached_.defined()
-                            || cached_coeff_device_ != diff.device()
-                            || cached_coeff_dpn_nz_ != dpn_nz
-                            || cached_coeff_rdnw_ptr_ != static_cast<const void*>(rdnw_ptr_dpn)) {
-                            torch::NoGradGuard no_grad;
-                            // Diagnostic: log first 3 cache misses to verify hit rate
-                            static int rdnw_cache_miss_count = 0;
-                            if (rdnw_cache_miss_count < 3) {
-                                std::cerr << "[PERF] rdnw_dev_u cache MISS #" << (rdnw_cache_miss_count + 1)
-                                          << ": defined=" << rdnw_dev_u_cached_.defined()
-                                          << " ptr_changed=" << (cached_coeff_rdnw_ptr_ != static_cast<const void*>(rdnw_ptr_dpn))
-                                          << " nz=" << dpn_nz << std::endl;
-                                ++rdnw_cache_miss_count;
-                            }
-                            rdnw_dev_u_cached_ = torch::from_blob(
-                                const_cast<float*>(rdnw_ptr_dpn),
-                                {dpn_nz}, torch::TensorOptions().dtype(torch::kFloat32))
-                                .to(diff.device())
-                                .reshape({1, dpn_nz, 1});
-                            cached_coeff_dpn_nz_ = dpn_nz;
-                            cached_coeff_rdnw_ptr_ = static_cast<const void*>(rdnw_ptr_dpn);
-                        }
-                        dpn_diff.copy_(diff * rdnw_dev_u_cached_);
-                    } else {
-                        dpn_diff.copy_(diff);
-                    }
-                }
-
-                // Average mu to u-points using runtime dimension
-                auto mu_u = avg_x_to_u_2d(mu, dpn_nx_u);   // WRF: perturbation mu
-                auto mu_u_3d = mu_u.unsqueeze(1).expand({-1, dpn_nz, -1});
-
-                // Compute the vertical factor
-                // PERF FIX 2026-01-31: Use cached c1h device tensor
-                auto target_device = dpn_u_.device();
-                auto target_dtype = dpn_u_.scalar_type();
-                auto& c1h_aligned = ensureC1hDevCached(target_device, target_dtype);
-                auto c1h_sliced = c1h_aligned.slice(0, 0, std::min(static_cast<int64_t>(c1h_aligned.size(0)), dpn_nz));
-                // Pad if necessary
-                torch::Tensor c1h_work;
-                if (c1h_sliced.size(0) < dpn_nz) {
-                    c1h_work = torch::full({dpn_nz}, 1.0f, dpn_u_.options());
-                    c1h_work.slice(0, 0, c1h_sliced.size(0)).copy_(c1h_sliced);
-                } else {
-                    c1h_work = c1h_sliced;
-                }
-                auto c1_3d = c1h_work.view({dpn_nz, 1, 1}).expand({dpn_nz, dpn_ny, dpn_nx_u}).contiguous();
-                // Permute to [ny, nz, nx_u] for correct broadcast
-                c1_3d = c1_3d.permute({1, 0, 2});
-                auto vertical_factor = -dpn_diff - 0.5f * c1_3d * mu_u_3d;   // WRF rdnw < 0; dpn_diff carries |rdnw|
-
-                // Add non-hydrostatic correction
-                auto nh_correction = msf_ratio * rdx * dphp_dx * vertical_factor;
-                dpx = dpx + nh_correction;            }
-            
             // Apply cqu moisture correction coefficient
             // AUTOGRAD FIX: cqu_ has shape [ny, nz, nx] at mass points following WRF [j,k,i] convention
             // Need to interpolate to u-points
@@ -19643,7 +19601,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             auto& c2h_dev = ensureC2hDevCached(u.device(), u.scalar_type());
             auto c1h_3d = c1h_dev.slice(0, 0, u_nz).view({1, u_nz, 1}).expand({u_ny, u_nz, u_nx}).contiguous();
             auto c2h_3d = c2h_dev.slice(0, 0, u_nz).view({1, u_nz, 1}).expand({u_ny, u_nz, u_nx}).contiguous();
-            auto vert_coupling = c1h_3d * muu_3d + c2h_3d;
+            auto vert_coupling = canonical_horizontal ? level_mass_u : c1h_3d * muu_3d + c2h_3d;
             
             // Debug: check dimensions before multiplication
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -19664,7 +19622,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 .slice(0, 0, nz_actual).view({1, nz_actual, 1});
             const auto c2 = ensureC2hDevCached(u.device(), u.scalar_type())
                 .slice(0, 0, nz_actual).view({1, nz_actual, 1});
-            const auto alpha_u = (c1 * muu_3d + c2) / msfuy_3d;
+            const auto alpha_u = (canonical_horizontal ? level_mass_u : c1 * muu_3d + c2) / msfuy_3d;
             u_tend_pgf = u_tend_pgf * (velocity_mass_u / alpha_u);
         }
 
@@ -19844,7 +19802,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             
             // AUTOGRAD DEBUG: Check intermediate tensor shapes            
             // First three terms of horizontal pressure gradient
-            auto vert_coupling = c1h_3d * muv_3d + c2h_3d;
+            auto vert_coupling = canonical_horizontal ? level_mass_v : c1h_3d * muv_3d + c2h_3d;
 
             // dph_diff sums both w levels; pressure differences stay on mass points.
             // alt/al are face means, so recover the neighbor sums for the shared kernel.
@@ -19853,112 +19811,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 2.0f * alt, dp_diff, 2.0f * al, dpb_diff);
 
             // Add non-hydrostatic term if configured
-            if (non_hydrostatic_ && php_.defined() && dpn_v_.defined()) {
-                // PARITY FIX 2025-12-14: Extract runtime dimensions from dpn_v_ tensor
-                // This ensures correct behavior for sub-tiles or halo-trimmed inputs
-                int64_t dpn_ny_v = dpn_v_.size(0);    // j dimension (v-staggered)
-                int64_t dpn_nz_w = dpn_v_.size(1);    // k dimension (w-levels)
-                int64_t dpn_nx = dpn_v_.size(2);      // i dimension
-                int64_t dpn_nz = dpn_nz_w - 1;        // mass levels = w-levels - 1
+            if (native_nh) {
+                TORCH_CHECK(native_nh_v.sizes() == dpy.sizes(),
+                            "native NH V term shape mismatch");
+                dpy = dpy + native_nh_v;
+            }
 
-                // AUTOGRAD FIX: php_ has shape [ny, nz, nx] but d_dy_v expects [nz, ny, nx]
-                // Need to permute dimensions from [j,k,i] to [k,j,i]
-                auto php_permuted = php_.permute({1, 0, 2});  // [ny,nz,nx] -> [nz,ny,nx]
-                // Compute php gradient at v-points using runtime dimension
-                auto dphp_dy = d_dy_v(php_permuted, rdy, dpn_ny_v);
-
-                // Vertical difference of dpn
-                // Memory reuse optimization: Reuse the same dpn_diff_work_ tensor
-                // AUTOGRAD FIX: dpn_diff should be [ny_v, nz, nx] following WRF [j,k,i] convention
-                // PARITY FIX 2025-12-14: Use runtime dimensions from dpn_v_ for cache validation
-                if (!dpn_diff_work_.defined() ||
-                    dpn_diff_work_.size(0) != dpn_ny_v ||
-                    dpn_diff_work_.size(1) != dpn_nz ||
-                    dpn_diff_work_.size(2) != dpn_nx ||
-                    dpn_diff_work_.device() != dpn_v_.device()) {
-                    dpn_diff_work_ = torch::zeros({dpn_ny_v, dpn_nz, dpn_nx}, dpn_v_.options());
-                } else {
-                    dpn_diff_work_.zero_();  // Zero existing tensor in-place
-                }
-                auto& dpn_diff = dpn_diff_work_;
-
-                // AUTOGRAD DEBUG: Check dpn_v_ dimensions
-                // Compute vertical difference using runtime dimensions
-                // dpn_v_ has w-levels, compute difference to get mass-level values
-                // PARITY FIX 2025-12-20: Use getRdnwTensor() fallback chain instead of rdnw_ vector.
-                // rdnw_ may be empty while grid_info_->rdnw is valid, so use unified fallback.
-                // PARITY FIX 2025-12-21: Use data_ptr for loop access instead of .index({k}).item()
-                // PARITY FIX 2025-12-21: Get CPU-cached tensor directly to avoid GPU->CPU copy each call.
-                torch::Tensor rdnw_cpu_dpn_v;
-                const float* rdnw_ptr_dpn_v = nullptr;
-                int64_t rdnw_numel_dpn_v = 0;
-                {
-                    torch::NoGradGuard no_grad;
-                    rdnw_cpu_dpn_v = getRdnwTensor(torch::kCPU, torch::kFloat32, dpn_nz);
-                    if (rdnw_cpu_dpn_v.defined() && rdnw_cpu_dpn_v.numel() > 0) {
-                        rdnw_cpu_dpn_v = rdnw_cpu_dpn_v.contiguous();
-                        rdnw_ptr_dpn_v = rdnw_cpu_dpn_v.data_ptr<float>();
-                        rdnw_numel_dpn_v = rdnw_cpu_dpn_v.numel();
-                    }
-                }
-                // FIX 2026-01-31: Vectorized dpn_diff computation.
-                // Previous k-loop with index_put_ was costly per JVP.
-                // dpn_diff[:, k, :] = (dpn_v[:, k+1, :] - dpn_v[:, k, :]) * rdnw[k]
-                {
-                    // Bulk difference: dpn_v[:, 1:nz+1, :] - dpn_v[:, 0:nz, :]
-                    auto dpn_upper = dpn_v_.slice(1, 1, dpn_nz + 1);
-                    auto dpn_lower = dpn_v_.slice(1, 0, dpn_nz);
-                    auto diff = dpn_upper - dpn_lower;  // shape: [ny_v, nz, nx]
-
-                    // Build rdnw weight tensor [1, nz, 1] for broadcasting
-                    if (rdnw_ptr_dpn_v && rdnw_numel_dpn_v >= dpn_nz) {
-                        // PERF FIX 2026-01-31: Cache rdnw device tensor for V pressure gradient
-                        // Reuse U-site cache if same pointer+dims, otherwise create V-specific cache
-                        if (!rdnw_dev_v_cached_.defined()
-                            || cached_coeff_device_ != diff.device()
-                            || cached_coeff_dpn_nz_ != dpn_nz
-                            || cached_coeff_rdnw_ptr_ != static_cast<const void*>(rdnw_ptr_dpn_v)) {
-                            torch::NoGradGuard no_grad;
-                            rdnw_dev_v_cached_ = torch::from_blob(
-                                const_cast<float*>(rdnw_ptr_dpn_v),
-                                {dpn_nz}, torch::TensorOptions().dtype(torch::kFloat32))
-                                .to(diff.device())
-                                .reshape({1, dpn_nz, 1});
-                            // dpn_nz and rdnw_ptr may already be set by U-site; update if different
-                            cached_coeff_dpn_nz_ = dpn_nz;
-                            cached_coeff_rdnw_ptr_ = static_cast<const void*>(rdnw_ptr_dpn_v);
-                        }
-                        dpn_diff.copy_(diff * rdnw_dev_v_cached_);
-                    } else {
-                        dpn_diff.copy_(diff);
-                    }
-                }
-
-                // Average mu to v-points using runtime dimension
-                auto mu_v = avg_y_to_v_2d(mu, dpn_ny_v);   // WRF: perturbation mu
-                auto mu_v_3d = mu_v.unsqueeze(1).expand({-1, dpn_nz, -1});
-
-                // Compute the vertical factor
-                // PERF FIX 2026-01-31: Use cached c1h device tensor
-                auto target_device = dpn_v_.device();
-                auto target_dtype = dpn_v_.scalar_type();
-                auto& c1h_aligned = ensureC1hDevCached(target_device, target_dtype);
-                auto c1h_sliced = c1h_aligned.slice(0, 0, std::min(static_cast<int64_t>(c1h_aligned.size(0)), dpn_nz));
-                // Pad if necessary
-                torch::Tensor c1h_work;
-                if (c1h_sliced.size(0) < dpn_nz) {
-                    c1h_work = torch::full({dpn_nz}, 1.0f, dpn_v_.options());
-                    c1h_work.slice(0, 0, c1h_sliced.size(0)).copy_(c1h_sliced);
-                } else {
-                    c1h_work = c1h_sliced;
-                }
-                auto c1_3d = c1h_work.view({1, dpn_nz, 1}).expand({dpn_ny_v, dpn_nz, dpn_nx}).contiguous();
-                auto vertical_factor = -dpn_diff - 0.5f * c1_3d * mu_v_3d;   // WRF rdnw < 0; dpn_diff carries |rdnw|
-
-                // Add non-hydrostatic correction
-                auto nh_correction = msf_ratio_v * rdy * dphp_dy * vertical_factor;
-                dpy = dpy + nh_correction;            }
-            
             // Apply cqu moisture correction coefficient (same as for U-momentum)
             // cqv_ has shape [nz_, ny_, nx_] at mass points
             // Need to interpolate to v-points
@@ -20059,7 +19917,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 .slice(0, 0, nz_actual).view({1, nz_actual, 1});
             const auto c2 = ensureC2hDevCached(v.device(), v.scalar_type())
                 .slice(0, 0, nz_actual).view({1, nz_actual, 1});
-            const auto alpha_v = (c1 * muv_3d + c2) / msfvx_3d;
+            const auto alpha_v = (canonical_horizontal ? level_mass_v : c1 * muv_3d + c2) / msfvx_3d;
             rv_tend_pgf = rv_tend_pgf * (velocity_mass_v / alpha_v);
         }
         // AUTOGRAD DEBUG: Check tensor shapes before addition

@@ -89,3 +89,5 @@ Curvature_Kernel_Contract
 Phi_Horizontal_Kernel_Contract
 Phi_Horizontal_Coordinate_Contract
 MSF_Pointer_Republication
+Nonhydrostatic_Pressure_Kernel_Contract
+Nonhydrostatic_Pressure_Coordinate_Contract
