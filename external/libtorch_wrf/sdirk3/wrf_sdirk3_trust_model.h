@@ -160,6 +160,16 @@ inline double scaled_merit_sq_unchecked(const torch::Tensor& residual_scaled,
         : residual_scaled;
     return x.to(torch::kFloat64).square().sum().item<double>();
 }
+
+// Requires a finite, non-negative measured trial norm; the radius, shrink
+// factor, and floor are trusted finite configuration values.
+inline double contracted_trust_radius(double current_radius,
+                                      double actual_trial_norm,
+                                      double shrink_factor,
+                                      double explicit_min) noexcept {
+    return std::max(explicit_min,
+                    shrink_factor * std::min(current_radius, actual_trial_norm));
+}
 }  // namespace detail
 
 // Both inputs are in the SCALED space; `mask` is optional (undefined = no masking) and,

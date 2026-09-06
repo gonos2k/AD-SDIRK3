@@ -10212,14 +10212,28 @@ public:
                     if (!recovery_bad) {
                         apply_halo_zeroing(dK_recovery);
 
-                        auto dK_norm = dK_recovery.norm();
-                        auto K_norm = K.norm();
+                        // The fallback is judged by the same S-scaled geometry as the
+                        // normal trust path and its canonical S merit below.
+                        const bool recovery_scaled_coords =
+                            S_inv_diag_.defined() &&
+                            S_inv_diag_.numel() == dK_recovery.numel() &&
+                            K.numel() == dK_recovery.numel();
+                        auto dK_norm = recovery_scaled_coords
+                            ? (S_inv_diag_ * dK_recovery).norm()
+                            : dK_recovery.norm();
+                        auto K_norm = recovery_scaled_coords
+                            ? (S_inv_diag_ * K).norm()
+                            : K.norm();
                         auto effective_limit = compute_effective_trust_limit(K_norm, dK_recovery);
                         if (guarded_item<bool>(dK_norm > effective_limit)) {
                             dK_recovery = dK_recovery * (effective_limit / dK_norm);
                         }
 
-                        recovery_step_norm = safe_tensor_norm(dK_recovery).to(torch::kCPU).item<float>();
+                        auto recovery_step_for_norm = recovery_scaled_coords
+                            ? (S_inv_diag_ * dK_recovery)
+                            : dK_recovery;
+                        recovery_step_norm =
+                            safe_tensor_norm(recovery_step_for_norm).to(torch::kCPU).item<float>();
                         if (recovery_step_norm > 1e-20f && std::isfinite(recovery_step_norm)) {
                             it.candidate.recovery_attempted = true;   // a nonlinear residual IS evaluated below
                             auto K_trial = K + dK_recovery;
@@ -10339,7 +10353,13 @@ public:
                     last_rho = 0.0f;
                     // v20.14r40: Gradual shrink instead of slam to minimum.
                     // Preserves recovery potential for next Newton iteration.
-                    trust_radius_ = std::max(trust_radius_ * 0.5f, trust_radius_min_);
+                    if (it.candidate.recovery_attempted) {
+                        trust_radius_ = static_cast<float>(wrf::sdirk3::detail::contracted_trust_radius(
+                            trust_radius_, static_cast<double>(recovery_step_norm),
+                            0.5, trust_radius_min_));
+                    } else {
+                        trust_radius_ = std::max(trust_radius_ * 0.5f, trust_radius_min_);
+                    }
                     if (cfg.debug_level >= 1) {
                         std::cerr << "[TRUST REGION] GMRES failed (rel_error="
                                   << gmres_rel_error << ", raw=" << gmres_raw_rel_error
@@ -10427,7 +10447,8 @@ public:
                         } else {
                             // v20.14r40: Already tried forced scale — break entirely.
                             // Further attempts just shrink radius without changing candidate.
-                            trust_radius_ = std::max(trust_radius_ * 0.25f, trust_radius_min_);
+                            trust_radius_ = static_cast<float>(wrf::sdirk3::detail::contracted_trust_radius(
+                                trust_radius_, curr_cand_norm, 0.25, trust_radius_min_));
                             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                                 std::cerr << "[TRUST REGION] Break attempt " << attempt
                                           << " (same candidate, forced already tried)" << std::endl;
@@ -10627,7 +10648,9 @@ public:
                                       << " > " << quality_thresh
                                       << ", rejecting step (poor linear solve quality)" << std::endl;
                         }
-                        trust_radius_ = std::max(trust_radius_ * 0.25f, trust_radius_min_);
+                        trust_radius_ = static_cast<float>(wrf::sdirk3::detail::contracted_trust_radius(
+                            trust_radius_, static_cast<double>(dK_scaled_norm_val),
+                            0.25, trust_radius_min_));
                         continue;  // Try again with smaller radius
                     }
                 }
@@ -10763,7 +10786,9 @@ public:
                     break;
                 }
 
-                trust_radius_ = std::max(trust_radius_ * 0.25f, trust_radius_min_);
+                trust_radius_ = static_cast<float>(wrf::sdirk3::detail::contracted_trust_radius(
+                    trust_radius_, static_cast<double>(dK_scaled_norm_val),
+                    0.25, trust_radius_min_));
                 if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                     std::cerr << "[TRUST REGION] Rejecting step, new radius=" << trust_radius_ << std::endl;
                 }
