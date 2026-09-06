@@ -23,7 +23,9 @@ active investigation (see the repository root `README.md` and `doc/`).
 - **Zero-copy interface:** Fortran `(i,k,j)` column-major maps to C++ `(j,k,i)`
   row-major with no data copy — layout `{nj,nk,ni}`, strides `{ni*nk, ni, 1}`.
   This layout is verified — do not change it.
-- Cross-platform CPU / CUDA / MPS.
+- CPU WRF execution is validated in the documented cases. MPS map-cache
+  transfers have separate contract tests; the full MPS RHS remains unsupported
+  because of mixed CPU/MPS tensors. CUDA execution is unvalidated in this review.
 
 ## Vertical principal preconditioner
 

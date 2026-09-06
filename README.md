@@ -16,7 +16,9 @@ HVP via double-backward is a design goal). The goal is a differentiable dynamica
   `(j,k,i)` row-major with no data copy — layout `{nj,nk,ni}`, strides `{ni*nk, ni, 1}`.
   **Base-state initialisation is not zero-copy**: it materialises owned contiguous per-tile
   snapshots via `.contiguous()`. The `zerocopy` in those symbol names is historical.
-- Cross-platform CPU / CUDA / MPS.
+- CPU WRF execution is validated in the documented cases. MPS map-cache
+  transfers have separate contract tests; the full MPS RHS remains unsupported
+  because of mixed CPU/MPS tensors. CUDA execution is unvalidated in this review.
 
 ## Status
 
