@@ -33267,9 +33267,14 @@ boundary_tensors_done:
                         sample9Points(msfvx_tile) + sample9Points(msfvy_tile);
     }
 
+    // Rebinding any source array changes ownership even if its sampled values match.
     bool msf_changed = (msf_signature_ != new_signature) ||
-                       !msftx_cpu_.defined() ||
-                       (msftx_cpu_.data_ptr() != msftx_tile.data_ptr());
+                       !msftx_cpu_.defined() || msftx_cpu_.data_ptr() != msftx_tile.data_ptr() ||
+                       !msfty_cpu_.defined() || msfty_cpu_.data_ptr() != msfty_tile.data_ptr() ||
+                       !msfux_cpu_.defined() || msfux_cpu_.data_ptr() != msfux_tile.data_ptr() ||
+                       !msfuy_cpu_.defined() || msfuy_cpu_.data_ptr() != msfuy_tile.data_ptr() ||
+                       !msfvx_cpu_.defined() || msfvx_cpu_.data_ptr() != msfvx_tile.data_ptr() ||
+                       !msfvy_cpu_.defined() || msfvy_cpu_.data_ptr() != msfvy_tile.data_ptr();
 
     msftx_cpu_ = msftx_tile;  // Keep view (zero-copy link to WRF memory)
     msfty_cpu_ = msfty_tile;

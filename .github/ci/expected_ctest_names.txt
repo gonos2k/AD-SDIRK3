@@ -88,3 +88,4 @@ Curvature_Coordinate_Contract
 Curvature_Kernel_Contract
 Phi_Horizontal_Kernel_Contract
 Phi_Horizontal_Coordinate_Contract
+MSF_Pointer_Republication
