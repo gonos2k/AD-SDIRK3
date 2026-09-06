@@ -143,8 +143,11 @@ int main() {
             options.max_newton_iter = 8;
             options.gmres_restart = n;
             options.max_krylov_iter = 20;
+            options.retain_graph_for_adjoint = true;
+            g_sdirk3_config.use_autograd = true;
             WRFNewtonKrylovSolver solver(options);
-            const auto base = torch::linspace(0.1, 0.6, n, torch::kFloat64);
+            const auto base = torch::linspace(0.1, 0.6, n, torch::kFloat64)
+                                  .requires_grad_(true);
             solver.set_physics_scaling(torch::ones_like(base));
             const auto rhs = [](const torch::Tensor& state) { return 2.0 * state; };
             const double dt = 0.125;
@@ -153,6 +156,14 @@ int main() {
             const auto exact = 2.0 * base / (1.0 - 2.0 * dt * gamma);
             check(result.converged && (result.K - exact).norm().item<double>() < 1e-11,
                   "FP64 Newton residual and JVP preserve the double implicit diagonal");
+            const auto seed = torch::linspace(-0.2, 0.8, n, torch::kFloat64);
+            const auto gradient = torch::autograd::grad({result.K}, {base}, {seed})[0];
+            const auto exact_gradient = 2.0 * seed / (1.0 - 2.0 * dt * gamma);
+            const double gradient_error = (gradient - exact_gradient).norm().item<double>();
+            std::cout << "IMPLICIT_DIAGONAL_PULLBACK error=" << gradient_error << '\n';
+            check(gradient_error < 1e-11,
+                  "FP64 implicit pullback uses the same diagonal as its forward stage");
+            g_sdirk3_config.use_autograd = false;
         }
         for (bool forced : {false, true}) {
             const Problem problem(forced);

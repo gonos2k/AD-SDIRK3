@@ -79,7 +79,7 @@ public:
 inline torch::Tensor attach_converged_stage_pullback(
     const torch::Tensor& base, const torch::Tensor& root,
     const std::function<torch::Tensor(const torch::Tensor&)>& rhs_function,
-    float dt, float gamma, const WRFNewtonKrylovOptions& options) {
+    double dt, double gamma, const WRFNewtonKrylovOptions& options) {
     TORCH_CHECK(!options.is_multi_tile,
                 "ConvergedStage: multi-tile boundary pullback is not implemented");
     torch::AutoGradMode enable_grad(true);
@@ -88,7 +88,7 @@ inline torch::Tensor attach_converged_stage_pullback(
     TORCH_CHECK(rhs.sizes() == root.sizes() && torch::isfinite(rhs).all().item<bool>(),
                 "ConvergedStage: invalid converged RHS graph");
     return ConvergedStage::apply(base, root.detach(), point, rhs,
-                                static_cast<double>(dt * gamma), options);
+                                dt * gamma, options);
 }
 
 }  // namespace wrf::sdirk3::implicit_diff
