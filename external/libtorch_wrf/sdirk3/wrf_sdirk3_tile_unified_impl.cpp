@@ -3337,6 +3337,8 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     : wrf::sdirk3::TileSDIRK3Solver(nx, ny, nz, dx, dy, 0.0, tile_id),
       experiment_(wrf::sdirk3::ExperimentConfig::from_environment()),
       diagnostics_(wrf::sdirk3::DiagnosticsConfig::from_environment()) {
+    // Snapshot after serialized env loading and authoritative Fortran setters.
+    non_hydrostatic_ = wrf::sdirk3::g_sdirk3_config.non_hydrostatic;
 
     // 9F.D39 (review section 7): emit the effective config into the evidence stream at
     // construction, so an artifact records WHICH MODEL produced it. Both experiment

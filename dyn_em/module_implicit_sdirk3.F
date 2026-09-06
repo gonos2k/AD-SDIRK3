@@ -252,6 +252,11 @@ MODULE module_implicit_sdirk3
          INTEGER(C_INT), VALUE :: value
       END SUBROUTINE wrf_sdirk3_set_config_bool
 
+      SUBROUTINE wrf_sdirk3_load_env_once() &
+         BIND(C, name="wrf_sdirk3_load_env_once")
+         USE, INTRINSIC :: ISO_C_BINDING
+      END SUBROUTINE wrf_sdirk3_load_env_once
+
       ! FIX 2025-01-25: Config freeze mechanism - call after all config is set
       SUBROUTINE wrf_sdirk3_mark_workers_started() &
          BIND(C, name="wrf_sdirk3_mark_workers_started")
@@ -500,8 +505,15 @@ CONTAINS
       INTEGER :: nx_u, ny_v, nz_w  ! Staggered dimensions
       REAL(C_FLOAT) :: dx, dy
       CHARACTER(LEN=256) :: message
+      CHARACTER(LEN=256) :: config_name
       
       CALL wrf_message("SDIRK3: init_implicit_sdirk3 called")
+
+      ! The unified SDIRK3 state evolves W and Phi prognostically. WRF's
+      ! hydrostatic mode instead diagnoses them and needs a separate adapter.
+      IF (.NOT. config_flags%non_hydrostatic) THEN
+         CALL wrf_error_fatal("SDIRK3_HYDROSTATIC_UNSUPPORTED: prognostic W/Phi require non_hydrostatic=.TRUE.")
+      END IF
       
       IF (sdirk3_initialized) THEN
          CALL wrf_debug(2, "UNIFIED SDIRK3: Already initialized, skipping")
@@ -544,6 +556,17 @@ CONTAINS
 
       ! Activate MPI safety framework once during SDIRK3 initialization.
       CALL sdirk3_mpi_safety_init()
+
+      ! Load non-WRF environment overrides once, before any tile parallelism.
+      CALL wrf_sdirk3_load_env_once()
+
+      ! Existing WRF dynamics flags are authoritative after environment loading.
+      config_name = "split_explicit_top_lid"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%top_lid))
+      config_name = "non_hydrostatic"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%non_hydrostatic))
+      config_name = "do_curvature"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%do_curvature))
 
       ! Initialize solvers for each tile
       !$OMP PARALLEL DO PRIVATE(ij,its,ite,jts,jte,kts,kte,nx,ny,nz,nx_u,ny_v,nz_w,tile_id,dx,dy, &
@@ -1998,9 +2021,6 @@ CONTAINS
 
       config_name = "split_explicit_emdiv"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_float(config_name, MAX(0.0, config_flags%emdiv))
-
-      config_name = "split_explicit_top_lid"//C_NULL_CHAR
-      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%top_lid))
 
       config_name = "hopeless_relax"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_hopeless_relax))

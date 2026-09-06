@@ -785,6 +785,8 @@ struct SDIRK3Config {
     float split_explicit_smdiv = 0.1f;       // WRF smdiv: 3D divergence damping
     float split_explicit_emdiv = 0.01f;      // WRF emdiv: external-mode filter
     bool split_explicit_top_lid = false;     // WRF config_flags%top_lid (rigid upper lid)
+    // Existing WRF dynamics input; production Fortran supplies config_flags%non_hydrostatic.
+    bool non_hydrostatic = false;             // standalone C++ default remains off
 
     // v20.14r66: Mode3 Stage4 severe non-convergence abort toggle.
     // true (default): keep current safety behavior (stage4 severe -> abort).
@@ -2297,8 +2299,8 @@ struct SDIRK3Config {
     // Map projection and coordinate system
     int map_proj = 1;               // 0=lat-lon, 1=Lambert, 2=polar stereographic, 3=Mercator
 
-    // Independent C++ curvature opt-in; the Fortran do_curvature namelist
-    // is not forwarded here. Canonical periodic-X/symmetric-Y uses alpha units.
+    // Existing WRF dynamics input; production Fortran supplies config_flags%do_curvature.
+    // Standalone C++ default remains explicit opt-in. Canonical periodic-X/symmetric-Y uses alpha units.
     bool do_curvature = false;       // Enable curvature terms for momentum equations
     bool polar = false;             // Polar boundary condition flag (affects curvature formula choice)
     // NOTE: Fortran map_proj values: 1=Lambert, 2=Polar Stereo, 3=Mercator, 6=lat-lon(Cassini)
@@ -2830,6 +2832,8 @@ extern "C" {
     void wrf_sdirk3_set_config_int(const char* name, int value);
     void wrf_sdirk3_set_config_float(const char* name, float value);
     void wrf_sdirk3_set_config_bool(const char* name, int value);
+    // Thread-safe one-time environment load; converts parser exceptions to coordinated C ABI failure.
+    void wrf_sdirk3_load_env_once(void);
     void wrf_sdirk3_load_config_from_namelist(const char* filename);
     void wrf_sdirk3_print_config();
 

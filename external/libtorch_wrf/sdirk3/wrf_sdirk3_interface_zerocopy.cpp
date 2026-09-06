@@ -662,31 +662,9 @@ void* sdirk3_tile_solver_create_zerocopy(
     int tile_id,
     int nx_u, int ny_v, int nz_w)  // Add staggered dimensions
 {
-    // v20.14: Ensure env var overrides are loaded (once per process).
-    // wrf_sdirk3_load_config_from_namelist() is never called from Fortran,
-    // so load_from_env() was never reached. Call it here on first solver creation.
-    // P0 FIX (2026-07-12, external review): solver creation runs under an OpenMP tile loop —
-    // an unsynchronized `static bool` here let multiple threads race load_from_env() against
-    // concurrent reads of the global config. std::call_once serializes the one-time load.
-    {
-        static std::once_flag env_once;
-        // 9F.D132: this is the LIVE env-load site (the namelist entry point above is never
-        // reached, as this file's own comment says), and it sits behind a C ABI. D123's strict
-        // parser throws, so a malformed WRF_SDIRK3_MASS_COORDINATE_MODE unwound from inside
-        // std::call_once and out through the boundary -- measured as exit=134 with a raw
-        // backtrace in rsl.error and no message. Convert here, where the throw actually is.
-        std::call_once(env_once, [] {
-            try {
-                wrf::sdirk3::g_sdirk3_config.load_from_env();
-            } catch (const std::exception& e) {
-                wrf::sdirk3::abort_c_abi_fail(
-                    std::string("SDIRK3_CONFIG_ENV_INVALID: ") + e.what());
-            } catch (...) {
-                wrf::sdirk3::abort_c_abi_fail(
-                    "SDIRK3_CONFIG_ENV_INVALID: unknown exception");
-            }
-        });
-    }
+    // Standalone C++ and legacy callers share the same serialized env load.
+    // Fortran production calls this helper before entering the tile loop.
+    wrf::sdirk3::wrf_sdirk3_load_env_once();
 
     // FIX Round150: Gate solver creation debug output with debug_level >= 2
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {

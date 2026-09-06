@@ -438,6 +438,10 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 split_explicit_emdiv = std::clamp(std::stof(value), 0.0f, 1.0f);
             } else if (key == "sdirk3_split_explicit_top_lid" || key == "split_explicit_top_lid") {
                 split_explicit_top_lid = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_non_hydrostatic" || key == "non_hydrostatic") {
+                non_hydrostatic = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_do_curvature" || key == "do_curvature") {
+                do_curvature = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_precond_phi_w_coupling_scale" || key == "precond_phi_w_coupling_scale") {
                 int parsed = std::atoi(value.c_str());
                 if (parsed == 0 && value != "0") {
@@ -1865,6 +1869,14 @@ void SDIRK3Config::load_from_env() {
         split_explicit_top_lid = parse_bool_env(env_val);
         std::cerr << "[CONFIG ENV] split_explicit_top_lid = " << (split_explicit_top_lid ? "true" : "false") << std::endl;
     }
+    if ((env_val = std::getenv("WRF_SDIRK3_NON_HYDROSTATIC"))) {
+        non_hydrostatic = parse_bool_env(env_val);
+        std::cerr << "[CONFIG ENV] non_hydrostatic = " << (non_hydrostatic ? "true" : "false") << std::endl;
+    }
+    if ((env_val = std::getenv("WRF_SDIRK3_DO_CURVATURE"))) {
+        do_curvature = parse_bool_env(env_val);
+        std::cerr << "[CONFIG ENV] do_curvature = " << (do_curvature ? "true" : "false") << std::endl;
+    }
     // v20.14r27q: Φ→W GS damping coefficient
     if ((env_val = std::getenv("WRF_SDIRK3_PRECOND_GS_BETA"))) {
         precond_gs_beta = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
@@ -2095,6 +2107,8 @@ void SDIRK3Config::load_from_env() {
         row("use_autograd",              false, use_autograd);               // :220
         row("hevi_split",                false, hevi_split);                 // :587
         row("stage_require_convergence", false, stage_require_convergence);  // :576
+        row("non_hydrostatic", false, non_hydrostatic);
+        row("do_curvature", false, do_curvature);
     }
     // ONE authority (review P1-2): fold the deprecated booleans into the mode BEFORE anything
     // reads the effective operator. load_from_env() is the single point that runs after every
@@ -2128,6 +2142,11 @@ void SDIRK3Config::load_from_env() {
                       ? "ON (Omega = mu*d(eta)/dt via calc_ww_cp)"
                       : "off (Omega = rom = mu*w, the coupled vertical momentum)")
               << (mass_coordinate_mode != 0 ? "  [IGNORED: mode is the authority]" : "")
+              << std::endl;
+    std::cerr << "[CONFIG EFFECTIVE] non_hydrostatic="
+              << (non_hydrostatic ? "ON" : "off")
+              << ", do_curvature=" << (do_curvature ? "ON" : "off")
+              << ", top_lid=" << (split_explicit_top_lid ? "on" : "off")
               << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] split_explicit="
               << (split_explicit ? "ON (WIP RK3 + acoustic-substep core)" : "off (ARK324 implicit)")
@@ -2322,6 +2341,8 @@ bool SDIRK3Config::validate() const {
         self->split_explicit_smdiv = std::clamp(split_explicit_smdiv, 0.0f, 1.0f);
         self->split_explicit_emdiv = std::clamp(split_explicit_emdiv, 0.0f, 1.0f);
         self->split_explicit_top_lid = split_explicit_top_lid;
+        self->non_hydrostatic = non_hydrostatic;
+        self->do_curvature = do_curvature;
         self->jvp_auto_bench_calls = std::clamp(jvp_auto_bench_calls, 0, 20);
         self->jvp_auto_bench_warmup = std::clamp(jvp_auto_bench_warmup, 0, 50);
         self->gmres_warmstart_quality_gate = std::clamp(gmres_warmstart_quality_gate, 0.0f, 1.0f);
@@ -4241,6 +4262,14 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
         g_sdirk3_config.split_explicit_top_lid = (value != 0);
         std::cerr << "[CONFIG] split_explicit_top_lid = "
                   << (g_sdirk3_config.split_explicit_top_lid ? "true" : "false") << std::endl;
+    } else if (key == "non_hydrostatic") {
+        g_sdirk3_config.non_hydrostatic = (value != 0);
+        std::cerr << "[CONFIG] non_hydrostatic = "
+                  << (g_sdirk3_config.non_hydrostatic ? "true" : "false") << std::endl;
+    } else if (key == "do_curvature") {
+        g_sdirk3_config.do_curvature = (value != 0);
+        std::cerr << "[CONFIG] do_curvature = "
+                  << (g_sdirk3_config.do_curvature ? "true" : "false") << std::endl;
     } else if (key == "precond_phi_feedback_fallback_gs") {
         g_sdirk3_config.precond_phi_feedback_fallback_gs = (value != 0);
         std::cerr << "[CONFIG] precond_phi_feedback_fallback_gs = "
@@ -4263,6 +4292,21 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
 // The repo already measured that, which is why wrf_sdirk3_contract_fail.h exists.
 //
 // Every exception is converted here: fail-close with the stable marker, never unwind.
+void wrf_sdirk3_load_env_once(void) {
+    static std::once_flag env_once;
+    std::call_once(env_once, [] {
+        try {
+            g_sdirk3_config.load_from_env();
+        } catch (const std::exception& e) {
+            wrf::sdirk3::abort_c_abi_fail(
+                std::string("SDIRK3_CONFIG_ENV_INVALID: ") + e.what());
+        } catch (...) {
+            wrf::sdirk3::abort_c_abi_fail(
+                "SDIRK3_CONFIG_ENV_INVALID: unknown exception");
+        }
+    });
+}
+
 void wrf_sdirk3_load_config_from_namelist(const char* filename) {
   try {
     if (!filename) { std::cerr << "[CONFIG] load_config_from_namelist: null filename" << std::endl; return; }
@@ -4279,8 +4323,8 @@ void wrf_sdirk3_load_config_from_namelist(const char* filename) {
         std::cerr << "Warning: Could not open SDIRK3 config file: " << filename << std::endl;
     }
     
-    // Also check environment variables
-    g_sdirk3_config.load_from_env();
+    // Also check environment variables through the shared one-time C ABI helper.
+    wrf_sdirk3_load_env_once();
 
     // CRITICAL: Log final config values to verify settings
     std::cerr << "\n=== SDIRK3 CONFIG LOADED ===" << std::endl;

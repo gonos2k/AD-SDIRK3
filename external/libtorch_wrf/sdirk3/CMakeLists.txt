@@ -957,3 +957,7 @@ add_test(NAME Nonhydrostatic_Pressure_Kernel_Contract COMMAND test_nonhydrostati
 add_executable(test_nh_pressure_coordinate_contract tests/test_nh_pressure_coordinate_contract.cpp)
 target_link_libraries(test_nh_pressure_coordinate_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Nonhydrostatic_Pressure_Coordinate_Contract COMMAND test_nh_pressure_coordinate_contract)
+
+add_executable(test_wrf_dynamics_config tests/test_wrf_dynamics_config.cpp)
+target_link_libraries(test_wrf_dynamics_config PRIVATE wrf_sdirk3::core)
+add_test(NAME WRF_Dynamics_Config COMMAND test_wrf_dynamics_config)
