@@ -7277,6 +7277,9 @@ vertical_coefficients:
             checkTensorHealth(U_new, "U_new");
 
         } else if (split_mode == 3) {
+            // Preserve tableau precision through stage assembly, the implicit
+            // equation, and the final update. The Fortran timestep ABI stays float.
+            const double dt_ark = static_cast<double>(dt);
             // [SPLIT-EXPLICIT Inc 0 scaffold] Opt-in differentiable RK3 + acoustic-substep core
             // (mirrors dyn_em; see doc/sdirk3_split_explicit_rebuild_plan.md). Default OFF =>
             // this branch is skipped and the ARK324 path below runs unchanged (byte-identical
@@ -9755,16 +9758,16 @@ vertical_coefficients:
                         std::cerr << "SDIRK3_STAGE_BASE stage=" << (stage_idx + 1)
                                   << " src=" << (j + 1)
                                   << " aE=" << aE << " k_slow=" << ks
-                                  << " term_E=" << (ks >= 0.0 ? dt * std::abs(aE) * ks : -1.0)
+                                  << " term_E=" << (ks >= 0.0 ? dt_ark * std::abs(aE) * ks : -1.0)
                                   << " aI=" << aI << " k_fast=" << kf
-                                  << " term_I=" << (kf >= 0.0 ? dt * std::abs(aI) * kf : -1.0)
+                                  << " term_I=" << (kf >= 0.0 ? dt_ark * std::abs(aI) * kf : -1.0)
                                   << " running=" 
                                   << rhs.detach().to(torch::kFloat64).norm().item<double>()
                                   << std::endl;
                     }
                 };
                 return wrf::sdirk3::ark324_stage_base(
-                    U_n, dt, stage_idx, k_slow, k_fast, observe);
+                    U_n, dt_ark, stage_idx, k_slow, k_fast, observe);
             };
 
             auto compute_fast_rhs = [&](const torch::Tensor& U_interior,
@@ -9929,7 +9932,7 @@ vertical_coefficients:
                 }
 
                 const int stage_id = i + 1;
-                const float aii = static_cast<float>(Ark::a_implicit[i][i]);
+                const double aii = Ark::a_implicit[i][i];
                 torch::Tensor U_stage = compute_stage_rhs(i);
                 probe_firsthit_nonfinite(stage_id, false, "U_stage_pre", U_stage);
                 checkTensorHealth(U_stage, "U_stage_ark");
@@ -10137,7 +10140,7 @@ vertical_coefficients:
 
                 // stage_fail_action=2: one recoverable retry for failed implicit stages.
                 // Retry keeps the same implicit stage equation (no a_ii mutation).
-                float effective_aii = aii;
+                double effective_aii = aii;
                 bool retry_used = false;
                 torch::Tensor K_prev_attempt = K_prev_stage;
                 while (true) {
@@ -10201,7 +10204,7 @@ vertical_coefficients:
                         last_stage_wrms_norm_ = 0.0f;
                         last_stage_wrms_growth_ = 0.0f;
                     } else {
-                        k_fast[i] = solveImplicitStage(U_stage, F_phys, dt, effective_aii, stage_id,
+                        k_fast[i] = solveImplicitStage(U_stage, F_phys, dt_ark, effective_aii, stage_id,
                                                        K_prev_attempt, U_full_exch_stage);
                     }
                     probe_firsthit_nonfinite(stage_id, retry_used, "k_fast_postsolve", k_fast[i]);
@@ -10393,7 +10396,7 @@ vertical_coefficients:
 
                 torch::Tensor U_conv = U_stage;
                 if (std::abs(effective_aii) >= 1e-14f) {
-                    U_conv = U_stage + dt * effective_aii * k_fast[i];
+                    U_conv = U_stage + dt_ark * effective_aii * k_fast[i];
                 }
                 probe_firsthit_nonfinite(stage_id, retry_used, "U_conv", U_conv);
                 torch::Tensor U_full_exch_conv;
@@ -11570,7 +11573,7 @@ vertical_coefficients:
                             continue;
                         }
                         abort_delta_accum = abort_delta_accum +
-                            dt * static_cast<float>(Ark::b[s]) * k_full[s];
+                            dt_ark * static_cast<double>(Ark::b[s]) * k_full[s];
                         completed_stage_count++;
                     }
 
@@ -11698,7 +11701,7 @@ vertical_coefficients:
                                 continue;
                             }
                             torch::Tensor abort_delta_fast =
-                                dt * static_cast<float>(Ark::b[s]) * k_fast[s];
+                                dt_ark * static_cast<double>(Ark::b[s]) * k_fast[s];
                             if (try_commit_abort_delta(abort_delta_fast, "mode3_abort_fast_stage")) {
                                 break;
                             }
@@ -11729,7 +11732,7 @@ vertical_coefficients:
                 k2 = k_full[1];
                 k3 = k_full[2];
                 k4 = k_full[3];
-                U_new = wrf::sdirk3::ark324_final_state(U_n, dt, k_full);
+                U_new = wrf::sdirk3::ark324_final_state(U_n, dt_ark, k_full);
             }
             checkTensorHealth(U_new, "U_new");
             } // !split_explicit: end ARK324 fallback
@@ -12978,7 +12981,7 @@ void TileSDIRK3UnifiedSolver::unpackState(
 torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     const torch::Tensor& U_stage,
     const torch::Tensor& F_phys,
-    float dt, float a_ii, int stage,
+    double dt, double a_ii, int stage,
     const torch::Tensor& K_prev,
     const torch::Tensor& U_full_exchanged) {
 

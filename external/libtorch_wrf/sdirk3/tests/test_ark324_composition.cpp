@@ -79,13 +79,13 @@ torch::Tensor integrate(const Problem& problem, int steps, float tolerance,
     WRFNewtonKrylovSolver solver(options);
     auto state = initial.defined() ? initial : problem.initial();
     solver.set_physics_scaling(torch::ones_like(state));
-    const float dt = 1.0f / steps;
+    const double dt = 1.0 / steps;
     for (int step = 0; step < steps; ++step) {
         std::vector<torch::Tensor> fast(Ark::stages), slow(Ark::stages), full(Ark::stages);
         for (int stage = 0; stage < Ark::stages; ++stage) {
             const auto base = ark324_stage_base(state, dt, stage, slow, fast,
                                                 [](int, const torch::Tensor&) {});
-            const float gamma = static_cast<float>(Ark::a_implicit[stage][stage]);
+            const double gamma = Ark::a_implicit[stage][stage];
             if (gamma == 0) {
                 fast[stage] = problem.implicit_matrix.mv(base);
             } else if (dense_reference) {
@@ -121,6 +121,39 @@ int main() {
     std::ostringstream solver_log;
     auto* previous_stream = std::cerr.rdbuf(solver_log.rdbuf());
     try {
+        // A constant RHS isolates consistency from nonlinear/stage solve error.
+        // Rounding the weights to float before an FP64 update introduces a bias.
+        const auto initial_constant = torch::tensor({1.25, -0.75}, torch::kFloat64);
+        const auto rate_constant = torch::tensor({0.7, -1.1}, torch::kFloat64);
+        const std::vector<torch::Tensor> constant_stages(Ark::stages, rate_constant);
+        const auto exact_constant = initial_constant + 0.25 * rate_constant;
+        check((ark324_final_state(initial_constant, 0.25, constant_stages) -
+               exact_constant).abs().max().item<double>() < 1e-15,
+              "FP64 constant RHS preserves exact tableau consistency");
+        check((ark324_final_state(initial_constant, 0.25f, constant_stages) -
+               exact_constant).norm().item<double>() > 1e-8,
+              "float-scalar negative control detects rounded-weight bias");
+        {
+            WRFNewtonKrylovOptions options;
+            options.nx = options.ny = options.nz = 1;
+            options.nx_u = options.ny_v = options.nz_w = 2;
+            options.use_preconditioner = options.use_adaptive_tolerances = false;
+            options.newton_tol = options.krylov_tol = 1e-12f;
+            options.newton_rtol = 0.0f;
+            options.max_newton_iter = 8;
+            options.gmres_restart = n;
+            options.max_krylov_iter = 20;
+            WRFNewtonKrylovSolver solver(options);
+            const auto base = torch::linspace(0.1, 0.6, n, torch::kFloat64);
+            solver.set_physics_scaling(torch::ones_like(base));
+            const auto rhs = [](const torch::Tensor& state) { return 2.0 * state; };
+            const double dt = 0.125;
+            const double gamma = Ark::a_implicit[1][1];
+            const auto result = solver.solve_stage_with_status(base, {}, rhs, dt, gamma, 2);
+            const auto exact = 2.0 * base / (1.0 - 2.0 * dt * gamma);
+            check(result.converged && (result.K - exact).norm().item<double>() < 1e-11,
+                  "FP64 Newton residual and JVP preserve the double implicit diagonal");
+        }
         for (bool forced : {false, true}) {
             const Problem problem(forced);
             check((problem.explicit_matrix.matmul(problem.implicit_matrix) -

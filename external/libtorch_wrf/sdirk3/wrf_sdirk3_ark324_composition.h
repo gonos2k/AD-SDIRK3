@@ -7,8 +7,8 @@
 
 namespace wrf::sdirk3 {
 
-// Scalar follows the caller's timestep precision. Production passes float;
-// keep each multiply/add in its original order so diagnostic deltas stay exact.
+// Use double scalars in mode 3 so FP64 states retain the tableau precision.
+// Keep stage history and diagnostic observations in the same operation order.
 template <typename Scalar, typename Observer>
 torch::Tensor ark324_stage_base(
     const torch::Tensor& initial, Scalar dt, int stage,

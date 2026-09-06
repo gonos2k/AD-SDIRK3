@@ -275,8 +275,8 @@ public:
         const torch::Tensor& U_n,
         const torch::Tensor& K_prev,
         const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
-        float dt,
-        float gamma,
+        double dt,
+        double gamma,
         int stage
     );
     
@@ -285,8 +285,8 @@ public:
         const torch::Tensor& U_n,
         const torch::Tensor& K_prev,
         const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
-        float dt,
-        float gamma,
+        double dt,
+        double gamma,
         int stage
     );
     
@@ -295,8 +295,8 @@ public:
         const torch::Tensor& U_n,
         const torch::Tensor& K_prev,
         const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
-        float dt,
-        float gamma,
+        double dt,
+        double gamma,
         int stage,
         const torch::Tensor& F_phys  // Physical forcing term for SDIRK3
     );
@@ -309,8 +309,8 @@ public:
         const torch::Tensor& K_prev,
         const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
         const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs_fast,
-        float dt,
-        float gamma,
+        double dt,
+        double gamma,
         int stage,
         const torch::Tensor& F_phys = torch::Tensor()
     );

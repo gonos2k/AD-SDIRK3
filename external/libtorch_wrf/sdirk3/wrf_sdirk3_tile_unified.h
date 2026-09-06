@@ -2063,7 +2063,7 @@ private:
     
     torch::Tensor solveImplicitStage(const torch::Tensor& U_stage,
                                      const torch::Tensor& F_phys,
-                                     float dt, float a_ii, int stage,
+                                     double dt, double a_ii, int stage,
                                      const torch::Tensor& K_prev = torch::Tensor(),
                                      const torch::Tensor& U_full_exchanged = torch::Tensor());
 

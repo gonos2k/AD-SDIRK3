@@ -420,7 +420,7 @@ namespace jvp_check {
 
 struct Context {
     int ts = 0, stage = 0, newton_iter = 0;
-    float dt = 0.0f, gamma = 0.0f;
+    double dt = 0.0, gamma = 0.0;
     torch::Tensor U_stage, K, U_eval, dK;   // detached clones
     bool scaled = false;
     torch::Tensor S_diag, S_inv_diag;
@@ -939,7 +939,7 @@ static void run_directional_consistency_check(const Context& c) {
 
     const float K_ref = diag_norm(c.K);
     const float U_ref = diag_norm(c.U_eval);
-    const float dtg = c.dt * c.gamma;
+    const double dtg = c.dt * c.gamma;
 
     // GATE (review P1): the purity probe runs BEFORE any FD ladder. An impure
     // shadow replay would contaminate every FD verdict, so on failure the
@@ -4265,8 +4265,8 @@ public:
         torch::Tensor F_cached;  // RHS F(U_cached) to avoid recomputation
         std::function<torch::Tensor(const torch::Tensor&)> cached_rhs;
         bool is_valid = false;
-        float dt_cached = 0.0f;
-        float gamma_cached = 0.0f;
+        double dt_cached = 0.0;
+        double gamma_cached = 0.0;
         int reuse_count = 0;
         const int max_reuse = 3;  // Max reuses before recompute
     } jacobian_cache_;
@@ -4795,8 +4795,8 @@ public:
         const torch::Tensor& K_prev,
         const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
         const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs_fast,
-        float dt,
-        float gamma,
+        double dt,
+        double gamma,
         int stage,
         const torch::Tensor& F_phys = torch::Tensor()) {  // Added F_phys with default
 
@@ -5741,7 +5741,7 @@ public:
                                       << " / " << w_block_stage.max().item<float>() << std::endl;
                         }
 
-                        float dt_gamma = dt * gamma;
+                        double dt_gamma = dt * gamma;
                         std::cerr << "  Scaling factor dt*gamma = " << dt_gamma << std::endl;
                     }
                 } else {
@@ -11206,8 +11206,8 @@ sdirk3::WRFNewtonKrylovSolver::NewtonResult sdirk3::WRFNewtonKrylovSolver::solve
     const torch::Tensor& U_n,
     const torch::Tensor& K_prev,
     const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
-    float dt,
-    float gamma,
+    double dt,
+    double gamma,
     int stage) {
     
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -11276,8 +11276,8 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
     const torch::Tensor& U_n,
     const torch::Tensor& K_prev,
     const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
-    float dt,
-    float gamma,
+    double dt,
+    double gamma,
     int stage) {
     
     return solve_stage(U_n, K_prev, compute_rhs,
@@ -11290,8 +11290,8 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
     const torch::Tensor& U_n,
     const torch::Tensor& K_prev,
     const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
-    float dt,
-    float gamma,
+    double dt,
+    double gamma,
     int stage,
     const torch::Tensor& F_phys) {  // Physical forcing term
 
@@ -11306,8 +11306,8 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
     const torch::Tensor& K_prev,
     const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
     const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs_fast,
-    float dt,
-    float gamma,
+    double dt,
+    double gamma,
     int stage,
     const torch::Tensor& F_phys) {  // Physical forcing term
     
