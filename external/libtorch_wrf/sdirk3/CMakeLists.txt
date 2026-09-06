@@ -576,6 +576,11 @@ add_executable(test_msf_cache_reset_contract tests/test_msf_cache_reset_contract
 target_link_libraries(test_msf_cache_reset_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME MSF_Cache_Reset_Contract COMMAND test_msf_cache_reset_contract)
 
+add_executable(test_msf_map_transfer_mps tests/test_msf_map_transfer_mps.cpp)
+target_link_libraries(test_msf_map_transfer_mps PRIVATE wrf_sdirk3::core)
+add_test(NAME MSF_Map_Transfer_MPS COMMAND test_msf_map_transfer_mps)
+set_tests_properties(MSF_Map_Transfer_MPS PROPERTIES SKIP_RETURN_CODE 77)
+
 add_executable(test_full_tile_step tests/test_full_tile_step.cpp)
 target_link_libraries(test_full_tile_step PRIVATE wrf_sdirk3::core)
 add_test(NAME Full_Tile_Step_Adjoint COMMAND test_full_tile_step)

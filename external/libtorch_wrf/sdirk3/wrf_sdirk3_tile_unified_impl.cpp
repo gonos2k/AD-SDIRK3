@@ -15177,6 +15177,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     {
         auto target_dev = u.device();
         auto target_dtype = u.scalar_type();
+        // MPS map copies must complete before their CPU source can be released.
+        const bool map_copy_non_blocking = target_dev.is_cuda();
         bool need_refresh = (msf_epoch_cached_ != msf_epoch_) ||
                             (msftx_.defined() && (msftx_.device() != target_dev ||
                                                   msftx_.scalar_type() != target_dtype));
@@ -15184,35 +15186,35 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         if (need_refresh) {
             // Refresh from CPU originals (or current tensors if no CPU originals)
             if (msftx_cpu_.defined() && msftx_cpu_.numel() > 0) {
-                msftx_ = msftx_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msftx_ = msftx_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msftx_.defined() && msftx_.device() != target_dev) {
-                msftx_ = msftx_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msftx_ = msftx_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
             if (msfty_cpu_.defined() && msfty_cpu_.numel() > 0) {
-                msfty_ = msfty_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfty_ = msfty_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msfty_.defined() && msfty_.device() != target_dev) {
-                msfty_ = msfty_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfty_ = msfty_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
             if (msfuy_cpu_.defined() && msfuy_cpu_.numel() > 0) {
-                msfuy_ = msfuy_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfuy_ = msfuy_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msfuy_.defined() && msfuy_.device() != target_dev) {
-                msfuy_ = msfuy_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfuy_ = msfuy_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
             if (msfvx_cpu_.defined() && msfvx_cpu_.numel() > 0) {
-                msfvx_ = msfvx_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfvx_ = msfvx_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msfvx_.defined() && msfvx_.device() != target_dev) {
-                msfvx_ = msfvx_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfvx_ = msfvx_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
             // PARITY FIX 2025-12-19: msfux_/msfvy_ now have CPU originals for compute_defor13/23
             if (msfux_cpu_.defined() && msfux_cpu_.numel() > 0) {
-                msfux_ = msfux_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfux_ = msfux_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msfux_.defined() && msfux_.device() != target_dev) {
-                msfux_ = msfux_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfux_ = msfux_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
             if (msfvy_cpu_.defined() && msfvy_cpu_.numel() > 0) {
-                msfvy_ = msfvy_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfvy_ = msfvy_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msfvy_.defined() && msfvy_.device() != target_dev) {
-                msfvy_ = msfvy_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfvy_ = msfvy_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
 
             // Multi-tile safety: sanitize map factors once per refresh.
@@ -15246,7 +15248,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // Legacy alignment for other tensors (now handled above)
         auto align_msf = [&](torch::Tensor& t) {
             if (t.defined() && t.numel() > 0 && t.device() != target_dev) {
-                t = t.to(target_dev, target_dtype, /*non_blocking=*/true);
+                t = t.to(target_dev, target_dtype, map_copy_non_blocking);
             }
         };
         // These are now already aligned above, but keep for safety
