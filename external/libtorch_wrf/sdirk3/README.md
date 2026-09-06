@@ -181,8 +181,12 @@ dynamic-state violations; absent env leaves every operand untouched.
 `save_trajectory` retains sampled stage-1 states. The legacy replay applies an
 implicit-only transpose at those states; it is not the derivative of the full ARK
 trajectory. With `retain_graph_for_adjoint = .true.`, the supported dry, single-tile
-mode-3 path exposes the last completed tile-step pullback. Neither API currently
-provides a complete WRF/4D-Var window adjoint.
+mode-3 path exposes the last completed tile-step pullback. For fixed native CPU
+trajectories, call `beginFixedTrajectory(N, schedule)` before the first step,
+`pullbackFixedTrajectory(cotangent)` after N accepted steps, then
+`closeFixedTrajectory()`. The checked NH/curvature profile requires fixed inputs
+and zero projected physics forcing; an omitted schedule enforces constant timestep.
+The full Fortran/MPI and observation-window adjoint remain outside this API.
 
 When observation-aware replay is enabled, enforce endpoint semantics:
 - `x0` (window-start state) must be present for replay-enabled windows.
@@ -190,7 +194,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 74-test CTest inventory**, pinned by
+The CMake tree registers an **exact 97-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 

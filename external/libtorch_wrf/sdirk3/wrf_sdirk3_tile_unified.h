@@ -403,8 +403,17 @@ namespace sdirk3 {
 }
 }
 
+namespace wrf {
+namespace sdirk3 {
+namespace test {
+    struct TileCase;
+}
+}
+}
+
 class TileSDIRK3UnifiedSolver : public wrf::sdirk3::TileSDIRK3Solver {
 private:
+    friend struct wrf::sdirk3::test::TileCase;
     // UnifiedRHS for physics computation (FINAL_DESIGN.md compliant)
     std::unique_ptr<wrf::sdirk3::UnifiedRHS> unified_rhs_;
     
@@ -790,6 +799,16 @@ public:
     // Requires retain_graph_for_adjoint; invalidated by the next forward step or
     // by a full reset before any source buffers are republished.
     torch::Tensor pullbackLastStep(const torch::Tensor& terminal_cotangent);
+    void beginFixedTrajectory(int expected_steps);
+    // If dt_schedule is empty, a fixed trajectory has an explicit constant-dt
+    // contract: the first accepted call establishes dt and every later call
+    // must use the identical value.  A non-empty schedule records and checks
+    // one dt for each trajectory step.  dt_stage_ is deliberately excluded
+    // from the fixed-input fingerprint because internal stage probes mutate it.
+    void beginFixedTrajectory(int expected_steps,
+                              const std::vector<float>& dt_schedule);
+    torch::Tensor pullbackFixedTrajectory(const torch::Tensor& terminal_cotangent);
+    void closeFixedTrajectory();
     torch::Tensor runAdjointReplay(const torch::Tensor& lambda_terminal,
                                    float dt,
                                    float gamma,
@@ -907,6 +926,11 @@ public:
     }
 
 private:
+    void validateFixedTrajectoryProfile() const;
+    uint64_t fixedTrajectoryInputFingerprint() const;
+    void checkFixedTrajectoryFingerprint() const;
+    void validateFixedTrajectoryTimestep(float dt);
+
     // Release both sides of the map-factor cache at a full reset boundary.
     // The CPU tensors are from_blob views into WRF-owned storage; retaining one
     // across restart or nest movement can leave a dangling view after Fortran
@@ -919,6 +943,13 @@ private:
     // msf_epoch_ is a local generation key. Advance it rather than resetting it
     // to avoid an epoch ABA if an old key is inspected during diagnostics.
     void invalidateMapFactorCaches() {
+        fixed_trajectory_steps_.clear();
+        fixed_trajectory_expected_ = 0;
+        fixed_trajectory_open_ = false;
+        fixed_trajectory_fp_ = 0;
+        fixed_trajectory_dt_schedule_.clear();
+        fixed_trajectory_dt_reference_set_ = false;
+        fixed_trajectory_dt_reference_ = 0.0f;
         msftx_cpu_ = torch::Tensor();
         msfty_cpu_ = torch::Tensor();
         msfux_cpu_ = torch::Tensor();
@@ -2153,6 +2184,18 @@ private:
     bool split_forward_ran_ = false;
     torch::Tensor last_step_input_graph_;
     torch::Tensor last_step_output_graph_;
+    struct FixedTrajectoryStep { torch::Tensor input, output, fphys; float dt = 0.0f; };
+    std::vector<FixedTrajectoryStep> fixed_trajectory_steps_;
+    int fixed_trajectory_expected_ = 0;
+    bool fixed_trajectory_open_ = false;
+    uint64_t fixed_trajectory_fp_ = 0;
+    std::vector<float> fixed_trajectory_dt_schedule_;
+    bool fixed_trajectory_dt_reference_set_ = false;
+    float fixed_trajectory_dt_reference_ = 0.0f;
+    void recordFixedTrajectoryStep(const torch::Tensor& input,
+                                   const torch::Tensor& output,
+                                   const torch::Tensor& fphys,
+                                   float dt);
     // Raw U-staggered map-factor verification (external review rounds 3/3b/3c):
     // the periodic-x preprocessing repairs raw zero msfux/msfuy entries to a fallback
     // value, so the split guard cannot trust the (repaired) member tensors. These flags

@@ -93,3 +93,5 @@ MSF_Pointer_Republication
 Nonhydrostatic_Pressure_Kernel_Contract
 Nonhydrostatic_Pressure_Coordinate_Contract
 WRF_Dynamics_Config
+Fixed_Trajectory_Derivative
+Fixed_Trajectory_Lifecycle

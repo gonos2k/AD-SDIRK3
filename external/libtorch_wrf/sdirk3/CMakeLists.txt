@@ -557,6 +557,16 @@ add_executable(test_two_step_tile_adjoint tests/test_two_step_tile_adjoint.cpp)
 target_link_libraries(test_two_step_tile_adjoint PRIVATE wrf_sdirk3::core)
 add_test(NAME Two_Step_Tile_Adjoint COMMAND test_two_step_tile_adjoint)
 
+# Fixed-trajectory native discrete-transpose contract: accepted-step tape,
+# profile/input immutability, and FD/VJP validation.
+add_executable(test_fixed_trajectory_derivative tests/test_fixed_trajectory_derivative.cpp)
+target_link_libraries(test_fixed_trajectory_derivative PRIVATE wrf_sdirk3::core)
+add_test(NAME Fixed_Trajectory_Derivative COMMAND test_fixed_trajectory_derivative)
+
+add_executable(test_fixed_trajectory_lifecycle tests/test_fixed_trajectory_lifecycle.cpp)
+target_link_libraries(test_fixed_trajectory_lifecycle PRIVATE wrf_sdirk3::core)
+add_test(NAME Fixed_Trajectory_Lifecycle COMMAND test_fixed_trajectory_lifecycle)
+
 add_executable(test_horizontal_mass_contract tests/test_horizontal_mass_contract.cpp)
 target_link_libraries(test_horizontal_mass_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Horizontal_Mass_Contract COMMAND test_horizontal_mass_contract)

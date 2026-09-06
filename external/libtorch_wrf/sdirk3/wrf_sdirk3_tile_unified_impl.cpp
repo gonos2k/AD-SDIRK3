@@ -5963,6 +5963,20 @@ vertical_coefficients:
     
     // Pack current state with staggered dimensions
     torch::Tensor U_n = packState(u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
+    if (fixed_trajectory_open_) {
+        checkFixedTrajectoryFingerprint();
+        TORCH_CHECK(U_n.device().is_cpu(),
+                    "fixed trajectory contract requires a CPU packed state");
+        TORCH_CHECK(rk_step == 1, "fixed trajectory requires forward rk_step=1 call");
+        TORCH_CHECK(fixed_trajectory_steps_.size() <
+                        static_cast<size_t>(fixed_trajectory_expected_),
+                    "fixed trajectory exceeds N");
+        validateFixedTrajectoryTimestep(dt);
+        if (!fixed_trajectory_steps_.empty()) {
+            TORCH_CHECK(torch::equal(U_n, fixed_trajectory_steps_.back().output.detach()),
+                        "fixed trajectory packed state handoff changed");
+        }
+    }
     if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
         const auto& cfg = wrf::sdirk3::g_sdirk3_config;
         TORCH_CHECK(cfg.use_autograd && cfg.imex_slow_in_tangent &&
@@ -12474,6 +12488,7 @@ vertical_coefficients:
     if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
         last_step_input_graph_ = step_input_graph;
         last_step_output_graph_ = U_new;
+        recordFixedTrajectoryStep(step_input_graph, U_new, F_phys, dt);
     }
 
     // R13.1: THE np-equivalence record, and the only one entitled to that claim.
@@ -13008,8 +13023,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         std::cerr << "=================================================" << std::endl;
     }
     
-    // Solve: (I - dt*a_ii*J)*k = F(U_stage + dt*a_ii*k) + F_phys
-    // where F is the unified RHS (dynamics) and F_phys is physics tendency
+    // Solve k = F(U_stage + dt*a_ii*k) + F_phys.
+    // Newton's matrix is I - dt*a_ii*J_F; F_phys is the fixed physics tendency.
     
     // Define RHS function for Newton-Krylov solver
     // GENERALIZED (2025-10-18): Handle cases with/without physics forcing
@@ -18237,8 +18252,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         "native-W PH horizontal requires rdnw through k=kte-1");
             // WRF dn(top) is the mean of the last two dnw intervals.
             // Compute the equivalent ratio in double before the tensor stencil.
-            const double r_top = phi_rdnw.index({nz_w_ - 2}).item<double>();
-            const double r_below = phi_rdnw.index({nz_w_ - 3}).item<double>();
+            const double r_top = wrf::sdirk3::guarded_item<double>(phi_rdnw.index({nz_w_ - 2}));
+            const double r_below = wrf::sdirk3::guarded_item<double>(phi_rdnw.index({nz_w_ - 3}));
             TORCH_CHECK(std::isfinite(r_top) && r_top > 0.0 &&
                         std::isfinite(r_below) && r_below > 0.0 &&
                         std::isfinite(r_top + r_below),
@@ -40609,6 +40624,265 @@ int64_t TileSDIRK3UnifiedSolver::getStateVectorSize() const {
     return size_u + size_v + size_w + size_ph + size_t + size_mu;
 }
 
+
+namespace {
+constexpr uint64_t kFixedTrajectoryFNVOffset = 1469598103934665603ULL;
+constexpr uint64_t kFixedTrajectoryFNVPrime = 1099511628211ULL;
+
+void fixed_trajectory_hash_bytes(uint64_t& h, const void* data, size_t n) {
+    const auto* p = static_cast<const unsigned char*>(data);
+    for (size_t i = 0; i < n; ++i) {
+        h ^= static_cast<uint64_t>(p[i]);
+        h *= kFixedTrajectoryFNVPrime;
+    }
+}
+
+template <typename T>
+void fixed_trajectory_hash_scalar(uint64_t& h, const T& value) {
+    fixed_trajectory_hash_bytes(h, &value, sizeof(T));
+}
+
+void fixed_trajectory_hash_bool(uint64_t& h, bool value) {
+    const uint8_t encoded = value ? 1U : 0U;
+    fixed_trajectory_hash_scalar(h, encoded);
+}
+
+void fixed_trajectory_hash_tensor(uint64_t& h, const torch::Tensor& x) {
+    fixed_trajectory_hash_bool(h, x.defined());
+    if (!x.defined()) return;
+    auto c = x.detach().to(torch::kCPU).contiguous();
+    fixed_trajectory_hash_scalar(h, static_cast<int32_t>(c.scalar_type()));
+    fixed_trajectory_hash_scalar(h, static_cast<int64_t>(c.dim()));
+    for (const auto size : c.sizes()) fixed_trajectory_hash_scalar(h, static_cast<int64_t>(size));
+    fixed_trajectory_hash_scalar(h, static_cast<int64_t>(c.numel()));
+    fixed_trajectory_hash_scalar(h, static_cast<int64_t>(c.element_size()));
+    fixed_trajectory_hash_bytes(h, c.data_ptr(), static_cast<size_t>(c.numel() * c.element_size()));
+}
+
+void fixed_trajectory_hash_vector(uint64_t& h, const std::vector<float>& values) {
+    fixed_trajectory_hash_scalar(h, static_cast<uint64_t>(values.size()));
+    if (!values.empty()) fixed_trajectory_hash_bytes(h, values.data(), values.size() * sizeof(float));
+}
+}
+
+void TileSDIRK3UnifiedSolver::validateFixedTrajectoryProfile() const {
+    const auto& c = wrf::sdirk3::g_sdirk3_config;
+    TORCH_CHECK(non_hydrostatic_ && c.non_hydrostatic && c.do_curvature &&
+                c.buoyancy_use_current_w && c.omega_w_blend == 1.0f &&
+                !c.omega_update_ref_per_newton,
+                "fixed trajectory requires canonical NH=true curvature=true profile "
+                "with current-w buoyancy, omega_w_blend=1, and fixed Newton reference");
+    TORCH_CHECK(c.retain_graph_for_adjoint && c.use_autograd && c.imex_split_mode == 3 &&
+                c.imex_slow_in_tangent && c.mass_coordinate_mode == 1 && !c.hevi_split &&
+                !c.split_explicit && nprocx_ * nprocy_ == 1 && n_moist_ == 0 &&
+                c.khdif == 0.0f && c.kvdif == 0.0f && c.diffusion_option == 0 &&
+                c.wrf_w_damping == 0 && c.wrf_damp_opt == 0 &&
+                c.wrf_zadvect_implicit == 0 && !c.damp_t &&
+                !c.enable_ad_halo_exchange &&
+                !c.enable_test_tendencies && grid_info_ &&
+                grid_info_->fzm.defined() && grid_info_->fzp.defined(),
+                "fixed trajectory canonical NH/curvature profile unsupported: "
+                "test tendencies, diffusion, and WRF damping must be off");
+}
+
+uint64_t TileSDIRK3UnifiedSolver::fixedTrajectoryInputFingerprint() const {
+    uint64_t h = kFixedTrajectoryFNVOffset;
+    for (const int value : {nx_, ny_, nz_, nx_u_, ny_v_, nz_w_, its_, ite_, jts_, jte_,
+                            ids_, ide_, jds_, jde_, nprocx_, nprocy_, mypx_, mypy_}) {
+        fixed_trajectory_hash_scalar(h, value);
+    }
+    fixed_trajectory_hash_vector(h, rdx_);
+    fixed_trajectory_hash_vector(h, rdy_);
+    fixed_trajectory_hash_vector(h, rdnw_);
+    // These are the effective vertical metrics consumed by the native RHS.
+    // The helper may select solver vectors, grid tensors, or a fallback; hashing
+    // the selected values closes all source branches, including from_blob views.
+    fixed_trajectory_hash_tensor(
+        h, getRdnwTensor(torch::kCPU, torch::kFloat64, static_cast<int64_t>(nz_)));
+    fixed_trajectory_hash_tensor(
+        h, getRdnTensor(torch::kCPU, torch::kFloat64, static_cast<int64_t>(nz_)));
+    for (const float value : {cf1_, cf2_, cf3_, cfn_, cfn1_}) fixed_trajectory_hash_scalar(h, value);
+    for (const auto& x : {p_base_, th_base_, rho_base_, mu_base_, ph_base_, u_base_, v_base_,
+                          fnm_cpu_, fnp_cpu_, c1f_, c2f_, c1h_, c2h_,
+                          msftx_cpu_, msfty_cpu_, msfux_cpu_, msfuy_cpu_, msfvx_cpu_, msfvy_cpu_,
+                          f_, e_, sina_, cosa_, zx_, zy_, cqu_, cqv_, cqw_}) {
+        fixed_trajectory_hash_tensor(h, x);
+    }
+    if (grid_info_) {
+        // Hash every vertical-metric source at source precision.  The cache
+        // helper may normalize to float32, while an FP64 RHS can consume the
+        // FP64 grid tensor; source-value hashing catches sub-float32-ULP edits.
+        fixed_trajectory_hash_tensor(h, grid_info_->rdnw);
+        fixed_trajectory_hash_tensor(h, grid_info_->rdn);
+        fixed_trajectory_hash_tensor(h, grid_info_->dnw);
+        fixed_trajectory_hash_tensor(h, grid_info_->dn);
+        fixed_trajectory_hash_tensor(h, grid_info_->ph_base);
+        fixed_trajectory_hash_tensor(h, grid_info_->fzm);
+        fixed_trajectory_hash_tensor(h, grid_info_->fzp);
+        fixed_trajectory_hash_tensor(h, grid_info_->xlat);
+        fixed_trajectory_hash_scalar(h, grid_info_->g);
+        fixed_trajectory_hash_scalar(h, grid_info_->dx);
+        fixed_trajectory_hash_scalar(h, grid_info_->dy);
+        fixed_trajectory_hash_scalar(h, grid_info_->reradius);
+        fixed_trajectory_hash_scalar(h, grid_info_->map_proj);
+        fixed_trajectory_hash_scalar(h, grid_info_->kdamp);
+        fixed_trajectory_hash_scalar(h, grid_info_->damp_top);
+        fixed_trajectory_hash_scalar(h, grid_info_->dtbc);
+    } else {
+        fixed_trajectory_hash_bool(h, false);
+    }
+    const auto& c = wrf::sdirk3::g_sdirk3_config;
+    // These are actual RHS controls on the supported native-NH path.  They are
+    // snapshotted explicitly; dt_stage_ and other per-stage work state are not
+    // fixed inputs and must not be folded into this digest.
+    for (const bool value : {non_hydrostatic_, c.non_hydrostatic, c.do_curvature,
+                             c.split_explicit_top_lid, c.hevi_split, c.split_explicit,
+                             c.use_autograd, c.retain_graph_for_adjoint,
+                             c.imex_slow_in_tangent, c.buoyancy_use_current_w,
+                             c.implicit_acoustic, c.implicit_gravity,
+                             c.implicit_rayleigh, c.implicit_wdamp,
+                             c.implicit_vdiff, c.implicit_hdiff,
+                             c.rhs_bc_parity, c.implicit_divergence,
+                             c.mu_tend_fortran_parity, c.ph_use_rdnw_not_rdzw,
+                             c.omega_update_ref_per_newton, c.enable_test_tendencies,
+                             c.damp_t, c.mass_pgf_bc_guard,
+                             c.use_stress_tensor, c.enable_ad_halo_exchange,
+                             c.imex_enabled,
+                             config_flags_periodic_x_, config_flags_periodic_y_,
+                             config_flags_open_xs_, config_flags_open_xe_,
+                             config_flags_open_ys_, config_flags_open_ye_,
+                             config_flags_symmetric_xs_, config_flags_symmetric_xe_,
+                             config_flags_symmetric_ys_, config_flags_symmetric_ye_,
+                             config_flags_specified_, config_flags_nested_,
+                             config_flags_polar_, c.gmres_warmstart, c.inn_warmstart_enable}) {
+        fixed_trajectory_hash_bool(h, value);
+    }
+    for (const int value : {c.imex_split_mode, c.mass_coordinate_mode, c.advection_order,
+                            c.diffusion_option, c.khdif == 0.0f ? 0 : 1,
+                            c.kvdif == 0.0f ? 0 : 1, c.wrf_w_damping, c.wrf_damp_opt,
+                            c.wrf_zadvect_implicit, c.map_proj, c.nan_sanitize_mode,
+                            c.precond_type,
+                            c.max_newton_iter, c.max_krylov_iter, c.gmres_restart,
+                            c.stage_fail_action}) {
+        fixed_trajectory_hash_scalar(h, value);
+    }
+    for (const float value : {c.newton_tol, c.krylov_tol, c.omega_w_blend,
+                              c.sign_smooth_delta, c.rayleigh_damp_coef,
+                              c.rayleigh_damp_depth, c.t_ref, c.test_w_damp_coef,
+                              c.test_t_relax_coef, c.w_damp_alpha, c.w_crit_cfl,
+                              c.wrf_w_crit_cfl, c.coriolis_f, c.khdif, c.kvdif,
+                              c.kdamp}) {
+        fixed_trajectory_hash_scalar(h, value);
+    }
+    return h;
+}
+
+void TileSDIRK3UnifiedSolver::checkFixedTrajectoryFingerprint() const {
+    TORCH_CHECK(fixed_trajectory_open_, "fixed trajectory not open");
+    TORCH_CHECK(fixedTrajectoryInputFingerprint() == fixed_trajectory_fp_,
+                "fixed trajectory fixed input changed");
+    validateFixedTrajectoryProfile();
+}
+
+void TileSDIRK3UnifiedSolver::beginFixedTrajectory(int expected_steps) {
+    beginFixedTrajectory(expected_steps, {});
+}
+
+void TileSDIRK3UnifiedSolver::beginFixedTrajectory(
+    int expected_steps, const std::vector<float>& dt_schedule) {
+    TORCH_CHECK(expected_steps > 0 && !fixed_trajectory_open_, "invalid/open fixed trajectory");
+    TORCH_CHECK(dt_schedule.empty() ||
+                dt_schedule.size() == static_cast<size_t>(expected_steps),
+                "fixed trajectory timestep schedule length mismatch");
+    for (const float dt : dt_schedule) {
+        TORCH_CHECK(std::isfinite(dt) && dt > 0.0f,
+                    "fixed trajectory timestep schedule contains invalid dt");
+    }
+    validateFixedTrajectoryProfile();
+    fixed_trajectory_steps_.clear();
+    fixed_trajectory_expected_ = expected_steps;
+    fixed_trajectory_dt_schedule_ = dt_schedule;
+    fixed_trajectory_dt_reference_set_ = false;
+    fixed_trajectory_dt_reference_ = 0.0f;
+    fixed_trajectory_open_ = true;
+    fixed_trajectory_fp_ = fixedTrajectoryInputFingerprint();
+}
+
+void TileSDIRK3UnifiedSolver::validateFixedTrajectoryTimestep(float dt) {
+    TORCH_CHECK(fixed_trajectory_open_, "fixed trajectory not open");
+    TORCH_CHECK(std::isfinite(dt) && dt > 0.0f,
+                "fixed trajectory timestep invalid");
+    const size_t step = fixed_trajectory_steps_.size();
+    TORCH_CHECK(step < static_cast<size_t>(fixed_trajectory_expected_),
+                "fixed trajectory exceeds N");
+    if (!fixed_trajectory_dt_schedule_.empty()) {
+        TORCH_CHECK(dt == fixed_trajectory_dt_schedule_[step],
+                    "fixed trajectory timestep changed");
+        return;
+    }
+    if (!fixed_trajectory_dt_reference_set_) {
+        fixed_trajectory_dt_reference_ = dt;
+        fixed_trajectory_dt_reference_set_ = true;
+        return;
+    }
+    TORCH_CHECK(dt == fixed_trajectory_dt_reference_,
+                "fixed trajectory timestep changed");
+}
+
+void TileSDIRK3UnifiedSolver::recordFixedTrajectoryStep(const torch::Tensor& input,
+                                                          const torch::Tensor& output,
+                                                          const torch::Tensor& fphys,
+                                                          float dt) {
+    if (!fixed_trajectory_open_) return;
+    checkFixedTrajectoryFingerprint();
+    TORCH_CHECK(std::isfinite(dt) && dt > 0.0f,
+                "fixed trajectory timestep invalid");
+    TORCH_CHECK(getLastStepOutcomeCode() == static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED),
+                "fixed trajectory requires accepted step");
+    TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(fphys).all()) &&
+                wrf::sdirk3::guarded_item<double>(fphys.abs().max()) == 0.0,
+                "fixed trajectory requires zero projected F_phys");
+    TORCH_CHECK(fixed_trajectory_steps_.size() < static_cast<size_t>(fixed_trajectory_expected_),
+                "fixed trajectory exceeds N");
+    const size_t step = fixed_trajectory_steps_.size();
+    if (!fixed_trajectory_dt_schedule_.empty()) {
+        TORCH_CHECK(dt == fixed_trajectory_dt_schedule_[step],
+                    "fixed trajectory timestep changed");
+    } else {
+        TORCH_CHECK(fixed_trajectory_dt_reference_set_ &&
+                    dt == fixed_trajectory_dt_reference_,
+                    "fixed trajectory timestep changed");
+    }
+    fixed_trajectory_steps_.push_back({input, output, fphys.detach().clone(), dt});
+}
+
+torch::Tensor TileSDIRK3UnifiedSolver::pullbackFixedTrajectory(const torch::Tensor& terminal) {
+    TORCH_CHECK(fixed_trajectory_open_ && fixed_trajectory_steps_.size() ==
+                static_cast<size_t>(fixed_trajectory_expected_), "fixed trajectory incomplete");
+    checkFixedTrajectoryFingerprint();
+    TORCH_CHECK(terminal.defined() &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(terminal).all()), "invalid terminal");
+    auto lambda = terminal;
+    for (auto it = fixed_trajectory_steps_.rbegin(); it != fixed_trajectory_steps_.rend(); ++it) {
+        TORCH_CHECK(std::isfinite(it->dt) && it->dt > 0.0f,
+                    "fixed trajectory recorded invalid timestep");
+        TORCH_CHECK(lambda.sizes() == it->output.sizes() && lambda.options().type_equal(it->output.options()),
+                    "fixed trajectory cotangent shape/type mismatch");
+        lambda = torch::autograd::grad({it->output}, {it->input}, {lambda}, true, false)[0];
+    }
+    return lambda;
+}
+
+void TileSDIRK3UnifiedSolver::closeFixedTrajectory() {
+    TORCH_CHECK(fixed_trajectory_open_, "fixed trajectory not open");
+    fixed_trajectory_steps_.clear();
+    fixed_trajectory_expected_ = 0;
+    fixed_trajectory_open_ = false;
+    fixed_trajectory_fp_ = 0;
+    fixed_trajectory_dt_schedule_.clear();
+    fixed_trajectory_dt_reference_set_ = false;
+    fixed_trajectory_dt_reference_ = 0.0f;
+}
 
 // 9F.D81: the adjoint driver body, moved out of unifiedStep. Opt-in via
 // WRF_SDIRK3_ADJOINT_DRIVER; unifiedStep keeps only the RAII shim that fires it at

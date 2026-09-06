@@ -38,7 +38,8 @@ struct TileCase {
     float spacing;
     TileSDIRK3UnifiedSolver solver;
 
-    explicit TileCase(float grid_spacing = 100000.0f, float coriolis = 0.0f)
+    explicit TileCase(float grid_spacing = 100000.0f, float coriolis = 0.0f,
+                      bool native_trajectory = false)
         : spacing(grid_spacing), solver(nx, ny, nz, spacing, spacing,
                        {1.0f/spacing}, {1.0f/spacing}, std::vector<float>(nz, nz), 0) {
         solver.setWRFIndices(1, nx+1, 1, ny+1, 1, nz,
@@ -87,7 +88,17 @@ struct TileCase {
         std::fill(setup_f.begin(),setup_f.end(),coriolis);
         setup.f_ptr=setup_f.data(); setup.e_ptr=setup.sina_ptr=setup_zero.data();
         setup.cosa_ptr=setup_map.data();
-        solver.advanceZeroCopy(setup, 2, 0.1f);
+        solver.advanceZeroCopy(setup, native_trajectory ? 1 : 2, 0.1f);
+        if (native_trajectory) {
+            // The native curvature RHS consumes these W-level profiles.  Setup-only
+            // rk_step=2 deliberately leaves them unpublished in legacy fixtures.
+            auto grid = solver.getGridInfo();
+            TORCH_CHECK(grid, "trajectory fixture has no GridInfo");
+            grid->fzm = torch::from_blob(half.data(), {nw}, torch::kFloat32).clone();
+            grid->fzp = torch::from_blob(half.data(), {nw}, torch::kFloat32).clone();
+            solver.setTerrainSlopes(torch::full({ny, nw, nx}, 1.0e-4f, torch::kFloat32),
+                                    torch::full({ny, nw, nx}, -2.0e-4f, torch::kFloat32));
+        }
     }
 
     std::vector<std::vector<float>*> fields() { return {&u,&v,&w,&ph,&theta,&mu}; }
@@ -99,6 +110,23 @@ struct TileCase {
             pointer += field->size();
         }
     }
+    torch::Tensor terrainSlopeX() const { return solver.zx_; }
+    torch::Tensor terrainSlopeY() const { return solver.zy_; }
+    torch::Tensor moistureCorrectionU() const { return solver.cqu_; }
+    torch::Tensor moistureCorrectionV() const { return solver.cqv_; }
+    torch::Tensor moistureCorrectionW() const { return solver.cqw_; }
+    torch::Tensor coriolisF() const { return solver.f_; }
+    torch::Tensor coriolisE() const { return solver.e_; }
+    void checkFixedInputs() const { solver.checkFixedTrajectoryFingerprint(); }
+    void useDoubleGridMetrics() {
+        solver.rdnw_.clear();
+        solver.rdn_.clear();
+        auto grid = solver.getGridInfo();
+        TORCH_CHECK(grid, "trajectory fixture has no GridInfo");
+        grid->rdnw = torch::full({nw}, 1.0, torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU));
+        grid->rdn = torch::full({nw}, 1.0, torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU));
+    }
+
     torch::Tensor state() {
         std::vector<torch::Tensor> blocks;
         for (auto* field : fields())
