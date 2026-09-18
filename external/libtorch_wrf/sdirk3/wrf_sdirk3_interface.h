@@ -1123,6 +1123,32 @@ void sdirk3_tile_solver_clear_saved_trajectory_zerocopy(void* solver_ptr);
 int sdirk3_tile_solver_get_state_vector_size_zerocopy(void* solver_ptr);
 
 /**
+ * Request a fixed trajectory before the first zero-copy forward call.
+ * Activation is deferred until the native step has published all caller views.
+ * A null schedule with size zero selects the constant-dt contract.
+ * Returns 1 when the request is copied, 0 on invalid input/handle/error.
+ */
+int sdirk3_tile_solver_begin_fixed_trajectory_zerocopy(
+    void* solver_ptr, int expected_steps,
+    const float* dt_schedule, int dt_schedule_size);
+
+/**
+ * Pull back a completed fixed trajectory in packed Float32 state layout.
+ * lambda_initial is not modified when the function returns 0.
+ * Returns 1 on success, 0 on invalid input, incomplete tape, or error.
+ */
+int sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy(
+    void* solver_ptr, const float* lambda_terminal, int lambda_size,
+    float* lambda_initial);
+
+/**
+ * Close an open fixed trajectory, or cancel an armed request that has not
+ * reached the first native step. An idle handle returns 0.
+ * Returns 1 on success, 0 when the handle is invalid, idle, or an error occurs.
+ */
+int sdirk3_tile_solver_close_fixed_trajectory_zerocopy(void* solver_ptr);
+
+/**
  * Run checkpoint-replay adjoint loop on saved trajectory.
  *
  * @param solver_ptr         Solver handle

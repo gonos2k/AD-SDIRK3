@@ -25,6 +25,8 @@ MODULE module_implicit_sdirk3
    PUBLIC :: sdirk3_print_solver_statistics
    PUBLIC :: sdirk3_reset_on_restart  ! FIX 2025-01-25: Cache reset for restart path
    PUBLIC :: sdirk3_get_4dvar_trajectory_info, sdirk3_run_4dvar_adjoint_loop
+   PUBLIC :: sdirk3_begin_fixed_trajectory, sdirk3_pullback_fixed_trajectory
+   PUBLIC :: sdirk3_close_fixed_trajectory
    
    ! SDIRK-3 L-stable parameter
    ! Original double precision: 0.4358665215084590
@@ -137,6 +139,28 @@ MODULE module_implicit_sdirk3
          USE, INTRINSIC :: ISO_C_BINDING
          TYPE(C_PTR), VALUE :: solver
       END FUNCTION sdirk3_tile_solver_get_state_vector_size_zerocopy
+
+      INTEGER(C_INT) FUNCTION sdirk3_tile_solver_begin_fixed_trajectory_zerocopy( &
+         solver, expected_steps, dt_schedule_ptr, dt_schedule_size) &
+         BIND(C, name="sdirk3_tile_solver_begin_fixed_trajectory_zerocopy")
+         USE, INTRINSIC :: ISO_C_BINDING
+         TYPE(C_PTR), VALUE :: solver, dt_schedule_ptr
+         INTEGER(C_INT), VALUE :: expected_steps, dt_schedule_size
+      END FUNCTION sdirk3_tile_solver_begin_fixed_trajectory_zerocopy
+
+      INTEGER(C_INT) FUNCTION sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy( &
+         solver, lambda_terminal_ptr, lambda_size, lambda_initial_ptr) &
+         BIND(C, name="sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy")
+         USE, INTRINSIC :: ISO_C_BINDING
+         TYPE(C_PTR), VALUE :: solver, lambda_terminal_ptr, lambda_initial_ptr
+         INTEGER(C_INT), VALUE :: lambda_size
+      END FUNCTION sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy
+
+      INTEGER(C_INT) FUNCTION sdirk3_tile_solver_close_fixed_trajectory_zerocopy(solver) &
+         BIND(C, name="sdirk3_tile_solver_close_fixed_trajectory_zerocopy")
+         USE, INTRINSIC :: ISO_C_BINDING
+         TYPE(C_PTR), VALUE :: solver
+      END FUNCTION sdirk3_tile_solver_close_fixed_trajectory_zerocopy
 
       INTEGER(C_INT) FUNCTION sdirk3_tile_solver_run_adjoint_replay_zerocopy( &
          solver, lambda_terminal_ptr, lambda_size, lambda_initial_ptr, &
@@ -2380,6 +2404,75 @@ CONTAINS
       ierr = 0
 
    END SUBROUTINE sdirk3_get_4dvar_trajectory_info
+
+   SUBROUTINE sdirk3_begin_fixed_trajectory(tile_idx, expected_steps, dt_schedule, ierr)
+      IMPLICIT NONE
+      INTEGER, INTENT(IN) :: tile_idx, expected_steps
+      REAL(C_FLOAT), OPTIONAL, TARGET, CONTIGUOUS, INTENT(IN) :: dt_schedule(:)
+      INTEGER, INTENT(OUT) :: ierr
+      TYPE(C_PTR) :: c_schedule
+      INTEGER(C_INT) :: c_rc, c_n
+
+      ierr = 1
+      c_schedule = C_NULL_PTR
+      c_n = 0_C_INT
+      IF (.NOT. sdirk3_initialized) RETURN
+      IF (tile_idx < 1 .OR. tile_idx > num_tiles_initialized) RETURN
+      IF (.NOT. C_ASSOCIATED(tile_solvers(tile_idx))) RETURN
+      IF (expected_steps <= 0) RETURN
+      IF (PRESENT(dt_schedule)) THEN
+         IF (SIZE(dt_schedule) > 0) THEN
+            c_schedule = C_LOC(dt_schedule(1))
+            c_n = INT(SIZE(dt_schedule), C_INT)
+         END IF
+      END IF
+
+      c_rc = sdirk3_tile_solver_begin_fixed_trajectory_zerocopy( &
+         tile_solvers(tile_idx), INT(expected_steps, C_INT), c_schedule, c_n)
+      IF (c_rc == 1_C_INT) THEN
+         ierr = 0
+      END IF
+   END SUBROUTINE sdirk3_begin_fixed_trajectory
+
+   SUBROUTINE sdirk3_pullback_fixed_trajectory(tile_idx, lambda_terminal, &
+                                               lambda_initial, ierr)
+      IMPLICIT NONE
+      INTEGER, INTENT(IN) :: tile_idx
+      REAL(C_FLOAT), DIMENSION(:), TARGET, CONTIGUOUS, INTENT(IN) :: lambda_terminal
+      REAL(C_FLOAT), DIMENSION(:), TARGET, CONTIGUOUS, INTENT(INOUT) :: lambda_initial
+      INTEGER, INTENT(OUT) :: ierr
+      INTEGER(C_INT) :: c_size, c_rc
+
+      ierr = 1
+      IF (.NOT. sdirk3_initialized) RETURN
+      IF (tile_idx < 1 .OR. tile_idx > num_tiles_initialized) RETURN
+      IF (.NOT. C_ASSOCIATED(tile_solvers(tile_idx))) RETURN
+      c_size = sdirk3_tile_solver_get_state_vector_size_zerocopy(tile_solvers(tile_idx))
+      IF (c_size <= 0_C_INT .OR. SIZE(lambda_terminal) /= INT(c_size)) RETURN
+      IF (SIZE(lambda_initial) /= SIZE(lambda_terminal)) RETURN
+
+      c_rc = sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy( &
+         tile_solvers(tile_idx), C_LOC(lambda_terminal(1)), c_size, &
+         C_LOC(lambda_initial(1)))
+      IF (c_rc == 1_C_INT) ierr = 0
+   END SUBROUTINE sdirk3_pullback_fixed_trajectory
+
+   SUBROUTINE sdirk3_close_fixed_trajectory(tile_idx, ierr)
+      IMPLICIT NONE
+      INTEGER, INTENT(IN) :: tile_idx
+      INTEGER, INTENT(OUT) :: ierr
+      INTEGER(C_INT) :: c_rc
+
+      ierr = 1
+      IF (.NOT. sdirk3_initialized) RETURN
+      IF (tile_idx < 1 .OR. tile_idx > num_tiles_initialized) RETURN
+      IF (.NOT. C_ASSOCIATED(tile_solvers(tile_idx))) RETURN
+      c_rc = sdirk3_tile_solver_close_fixed_trajectory_zerocopy( &
+         tile_solvers(tile_idx))
+      IF (c_rc == 1_C_INT) THEN
+         ierr = 0
+      END IF
+   END SUBROUTINE sdirk3_close_fixed_trajectory
 
    SUBROUTINE sdirk3_run_4dvar_adjoint_loop(tile_idx, lambda_terminal, lambda_initial, &
                                             lambda_size, dt, gamma, &

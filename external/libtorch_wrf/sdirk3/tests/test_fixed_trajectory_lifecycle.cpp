@@ -1,4 +1,5 @@
 #include "tile_test_fixture.h"
+#include "wrf_sdirk3_autograd_utils.h"
 #include <iostream>
 #include <functional>
 
@@ -29,6 +30,42 @@ static void run_n(int n, bool top_lid) {
   t.solver.closeFixedTrajectory();
   std::cout << "FIXED_TRAJECTORY_LIFECYCLE NH=1 curvature=1 top_lid=" << top_lid
             << " N="<<n<<" initial_norm="<<lambda.norm().item<double>()<<" passed\n";
+}
+static void deferred_request_lifecycle() {
+  TileCase t(100000.0f, 0.0f, true); t.set(x0());
+  t.solver.requestFixedTrajectory(2, {.1f, .1f});
+  TORCH_CHECK(t.solver.fixedTrajectoryRequested(), "deferred request was not armed");
+  t.step(.1f); t.step(.1f);
+  const auto lambda=t.solver.pullbackFixedTrajectory(terminal());
+  TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(lambda).all()) &&
+              wrf::sdirk3::guarded_item<double>(lambda.norm())>1e-8,
+              "deferred activation pullback invalid");
+  t.solver.closeFixedTrajectory();
+
+  TileCase cancelled(100000.0f, 0.0f, true); cancelled.set(x0());
+  cancelled.solver.requestFixedTrajectory(1, {});
+  cancelled.solver.cancelFixedTrajectoryRequest();
+  TORCH_CHECK(!cancelled.solver.fixedTrajectoryRequested(), "pending request was not cancelled");
+  cancelled.step(.1f);
+
+  TileCase invalid(100000.0f, 0.0f, true); invalid.set(x0());
+  invalid.solver.requestFixedTrajectory(1, {});
+  wrf::sdirk3::g_sdirk3_config.imex_split_mode=2;
+  expect_rejected([&]{invalid.step(.1f);}, "fixed trajectory canonical NH/curvature profile unsupported");
+  wrf::sdirk3::g_sdirk3_config.imex_split_mode=3;
+  invalid.solver.requestFixedTrajectory(1, {});
+  invalid.solver.cancelFixedTrajectoryRequest();
+
+  TileCase reset(100000.0f, 0.0f, true); reset.set(x0());
+  reset.solver.requestFixedTrajectory(1, {});
+  reset.solver.invalidateCaches();
+  TORCH_CHECK(!reset.solver.fixedTrajectoryRequested(), "reset retained pending request");
+  reset.step(.1f);
+  reset.solver.requestFixedTrajectory(1, {});
+  reset.step(.1f);
+  (void)reset.solver.pullbackFixedTrajectory(terminal());
+  reset.solver.closeFixedTrajectory();
+  std::cout << "FIXED_TRAJECTORY_DEFERRED_LIFECYCLE passed\n";
 }
 static void reset_invalidates() {
   TileCase t(100000.0f, 0.0f, true); t.set(x0()); t.solver.beginFixedTrajectory(2); t.step(.1f);
@@ -231,6 +268,7 @@ int main() {
   for (const bool top_lid : {false, true}) {
     configure(top_lid); run("run_n2", [&]{run_n(2, top_lid);});
     configure(top_lid); run("run_n3", [&]{run_n(3, top_lid);});
+    configure(top_lid); run("deferred_request", deferred_request_lifecycle);
     configure(top_lid); run("reset_invalidates", reset_invalidates);
     configure(top_lid); run("config_mutation", config_mutation_rejects);
     configure(top_lid); run("map_mutation_before_final", [&]{map_mutation_rejects(false);});

@@ -210,6 +210,11 @@ trajectories, call `beginFixedTrajectory(N, schedule)` before the first step,
 `pullbackFixedTrajectory(cotangent)` after N accepted steps, then
 `closeFixedTrajectory()`. The checked NH/curvature profile requires fixed inputs
 and zero projected physics forcing; an omitted schedule enforces constant timestep.
+Fortran callers can use `sdirk3_begin_fixed_trajectory`,
+`sdirk3_pullback_fixed_trajectory`, and `sdirk3_close_fixed_trajectory`.
+Begin copies the request; recording starts after the first owner call publishes
+its buffers. Pullback uses the native packed Float32 layout and preserves the
+caller's output on error. These wrappers do not differentiate caller-side maps.
 The full Fortran/MPI and observation-window adjoint remain outside this API.
 
 When observation-aware replay is enabled, enforce endpoint semantics:

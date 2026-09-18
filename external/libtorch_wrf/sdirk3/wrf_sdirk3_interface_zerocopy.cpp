@@ -16,6 +16,7 @@
 #include "wrf_sdirk3_unified_rhs_extended.h"
 #include "wrf_sdirk3_profiler.h"
 #include "wrf_sdirk3_halo_exchange.h"
+#include "wrf_sdirk3_autograd_utils.h"
 // FIX 2025-01-11 Round72: Removed <atomic> - no longer needed after Round70 switch to per-solver state
 // FIX Round108: Re-added <atomic> for TLS cache generation counter
 #include <atomic>
@@ -24,6 +25,7 @@
 #include <memory>
 #include <unordered_map>
 #include <mutex>
+#include <vector>
 #include <cmath>
 #include <limits>
 
@@ -922,6 +924,68 @@ int sdirk3_tile_solver_get_state_vector_size_zerocopy(void* solver_ptr)
     }
 
     return static_cast<int>(state_size);
+}
+
+extern "C" int sdirk3_tile_solver_begin_fixed_trajectory_zerocopy(
+    void* solver_ptr, int expected_steps, const float* dt_schedule, int dt_schedule_size) {
+    if (!solver_ptr || expected_steps <= 0 || dt_schedule_size < 0 ||
+        (dt_schedule_size > 0 && !dt_schedule)) return 0;
+    try {
+        std::vector<float> schedule;
+        if (dt_schedule_size > 0) schedule.assign(dt_schedule, dt_schedule + dt_schedule_size);
+        std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
+        auto it = g_tile_solvers.find(solver_ptr);
+        if (it == g_tile_solvers.end() || !it->second) return 0;
+        auto* unified_solver = dynamic_cast<TileSDIRK3UnifiedSolver*>(it->second.get());
+        if (!unified_solver) return 0;
+        unified_solver->requestFixedTrajectory(expected_steps, schedule);
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "SDIRK3 fixed trajectory begin ERROR: " << e.what() << std::endl;
+        return 0;
+    } catch (...) { return 0; }
+}
+
+extern "C" int sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy(
+    void* solver_ptr, const float* lambda_terminal, int lambda_size, float* lambda_initial) {
+    if (!solver_ptr || !lambda_terminal || !lambda_initial || lambda_size <= 0) return 0;
+    try {
+        std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
+        auto it = g_tile_solvers.find(solver_ptr);
+        if (it == g_tile_solvers.end() || !it->second) return 0;
+        auto* unified_solver = dynamic_cast<TileSDIRK3UnifiedSolver*>(it->second.get());
+        if (!unified_solver) return 0;
+        const int64_t expected_size = unified_solver->getStateVectorSize();
+        if (expected_size <= 0 || expected_size != static_cast<int64_t>(lambda_size)) return 0;
+        auto terminal = torch::from_blob(const_cast<float*>(lambda_terminal), {expected_size}, wrf::sdirk3::make_cpu_from_blob_opts()).clone();
+        auto initial = unified_solver->pullbackFixedTrajectory(terminal)
+                           .detach().to(torch::kCPU, torch::kFloat32).contiguous();
+        if (!initial.defined() || initial.numel() != expected_size ||
+            !wrf::sdirk3::guarded_item<bool>(torch::isfinite(initial).all())) return 0;
+        std::memcpy(lambda_initial, initial.data_ptr<float>(),
+                    static_cast<size_t>(expected_size) * sizeof(float));
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "SDIRK3 fixed trajectory pullback ERROR: " << e.what() << std::endl;
+        return 0;
+    } catch (...) { return 0; }
+}
+
+extern "C" int sdirk3_tile_solver_close_fixed_trajectory_zerocopy(void* solver_ptr) {
+    if (!solver_ptr) return 0;
+    try {
+        std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
+        auto it = g_tile_solvers.find(solver_ptr);
+        if (it == g_tile_solvers.end() || !it->second) return 0;
+        auto* unified_solver = dynamic_cast<TileSDIRK3UnifiedSolver*>(it->second.get());
+        if (!unified_solver) return 0;
+        if (unified_solver->fixedTrajectoryRequested()) unified_solver->cancelFixedTrajectoryRequest();
+        else unified_solver->closeFixedTrajectory();
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "SDIRK3 fixed trajectory close ERROR: " << e.what() << std::endl;
+        return 0;
+    } catch (...) { return 0; }
 }
 
 int sdirk3_tile_solver_run_adjoint_replay_zerocopy(

@@ -147,6 +147,23 @@ int main() {
         7, 5, 7, 1.0f, 1.0f, rdnw.data(), 901, 8, 6, 8);
     check(registered != nullptr, "v2 regression solver handle registered");
     if (registered != nullptr) {
+        check(sdirk3_tile_solver_begin_fixed_trajectory_zerocopy(
+                  registered, 1, nullptr, 0) == 1,
+              "fixed trajectory request accepted before first publication");
+        const int trajectory_size = sdirk3_tile_solver_get_state_vector_size_zerocopy(registered);
+        bool sentinel_preserved = false;
+        if (trajectory_size > 0) {
+            std::vector<float> terminal(static_cast<size_t>(trajectory_size), 1.0f);
+            std::vector<float> initial(static_cast<size_t>(trajectory_size), -37.0f);
+            sentinel_preserved =
+                sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy(
+                    registered, terminal.data(), trajectory_size, initial.data()) == 0 &&
+                initial == std::vector<float>(static_cast<size_t>(trajectory_size), -37.0f);
+        }
+        check(trajectory_size > 0 && sentinel_preserved,
+              "incomplete C ABI pullback returns 0 and preserves sentinel output");
+        check(sdirk3_tile_solver_close_fixed_trajectory_zerocopy(registered) == 1,
+              "close cancels pending C ABI request before first publication");
         check(call(registered, pb.data(), ti.data(), phb.data(), mub.data()) == 1,
               "v2 regression base state initialized");
         int outcome = -1, aborted = -1, ratio_valid = -1;
@@ -168,7 +185,7 @@ int main() {
         sdirk3_tile_solver_destroy_zerocopy(registered);
     }
 
-    constexpr int expected_checks = 15;
+    constexpr int expected_checks = 18;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

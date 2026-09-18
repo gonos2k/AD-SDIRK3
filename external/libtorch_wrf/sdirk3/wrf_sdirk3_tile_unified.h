@@ -809,6 +809,13 @@ public:
     // from the fixed-input fingerprint because internal stage probes mutate it.
     void beginFixedTrajectory(int expected_steps,
                               const std::vector<float>& dt_schedule);
+    // Request a fixed trajectory before the first zero-copy publication.
+    // Activation occurs in unifiedStep immediately before packState, after all
+    // caller-owned views and fingerprint inputs are live.
+    void requestFixedTrajectory(int expected_steps,
+                                const std::vector<float>& dt_schedule);
+    bool fixedTrajectoryRequested() const { return fixed_trajectory_requested_; }
+    void cancelFixedTrajectoryRequest();
     torch::Tensor pullbackFixedTrajectory(const torch::Tensor& terminal_cotangent);
     void closeFixedTrajectory();
     torch::Tensor runAdjointReplay(const torch::Tensor& lambda_terminal,
@@ -945,6 +952,7 @@ private:
     // msf_epoch_ is a local generation key. Advance it rather than resetting it
     // to avoid an epoch ABA if an old key is inspected during diagnostics.
     void invalidateMapFactorCaches() {
+        fixed_trajectory_requested_ = false;
         fixed_trajectory_steps_.clear();
         fixed_trajectory_expected_ = 0;
         fixed_trajectory_open_ = false;
@@ -2190,6 +2198,7 @@ private:
     std::vector<FixedTrajectoryStep> fixed_trajectory_steps_;
     int fixed_trajectory_expected_ = 0;
     bool fixed_trajectory_open_ = false;
+    bool fixed_trajectory_requested_ = false;
     uint64_t fixed_trajectory_fp_ = 0;
     std::vector<float> fixed_trajectory_dt_schedule_;
     bool fixed_trajectory_dt_reference_set_ = false;

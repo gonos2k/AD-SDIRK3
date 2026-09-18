@@ -5965,6 +5965,17 @@ vertical_coefficients:
         throw std::runtime_error("Base state not initialized before timestep");
     }
     
+    // A deferred C/Fortran request is activated only after this call has
+    // published all caller-owned views and before packState creates the first
+    // retained input leaf.
+    if (fixed_trajectory_requested_) {
+        const int expected_steps = fixed_trajectory_expected_;
+        auto dt_schedule = std::move(fixed_trajectory_dt_schedule_);
+        fixed_trajectory_expected_ = 0;
+        fixed_trajectory_requested_ = false;
+        beginFixedTrajectory(expected_steps, dt_schedule);
+    }
+
     // Pack current state with staggered dimensions
     torch::Tensor U_n = packState(u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
     if (fixed_trajectory_open_) {
@@ -40803,7 +40814,8 @@ void TileSDIRK3UnifiedSolver::beginFixedTrajectory(int expected_steps) {
 
 void TileSDIRK3UnifiedSolver::beginFixedTrajectory(
     int expected_steps, const std::vector<float>& dt_schedule) {
-    TORCH_CHECK(expected_steps > 0 && !fixed_trajectory_open_, "invalid/open fixed trajectory");
+    TORCH_CHECK(expected_steps > 0 && !fixed_trajectory_open_ &&
+                !fixed_trajectory_requested_, "invalid/open fixed trajectory");
     TORCH_CHECK(dt_schedule.empty() ||
                 dt_schedule.size() == static_cast<size_t>(expected_steps),
                 "fixed trajectory timestep schedule length mismatch");
@@ -40812,13 +40824,43 @@ void TileSDIRK3UnifiedSolver::beginFixedTrajectory(
                     "fixed trajectory timestep schedule contains invalid dt");
     }
     validateFixedTrajectoryProfile();
+    const uint64_t fingerprint = fixedTrajectoryInputFingerprint();
+    std::vector<float> schedule_copy(dt_schedule);
     fixed_trajectory_steps_.clear();
     fixed_trajectory_expected_ = expected_steps;
-    fixed_trajectory_dt_schedule_ = dt_schedule;
+    fixed_trajectory_dt_schedule_ = std::move(schedule_copy);
     fixed_trajectory_dt_reference_set_ = false;
     fixed_trajectory_dt_reference_ = 0.0f;
+    fixed_trajectory_fp_ = fingerprint;
     fixed_trajectory_open_ = true;
-    fixed_trajectory_fp_ = fixedTrajectoryInputFingerprint();
+}
+
+void TileSDIRK3UnifiedSolver::requestFixedTrajectory(
+    int expected_steps, const std::vector<float>& dt_schedule) {
+    TORCH_CHECK(expected_steps > 0 && !fixed_trajectory_open_ &&
+                !fixed_trajectory_requested_,
+                "invalid/open fixed trajectory request");
+    TORCH_CHECK(dt_schedule.empty() ||
+                dt_schedule.size() == static_cast<size_t>(expected_steps),
+                "fixed trajectory timestep schedule length mismatch");
+    for (const float dt : dt_schedule) {
+        TORCH_CHECK(std::isfinite(dt) && dt > 0.0f,
+                    "fixed trajectory timestep schedule contains invalid dt");
+    }
+    // Validation and fingerprinting are intentionally deferred until the
+    // first unifiedStep has published the Fortran-owned views.
+    std::vector<float> schedule_copy(dt_schedule);
+    fixed_trajectory_expected_ = expected_steps;
+    fixed_trajectory_dt_schedule_ = std::move(schedule_copy);
+    fixed_trajectory_requested_ = true;
+}
+
+void TileSDIRK3UnifiedSolver::cancelFixedTrajectoryRequest() {
+    TORCH_CHECK(fixed_trajectory_requested_ && !fixed_trajectory_open_,
+                "fixed trajectory request not pending");
+    fixed_trajectory_requested_ = false;
+    fixed_trajectory_expected_ = 0;
+    fixed_trajectory_dt_schedule_.clear();
 }
 
 void TileSDIRK3UnifiedSolver::validateFixedTrajectoryTimestep(float dt) {
@@ -40882,6 +40924,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::pullbackFixedTrajectory(const torch::Tens
         TORCH_CHECK(lambda.sizes() == it->output.sizes() && lambda.options().type_equal(it->output.options()),
                     "fixed trajectory cotangent shape/type mismatch");
         lambda = torch::autograd::grad({it->output}, {it->input}, {lambda}, true, false)[0];
+        TORCH_CHECK(lambda.defined() && lambda.numel() == terminal.numel() &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(lambda).all()),
+                    "fixed trajectory reverse produced invalid gradient");
     }
     return lambda;
 }
