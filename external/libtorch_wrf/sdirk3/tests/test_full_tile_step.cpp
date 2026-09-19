@@ -240,6 +240,11 @@ void check_temporal_order() {
 }
 }
 
+struct DiagnosticPullback {
+    torch::Tensor output;
+    torch::Tensor pullback;
+};
+
 int main(int argc, char** argv) {
     auto& cfg = wrf::sdirk3::g_sdirk3_config;
     cfg.debug_level = 0;
@@ -360,6 +365,45 @@ int main(int argc, char** argv) {
         try { base.solver.pullbackLastStep(terminal); }
         catch (const c10::Error&) { stale_rejected = true; }
         TORCH_CHECK(stale_rejected, "previous-step graph remained available after another step");
+
+        auto run_diagnostic_pullback = [&](int debug_level, std::string& trace) {
+            std::ostringstream captured;
+            auto* captured_previous = std::cerr.rdbuf(captured.rdbuf());
+            try {
+                cfg.debug_level = debug_level;
+                cfg.retain_graph_for_adjoint = true;
+                TileCase tile;
+                tile.step(0.1f);
+                DiagnosticPullback result{tile.state(), tile.solver.pullbackLastStep(terminal)};
+                std::cerr.rdbuf(captured_previous);
+                trace = captured.str();
+                return result;
+            } catch (...) {
+                std::cerr.rdbuf(captured_previous);
+                throw;
+            }
+        };
+        std::string quiet_trace, verbose_trace;
+        const auto quiet = run_diagnostic_pullback(0, quiet_trace);
+        const auto verbose = run_diagnostic_pullback(2, verbose_trace);
+        TORCH_CHECK(torch::equal(quiet.output, verbose.output) &&
+                    torch::equal(quiet.pullback, verbose.pullback),
+                    "verbose transpose residual diagnostics changed the pullback");
+        TORCH_CHECK(quiet_trace.find("SDIRK3_CONVERGED_STAGE_BLOCK_RESIDUAL") == std::string::npos,
+                    "quiet pullback emitted native block residual diagnostics");
+        TORCH_CHECK(verbose_trace.find("SDIRK3_CONVERGED_STAGE_BLOCK_RESIDUAL") != std::string::npos,
+                    "verbose pullback omitted native block residual diagnostics");
+        for (const char* block : {"ru", "rv", "rw", "ph", "t", "mu"}) {
+            TORCH_CHECK(verbose_trace.find(std::string(" ") + block + "_r=") != std::string::npos &&
+                        verbose_trace.find(std::string(" ") + block + "_b=") != std::string::npos &&
+                        verbose_trace.find(std::string(" ") + block + "_rel=") != std::string::npos,
+                        "verbose native block residual diagnostics omitted block ", block);
+        }
+        std::istringstream diagnostic_lines(verbose_trace);
+        for (std::string line; std::getline(diagnostic_lines, line); ) {
+            if (line.find("SDIRK3_CONVERGED_STAGE_BLOCK_RESIDUAL") == 0)
+                std::cout << line << '\n';
+        }
         std::cout << "Full tile step contracts passed\n";
         std::cerr.rdbuf(previous);
         return 0;

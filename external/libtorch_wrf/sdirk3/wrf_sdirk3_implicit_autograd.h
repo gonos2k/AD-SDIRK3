@@ -21,6 +21,7 @@ public:
         ctx->saved_data["restart"] = options.gmres_restart;
         ctx->saved_data["cycles"] = options.max_krylov_iter;
         ctx->saved_data["tolerance"] = static_cast<double>(options.krylov_tol);
+        ctx->saved_data["verbose"] = options.verbose;
         return root.detach().clone();
     }
 
@@ -62,10 +63,44 @@ public:
             static_cast<int>(ctx->saved_data["cycles"].toInt()), nullptr,
             &layout, &active, true, true);
         const auto residual = normalized - apply(solved.x);
-        const double residual_norm = residual.detach().to(torch::kFloat64).norm().item<double>();
-        const double rhs_norm = normalized.detach().to(torch::kFloat64).norm().item<double>();
-        TORCH_CHECK(assess_adjoint_solve(residual_norm, rhs_norm, solved.breakdown,
-                                       tolerance) == SolveVerdict::Converged,
+        const auto residual64 = residual.detach().to(torch::kFloat64);
+        const auto rhs64 = normalized.detach().to(torch::kFloat64);
+        const double residual_norm = residual64.norm().item<double>();
+        const double rhs_norm = rhs64.norm().item<double>();
+        const auto verdict = assess_adjoint_solve(
+            residual_norm, rhs_norm, solved.breakdown, tolerance);
+        if (ctx->saved_data["verbose"].toBool() &&
+            layout.is_valid() && layout.total_size == residual.numel()) {
+            torch::NoGradGuard no_grad;
+            std::vector<BlockResidual> blocks;
+            blocks.reserve(layout.blocks.size());
+            for (const auto& block : layout.blocks) {
+                BlockResidual measured;
+                measured.name = block.name;
+                measured.residual_norm = residual64.slice(
+                    0, block.start, block.start + block.size).norm().item<double>();
+                measured.rhs_norm = rhs64.slice(
+                    0, block.start, block.start + block.size).norm().item<double>();
+                blocks.push_back(measured);
+            }
+            const auto worst = worst_block(blocks);
+            std::cerr << "SDIRK3_CONVERGED_STAGE_BLOCK_RESIDUAL"
+                      << " global_verdict=" << to_string(verdict)
+                      << " global_rel=" << residual_norm / rhs_norm
+                      << " rtol=" << tolerance
+                      << " worst_block=" << worst.name;
+            for (const auto& block : blocks) {
+                std::cerr << " " << block.name
+                          << "_r=" << (norm * block.residual_norm)
+                          << " " << block.name
+                          << "_b=" << (norm * block.rhs_norm)
+                          << " " << block.name
+                          << "_rel=" << (block.rhs_norm > 0.0
+                              ? block.residual_norm / block.rhs_norm : -1.0);
+            }
+            std::cerr << std::endl << std::flush;
+        }
+        TORCH_CHECK(verdict == SolveVerdict::Converged,
                     "ConvergedStage: transpose solve failed its physical residual contract; ",
                     "relative residual=", residual_norm / rhs_norm);
         const auto lambda = norm * solved.x;
