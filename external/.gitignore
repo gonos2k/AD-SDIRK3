@@ -20,6 +20,18 @@
 !fftpack/fftpack5/*.F
 
 # Authoritative preprocessing inputs for GRIB and RSL.
-!io_grib_share/*.F
-!io_grib1/*.F
-!RSL_LITE/*.F
+!RSL_LITE/feedback_domain_em_part1.F
+!RSL_LITE/feedback_domain_em_part2.F
+!RSL_LITE/force_domain_em_part2.F
+!RSL_LITE/interp_domain_em_part1.F
+!RSL_LITE/interp_domain_em_part2.F
+!RSL_LITE/interp_domain_em_part3.F
+!RSL_LITE/interp_domain_em_small.F
+!RSL_LITE/module_dm.F
+!io_grib1/io_grib1.F
+!io_grib_share/io_grib_share.F
+
+# These directories regenerate lowercase Fortran from the inputs above.
+RSL_LITE/*.f90
+io_grib1/*.f90
+io_grib_share/*.f90
