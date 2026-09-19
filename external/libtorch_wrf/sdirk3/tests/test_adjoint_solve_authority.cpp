@@ -389,6 +389,12 @@ int main() {
             {"ru", 1e-9, 1.0},
             {"mu", 0.0,  0.0},     // zero RHS, zero residual
         };
+        std::vector<BlockResidual> zero_only = {
+            {"mu", 0.0, 0.0},      // isolates the zero-RHS path from nonzero blocks
+        };
+        std::vector<BlockResidual> zero_unsettled = {
+            {"mu", 0.3, 0.0},      // invalid rtol must be caught before this Continue case
+        };
         check(assess_adjoint_solve_blockwise(settled, false, rtol) == SolveVerdict::Converged,
               "zero-RHS block that IS zero -> Converged");
 
@@ -398,6 +404,44 @@ int main() {
         };
         check(assess_adjoint_solve_blockwise(nan_blk, false, rtol) == SolveVerdict::Fatal,
               "zero-RHS block with a NaN residual is STILL Fatal");
+
+        // The block path must share tolerance validation with the global path: zero RHS
+        // cannot turn an invalid tolerance into a usable decision.
+        check(assess_adjoint_solve_blockwise(zero_only, false, rtol, std::numeric_limits<double>::infinity())
+                  == SolveVerdict::Fatal,
+              "zero-RHS block + infinite atol -> Fatal (tolerance validation is not bypassed)");
+        check(assess_adjoint_solve_blockwise(zero_unsettled, false, -rtol) == SolveVerdict::Fatal,
+              "zero-RHS block + negative rtol -> Fatal (tolerance validation is shared)");
+
+        check(assess_adjoint_solve_blockwise(zero_only, false, rtol, std::nan(""))
+                  == SolveVerdict::Fatal,
+              "zero-RHS block + NaN atol -> Fatal (tolerance validation is not bypassed)");
+        check(assess_adjoint_solve_blockwise(zero_unsettled, false, std::nan(""))
+                  == SolveVerdict::Fatal,
+              "zero-RHS block + NaN rtol -> Fatal (tolerance validation is shared)");
+
+        std::vector<BlockResidual> atol_boundary = {
+            {"mu", 0.1, 0.0},       // exactly at a positive blockwise absolute tolerance
+        };
+        std::vector<BlockResidual> atol_unsettled = {
+            {"mu", 0.1001, 0.0},   // just outside that positive absolute tolerance
+        };
+        check(assess_adjoint_solve_blockwise(atol_boundary, true, rtol, 0.1)
+                  == SolveVerdict::Converged,
+              "zero-RHS block at positive atol boundary + breakdown -> Converged");
+        check(assess_adjoint_solve_blockwise(atol_unsettled, false, rtol, 0.1)
+                  == SolveVerdict::Continue,
+              "zero-RHS block above positive atol without breakdown -> Continue");
+        check(assess_adjoint_solve_blockwise(atol_unsettled, true, rtol, 0.1)
+                  == SolveVerdict::Fatal,
+              "zero-RHS block above positive atol with breakdown -> Fatal");
+
+        // A breakdown is fatal only when the zero-RHS block is still outside its blockwise
+        // absolute tolerance; a converged breakdown remains the happy-breakdown success.
+        check(assess_adjoint_solve_blockwise(coupled, true, rtol) == SolveVerdict::Fatal,
+              "zero-RHS block with an unconverged breakdown -> Fatal");
+        check(assess_adjoint_solve_blockwise(settled, true, rtol) == SolveVerdict::Converged,
+              "zero-RHS block with a happy breakdown -> Converged");
     }
 
         // A wrong basis must not buy WEAKER gating. layout_for_adjoint_residual returns an invalid
@@ -435,7 +479,7 @@ int main() {
         check(threw_prov, "a structurally-valid but NON-grid-derived layout is refused");
     }
 
-constexpr int expected_checks = 53;
+constexpr int expected_checks = 62;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

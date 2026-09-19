@@ -443,6 +443,8 @@ jobs:
                 || { echo "FAIL: installed header differs from source: $hdr"; exit 1; } ;;
             esac
           done < .github/ci/expected_install_manifest.txt
+          bash external/libtorch_wrf/sdirk3/tests/check_installed_c_interface.sh \
+            "$install_root" "$TORCH_LIB_DIR"
           echo "install contract OK"
 
       - name: failure artifacts

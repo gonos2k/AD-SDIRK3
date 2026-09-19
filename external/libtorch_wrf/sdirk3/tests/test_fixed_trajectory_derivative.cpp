@@ -11,6 +11,11 @@ struct ChainResult {
     torch::Tensor initial_pullback;
 };
 
+struct MultiChainResult {
+    torch::Tensor output;
+    std::vector<torch::Tensor> pullbacks;
+};
+
 torch::Tensor make_initial() {
     auto x = torch::zeros({N}, torch::kFloat32);
     auto idx = torch::arange(N, torch::kFloat32);
@@ -31,6 +36,28 @@ torch::Tensor make_terminal() {
     return lambda / lambda.norm();
 }
 
+std::vector<int64_t> packed_block_sizes() {
+    return {wrf::sdirk3::test::su, wrf::sdirk3::test::sv,
+            wrf::sdirk3::test::sw, wrf::sdirk3::test::sw,
+            wrf::sdirk3::test::st, wrf::sdirk3::test::sm};
+}
+
+torch::Tensor make_block_vector(int block) {
+    const auto sizes = packed_block_sizes();
+    TORCH_CHECK(block >= 0 && block < static_cast<int>(sizes.size()),
+                "invalid packed block ", block);
+    int64_t start = 0;
+    for (int b = 0; b < block; ++b) start += sizes[b];
+    const int64_t size = sizes[block];
+    auto local = torch::arange(size, torch::kFloat32);
+    local = torch::sin((0.031f + 0.002f * block) * local + 0.17f * block) +
+            0.3f * torch::cos((0.011f + 0.001f * block) * local);
+    local = local / local.norm();
+    auto packed = torch::zeros({N}, torch::kFloat32);
+    packed.slice(0, start, start + size).copy_(local);
+    return packed;
+}
+
 int trajectory_length = 2;
 std::vector<float> trajectory_dt_schedule() {
     if (trajectory_length == 2) return {0.1f, 0.075f};
@@ -49,6 +76,24 @@ ChainResult run_chain(const torch::Tensor& x0, const torch::Tensor& terminal, bo
     const auto lambda = tile.solver.pullbackFixedTrajectory(terminal);
     tile.solver.closeFixedTrajectory();
     return {out, lambda};
+}
+
+MultiChainResult run_chain_many(const torch::Tensor& x0,
+                                const std::vector<torch::Tensor>& terminals) {
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg.retain_graph_for_adjoint = true;
+    TileCase tile(100000.0f, 0.0f, true);
+    tile.set(x0);
+    const auto dt_schedule = trajectory_dt_schedule();
+    tile.solver.beginFixedTrajectory(trajectory_length, dt_schedule);
+    for (int step = 0; step < trajectory_length; ++step) tile.step(dt_schedule[step]);
+    const auto out = tile.state();
+    std::vector<torch::Tensor> pullbacks;
+    pullbacks.reserve(terminals.size());
+    for (const auto& terminal : terminals)
+        pullbacks.push_back(tile.solver.pullbackFixedTrajectory(terminal));
+    tile.solver.closeFixedTrajectory();
+    return {out, std::move(pullbacks)};
 }
 
 void configure(bool top_lid) {
@@ -122,18 +167,22 @@ int main() {
             TORCH_CHECK(std::isfinite(fd) && denom > 1e-12,
                         "two-step FD/adjoint signal is zero or non-finite");
             const double rel = std::abs(fd - ad) / denom;
-            // Objective Taylor check on the plus branch, with the quadratic
-            // term making the expected remainder ratio approximately four.
+            // Keep the linear objective diagnostic separate while preserving the original
+            // quadratic Taylor remainder and ratio assertions below.
             const auto plus_delta = plus.to(torch::kFloat64) - baseline.output.to(torch::kFloat64);
             const double objective = plus_delta.dot(terminal.to(torch::kFloat64)).item<double>() +
                                      0.5 * plus_delta.square().sum().item<double>();
             const double remainder = std::abs(objective - eps * ad);
+            const double linear_remainder = std::abs(
+                plus_delta.dot(terminal.to(torch::kFloat64)).item<double>() - eps * ad);
             std::cout << "FIXED_TRAJECTORY_ADJOINT N=" << length << " eps=" << eps << " ad=" << ad << " fd=" << fd
-                      << " relative_error=" << rel << " taylor_remainder=" << remainder;
+                      << " relative_error=" << rel << " linear_remainder=" << linear_remainder
+                      << " quadratic_remainder=" << remainder;
             if (previous_remainder > 0.0)
-                std::cout << " remainder_ratio=" << previous_remainder / remainder;
+                std::cout << " quadratic_remainder_ratio=" << previous_remainder / remainder;
             std::cout << '\n';
-            TORCH_CHECK(rel < 5e-4 && std::isfinite(remainder) && remainder > 0.0,
+            TORCH_CHECK(rel < 5e-4 && std::isfinite(linear_remainder) &&
+                            std::isfinite(remainder) && remainder > 0.0,
                         "two-step tile VJP finite-difference/Taylor check failed");
             if (previous_remainder > 0.0) {
                 const double ratio = previous_remainder / remainder;
@@ -144,6 +193,68 @@ int main() {
         }
         std::cout << "fixed C++ trajectory NH=1 curvature=1 top_lid=" << top_lid
                   << " N=" << length << " passed\n";
+
+        // One retained trajectory supplies independent block cotangents without repeating the
+        // nonlinear forward solve.  The six vectors are supported on the exact packed blocks
+        // (ru, rv, rw, ph, t, mu), so this exercises coordinate ownership rather than only one
+        // global random direction.  Keep this contract probe to one representative case to
+        // bound runtime; the original four cases above remain unchanged.
+        if (!top_lid && length == 2) {
+            std::vector<torch::Tensor> block_vectors;
+            for (int block = 0; block < 6; ++block)
+                block_vectors.push_back(make_block_vector(block));
+            const auto c1 = block_vectors[0];
+            const auto c2 = block_vectors[5];
+            const auto c12 = c1 + 2.0f * c2;
+            auto terminals = block_vectors;
+            terminals.push_back(c12);
+            terminals.push_back(torch::zeros({N}, torch::kFloat32));
+            const auto batch = run_chain_many(x0, terminals);
+            TORCH_CHECK(batch.pullbacks.size() == 8,
+                        "block/cotangent contract returned the wrong pullback count");
+            for (int block = 0; block < 6; ++block) {
+                const auto& pb = batch.pullbacks[block];
+                TORCH_CHECK(torch::isfinite(pb).all().item<bool>() &&
+                                pb.norm().item<double>() > 1e-8,
+                            "block cotangent ", block, " produced an uninformative pullback");
+
+                // Independent block direction: compare one central FD to the corresponding
+                // block terminal objective, using the existing eps=0.01 and rel<5e-4 budget.
+                const float eps = 0.01f;
+                const auto& block_cotangent = block_vectors[block];
+                const auto plus = run_chain(x0 + eps * block_vectors[block],
+                                            block_cotangent, false).output;
+                const auto minus = run_chain(x0 - eps * block_vectors[block],
+                                             block_cotangent, false).output;
+                const auto delta = (plus.to(torch::kFloat64) - minus.to(torch::kFloat64)) /
+                                   (2.0 * eps);
+                const double fd = delta.dot(block_cotangent.to(torch::kFloat64)).item<double>();
+                const double ad = block_vectors[block].to(torch::kFloat64)
+                                      .dot(batch.pullbacks[block].to(torch::kFloat64)).item<double>();
+                const double denom = 0.5 * (std::abs(fd) + std::abs(ad));
+                const double rel = std::abs(fd - ad) / denom;
+                std::cout << "FIXED_TRAJECTORY_BLOCK block=" << block
+                          << " fd=" << fd << " ad=" << ad << " relative_error=" << rel << '\n';
+                TORCH_CHECK(std::isfinite(fd) && denom > 1e-12 &&
+                                rel < 5e-4,
+                            "block direction ", block,
+                            " failed fixed-trajectory FD/VJP contract");
+            }
+            const auto& pb1 = batch.pullbacks[0];
+            const auto& pb2 = batch.pullbacks[5];
+            const auto& pb12 = batch.pullbacks[6];
+            const double lin_den = std::max(
+                (pb12.abs().max().item<double>()),
+                (pb1 + 2.0f * pb2).abs().max().item<double>());
+            const double lin_err = (pb12 - pb1 - 2.0f * pb2).abs().max().item<double>() /
+                                   std::max(lin_den, 1e-30);
+            TORCH_CHECK(lin_err < 5e-4,
+                        "fixed-trajectory pullback is not linear in terminal cotangent");
+            TORCH_CHECK(batch.pullbacks[7].norm().item<double>() == 0.0,
+                        "zero terminal cotangent did not remain exactly zero in batch pullback");
+            std::cout << "fixed trajectory block/cotangent contract passed"
+                      << " max_linear_error=" << lin_err << '\n';
+        }
         }
         }
         return 0;

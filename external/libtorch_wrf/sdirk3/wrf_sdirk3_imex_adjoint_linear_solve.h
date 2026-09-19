@@ -204,10 +204,12 @@ inline StateLayout layout_for_adjoint_residual(int64_t numel) {
 // five orders below it. A gradient is only usable if EVERY block is usable, so every block
 // gets its own mixed tolerance and the worst one decides.
 //
-// STRICTER THAN THE GLOBAL TEST, deliberately, and in the safe direction: it can refuse a
-// gradient the global test would accept, never accept one the global test would refuse. For
-// a fail-close gate whose whole premise is that a wrong gradient is worse than no gradient,
-// that is the correct way to be wrong.
+// With the default atol = 0 and finite nonzero block norms, this is stricter than the global
+// test in the safe direction: it can refuse a gradient the global test would accept. When a
+// nonzero atol is supplied, that absolute allowance is applied independently to each block,
+// so the blockwise gate must be read as an every-block contract rather than as a globally
+// stricter scalar norm. For a fail-close gate whose whole premise is that a wrong gradient is
+// worse than no gradient, each block still has to pass.
 struct BlockResidual {
     std::string name;
     double residual_norm = 0.0;
@@ -220,9 +222,16 @@ inline SolveVerdict assess_adjoint_solve_blockwise(const std::vector<BlockResidu
                                                    double atol = 0.0) {
     if (blocks.empty()) return SolveVerdict::Fatal;   // nothing measured is not convergence
 
+    // Validate the shared tolerance policy before looking at any block.  A zero-RHS block
+    // uses atol directly below, so it must not bypass the finite/nonnegative checks in the
+    // global adjudicator merely because rtol is multiplied by zero.
+    if (!std::isfinite(rtol) || !std::isfinite(atol) || rtol < 0.0 || atol < 0.0)
+        return SolveVerdict::Fatal;
+
     SolveVerdict worst = SolveVerdict::Converged;
     for (const auto& b : blocks) {
-        // 9F.D114 (review section 9): A ZERO-RHS *BLOCK* IS NOT FATAL.
+        // 9F.D114 (review section 9): A ZERO-RHS *BLOCK* IS NOT FATAL when it is
+        // merely above this block's absolute tolerance and the Krylov space can continue.
         //
         // assess_adjoint_solve treats rhs_norm == 0 as Fatal, which is right for the WHOLE
         // system (b = 0 means x = 0, so a large residual cannot be fixed by iterating). It is
@@ -233,13 +242,17 @@ inline SolveVerdict assess_adjoint_solve_blockwise(const std::vector<BlockResidu
         //     A = [[1,1],[1,2]], b = (1,0)^T   -- b_2 = 0, yet r_2 != 0 at intermediate
         //                                          iterates and converges normally.
         //
-        // So a zero-RHS block is judged on the ABSOLUTE tolerance alone and can only reach
-        // Continue, never Fatal. Genuine Fatals (non-finite, breakdown, bad tolerances) still
-        // come from assess_adjoint_solve on the other blocks.
+        // So a zero-RHS block is judged on this block's ABSOLUTE tolerance alone: it reaches
+        // Continue while more Krylov iterations can help, but an unconverged breakdown is
+        // Fatal because the invariant subspace cannot improve it. A converged breakdown is
+        // still the happy-breakdown Converged case.
         if (b.rhs_norm == 0.0) {
             if (!std::isfinite(b.residual_norm) || b.residual_norm < 0.0)
                 return SolveVerdict::Fatal;
-            if (b.residual_norm > atol) worst = SolveVerdict::Continue;
+            if (b.residual_norm > atol) {
+                if (krylov_breakdown) return SolveVerdict::Fatal;
+                worst = SolveVerdict::Continue;
+            }
             continue;
         }
         const SolveVerdict v =
