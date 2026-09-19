@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Multi-version Python CI is deferred; automatic runs use only this baseline.
+  PYTHON_VERSION: '3.12'
+
 concurrency:
   group: sdirk3-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -302,7 +306,7 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: .github/ci/requirements-core.txt
 
@@ -497,7 +501,7 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: .github/ci/requirements-core.txt
 
