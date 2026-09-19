@@ -169,7 +169,7 @@ jobs:
           shellcheck --version | head -2
           shellcheck -S warning .github/ci/*.sh external/libtorch_wrf/sdirk3/tests/*.sh
 
-      # 9F.D21: the ONLY Fortran gate in hosted CI. The causal results of this
+      # 9F.D21: the parser Fortran gate. The causal results of this
       # campaign (failure step, g_eff, the ablation matrix) live in manual local
       # runs and cannot be re-run here -- model execution is local-only by repo
       # policy -- so the next code change could silently invert them and CI would
@@ -192,6 +192,9 @@ jobs:
           gfortran -Idyn_em -std=f2008 -Wall -o /tmp/test_bwave_pert_scale \
             external/libtorch_wrf/sdirk3/tests/test_bwave_pert_scale.f90
           /tmp/test_bwave_pert_scale
+
+      - name: diffusion metric boundary contract (Fortran)
+        run: python3 tools/test_compute_diff_metrics_boundaries.py
 
       # PR 7C: the decomposition harness carries its own logic (marker /
       # exit / stage-norm / pre-refusal-solve assertions + manifest sanity).
