@@ -18,3 +18,8 @@
 
 # FFTPACK ships authoritative uppercase .F sources, including on macOS.
 !fftpack/fftpack5/*.F
+
+# Authoritative preprocessing inputs for GRIB and RSL.
+!io_grib_share/*.F
+!io_grib1/*.F
+!RSL_LITE/*.F

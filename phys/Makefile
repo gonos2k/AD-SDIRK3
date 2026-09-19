@@ -269,11 +269,12 @@ submodules :
 		ln -sf noahmp/src/module_sf_noahmp_glacier.F . ; \
 		ln -sf noahmp/src/module_sf_noahmp_groundwater.F . ; \
 		ln -sf noahmp/src/module_sf_noahmplsm.F . ; \
-		( cd ../run ; ln -sf ../phys/noahmp/parameters/MPTABLE.TBL . ) ; \
 	else \
 		echo No action required for NoahMP submodule ; \
 	fi
-	@if [ \( ! -f module_bl_mynnedmf.F \) -o \( ! -f module_bl_mynedmf_common.F \) -o \
+	@mkdir -p ../run
+	@ln -sf ../phys/noahmp/parameters/MPTABLE.TBL ../run/MPTABLE.TBL
+	@if [ \( ! -f module_bl_mynnedmf.F \) -o \( ! -f module_bl_mynnedmf_common.F \) -o \
 	      \( ! -f module_bl_mynnedmf_driver.F \) ] ; then \
 	      	echo Pulling in MYNN-EDMF submodule ; \
 		( cd .. ; git submodule update --init --recursive ) ; \
