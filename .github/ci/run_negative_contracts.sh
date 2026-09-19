@@ -74,15 +74,34 @@ fresh_copy
 expect_fail "cmake-semicolon-line" "not a .cpp|nonexistent|duplicate" "$WORK/cmake-semi.log" -- \
   cmake_configure "$SRC" "$WORK/b-semi"
 
-# ---------- archive exact-set: stale member injected as a REAL object ----------
-# The positive builds below are SETUP, not the contract under test: if one
-# fails, report it as a distinct FAIL and skip that case's checks — under
-# `set -e` a bare subshell failure would kill the whole matrix with no
-# diagnostic (observed: first Linux run died here on an unrelated compile
-# error, exit 2, zero FAIL lines).
+# ---------- one positive Make baseline, restored before each mutation ----------
+# The positive build is setup only. A failure is explicit and nonzero; it is
+# never laundered into a negative-case marker failure.
 fresh_copy
+BASELINE="$WORK/pristine"
 if ( cd "$SRC" \
+  && make check-core-manifest "${MAKE_ARGS[@]}" > "$WORK/baseline-manifest.log" 2>&1 \
   && make -j 2 "${MAKE_ARGS[@]}" > "$WORK/pos-build.log" 2>&1 \
+  && make check-core-archive "${MAKE_ARGS[@]}" > "$WORK/baseline-archive.log" 2>&1 ); then
+  rm -rf "$BASELINE"
+  cp -pR "$SRC" "$BASELINE"
+  echo "PASS [baseline]: manifest/archive checked and pristine source/build tree preserved"
+else
+  echo "FAIL [baseline]: positive Make setup failed (see baseline-manifest.log / pos-build.log / baseline-archive.log)"
+  tail -5 "$WORK/baseline-manifest.log" 2>/dev/null || true
+  tail -5 "$WORK/pos-build.log" 2>/dev/null || true
+  tail -5 "$WORK/baseline-archive.log" 2>/dev/null || true
+  exit 1
+fi
+
+restore_baseline() {
+  rm -rf "$SRC"
+  cp -pR "$BASELINE" "$SRC"
+}
+
+# ---------- archive exact-set: stale member injected as a REAL object ----------
+restore_baseline
+if ( cd "$SRC" \
   && printf 'namespace { int neg_stale_anchor = 0; }\nint* neg_stale() { return &::neg_stale_anchor; }\n' > stale_member.cpp \
   && "${CXX:-g++}" -std=c++17 -c stale_member.cpp -o stale_member.o \
   && ar r libwrf_sdirk3_libtorch.a stale_member.o \
@@ -94,16 +113,20 @@ if ( cd "$SRC" \
   else
     echo "PASS [stale-member]: atomic reconstruction dropped the injected member"
   fi
-  ( cd "$SRC" && make check-core-archive "${MAKE_ARGS[@]}" > "$WORK/stale-check.log" 2>&1 ) \
-    && echo "PASS [stale-member-check]" || { echo "FAIL [stale-member-check]"; fail=1; }
+  if ( cd "$SRC" && make check-core-archive "${MAKE_ARGS[@]}" > "$WORK/stale-check.log" 2>&1 ); then
+    echo "PASS [stale-member-check]"
+  else
+    echo "FAIL [stale-member-check]"
+    fail=1
+  fi
 else
-  echo "FAIL [stale-member]: setup/positive build failed (see pos-build.log / stale-rebuild.log)"
-  tail -5 "$WORK/pos-build.log" 2>/dev/null || true
+  echo "FAIL [stale-member]: baseline restore or mutation failed (see stale-rebuild.log)"
+  tail -5 "$WORK/stale-rebuild.log" 2>/dev/null || true
   fail=1
 fi
 
 # ---------- source removal without clean ----------
-fresh_copy
+restore_baseline
 if ( cd "$SRC" \
   && printf 'namespace { int neg_tmp_anchor = 0; }\nint* neg_tmp() { return &::neg_tmp_anchor; }\n' > wrf_sdirk3_neg_tmp.cpp \
   && printf 'wrf_sdirk3_neg_tmp.cpp\n' >> $M \
@@ -118,14 +141,14 @@ if ( cd "$SRC" \
     echo "PASS [removed-source]: retired member gone without clean"
   fi
 else
-  echo "FAIL [removed-source]: setup/positive build failed (see tmp-add.log / tmp-del.log)"
+  echo "FAIL [removed-source]: baseline restore or mutation failed (see tmp-add.log / tmp-del.log)"
   tail -5 "$WORK/tmp-add.log" 2>/dev/null || true
   fail=1
 fi
 
 # ---------- compile-fail atomicity ----------
-fresh_copy
-if ( cd "$SRC" && make -j 2 "${MAKE_ARGS[@]}" > "$WORK/atom-pos.log" 2>&1 ); then
+restore_baseline
+if [ -f "$SRC/libwrf_sdirk3_libtorch.a" ]; then
   sha_before="$(shasum -a 256 "$SRC/libwrf_sdirk3_libtorch.a" 2>/dev/null || sha256sum "$SRC/libwrf_sdirk3_libtorch.a")"
   ( cd "$SRC" && sleep 1.2 && printf '\n#error pr6 deliberate\n' >> wrf_sdirk3_globals.cpp )
   expect_fail "compile-fail-make" "pr6 deliberate" "$WORK/atom-make.log" -- \
@@ -143,8 +166,7 @@ if ( cd "$SRC" && make -j 2 "${MAKE_ARGS[@]}" > "$WORK/atom-pos.log" 2>&1 ); the
   expect_fail "compile-fail-cmake" "pr6 deliberate" "$WORK/atom-cmake.log" -- \
     cmake --build "$WORK/b-atom" --parallel 2
 else
-  echo "FAIL [atomicity]: setup/positive build failed (see atom-pos.log)"
-  tail -5 "$WORK/atom-pos.log" 2>/dev/null || true
+  echo "FAIL [atomicity]: baseline restore failed (archive missing)"
   fail=1
 fi
 

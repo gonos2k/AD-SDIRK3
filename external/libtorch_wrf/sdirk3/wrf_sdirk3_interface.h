@@ -1,6 +1,10 @@
 #ifndef WRF_SDIRK3_INTERFACE_H
 #define WRF_SDIRK3_INTERFACE_H
+#ifdef __cplusplus
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
+#else
+#include <stdint.h>
+#endif
 
 /**
  * WRF SDIRK3 ABI Version Information

@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Multi-version Python CI is deferred; automatic runs use only this baseline.
+  PYTHON_VERSION: '3.12'
+
 concurrency:
   group: sdirk3-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -292,6 +296,9 @@ jobs:
       # nondeterministically across runner nodes. Pin UCX to transports that
       # exist everywhere.
       UCX_TLS: shm,tcp,self
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 1G
+      CCACHE_COMPILERCHECK: content
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -299,15 +306,23 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: .github/ci/requirements-core.txt
 
       - name: install pinned CPU torch + fingerprint
         run: bash .github/ci/setup_torch_env.sh
 
-      - name: install ninja
-        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build mpich libmpich-dev
+      - name: install build tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build ccache mpich libmpich-dev
+
+      - name: restore compiler cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .ccache
+          key: ${{ runner.os }}-sdirk3-ccache-v1-${{ hashFiles('.github/ci/requirements-core.txt') }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-sdirk3-ccache-v1-${{ hashFiles('.github/ci/requirements-core.txt') }}-
 
       - name: production Make archive + exact-set contracts
         run: |
@@ -323,6 +338,7 @@ jobs:
           set -euo pipefail
           cmake -S external/libtorch_wrf/sdirk3 -B build/sdirk3-core -G Ninja \
                 -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
                 -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX" \
                 -DWRF_SDIRK3_ABI_STRICT=AUTO \
                 -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI" \
@@ -375,7 +391,14 @@ jobs:
       - name: MPI-free core shape must stay compilable (P1 regression gate)
         run: |
           set -euo pipefail
-          cmake -S external/libtorch_wrf/sdirk3 -B build/sdirk3-nompi -G Ninja                 -DCMAKE_BUILD_TYPE=Release                 -DCMAKE_DISABLE_FIND_PACKAGE_MPI=ON                 -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX"                 -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI"                 -DSDIRK3_QUIET_TESTS=ON                 -DUSE_FAST_POW_0875=OFF                 | tee nompi-configure.log
+          cmake -S external/libtorch_wrf/sdirk3 -B build/sdirk3-nompi -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+                -DCMAKE_DISABLE_FIND_PACKAGE_MPI=ON \
+                -DCMAKE_PREFIX_PATH="$TORCH_CMAKE_PREFIX" \
+                -DWRF_SDIRK3_TORCH_ABI="$TORCH_ABI" \
+                -DSDIRK3_QUIET_TESTS=ON \
+                -DUSE_FAST_POW_0875=OFF | tee nompi-configure.log
           # prove MPI was really disabled, not silently found:
           grep -q "SDIRK3 MPI halo contract: MPI not found - tests NOT registered" nompi-configure.log
           cmake --build build/sdirk3-nompi --target wrf_sdirk3_lib --parallel 2
@@ -443,7 +466,13 @@ jobs:
                 || { echo "FAIL: installed header differs from source: $hdr"; exit 1; } ;;
             esac
           done < .github/ci/expected_install_manifest.txt
+          bash external/libtorch_wrf/sdirk3/tests/check_installed_c_interface.sh \
+            "$install_root" "$TORCH_LIB_DIR"
           echo "install contract OK"
+
+      - name: compiler cache statistics
+        if: ${{ always() }}
+        run: ccache --show-stats
 
       - name: failure artifacts
         if: ${{ failure() }}
@@ -472,7 +501,7 @@ jobs:
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: '3.12'
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: .github/ci/requirements-core.txt
 

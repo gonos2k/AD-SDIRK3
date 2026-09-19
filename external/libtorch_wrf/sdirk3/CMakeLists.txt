@@ -164,9 +164,10 @@ install(TARGETS wrf_sdirk3_lib DESTINATION lib)
 
 # Public-header install preserved from the pre-PR5 CMake (Codex: the stub
 # removal must not REGRESS the install contract; a full header-install
-# redesign is explicitly out of PR 5 scope). Same existence-checked list,
-# same include/wrf_sdirk3 destination as before.
+# redesign is explicitly out of PR 5 scope). Keep the authoritative C ABI
+# header in the same existence-checked include/wrf_sdirk3 destination.
 set(WRF_SDIRK3_INSTALL_HEADER_CANDIDATES
+    wrf_sdirk3_interface.h
     wrf_sdirk3_state_vector.h
     wrf_sdirk3_zero_copy_interface.h
     wrf_sdirk3_newton_krylov_fixed.h
