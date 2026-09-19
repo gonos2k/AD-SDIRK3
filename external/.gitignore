@@ -15,3 +15,6 @@
 
 # Exceptions to top-level .gitignore: many external/ source code files use .f90 extension
 !*.f90
+
+# FFTPACK ships authoritative uppercase .F sources, including on macOS.
+!fftpack/fftpack5/*.F
