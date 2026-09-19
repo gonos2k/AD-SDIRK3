@@ -7014,13 +7014,14 @@ END SUBROUTINE phy_bc
     END DO
     END DO
 
-! Some b.c. on zx and zy.
+! Slopes live at W levels, including kte.  The top mass layer reads
+! zx/zy at k+1, so boundary slopes must cover the same levels as the interior.
 
     IF ( .NOT. config_flags%periodic_x ) THEN
 
       IF ( ite == ide ) THEN
         DO j = j_start, j_end
-        DO k = 1, ktf
+        DO k = 1, kte
           zx(ide,k,j) = 0.0
         END DO
         END DO
@@ -7028,7 +7029,7 @@ END SUBROUTINE phy_bc
 
       IF ( its == ids ) THEN
         DO j = j_start, j_end
-        DO k = 1, ktf
+        DO k = 1, kte
           zx(ids,k,j) = 0.0
         END DO
         END DO
@@ -7038,13 +7039,13 @@ END SUBROUTINE phy_bc
 
       IF ( ite == ide ) THEN
         DO j=j_start,j_end
-        DO k=1,ktf
+        DO k=1,kte
          zx(ide,k,j) = rdx * ( phb(ide,k,j) - phb(ide-1,k,j) ) / g
         END DO
         END DO
 
         DO j = j_start, j_end
-        DO k = 1, ktf
+        DO k = 1, kte
           zx(ide,k,j) = zx(ide,k,j) + rdx * ( ph(ide,k,j) - ph(ide-1,k,j) ) / g
         END DO
         END DO
@@ -7052,13 +7053,13 @@ END SUBROUTINE phy_bc
 
       IF ( its == ids ) THEN
         DO j = j_start, j_end
-        DO k = 1, ktf
+        DO k = 1, kte
           zx(ids,k,j) = rdx * ( phb(ids,k,j) - phb(ids-1,k,j) ) / g
         END DO
         END DO
 
         DO j =j_start,j_end
-        DO k =1,ktf
+        DO k =1,kte
           zx(ids,k,j) = zx(ids,k,j) + rdx * ( ph(ids,k,j) - ph(ids-1,k,j) ) / g
         END DO
         END DO
@@ -7069,7 +7070,7 @@ END SUBROUTINE phy_bc
     IF ( .NOT. config_flags%periodic_y ) THEN
 
       IF ( jte == jde ) THEN
-        DO k =1, ktf
+        DO k =1, kte
         DO i =i_start, i_end
           zy(i,k,jde) = 0.0
         END DO
@@ -7077,7 +7078,7 @@ END SUBROUTINE phy_bc
       END IF
 
       IF ( jts == jds ) THEN
-        DO k =1, ktf
+        DO k =1, kte
         DO i =i_start, i_end
           zy(i,k,jds) = 0.0
         END DO
@@ -7087,13 +7088,13 @@ END SUBROUTINE phy_bc
     ELSE
 
       IF ( jte == jde ) THEN
-        DO k=1, ktf
+        DO k=1, kte
         DO i =i_start, i_end
           zy(i,k,jde) = rdy * ( phb(i,k,jde) - phb(i,k,jde-1) ) / g
         END DO
         END DO
 
-        DO k = 1, ktf
+        DO k = 1, kte
         DO i =i_start, i_end
           zy(i,k,jde) = zy(i,k,jde) + rdy * ( ph(i,k,jde) - ph(i,k,jde-1) ) / g
         END DO
@@ -7101,13 +7102,13 @@ END SUBROUTINE phy_bc
       END IF
 
       IF ( jts == jds ) THEN
-        DO k = 1, ktf
+        DO k = 1, kte
         DO i =i_start, i_end
           zy(i,k,jds) = rdy * ( phb(i,k,jds) - phb(i,k,jds-1) ) / g
         END DO
         END DO
 
-        DO k = 1, ktf
+        DO k = 1, kte
         DO i =i_start, i_end
           zy(i,k,jds) = zy(i,k,jds) + rdy * ( ph(i,k,jds) - ph(i,k,jds-1) ) / g
         END DO
