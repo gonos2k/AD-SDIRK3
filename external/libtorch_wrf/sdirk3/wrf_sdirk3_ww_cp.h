@@ -144,7 +144,41 @@ inline const char* wwcp_policy_name(WWCPBoundaryPolicy p) {
     return "?";
 }
 
-inline torch::Tensor compute_wrf_ww_cp(
+// Full diagnostic output of WRF calc_ww_cp.  `u` and `v` are the map-coupled
+// mass fluxes at their native staggered faces (cu and cv in the Fortran
+// kernel). `omega` is the w-staggered diagnosed vertical mass flux. The
+// continuity diagnostic is dmdt = sum_k divv(k), i.e. the horizontal column
+// mass tendency divided by the y-direction map factor (Mdot/msfty) in WRF's
+// map-scaled continuity equation. It has pressure/time units (Pa/s);
+// it is the quantity used by the omega recurrence, not an independently
+// rescaled physical Mdot.
+struct WRFMassFlux {
+    torch::Tensor u;  // cu: map-coupled x-face mass flux, [ny,nz,nx+1]
+    torch::Tensor v;  // cv: map-coupled y-face mass flux, [ny+1,nz,nx]
+    torch::Tensor omega;  // diagnosed w-staggered mass flux, [ny,nz+1,nx]
+    torch::Tensor mass_tendency_over_map_y;  // dmdt=Mdot/msfty, [ny,nx]
+};
+
+// Average independent mass cells to staggered faces. Packed aliases must be
+// removed by the caller; they are not additional cells at a periodic seam.
+inline torch::Tensor stagger_wrf_mass_field(
+    const torch::Tensor& field, int64_t axis, WWCPBoundaryPolicy policy) {
+    TORCH_CHECK(policy == WWCPBoundaryPolicy::Periodic ||
+                policy == WWCPBoundaryPolicy::SymmetricReplicate,
+                "mass-to-face averaging requires an authoritative boundary policy");
+    const auto n = field.size(axis);
+    TORCH_CHECK(n > 0, "mass-to-face averaging requires nonempty cells");
+    const auto first = field.slice(axis, 0, 1);
+    const auto last = field.slice(axis, n - 1, n);
+    const auto middle = 0.5f * (field.slice(axis, 1, n) + field.slice(axis, 0, n - 1));
+    if (policy == WWCPBoundaryPolicy::Periodic) {
+        const auto seam = 0.5f * (first + last);
+        return torch::cat({seam, middle, seam}, axis);
+    }
+    return torch::cat({first, middle, last}, axis);
+}
+
+inline WRFMassFlux diagnose_wrf_mass_flux(
     const torch::Tensor& u,          // [ny, nz, nx_u]
     const torch::Tensor& v,          // [ny_v, nz, nx]
     const torch::Tensor& mup,        // [ny, nx] perturbation column mass
@@ -250,32 +284,8 @@ inline torch::Tensor compute_wrf_ww_cp(
 
     auto mut = mup + mub;  // [ny, nx]
 
-    // muu at u-points [ny, nx+1] — assembled out-of-place (cat), never by
-    // slice/select assignment, so the autograd graph stays intact. The seam
-    // columns carry the boundary policy: periodic wraps to the opposite
-    // edge, symmetric degenerates to the edge value.
-    auto muu_interior = 0.5f * (mut.slice(1, 1, nx) + mut.slice(1, 0, nx - 1));
-    torch::Tensor muu;
-    if (x_policy == WWCPBoundaryPolicy::Periodic) {
-        auto seam =
-            0.5f * (mut.slice(1, 0, 1) + mut.slice(1, nx - 1, nx));
-        muu = torch::cat({seam, muu_interior, seam}, 1);
-    } else {  // SymmetricReplicate
-        muu = torch::cat(
-            {mut.slice(1, 0, 1), muu_interior, mut.slice(1, nx - 1, nx)}, 1);
-    }
-
-    // muv at v-points [ny+1, nx] (same per-policy seam handling)
-    auto muv_interior = 0.5f * (mut.slice(0, 1, ny) + mut.slice(0, 0, ny - 1));
-    torch::Tensor muv;
-    if (y_policy == WWCPBoundaryPolicy::Periodic) {
-        auto seam =
-            0.5f * (mut.slice(0, 0, 1) + mut.slice(0, ny - 1, ny));
-        muv = torch::cat({seam, muv_interior, seam}, 0);
-    } else {  // SymmetricReplicate
-        muv = torch::cat(
-            {mut.slice(0, 0, 1), muv_interior, mut.slice(0, ny - 1, ny)}, 0);
-    }
+    const auto muu = stagger_wrf_mass_field(mut, 1, x_policy);
+    const auto muv = stagger_wrf_mass_field(mut, 0, y_policy);
 
     auto c1k = c1h.view({1, nz, 1});
     auto c2k = c2h.view({1, nz, 1});
@@ -300,7 +310,35 @@ inline torch::Tensor compute_wrf_ww_cp(
                    divv.slice(1, 0, nz - 1);            // [ny, nz-1, nx]
     auto zeros_lvl = torch::zeros({ny, 1, nx}, mut.options());
     // Interior levels k=1..nz-1; explicit WRF BCs ww(0)=0 and ww(top)=0.
-    return torch::cat({zeros_lvl, -contrib.cumsum(1), zeros_lvl}, 1);
+    return WRFMassFlux{
+        cu,
+        cv,
+        torch::cat({zeros_lvl, -contrib.cumsum(1), zeros_lvl}, 1),
+        dmdt};
+}
+
+// Compatibility API: existing callers consume only WRF's diagnosed omega.
+// Keep this wrapper as the sole legacy entry point so the structured
+// diagnostic and the production omega path cannot drift apart.
+inline torch::Tensor compute_wrf_ww_cp(
+    const torch::Tensor& u,
+    const torch::Tensor& v,
+    const torch::Tensor& mup,
+    const torch::Tensor& mub,
+    const torch::Tensor& c1h,
+    const torch::Tensor& c2h,
+    const torch::Tensor& dnw,
+    float rdx,
+    float rdy,
+    const torch::Tensor& msftx,
+    const torch::Tensor& msfuy,
+    const torch::Tensor& msfvx_inv,
+    WWCPBoundaryPolicy x_policy,
+    WWCPBoundaryPolicy y_policy)
+{
+    return diagnose_wrf_mass_flux(u, v, mup, mub, c1h, c2h, dnw,
+                                  rdx, rdy, msftx, msfuy, msfvx_inv,
+                                  x_policy, y_policy).omega;
 }
 
 }  // namespace sdirk3

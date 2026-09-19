@@ -10,11 +10,8 @@ active investigation (see the repository root `README.md` and `doc/`).
 
 - **Newton–Krylov solver** with Eisenstat–Walker forcing and a trust-region
   fallback (`wrf_sdirk3_newton_solver.cpp`).
-- **FGMRES** (flexible, right-preconditioned) as the linear solver. The earlier
-  fixed-preconditioner GMRES was replaced during the full-repo review; the
-  legacy `wrf_sdirk3_gmres_fixed.h` / `wrf_sdirk3_gmres_ad_safe.h` headers
-  remain in-tree for history but the production Krylov loop is the FGMRES
-  implementation inside the Newton solver.
+- **FGMRES** (flexible, right-preconditioned) for the production Newton loop.
+  The unused fixed-GMRES header has been removed.
 - **JVP** via forward-mode autodiff (dual numbers) with an explicit,
   counted finite-difference fallback (`wrf_sdirk3_jvp_autograd.{cpp,h}`,
   `wrf_sdirk3_jvp_fwad_or_fd.h`). The FGMRES matvec is
@@ -26,7 +23,31 @@ active investigation (see the repository root `README.md` and `doc/`).
 - **Zero-copy interface:** Fortran `(i,k,j)` column-major maps to C++ `(j,k,i)`
   row-major with no data copy — layout `{nj,nk,ni}`, strides `{ni*nk, ni, 1}`.
   This layout is verified — do not change it.
-- Cross-platform CPU / CUDA / MPS.
+- CPU WRF execution is validated in the documented cases. MPS map-cache
+  transfers have separate contract tests; the full MPS RHS remains unsupported
+  because of mixed CPU/MPS tensors. CUDA execution is unvalidated in this review.
+
+## Vertical principal preconditioner
+
+The canonical type-2, mode-3 WRF mass-coordinate profile uses a dry vertical
+principal approximation in the packed velocity/Phi/theta/mass coordinates.
+It binds a complete Newton stage snapshot and derives its pressure/Phi/W
+couplings from authoritative hybrid mass and vertical metrics. The Schur solve
+and its transpose share the same coefficients. Nonprincipal terms, including
+horizontal transport and NH/curvature contributions, remain in the true
+Newton operator; the approximation does not claim to equal that operator.
+
+`precond_type=2` is the existing default, so selecting this model changes the
+preconditioned path. Type 0 disables preconditioning. Explicit legacy tuning
+selects the legacy model; ignored type-2 options do not affect selection.
+The historical C++/archived-run damping default (0.1) and the WRF Registry
+default (0.7) both identify supported default profiles, without changing their
+values on the legacy path. Invalid or moist inputs after canonical selection
+are rejected. Coefficients and column solves use FP32 on CPU, with results
+returned to the input device/dtype. Higher precision inputs therefore use a
+mixed precision preconditioner, and convergence is judged on the true Krylov
+residual. Full GPU execution and broad performance claims require separate
+validation.
 
 ## Key files
 
@@ -42,7 +63,7 @@ active investigation (see the repository root `README.md` and `doc/`).
 | `wrf_sdirk3_mpi_safety.h`, `wrf_sdirk3_mpi_safety_impl.cpp` | MPI fail-close contracts: baseline thread, single-flight scope, freshness guard |
 | `jvp_bridge.F90` | Fortran↔C++ AD bridge |
 
-The production archive is `libwrf_sdirk3_libtorch.a` (exact 21-TU manifest in
+The production archive is `libwrf_sdirk3_libtorch.a` (authoritative source manifest in
 `wrf_sdirk3_core_sources.txt`, enforced by `tests/check_core_archive.sh`). The
 sole Fortran bridge is `dyn_em/module_implicit_sdirk3.F` — the dormant
 `module_implicit_sdirk3_zerocopy.F` duplicate was removed and a build contract
@@ -181,9 +202,20 @@ dynamic-state violations; absent env leaves every operand untouched.
 
 ### 4DVAR operation note
 
-For long windows, use `retain_graph_for_adjoint = .false.` with trajectory/checkpoint
-replay (`save_trajectory`, `checkpoint_interval`). Retaining the full graph is intended
-for short debug windows only.
+`save_trajectory` retains sampled stage-1 states. The legacy replay applies an
+implicit-only transpose at those states; it is not the derivative of the full ARK
+trajectory. With `retain_graph_for_adjoint = .true.`, the supported dry, single-tile
+mode-3 path exposes the last completed tile-step pullback. For fixed native CPU
+trajectories, call `beginFixedTrajectory(N, schedule)` before the first step,
+`pullbackFixedTrajectory(cotangent)` after N accepted steps, then
+`closeFixedTrajectory()`. The checked NH/curvature profile requires fixed inputs
+and zero projected physics forcing; an omitted schedule enforces constant timestep.
+Fortran callers can use `sdirk3_begin_fixed_trajectory`,
+`sdirk3_pullback_fixed_trajectory`, and `sdirk3_close_fixed_trajectory`.
+Begin copies the request; recording starts after the first owner call publishes
+its buffers. Pullback uses the native packed Float32 layout and preserves the
+caller's output on error. These wrappers do not differentiate caller-side maps.
+The full Fortran/MPI and observation-window adjoint remain outside this API.
 
 When observation-aware replay is enabled, enforce endpoint semantics:
 - `x0` (window-start state) must be present for replay-enabled windows.
@@ -191,14 +223,11 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 58-test CTest inventory** (pinned by
-`.github/ci/expected_ctest_names.txt`; any drift fails hosted CI). This number had
-drifted to 37 while the pinned file held 61: the CI gate that derives the claim from
-the file it cites was reading only the repo-root README, so this copy of the same claim
-was never checked. It is checked now. The breakdown below is a guide to the categories,
-not an inventory — the pinned file is the inventory:
+The CMake tree registers an **exact 101-test CTest inventory**, pinned by
+`.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
+the pinned file defines the inventory.
 
-- core contracts (geometry matrix, MSF stats, VJP semantics, FGMRES
+- core contracts (geometry matrix, MSF stats and full-reset publication, VJP semantics, FGMRES
   contract, WRMS gate metric, acoustic-substep AD, the W-damping forward-mode
   tangent contract, the rw term-capture safety contract, the WRF W-damping reference contract, the calc_ww_cp state-to-omega contract, the W-damping operator/preconditioner policy contract, the stage-operand decomposition contract, core
   manifest/archive/link parity),

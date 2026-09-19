@@ -169,7 +169,6 @@ install(TARGETS wrf_sdirk3_lib DESTINATION lib)
 set(WRF_SDIRK3_INSTALL_HEADER_CANDIDATES
     wrf_sdirk3_state_vector.h
     wrf_sdirk3_zero_copy_interface.h
-    wrf_sdirk3_gmres_fixed.h
     wrf_sdirk3_newton_krylov_fixed.h
     wrf_sdirk3_jvp_router.h
     wrf_sdirk3_vertical_preconditioner.h
@@ -484,8 +483,123 @@ add_test(NAME FGMRES_Contract COMMAND test_fgmres_contract)
 add_executable(test_trust_model_contract test_trust_model_contract.cpp)
 target_include_directories(test_trust_model_contract PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 set_property(TARGET test_trust_model_contract PROPERTY CXX_STANDARD 17)
-target_link_libraries(test_trust_model_contract "${TORCH_LIBRARIES}")
+target_link_libraries(test_trust_model_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Trust_Model_Contract COMMAND test_trust_model_contract)
+
+# Shared production ARK composition with actual Newton/GMRES stage solves.
+add_executable(test_ark324_composition tests/test_ark324_composition.cpp)
+target_link_libraries(test_ark324_composition PRIVATE wrf_sdirk3::core)
+add_test(NAME ARK324_Production_Composition COMMAND test_ark324_composition)
+
+add_executable(test_krylov_budget_config tests/test_krylov_budget_config.cpp)
+target_link_libraries(test_krylov_budget_config PRIVATE wrf_sdirk3::core)
+add_test(NAME Krylov_Budget_Config COMMAND test_krylov_budget_config)
+
+add_executable(test_config_numeric_contract tests/test_config_numeric_contract.cpp)
+target_link_libraries(test_config_numeric_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Config_Numeric_Contract COMMAND test_config_numeric_contract)
+
+add_executable(test_scalar_advection_contract tests/test_scalar_advection_contract.cpp)
+target_link_libraries(test_scalar_advection_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Scalar_Advection_Contract COMMAND test_scalar_advection_contract)
+
+add_executable(test_potential_temperature_contract tests/test_potential_temperature_contract.cpp)
+target_link_libraries(test_potential_temperature_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Potential_Temperature_Contract COMMAND test_potential_temperature_contract)
+
+add_executable(test_periodic_staggered_advection tests/test_periodic_staggered_advection.cpp)
+target_link_libraries(test_periodic_staggered_advection PRIVATE wrf_sdirk3::core)
+add_test(NAME Periodic_Staggered_Advection COMMAND test_periodic_staggered_advection)
+
+add_executable(test_packed_boundary_contract tests/test_packed_boundary_contract.cpp)
+target_link_libraries(test_packed_boundary_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Packed_Boundary_Contract COMMAND test_packed_boundary_contract)
+
+add_executable(test_ad_safe_math tests/test_ad_safe_math.cpp)
+target_link_libraries(test_ad_safe_math PRIVATE wrf_sdirk3::core)
+add_test(NAME AD_Safe_Math_Contract COMMAND test_ad_safe_math)
+
+add_executable(test_fnm_fnp_geometry_contract
+    tests/test_fnm_fnp_geometry_contract.cpp tests/test_fnm_fnp_rhs_contract.cpp)
+target_link_libraries(test_fnm_fnp_geometry_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME FNM_FNP_Geometry_Contract COMMAND test_fnm_fnp_geometry_contract)
+
+add_executable(test_vertical_momentum_contract tests/test_vertical_momentum_contract.cpp)
+target_link_libraries(test_vertical_momentum_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Vertical_Momentum_Contract COMMAND test_vertical_momentum_contract)
+
+add_executable(test_horizontal_momentum_contract tests/test_horizontal_momentum_contract.cpp)
+target_link_libraries(test_horizontal_momentum_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Horizontal_Momentum_Contract COMMAND test_horizontal_momentum_contract)
+
+add_executable(test_coriolis_contract
+  tests/test_coriolis_contract.cpp
+  tests/test_coriolis_coefficients.cpp)
+target_link_libraries(test_coriolis_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Coriolis_Contract COMMAND test_coriolis_contract)
+
+add_executable(test_phi_coordinate_contract tests/test_phi_coordinate_contract.cpp)
+target_link_libraries(test_phi_coordinate_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Phi_Coordinate_Contract COMMAND test_phi_coordinate_contract)
+
+add_executable(test_w_damping_coordinate_contract tests/test_w_damping_coordinate_contract.cpp)
+target_link_libraries(test_w_damping_coordinate_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME W_Damping_Coordinate_Contract COMMAND test_w_damping_coordinate_contract)
+
+add_executable(test_consistent_d0_phase2 tests/test_consistent_d0_phase2.cpp)
+target_link_libraries(test_consistent_d0_phase2 PRIVATE wrf_sdirk3::core)
+add_test(NAME Phase2_D0_Contract COMMAND test_consistent_d0_phase2)
+add_test(NAME Phase2_D0_Uncapped COMMAND test_consistent_d0_phase2 --uncapped)
+add_test(NAME Phase2_D0_Floor COMMAND test_consistent_d0_phase2 --floor-hit)
+add_test(NAME Phase2_D0_Phi_Unity COMMAND test_consistent_d0_phase2 --phi-unity)
+
+add_executable(test_two_step_tile_adjoint tests/test_two_step_tile_adjoint.cpp)
+target_link_libraries(test_two_step_tile_adjoint PRIVATE wrf_sdirk3::core)
+add_test(NAME Two_Step_Tile_Adjoint COMMAND test_two_step_tile_adjoint)
+
+# Fixed-trajectory native discrete-transpose contract: accepted-step tape,
+# profile/input immutability, and FD/VJP validation.
+add_executable(test_fixed_trajectory_derivative tests/test_fixed_trajectory_derivative.cpp)
+target_link_libraries(test_fixed_trajectory_derivative PRIVATE wrf_sdirk3::core)
+add_test(NAME Fixed_Trajectory_Derivative COMMAND test_fixed_trajectory_derivative)
+
+add_executable(test_fixed_trajectory_lifecycle tests/test_fixed_trajectory_lifecycle.cpp)
+target_link_libraries(test_fixed_trajectory_lifecycle PRIVATE wrf_sdirk3::core)
+add_test(NAME Fixed_Trajectory_Lifecycle COMMAND test_fixed_trajectory_lifecycle)
+
+add_executable(test_horizontal_mass_contract tests/test_horizontal_mass_contract.cpp)
+target_link_libraries(test_horizontal_mass_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Horizontal_Mass_Contract COMMAND test_horizontal_mass_contract)
+
+add_executable(test_pgf_coordinate_contract
+    tests/test_pgf_coordinate_contract.cpp tests/test_w_pgf_coordinate_contract.cpp
+    tests/test_pgf_debug_contract.cpp)
+target_link_libraries(test_pgf_coordinate_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME PGF_Coordinate_Contract COMMAND test_pgf_coordinate_contract)
+
+add_executable(test_rhs_preconditioner_contract tests/test_rhs_preconditioner_contract.cpp)
+target_link_libraries(test_rhs_preconditioner_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME RHS_Preconditioner_Contract COMMAND test_rhs_preconditioner_contract)
+set_tests_properties(RHS_Preconditioner_Contract PROPERTIES TIMEOUT 180)
+
+add_executable(test_msf_cache_reset_contract tests/test_msf_cache_reset_contract.cpp)
+target_link_libraries(test_msf_cache_reset_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME MSF_Cache_Reset_Contract COMMAND test_msf_cache_reset_contract)
+
+add_executable(test_msf_map_transfer_mps tests/test_msf_map_transfer_mps.cpp)
+target_link_libraries(test_msf_map_transfer_mps PRIVATE wrf_sdirk3::core)
+add_test(NAME MSF_Map_Transfer_MPS COMMAND test_msf_map_transfer_mps)
+set_tests_properties(MSF_Map_Transfer_MPS PROPERTIES SKIP_RETURN_CODE 77)
+
+add_executable(test_full_tile_step tests/test_full_tile_step.cpp)
+target_link_libraries(test_full_tile_step PRIVATE wrf_sdirk3::core)
+add_test(NAME Full_Tile_Step_Adjoint COMMAND test_full_tile_step)
+set_tests_properties(Full_Tile_Step_Adjoint PROPERTIES TIMEOUT 180)
+add_test(NAME Full_Tile_Temporal_Order COMMAND test_full_tile_step --temporal-order)
+set_tests_properties(Full_Tile_Temporal_Order PROPERTIES TIMEOUT 300)
+add_test(NAME Full_Tile_Horizontal_PGF COMMAND test_full_tile_step --horizontal-pgf)
+add_test(NAME Full_Tile_Symmetric_Walls COMMAND test_full_tile_step --symmetric-walls)
+add_test(NAME Full_Tile_RHS_Debug_Invariance COMMAND test_full_tile_step --rhs-debug-invariance)
 
 # R9 P0-A/B: a Krylov metric's coordinate system is part of the metric.
 add_executable(test_krylov_metric_coordinate_contract test_krylov_metric_coordinate_contract.cpp)
@@ -830,3 +944,51 @@ message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  LibTorch: ${TORCH_LIBRARIES}")
 message(STATUS "  Install prefix: ${CMAKE_INSTALL_PREFIX}")
 message(STATUS "  Lint targets: lint_from_blob, lint_libtorch_patterns, lint_all")
+
+add_executable(test_curvature_coordinate_contract tests/test_curvature_coordinate_contract.cpp)
+target_link_libraries(test_curvature_coordinate_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Curvature_Coordinate_Contract COMMAND test_curvature_coordinate_contract)
+
+add_executable(test_curvature_kernel_contract tests/test_curvature_kernel_contract.cpp)
+target_link_libraries(test_curvature_kernel_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Curvature_Kernel_Contract COMMAND test_curvature_kernel_contract)
+
+add_executable(test_phi_horizontal_kernel_contract tests/test_phi_horizontal_kernel_contract.cpp)
+target_link_libraries(test_phi_horizontal_kernel_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Phi_Horizontal_Kernel_Contract COMMAND test_phi_horizontal_kernel_contract)
+
+add_executable(test_phi_horizontal_coordinate_contract tests/test_phi_horizontal_coordinate_contract.cpp)
+target_link_libraries(test_phi_horizontal_coordinate_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Phi_Horizontal_Coordinate_Contract COMMAND test_phi_horizontal_coordinate_contract)
+
+add_executable(test_msf_pointer_republication tests/test_msf_pointer_republication.cpp)
+target_link_libraries(test_msf_pointer_republication PRIVATE wrf_sdirk3::core)
+add_test(NAME MSF_Pointer_Republication COMMAND test_msf_pointer_republication)
+
+add_executable(test_nonhydrostatic_pressure_kernel tests/test_nonhydrostatic_pressure_kernel.cpp)
+target_link_libraries(test_nonhydrostatic_pressure_kernel PRIVATE wrf_sdirk3::core)
+add_test(NAME Nonhydrostatic_Pressure_Kernel_Contract COMMAND test_nonhydrostatic_pressure_kernel)
+
+add_executable(test_nh_pressure_coordinate_contract tests/test_nh_pressure_coordinate_contract.cpp)
+target_link_libraries(test_nh_pressure_coordinate_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Nonhydrostatic_Pressure_Coordinate_Contract COMMAND test_nh_pressure_coordinate_contract)
+
+add_executable(test_wrf_dynamics_config tests/test_wrf_dynamics_config.cpp)
+target_link_libraries(test_wrf_dynamics_config PRIVATE wrf_sdirk3::core)
+add_test(NAME WRF_Dynamics_Config COMMAND test_wrf_dynamics_config)
+
+add_executable(test_raw_principal_contract tests/raw_principal_contract.cpp)
+target_link_libraries(test_raw_principal_contract PRIVATE wrf_sdirk3::core)
+add_test(NAME Raw_Principal_Contract COMMAND test_raw_principal_contract)
+
+add_executable(test_raw_principal_actual_tile_oracle tests/raw_principal_actual_tile_oracle.cpp)
+target_link_libraries(test_raw_principal_actual_tile_oracle PRIVATE wrf_sdirk3::core)
+add_test(NAME Raw_Principal_Actual_Tile_Oracle COMMAND test_raw_principal_actual_tile_oracle)
+
+add_executable(test_raw_principal_factory tests/raw_principal_factory.cpp)
+target_link_libraries(test_raw_principal_factory PRIVATE wrf_sdirk3::core)
+add_test(NAME Raw_Principal_Factory COMMAND test_raw_principal_factory)
+
+add_executable(test_raw_principal_default_off tests/raw_principal_default_off.cpp)
+target_link_libraries(test_raw_principal_default_off PRIVATE wrf_sdirk3::core)
+add_test(NAME Raw_Principal_Disabled COMMAND test_raw_principal_default_off)

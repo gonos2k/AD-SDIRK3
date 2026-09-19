@@ -6,7 +6,8 @@ interface and autodiff (JVP and VJP are implemented and contract-tested on the s
 HVP via double-backward is a design goal). The goal is a differentiable dynamical core for
 **4D-Var adjoint** modeling.
 
-- **IMEX split** (mode 3 = ARK324L2SA): horizontal/slow terms explicit, vertical acoustic implicit.
+- **IMEX split** (mode 3 = ARK324L2SA): slow advection/Coriolis/diffusion terms explicit,
+  acoustic/gravity terms implicit. The optional HEVI split also moves horizontal acoustic terms explicit.
 - **Matrix-free Newton–Krylov** implicit solve: **FGMRES** (flexible, right-preconditioned — the
   earlier fixed-preconditioner GMRES was replaced during the full-repo review) with Eisenstat–Walker
   adaptive forcing, a vertical preconditioner, and a trust-region fallback. `A·v = v − dt·γ·J·v` is
@@ -15,23 +16,71 @@ HVP via double-backward is a design goal). The goal is a differentiable dynamica
   `(j,k,i)` row-major with no data copy — layout `{nj,nk,ni}`, strides `{ni*nk, ni, 1}`.
   **Base-state initialisation is not zero-copy**: it materialises owned contiguous per-tile
   snapshots via `.contiguous()`. The `zerocopy` in those symbol names is historical.
-- Cross-platform CPU / CUDA / MPS.
+- CPU WRF execution is validated in the documented cases. MPS map-cache
+  transfers have separate contract tests; the full MPS RHS remains unsupported
+  because of mixed CPU/MPS tensors. CUDA execution is unvalidated in this review.
 
 ## Status
 
 The model **builds and runs** (`main/wrf.exe`, `main/ideal.exe`,
-`external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a`). The stock-RK3 baseline is validated.
-The differentiable implicit solve converges at small timesteps; making it converge and remain
-stable at the **operational timestep dt=600** on `em_b_wave` is the active investigation, and
-it is **unresolved**.
+`external/libtorch_wrf/sdirk3/libwrf_sdirk3_libtorch.a`). Frozen revision `cc66520`
+completed six `dt=600` steps on `em_b_wave` through 3600 seconds with finite output and
+all 18 implicit stages below scaled RMS `1e-4`. Its seven output frames were compared
+with the restored stock-RK3 archive using identical primary initial fields; see
+[the frozen-run receipt](docs/(202609060337)_ad_sdirk3_dt600_rk3_comparison.md).
+This validates that run and configuration. Long-duration stability, whole-WRF third-order
+accuracy, forecast quality and the full trajectory adjoint remain **unverified**.
 
-Verification is an **exact 58-test CTest inventory** pinned by
+Verification is an **exact 101-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
 
+Earlier RHS singular-value and solver-probe amplitudes below predate the horizontal-PGF
+and dry-theta corrections. They are historical measurements, not current operator, forecast
+or stability certifications.
+
 ### What is measured
 
+- **Dry potential temperature and continuity.** Ordinary ARK in WRFParity mode uses one
+  hybrid/map-aware face-flux diagnosis for column mass, Omega, and theta transport.
+  Periodic and symmetric stencils cover every physical face; packed aliases are excluded
+  from the mass diagnosis and restored afterwards. Vertical theta flux uses WRF's eta
+  sign and includes the top cell. The final product rule uses level mass `c1h*M+c2h`.
+  The extra `-theta*div(u,v,w)` source and its unused private divergence cache were removed.
+  `Potential_Temperature_Contract` checks constant theta, nonzero mass/Omega controls,
+  and an independent column-divergence oracle with varying mass, hybrid coefficients,
+  nonunit maps, orders 2/3/5, HEVI on/off, and physical/packed single-rank layouts.
+  Split export retains its separate driver-supplied tendency convention.
+
+- **Vertical momentum and geopotential transport.** Ordinary WRFParity uses the shared
+  WRF order-3 vertical operators with the signed eta orientation and all U/V mass levels
+  plus the W lid flux. Omega and hybrid coupled masses use the same boundary averaging;
+  packed aliases are excluded before averaging. The raw WRF transport is converted to
+  the legacy momentum accumulator so final division yields the correct velocity term.
+  `Vertical_Momentum_Contract` compares independent scalar U/V/W flux oracles with
+  nonunit anisotropic maps, layer-dependent hybrid coefficients and physical/packed layouts.
+  The PH eta gradient uses `-|rdnw|` with the WRF outer `-Omega`; the production-linked
+  FNM/FNP test checks its sign, boundaries and HEVI decomposition. These component
+  contracts do not certify the whole momentum RHS or whole-WRF time order.
+
+- **Horizontal pressure gradients.** The full and acoustic RHS share the first three WRF
+  PGF terms with raw neighbor differences and sums. Grid inverse spacing and the common
+  half are applied once. `Full_Tile_Horizontal_PGF` isolates Phi/p/pb and their derivatives,
+  then tests actual tile X/Y accelerations from separate geopotential and thermal gradients
+  at two grid spacings. This catches the former V double-spacing factor and U half-pressure
+  term; unused V pressure interpolation and base-geopotential differences were removed.
+  `PGF_Coordinate_Contract` checks U/V/W force-to-velocity conversion using the
+  corresponding hybrid mass and map factor, including the separate W lid force.
+  Independent stencils exercise nonunit maps, hybrid coefficients and HEVI decomposition.
+- **Packed boundaries and observational diagnostics.** State, forcing and RHS share the
+  normal-velocity wall constraint. A single whole-domain packed tile with periodic X,
+  symmetric Y and AD halo exchange off also uses the same copy/reflection map at RHS input
+  and output. It closes periodic aliases and the odd V north ghost within the ARK stage
+  equations. This map is oblique: its pullback accumulates the transpose of each copy and
+  reflection. Full-halo paths retain their separate exchange and wall contract.
+  Debug levels 0/2 produce identical finite results and both reject an undefined EOS;
+  logging no longer replaces a non-finite RHS with zero.
 - **Base-state EOS and hydrostatic pressure.** WRF's Exner form
   `alpha = (R_d/p0)*theta*(p/p0)^(-cv/cp)` is a single authority, contract-tested forward *and*
   in its tangent. The pressure integrator's eta orientation is pinned against WRF's own algebra
@@ -46,8 +95,9 @@ proven byte-identical.
 - **Instantaneous perturbation equilibrium.** The assembled production RHS returns **exactly
   zero** in every channel and every `RhsMode` at zero perturbation, paired with a non-zero
   control so the measurement cannot be confused with a dead probe. This is *not*
-  well-balancedness: `F(U) = 1000U` also satisfies `F(0) = 0`. Multi-step rest preservation
-  (1 / 10 / 100 steps, with mass, energy and hydrostatic-residual drift) is **not** measured.
+  well-balancedness: `F(U) = 1000U` also satisfies `F(0) = 0`. The full-tile test now measures
+  1 / 10 / 100 steps: uniform dry mass is unchanged; W/Phi drift is also measured.
+  These measurements do not establish exact equilibrium preservation.
 - **The RHS Jacobian shows nothing anomalous at the first RHS base point.** Its implicit part is
   state-invariant to six digits (predictably: the coefficient is `mu`, which moves 0.01% between
   rest and jet); its explicit part is proportional to base-state amplitude with a measured
@@ -56,17 +106,46 @@ proven byte-identical.
 - **AD.** Forward-mode duals, reverse-mode VJPs and the `<Jv,w> == <v,J^T w>` identity hold on
   the EOS and the pressure integrator; the reverse pass runs through the whole production RHS.
   Production `J_FD` and `J_AD^T` agree to **1.198e-06**.
+- **Production ARK composition and converged-stage pullbacks.**
+  `ARK324_Production_Composition` uses the shared production stage/final sums and actual
+  Newton–GMRES solves on noncommuting and time-dependent manufactured systems, including
+  timestep refinement and a tighter-Newton control. Its one/three-step pullbacks agree with
+  dense implicit roots and pass dot/Taylor tests. This is not a whole-WRF temporal-order claim.
+  `Full_Tile_Temporal_Order` additionally refines an actual dry tile's vertical-wave trajectory,
+  checks W/Phi against a finer reference, repeats with tighter Newton tolerance, and requires
+  constant theta to stay constant. With the corrected dry physics, the `h=1/0.5/0.125`
+  family at final time 64 observes W order 2.789 and Phi order 3.029. Tightening Newton
+  tolerance from 1e-7 to 1e-9 leaves the fine state unchanged. The earlier h=2/1 W order
+  of 2.479 was pre-asymptotic in this test; this remains a tile test, not a whole-WRF claim.
+- **Last completed tile-step pullback.** With `retain_graph_for_adjoint=true`, mode 3,
+  `use_autograd=true`, and `imex_slow_in_tangent=true`, `pullbackLastStep(cotangent)` evaluates
+  a first-order VJP of the last completed single-rank, single-tile step. Converged RHS graphs
+  are saved at their stage points; transpose solves must pass a true-residual check. A new
+  forward step invalidates the saved graph. `Full_Tile_Step_Adjoint` calls `unifiedStep` and
+  checks a non-identity derivative, finite-difference dots, objective Taylor remainders,
+  invalid/zero cotangents, and identical forward results with retention off. The validated
+  scope is a dry CPU tile with fixed timestep, forcing and boundary branches; second
+  derivatives and a complete WRF/4D-Var trajectory are not implemented by this API.
+
+
+- **Fixed native tile trajectories.** `beginFixedTrajectory(N, schedule)` retains the
+  accepted stage graphs for N steps; an omitted schedule enforces constant timestep.
+  `pullbackFixedTrajectory(cotangent)` composes their reverse VJPs, and
+  `closeFixedTrajectory()` releases the tape. The checked profile is dry serial CPU
+  ARK mode 3 with NH/curvature enabled, current-W buoyancy, fixed grid/base inputs,
+  and zero projected physics forcing. Reset, input mutation, changed state handoff,
+  unsupported branches, and incomplete tapes are rejected. The derivative and lifecycle
+  tests cover two/three steps, scheduled timesteps, Taylor/FD checks, and input changes.
+  This API does not supply the full Fortran/MPI or observation-window adjoint.
 
 ### What is NOT measured, and matters
 
-- **The full timestep map `DG` is unmeasured.** All Jacobian analysis above is of the RHS `F`.
-  Stability is governed by `DG`, which additionally contains the ARK stage composition, the
-  implicit resolvents and the acoustic substep maps. `DF` behaving normally does **not** bound
-  `DG`.
-- **Implicit-stage differentiation is an algebra contract, not production.** The implicit
-  function theorem forms (`dK/dU = A^-1 J`, adjoint `J^T A^-T`) are pinned against closed-form
-  Jacobians but are **not wired** into the stage solve.
-- **The 4D-Var adjoint replay does not converge.** The RHS is differentiable and the transpose
+- **Operational full-timestep stability remains unverified.** The tile-step derivative test
+  above does not bound `DG` along the WRF forecast trajectory or include split-explicit
+  acoustic substeps. RHS `DF` measurements alone also cannot establish that bound.
+- **The legacy 4D-Var adjoint replay is not a completed full-ARK trajectory adjoint.** The
+  opt-in last-step API above attaches the implicit-function pullback to converged production
+  Newton roots; it does not complete the separate checkpoint replay. The RHS is differentiable and the transpose
   operator is correct (rel 1.198e-06).
 
   The remediation ordering that used to stand here — try a frozen `M^-1`, then flexible
@@ -96,6 +175,11 @@ proven byte-identical.
     production instance is untouched across the replay rather than restoring it. **Cleanup
     incomplete**: a receipt-equality contract pinning strict no-write isolation is not yet in
     place.
+### Historical solver experiments (2026-08-17; earlier source)
+
+The results below describe their recorded configurations. They are not current-source
+convergence or stability claims; later validation is recorded in timestamped `docs/` reports.
+
 - **STAGE 2 CONVERGES at a real Krylov budget** (2026-08-17). At `stage2_gmres_restart=600`
   (510 Arnoldi) stage 2 converges — with the production preconditioner (gate 0.095) *and* without
   it (gate 0.058). It had never converged in this configuration before; the shipped budget is 7
@@ -139,11 +223,11 @@ proven byte-identical.
     "correction" degrades it. Two earlier readings of these experiments — off the unscaled
     `rel_error`, then off a residual scaled with the wrong vector — ranked them the other way
     round; both are retracted. All on the open experiment PR rather than on `main`. See `AcousticGravity_Shadow_Contract`.
-  - the **full ARK adjoint** and the **full-timestep `DG`/`DG^T`**
+  - the **full WRF/4D-Var trajectory adjoint**, beyond the retained tile-step API above
   - the **acoustic–gravity coefficient re-derivation** (`D_mu`, `D_phi`, `c_s^2+N^2`,
     direct/Schur double-count, theta–W)
-- **No multi-step well-balancedness, geostrophic/thermal-wind balance, mass/energy/PV budgets,
-  or formal temporal-order verification.**
+- **No certified multi-step well-balancedness, geostrophic/thermal-wind balance, exact
+  mass/energy/PV budgets, or whole-WRF temporal-order verification.**
 - Support boundary: **dry, single-rank, single-tile, idealised map factors.** MPI halo primitives
   are contract-tested; the integrated multi-rank SDIRK solve is not supported.
 
@@ -209,7 +293,7 @@ with a stable marker **before** any communicator/halo state mutation or solve:
 - **AD halo + multi-tile** — refused pre-solve with `SDIRK3_MPI_MULTI_TILE_UNSUPPORTED`.
 - **MPI halo primitive** — verified independently of the solver at np=1/2/4: forward, adjoint,
   packed AD+BC transpose, and the runtime fail-close contracts
-  (`MPI_Halo_Contract_np{1,2,4}` + `MPI_Runtime_Contract_np{1,2,4}` in the 58-test CTest suite).
+  (`MPI_Halo_Contract_np{1,2,4}` + `MPI_Runtime_Contract_np{1,2,4}` in the pinned CTest suite).
 - **Decomposition evidence** — the SDIRK3 decomposition fail-close matrix
   (`.github/ci/run_decomposition_matrix.sh`, 4 cases) was produced by direct local-machine
   execution; it is *not* a full-WRF decomposition validation and does not include a stock-RK3

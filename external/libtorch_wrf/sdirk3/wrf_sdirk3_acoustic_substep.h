@@ -251,6 +251,19 @@ torch::Tensor rhs_ph_stage(
     const torch::Tensor& fnm, const torch::Tensor& fnp, const torch::Tensor& rdnw,
     float cfn, float cfn1, float rdx, float rdy, float g);
 
+// Fortran horizontal_pressure_gradient: raw neighbor differences and SUMS.
+// phi_difference_sum includes both bounding w levels. Apply averaging and
+// inverse spacing exactly once; weighted_mass includes the map-factor ratio.
+inline torch::Tensor horizontal_pgf_primary(
+    float inverse_spacing, const torch::Tensor& weighted_mass,
+    const torch::Tensor& phi_difference_sum, const torch::Tensor& alpha_sum,
+    const torch::Tensor& pressure_difference, const torch::Tensor& alpha_pert_sum,
+    const torch::Tensor& base_pressure_difference) {
+    return 0.5f * inverse_spacing * weighted_mass *
+        (phi_difference_sum + alpha_sum * pressure_difference
+                            + alpha_pert_sum * base_pressure_difference);
+}
+
 std::pair<torch::Tensor, torch::Tensor> horizontal_pgf(
     const torch::Tensor& ph,    // geopotential perturbation {ny,nz_w,nx}
     const torch::Tensor& p,     // pressure perturbation {ny,nz,nx}

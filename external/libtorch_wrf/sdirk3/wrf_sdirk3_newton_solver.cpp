@@ -46,6 +46,7 @@
 // ============================================================================
 //
 #include "wrf_sdirk3_newton_solver.h"
+#include "wrf_sdirk3_implicit_autograd.h"
 #include "wrf_sdirk3_coefficients.h"
 #include "wrf_sdirk3_config.h"
 #include "wrf_sdirk3_trust_model.h"   // PR 9F.9.1: pure exact trust-prediction (testable)
@@ -419,7 +420,7 @@ namespace jvp_check {
 
 struct Context {
     int ts = 0, stage = 0, newton_iter = 0;
-    float dt = 0.0f, gamma = 0.0f;
+    double dt = 0.0, gamma = 0.0;
     torch::Tensor U_stage, K, U_eval, dK;   // detached clones
     bool scaled = false;
     torch::Tensor S_diag, S_inv_diag;
@@ -938,7 +939,7 @@ static void run_directional_consistency_check(const Context& c) {
 
     const float K_ref = diag_norm(c.K);
     const float U_ref = diag_norm(c.U_eval);
-    const float dtg = c.dt * c.gamma;
+    const double dtg = c.dt * c.gamma;
 
     // GATE (review P1): the purity probe runs BEFORE any FD ladder. An impure
     // shadow replay would contaminate every FD verdict, so on failure the
@@ -1393,8 +1394,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
                 std::cerr << "  r_precond is 1D flattened tensor - halo zeroing should NOT apply" << std::endl;
             }
 
-            if (r_precond_norm < 1e-12f) {
-                std::cerr << "  ERROR: Preconditioned residual has near-zero norm!" << std::endl;
+            if (!(r_precond_norm > 0.0f) || !std::isfinite(r_precond_norm)) {
+                std::cerr << "  ERROR: Preconditioned residual has zero/non-finite norm!" << std::endl;
                 std::cerr << "  This will cause v_0 = r_precond / r_precond.norm() to be zero or NaN" << std::endl;
             }
         }
@@ -1414,14 +1415,9 @@ WRFNewtonKrylovSolver::GMRESResult solve_gmres(
         // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
         auto r_norm_tensor = safe_tensor_norm(r_precond);
 
-        // NUMERICAL STABILITY: Guard against tiny/zero norm before division
-        if (guarded_item<bool>(r_norm_tensor < 1e-12f)) {
-            std::cerr << "[GMRES ERROR] Preconditioned residual norm too small for V[0] normalization" << std::endl;
-            std::cerr << "  ||r_precond|| = " << guarded_item<float>(r_norm_tensor) << " < 1e-12" << std::endl;
-            std::cerr << "  ||r_true|| = " << guarded_item<float>(r_true.norm()) << std::endl;
-            std::cerr << "  ||b|| = " << guarded_item<float>(b.norm()) << std::endl;
-            throw std::runtime_error("GMRES: Cannot normalize V[0] - residual norm too small");
-        }
+        // A finite positive norm is normalizable even below an absolute 1e-12.
+        TORCH_CHECK(guarded_item<bool>(torch::isfinite(r_norm_tensor) & (r_norm_tensor > 0)),
+                    "GMRES: Cannot normalize V[0] with a zero or non-finite residual norm");
 
         V.push_back(r_precond / r_norm_tensor);
 
@@ -2931,8 +2927,8 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
                 std::cerr << "  r_precond is 1D flattened tensor - halo zeroing should NOT apply" << std::endl;
             }
 
-            if (r_precond_norm < 1e-12f) {
-                std::cerr << "  ERROR: Preconditioned residual has near-zero norm!" << std::endl;
+            if (!(r_precond_norm > 0.0f) || !std::isfinite(r_precond_norm)) {
+                std::cerr << "  ERROR: Preconditioned residual has zero/non-finite norm!" << std::endl;
                 std::cerr << "  This will cause v_0 = r_precond / r_precond.norm() to be zero or NaN" << std::endl;
             }
         }
@@ -2973,14 +2969,9 @@ WRFNewtonKrylovSolver::GMRESResult solve_fgmres(
         // FWD-AD FIX 2026-01-28: Use safe_tensor_norm() for forward-mode AD compatibility
         auto r_norm_tensor = safe_tensor_norm(r_precond);
 
-        // NUMERICAL STABILITY: Guard against tiny/zero norm before division
-        if (guarded_item<bool>(r_norm_tensor < 1e-12f)) {
-            std::cerr << "[GMRES ERROR] Preconditioned residual norm too small for V[0] normalization" << std::endl;
-            std::cerr << "  ||r_precond|| = " << guarded_item<float>(r_norm_tensor) << " < 1e-12" << std::endl;
-            std::cerr << "  ||r_true|| = " << guarded_item<float>(r_true.norm()) << std::endl;
-            std::cerr << "  ||b|| = " << guarded_item<float>(b.norm()) << std::endl;
-            throw std::runtime_error("GMRES: Cannot normalize V[0] - residual norm too small");
-        }
+        // A finite positive norm is normalizable even below an absolute 1e-12.
+        TORCH_CHECK(guarded_item<bool>(torch::isfinite(r_norm_tensor) & (r_norm_tensor > 0)),
+                    "GMRES: Cannot normalize V[0] with a zero or non-finite residual norm");
 
         V.push_back(r_precond / r_norm_tensor);
         if (basis_capture) capture_basis_vector(basis_capture->V, V.back());
@@ -4274,8 +4265,8 @@ public:
         torch::Tensor F_cached;  // RHS F(U_cached) to avoid recomputation
         std::function<torch::Tensor(const torch::Tensor&)> cached_rhs;
         bool is_valid = false;
-        float dt_cached = 0.0f;
-        float gamma_cached = 0.0f;
+        double dt_cached = 0.0;
+        double gamma_cached = 0.0;
         int reuse_count = 0;
         const int max_reuse = 3;  // Max reuses before recompute
     } jacobian_cache_;
@@ -4316,10 +4307,8 @@ public:
     // turning a scattered hunt into a one-line policy change. GMRES/linear sites keep using
     // S_inv_diag_ directly -- they are the linear domain and must NOT be routed here.
     const torch::Tensor& metric_scale_inv() const { return S_inv_diag_; }
-    // PR 9F.9 P1-4 SHADOW: the GMRES linear residual r_g = b - A*dK from the current
-    // iteration's solve, saved so the trust-region site (a later, nested scope where
-    // gmres_result is gone) can build the EXACT predicted reduction with no extra JVP.
-    // Written only under debug_level>=1; carries no numerical effect.
+    // Scaled linear residual for the final trial direction. Saved from GMRES,
+    // or recomputed if postprocessing changes dK; required for trust acceptance.
     torch::Tensor last_gmres_r_true_;
     bool scaling_initialized_ = false;
     bool physics_scaling_set_ = false;  // True after set_physics_scaling() called
@@ -4514,7 +4503,7 @@ public:
                 std::cerr << "  Total size: " << cached_layout_.total_size << std::endl;
             }
         } else if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-            std::cerr << "[LAYOUT CACHE] Grid dimensions not set - will use heuristic per call" << std::endl;
+            std::cerr << "[LAYOUT CACHE] Grid dimensions not set - solve_stage requires an exact layout" << std::endl;
         }
     }
 
@@ -4806,8 +4795,8 @@ public:
         const torch::Tensor& K_prev,
         const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
         const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs_fast,
-        float dt,
-        float gamma,
+        double dt,
+        double gamma,
         int stage,
         const torch::Tensor& F_phys = torch::Tensor()) {  // Added F_phys with default
 
@@ -5266,8 +5255,13 @@ public:
             }
         }
 
-        // NOTE: Layout size == K.numel() is guaranteed by TORCH_CHECK above.
-        // (Previously had a warning branch here; removed as unreachable after v19.)
+        // Identity scaling is valid; missing scale data is an initialization error,
+        // not a trust-model failure to retry with a smaller radius.
+        TORCH_CHECK(scaling_initialized_ && S_diag_.defined() && S_inv_diag_.defined() &&
+                    S_diag_.sizes() == K.sizes() && S_inv_diag_.sizes() == K.sizes() &&
+                    S_diag_.device() == K.device() && S_inv_diag_.device() == K.device() &&
+                    S_diag_.scalar_type() == K.scalar_type() && S_inv_diag_.scalar_type() == K.scalar_type(),
+                    "SDIRK3: initialized scale and exact layout are required before Newton iteration");
 
         // v20.14r26: Halo mask build DISABLED.
         // The 1D halo mask was introduced in v20.14 to zero boundary DOFs in
@@ -5294,22 +5288,28 @@ public:
 
         // v20.5: Set stage-specific state for preconditioner adaptation
         // Extract mu_pert from U_stage and pass to preconditioner for mu_full computation
-        if (preconditioner_ && layout_initialized_ && cached_layout_.blocks.size() >= 6) {
-            // mu is the last block (index 5): {"mu", offset, size}
-            const auto& mu_block = cached_layout_.blocks[5];
-            if (mu_block.name == "mu" && mu_block.size > 0 &&
-                mu_block.start + mu_block.size <= U_stage.numel()) {
-                // Extract mu_pert as 1D slice
-                auto mu_pert_1d = U_stage.slice(0, mu_block.start, mu_block.start + mu_block.size);
-                // Reshape to 2D (ny, nx) - mu is 2D field (no k dimension)
-                int64_t ny = options_.ny;
-                int64_t nx = options_.nx;
-                if (ny > 0 && nx > 0 && mu_block.size == ny * nx) {
-                    auto mu_pert_2d = mu_pert_1d.reshape({ny, nx});
-                    // Set stage state (preconditioner internally computes mu_full = mu_base + mu_pert)
-                    auto* unified_precond = dynamic_cast<UnifiedPreconditioner*>(preconditioner_);
-                    if (unified_precond) {
-                        unified_precond->set_stage_state(mu_pert_2d, stage);
+        if (preconditioner_) {
+            auto* unified_precond = dynamic_cast<UnifiedPreconditioner*>(preconditioner_);
+            if (unified_precond && unified_precond->raw_principal_enabled()) {
+                // The raw model owns the full Newton linearization point.  Bind it
+                // before the first apply even if a legacy packed-layout helper is absent.
+                unified_precond->bind_raw_principal_state_or_throw(
+                    U_stage, stage, "U_stage");
+                unified_precond->update_time_coefficients(dt, gamma);
+            } else if (layout_initialized_ && cached_layout_.blocks.size() >= 6) {
+                // mu is the last block (index 5): {"mu", offset, size}
+                const auto& mu_block = cached_layout_.blocks[5];
+                if (mu_block.name == "mu" && mu_block.size > 0 &&
+                    mu_block.start + mu_block.size <= U_stage.numel()) {
+                    // Extract mu_pert as 1D slice
+                    auto mu_pert_1d = U_stage.slice(0, mu_block.start, mu_block.start + mu_block.size);
+                    // Reshape to 2D (ny, nx) - mu is 2D field (no k dimension)
+                    int64_t ny = options_.ny;
+                    int64_t nx = options_.nx;
+                    if (ny > 0 && nx > 0 && mu_block.size == ny * nx) {
+                        auto mu_pert_2d = mu_pert_1d.reshape({ny, nx});
+                        // Set stage state (preconditioner internally computes mu_full = mu_base + mu_pert)
+                        if (unified_precond) unified_precond->set_stage_state(mu_pert_2d, stage);
                     }
                 }
             }
@@ -5599,37 +5599,22 @@ public:
                 s_measured = S_inv_diag_.defined() &&
                              S_inv_diag_.numel() == R_ref.numel();
                 if (s_measured) {
-                    // R13.24 (external review P1-1): the SAME quantity the trust region judges by.
-                    // This computed ||S^-1 R|| unmasked while trust acceptance zeroes the halo
-                    // first (masked_fill_) -- two different numbers under one name, so a candidate
-                    // could pass here and fail there. At np=1 with no halo mask the two coincide,
-                    // which is why the divergence stayed invisible; it would appear the moment
-                    // this runs multi-tile.
-                    // R13.25 (external review, section 11): the SAME reduction the trust region
-                    // uses. This reduced in FP64 while trust acceptance takes the norm in the
-                    // tensor's own dtype (`guarded_item<float>(R_scaled.norm())`, FP32). Same
-                    // formula, different arithmetic -- and at the strict `after < before` boundary
-                    // that decides admission, a roundoff-level disagreement decides differently.
-                    // The entry-mismatch path is the sharp case: trust never re-checks it, so an
-                    // FP64-only decrease became a full-step acceptance.
                     auto sb = (S_inv_diag_ * R_ref);
                     auto sa = (S_inv_diag_ * R_cand);
+                    torch::Tensor active_mask;
                     if (halo_mask_initialized_) {
-                        if (halo_mask_.defined() && halo_mask_.numel() == sb.numel()) {
-                            const auto halo = halo_mask_.to(torch::kBool).logical_not();
-                            sb = sb.masked_fill(halo, 0.0);
-                            sa = sa.masked_fill(halo, 0.0);
+                        if (halo_mask_.defined() && halo_mask_.sizes() == sb.sizes() &&
+                            halo_mask_.device() == sb.device()) {
+                            active_mask = halo_mask_;
                             s_halo_status = wrf::sdirk3::HaloMaskStatus::Applied;
                         } else {
-                            // R13.25 (section 7): a mask is in play and this one cannot use it, so
-                            // the number below is NOT the quantity trust judges by. Say so rather
-                            // than returning it as if it were.
                             s_halo_status = wrf::sdirk3::HaloMaskStatus::RequiredButUnavailable;
                         }
                     }
-                    // norm() in the native dtype first (as trust does), THEN widen.
-                    s_before = static_cast<double>(sb.norm().item<float>());
-                    s_after  = static_cast<double>(sa.norm().item<float>());
+                    // Recovery and ordinary trust acceptance share the masked FP64 merit.
+                    // The recovery gate compares norms, so take sqrt only after that reduction.
+                    s_before = std::sqrt(wrf::sdirk3::detail::scaled_merit_sq_unchecked(sb, active_mask));
+                    s_after = std::sqrt(wrf::sdirk3::detail::scaled_merit_sq_unchecked(sa, active_mask));
                 } else {
                     s_before = -1.0;
                     s_after = -1.0;
@@ -5705,18 +5690,22 @@ public:
             // Pre-loop set_stage_state uses U_stage (fixed K=0 linearization point).
             // At iter 0, U_eval = U_stage + dt*gamma*K where K is the initial guess;
             // at iter >= 1, K has been updated by GMRES. Both need fresh mu.
-            if (preconditioner_ && layout_initialized_ &&
-                cached_layout_.blocks.size() >= 6) {
-                const auto& mu_block = cached_layout_.blocks[5];
-                if (mu_block.name == "mu" && mu_block.size > 0 &&
-                    mu_block.start + mu_block.size <= U_eval.numel()) {
-                    auto mu_pert_1d = U_eval.slice(0, mu_block.start, mu_block.start + mu_block.size);
-                    int64_t ny = options_.ny;
-                    int64_t nx = options_.nx;
-                    if (ny > 0 && nx > 0 && mu_block.size == ny * nx) {
-                        auto mu_pert_2d = mu_pert_1d.reshape({ny, nx});
-                        auto* unified_precond = dynamic_cast<UnifiedPreconditioner*>(preconditioner_);
-                        if (unified_precond) {
+            if (preconditioner_) {
+                auto* unified_precond = dynamic_cast<UnifiedPreconditioner*>(preconditioner_);
+                if (unified_precond && unified_precond->raw_principal_enabled()) {
+                    unified_precond->bind_raw_principal_state_or_throw(
+                        U_eval, stage, "U_eval");
+                    unified_precond->update_time_coefficients(dt, gamma);
+                } else if (unified_precond && layout_initialized_ &&
+                           cached_layout_.blocks.size() >= 6) {
+                    const auto& mu_block = cached_layout_.blocks[5];
+                    if (mu_block.name == "mu" && mu_block.size > 0 &&
+                        mu_block.start + mu_block.size <= U_eval.numel()) {
+                        auto mu_pert_1d = U_eval.slice(0, mu_block.start, mu_block.start + mu_block.size);
+                        int64_t ny = options_.ny;
+                        int64_t nx = options_.nx;
+                        if (ny > 0 && nx > 0 && mu_block.size == ny * nx) {
+                            auto mu_pert_2d = mu_pert_1d.reshape({ny, nx});
                             unified_precond->set_stage_state(mu_pert_2d, stage);
                         }
                     }
@@ -5762,7 +5751,7 @@ public:
                                       << " / " << w_block_stage.max().item<float>() << std::endl;
                         }
 
-                        float dt_gamma = dt * gamma;
+                        double dt_gamma = dt * gamma;
                         std::cerr << "  Scaling factor dt*gamma = " << dt_gamma << std::endl;
                     }
                 } else {
@@ -5962,12 +5951,6 @@ public:
                 std::cerr << std::defaultfloat;
             }
 
-            // NOTE 2026-02-03 / r50-F3: S is initialized from R₀ at iter 0, then MONOTONICALLY
-            // updated: S[b] = max(S_old[b], rms(R_b)) per iteration. S only grows, so the
-            // scaled metric ||S⁻¹R|| becomes tighter over time (never artificially looser).
-            // This tracks growing components (e.g., ru that grows while preconditioner focuses on ph)
-            // without breaking the rtol criterion consistency.
-
             // FIX 2026-02-01: Compute Newton residual norm on halo-zeroed R for consistency
             // with GMRES (which operates on halo-zeroed vectors).
             // Uses 1D halo mask (apply_halo_zeroing) instead of zero_halo_regions,
@@ -5976,7 +5959,7 @@ public:
             apply_halo_zeroing(R_inner);
 
             // ONE physical scale, from the STATE, once per stage:
-            //     S_b = rms|y over the unit group of b| / (dt*gamma)
+            //     S_b = max(rms|y over the unit group of b| / (dt*gamma), configured floor)
             // so ||S^-1 R|| is the RELATIVE STATE-INCREMENT DEFECT of the stage equation
             // K = F(U_n + dt*gamma*K) -- dimensionless, and the same quantity for GMRES's
             // coordinates, Newton's convergence test and the trust region.
@@ -6010,14 +5993,6 @@ public:
                     std::cerr << "[SCALING] S from the state (rms|y| / dt*gamma, dt*gamma=" << h
                               << "):" << std::endl;
                 }
-                double max_rms = 0.0;
-                for (const auto& blk : cached_layout_.blocks) {
-                    if (blk.start + blk.size > y.numel()) continue;
-                    const double n_b = static_cast<double>(blk.size);
-                    max_rms = std::max(max_rms, std::sqrt(
-                        y.slice(0, blk.start, blk.start + blk.size).square().sum().item<double>()
-                        / std::max(n_b, 1.0)));
-                }
                 for (const auto& blk : cached_layout_.blocks) {
                     if (blk.start + blk.size > y.numel()) continue;
                     double ss, n;
@@ -6027,15 +6002,17 @@ public:
                         n = static_cast<double>(blk.size);
                     }
                     const double rms = std::sqrt(ss / std::max(n, 1.0));
-                    // t', mu' and ph' are PERTURBATIONS (t-t0, mu-mub, ph-phb), so zero is a
-                    // legitimate reference state, not an error -- aborting on it refused a valid
-                    // run. Floor each block well below every healthy scale (measured at dt=600:
-                    // 0.032 .. 15.5) so a vanishing block still has a scale and S^-1 cannot blow
-                    // up, while a healthy metric is untouched.
+                    // Zero perturbations are valid. The configured floor has this
+                    // block's tendency units; another block's state magnitude does not.
+                    const double floor = blk.name == "ph" ? options_.scale_ph
+                        : blk.name == "t" ? options_.scale_t
+                        : blk.name == "mu" ? options_.scale_mu : options_.scale_u;
+                    TORCH_CHECK(std::isfinite(floor) && floor >= 0.0,
+                                "invalid tendency scale floor for block '", blk.name, "'");
                     TORCH_CHECK(std::isfinite(rms), "state scale for block '", blk.name,
                                 "' is not finite (rms=", rms, ")");
                     const float scale = static_cast<float>(
-                        std::max(rms / h, 1.0e-6 * max_rms / h));
+                        std::max(rms / h, floor));
                     S_diag_.slice(0, blk.start, blk.start + blk.size).fill_(scale);
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                         std::cerr << "  S[" << blk.name << "] = " << scale
@@ -6043,14 +6020,8 @@ public:
                                   << ")" << std::endl;
                     }
                 }
-                // Every block zero leaves max_rms = 0, so the floor above is 0 too and
-                // reciprocal() would hand back Inf silently. A SINGLE zero block is a
-                // legitimate reference state and is floored; an ENTIRELY zero state gives
-                // nothing to derive a scale from, so say so rather than emit an infinite
-                // weight the caller cannot see.
                 TORCH_CHECK(guarded_item<bool>((S_diag_ > 0).all()),
-                            "state scale is not positive: every block of U_n has zero RMS, "
-                            "so there is no magnitude to judge a residual against");
+                            "state scale is not positive: a zero state block requires a positive tendency floor");
                 S_inv_diag_ = S_diag_.reciprocal();
                 if (S_diag_.device() != K.device()) {
                     S_diag_ = S_diag_.to(K.device());
@@ -6723,6 +6694,12 @@ public:
                 result.iterations = stats_.newton_iterations;
                 result.final_residual = res_norm_for_stats;
                 result.message = "Newton solver converged successfully";
+                if (options_.retain_graph_for_adjoint && U_n.requires_grad()) {
+                    TORCH_CHECK(wrf::sdirk3::g_sdirk3_config.use_autograd,
+                                "Implicit stage pullback requires use_autograd");
+                    result.K = implicit_diff::attach_converged_stage_pullback(
+                        U_n, K, compute_rhs, dt, gamma, options_);
+                }
                 update_stage_predictor_cache(true, result.K);
                 return result;
             }
@@ -8625,14 +8602,19 @@ public:
                     dK = gmres_result.x;
                 }
 
+                // Preserve the direction certified by the GMRES residual and warm-start
+                // quality. Optional postprocessing must not silently change that pairing.
+                const bool may_modify_direction = halo_mask_initialized_ ||
+                    wrf::sdirk3::g_sdirk3_config.direct_u_solve_thresh > 0.0f;
+                const auto gmres_direction = may_modify_direction ? dK.detach().clone() : dK.detach();
+
                 // Zero halo components in dK before K += dK update.
                 // v20.14r27g: Halo mask is DISABLED in GMRES operator (v20.14r26),
                 // but post-GMRES zeroing is still applied to suppress boundary noise.
                 apply_halo_zeroing(dK);
 
-                // v20.14 r49-fix: Direct U Solve — when ru_share > threshold, S_U ≈ I,
-                // so the optimal Newton step for U is δK_u = -R_u.
-                // Override the GMRES U-block with the direct solution.
+                // Optional U-block replacement. Its linear residual must be recomputed
+                // below: -R_u is generally not the U component of the GMRES solution.
                 {
                     float du_thresh = wrf::sdirk3::g_sdirk3_config.direct_u_solve_thresh;
                     if (du_thresh > 0.0f && last_ru_share_ > du_thresh &&
@@ -8655,6 +8637,19 @@ public:
                     }
                 }
 
+                if (may_modify_direction) {
+                    apply_halo_zeroing(dK);
+                    if (!torch::equal(dK, gmres_direction)) {
+                        // apply_jacobian returns A*dK in physical coordinates. Do not wrap
+                        // the JVP call in NoGradGuard; only the residual bookkeeping is detached.
+                        const auto A_final = apply_jacobian(dK.detach());
+                        torch::NoGradGuard no_grad;
+                        const auto r_final = -R.detach() - A_final.detach();
+                        last_gmres_r_true_ = scaling_initialized_
+                            ? S_inv_diag_ * r_final : r_final;
+                    }
+                }
+
                 if (stage >= 0 && stage < static_cast<int>(gmres_warmstart_stage_.size())) {
                     // Shift current same-stage cache into temporal history first.
                     if (gmres_warmstart_stage_[stage].defined()) {
@@ -8662,7 +8657,7 @@ public:
                         gmres_warmstart_prev_relerr_stage_[stage] = gmres_warmstart_relerr_stage_[stage];
                         gmres_warmstart_prev_varpc_stage_[stage] = gmres_warmstart_varpc_stage_[stage];
                     }
-                    gmres_warmstart_stage_[stage] = dK.detach().clone();
+                    gmres_warmstart_stage_[stage] = gmres_direction.clone();
                     gmres_warmstart_relerr_stage_[stage] = gmres_result.rel_error;
                     gmres_warmstart_varpc_stage_[stage] = variable_pc_event_this_newton;
                 }
@@ -9590,22 +9585,35 @@ public:
 
                         // 2. FD JVP (central difference, under NoGradGuard)
                         torch::Tensor jvp_fd;
+                        wrf::sdirk3::ProbeVerdict fd_perturbation;
                         {
                             torch::NoGradGuard no_grad;
-                            auto F_plus  = compute_rhs(U_eval + fd_eps * v_test);
-                            auto F_minus = compute_rhs(U_eval - fd_eps * v_test);
-                            jvp_fd = (F_plus - F_minus) / (2.0f * fd_eps);
+                            const auto U_plus = U_eval + fd_eps * v_test;
+                            const auto U_minus = U_eval - fd_eps * v_test;
+                            fd_perturbation = wrf::sdirk3::central_fd_perturbation_verdict(
+                                U_eval, v_test, U_plus, U_minus);
+                            if (fd_perturbation.valid) {
+                                const auto F_plus = compute_rhs(U_plus);
+                                const auto F_minus = compute_rhs(U_minus);
+                                jvp_fd = (F_plus - F_minus) / (2.0f * fd_eps);
+                            }
                         }
+
+                        if (!fd_perturbation.valid) {
+                            std::cerr << "[JVP_VS_FD] UNINFORMATIVE: " << fd_perturbation.reason << std::endl;
+                        } else {
 
                         // 3. Global comparison
                         {
                             torch::NoGradGuard no_grad;
                             auto ad_cpu = jvp_ad.detach().to(torch::kCPU);
                             auto fd_cpu = jvp_fd.detach().to(torch::kCPU);
-                            float ad_norm = ad_cpu.norm().item<float>();
-                            float fd_norm = fd_cpu.norm().item<float>();
-                            float diff_norm = (ad_cpu - fd_cpu).norm().item<float>();
-                            float rel_err = diff_norm / std::max(fd_norm, 1e-12f);
+                            const auto comparison = wrf::sdirk3::compare_jvp_reference(
+                                ad_cpu, fd_cpu, fd_perturbation);
+                            const double ad_norm = comparison.candidate_norm;
+                            const double fd_norm = comparison.reference_norm;
+                            const double diff_norm = comparison.difference_norm;
+                            const double rel_err = comparison.relative_error;
                             float cosine = 0.0f;
                             if (ad_norm > 1e-15f && fd_norm > 1e-15f) {
                                 cosine = (ad_cpu * fd_cpu).sum().item<float>() / (ad_norm * fd_norm);
@@ -9614,6 +9622,7 @@ public:
                                       << ", ||Jv_fd||=" << fd_norm
                                       << ", ||diff||=" << diff_norm
                                       << ", rel_err=" << rel_err
+                                      << ", status=" << comparison.verdict.reason
                                       << ", cosine=" << cosine << std::endl;
                         }
 
@@ -9644,18 +9653,21 @@ public:
                             for (const auto& blk : layout.blocks) {
                                 auto ad_blk = ad_cpu.slice(0, blk.start, blk.start + blk.size);
                                 auto fd_blk = fd_cpu.slice(0, blk.start, blk.start + blk.size);
-                                float ad_n = ad_blk.norm().item<float>();
-                                float fd_n = fd_blk.norm().item<float>();
-                                float diff_n = (ad_blk - fd_blk).norm().item<float>();
-                                float rel = diff_n / std::max(fd_n, 1e-12f);
+                                const auto comparison = wrf::sdirk3::compare_jvp_reference(
+                                    ad_blk, fd_blk, fd_perturbation);
+                                const double ad_n = comparison.candidate_norm;
+                                const double fd_n = comparison.reference_norm;
+                                const double rel = comparison.relative_error;
                                 float cos_blk = 0.0f;
                                 if (ad_n > 1e-15f && fd_n > 1e-15f) {
                                     cos_blk = (ad_blk * fd_blk).sum().item<float>() / (ad_n * fd_n);
                                 }
                                 std::cerr << "[JVP_VS_FD] " << blk.name
                                           << ": ||ad||=" << ad_n << ", ||fd||=" << fd_n
-                                          << ", rel_err=" << rel << ", cos=" << cos_blk << std::endl;
+                                          << ", rel_err=" << rel << ", cos=" << cos_blk
+                                          << ", status=" << comparison.verdict.reason << std::endl;
                             }
+                        }
                         }
                         std::cerr << "========== [JVP_VS_FD] END ==========" << std::endl;
                     } catch (const std::exception& e) {
@@ -9772,20 +9784,16 @@ public:
                 }
             }
 
-            // GMRES solution norm diagnostic.
-            // ||dK||/||R|| ≈ ||(I-dt*γ*J)^{-1}|| is the operator's inverse norm.
-            // For acoustic modes this can be O(100-10000). This is structural, NOT
-            // null-space contamination. The trust-region handles step size control.
-            // Do NOT replace with steepest descent — it's catastrophically wrong
-            // because -R has ~zero component in the Newton descent direction.
+            // Directional step/residual ratio in raw packed coordinates. This single
+            // direction does not estimate an inverse-operator norm or a condition number.
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                 torch::NoGradGuard no_grad;
                 float dK_n = dK.norm().to(torch::kCPU).item<float>();
                 float R_n = R.detach().norm().to(torch::kCPU).item<float>();
                 float ratio = (R_n > 1e-15f) ? dK_n / R_n : 0.0f;
                 if (ratio > 100.0f) {
-                    std::cerr << "[GMRES INFO] ||dK||/||R||=" << ratio
-                              << " (operator inverse norm, trust-region controls step)" << std::endl;
+                    std::cerr << "[GMRES INFO] step_to_residual_ratio=" << ratio
+                              << " (raw packed coordinates)" << std::endl;
                 }
             }
 
@@ -9835,8 +9843,8 @@ public:
                     dK_norm_val = dK_norm_tensor.to(torch::kCPU).item<float>();
                 }
 
-                if (dK_norm_val < 1e-12f) {
-                    std::cerr << "\n[JVP VALIDATION] Skipped (||dK|| too small: "
+                if (!std::isfinite(dK_norm_val) || dK_norm_val < 1e-12f) {
+                    std::cerr << "\n[JVP VALIDATION] UNINFORMATIVE (invalid/small ||dK||: "
                               << dK_norm_val << ")" << std::endl;
                 } else {
                     std::cerr << "\n[JVP VALIDATION] Checking apply_jacobian vs reference central FD..." << std::endl;
@@ -9849,6 +9857,7 @@ public:
 
                     // Compute finite-difference Jacobian-vector product (can be in NoGradGuard)
                     torch::Tensor jvp_fd;
+                    wrf::sdirk3::ProbeVerdict fd_perturbation;
                     {
                         torch::NoGradGuard no_grad;
                         float fd_eps = 1e-6f;
@@ -9858,13 +9867,17 @@ public:
                         // Evaluate residuals at perturbed states
                         torch::Tensor U_plus = U_stage + dt * gamma * K_plus;
                         torch::Tensor U_minus = U_stage + dt * gamma * K_minus;
-                        torch::Tensor F_plus = compute_rhs(U_plus);
-                        torch::Tensor F_minus = compute_rhs(U_minus);
-                        torch::Tensor R_plus = K_plus - F_plus;
-                        torch::Tensor R_minus = K_minus - F_minus;
-
-                        // Central difference: (R(K+ε*v) - R(K-ε*v)) / (2*ε)
-                        jvp_fd = (R_plus - R_minus) / (2.0f * fd_eps);
+                        fd_perturbation = wrf::sdirk3::central_fd_perturbation_verdict(
+                            K, test_vec, K_plus, K_minus);
+                        if (fd_perturbation.valid && dt * gamma != 0.0f) {
+                            fd_perturbation = wrf::sdirk3::central_fd_perturbation_verdict(
+                                U_stage + dt * gamma * K, test_vec, U_plus, U_minus);
+                        }
+                        if (fd_perturbation.valid) {
+                            const auto R_plus = K_plus - compute_rhs(U_plus);
+                            const auto R_minus = K_minus - compute_rhs(U_minus);
+                            jvp_fd = (R_plus - R_minus) / (2.0f * fd_eps);
+                        }
                     }
 
                     // Compare results (in NoGradGuard since we need .item())
@@ -9872,18 +9885,23 @@ public:
                         torch::NoGradGuard no_grad;
                         // FIX 2025-12-27: Pre-copy tensors to CPU once for all diagnostics
                         auto jvp_apply_cpu = jvp_apply.to(torch::kCPU);
-                        auto jvp_fd_cpu = jvp_fd.to(torch::kCPU);
-                        float jvp_apply_norm = jvp_apply_cpu.norm().item<float>();
-                        float jvp_fd_norm = jvp_fd_cpu.norm().item<float>();
-                        float diff_norm = (jvp_apply_cpu - jvp_fd_cpu).norm().item<float>();
-                        float rel_error = (jvp_fd_norm > 1e-12f) ? (diff_norm / jvp_fd_norm) : 0.0f;
+                        auto jvp_fd_cpu = jvp_fd.defined() ? jvp_fd.to(torch::kCPU) : torch::Tensor();
+                        const auto comparison = wrf::sdirk3::compare_jvp_reference(
+                            jvp_apply_cpu, jvp_fd_cpu, fd_perturbation);
+                        const double jvp_apply_norm = comparison.candidate_norm;
+                        const double jvp_fd_norm = comparison.reference_norm;
+                        const double diff_norm = comparison.difference_norm;
+                        const double rel_error = comparison.relative_error;
 
                         std::cerr << "  ||(I - dt*gamma*J)*v||_apply  = " << jvp_apply_norm << std::endl;
                         std::cerr << "  ||(I - dt*gamma*J)*v||_ref_fd = " << jvp_fd_norm << std::endl;
                         std::cerr << "  ||difference||                = " << diff_norm << std::endl;
                         std::cerr << "  Relative error                = " << rel_error << std::endl;
 
-                        if (rel_error > 0.1f) {
+                        if (!comparison.verdict.valid) {
+                            std::cerr << "  [UNINFORMATIVE] Jacobian validation: "
+                                      << comparison.verdict.reason << std::endl;
+                        } else if (rel_error > 0.1f) {
                             std::cerr << "  [WARNING] Large JVP mismatch (>10%)!" << std::endl;
                             std::cerr << "  This suggests apply_jacobian doesn't match reference FD" << std::endl;
 
@@ -9896,7 +9914,8 @@ public:
                                 auto apply_slice = jvp_apply_cpu.slice(0, offset, offset + block.size);
                                 float fd_norm = fd_slice.norm().item<float>();
                                 float apply_norm = apply_slice.norm().item<float>();
-                                float ratio = (fd_norm > 1e-12f) ? (apply_norm / fd_norm) : 1.0f;
+                                float ratio = (fd_norm > 0.0f) ? (apply_norm / fd_norm)
+                                    : std::numeric_limits<float>::quiet_NaN();
                                 std::cerr << "  " << block.name << ": ||ref_fd||=" << fd_norm
                                          << ", ||apply||=" << apply_norm
                                          << ", ratio=" << ratio;
@@ -9950,7 +9969,7 @@ public:
              torch::Tensor accepted_residual;
             torch::Tensor accepted_residual_norm;
             float alpha = 1.0f;
-            float last_rho = 0.0f;
+            double last_rho = 0.0;
             const int max_trust_attempts = 3;
             // Phase 3C: Combined TR + LS RHS evaluation budget.
             // Trust region (3 evals) + line search (10 evals) = up to 13 RHS per Newton.
@@ -10193,14 +10212,28 @@ public:
                     if (!recovery_bad) {
                         apply_halo_zeroing(dK_recovery);
 
-                        auto dK_norm = dK_recovery.norm();
-                        auto K_norm = K.norm();
+                        // The fallback is judged by the same S-scaled geometry as the
+                        // normal trust path and its canonical S merit below.
+                        const bool recovery_scaled_coords =
+                            S_inv_diag_.defined() &&
+                            S_inv_diag_.numel() == dK_recovery.numel() &&
+                            K.numel() == dK_recovery.numel();
+                        auto dK_norm = recovery_scaled_coords
+                            ? (S_inv_diag_ * dK_recovery).norm()
+                            : dK_recovery.norm();
+                        auto K_norm = recovery_scaled_coords
+                            ? (S_inv_diag_ * K).norm()
+                            : K.norm();
                         auto effective_limit = compute_effective_trust_limit(K_norm, dK_recovery);
                         if (guarded_item<bool>(dK_norm > effective_limit)) {
                             dK_recovery = dK_recovery * (effective_limit / dK_norm);
                         }
 
-                        recovery_step_norm = safe_tensor_norm(dK_recovery).to(torch::kCPU).item<float>();
+                        auto recovery_step_for_norm = recovery_scaled_coords
+                            ? (S_inv_diag_ * dK_recovery)
+                            : dK_recovery;
+                        recovery_step_norm =
+                            safe_tensor_norm(recovery_step_for_norm).to(torch::kCPU).item<float>();
                         if (recovery_step_norm > 1e-20f && std::isfinite(recovery_step_norm)) {
                             it.candidate.recovery_attempted = true;   // a nonlinear residual IS evaluated below
                             auto K_trial = K + dK_recovery;
@@ -10320,7 +10353,13 @@ public:
                     last_rho = 0.0f;
                     // v20.14r40: Gradual shrink instead of slam to minimum.
                     // Preserves recovery potential for next Newton iteration.
-                    trust_radius_ = std::max(trust_radius_ * 0.5f, trust_radius_min_);
+                    if (it.candidate.recovery_attempted) {
+                        trust_radius_ = static_cast<float>(wrf::sdirk3::detail::contracted_trust_radius(
+                            trust_radius_, static_cast<double>(recovery_step_norm),
+                            0.5, trust_radius_min_));
+                    } else {
+                        trust_radius_ = std::max(trust_radius_ * 0.5f, trust_radius_min_);
+                    }
                     if (cfg.debug_level >= 1) {
                         std::cerr << "[TRUST REGION] GMRES failed (rel_error="
                                   << gmres_rel_error << ", raw=" << gmres_raw_rel_error
@@ -10408,7 +10447,8 @@ public:
                         } else {
                             // v20.14r40: Already tried forced scale — break entirely.
                             // Further attempts just shrink radius without changing candidate.
-                            trust_radius_ = std::max(trust_radius_ * 0.25f, trust_radius_min_);
+                            trust_radius_ = static_cast<float>(wrf::sdirk3::detail::contracted_trust_radius(
+                                trust_radius_, curr_cand_norm, 0.25, trust_radius_min_));
                             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                                 std::cerr << "[TRUST REGION] Break attempt " << attempt
                                           << " (same candidate, forced already tried)" << std::endl;
@@ -10439,9 +10479,9 @@ public:
 
                 float res_old_val = 0.0f;
                 float res_new_val = 0.0f;
-                [[maybe_unused]] float predicted_val = 0.0f;
-                float dK_norm_val = 0.0f;
-                float dK_scaled_norm_val = 0.0f;
+                [[maybe_unused]] double predicted_val = 0.0;
+                double dK_norm_val = 0.0;
+                double dK_scaled_norm_val = 0.0;
                 [[maybe_unused]] float effective_limit_val = 0.0f;
 
                 // FIX (2025-12-05): Use guarded_item for autograd compatibility
@@ -10480,14 +10520,15 @@ public:
                     res_old_val = guarded_item<float>(R.norm());
                     res_new_val = guarded_item<float>(res_trial_tensor);
                 }
-                dK_norm_val = guarded_item<float>(dK_norm);
-                dK_scaled_norm_val = guarded_item<float>(dK_scaled_norm_tensor);
+                dK_norm_val = guarded_item<double>(dK_norm);
+                dK_scaled_norm_val = guarded_item<double>(dK_scaled_norm_tensor);
                 effective_limit_val = guarded_item<float>(effective_limit);
 
                 // The EXACT linear model, in the coordinates the merit already uses.
                 // GMRES returns r_g = b_s - A_s x (already S-scaled), so the residual the
                 // model predicts at fraction a is R_lin_s = (1-a)R_s - a r_g, and the
-                // predicted reduction is ||R_s||^2 - ||R_lin_s||^2 -- no extra JVP.
+                // predicted reduction is ||R_s||^2 - ||R_lin_s||^2. A direction
+                // changed after GMRES already has its residual recomputed above.
                 //
                 // This REPLACES ||R||^2 a(2-a-a e^2), which approximated the same thing by
                 // dropping the cross term 2a(1-a)<R_s,r_g> and substituting the scalar
@@ -10497,11 +10538,11 @@ public:
                 // in wrf_sdirk3_trust_model.h; only the production path was still using the
                 // approximation, with a full-step cap on top that shrank the denominator and
                 // inflated rho.
-                float tr_alpha = (dK_norm_val > 1e-14f) ? (dK_scaled_norm_val / dK_norm_val) : 1.0f;
-                tr_alpha = std::min(tr_alpha, 1.0f);
+                double tr_alpha = (dK_norm_val > 0.0) ? (dK_scaled_norm_val / dK_norm_val) : 1.0;
+                tr_alpha = std::min(tr_alpha, 1.0);
                 float e = gmres_rel_error;  // reported only
 
-                float actual_reduction = std::numeric_limits<float>::quiet_NaN();
+                double actual_reduction = std::numeric_limits<double>::quiet_NaN();
                 wrf::sdirk3::TrustAssessment assess{};
                 assess.status = wrf::sdirk3::TrustAssessmentStatus::DegeneratePrediction;
                 assess.rho = std::numeric_limits<double>::quiet_NaN();
@@ -10527,7 +10568,7 @@ public:
                         assess = assess_trust_model(pred.reduction(), pred.merit_old(),
                                                     pred.merit_model(),
                                                     pred.merit_old() - merit_trial);
-                        actual_reduction = static_cast<float>(assess.actual);
+                        actual_reduction = assess.actual;
                     }
                 } else {
                     // Name the condition that failed. "inputs_unavailable" alone sent me
@@ -10548,8 +10589,8 @@ public:
                 // non-finite, which the acceptance test below already treats as a reject --
                 // the trust region then shrinks and retries, which is the right response to
                 // "the model cannot be trusted here", and needs no separate branch.
-                predicted_val = static_cast<float>(assess.predicted);
-                float rho_val = static_cast<float>(assess.rho);
+                predicted_val = assess.predicted;
+                const double rho_val = assess.rho;
                 if (trust_model_failure && wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                     std::cerr << "[TRUST REGION] no usable linear model ("
                               << trust_model_failure << "); rejecting this attempt"
@@ -10607,7 +10648,9 @@ public:
                                       << " > " << quality_thresh
                                       << ", rejecting step (poor linear solve quality)" << std::endl;
                         }
-                        trust_radius_ = std::max(trust_radius_ * 0.25f, trust_radius_min_);
+                        trust_radius_ = static_cast<float>(wrf::sdirk3::detail::contracted_trust_radius(
+                            trust_radius_, static_cast<double>(dK_scaled_norm_val),
+                            0.25, trust_radius_min_));
                         continue;  // Try again with smaller radius
                     }
                 }
@@ -10624,7 +10667,7 @@ public:
                     // v20.14r40: Scale floor by tr_alpha — trust-region reduced steps
                     // naturally produce proportionally smaller decrease.
                     const float near_fail_floor = wrf::sdirk3::g_sdirk3_config.near_fail_floor;
-                    const float scaled_floor = near_fail_floor * std::max(tr_alpha, 0.1f);
+                    const double scaled_floor = near_fail_floor * std::max(tr_alpha, 0.1);
                     float actual_decrease_frac = (res_old_val > 1e-12f) ?
                         (res_old_val - res_new_val) / res_old_val : 0.0f;
                     if (actual_decrease_frac < scaled_floor) {
@@ -10663,7 +10706,7 @@ public:
                         // tr_alpha already computed above (line ~3737).
                         bool hard_rejected = false;
                         if (res_old_val > 1e-12f) {
-                            float required_decrease = 0.01f * tr_alpha;  // 1% at full step
+                            double required_decrease = 0.01 * tr_alpha;  // 1% at full step
                             float actual_decrease_frac = (res_old_val - res_new_val) / res_old_val;
                             if (actual_decrease_frac < required_decrease) {
                                 hard_rejected = true;
@@ -10743,7 +10786,9 @@ public:
                     break;
                 }
 
-                trust_radius_ = std::max(trust_radius_ * 0.25f, trust_radius_min_);
+                trust_radius_ = static_cast<float>(wrf::sdirk3::detail::contracted_trust_radius(
+                    trust_radius_, static_cast<double>(dK_scaled_norm_val),
+                    0.25, trust_radius_min_));
                 if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                     std::cerr << "[TRUST REGION] Rejecting step, new radius=" << trust_radius_ << std::endl;
                 }
@@ -11196,8 +11241,8 @@ sdirk3::WRFNewtonKrylovSolver::NewtonResult sdirk3::WRFNewtonKrylovSolver::solve
     const torch::Tensor& U_n,
     const torch::Tensor& K_prev,
     const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
-    float dt,
-    float gamma,
+    double dt,
+    double gamma,
     int stage) {
     
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -11266,8 +11311,8 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
     const torch::Tensor& U_n,
     const torch::Tensor& K_prev,
     const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
-    float dt,
-    float gamma,
+    double dt,
+    double gamma,
     int stage) {
     
     return solve_stage(U_n, K_prev, compute_rhs,
@@ -11280,8 +11325,8 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
     const torch::Tensor& U_n,
     const torch::Tensor& K_prev,
     const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
-    float dt,
-    float gamma,
+    double dt,
+    double gamma,
     int stage,
     const torch::Tensor& F_phys) {  // Physical forcing term
 
@@ -11296,8 +11341,8 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
     const torch::Tensor& K_prev,
     const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs,
     const std::function<torch::Tensor(const torch::Tensor&)>& compute_rhs_fast,
-    float dt,
-    float gamma,
+    double dt,
+    double gamma,
     int stage,
     const torch::Tensor& F_phys) {  // Physical forcing term
     
@@ -11313,6 +11358,9 @@ torch::Tensor sdirk3::WRFNewtonKrylovSolver::solve_stage(
     
     auto result = pImpl->solve_stage_impl(U_n, K_prev, compute_rhs, compute_rhs_fast,
                                           dt, gamma, stage, F_phys);
+    TORCH_CHECK(!pImpl->options_.retain_graph_for_adjoint || !U_n.requires_grad() ||
+                result.converged,
+                "Implicit stage pullback requires a converged Newton root: ", result.message);
 
     // PR 8: per-stage summary record (opt-in) — the PRODUCTION entry point
     // (the tile solver calls this overload directly, bypassing
@@ -11551,12 +11599,26 @@ void sdirk3::WRFNewtonKrylovSolver::update_boundary_periodicity(
 
 void sdirk3::WRFNewtonKrylovSolver::set_physics_scaling(const torch::Tensor& S_diag) {
     torch::NoGradGuard no_grad;
-    // v19.1: detach() without clone() — caller's tensor is alive through solve_stage().
-    // reciprocal() creates a new tensor, so S_inv_diag_ is independent.
-    // CONTRACT: Caller must NOT mutate S_diag after this call. If that invariant
-    // changes in future, revert to S_diag.detach().clone().
-    pImpl->S_diag_ = S_diag.detach();
-    pImpl->S_inv_diag_ = pImpl->S_diag_.reciprocal();
+    TORCH_CHECK(S_diag.defined() && S_diag.dim() == 1 && S_diag.numel() > 0 &&
+                (S_diag.scalar_type() == torch::kFloat32 ||
+                 S_diag.scalar_type() == torch::kFloat64),
+                "SDIRK3: physics scale must be a nonempty packed FP32/FP64 vector");
+    TORCH_CHECK(pImpl->layout_initialized_ &&
+                S_diag.numel() == pImpl->cached_layout_.total_size,
+                "SDIRK3: physics scale must match the initialized state layout");
+
+    // A finite, invertible scale is required for ||S^-1 R||=0 to imply R=0.
+    // Own the pair so later caller mutation cannot change S without changing S^-1.
+    auto scale = S_diag.detach().clone();
+    TORCH_CHECK((torch::isfinite(scale) & (scale > 0)).all().item<bool>(),
+                "SDIRK3: physics scale must contain only finite positive values");
+    auto inverse = scale.reciprocal();
+    TORCH_CHECK((torch::isfinite(inverse) & (inverse > 0)).all().item<bool>(),
+                "SDIRK3: physics scale reciprocal must be finite and positive");
+
+    // Publish only after all checks pass; a rejected replacement preserves the old pair.
+    pImpl->S_diag_ = std::move(scale);
+    pImpl->S_inv_diag_ = std::move(inverse);
     pImpl->scaling_initialized_ = true;
     pImpl->physics_scaling_set_ = true;
     pImpl->scaling_device_ = pImpl->S_diag_.device();

@@ -47,6 +47,73 @@ struct ProbeVerdict {
     const char* reason = "";
 };
 
+// A central-FD reference is informative only if both perturbations survive in
+// every excited coordinate. Check the actual evaluation points, not an RMS/ULP estimate.
+inline ProbeVerdict central_fd_perturbation_verdict(
+        const torch::Tensor& base, const torch::Tensor& direction,
+        const torch::Tensor& plus, const torch::Tensor& minus) {
+    torch::NoGradGuard no_grad;
+    if (!base.defined() || base.numel() == 0 || !base.is_floating_point())
+        return {false, "invalid_perturbation_input"};
+    for (const auto* t : {&base, &direction, &plus, &minus}) {
+        if (!t->defined() || t->sizes() != base.sizes() ||
+            t->device() != base.device() || t->scalar_type() != base.scalar_type())
+            return {false, "invalid_perturbation_input"};
+        if (!torch::isfinite(*t).all().item<bool>())
+            return {false, "nonfinite_perturbation"};
+    }
+    const auto excited = direction.ne(0);
+    if (!excited.any().item<bool>()) return {false, "zero_direction"};
+    if ((excited & (plus.eq(base) | minus.eq(base) | plus.eq(minus))).any().item<bool>())
+        return {false, "unresolved_perturbation"};
+    return {true, "ok"};
+}
+
+struct JvpReferenceComparison {
+    ProbeVerdict verdict{false, "invalid_reference_input"};
+    double candidate_norm = std::numeric_limits<double>::quiet_NaN();
+    double reference_norm = std::numeric_limits<double>::quiet_NaN();
+    double difference_norm = std::numeric_limits<double>::quiet_NaN();
+    double relative_error = std::numeric_limits<double>::quiet_NaN();
+};
+
+// Shared by the configured-JVP and AD-vs-FD diagnostics. Invalid/uninformative
+// comparisons never substitute a zero error that a caller could report as a pass.
+inline JvpReferenceComparison compare_jvp_reference(
+        const torch::Tensor& candidate, const torch::Tensor& reference,
+        ProbeVerdict perturbation) {
+    torch::NoGradGuard no_grad;
+    JvpReferenceComparison result;
+    if (!perturbation.valid) {
+        result.verdict = perturbation;
+        return result;
+    }
+    if (!candidate.defined() || !reference.defined() || candidate.numel() == 0 ||
+        candidate.sizes() != reference.sizes() || candidate.device() != reference.device() ||
+        candidate.scalar_type() != reference.scalar_type() || !candidate.is_floating_point())
+        return result;
+    if (!torch::isfinite(candidate).all().item<bool>() ||
+        !torch::isfinite(reference).all().item<bool>()) {
+        result.verdict = {false, "nonfinite_reference"};
+        return result;
+    }
+    const auto c64 = candidate.to(torch::kFloat64);
+    const auto r64 = reference.to(torch::kFloat64);
+    result.candidate_norm = c64.norm().item<double>();
+    result.reference_norm = r64.norm().item<double>();
+    result.difference_norm = (c64 - r64).norm().item<double>();
+    if (result.reference_norm == 0.0) {
+        result.verdict = {false, "zero_reference"};
+        return result;
+    }
+    result.relative_error = result.difference_norm / result.reference_norm;
+    result.verdict = std::isfinite(result.candidate_norm) &&
+                     std::isfinite(result.reference_norm) &&
+                     std::isfinite(result.relative_error)
+        ? ProbeVerdict{true, "ok"} : ProbeVerdict{false, "nonfinite_comparison"};
+    return result;
+}
+
 // ---------------------------------------------------------------------------------------
 // Step-map probes (purity / advance / tangent)
 // ---------------------------------------------------------------------------------------

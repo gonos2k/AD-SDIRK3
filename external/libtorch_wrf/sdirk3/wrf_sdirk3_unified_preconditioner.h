@@ -7,6 +7,7 @@
 #include <optional>
 #include <set>
 #include <tuple>
+#include <vector>
 #include <cstdint>
 #include <atomic>  // OPT Pass33+: For diagnostic sampling counter
 #include <limits>  // PR 9D: sentinel NaN for the W-damping policy signature
@@ -239,9 +240,17 @@ public:
      * coefficients need to be recomputed to avoid GMRES stagnation.
      * Internally computes mu_full = mu_base + mu_pert using grid_info_.
      * @param mu_pert 2D tensor of column mass perturbation (j,i) from state vector
-     * @param stage SDIRK3 stage number (1, 2, or 3)
+     * @param stage SDIRK3 stage number (1..4 for mode-3 ARK; legacy callers may use 1..3)
      */
     void set_stage_state(const torch::Tensor& mu_pert, int stage);
+
+    // The canonical type-2 profile selects the raw vertical principal model.
+    // It consumes a full stage snapshot; mu-only binding is invalid for this model.
+    bool raw_principal_enabled() const;
+    void bind_raw_principal_state_or_throw(const torch::Tensor& packed_state,
+                                           int stage,
+                                           const char* state_label);
+    uint64_t raw_principal_generation() const { return raw_principal_generation_; }
 
     // 9F.D98 (review section 5): the CHECKED binding, for callers that cannot proceed
     // without it.
@@ -299,6 +308,9 @@ public:
         float mu_scale_correction = 1.0f;
     };
     StageStateSnapshot snapshot_stage_state() const {
+        TORCH_CHECK(!raw_principal_enabled(),
+                    "snapshot_stage_state is a legacy mu-only API and is unavailable for "
+                    "the raw principal preconditioner");
         StageStateSnapshot s;
         if (mu_full_stage_.defined()) s.mu_full_stage = mu_full_stage_.detach().clone();
         if (mu_pert_last_bound_.defined())
@@ -308,6 +320,9 @@ public:
         return s;
     }
     void restore_stage_state(const StageStateSnapshot& s) {
+        TORCH_CHECK(!raw_principal_enabled(),
+                    "restore_stage_state is a legacy mu-only API and is unavailable for "
+                    "the raw principal preconditioner");
         mu_full_stage_ = s.mu_full_stage;
         mu_pert_last_bound_ = s.mu_pert_last_bound;
         current_stage_ = s.current_stage;
@@ -537,6 +552,51 @@ public:
     uint64_t coefficient_generation() const { return coefficient_generation_; }
 
 private:
+    enum class RawPrincipalSelection : uint8_t {
+        Legacy = 0,
+        Canonical = 1,
+    };
+
+    // This gate mirrors the actual precond_type==2 -> UnifiedPreconditioner
+    // tile factory and the ordinary mode-3 RHS call sites.  It is immutable
+    // for the lifetime of a preconditioner, so forward and transpose cannot
+    // silently select different models after a stage snapshot is bound.
+    RawPrincipalSelection raw_principal_selection_ = RawPrincipalSelection::Legacy;
+
+    bool raw_principal_profile_supported(std::string* why_not) const;
+
+    // Raw W/Phi/theta principal block.  M approximates A by retaining the
+    // pressure/Phi derivative K, theta-to-W derivative B, and canonical G=gI.
+    // NH/curvature, advection, direct-W, UV, and mu couplings remain in A and
+    // are intentionally outside this principal M; NH is therefore not a
+    // selector rejection gate.  The vectors are an immutable snapshot after
+    // update_time_coefficients() publishes one generation.  K and B use their
+    // native three/two-point vertical stencils; G is the canonical gI map and
+    // is therefore not stored.  The Schur is the sole W owner.
+    struct RawPrincipalBlock {
+        std::vector<float> k_left;  // K row: Phi[k-1], size nz
+        std::vector<float> k_diag;  // K row: Phi[k],   size nz
+        std::vector<float> k_right; // K row: Phi[k+1], size nz (top is zero)
+        std::vector<float> b_left;  // B row: theta[k-1], size nz (top is zero)
+        std::vector<float> b_diag;  // B row: theta[k],   size nz
+        std::vector<float> lower;   // S_w lower, size nz-1
+        std::vector<float> diag;    // S_w diagonal, size nz
+        std::vector<float> upper;   // S_w upper, size nz-1
+    };
+
+    void initialize_raw_principal_or_throw(float h);
+    torch::Tensor apply_raw_principal(const torch::Tensor& residual) const;
+    torch::Tensor apply_raw_principal_inverse_transpose(const torch::Tensor& cotangent) const;
+
+    bool raw_principal_state_bound_ = false;
+    bool raw_principal_coefficients_valid_ = false;
+    bool raw_principal_coefficients_dirty_ = false;
+    int raw_principal_stage_ = -1;
+    float raw_principal_h_ = 0.0f;
+    uint64_t raw_principal_generation_ = 0;
+    torch::Tensor raw_principal_state_cpu_;
+    std::vector<RawPrincipalBlock> raw_principal_blocks_;
+
     // Grid and physics info
     std::shared_ptr<WRFGridInfo> grid_info_;
     std::shared_ptr<PhysicsConfig> physics_config_;
@@ -683,7 +743,7 @@ private:
     // v20.5: Stage-specific state for adaptive preconditioner
     // When set, mu_full_stage_ is used instead of mu_base for coefficient computation
     torch::Tensor mu_full_stage_;  // 2D (j,i) mean across k, or empty if not set
-    int current_stage_ = 0;        // SDIRK3 stage (1, 2, 3), 0 = not set
+    int current_stage_ = 0;        // SDIRK3 stage (1..4 in mode-3 ARK), 0 = not set
     // stage_state_dirty_ removed in v20.14 (was set but never read)
 
     // Cached base state generation counter from grid_info_

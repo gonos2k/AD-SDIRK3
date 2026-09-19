@@ -60,6 +60,28 @@ static bool parse_bool_env(const char* v) {
     return parse_fortran_bool_value(std::string(v));
 }
 
+// Numeric configuration is authority, so reject both non-finite values and
+// consumed-prefix text before applying a range clamp.  std::clamp(NaN, lo, hi)
+// returns NaN because both comparisons are false.
+static float parse_finite_float(const std::string& text, const char* knob) {
+    char* end = nullptr;
+    const float value = std::strtof(text.c_str(), &end);
+    // Underflow to zero remains a valid input for the existing range clamp
+    // (notably jvp_epsilon's lower bound); overflow is rejected by isfinite.
+    if (end == text.c_str() || *end != '\0' || !std::isfinite(value)) {
+        throw std::invalid_argument(std::string(knob) + " must be a finite number: '" + text + "'");
+    }
+    return value;
+}
+
+static int parse_config_int(const std::string& text, const char* knob) {
+    int value = 0;
+    if (!wrf::sdirk3::parse_whole_int(text.c_str(), value)) {
+        throw std::invalid_argument(std::string(knob) + " must be a complete integer: '" + text + "'");
+    }
+    return value;
+}
+
 // Internal helper: Reject ALL config changes after workers started.
 // FIX Round6 Item2: Per-key WARN_ONCE policy to prevent warning spam.
 // v20.14r16: All writes rejected (g_sdirk3_config is unsynchronized plain struct).
@@ -152,15 +174,15 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
             if (key == "sdirk3_max_newton_iter") {
                 max_newton_iter = std::stoi(value);
             } else if (key == "sdirk3_newton_tol") {
-                newton_tol = std::stof(value);
+                newton_tol = parse_finite_float(value, "newton_tol");
             } else if (key == "sdirk3_newton_rtol") {
-                newton_rtol = std::stof(value);
+                newton_rtol = parse_finite_float(value, "newton_rtol");
             } else if (key == "sdirk3_gmres_restart") {
                 gmres_restart = std::stoi(value);
             } else if (key == "sdirk3_max_krylov_iter") {
                 max_krylov_iter = std::stoi(value);
             } else if (key == "sdirk3_krylov_tol") {
-                krylov_tol = std::stof(value);
+                krylov_tol = parse_finite_float(value, "krylov_tol");
             // v20.14r48: GMRES performance tuning
             } else if (key == "sdirk3_gmres_true_residual_start_j") {
                 gmres_true_residual_start_j = std::clamp(std::stoi(value), 0, 1000);
@@ -182,26 +204,26 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 // which is how a measurement gets attributed to a budget it never had. One
                 // maximum, and a clamp that says it clamped.
                 stage2_gmres_restart =
-                    clamp_int_warn("sdirk3_stage2_gmres_restart", std::stoi(value), 0, 1000);
+                    clamp_int_warn("sdirk3_stage2_gmres_restart", std::stoi(value), 0, kMaxGmresRestart);
             } else if (key == "sdirk3_stage2_max_krylov_restarts") {
                 stage2_max_krylov_restarts = std::clamp(std::stoi(value), 0, 20);
             } else if (key == "sdirk3_stage2_krylov_tol") {
-                stage2_krylov_tol = std::clamp(std::strtof(value.c_str(), nullptr), 0.0f, 1.0f);
+                stage2_krylov_tol = std::clamp(parse_finite_float(value, "stage2_krylov_tol"), 0.0f, 1.0f);
             } else if (key == "sdirk3_stage2_ew_eta_min") {
-                stage2_ew_eta_min = std::clamp(std::strtof(value.c_str(), nullptr), 0.0f, 1.0f);
+                stage2_ew_eta_min = std::clamp(parse_finite_float(value, "stage2_ew_eta_min"), 0.0f, 1.0f);
             } else if (key == "sdirk3_stage2_ew_eta_max") {
-                stage2_ew_eta_max = std::clamp(std::strtof(value.c_str(), nullptr), 0.0f, 1.0f);
+                stage2_ew_eta_max = std::clamp(parse_finite_float(value, "stage2_ew_eta_max"), 0.0f, 1.0f);
             } else if (key == "sdirk3_stage3_gmres_restart") {
                 stage3_gmres_restart =
-                    clamp_int_warn("sdirk3_stage3_gmres_restart", std::stoi(value), 0, 1000);
+                    clamp_int_warn("sdirk3_stage3_gmres_restart", std::stoi(value), 0, kMaxGmresRestart);
             } else if (key == "sdirk3_stage3_max_krylov_restarts") {
                 stage3_max_krylov_restarts = std::clamp(std::stoi(value), 0, 20);
             } else if (key == "sdirk3_stage3_krylov_tol") {
-                stage3_krylov_tol = std::clamp(std::strtof(value.c_str(), nullptr), 0.0f, 1.0f);
+                stage3_krylov_tol = std::clamp(parse_finite_float(value, "stage3_krylov_tol"), 0.0f, 1.0f);
             } else if (key == "sdirk3_stage3_ew_eta_min") {
-                stage3_ew_eta_min = std::clamp(std::strtof(value.c_str(), nullptr), 0.0f, 1.0f);
+                stage3_ew_eta_min = std::clamp(parse_finite_float(value, "stage3_ew_eta_min"), 0.0f, 1.0f);
             } else if (key == "sdirk3_stage3_ew_eta_max") {
-                stage3_ew_eta_max = std::clamp(std::strtof(value.c_str(), nullptr), 0.0f, 1.0f);
+                stage3_ew_eta_max = std::clamp(parse_finite_float(value, "stage3_ew_eta_max"), 0.0f, 1.0f);
             } else if (key == "sdirk3_jvp_auto_bench_calls") {
                 jvp_auto_bench_calls = std::clamp(std::stoi(value), 0, 20);
             } else if (key == "sdirk3_jvp_auto_bench_quality_gate") {
@@ -406,7 +428,8 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 // "1abc" as 1. Whole-string or reject.
                 mass_coordinate_mode = parse_mode_strict(value);
             } else if (key == "sdirk3_split_explicit_time_step_sound" || key == "split_explicit_time_step_sound") {
-                split_explicit_time_step_sound = std::clamp(std::atoi(value.c_str()), 0, 1000);
+                split_explicit_time_step_sound = std::clamp(
+                    parse_config_int(value, "split_explicit_time_step_sound"), 0, 1000);
             } else if (key == "sdirk3_split_explicit_epssm" || key == "split_explicit_epssm") {
                 split_explicit_epssm = std::clamp(std::stof(value), 0.0f, 1.0f);
             } else if (key == "sdirk3_split_explicit_smdiv" || key == "split_explicit_smdiv") {
@@ -415,6 +438,10 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 split_explicit_emdiv = std::clamp(std::stof(value), 0.0f, 1.0f);
             } else if (key == "sdirk3_split_explicit_top_lid" || key == "split_explicit_top_lid") {
                 split_explicit_top_lid = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_non_hydrostatic" || key == "non_hydrostatic") {
+                non_hydrostatic = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_do_curvature" || key == "do_curvature") {
+                do_curvature = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_precond_phi_w_coupling_scale" || key == "precond_phi_w_coupling_scale") {
                 int parsed = std::atoi(value.c_str());
                 if (parsed == 0 && value != "0") {
@@ -556,10 +583,10 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 uv_vfrac_warmup_start = std::clamp(std::stof(value), 0.0f, 1.0f);
             // v20.14: Adaptive tuning constants via namelist
             } else if (key == "sdirk3_adaptive_high_threshold") {
-                adaptive_high_threshold = std::stof(value);
+                adaptive_high_threshold = parse_finite_float(value, "adaptive_high_threshold");
                 normalize_adaptive_thresholds();
             } else if (key == "sdirk3_adaptive_low_threshold") {
-                adaptive_low_threshold = std::stof(value);
+                adaptive_low_threshold = parse_finite_float(value, "adaptive_low_threshold");
                 normalize_adaptive_thresholds();
             } else if (key == "sdirk3_adaptive_step_size") {
                 adaptive_step_size = std::clamp(std::stof(value), 0.001f, 0.1f);
@@ -705,7 +732,7 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
 
             // IMEX post-solve split mode (2026-02-01)
             } else if (key == "sdirk3_imex_split_mode" || key == "imex_split_mode") {
-                int parsed = std::stoi(value);
+                int parsed = parse_config_int(value, "imex_split_mode");
                 if (parsed < 0 || parsed > 3) {
                     std::cerr << "[CONFIG WARNING] imex_split_mode=" << parsed
                               << " (invalid, from namelist) -> clamped to 0;"
@@ -825,7 +852,19 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 // Ordinary tuning knobs keep the warning -- skipping a malformed
                 // gmres_restart is recoverable. Selecting the wrong mass-coordinate scheme is
                 // not, so it fails closed with the stable marker.
-                if (key == "sdirk3_mass_coordinate_mode" || key == "mass_coordinate_mode") {
+                if (key == "sdirk3_mass_coordinate_mode" || key == "mass_coordinate_mode" ||
+                    key == "sdirk3_stage2_krylov_tol" || key == "sdirk3_stage3_krylov_tol" ||
+                    key == "sdirk3_stage2_ew_eta_min" || key == "sdirk3_stage2_ew_eta_max" ||
+                    key == "sdirk3_stage3_ew_eta_min" || key == "sdirk3_stage3_ew_eta_max" ||
+                    key == "sdirk3_adaptive_high_threshold" || key == "sdirk3_adaptive_low_threshold" ||
+                    key == "sdirk3_newton_tol" || key == "sdirk3_newton_rtol" ||
+                    key == "sdirk3_krylov_tol" ||
+                    key == "sdirk3_imex_split_mode" || key == "imex_split_mode" ||
+                    key == "sdirk3_split_explicit_time_step_sound" ||
+                    key == "split_explicit_time_step_sound") {
+                    if (key != "sdirk3_mass_coordinate_mode" && key != "mass_coordinate_mode") {
+                        throw;
+                    }
                     wrf::sdirk3::abort_c_abi_fail(
                         std::string("SDIRK3_CONFIG_INVALID_MODE: namelist ") + key + "=" +
                         value + " -- " + e.what() +
@@ -846,7 +885,7 @@ void SDIRK3Config::load_from_env() {
         max_newton_iter = std::atoi(env_val);
     }
     if ((env_val = std::getenv("WRF_SDIRK3_NEWTON_TOL"))) {
-        newton_tol = std::atof(env_val);
+        newton_tol = parse_finite_float(env_val, "newton_tol");
     }
     if ((env_val = std::getenv("WRF_SDIRK3_EWT_RTOL"))) {
         // STRICT: atof returns NaN for "nan" and 0.0 for any garbage, NaN passes a [0,1] range
@@ -923,7 +962,7 @@ void SDIRK3Config::load_from_env() {
             int parsed_budget = 0;
             if (wrf::sdirk3::parse_whole_int(env_val, parsed_budget)) {
                 stage2_gmres_restart = clamp_int_warn(
-                    "WRF_SDIRK3_STAGE2_GMRES_RESTART", parsed_budget, 0, 1000);
+                    "WRF_SDIRK3_STAGE2_GMRES_RESTART", parsed_budget, 0, kMaxGmresRestart);
             } else {
                 std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_STAGE2_GMRES_RESTART='" << env_val
                           << "' is not a whole integer; keeping stage2_gmres_restart = "
@@ -937,15 +976,15 @@ void SDIRK3Config::load_from_env() {
         std::cerr << "[CONFIG ENV] stage2_max_krylov_restarts = " << stage2_max_krylov_restarts << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE2_KRYLOV_TOL"))) {
-        stage2_krylov_tol = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
+        stage2_krylov_tol = std::clamp(parse_finite_float(env_val, "stage2_krylov_tol"), 0.0f, 1.0f);
         std::cerr << "[CONFIG ENV] stage2_krylov_tol = " << stage2_krylov_tol << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE2_EW_ETA_MIN"))) {
-        stage2_ew_eta_min = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
+        stage2_ew_eta_min = std::clamp(parse_finite_float(env_val, "stage2_ew_eta_min"), 0.0f, 1.0f);
         std::cerr << "[CONFIG ENV] stage2_ew_eta_min = " << stage2_ew_eta_min << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE2_EW_ETA_MAX"))) {
-        stage2_ew_eta_max = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
+        stage2_ew_eta_max = std::clamp(parse_finite_float(env_val, "stage2_ew_eta_max"), 0.0f, 1.0f);
         std::cerr << "[CONFIG ENV] stage2_ew_eta_max = " << stage2_ew_eta_max << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE3_GMRES_RESTART"))) {
@@ -956,7 +995,7 @@ void SDIRK3Config::load_from_env() {
             int parsed_budget = 0;
             if (wrf::sdirk3::parse_whole_int(env_val, parsed_budget)) {
                 stage3_gmres_restart = clamp_int_warn(
-                    "WRF_SDIRK3_STAGE3_GMRES_RESTART", parsed_budget, 0, 1000);
+                    "WRF_SDIRK3_STAGE3_GMRES_RESTART", parsed_budget, 0, kMaxGmresRestart);
             } else {
                 std::cerr << "[SDIRK3 WARN] WRF_SDIRK3_STAGE3_GMRES_RESTART='" << env_val
                           << "' is not a whole integer; keeping stage3_gmres_restart = "
@@ -970,15 +1009,15 @@ void SDIRK3Config::load_from_env() {
         std::cerr << "[CONFIG ENV] stage3_max_krylov_restarts = " << stage3_max_krylov_restarts << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE3_KRYLOV_TOL"))) {
-        stage3_krylov_tol = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
+        stage3_krylov_tol = std::clamp(parse_finite_float(env_val, "stage3_krylov_tol"), 0.0f, 1.0f);
         std::cerr << "[CONFIG ENV] stage3_krylov_tol = " << stage3_krylov_tol << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE3_EW_ETA_MIN"))) {
-        stage3_ew_eta_min = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
+        stage3_ew_eta_min = std::clamp(parse_finite_float(env_val, "stage3_ew_eta_min"), 0.0f, 1.0f);
         std::cerr << "[CONFIG ENV] stage3_ew_eta_min = " << stage3_ew_eta_min << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_STAGE3_EW_ETA_MAX"))) {
-        stage3_ew_eta_max = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
+        stage3_ew_eta_max = std::clamp(parse_finite_float(env_val, "stage3_ew_eta_max"), 0.0f, 1.0f);
         std::cerr << "[CONFIG ENV] stage3_ew_eta_max = " << stage3_ew_eta_max << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_JVP_AUTO_BENCH_CALLS"))) {
@@ -1152,7 +1191,7 @@ void SDIRK3Config::load_from_env() {
     }
     
     if ((env_val = std::getenv("WRF_SDIRK3_JVP_EPSILON"))) {
-        jvp_epsilon = static_cast<float>(std::atof(env_val));
+        jvp_epsilon = parse_finite_float(env_val, "jvp_epsilon");
         // v20.14r27m: Clamp to valid range (0, 0.1]
         jvp_epsilon = std::clamp(jvp_epsilon, 1e-15f, 0.1f);
         std::cerr << "SDIRK3: JVP epsilon set to " << jvp_epsilon << " via environment" << std::endl;
@@ -1386,7 +1425,7 @@ void SDIRK3Config::load_from_env() {
     // WRF_SDIRK3_IMEX_SLOW_IN_TANGENT: integer 0 or 1 (0=false, non-zero=true)
     // WRF_SDIRK3_IMEX_PHYS_IN_TANGENT: integer 0 or 1 (0=false, non-zero=true)
     if ((env_val = std::getenv("WRF_SDIRK3_IMEX_SPLIT_MODE"))) {
-        int val = std::atoi(env_val);
+        int val = parse_config_int(env_val, "imex_split_mode");
         if (val < 0 || val > 3) {
             std::cerr << "SDIRK3: imex_split_mode=" << val
                       << " (invalid, from env) -> clamped to 0;"
@@ -1810,7 +1849,8 @@ void SDIRK3Config::load_from_env() {
                   << " (" << mass_coordinate_mode_name() << ")" << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_TIME_STEP_SOUND"))) {
-        split_explicit_time_step_sound = std::clamp(std::atoi(env_val), 0, 1000);
+        split_explicit_time_step_sound = std::clamp(
+            parse_config_int(env_val, "split_explicit_time_step_sound"), 0, 1000);
         std::cerr << "[CONFIG ENV] split_explicit_time_step_sound = " << split_explicit_time_step_sound << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_SPLIT_EXPLICIT_EPSSM"))) {
@@ -1829,6 +1869,14 @@ void SDIRK3Config::load_from_env() {
         split_explicit_top_lid = parse_bool_env(env_val);
         std::cerr << "[CONFIG ENV] split_explicit_top_lid = " << (split_explicit_top_lid ? "true" : "false") << std::endl;
     }
+    if ((env_val = std::getenv("WRF_SDIRK3_NON_HYDROSTATIC"))) {
+        non_hydrostatic = parse_bool_env(env_val);
+        std::cerr << "[CONFIG ENV] non_hydrostatic = " << (non_hydrostatic ? "true" : "false") << std::endl;
+    }
+    if ((env_val = std::getenv("WRF_SDIRK3_DO_CURVATURE"))) {
+        do_curvature = parse_bool_env(env_val);
+        std::cerr << "[CONFIG ENV] do_curvature = " << (do_curvature ? "true" : "false") << std::endl;
+    }
     // v20.14r27q: Φ→W GS damping coefficient
     if ((env_val = std::getenv("WRF_SDIRK3_PRECOND_GS_BETA"))) {
         precond_gs_beta = std::clamp(static_cast<float>(std::atof(env_val)), 0.0f, 1.0f);
@@ -1846,12 +1894,12 @@ void SDIRK3Config::load_from_env() {
     }
     // v20.14: Adaptive tuning constants
     if ((env_val = std::getenv("WRF_SDIRK3_ADAPTIVE_HIGH_THRESHOLD"))) {
-        adaptive_high_threshold = static_cast<float>(std::atof(env_val));
+        adaptive_high_threshold = parse_finite_float(env_val, "adaptive_high_threshold");
         normalize_adaptive_thresholds();
         std::cerr << "[CONFIG ENV] adaptive_high_threshold = " << adaptive_high_threshold << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_ADAPTIVE_LOW_THRESHOLD"))) {
-        adaptive_low_threshold = static_cast<float>(std::atof(env_val));
+        adaptive_low_threshold = parse_finite_float(env_val, "adaptive_low_threshold");
         normalize_adaptive_thresholds();
         std::cerr << "[CONFIG ENV] adaptive_low_threshold = " << adaptive_low_threshold << std::endl;
     }
@@ -2059,6 +2107,8 @@ void SDIRK3Config::load_from_env() {
         row("use_autograd",              false, use_autograd);               // :220
         row("hevi_split",                false, hevi_split);                 // :587
         row("stage_require_convergence", false, stage_require_convergence);  // :576
+        row("non_hydrostatic", false, non_hydrostatic);
+        row("do_curvature", false, do_curvature);
     }
     // ONE authority (review P1-2): fold the deprecated booleans into the mode BEFORE anything
     // reads the effective operator. load_from_env() is the single point that runs after every
@@ -2092,6 +2142,11 @@ void SDIRK3Config::load_from_env() {
                       ? "ON (Omega = mu*d(eta)/dt via calc_ww_cp)"
                       : "off (Omega = rom = mu*w, the coupled vertical momentum)")
               << (mass_coordinate_mode != 0 ? "  [IGNORED: mode is the authority]" : "")
+              << std::endl;
+    std::cerr << "[CONFIG EFFECTIVE] non_hydrostatic="
+              << (non_hydrostatic ? "ON" : "off")
+              << ", do_curvature=" << (do_curvature ? "ON" : "off")
+              << ", top_lid=" << (split_explicit_top_lid ? "on" : "off")
               << std::endl;
     std::cerr << "[CONFIG EFFECTIVE] split_explicit="
               << (split_explicit ? "ON (WIP RK3 + acoustic-substep core)" : "off (ARK324 implicit)")
@@ -2187,6 +2242,7 @@ void SDIRK3Config::load_from_env() {
 }
 
 void SDIRK3Config::normalize_adaptive_thresholds() {
+    if (!std::isfinite(adaptive_high_threshold) || !std::isfinite(adaptive_low_threshold)) return;
     adaptive_high_threshold = std::clamp(adaptive_high_threshold, 0.15f, 0.9f);
     adaptive_low_threshold = std::clamp(adaptive_low_threshold, 0.1f, 0.85f);
     if (adaptive_high_threshold - adaptive_low_threshold < 0.05f) {
@@ -2212,13 +2268,21 @@ bool SDIRK3Config::validate() const {
                      "(0 = follow newton_tol); got " << ewt_rtol << std::endl;
         valid = false;
     }
-        if (newton_tol <= 0.0f || newton_tol > 1.0f) {
-        std::cerr << "SDIRK3 Config Error: newton_tol must be between 0 and 1" << std::endl;
+        if (!std::isfinite(newton_tol) || newton_tol <= 0.0f || newton_tol > 1.0f) {
+        std::cerr << "SDIRK3 Config Error: newton_tol must be a finite value between 0 and 1" << std::endl;
+        valid = false;
+    }
+    if (!std::isfinite(newton_rtol) || newton_rtol < 0.0f) {
+        std::cerr << "SDIRK3 Config Error: newton_rtol must be finite and >= 0" << std::endl;
+        valid = false;
+    }
+    if (!std::isfinite(krylov_tol)) {
+        std::cerr << "SDIRK3 Config Error: krylov_tol must be finite" << std::endl;
         valid = false;
     }
     
-    if (gmres_restart < 1 || gmres_restart > 1000) {
-        std::cerr << "SDIRK3 Config Error: gmres_restart must be between 1 and 1000" << std::endl;
+    if (gmres_restart < 1 || gmres_restart > kMaxGmresRestart) {
+        std::cerr << "SDIRK3 Config Error: gmres_restart must be between 1 and " << kMaxGmresRestart << std::endl;
         valid = false;
     }
 
@@ -2230,23 +2294,36 @@ bool SDIRK3Config::validate() const {
         self->gmres_arnoldi_stag_window = std::clamp(gmres_arnoldi_stag_window, 1, 20);
         self->gmres_arnoldi_stag_ratio = std::clamp(gmres_arnoldi_stag_ratio, 0.5f, 1.0f);
         // v20.14 r49/r59
-        self->stage2_gmres_restart = std::clamp(stage2_gmres_restart, 0, 100);
+        self->stage2_gmres_restart = std::clamp(stage2_gmres_restart, 0, kMaxGmresRestart);
         self->stage2_max_krylov_restarts = std::clamp(stage2_max_krylov_restarts, 0, 20);
-        self->stage2_krylov_tol = std::clamp(stage2_krylov_tol, 0.0f, 1.0f);
-        self->stage2_ew_eta_min = std::clamp(stage2_ew_eta_min, 0.0f, 1.0f);
-        self->stage2_ew_eta_max = std::clamp(stage2_ew_eta_max, 0.0f, 1.0f);
-        if (self->stage2_ew_eta_min > 0.0f && self->stage2_ew_eta_max > 0.0f &&
-            self->stage2_ew_eta_max < self->stage2_ew_eta_min) {
-            std::swap(self->stage2_ew_eta_min, self->stage2_ew_eta_max);
+        const bool stage_policy_finite = std::isfinite(stage2_krylov_tol) &&
+                                         std::isfinite(stage3_krylov_tol) &&
+                                         std::isfinite(stage2_ew_eta_min) &&
+                                         std::isfinite(stage2_ew_eta_max) &&
+                                         std::isfinite(stage3_ew_eta_min) &&
+                                         std::isfinite(stage3_ew_eta_max);
+        if (!stage_policy_finite) {
+            std::cerr << "SDIRK3 Config Error: stage Krylov tolerances and EW bounds must be finite" << std::endl;
+            valid = false;
+        } else {
+            self->stage2_krylov_tol = std::clamp(stage2_krylov_tol, 0.0f, 1.0f);
+            self->stage3_krylov_tol = std::clamp(stage3_krylov_tol, 0.0f, 1.0f);
+            self->stage2_ew_eta_min = std::clamp(stage2_ew_eta_min, 0.0f, 1.0f);
+            self->stage2_ew_eta_max = std::clamp(stage2_ew_eta_max, 0.0f, 1.0f);
+            if (self->stage2_ew_eta_min > 0.0f && self->stage2_ew_eta_max > 0.0f &&
+                self->stage2_ew_eta_max < self->stage2_ew_eta_min) {
+                std::swap(self->stage2_ew_eta_min, self->stage2_ew_eta_max);
+            }
         }
-        self->stage3_gmres_restart = std::clamp(stage3_gmres_restart, 0, 100);
+        self->stage3_gmres_restart = std::clamp(stage3_gmres_restart, 0, kMaxGmresRestart);
         self->stage3_max_krylov_restarts = std::clamp(stage3_max_krylov_restarts, 0, 20);
-        self->stage3_krylov_tol = std::clamp(stage3_krylov_tol, 0.0f, 1.0f);
-        self->stage3_ew_eta_min = std::clamp(stage3_ew_eta_min, 0.0f, 1.0f);
-        self->stage3_ew_eta_max = std::clamp(stage3_ew_eta_max, 0.0f, 1.0f);
-        if (self->stage3_ew_eta_min > 0.0f && self->stage3_ew_eta_max > 0.0f &&
-            self->stage3_ew_eta_max < self->stage3_ew_eta_min) {
-            std::swap(self->stage3_ew_eta_min, self->stage3_ew_eta_max);
+        if (stage_policy_finite) {
+            self->stage3_ew_eta_min = std::clamp(stage3_ew_eta_min, 0.0f, 1.0f);
+            self->stage3_ew_eta_max = std::clamp(stage3_ew_eta_max, 0.0f, 1.0f);
+            if (self->stage3_ew_eta_min > 0.0f && self->stage3_ew_eta_max > 0.0f &&
+                self->stage3_ew_eta_max < self->stage3_ew_eta_min) {
+                std::swap(self->stage3_ew_eta_min, self->stage3_ew_eta_max);
+            }
         }
         self->stage_fail_action = std::clamp(stage_fail_action, 0, 2);
         self->mode3_stage4_severe_abort = mode3_stage4_severe_abort;
@@ -2264,6 +2341,8 @@ bool SDIRK3Config::validate() const {
         self->split_explicit_smdiv = std::clamp(split_explicit_smdiv, 0.0f, 1.0f);
         self->split_explicit_emdiv = std::clamp(split_explicit_emdiv, 0.0f, 1.0f);
         self->split_explicit_top_lid = split_explicit_top_lid;
+        self->non_hydrostatic = non_hydrostatic;
+        self->do_curvature = do_curvature;
         self->jvp_auto_bench_calls = std::clamp(jvp_auto_bench_calls, 0, 20);
         self->jvp_auto_bench_warmup = std::clamp(jvp_auto_bench_warmup, 0, 50);
         self->gmres_warmstart_quality_gate = std::clamp(gmres_warmstart_quality_gate, 0.0f, 1.0f);
@@ -2669,19 +2748,19 @@ bool SDIRK3Config::validate() const {
     }
 
     // v20.14r27m: Validate jvp_epsilon
-    if (jvp_epsilon <= 0.0f || jvp_epsilon > 0.1f) {
+    if (!std::isfinite(jvp_epsilon) || jvp_epsilon <= 0.0f || jvp_epsilon > 0.1f) {
         std::cerr << "SDIRK3 Config Error: jvp_epsilon must be in (0, 0.1] (got "
                   << jvp_epsilon << ")" << std::endl;
         valid = false;
     }
 
     // v20.14: Validate adaptive tuning parameters (same policy as normalize)
-    if (adaptive_high_threshold < 0.15f || adaptive_high_threshold > 0.9f) {
+    if (!std::isfinite(adaptive_high_threshold) || adaptive_high_threshold < 0.15f || adaptive_high_threshold > 0.9f) {
         std::cerr << "SDIRK3 Config Error: adaptive_high_threshold must be in [0.15, 0.9] (got "
                   << adaptive_high_threshold << ")" << std::endl;
         valid = false;
     }
-    if (adaptive_low_threshold < 0.1f || adaptive_low_threshold > 0.85f) {
+    if (!std::isfinite(adaptive_low_threshold) || adaptive_low_threshold < 0.1f || adaptive_low_threshold > 0.85f) {
         std::cerr << "SDIRK3 Config Error: adaptive_low_threshold must be in [0.1, 0.85] (got "
                   << adaptive_low_threshold << ")" << std::endl;
         valid = false;
@@ -3226,13 +3305,13 @@ void wrf_sdirk3_set_config_int(const char* name, int value) {
         g_sdirk3_config.jvp_mixed_fd_newton_switch = value;
     // v20.14 r49/r59: Stage-aware GMRES budget + JVP auto-bench
     } else if (key == "stage2_gmres_restart") {
-        g_sdirk3_config.stage2_gmres_restart = std::clamp(value, 0, 100);
+        g_sdirk3_config.stage2_gmres_restart = std::clamp(value, 0, kMaxGmresRestart);
         std::cerr << "[CONFIG] stage2_gmres_restart = " << g_sdirk3_config.stage2_gmres_restart << std::endl;
     } else if (key == "stage2_max_krylov_restarts") {
         g_sdirk3_config.stage2_max_krylov_restarts = std::clamp(value, 0, 20);
         std::cerr << "[CONFIG] stage2_max_krylov_restarts = " << g_sdirk3_config.stage2_max_krylov_restarts << std::endl;
     } else if (key == "stage3_gmres_restart") {
-        g_sdirk3_config.stage3_gmres_restart = std::clamp(value, 0, 100);
+        g_sdirk3_config.stage3_gmres_restart = std::clamp(value, 0, kMaxGmresRestart);
         std::cerr << "[CONFIG] stage3_gmres_restart = " << g_sdirk3_config.stage3_gmres_restart << std::endl;
     } else if (key == "stage3_max_krylov_restarts") {
         g_sdirk3_config.stage3_max_krylov_restarts = std::clamp(value, 0, 20);
@@ -3555,6 +3634,14 @@ void wrf_sdirk3_set_config_float(const char* name, float value) {
 
     std::string key(name);
     std::transform(key.begin(), key.end(), key.begin(), safe_tolower);
+
+    // No float configuration key uses NaN/Inf as a documented sentinel. Reject
+    // non-finite values before any key-specific clamp or normalization so a
+    // setter cannot launder them into a different accepted value.
+    if (!std::isfinite(value)) {
+        std::cerr << "[CONFIG REJECT] " << key << " must be finite" << std::endl;
+        return;
+    }
 
     if (key == "newton_tol") {
         g_sdirk3_config.newton_tol = value;
@@ -4175,6 +4262,14 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
         g_sdirk3_config.split_explicit_top_lid = (value != 0);
         std::cerr << "[CONFIG] split_explicit_top_lid = "
                   << (g_sdirk3_config.split_explicit_top_lid ? "true" : "false") << std::endl;
+    } else if (key == "non_hydrostatic") {
+        g_sdirk3_config.non_hydrostatic = (value != 0);
+        std::cerr << "[CONFIG] non_hydrostatic = "
+                  << (g_sdirk3_config.non_hydrostatic ? "true" : "false") << std::endl;
+    } else if (key == "do_curvature") {
+        g_sdirk3_config.do_curvature = (value != 0);
+        std::cerr << "[CONFIG] do_curvature = "
+                  << (g_sdirk3_config.do_curvature ? "true" : "false") << std::endl;
     } else if (key == "precond_phi_feedback_fallback_gs") {
         g_sdirk3_config.precond_phi_feedback_fallback_gs = (value != 0);
         std::cerr << "[CONFIG] precond_phi_feedback_fallback_gs = "
@@ -4197,6 +4292,21 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
 // The repo already measured that, which is why wrf_sdirk3_contract_fail.h exists.
 //
 // Every exception is converted here: fail-close with the stable marker, never unwind.
+void wrf_sdirk3_load_env_once(void) {
+    static std::once_flag env_once;
+    std::call_once(env_once, [] {
+        try {
+            g_sdirk3_config.load_from_env();
+        } catch (const std::exception& e) {
+            wrf::sdirk3::abort_c_abi_fail(
+                std::string("SDIRK3_CONFIG_ENV_INVALID: ") + e.what());
+        } catch (...) {
+            wrf::sdirk3::abort_c_abi_fail(
+                "SDIRK3_CONFIG_ENV_INVALID: unknown exception");
+        }
+    });
+}
+
 void wrf_sdirk3_load_config_from_namelist(const char* filename) {
   try {
     if (!filename) { std::cerr << "[CONFIG] load_config_from_namelist: null filename" << std::endl; return; }
@@ -4213,8 +4323,8 @@ void wrf_sdirk3_load_config_from_namelist(const char* filename) {
         std::cerr << "Warning: Could not open SDIRK3 config file: " << filename << std::endl;
     }
     
-    // Also check environment variables
-    g_sdirk3_config.load_from_env();
+    // Also check environment variables through the shared one-time C ABI helper.
+    wrf_sdirk3_load_env_once();
 
     // CRITICAL: Log final config values to verify settings
     std::cerr << "\n=== SDIRK3 CONFIG LOADED ===" << std::endl;

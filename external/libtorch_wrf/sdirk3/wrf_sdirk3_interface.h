@@ -415,7 +415,7 @@ void wrf_sdirk3_destroy_tile_solver(void* solver);
 //
 // 3. sdirk3_tile_solver_reset_full() [Per-solver + all caches]
 //    - Resets: Everything in reset_state() + all solver caches
-//    - Cache types: Divergence, MSF 3D, metric, pressure gradient
+//    - Cache types: MSF 3D, metric, pressure gradient
 //    - Use for: Testing/debugging with full state isolation
 //    - Overhead: Moderate (epoch increments, cache flag resets)
 //    - Thread scope: Per-solver + calling thread TLS only
@@ -598,7 +598,7 @@ void sdirk3_tile_solver_reset_state(void* solver_ptr);
  *   consider destroying and recreating the solver, or implementing a pool clear API.
  *
  * THREAD POLICY (FIX Round84 - synced from wrf_sdirk3_tile_unified.h):
- *   Thread-local caches (#2 MSF 3D, #4 pressure gradient) are only invalidated
+ *   Thread-local caches (MSF 3D, pressure gradient) are only invalidated
  *   in the CALLING THREAD. In multi-threaded execution (OpenMP):
  *   - Worker threads' caches remain valid after reset_full from main thread
  *   - Each thread must call invalidateCaches() independently for full reset
@@ -1123,6 +1123,32 @@ void sdirk3_tile_solver_clear_saved_trajectory_zerocopy(void* solver_ptr);
 int sdirk3_tile_solver_get_state_vector_size_zerocopy(void* solver_ptr);
 
 /**
+ * Request a fixed trajectory before the first zero-copy forward call.
+ * Activation is deferred until the native step has published all caller views.
+ * A null schedule with size zero selects the constant-dt contract.
+ * Returns 1 when the request is copied, 0 on invalid input/handle/error.
+ */
+int sdirk3_tile_solver_begin_fixed_trajectory_zerocopy(
+    void* solver_ptr, int expected_steps,
+    const float* dt_schedule, int dt_schedule_size);
+
+/**
+ * Pull back a completed fixed trajectory in packed Float32 state layout.
+ * lambda_initial is not modified when the function returns 0.
+ * Returns 1 on success, 0 on invalid input, incomplete tape, or error.
+ */
+int sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy(
+    void* solver_ptr, const float* lambda_terminal, int lambda_size,
+    float* lambda_initial);
+
+/**
+ * Close an open fixed trajectory, or cancel an armed request that has not
+ * reached the first native step. An idle handle returns 0.
+ * Returns 1 on success, 0 when the handle is invalid, idle, or an error occurs.
+ */
+int sdirk3_tile_solver_close_fixed_trajectory_zerocopy(void* solver_ptr);
+
+/**
  * Run checkpoint-replay adjoint loop on saved trajectory.
  *
  * @param solver_ptr         Solver handle
@@ -1223,7 +1249,9 @@ void sdirk3_tile_set_base_state_zerocopy_v2(
  * @param solver_ptr Solver handle from sdirk3_tile_solver_create_zerocopy()
  * @param u_ptr...t_ptr State variable pointers (8 3D arrays)
  * @param moist_ptr,n_moist Moisture array and count
- * @param ru_tend_ptr...t_tend_ptr Tendency pointers (8 3D arrays)
+ * @param ru_tend_ptr...t_tend_ptr Tendency pointers (8 3D arrays). These
+ *        pointers are an all-or-none group: pass all eight as NULL for
+ *        solver-owned temporary tendencies, or provide all eight arrays.
  * @param rdnw_ptr...cosa_ptr Grid metric arrays (18 pointers)
  * @param cqu_ptr,cqv_ptr,cqw_ptr Moisture correction factors
  * @param u_bdy_xs...mu_btend_ye Boundary arrays (48 pointers)

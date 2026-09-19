@@ -20,6 +20,9 @@
 namespace wrf {
 namespace sdirk3 {
 
+// Shared ceiling for global and stage-specific GMRES restart lengths.
+constexpr int kMaxGmresRestart = 1000;
+
 // THE spelling authority for boolean text, shared by the namelist path, the env path, and any
 // diagnostic gate. Recognises what this project has always recognised -- 1 / true / .true. / t /
 // yes and their false counterparts, case-insensitive, Fortran dots stripped -- and says so when a
@@ -540,7 +543,8 @@ struct SDIRK3Config {
 
     // v20.14r40: Stage gate K_norm floor for rel_R_full computation.
     // Prevents rel_R_full = R_full/K_norm from exploding when ||K|| is small.
-    // Gate uses max(||K||, K_floor) as denominator; raw ratio logged separately.
+    // K_floor has RMS units: the gate uses max(RMS(K), K_floor).
+    // The raw ratio and mode>=2 fast residual never use this floor.
     // Set via env: WRF_SDIRK3_STAGE_GATE_K_FLOOR
     float stage_gate_K_floor = 1.0f;
 
@@ -781,6 +785,8 @@ struct SDIRK3Config {
     float split_explicit_smdiv = 0.1f;       // WRF smdiv: 3D divergence damping
     float split_explicit_emdiv = 0.01f;      // WRF emdiv: external-mode filter
     bool split_explicit_top_lid = false;     // WRF config_flags%top_lid (rigid upper lid)
+    // Existing WRF dynamics input; production Fortran supplies config_flags%non_hydrostatic.
+    bool non_hydrostatic = false;             // standalone C++ default remains off
 
     // v20.14r66: Mode3 Stage4 severe non-convergence abort toggle.
     // true (default): keep current safety behavior (stage4 severe -> abort).
@@ -922,7 +928,7 @@ struct SDIRK3Config {
     // Keep default-off for regression neutrality in forecast mode.
     bool save_trajectory = false;          // Save detached forward states for replay
     int checkpoint_interval = 360;         // Timesteps between saved checkpoints
-    bool retain_graph_for_adjoint = false; // Debug-only: retain graph in short windows
+    bool retain_graph_for_adjoint = false; // Retain the last tile step and converged-root pullbacks
     // PR 9E: diagnosis-only stage-operand decomposition capture. Default OFF;
     // when ON it OBSERVES the exact production evaluations (no extra RHS/JVP
     // calls, no numerical branch change) at record stage 2/3 Newton iter-0 on
@@ -1396,71 +1402,7 @@ struct SDIRK3Config {
     // │   }                                                                    │
     // └────────────────────────────────────────────────────────────────────────┘
     //
-    // ┌────────────────────────────────────────────────────────────────────────┐
-    // │ 6. NON-AD WORKSPACE REUSE PATH SEPARATION (FUTURE API)                 │
-    // ├────────────────────────────────────────────────────────────────────────┤
-    // │ CONTEXT:                                                               │
-    // │   Current TensorFactory::create_*() uses use_pool=true by default.     │
-    // │   Pooled tensors are pre-allocated and reused, saving allocation time. │
-    // │   However, pooled tensors cannot be used in AD paths because:          │
-    // │     1. Reuse breaks gradient tape continuity                           │
-    // │     2. In-place ops on pooled tensors cause grad_fn corruption         │
-    // │                                                                        │
-    // │ CURRENT WORKAROUND:                                                    │
-    // │   Callers must manually specify use_pool=false for AD paths:           │
-    // │     auto tensor = TensorFactory::create_3d(ny, nz, nx, opts, false);   │
-    // │                                                                        │
-    // │ PROPOSED FUTURE API:                                                   │
-    // │   Split into explicit function variants:                               │
-    // │                                                                        │
-    // │   // For non-AD paths (workspace, temporaries)                         │
-    // │   auto ws = TensorFactory::create_workspace_3d(ny, nz, nx, opts);      │
-    // │                                                                        │
-    // │   // For AD paths (gradient-tracked tensors)                           │
-    // │   auto t = TensorFactory::create_ad_3d(ny, nz, nx, opts);              │
-    // │                                                                        │
-    // │ BENEFITS:                                                              │
-    // │   - Compile-time clarity: API name documents intent                    │
-    // │   - Static analysis: Can grep for misuse patterns                      │
-    // │   - Default safety: create_ad_*() never uses pool                      │
-    // │                                                                        │
-    // │ MIGRATION PATH:                                                        │
-    // │   1. Add new create_workspace_*() and create_ad_*() functions          │
-    // │   2. Deprecate use_pool parameter on create_*() functions              │
-    // │   3. Grep for create_3d(..., true) → create_workspace_3d(...)          │
-    // │   4. Grep for create_3d(..., false) → create_ad_3d(...)                │
-    // │   5. Remove use_pool parameter in next major version                   │
-    // │                                                                        │
-    // │ TEST PLAN (OPT Pass34):                                                │
-    // │   Before implementing, validate with these autograd test cases:        │
-    // │                                                                        │
-    // │   TEST 1: AD path gradient flow                                        │
-    // │     auto t = create_ad_3d(ny, nz, nx, opts);                           │
-    // │     t.requires_grad_(true);                                            │
-    // │     auto y = t.sum();                                                  │
-    // │     y.backward();                                                      │
-    // │     ASSERT(t.grad().defined());  // grad must exist                    │
-    // │     ASSERT(t.grad().sum().item<float>() == ny*nz*nx); // all ones      │
-    // │                                                                        │
-    // │   TEST 2: Workspace path no grad pollution                             │
-    // │     auto ws = create_workspace_3d(ny, nz, nx, opts);                   │
-    // │     ASSERT(!ws.requires_grad());  // no grad tracking                  │
-    // │     ws.fill_(1.0f);               // in-place op should not fail       │
-    // │     release(ws);                  // should return to pool             │
-    // │     auto ws2 = create_workspace_3d(ny, nz, nx, opts);                  │
-    // │     ASSERT(ws2.sum().item<float>() == 0.0f);  // zeroed on reuse       │
-    // │                                                                        │
-    // │   TEST 3: Mixed path isolation                                         │
-    // │     auto t = create_ad_3d(...);  t.requires_grad_(true);               │
-    // │     auto ws = create_workspace_3d(...);                                │
-    // │     ws = t * 2;  // intermediate result in workspace                   │
-    // │     auto y = ws.sum();                                                 │
-    // │     y.backward();                                                      │
-    // │     ASSERT(t.grad().defined());  // AD path still has grad             │
-    // │     // ws should not retain grad_fn after release                      │
-    // │                                                                        │
-    // │ STATUS: TEST PLAN READY - IMPLEMENTATION PENDING                       │
-    // └────────────────────────────────────────────────────────────────────────┘
+    // Section 6 removed: it described a nonexistent TensorFactory API and a speculative migration plan.
     //
     // ┌────────────────────────────────────────────────────────────────────────┐
     // │ 7. InferenceMode vs NoGradGuard SELECTION GUIDE (OPT Pass34)           │
@@ -2164,7 +2106,7 @@ struct SDIRK3Config {
     int64_t spatial_async_min_elems = 0;
 
     // Numerical scheme options
-    int advection_order = 5;        // Advection order (1, 3, 5)
+    int advection_order = 5;        // Momentum: 1/2 centered, 3/5 upwind; PH: 2/4/6
     int diffusion_option = 0;       // 0=none, 1=2nd order, 2=4th order
 
     // PARITY FIX 2025-12-23: Configurable ztop parameters for fallback rdnw/rdn computation
@@ -2357,9 +2299,8 @@ struct SDIRK3Config {
     // Map projection and coordinate system
     int map_proj = 1;               // 0=lat-lon, 1=Lambert, 2=polar stereographic, 3=Mercator
 
-    // Curvature term control (2025-12-05 PARITY FIX)
-    // Fortran: do_curvature in namelist controls curvature for all map projections
-    // TEMPORARILY DISABLED for debugging - vxgm boundary logic needs fixes
+    // Existing WRF dynamics input; production Fortran supplies config_flags%do_curvature.
+    // Standalone C++ default remains explicit opt-in. Canonical periodic-X/symmetric-Y uses alpha units.
     bool do_curvature = false;       // Enable curvature terms for momentum equations
     bool polar = false;             // Polar boundary condition flag (affects curvature formula choice)
     // NOTE: Fortran map_proj values: 1=Lambert, 2=Polar Stereo, 3=Mercator, 6=lat-lon(Cassini)
@@ -2686,7 +2627,7 @@ extern SDIRK3Config g_sdirk3_config;
 // │ precond_block_size     │ Block size for block Jacobi                   │
 // │ jvp_method             │ JVP method (0=FD, 1=AD, 2=dual, 3=optimized)  │
 // │ n_threads              │ Number of threads                             │
-// │ advection_order        │ Advection order (1, 3, 5)                     │
+// │ advection_order        │ Advection order (1/2, 3, 5)                   │
 // │ diffusion_option       │ Diffusion option (0=none, 1=2nd, 2=4th)       │
 // │ lateral_bc_option      │ Lateral boundary condition option             │
 // │ top_bc_option          │ Top boundary condition option                 │
@@ -2891,6 +2832,8 @@ extern "C" {
     void wrf_sdirk3_set_config_int(const char* name, int value);
     void wrf_sdirk3_set_config_float(const char* name, float value);
     void wrf_sdirk3_set_config_bool(const char* name, int value);
+    // Thread-safe one-time environment load; converts parser exceptions to coordinated C ABI failure.
+    void wrf_sdirk3_load_env_once(void);
     void wrf_sdirk3_load_config_from_namelist(const char* filename);
     void wrf_sdirk3_print_config();
 

@@ -78,6 +78,7 @@ torch::Tensor compute_pressure_hydrostatic(
 // WRF calc_p_rho (module_big_step_utilities_em.F, dry): the inverse density comes from the
 // layer thickness and the pressure from the equation of state -- NOT from a hydrostatic
 // integral of mu'. rdnw_abs is |1/dnw| (WRF's rdnw is negative: dnw < 0).
+// Inputs share the state dtype/device; outputs retain ph_pert's state dtype/device.
 struct WrfPRho { torch::Tensor al_pert, alt, p_pert; };
 inline WrfPRho calc_p_rho_wrf(const torch::Tensor& ph_pert,   // [ny, nz+1, nx]  phi' at w levels
                               const torch::Tensor& t_pert,    // [ny, nz, nx]    theta - t0
@@ -90,16 +91,25 @@ inline WrfPRho calc_p_rho_wrf(const torch::Tensor& ph_pert,   // [ny, nz+1, nx] 
                               const torch::Tensor& c2h,       // [nz]
                               float rd, float cv, float cp, float p0, float t0) {
     const int64_t nz = t_pert.size(1);
-    auto c1 = c1h.slice(0, 0, nz).view({1, nz, 1});
-    auto c2 = c2h.slice(0, 0, nz).view({1, nz, 1});
-    auto muts = (mu_base + mu_pert).unsqueeze(1);                        // WRF muts = mub + mu
-    auto dph = ph_pert.slice(1, 1, nz + 1) - ph_pert.slice(1, 0, nz);    // phi'(k+1) - phi'(k)
-    auto rdnw_wrf = -rdnw_abs.slice(0, 0, nz).view({1, nz, 1});          // WRF sign (dnw < 0)
-    auto al_pert = -(alb * c1 * mu_pert.unsqueeze(1) + rdnw_wrf * dph) / (c1 * muts + c2);
-    auto alt = al_pert + alb;
+    // Preserve small perturbations through base-state additions and p - p_base.
+    // A double scalar alone does not promote FP32 tensor arithmetic. Cast back
+    // only at the outputs; tensor casts preserve both forward and reverse AD.
+    const auto output_type = ph_pert.scalar_type();
+    auto ph64 = ph_pert.to(torch::kFloat64);
+    auto mu64 = mu_pert.to(torch::kFloat64).unsqueeze(1);
+    auto alb64 = alb.to(torch::kFloat64);
+    auto c1 = c1h.slice(0, 0, nz).to(torch::kFloat64).view({1, nz, 1});
+    auto c2 = c2h.slice(0, 0, nz).to(torch::kFloat64).view({1, nz, 1});
+    auto muts = mu_base.to(torch::kFloat64).unsqueeze(1) + mu64;       // WRF muts = mub + mu
+    auto dph = ph64.slice(1, 1, nz + 1) - ph64.slice(1, 0, nz);       // phi'(k+1) - phi'(k)
+    auto rdnw_wrf = -rdnw_abs.slice(0, 0, nz).to(torch::kFloat64).view({1, nz, 1});
+    auto al_pert = -(alb64 * c1 * mu64 + rdnw_wrf * dph) / (c1 * muts + c2);
+    auto alt = al_pert + alb64;
     const double cpovcv = static_cast<double>(cp) / static_cast<double>(cv);
-    auto p = static_cast<double>(p0) * torch::pow(rd * (t_pert + t0) / (p0 * alt), cpovcv);
-    return {al_pert, alt, p - p_base};
+    auto p = static_cast<double>(p0) *
+             torch::pow(rd * (t_pert.to(torch::kFloat64) + t0) / (p0 * alt), cpovcv);
+    return {al_pert.to(output_type), alt.to(output_type),
+            (p - p_base.to(torch::kFloat64)).to(output_type)};
 }
 
 }  // namespace sdirk3

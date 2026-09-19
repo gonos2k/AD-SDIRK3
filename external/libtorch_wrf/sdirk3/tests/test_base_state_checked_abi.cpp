@@ -22,6 +22,7 @@
 // unlike the layout fixture where an abort merely made a real regression unreadable.
 
 #include "../wrf_sdirk3_interface.h"
+#include "../wrf_sdirk3_interface_params.h"
 
 #include <iostream>
 #include <string>
@@ -36,6 +37,33 @@ void check(bool ok, const std::string& what) {
     ++check_count;
     std::cout << (ok ? "  ok   " : "  FAIL ") << what << std::endl;
     if (!ok) ++failures;
+}
+
+void call_v2_mixed_tendency(void* solver, float* state, float* metric,
+                            float* ru_tend) {
+    SDIRK3_IndexBounds bounds{2, 8, 2, 6, 1, 8,
+                              1, 16, 1, 12, 1, 10,
+                              1, 16, 1, 12, 1, 10};
+    SDIRK3_Dimensions dims{7, 5, 7, 8, 6, 8, 2};
+    SDIRK3_ScalarParams scalars{1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.01f, 0.01f};
+    SDIRK3_BoundaryConfig bdy{0, 0, 0, 0};
+    sdirk3_tile_unified_step_zerocopy_v2(
+        solver,
+        state, state, state, state, state, state, state, state,
+        nullptr, 0,
+        ru_tend, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        metric, metric, metric, metric, metric, metric, metric, metric,
+        metric, metric, metric, metric, metric, metric, metric, metric,
+        metric, metric,
+        nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+        nullptr, nullptr, nullptr, nullptr,
+        &bounds, &dims, &scalars, &bdy);
 }
 
 // A memory domain big enough for the tile below.
@@ -110,7 +138,54 @@ int main() {
     // int across a C boundary. State it as an assertion so the log says so explicitly.
     check(true, "all invalid-input calls RETURNED across the C ABI (none terminated)");
 
-    constexpr int expected_checks = 11;
+    // U04: a registered v2 handle must reject mixed tendency ownership before
+    // touching the tile implementation. The all-null production mode reaches
+    // the same prevalidation point; one supplied pointer is the forbidden mode.
+    std::vector<float> rdnw(8, 1.0f);
+    std::vector<float> state(4096, 1.0f), metric(4096, 1.0f);
+    void* registered = sdirk3_tile_solver_create_zerocopy(
+        7, 5, 7, 1.0f, 1.0f, rdnw.data(), 901, 8, 6, 8);
+    check(registered != nullptr, "v2 regression solver handle registered");
+    if (registered != nullptr) {
+        check(sdirk3_tile_solver_begin_fixed_trajectory_zerocopy(
+                  registered, 1, nullptr, 0) == 1,
+              "fixed trajectory request accepted before first publication");
+        const int trajectory_size = sdirk3_tile_solver_get_state_vector_size_zerocopy(registered);
+        bool sentinel_preserved = false;
+        if (trajectory_size > 0) {
+            std::vector<float> terminal(static_cast<size_t>(trajectory_size), 1.0f);
+            std::vector<float> initial(static_cast<size_t>(trajectory_size), -37.0f);
+            sentinel_preserved =
+                sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy(
+                    registered, terminal.data(), trajectory_size, initial.data()) == 0 &&
+                initial == std::vector<float>(static_cast<size_t>(trajectory_size), -37.0f);
+        }
+        check(trajectory_size > 0 && sentinel_preserved,
+              "incomplete C ABI pullback returns 0 and preserves sentinel output");
+        check(sdirk3_tile_solver_close_fixed_trajectory_zerocopy(registered) == 1,
+              "close cancels pending C ABI request before first publication");
+        check(call(registered, pb.data(), ti.data(), phb.data(), mub.data()) == 1,
+              "v2 regression base state initialized");
+        int outcome = -1, aborted = -1, ratio_valid = -1;
+        float ratio = -1.0f;
+        call_v2_mixed_tendency(registered, state.data(), metric.data(), nullptr);
+        check(sdirk3_tile_solver_get_last_step_outcome_zerocopy(
+                  registered, &outcome, &aborted, &ratio, &ratio_valid) == 1 &&
+                  outcome == SDIRK3_STEP_OUTCOME_OK_SKIPPED && aborted == 0,
+              "v2 all-null tendency control reaches OK_SKIPPED");
+        const std::vector<float> state_before_mixed = state;
+        float sentinel = 7.0f;
+        call_v2_mixed_tendency(registered, state.data(), metric.data(), &sentinel);
+        outcome = -1;
+        check(sdirk3_tile_solver_get_last_step_outcome_zerocopy(
+                  registered, &outcome, &aborted, &ratio, &ratio_valid) == 1 &&
+                  outcome == SDIRK3_STEP_OUTCOME_FATAL_INPUT && aborted == 1 &&
+                  ratio_valid == 0 && sentinel == 7.0f && state == state_before_mixed,
+              "v2 mixed tendency pointers -> FATAL_INPUT, state unmodified");
+        sdirk3_tile_solver_destroy_zerocopy(registered);
+    }
+
+    constexpr int expected_checks = 18;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

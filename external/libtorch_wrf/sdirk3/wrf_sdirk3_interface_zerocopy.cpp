@@ -16,6 +16,7 @@
 #include "wrf_sdirk3_unified_rhs_extended.h"
 #include "wrf_sdirk3_profiler.h"
 #include "wrf_sdirk3_halo_exchange.h"
+#include "wrf_sdirk3_autograd_utils.h"
 // FIX 2025-01-11 Round72: Removed <atomic> - no longer needed after Round70 switch to per-solver state
 // FIX Round108: Re-added <atomic> for TLS cache generation counter
 #include <atomic>
@@ -24,6 +25,7 @@
 #include <memory>
 #include <unordered_map>
 #include <mutex>
+#include <vector>
 #include <cmath>
 #include <limits>
 
@@ -297,6 +299,29 @@ extern "C" void sdirk3_tile_unified_step_zerocopy_v2(
         std::cerr << "  Tile bounds:   its=" << bounds.its << " ite=" << bounds.ite << std::endl;
         std::cerr << "                 jts=" << bounds.jts << " jte=" << bounds.jte << std::endl;
         std::cerr << "                 kts=" << bounds.kts << " kte=" << bounds.kte << std::endl;
+        set_solver_step_outcome_if_present(
+            solver_ptr,
+            SDIRK3_STEP_OUTCOME_FATAL_INPUT,
+            1,
+            0.0f,
+            0);
+        return;
+    }
+
+    // The tendency ABI has two valid modes: solver-owned temporary tendencies
+    // (all eight pointers null), or caller-owned tendencies (all eight set).
+    // The tile implementation consumes the primary tendency set as a unit;
+    // accepting a mixed set would make null writeback/diagnostic accesses
+    // depend on which member happened to be supplied.
+    const bool any_tendency_ptr =
+        ru_tend_ptr || rv_tend_ptr || rw_tend_ptr || ph_tend_ptr ||
+        al_tend_ptr || mu_tend_ptr || p_tend_ptr || t_tend_ptr;
+    const bool all_tendency_ptrs =
+        ru_tend_ptr && rv_tend_ptr && rw_tend_ptr && ph_tend_ptr &&
+        al_tend_ptr && mu_tend_ptr && p_tend_ptr && t_tend_ptr;
+    if (any_tendency_ptr && !all_tendency_ptrs) {
+        std::cerr << "=== FATAL: Mixed nullable tendency pointers in v2 ==="
+                  << std::endl;
         set_solver_step_outcome_if_present(
             solver_ptr,
             SDIRK3_STEP_OUTCOME_FATAL_INPUT,
@@ -639,31 +664,9 @@ void* sdirk3_tile_solver_create_zerocopy(
     int tile_id,
     int nx_u, int ny_v, int nz_w)  // Add staggered dimensions
 {
-    // v20.14: Ensure env var overrides are loaded (once per process).
-    // wrf_sdirk3_load_config_from_namelist() is never called from Fortran,
-    // so load_from_env() was never reached. Call it here on first solver creation.
-    // P0 FIX (2026-07-12, external review): solver creation runs under an OpenMP tile loop —
-    // an unsynchronized `static bool` here let multiple threads race load_from_env() against
-    // concurrent reads of the global config. std::call_once serializes the one-time load.
-    {
-        static std::once_flag env_once;
-        // 9F.D132: this is the LIVE env-load site (the namelist entry point above is never
-        // reached, as this file's own comment says), and it sits behind a C ABI. D123's strict
-        // parser throws, so a malformed WRF_SDIRK3_MASS_COORDINATE_MODE unwound from inside
-        // std::call_once and out through the boundary -- measured as exit=134 with a raw
-        // backtrace in rsl.error and no message. Convert here, where the throw actually is.
-        std::call_once(env_once, [] {
-            try {
-                wrf::sdirk3::g_sdirk3_config.load_from_env();
-            } catch (const std::exception& e) {
-                wrf::sdirk3::abort_c_abi_fail(
-                    std::string("SDIRK3_CONFIG_ENV_INVALID: ") + e.what());
-            } catch (...) {
-                wrf::sdirk3::abort_c_abi_fail(
-                    "SDIRK3_CONFIG_ENV_INVALID: unknown exception");
-            }
-        });
-    }
+    // Standalone C++ and legacy callers share the same serialized env load.
+    // Fortran production calls this helper before entering the tile loop.
+    wrf::sdirk3::wrf_sdirk3_load_env_once();
 
     // FIX Round150: Gate solver creation debug output with debug_level >= 2
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -923,6 +926,68 @@ int sdirk3_tile_solver_get_state_vector_size_zerocopy(void* solver_ptr)
     return static_cast<int>(state_size);
 }
 
+extern "C" int sdirk3_tile_solver_begin_fixed_trajectory_zerocopy(
+    void* solver_ptr, int expected_steps, const float* dt_schedule, int dt_schedule_size) {
+    if (!solver_ptr || expected_steps <= 0 || dt_schedule_size < 0 ||
+        (dt_schedule_size > 0 && !dt_schedule)) return 0;
+    try {
+        std::vector<float> schedule;
+        if (dt_schedule_size > 0) schedule.assign(dt_schedule, dt_schedule + dt_schedule_size);
+        std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
+        auto it = g_tile_solvers.find(solver_ptr);
+        if (it == g_tile_solvers.end() || !it->second) return 0;
+        auto* unified_solver = dynamic_cast<TileSDIRK3UnifiedSolver*>(it->second.get());
+        if (!unified_solver) return 0;
+        unified_solver->requestFixedTrajectory(expected_steps, schedule);
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "SDIRK3 fixed trajectory begin ERROR: " << e.what() << std::endl;
+        return 0;
+    } catch (...) { return 0; }
+}
+
+extern "C" int sdirk3_tile_solver_pullback_fixed_trajectory_zerocopy(
+    void* solver_ptr, const float* lambda_terminal, int lambda_size, float* lambda_initial) {
+    if (!solver_ptr || !lambda_terminal || !lambda_initial || lambda_size <= 0) return 0;
+    try {
+        std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
+        auto it = g_tile_solvers.find(solver_ptr);
+        if (it == g_tile_solvers.end() || !it->second) return 0;
+        auto* unified_solver = dynamic_cast<TileSDIRK3UnifiedSolver*>(it->second.get());
+        if (!unified_solver) return 0;
+        const int64_t expected_size = unified_solver->getStateVectorSize();
+        if (expected_size <= 0 || expected_size != static_cast<int64_t>(lambda_size)) return 0;
+        auto terminal = torch::from_blob(const_cast<float*>(lambda_terminal), {expected_size}, wrf::sdirk3::make_cpu_from_blob_opts()).clone();
+        auto initial = unified_solver->pullbackFixedTrajectory(terminal)
+                           .detach().to(torch::kCPU, torch::kFloat32).contiguous();
+        if (!initial.defined() || initial.numel() != expected_size ||
+            !wrf::sdirk3::guarded_item<bool>(torch::isfinite(initial).all())) return 0;
+        std::memcpy(lambda_initial, initial.data_ptr<float>(),
+                    static_cast<size_t>(expected_size) * sizeof(float));
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "SDIRK3 fixed trajectory pullback ERROR: " << e.what() << std::endl;
+        return 0;
+    } catch (...) { return 0; }
+}
+
+extern "C" int sdirk3_tile_solver_close_fixed_trajectory_zerocopy(void* solver_ptr) {
+    if (!solver_ptr) return 0;
+    try {
+        std::lock_guard<std::mutex> lock(g_tile_solvers_mutex);
+        auto it = g_tile_solvers.find(solver_ptr);
+        if (it == g_tile_solvers.end() || !it->second) return 0;
+        auto* unified_solver = dynamic_cast<TileSDIRK3UnifiedSolver*>(it->second.get());
+        if (!unified_solver) return 0;
+        if (unified_solver->fixedTrajectoryRequested()) unified_solver->cancelFixedTrajectoryRequest();
+        else unified_solver->closeFixedTrajectory();
+        return 1;
+    } catch (const std::exception& e) {
+        std::cerr << "SDIRK3 fixed trajectory close ERROR: " << e.what() << std::endl;
+        return 0;
+    } catch (...) { return 0; }
+}
+
 int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
     void* solver_ptr,
     const float* lambda_terminal,
@@ -1019,7 +1084,6 @@ int sdirk3_tile_solver_run_adjoint_replay_zerocopy(
  *   - Device cache
  *
  * What it does NOT reset (use sdirk3_tile_solver_reset_full for these):
- *   - Divergence cache
  *   - MSF 3D expansion cache
  *   - Static metric caches
  *   - Pressure gradient caches
@@ -1092,7 +1156,6 @@ void sdirk3_tile_solver_reset_state(void* solver_ptr)
  * What it resets:
  *   1. Per-solver state (warning flags, device cache, logging state)
  *   2. Solver internal caches via invalidateCaches():
- *      - Divergence cache
  *      - MSF 3D expansion cache
  *      - Static metric caches (rdz, dnw, dn)
  *      - UnifiedRHS acoustic metric caches

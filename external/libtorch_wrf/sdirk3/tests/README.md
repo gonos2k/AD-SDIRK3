@@ -273,70 +273,18 @@ grid_info_->u_bdy_ys = tls_cached_from_blob(..., {nx_u, nz, bw}, ...);
 grid_info_->w_bdy_ys = tls_cached_from_blob(..., {nx, nz_w, bw}, ...);
 ```
 
-### WRF Boundary Condition Verification (2025-01-25)
+### Boundary verification scope
 
-**Issue #7: Complete WRF BC Type Coverage**:
-- [x] All 6 WRF BC types implemented in SDIRK3 C++
-- [x] ConfigFlags 1:1 mapping with WRF Fortran grid_config_rec_type
-- [x] BC application precedence matches WRF Fortran
-- [x] All BC implementations are AD-compatible (NoGradGuard wrapped)
+Production WRF owns the Fortran/MPI halo and lateral boundary updates by default
+(`WRF_SDIRK3_WRF_HANDLES_BC=1`). The standalone `BoundaryDispatcher` and its
+`apply*BoundaryAD` family have no in-tree production callers. Their declarations
+are not evidence of WRF boundary precedence or full-step adjoint correctness.
 
-**WRF BC Types vs SDIRK3 Implementation**:
-| BC Type | WRF Fortran (module_bc.F) | SDIRK3 C++ (wrf_sdirk3_boundary_ad.cpp) |
-|---------|---------------------------|----------------------------------------|
-| Periodic | `periodicity_x`, `periodicity_y` | ✅ `applyPeriodicBoundaryAD()` |
-| Symmetric | `symmetry_xs/xe/ys/ye` | ✅ `applySymmetricBoundaryAD()` |
-| Open | `open_xs/xe/ys/ye` | ✅ `applyOpenBoundaryAD()` |
-| Specified | `specified` + Davies relaxation | ✅ `applySpecifiedBoundaryAD()` |
-| Nested | `nested` | ✅ `applyNestedBoundaryAD()` |
-| Polar | `polar` | ✅ `applyPolarFilterAD()` |
-
-**ConfigFlags Field Mapping** (wrf_config_flags.h):
-```cpp
-// BC configuration - complete 1:1 mapping with WRF
-int open_xs = 0;      // WRF: grid%open_xs
-int open_xe = 0;      // WRF: grid%open_xe
-int open_ys = 0;      // WRF: grid%open_ys
-int open_ye = 0;      // WRF: grid%open_ye
-int periodic_x = 0;   // WRF: grid%periodic_x
-int periodic_y = 0;   // WRF: grid%periodic_y
-int symmetric_xs = 0; // WRF: grid%symmetric_xs
-int symmetric_xe = 0; // WRF: grid%symmetric_xe
-int symmetric_ys = 0; // WRF: grid%symmetric_ys
-int symmetric_ye = 0; // WRF: grid%symmetric_ye
-int specified = 0;    // WRF: grid%specified
-int nested = 0;       // WRF: grid%nested
-int polar = 0;        // WRF: grid%polar
-```
-
-**BC Application Precedence** (matches WRF module_bc.F):
-```
-periodic > symmetric > open > specified > nested
-```
-
-**AD Compatibility**:
-- All BC functions wrap boundary updates in `torch::NoGradGuard`
-- Boundaries are external constraints, not part of optimization
-- Interior gradients flow correctly through solver
-
-**spec_bdy_width==0 Optimization** (wrf_sdirk3_tile_unified_impl.cpp):
-```cpp
-// OPT 2025-01-25: Skip boundary tensor creation for periodic/global domains
-if (bw <= 0) {
-    // Set defaults and skip to boundary_tensors_done label
-    goto boundary_tensors_done;
-}
-```
-
-**Verified Files**:
-- `wrf_sdirk3_boundary_ad.h`: All 6 BC function declarations
-- `wrf_sdirk3_boundary_ad.cpp`: Complete BC implementations with precedence
-- `wrf_config_flags.h`: ConfigFlags with all BC fields (lines 316-347)
-- `wrf_sdirk3_tile_unified_impl.cpp`: spec_bdy_width skip optimization
-
-**Reference WRF Fortran Files**:
-- `share/module_bc.F`: BC type definitions, stagger handling
-- `dyn_em/module_bc_em.F`: EM-specific BCs, Davies relaxation
+`test_full_tile_step.cpp` checks the production symmetric normal-velocity
+projection: idempotence, self-adjointness, internal tile edges, halo origins,
+non-finite inactive entries, completed-step wall values, and pullback. The MPI
+halo tests cover their own forward/transpose contract. These tests do not certify
+the unused dispatcher, nested/polar combinations, or a full WRF trajectory adjoint.
 
 ### I/O Consistency Verification (2025-01-25)
 
@@ -486,9 +434,14 @@ if (should_log) {
 1. **Epoch-based**: `incrementSolverEpoch()` invalidates TLS caches
 2. **Pointer tracking**: Cache validates `data_ptr` hasn't changed
 3. **solver_unique_id**: Detects memory recycling for solver pointers
-4. **9-point signature**: Validates grid metrics haven't changed in-place
+4. **9-point signature**: Detects changes at sampled metric entries; it cannot certify arbitrary in-place changes.
 5. **Restart reset** (NEW): `sdirk3_reset_on_restart()` in start_em.F clears all caches
 6. **Moving nest reset**: `reset_full()` path invalidates vertical metric caches
+
+CUDA metric caches require immutable source metrics or explicit epoch invalidation
+when metrics change. Pointer identity and periodic sampling do not guarantee
+immediate detection of arbitrary in-place writes. The current macOS validation
+has no CUDA mutation fixture; GPU mutation safety is not certified.
 
 **Deferred Mechanism** (full wrf_array_version):
 ```fortran
@@ -563,7 +516,7 @@ Now both initialization paths freeze config after completion.
 |------|--------|---------------------|
 | Driver/path coverage | ✅ SAFE | Only `solve_em.F` is compiled; `solve_em_backup.F` NOT in Makefile, `solve_em_kslab_integration.F` is documentation only |
 | HALO include variants | ✅ SAFE | Both modules use `HALO_EM_D2_5.inc` unconditionally (conservative larger stencil); freshness notification present |
-| BC priority combinations | ✅ CONSISTENT | C++ precedence (periodic>symmetric>open>specified>nested) matches WRF; nested+specified+polar handled correctly |
+| BC priority combinations | Unverified standalone scope | The dispatcher has no production caller; the production projection and MPI halo tests cover separate contracts. |
 | PIO async I/O concurrency | ✅ SAFE | WRF I/O quilt architecture buffers data; I/O servers never access compute task arrays; async overlap is previous timestep only |
 | Config freeze timing | ✅ FIXED | Moved `mark_workers_started` from `init_implicit_sdirk3` to END of `sdirk3_initialize_solvers` (after physics coupling config) |
 | Stagger/stride 48 tensors | ✅ VERIFIED | U(i-stagger nx+1), V(j-stagger ny+1), W/PH(k-stagger nz+1) all correct; tests in `test_boundary_conditions_ad.cpp:237-275` |

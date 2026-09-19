@@ -144,7 +144,64 @@ int main() {
               "and the record names the relation rather than implying it in prose");
     }
 
-    constexpr int expected_checks = 16;
+    // R1: a vanished finite-difference reference cannot certify a Jacobian.
+    {
+        torch::NoGradGuard no_grad;
+        using wrf::sdirk3::central_fd_perturbation_verdict;
+        using wrf::sdirk3::compare_jvp_reference;
+        const auto k = torch::tensor({1.0e4f});
+        const auto v = torch::ones_like(k);
+        const auto plus = k + 1.0e-6f * v;
+        const auto minus = k - 1.0e-6f * v;
+        const auto lost = central_fd_perturbation_verdict(k, v, plus, minus);
+        check(!lost.valid && std::string(lost.reason) == "unresolved_perturbation",
+              "FP32 K=1e4, epsilon=1e-6 loses both perturbations");
+        const auto invalid = compare_jvp_reference(v, (plus-minus)/2.0e-6f, lost);
+        check(!invalid.verdict.valid && std::isnan(invalid.relative_error),
+              "vanished FD reference cannot produce a passing zero error");
+        const auto zero = torch::zeros_like(v);
+        const wrf::sdirk3::ProbeVerdict resolved{true, "ok"};
+        check(!compare_jvp_reference(v, zero, resolved).verdict.valid,
+              "nonzero candidate against zero reference is not a pass");
+        check(!compare_jvp_reference(zero, zero, resolved).verdict.valid,
+              "two zero derivatives are uninformative, not independent confirmation");
+        const auto match = compare_jvp_reference(v, v, resolved);
+        check(match.verdict.valid && match.relative_error == 0.0,
+              "informative equal derivatives pass");
+        const auto mismatch = compare_jvp_reference(2*v, v, resolved);
+        check(mismatch.verdict.valid && mismatch.relative_error == 1.0,
+              "informative unequal derivatives retain their actual error");
+        const auto nan = torch::full_like(v, std::numeric_limits<float>::quiet_NaN());
+        const auto inf = torch::full_like(v, std::numeric_limits<float>::infinity());
+        check(!compare_jvp_reference(nan, v, resolved).verdict.valid,
+              "NaN candidate cannot pass");
+        check(!compare_jvp_reference(v, inf, resolved).verdict.valid,
+              "infinite reference cannot pass");
+        const auto mixed = torch::tensor({1.0e4f, 0.0f});
+        const auto mv = torch::ones_like(mixed);
+        check(!central_fd_perturbation_verdict(mixed, mv, mixed+1.0e-6f*mv,
+                                              mixed-1.0e-6f*mv).valid,
+              "one resolved coordinate does not hide another lost coordinate");
+        check(!central_fd_perturbation_verdict(k, v, k+1.0e-8f*v, k-1.0e-8f*v).valid,
+              "stage-state perturbation loss is checked independently of K");
+        check(!central_fd_perturbation_verdict(k, zero, k, k).valid,
+              "zero direction is uninformative");
+        check(!central_fd_perturbation_verdict(inf, v, inf, inf).valid,
+              "nonfinite evaluation points are invalid");
+        const auto small = torch::tensor({1.0e-20}, torch::kFloat64);
+        const auto small_cmp = compare_jvp_reference(1.5*small, small, resolved);
+        check(small_cmp.verdict.valid && std::abs(small_cmp.relative_error-0.5) < 1e-14,
+              "small nonzero FP64 reference retains scale-relative error");
+        const auto x = torch::tensor({2.0}, torch::kFloat64);
+        const auto dx = torch::ones_like(x);
+        const auto xp = x+1.0e-3*dx, xm = x-1.0e-3*dx;
+        const auto finite_cmp = compare_jvp_reference(2*x*dx, (xp.square()-xm.square())/2.0e-3,
+            central_fd_perturbation_verdict(x, dx, xp, xm));
+        check(finite_cmp.verdict.valid && finite_cmp.relative_error < 1e-12,
+              "central FD of x squared agrees with the analytic derivative");
+    }
+
+    constexpr int expected_checks = 30;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

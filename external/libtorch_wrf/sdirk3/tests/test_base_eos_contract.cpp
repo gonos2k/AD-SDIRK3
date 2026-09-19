@@ -36,10 +36,12 @@
 #include <torch/torch.h>
 
 #include <cmath>
+#include <initializer_list>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -64,6 +66,196 @@ constexpr float RD = 287.0f, CP = 1004.5f, CV = 717.5f, P1000 = 1.0e5f;
 // The formula D47 replaced. Kept ONLY as a negative control: it must fail the contract.
 torch::Tensor legacy_inverse_density(const torch::Tensor& theta, const torch::Tensor& p) {
     return RD * theta / p;
+}
+
+void check_pressure_perturbations(torch::ScalarType dtype) {
+    const auto options = torch::TensorOptions().dtype(dtype);
+    auto column = [&](std::initializer_list<double> values) {
+        return torch::tensor(std::vector<double>(values), options).view({1, 2, 1});
+    };
+    auto pb = column({95000, 80000});
+    auto alb = wrf::sdirk3::compute_inverse_density(torch::full_like(pb, 300), pb,
+                                                  RD, CV, CP, P1000);
+    auto t = column({4e-6, -2e-6});
+    auto mu = torch::full({1, 1}, 5e-4, options);
+    auto mub = torch::full_like(mu, 80000);
+    auto rdnw = torch::tensor({2., 4.}, options);
+    auto c1 = torch::tensor({0.75, 0.5}, options);
+    auto c2 = torch::tensor({1000., 3000.}, options);
+    auto direction = torch::tensor({0., 1., -0.5}, options).view({1, 3, 1});
+    auto evaluate = [&](const torch::Tensor& ph) {
+        return wrf::sdirk3::calc_p_rho_wrf(ph, t, mu, mub, alb, pb, rdnw, c1, c2,
+                                         RD, CV, CP, P1000, 300);
+    };
+    auto ph = 3e-4 * direction;
+    auto got = evaluate(ph);
+    const double kappa = static_cast<double>(CP) / CV;
+    std::vector<double> al_ref, alt_ref, p_ref, da_ref, dp_ref;
+    // Scalar reference starts from the SAME stored inputs, including rounded alb.
+    // It deliberately does not assume that this quantized base is exactly balanced.
+    for (int k = 0; k < 2; ++k) {
+        const double a = alb.flatten()[k].item<double>();
+        const double c = c1[k].item<double>();
+        const double denom = c * (mub.item<double>() + mu.item<double>()) + c2[k].item<double>();
+        const double dph = ph.flatten()[k+1].item<double>() - ph.flatten()[k].item<double>();
+        const double al = (rdnw[k].item<double>() * dph - a * c * mu.item<double>()) / denom;
+        const double alt = a + al;
+        const double p = P1000 * std::pow(RD * (300. + t.flatten()[k].item<double>()) /
+                                          (P1000 * alt), kappa);
+        const double da = rdnw[k].item<double>() *
+            (direction.flatten()[k+1].item<double>() - direction.flatten()[k].item<double>()) / denom;
+        al_ref.push_back(al); alt_ref.push_back(alt); p_ref.push_back(p - pb.flatten()[k].item<double>());
+        da_ref.push_back(da); dp_ref.push_back(-kappa * p * da / alt);
+    }
+    auto reference = [&](const std::vector<double>& values) {
+        return torch::tensor(values, torch::kFloat64).view({1, 2, 1});
+    };
+    auto close = [](const torch::Tensor& x, const torch::Tensor& y, double rtol, double atol) {
+        return torch::allclose(x.to(torch::kFloat64), y.to(torch::kFloat64), rtol, atol);
+    };
+    bool outputs_ok = true;
+    for (const auto& pair : {std::make_pair(got.al_pert, reference(al_ref)),
+                             std::make_pair(got.alt, reference(alt_ref)),
+                             std::make_pair(got.p_pert, reference(p_ref))}) {
+        outputs_ok &= pair.first.scalar_type() == dtype && pair.first.device() == ph.device() &&
+                      pair.first.sizes() == t.sizes() && pair.first.is_contiguous() &&
+                      close(pair.first, pair.second.to(dtype),
+                            dtype == torch::kFloat64 ? 1e-12 : 2e-7, 1e-10);
+    }
+    const std::string label = dtype == torch::kFloat32 ? "FP32 " : "FP64 ";
+    check(outputs_ok, label + "pressure/alpha outputs preserve ABI and agree with scalar reference");
+
+    auto q = torch::full({}, 3e-4, options).requires_grad_(true);
+    auto reverse = torch::autograd::grad({evaluate(q * direction).p_pert.sum()}, {q})[0];
+    auto dp = reference(dp_ref);
+    const double ad_rtol = dtype == torch::kFloat64 ? 1e-12 : 2e-6;
+    check(close(reverse, dp.sum(), ad_rtol, 1e-10), label + "pressure reverse derivative matches analytic EOS");
+
+    auto level = torch::autograd::forward_ad::enter_dual_level();
+    auto dual = evaluate(torch::_make_dual(ph, direction, level));
+    bool tangent_ok = true;
+    for (const auto& pair : {std::make_pair(dual.al_pert, reference(da_ref)),
+                             std::make_pair(dual.alt, reference(da_ref)),
+                             std::make_pair(dual.p_pert, dp)}) {
+        auto tangent = std::get<1>(torch::_unpack_dual(pair.first, level));
+        tangent_ok &= tangent.defined() && close(tangent, pair.second, ad_rtol, 1e-10);
+    }
+    torch::autograd::forward_ad::exit_dual_level(level);
+    check(tangent_ok, label + "all three pressure/alpha forward tangents match analytic EOS");
+
+    constexpr double epsilon = 1e-4;
+    auto plus = evaluate(ph + epsilon * direction).p_pert.to(torch::kFloat64);
+    auto minus = evaluate(ph - epsilon * direction).p_pert.to(torch::kFloat64);
+    check(close((plus - minus) / (2 * epsilon), dp, 2e-6, 1e-8),
+          label + "small represented geopotential perturbations survive the pressure calculation");
+}
+
+void check_state_perturbations(torch::ScalarType dtype) {
+    const auto options = torch::TensorOptions().dtype(dtype);
+    auto column = [&](std::initializer_list<double> values) {
+        return torch::tensor(std::vector<double>(values), options).view({1, 2, 1});
+    };
+    auto pb = column({95000, 80000});
+    auto alb = wrf::sdirk3::compute_inverse_density(torch::full_like(pb, 300), pb,
+                                                    RD, CV, CP, P1000);
+    auto t = column({4e-6, -2e-6});
+    auto mu = torch::full({1, 1}, 5e-4, options);
+    auto mub = torch::full_like(mu, 80000);
+    auto rdnw = torch::tensor({2., 4.}, options);
+    auto c1 = torch::tensor({0.75, 0.5}, options);
+    auto c2 = torch::tensor({1000., 3000.}, options);
+    auto ph = torch::zeros({1, 3, 1}, options);
+    auto dt_dir = column({0.75, -1.25});
+    auto dmu_dir = torch::full_like(mu, 50.0);
+    auto evaluate = [&](const torch::Tensor& t_arg, const torch::Tensor& mu_arg) {
+        return wrf::sdirk3::calc_p_rho_wrf(ph, t_arg, mu_arg, mub, alb, pb, rdnw, c1, c2,
+                                           RD, CV, CP, P1000, 300);
+    };
+
+    const double kappa = static_cast<double>(CP) / CV;
+    std::vector<double> al_t_ref, alt_t_ref, p_t_ref;
+    std::vector<double> al_mu_ref, alt_mu_ref, p_mu_ref;
+    std::vector<double> al_mix_ref, alt_mix_ref, p_mix_ref;
+    for (int k = 0; k < 2; ++k) {
+        const double a = alb.flatten()[k].item<double>();
+        const double c = c1[k].item<double>();
+        const double m = mu.item<double>();
+        const double muts = mub.item<double>() + m;
+        const double denom = c * muts + c2[k].item<double>();
+        const double al = (-a * c * m) / denom;
+        const double alt = a + al;
+        const double theta = 300.0 + t.flatten()[k].item<double>();
+        const double p = P1000 * std::pow(RD * theta / (P1000 * alt), kappa);
+        const double dal_dmu = -c * (a + al) / denom;
+        const double dt = dt_dir.flatten()[k].item<double>();
+        const double dmu = dmu_dir.item<double>();
+        const double dal_mu = dal_dmu * dmu;
+
+        // Independent analytic directions: da/dt=0 and
+        // da/dmu=-c1*(alb+al)/(c1*muts+c2), with dp=kappa*p*(dt/theta-da/alt).
+        al_t_ref.push_back(0.0);
+        alt_t_ref.push_back(0.0);
+        p_t_ref.push_back(kappa * p * dt / theta);
+        al_mu_ref.push_back(dal_mu);
+        alt_mu_ref.push_back(dal_mu);
+        p_mu_ref.push_back(-kappa * p * dal_mu / alt);
+        al_mix_ref.push_back(dal_mu);
+        alt_mix_ref.push_back(dal_mu);
+        p_mix_ref.push_back(kappa * p * (dt / theta - dal_mu / alt));
+    }
+    auto reference = [&](const std::vector<double>& values) {
+        return torch::tensor(values, torch::kFloat64).view({1, 2, 1});
+    };
+    auto close = [dtype](const torch::Tensor& x, const torch::Tensor& y) {
+        return torch::allclose(x.to(torch::kFloat64), y.to(torch::kFloat64),
+                               dtype == torch::kFloat64 ? 1e-12 : 2e-6, 1e-10);
+    };
+    const std::string label = dtype == torch::kFloat32 ? "FP32 " : "FP64 ";
+
+    auto check_dual = [&](const torch::Tensor& t_tangent, const torch::Tensor& mu_tangent,
+                          const torch::Tensor& al_ref, const torch::Tensor& alt_ref,
+                          const torch::Tensor& p_ref) {
+        auto level = torch::autograd::forward_ad::enter_dual_level();
+        auto t_dual = torch::_make_dual(t, t_tangent, level);
+        auto mu_dual = torch::_make_dual(mu, mu_tangent, level);
+        auto out = evaluate(t_dual, mu_dual);
+        bool ok = true;
+        for (const auto& pair : {std::make_pair(out.al_pert, al_ref),
+                                 std::make_pair(out.alt, alt_ref),
+                                 std::make_pair(out.p_pert, p_ref)}) {
+            auto tangent = std::get<1>(torch::_unpack_dual(pair.first, level));
+            ok &= tangent.defined() && close(tangent, pair.second);
+        }
+        torch::autograd::forward_ad::exit_dual_level(level);
+        return ok;
+    };
+
+    check(check_dual(dt_dir, torch::zeros_like(mu), reference(al_t_ref), reference(alt_t_ref),
+                     reference(p_t_ref)),
+          label + "independent t_pert FWAD matches da/dt=0 and analytic dp");
+    check(check_dual(torch::zeros_like(t), dmu_dir, reference(al_mu_ref), reference(alt_mu_ref),
+                     reference(p_mu_ref)),
+          label + "independent mu_pert FWAD matches analytic da/dmu and dp");
+
+    // A weighted reverse dot identity checks the same mixed direction through all outputs.
+    auto t_leaf = t.clone().requires_grad_(true);
+    auto mu_leaf = mu.clone().requires_grad_(true);
+    auto mixed = evaluate(t_leaf, mu_leaf);
+    auto lambda_al = column({0.7, -1.1});
+    auto lambda_alt = column({-0.4, 0.9});
+    auto lambda_p = column({1.3, -0.6});
+    auto objective = (mixed.al_pert * lambda_al + mixed.alt * lambda_alt +
+                      mixed.p_pert * lambda_p).sum();
+    auto reverse = torch::autograd::grad({objective}, {t_leaf, mu_leaf});
+    const auto mixed_dot =
+        (reference(al_mix_ref) * lambda_al.to(torch::kFloat64) +
+         reference(alt_mix_ref) * lambda_alt.to(torch::kFloat64) +
+         reference(p_mix_ref) * lambda_p.to(torch::kFloat64)).sum();
+    const auto reverse_dot =
+        (reverse[0].to(torch::kFloat64) * dt_dir.to(torch::kFloat64)).sum() +
+        (reverse[1].to(torch::kFloat64) * dmu_dir.to(torch::kFloat64)).sum();
+    check(close(reverse_dot, mixed_dot),
+          label + "reverse/forward dot identity holds for mixed t_pert+mu_pert EOS direction");
 }
 
 }  // namespace
@@ -189,7 +381,12 @@ int main() {
                          sci(rel) + "), so the absolute-theta contract is testable");
     }
 
-    constexpr int expected_checks = 10;
+    check_pressure_perturbations(torch::kFloat32);
+    check_pressure_perturbations(torch::kFloat64);
+    check_state_perturbations(torch::kFloat32);
+    check_state_perturbations(torch::kFloat64);
+
+    constexpr int expected_checks = 24;
     const bool count_ok = (check_count == expected_checks);
     std::cout << (count_ok ? "  ok   " : "  FAIL ")
               << "case-count ratchet (" << check_count << "/" << expected_checks << ")"

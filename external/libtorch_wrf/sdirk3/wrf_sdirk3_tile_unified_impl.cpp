@@ -124,7 +124,11 @@
 // they have been reviewed for const-correctness safety.
 // =========================================================================
 
+#include <array>
 #include <cstdint>  // fixed-width ints used below; libstdc++ (Linux g++) does not provide them transitively
+#include "wrf_sdirk3_coriolis.h"
+#include "wrf_sdirk3_curvature.h"
+#include "wrf_sdirk3_horizontal_momentum.h"
 #include "wrf_sdirk3_metric_policy.h"
 #include "wrf_sdirk3_transpose_probe.h"
 
@@ -249,6 +253,9 @@ inline double probe_env_positive_double(const char* name, double fallback) {
 
 }  // namespace
 #include "wrf_sdirk3_tile_unified.h"
+#include "wrf_sdirk3_phi_horizontal.h"
+#include "wrf_sdirk3_nonhydrostatic_pressure.h"
+#include "wrf_sdirk3_boundary_ad.h"
 #include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_owned_box.h"
 #include "wrf_sdirk3_halo_c_api.h"
@@ -280,7 +287,7 @@ inline const char* rhs_mode_name(wrf::sdirk3::RhsMode m) {
 #include "wrf_sdirk3_profiler.h"
 #include "wrf_sdirk3_autograd_utils.h"
 #include "wrf_sdirk3_wrms_norm.h"
-#include "wrf_sdirk3_imex_ark324_coeffs.h"
+#include "wrf_sdirk3_ark324_composition.h"
 #include "wrf_sdirk3_imex_adjoint_linear_solve.h"
 #include "wrf_sdirk3_acoustic_substep.h"
 #include "wrf_sdirk3_u_slow_diagnostics.h"
@@ -611,7 +618,7 @@ struct CoupledSlowGuard {
 //   kf=2..nz-2:  vflux = Omega * flux3(q(kf-2..kf+1), ua=-Omega)
 //     flux3 = flux4 + sign(ua)*((q_ip1-q_im2) - 3(q_i-q_im1))/12,
 //     flux4 = (7(q_i+q_im1) - (q_ip1+q_im2))/12               [WRF :195-204 exact — NOT the
-//     file's flux3_upwind helper, whose flux4 is a "simplified" deviation]
+//     flux3_upwind helper's horizontal implementation below uses the same stencil.
 //   kf=0, nz: zero boundary fluxes.
 // tendency(k=0..nz-1) = +|rdnw(k)| * (vflux(k+1)-vflux(k))  [WRF passes NEGATIVE rdnw as
 // rdzw and writes tendency -= rdzw*d, module_em.F:630] — INCLUDING the top mass level.
@@ -625,30 +632,26 @@ static torch::Tensor wrf_vert_adv3(const torch::Tensor& q, const torch::Tensor& 
     auto dnv = torch::reciprocal(rdn_pos.slice(0, 1, nz));                  // |dn0[1..nz-1]|
     auto fzm = (0.5f * dnw.slice(0, 0, nz - 1) / dnv).view({1, nz - 1, 1}); // idx kf-1
     auto fzp = (0.5f * dnw.slice(0, 1, nz) / dnv).view({1, nz - 1, 1});
-    // interior w-levels kf=2..nz-2
-    auto q_im2 = q.slice(1, 0, nz - 3);
-    auto q_im1 = q.slice(1, 1, nz - 2);
-    auto q_i   = q.slice(1, 2, nz - 1);
-    auto q_ip1 = q.slice(1, 3, nz);
-    auto romI  = omega.slice(1, 2, nz - 1);
-    torch::Tensor s_ua;   // sign(ua) with ua = -Omega (eta decreases upward); smooth for AD
-    if (sign_delta > 0.0f) {
-        s_ua = (-romI) / torch::sqrt(romI * romI + sign_delta * sign_delta);
-    } else {
-        s_ua = torch::sign(-romI).detach();
+    if (nz == 1) return torch::zeros_like(q); // both boundary fluxes are zero
+    auto interior = omega.slice(1, 1, nz) *
+        (fzm * q.slice(1, 1, nz) + fzp * q.slice(1, 0, nz - 1));
+    if (nz >= 4) {
+        const auto qm2 = q.slice(1, 0, nz - 3);
+        const auto qm1 = q.slice(1, 1, nz - 2);
+        const auto qi = q.slice(1, 2, nz - 1);
+        const auto qp1 = q.slice(1, 3, nz);
+        const auto om = omega.slice(1, 2, nz - 1);
+        const auto direction = sign_delta > 0.0f
+            ? -om / torch::sqrt(om * om + sign_delta * sign_delta)
+            : torch::sign(-om).detach();
+        const auto flux4 = (7.0f * (qi + qm1) - (qp1 + qm2)) / 12.0f;
+        const auto flux3 = flux4 + direction * ((qp1 - qm2) - 3.0f * (qi - qm1)) / 12.0f;
+        interior = torch::cat({interior.slice(1, 0, 1), om * flux3,
+                              interior.slice(1, nz - 2, nz - 1)}, 1);
     }
-    auto flux4 = (7.0f * (q_i + q_im1) - (q_ip1 + q_im2)) / 12.0f;
-    auto fl3   = flux4 + s_ua * ((q_ip1 - q_im2) - 3.0f * (q_i - q_im1)) / 12.0f;
-    auto vf_int = romI * fl3;                                               // {ny,nz-3,nx}
-    // edge w-levels kf=1 and kf=nz-1 (2nd-order stretch-weighted)
-    auto vf_k1 = omega.slice(1, 1, 2)
-                 * (fzm.slice(1, 0, 1) * q.slice(1, 1, 2) + fzp.slice(1, 0, 1) * q.slice(1, 0, 1));
-    auto vf_kt = omega.slice(1, nz - 1, nz)
-                 * (fzm.slice(1, nz - 2, nz - 1) * q.slice(1, nz - 1, nz)
-                    + fzp.slice(1, nz - 2, nz - 1) * q.slice(1, nz - 2, nz - 1));
-    auto zerof = torch::zeros_like(vf_k1);
-    auto vflux = torch::cat({zerof, vf_k1, vf_int, vf_kt, zerof}, 1);       // {ny,nz+1,nx}
-    return (vflux.slice(1, 1, nz + 1) - vflux.slice(1, 0, nz))
+    const auto boundary = torch::zeros_like(q.slice(1, 0, 1));
+    const auto flux = torch::cat({boundary, interior, boundary}, 1);
+    return (flux.slice(1, 1, nz + 1) - flux.slice(1, 0, nz))
            * rdnw_pos.slice(0, 0, nz).view({1, nz, 1});
 }
 
@@ -663,6 +666,7 @@ static torch::Tensor wrf_vert_adv3_w(const torch::Tensor& wf, const torch::Tenso
                                      const torch::Tensor& rdn_pos, float sign_delta) {
     const int64_t nzw = wf.size(1);
     const int64_t nzm = nzw - 1;
+    if (nzm == 1) return torch::zeros_like(wf); // zero Omega at both faces
     auto romm = 0.5f * (omega.slice(1, 0, nzm) + omega.slice(1, 1, nzw));   // {ny,nzm,nx}
     auto q_im2 = wf.slice(1, 0, nzm - 2);
     auto q_im1 = wf.slice(1, 1, nzm - 1);
@@ -1618,7 +1622,7 @@ int TileSDIRK3UnifiedSolver::solve(double* state_new, const double* state_old,
 }
 
 // PARITY FIX 2025-12-20: Helper to refresh grid_info_ epochs for in-place change detection.
-// Called at top of getRdnwTensor() and ensureDivergenceCache() to ensure consistent
+// Called by getRdnwTensor() to ensure consistent
 // epoch tracking regardless of which code path accesses the cached tensors.
 // PARITY FIX 2025-12-20: CPU tensors (from_blob) keep same pointer on in-place update,
 // so we must always sample signature. CUDA tensors only sample on pointer change.
@@ -3333,6 +3337,8 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     : wrf::sdirk3::TileSDIRK3Solver(nx, ny, nz, dx, dy, 0.0, tile_id),
       experiment_(wrf::sdirk3::ExperimentConfig::from_environment()),
       diagnostics_(wrf::sdirk3::DiagnosticsConfig::from_environment()) {
+    // Snapshot after serialized env loading and authoritative Fortran setters.
+    non_hydrostatic_ = wrf::sdirk3::g_sdirk3_config.non_hydrostatic;
 
     // 9F.D39 (review section 7): emit the effective config into the evidence stream at
     // construction, so an artifact records WHICH MODEL produced it. Both experiment
@@ -3762,7 +3768,7 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
         // Don't create or set preconditioner
     } else if (wrf::sdirk3::g_sdirk3_config.precond_type == 2) {
         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-            std::cerr << "[PRECOND SELECTION] UnifiedPreconditioner with W-θ coupling (precond_type=2)" << std::endl;
+            std::cerr << "[PRECOND SELECTION] UnifiedPreconditioner (precond_type=2)" << std::endl;
         }
 
         // UnifiedPreconditioner: Advanced Block-Jacobi with:
@@ -3931,6 +3937,11 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     int rk_step, float dt,
     int nx, int ny, int nz,
     int nx_u, int ny_v, int nz_w) {
+
+    if (rk_step == 1) {
+        last_step_input_graph_ = torch::Tensor();
+        last_step_output_graph_ = torch::Tensor();
+    }
 
     // R2: a quantity that does NOT depend on how the domain was decomposed.
     //
@@ -5053,7 +5064,7 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         }
         
         // PARITY FIX 2025-12-19: Only update grid_info_->rdnw when epoch changes.
-        // clone() creates new tensor with new pointer, which would invalidate DivergenceCacheKey.
+        // clone() creates a new tensor and breaks reuse of the source view.
         // By tracking rdnw_epoch_cached_grid_, we avoid unnecessary clone and pointer changes.
         // PARITY FIX 2025-12-20: Use rdnw_epoch_vec_ for vector change detection.
         if (grid_info_ && !rdnw_.empty() && rdnw_epoch_cached_grid_ != rdnw_epoch_vec_) {
@@ -5710,10 +5721,6 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     // PARITY FIX 2025-12-19: Increment epoch to signal CPU map factors refreshed
     ++msf_epoch_;
 
-    // PARITY FIX 2025-12-17: Invalidate divergence cache when map factors change
-    // This ensures cache doesn't use stale map factor data after from_blob updates
-    invalidateDivergenceCache();
-
     // OPT Pass33+: Clear TLS tensor view cache on grid update (map factors changed)
     // This ensures boundary tensors in advanceZeroCopy are recreated with new shapes
     wrf::sdirk3::getThreadLocalTensorViewCache().clear();
@@ -5782,6 +5789,10 @@ vertical_coefficients:
     c1h_ = torch::from_blob(c1h, {nz}, options);    // LINT_EXCEPTION: At mass levels - zero-copy
         TORCH_CHECK(nz > 0 && nz <= 1000, "Invalid nz for c2h: ", nz);
     c2h_ = torch::from_blob(c2h, {nz}, options);    // LINT_EXCEPTION: At mass levels - zero-copy
+    if (grid_info_) {
+        grid_info_->c1h = c1h_.clone();
+        grid_info_->c2h = c2h_.clone();
+    }
 
     // FIX 2025-01-11 Round59: Invalidate aligned tensor cache after c1f/c2f/c1h/c2h updates
     // This ensures GPU tensors (which skip signature check) pick up the new values
@@ -5954,8 +5965,48 @@ vertical_coefficients:
         throw std::runtime_error("Base state not initialized before timestep");
     }
     
+    // A deferred C/Fortran request is activated only after this call has
+    // published all caller-owned views and before packState creates the first
+    // retained input leaf.
+    if (fixed_trajectory_requested_) {
+        const int expected_steps = fixed_trajectory_expected_;
+        auto dt_schedule = std::move(fixed_trajectory_dt_schedule_);
+        fixed_trajectory_expected_ = 0;
+        fixed_trajectory_requested_ = false;
+        beginFixedTrajectory(expected_steps, dt_schedule);
+    }
+
     // Pack current state with staggered dimensions
     torch::Tensor U_n = packState(u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
+    if (fixed_trajectory_open_) {
+        checkFixedTrajectoryFingerprint();
+        TORCH_CHECK(U_n.device().is_cpu(),
+                    "fixed trajectory contract requires a CPU packed state");
+        TORCH_CHECK(rk_step == 1, "fixed trajectory requires forward rk_step=1 call");
+        TORCH_CHECK(fixed_trajectory_steps_.size() <
+                        static_cast<size_t>(fixed_trajectory_expected_),
+                    "fixed trajectory exceeds N");
+        validateFixedTrajectoryTimestep(dt);
+        if (!fixed_trajectory_steps_.empty()) {
+            TORCH_CHECK(torch::equal(U_n, fixed_trajectory_steps_.back().output.detach()),
+                        "fixed trajectory packed state handoff changed");
+        }
+    }
+    if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
+        const auto& cfg = wrf::sdirk3::g_sdirk3_config;
+        TORCH_CHECK(cfg.use_autograd && cfg.imex_slow_in_tangent &&
+                    cfg.imex_split_mode == 3 && !cfg.split_explicit &&
+                    nprocx_ * nprocy_ == 1 &&
+                    its_ <= ids_ && ite_ >= ide_ - 1 &&
+                    jts_ <= jds_ && jte_ >= jde_ - 1,
+                    "Full-step pullback requires mode 3, AD, explicit-stage gradients, ",
+                    "and one tile covering a single-rank domain");
+        U_n = U_n.detach().clone().requires_grad_(true);
+    }
+
+    // Keep the original leaf so the full-step VJP includes the input projection.
+    const auto step_input_graph = U_n;
+    U_n = projectStateBoundaries(U_n);
 
     // 9F.D66/D81: the adjoint driver, opt-in via WRF_SDIRK3_ADJOINT_DRIVER.
     //
@@ -6128,6 +6179,8 @@ vertical_coefficients:
                           ph_tend, t_tend, mu_tend, nx_u, ny_v, nz_w);
     }
     
+    F_phys = projectStateBoundaries(F_phys);
+
     // SDIRK3 Stage computations
     // k2/k3 initialized to zero so partial updates are safe if stages are aborted.
     torch::Tensor k1;
@@ -6148,42 +6201,6 @@ vertical_coefficients:
         std::cerr << "\n--- Initial state diagnostics ---" << std::endl;
         std::cerr << "Total energy: " << initial_energy << std::endl;
         std::cerr << "Total mass: " << initial_mass << std::endl;
-    }
-    
-    // Compute and cache boundary fluxes for neighboring tiles
-    // TEMPORARILY DISABLED: Boundary optimizer needs fixes for staggered grid handling
-    if (false && boundary_optimizer_ && flux_computer_) {
-        // Extract state components for boundary computation with proper staggered dimensions
-        // FIX Round192: Use int64_t to prevent overflow on large grids
-        int64_t size_u = static_cast<int64_t>(nx_u_) * ny_ * nz_;
-        int64_t size_v = static_cast<int64_t>(nx_) * ny_v_ * nz_;
-        int64_t size_w = static_cast<int64_t>(nx_) * ny_ * nz_w_;
-
-        int64_t offset = 0;
-        // Use correct tensor shape [nz, ny, nx] to match rest of the code
-        auto u_tensor = U_n.slice(0, offset, offset + size_u).view({nz_, ny_, nx_u_});
-        offset += size_u;
-        auto v_tensor = U_n.slice(0, offset, offset + size_v).view({nz_, ny_v_, nx_});
-        offset += size_v;
-        auto w_tensor = U_n.slice(0, offset, offset + size_w).view({nz_w_, ny_, nx_});
-        
-        // Compute pressure from state (simplified for demonstration)
-        auto p_tensor = torch::zeros({nz_, ny_, nx_}, torch::kFloat32);
-        
-        // Check and compute boundaries for each neighbor
-        std::vector<std::pair<int, wrf::sdirk3::TileBoundaryData::BoundaryType>> neighbors = {
-            {tile_id_ - 1, wrf::sdirk3::TileBoundaryData::WEST},
-            {tile_id_ + 1, wrf::sdirk3::TileBoundaryData::EAST},
-            {tile_id_ - 100, wrf::sdirk3::TileBoundaryData::SOUTH},
-            {tile_id_ + 100, wrf::sdirk3::TileBoundaryData::NORTH}
-        };
-        
-        for (const auto& [neighbor_id, boundary_type] : neighbors) {
-            boundary_optimizer_->compute_shared_boundary(
-                u_tensor, v_tensor, w_tensor, p_tensor,
-                neighbor_id, boundary_type, dx_, dy_
-            );
-        }
     }
     
     try {
@@ -7289,6 +7306,9 @@ vertical_coefficients:
             checkTensorHealth(U_new, "U_new");
 
         } else if (split_mode == 3) {
+            // Preserve tableau precision through stage assembly, the implicit
+            // equation, and the final update. The Fortran timestep ABI stays float.
+            const double dt_ark = static_cast<double>(dt);
             // [SPLIT-EXPLICIT Inc 0 scaffold] Opt-in differentiable RK3 + acoustic-substep core
             // (mirrors dyn_em; see doc/sdirk3_split_explicit_rebuild_plan.md). Default OFF =>
             // this branch is skipped and the ARK324 path below runs unchanged (byte-identical
@@ -9739,15 +9759,8 @@ vertical_coefficients:
                 const bool capture_deltas =
                     stage_operand_diag_on && (stage_idx == 1 || stage_idx == 2);
                 if (capture_deltas) stage_operand_stage_states.clear();
-                // R9 P0-C: the ARK stage base, TERM BY TERM.
-                //
-                //     Y_s = U_n + h*sum_j a^E_sj k_slow[j] + h*sum_j a^I_sj k_fast[j]
-                //
-                // Measured: ||Y_3|| = 1.251e10 against ||Y_2|| = 2.100e6 and ||U_n|| ~ 2.1e6,
-                // while the accepted stage-2 K has ||K_2|| = 4806, i.e. h*gamma*||K_2|| ~ 1.3e6.
-                // The implicit history cannot supply four of those orders, so the term that
-                // does has to be named rather than deduced. This OBSERVES the production
-                // tensors -- no extra RHS evaluation, no change to the assembly statement.
+                // Observe the actual running state after each source's add.
+                // The shared composition kernel owns the production arithmetic.
                 const bool decompose_stage_base =
                     wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_STAGE_ENTRY_LEDGER");
                 if (decompose_stage_base) {
@@ -9757,12 +9770,7 @@ vertical_coefficients:
                               << U_n.detach().to(torch::kFloat64).norm().item<double>()
                               << std::endl;
                 }
-                torch::Tensor rhs = U_n;
-                for (int j = 0; j < stage_idx; ++j) {
-                    // UNCHANGED production assembly statement (not decomposed).
-                    rhs = rhs
-                        + dt * static_cast<float>(Ark::a_explicit[stage_idx][j]) * k_slow[j]
-                        + dt * static_cast<float>(Ark::a_implicit[stage_idx][j]) * k_fast[j];
+                auto observe = [&](int j, const torch::Tensor& rhs) {
                     if (capture_deltas) {
                         torch::NoGradGuard no_grad;
                         // Running FP32 state after source j's actual add.
@@ -9779,15 +9787,16 @@ vertical_coefficients:
                         std::cerr << "SDIRK3_STAGE_BASE stage=" << (stage_idx + 1)
                                   << " src=" << (j + 1)
                                   << " aE=" << aE << " k_slow=" << ks
-                                  << " term_E=" << (ks >= 0.0 ? dt * std::abs(aE) * ks : -1.0)
+                                  << " term_E=" << (ks >= 0.0 ? dt_ark * std::abs(aE) * ks : -1.0)
                                   << " aI=" << aI << " k_fast=" << kf
-                                  << " term_I=" << (kf >= 0.0 ? dt * std::abs(aI) * kf : -1.0)
+                                  << " term_I=" << (kf >= 0.0 ? dt_ark * std::abs(aI) * kf : -1.0)
                                   << " running=" 
                                   << rhs.detach().to(torch::kFloat64).norm().item<double>()
                                   << std::endl;
                     }
-                }
-                return rhs;
+                };
+                return wrf::sdirk3::ark324_stage_base(
+                    U_n, dt_ark, stage_idx, k_slow, k_fast, observe);
             };
 
             auto compute_fast_rhs = [&](const torch::Tensor& U_interior,
@@ -9952,7 +9961,7 @@ vertical_coefficients:
                 }
 
                 const int stage_id = i + 1;
-                const float aii = static_cast<float>(Ark::a_implicit[i][i]);
+                const double aii = Ark::a_implicit[i][i];
                 torch::Tensor U_stage = compute_stage_rhs(i);
                 probe_firsthit_nonfinite(stage_id, false, "U_stage_pre", U_stage);
                 checkTensorHealth(U_stage, "U_stage_ark");
@@ -10160,7 +10169,7 @@ vertical_coefficients:
 
                 // stage_fail_action=2: one recoverable retry for failed implicit stages.
                 // Retry keeps the same implicit stage equation (no a_ii mutation).
-                float effective_aii = aii;
+                double effective_aii = aii;
                 bool retry_used = false;
                 torch::Tensor K_prev_attempt = K_prev_stage;
                 while (true) {
@@ -10224,7 +10233,7 @@ vertical_coefficients:
                         last_stage_wrms_norm_ = 0.0f;
                         last_stage_wrms_growth_ = 0.0f;
                     } else {
-                        k_fast[i] = solveImplicitStage(U_stage, F_phys, dt, effective_aii, stage_id,
+                        k_fast[i] = solveImplicitStage(U_stage, F_phys, dt_ark, effective_aii, stage_id,
                                                        K_prev_attempt, U_full_exch_stage);
                     }
                     probe_firsthit_nonfinite(stage_id, retry_used, "k_fast_postsolve", k_fast[i]);
@@ -10416,7 +10425,7 @@ vertical_coefficients:
 
                 torch::Tensor U_conv = U_stage;
                 if (std::abs(effective_aii) >= 1e-14f) {
-                    U_conv = U_stage + dt * effective_aii * k_fast[i];
+                    U_conv = U_stage + dt_ark * effective_aii * k_fast[i];
                 }
                 probe_firsthit_nonfinite(stage_id, retry_used, "U_conv", U_conv);
                 torch::Tensor U_full_exch_conv;
@@ -11593,7 +11602,7 @@ vertical_coefficients:
                             continue;
                         }
                         abort_delta_accum = abort_delta_accum +
-                            dt * static_cast<float>(Ark::b[s]) * k_full[s];
+                            dt_ark * static_cast<double>(Ark::b[s]) * k_full[s];
                         completed_stage_count++;
                     }
 
@@ -11721,7 +11730,7 @@ vertical_coefficients:
                                 continue;
                             }
                             torch::Tensor abort_delta_fast =
-                                dt * static_cast<float>(Ark::b[s]) * k_fast[s];
+                                dt_ark * static_cast<double>(Ark::b[s]) * k_fast[s];
                             if (try_commit_abort_delta(abort_delta_fast, "mode3_abort_fast_stage")) {
                                 break;
                             }
@@ -11752,10 +11761,7 @@ vertical_coefficients:
                 k2 = k_full[1];
                 k3 = k_full[2];
                 k4 = k_full[3];
-                U_new = U_n;
-                for (int i = 0; i < Ark::stages; ++i) {
-                    U_new = U_new + dt * static_cast<float>(Ark::b[i]) * k_full[i];
-                }
+                U_new = wrf::sdirk3::ark324_final_state(U_n, dt_ark, k_full);
             }
             checkTensorHealth(U_new, "U_new");
             } // !split_explicit: end ARK324 fallback
@@ -12490,8 +12496,15 @@ vertical_coefficients:
         throw;
     }
     
+    // The full map is P G(P U): fixed wall values are not control variables.
+    U_new = projectStateBoundaries(U_new);
     // Unpack updated state with staggered dimensions
     unpackState(U_new, u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
+    if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
+        last_step_input_graph_ = step_input_graph;
+        last_step_output_graph_ = U_new;
+        recordFixedTrajectoryStep(step_input_graph, U_new, F_phys, dt);
+    }
 
     // R13.1: THE np-equivalence record, and the only one entitled to that claim.
     //
@@ -12998,7 +13011,7 @@ void TileSDIRK3UnifiedSolver::unpackState(
 torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     const torch::Tensor& U_stage,
     const torch::Tensor& F_phys,
-    float dt, float a_ii, int stage,
+    double dt, double a_ii, int stage,
     const torch::Tensor& K_prev,
     const torch::Tensor& U_full_exchanged) {
 
@@ -13025,8 +13038,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         std::cerr << "=================================================" << std::endl;
     }
     
-    // Solve: (I - dt*a_ii*J)*k = F(U_stage + dt*a_ii*k) + F_phys
-    // where F is the unified RHS (dynamics) and F_phys is physics tendency
+    // Solve k = F(U_stage + dt*a_ii*k) + F_phys.
+    // Newton's matrix is I - dt*a_ii*J_F; F_phys is the fixed physics tendency.
     
     // Define RHS function for Newton-Krylov solver
     // GENERALIZED (2025-10-18): Handle cases with/without physics forcing
@@ -13768,7 +13781,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
         try {
             torch::NoGradGuard no_grad_diag;
             auto U_new = (U_stage + dt * a_ii * k).detach();
-            float K_norm = k.detach().to(torch::kCPU).norm().item<float>();
+            // Relative residuals use RMS for both operands.  The floor is in
+            // the same RMS units; do not mix it with the raw L2 norm.
+            const double K_rms = wrf::sdirk3::guarded_item<double>(
+                wrf::sdirk3::rms_norm_fp64(k.detach()));
 
             if (split_mode >= 2) {
                 // Mode>=2: K is fast-only. R_fast is the meaningful convergence metric.
@@ -13872,17 +13888,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                     }
                 }
 
-                float fast_resid_unscaled = R_fast_vec.norm().item<float>();
-                // GR5 FIX 2026-02-16: Use scaled RMS (consistent with Mode 1 and Newton solver)
-                float sqrt_N_mode2 = std::sqrt(static_cast<float>(R_fast_vec.numel()));
-                float fast_resid = (sqrt_N_mode2 > 0.0f) ? (fast_resid_unscaled / sqrt_N_mode2) : fast_resid_unscaled;
-                if (!std::isfinite(fast_resid)) {
-                    fast_resid = 1.0e8f;
-                }
-                float rel_R_fast = (K_norm > 1e-15f) ? fast_resid / K_norm : fast_resid;
-                if (!std::isfinite(rel_R_fast)) {
-                    rel_R_fast = 1.0e8f;
-                }
+                const double fast_resid = wrf::sdirk3::guarded_item<double>(
+                    wrf::sdirk3::rms_norm_fp64(R_fast_vec));
+                const double rel_R_fast = wrf::sdirk3::relative_rms_residual(fast_resid, K_rms);
                 last_stage_rel_R_full_ = rel_R_fast;
                 last_stage_rel_R_full_raw_ = rel_R_fast;  // v20.14r41: mode>=2 has no K_floor, raw=floored
                 // v20.14r27y: Also update R_full_norm for mode>=2 so post-damp
@@ -13894,7 +13902,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                     std::cerr << "[RESIDUAL_REEVAL] Stage " << stage
                               << " (IMEX mode>=2): ||R_fast||=" << fast_resid
                               << ", ||R_newton||=" << stats.final_residual
-                              << ", ||K_fast||=" << K_norm
+                              << ", ||K_fast||_rms=" << K_rms
                               << ", rel_R_fast=" << rel_R_fast
                               << ", wrms=" << last_stage_wrms_norm_
                               << ", wrms_growth=" << last_stage_wrms_growth_
@@ -13916,19 +13924,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 auto F_full_check = computeUnifiedRHS(U_new, RhsMode::Full);
                 if (has_physics) F_full_check = F_full_check + F_phys;
                 auto R_full_cpu = (k.detach() - F_full_check).detach().to(torch::kCPU);
-                float R_full_norm_unscaled = R_full_cpu.norm().item<float>();
-                // v20.14r50-fix3: Use scaled RMS (same metric as Newton solver) for
-                // coherent thresholds. Unscaled L2 grows with √N, making fixed thresholds
-                // meaningless (Newton reports 0.3, REEVAL reports 825 for same residual).
-                float sqrt_N_reeval = std::sqrt(static_cast<float>(R_full_cpu.numel()));
-                float R_full_norm = R_full_norm_unscaled / sqrt_N_reeval;  // Scaled RMS
+                const double R_full_norm = wrf::sdirk3::guarded_item<double>(
+                    wrf::sdirk3::rms_norm_fp64(R_full_cpu));
                 // v20.14r40: Dual indicators — floored for gate, raw for diagnostics.
                 // Gate uses max(||K||, K_floor) to prevent rel_R_full explosion when ||K|| is small.
                 // Raw ratio logged separately for diagnostics.
                 float K_floor = wrf::sdirk3::g_sdirk3_config.stage_gate_K_floor;
-                float K_denom = std::max(K_norm, K_floor);
-                float rel_R_full = R_full_norm / K_denom;
-                float rel_R_full_raw = (K_norm > 1e-15f) ? R_full_norm / K_norm : R_full_norm;
+                const double rel_R_full = wrf::sdirk3::relative_rms_residual(
+                    R_full_norm, K_rms, K_floor);
+                const double rel_R_full_raw = wrf::sdirk3::relative_rms_residual(R_full_norm, K_rms);
                 last_stage_rel_R_full_ = rel_R_full;
                 last_stage_rel_R_full_raw_ = rel_R_full_raw;  // v20.14r41: raw for post-damp
                 last_stage_R_full_norm_ = R_full_norm;
@@ -13937,9 +13941,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
                     std::cerr << "[RESIDUAL_REEVAL] Stage " << stage << ": "
                               << "||R_full||_rms=" << R_full_norm
-                              << " (unscaled=" << R_full_norm_unscaled << ")"
                               << ", ||R_newton||=" << stats.final_residual
-                              << ", ||K||=" << K_norm
+                              << ", ||K||_rms=" << K_rms
                               << ", rel_R_full=" << rel_R_full
                               << " (raw=" << rel_R_full_raw << ")"
                               << ", wrms=" << last_stage_wrms_norm_
@@ -14027,8 +14030,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                 auto F_post = computeUnifiedRHS(U_new_post, post_damp_mode);
                 if (post_damp_mode == RhsMode::Full && has_physics) F_post = F_post + F_phys;
                 auto R_post_vec = (k.detach() - F_post).detach();
-                float R_post_abs = R_post_vec.norm().item<float>() /
-                    std::sqrt(static_cast<float>(R_post_vec.numel()));  // Scaled RMS
+                // The stored absolute metric is FP32; use the same FP64 reduction
+                // and final conversion as the pre-damp metric.
+                const float R_post_abs = static_cast<float>(wrf::sdirk3::guarded_item<double>(
+                    wrf::sdirk3::rms_norm_fp64(R_post_vec)));
 #ifdef DMPARALLEL
                 const float R_post_abs_global = stage_metric_global_max_mpi(R_post_abs);
 #else
@@ -14059,11 +14064,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
                               << std::endl;
                 }
             } catch (const std::exception& e) {
-                // Re-eval failed: keep damped K, estimate absolute norm proportionally.
-                // v20.14r34c: Don't overwrite rel_R_full (keep pre-damp Newton ratio).
-                last_stage_R_full_norm_ = R_pre_abs_global * extra_damp;
+                // An unevaluated direction has no valid decrease estimate.
+                // Restore the previously evaluated stage and its metric.
+                k = k_pre_damp;
+                last_stage_R_full_norm_ = R_pre_abs_global;
                 std::cerr << "[NEWTON DAMP] Stage " << stage
-                          << ": damp by " << extra_damp
+                          << ": reverted unevaluated damp=" << extra_damp
                           << " (pre=" << pre_damp_rel
                           << ", re-eval failed: " << e.what() << ")" << std::endl;
             }
@@ -14165,6 +14171,57 @@ static uint64_t sdirk3_rhs_operand_digest(const torch::Tensor& t) {
     return h;
 }
 
+bool TileSDIRK3UnifiedSolver::isPackedPeriodicDomain() const {
+    // WRF's single whole-domain tile includes one mass endpoint per axis.
+    // Physical-dimension fixtures and full-halo views use another layout.
+    return grid_info_ && nprocx_ * nprocy_ == 1 &&
+        !wrf::sdirk3::g_sdirk3_config.enable_ad_halo_exchange &&
+        config_flags_periodic_x_ && !config_flags_periodic_y_ &&
+        config_flags_symmetric_ys_ && config_flags_symmetric_ye_ &&
+        !config_flags_open_xs_ && !config_flags_open_xe_ &&
+        !config_flags_open_ys_ && !config_flags_open_ye_ &&
+        !config_flags_specified_ && !config_flags_nested_ &&
+        grid_info_->its == grid_info_->ids && grid_info_->ite == grid_info_->ide &&
+        grid_info_->jts == grid_info_->jds && grid_info_->jte == grid_info_->jde &&
+        nx_ == grid_info_->ide - grid_info_->ids + 1 &&
+        ny_ == grid_info_->jde - grid_info_->jds + 1 && nx_ >= 3 && ny_ >= 3 &&
+        nx_u_ == nx_ + 1 && ny_v_ == ny_ + 1;
+}
+
+torch::Tensor TileSDIRK3UnifiedSolver::projectStateBoundaries(const torch::Tensor& state) {
+    if ((!config_flags_symmetric_xs_ && !config_flags_symmetric_xe_ &&
+         !config_flags_symmetric_ys_ && !config_flags_symmetric_ye_) || !state.defined())
+        return state;
+    auto [u, v, w, ph, t, mu] = extractStateVariables(state);
+    const auto pu = wrf::sdirk3::project_symmetric_normal_velocity(
+        u, 2, its_, ids_, ide_, config_flags_symmetric_xs_ && !config_flags_periodic_x_,
+                              config_flags_symmetric_xe_ && !config_flags_periodic_x_);
+    const auto pv = wrf::sdirk3::project_symmetric_normal_velocity(
+        v, 0, jts_, jds_, jde_, config_flags_symmetric_ys_ && !config_flags_periodic_y_,
+                              config_flags_symmetric_ye_ && !config_flags_periodic_y_);
+    if (isPackedPeriodicDomain()) {
+        // Q extends the physical core with WRF periodic-X aliases and
+        // symmetric-Y ghosts. Applying Q to both RHS input and output closes
+        // the stage equation under those constraints: F_c(U) = Q F(Q U).
+        // Q is a copy/reflection map, so autograd must accumulate Q^T on pullback.
+        const int64_t n = nx_ - 1, m = ny_ - 1;
+        auto mass = [&](const torch::Tensor& q) {
+            const auto core = q.slice(0, 0, m).slice(2, 0, n);
+            const auto x = torch::cat({core, core.slice(2, 0, 1)}, 2);
+            return torch::cat({x, x.slice(0, m - 1, m)}, 0);
+        };
+        const auto uc = pu.slice(0, 0, m).slice(2, 0, n);
+        const auto ux = torch::cat({uc, uc.slice(2, 0, 2)}, 2);
+        const auto ub = torch::cat({ux, ux.slice(0, m - 1, m)}, 0);
+        const auto vc = pv.slice(0, 0, m + 1).slice(2, 0, n);
+        const auto vx = torch::cat({vc, vc.slice(2, 0, 1)}, 2);
+        const auto vb = torch::cat({vx, -vx.slice(0, m - 1, m)}, 0);
+        return combineStateVariables(ub, vb, mass(w), mass(ph), mass(t),
+                                     mass(mu.unsqueeze(1)).squeeze(1));
+    }
+    return combineStateVariables(pu, pv, w, ph, t, mu);
+}
+
 torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U, RhsMode mode) {
     // Step 7b: Detect full-halo input and redirect
     {
@@ -14229,6 +14286,41 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         if (marker != nullptr) {
             wrf::sdirk3::sdirk3_run_emit_violation(marker);
             wrf::sdirk3::mpi_safety::abort_c_abi_exception("computeUnifiedRHS", detail);
+        }
+    }
+
+    const bool use_wrf_mass_flux = !g_export_coupled_slow &&
+        wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp();
+    const bool canonical_horizontal = use_wrf_mass_flux &&
+        wdamp_contract_.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic &&
+        wdamp_contract_.y_policy == wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate;
+    // Native NH term 4 requires the ordinary ARK face geometry and the
+    // pressure/EOS branch. Reject missing prerequisites before RHS arithmetic.
+    if (non_hydrostatic_) {
+        TORCH_CHECK(canonical_horizontal,
+                    "SDIRK3_NH_GEOMETRY_UNSUPPORTED: require ordinary ARK, "
+                    "periodic X and symmetric Y");
+        const std::array<int64_t, 3> mass_shape{ny_, nz_, nx_};
+        const std::array<int64_t, 3> w_shape{ny_, nz_w_, nx_};
+        TORCH_CHECK(p_base_.defined() && p_base_.sizes() == torch::IntArrayRef(mass_shape) &&
+                    th_base_.defined() && th_base_.sizes() == torch::IntArrayRef(mass_shape) &&
+                    ph_base_.defined() && ph_base_.sizes() == torch::IntArrayRef(w_shape) &&
+                    mu_base_.defined() &&
+                    mu_base_.sizes() == torch::IntArrayRef({ny_, nx_}),
+                    "SDIRK3_NH_BASE_STATE_MISSING: require native pressure, theta, Phi and mass base state");
+        for (const auto* q : {&fnm_, &fnp_, &c1h_, &c2h_}) {
+            TORCH_CHECK(q->defined() && q->dim() == 1 && q->numel() >= nz_,
+                        "SDIRK3_NH_INPUT_INVALID: missing vertical coefficients");
+        }
+        for (const auto* q : {&msfux_, &msfuy_}) {
+            TORCH_CHECK(q->defined() &&
+                        q->sizes() == torch::IntArrayRef({ny_, nx_u_}),
+                        "SDIRK3_NH_INPUT_INVALID: require native U face maps");
+        }
+        for (const auto* q : {&msfvx_, &msfvy_}) {
+            TORCH_CHECK(q->defined() &&
+                        q->sizes() == torch::IntArrayRef({ny_v_, nx_}),
+                        "SDIRK3_NH_INPUT_INVALID: require native V face maps");
         }
     }
 
@@ -14362,7 +14454,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // FIX Round153: Removed orphan flush() from hot path
 
     PROFILE_START(rhs_unpack);
-    auto [u, v, w, ph, t, mu] = extractStateVariables(U);
+    const auto constrained_state = projectStateBoundaries(U);
+    auto [u, v, w, ph, t, mu] = extractStateVariables(constrained_state);
     PROFILE_END(rhs_unpack);
 
     // CRITICAL FIX: Extract w_ref from reference state for BOTH:
@@ -14637,29 +14730,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
     }
 
-    // 9F.D118: WRF's Omega, for the sites that have been using mu*w.
-    //
-    // The core RHS aliases `Omega = rom` where `rom = mu_full * w`, on the stated belief
-    // that "Omega is alias for rom in WRF". It is not. In WRF `rom = mu_d*w` is the COUPLED
-    // VERTICAL MOMENTUM (the rw prognostic); ww/Omega is mu*d(eta)/dt, produced by
-    // calc_ww_cp as a running vertical integral of the HORIZONTAL mass divergence:
-    //
-    //     ww(i,1,j) = 0. ;  ww(i,kte,j) = 0.
-    //     ww(i,k,j) = ww(i,k-1,j) - dnw(k-1)*c1h(k-1)*dmdt(i) - divv(i,k-1)
-    //
-    // Different units (Pa/s vs Pa*m/s), different inputs (u,v,mu vs w), and EXACTLY ZERO at
-    // both boundaries by construction rather than by a mask. That last property is why the
-    // measured signature is "stage 1 clean, stages 2-3 wrong": mu*w is only zero while w is.
-    //
-    // compute_wrf_ww_cp is the complete audited recurrence (PR 9C.1) with a parity contract
-    // in the test suite. It already serves the W-damping path; the core RHS never adopted it,
-    // which is the open "production 배선" item from that PR. Memoised because both consumer
-    // sites (mu div_z, ph z_adv) are in this same evaluation and it is not free.
-    //
-    // Opt-in. When off, nothing here is evaluated and the mu*w sites are untouched.
-    torch::Tensor wrf_ww_cp_memo;
-    auto wrf_ww_cp = [&]() -> torch::Tensor {
-        if (wrf_ww_cp_memo.defined()) return wrf_ww_cp_memo;
+    // Ordinary ARK uses one hybrid/map-aware mass-flux diagnosis for Omega,
+    // column continuity, and potential-temperature transport. Split export
+    // retains its driver-supplied flux/tendency convention.
+    wrf::sdirk3::WRFMassFlux mass_flux_memo;
+    auto wrf_mass_flux = [&]() -> const wrf::sdirk3::WRFMassFlux& {
+        if (mass_flux_memo.omega.defined()) return mass_flux_memo;
         const int64_t ny_o = mu_full.size(0);
         const int64_t nx_o = mu_full.size(1);
         const int64_t nxu_o = u.size(2);
@@ -14686,15 +14762,40 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         auto dev = u.device();
         auto dtp = u.scalar_type();
         auto dnw_t = -torch::reciprocal(getRdnwTensor(dev, dtp, nz_));
-        wrf_ww_cp_memo = wrf::sdirk3::compute_wrf_ww_cp(
-            u, v, mu, mu_base_.to(dev, dtp).reshape({ny_o, nx_o}),
+        const bool packed = isPackedPeriodicDomain();
+        const int64_t m = ny_o - (packed ? 1 : 0);
+        const int64_t n = nx_o - (packed ? 1 : 0);
+        // calc_ww_cp operates on independent physical cells. Packed endpoint
+        // aliases must not participate as extra cells in its seam averages.
+        mass_flux_memo = wrf::sdirk3::diagnose_wrf_mass_flux(
+            u.slice(0, 0, m).slice(2, 0, n + 1),
+            v.slice(0, 0, m + 1).slice(2, 0, n),
+            mu.slice(0, 0, m).slice(1, 0, n),
+            mu_base_.to(dev, dtp).slice(0, 0, m).slice(1, 0, n),
             c1h_.to(dev, dtp).slice(0, 0, nz_), c2h_.to(dev, dtp).slice(0, 0, nz_),
             dnw_t, rdx, rdy,
-            msftx_.to(dev, dtp), msfuy_.to(dev, dtp),
-            torch::reciprocal(msfvx_.to(dev, dtp)),
+            msftx_.to(dev, dtp).slice(0, 0, m).slice(1, 0, n),
+            msfuy_.to(dev, dtp).slice(0, 0, m).slice(1, 0, n + 1),
+            torch::reciprocal(msfvx_.to(dev, dtp).slice(0, 0, m + 1).slice(1, 0, n)),
             wdamp_contract_.x_policy, wdamp_contract_.y_policy);
-        return wrf_ww_cp_memo;
+        if (packed) {
+            auto extend_scalar = [m](const torch::Tensor& f) {
+                const auto x = torch::cat({f, f.slice(f.dim() - 1, 0, 1)}, f.dim() - 1);
+                return torch::cat({x, x.slice(0, m - 1, m)}, 0);
+            };
+            mass_flux_memo.omega = extend_scalar(mass_flux_memo.omega);
+            mass_flux_memo.mass_tendency_over_map_y =
+                extend_scalar(mass_flux_memo.mass_tendency_over_map_y);
+            const auto ux = torch::cat({mass_flux_memo.u,
+                mass_flux_memo.u.slice(2, 1, 2)}, 2);
+            mass_flux_memo.u = torch::cat({ux, ux.slice(0, m - 1, m)}, 0);
+            const auto vx = torch::cat({mass_flux_memo.v,
+                mass_flux_memo.v.slice(2, 0, 1)}, 2);
+            mass_flux_memo.v = torch::cat({vx, -vx.slice(0, m - 1, m)}, 0);
+        }
+        return mass_flux_memo;
     };
+    auto wrf_ww_cp = [&]() { return wrf_mass_flux().omega; };
 
     // GRADIENT FIX: Compute mu_full safety check unconditionally (no control-flow .item())
     // The torch::where() operation below is differentiable regardless of the condition
@@ -15090,14 +15191,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     if (!msftx_.defined() || msftx_.numel() == 0 || 
         !msfty_.defined() || msfty_.numel() == 0) {        // Initialize to unity if not set
         // PARITY FIX 2025-12-11: Use state tensor options for device alignment
-        // PARITY FIX 2025-12-19: Track fallback creation to trigger cache invalidation
         if (!msftx_.defined() || msftx_.numel() == 0) {
             msftx_ = torch::ones({ny_, nx_}, u.options());
-            invalidateDivergenceCache();  // New tensor created
+
         }
         if (!msfty_.defined() || msfty_.numel() == 0) {
             msfty_ = torch::ones({ny_, nx_}, u.options());
-            invalidateDivergenceCache();  // New tensor created
+
         }
     }
 
@@ -15110,6 +15210,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     {
         auto target_dev = u.device();
         auto target_dtype = u.scalar_type();
+        // MPS map copies must complete before their CPU source can be released.
+        const bool map_copy_non_blocking = target_dev.is_cuda();
         bool need_refresh = (msf_epoch_cached_ != msf_epoch_) ||
                             (msftx_.defined() && (msftx_.device() != target_dev ||
                                                   msftx_.scalar_type() != target_dtype));
@@ -15117,35 +15219,35 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         if (need_refresh) {
             // Refresh from CPU originals (or current tensors if no CPU originals)
             if (msftx_cpu_.defined() && msftx_cpu_.numel() > 0) {
-                msftx_ = msftx_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msftx_ = msftx_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msftx_.defined() && msftx_.device() != target_dev) {
-                msftx_ = msftx_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msftx_ = msftx_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
             if (msfty_cpu_.defined() && msfty_cpu_.numel() > 0) {
-                msfty_ = msfty_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfty_ = msfty_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msfty_.defined() && msfty_.device() != target_dev) {
-                msfty_ = msfty_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfty_ = msfty_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
             if (msfuy_cpu_.defined() && msfuy_cpu_.numel() > 0) {
-                msfuy_ = msfuy_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfuy_ = msfuy_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msfuy_.defined() && msfuy_.device() != target_dev) {
-                msfuy_ = msfuy_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfuy_ = msfuy_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
             if (msfvx_cpu_.defined() && msfvx_cpu_.numel() > 0) {
-                msfvx_ = msfvx_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfvx_ = msfvx_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msfvx_.defined() && msfvx_.device() != target_dev) {
-                msfvx_ = msfvx_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfvx_ = msfvx_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
             // PARITY FIX 2025-12-19: msfux_/msfvy_ now have CPU originals for compute_defor13/23
             if (msfux_cpu_.defined() && msfux_cpu_.numel() > 0) {
-                msfux_ = msfux_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfux_ = msfux_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msfux_.defined() && msfux_.device() != target_dev) {
-                msfux_ = msfux_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfux_ = msfux_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
             if (msfvy_cpu_.defined() && msfvy_cpu_.numel() > 0) {
-                msfvy_ = msfvy_cpu_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfvy_ = msfvy_cpu_.to(target_dev, target_dtype, map_copy_non_blocking);
             } else if (msfvy_.defined() && msfvy_.device() != target_dev) {
-                msfvy_ = msfvy_.to(target_dev, target_dtype, /*non_blocking=*/true);
+                msfvy_ = msfvy_.to(target_dev, target_dtype, map_copy_non_blocking);
             }
 
             // Multi-tile safety: sanitize map factors once per refresh.
@@ -15174,14 +15276,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             sanitize_msf(msfvy_, "msfvy");
 
             msf_epoch_cached_ = msf_epoch_;
-            invalidateDivergenceCache();
+
         }
         // Legacy alignment for other tensors (now handled above)
-        bool map_factors_changed = false;
         auto align_msf = [&](torch::Tensor& t) {
             if (t.defined() && t.numel() > 0 && t.device() != target_dev) {
-                t = t.to(target_dev, target_dtype, /*non_blocking=*/true);
-                map_factors_changed = true;
+                t = t.to(target_dev, target_dtype, map_copy_non_blocking);
             }
         };
         // These are now already aligned above, but keep for safety
@@ -15192,10 +15292,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         align_msf(msfvx_);
         align_msf(msfvy_);
 
-        // PARITY FIX 2025-12-19: Only invalidate if map factors actually changed
-        if (map_factors_changed) {
-            invalidateDivergenceCache();
-        }
     }
 
     // PARITY FIX 2025-12-13: Device alignment for base state tensors
@@ -16180,7 +16276,154 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     auto v_at_mass = avg_v_to_mass(v);
     auto w_at_mass = avg_w_to_mass(w);
 
+    // Share the exact conversion denominators with periodic momentum advection.
+    // Get mu at staggered points
+    auto mu_at_u = avg_x_to_u_2d(mu, nx_u_);
+    auto mu_at_v = avg_y_to_v_2d(mu, ny_v_);
+    auto mu_at_w = mu;  // W is at mass points horizontally
+
+    // Get mu_base at staggered points for correct total dry air mass
+    auto mu_base_at_u = avg_x_to_u_2d(mu_base_, nx_u_);
+    auto mu_base_at_v = avg_y_to_v_2d(mu_base_, ny_v_);
+    auto mu_base_at_w = mu_base_;  // W is at mass points
+
+    // Expand mu to 3D for each staggered grid
+    auto mu_at_u_3d = mu_at_u.unsqueeze(1).expand({-1, nz_, -1});
+    auto mu_at_v_3d = mu_at_v.unsqueeze(1).expand({-1, nz_, -1});
+    auto mu_at_w_3d = mu_at_w.unsqueeze(1).expand({-1, nz_w_, -1});
+
+    // Expand mu_base to 3D for each staggered grid
+    auto mu_base_at_u_3d = mu_base_at_u.unsqueeze(1).expand({-1, nz_, -1});
+    auto mu_base_at_v_3d = mu_base_at_v.unsqueeze(1).expand({-1, nz_, -1});
+    auto mu_base_at_w_3d = mu_base_at_w.unsqueeze(1).expand({-1, nz_w_, -1});
+
+    const float eps_u = getAutocastAwareEps(mu_at_u_3d);
+    const float eps_v = getAutocastAwareEps(mu_at_v_3d);
+    const float eps_w = getAutocastAwareEps(mu_at_w_3d);
+    const auto velocity_mass_u = mu_at_u_3d + mu_base_at_u_3d + eps_u;
+    const auto velocity_mass_v = mu_at_v_3d + mu_base_at_v_3d + eps_v;
+    const auto velocity_mass_w = mu_at_w_3d + mu_base_at_w_3d + eps_w;
+
+    const bool momentum_packed = isPackedPeriodicDomain();
+    const int64_t momentum_m = ny_ - (momentum_packed ? 1 : 0);
+    const int64_t momentum_n = nx_ - (momentum_packed ? 1 : 0);
+    const auto extend_u = [&](const torch::Tensor& q) {
+        if (!momentum_packed) return q;
+        const auto x = torch::cat({q,q.slice(2,1,2)},2);
+        return torch::cat({x,x.slice(0,momentum_m-1,momentum_m)},0);
+    };
+    const auto extend_v = [&](const torch::Tensor& q, bool odd) {
+        if (!momentum_packed) return q;
+        const auto x = torch::cat({q,q.slice(2,0,1)},2);
+        const auto last = x.slice(0,momentum_m-1,momentum_m);
+        return torch::cat({x,odd ? -last : last},0);
+    };
+    const auto extend_w = [&](const torch::Tensor& q) {
+        if (!momentum_packed) return q;
+        const auto x = torch::cat({q,q.slice(2,0,1)},2);
+        return torch::cat({x,x.slice(0,momentum_m-1,momentum_m)},0);
+    };
+    torch::Tensor level_mass_u, level_mass_v, level_mass_w;
+    if (canonical_horizontal) {
+        const auto mass = mu_full.slice(0,0,momentum_m).slice(1,0,momentum_n);
+        const auto mass_u = stagger_wrf_mass_field(mass,1,wdamp_contract_.x_policy);
+        const auto mass_v = stagger_wrf_mass_field(mass,0,wdamp_contract_.y_policy);
+        const auto c1h = c1h_.to(u.device(),u.scalar_type()).slice(0,0,nz_).view({1,-1,1});
+        const auto c2h = c2h_.to(u.device(),u.scalar_type()).slice(0,0,nz_).view({1,-1,1});
+        const auto c1f = c1f_.to(w.device(),w.scalar_type()).slice(0,0,nz_w_).view({1,-1,1});
+        const auto c2f = c2f_.to(w.device(),w.scalar_type()).slice(0,0,nz_w_).view({1,-1,1});
+        level_mass_u = extend_u(c1h*mass_u.unsqueeze(1)+c2h);
+        level_mass_v = extend_v(c1h*mass_v.unsqueeze(1)+c2h,false);
+        level_mass_w = extend_w(c1f*mass.unsqueeze(1)+c2f);
+    }
+
     if (do_explicit) {  // Step 3: ADVECTION (slow-mode / explicit)
+
+    const bool packed_periodic_x = isPackedPeriodicDomain() &&
+        u.size(0) == ny_ && u.size(2) == nx_ + 1 &&
+        v.size(0) == ny_ + 1 && v.size(2) == nx_;
+    std::pair<torch::Tensor, torch::Tensor> periodic_momentum_x;
+    if (packed_periodic_x && !canonical_horizontal) {
+        periodic_momentum_x = advectPackedPeriodicMomentumX(
+            u, v, mu_full, rdx, g_export_coupled_slow);
+        if (!g_export_coupled_slow) {
+            periodic_momentum_x.first = periodic_momentum_x.first * velocity_mass_u;
+            periodic_momentum_x.second = periodic_momentum_x.second * velocity_mass_v;
+        }
+    }
+
+    wrf::sdirk3::HorizontalMomentumFluxes horizontal;
+    if (canonical_horizontal) {
+        const auto& mass_flux = wrf_mass_flux();
+        const auto flux = [&](const std::array<torch::Tensor,6>& q,const torch::Tensor& transport) {
+            const int order = wrf::sdirk3::g_sdirk3_config.advection_order;
+            if (order >= 5) return flux5_upwind(q[0],q[1],q[2],q[3],q[4],q[5],transport);
+            if (order >= 3) return flux3_upwind(q[1],q[2],q[3],q[4],transport);
+            return flux2_centered(q[2],q[3],transport);
+        };
+        const auto m=momentum_m, n=momentum_n;
+        horizontal = wrf::sdirk3::wrf_horizontal_momentum(
+            u.slice(0,0,m).slice(2,0,n+1),v.slice(0,0,m+1).slice(2,0,n),
+            w.slice(0,0,m).slice(2,0,n),
+            mass_flux.u.slice(0,0,m).slice(2,0,n+1),
+            mass_flux.v.slice(0,0,m+1).slice(2,0,n),
+            msfux_.to(u.device(),u.scalar_type()).slice(0,0,m).slice(1,0,n+1),
+            msfvy_.to(v.device(),v.scalar_type()).slice(0,0,m+1).slice(1,0,n),
+            msftx_.to(w.device(),w.scalar_type()).slice(0,0,m).slice(1,0,n),
+            fnm_.to(w.device(),w.scalar_type()),fnp_.to(w.device(),w.scalar_type()),rdx,rdy,flux);
+        const auto factor_u = velocity_mass_u /
+            (level_mass_u/msfuy_.to(u.device(),u.scalar_type()).unsqueeze(1));
+        const auto factor_v = velocity_mass_v /
+            (level_mass_v/msfvx_.to(v.device(),v.scalar_type()).unsqueeze(1));
+        const auto factor_w = velocity_mass_w /
+            (level_mass_w/msfty_.to(w.device(),w.scalar_type()).unsqueeze(1));
+        horizontal.ux = extend_u(horizontal.ux)*factor_u;
+        horizontal.uy = extend_u(horizontal.uy)*factor_u;
+        horizontal.vx = extend_v(horizontal.vx,true)*factor_v;
+        horizontal.vy = extend_v(horizontal.vy,true)*factor_v;
+        horizontal.wx = extend_w(horizontal.wx)*factor_w;
+        horizontal.wy = extend_w(horizontal.wy)*factor_w;
+    }
+
+    std::pair<torch::Tensor, torch::Tensor> wrf_vertical_uv;
+    if (use_wrf_mass_flux) {
+        // Use physical cells for both Omega and coupled masses. The same
+        // boundary averaging is used by calc_ww_cp, then aliases are restored.
+        const bool packed = isPackedPeriodicDomain();
+        const int64_t m = ny_ - (packed ? 1 : 0);
+        const int64_t n = nx_ - (packed ? 1 : 0);
+        const auto om = wrf_ww_cp().slice(0, 0, m).slice(2, 0, n);
+        const auto mass = mu_full.slice(0, 0, m).slice(1, 0, n);
+        using wrf::sdirk3::stagger_wrf_mass_field;
+        const auto omega_u = stagger_wrf_mass_field(om, 2, wdamp_contract_.x_policy);
+        const auto omega_v = stagger_wrf_mass_field(om, 0, wdamp_contract_.y_policy);
+        const auto mass_u = stagger_wrf_mass_field(mass, 1, wdamp_contract_.x_policy);
+        const auto mass_v = stagger_wrf_mass_field(mass, 0, wdamp_contract_.y_policy);
+        const auto c1 = c1h_.to(u.device(), u.scalar_type()).slice(0, 0, nz_).view({1, nz_, 1});
+        const auto c2 = c2h_.to(u.device(), u.scalar_type()).slice(0, 0, nz_).view({1, nz_, 1});
+        const auto uy = msfuy_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n + 1).unsqueeze(1);
+        const auto vx = msfvx_.to(u.device(), u.scalar_type()).slice(0, 0, m + 1).slice(1, 0, n).unsqueeze(1);
+        const auto vy = msfvy_.to(u.device(), u.scalar_type()).slice(0, 0, m + 1).slice(1, 0, n).unsqueeze(1);
+        const auto alpha_u = (c1 * mass_u.unsqueeze(1) + c2) / uy;
+        const auto alpha_v = (c1 * mass_v.unsqueeze(1) + c2) / vx;
+        const auto rdnw = getRdnwTensor(u.device(), u.scalar_type(), nz_);
+        const auto rdn = getRdnTensor(u.device(), u.scalar_type(), nz_);
+        const float delta = wrf::sdirk3::g_sdirk3_config.sign_smooth_delta;
+        auto du = wrf_vert_adv3(u.slice(0, 0, m).slice(2, 0, n + 1),
+                               omega_u, rdnw, rdn, delta) / alpha_u;
+        auto dv = wrf_vert_adv3(v.slice(0, 0, m + 1).slice(2, 0, n),
+                               omega_v, rdnw, rdn, delta) * (vy / vx) / alpha_v;
+        if (packed) {
+            const auto ux = torch::cat({du, du.slice(2, 1, 2)}, 2);
+            du = torch::cat({ux, ux.slice(0, m - 1, m)}, 0);
+            const auto vx = torch::cat({dv, dv.slice(2, 0, 1)}, 2);
+            dv = torch::cat({vx, -vx.slice(0, m - 1, m)}, 0);
+        }
+        // Other contributions still use a legacy M*q accumulator. Reweight
+        // these physical tendencies with its exact final denominator so the
+        // later division by M returns the WRF raw/alpha contribution.
+        wrf_vertical_uv = {du * velocity_mass_u, dv * velocity_mass_v};
+    }
 
     // --- 3.1: U-Momentum Advection ---
     {
@@ -16211,11 +16454,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         
         // X-advection: -∂(ru*u)/∂x (WRF formulation)
         // NOTE: Map scale factors will be applied INSIDE the advection functions
-        auto ru_adv_x = advect_u_point_scalar_x(ru, u, rdx);
+        auto ru_adv_x = canonical_horizontal ? horizontal.ux
+                         : packed_periodic_x ? periodic_momentum_x.first
+                                          : advect_u_point_scalar_x(ru, u, rdx);
         
         // Y-advection: -∂(rv*u)/∂y (WRF formulation)  
         // NOTE: Map scale factors will be applied INSIDE the advection functions
-        auto ru_adv_y = advect_u_point_scalar_y(ru, v, rdy);
+        auto ru_adv_y = canonical_horizontal ? horizontal.uy
+                         : advect_u_point_scalar_y(ru, v, rdy);
         
         // Combine horizontal advection (map factors already included)
         auto ru_adv_horiz = ru_adv_x + ru_adv_y;  // WRF: horizontal advection
@@ -16246,7 +16492,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // rdnw_ may be empty while grid_info_->rdnw is valid.
         torch::Tensor rdnw_for_u_adv = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
         bool have_rdnw_u = rdnw_for_u_adv.defined() && rdnw_for_u_adv.numel() >= nz_ - 1;
-        if (g_export_coupled_slow && split_omega_ww_.defined() && have_rdnw_u && nz_ > 3) {
+        if (use_wrf_mass_flux) {
+            ru_adv_z = wrf_vertical_uv.first;
+            ru_adv_z_work_ = ru_adv_z;
+        } else if (g_export_coupled_slow && split_omega_ww_.defined() && have_rdnw_u && nz_ > 3) {
             // SPLIT PATH (2026-07-11): WRF vertical order-3 for u (v_mom_adv_order=3) via
             // wrf_vert_adv3 with Omega x-averaged to u-points (WRF advect_u:
             // 0.5*(rom(i)+rom(i-1))). Omega's ghost col (= col 0 copy) makes the seam pair
@@ -16525,10 +16774,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
         
         // X-advection: -∂(ru*v)/∂x (WRF formulation)
-        auto rv_adv_x = advect_v_point_scalar_x(rv, u, rdx);
+        auto rv_adv_x = canonical_horizontal ? horizontal.vx
+                         : packed_periodic_x ? periodic_momentum_x.second
+                                          : advect_v_point_scalar_x(rv, u, rdx);
         
         // Y-advection: -∂(rv*v)/∂y (WRF formulation)
-        auto rv_adv_y = advect_v_point_scalar_y(rv, v, rdy);
+        auto rv_adv_y = canonical_horizontal ? horizontal.vy
+                         : advect_v_point_scalar_y(rv, v, rdy);
         
         // Combine horizontal advection (map factors already included in advection functions)
         auto rv_adv_horiz = rv_adv_x + rv_adv_y;  // WRF: horizontal advection
@@ -16559,7 +16811,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // rdnw_ may be empty while grid_info_->rdnw is valid.
         torch::Tensor rdnw_for_v_adv = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
         bool have_rdnw_v = rdnw_for_v_adv.defined() && rdnw_for_v_adv.numel() >= nz_ - 1;
-        if (g_export_coupled_slow && split_omega_ww_.defined() && have_rdnw_v && nz_ > 3) {
+        if (use_wrf_mass_flux) {
+            V_adv_z = wrf_vertical_uv.second;
+            rv_adv_z_work_ = V_adv_z;
+        } else if (g_export_coupled_slow && split_omega_ww_.defined() && have_rdnw_v && nz_ > 3) {
             // SPLIT PATH (2026-07-11): WRF vertical order-3 for v via wrf_vert_adv3 with
             // Omega y-averaged to v-points (WRF advect_v: 0.5*(rom(j)+rom(j-1))); wall
             // v-rows take the adjacent interior value (symmetric-y; wall v is frozen by
@@ -16767,6 +17022,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             }
         }
         
+        torch::Tensor rw_adv_horiz;
+        if (canonical_horizontal) {
+            rw_adv_horiz = horizontal.wx + horizontal.wy;
+        } else {
         // X-advection: -∂(ru*w)/∂x (WRF formulation)
         auto muu_2d_w = avg_x_to_u_2d(mu_full, u.size(2));
         auto muu_w = muu_2d_w.unsqueeze(1).expand({-1, u.size(1), -1});
@@ -16831,8 +17090,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         auto rw_adv_horiz_mass = map_product * rw_adv_sum;
         
         // Interpolate horizontal advection back to w-points
-        auto rw_adv_horiz = avg_mass_to_w(rw_adv_horiz_mass);
+        rw_adv_horiz = avg_mass_to_w(rw_adv_horiz_mass);
         
+        }
+
         // AUTOGRAD FIX: Build rw_adv_z functionally instead of mutating zeros_like tensor
         torch::Tensor rw_adv_z;
 
@@ -16842,7 +17103,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         torch::Tensor rdn_for_w_adv = getRdnTensor(options.device(), options.dtype().toScalarType(), nz_);
         bool have_vert_metrics_w = (rdnw_for_w_adv.defined() && rdnw_for_w_adv.numel() >= nz_ - 1) ||
                                    (rdn_for_w_adv.defined() && rdn_for_w_adv.numel() >= nz_);
-        if (g_export_coupled_slow && split_omega_ww_.defined() && have_vert_metrics_w && nz_ > 3) {
+        if (use_wrf_mass_flux) {
+            const auto c1 = c1f_.to(w.device(), w.scalar_type()).slice(0, 0, nz_w_).view({1, nz_w_, 1});
+            const auto c2 = c2f_.to(w.device(), w.scalar_type()).slice(0, 0, nz_w_).view({1, nz_w_, 1});
+            const auto alpha = (c1 * mu_full.unsqueeze(1) + c2) /
+                               msfty_.to(w.device(), w.scalar_type()).unsqueeze(1);
+            // WRF's W-staggered operator includes the upper-lid flux pickup.
+            // Convert raw WRF coupled units to the legacy accumulator units.
+            rw_adv_z = wrf_vert_adv3_w(w, wrf_ww_cp(), rdn_for_w_adv,
+                wrf::sdirk3::g_sdirk3_config.sign_smooth_delta) / alpha * velocity_mass_w;
+            rw_adv_z_work_ = rw_adv_z;
+        } else if (g_export_coupled_slow && split_omega_ww_.defined() && have_vert_metrics_w && nz_ > 3) {
             // SPLIT PATH (2026-07-11): WRF advect_w vertical order-3 (wrf_vert_adv3_w) —
             // mass-level fluxes from 0.5*(Omega(k)+Omega(k+1)), flux3 upwind (ua=-vel),
             // +|rdn|*d tendency at interior w-levels and the WRF LID pickup term (legacy
@@ -17038,12 +17309,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         auto muu_2d_theta = avg_x_to_u_2d(mu_full, u.size(2));  // WRF: muu = dry mass at u-points
         int nz_t_actual = t.size(1);
         auto muu_theta = muu_2d_theta.unsqueeze(1).expand({-1, nz_t_actual, -1});
-        auto ru_theta = muu_theta * u;  // WRF: ru = coupled momentum (μu)
+        auto ru_theta = use_wrf_mass_flux ? wrf_mass_flux().u : muu_theta * u;
 
         // Compute rv = μv at v-staggered points for Y-flux
         auto muv_theta = avg_y_to_v_2d(mu_full, v.size(0));  // WRF: muv = dry mass at v-points
         auto muv_3d_theta = muv_theta.unsqueeze(1).expand({-1, v.size(1), -1});
-        auto rv_theta = muv_3d_theta * v;  // WRF: rv = coupled momentum (μv)
+        auto rv_theta = use_wrf_mass_flux ? wrf_mass_flux().v : muv_3d_theta * v;
 
         // Use perturbation t for advection with mass-coupled momentum
         // X-advection: -∂(ru·θ')/∂x (mass-conserving flux form)
@@ -17072,7 +17343,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         auto t_adv_y_safe = t_adv_y / msftx_safe;
         t_adv_y_safe = torch::where(msftx_mask, torch::zeros_like(t_adv_y_safe), t_adv_y_safe);
         
-        auto t_adv_horiz = msftx_3d * msfty_3d * (t_adv_x_safe + t_adv_y_safe);
+        // The shared face fluxes already include the face map division.
+        // t_tend stores the mass-coupled, map-uncoupled tendency.
+        auto t_adv_horiz = use_wrf_mass_flux
+            ? msftx_3d * msfty_3d * (t_adv_x + t_adv_y)
+            : msftx_3d * msfty_3d * (t_adv_x_safe + t_adv_y_safe);
         
         // AUTOGRAD FIX: Build t_adv_z functionally instead of mutating zeros_like tensor
         torch::Tensor t_adv_z;
@@ -17089,6 +17364,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             t_adv_z = wrf_vert_adv3(t, split_omega_ww_.to(t.device(), t.scalar_type()),
                                     rdnw_for_t_adv, rdn_for_t_adv,
                                     wrf::sdirk3::g_sdirk3_config.sign_smooth_delta);
+            t_adv_z_work_ = t_adv_z;
+        } else if (use_wrf_mass_flux && have_rdnw_t) {
+            const auto flux_w = wrf_ww_cp() * avg_z_to_w(t);
+            // WRF rdnw is negative; getRdnwTensor stores its magnitude.
+            // -rdnw * delta(Omega*theta) therefore has a positive sign here.
+            // Both boundary fluxes vanish, but the top cell divergence need not.
+            t_adv_z = msfty_3d * rdnw_for_t_adv.view({1, nz_, 1}) *
+                (flux_w.slice(1, 1, nz_ + 1) - flux_w.slice(1, 0, nz_));
             t_adv_z_work_ = t_adv_z;
         } else if (have_rdnw_t && nz_ > 2) {
             // AUTOGRAD DEBUG: Check t dimensions before avg_z_to_w
@@ -17182,6 +17465,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // --- 3.5: Mass Conservation (mu tendency) ---
     {
+        if (use_wrf_mass_flux &&
+            wrf::sdirk3::g_sdirk3_config.effective_mu_horizontal_div_only()) {
+            // WRFParity: Omega and Mdot come from the same physical face flux.
+            // In HEVI all horizontal continuity belongs to the explicit part.
+            if (!hevi_pure_implicit)
+                mu_tend = mu_tend + msfty_ * wrf_mass_flux().mass_tendency_over_map_y;
+        } else {
         // Compute coupled momentum for divergence
         auto muu_2d_div = avg_x_to_u_2d(mu_full, u.size(2));  // WRF: muu = dry mass at u-points
         
@@ -17744,6 +18034,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             }
         }
         mu_tend = mu_tend - hevi_mu_div;
+        }  // legacy/diagnostic mass-coordinate path
 
         // FORTRAN PARITY (2025-12-05): Guard mean-subtract and clamp with config flag
         // When mu_tend_fortran_parity=true, skip these C++-only corrections
@@ -17942,6 +18233,59 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             }
         }  // end if (nx_ > 1 || ny_ > 1)
 
+        // WRF native-W PH advection on a periodic-X/symmetric-Y tile.
+        // C++ momentum orders 1/2, 3, 5 select centered PH orders 2, 4, 6.
+        if (canonical_horizontal) {
+            int phi_order = 0;
+            switch (wrf::sdirk3::g_sdirk3_config.advection_order) {
+                case 1:
+                case 2: phi_order = 2; break;
+                case 3: phi_order = 4; break;
+                case 5: phi_order = 6; break;
+                default:
+                    TORCH_CHECK(false,
+                                "native-W PH horizontal requires explicit "
+                                "advection_order 1, 2, 3, or 5; got ",
+                                wrf::sdirk3::g_sdirk3_config.advection_order);
+            }
+            TORCH_CHECK(base_state_initialized_ && ph_base_.defined() &&
+                        ph_base_.sizes() == ph.sizes(),
+                        "native-W PH horizontal requires initialized "
+                        "ph_base_ base-state contract");
+            auto phi_total = ph + ph_base_.to(ph.device(), ph.scalar_type());
+            TORCH_CHECK(nz_w_ >= 3 && c1f_.defined() && c2f_.defined() &&
+                        c1f_.dim() == 1 && c2f_.dim() == 1 &&
+                        c1f_.numel() >= nz_w_ && c2f_.numel() >= nz_w_,
+                        "native-W PH horizontal requires c1f/c2f at every W level");
+            auto phi_c1f = c1f_.to(ph.device(), ph.scalar_type()).slice(0, 0, nz_w_);
+            auto phi_c2f = c2f_.to(ph.device(), ph.scalar_type()).slice(0, 0, nz_w_);
+            auto phi_rdnw = getRdnwTensor(ph.device(), ph.scalar_type(), nz_);
+            // rdnw is a mass-level vector of length nz_w-1; the top rule reads
+            // entries nz_w-2 and nz_w-3, so the bound is >= nz_w-1.
+            TORCH_CHECK(phi_rdnw.defined() && phi_rdnw.dim() == 1 &&
+                        phi_rdnw.numel() >= nz_w_ - 1,
+                        "native-W PH horizontal requires rdnw through k=kte-1");
+            // WRF dn(top) is the mean of the last two dnw intervals.
+            // Compute the equivalent ratio in double before the tensor stencil.
+            const double r_top = wrf::sdirk3::guarded_item<double>(phi_rdnw.index({nz_w_ - 2}));
+            const double r_below = wrf::sdirk3::guarded_item<double>(phi_rdnw.index({nz_w_ - 3}));
+            TORCH_CHECK(std::isfinite(r_top) && r_top > 0.0 &&
+                        std::isfinite(r_below) && r_below > 0.0 &&
+                        std::isfinite(r_top + r_below),
+                        "native-W PH horizontal received invalid top rdnw");
+            const double phi_cfn1 = -r_below / (r_top + r_below);
+            const double phi_cfn = 1.0 - phi_cfn1;
+            const auto horizontal_phi =
+                wrf::sdirk3::phi_horizontal::native_w_phi_horizontal(
+                    phi_total, mu_full, u, v,
+                    msfux_.to(ph.device(), ph.scalar_type()),
+                    msfvy_.to(ph.device(), ph.scalar_type()),
+                    msfty_.to(ph.device(), ph.scalar_type()),
+                    phi_c1f, phi_c2f, phi_order, rdx, rdy,
+                    phi_cfn, phi_cfn1, momentum_packed);
+            ph_tend_x_adv = horizontal_phi.x;
+            ph_tend_y_adv = horizontal_phi.y;
+        } else {
         // X-direction: -(1/my)*μu*∂(Φ+Φb)/∂x
         if (nx_ > 1) {
             // Get mu at u-points (muuf in WRF)
@@ -18479,7 +18823,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             // Stack all k-level contributions to create the final tensor
             ph_tend_y_adv = torch::stack(ph_tend_y_all_k, 1);
         }
-        
+        }
+
         // --- 4.2 Vertical advection of geopotential ---
         // AUTOGRAD FIX: Use batch operations to avoid in-place modifications
         // Compute all vertical advection contributions at once
@@ -18506,64 +18851,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             auto ph_total_min_cpu = ph_total_cpu.min();
         }
 
-        // FORTRAN PARITY (2025-12-05): Use rdnw (eta coords) for Fortran match
-        // WRF Fortran code (module_big_step_utilities_em.F:1466) uses rdnw:
-        //   wdwn(i,k) = rdnw(k-1)*(ph(i,k,j)-ph(i,k-1,j)+phb(i,k,j)-phb(i,k-1,j))
-        // rdnw is 1/dnw (eta coordinate spacing), NOT physical 1/dz
-        // Using physical 1/dz gives ∂φ/∂z, but Fortran computes ∂φ/∂η
-
-        torch::Tensor vert_deriv_scale;  // Either rdnw (eta) or rdzw (physical)
-
+        // WRF eta decreases upward. Storage holds |rdnw|, so dPhi/deta
+        // requires -|rdnw| * Delta(Phi); the outer -Omega is retained below.
+        torch::Tensor vert_deriv_scale;
         if (wrf::sdirk3::g_sdirk3_config.ph_use_rdnw_not_rdzw) {
-            // FORTRAN PARITY: Use rdnw (1/dη) like Fortran
-            // PARITY FIX 2025-12-20: Use getRdnwTensor() fallback chain instead of rdnw_ vector.
-            // 9F.D62 (review P0-A): nz_, not nz_w_. WRF's authority
-            // (module_big_step_utilities_em.F:1421,1470) declares
-            //     REAL, DIMENSION(its:ite,kts:kte) :: wdwn        <- MASS levels
-            //     wdwn(i,k) = rdnw(k-1)*(ph(i,k,j)-ph(i,k-1,j)+...)
-            // so rdnw is read at MASS indices only. And the consumer below reads
-            // vert_deriv_scale at most at index nz_w_-2 = nz_-1: the top w slot the pad
-            // used to invent is NEVER READ. Requesting nz_ removes the need for it.
-            torch::Tensor rdnw_for_scale = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
-            if (rdnw_for_scale.defined() && rdnw_for_scale.numel() > 0) {
-                // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw > 0 (WRF standard), no abs() needed
-                // WRF vertical advection (wdwn = rdnw(k-1)*(ph(k)-ph(k-1))) uses positive rdnw directly
-                // Pad to nz_w_ if needed
-                // 9F.D67 (review P0-1): the length branch below was DEAD after D62.
-                //
-                // D62 changed this caller from nz_w_ to nz_ but left the consumption
-                // condition alone. getRdnwTensor now returns EXACTLY nz_ (it slices when
-                // longer and throws when shorter), and nz_w_ = nz_+1, so
-                //     rdnw_numel >= nz_w_   <=>   nz_ >= nz_+1
-                // is always false. The `if` arm could not execute and the `else` arm did
-                // all the work.
-                //
-                // Behaviour was unaffected -- which is why the fingerprint matched and why
-                // nothing caught it. Before D62 the padded array made the condition true
-                // and it sliced [rdnw..., pad]; after D62 it zero-fills to [rdnw..., 0].
-                // The two differ ONLY at index nz_, and the consumer reads at most
-                // nz_w_-2 = nz_-1. A dead branch whose deadness is invisible in the output
-                // is exactly the shape that survives review, so it is removed rather than
-                // left to be re-derived.
-                //
-                // vert_deriv_scale stays nz_w_ long because its consumers slice it that
-                // way; index nz_ is deliberately zero and deliberately never read.
-                TORCH_CHECK(rdnw_for_scale.numel() == nz_,
-                            "vert_deriv_scale: expected exactly nz_=", nz_,
-                            " mass-level rdnw values, got ", rdnw_for_scale.numel());
-                vert_deriv_scale = torch::zeros({nz_w_}, options);
-                vert_deriv_scale.slice(0, 0, nz_).copy_(
-                    rdnw_for_scale.to(options.device(), options.dtype().toScalarType()));
-            } else {
-                vert_deriv_scale = torch::zeros({nz_w_}, options);
-            }
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-                // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-                torch::NoGradGuard no_grad;
-                auto vert_deriv_scale_cpu = vert_deriv_scale.detach().to(torch::kCPU);
-                auto rdnw_max_cpu = vert_deriv_scale_cpu.max();
-                auto rdnw_min_cpu = vert_deriv_scale_cpu.min();
-            }
+            const auto rdnw = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
+            // Consumers read mass levels only; the final w-level slot is unused.
+            vert_deriv_scale = torch::cat({-rdnw, torch::zeros({1}, options)}, 0);
         } else {
             // PARITY FIX 2025-12-11: Use physical 1/dz for debugging/physical interpretation.
             // Priority: grid_info_->dz (from computeVerticalMetrics) > rdzw_3d_ (horizontal mean) > rdnw fallback
@@ -18599,23 +18893,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     std::cerr << "WARNING: grid_info_->dz not initialized, falling back to rdnw for vert_deriv_scale"
                               << " (this warning will not repeat)" << std::endl;
                 }
-                // 9F.D62 (review P0-A): nz_, not nz_w_ -- same reason as the site above.
-                torch::Tensor rdnw_fallback = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
-                if (rdnw_fallback.defined() && rdnw_fallback.numel() > 0) {
-                    // 9F.D67 (review P0-1): the SAME dead branch, in the dz-fallback twin.
-                    // D62 fixed the caller here too and left this condition, so both copies
-                    // carried it. That makes five times in this campaign that a block was
-                    // corrected in one place and its twin left behind; the grep for the
-                    // condition, not for the caller, is what finds them.
-                    TORCH_CHECK(rdnw_fallback.numel() == nz_,
-                                "vert_deriv_scale (dz fallback): expected exactly nz_=", nz_,
-                                " mass-level rdnw values, got ", rdnw_fallback.numel());
-                    vert_deriv_scale = torch::zeros({nz_w_}, options);
-                    vert_deriv_scale.slice(0, 0, nz_).copy_(
-                        rdnw_fallback.to(options.device(), options.dtype().toScalarType()));
-                } else {
-                    vert_deriv_scale = torch::zeros({nz_w_}, options);
-                }
+                const auto rdnw = getRdnwTensor(options.device(), options.dtype().toScalarType(), nz_);
+                vert_deriv_scale = torch::cat({-rdnw, torch::zeros({1}, options)}, 0);
             }
         }
 
@@ -18637,25 +18916,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             wdwn_lower.slice(1, 1, nz_w_-1).copy_(scale_lower * ph_diff_lower);
         }
         
-        // CRITICAL FIX: Use proper fnm/fnp weighting AND Omega instead of w
-        // Reference: dyn_em/module_big_step_utilities_em.F:1470-1475
-        //   ph_tend(i,k,j) -= ww(i,k,j) * (fnm(k)*wdwn(i,k+1) + fnp(k)*wdwn(i,k))
-        // where ww = Omega = (μ/my)·w (mass flux with map-scale factor), not just w!
-        // wdwn_upper corresponds to wdwn(k+1) and wdwn_lower to wdwn(k)
-
-        // Compute Omega = (μ/my)·w at w-points (WRF: rom = ww = mass flux)
-        // CRITICAL: Must divide by msfty_ to get correct mass flux ww = (μ/my)·w
-        // CRITICAL FIX: Use w_ref (from U_ref_stage_) instead of w to avoid Newton feedback loop!
-        // This is the SAME fix we applied to W-momentum advection and mass continuity
-        // Using w from current Newton iteration causes instability in geopotential tendency
-        // CRITICAL FIX: Use w.size(1) not t.size(1) - w has nz_w levels (65), t has nz_w levels (65)
+        // rhs_ph: -Omega * (fnm*dPhi/deta_upper + fnp*dPhi/deta_lower).
+        // Mode 1 diagnoses eta mass flux with calc_ww_cp; it is not physical w.
         auto mu_3d = mu_full.unsqueeze(1).expand({-1, w_ref.size(1), -1});
         auto msfty_3d = msfty_.unsqueeze(1).expand({-1, w_ref.size(1), -1});
         // JVP FIX: Blend reference and current state for omega to prevent zero-flux linearization
         float blend = wrf::sdirk3::g_sdirk3_config.omega_w_blend;
         auto w_blended = blend * w + (1.0f - blend) * w_ref;
-        // 9F.D118: same substitution as the mu channel. rhs_ph's -omega*dphi/d_eta is a
-        // LEGITIMATE term (unlike the mass equation's div_z); what was wrong is omega.
         auto omega = wrf::sdirk3::g_sdirk3_config.effective_wrf_omega_ww_cp()
                          ? wrf_ww_cp()
                          : ((mu_3d / msfty_3d) * w_blended);
@@ -18690,39 +18957,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         int64_t ph_nz_w = w_ref.size(1);   // k dimension (w-staggered levels)
         int64_t ph_nx = w_ref.size(2);     // i dimension
 
-        if (fnm_.defined() && fnp_.defined() && fnm_.size(0) >= ph_nz_w && fnp_.size(0) >= ph_nz_w) {
-            // Use proper fnm/fnp weights from WRF terrain-following coordinates
-            // Slice to runtime nz_w in case coefficient array is longer than runtime dimension
-            auto fnm_sliced = fnm_.slice(0, 0, ph_nz_w);
-            auto fnp_sliced = fnp_.slice(0, 0, ph_nz_w);
-            auto fnm_3d = fnm_sliced.view({1, ph_nz_w, 1}).expand({ph_ny, ph_nz_w, ph_nx}).contiguous();
-            auto fnp_3d = fnp_sliced.view({1, ph_nz_w, 1}).expand({ph_ny, ph_nz_w, ph_nx}).contiguous();
+        TORCH_CHECK(fnm_.defined() && fnp_.defined() && fnm_.dim() == 1 && fnp_.dim() == 1 &&
+                    fnm_.numel() >= ph_nz_w && fnp_.numel() >= ph_nz_w,
+                    "geopotential advection requires fnm/fnp at every w level");
+        const auto fnm_3d = fnm_.slice(0, 0, ph_nz_w).view({1, ph_nz_w, 1});
+        const auto fnp_3d = fnp_.slice(0, 0, ph_nz_w).view({1, ph_nz_w, 1});
+        // Omega is the coupled vertical mass flux, not the physical w velocity.
+        ph_tend_z_adv = -omega * (fnm_3d * wdwn_upper + fnp_3d * wdwn_lower);
 
-            // CRITICAL: Use Omega ((μ/my)·w), not w!
-            // Apply weighted vertical advection: -Omega * (fnm*wdwn_upper + fnp*wdwn_lower)
-            ph_tend_z_adv = -omega * (fnm_3d * wdwn_upper + fnp_3d * wdwn_lower);
-
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-                torch::NoGradGuard no_grad;  // Protect .item() calls in debug output
-                // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
-                auto fnm_cpu = fnm_.detach().to(torch::kCPU);
-                auto fnp_cpu = fnp_.detach().to(torch::kCPU);
-                // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-                auto fnm_min_cpu = fnm_cpu.min();
-                auto fnm_max_cpu = fnm_cpu.max();
-                auto fnp_min_cpu = fnp_cpu.min();
-                auto fnp_max_cpu = fnp_cpu.max();
-                auto weight_sum_cpu = (fnm_cpu.slice(0, 0, std::min(fnm_cpu.size(0), ph_nz_w)) +
-                                  fnp_cpu.slice(0, 0, std::min(fnp_cpu.size(0), ph_nz_w))).mean();
-            }
-        } else {
-            // FALLBACK: Use simple average if fnm/fnp not properly sized
-            // This should not happen in production WRF runs
-            auto vert_grad_avg = 0.5f * (wdwn_upper + wdwn_lower);
-            // CRITICAL: Still use Omega (μ·w), not w!
-            ph_tend_z_adv = -omega * vert_grad_avg;
-        }
-        
         // --- 4.3 Buoyancy term ---
         // Note: WRF has positive sign, not negative!
         // PARITY FIX 2025-12-14: Use runtime tensor sizes (ph_ny, ph_nz_w, ph_nx) from above
@@ -18879,6 +19121,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // CRITICAL: Declare p_pert_mass at outer scope so it's available to both U and W momentum sections
     torch::Tensor p_pert_mass;  // Perturbation pressure at mass levels [ny, nz, nx]
     torch::Tensor al_pert_mass_fs, alt_mass_fs;  // WRF al' and alt at mass points (calc_p_rho)
+    const bool native_nh = non_hydrostatic_ && canonical_horizontal;
+    torch::Tensor native_nh_u, native_nh_v;
 
     // --- 5.1: U-Momentum PGF ---
     {
@@ -18950,8 +19194,38 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             auto p_full_mass = p_pert_mass + p_base_;
             
             // Compute non-hydrostatic pressure terms if configured
-            if (non_hydrostatic_) {
-                compute_nonhydrostatic_terms(ph, ph_base_, p_pert_mass);
+            if (native_nh) {
+                // Add WRF pressure-gradient term 4 in native face coordinates
+                // before the outer -cq/alpha conversion. Use the existing
+                // WRF top_lid setting for the top pressure extrapolation.
+                const auto dev = p_pert_mass.device();
+                const auto dtype = p_pert_mass.scalar_type();
+                const auto core3 = [&](const torch::Tensor& q) {
+                    return q.slice(0, 0, momentum_m).slice(2, 0, momentum_n);
+                };
+                const auto metric = [&](const torch::Tensor& q, int64_t m, int64_t n) {
+                    return q.to(dev, dtype).slice(0, 0, m).slice(1, 0, n);
+                };
+                TORCH_CHECK(fnm_.defined() && fnp_.defined() &&
+                            fnm_.dim() == 1 && fnp_.dim() == 1 &&
+                            fnm_.numel() >= nz_actual && fnp_.numel() >= nz_actual,
+                            "native NH requires every interior fnm/fnp coefficient");
+                const auto nh = wrf::sdirk3::nonhydrostatic_pressure::
+                    native_nonhydrostatic_pressure_core(
+                        core3(p_pert_mass), core3(compute_php(ph, ph_base_)),
+                        metric(msfux_, momentum_m, momentum_n + 1),
+                        metric(msfuy_, momentum_m, momentum_n + 1),
+                        metric(msfvx_, momentum_m + 1, momentum_n),
+                        metric(msfvy_, momentum_m + 1, momentum_n),
+                        mu.slice(0, 0, momentum_m).slice(1, 0, momentum_n),
+                        c1h_.to(dev, dtype).slice(0, 0, nz_actual),
+                        -getRdnwTensor(dev, dtype, nz_actual), rdx, rdy,
+                        cf1_, cf2_, cf3_,
+                        fnm_.to(dev, dtype).slice(0, 1, nz_actual),
+                        fnp_.to(dev, dtype).slice(0, 1, nz_actual),
+                        wrf::sdirk3::g_sdirk3_config.split_explicit_top_lid, cfn_, cfn1_);
+                native_nh_u = extend_u(nh.term4_u);
+                native_nh_v = extend_v(nh.term4_v, true);
             }
             
             // Compute base state inverse density: alb = rd * th_base / p_base
@@ -19077,7 +19351,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // Already defined c1h_3d and c2h_3d above, use them directly
                 // PARITY FIX 2025-12-14: Use runtime tensor sizes for muu_3d expansion
                 auto muu_3d = muu.unsqueeze(1).expand({u_ny, u_nz, u_nx});
-                auto vert_coupling_3d = c1h_3d * muu_3d + c2h_3d;
+                auto vert_coupling_3d = canonical_horizontal ? level_mass_u : c1h_3d * muu_3d + c2h_3d;
                 
                 // Map scale factor ratio - already defined as msf_ratio above
                 
@@ -19112,10 +19386,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto dpb_dx = p_base_cont.index({Slice(), Slice(), right_slice}) - 
                               p_base_cont.index({Slice(), Slice(), left_slice});
                 
-                // Average inverse densities
-                auto alt_avg = 0.5f * (alt_cont.index({Slice(), Slice(), right_slice}) + 
+                // Fortran uses neighbor sums; the shared kernel applies the half once.
+                auto alt_sum = (alt_cont.index({Slice(), Slice(), right_slice}) +
                                        alt_cont.index({Slice(), Slice(), left_slice}));
-                auto al_avg = 0.5f * (al_pert_cont.index({Slice(), Slice(), right_slice}) + 
+                auto al_sum = (al_pert_cont.index({Slice(), Slice(), right_slice}) +
                                       al_pert_cont.index({Slice(), Slice(), left_slice}));
                 
                 // Apply WRF formula for interior points
@@ -19123,10 +19397,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 //   (ph gradient) + (alt × p' gradient) + (al × pb gradient)
                 // where ph is PERTURBATION geopotential only, NOT ph+phb.
                 // The base state geopotential gradient is NOT included.
-                auto dpx_interior = msf_ratio.index({Slice(), Slice(), interior_slice}) *
-                                   0.5f * rdx *
-                                   vert_coupling_3d.index({Slice(), Slice(), interior_slice}) *
-                                   (dph_dx + alt_avg * dp_dx + al_avg * dpb_dx);
+                auto dpx_interior = wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                    rdx, msf_ratio.index({Slice(), Slice(), interior_slice}) *
+                         vert_coupling_3d.index({Slice(), Slice(), interior_slice}),
+                    dph_dx, alt_sum, dp_dx, al_sum, dpb_dx);
                 
                 // AUTOGRAD FIX: Use functional operation instead of direct assignment
                 // Note: dpx is [ny, nz, nx_u], so dimension 2 is x-direction
@@ -19157,7 +19431,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto msf_ratio_bdy_end = msfux_bdy_end / msfuy_bdy_end;
 
                 auto muu_3d_full = muu.unsqueeze(1).expand({u_ny, u_nz, u_nx});
-                auto vert_coupling_3d_full = c1h_3d * muu_3d_full + c2h_3d;
+                auto vert_coupling_3d_full = canonical_horizontal ? level_mass_u : c1h_3d * muu_3d_full + c2h_3d;
                 auto vert_coupling_bdy_0 = vert_coupling_3d_full.index({Slice(), Slice(), 0});
                 auto vert_coupling_bdy_end = vert_coupling_3d_full.index({Slice(), Slice(), u_nx-1});
 
@@ -19192,21 +19466,23 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     auto dph_dx_left = (ph_top_i1 - ph_top_i0) + (ph_bot_i1 - ph_bot_i0);
                     auto dp_dx_left = p_pert_i1 - p_pert_i0;
                     auto dpb_dx_left = p_base_i1 - p_base_i0;
-                    auto alt_avg_left = 0.5f * (alt_i1 + alt_i0);
-                    auto al_avg_left = 0.5f * (al_i1 + al_i0);
+                    auto alt_sum_left = (alt_i1 + alt_i0);
+                    auto al_sum_left = (al_i1 + al_i0);
 
                     auto dph_dx_right = (ph_top_im1 - ph_top_im2) + (ph_bot_im1 - ph_bot_im2);
                     auto dp_dx_right = p_pert_im1 - p_pert_im2;
                     auto dpb_dx_right = p_base_im1 - p_base_im2;
-                    auto alt_avg_right = 0.5f * (alt_im1 + alt_im2);
-                    auto al_avg_right = 0.5f * (al_im1 + al_im2);
+                    auto alt_sum_right = (alt_im1 + alt_im2);
+                    auto al_sum_right = (al_im1 + al_im2);
 
                     dpx.index_put_({Slice(), Slice(), 0},
-                                   msf_ratio_bdy_0 * 0.5f * rdx * vert_coupling_bdy_0 *
-                                   (dph_dx_left + alt_avg_left * dp_dx_left + al_avg_left * dpb_dx_left));
+                                   wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                                       rdx, msf_ratio_bdy_0 * vert_coupling_bdy_0, dph_dx_left,
+                                       alt_sum_left, dp_dx_left, al_sum_left, dpb_dx_left));
                     dpx.index_put_({Slice(), Slice(), u_nx-1},
-                                   msf_ratio_bdy_end * 0.5f * rdx * vert_coupling_bdy_end *
-                                   (dph_dx_right + alt_avg_right * dp_dx_right + al_avg_right * dpb_dx_right));
+                                   wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                                       rdx, msf_ratio_bdy_end * vert_coupling_bdy_end, dph_dx_right,
+                                       alt_sum_right, dp_dx_right, al_sum_right, dpb_dx_right));
                 } else {
                     // Baseline behavior: periodic wrap gradients at boundaries.
                     auto ph_top_ip0 = ph_cont.index({Slice(), Slice(1, u_nz+1), 0});        // [ny, nz]
@@ -19227,15 +19503,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     auto dph_dx_bdy = (ph_top_ip0 - ph_top_im1) + (ph_bot_ip0 - ph_bot_im1);  // [ny, nz]
                     auto dp_dx_bdy = p_pert_ip0 - p_pert_im1;                                  // [ny, nz]
                     auto dpb_dx_bdy = p_base_ip0 - p_base_im1;                                 // [ny, nz]
-                    auto alt_avg_bdy = 0.5f * (alt_ip0 + alt_im1);                             // [ny, nz]
-                    auto al_avg_bdy = 0.5f * (al_ip0 + al_im1);                                // [ny, nz]
+                    auto alt_sum_bdy = (alt_ip0 + alt_im1);                             // [ny, nz]
+                    auto al_sum_bdy = (al_ip0 + al_im1);                                // [ny, nz]
 
-                    auto dpx_bdy = msf_ratio_bdy_0 * 0.5f * rdx * vert_coupling_bdy_0 *
-                                   (dph_dx_bdy + alt_avg_bdy * dp_dx_bdy + al_avg_bdy * dpb_dx_bdy);
+                    auto dpx_bdy = wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                        rdx, msf_ratio_bdy_0 * vert_coupling_bdy_0, dph_dx_bdy,
+                        alt_sum_bdy, dp_dx_bdy, al_sum_bdy, dpb_dx_bdy);
                     dpx.index_put_({Slice(), Slice(), 0}, dpx_bdy);
                     dpx.index_put_({Slice(), Slice(), u_nx-1},
-                                   msf_ratio_bdy_end * 0.5f * rdx * vert_coupling_bdy_end *
-                                   (dph_dx_bdy + alt_avg_bdy * dp_dx_bdy + al_avg_bdy * dpb_dx_bdy));
+                                   wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                                       rdx, msf_ratio_bdy_end * vert_coupling_bdy_end, dph_dx_bdy,
+                                       alt_sum_bdy, dp_dx_bdy, al_sum_bdy, dpb_dx_bdy));
                 }
             }
             
@@ -19251,118 +19529,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     }
                 }
             }
-            if (non_hydrostatic_ && php_.defined() && dpn_u_.defined()) {
-                // PARITY FIX 2025-12-14: Extract runtime dimensions from dpn_u_ tensor
-                // This ensures correct behavior for sub-tiles or halo-trimmed inputs
-                int64_t dpn_ny = dpn_u_.size(0);      // j dimension
-                int64_t dpn_nz_w = dpn_u_.size(1);    // k dimension (w-levels)
-                int64_t dpn_nx_u = dpn_u_.size(2);    // i dimension (u-staggered)
-                int64_t dpn_nz = dpn_nz_w - 1;        // mass levels = w-levels - 1
+            if (native_nh) {
+                TORCH_CHECK(native_nh_u.sizes() == dpx.sizes(),
+                            "native NH U term shape mismatch");
+                dpx = dpx + native_nh_u;
+            }
 
-                // DEBUG: Check php_ dimensions before d_dx_u
-                if (wrf::sdirk3::g_sdirk3_config.debug_level > 0) {
-                }
-
-                // Compute php gradient at u-points using runtime dimension
-                auto dphp_dx = d_dx_u(php_, rdx, dpn_nx_u);
-
-                // Vertical difference of dpn
-                // Memory reuse optimization: Use pre-allocated working tensor
-                // AUTOGRAD FIX: dpn_diff should be [ny, nz, nx_u] following WRF [j,k,i] convention
-                // PARITY FIX 2025-12-14: Use runtime dimensions from dpn_u_ for cache validation
-                if (!dpn_diff_work_.defined() ||
-                    dpn_diff_work_.size(0) != dpn_ny ||
-                    dpn_diff_work_.size(1) != dpn_nz ||
-                    dpn_diff_work_.size(2) != dpn_nx_u ||
-                    dpn_diff_work_.device() != dpn_u_.device()) {
-                    dpn_diff_work_ = torch::zeros({dpn_ny, dpn_nz, dpn_nx_u}, dpn_u_.options());
-                } else {
-                    dpn_diff_work_.zero_();  // Zero existing tensor in-place
-                }
-                auto& dpn_diff = dpn_diff_work_;
-
-                // AUTOGRAD DEBUG: Check dpn_u_ dimensions
-                // Compute vertical difference using runtime dimensions
-                // dpn_u_ has w-levels, compute difference to get mass-level values
-                // PARITY FIX 2025-12-20: Use getRdnwTensor() fallback chain instead of rdnw_ vector.
-                // rdnw_ may be empty while grid_info_->rdnw is valid, so use unified fallback.
-                // PARITY FIX 2025-12-21: Use data_ptr for loop access instead of .index({k}).item()
-                // PARITY FIX 2025-12-21: Get CPU-cached tensor directly to avoid GPU->CPU copy each call.
-                torch::Tensor rdnw_cpu_dpn;
-                const float* rdnw_ptr_dpn = nullptr;
-                int64_t rdnw_numel_dpn = 0;
-                {
-                    torch::NoGradGuard no_grad;
-                    rdnw_cpu_dpn = getRdnwTensor(torch::kCPU, torch::kFloat32, dpn_nz);
-                    if (rdnw_cpu_dpn.defined() && rdnw_cpu_dpn.numel() > 0) {
-                        rdnw_cpu_dpn = rdnw_cpu_dpn.contiguous();
-                        rdnw_ptr_dpn = rdnw_cpu_dpn.data_ptr<float>();
-                        rdnw_numel_dpn = rdnw_cpu_dpn.numel();
-                    }
-                }
-                // FIX 2026-01-31: Vectorized dpn_diff (U-momentum) computation.
-                {
-                    auto dpn_upper = dpn_u_.slice(1, 1, dpn_nz + 1);
-                    auto dpn_lower = dpn_u_.slice(1, 0, dpn_nz);
-                    auto diff = dpn_upper - dpn_lower;
-
-                    if (rdnw_ptr_dpn && rdnw_numel_dpn >= dpn_nz) {
-                        // PERF FIX 2026-01-31: Cache rdnw device tensor for U pressure gradient
-                        if (!rdnw_dev_u_cached_.defined()
-                            || cached_coeff_device_ != diff.device()
-                            || cached_coeff_dpn_nz_ != dpn_nz
-                            || cached_coeff_rdnw_ptr_ != static_cast<const void*>(rdnw_ptr_dpn)) {
-                            torch::NoGradGuard no_grad;
-                            // Diagnostic: log first 3 cache misses to verify hit rate
-                            static int rdnw_cache_miss_count = 0;
-                            if (rdnw_cache_miss_count < 3) {
-                                std::cerr << "[PERF] rdnw_dev_u cache MISS #" << (rdnw_cache_miss_count + 1)
-                                          << ": defined=" << rdnw_dev_u_cached_.defined()
-                                          << " ptr_changed=" << (cached_coeff_rdnw_ptr_ != static_cast<const void*>(rdnw_ptr_dpn))
-                                          << " nz=" << dpn_nz << std::endl;
-                                ++rdnw_cache_miss_count;
-                            }
-                            rdnw_dev_u_cached_ = torch::from_blob(
-                                const_cast<float*>(rdnw_ptr_dpn),
-                                {dpn_nz}, torch::TensorOptions().dtype(torch::kFloat32))
-                                .to(diff.device())
-                                .reshape({1, dpn_nz, 1});
-                            cached_coeff_dpn_nz_ = dpn_nz;
-                            cached_coeff_rdnw_ptr_ = static_cast<const void*>(rdnw_ptr_dpn);
-                        }
-                        dpn_diff.copy_(diff * rdnw_dev_u_cached_);
-                    } else {
-                        dpn_diff.copy_(diff);
-                    }
-                }
-
-                // Average mu to u-points using runtime dimension
-                auto mu_u = avg_x_to_u_2d(mu, dpn_nx_u);   // WRF: perturbation mu
-                auto mu_u_3d = mu_u.unsqueeze(1).expand({-1, dpn_nz, -1});
-
-                // Compute the vertical factor
-                // PERF FIX 2026-01-31: Use cached c1h device tensor
-                auto target_device = dpn_u_.device();
-                auto target_dtype = dpn_u_.scalar_type();
-                auto& c1h_aligned = ensureC1hDevCached(target_device, target_dtype);
-                auto c1h_sliced = c1h_aligned.slice(0, 0, std::min(static_cast<int64_t>(c1h_aligned.size(0)), dpn_nz));
-                // Pad if necessary
-                torch::Tensor c1h_work;
-                if (c1h_sliced.size(0) < dpn_nz) {
-                    c1h_work = torch::full({dpn_nz}, 1.0f, dpn_u_.options());
-                    c1h_work.slice(0, 0, c1h_sliced.size(0)).copy_(c1h_sliced);
-                } else {
-                    c1h_work = c1h_sliced;
-                }
-                auto c1_3d = c1h_work.view({dpn_nz, 1, 1}).expand({dpn_nz, dpn_ny, dpn_nx_u}).contiguous();
-                // Permute to [ny, nz, nx_u] for correct broadcast
-                c1_3d = c1_3d.permute({1, 0, 2});
-                auto vertical_factor = -dpn_diff - 0.5f * c1_3d * mu_u_3d;   // WRF rdnw < 0; dpn_diff carries |rdnw|
-
-                // Add non-hydrostatic correction
-                auto nh_correction = msf_ratio * rdx * dphp_dx * vertical_factor;
-                dpx = dpx + nh_correction;            }
-            
             // Apply cqu moisture correction coefficient
             // AUTOGRAD FIX: cqu_ has shape [ny, nz, nx] at mass points following WRF [j,k,i] convention
             // Need to interpolate to u-points
@@ -19466,7 +19638,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             auto& c2h_dev = ensureC2hDevCached(u.device(), u.scalar_type());
             auto c1h_3d = c1h_dev.slice(0, 0, u_nz).view({1, u_nz, 1}).expand({u_ny, u_nz, u_nx}).contiguous();
             auto c2h_3d = c2h_dev.slice(0, 0, u_nz).view({1, u_nz, 1}).expand({u_ny, u_nz, u_nx}).contiguous();
-            auto vert_coupling = c1h_3d * muu_3d + c2h_3d;
+            auto vert_coupling = canonical_horizontal ? level_mass_u : c1h_3d * muu_3d + c2h_3d;
             
             // Debug: check dimensions before multiplication
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -19480,25 +19652,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             u_tend_pgf = -msf_ratio_u * 0.5f * rdx * vert_coupling * dph_dx;
         }
         
-        // Convert to u tendency and add to total
-        // Note: u_tend_pgf already includes the map scale factor and vertical coupling
-        // In WRF, ru_tend is updated directly, not divided by muu again
-        
-        // SDIRK3 VALIDATION: Check pressure gradient force for abnormal values
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-            torch::NoGradGuard no_grad;
-            // PERF FIX 2025-12-28: Pre-copy to CPU with _cpu suffix for consistency
-            auto u_tend_pgf_cpu = u_tend_pgf.detach().to(torch::kCPU);
-            // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-            auto pgf_norm_cpu = u_tend_pgf_cpu.norm();
-            float pgf_norm = pgf_norm_cpu.item<float>();
-            if (std::isnan(pgf_norm) || std::isinf(pgf_norm)) {
-                u_tend_pgf = torch::zeros_like(u_tend_pgf);
-            } else if (pgf_norm > 1e6f) {
-                // AUTOGRAD: No clamping per user requirement - preserve computation graph
-            }
+        if (use_wrf_mass_flux) {
+            // WRF supplies d(alpha*u)/dt. Convert its force to physical
+            // acceleration before storing it in the legacy M*u accumulator.
+            const auto c1 = ensureC1hDevCached(u.device(), u.scalar_type())
+                .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+            const auto c2 = ensureC2hDevCached(u.device(), u.scalar_type())
+                .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+            const auto alpha_u = (canonical_horizontal ? level_mass_u : c1 * muu_3d + c2) / msfuy_3d;
+            u_tend_pgf = u_tend_pgf * (velocity_mass_u / alpha_u);
         }
-        
+
         ru_tend = ru_tend + u_tend_pgf;    }
     uterm_site(wrf::sdirk3::USlowSiteKind::PressureGradient);
 
@@ -19514,114 +19678,22 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // PERF 2025-12-28: Removed local shadowing - uses outer-scope cached msfvy_3d/msfvx_3d
         // The outer-scope tensors were created at line ~7228 with same nz_actual dimension.
         
-        // AUTOGRAD FIX: Compute t_full for V-momentum section
-        // t_full is not defined in this scope, need to compute it
-        torch::Tensor t_full_v;
-        if (th_base_.defined() && th_base_.numel() > 0) {
-            if (th_base_.dim() == 2) {
-                // Base state is 2D - expand to 3D
-                auto th_base_3d = th_base_.unsqueeze(1).expand({-1, nz_actual, -1});
-                t_full_v = t + th_base_3d;
-            } else {
-                // Base state is already 3D
-                t_full_v = t + th_base_;
-            }
-        } else {
-            // No base state
-            t_full_v = t;
-        }
-        
-        // Get t at v-points
-        // AUTOGRAD DEBUG: Check t_full shape before avg_y_to_v
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        }
-        
-        auto t_at_v = avg_y_to_v(t_full_v, ny_v_);
-        
-        
         torch::Tensor rv_tend_pgf;
         
         if (p_base_.defined() && p_base_.numel() > 0 &&
             th_base_.defined() && th_base_.numel() > 0 &&
             ph_base_.defined() && ph_base_.numel() > 0) {
             
-            // Get base state at v-points
-            torch::Tensor p_base_at_v, th_base_at_v;
-            
-            if (p_base_.dim() == 2) {
-                // Fix: Use v.size(0) which is ny_v, not v.size(1) which is nz
-                auto p_base_2d_v = avg_y_to_v_2d(p_base_, v.size(0));
-                p_base_at_v = p_base_2d_v.unsqueeze(1).expand({-1, nz_actual, -1});
-            } else {
-                // Fix: Use v.size(0) which is ny_v, not v.size(1) which is nz
-                p_base_at_v = avg_y_to_v(p_base_, v.size(0));
-            }
-            
-            if (th_base_.dim() == 2) {
-                // Fix: Use v.size(0) which is ny_v, not v.size(1) which is nz
-                auto th_base_2d_v = avg_y_to_v_2d(th_base_, v.size(0));
-                th_base_at_v = th_base_2d_v.unsqueeze(1).expand({-1, nz_actual, -1});
-            } else {
-                // Fix: Use v.size(0) which is ny_v, not v.size(1) which is nz
-                th_base_at_v = avg_y_to_v(th_base_, v.size(0));
-            }
-
-            // AUTOGRAD DEBUG: Check shapes before addition            
-            // ULTRATHINK FIX: WRF 정합성을 위한 차원 재배치
-            // avg_y_to_v는 [ny, nz, nx] -> [ny_v, nz, nx] 변환
-            // 하지만 실제로는 잘못된 차원 순서일 가능성
-            
-            // AUTOGRAD FIX: Remove detach() to maintain gradient flow
-            // Direct addition preserves gradients properly
-            torch::Tensor t_full_at_v = t_at_v + th_base_at_v;
-
-            // Use WRF-calculated pressure if available
-            torch::Tensor p_full_at_v, p_pert_at_v;
-            if (p_pert_.defined()) {
-                // Use the perturbation pressure from WRF
-                p_pert_at_v = avg_y_to_v(p_pert_, v.size(0));
-                p_full_at_v = p_pert_at_v + p_base_at_v;
-
-                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-                    torch::NoGradGuard no_grad;
-                    auto p_pert_at_v_cpu = p_pert_at_v.detach().to(torch::kCPU);
-                    auto p_pert_at_v_min_cpu = p_pert_at_v_cpu.min();
-                    auto p_pert_at_v_max_cpu = p_pert_at_v_cpu.max();
-                    std::cerr << "[SDIRK3] V-momentum p_pert: " << p_pert_at_v_min_cpu.item<float>()
-                              << " / " << p_pert_at_v_max_cpu.item<float>() << " Pa" << std::endl;
-                }
-            } else {
-                // Fallback: compute diagnostic pressure (not recommended)
-                float gamma = cp_ / cv_;
-
-                // AUTOGRAD FIX: Remove detach() to maintain gradient flow through pow operation
-                auto t_for_pow = t_full_at_v;
-                auto rd_t = rd_ * t_for_pow;
-                auto rd_t_div_p0 = rd_t / p0_;
-                auto pi_full = torch::pow(rd_t_div_p0, gamma);
-                auto p_full_diag = p0_ * pi_full;
-
-                // Apply mass coupling for pressure
-                auto mu_full_at_v = avg_y_to_v_2d(mu_full, v.size(0));
-                torch::Tensor mu_base_at_v;
-                if (mu_base_.defined() && mu_base_.numel() > 0) {
-                    mu_base_at_v = avg_y_to_v_2d(mu_base_, v.size(0));
-                } else {
-                    mu_base_at_v = torch::full({mu_full_at_v.size(0), mu_full_at_v.size(1)},
-                                              89083.9219f, mu_full_at_v.options());
-                }
-
-                auto mu_full_3d_v = mu_full_at_v.unsqueeze(1).expand({-1, nz_actual, -1});
-                auto mu_base_3d_v = mu_base_at_v.unsqueeze(1).expand({-1, nz_actual, -1});
-                p_full_at_v = p_full_diag * (mu_full_3d_v / mu_base_3d_v);
-                p_pert_at_v = p_full_at_v - p_base_at_v;
-            }
+            TORCH_CHECK(p_pert_.defined(), "V-PGF requires diagnosed mass-point pressure");
+            const auto p_mass = p_pert_;
+            const auto pb_mass = p_base_.dim() == 2
+                ? p_base_.unsqueeze(1).expand({ny_, nz_actual, nx_}) : p_base_;
 
             // Compute inverse densities
             // 9F.D47: THE LIVE ONE. V-momentum used these inline non-Exner forms and
             // assigned alt DIRECTLY, so unlike U-momentum (which gets alt from the
             // correct helper) there was no cancellation: alt was high by 1/Pi, up to
-            // +87% at model top, and it multiplies dp_pert_dy in the pressure gradient.
+            // +87% at model top, and it multiplies dp_diff in the pressure gradient.
             // The same physical quantity was computed two different ways in one function.
             // WRF: (alt(i,k,j)+alt(i,k,j-1)) -- average the mass-point calc_p_rho values to v points
             auto alt = avg_y_to_v(alt_mass_fs, v.size(0));
@@ -19634,10 +19706,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             using namespace torch::indexing;
             
             // Geopotential gradient - note ph is already perturbation
-            auto ph_base_at_mass = avg_w_to_mass(ph_base_);
             
             // Initialize gradient tensors
-            torch::Tensor dph_dy, dphb_dy, dp_pert_dy, dpb_dy;
+            torch::Tensor dph_diff, dp_diff, dpb_diff;
             
             // Determine interior range for v-momentum (symmetric boundaries)
             int j_start_interior = 1;  // Skip first j point
@@ -19656,77 +19727,70 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto mass_lower_slice = Slice(j_start_interior - 1, j_end_interior - 1);  // mass j=0..ny_v-3
                 
                 // Compute geopotential gradients (vectorized)
-                auto ph_pert_upper = ph_pert_at_mass.index({mass_upper_slice, Slice(), Slice()});
-                auto ph_pert_lower = ph_pert_at_mass.index({mass_lower_slice, Slice(), Slice()});
-                auto ph_base_upper = ph_base_at_mass.index({mass_upper_slice, Slice(), Slice()});
-                auto ph_base_lower = ph_base_at_mass.index({mass_lower_slice, Slice(), Slice()});
+                const auto ph_upper_top = ph.index({mass_upper_slice, Slice(1,nz_actual+1), Slice()});
+                const auto ph_lower_top = ph.index({mass_lower_slice, Slice(1,nz_actual+1), Slice()});
+                const auto ph_upper_bottom = ph.index({mass_upper_slice, Slice(0,nz_actual), Slice()});
+                const auto ph_lower_bottom = ph.index({mass_lower_slice, Slice(0,nz_actual), Slice()});
                 
-                auto dph_dy_interior = (ph_pert_upper - ph_pert_lower) * rdy;
-                auto dphb_dy_interior = (ph_base_upper - ph_base_lower) * rdy;
+                auto dph_diff_interior = (ph_upper_top - ph_lower_top) + (ph_upper_bottom - ph_lower_bottom);
                 
                 // Initialize full gradient tensors
-                dph_dy = torch::zeros({ny_v_, nz_, nx_}, v.options());
-                dphb_dy = torch::zeros({ny_v_, nz_, nx_}, v.options());
+                dph_diff = torch::zeros({ny_v_, nz_, nx_}, v.options());
                 
                 // AUTOGRAD FIX: Use functional operations instead of direct assignment
-                dph_dy = combineInteriorBoundary(dph_dy_interior, dph_dy,
+                dph_diff = combineInteriorBoundary(dph_diff_interior, dph_diff,
                                                 j_start_interior, j_end_interior, 0);
-                dphb_dy = combineInteriorBoundary(dphb_dy_interior, dphb_dy,
-                                                 j_start_interior, j_end_interior, 0);
                 
                 // Compute pressure gradients (vectorized)
-                auto p_pert_at_mass = avg_v_to_mass(p_pert_at_v);
-                auto p_base_at_mass = avg_v_to_mass(p_base_at_v);
+                const auto& p_pert_at_mass = p_mass;
+                const auto& p_base_at_mass = pb_mass;
                 
                 auto p_pert_upper = p_pert_at_mass.index({mass_upper_slice, Slice(), Slice()});
                 auto p_pert_lower = p_pert_at_mass.index({mass_lower_slice, Slice(), Slice()});
                 auto p_base_upper = p_base_at_mass.index({mass_upper_slice, Slice(), Slice()});
                 auto p_base_lower = p_base_at_mass.index({mass_lower_slice, Slice(), Slice()});
                 
-                auto dp_pert_dy_interior = (p_pert_upper - p_pert_lower) * rdy;
-                auto dpb_dy_interior = (p_base_upper - p_base_lower) * rdy;
+                auto dp_diff_interior = p_pert_upper - p_pert_lower;
+                auto dpb_diff_interior = p_base_upper - p_base_lower;
                 
                 // Initialize full pressure gradient tensors
                 // PARITY FIX 2025-12-14: Use runtime tensor sizes for V-momentum
                 int64_t v_ny = v.size(0);   // j dimension (v-staggered)
                 int64_t v_nz = v.size(1);   // k dimension
                 int64_t v_nx = v.size(2);   // i dimension
-                dp_pert_dy = torch::zeros({v_ny, v_nz, v_nx}, v.options());
-                dpb_dy = torch::zeros({v_ny, v_nz, v_nx}, v.options());
+                dp_diff = torch::zeros({v_ny, v_nz, v_nx}, v.options());
+                dpb_diff = torch::zeros({v_ny, v_nz, v_nx}, v.options());
                 
                 // AUTOGRAD FIX: Use functional operations instead of direct assignment
-                dp_pert_dy = combineInteriorBoundary(dp_pert_dy_interior, dp_pert_dy,
+                dp_diff = combineInteriorBoundary(dp_diff_interior, dp_diff,
                                                     j_start_interior, j_end_interior, 0);
-                dpb_dy = combineInteriorBoundary(dpb_dy_interior, dpb_dy,
+                dpb_diff = combineInteriorBoundary(dpb_diff_interior, dpb_diff,
                                                 j_start_interior, j_end_interior, 0);
                 
             } else {
                 // Fallback to accessor-based for small grids
-                // AUTOGRAD FIX: avg_v_to_mass produces [ny, nz, nx] but d_dy_v expects [nz, ny, nx]
+                // Mass fields are [ny, nz, nx]; d_dy_v expects [nz, ny, nx]
                 // Need to permute dimensions from [j,k,i] to [k,j,i]
                 auto ph_pert_at_mass_permuted = ph_pert_at_mass.permute({1, 0, 2});  // [ny,nz,nx] -> [nz,ny,nx]
-                auto ph_base_at_mass_permuted = ph_base_at_mass.permute({1, 0, 2});  // [ny,nz,nx] -> [nz,ny,nx]
-                auto dph_dy_temp = d_dy_v(ph_pert_at_mass_permuted, rdy, v.size(0));
-                auto dphb_dy_temp = d_dy_v(ph_base_at_mass_permuted, rdy, v.size(0));
+                auto dph_diff_temp = 2.0f * d_dy_v(ph_pert_at_mass_permuted, 1.0f, v.size(0));
                 
                 // AUTOGRAD FIX: d_dy_v returns [nz, ny_v, nx], permute back to [ny_v, nz, nx]
-                dph_dy = dph_dy_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
-                dphb_dy = dphb_dy_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
+                dph_diff = dph_diff_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
                 
-                auto p_pert_at_mass = avg_v_to_mass(p_pert_at_v);
-                auto p_base_at_mass = avg_v_to_mass(p_base_at_v);
+                const auto& p_pert_at_mass = p_mass;
+                const auto& p_base_at_mass = pb_mass;
                 
-                // AUTOGRAD FIX: avg_v_to_mass produces [ny, nz, nx] but d_dy_v expects [nz, ny, nx]
+                // Mass fields are [ny, nz, nx]; d_dy_v expects [nz, ny, nx]
                 // Need to permute dimensions from [j,k,i] to [k,j,i]
                 auto p_pert_at_mass_permuted = p_pert_at_mass.permute({1, 0, 2});  // [ny,nz,nx] -> [nz,ny,nx]
                 auto p_base_at_mass_permuted = p_base_at_mass.permute({1, 0, 2});  // [ny,nz,nx] -> [nz,ny,nx]
                 
-                auto dp_pert_dy_temp = d_dy_v(p_pert_at_mass_permuted, rdy, v.size(0));
-                auto dpb_dy_temp = d_dy_v(p_base_at_mass_permuted, rdy, v.size(0));
+                auto dp_diff_temp = d_dy_v(p_pert_at_mass_permuted, 1.0f, v.size(0));
+                auto dpb_diff_temp = d_dy_v(p_base_at_mass_permuted, 1.0f, v.size(0));
                 
                 // AUTOGRAD FIX: d_dy_v returns [nz, ny_v, nx], permute back to [ny_v, nz, nx]
-                dp_pert_dy = dp_pert_dy_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
-                dpb_dy = dpb_dy_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
+                dp_diff = dp_diff_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
+                dpb_diff = dpb_diff_temp.permute({1, 0, 2});  // [nz,ny_v,nx] -> [ny_v,nz,nx]
             }
             
             // BOUNDARY HANDLING: Symmetric boundaries at j=0 and j=v_ny-1
@@ -19739,16 +19803,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // AUTOGRAD FIX: Use functional operations for boundary conditions
                 // Southern boundary (j=0): zero gradient for symmetric BC
                 auto zero_slice = torch::zeros({v_nz, v_nx}, v.options());
-                dph_dy = setSlice2D(dph_dy, 0, 0, zero_slice);
-                dphb_dy = setSlice2D(dphb_dy, 0, 0, zero_slice);
-                dp_pert_dy = setSlice2D(dp_pert_dy, 0, 0, zero_slice);
-                dpb_dy = setSlice2D(dpb_dy, 0, 0, zero_slice);
+                dph_diff = setSlice2D(dph_diff, 0, 0, zero_slice);
+                dp_diff = setSlice2D(dp_diff, 0, 0, zero_slice);
+                dpb_diff = setSlice2D(dpb_diff, 0, 0, zero_slice);
 
                 // Northern boundary (j=v_ny-1): zero gradient for symmetric BC
-                dph_dy = setSlice2D(dph_dy, 0, static_cast<int>(v_ny-1), zero_slice);
-                dphb_dy = setSlice2D(dphb_dy, 0, static_cast<int>(v_ny-1), zero_slice);
-                dp_pert_dy = setSlice2D(dp_pert_dy, 0, static_cast<int>(v_ny-1), zero_slice);
-                dpb_dy = setSlice2D(dpb_dy, 0, static_cast<int>(v_ny-1), zero_slice);
+                dph_diff = setSlice2D(dph_diff, 0, static_cast<int>(v_ny-1), zero_slice);
+                dp_diff = setSlice2D(dp_diff, 0, static_cast<int>(v_ny-1), zero_slice);
+                dpb_diff = setSlice2D(dpb_diff, 0, static_cast<int>(v_ny-1), zero_slice);
             }
 
             if (wrf::sdirk3::g_sdirk3_config.debug_level > 0) {
@@ -19777,124 +19839,21 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             
             // AUTOGRAD DEBUG: Check intermediate tensor shapes            
             // First three terms of horizontal pressure gradient
-            auto vert_coupling = c1h_3d * muv_3d + c2h_3d;
+            auto vert_coupling = canonical_horizontal ? level_mass_v : c1h_3d * muv_3d + c2h_3d;
 
-            // WRF-CONSISTENT: Fortran horizontal_pressure_gradient (L2385-2388) uses:
-            //   (ph gradient) + (alt × p' gradient) + (al × pb gradient)
-            // where ph is PERTURBATION geopotential only, NOT ph+phb.
-            // The base state geopotential gradient is NOT included.
-            auto grad_sum = dph_dy + alt * dp_pert_dy + al * dpb_dy;
-            // Note: dphb_dy is computed but intentionally NOT included in grad_sum
-            
-            auto dpy = msf_ratio_v * 0.5f * rdy * vert_coupling * grad_sum;
-            
+            // dph_diff sums both w levels; pressure differences stay on mass points.
+            // alt/al are face means, so recover the neighbor sums for the shared kernel.
+            auto dpy = wrf::sdirk3::acoustic::horizontal_pgf_primary(
+                rdy, msf_ratio_v * vert_coupling, dph_diff,
+                2.0f * alt, dp_diff, 2.0f * al, dpb_diff);
+
             // Add non-hydrostatic term if configured
-            if (non_hydrostatic_ && php_.defined() && dpn_v_.defined()) {
-                // PARITY FIX 2025-12-14: Extract runtime dimensions from dpn_v_ tensor
-                // This ensures correct behavior for sub-tiles or halo-trimmed inputs
-                int64_t dpn_ny_v = dpn_v_.size(0);    // j dimension (v-staggered)
-                int64_t dpn_nz_w = dpn_v_.size(1);    // k dimension (w-levels)
-                int64_t dpn_nx = dpn_v_.size(2);      // i dimension
-                int64_t dpn_nz = dpn_nz_w - 1;        // mass levels = w-levels - 1
+            if (native_nh) {
+                TORCH_CHECK(native_nh_v.sizes() == dpy.sizes(),
+                            "native NH V term shape mismatch");
+                dpy = dpy + native_nh_v;
+            }
 
-                // AUTOGRAD FIX: php_ has shape [ny, nz, nx] but d_dy_v expects [nz, ny, nx]
-                // Need to permute dimensions from [j,k,i] to [k,j,i]
-                auto php_permuted = php_.permute({1, 0, 2});  // [ny,nz,nx] -> [nz,ny,nx]
-                // Compute php gradient at v-points using runtime dimension
-                auto dphp_dy = d_dy_v(php_permuted, rdy, dpn_ny_v);
-
-                // Vertical difference of dpn
-                // Memory reuse optimization: Reuse the same dpn_diff_work_ tensor
-                // AUTOGRAD FIX: dpn_diff should be [ny_v, nz, nx] following WRF [j,k,i] convention
-                // PARITY FIX 2025-12-14: Use runtime dimensions from dpn_v_ for cache validation
-                if (!dpn_diff_work_.defined() ||
-                    dpn_diff_work_.size(0) != dpn_ny_v ||
-                    dpn_diff_work_.size(1) != dpn_nz ||
-                    dpn_diff_work_.size(2) != dpn_nx ||
-                    dpn_diff_work_.device() != dpn_v_.device()) {
-                    dpn_diff_work_ = torch::zeros({dpn_ny_v, dpn_nz, dpn_nx}, dpn_v_.options());
-                } else {
-                    dpn_diff_work_.zero_();  // Zero existing tensor in-place
-                }
-                auto& dpn_diff = dpn_diff_work_;
-
-                // AUTOGRAD DEBUG: Check dpn_v_ dimensions
-                // Compute vertical difference using runtime dimensions
-                // dpn_v_ has w-levels, compute difference to get mass-level values
-                // PARITY FIX 2025-12-20: Use getRdnwTensor() fallback chain instead of rdnw_ vector.
-                // rdnw_ may be empty while grid_info_->rdnw is valid, so use unified fallback.
-                // PARITY FIX 2025-12-21: Use data_ptr for loop access instead of .index({k}).item()
-                // PARITY FIX 2025-12-21: Get CPU-cached tensor directly to avoid GPU->CPU copy each call.
-                torch::Tensor rdnw_cpu_dpn_v;
-                const float* rdnw_ptr_dpn_v = nullptr;
-                int64_t rdnw_numel_dpn_v = 0;
-                {
-                    torch::NoGradGuard no_grad;
-                    rdnw_cpu_dpn_v = getRdnwTensor(torch::kCPU, torch::kFloat32, dpn_nz);
-                    if (rdnw_cpu_dpn_v.defined() && rdnw_cpu_dpn_v.numel() > 0) {
-                        rdnw_cpu_dpn_v = rdnw_cpu_dpn_v.contiguous();
-                        rdnw_ptr_dpn_v = rdnw_cpu_dpn_v.data_ptr<float>();
-                        rdnw_numel_dpn_v = rdnw_cpu_dpn_v.numel();
-                    }
-                }
-                // FIX 2026-01-31: Vectorized dpn_diff computation.
-                // Previous k-loop with index_put_ was costly per JVP.
-                // dpn_diff[:, k, :] = (dpn_v[:, k+1, :] - dpn_v[:, k, :]) * rdnw[k]
-                {
-                    // Bulk difference: dpn_v[:, 1:nz+1, :] - dpn_v[:, 0:nz, :]
-                    auto dpn_upper = dpn_v_.slice(1, 1, dpn_nz + 1);
-                    auto dpn_lower = dpn_v_.slice(1, 0, dpn_nz);
-                    auto diff = dpn_upper - dpn_lower;  // shape: [ny_v, nz, nx]
-
-                    // Build rdnw weight tensor [1, nz, 1] for broadcasting
-                    if (rdnw_ptr_dpn_v && rdnw_numel_dpn_v >= dpn_nz) {
-                        // PERF FIX 2026-01-31: Cache rdnw device tensor for V pressure gradient
-                        // Reuse U-site cache if same pointer+dims, otherwise create V-specific cache
-                        if (!rdnw_dev_v_cached_.defined()
-                            || cached_coeff_device_ != diff.device()
-                            || cached_coeff_dpn_nz_ != dpn_nz
-                            || cached_coeff_rdnw_ptr_ != static_cast<const void*>(rdnw_ptr_dpn_v)) {
-                            torch::NoGradGuard no_grad;
-                            rdnw_dev_v_cached_ = torch::from_blob(
-                                const_cast<float*>(rdnw_ptr_dpn_v),
-                                {dpn_nz}, torch::TensorOptions().dtype(torch::kFloat32))
-                                .to(diff.device())
-                                .reshape({1, dpn_nz, 1});
-                            // dpn_nz and rdnw_ptr may already be set by U-site; update if different
-                            cached_coeff_dpn_nz_ = dpn_nz;
-                            cached_coeff_rdnw_ptr_ = static_cast<const void*>(rdnw_ptr_dpn_v);
-                        }
-                        dpn_diff.copy_(diff * rdnw_dev_v_cached_);
-                    } else {
-                        dpn_diff.copy_(diff);
-                    }
-                }
-
-                // Average mu to v-points using runtime dimension
-                auto mu_v = avg_y_to_v_2d(mu, dpn_ny_v);   // WRF: perturbation mu
-                auto mu_v_3d = mu_v.unsqueeze(1).expand({-1, dpn_nz, -1});
-
-                // Compute the vertical factor
-                // PERF FIX 2026-01-31: Use cached c1h device tensor
-                auto target_device = dpn_v_.device();
-                auto target_dtype = dpn_v_.scalar_type();
-                auto& c1h_aligned = ensureC1hDevCached(target_device, target_dtype);
-                auto c1h_sliced = c1h_aligned.slice(0, 0, std::min(static_cast<int64_t>(c1h_aligned.size(0)), dpn_nz));
-                // Pad if necessary
-                torch::Tensor c1h_work;
-                if (c1h_sliced.size(0) < dpn_nz) {
-                    c1h_work = torch::full({dpn_nz}, 1.0f, dpn_v_.options());
-                    c1h_work.slice(0, 0, c1h_sliced.size(0)).copy_(c1h_sliced);
-                } else {
-                    c1h_work = c1h_sliced;
-                }
-                auto c1_3d = c1h_work.view({1, dpn_nz, 1}).expand({dpn_ny_v, dpn_nz, dpn_nx}).contiguous();
-                auto vertical_factor = -dpn_diff - 0.5f * c1_3d * mu_v_3d;   // WRF rdnw < 0; dpn_diff carries |rdnw|
-
-                // Add non-hydrostatic correction
-                auto nh_correction = msf_ratio_v * rdy * dphp_dy * vertical_factor;
-                dpy = dpy + nh_correction;            }
-            
             // Apply cqu moisture correction coefficient (same as for U-momentum)
             // cqv_ has shape [nz_, ny_, nx_] at mass points
             // Need to interpolate to v-points
@@ -19979,19 +19938,25 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             msf_ratio_v = torch::where(bad_msfvx,
                                       torch::zeros_like(msf_ratio_v),
                                       msf_ratio_v);
-            rv_tend_pgf = -msf_ratio_v * muv_3d * dph_dy;
+            auto mass_coupling = muv_3d;
+            if (use_wrf_mass_flux) {
+                const auto c1 = ensureC1hDevCached(v.device(), v.scalar_type())
+                    .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+                const auto c2 = ensureC2hDevCached(v.device(), v.scalar_type())
+                    .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+                mass_coupling = c1 * muv_3d + c2;
+            }
+            rv_tend_pgf = -msf_ratio_v * mass_coupling * dph_dy;
         }
         
-        // Convert to v tendency and add to total
-        // Note: rv_tend_pgf already includes the map scale factor and vertical coupling
-        // In WRF, rv_tend is updated directly, not divided by muv again.
-        // Guard V-PGF against non-finite halo/boundary artifacts to prevent NaN
-        // propagation into Newton scaling (S[rv]=nan).
-        {
-            auto rv_pgf_finite = torch::isfinite(rv_tend_pgf);
-            rv_tend_pgf = torch::where(rv_pgf_finite, rv_tend_pgf, torch::zeros_like(rv_tend_pgf));
+        if (use_wrf_mass_flux) {
+            const auto c1 = ensureC1hDevCached(v.device(), v.scalar_type())
+                .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+            const auto c2 = ensureC2hDevCached(v.device(), v.scalar_type())
+                .slice(0, 0, nz_actual).view({1, nz_actual, 1});
+            const auto alpha_v = (canonical_horizontal ? level_mass_v : c1 * muv_3d + c2) / msfvx_3d;
+            rv_tend_pgf = rv_tend_pgf * (velocity_mass_v / alpha_v);
         }
-
         // AUTOGRAD DEBUG: Check tensor shapes before addition
         rv_tend = rv_tend + rv_tend_pgf;    }
     
@@ -20011,6 +19976,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         
         if (p_base_.defined() && p_base_.numel() > 0 &&
             th_base_.defined() && th_base_.numel() > 0) {            
+            torch::Tensor w_pgf_to_legacy;
+            if (use_wrf_mass_flux) {
+                const auto c1 = ensureC1fDevCached(w.device(), w.scalar_type())
+                    .slice(0, 0, nz_w_).view({1, nz_w_, 1});
+                const auto c2 = ensureC2fDevCached(w.device(), w.scalar_type())
+                    .slice(0, 0, nz_w_).view({1, nz_w_, 1});
+                const auto alpha_w = (c1 * mu_full.unsqueeze(1) + c2) /
+                    msfty_.to(w.device(), w.scalar_type()).unsqueeze(1);
+                w_pgf_to_legacy = velocity_mass_w / alpha_w;
+            }
+
             // === Use hydrostatic pressure already computed ===
             // We already have p_pert and p_full_mass from the hydrostatic integration
             // computed at the beginning of the pressure gradient force section
@@ -21011,6 +20987,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // Stack all levels together (dimension 1 is the vertical dimension)
                 auto w_pgf_buoy_all = torch::stack(w_pgf_buoy_levels, 1);
 
+                if (use_wrf_mass_flux)
+                    w_pgf_buoy_all = w_pgf_buoy_all * w_pgf_to_legacy;
+
                 if (rw_cap.armed) {
                     auto rw_cap_pad = [&](std::vector<torch::Tensor>& v) {
                         while (v.size() < (size_t)nz_w_) {
@@ -21021,14 +21000,21 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     rw_cap_pad(rw_cap_pg);
                     rw_cap_pad(rw_cap_b1);
                     rw_cap_pad(rw_cap_b2);
-                    rw_cap.add("pg", torch::stack(rw_cap_pg, 1));
-                    rw_cap.add("buoy_mu1", torch::stack(rw_cap_b1, 1));
-                    rw_cap.add("buoy_mu2", torch::stack(rw_cap_b2, 1));
+                    auto pg = torch::stack(rw_cap_pg, 1);
+                    auto b1 = torch::stack(rw_cap_b1, 1);
+                    auto b2 = torch::stack(rw_cap_b2, 1);
+                    if (use_wrf_mass_flux) {
+                        pg = pg * w_pgf_to_legacy;
+                        b1 = b1 * w_pgf_to_legacy;
+                        b2 = b2 * w_pgf_to_legacy;
+                    }
+                    rw_cap.add("pg", pg);
+                    rw_cap.add("buoy_mu1", b1);
+                    rw_cap.add("buoy_mu2", b2);
                     rw_cap.add("rw_pre_pgf", rw_tend);
                     rw_cap.add("w_pgf_buoy_all", w_pgf_buoy_all);
                 }
 
-                // Add all contributions at once
                 rw_tend = rw_tend + w_pgf_buoy_all;
 
                 // v18 DIAG: Check tangent after PGF addition (only during forward-mode AD)
@@ -21218,6 +21204,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         }
                     }
                     auto w_top_contrib = torch::cat(top_contrib_levels, 1);
+                    if (use_wrf_mass_flux)
+                        w_top_contrib = w_top_contrib * w_pgf_to_legacy;
                     rw_tend = rw_tend + w_top_contrib;
                     {
                         auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
@@ -21517,7 +21505,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             auto w_damp_padded = wrf::sdirk3::compute_w_damping_term(
                 ww, w, damp_mu_arg, c1f_, c2f_, damp_rdnw_arg, dt, w_alpha,
                 gate_threshold, w_crit_cfl, k_start, k_end, nz_w_);
-            rw_tend = rw_tend - w_damp_padded;
+            if (canonical_horizontal) {
+                // The raw damping is a WRF coupled force. Preserve raw/alpha_w
+                // through the later division by the legacy velocity mass.
+                const auto alpha_w = level_mass_w /
+                    msfty_.to(w.device(), w.scalar_type()).unsqueeze(1);
+                rw_tend = rw_tend - w_damp_padded * (velocity_mass_w / alpha_w);
+            } else {
+                rw_tend = rw_tend - w_damp_padded;
+            }
             {
                 auto& rw_cap2 = wrf::sdirk3::rw_term_capture_slot();
                 rw_cap2.add("w_damp_padded", w_damp_padded);
@@ -21741,7 +21737,53 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             }
         }
         
-        // --- U-momentum Coriolis ---
+        // Canonical WRF Coriolis on the physical periodic-X,
+        // symmetric-Y core.  The legacy ru/rv/rw tensors above remain
+        // untouched because curvature below consumes them.
+        const bool canonical_coriolis =
+            canonical_horizontal && use_spatially_varying_coriolis &&
+            f_.defined() && e_.defined() && sina_.defined() && cosa_.defined() &&
+            f_.dim() == 2 && e_.dim() == 2 && sina_.dim() == 2 && cosa_.dim() == 2;
+        if (canonical_coriolis) {
+            const auto m = momentum_m;
+            const auto n = momentum_n;
+            const auto uc = u.slice(0, 0, m).slice(2, 0, n + 1);
+            const auto vc = v.slice(0, 0, m + 1).slice(2, 0, n);
+            const auto wc = w.slice(0, 0, m).slice(2, 0, n);
+            const auto map_u_x = msfux_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n + 1);
+            const auto map_u_y = msfuy_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n + 1);
+            const auto map_v_x = msfvx_.to(v.device(), v.scalar_type()).slice(0, 0, m + 1).slice(1, 0, n);
+            const auto map_v_y = msfvy_.to(v.device(), v.scalar_type()).slice(0, 0, m + 1).slice(1, 0, n);
+            const auto map_w_x = msftx_.to(w.device(), w.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto map_w_y = msfty_.to(w.device(), w.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto alpha_u = level_mass_u.slice(0, 0, m).slice(2, 0, n + 1) /
+                                 map_u_y.unsqueeze(1);
+            const auto alpha_v = level_mass_v.slice(0, 0, m + 1).slice(2, 0, n) /
+                                 map_v_x.unsqueeze(1);
+            const auto alpha_w = level_mass_w.slice(0, 0, m).slice(2, 0, n) /
+                                 map_w_y.unsqueeze(1);
+            const auto f_core = f_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto e_core = e_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto sina_core = sina_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto cosa_core = cosa_.to(u.device(), u.scalar_type()).slice(0, 0, m).slice(1, 0, n);
+            const auto raw = wrf::sdirk3::wrf_coriolis_tendencies(
+                uc, vc, wc, alpha_u, alpha_v, alpha_w,
+                map_u_x, map_u_y, map_v_x, map_v_y, map_w_x, map_w_y,
+                f_core, e_core, sina_core, cosa_core,
+                fnm_.to(w.device(), w.scalar_type()), fnp_.to(w.device(), w.scalar_type()));
+            const auto raw_u = extend_u(raw.u);
+            const auto raw_v = extend_v(raw.v, true);
+            const auto raw_w = extend_w(raw.w);
+            // Convert the canonical raw rate to the existing coupled
+            // accumulator; the final division by velocity_mass restores the
+            // physical velocity rate.
+            const auto map_u_y_full = msfuy_.to(u.device(), u.scalar_type()).unsqueeze(1).expand_as(level_mass_u);
+            const auto map_v_x_full = msfvx_.to(v.device(), v.scalar_type()).unsqueeze(1).expand_as(level_mass_v);
+            const auto map_w_y_full = msfty_.to(w.device(), w.scalar_type()).unsqueeze(1).expand_as(level_mass_w);
+            ru_tend = ru_tend + raw_u * (velocity_mass_u / (level_mass_u / map_u_y_full));
+            rv_tend = rv_tend + raw_v * (velocity_mass_v / (level_mass_v / map_v_x_full));
+            rw_tend = rw_tend + raw_w * (velocity_mass_w / (level_mass_w / map_w_y_full));
+        } else {
         // ru_tend = +(msfux/msfuy)*f*rv_at_u - e*cosa*rw_at_u
         // WRF-CONSISTENT: Use coupled momentum (rv = mu*v/mx) for Coriolis per Fortran L3727
         {
@@ -22420,6 +22462,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 0.5f * cosa_3d * ru_at_w - 0.5f * msf_ratio_mass_3d * sina_3d * rv_at_w
             );
         }
+        }
     }
     
     // ========================================================================
@@ -22429,11 +22472,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // Curvature terms for spherical coordinates
         // Following WRF implementation in module_big_step_utilities_em.F
 
-        // PARITY FIX (2025-12-05): Use do_curvature config flag (like Fortran) instead of only map_proj==0
-        // Fortran enables curvature for all map projections when do_curvature=.true.
+        // The C++ curvature opt-in is independent of the Fortran namelist.
         bool do_curvature = wrf::sdirk3::g_sdirk3_config.do_curvature;
 
-        if (do_curvature) {
+        // Canonical mass-coordinate curvature is supplied
+        // by the tensor core below. Keep the existing implementation for
+        // noncanonical/open/nested modes unchanged.
+        if (do_curvature && !canonical_horizontal) {
             if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                 std::cerr << "[SDIRK3] Curvature terms enabled (map_proj="
                           << wrf::sdirk3::g_sdirk3_config.map_proj << ")" << std::endl;
@@ -23192,6 +23237,57 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         [[maybe_unused]] float v_velocity_tend = rv_tend_curv_max_cpu.item<float>() / mu_typical;
     }
     
+    // The canonical curvature tensor core returns rates in
+    // Fortran's coupled alpha units. The existing accumulator still uses the
+    // legacy velocity-mass denominator, so convert by velocity_mass/alpha here.
+    if (wrf::sdirk3::g_sdirk3_config.do_curvature && canonical_horizontal) {
+        const auto map_u_y = msfuy_.to(u.device(), u.scalar_type());
+        const auto map_v_x = msfvx_.to(v.device(), v.scalar_type());
+        const auto map_w_y = msfty_.to(w.device(), w.scalar_type());
+        const auto alpha_u = level_mass_u / map_u_y.unsqueeze(1);
+        const auto alpha_v = level_mass_v / map_v_x.unsqueeze(1);
+        const auto alpha_w = level_mass_w / map_w_y.unsqueeze(1);
+
+        const auto grid = grid_info_;
+        TORCH_CHECK(grid && grid->fzm.defined() && grid->fzp.defined(),
+                    "curvature canonical requires grid_info_->fzm/fzp");
+        const int map_proj = grid->map_proj;
+        torch::Tensor xlat_radians;
+        if (grid->xlat.defined() && grid->xlat.numel() > 0) {
+            xlat_radians = grid->xlat.to(u.device(), u.scalar_type()) *
+                           (M_PI / 180.0);
+        } else if (map_proj == 6 || config_flags_polar_) {
+            TORCH_CHECK(false,
+                        "curvature canonical requires grid_info_->xlat for projection 6/polar");
+        }
+
+        const auto fzm = grid->fzm.to(w.device(), w.scalar_type());
+        const auto fzp = grid->fzp.to(w.device(), w.scalar_type());
+        const float reradius = grid->reradius;
+        wrf::sdirk3::CurvatureTendencies curvature;
+        if (momentum_packed) {
+            curvature = wrf::sdirk3::wrf_curvature_tendencies_packed(
+                u, v, w, alpha_u, alpha_v, alpha_w,
+                msfux_.to(u.device(), u.scalar_type()), map_u_y,
+                map_v_x, msfvy_.to(v.device(), v.scalar_type()),
+                msftx_.to(w.device(), w.scalar_type()), map_w_y,
+                xlat_radians, fzm, fzp,
+                momentum_m, momentum_n, rdx, rdy, reradius,
+                map_proj, config_flags_polar_);
+        } else {
+            curvature = wrf::sdirk3::wrf_curvature_tendencies(
+                u, v, w, alpha_u, alpha_v, alpha_w,
+                msfux_.to(u.device(), u.scalar_type()), map_u_y,
+                map_v_x, msfvy_.to(v.device(), v.scalar_type()),
+                msftx_.to(w.device(), w.scalar_type()), map_w_y,
+                xlat_radians, fzm, fzp,
+                rdx, rdy, reradius, map_proj, config_flags_polar_);
+        }
+        ru_tend = ru_tend + curvature.u * (velocity_mass_u / alpha_u);
+        rv_tend = rv_tend + curvature.v * (velocity_mass_v / alpha_v);
+        rw_tend = rw_tend + curvature.w * (velocity_mass_w / alpha_w);
+    }
+
     // ========================================================================
     // Step 9: HORIZONTAL DIFFUSION
     // ========================================================================
@@ -24205,148 +24301,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // (W DAMPING moved to Step 6, before Coriolis, to match WRF order)
 
-    if (do_implicit || (do_explicit && hevi)) {  // Compressibility: acoustic divergence coupling in theta equation (HEVI inc3: explicit pass enters to route horizontal compressibility to k_slow)
-
-    // ========================================================================
-    // Additional physics tendencies
-    // ========================================================================
-    {
-        // Placeholder for additional physics
-        // - Radiation
-        // - Microphysics
-        // - PBL schemes
-        // - etc.
-
-        // Compressibility effects for t (theta equation compression term)
-        // PERF FIX 2025-12-14: Enabled with vectorized GPU-compatible compute_3d_divergence
-        // PARITY FIX 2025-12-14: Use staggered map factors (msfuy_, msfvx_) for u/v components
-        // PARITY FIX 2025-12-16: Keep entire compressibility calculation in float32 for AMP stability
-        // This term represents: -θ * ∇·V (adiabatic compression/expansion)
-        if (mu_full.defined() && msftx_.defined() && msfty_.defined()) {
-            auto mu_full_3d = mu_full.unsqueeze(1).expand({-1, t.size(1), -1});
-            // Pass staggered map factors for proper scaling on non-uniform grids
-            // PARITY FIX 2025-12-16: Request float32 divergence to keep precision through multiply
-            auto div_3d_f32 = compute_3d_divergence(u, v, w, msftx_, msfty_, msfuy_, msfvx_, rdx, rdy,
-                                                    /*keep_float32=*/true);
-
-            // PARITY FIX 2025-12-15: Handle vertical dimension mismatch
-            // div_3d has shape [ny_mass, nz_common, nx_mass] where nz_common = min(nz_u, nz_v, nz_w-1)
-            // t/t_tend may have larger vertical extent. Pad div_3d or slice t to match.
-            int64_t nz_t = t.size(1);
-            int64_t nz_div = div_3d_f32.size(1);
-
-            // Get input dtype for final cast
-            auto input_dtype = t.dtype();
-
-            if (nz_div < nz_t) {
-                // div_3d is smaller - slice t/th_base_ to nz_div, compute compress, add only to those levels
-                // PARITY FIX 2025-12-16: Promote t and th_base_ to float32 for precision
-                auto t_slice_f32 = t.slice(1, 0, nz_div).to(torch::kFloat32);
-                auto th_base_slice_f32 = th_base_.slice(1, 0, nz_div).to(torch::kFloat32);
-                auto t_full_for_compress = t_slice_f32 + th_base_slice_f32;
-            // R10 follow-up: `t_compress = -theta_full * div(u,v,w)` couples theta to ALL THREE
-            // momentum components -- exactly the shape of the dominant eigenvector (t 0.458,
-            // ru 0.310, rw 0.119, rv 0.113, ph and mu identically 0), which makes it the leading
-            // suspect for the 0.57 s timescale. Zeroing the shared factor removes the term on
-            // every branch of this path at once, instead of gating four separate add sites.
-            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_COMPRESS")) {
-                t_full_for_compress = torch::zeros_like(t_full_for_compress);
-            }
-                auto t_compress_f32 = -t_full_for_compress * div_3d_f32;
-                // Add only to the levels we computed (upper levels unchanged)
-                // Cast back to input dtype when adding to t_tend
-                // FIX 2025-12-26: Use add_() for in-place modification (slice=... rebinds temporary)
-                // HEVI inc3: split theta compressibility -> horizontal (k_slow) + vertical (k_fast).
-                // div_horiz = compute_3d_divergence(u,v,zeros_like(w)) -> Z-block (dw/dz)=0, leaving X+Y only,
-                // on the IDENTICAL grid/levels/cache as div_3d_f32. V_vert = V_full - V_horiz (same input_dtype)
-                // so k_fast + k_slow == Full add (Sterbenz-favorable). Computed only for the two pure passes;
-                // Full pass and hevi-off fall through to the verbatim original add (byte-identical baseline).
-                if (hevi_pure_implicit || hevi_pure_explicit) {
-                    auto div_horiz_f32 = compute_3d_divergence(u, v, torch::zeros_like(w),
-                                                               msftx_, msfty_, msfuy_, msfvx_, rdx, rdy,
-                                                               /*keep_float32=*/true);
-                    auto t_compress_horiz_f32 = -t_full_for_compress * div_horiz_f32;
-                    if (hevi_pure_implicit) {
-                        // k_fast: vertical compressibility only (drop horizontal)
-                        t_tend.slice(1, 0, nz_div).add_(
-                            t_compress_f32.to(input_dtype) - t_compress_horiz_f32.to(input_dtype));
-                    } else {
-                        // k_slow: horizontal compressibility only
-                        t_tend.slice(1, 0, nz_div).add_(t_compress_horiz_f32.to(input_dtype));
-                    }
-                } else {
-                    // Full pass / hevi off: full compressibility (byte-identical to baseline)
-                    t_tend.slice(1, 0, nz_div).add_(t_compress_f32.to(input_dtype));
-                }
-
-                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-                    torch::NoGradGuard no_grad;
-                    // PERF FIX 2025-12-28: Pre-copy to CPU with _cpu suffix for consistency
-                    auto div_3d_f32_cpu = div_3d_f32.detach().to(torch::kCPU);
-                    auto t_compress_f32_cpu = t_compress_f32.detach().to(torch::kCPU);
-                    // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-                    auto div_max_cpu = div_3d_f32_cpu.abs().max();
-                    auto compress_max_cpu = t_compress_f32_cpu.abs().max();
-                    auto div_max = div_max_cpu.item<float>();
-                    auto compress_max = compress_max_cpu.item<float>();
-                    std::cerr << "[SDIRK3] Compression div_max=" << div_max << " compress_max=" << compress_max << std::endl;
-                }
-            } else {
-                // div_3d matches or exceeds t vertical extent - use full t
-                // (If nz_div > nz_t, slice div_3d to match t)
-                auto div_3d_use = (nz_div > nz_t) ? div_3d_f32.slice(1, 0, nz_t) : div_3d_f32;
-                // PARITY FIX 2025-12-16: Promote t and th_base_ to float32 for precision
-                auto t_f32 = t.to(torch::kFloat32);
-                auto th_base_f32 = th_base_.to(torch::kFloat32);
-                auto t_full_for_compress = t_f32 + th_base_f32;
-            // R10 follow-up: `t_compress = -theta_full * div(u,v,w)` couples theta to ALL THREE
-            // momentum components -- exactly the shape of the dominant eigenvector (t 0.458,
-            // ru 0.310, rw 0.119, rv 0.113, ph and mu identically 0), which makes it the leading
-            // suspect for the 0.57 s timescale. Zeroing the shared factor removes the term on
-            // every branch of this path at once, instead of gating four separate add sites.
-            if (wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_COMPRESS")) {
-                t_full_for_compress = torch::zeros_like(t_full_for_compress);
-            }
-                auto t_compress_f32 = -t_full_for_compress * div_3d_use;
-                // Cast back to input dtype when adding to t_tend
-                // HEVI inc3: split theta compressibility -> horizontal (k_slow) + vertical (k_fast).
-                // div_horiz via w-zeroed re-call; sliced to t extent with the IDENTICAL (nz_div>nz_t) condition
-                // as div_3d_use. V_vert = V_full - V_horiz (same input_dtype). Full pass / hevi-off: verbatim original.
-                if (hevi_pure_implicit || hevi_pure_explicit) {
-                    auto div_horiz_f32 = compute_3d_divergence(u, v, torch::zeros_like(w),
-                                                               msftx_, msfty_, msfuy_, msfvx_, rdx, rdy,
-                                                               /*keep_float32=*/true);
-                    auto div_horiz_use = (nz_div > nz_t) ? div_horiz_f32.slice(1, 0, nz_t) : div_horiz_f32;
-                    auto t_compress_horiz_f32 = -t_full_for_compress * div_horiz_use;
-                    if (hevi_pure_implicit) {
-                        // k_fast: vertical compressibility only (drop horizontal)
-                        t_tend = t_tend + (t_compress_f32.to(input_dtype) - t_compress_horiz_f32.to(input_dtype));
-                    } else {
-                        // k_slow: horizontal compressibility only
-                        t_tend = t_tend + t_compress_horiz_f32.to(input_dtype);
-                    }
-                } else {
-                    // Full pass / hevi off: full compressibility (byte-identical to baseline)
-                    t_tend = t_tend + t_compress_f32.to(input_dtype);
-                }
-
-                if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-                    torch::NoGradGuard no_grad;
-                    // PERF FIX 2025-12-28: Pre-copy to CPU with _cpu suffix for consistency
-                    auto div_3d_use_cpu = div_3d_use.detach().to(torch::kCPU);
-                    auto t_compress_f32_cpu = t_compress_f32.detach().to(torch::kCPU);
-                    // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-                    auto div_max_cpu = div_3d_use_cpu.abs().max();
-                    auto compress_max_cpu = t_compress_f32_cpu.abs().max();
-                    auto div_max = div_max_cpu.item<float>();
-                    auto compress_max = compress_max_cpu.item<float>();
-                    std::cerr << "[SDIRK3] Compression div_max=" << div_max << " compress_max=" << compress_max << std::endl;
-                }
-            }
-        }
-    }
-
-    }  // end if (do_implicit) — compressibility term
+    // Dry potential temperature has no adiabatic compression source. Its
+    // conservative transport above and the mass product rule below together
+    // preserve constant theta; pressure compression is represented by the EOS.
 
     // ========================================================================
     // FINAL: Combine all tendencies
@@ -24474,26 +24431,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // Using product rule: d(mu*u)/dt = mu*du/dt + u*dmu/dt
     // Therefore: du/dt = (1/mu)*[d(mu*u)/dt - u*dmu/dt]
 
-    // Get mu at staggered points
-    auto mu_at_u = avg_x_to_u_2d(mu, nx_u_);
-    auto mu_at_v = avg_y_to_v_2d(mu, ny_v_);
-    auto mu_at_w = mu;  // W is at mass points horizontally
-
-    // Get mu_base at staggered points for correct total dry air mass
-    auto mu_base_at_u = avg_x_to_u_2d(mu_base_, nx_u_);
-    auto mu_base_at_v = avg_y_to_v_2d(mu_base_, ny_v_);
-    auto mu_base_at_w = mu_base_;  // W is at mass points
-
-    // Expand mu to 3D for each staggered grid
-    auto mu_at_u_3d = mu_at_u.unsqueeze(1).expand({-1, nz_, -1});
-    auto mu_at_v_3d = mu_at_v.unsqueeze(1).expand({-1, nz_, -1});
-    auto mu_at_w_3d = mu_at_w.unsqueeze(1).expand({-1, nz_w_, -1});
-
-    // Expand mu_base to 3D for each staggered grid
-    auto mu_base_at_u_3d = mu_base_at_u.unsqueeze(1).expand({-1, nz_, -1});
-    auto mu_base_at_v_3d = mu_base_at_v.unsqueeze(1).expand({-1, nz_, -1});
-    auto mu_base_at_w_3d = mu_base_at_w.unsqueeze(1).expand({-1, nz_w_, -1});
-
     // mu_tend for product rule subtraction (unscaled dmu/dt)
     auto mu_tend_at_u = avg_x_to_u_2d(mu_tend_for_conversion, nx_u_);
     auto mu_tend_at_v = avg_y_to_v_2d(mu_tend_for_conversion, ny_v_);
@@ -24507,9 +24444,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // CRITICAL FIX: Use total dry air mass (mu + mu_base) not just perturbation
     // Add small epsilon to prevent division by zero
     // PARITY FIX 2025-12-24: Autocast-aware eps per variable (handles FP16 autocast and dtype differences).
-    const float eps_u = getAutocastAwareEps(mu_at_u_3d);
-    const float eps_v = getAutocastAwareEps(mu_at_v_3d);
-    const float eps_w = getAutocastAwareEps(mu_at_w_3d);
     // 9F.D18: last mutation of ru_tend_ in this function -- everything downstream
     // works on the PACKED RHS, not on ru_tend_. So the coverage residual measured
     // against this snapshot is exact for ru_tend_ and only for ru_tend_.
@@ -24531,10 +24465,24 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         u_tend = ru_tend;
         v_tend = rv_tend;
         w_tend = rw_tend;
+    } else if (canonical_horizontal) {
+        // Maps and hybrid coefficients are fixed: alpha_dot/alpha =
+        // c1*Mdot/(c1*M+c2). Use the same physical face averaging as the flux.
+        const auto mass_dot = mu_tend_for_conversion.slice(0,0,momentum_m).slice(1,0,momentum_n);
+        const auto c1h = c1h_.to(u.device(),u.scalar_type()).slice(0,0,nz_).view({1,-1,1});
+        const auto c1f = c1f_.to(w.device(),w.scalar_type()).slice(0,0,nz_w_).view({1,-1,1});
+        const auto rate_u = extend_u(c1h*stagger_wrf_mass_field(
+            mass_dot,1,wdamp_contract_.x_policy).unsqueeze(1))/level_mass_u;
+        const auto rate_v = extend_v(c1h*stagger_wrf_mass_field(
+            mass_dot,0,wdamp_contract_.y_policy).unsqueeze(1),false)/level_mass_v;
+        const auto rate_w = extend_w(c1f*mass_dot.unsqueeze(1))/level_mass_w;
+        u_tend = ru_tend/velocity_mass_u-u*rate_u;
+        v_tend = rv_tend/velocity_mass_v-v*rate_v;
+        w_tend = rw_tend/velocity_mass_w-w*rate_w;
     } else {
-        u_tend = ru_tend / (mu_at_u_3d + mu_base_at_u_3d + eps_u) - u * mu_tend_at_u_3d / (mu_at_u_3d + mu_base_at_u_3d + eps_u);
-        v_tend = rv_tend / (mu_at_v_3d + mu_base_at_v_3d + eps_v) - v * mu_tend_at_v_3d / (mu_at_v_3d + mu_base_at_v_3d + eps_v);
-        w_tend = rw_tend / (mu_at_w_3d + mu_base_at_w_3d + eps_w) - w * mu_tend_at_w_3d / (mu_at_w_3d + mu_base_at_w_3d + eps_w);
+        u_tend = ru_tend / velocity_mass_u - u * mu_tend_at_u_3d / velocity_mass_u;
+        v_tend = rv_tend / velocity_mass_v - v * mu_tend_at_v_3d / velocity_mass_v;
+        w_tend = rw_tend / velocity_mass_w - w * mu_tend_at_w_3d / velocity_mass_w;
     }
 
     // v18 DIAG: Check tangent after coupled-to-velocity conversion (only during forward-mode AD)
@@ -24579,9 +24527,16 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     auto mu_tend_3d = mu_tend_for_conversion.unsqueeze(1).expand({-1, nz_, -1});
     const float eps_theta = getAutocastAwareEps(mu_3d);
     // SPLIT-EXPLICIT D1 FIX (2026-07-11): coupled d(mu*theta)/dt export, same rationale as u/v/w.
+    const auto theta_mass = use_wrf_mass_flux
+        ? c1h_.to(t.device(), t.scalar_type()).view({1, nz_, 1}) * (mu_3d + mu_base_3d)
+            + c2h_.to(t.device(), t.scalar_type()).view({1, nz_, 1})
+        : mu_3d + mu_base_3d;
+    const auto theta_mass_tend = use_wrf_mass_flux
+        ? c1h_.to(t.device(), t.scalar_type()).view({1, nz_, 1}) * mu_tend_3d
+        : mu_tend_3d;
     auto theta_tend = g_export_coupled_slow
         ? t_tend
-        : t_tend / (mu_3d + mu_base_3d + eps_theta) - t * mu_tend_3d / (mu_3d + mu_base_3d + eps_theta);
+        : (t_tend - t * theta_mass_tend) / (theta_mass + eps_theta);
     
     // ph is geopotential, not coupled with mu, so keep as is
     // mu_tend stays as is
@@ -24600,8 +24555,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         auto check_tend = [&nan_cnt, do_sanitize](const torch::Tensor& tend,
                                     const char* name) -> torch::Tensor {
             auto tend_cpu = tend.detach().to(torch::kCPU);
-            float norm = tend_cpu.norm().item<float>();
-            if (std::isnan(norm) || std::isinf(norm)) {
+            if (!torch::isfinite(tend_cpu).all().item<bool>()) {
+                const float norm = tend_cpu.norm().item<float>();
                 if (nan_cnt < 10) {
                     if (do_sanitize) {
                         std::cerr << "[RHS NaN SANITIZE] " << name
@@ -24641,11 +24596,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                   << " / " << w_tend_comb_max_cpu.item<float>() << std::endl;
     }
 
-    // CRITICAL FIX: Convert ph_tend from mass-weighted to physical tendency
-    // Currently: ph_tend = μ/msfty · ∂φ/∂t (mass-weighted form)
-    // Need: ph_tend = ∂φ/∂t (physical tendency for Newton solver)
-    // Fortran does this conversion at state update time (module_small_step_em.F:1822-1823)
-    // But implicit solver needs it in RHS
+    // rhs_ph accumulates coupled tendencies. The ordinary WRF advance_w
+    // divides the complete PH equation by alpha_w=(c1f*M+c2f)/msfty.
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
         // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
         auto ph_tend_conv_cpu = ph_tend.detach().to(torch::kCPU);
@@ -24668,10 +24620,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         msfty_3d_ph = torch::ones_like(mut_at_w);
     }
 
-    // Convert: ph_tend_physical = ph_tend_weighted * msfty / mut
-    // PARITY FIX 2025-12-24: FP16 only - BF16 has float32 exponent range so 1e-10 is safe.
     const float mut_safe_eps = getAutocastAwareEps(mut_at_w);
-    ph_tend = ph_tend * msfty_3d_ph / (mut_at_w + mut_safe_eps);
+    const auto ph_conversion = canonical_horizontal
+        ? msfty_.to(ph_tend.device(), ph_tend.scalar_type()).unsqueeze(1) / level_mass_w
+        : msfty_3d_ph / (mut_at_w + mut_safe_eps);
+    ph_tend = ph_tend * ph_conversion;
 
     // DIAGNOSTIC: Convert each contribution to physical units for comparison
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24685,8 +24638,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
         // Convert individual contributions to diagnose which term is problematic
         // Note: These are computed from saved tensors, conversion factor is same
-        auto conversion_factor = msfty_3d_ph / (mut_at_w + mut_safe_eps);
-        auto conversion_factor_cpu = conversion_factor.detach().to(torch::kCPU);
+        auto conversion_factor_cpu = ph_conversion.detach().to(torch::kCPU);
         auto conv_factor_max_cpu = conversion_factor_cpu.max();
         auto conv_factor_min_cpu = conversion_factor_cpu.min();
         std::cerr << "[SDIRK3] Conversion factor: " << conv_factor_max_cpu.item<float>()
@@ -24759,7 +24711,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         wrf::sdirk3::g_sdirk3_config.wrf_damp_opt == 2 &&
         wrf::sdirk3::g_sdirk3_config.rayleigh_damp_coef > 0.0f &&
         wrf::sdirk3::g_sdirk3_config.rayleigh_damp_depth > 0.0f) {
-        applyRayleighDamping(RHS, U);
+        applyRayleighDamping(RHS, constrained_state);
     }
 
     // Divergence damping: applied in do_implicit for acoustic mode stabilization (2026-02-01)
@@ -24773,35 +24725,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         applyDivergenceDamping(RHS, u, v, w);
     }
 
-    // Final RHS validation
-    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        torch::NoGradGuard no_grad;
-        // PERF FIX 2025-12-28: Pre-copy to CPU with _cpu suffix for consistency
-        auto RHS_cpu = RHS.detach().to(torch::kCPU);
-        // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-        auto rhs_norm_cpu = RHS_cpu.norm();
-        auto rhs_norm = rhs_norm_cpu.item<float>();
-
-        if (std::isnan(rhs_norm) || std::isinf(rhs_norm)) {
-            return torch::zeros_like(RHS);
-        } else if (rhs_norm > 1e7f) {
-            // AUTOGRAD: No clamping per user requirement - preserve computation graph
-        }
-    }    
-    // Rayleigh damping: moved to do_explicit block (2026-02-01) for precond-RHS consistency.
-    // See Step 7-10 section above.
-
-    // Final check - PERF FIX 2025-12-27: Gate behind debug_level >= 1 to avoid production sync
-    // Use !isfinite().all() to combine NaN+Inf check in one reduction
-    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        torch::NoGradGuard no_grad;
-        // Pre-copy RHS to CPU once for all checks
-        auto RHS_cpu = RHS.detach().to(torch::kCPU);
-        // PERF FIX 2025-12-28: Pre-compute boolean check with _cpu suffix
-        auto RHS_finite_cpu = torch::isfinite(RHS_cpu).all();
-        [[maybe_unused]] bool has_bad = !RHS_finite_cpu.item<bool>();
-        // has_bad check available for future debug output
-    }
+    // Logging must not replace an invalid RHS with zero: the stage solver must
+    // see the same residual and failure status at every debug level.
 
     // DIAGNOSTIC 2026-02-01: Log mask activation summary for JVP discontinuity diagnosis
     // v20.14r27: Raised to debug_level >= 2 (hot-path RHS, 1 line per call)
@@ -24815,7 +24740,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                   << std::endl;
     }
 
-    return RHS;
+    return projectStateBoundaries(RHS);
 }
 
 void TileSDIRK3UnifiedSolver::applyRayleighDamping(torch::Tensor& rhs,
@@ -26140,16 +26065,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::flux5_upwind(
 }
 
 torch::Tensor TileSDIRK3UnifiedSolver::flux3_upwind(
-    const torch::Tensor& q_im1, const torch::Tensor& q_i,
-    const torch::Tensor& q_ip1, const torch::Tensor& q_ip2,
+    const torch::Tensor& q_im2, const torch::Tensor& q_im1,
+    const torch::Tensor& q_i, const torch::Tensor& q_ip1,
     const torch::Tensor& vel) {
     // WRF 3rd-order upwind-biased flux (used near boundaries)
-    // flux3 = flux4 - sign(1,time_step)*sign(1,vel)*((q_ip2-q_im1)-3*(q_ip1-q_i))/12
-    // where flux4 = 7/12*(q_i+q_im1) - 1/12*(q_ip1+q_im2)
-    // But q_im2 is not available, so use simplified form
-
-    // 4th-order centered flux (simplified without q_im2)
-    auto flux4 = (7.0f*(q_i + q_im1) - (q_ip1 + q_im1)) / 12.0f;
+    // WRF flux3(q_im2,q_im1,q_i,q_ip1): flux4 plus the upwind correction.
+    // The caller supplies the same face stencil as module_advect_em.F.
+    auto flux4 = (7.0f*(q_i + q_im1) - (q_ip1 + q_im2)) / 12.0f;
 
     // Upwind correction
     // v20.8: Smooth sign — same fix as flux5_upwind (see comment there)
@@ -26166,9 +26088,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::flux3_upwind(
         wrf::sdirk3::g_mask_counters.sign_vel_zero += (vel == 0).sum().item<int64_t>();
         wrf::sdirk3::g_mask_counters.sign_vel_total += vel.numel();
     }
-    auto upwind_term = sign_vel * ((q_ip2 - q_im1) - 3.0f*(q_ip1 - q_i)) / 12.0f;
+    auto upwind_term = sign_vel * ((q_ip1 - q_im2) - 3.0f*(q_i - q_im1)) / 12.0f;
 
-    return vel * (flux4 - upwind_term);
+    return vel * (flux4 + upwind_term);
 }
 
 torch::Tensor TileSDIRK3UnifiedSolver::flux2_centered(
@@ -26209,33 +26131,40 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_x(const torch::Tensor& f, c
 
     bool full_coverage_periodic = false;
     if (nx > 1 && nx_u_actual > 1) {
-        // SPLIT-EXPLICIT FULL-COVERAGE PERIODIC-X (2026-07-11): the legacy branches leave
-        // near-edge strips at 2nd-order/ZERO flux (cols 1-2 via flux2_centered; u-points
-        // >= i_end_5th never filled, so the col-36 tendency uses a zero east flux — NOT
-        // repaired by the driver's seam splice, which only covers cols {0,1,2,37,38,39}).
-        // MEASURED: the 3-h slow mode (x-gridscale, e-fold ~17 min, acoustic-knob- and
-        // dt-independent) leads at i={2,39,36} — exactly these strips. Under periodic x
-        // every interface has a full stencil: WRF applies flux5 EVERYWHERE, so compute it
-        // at all true interfaces via rolls of the ghost-stripped field. Split path only
-        // (g_export_coupled_slow) => baseline byte-identical.
-        if (g_export_coupled_slow && config_flags_periodic_x_ &&
-            advect_order >= 5 && nx >= 8) {
-            static std::atomic<int> fcov_probe{0};
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2 && fcov_probe.fetch_add(1) < 1) {
-                std::cerr << "[SPLIT-EXPLICIT ADV] full-coverage periodic x branch ACTIVE (nx="
-                          << nx << ", nx_u=" << nx_u_actual << ")" << std::endl;
+        // A packed periodic field contains one copied mass column. Every true
+        // face has a complete wrapped stencil, including the near-boundary faces.
+        // Missing faces would break constant-scalar transport/mass cancellation.
+        const bool matching_shape = f.size(0) == ny_ && nx == nx_ &&
+            nx_u_actual == nx_u_ && u.size(0) == f.size(0) && u.size(1) == f.size(1);
+        const bool packed_periodic = isPackedPeriodicDomain() && matching_shape;
+        const bool physical_periodic = !g_export_coupled_slow && matching_shape &&
+            !wrf::sdirk3::g_sdirk3_config.enable_ad_halo_exchange && grid_info_ &&
+            nx_ == grid_info_->ide - grid_info_->ids &&
+            ny_ == grid_info_->jde - grid_info_->jds && wdamp_contract_.active &&
+            wdamp_contract_.x_policy == wrf::sdirk3::WWCPBoundaryPolicy::Periodic;
+        const bool split_periodic = g_export_coupled_slow &&
+            config_flags_periodic_x_ && advect_order >= 5 && nx >= 8;
+        if ((packed_periodic || physical_periodic || split_periodic) && nx >= 3) {
+            const int64_t n = nx - ((packed_periodic || split_periodic) ? 1 : 0);
+            const auto core = f.slice(2, 0, n);
+            const auto velocity = u.slice(2, 0, n);
+            torch::Tensor faces;
+            if (advect_order <= 2) {
+                faces = flux2_centered(torch::roll(core, 1, 2), core, velocity);
+            } else if (advect_order < 5) {
+                faces = flux3_upwind(torch::roll(core, 2, 2),
+                                      torch::roll(core, 1, 2), core,
+                                      torch::roll(core, -1, 2), velocity);
+            } else {
+                faces = flux5_upwind(torch::roll(core, 3, 2),
+                                      torch::roll(core, 2, 2),
+                                      torch::roll(core, 1, 2), core,
+                                      torch::roll(core, -1, 2),
+                                      torch::roll(core, -2, 2), velocity);
             }
-            const int64_t nxt = nx - 1;               // true columns (col nx-1 is the x ghost)
-            auto ft = f.index({Slice(), Slice(), Slice(0, nxt)});
-            auto u_t = u.index({Slice(), Slice(), Slice(0, nxt)});
-            auto fx = flux5_upwind(torch::roll(ft, 3, 2), torch::roll(ft, 2, 2),
-                                   torch::roll(ft, 1, 2), ft,
-                                   torch::roll(ft, -1, 2), torch::roll(ft, -2, 2), u_t);
-            flux.index_put_({Slice(), Slice(), Slice(0, nxt)}, fx);
-            for (int64_t ia = nxt; ia < static_cast<int64_t>(nx_u_actual); ++ia) {
-                flux.index_put_({Slice(), Slice(), Slice(ia, ia + 1)},
-                                fx.index({Slice(), Slice(), Slice(ia - nxt, ia - nxt + 1)}));
-            }
+            flux.slice(2, 0, n).copy_(faces);
+            for (int64_t i = n; i < nx_u_actual; ++i)
+                flux.select(2, i).copy_(faces.select(2, i % n));
             full_coverage_periodic = true;
         }
         // VECTORIZED INTERIOR COMPUTATION
@@ -26344,12 +26273,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_x(const torch::Tensor& f, c
                 // Vectorized 3rd-order upwind flux
                 auto u_interior = u.index({Slice(), Slice(), Slice(i_start_3rd, i_end_3rd)});
                 
+                auto q_im2 = f.index({Slice(), Slice(), Slice(i_start_3rd-2, i_end_3rd-2)});
                 auto q_im1 = f.index({Slice(), Slice(), Slice(i_start_3rd-1, i_end_3rd-1)});
                 auto q_i   = f.index({Slice(), Slice(), Slice(i_start_3rd, i_end_3rd)});
                 auto q_ip1 = f.index({Slice(), Slice(), Slice(i_start_3rd+1, i_end_3rd+1)});
-                auto q_ip2 = f.index({Slice(), Slice(), Slice(i_start_3rd+2, i_end_3rd+2)});
                 
-                auto flux_interior = flux3_upwind(q_im1, q_i, q_ip1, q_ip2, u_interior);
+                auto flux_interior = flux3_upwind(q_im2, q_im1, q_i, q_ip1, u_interior);
                 
                 flux.index_put_({Slice(), Slice(), Slice(i_start_3rd, i_end_3rd)}, flux_interior);
                 
@@ -26497,30 +26426,42 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, c
 
     bool full_coverage_symy = false;
     if (ny > 1 && ny_v_actual > 1) {
-        // SPLIT-EXPLICIT FULL-COVERAGE SYMMETRIC-Y (2026-07-12): under symmetric y BCs WRF
-        // applies the FULL 5th-order stencil at every row (order degradation is open/
-        // specified-only; halos carry REFLECTED rows, module_bc symmetric_ys:
-        // ghost(-m) = row(m-1)). The legacy branches leave low-order/undissipated strips
-        // near the walls, UNREPAIRED in y (the driver's roll-splice fixes x only) —
-        // MEASURED as the residual instability's nucleation site (ignites at j=2-3 after
-        // ~2.5 h of stock-tracking, e-fold ~17 min). Build +-3 even-reflected ghost rows
-        // and evaluate flux5 at every true v-point; wall fluxes carry the state's wall rv.
-        if (g_export_coupled_slow && !config_flags_periodic_y_ &&
-            advect_order >= 5 && ny >= 8) {
-            const int64_t nyt = ny - 1;                        // true mass rows (row ny-1 = pad)
-            auto ftr = f.slice(0, 0, nyt);
-            auto fe = torch::cat({ftr.slice(0, 0, 3).flip(0), ftr,
-                                  ftr.slice(0, nyt - 3, nyt).flip(0)}, 0);   // {nyt+6,nz,nx}
-            auto qy = [&](int off) {                            // value f(j+off) at v-point j=0..nyt
-                return fe.slice(0, 3 + off, 3 + off + nyt + 1);
+        // The packed north scalar row is an even-reflected alias. Complete
+        // reflected stencils supply every physical face, including the walls.
+        const bool matching_shape = ny == ny_ && f.size(2) == nx_ &&
+            ny_v_actual == ny_v_ && v.size(1) == f.size(1) && v.size(2) == f.size(2);
+        const bool packed_symmetric = isPackedPeriodicDomain() && matching_shape;
+        const bool physical_symmetric = !g_export_coupled_slow && matching_shape &&
+            !wrf::sdirk3::g_sdirk3_config.enable_ad_halo_exchange && grid_info_ &&
+            nx_ == grid_info_->ide - grid_info_->ids &&
+            ny_ == grid_info_->jde - grid_info_->jds && wdamp_contract_.active &&
+            wdamp_contract_.y_policy == wrf::sdirk3::WWCPBoundaryPolicy::SymmetricReplicate;
+        const bool split_symmetric = g_export_coupled_slow &&
+            !config_flags_periodic_y_ && advect_order >= 5 && ny >= 8;
+        if ((packed_symmetric || physical_symmetric || split_symmetric) && ny >= 3) {
+            const int64_t m = ny - ((packed_symmetric || split_symmetric) ? 1 : 0);
+            const auto core = f.slice(0, 0, m);
+            // Modulo reflection also supports domains narrower than the stencil.
+            const auto j = torch::arange(-3, m + 3,
+                torch::TensorOptions().dtype(torch::kLong).device(f.device()));
+            const auto r = torch::remainder(j, 2 * m);
+            const auto reflected = core.index_select(0,
+                torch::where(r < m, r, 2 * m - 1 - r));
+            auto q = [&](int offset) {
+                return reflected.slice(0, 3 + offset, 3 + offset + m + 1);
             };
-            auto v_t = v.slice(0, 0, nyt + 1);                  // true v-points 0..nyt
-            auto fy = flux5_upwind(qy(-3), qy(-2), qy(-1), qy(0), qy(1), qy(2), v_t);
-            flux.index_put_({Slice(0, nyt + 1), Slice(), Slice()}, fy);
-            for (int64_t ja = nyt + 1; ja < static_cast<int64_t>(ny_v_actual); ++ja) {
-                flux.index_put_({Slice(ja, ja + 1), Slice(), Slice()},
-                                fy.slice(0, nyt, nyt + 1));
+            const auto velocity = v.slice(0, 0, m + 1);
+            torch::Tensor faces;
+            if (advect_order <= 2) {
+                faces = flux2_centered(q(-1), q(0), velocity);
+            } else if (advect_order < 5) {
+                faces = flux3_upwind(q(-2), q(-1), q(0), q(1), velocity);
+            } else {
+                faces = flux5_upwind(q(-3), q(-2), q(-1), q(0), q(1), q(2), velocity);
             }
+            flux.slice(0, 0, m + 1).copy_(faces);
+            for (int64_t j = m + 1; j < ny_v_actual; ++j)
+                flux.select(0, j).copy_(faces.select(0, m));
             full_coverage_symy = true;
         }
         // VECTORIZED INTERIOR COMPUTATION
@@ -26652,12 +26593,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, c
                 // For [ny, nz, nx] layout, Y is dimension 0
                 auto v_interior = v.index({Slice(j_start_3rd, j_end_3rd), Slice(), Slice()});
                 
+                auto q_jm2 = f.index({Slice(j_start_3rd-2, j_end_3rd-2), Slice(), Slice()});
                 auto q_jm1 = f.index({Slice(j_start_3rd-1, j_end_3rd-1), Slice(), Slice()});
                 auto q_j   = f.index({Slice(j_start_3rd, j_end_3rd), Slice(), Slice()});
                 auto q_jp1 = f.index({Slice(j_start_3rd+1, j_end_3rd+1), Slice(), Slice()});
-                auto q_jp2 = f.index({Slice(j_start_3rd+2, j_end_3rd+2), Slice(), Slice()});
                 
-                auto flux_interior = flux3_upwind(q_jm1, q_j, q_jp1, q_jp2, v_interior);
+                auto flux_interior = flux3_upwind(q_jm2, q_jm1, q_j, q_jp1, v_interior);
                 
                 flux.index_put_({Slice(j_start_3rd, j_end_3rd), Slice(), Slice()}, flux_interior);
                 
@@ -26735,16 +26676,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, c
         if (ny_v_actual > 0) flux.select(0, ny_v_actual - 1).zero_();
     }
 
-    // Early return if velocity is zero everywhere
-    // PERF FIX 2025-12-28: Pre-copy to CPU with _cpu suffix for consistency
-    torch::NoGradGuard no_grad_check;
-    auto v_abs_cpu = v.abs().detach().to(torch::kCPU);
-    // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-    auto v_max_cpu = v_abs_cpu.max();
-    auto v_max = v_max_cpu.item<float>();
-    if (v_max < 1e-20f) {        return torch::zeros_like(f);
-    }
-    
+    // Keep the flux graph even at zero velocity: its velocity derivative
+    // transports a nonzero scalar and is required by the Newton operator.
     // Compute divergence of flux - VECTORIZED
     // For mass point j, we need flux at v-points j and j+1
     // Handle both interior tiles (ny_v = ny+1) and boundary tiles (ny_v = ny)
@@ -26772,6 +26705,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, c
         }
     }
     
+    {
+        torch::NoGradGuard no_grad;  // diagnostics only; preserve the flux graph
     // Check for NaN before returning
     // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
     auto advect_chk_cpu = advect.detach().to(torch::kCPU);
@@ -26801,7 +26736,85 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, c
         }
     }
     
+    }
     return advect;
+}
+
+std::pair<torch::Tensor, torch::Tensor>
+TileSDIRK3UnifiedSolver::advectPackedPeriodicMomentumX(
+    const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& mu_full,
+    float rdx, bool wrf_coupled_output) {
+    const int64_t n = nx_ - 1;
+    const int64_t m = ny_ - 1;
+    TORCH_CHECK(n >= 2 && m >= 2 && u.dim() == 3 && v.dim() == 3 &&
+                    mu_full.dim() == 2 && u.size(0) == m + 1 && u.size(2) == n + 2 &&
+                    v.size(0) == m + 2 && v.size(2) == n + 1 &&
+                    u.size(1) == v.size(1) && mu_full.size(0) == m + 1 &&
+                    mu_full.size(1) == n + 1,
+                "periodic momentum X requires the whole-domain packed WRF layout");
+
+    // Compute on independent columns only.  U[n] is the seam; U[n+1] and
+    // mass/V[n] are aliases, not additional cells of the periodic domain.
+    const auto ut = u.slice(0, 0, m).slice(2, 0, n);
+    const auto vt = v.slice(0, 0, m + 1).slice(2, 0, n);
+    const auto mt = mu_full.slice(0, 0, m).slice(1, 0, n);
+    const auto mu_u = 0.5f * (mt + torch::roll(mt, 1, 1));
+    const auto mu_v = torch::cat({mt.slice(0, 0, 1),
+        0.5f * (mt.slice(0, 0, m - 1) + mt.slice(0, 1, m)),
+        mt.slice(0, m - 1, m)}, 0);
+    const auto c1 = ensureC1hDevCached(u.device(), u.scalar_type())
+                        .slice(0, 0, u.size(1)).view({1, -1, 1});
+    const auto c2 = ensureC2hDevCached(u.device(), u.scalar_type())
+                        .slice(0, 0, u.size(1)).view({1, -1, 1});
+    const auto alpha_u = (c1 * mu_u.unsqueeze(1) + c2) /
+                        msfuy_.slice(0, 0, m).slice(1, 0, n).unsqueeze(1);
+    const auto alpha_v = (c1 * mu_v.unsqueeze(1) + c2) /
+                        msfvx_.slice(0, 0, m + 1).slice(1, 0, n).unsqueeze(1);
+
+    // WRF couple_momentum and advect_u/advect_v: reconstruct velocity;
+    // transport it with coupled U momentum.  V's X flux averages only in Y.
+    const auto ru = alpha_u * ut;
+    const auto transport_u = 0.5f * (ru + torch::roll(ru, 1, 2));
+    const auto transport_v = torch::cat({ru.slice(0, 0, 1),
+        0.5f * (ru.slice(0, 0, m - 1) + ru.slice(0, 1, m)),
+        ru.slice(0, m - 1, m)}, 0);
+    const int order = wrf::sdirk3::g_sdirk3_config.advection_order;
+    auto divergence = [&](const torch::Tensor& q, const torch::Tensor& transport,
+                          const torch::Tensor& map) {
+        torch::Tensor flux;
+        if (order >= 5) {
+            flux = flux5_upwind(torch::roll(q, 3, 2), torch::roll(q, 2, 2),
+                torch::roll(q, 1, 2), q, torch::roll(q, -1, 2),
+                torch::roll(q, -2, 2), transport);
+        } else if (order >= 3) {
+            flux = flux3_upwind(torch::roll(q, 2, 2), torch::roll(q, 1, 2),
+                q, torch::roll(q, -1, 2), transport);
+        } else {
+            flux = flux2_centered(torch::roll(q, 1, 2), q, transport);
+        }
+        // flux[i] is the west face: WRF fqx(i+1)-fqx(i).
+        return -(torch::roll(flux, -1, 2) - flux) * map.unsqueeze(1) * rdx;
+    };
+    auto pad_u = [&](const torch::Tensor& q) {
+        const auto x = torch::cat({q, q.slice(2, 0, 2)}, 2);
+        return torch::cat({x, x.slice(0, m - 1, m)}, 0);
+    };
+    auto pad_v = [&](const torch::Tensor& q) {
+        const auto x = torch::cat({q, q.slice(2, 0, 1)}, 2);
+        // WRF symmetric_ye: V[jde+1] = -V[jde-1].  The wall is row m.
+        return torch::cat({x, -x.slice(0, m - 1, m)}, 0);
+    };
+    auto du = divergence(ut, transport_u,
+        msfux_.slice(0, 0, m).slice(1, 0, n));
+    auto dv = divergence(vt, transport_v,
+        msfvy_.slice(0, 0, m + 1).slice(1, 0, n));
+    if (!wrf_coupled_output) {
+        // Return the physical velocity contribution.  The caller reweights it
+        // with its exact shared denominator before combining legacy terms.
+        du = du / alpha_u;
+        dv = dv / alpha_v;
+    }
+    return {pad_u(du), pad_v(dv)};
 }
 
 // Advection functions for already-staggered variables
@@ -27489,37 +27502,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_v_point_scalar_x(const torch::Tens
 }
 
 // Diffusion and mixing helper functions
-torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_3d(
-    const torch::Tensor& f, const torch::Tensor& Kh, float rdx, float rdy) {
-    // Compute horizontal diffusion with spatially varying coefficient
-    // f: (ny, nz, nx) field to diffuse - per WRF-SDIRK3-design.md layout
-    // Kh: (ny, nz, nx) diffusion coefficient
-    
-    [[maybe_unused]] auto options = f.options();
-    torch::Tensor diff = torch::zeros_like(f);
-    
-    // x-direction: d/dx(Kh * df/dx)
-    auto df_dx = torch::zeros_like(f);
-    df_dx.slice(2, 1, -1).copy_((f.slice(2, 2, -0) - f.slice(2, 0, -2)) * 0.5f * rdx);
-    
-    auto Kh_df_dx = Kh * df_dx;
-    auto d_Kh_df_dx = torch::zeros_like(f);
-    d_Kh_df_dx.slice(2, 1, -1).copy_((Kh_df_dx.slice(2, 2, -0) - Kh_df_dx.slice(2, 0, -2)) * 0.5f * rdx);
-    
-    // y-direction: d/dy(Kh * df/dy)
-    // For [ny, nz, nx] layout, Y is dimension 0
-    auto df_dy = torch::zeros_like(f);
-    df_dy.slice(0, 1, -1).copy_((f.slice(0, 2, -0) - f.slice(0, 0, -2)) * 0.5f * rdy);
-    
-    auto Kh_df_dy = Kh * df_dy;
-    auto d_Kh_df_dy = torch::zeros_like(f);
-    d_Kh_df_dy.slice(0, 1, -1).copy_((Kh_df_dy.slice(0, 2, -0) - Kh_df_dy.slice(0, 0, -2)) * 0.5f * rdy);
-    
-    diff = d_Kh_df_dx + d_Kh_df_dy;
-    
-    return diff;
-}
-
 torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion(
     const torch::Tensor& f, float Kh, float rdx, float rdy) {
     // Compute 2nd-order horizontal diffusion: Kh * ∇²f
@@ -28647,31 +28629,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_mixing(
     mix.select(1, nz-1).zero_();
 
     return mix;
-}
-
-torch::Tensor TileSDIRK3UnifiedSolver::compute_numerical_filter(
-    const torch::Tensor& f, float alpha) {
-    // Apply numerical smoothing filter to reduce grid-scale noise
-    // Simple 1-2-1 filter in horizontal
-    
-    [[maybe_unused]] auto options = f.options();
-    torch::Tensor filtered = f.clone();
-    
-    // Apply filter multiple times for stronger smoothing
-    for (int iter = 0; iter < 2; ++iter) {
-        auto f_smooth = filtered.clone();
-
-        // x-direction smoothing
-        f_smooth.slice(2, 1, -1).copy_((1.0f - 2.0f*alpha) * filtered.slice(2, 1, -1) +
-                                   alpha * (filtered.slice(2, 0, -2) + filtered.slice(2, 2, -0)));
-
-        // y-direction smoothing
-        filtered = f_smooth.clone();
-        filtered.slice(1, 1, -1).copy_((1.0f - 2.0f*alpha) * f_smooth.slice(1, 1, -1) +
-                                   alpha * (f_smooth.slice(1, 0, -2) + f_smooth.slice(1, 2, -0)));
-    }
-    
-    return filtered - f;  // Return the filtered tendency
 }
 
 // Helper function to perform halo exchange on a packed state vector.
@@ -30361,6 +30318,15 @@ void TileSDIRK3UnifiedSolver::setVerticalCoordinateCoefficients(
 
     if (c2h) {
         c2h_ = torch::from_blob(const_cast<float*>(c2h), {nz_}, options).clone();  // LINT_EXCEPTION: CPU opts
+    }
+
+    // Keep the authoritative GridInfo source in lockstep with the public WRF
+    // coefficient setter.  The raw principal model reads GridInfo, while
+    // RHS kernels retain these tile-owned tensors; publishing both closes the
+    // stale c1h/c2h ownership split after a runtime refresh.
+    if (grid_info_) {
+        if (c1h_.defined()) grid_info_->c1h = c1h_.clone();
+        if (c2h_.defined()) grid_info_->c2h = c2h_.clone();
     }
 
     // FIX 2025-01-11 Round59: Invalidate aligned tensor cache after c1f/c2f/c1h/c2h updates
@@ -33205,9 +33171,14 @@ boundary_tensors_done:
                         sample9Points(msfvx_tile) + sample9Points(msfvy_tile);
     }
 
+    // Rebinding any source array changes ownership even if its sampled values match.
     bool msf_changed = (msf_signature_ != new_signature) ||
-                       !msftx_cpu_.defined() ||
-                       (msftx_cpu_.data_ptr() != msftx_tile.data_ptr());
+                       !msftx_cpu_.defined() || msftx_cpu_.data_ptr() != msftx_tile.data_ptr() ||
+                       !msfty_cpu_.defined() || msfty_cpu_.data_ptr() != msfty_tile.data_ptr() ||
+                       !msfux_cpu_.defined() || msfux_cpu_.data_ptr() != msfux_tile.data_ptr() ||
+                       !msfuy_cpu_.defined() || msfuy_cpu_.data_ptr() != msfuy_tile.data_ptr() ||
+                       !msfvx_cpu_.defined() || msfvx_cpu_.data_ptr() != msfvx_tile.data_ptr() ||
+                       !msfvy_cpu_.defined() || msfvy_cpu_.data_ptr() != msfvy_tile.data_ptr();
 
     msftx_cpu_ = msftx_tile;  // Keep view (zero-copy link to WRF memory)
     msfty_cpu_ = msfty_tile;
@@ -33230,9 +33201,6 @@ boundary_tensors_done:
         msfvx_ = msfvx_cpu_.to(target_device);
         msfvy_ = msfvy_cpu_.to(target_device);
 
-        // PARITY FIX 2025-12-17: Invalidate divergence cache after GPU copy
-        // .to() creates new tensors with new data pointers, so cache must be invalidated
-        invalidateDivergenceCache();
     }
 
     // Only increment epoch when map factors actually changed
@@ -38200,6 +38168,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHSFullHalo(
 
     // Unpack full-halo fields via views (Finding #6)
     auto fields = wrf::sdirk3::viewFullHaloFields(U_full, nj_mem_, nz_, ni_mem_, nz_w_);
+    // Constrain physical wall entries before both interior and ghost-stencil paths.
+    fields.u = wrf::sdirk3::project_symmetric_normal_velocity(
+        fields.u, 2, ims_, ids_, ide_, config_flags_symmetric_xs_ && !config_flags_periodic_x_,
+                                     config_flags_symmetric_xe_ && !config_flags_periodic_x_);
+    fields.v = wrf::sdirk3::project_symmetric_normal_velocity(
+        fields.v, 0, jms_, jds_, jde_, config_flags_symmetric_ys_ && !config_flags_periodic_y_,
+                                     config_flags_symmetric_ye_ && !config_flags_periodic_y_);
 
     // Interior bounds in full-halo coordinates
     const int64_t j_s = j_off_;
@@ -38571,11 +38546,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHSFullHalo(
     }
 #endif
 
-    return result;
+    return projectStateBoundaries(result);
 }
 
 // =========================================================================
-// PERF FIX 2025-12-15: Helper functions for compute_3d_divergence optimization
+// Shared interior bounds for staggered spatial operators
 // =========================================================================
 
 // Compute interior bounds based on boundary conditions and grid size
@@ -38615,669 +38590,6 @@ TileSDIRK3UnifiedSolver::InteriorBounds TileSDIRK3UnifiedSolver::computeInterior
     bounds.j_end = reduce_north ? (ny_mass - 1) : ny_mass;
 
     return bounds;
-}
-
-// Ensure divergence cache is valid and populated
-void TileSDIRK3UnifiedSolver::ensureDivergenceCache(
-    const torch::Device& device, torch::ScalarType dtype,
-    int64_t ny_mass, int64_t nx_mass, int64_t nz,
-    const torch::Tensor& msftx, const torch::Tensor& msfty,
-    const torch::Tensor& msfuy, const torch::Tensor& msfvx) const {
-
-    // PARITY FIX 2025-12-16: Include data pointers in cache key to detect map factor changes
-    // If caller passes new tensor with same shape but different underlying data (e.g., moving
-    // nests, regridding, or calling setStaggeredDimensions with new map factors), the cache
-    // must invalidate even if device/dtype/dimensions match.
-    DivergenceCacheKey key;
-    key.device = device;
-    key.dtype = dtype;
-    key.ny_mass = ny_mass;
-    key.nx_mass = nx_mass;
-    key.nz = nz;
-    key.msftx_data_ptr = msftx.defined() ? msftx.data_ptr() : nullptr;
-    key.msfty_data_ptr = msfty.defined() ? msfty.data_ptr() : nullptr;
-    key.msfuy_data_ptr = msfuy.defined() ? msfuy.data_ptr() : nullptr;
-    key.msfvx_data_ptr = msfvx.defined() ? msfvx.data_ptr() : nullptr;
-    // PARITY FIX 2025-12-19: Track msfuy/msfvx shape to detect re-wrapping at same pointer.
-    // WRF may reuse same memory address with different staggered grid dimensions.
-    key.msfuy_ny = msfuy.defined() && msfuy.dim() >= 2 ? msfuy.size(0) : 0;
-    key.msfuy_nx = msfuy.defined() && msfuy.dim() >= 2 ? msfuy.size(1) : 0;
-    key.msfvx_ny = msfvx.defined() && msfvx.dim() >= 2 ? msfvx.size(0) : 0;
-    key.msfvx_nx = msfvx.defined() && msfvx.dim() >= 2 ? msfvx.size(1) : 0;
-    // PARITY FIX 2025-12-19: Track strides to detect different memory layouts at same ptr/shape.
-    // PARITY FIX 2025-12-19: Track strides for all map factors (msftx/msfty/msfuy/msfvx)
-    key.msftx_stride0 = msftx.defined() && msftx.dim() >= 2 ? msftx.stride(0) : 0;
-    key.msftx_stride1 = msftx.defined() && msftx.dim() >= 2 ? msftx.stride(1) : 0;
-    key.msfty_stride0 = msfty.defined() && msfty.dim() >= 2 ? msfty.stride(0) : 0;
-    key.msfty_stride1 = msfty.defined() && msfty.dim() >= 2 ? msfty.stride(1) : 0;
-    key.msfuy_stride0 = msfuy.defined() && msfuy.dim() >= 2 ? msfuy.stride(0) : 0;
-    key.msfuy_stride1 = msfuy.defined() && msfuy.dim() >= 2 ? msfuy.stride(1) : 0;
-    key.msfvx_stride0 = msfvx.defined() && msfvx.dim() >= 2 ? msfvx.stride(0) : 0;
-    key.msfvx_stride1 = msfvx.defined() && msfvx.dim() >= 2 ? msfvx.stride(1) : 0;
-    // PARITY FIX 2025-12-20: Refresh grid epochs before staleness check to detect in-place changes.
-    // This ensures grid_info_->rdnw/dnw/rdn changes are properly tracked.
-    refreshGridMetricEpochs();
-
-    // PARITY FIX 2025-12-19: Track which rdnw source will be used and only that pointer.
-    // This avoids false cache misses when unused rdn/dnw pointers change.
-    // PARITY FIX 2025-12-25: Source selection MUST match getRdnwTensor() priority chain exactly.
-    // Both use: VecRdnw (if fresher) > GridRdnw > VecRdnw > GridDnw > GridRdn > Fallback
-    // Only same-metric vec/grid freshness comparison is valid (rdnw_seq_vec_ vs rdnw_seq_grid_).
-    // Cross-source comparison (rdnw vs dnw) is invalid because their update_seq_ counters are independent.
-    bool grid_rdnw_stale = (!rdnw_.empty()) && (rdnw_seq_vec_ > rdnw_seq_grid_);
-    // PARITY FIX 2025-12-25: Pre-declare is_source_cuda for use in epoch selection below.
-    // Will be set in Fallback block and used in rdnw_epoch assignment.
-    bool is_source_cuda = false;
-    if (!rdnw_.empty() && grid_rdnw_stale) {
-        // Vector has fresher data - use it instead of stale grid tensor
-        key.rdnw_src = RdnwSource::VecRdnw;
-        key.rdnw_src_ptr = rdnw_.data();
-    } else if (grid_info_ && grid_info_->rdnw.defined() && grid_info_->rdnw.numel() > 0) {
-        key.rdnw_src = RdnwSource::GridRdnw;
-        key.rdnw_src_ptr = grid_info_->rdnw.data_ptr();
-        // PARITY FIX 2025-12-20: Grid rdnw in-place changes are already tracked by refreshGridMetricEpochs()
-        // which updates rdnw_epoch_grid_ and rdnw_seq_grid_ for freshness comparison. No additional tracking needed.
-        (void)0;  // Placeholder for removed tracking code
-    } else if (!rdnw_.empty()) {
-        key.rdnw_src = RdnwSource::VecRdnw;
-        key.rdnw_src_ptr = rdnw_.data();  // Vector data pointer
-    } else if (grid_info_ && grid_info_->dnw.defined() && grid_info_->dnw.numel() > 0) {
-        key.rdnw_src = RdnwSource::GridDnw;
-        key.rdnw_src_ptr = grid_info_->dnw.data_ptr();
-        // PARITY FIX 2025-12-20: Signature sampling and epoch updates already done by
-        // refreshGridMetricEpochs() above - no need to duplicate .item() synchronization here.
-        // The grid_dnw_ptr_, grid_dnw_signature_, and dnw_epoch_grid_ are already up-to-date.
-    } else if (grid_info_ && grid_info_->rdn.defined() && grid_info_->rdn.numel() > 0) {
-        key.rdnw_src = RdnwSource::GridRdn;
-        key.rdnw_src_ptr = grid_info_->rdn.data_ptr();
-        // PARITY FIX 2025-12-20: Signature sampling and epoch updates already done by
-        // refreshGridMetricEpochs() above - no need to duplicate .item() synchronization here.
-        // The grid_rdn_ptr_, grid_rdn_signature_, and rdn_epoch_grid_ are already up-to-date.
-    } else {
-        key.rdnw_src = RdnwSource::Fallback;
-        key.rdnw_src_ptr = nullptr;
-        // PARITY FIX 2025-12-20: Track ph_base for Fallback source.
-        // Fallback uses ztop = max(1000, max(ph_base)/g) for rdnw computation.
-        // PERF FIX 2025-12-23: Use lightweight updatePhBaseSignature instead of getRdnwTensor.
-        // This avoids potential rdnw cache rebuild overhead - we only need epoch update here.
-        bool want_cpu = device.is_cpu();
-        torch::Tensor ph_base_for_sig;
-        if (ph_base_.defined() && ph_base_.numel() > 0) {
-            ph_base_for_sig = ph_base_;
-            key.ph_base_ptr = ph_base_.data_ptr();
-        } else if (grid_info_ && grid_info_->ph_base.defined() && grid_info_->ph_base.numel() > 0) {
-            ph_base_for_sig = grid_info_->ph_base;
-            key.ph_base_ptr = grid_info_->ph_base.data_ptr();
-        }
-        // PERF FIX 2025-12-23: Call updatePhBaseSignature to bump epoch if ztop changed.
-        // This is O(1) when cache is valid, vs getRdnwTensor which may rebuild entire cache.
-        updatePhBaseSignature(ph_base_for_sig, want_cpu);
-        // PARITY FIX 2025-12-24: Use SOURCE device (ph_base_for_sig) for signature selection, not TARGET (want_cpu).
-        // This ensures cache key matches the epoch updated by updatePhBaseSignature based on source device.
-        // PARITY FIX 2025-12-25: Assignment (not declaration) - is_source_cuda declared above for scope.
-        is_source_cuda = ph_base_for_sig.defined() && ph_base_for_sig.is_cuda();
-        key.ph_base_signature = is_source_cuda ? ph_base_ztop_sig_gpu_ : ph_base_ztop_sig_cpu_;
-    }
-    // PARITY FIX 2025-12-19: Include rdnw epoch to detect coefficient updates.
-    // PARITY FIX 2025-12-20: Use source-specific epoch based on actual rdnw source.
-    // This prevents false invalidations when unrelated epochs change.
-    if (key.rdnw_src == RdnwSource::VecRdnw) {
-        key.rdnw_epoch = rdnw_epoch_vec_;
-    } else if (key.rdnw_src == RdnwSource::GridRdnw) {
-        key.rdnw_epoch = rdnw_epoch_grid_;
-    } else if (key.rdnw_src == RdnwSource::GridDnw) {
-        // PARITY FIX 2025-12-20: Use grid-specific dnw epoch for GridDnw source.
-        key.rdnw_epoch = dnw_epoch_grid_;
-        key.dnw_epoch = dnw_epoch_grid_;
-    } else if (key.rdnw_src == RdnwSource::GridRdn) {
-        key.rdnw_epoch = rdn_epoch_grid_;  // PARITY FIX 2025-12-20: Use grid-specific epoch
-        key.rdn_epoch = rdn_epoch_grid_;
-    } else {
-        // PERF FIX 2025-12-23: Fallback uses device-specific epoch, not max(vec, grid).
-        // The fallback epoch is bumped by updatePhBaseSignature when clamped ztop changes.
-        // Using max(vec, grid) causes spurious invalidation when unrelated sources change.
-        // PARITY FIX 2025-12-25: Use ph_base_for_sig SOURCE device (is_source_cuda) for epoch selection.
-        // The is_source_cuda was computed from the ACTUAL tensor used (ph_base_for_sig) at line ~27192.
-        // This ensures cache key epoch matches updatePhBaseSignature's epoch tracking.
-        key.rdnw_epoch = is_source_cuda ? rdnw_fallback_epoch_gpu_ : rdnw_fallback_epoch_cpu_;
-    }
-    // PARITY FIX 2025-12-19: Include msf epoch to detect in-place value changes
-    key.msf_epoch = msf_epoch_;
-
-    // Check if cache is valid
-    if (div_cache_.valid && div_cache_.key == key) {
-        return;  // Cache hit
-    }
-
-    // Cache miss - rebuild
-    div_cache_.key = key;
-    div_cache_.msftx_aligned = msftx.to(device, dtype, /*non_blocking=*/true);
-    div_cache_.msfty_aligned = msfty.to(device, dtype, /*non_blocking=*/true);
-    div_cache_.msfuy_aligned = msfuy.defined() ?
-        msfuy.to(device, dtype, /*non_blocking=*/true) : torch::Tensor();
-    div_cache_.msfvx_aligned = msfvx.defined() ?
-        msfvx.to(device, dtype, /*non_blocking=*/true) : torch::Tensor();
-
-    // PERF FIX 2025-12-19: Build pre-sized rdnw_broadcast [nz_common] once per cache key.
-    // This eliminates per-call slice/pad/cat in compute_3d_divergence hot path.
-    // Priority chain: rdnw_ (if fresher) > grid_info_->rdnw > rdnw_ vector > dnw > rdn > fallback
-    auto compute_options = torch::TensorOptions().dtype(dtype).device(device);
-    torch::Tensor rdnw_source;  // Intermediate, may need resize
-
-    // PARITY FIX 2025-12-19: Same staleness check as key selection above.
-    // Priority 0: rdnw_ vector when it has fresher data than grid_info_->rdnw
-    if (!rdnw_.empty() && grid_rdnw_stale) {
-        auto cpu_options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
-        rdnw_source = torch::from_blob(const_cast<float*>(rdnw_.data()),  // LINT_EXCEPTION: CPU opts above
-                                       {static_cast<int64_t>(rdnw_.size())}, cpu_options)
-                      .clone().to(device, dtype, /*non_blocking=*/true);
-    }
-    // Priority 1: grid_info_->rdnw tensor
-    // v20.14r27o: WRF Fortran rdnw < 0 (eta decreasing). Convert to positive at extraction.
-    else if (grid_info_ && grid_info_->rdnw.defined() && grid_info_->rdnw.numel() > 0) {
-        // Convert to positive via abs() and replace NaN/Inf with eps
-        // 9F.D51 (review section 4): fail closed. This is a SECOND copy of the priority-1
-        // logic in getRdnwTensor; the sweep covers both (fix one, sweep all).
-        auto rdnw_grid = grid_info_->rdnw;
-        auto normalized = require_metric_magnitude_tensor(rdnw_grid, "grid rdnw");
-        rdnw_source = normalized.to(device, dtype, /*non_blocking=*/true);
-    }
-    // Priority 2: member vector rdnw_
-    else if (!rdnw_.empty()) {
-        auto cpu_options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
-        rdnw_source = torch::from_blob(const_cast<float*>(rdnw_.data()),  // LINT_EXCEPTION: CPU opts above
-                                       {static_cast<int64_t>(rdnw_.size())}, cpu_options)
-                      .clone().to(device, dtype, /*non_blocking=*/true);
-    }
-    // Priority 3: compute rdnw from dnw
-    // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw = 1/|dnw| (positive).
-    // GRID NAN/INF FIX 2025-12-26: Handle NaN/Inf before abs() to prevent NaN propagation.
-    else if (grid_info_ && grid_info_->dnw.defined() && grid_info_->dnw.numel() > 0) {
-        auto dnw_dev = grid_info_->dnw.to(device, dtype, /*non_blocking=*/true);
-        const float eps = getAutocastAwareEps(dnw_dev);
-        // Handle NaN/Inf before abs()
-        auto finite_mask = torch::isfinite(dnw_dev);
-        auto dnw_abs = torch::where(finite_mask, dnw_dev.abs(),
-                                    torch::full_like(dnw_dev, eps));
-        auto dnw_safe = torch::where(dnw_abs < eps,
-                                     torch::full_like(dnw_dev, eps),
-                                     dnw_abs);
-        rdnw_source = 1.0f / dnw_safe;  // Positive rdnw
-    }
-    // Priority 4: use rdn as fallback
-    // v20.14r27o: WRF Fortran rdn < 0 (eta decreasing). Convert to positive at extraction.
-    else if (grid_info_ && grid_info_->rdn.defined() && grid_info_->rdn.numel() > 0) {
-        // Convert to positive via abs() and replace NaN/Inf with eps
-        // 9F.D57 (review sections 3.1 + 3.2): deleted here too -- this was the SECOND
-        // copy of the cross-stagger fallback. See the primary site in getRdnwTensor.
-        throw std::invalid_argument(
-            "SDIRK3 vertical metric: rdnw is unavailable and grid rdn will NOT be "
-            "substituted for it (different stagger; rdn(1) undefined in WRF).");
-    }
-    // No tensor source - leave rdnw_source undefined
-
-    // Now resize rdnw_source to exact nz_common (the cache key's nz field)
-    int64_t nz_common = nz;  // nz parameter is nz_common from caller
-    if (rdnw_source.defined() && rdnw_source.numel() > 0) {
-        int64_t src_len = rdnw_source.size(0);
-        if (src_len >= nz_common) {
-            // Slice to exact size
-            div_cache_.rdnw_broadcast = rdnw_source.slice(0, 0, nz_common).contiguous();
-        } else {
-            // Pad with last value (no .item() - use tensor slice expansion)
-            auto pad = rdnw_source.slice(0, src_len - 1, src_len).expand({nz_common - src_len});
-            div_cache_.rdnw_broadcast = torch::cat({rdnw_source, pad}, 0).contiguous();
-        }
-    } else {
-        // Physical fallback: +nz_common/ztop (positive)
-        // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw = nz/ztop (positive).
-        const float z_top_min = wrf::sdirk3::g_sdirk3_config.z_top_min;
-        const float z_top_default = wrf::sdirk3::g_sdirk3_config.z_top_default;
-        float g_val = (grid_info_ && grid_info_->g > 0) ? grid_info_->g : g_;
-        float ztop = z_top_default;
-        torch::Tensor ph_base_source;
-        if (ph_base_.defined() && ph_base_.numel() > 0) {
-            ph_base_source = ph_base_;
-        } else if (grid_info_ && grid_info_->ph_base.defined() && grid_info_->ph_base.numel() > 0) {
-            ph_base_source = grid_info_->ph_base;
-        }
-        if (ph_base_source.defined()) {
-            bool is_cpu_source = ph_base_source.device().is_cpu();
-            auto sig_result = updatePhBaseSignature(ph_base_source, is_cpu_source);
-            float ph_max = sig_result.max_val;
-            if (std::isfinite(ph_max)) {
-                ztop = std::max(z_top_min, ph_max / g_val);
-            }
-        }
-        if (ztop <= 0.0f) ztop = z_top_default;
-        float rdnw_fallback = static_cast<float>(nz_common) / ztop;  // Positive
-        div_cache_.rdnw_broadcast = torch::full({nz_common}, rdnw_fallback, compute_options);
-    }
-
-    // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw is already positive, no abs() needed.
-    // Keep rdnw_broadcast_abs as alias for compatibility with existing usage.
-    div_cache_.rdnw_broadcast_abs = div_cache_.rdnw_broadcast;
-
-    div_cache_.valid = true;
-}
-
-// Compute 3D divergence with map scale factors (vectorized GPU version)
-// Computes: ∇·V = mx*my*(∂(u/my)/∂x + ∂(v/mx)/∂y) + ∂w/∂z
-// Input layout: [j,k,i] = [ny, nz, nx] for all tensors
-// PARITY FIX 2025-12-14: Use mass grid dimensions from msftx/msfty, not u-staggered
-// PARITY FIX 2025-12-14: Handle periodic boundaries with roll-based wrapping
-// PARITY FIX 2025-12-14: Use staggered map factors (msfuy, msfvx) for u/v components
-// PARITY FIX 2025-12-16: Added keep_float32 parameter to preserve float32 precision
-// for downstream calculations (e.g., compressibility term) in AMP/fp16 runs.
-torch::Tensor TileSDIRK3UnifiedSolver::compute_3d_divergence(
-    const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w,
-    const torch::Tensor& msftx, const torch::Tensor& msfty,
-    const torch::Tensor& msfuy, const torch::Tensor& msfvx,
-    float rdx, float rdy, bool keep_float32) {
-
-    // PARITY FIX 2025-12-15: Compute divergence in float32 for numerical stability
-    // In mixed-precision/AMP runs (fp16 inputs), accumulating divergence in fp16
-    // risks overflow/underflow on steep terrain or stretched grids.
-    auto input_dtype = u.dtype();
-    auto input_device = u.device();
-    auto compute_options = torch::TensorOptions().dtype(torch::kFloat32).device(input_device);
-
-    // Promote inputs to float32 for computation
-    auto u_f32 = u.to(torch::kFloat32);
-    auto v_f32 = v.to(torch::kFloat32);
-    auto w_f32 = w.to(torch::kFloat32);
-
-    // MPI/non-debug stability: remove non-finite velocity values before any divergence algebra.
-    // This keeps transient NaN/Inf from contaminating compressibility (theta) tendency.
-    auto u_finite = torch::isfinite(u_f32);
-    auto v_finite = torch::isfinite(v_f32);
-    auto w_finite = torch::isfinite(w_f32);
-    u_f32 = torch::where(u_finite, u_f32, torch::zeros_like(u_f32));
-    v_f32 = torch::where(v_finite, v_f32, torch::zeros_like(v_f32));
-    w_f32 = torch::where(w_finite, w_f32, torch::zeros_like(w_f32));
-
-    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-        static int vel_nonfinite_warn_count = 0;
-        if (vel_nonfinite_warn_count < 8) {
-            torch::NoGradGuard no_grad;
-            auto bad_u = (~u_finite).sum().item<int64_t>();
-            auto bad_v = (~v_finite).sum().item<int64_t>();
-            auto bad_w = (~w_finite).sum().item<int64_t>();
-            if (bad_u > 0 || bad_v > 0 || bad_w > 0) {
-                std::cerr << "[SDIRK3] compute_3d_divergence velocity sanitize: bad_u=" << bad_u
-                          << " bad_v=" << bad_v
-                          << " bad_w=" << bad_w << std::endl;
-                ++vel_nonfinite_warn_count;
-            }
-        }
-    }
-
-    // PARITY FIX 2025-12-14: Derive common vertical extent from u, v, w
-    int64_t nz_u = u.size(1);
-    int64_t nz_v = v.size(1);
-    int64_t nz_w = std::max<int64_t>(0, w.size(1) - 1);
-    int64_t nz_common = std::min({nz_u, nz_v, nz_w});
-
-    // PARITY FIX 2025-12-19: Use RAW tensor dimensions for cache key (data_ptr stability).
-    // Previously we aligned tensors before cache check, which created new tensors with
-    // different data_ptr, causing cache misses every call. Now we:
-    // 1. Get dimensions from raw input tensors
-    // 2. Pass raw tensors to ensureDivergenceCache (uses their data_ptr for key)
-    // 3. Use cached aligned tensors for computation
-    int64_t ny_mass = msftx.size(0);
-    int64_t nx_mass = msftx.size(1);
-
-    // If any dimension is zero, we can't compute divergence
-    if (nz_common <= 0) {
-        int64_t nz_out = std::max<int64_t>(1, nz_u);
-        return torch::zeros({ny_mass, nz_out, nx_mass}, compute_options).to(input_dtype);
-    }
-
-    // PERF FIX 2025-12-19: Pass RAW tensors to cache - uses their data_ptr for key.
-    // Cache will align them internally and store aligned versions.
-    ensureDivergenceCache(input_device, torch::kFloat32, ny_mass, nx_mass, nz_common,
-                          msftx, msfty, msfuy, msfvx);
-    auto& msftx_dev = div_cache_.msftx_aligned;
-    auto& msfty_dev = div_cache_.msfty_aligned;
-    auto& msfuy_dev = div_cache_.msfuy_aligned;
-    auto& msfvx_dev = div_cache_.msfvx_aligned;
-
-    // Initialize divergence tensor at MASS grid size with common vertical extent
-    // Boundary rows/cols stay zero; levels beyond nz_common also stay zero
-    torch::Tensor div = torch::zeros({ny_mass, nz_common, nx_mass}, compute_options);
-
-    // PERF FIX 2025-12-15: Use cached interior bounds helper
-    InteriorBounds bounds = computeInteriorBounds(nx_mass, ny_mass);
-    int64_t i_start = bounds.i_start;
-    int64_t i_end = bounds.i_end;
-    int64_t j_start = bounds.j_start;
-    int64_t j_end = bounds.j_end;
-    int64_t ni_interior = bounds.ni();
-    int64_t nj_interior = bounds.nj();
-
-    // PERF FIX 2025-12-18: Defer msfxy computation to where it's needed
-    // Previously computed full [ny_mass, nz_common, nx_mass] msfxy upfront, but periodic
-    // branches only use trimmed slices (ny_common_u or nx_common_v). Computing lazily
-    // avoids one large broadcast-multiply per call in periodic cases.
-    // msftx_dev and msfty_dev are 2D [ny_mass, nx_mass], will be sliced/expanded as needed.
-
-    // === X-component: mx*my*∂(u/my_u)/∂x at mass points ===
-    // u is at u-points [ny, nz, nx_u], where nx_u = nx_mass + 1
-    // msfuy is at u-points [ny, nx_u] - the staggered map factor
-    // For mass point i: du_dx = (u/msfuy)[i+1] - (u/msfuy)[i] (i in 0..nx_mass-1)
-    int64_t nx_u = u_f32.size(2);
-    int64_t ny_u = u_f32.size(0);
-    if (nx_u > 1 && nx_mass > 0) {
-        // Prepare u-staggered map factor msfuy for division
-        // msfuy is [ny, nx_u], broadcast to 3D for division
-        // Use device-aligned msfuy_dev (already on target device/dtype)
-        torch::Tensor msfuy_3d;
-        if (msfuy_dev.defined() && msfuy_dev.numel() > 0) {
-            // msfuy_dev is at u-points [ny_u, nx_u], already on target device
-            int64_t msfuy_ny = msfuy_dev.size(0);
-            int64_t msfuy_nx = msfuy_dev.size(1);
-            auto msfuy_m = (msfuy_ny > ny_u) ? msfuy_dev.slice(0, 0, ny_u) : msfuy_dev;
-            if (msfuy_ny < ny_u) {
-                // Extend y by repeating last row
-                auto last_row = msfuy_dev.select(0, msfuy_ny - 1).unsqueeze(0).expand({ny_u - msfuy_ny, -1});
-                msfuy_m = torch::cat({msfuy_dev, last_row}, 0);
-            }
-            // PARITY FIX 2025-12-14: Also handle x-dimension mismatch (same pattern as msfvx)
-            // msfuy may have fewer/more x-points than nx_u if halos differ
-            if (msfuy_nx > nx_u) {
-                msfuy_m = msfuy_m.slice(1, 0, nx_u);
-            } else if (msfuy_nx < nx_u) {
-                auto last_col = msfuy_m.select(1, msfuy_nx - 1).unsqueeze(1).expand({-1, nx_u - msfuy_nx});
-                msfuy_m = torch::cat({msfuy_m, last_col}, 1);
-            }
-            msfuy_3d = msfuy_m.unsqueeze(1).expand({ny_u, nz_common, nx_u});
-        } else {
-            // Fallback: use mass msfty_dev (not ideal but safe, already on target device)
-            msfuy_3d = msfty_dev.unsqueeze(1).expand({ny_mass, nz_common, nx_mass});
-        }
-
-        // Guard map-factor denominator against 0/NaN/Inf.
-        const float eps_msfuy = getAutocastAwareEps(msfuy_3d);
-        auto msfuy_valid = torch::isfinite(msfuy_3d) & (msfuy_3d.abs() >= eps_msfuy);
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-            static int msfuy_warn_count = 0;
-            if (msfuy_warn_count < 8) {
-                torch::NoGradGuard no_grad;
-                auto bad_msfuy = (~msfuy_valid).sum().item<int64_t>();
-                if (bad_msfuy > 0) {
-                    std::cerr << "[SDIRK3] compute_3d_divergence msfuy sanitize: bad=" << bad_msfuy
-                              << " replaced_with=1" << std::endl;
-                    ++msfuy_warn_count;
-                }
-            }
-        }
-        msfuy_3d = torch::where(msfuy_valid, msfuy_3d, torch::ones_like(msfuy_3d));
-
-        if (config_flags_periodic_x_ && nx_u == nx_mass + 1) {
-            // PERIODIC X: Use torch::roll for proper seam wrapping
-            // PARITY FIX 2025-12-15: Clamp staggered slices to mass grid extent
-            // When ny_u < ny_mass (sub-tile or trimmed halo), du_dx would be [ny_u,...]
-            // but msfxy is [ny_mass,...], causing broadcast error. Clamp to common extent.
-            int64_t ny_common_u = std::min(ny_u, ny_mass);
-
-            // Slice u_f32 to common y-extent and vertical extent
-            auto u_m = u_f32.slice(0, 0, ny_common_u).slice(1, 0, nz_common);
-            auto msfuy_m = msfuy_3d.slice(0, 0, ny_common_u);
-
-            auto u_rolled = torch::roll(u_m, -1, /*dim=*/2);  // shift left
-            auto msfuy_rolled = torch::roll(msfuy_m, -1, /*dim=*/2);
-
-            auto u_west = u_m.slice(2, 0, nx_mass);
-            auto u_east = u_rolled.slice(2, 0, nx_mass);
-            auto msfuy_west = msfuy_m.slice(2, 0, nx_mass);
-            auto msfuy_east = msfuy_rolled.slice(2, 0, nx_mass);
-
-            // (u/msfuy)[i+1] - (u/msfuy)[i] using staggered map factors
-            // Result shape is [ny_common_u, nz_common, nx_mass]
-            auto du_dx_partial = rdx * (u_east / msfuy_east - u_west / msfuy_west);
-
-            // PERF FIX 2025-12-18: Compute msfxy lazily, sliced to exact needed size
-            // Only build [ny_common_u, nz_common, nx_mass] instead of full [ny_mass, nz_common, nx_mass]
-            auto msftx_partial = msftx_dev.slice(0, 0, ny_common_u).unsqueeze(1).expand({ny_common_u, nz_common, nx_mass});
-            auto msfty_partial = msfty_dev.slice(0, 0, ny_common_u).unsqueeze(1).expand({ny_common_u, nz_common, nx_mass});
-            auto msfxy_partial = msftx_partial * msfty_partial;
-            div.slice(0, 0, ny_common_u).add_(msfxy_partial * du_dx_partial);
-        } else if (nx_u >= 2 && ni_interior > 0 && nj_interior > 0) {
-            // NON-PERIODIC: Slice difference with boundary reduction
-            // PARITY FIX 2025-12-14: Only compute du_dx for interior points [i_start:i_end]
-            // For u-staggered grid, u[i] and u[i+1] straddle mass point i
-            // Interior mass point i requires u[i] and u[i+1], so u needs indices i_start to i_end+1
-            int64_t u_i_start = i_start;
-            int64_t u_i_end = std::min(i_end + 1, nx_u);  // u[i_end] for mass point i_end-1
-            int64_t n_u_pts = u_i_end - u_i_start;
-
-            if (n_u_pts >= 2) {
-                // Slice u_f32 to interior region [j_start:j_end, 0:nz_common, u_i_start:u_i_end]
-                // u_f32 has shape [ny_u, nz_u, nx_u], slice j in mass indices, k to nz_common, i in u-staggered indices
-                int64_t u_j_end = std::min(j_end, ny_u);
-                auto u_interior = u_f32.slice(0, j_start, u_j_end)
-                                       .slice(1, 0, nz_common)
-                                       .slice(2, u_i_start, u_i_end);
-
-                // PARITY FIX 2025-12-14: Slice staggered map factors to same interior region
-                // msfuy_3d has shape [ny_u, nz_common, nx_u], slice to match u_interior exactly
-                int64_t msf_j_end = std::min(j_end, msfuy_3d.size(0));
-                int64_t msf_i_end = std::min(u_i_end, msfuy_3d.size(2));
-                auto msfuy_interior = msfuy_3d.slice(0, j_start, msf_j_end)
-                                              .slice(2, u_i_start, msf_i_end);
-
-                // u_east = u[i+1], u_west = u[i] for interior mass points
-                auto u_east = u_interior.slice(2, 1, n_u_pts);    // u[i_start+1 : i_end+1]
-                auto u_west = u_interior.slice(2, 0, n_u_pts - 1); // u[i_start : i_end]
-                auto msfuy_east = msfuy_interior.slice(2, 1, n_u_pts);
-                auto msfuy_west = msfuy_interior.slice(2, 0, n_u_pts - 1);
-
-                // du_dx for interior points only, shape [nj_interior, nz_common, ni_interior]
-                auto du_dx_interior = rdx * (u_east / msfuy_east - u_west / msfuy_west);
-
-                // PERF FIX 2025-12-18: Compute msfxy lazily for interior region only
-                // Only build [nj_interior, nz_common, ni_interior] instead of full tile
-                auto msftx_interior = msftx_dev.slice(0, j_start, j_end).slice(1, i_start, i_end)
-                                               .unsqueeze(1).expand({nj_interior, nz_common, ni_interior});
-                auto msfty_interior = msfty_dev.slice(0, j_start, j_end).slice(1, i_start, i_end)
-                                               .unsqueeze(1).expand({nj_interior, nz_common, ni_interior});
-                auto msfxy_interior = msftx_interior * msfty_interior;
-                div.slice(0, j_start, j_end).slice(2, i_start, i_end).add_(msfxy_interior * du_dx_interior);
-            }
-            // If insufficient u points, X-contribution is zero (already initialized in div)
-        }
-        // If degenerate interior, X-contribution is zero (already initialized in div)
-    }
-
-    // === Y-component: mx*my*∂(v/mx_v)/∂y at mass points ===
-    // v is at v-points [ny_v, nz_v, nx], where ny_v = ny_mass + 1
-    // msfvx is at v-points [ny_v, nx] - the staggered map factor
-    // Use device-aligned msfvx_dev (already on target device/dtype)
-    // Use v_f32 for float32 computation
-    int64_t ny_v = v_f32.size(0);
-    int64_t nx_v = v_f32.size(2);
-    if (ny_v > 1 && ny_mass > 0) {
-        // Prepare v-staggered map factor msfvx for division
-        torch::Tensor msfvx_3d;
-        if (msfvx_dev.defined() && msfvx_dev.numel() > 0) {
-            int64_t msfvx_ny = msfvx_dev.size(0);
-            int64_t msfvx_nx = msfvx_dev.size(1);
-            // PARITY FIX 2025-12-14: Handle both y and x dimension mismatches
-            // msfvx may have fewer/more points than ny_v/nx_v if halos differ
-            auto msfvx_m = (msfvx_ny > ny_v) ? msfvx_dev.slice(0, 0, ny_v) : msfvx_dev;
-            if (msfvx_ny < ny_v) {
-                // Extend y by repeating last row
-                auto last_row = msfvx_dev.select(0, msfvx_ny - 1).unsqueeze(0).expand({ny_v - msfvx_ny, -1});
-                msfvx_m = torch::cat({msfvx_dev, last_row}, 0);
-            }
-            // Handle x-dimension mismatch
-            if (msfvx_nx > nx_v) {
-                msfvx_m = msfvx_m.slice(1, 0, nx_v);
-            } else if (msfvx_nx < nx_v) {
-                auto last_col = msfvx_m.select(1, msfvx_nx - 1).unsqueeze(1).expand({-1, nx_v - msfvx_nx});
-                msfvx_m = torch::cat({msfvx_m, last_col}, 1);
-            }
-            msfvx_3d = msfvx_m.unsqueeze(1).expand({ny_v, nz_common, nx_v});
-        } else {
-            // Fallback: use mass msftx_dev (not ideal but safe, already on target device)
-            msfvx_3d = msftx_dev.unsqueeze(1).expand({ny_mass, nz_common, nx_mass});
-        }
-
-        // Guard map-factor denominator against 0/NaN/Inf.
-        const float eps_msfvx = getAutocastAwareEps(msfvx_3d);
-        auto msfvx_valid = torch::isfinite(msfvx_3d) & (msfvx_3d.abs() >= eps_msfvx);
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-            static int msfvx_warn_count = 0;
-            if (msfvx_warn_count < 8) {
-                torch::NoGradGuard no_grad;
-                auto bad_msfvx = (~msfvx_valid).sum().item<int64_t>();
-                if (bad_msfvx > 0) {
-                    std::cerr << "[SDIRK3] compute_3d_divergence msfvx sanitize: bad=" << bad_msfvx
-                              << " replaced_with=1" << std::endl;
-                    ++msfvx_warn_count;
-                }
-            }
-        }
-        msfvx_3d = torch::where(msfvx_valid, msfvx_3d, torch::ones_like(msfvx_3d));
-
-        if (config_flags_periodic_y_ && ny_v == ny_mass + 1) {
-            // PERIODIC Y: Use torch::roll for proper seam wrapping
-            // PARITY FIX 2025-12-15: Clamp staggered slices to mass grid extent
-            // When nx_v < nx_mass (sub-tile or trimmed halo), dv_dy would be [...,nx_v]
-            // but msfxy is [...,nx_mass], causing broadcast error. Clamp to common extent.
-            int64_t nx_common_v = std::min(nx_v, nx_mass);
-
-            // Slice v_f32 to common x-extent and vertical extent
-            auto v_m = v_f32.slice(2, 0, nx_common_v).slice(1, 0, nz_common);
-            auto msfvx_m = msfvx_3d.slice(2, 0, nx_common_v);
-
-            auto v_rolled = torch::roll(v_m, -1, /*dim=*/0);  // shift up
-            auto msfvx_rolled = torch::roll(msfvx_m, -1, /*dim=*/0);
-
-            auto v_south = v_m.slice(0, 0, ny_mass);
-            auto v_north = v_rolled.slice(0, 0, ny_mass);
-            auto msfvx_south = msfvx_m.slice(0, 0, ny_mass);
-            auto msfvx_north = msfvx_rolled.slice(0, 0, ny_mass);
-
-            // (v/msfvx)[j+1] - (v/msfvx)[j] using staggered map factors
-            // Result shape is [ny_mass, nz_common, nx_common_v]
-            auto dv_dy_partial = rdy * (v_north / msfvx_north - v_south / msfvx_south);
-
-            // PERF FIX 2025-12-18: Compute msfxy lazily, sliced to exact needed size
-            // Only build [ny_mass, nz_common, nx_common_v] instead of full [ny_mass, nz_common, nx_mass]
-            auto msftx_partial = msftx_dev.slice(1, 0, nx_common_v).unsqueeze(1).expand({ny_mass, nz_common, nx_common_v});
-            auto msfty_partial = msfty_dev.slice(1, 0, nx_common_v).unsqueeze(1).expand({ny_mass, nz_common, nx_common_v});
-            auto msfxy_partial = msftx_partial * msfty_partial;
-            div.slice(2, 0, nx_common_v).add_(msfxy_partial * dv_dy_partial);
-        } else if (ny_v >= 2 && ni_interior > 0 && nj_interior > 0) {
-            // NON-PERIODIC: Slice difference with boundary reduction
-            // PARITY FIX 2025-12-14: Only compute dv_dy for interior points [j_start:j_end]
-            // For v-staggered grid, v[j] and v[j+1] straddle mass point j
-            // Interior mass point j requires v[j] and v[j+1], so v needs indices j_start to j_end+1
-            int64_t v_j_start = j_start;
-            int64_t v_j_end = std::min(j_end + 1, ny_v);  // v[j_end] for mass point j_end-1
-            int64_t n_v_pts = v_j_end - v_j_start;
-
-            if (n_v_pts >= 2) {
-                // Slice v_f32 to interior region [v_j_start:v_j_end, 0:nz_common, i_start:i_end]
-                // v_f32 has shape [ny_v, nz_v, nx_v], slice j in v-staggered indices, k to nz_common, i in mass indices
-                int64_t v_i_end = std::min(i_end, nx_v);
-                auto v_interior = v_f32.slice(0, v_j_start, v_j_end)
-                                       .slice(1, 0, nz_common)
-                                       .slice(2, i_start, v_i_end);
-
-                // PARITY FIX 2025-12-14: Slice staggered map factors to same interior region
-                // msfvx_3d has shape [ny_v, nz_common, nx_v], slice to match v_interior exactly
-                int64_t msf_j_end = std::min(v_j_end, msfvx_3d.size(0));
-                int64_t msf_i_end = std::min(i_end, msfvx_3d.size(2));
-                auto msfvx_interior = msfvx_3d.slice(0, v_j_start, msf_j_end)
-                                              .slice(2, i_start, msf_i_end);
-
-                // v_north = v[j+1], v_south = v[j] for interior mass points
-                auto v_north = v_interior.slice(0, 1, n_v_pts);    // v[j_start+1 : j_end+1]
-                auto v_south = v_interior.slice(0, 0, n_v_pts - 1); // v[j_start : j_end]
-                auto msfvx_north = msfvx_interior.slice(0, 1, n_v_pts);
-                auto msfvx_south = msfvx_interior.slice(0, 0, n_v_pts - 1);
-
-                // dv_dy for interior points only, shape [nj_interior, nz_common, ni_interior]
-                auto dv_dy_interior = rdy * (v_north / msfvx_north - v_south / msfvx_south);
-
-                // PERF FIX 2025-12-18: Compute msfxy lazily for interior region only
-                // Only build [nj_interior, nz_common, ni_interior] instead of full tile
-                auto msftx_interior = msftx_dev.slice(0, j_start, j_end).slice(1, i_start, i_end)
-                                               .unsqueeze(1).expand({nj_interior, nz_common, ni_interior});
-                auto msfty_interior = msfty_dev.slice(0, j_start, j_end).slice(1, i_start, i_end)
-                                               .unsqueeze(1).expand({nj_interior, nz_common, ni_interior});
-                auto msfxy_interior = msftx_interior * msfty_interior;
-                div.slice(0, j_start, j_end).slice(2, i_start, i_end).add_(msfxy_interior * dv_dy_interior);
-            }
-            // If insufficient v points, Y-contribution is zero (already initialized in div)
-        }
-        // If degenerate interior, Y-contribution is zero (already initialized in div)
-    }
-
-    // === Z-component: ∂w/∂z at mass points ===
-    // w is at w-points [ny, nz_w, nx], normally nz_w = nz + 1
-    // For mass level k: dw_dz = rdnw[k] * (w[k+1] - w[k])
-    // PARITY FIX 2025-12-14: nz_common already accounts for w vertical extent
-    // nz_common = min(nz_u, nz_v, nz_w-1), so we can use it directly
-    // Note: nz_w was already used to compute nz_common at function entry
-
-    if (nz_common > 0) {
-        // PERF FIX 2025-12-19: Use pre-sized rdnw_broadcast directly from cache.
-        // ensureDivergenceCache already built [nz_common] tensor with slice/pad,
-        // so no per-call allocation, slice, cat, or conditional needed here.
-        // PERF FIX 2025-12-25: Use pre-computed rdnw_broadcast_abs to avoid per-call abs() allocation.
-        // WRF divergence (dw_dz = rdnw[k]*(w[k+1]-w[k])) needs positive rdnw.
-        // Broadcast rdnw to 3D: [nz_common] -> [1, nz_common, 1] -> [ny_mass, nz_common, nx_mass]
-        auto rdnw_3d = div_cache_.rdnw_broadcast_abs.view({1, nz_common, 1}).expand({ny_mass, nz_common, nx_mass});
-
-        // Finite difference: w[k+1] - w[k] for mass level k, only for nz_common levels
-        // Use w_f32 for float32 computation
-        auto w_top = w_f32.slice(1, 1, 1 + nz_common);   // w[k+1], k=0..nz_common-1
-        auto w_bot = w_f32.slice(1, 0, nz_common);       // w[k], k=0..nz_common-1
-
-        // PARITY FIX 2025-12-15: Apply same boundary reduction as X/Y components
-        // WRF divergence loop uses identical interior bounds for all three components.
-        // Slice w to interior region [j_start:j_end, :, i_start:i_end] to match X/Y.
-        int64_t ny_w = w_f32.size(0);
-        int64_t nx_w = w_f32.size(2);
-
-        // Clamp interior bounds to available w dimensions
-        int64_t w_j_start = std::min(j_start, ny_w);
-        int64_t w_j_end = std::min(j_end, ny_w);
-        int64_t w_i_start = std::min(i_start, nx_w);
-        int64_t w_i_end = std::min(i_end, nx_w);
-
-        if (w_j_end > w_j_start && w_i_end > w_i_start && ni_interior > 0 && nj_interior > 0) {
-            // PARITY FIX 2025-12-15: Slice all tensors with same clamped bounds for shape alignment
-            // When w is a sub-tile/halo-stripped slice with ny_w < ny_mass or nx_w < nx_mass,
-            // we must slice rdnw_3d with the same clamped bounds as w to avoid shape mismatch.
-            auto w_top_interior = w_top.slice(0, w_j_start, w_j_end).slice(2, w_i_start, w_i_end);
-            auto w_bot_interior = w_bot.slice(0, w_j_start, w_j_end).slice(2, w_i_start, w_i_end);
-
-            // Slice rdnw_3d with clamped w bounds to match w_top/w_bot shapes
-            auto rdnw_interior = rdnw_3d.slice(0, w_j_start, w_j_end).slice(2, w_i_start, w_i_end);
-
-            // Compute dw_dz for interior only (shapes now aligned)
-            auto dw_dz_interior = rdnw_interior * (w_top_interior - w_bot_interior);
-
-            // Add to div at the clamped interior positions
-            // Use w_j_start/w_j_end/w_i_start/w_i_end to match dw_dz_interior shape
-            div.slice(0, w_j_start, w_j_end).slice(2, w_i_start, w_i_end).add_(dw_dz_interior);
-        }
-        // If interior is empty or degenerate, dw_dz contribution is zero (already initialized)
-    }
-
-    // PARITY FIX 2025-12-16: Optionally keep result in float32 for downstream precision
-    // When keep_float32=true, return in float32 for calculations like compressibility term
-    // that benefit from higher precision in AMP/fp16 runs.
-    // When keep_float32=false, cast back to input dtype for mixed-precision compatibility.
-    if (keep_float32) {
-        return div;  // Already float32
-    } else {
-        return div.to(input_dtype);
-    }
 }
 
 // Average from mass points to u-points in y-direction
@@ -41142,119 +40454,41 @@ void TileSDIRK3UnifiedSolver::compute_nonhydrostatic_terms(const torch::Tensor& 
 
 void TileSDIRK3UnifiedSolver::setVerticalInterpolationCoefficients(const float* fnm, const float* fnp,
                                                                   float cf1, float cf2, float cf3) {
-    // Store vertical interpolation coefficients for non-hydrostatic dpn computation
-    if (fnm && fnp) {
-        // Create tensors from arrays
-        // FIX Round193: Explicit CPU device to ensure accessor safety
-        fnm_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
-        fnp_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
-
-        // Copy values
-        // FIX Round193: accessor() is CPU-only (verified by explicit kCPU allocation above)
-        auto fnm_accessor = fnm_.accessor<float, 1>();
-        auto fnp_accessor = fnp_.accessor<float, 1>();
-        
+    TORCH_CHECK((fnm == nullptr) == (fnp == nullptr),
+                "fnm and fnp must be supplied together");
+    TORCH_CHECK(nz_ > 0 && nz_w_ >= nz_, "invalid vertical interpolation dimensions");
+    const auto options = torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    auto next_fnm = torch::zeros({nz_w_}, options);
+    auto next_fnp = torch::zeros({nz_w_}, options);
+    auto* m = next_fnm.data_ptr<float>();
+    auto* p = next_fnp.data_ptr<float>();
+    if (fnm) {
+        // This lengthless API historically reads nz values. The extra w-top
+        // slot stays zero; both endpoint gradient operands in the RHS are zero.
         for (int k = 0; k < nz_; ++k) {
-            fnm_accessor[k] = fnm[k];
-            fnp_accessor[k] = fnp[k];
-        }
-        
-        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-            // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
-            torch::NoGradGuard no_grad;
-            auto fnm_dbg = fnm_.detach().to(torch::kCPU);
-            auto fnp_dbg = fnp_.detach().to(torch::kCPU);
-            // PERF FIX 2025-12-28: Pre-compute indexed values with _cpu suffix
-            auto fnm_1_cpu = fnm_dbg.index({1});
-            auto fnp_1_cpu = fnp_dbg.index({1});
+            TORCH_CHECK(std::isfinite(fnm[k]) && std::isfinite(fnp[k]),
+                        "fnm and fnp must be finite");
+            m[k] = fnm[k];
+            p[k] = fnp[k];
         }
     } else {
-        // Compute fnm and fnp from rdnw_ if not provided
-        // Based on WRF Fortran calc_fnp subroutine:
-        // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw > 0, dnw = 1/rdnw > 0
-        // fnp[k] = dnw[k-1] / (dnw[k-1] + dnw[k])  <- weight for lower level (k-1)
-        // fnm[k] = dnw[k]   / (dnw[k-1] + dnw[k])  <- weight for upper level (k)
-        // Verify: fnm[k] + fnp[k] = 1.0
-
-        // PARITY FIX 2025-12-20: Use getRdnwTensor() fallback chain instead of rdnw_ vector.
-        // This ensures we use grid_info_->rdnw or computed fallback when rdnw_ is empty.
-        torch::Tensor rdnw_for_fnm = getRdnwTensor(torch::kCPU, torch::kFloat32, nz_);
-        if (rdnw_for_fnm.defined() && rdnw_for_fnm.numel() >= nz_) {
-            fnm_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
-            fnp_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
-
-            auto fnm_accessor = fnm_.accessor<float, 1>();
-            auto fnp_accessor = fnp_.accessor<float, 1>();
-
-            // PARITY FIX 2025-12-21: Pre-copy rdnw to CPU and use data_ptr for loop access.
-            // Using .index({k}).item<float>() in loops is slow in AMP mode due to implicit
-            // CUDA synchronization. Use contiguous().data_ptr<float>() for direct indexing.
-            torch::Tensor rdnw_cpu_fnm;
-            const float* rdnw_ptr_fnm = nullptr;
-            int64_t rdnw_numel_fnm = 0;
-            {
-                torch::NoGradGuard no_grad;
-                rdnw_cpu_fnm = rdnw_for_fnm.to(torch::kCPU, torch::kFloat32).contiguous();
-                rdnw_ptr_fnm = rdnw_cpu_fnm.data_ptr<float>();
-                rdnw_numel_fnm = rdnw_cpu_fnm.numel();
-            }
-
-            // k=0 is special case (ground level, w=0 boundary)
-            fnm_accessor[0] = 0.0f;
-            fnp_accessor[0] = 1.0f;  // All weight on lower boundary
-
-            // Compute for k=1 to k=nz-1
-            // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw > 0, dnw = 1/rdnw > 0
-            constexpr float rdnw_eps = 1e-10f;
-            constexpr float denom_eps = 1e-10f;
-            for (int k = 1; k < nz_; ++k) {
-                // Direct pointer indexing for efficiency
-                float rdnw_k = (rdnw_ptr_fnm && k < rdnw_numel_fnm) ? rdnw_ptr_fnm[k] : 1.0f;
-                float rdnw_km1 = (rdnw_ptr_fnm && k-1 < rdnw_numel_fnm) ? rdnw_ptr_fnm[k-1] : 1.0f;
-
-                // Protect against division by zero: ensure rdnw >= eps (positive)
-                float rdnw_k_safe = (rdnw_k < rdnw_eps) ? rdnw_eps : rdnw_k;
-                float rdnw_km1_safe = (rdnw_km1 < rdnw_eps) ? rdnw_eps : rdnw_km1;
-
-                float dnw_k = 1.0f / rdnw_k_safe;
-                float dnw_km1 = 1.0f / rdnw_km1_safe;
-
-                float denom = dnw_km1 + dnw_k;
-
-                // Protect against near-zero denominator (shouldn't happen with valid eta coords)
-                if (std::abs(denom) < denom_eps) {
-                    // Fallback to equal weights if denominator is degenerate
-                    fnp_accessor[k] = 0.5f;
-                    fnm_accessor[k] = 0.5f;
-                } else {
-                    // fnp[k] = dnw[k-1] / (dnw[k-1] + dnw[k])  (weight for level k-1)
-                    fnp_accessor[k] = dnw_km1 / denom;
-                    // fnm[k] = dnw[k] / (dnw[k-1] + dnw[k])    (weight for level k)
-                    fnm_accessor[k] = dnw_k / denom;
-                }
-            }
-
-            if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
-                // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
-                torch::NoGradGuard no_grad;
-                auto fnm_dbg = fnm_.detach().to(torch::kCPU);
-                auto fnp_dbg = fnp_.detach().to(torch::kCPU);
-                if (nz_ > 1) {
-                    // PERF FIX 2025-12-28: Pre-compute indexed values with _cpu suffix
-                    auto fnm_1_cpu = fnm_dbg.index({1});
-                    auto fnp_1_cpu = fnp_dbg.index({1});
-                    float fnm_1_val = fnm_1_cpu.item<float>();
-                    float fnp_1_val = fnp_1_cpu.item<float>();
-                    std::cerr << "[SDIRK3] fnm[1]+fnp[1]=" << (fnm_1_val + fnp_1_val)
-                              << " (should be 1.0)" << std::endl;
-                }
-            }
-        } else {
-            // Fallback to zeros if rdnw is not available from any source
-            fnm_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
-            fnp_ = torch::zeros({nz_}, torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU));
+        const auto rdnw = getRdnwTensor(torch::kCPU, torch::kFloat32, nz_).contiguous();
+        TORCH_CHECK(rdnw.dim() == 1 && rdnw.numel() == nz_ &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(rdnw).all()) &&
+                    wrf::sdirk3::guarded_item<bool>((rdnw > 0).all()),
+                    "fnm/fnp require finite positive rdnw at every mass level");
+        const auto* r = rdnw.data_ptr<float>();
+        p[0] = 1.0f;
+        for (int k = 1; k < nz_; ++k) {
+            // WRF: fnm=dnw(k-1)/(dnw(k-1)+dnw(k)), fnp=1-fnm.
+            // With rdnw=1/dnw, this equivalent ratio avoids reciprocal overflow.
+            const double denominator = static_cast<double>(r[k-1]) + r[k];
+            m[k] = static_cast<float>(r[k] / denominator);
+            p[k] = static_cast<float>(r[k-1] / denominator);
         }
     }
+    fnm_ = std::move(next_fnm);
+    fnp_ = std::move(next_fnp);
 
     // PARITY FIX 2025-12-19: Invalidate fnm/fnp view caches on update
     fnm_view_cache_ = torch::Tensor();
@@ -41415,15 +40649,332 @@ int64_t TileSDIRK3UnifiedSolver::getStateVectorSize() const {
 }
 
 
+namespace {
+constexpr uint64_t kFixedTrajectoryFNVOffset = 1469598103934665603ULL;
+constexpr uint64_t kFixedTrajectoryFNVPrime = 1099511628211ULL;
+
+void fixed_trajectory_hash_bytes(uint64_t& h, const void* data, size_t n) {
+    const auto* p = static_cast<const unsigned char*>(data);
+    for (size_t i = 0; i < n; ++i) {
+        h ^= static_cast<uint64_t>(p[i]);
+        h *= kFixedTrajectoryFNVPrime;
+    }
+}
+
+template <typename T>
+void fixed_trajectory_hash_scalar(uint64_t& h, const T& value) {
+    fixed_trajectory_hash_bytes(h, &value, sizeof(T));
+}
+
+void fixed_trajectory_hash_bool(uint64_t& h, bool value) {
+    const uint8_t encoded = value ? 1U : 0U;
+    fixed_trajectory_hash_scalar(h, encoded);
+}
+
+void fixed_trajectory_hash_tensor(uint64_t& h, const torch::Tensor& x) {
+    fixed_trajectory_hash_bool(h, x.defined());
+    if (!x.defined()) return;
+    auto c = x.detach().to(torch::kCPU).contiguous();
+    fixed_trajectory_hash_scalar(h, static_cast<int32_t>(c.scalar_type()));
+    fixed_trajectory_hash_scalar(h, static_cast<int64_t>(c.dim()));
+    for (const auto size : c.sizes()) fixed_trajectory_hash_scalar(h, static_cast<int64_t>(size));
+    fixed_trajectory_hash_scalar(h, static_cast<int64_t>(c.numel()));
+    fixed_trajectory_hash_scalar(h, static_cast<int64_t>(c.element_size()));
+    fixed_trajectory_hash_bytes(h, c.data_ptr(), static_cast<size_t>(c.numel() * c.element_size()));
+}
+
+void fixed_trajectory_hash_vector(uint64_t& h, const std::vector<float>& values) {
+    fixed_trajectory_hash_scalar(h, static_cast<uint64_t>(values.size()));
+    if (!values.empty()) fixed_trajectory_hash_bytes(h, values.data(), values.size() * sizeof(float));
+}
+}
+
+void TileSDIRK3UnifiedSolver::validateFixedTrajectoryProfile() const {
+    const auto& c = wrf::sdirk3::g_sdirk3_config;
+    TORCH_CHECK(non_hydrostatic_ && c.non_hydrostatic && c.do_curvature &&
+                c.buoyancy_use_current_w && c.omega_w_blend == 1.0f &&
+                !c.omega_update_ref_per_newton,
+                "fixed trajectory requires canonical NH=true curvature=true profile "
+                "with current-w buoyancy, omega_w_blend=1, and fixed Newton reference");
+    TORCH_CHECK(c.retain_graph_for_adjoint && c.use_autograd && c.imex_split_mode == 3 &&
+                c.imex_slow_in_tangent && c.mass_coordinate_mode == 1 && !c.hevi_split &&
+                !c.split_explicit && nprocx_ * nprocy_ == 1 && n_moist_ == 0 &&
+                c.khdif == 0.0f && c.kvdif == 0.0f && c.diffusion_option == 0 &&
+                c.wrf_w_damping == 0 && c.wrf_damp_opt == 0 &&
+                c.wrf_zadvect_implicit == 0 && !c.damp_t &&
+                !c.enable_ad_halo_exchange &&
+                !c.enable_test_tendencies && grid_info_ &&
+                grid_info_->fzm.defined() && grid_info_->fzp.defined(),
+                "fixed trajectory canonical NH/curvature profile unsupported: "
+                "test tendencies, diffusion, and WRF damping must be off");
+}
+
+uint64_t TileSDIRK3UnifiedSolver::fixedTrajectoryInputFingerprint() const {
+    uint64_t h = kFixedTrajectoryFNVOffset;
+    for (const int value : {nx_, ny_, nz_, nx_u_, ny_v_, nz_w_, its_, ite_, jts_, jte_,
+                            ids_, ide_, jds_, jde_, nprocx_, nprocy_, mypx_, mypy_}) {
+        fixed_trajectory_hash_scalar(h, value);
+    }
+    fixed_trajectory_hash_vector(h, rdx_);
+    fixed_trajectory_hash_vector(h, rdy_);
+    fixed_trajectory_hash_vector(h, rdnw_);
+    // These are the effective vertical metrics consumed by the native RHS.
+    // The helper may select solver vectors, grid tensors, or a fallback; hashing
+    // the selected values closes all source branches, including from_blob views.
+    fixed_trajectory_hash_tensor(
+        h, getRdnwTensor(torch::kCPU, torch::kFloat64, static_cast<int64_t>(nz_)));
+    fixed_trajectory_hash_tensor(
+        h, getRdnTensor(torch::kCPU, torch::kFloat64, static_cast<int64_t>(nz_)));
+    for (const float value : {cf1_, cf2_, cf3_, cfn_, cfn1_}) fixed_trajectory_hash_scalar(h, value);
+    for (const auto& x : {p_base_, th_base_, rho_base_, mu_base_, ph_base_, u_base_, v_base_,
+                          fnm_cpu_, fnp_cpu_, c1f_, c2f_, c1h_, c2h_,
+                          msftx_cpu_, msfty_cpu_, msfux_cpu_, msfuy_cpu_, msfvx_cpu_, msfvy_cpu_,
+                          f_, e_, sina_, cosa_, zx_, zy_, cqu_, cqv_, cqw_}) {
+        fixed_trajectory_hash_tensor(h, x);
+    }
+    if (grid_info_) {
+        // Hash every vertical-metric source at source precision.  The cache
+        // helper may normalize to float32, while an FP64 RHS can consume the
+        // FP64 grid tensor; source-value hashing catches sub-float32-ULP edits.
+        fixed_trajectory_hash_tensor(h, grid_info_->rdnw);
+        fixed_trajectory_hash_tensor(h, grid_info_->rdn);
+        fixed_trajectory_hash_tensor(h, grid_info_->dnw);
+        fixed_trajectory_hash_tensor(h, grid_info_->dn);
+        fixed_trajectory_hash_tensor(h, grid_info_->ph_base);
+        fixed_trajectory_hash_tensor(h, grid_info_->fzm);
+        fixed_trajectory_hash_tensor(h, grid_info_->fzp);
+        fixed_trajectory_hash_tensor(h, grid_info_->xlat);
+        fixed_trajectory_hash_scalar(h, grid_info_->g);
+        fixed_trajectory_hash_scalar(h, grid_info_->dx);
+        fixed_trajectory_hash_scalar(h, grid_info_->dy);
+        fixed_trajectory_hash_scalar(h, grid_info_->reradius);
+        fixed_trajectory_hash_scalar(h, grid_info_->map_proj);
+        fixed_trajectory_hash_scalar(h, grid_info_->kdamp);
+        fixed_trajectory_hash_scalar(h, grid_info_->damp_top);
+        fixed_trajectory_hash_scalar(h, grid_info_->dtbc);
+    } else {
+        fixed_trajectory_hash_bool(h, false);
+    }
+    const auto& c = wrf::sdirk3::g_sdirk3_config;
+    // These are actual RHS controls on the supported native-NH path.  They are
+    // snapshotted explicitly; dt_stage_ and other per-stage work state are not
+    // fixed inputs and must not be folded into this digest.
+    for (const bool value : {non_hydrostatic_, c.non_hydrostatic, c.do_curvature,
+                             c.split_explicit_top_lid, c.hevi_split, c.split_explicit,
+                             c.use_autograd, c.retain_graph_for_adjoint,
+                             c.imex_slow_in_tangent, c.buoyancy_use_current_w,
+                             c.implicit_acoustic, c.implicit_gravity,
+                             c.implicit_rayleigh, c.implicit_wdamp,
+                             c.implicit_vdiff, c.implicit_hdiff,
+                             c.rhs_bc_parity, c.implicit_divergence,
+                             c.mu_tend_fortran_parity, c.ph_use_rdnw_not_rdzw,
+                             c.omega_update_ref_per_newton, c.enable_test_tendencies,
+                             c.damp_t, c.mass_pgf_bc_guard,
+                             c.use_stress_tensor, c.enable_ad_halo_exchange,
+                             c.imex_enabled,
+                             config_flags_periodic_x_, config_flags_periodic_y_,
+                             config_flags_open_xs_, config_flags_open_xe_,
+                             config_flags_open_ys_, config_flags_open_ye_,
+                             config_flags_symmetric_xs_, config_flags_symmetric_xe_,
+                             config_flags_symmetric_ys_, config_flags_symmetric_ye_,
+                             config_flags_specified_, config_flags_nested_,
+                             config_flags_polar_, c.gmres_warmstart, c.inn_warmstart_enable}) {
+        fixed_trajectory_hash_bool(h, value);
+    }
+    for (const int value : {c.imex_split_mode, c.mass_coordinate_mode, c.advection_order,
+                            c.diffusion_option, c.khdif == 0.0f ? 0 : 1,
+                            c.kvdif == 0.0f ? 0 : 1, c.wrf_w_damping, c.wrf_damp_opt,
+                            c.wrf_zadvect_implicit, c.map_proj, c.nan_sanitize_mode,
+                            c.precond_type,
+                            c.max_newton_iter, c.max_krylov_iter, c.gmres_restart,
+                            c.stage_fail_action}) {
+        fixed_trajectory_hash_scalar(h, value);
+    }
+    for (const float value : {c.newton_tol, c.krylov_tol, c.omega_w_blend,
+                              c.sign_smooth_delta, c.rayleigh_damp_coef,
+                              c.rayleigh_damp_depth, c.t_ref, c.test_w_damp_coef,
+                              c.test_t_relax_coef, c.w_damp_alpha, c.w_crit_cfl,
+                              c.wrf_w_crit_cfl, c.coriolis_f, c.khdif, c.kvdif,
+                              c.kdamp}) {
+        fixed_trajectory_hash_scalar(h, value);
+    }
+    return h;
+}
+
+void TileSDIRK3UnifiedSolver::checkFixedTrajectoryFingerprint() const {
+    TORCH_CHECK(fixed_trajectory_open_, "fixed trajectory not open");
+    TORCH_CHECK(fixedTrajectoryInputFingerprint() == fixed_trajectory_fp_,
+                "fixed trajectory fixed input changed");
+    validateFixedTrajectoryProfile();
+}
+
+void TileSDIRK3UnifiedSolver::beginFixedTrajectory(int expected_steps) {
+    beginFixedTrajectory(expected_steps, {});
+}
+
+void TileSDIRK3UnifiedSolver::beginFixedTrajectory(
+    int expected_steps, const std::vector<float>& dt_schedule) {
+    TORCH_CHECK(expected_steps > 0 && !fixed_trajectory_open_ &&
+                !fixed_trajectory_requested_, "invalid/open fixed trajectory");
+    TORCH_CHECK(dt_schedule.empty() ||
+                dt_schedule.size() == static_cast<size_t>(expected_steps),
+                "fixed trajectory timestep schedule length mismatch");
+    for (const float dt : dt_schedule) {
+        TORCH_CHECK(std::isfinite(dt) && dt > 0.0f,
+                    "fixed trajectory timestep schedule contains invalid dt");
+    }
+    validateFixedTrajectoryProfile();
+    const uint64_t fingerprint = fixedTrajectoryInputFingerprint();
+    std::vector<float> schedule_copy(dt_schedule);
+    fixed_trajectory_steps_.clear();
+    fixed_trajectory_expected_ = expected_steps;
+    fixed_trajectory_dt_schedule_ = std::move(schedule_copy);
+    fixed_trajectory_dt_reference_set_ = false;
+    fixed_trajectory_dt_reference_ = 0.0f;
+    fixed_trajectory_fp_ = fingerprint;
+    fixed_trajectory_open_ = true;
+}
+
+void TileSDIRK3UnifiedSolver::requestFixedTrajectory(
+    int expected_steps, const std::vector<float>& dt_schedule) {
+    TORCH_CHECK(expected_steps > 0 && !fixed_trajectory_open_ &&
+                !fixed_trajectory_requested_,
+                "invalid/open fixed trajectory request");
+    TORCH_CHECK(dt_schedule.empty() ||
+                dt_schedule.size() == static_cast<size_t>(expected_steps),
+                "fixed trajectory timestep schedule length mismatch");
+    for (const float dt : dt_schedule) {
+        TORCH_CHECK(std::isfinite(dt) && dt > 0.0f,
+                    "fixed trajectory timestep schedule contains invalid dt");
+    }
+    // Validation and fingerprinting are intentionally deferred until the
+    // first unifiedStep has published the Fortran-owned views.
+    std::vector<float> schedule_copy(dt_schedule);
+    fixed_trajectory_expected_ = expected_steps;
+    fixed_trajectory_dt_schedule_ = std::move(schedule_copy);
+    fixed_trajectory_requested_ = true;
+}
+
+void TileSDIRK3UnifiedSolver::cancelFixedTrajectoryRequest() {
+    TORCH_CHECK(fixed_trajectory_requested_ && !fixed_trajectory_open_,
+                "fixed trajectory request not pending");
+    fixed_trajectory_requested_ = false;
+    fixed_trajectory_expected_ = 0;
+    fixed_trajectory_dt_schedule_.clear();
+}
+
+void TileSDIRK3UnifiedSolver::validateFixedTrajectoryTimestep(float dt) {
+    TORCH_CHECK(fixed_trajectory_open_, "fixed trajectory not open");
+    TORCH_CHECK(std::isfinite(dt) && dt > 0.0f,
+                "fixed trajectory timestep invalid");
+    const size_t step = fixed_trajectory_steps_.size();
+    TORCH_CHECK(step < static_cast<size_t>(fixed_trajectory_expected_),
+                "fixed trajectory exceeds N");
+    if (!fixed_trajectory_dt_schedule_.empty()) {
+        TORCH_CHECK(dt == fixed_trajectory_dt_schedule_[step],
+                    "fixed trajectory timestep changed");
+        return;
+    }
+    if (!fixed_trajectory_dt_reference_set_) {
+        fixed_trajectory_dt_reference_ = dt;
+        fixed_trajectory_dt_reference_set_ = true;
+        return;
+    }
+    TORCH_CHECK(dt == fixed_trajectory_dt_reference_,
+                "fixed trajectory timestep changed");
+}
+
+void TileSDIRK3UnifiedSolver::recordFixedTrajectoryStep(const torch::Tensor& input,
+                                                          const torch::Tensor& output,
+                                                          const torch::Tensor& fphys,
+                                                          float dt) {
+    if (!fixed_trajectory_open_) return;
+    checkFixedTrajectoryFingerprint();
+    TORCH_CHECK(std::isfinite(dt) && dt > 0.0f,
+                "fixed trajectory timestep invalid");
+    TORCH_CHECK(getLastStepOutcomeCode() == static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED),
+                "fixed trajectory requires accepted step");
+    TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(fphys).all()) &&
+                wrf::sdirk3::guarded_item<double>(fphys.abs().max()) == 0.0,
+                "fixed trajectory requires zero projected F_phys");
+    TORCH_CHECK(fixed_trajectory_steps_.size() < static_cast<size_t>(fixed_trajectory_expected_),
+                "fixed trajectory exceeds N");
+    const size_t step = fixed_trajectory_steps_.size();
+    if (!fixed_trajectory_dt_schedule_.empty()) {
+        TORCH_CHECK(dt == fixed_trajectory_dt_schedule_[step],
+                    "fixed trajectory timestep changed");
+    } else {
+        TORCH_CHECK(fixed_trajectory_dt_reference_set_ &&
+                    dt == fixed_trajectory_dt_reference_,
+                    "fixed trajectory timestep changed");
+    }
+    fixed_trajectory_steps_.push_back({input, output, fphys.detach().clone(), dt});
+}
+
+torch::Tensor TileSDIRK3UnifiedSolver::pullbackFixedTrajectory(const torch::Tensor& terminal) {
+    TORCH_CHECK(fixed_trajectory_open_ && fixed_trajectory_steps_.size() ==
+                static_cast<size_t>(fixed_trajectory_expected_), "fixed trajectory incomplete");
+    checkFixedTrajectoryFingerprint();
+    TORCH_CHECK(terminal.defined() &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(terminal).all()), "invalid terminal");
+    auto lambda = terminal;
+    for (auto it = fixed_trajectory_steps_.rbegin(); it != fixed_trajectory_steps_.rend(); ++it) {
+        TORCH_CHECK(std::isfinite(it->dt) && it->dt > 0.0f,
+                    "fixed trajectory recorded invalid timestep");
+        TORCH_CHECK(lambda.sizes() == it->output.sizes() && lambda.options().type_equal(it->output.options()),
+                    "fixed trajectory cotangent shape/type mismatch");
+        lambda = torch::autograd::grad({it->output}, {it->input}, {lambda}, true, false)[0];
+        TORCH_CHECK(lambda.defined() && lambda.numel() == terminal.numel() &&
+                    wrf::sdirk3::guarded_item<bool>(torch::isfinite(lambda).all()),
+                    "fixed trajectory reverse produced invalid gradient");
+    }
+    return lambda;
+}
+
+void TileSDIRK3UnifiedSolver::closeFixedTrajectory() {
+    TORCH_CHECK(fixed_trajectory_open_, "fixed trajectory not open");
+    fixed_trajectory_steps_.clear();
+    fixed_trajectory_expected_ = 0;
+    fixed_trajectory_open_ = false;
+    fixed_trajectory_fp_ = 0;
+    fixed_trajectory_dt_schedule_.clear();
+    fixed_trajectory_dt_reference_set_ = false;
+    fixed_trajectory_dt_reference_ = 0.0f;
+}
+
 // 9F.D81: the adjoint driver body, moved out of unifiedStep. Opt-in via
 // WRF_SDIRK3_ADJOINT_DRIVER; unifiedStep keeps only the RAII shim that fires it at
 // scope exit, because the replay needs the forward's checkpoints to exist.
+torch::Tensor TileSDIRK3UnifiedSolver::pullbackLastStep(
+    const torch::Tensor& terminal_cotangent) {
+    TORCH_CHECK(last_step_input_graph_.defined() && last_step_output_graph_.defined() &&
+                last_step_input_graph_.requires_grad() && last_step_output_graph_.requires_grad() &&
+                getLastStepOutcomeCode() == static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED),
+                "pullbackLastStep: no completed differentiable step is available");
+    TORCH_CHECK(terminal_cotangent.sizes() == last_step_output_graph_.sizes() &&
+                terminal_cotangent.options().type_equal(last_step_output_graph_.options()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(terminal_cotangent).all()),
+                "pullbackLastStep: invalid terminal cotangent");
+    return torch::autograd::grad({last_step_output_graph_}, {last_step_input_graph_},
+                                 {terminal_cotangent}, /*retain_graph=*/true)[0];
+}
+
 bool TileSDIRK3UnifiedSolver::runAdjointDriverProbe(const torch::Tensor& U_n) {
     // Entry marker + explicit flushes. An earlier iteration produced NO output at all
     // while the process died on an autograd error, which left it ambiguous whether the
     // driver had even run.
     std::cerr << "SDIRK3_ADJOINT_DRIVER: entered" << std::endl << std::flush;
     try {
+        if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
+            auto gen = at::detail::createCPUGenerator(20260905);
+            auto terminal = torch::randn(U_n.numel(), gen, U_n.options().requires_grad(false));
+            terminal = terminal / terminal.norm();
+            const auto initial = pullbackLastStep(terminal);
+            std::cerr << "SDIRK3_ADJOINT_DRIVER kind=FullTileStep"
+                      << " terminal_norm=" << terminal.detach().norm().item<double>()
+                      << " initial_norm=" << initial.detach().norm().item<double>() << std::endl;
+            return true;
+        }
         // NO blanket NoGradGuard. solve_transpose_linear_system_gmres forms A^T w
         // through a VJP, so a guard around this whole block disables it and the
         // replay dies with "element 0 of tensors does not require grad".
@@ -41524,7 +41075,19 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                 "runAdjointReplay: no checkpoints recorded (run a forward with "
                 "save_trajectory enabled first) — refusing to return an identity adjoint");
 
-    const float dt_prev = dt_stage_;
+    // Install this guard before changing dt_stage_ and before any allocation or
+    // constructor that can throw.  The replay-owned preconditioner is built
+    // before the main try block, so a guard created later would leak this
+    // per-solver value on an allocation/constructor exception.
+    struct ScopedReplayDt {
+        TileSDIRK3UnifiedSolver& solver;
+        const float saved;
+        explicit ScopedReplayDt(TileSDIRK3UnifiedSolver& s)
+            : solver(s), saved(s.dt_stage_) {}
+        ~ScopedReplayDt() noexcept { solver.dt_stage_ = saved; }
+        ScopedReplayDt(const ScopedReplayDt&) = delete;
+        ScopedReplayDt& operator=(const ScopedReplayDt&) = delete;
+    } replay_dt_guard(*this);
     dt_stage_ = dt;
 
     // 9F.D109 (review section 9): RESTORE THE PRODUCTION STATE ON EVERY EXIT.
@@ -41625,7 +41188,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
     }
     wrf::sdirk3::UnifiedPreconditioner* const replay_precond = replay_precond_owned.get();
 
-    try {
+    {
         // 9F.D99 (review section 6): the order comes from a pure, unit-tested function, and
         // a bind counter below asserts one bind per checkpoint. Together they close the
         // regression window on D94 -- per-checkpoint work drifting back inside a one-shot --
@@ -41653,100 +41216,25 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
             // Keep replay in the same state basis as the forward stage reference.
             U_ref_stage_ = linearization_point.clone();
 
-            // 9F.D87 (review section 3): rebuild the preconditioner for THIS replay's alpha.
-            // Without this the transpose solve is preconditioned by an operator built for a
-            // DIFFERENT problem, and D84's dt-ladder was exactly that.
-            //
-            // 9F.D91 CORRECTION (review P0-2): D87 said "alpha AND STATE". The state half was
-            // WRONG. update(state, dt, gamma) DOES NOT READ `state` -- across its 140-line
-            // body the identifier appears only in the signature, in a debug string about
-            // BASE-state generation, and in one comment. What it rebuilds on is dt/gamma plus
-            // base-state / metric / config generation counters.
-            //
-            // So this call makes the preconditioner match the replay's ALPHA, which is what
-            // D84 needed and is measured (261.5 / 26.15 / 2.179 at dt 600/60/5). It does NOT
-            // make it match the checkpoint STATE. Stage-state adaptation lives in a separate
-            // path, set_stage_state(mu_pert, stage), which this replay never calls -- so the
-            // preconditioner is still built around the forward step's stage state.
-            //
-            // The unused `state` parameter is what made D87 believe otherwise. Extracting
-            // mu_pert from the packed checkpoint and splitting the API into
-            // update_time_coefficients() / bind_stage_state() is the real fix and is open.
-            //
-            // update() is called once per forward step (unifiedStep, :5577) with the
-            // FORWARD dt. runAdjointReplay never called it, and set_alpha() is a no-op in
-            // all three transpose-preconditioner wrappers, so nothing re-derived the
-            // coefficients. With WRF_SDIRK3_ADJOINT_DT=5 against a namelist dt of 600 that
-            // is alpha = 2.18 solved against a preconditioner built for alpha = 261.5 --
-            // a 120x mismatch. The horizontal smoothing factor alone carries dt*gamma*cs^2.
-            //
-            // So "a correct M^-T does not help" was measured against the exact transpose of
-            // the WRONG preconditioner. The AD transpose was faithful to what it was given;
-            // what it was given did not match A.
-            //
-            // Safe for the forward path: unifiedStep re-updates at the top of every step,
-            // and the replay only runs after one has completed.
-            if (replay_precond) {
-                replay_precond->update(linearization_point, dt, gamma);
-
-                // 9F.D95 (review section 4): BIND EVERY CHECKPOINT, AND FAIL CLOSED.
-                //
-                // D94 put this binding INSIDE the one-shot provenance block, so it ran on the
-                // FIRST checkpoint only and every earlier checkpoint silently reused that
-                // first preconditioner state. Worse, prov_said is a function-local static, so
-                // it is PROCESS-wide: a second solver instance would never bind at all.
-                //
-                // That is not a missing log line, it is a missing preconditioner state
-                // update -- exactly the partial-sweep shape this campaign keeps producing,
-                // and I introduced it while fixing something else. The binding is
-                // unconditional now; only the LOG is one-shot.
-                //
-                // FAIL-CLOSED, per the review: D94 measured that P genuinely depends on the
-                // mass state, so a layout that does not match is not a reason to skip the
-                // binding and continue -- it means the adjoint would run against a
-                // preconditioner bound to the wrong state, and a wrong gradient is worse
-                // than no gradient. The old form silently did nothing when the shape checks
-                // failed.
-                {
-                    const auto lay = wrf::sdirk3::StateLayout::from_grid_dims(
-                        nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
-                    const int64_t ny64 = ny_, nx64 = nx_;
-                    torch::NoGradGuard ng_bind;
-                    // Checked extraction lives in the layout header so it can be a standing
-                    // contract; the replay only says WHEN to bind, not how to find mu.
-                    auto mu_pert = wrf::sdirk3::extract_mu_pert_2d(
-                        lay, linearization_point, ny64, nx64);
-                    // STAGE INDEX IS A KNOWN GAP. The packed checkpoint records no ARK stage,
-                    // so this passes 1. D94 MEASURED stage1_vs_stage3 = 0 in this
-                    // configuration, so the guess is currently harmless -- but that is a
-                    // statement about one config, not about the design: current_stage_ does
-                    // gate stage-dependent policy elsewhere in the preconditioner. Only the
-                    // stage tape can remove the guess.
-                    // 9F.D98 (review section 5): the CHECKED bind. set_stage_state() returns
-                    // silently on five internal failures, so D95's fail-closed extraction was
-                    // still fail-OPEN one call deeper -- extraction could succeed and the bind
-                    // be skipped, leaving the replay preconditioned by the wrong mass state.
-                    // The receipt is read back FROM the preconditioner, so this verifies the
-                    // bind took rather than assuming the setter did something.
-                    const auto receipt =
-                        replay_precond->bind_stage_state_or_throw(mu_pert, 1);
-                    ++binds_performed;
-                    static std::atomic<bool> bind_said{false};
-                    bool bind_expected = false;
-                    if (bind_said.compare_exchange_strong(bind_expected, true)) {
-                        std::cerr << "SDIRK3_ADJOINT_BIND_RECEIPT"
-                                  << " stage=" << receipt.stage
-                                  << " mu_numel=" << receipt.mu_numel
-                                  << " mu_full_mean=" << receipt.mu_full_mean
-                                  << " mu_min=" << receipt.mu_full_min
-                                  << " mu_max=" << receipt.mu_full_max
-                                  << " bind_err=" << receipt.max_binding_error
-                                  << " stage_gen=" << receipt.stage_state_generation
-                                  << " coeff_gen=" << receipt.coefficient_generation
-                                  << "  (verified read-back; logged once)"
-                                  << std::endl << std::flush;
-                    }
+            // Bind every checkpoint before rebuilding M for the replay's alpha.
+            // This legacy replay has no stage tape and uses stage 1. The raw
+            // principal model is stage-agnostic; full ARK replay needs the tape.
+            const auto replay_layout = wrf::sdirk3::StateLayout::from_grid_dims(
+                nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
+            auto bind_replay_state = [&](const torch::Tensor& state, int stage) {
+                if (replay_precond->raw_principal_enabled()) {
+                    replay_precond->bind_raw_principal_state_or_throw(
+                        state, stage, "adjoint checkpoint");
+                } else {
+                    replay_precond->bind_stage_state_or_throw(
+                        wrf::sdirk3::extract_mu_pert_2d(replay_layout, state, ny_, nx_),
+                        stage);
                 }
+                replay_precond->update_time_coefficients(dt, gamma);
+            };
+            if (replay_precond) {
+                bind_replay_state(linearization_point, 1);
+                ++binds_performed;
 
                 // The LOG is one-shot; the binding above is not.
                 static std::atomic<bool> prov_said{false};
@@ -41864,67 +41352,34 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                         }
                     }
 
-                    // 9F.D94 (review section 4, the standing contract): IS THE
-                    // PRECONDITIONER ACTUALLY STATE-DEPENDENT?
-                    //
-                    // The review's test, run before wiring anything: hold shape, dt and gamma
-                    // fixed and change only the mass state. If the design is state-dependent,
-                    // P(Y_a)v != P(Y_b)v. If it does not move, then either P is effectively
-                    // state-independent or the binding is broken -- and in EITHER case
-                    // update(state,...) is the wrong API, because it takes a state it ignores.
-                    //
-                    // Measure before wiring: if P does not respond to mu_pert at all, then
-                    // "the preconditioner is not matched to the checkpoint state" is a defect
-                    // in the API's honesty rather than in the numerics, and extracting mu_pert
-                    // would buy nothing.
-                    //
-                    // Production binds this per Newton stage from the same StateLayout
-                    // (newton_solver.cpp:4311), so the forward re-establishes it next step.
+                    // Hold alpha fixed and perturb only checkpoint column mass.
+                    // Restore the checkpoint and stage before the transpose solve.
                     {
-                        const auto layout = wrf::sdirk3::StateLayout::from_grid_dims(
-                            nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
-                        const auto& mu_blk = layout.blocks.back();   // "mu", 2-D, last
-                        const int64_t ny64 = ny_, nx64 = nx_;
-                        if (mu_blk.name == "mu" && mu_blk.size == ny64 * nx64) {
-                            torch::NoGradGuard ng_probe;
-                            auto v_probe = torch::randn(linearization_point.numel(),
-                                                        linearization_point.options());
-                            auto z_before = replay_precond->apply(v_probe);
-
-                            auto mu_a = linearization_point
-                                            .slice(0, mu_blk.start, mu_blk.start + mu_blk.size)
-                                            .reshape({ny64, nx64}).clone();
-                            replay_precond->set_stage_state(mu_a, 1);
-                            auto z_a = replay_precond->apply(v_probe);
-
-                            // +1000 Pa on the column mass: physically large, ~1% of mu.
-                            auto mu_b = mu_a + 1000.0f;
-                            replay_precond->set_stage_state(mu_b, 1);
-                            auto z_b = replay_precond->apply(v_probe);
-
-                            auto rel = [](const torch::Tensor& x, const torch::Tensor& y) {
-                                return ((x - y).norm() / y.norm().clamp_min(1e-30))
-                                    .item<double>();
-                            };
-                            // Does the STAGE INDEX matter? The checkpoint carries no stage,
-                            // so if it does, binding with a guessed stage is its own error.
-                            replay_precond->set_stage_state(mu_a, 1);
-                            auto z_s1 = replay_precond->apply(v_probe);
-                            replay_precond->set_stage_state(mu_a, 3);
-                            auto z_s3 = replay_precond->apply(v_probe);
-
-                            const double d_bind = rel(z_a, z_before);
-                            const double d_state = rel(z_b, z_a);
-                            std::cerr << "SDIRK3_PRECOND_STATE_DEPENDENCE"
-                                      << " bind_changed=" << d_bind
-                                      << " dmu_1000Pa_changed=" << d_state
-                                      << " stage1_vs_stage3=" << rel(z_s3, z_s1)
-                                      << (d_state > 1e-9
-                                              ? "  STATE-DEPENDENT: the replay MUST bind mu_pert"
-                                              : "  NO RESPONSE: P ignores mu_pert here, so"
-                                                " update(state,...) takes a state it cannot use")
-                                      << std::endl << std::flush;
-                        }
+                        torch::NoGradGuard ng_probe;
+                        const auto& mu_block = replay_layout.blocks.back();
+                        auto v_probe = torch::randn_like(linearization_point);
+                        auto z_before = replay_precond->apply(v_probe);
+                        bind_replay_state(linearization_point, 1);
+                        auto z_a = replay_precond->apply(v_probe);
+                        auto perturbed = linearization_point.clone();
+                        perturbed.slice(0, mu_block.start, mu_block.start + mu_block.size)
+                            .add_(1000.0f);
+                        bind_replay_state(perturbed, 1);
+                        auto z_b = replay_precond->apply(v_probe);
+                        bind_replay_state(linearization_point, 3);
+                        auto z_s3 = replay_precond->apply(v_probe);
+                        bind_replay_state(linearization_point, 1);
+                        auto z_restored = replay_precond->apply(v_probe);
+                        auto rel = [](const torch::Tensor& x, const torch::Tensor& y) {
+                            return ((x - y).norm() / y.norm().clamp_min(1e-30))
+                                .item<double>();
+                        };
+                        std::cerr << "SDIRK3_PRECOND_STATE_DEPENDENCE"
+                                  << " bind_changed=" << rel(z_a, z_before)
+                                  << " dmu_1000Pa_changed=" << rel(z_b, z_a)
+                                  << " stage1_vs_stage3=" << rel(z_s3, z_a)
+                                  << " restore_error=" << rel(z_restored, z_a)
+                                  << std::endl << std::flush;
                     }
 
                     // 9F.D85: the same instrument, pointed at the OPERATOR instead of the
@@ -42091,12 +41546,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::runAdjointReplay(
                         " time(s) for ", checkpoints.size(), " checkpoints -- every "
                         "checkpoint must bind its own mass state");
         }
-    } catch (...) {
-        dt_stage_ = dt_prev;
-        throw;
     }
 
-    dt_stage_ = dt_prev;
     replay_guard.verify_or_throw();
     return lambda;
 }

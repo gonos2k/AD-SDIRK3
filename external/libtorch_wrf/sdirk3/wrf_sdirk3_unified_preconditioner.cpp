@@ -451,6 +451,30 @@ UnifiedPreconditioner::UnifiedPreconditioner(
     : grid_info_(grid_info), 
       physics_config_(physics_config),
       dt_(dt), gamma_(gamma) {
+
+    // Select the model once from the same existing type-2 tile profile used by
+    // the RHS.  Unsupported profiles retain the existing UnifiedPreconditioner
+    // implementation; they are not silently run with a partially applicable
+    // principal model.
+    std::string selector_reason;
+    raw_principal_selection_ = raw_principal_profile_supported(&selector_reason)
+        ? RawPrincipalSelection::Canonical
+        : RawPrincipalSelection::Legacy;
+    if (raw_principal_enabled()) {
+        if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+            std::cerr << "[PRECOND SELECTION] raw principal active; K/B/G vertical Schur"
+                      << std::endl;
+        }
+        // Do not build legacy N²/Aeff/GS state: that would leave two coefficient
+        // owners alive even though both inverse directions use the raw model.
+        return;
+    }
+    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
+        std::cerr << "[PRECOND SELECTION] raw principal inactive; retaining legacy "
+                  << "UnifiedPreconditioner: "
+                  << (selector_reason.empty() ? "unsupported profile" : selector_reason)
+                  << std::endl;
+    }
     
     // Initialize ENHANCED vertical solver for acoustic-gravity waves
     initialize_acoustic_gravity_solver();
@@ -569,14 +593,9 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
 
     // PR 9D commit 3: legacy-M paired-comparison path — COMPILE-TIME ONLY.
     // Defining SDIRK3_PRECOND_LEGACY_WDAMP_COMPARISON at build time restores
-    // the retired legacy physical W diagonal (w_damp_alpha gated on
-    // implicit_wdamp) so a DEDICATED comparison binary can run the same dt=600
-    // case both ways for the operator/preconditioner consistency evidence.
-    // The macro is NEVER defined for production, so the retired physics is not
-    // present in the shipped binary (the compiler strips this branch) and is
-    // NOT reachable through any runtime knob — a raw env toggle would ship
-    // retired behavior behind an un-wired configuration, which the repo's
-    // config guardrails forbid.
+    // the retired legacy physical W diagonal for a dedicated comparison binary.
+    // It is not a runtime selector and is outside the canonical raw-principal
+    // profile; ordinary production builds retain the configured policy below.
     float wdamp_legacy_physical_diag = 0.0f;
 #ifdef SDIRK3_PRECOND_LEGACY_WDAMP_COMPARISON
     if (config.implicit_wdamp) {
@@ -1928,19 +1947,24 @@ void UnifiedPreconditioner::initialize_acoustic_gravity_solver() {
         for (int k = 1; k < nz_local; ++k) {
             int k_lo = std::min(k - 1, dz_sz - 1);
             int k_hi = std::min(k, dz_sz - 1);
-            float dz_w = 0.5f * (dz_effective_cached_[k_lo] + dz_effective_cached_[k_hi]);
-            dz_w = std::max(dz_w, 1.0f);
+            const float dz_w_builder =
+                0.5f * (dz_effective_cached_[k_lo] + dz_effective_cached_[k_hi]);
+            TORCH_CHECK(std::isfinite(dz_w_builder) && dz_w_builder > 0.0f,
+                        "invalid builder W-level dz at k=", k);
 
             float D_phi = phi_diag_ptr[k];
             float D_W_full = w_diag_ptr[k];
 
-            float acfl = dt_gamma * c_s / dz_w;
+            float acfl = dt_gamma * c_s / dz_w_builder;
             float acfl_sq = acfl * acfl;
-            float A_phi_diag = 1.0f + dt_gamma * c_s * c_s / (dz_w * dz_w);
+            float A_phi_diag = wrf::sdirk3::phi_diagonal_value(
+                dt_gamma, c_s, 1.0f / (dz_w_builder * dz_w_builder),
+                phi_diag_unity_experiment());
             float schur = acfl_sq / A_phi_diag;
             float schur_boosted = schur * w_acoustic_boost_cached_;
             float D_W_nosboost = D_W_full - schur_boosted;
 
+            const float dz_w = std::max(dz_w_builder, 1.0f);
             float GS_A_w_phi = 0.0f;
             if (k < mc_sz) {
                 float mc_k = momentum_coupling_k_cached_[k];
@@ -2054,6 +2078,13 @@ void UnifiedPreconditioner::initialize_horizontal_smoother() {
 // 9F.D84: M^T v as the VJP of apply(). See the header for why it lives here and why it
 // fails closed.
 torch::Tensor UnifiedPreconditioner::apply_inverse_transpose(const torch::Tensor& cotangent) {
+    if (raw_principal_enabled()) {
+        // The raw model has no autograd graph: its coefficients are an
+        // immutable CPU snapshot and apply() deliberately runs with grad off.
+        // Use the exact hand-transposed block solve instead of routing through
+        // the legacy graph-based transpose, whose M omits the raw model's K/B/G.
+        return apply_raw_principal_inverse_transpose(cotangent);
+    }
     torch::AutoGradMode grad_on(true);
 
     // 9F.D90: no flag to set, and nothing to restore. The policy travels down the call chain
@@ -2091,6 +2122,10 @@ torch::Tensor UnifiedPreconditioner::apply(const torch::Tensor& residual) {
 
 torch::Tensor UnifiedPreconditioner::apply_impl(const torch::Tensor& residual,
                                                 GradPolicy policy) {
+    if (raw_principal_enabled()) {
+        (void)policy;
+        return apply_raw_principal(residual);
+    }
     // The mu-Schur record is PER-CALL. Without this reset the `recorded` flag latches true for
     // the life of the object, so a later apply() that takes a non-recording path still reports
     // recorded=true carrying the PREVIOUS call's numbers -- the reader cannot tell a fresh value
@@ -4900,7 +4935,7 @@ void UnifiedPreconditioner::solve_coupled_w_theta_batched(
     bool phase2_active = (phi_block != nullptr && phi_diag != nullptr && A_eff != nullptr);
 
     // Precompute Thomas c_prime scalars (same for all columns)
-    // Phase 2: vd_w_eff[k] = vd_w[k] + A_eff[k]²/D_phi[k]
+    // Phase 2 replaces the builder Schur term: D_w_eff = cached D0 + A_eff²/D_phi.
     std::vector<float> c_prime_w(nz_w), denom_w(nz_w);
 
     // v20.14 r47c: ablation flag — boost can be independently disabled
@@ -4913,8 +4948,14 @@ void UnifiedPreconditioner::solve_coupled_w_theta_batched(
         if (!boost_on || k <= 0 || k >= nz || k >= phase2_nz_w) return vd;
         float D_phi_k = phi_diag[k];
         if (D_phi_k <= 1e-6f) return vd;
+        TORCH_CHECK(phi_w_cached_gen_ == coefficient_generation_ &&
+                    k >= 0 && static_cast<size_t>(k) < phi_w_D_w_nosboost_.size(),
+                    "Phase 2 requires a current phi_w_D_w_nosboost_ cache");
+        // The cache owns D0, including its configured floor. Do not subtract a
+        // newly recomputed builder Schur term from D_W_full here.
+        const float D_w0 = phi_w_D_w_nosboost_[k];
         float A = A_eff[k];
-        return vd + A * A / D_phi_k;
+        return D_w0 + A * A / D_phi_k;
     };
 
     denom_w[0] = safe_denom(get_vd_eff(0));
@@ -5073,7 +5114,12 @@ bool UnifiedPreconditioner::compute_phi_w_coupling_coefficients(int nz, int nz_w
         ++interior_count;
         int k_lo = std::min(k - 1, dz_sz - 1);
         int k_hi = std::min(k, dz_sz - 1);
-        float dz_w = std::max(0.5f * (dz_effective_cached_[k_lo] + dz_effective_cached_[k_hi]), 1.0f);
+        const float dz_w_builder =
+            0.5f * (dz_effective_cached_[k_lo] + dz_effective_cached_[k_hi]);
+        TORCH_CHECK(std::isfinite(dz_w_builder) && dz_w_builder > 0.0f,
+                    "invalid builder W-level dz at k=", k);
+        // Preserve the existing safety clamp for the heuristic A_wphi scale.
+        const float dz_w = std::max(dz_w_builder, 1.0f);
 
         // Compute A_wφ based on coupling scale
         float A_wph = 0.0f;
@@ -5093,8 +5139,11 @@ bool UnifiedPreconditioner::compute_phi_w_coupling_coefficients(int nz, int nz_w
         phi_w_coupling_wph_[k] = A_wph;
 
         // D_W_nosboost = D_W_full - schur_boosted
-        float acfl_sq = (dt_gamma * c_s / dz_w) * (dt_gamma * c_s / dz_w);
-        float A_phi_diag = 1.0f + dt_gamma * c_s * c_s / (dz_w * dz_w);
+        const float acfl_builder = dt_gamma * c_s / dz_w_builder;
+        float acfl_sq = acfl_builder * acfl_builder;
+        float A_phi_diag = wrf::sdirk3::phi_diagonal_value(
+            dt_gamma, c_s, 1.0f / (dz_w_builder * dz_w_builder),
+            phi_diag_unity_experiment());
         float schur = acfl_sq / A_phi_diag;
         float schur_boosted = schur * w_acoustic_boost_cached_;
         float D_W_nosboost = w_diag_ptr[k] - schur_boosted;
@@ -5189,7 +5238,631 @@ void UnifiedPreconditioner::set_newton_ru_share(float ru_share) {
     }
 }
 
+bool UnifiedPreconditioner::raw_principal_profile_supported(std::string* why_not) const {
+    const auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    auto reject = [why_not](bool condition, const char* reason) {
+        if (condition && why_not && why_not->empty()) *why_not = reason;
+        return condition;
+    };
+
+    // These are the actual production call-site conditions: the tile factory
+    // constructs UnifiedPreconditioner only for type 2, while the tested RHS
+    // route is ordinary post-solve ARK324 (mode 3), WRFParity, current W,
+    // omega blend 1, and no split-explicit/HEVI substitution.  This selector
+    // only decides whether the existing type-2 owner may use the principal
+    // model; it does not claim that the model reproduces the full Jacobian.
+    if (reject(cfg.precond_type != 2, "precond_type is not existing type 2")) return false;
+    if (reject(cfg.mass_coordinate_mode !=
+                   static_cast<int>(SDIRK3Config::MassCoordinateMode::WRFParity),
+               "mass_coordinate_mode is not exact WRFParity")) return false;
+    if (reject(!cfg.effective_wrf_omega_ww_cp(),
+               "effective RHS Omega branch is not WRF ww_cp")) return false;
+    if (reject(!cfg.buoyancy_use_current_w,
+               "RHS buoyancy is not current-W")) return false;
+    if (reject(std::abs(cfg.omega_w_blend - 1.0f) > 1.0e-6f,
+               "omega_w_blend is not the current-W value 1")) return false;
+    if (reject(cfg.omega_update_ref_per_newton,
+               "omega reference is updated per Newton iteration")) return false;
+    if (reject(cfg.effective_imex_split_mode() != 3,
+               "effective RHS split mode is not existing ARK324 mode 3")) return false;
+    if (reject(cfg.split_explicit,
+               "split-explicit RHS route is enabled")) return false;
+    if (reject(cfg.hevi_split,
+               "HEVI RHS route is enabled")) return false;
+
+    // Existing preconditioner selectors that would change the legacy owner are
+    // guarded explicitly.  The raw M is a principal approximation to A: it
+    // retains pressure/Phi K, theta-to-W B, and canonical G=gI, while leaving
+    // legacy N²/Aeff/GS/cap/double-Schur and other nonprincipal blocks to A.
+    // Requests for those legacy controls keep the existing owner.  NH and
+    // curvature flags are deliberately not gates: their nonprincipal terms
+    // remain in A while the factory test exercises this canonical model with
+    // both flags enabled.
+    // These type-2 knobs are currently observational/ignored by the fixed
+    // UnifiedPreconditioner structure: the tile path already warns for the
+    // diagonal/block-size requests, and ILU/multigrid owners are not
+    // implemented for precond_type=2.  They therefore must not switch a
+    // numerically identical canonical raw model back to the legacy owner.
+    // precond_block_size is likewise ignored; WRF publishes 4 while
+    // standalone C++ callers default to 0.
+    if (reject(cfg.precond_refinement_passes != 1,
+               "legacy preconditioner refinement was requested")) return false;
+    if (reject(std::abs(cfg.precond_relaxation) > 1.0e-7f,
+               "legacy precond_relaxation was requested")) return false;
+    if (reject(!cfg.precond_enable_clamps,
+               "legacy clamp policy override was requested")) return false;
+    if (reject(std::abs(cfg.precond_momentum_clamp_min - 1.0e4f) > 1.0e-3f ||
+               std::abs(cfg.precond_momentum_clamp_max - 1.0e5f) > 1.0e-2f,
+               "legacy momentum-clamp override was requested")) return false;
+    if (reject(std::abs(cfg.precond_damping_factor - 0.05f) > 1.0e-7f,
+               "legacy diagonal damping override was requested")) return false;
+    if (reject(cfg.precond_gs_min_iterations != 2 ||
+               cfg.precond_gs_max_iterations != 6,
+               "legacy Gauss-Seidel iteration policy was changed")) return false;
+    // Two existing front ends publish this same legacy knob differently: the
+    // archived C++/standalone profile uses 0.1, while the WRF Registry default
+    // forwarded by Fortran is 0.7.  Raw M intentionally ignores this legacy
+    // damping, so recognize both known defaults without changing either value
+    // in the legacy owner; any other custom value retains legacy selection.
+    const bool known_mu_damping_profile =
+        std::abs(cfg.precond_mu_coupling_damping - 0.1f) <= 1.0e-7f ||
+        std::abs(cfg.precond_mu_coupling_damping - 0.7f) <= 1.0e-7f;
+    if (reject(!known_mu_damping_profile,
+               "legacy U/V/mu coupling damping custom value was requested")) return false;
+    if (reject(cfg.precond_coupled_phi_w,
+               "legacy Phi-W feedback was requested")) return false;
+    if (reject(std::abs(cfg.precond_gs_beta - 0.5f) > 1.0e-7f ||
+               std::abs(cfg.precond_uv_vertical_fraction - 1.0f) > 1.0e-7f,
+               "legacy GS or UV vertical scaling was changed")) return false;
+    if (reject(cfg.precond_acoustic_4x4 != 1,
+               "legacy acoustic 4x4 selector was changed")) return false;
+    if (reject(std::abs(cfg.precond_w_acoustic_boost - 2.0f) > 1.0e-7f ||
+               std::abs(cfg.precond_theta_acoustic_factor) > 1.0e-7f,
+               "legacy acoustic tuning was changed")) return false;
+    if (reject(std::abs(cfg.precond_phi_w_coupling_scale) > 1.0e-7f ||
+               std::abs(cfg.precond_phi_feedback_relax - 1.0f) > 1.0e-7f ||
+               std::abs(cfg.precond_gs_awphi_cap - 1.0f) > 1.0e-7f ||
+               std::abs(cfg.precond_gs_awphi_cap_coupled + 1.0f) > 1.0e-7f ||
+               std::abs(cfg.precond_phi_feedback_beta - 1.0f) > 1.0e-7f ||
+               std::abs(cfg.precond_phi_feedback_cap + 1.0f) > 1.0e-7f ||
+               std::abs(cfg.precond_dw_nosboost_floor - 0.1f) > 1.0e-7f,
+               "legacy Phi-W feedback tuning was changed")) return false;
+    if (reject(std::abs(cfg.precond_phi_feedback_max_corr + 1.0f) > 1.0e-7f ||
+               cfg.precond_phi_feedback_fallback_gs ||
+               std::abs(cfg.precond_phi_feedback_cap_high + 1.0f) > 1.0e-7f ||
+               std::abs(cfg.precond_gs_awphi_cap_coupled_high + 1.0f) > 1.0e-7f ||
+               cfg.precond_phi_feedback_soft_cap ||
+               cfg.precond_phi_feedback_cap_mode != 0 ||
+               std::abs(cfg.precond_phi_feedback_stage_scale - 1.0f) > 1.0e-7f ||
+               std::abs(cfg.precond_phi_feedback_dw_blend) > 1.0e-7f ||
+               cfg.precond_phi_feedback_passes != 1,
+               "legacy Phi feedback schedule was changed")) return false;
+    if (reject(std::abs(cfg.precond_phi_w_schur_boost_cap - 0.5f) > 1.0e-7f ||
+               std::abs(cfg.precond_phi_w_schur_backsub_relax - 1.0f) > 1.0e-7f ||
+               !cfg.precond_phi_w_schur_boost_on ||
+               !cfg.precond_phi_w_schur_rhs_inject_on ||
+               !cfg.precond_phi_w_schur_backsub_on ||
+               std::abs(cfg.precond_phi_w_schur_cross_thresh) > 1.0e-7f ||
+               std::abs(cfg.precond_phi_w_schur_cap_decay - 1.0f) > 1.0e-7f ||
+               std::abs(cfg.precond_phi_w_schur_ru_scale) > 1.0e-7f ||
+               std::abs(cfg.precond_phi_w_schur_ru_thresh - 0.5f) > 1.0e-7f ||
+               cfg.precond_phi_w_schur_alpha_gs_start != 0 ||
+               std::abs(cfg.precond_phi_w_schur_alpha_gs) > 1.0e-7f,
+               "legacy Phi-W Schur tuning was changed")) return false;
+    if (reject(std::abs(cfg.precond_du_weak_factor - 1.0f) > 1.0e-7f ||
+               std::abs(cfg.precond_du_weak_ru_thresh - 0.95f) > 1.0e-7f,
+               "legacy U/V weak-scaling policy was changed")) return false;
+    if (reject(std::abs(cfg.precond_horizontal_smooth_alpha) > 1.0e-7f ||
+               cfg.precond_horizontal_smooth_iters != 1 ||
+               std::abs(cfg.precond_vertical_smooth_alpha) > 1.0e-7f ||
+               cfg.precond_smooth_boundary_guard,
+               "legacy horizontal/vertical smoothing was requested")) return false;
+    if (reject(cfg.precond_extra_rayleigh || cfg.precond_extra_wdamp ||
+               cfg.precond_extra_vdiff || cfg.precond_extra_divergence,
+               "legacy preconditioner extra-term override was requested")) return false;
+    if (reject(!cfg.precond_match_rhs,
+               "legacy precond_match_rhs was disabled")) return false;
+
+    return true;
+}
+
+bool UnifiedPreconditioner::raw_principal_enabled() const {
+    return raw_principal_selection_ == RawPrincipalSelection::Canonical;
+}
+
+void UnifiedPreconditioner::bind_raw_principal_state_or_throw(
+    const torch::Tensor& packed_state, int stage, const char* state_label) {
+    torch::NoGradGuard no_grad;
+    TORCH_CHECK(raw_principal_enabled(), "raw principal preconditioner selector is inactive");
+    TORCH_CHECK(packed_state.defined() && packed_state.dim() == 1,
+                "raw principal ", (state_label ? state_label : "state"),
+                " must be a defined packed 1-D tensor");
+    TORCH_CHECK(packed_state.scalar_type() == torch::kFloat32 ||
+                packed_state.scalar_type() == torch::kFloat64,
+                "raw principal ", (state_label ? state_label : "state"),
+                " requires float32 or float64 packed storage, got ",
+                packed_state.scalar_type());
+    // The mode-3 ARK324 tableau has four ordinary stages.  The raw M is
+    // stage-local but otherwise stage-agnostic, so accept stages 1..4 and
+    // retain the exact stage label in the generation.
+    TORCH_CHECK(stage >= 1 && stage <= 4,
+                "raw principal stage must be 1..4, got ", stage);
+    TORCH_CHECK(grid_info_ != nullptr,
+                "raw principal state bind requires grid_info");
+
+    const int nx = grid_info_->nx;
+    const int ny = grid_info_->ny;
+    const int nz = grid_info_->nz;
+    const int nx_u = grid_info_->nx_u;
+    const int ny_v = grid_info_->ny_v;
+    const int nz_w = grid_info_->nz_w;
+    TORCH_CHECK(nx > 0 && ny > 0 && nz > 0 && nx_u > 0 && ny_v > 0 && nz_w == nz + 1,
+                "raw principal packed layout has invalid grid dimensions");
+    const auto layout = StateLayout::from_grid_dims(nx, ny, nz, nx_u, ny_v, nz_w);
+    TORCH_CHECK(layout.is_valid() && layout.is_exact,
+                "raw principal packed layout is not an exact valid StateLayout");
+    TORCH_CHECK(packed_state.numel() == layout.total_size,
+                "raw principal ", (state_label ? state_label : "state"),
+                " size ", packed_state.numel(), " != expected ", layout.total_size);
+
+    auto snapshot = packed_state.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+    TORCH_CHECK(torch::isfinite(snapshot).all().item<bool>(),
+                "raw principal ", (state_label ? state_label : "state"),
+                " contains NaN/Inf");
+    // A clone is required here: the FGMRES/Newton caller is free to reuse its
+    // state storage immediately after this checked bind returns.
+    raw_principal_state_cpu_ = snapshot.clone();
+    raw_principal_stage_ = stage;
+    raw_principal_state_bound_ = true;
+    raw_principal_coefficients_dirty_ = true;
+    ++stage_state_generation_;
+}
+
+void UnifiedPreconditioner::initialize_raw_principal_or_throw(float h) {
+    torch::NoGradGuard no_grad;
+    TORCH_CHECK(raw_principal_state_bound_ && raw_principal_state_cpu_.defined(),
+                "raw principal coefficients require a bound stage snapshot");
+    TORCH_CHECK(std::isfinite(h) && h > 0.0f,
+                "raw principal requires positive finite h=dt*gamma");
+    TORCH_CHECK(grid_info_ != nullptr,
+                "raw principal coefficients require grid_info");
+    const auto& config = wrf::sdirk3::g_sdirk3_config;
+    TORCH_CHECK(config.mass_coordinate_mode ==
+                    static_cast<int>(SDIRK3Config::MassCoordinateMode::WRFParity),
+                "raw principal requires the exact WRFParity mass-coordinate selector");
+    TORCH_CHECK(config.effective_wrf_omega_ww_cp(),
+                "raw principal requires the canonical current-W WRF mass-flux branch");
+    TORCH_CHECK(config.buoyancy_use_current_w,
+                "raw principal requires current-W buoyancy");
+
+    // The validated K/B oracle is exactly dry: cq1=1 and cq2=0.  Only
+    // zero-filled dry auxiliary tensors are accepted; any finite nonzero
+    // moisture field fails closed instead of silently dropping its tangent.
+    auto dry_tensor = [](const torch::Tensor& t) {
+        if (!t.defined() || t.numel() == 0) return true;
+        auto c = t.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+        return torch::isfinite(c).all().item<bool>() &&
+               c.abs().max().item<double>() == 0.0;
+    };
+    TORCH_CHECK(dry_tensor(grid_info_->qv) && dry_tensor(grid_info_->qc) &&
+                dry_tensor(grid_info_->qr) && dry_tensor(grid_info_->qi) &&
+                dry_tensor(grid_info_->qs) && dry_tensor(grid_info_->qg) &&
+                dry_tensor(grid_info_->cqw),
+                "raw principal dry contract rejected nonzero moisture/cqw state");
+
+    const int nx = grid_info_->nx;
+    const int ny = grid_info_->ny;
+    const int nz = grid_info_->nz;
+    const int nz_w = grid_info_->nz_w;
+    TORCH_CHECK(nx > 0 && ny > 0 && nz > 1 && nz_w == nz + 1,
+                "raw principal requires nz_w=nz+1 and nz>1");
+    const auto layout = StateLayout::from_grid_dims(
+        nx, ny, nz, grid_info_->nx_u, grid_info_->ny_v, nz_w);
+    TORCH_CHECK(layout.is_valid() && layout.is_exact,
+                "raw principal coefficient layout is not an exact valid StateLayout");
+    TORCH_CHECK(grid_info_->p_base.defined() && grid_info_->p_base.dim() == 3 &&
+                grid_info_->p_base.numel() == layout.blocks[4].size,
+                "raw principal requires authoritative p_base[j,k,i]");
+    TORCH_CHECK(grid_info_->alb.defined() && grid_info_->alb.dim() == 3 &&
+                grid_info_->alb.numel() == layout.blocks[4].size,
+                "raw principal requires authoritative alb[j,k,i]");
+    TORCH_CHECK(grid_info_->mu_base.defined() && grid_info_->mu_base.dim() == 2 &&
+                grid_info_->mu_base.numel() == layout.blocks[5].size,
+                "raw principal requires authoritative mu_base[j,i]");
+    TORCH_CHECK(grid_info_->c1h.defined() && grid_info_->c2h.defined() &&
+                grid_info_->c1h.numel() >= nz && grid_info_->c2h.numel() >= nz &&
+                grid_info_->c1f.defined() && grid_info_->c2f.defined() &&
+                grid_info_->c1f.numel() >= nz_w && grid_info_->c2f.numel() >= nz_w,
+                "raw principal requires authoritative c1/c2 arrays");
+    // WRF publishes rdnw/rdn at mass levels with nz entries.  The physical-top
+    // row reuses the last mass-level rdnw; c1f/c2f remain the nz+1 W-level arrays.
+    TORCH_CHECK(grid_info_->rdnw.defined() && grid_info_->rdn.defined() &&
+                grid_info_->rdnw.numel() >= nz && grid_info_->rdn.numel() >= nz,
+                "raw principal requires authoritative mass-level rdnw/rdn arrays");
+    auto p = grid_info_->p_base.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+    auto alb = grid_info_->alb.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+    auto mub = grid_info_->mu_base.detach().to(torch::kCPU, torch::kFloat64).contiguous();
+    auto c1h = grid_info_->c1h.detach().to(torch::kCPU, torch::kFloat64).flatten().contiguous();
+    auto c2h = grid_info_->c2h.detach().to(torch::kCPU, torch::kFloat64).flatten().contiguous();
+    auto c1f = grid_info_->c1f.detach().to(torch::kCPU, torch::kFloat64).flatten().contiguous();
+    auto c2f = grid_info_->c2f.detach().to(torch::kCPU, torch::kFloat64).flatten().contiguous();
+    auto rdnw = grid_info_->rdnw.detach().to(torch::kCPU, torch::kFloat64).flatten().contiguous();
+    auto rdn = grid_info_->rdn.detach().to(torch::kCPU, torch::kFloat64).flatten().contiguous();
+    TORCH_CHECK(torch::isfinite(p).all().item<bool>() && (p > 0.0).all().item<bool>() &&
+                torch::isfinite(alb).all().item<bool>() && (alb > 0.0).all().item<bool>() &&
+                torch::isfinite(mub).all().item<bool>() && (mub > 0.0).all().item<bool>(),
+                "raw principal authoritative base inputs are not finite positive");
+    TORCH_CHECK(torch::isfinite(c1h).all().item<bool>() && torch::isfinite(c2h).all().item<bool>() &&
+                torch::isfinite(c1f).all().item<bool>() && torch::isfinite(c2f).all().item<bool>() &&
+                torch::isfinite(rdnw).all().item<bool>() && torch::isfinite(rdn).all().item<bool>() &&
+                (rdnw > 0.0).all().item<bool>() &&
+                (rdn.numel() <= 1 || (rdn.slice(0, 1) > 0.0).all().item<bool>()),
+                "raw principal authoritative vertical inputs are not finite positive on physical levels");
+
+    const auto state = raw_principal_state_cpu_.contiguous();
+    const double* sp = state.data_ptr<double>();
+    const double* pp = p.data_ptr<double>();
+    const double* ap = alb.data_ptr<double>();
+    const double* mb = mub.data_ptr<double>();
+    const double* c1hp = c1h.data_ptr<double>();
+    const double* c2hp = c2h.data_ptr<double>();
+    const double* c1fp = c1f.data_ptr<double>();
+    const double* c2fp = c2f.data_ptr<double>();
+    const double* rnw = rdnw.data_ptr<double>();
+    const double* rn = rdn.data_ptr<double>();
+    const double cp_cv = static_cast<double>(grid_info_->cp) /
+                        static_cast<double>(grid_info_->cv);
+    const double rd = static_cast<double>(grid_info_->rd);
+    const double p0 = static_cast<double>(grid_info_->p0);
+    const double t0 = static_cast<double>(grid_info_->t0);
+    const double g = static_cast<double>(grid_info_->g);
+    TORCH_CHECK(std::isfinite(cp_cv) && cp_cv > 0.0 && std::isfinite(rd) && rd > 0.0 &&
+                std::isfinite(p0) && p0 > 0.0 && std::isfinite(t0) &&
+                std::isfinite(g) && g > 0.0,
+                "raw principal physical constants are invalid");
+
+    // The raw solve stores its coefficient tables in float32 even when the
+    // state and EOS assembly above use float64.  Reject a mathematically
+    // finite value that cannot survive that narrowing instead of publishing
+    // an infinity (or relying on a later Thomas pivot check to discover it).
+    const auto narrow_coefficient = [](double value, const char* component) {
+        TORCH_CHECK(std::isfinite(value),
+                    "raw principal ", component, " is not finite before FP32 storage");
+        const float narrowed = static_cast<float>(value);
+        TORCH_CHECK(std::isfinite(narrowed),
+                    "raw principal ", component, " overflows FP32 storage");
+        return narrowed;
+    };
+
+    const int64_t w0 = layout.blocks[2].start;
+    const int64_t phi0 = layout.blocks[3].start;
+    const int64_t theta0 = layout.blocks[4].start;
+    const int64_t mu0 = layout.blocks[5].start;
+    auto sidx = [=](int64_t base, int j, int k, int i, int nk) {
+        return base + (static_cast<int64_t>(j) * nk + k) * nx + i;
+    };
+
+    std::vector<RawPrincipalBlock> next;
+    next.resize(static_cast<size_t>(layout.blocks[5].size));
+    for (int j = 0; j < ny; ++j) {
+        for (int i = 0; i < nx; ++i) {
+            RawPrincipalBlock block;
+            block.k_left.assign(static_cast<size_t>(nz), 0.0f);
+            block.k_diag.assign(static_cast<size_t>(nz), 0.0f);
+            block.k_right.assign(static_cast<size_t>(nz), 0.0f);
+            block.b_left.assign(static_cast<size_t>(nz), 0.0f);
+            block.b_diag.assign(static_cast<size_t>(nz), 0.0f);
+            block.lower.assign(static_cast<size_t>(nz - 1), 0.0f);
+            block.diag.assign(static_cast<size_t>(nz), 0.0f);
+            block.upper.assign(static_cast<size_t>(nz - 1), 0.0f);
+            const double mu_pert = sp[mu0 + static_cast<int64_t>(j) * nx + i];
+            const double M = mb[static_cast<int64_t>(j) * nx + i] + mu_pert;
+            TORCH_CHECK(std::isfinite(M) && M > 0.0,
+                        "raw principal nonpositive current mass at (", j, ",", i, ")");
+            std::vector<double> q(static_cast<size_t>(nz), 0.0);
+            std::vector<double> s_theta(static_cast<size_t>(nz), 0.0);
+            for (int k = 0; k < nz; ++k) {
+                const double H = c1hp[k] * M + c2hp[k];
+                const double pb = pp[(static_cast<int64_t>(j) * nz + k) * nx + i];
+                const double ak = ap[(static_cast<int64_t>(j) * nz + k) * nx + i];
+                const double theta_abs = t0 + sp[sidx(theta0, j, k, i, nz)];
+                const double dphi = sp[sidx(phi0, j, k + 1, i, nz_w)] -
+                                    sp[sidx(phi0, j, k, i, nz_w)];
+                const double alt = ak - (ak * c1hp[k] * mu_pert -
+                                         std::abs(rnw[k]) * dphi) / H;
+                TORCH_CHECK(std::isfinite(H) && H > 0.0 && std::isfinite(pb) && pb > 0.0 &&
+                            std::isfinite(ak) && ak > 0.0 && std::isfinite(theta_abs) &&
+                            theta_abs > 0.0 && std::isfinite(alt) && alt > 0.0,
+                            "raw principal invalid EOS input at (", j, ",", k, ",", i, ")");
+                const double current_p = p0 * std::pow(rd * theta_abs / (p0 * alt), cp_cv);
+                q[k] = (cp_cv * current_p / alt) * std::abs(rnw[k]) / H;
+                s_theta[k] = (cp_cv * current_p / theta_abs);
+                TORCH_CHECK(std::isfinite(q[k]) && std::isfinite(s_theta[k]),
+                            "raw principal EOS tangent is not finite");
+            }
+            for (int wk = 1; wk < nz; ++wk) {
+                const double L = c1fp[wk] * M + c2fp[wk];
+                const double a = g * rn[wk] / L;
+                TORCH_CHECK(std::isfinite(L) && L > 0.0 && std::isfinite(a),
+                            "raw principal invalid interior W denominator");
+                const int r = wk - 1;
+                block.k_left[static_cast<size_t>(r)] =
+                    narrow_coefficient(a * q[wk - 1], "K-left");
+                block.k_diag[static_cast<size_t>(r)] =
+                    narrow_coefficient(-a * (q[wk] + q[wk - 1]), "K-diag");
+                block.k_right[static_cast<size_t>(r)] =
+                    narrow_coefficient(a * q[wk], "K-right");
+                block.b_left[static_cast<size_t>(r)] =
+                    narrow_coefficient(a * s_theta[wk - 1], "B-left");
+                block.b_diag[static_cast<size_t>(r)] =
+                    narrow_coefficient(-a * s_theta[wk], "B-diag");
+            }
+            const double Ltop = c1fp[nz] * M + c2fp[nz];
+            const double atop = 2.0 * g * std::abs(rnw[nz - 1]) / Ltop;
+            TORCH_CHECK(std::isfinite(Ltop) && Ltop > 0.0 && std::isfinite(atop),
+                        "raw principal invalid physical-top W denominator");
+            block.k_left[static_cast<size_t>(nz - 1)] =
+                narrow_coefficient(atop * q[nz - 1], "K-top-left");
+            block.k_diag[static_cast<size_t>(nz - 1)] =
+                narrow_coefficient(-atop * q[nz - 1], "K-top-diag");
+            block.b_diag[static_cast<size_t>(nz - 1)] =
+                narrow_coefficient(atop * s_theta[nz - 1], "B-top-diag");
+
+            // G = g I maps Phi[k] to active W[k] for k=1..nz.  Since each
+            // K row is a three-point Phi stencil, form S directly in O(nz)
+            // work and storage; no dense K/B/G product is retained.
+            for (int r = 0; r < nz; ++r) {
+                const double scale = static_cast<double>(h) * h * g;
+                const double lower = -scale * block.k_left[static_cast<size_t>(r)];
+                const double diag = 1.0 - scale * block.k_diag[static_cast<size_t>(r)];
+                const double upper = -scale * block.k_right[static_cast<size_t>(r)];
+                TORCH_CHECK(std::isfinite(lower) && std::isfinite(diag) &&
+                            std::isfinite(upper),
+                            "raw principal Schur contains NaN/Inf");
+                if (r > 0) block.lower[static_cast<size_t>(r - 1)] =
+                    narrow_coefficient(lower, "Schur-lower");
+                block.diag[static_cast<size_t>(r)] =
+                    narrow_coefficient(diag, "Schur-diag");
+                if (r + 1 < nz) block.upper[static_cast<size_t>(r)] =
+                    narrow_coefficient(upper, "Schur-upper");
+            }
+            next[static_cast<size_t>(j) * nx + i] = std::move(block);
+        }
+    }
+    raw_principal_blocks_ = std::move(next);
+    raw_principal_h_ = h;
+    raw_principal_coefficients_valid_ = true;
+    raw_principal_coefficients_dirty_ = false;
+    ++raw_principal_generation_;
+    coefficients_stale_ = false;
+}
+
+torch::Tensor UnifiedPreconditioner::apply_raw_principal(const torch::Tensor& residual) const {
+    torch::NoGradGuard no_grad;
+    TORCH_CHECK(raw_principal_coefficients_valid_ && !raw_principal_coefficients_dirty_,
+                "raw principal apply requires a current coefficient generation");
+    TORCH_CHECK(raw_principal_state_bound_,
+                "raw principal apply requires a bound stage snapshot");
+    TORCH_CHECK(residual.defined() && residual.dim() == 1 &&
+                (residual.scalar_type() == torch::kFloat32 ||
+                 residual.scalar_type() == torch::kFloat64),
+                "raw principal apply expects a packed float residual");
+    const int nx = grid_info_->nx;
+    const int ny = grid_info_->ny;
+    const int nz = grid_info_->nz;
+    const int nx_u = grid_info_->nx_u;
+    const int ny_v = grid_info_->ny_v;
+    const int nz_w = grid_info_->nz_w;
+    const auto layout = StateLayout::from_grid_dims(nx, ny, nz, nx_u, ny_v, nz_w);
+    TORCH_CHECK(layout.is_valid() && layout.is_exact,
+                "raw principal residual layout is not an exact valid StateLayout");
+    TORCH_CHECK(residual.numel() == layout.total_size,
+                "raw principal residual size ", residual.numel(),
+                " != ", layout.total_size);
+    const uint64_t generation = raw_principal_generation_;
+    auto input = residual.detach().to(torch::kCPU, torch::kFloat32).contiguous();
+    TORCH_CHECK(torch::isfinite(input).all().item<bool>(),
+                "raw principal residual contains NaN/Inf");
+    auto output = input.clone();
+    const float* in = input.data_ptr<float>();
+    float* out = output.data_ptr<float>();
+    const int64_t w0 = layout.blocks[2].start;
+    const int64_t phi0 = layout.blocks[3].start;
+    const int64_t theta0 = layout.blocks[4].start;
+    const float h = raw_principal_h_;
+    for (int j = 0; j < ny; ++j) {
+        for (int i = 0; i < nx; ++i) {
+            const auto& block = raw_principal_blocks_[static_cast<size_t>(j) * nx + i];
+            std::vector<float> rhs(static_cast<size_t>(nz), 0.0f);
+            std::vector<float> d(block.diag);
+            std::vector<float> y(static_cast<size_t>(nz), 0.0f);
+            for (int r = 0; r < nz; ++r) {
+                const int wk = r + 1;
+                rhs[static_cast<size_t>(r)] = in[w0 + (static_cast<int64_t>(j) * nz_w + wk) * nx + i];
+                rhs[static_cast<size_t>(r)] += h * block.k_left[static_cast<size_t>(r)] *
+                    in[phi0 + (static_cast<int64_t>(j) * nz_w + wk - 1) * nx + i];
+                rhs[static_cast<size_t>(r)] += h * block.k_diag[static_cast<size_t>(r)] *
+                    in[phi0 + (static_cast<int64_t>(j) * nz_w + wk) * nx + i];
+                if (wk + 1 < nz_w)
+                    rhs[static_cast<size_t>(r)] += h * block.k_right[static_cast<size_t>(r)] *
+                        in[phi0 + (static_cast<int64_t>(j) * nz_w + wk + 1) * nx + i];
+                rhs[static_cast<size_t>(r)] += h * block.b_left[static_cast<size_t>(r)] *
+                    in[theta0 + (static_cast<int64_t>(j) * nz + wk - 1) * nx + i];
+                const int theta_diag = (wk < nz) ? wk : (nz - 1);
+                rhs[static_cast<size_t>(r)] += h * block.b_diag[static_cast<size_t>(r)] *
+                    in[theta0 + (static_cast<int64_t>(j) * nz + theta_diag) * nx + i];
+            }
+            for (int r = 1; r < nz; ++r) {
+                TORCH_CHECK(std::isfinite(d[static_cast<size_t>(r - 1)]) &&
+                            std::abs(d[static_cast<size_t>(r - 1)]) > 1.0e-12f,
+                            "raw principal Thomas zero pivot at ", r - 1);
+                const float m = block.lower[static_cast<size_t>(r - 1)] /
+                                d[static_cast<size_t>(r - 1)];
+                d[static_cast<size_t>(r)] -= m * block.upper[static_cast<size_t>(r - 1)];
+                rhs[static_cast<size_t>(r)] -= m * rhs[static_cast<size_t>(r - 1)];
+            }
+            TORCH_CHECK(std::isfinite(d.back()) && std::abs(d.back()) > 1.0e-12f,
+                        "raw principal Thomas zero final pivot");
+            y[static_cast<size_t>(nz - 1)] = rhs[static_cast<size_t>(nz - 1)] / d.back();
+            for (int r = nz - 2; r >= 0; --r) {
+                TORCH_CHECK(std::isfinite(d[static_cast<size_t>(r)]) &&
+                            std::abs(d[static_cast<size_t>(r)]) > 1.0e-12f,
+                            "raw principal Thomas zero pivot at ", r);
+                y[static_cast<size_t>(r)] =
+                    (rhs[static_cast<size_t>(r)] - block.upper[static_cast<size_t>(r)] *
+                     y[static_cast<size_t>(r + 1)]) / d[static_cast<size_t>(r)];
+            }
+            for (int r = 0; r < nz; ++r) {
+                const int wk = r + 1;
+                out[w0 + (static_cast<int64_t>(j) * nz_w + wk) * nx + i] = y[static_cast<size_t>(r)];
+            }
+            // G=gI on active Phi/W pairs; Phi[0] remains identity.
+            for (int pk = 1; pk < nz_w; ++pk)
+                out[phi0 + (static_cast<int64_t>(j) * nz_w + pk) * nx + i] =
+                    in[phi0 + (static_cast<int64_t>(j) * nz_w + pk) * nx + i] +
+                    h * grid_info_->g * y[static_cast<size_t>(pk - 1)];
+        }
+    }
+    TORCH_CHECK(torch::isfinite(output).all().item<bool>(),
+                "raw principal apply produced NaN/Inf after FP32 arithmetic");
+    TORCH_CHECK(generation == raw_principal_generation_,
+                "raw principal generation changed during stationary apply");
+    return output.to(residual.device(), residual.scalar_type());
+}
+
+torch::Tensor UnifiedPreconditioner::apply_raw_principal_inverse_transpose(
+    const torch::Tensor& cotangent) const {
+    torch::NoGradGuard no_grad;
+    TORCH_CHECK(raw_principal_coefficients_valid_ && !raw_principal_coefficients_dirty_,
+                "raw principal transpose requires a current coefficient generation");
+    TORCH_CHECK(raw_principal_state_bound_,
+                "raw principal transpose requires a bound stage snapshot");
+    TORCH_CHECK(cotangent.defined() && cotangent.dim() == 1 &&
+                (cotangent.scalar_type() == torch::kFloat32 ||
+                 cotangent.scalar_type() == torch::kFloat64),
+                "raw principal transpose expects a packed float cotangent");
+    const int nx = grid_info_->nx;
+    const int ny = grid_info_->ny;
+    const int nz = grid_info_->nz;
+    const int nx_u = grid_info_->nx_u;
+    const int ny_v = grid_info_->ny_v;
+    const int nz_w = grid_info_->nz_w;
+    const auto layout = StateLayout::from_grid_dims(nx, ny, nz, nx_u, ny_v, nz_w);
+    TORCH_CHECK(layout.is_valid() && layout.is_exact,
+                "raw principal transpose layout is not an exact valid StateLayout");
+    TORCH_CHECK(cotangent.numel() == layout.total_size,
+                "raw principal transpose size ", cotangent.numel(),
+                " != ", layout.total_size);
+    const uint64_t generation = raw_principal_generation_;
+    auto input = cotangent.detach().to(torch::kCPU, torch::kFloat32).contiguous();
+    TORCH_CHECK(torch::isfinite(input).all().item<bool>(),
+                "raw principal transpose cotangent contains NaN/Inf");
+    auto output = input.clone();
+    const float* in = input.data_ptr<float>();
+    float* out = output.data_ptr<float>();
+    const int64_t w0 = layout.blocks[2].start;
+    const int64_t phi0 = layout.blocks[3].start;
+    const int64_t theta0 = layout.blocks[4].start;
+    const float h = raw_principal_h_;
+    const float g = grid_info_->g;
+
+    for (int j = 0; j < ny; ++j) {
+        for (int i = 0; i < nx; ++i) {
+            const auto& block = raw_principal_blocks_[static_cast<size_t>(j) * nx + i];
+            std::vector<float> rhs(static_cast<size_t>(nz), 0.0f);
+            std::vector<float> d(block.diag);
+            std::vector<float> z(static_cast<size_t>(nz), 0.0f);
+            // G^T maps the active Phi cotangent back to the active W rows.
+            for (int r = 0; r < nz; ++r) {
+                const int wk = r + 1;
+                rhs[static_cast<size_t>(r)] =
+                    in[w0 + (static_cast<int64_t>(j) * nz_w + wk) * nx + i];
+                rhs[static_cast<size_t>(r)] += h * g *
+                    in[phi0 + (static_cast<int64_t>(j) * nz_w + wk) * nx + i];
+            }
+            // Thomas solve for S^T z.  The lower/upper roles swap under the
+            // transpose; the stored Schur is already the exact tridiagonal S.
+            for (int r = 1; r < nz; ++r) {
+                TORCH_CHECK(std::isfinite(d[static_cast<size_t>(r - 1)]) &&
+                            std::abs(d[static_cast<size_t>(r - 1)]) > 1.0e-12f,
+                            "raw principal transpose zero pivot at ", r - 1);
+                const float m = block.upper[static_cast<size_t>(r - 1)] /
+                                d[static_cast<size_t>(r - 1)];
+                d[static_cast<size_t>(r)] -= m * block.lower[static_cast<size_t>(r - 1)];
+                rhs[static_cast<size_t>(r)] -= m * rhs[static_cast<size_t>(r - 1)];
+            }
+            TORCH_CHECK(std::isfinite(d.back()) && std::abs(d.back()) > 1.0e-12f,
+                        "raw principal transpose zero final pivot");
+            z[static_cast<size_t>(nz - 1)] = rhs[static_cast<size_t>(nz - 1)] / d.back();
+            for (int r = nz - 2; r >= 0; --r) {
+                TORCH_CHECK(std::isfinite(d[static_cast<size_t>(r)]) &&
+                            std::abs(d[static_cast<size_t>(r)]) > 1.0e-12f,
+                            "raw principal transpose zero pivot at ", r);
+                z[static_cast<size_t>(r)] =
+                    (rhs[static_cast<size_t>(r)] - block.lower[static_cast<size_t>(r)] *
+                     z[static_cast<size_t>(r + 1)]) / d[static_cast<size_t>(r)];
+            }
+
+            // z_W is the solved active-W component; bottom W remains identity.
+            for (int r = 0; r < nz; ++r) {
+                const int wk = r + 1;
+                out[w0 + (static_cast<int64_t>(j) * nz_w + wk) * nx + i] =
+                    z[static_cast<size_t>(r)];
+            }
+            // z_Phi = r_Phi + h K^T z_W.  Include Phi[0]'s one-sided
+            // contribution; it is part of the packed operator even though
+            // forward G leaves bottom Phi as an identity output.
+            for (int r = 0; r < nz; ++r) {
+                const int wk = r + 1;
+                out[phi0 + (static_cast<int64_t>(j) * nz_w + wk - 1) * nx + i] +=
+                    h * block.k_left[static_cast<size_t>(r)] * z[static_cast<size_t>(r)];
+                out[phi0 + (static_cast<int64_t>(j) * nz_w + wk) * nx + i] +=
+                    h * block.k_diag[static_cast<size_t>(r)] * z[static_cast<size_t>(r)];
+                if (wk + 1 < nz_w)
+                    out[phi0 + (static_cast<int64_t>(j) * nz_w + wk + 1) * nx + i] +=
+                        h * block.k_right[static_cast<size_t>(r)] * z[static_cast<size_t>(r)];
+            }
+            // z_theta = r_theta + h B^T z_W, retaining both interior theta
+            // neighbors and the physical-top one-sided row.
+            for (int r = 0; r < nz; ++r) {
+                const int wk = r + 1;
+                out[theta0 + (static_cast<int64_t>(j) * nz + wk - 1) * nx + i] +=
+                    h * block.b_left[static_cast<size_t>(r)] * z[static_cast<size_t>(r)];
+                const int theta_diag = (wk < nz) ? wk : (nz - 1);
+                out[theta0 + (static_cast<int64_t>(j) * nz + theta_diag) * nx + i] +=
+                    h * block.b_diag[static_cast<size_t>(r)] * z[static_cast<size_t>(r)];
+            }
+        }
+    }
+    TORCH_CHECK(torch::isfinite(output).all().item<bool>(),
+                "raw principal transpose produced NaN/Inf after FP32 arithmetic");
+    TORCH_CHECK(generation == raw_principal_generation_,
+                "raw principal transpose generation changed during stationary apply");
+    return output.to(cotangent.device(), cotangent.scalar_type());
+}
+
 void UnifiedPreconditioner::update_time_coefficients(float dt, float gamma) {
+    if (raw_principal_enabled()) {
+        TORCH_CHECK(std::isfinite(dt) && std::isfinite(gamma) && dt > 0.0f && gamma > 0.0f,
+                    "raw principal preconditioner requires positive finite dt/gamma");
+        dt_received_update_ = true;
+        dt_ = dt;
+        gamma_ = gamma;
+        // The step-level update occurs before U_stage exists.  It records the
+        // time coefficient but deliberately cannot publish a state-free M.
+        if (!raw_principal_state_bound_) return;
+        const float requested_h = dt * gamma;
+        TORCH_CHECK(std::isfinite(requested_h) && requested_h > 0.0f,
+                    "raw principal requires finite dt*gamma");
+        // The stored h and the caller's h are both the same float product.
+        // Exact equality therefore identifies the same coefficient request;
+        // an absolute tolerance would silently retain M(h_old) for a changed
+        // current coefficient, which violates the update contract.
+        if (raw_principal_coefficients_valid_ && !raw_principal_coefficients_dirty_ &&
+            raw_principal_h_ == requested_h) return;
+        initialize_raw_principal_or_throw(requested_h);
+        return;
+    }
     // FIX 2026-02-03: Diagnostic to confirm update() is called
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {
         std::cerr << "[PRECOND UPDATE] Called with dt=" << dt << ", gamma=" << gamma
@@ -5425,6 +6098,9 @@ UnifiedPreconditioner::bind_stage_state_or_throw(const torch::Tensor& mu_pert, i
 }
 
 void UnifiedPreconditioner::set_stage_state(const torch::Tensor& mu_pert, int stage) {
+    TORCH_CHECK(!raw_principal_enabled(),
+                "raw principal requires bind_raw_principal_state_or_throw with the full packed state; "
+                "a mu-only bind cannot update its coefficients");
     torch::NoGradGuard no_grad;
 
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1) {

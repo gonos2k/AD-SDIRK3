@@ -12,6 +12,7 @@
 #define WRF_SDIRK3_AD_SAFE_HELPERS_H
 
 #include <torch/torch.h>
+#include <cmath>
 #include <iostream>
 #include <string>
 #include "wrf_sdirk3_config.h"  // OPT Pass33+: For g_sdirk3_config.debug_level
@@ -150,8 +151,15 @@ public:
      */
     static torch::Tensor safe_reciprocal(const torch::Tensor& x, 
                                         float epsilon = 1e-10f) {
+        TORCH_CHECK(std::isfinite(epsilon) && epsilon > 0.0f,
+                    "ADSafeMath::safe_reciprocal requires finite epsilon > 0");
+        // torch::sign(0) is zero; multiplying epsilon by it leaves an exact
+        // zero denominator.  Select a positive signed guard for zero itself.
+        auto signed_epsilon = torch::where(x < 0.0f,
+                                           torch::full_like(x, -epsilon),
+                                           torch::full_like(x, epsilon));
         auto safe_x = torch::where(torch::abs(x) < epsilon,
-                                  torch::full_like(x, epsilon) * torch::sign(x),
+                                  signed_epsilon,
                                   x);
         return 1.0f / safe_x;
     }
@@ -162,8 +170,13 @@ public:
     static torch::Tensor safe_divide(const torch::Tensor& numerator,
                                     const torch::Tensor& denominator,
                                     float epsilon = 1e-10f) {
+        TORCH_CHECK(std::isfinite(epsilon) && epsilon > 0.0f,
+                    "ADSafeMath::safe_divide requires finite epsilon > 0");
+        auto signed_epsilon = torch::where(denominator < 0.0f,
+                                           torch::full_like(denominator, -epsilon),
+                                           torch::full_like(denominator, epsilon));
         auto safe_denom = torch::where(torch::abs(denominator) < epsilon,
-                                      torch::full_like(denominator, epsilon) * torch::sign(denominator),
+                                      signed_epsilon,
                                       denominator);
         return numerator / safe_denom;
     }
