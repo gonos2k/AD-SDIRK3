@@ -4,6 +4,7 @@
 
 # Keep this file
 !.gitignore
+!.gitmodules
 
 # Top-level build/config essentials
 !CMakeLists.txt
