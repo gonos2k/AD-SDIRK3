@@ -96,6 +96,8 @@ core
 # Generated dirs
 install/
 build/
+# Source make fragments required by the GRIB libraries.
+!external/io_grib_share/build/
 build_*/
 logs/
 archive/
