@@ -1,6 +1,7 @@
 // Actual fixed-trajectory API: primal equality, nonzero/zero VJP, and FD/Taylor.
 // Uses the same tolerance/perturbation protocol as the existing two-owner test.
 #include "tile_test_fixture.h"
+#include <limits>
 
 namespace {
 using wrf::sdirk3::test::TileCase;
@@ -239,6 +240,40 @@ int main() {
                                 rel < 5e-4,
                             "block direction ", block,
                             " failed fixed-trajectory FD/VJP contract");
+
+                // Reuse this FD and the six retained VJPs: no additional trajectory solves.
+                // Four FP32 unit roundoffs bound a conservative output/pullback quantization
+                // allowance for this projection, not the full integration/truncation error.
+                const double roundoff = 2.0 * std::numeric_limits<float>::epsilon();
+                const auto direction64 = block_vectors[block].to(torch::kFloat64);
+                for (int output_block = 0; output_block < 6; ++output_block) {
+                    const auto terminal64 = block_vectors[output_block].to(torch::kFloat64);
+                    const auto pullback64 = batch.pullbacks[output_block].to(torch::kFloat64);
+                    const double cross_fd = delta.dot(terminal64).item<double>();
+                    const double cross_ad = direction64.dot(pullback64).item<double>();
+                    const double atol = roundoff * (
+                        terminal64.abs().dot(plus.to(torch::kFloat64).abs() +
+                                             minus.to(torch::kFloat64).abs()).item<double>() /
+                            (2.0 * eps) +
+                        direction64.abs().dot(pullback64.abs()).item<double>());
+                    const double signal = std::max(std::abs(cross_fd), std::abs(cross_ad));
+                    const double budget = atol + 5e-4 * signal;
+                    const char* status = cross_fd == 0.0 && cross_ad == 0.0 ? "exact-zero" :
+                                         signal <= atol ? "unresolved" : "resolved";
+                    std::cout << "FIXED_TRAJECTORY_CROSS input=" << block
+                              << " output=" << output_block << " fd=" << cross_fd
+                              << " ad=" << cross_ad << " atol=" << atol
+                              << " status=" << status << '\n';
+                    TORCH_CHECK(std::isfinite(cross_fd) && std::isfinite(cross_ad) &&
+                                    std::isfinite(atol) && std::abs(cross_fd - cross_ad) <= budget,
+                                "cross-block FD/VJP mismatch: input=", block,
+                                " output=", output_block);
+                    if (block == 2 && output_block == 3) {
+                        // W -> PH must be observable; a zeroed coupling must fail this budget.
+                        TORCH_CHECK(std::abs(cross_fd) > atol + 5e-4 * std::abs(cross_fd),
+                                    "W -> PH coupling is not resolved above the error budget");
+                    }
+                }
             }
             const auto& pb1 = batch.pullbacks[0];
             const auto& pb2 = batch.pullbacks[5];
