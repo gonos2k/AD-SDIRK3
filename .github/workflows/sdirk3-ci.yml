@@ -474,8 +474,22 @@ jobs:
         if: ${{ always() }}
         run: ccache --show-stats
 
-      - name: failure artifacts
-        if: ${{ failure() }}
+      - name: collect numerical measurements
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/numerical-evidence
+          git rev-parse HEAD 'HEAD^{tree}' > build/numerical-evidence/source-revisions.txt
+          log=build/sdirk3-core/Testing/Temporary/LastTest.log
+          if [ -f "$log" ]; then
+            grep '^FIXED_TRAJECTORY_CROSS ' "$log" \
+              > build/numerical-evidence/cross-projections.log || test "$?" -eq 1
+            grep '^SDIRK3_CONVERGED_STAGE_BLOCK_RESIDUAL ' "$log" \
+              > build/numerical-evidence/adjoint-block-residuals.log || test "$?" -eq 1
+          fi
+
+      - name: test evidence and diagnostics
+        if: ${{ always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: core-linux-diagnostics
@@ -485,6 +499,7 @@ jobs:
             build/sdirk3-core/CMakeCache.txt
             build/sdirk3-core/CMakeFiles/CMakeOutput.log
             build/sdirk3-core/Testing/Temporary/
+            build/numerical-evidence/
             /tmp/ctest_actual.txt
             /tmp/ctest_expected.txt
             /tmp/install_actual.txt
