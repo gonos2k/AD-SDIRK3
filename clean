@@ -86,8 +86,13 @@ if ( "$arg" == '-a' || "$arg" == '-aa' ) then
     /bin/rm -f Registry/Registry.backup
     /bin/rm -f run/namelist.input.backup.*
     /bin/rm -f phys/module_sf_noahmpdrv.F phys/module_sf_noahmp_glacier.F \
-               phys/module_sf_noahmp_groundwater.F phys/module_sf_noahmplsm.F \
-               run/MPTABLE.TBL
+               phys/module_sf_noahmp_groundwater.F phys/module_sf_noahmplsm.F
+    # Only the generated default link belongs to cleanup.
+    if ( -l run/MPTABLE.TBL ) then
+      if ( "`readlink run/MPTABLE.TBL`" == "../phys/noahmp/parameters/MPTABLE.TBL" ) then
+        /bin/rm -f run/MPTABLE.TBL
+      endif
+    endif
     /bin/rm -f phys/module_bl_mynnedmf.F phys/module_bl_mynnedmf_common.F \
                phys/module_bl_mynnedmf_driver.F
   endif
