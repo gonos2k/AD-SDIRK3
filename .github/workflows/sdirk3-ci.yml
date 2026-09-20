@@ -196,6 +196,9 @@ jobs:
       - name: diffusion metric boundary contract (Fortran)
         run: python3 tools/test_compute_diff_metrics_boundaries.py
 
+      - name: terrain scalar diffusion contract (Fortran)
+        run: python3 tools/test_horizontal_diffusion_scalar.py
+
       # PR 7C: the decomposition harness carries its own logic (marker /
       # exit / stage-norm / pre-refusal-solve assertions + manifest sanity).
       # --self-test exercises that logic against synthetic fixtures with no
