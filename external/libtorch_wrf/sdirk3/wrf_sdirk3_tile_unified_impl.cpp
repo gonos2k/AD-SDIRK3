@@ -17448,6 +17448,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     }  // end if (do_explicit) — Step 3 ADVECTION
 
+    torch::Tensor alt_mass_fs;  // Current-state inverse density, also used by slow diffusion.
+
     if (do_implicit || (do_explicit && hevi)) {  // Step 3.5+: fast-mode (HEVI: also in explicit pass to reroute horizontal-acoustic to k_slow)
 
     // v20.15 HEVI: snapshot the tendencies this block touches (only when hevi), so we can keep
@@ -19120,7 +19122,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
     // CRITICAL: Declare p_pert_mass at outer scope so it's available to both U and W momentum sections
     torch::Tensor p_pert_mass;  // Perturbation pressure at mass levels [ny, nz, nx]
-    torch::Tensor al_pert_mass_fs, alt_mass_fs;  // WRF al' and alt at mass points (calc_p_rho)
+    torch::Tensor al_pert_mass_fs;  // WRF al' at mass points (calc_p_rho)
     const bool native_nh = non_hydrostatic_ && canonical_horizontal;
     torch::Tensor native_nh_u, native_nh_v;
 
@@ -23410,9 +23412,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // PARITY FIX 2025-12-13: Compute rho for xkxavg = rhoavg * Km_avg in horizontal diffusion
                 // WRF cal_titau_13_31/23_32 uses density-weighted eddy viscosity
                 // rho = p_full / (rd * t_full)
-                torch::Tensor rho_for_hdiff;
+                torch::Tensor rho_for_hdiff, p_full_hdiff;
                 {
-                    torch::Tensor p_full_hdiff;
                     if (p_pert_.defined() && p_pert_.numel() > 0) {
                         p_full_hdiff = p_pert_ + p_base_;
                     } else {
@@ -23432,15 +23433,55 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     rho_for_hdiff = p_full_hdiff / (rd_ * t_full);
                 }
 
+                torch::Tensor rho_uv;
+                if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
+                    // WRF physical rho is (1+qv)/alt, not p/(Rd*theta).
+                    // Reuse the current-state inverse density from calc_p_rho.
+                    if (!alt_mass_fs.defined() && p_base_.defined() &&
+                        th_base_.defined() && ph_base_.defined()) {
+                        // An explicit-only IMEX evaluation skips the PGF block;
+                        // evaluate density at this state, not cached pressure.
+                        const auto alb = wrf::sdirk3::compute_inverse_density(
+                            th_base_, p_base_, rd_, cv_, cp_, p0_);
+                        alt_mass_fs = wrf::sdirk3::calc_p_rho_wrf(
+                            ph, t, mu, mu_base_, alb, p_base_,
+                            getRdnwTensor(t.device(), t.scalar_type(), nz_), c1h_, c2h_,
+                            rd_, cv_, cp_, p0_, kWrfT0).alt;
+                    }
+                    rho_uv = alt_mass_fs.defined() ? alt_mass_fs.reciprocal() :
+                        wrf::sdirk3::compute_inverse_density(
+                            t_full, p_full_hdiff, rd_, cv_, cp_, p0_).reciprocal();
+                    if (grid_info_ && grid_info_->qv.defined() && grid_info_->qv.numel() > 0)
+                        rho_uv = rho_uv * (1.0 + grid_info_->qv.to(t.device(), t.scalar_type()));
+                }
+
                 // U-momentum horizontal diffusion
                 auto u_diff_h = compute_horizontal_diffusion_u_wrf(u, v, w, Kh_mom, rdx, rdy,
-                                                                   msfux_, msfuy_, msftx_, msfty_, muu_2d, ph_full_for_diff);
+                                                                   msfux_, msfuy_, msftx_, msfty_, muu_2d, ph_full_for_diff, rho_uv);
+                if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
+                    const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
+                        .slice(0, 0, t.size(1)).view({1, -1, 1});
+                    const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
+                        .slice(0, 0, t.size(1)).view({1, -1, 1});
+                    const auto alpha = (canonical_horizontal ? level_mass_u :
+                        c1 * muu_2d.unsqueeze(1) + c2) / msfuy_.unsqueeze(1);
+                    u_diff_h = u_diff_h * (velocity_mass_u / alpha);
+                }
                 ru_tend = ru_tend + u_diff_h;
                 uterm_site(wrf::sdirk3::USlowSiteKind::HorizontalDiffusion);
 
                 // V-momentum horizontal diffusion
                 auto v_diff_h = compute_horizontal_diffusion_v_wrf(u, v, w, Kh_mom, rdx, rdy,
-                                                                   msfvx_, msfvy_, msftx_, msfty_, muv_2d, ph_full_for_diff);
+                                                                   msfvx_, msfvy_, msftx_, msfty_, muv_2d, ph_full_for_diff, rho_uv);
+                if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
+                    const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
+                        .slice(0, 0, t.size(1)).view({1, -1, 1});
+                    const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
+                        .slice(0, 0, t.size(1)).view({1, -1, 1});
+                    const auto alpha = (canonical_horizontal ? level_mass_v :
+                        c1 * muv_2d.unsqueeze(1) + c2) / msfvx_.unsqueeze(1);
+                    v_diff_h = v_diff_h * (velocity_mass_v / alpha);
+                }
                 rv_tend = rv_tend + v_diff_h;
 
                 // W-momentum horizontal diffusion
@@ -36235,13 +36276,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
     const torch::Tensor& msfux, const torch::Tensor& msfuy,
     const torch::Tensor& msftx, const torch::Tensor& msfty,
     const torch::Tensor& muu,
-    const torch::Tensor& ph_full) {  // PARITY FIX 2025-12-10: Add ph_full for 3D rdzw
+    const torch::Tensor& ph_full, const torch::Tensor& rho) {
 
     // WRF-consistent U-momentum horizontal diffusion using stress tensor
     // PARITY FIX 2025-12-07: Added MUT weighting (muu) for Fortran compatibility
     // PARITY FIX 2025-12-10: Added ph_full for on-the-fly rdzw computation
     // Based on horizontal_diffusion_u_2 in module_diffusion_em.F
     
+    const bool physical_stress = wrf::sdirk3::g_sdirk3_config.diffusion_option == 2;
+
     auto options = u.options();
     // AUTOGRAD FIX: Use WRF tensor ordering [ny, nz, nx]
     // u has shape (ny, nz, nx_u) - WRF uses (j,k,i) order
@@ -36264,7 +36307,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
     // τ₁₁ = -Kh * defor11 at mass points
     // τ₁₂ = -Kh * defor12 at vorticity points
     
-    auto tau11 = -Kh * defor11;  // At mass points
+    auto tau11 = -(physical_stress ? rho * Kh : Kh) * defor11;  // Mass-point stress
     
     // Need to interpolate Kh to vorticity points for tau12
     // For periodic_x boundary, vorticity points in x coincide with mass points
@@ -36371,6 +36414,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
     }
     
     // Debug: Check tensor dimensions before multiplication    
+    if (physical_stress) {
+        // cal_titau_12_21 averages rho and K separately. Select the actual
+        // vorticity domain from the staggered field (no duplicate end face).
+        const auto rho_vort = avg_y_to_v(
+            avg_x_to_u(rho, rho.size(2) + 1).slice(2, 0, defor12.size(2)),
+            defor12.size(0));
+        Kh_vort = Kh_vort * rho_vort;
+    }
+
     auto tau12 = -Kh_vort * defor12;  // At vorticity points    
     // Compute vertically averaged stress tensors using fnm/fnp
     // WRF uses these for terrain-following coordinate corrections
@@ -36996,7 +37048,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
         }
 
         // Apply MUT weighting: total_tendency *= muu[j,i]
-        if (muu.defined() && muu.numel() > 0) {
+        if (!physical_stress && muu.defined() && muu.numel() > 0) {
             auto muu_slice = muu.slice(0, j_start_div, j_end_div).slice(1, i_start_div, i_end_div);  // [j_len, i_len]
             total_tendency = total_tendency * muu_slice.unsqueeze(1);  // [j_len, nz, i_len]
         }
@@ -37061,7 +37113,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
             auto terrain_correction = (terrain_x + terrain_y) * vert_scale_terrain;  // [j_len, nz, i_len]
 
             // Apply MUT weighting to terrain correction
-            if (muu.defined() && muu.numel() > 0) {
+            if (!physical_stress && muu.defined() && muu.numel() > 0) {
                 auto muu_slice = muu.slice(0, j_start_div, j_end_div).slice(1, i_start_div, i_end_div);
                 terrain_correction = terrain_correction * muu_slice.unsqueeze(1);
             }
@@ -37098,6 +37150,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
         tendency.select(0, ny - 1).zero_();
     }
 
+    // Internal rdnw is a positive magnitude; Fortran dnw is negative.
+    // Stress already includes rho, and g*dz/dnw yields a coupled tendency.
+    // Do not multiply it by the dry column mass a second time.
+    if (physical_stress) tendency = -tendency;
+
     return tendency;
 }
 
@@ -37107,12 +37164,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf(
     const torch::Tensor& msfvx, const torch::Tensor& msfvy,
     const torch::Tensor& msftx, const torch::Tensor& msfty,
     const torch::Tensor& muv,
-    const torch::Tensor& ph_full) {  // PARITY FIX 2025-12-10: Add ph_full for 3D rdzw
+    const torch::Tensor& ph_full, const torch::Tensor& rho) {
 
     // WRF-consistent V-momentum horizontal diffusion using stress tensor
     // PARITY FIX 2025-12-07: Added MUT weighting (muv) for Fortran compatibility
     // PARITY FIX 2025-12-10: Added ph_full for on-the-fly rdzw computation
     // Based on horizontal_diffusion_v_2 in module_diffusion_em.F    
+    const bool physical_stress = wrf::sdirk3::g_sdirk3_config.diffusion_option == 2;
+
     auto options = v.options();
     // AUTOGRAD FIX: Use WRF tensor ordering [ny, nz, nx]
     // v has shape (ny_v, nz, nx) - WRF uses (j,k,i) order
@@ -37184,11 +37243,20 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf(
             }
         }
     }
+    if (physical_stress) {
+        // cal_titau_12_21 averages rho and K separately. Select the actual
+        // vorticity domain from the staggered field (no duplicate end face).
+        const auto rho_vort = avg_y_to_v(
+            avg_x_to_u(rho, rho.size(2) + 1).slice(2, 0, defor12.size(2)),
+            defor12.size(0));
+        Kh_vort = Kh_vort * rho_vort;
+    }
+
     auto tau12 = -Kh_vort * defor12;  // At vorticity points
     // Slice Kh to mass point dimensions to match defor22
     // AUTOGRAD FIX: Use dimension 0 for y-dimension in [ny, nz, nx] ordering
     auto Kh_mass = Kh.slice(0, 0, ny);  // Slice dimension 0 (y-dimension) from ny_ to ny
-    auto tau22 = -Kh_mass * defor22;    // At mass points
+    auto tau22 = -(physical_stress ? rho.slice(0, 0, ny) * Kh_mass : Kh_mass) * defor22;
     
     // Compute vertically averaged stress tensors using fnm/fnp
     // AUTOGRAD FIX: Use [ny, nz+1, nx] ordering for WRF consistency
@@ -37752,7 +37820,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf(
     }
 
     // Apply MUT weighting if available - broadcast [ny-1, nx] to [ny-1, nz, nx]
-    if (muv.defined() && muv.numel() > 0) {
+    if (!physical_stress && muv.defined() && muv.numel() > 0) {
         auto muv_slice = muv.slice(0, j_start_v, j_end_v);  // [ny-1, nx]
         auto muv_broadcast = muv_slice.unsqueeze(1);        // [ny-1, 1, nx]
         flux_tendency_3d = muv_broadcast * flux_tendency_3d;
@@ -37823,7 +37891,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf(
         }
 
         // Apply MUT weighting if available
-        if (muv.defined() && muv.numel() > 0) {
+        if (!physical_stress && muv.defined() && muv.numel() > 0) {
             auto muv_slice = muv.slice(0, j_start_v, j_end_v).unsqueeze(1);  // [ny-1, 1, nx]
             terrain_correction = muv_slice * terrain_correction;
         }
@@ -37877,6 +37945,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf(
                   << " ys=" << shrink_ys_v << " ye=" << shrink_ye_v
                   << " (ny_v=" << ny_v << ", nx=" << nx << ")" << std::endl;
     }
+
+    // Internal rdnw is a positive magnitude; Fortran dnw is negative.
+    // Stress already includes rho, and g*dz/dnw yields a coupled tendency.
+    // Do not multiply it by the dry column mass a second time.
+    if (physical_stress) tendency = -tendency;
 
     return tendency;
 }
