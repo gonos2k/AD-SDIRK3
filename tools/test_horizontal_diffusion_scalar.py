@@ -3,7 +3,8 @@
 
 The test calls the production metric producer, the production 3-D boundary
 routine, and the production scalar horizontal-diffusion routine in one fixed
-state.  It checks an all-cell terrain cancellation and a flat Fourier control.
+state. It checks all-cell cancellation and a flat Fourier control, plus
+interior-layer mixed terrain/Fourier forcing of the flux-divergence metrics.
 """
 from __future__ import annotations
 
@@ -39,10 +40,12 @@ PROGRAM test_horizontal_diffusion_scalar
   USE, INTRINSIC :: ieee_arithmetic, ONLY: ieee_is_finite
   IMPLICIT NONE
   INTEGER, PARAMETER :: NX0=8, NY0=6
+  REAL, PARAMETER :: LAYER_DEPTH=20.
   REAL, PARAMETER :: PI0=3.1415926535897932384626433832795
   CALL run_case(1, 'flat_cancel')
   CALL run_case(2, 'flat_fourier')
   CALL run_case(3, 'terrain_cancel')
+  CALL run_case(4, 'terrain_mixed_interior')
   WRITE(*,'(A)') 'horizontal scalar producer/BC/consumer: PASS'
 CONTAINS
   SUBROUTINE run_case(case_id, label)
@@ -106,8 +109,8 @@ CONTAINS
     DO j=jms,jme; DO i=ims,ime; DO k=kms,kme
       ! Analytic mass-point height; do not derive the test input from the
       ! metric producer's output, which could hide a shared geometry error.
-      zz=100.+20.*(REAL(k)+.5)
-      IF (case_id == 3) zz=zz+terrain(i,j)
+      zz=100.+LAYER_DEPTH*(REAL(k)+.5)
+      IF (case_id >= 3) zz=zz+terrain(i,j)
       IF (case_id == 2) THEN
         aa=1.+.03*SIN(2.*pi*REAL(MODULO(i-1,nx))/REAL(nx))+ &
              .02*COS(2.*pi*REAL(MODULO(j-1,ny))/REAL(ny))
@@ -115,6 +118,9 @@ CONTAINS
         aa=1.
       END IF
       var(i,k,j)=aa+b*zz
+      IF (case_id == 4) var(i,k,j)=var(i,k,j)+zz*( &
+           .03*SIN(2.*pi*REAL(MODULO(i-1,nx))/REAL(nx))+ &
+           .02*COS(2.*pi*REAL(MODULO(j-1,ny))/REAL(ny)))
     END DO; END DO; END DO
     tend=0.
     CALL horizontal_diffusion_s(tend,cfg,var,msftx,msfty,msfux,msfuy,msfvx,msfvy,xkhh,rdx,rdy, &
@@ -124,27 +130,31 @@ CONTAINS
     err=0.; max_expected=0.
     DO j=1,ny; DO k=1,kte-1; DO i=1,nx
       IF (.NOT. ieee_is_finite(tend(i,k,j))) ERROR STOP 'nonfinite diffusion tendency'
+      ! The mixed oracle uses the interior vertical stencil. The existing
+      ! three cases still check every physical layer; all outputs stay finite.
+      IF (case_id == 4 .AND. (k == 1 .OR. k == kte-1)) CYCLE
       expected=0.
-      IF (case_id == 2) expected=fourier_rhs(i,j,rdx,rdy,dnw(k),rdzw(i,k,j),kh)
+      IF (case_id == 2) expected=fourier_rhs(i,j,rdx,rdy,dnw(k),kh)
+      IF (case_id == 4) expected=mixed_rhs(i,j,k,rdx,rdy,dnw(k),kh)
       err=MAX(err,ABS(tend(i,k,j)-expected)); max_expected=MAX(max_expected,ABS(expected))
     END DO; END DO; END DO
 
     max_slope=0.
-    IF (case_id == 3) THEN
+    IF (case_id >= 3) THEN
       DO j=1,ny; DO i=1,nx
         max_slope=MAX(max_slope,ABS(rdx*(terrain(i,j)-terrain(i-1,j))))
         max_slope=MAX(max_slope,ABS(rdy*(terrain(i,j)-terrain(i,j-1))))
       END DO; END DO
     END IF
-    amp=g/(ABS(dnw(1))*MINVAL(rdzw(1:nx,1:kte-1,1:ny)))
-    derivative_scale=ABS(rdx)+ABS(rdy)+2.*max_slope*MAXVAL(rdzw(1:nx,1:kte-1,1:ny))
+    amp=g*LAYER_DEPTH/ABS(dnw(1))
+    derivative_scale=ABS(rdx)+ABS(rdy)+2.*max_slope/LAYER_DEPTH
     ! Fixed engineering roundoff budget, not a rigorous error bound:
     ! input magnitude * two derivative scales * diffusivity * tendency units.
     ! The factor 64 allows accumulation through interpolation and flux loops;
     ! it is independent of the observed mismatch and scales with precision.
     tol=64.*EPSILON(1.)*MAXVAL(ABS(var(1:nx,1:kte-1,1:ny)))*kh*amp*derivative_scale**2
     IF (.NOT. ieee_is_finite(tol)) ERROR STOP 'invalid error budget'
-    IF (case_id == 2 .AND. max_expected <= tol) ERROR STOP 'unresolved positive control'
+    IF ((case_id == 2 .OR. case_id == 4) .AND. max_expected <= tol) ERROR STOP 'unresolved positive control'
     IF (err > tol) THEN
       WRITE(*,'(A,1X,A,2(1X,ES13.5))') 'scalar regression FAIL',TRIM(label),err,tol
       ERROR STOP 1
@@ -158,19 +168,34 @@ CONTAINS
   END FUNCTION terrain
   REAL FUNCTION zw(i,j,k,case_id) RESULT(q)
     INTEGER, INTENT(IN) :: i,j,k,case_id
-    q=100.+20.*REAL(k)
-    IF (case_id == 3) q=q+terrain(i,j)
+    q=100.+LAYER_DEPTH*REAL(k)
+    IF (case_id >= 3) q=q+terrain(i,j)
   END FUNCTION zw
-  REAL FUNCTION fourier_rhs(i,j,rdx,rdy,deta,rdzv,kh) RESULT(q)
+  REAL FUNCTION fourier_rhs(i,j,rdx,rdy,deta,kh) RESULT(q)
     INTEGER, INTENT(IN) :: i,j
-    REAL, INTENT(IN) :: rdx,rdy,deta,rdzv,kh
+    REAL, INTENT(IN) :: rdx,rdy,deta,kh
     REAL :: laplacian
     ! Fourier eigenvalue of the periodic second difference, independent of
     ! the production flux loops. Flat terrain makes vertical flux terms zero.
     laplacian=-4.*rdx**2*SIN(PI0/NX0)**2*.03*SIN(2.*PI0*REAL(i-1)/NX0) &
               -4.*rdy**2*SIN(PI0/NY0)**2*.02*COS(2.*PI0*REAL(j-1)/NY0)
-    q=-g*kh/(deta*rdzv)*laplacian
+    q=-g*kh*LAYER_DEPTH/deta*laplacian
   END FUNCTION fourier_rhs
+  REAL FUNCTION mixed_rhs(i,j,k,rdx,rdy,deta,kh) RESULT(q)
+    INTEGER, INTENT(IN) :: i,j,k
+    REAL, INTENT(IN) :: rdx,rdy,deta,kh
+    REAL :: sx,cy,lx,ly,lap_f,product_correction,height
+    sx=SIN(2.*PI0*REAL(i-1)/NX0); cy=COS(2.*PI0*REAL(j-1)/NY0)
+    lx=-4.*rdx**2*SIN(PI0/NX0)**2; ly=-4.*rdy**2*SIN(PI0/NY0)**2
+    lap_f=lx*.03*sx+ly*.02*cy
+    height=100.+LAYER_DEPTH*(REAL(k)+.5)+terrain(i,j)
+    ! Exact centered-difference product identity, applied in each direction:
+    ! D(z_face D F) - D0(h) D0(F) = z L(F) + dx^2/4 L(h) L(F).
+    ! A continuous z*L(F) oracle alone would omit this discrete correction.
+    product_correction=.25*((lx*3.*sx)*(lx*.03*sx)/rdx**2 &
+                          +(ly*2.*cy)*(ly*.02*cy)/rdy**2)
+    q=-g*kh*LAYER_DEPTH/deta*(height*lap_f+product_correction)
+  END FUNCTION mixed_rhs
 END PROGRAM test_horizontal_diffusion_scalar
 """
 

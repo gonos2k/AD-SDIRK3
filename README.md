@@ -47,6 +47,10 @@ or stability certifications.
   `compute_diff_metrics`, `set_physical_bc3d`, and `horizontal_diffusion_s`
   routines and checks manufactured cancellation and a nonzero Fourier mode
   against its discrete eigenvalue, in default REAL and REAL64 arithmetic.
+  A mixed height/Fourier case activates both flux-divergence terrain corrections
+  in the interior vertical layers; its oracle includes the discrete product
+  correction. The original cases still check all physical layers. Oracle
+  normalization uses the prescribed layer depth, not a computed metric.
   The fixed, precision-scaled engineering budget is not a rigorous general
   roundoff bound; actual errors and budgets are printed separately.
   This is a serial source-level check with prepared periodic input halos,
