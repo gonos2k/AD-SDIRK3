@@ -47,7 +47,19 @@ or stability certifications.
   interior Fourier eigenvalues, zero total tendency, and nonpositive `q·Lq`
   with unit maps and fixed diffusivity/mass. The helper uses zero outer fluxes;
   this test does not establish periodic-edge or terrain parity. Option dispatch,
-  terrain metrics, and caller coefficient/mass ownership remain open.
+  terrain metrics, and general coefficient/mass ownership remain open.
+
+- **Option-2 diffusion coefficient locations.** The RHS constructs default
+  horizontal viscosity on the mass grid, keeps it in physical diffusivity units,
+  and uses `kvdif` for the W stress coefficient. Scalar fallback is `3*khdif`;
+  consumers retain responsibility for their own interpolation and coupling.
+  Staggered RHS coverage includes the V-boundary slice axis, the U stress
+  average extent, and the W metric profile length; no terminal metric padding
+  is introduced. The existing scalar contract also exercises the full RHS
+  with staggered inputs, equivalent default/supplied horizontal coefficients,
+  and an independently supplied scalar coefficient when `khdif=0`.
+  This does not establish full U/V/W stress parity, dynamic W-coefficient
+  support, or the separate option-1 coordinate-surface operator.
 
 - **Fortran scalar diffusion on terrain.**
   `python3 tools/test_horizontal_diffusion_scalar.py` extracts the current
