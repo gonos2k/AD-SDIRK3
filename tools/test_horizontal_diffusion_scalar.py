@@ -123,7 +123,7 @@ CONTAINS
 
     err=0.; max_expected=0.
     DO j=1,ny; DO k=1,kte-1; DO i=1,nx
-      IF (.NOT. ieee_is_finite(tend(i,k,j))) err=HUGE(err)
+      IF (.NOT. ieee_is_finite(tend(i,k,j))) ERROR STOP 'nonfinite diffusion tendency'
       expected=0.
       IF (case_id == 2) expected=fourier_rhs(i,j,rdx,rdy,dnw(k),rdzw(i,k,j),kh)
       err=MAX(err,ABS(tend(i,k,j)-expected)); max_expected=MAX(max_expected,ABS(expected))
