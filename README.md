@@ -42,6 +42,16 @@ or stability certifications.
 
 ### What is measured
 
+- **Fortran scalar diffusion on terrain.**
+  `python3 tools/test_horizontal_diffusion_scalar.py` extracts the current
+  `compute_diff_metrics`, `set_physical_bc3d`, and `horizontal_diffusion_s`
+  routines and checks manufactured cancellation and a nonzero Fourier mode
+  against its discrete eigenvalue, in default REAL and REAL64 arithmetic.
+  The fixed, precision-scaled engineering budget is not a rigorous general
+  roundoff bound; actual errors and budgets are printed separately.
+  This is a serial source-level check with prepared periodic input halos,
+  not MPI communication, C++ diffusion parity, or whole-WRF qualification.
+
 - **Dry potential temperature and continuity.** Ordinary ARK in WRFParity mode uses one
   hybrid/map-aware face-flux diagnosis for column mass, Omega, and theta transport.
   Periodic and symmetric stencils cover every physical face; packed aliases are excluded
