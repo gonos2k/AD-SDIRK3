@@ -223,7 +223,7 @@ When observation-aware replay is enabled, enforce endpoint semantics:
 
 ## Testing
 
-The CMake tree registers an **exact 101-test CTest inventory**, pinned by
+The CMake tree registers an **exact 102-test CTest inventory**, pinned by
 `.github/ci/expected_ctest_names.txt`. The breakdown below groups the tests;
 the pinned file defines the inventory.
 
