@@ -272,8 +272,11 @@ submodules :
 	else \
 		echo No action required for NoahMP submodule ; \
 	fi
+	# Preserve existing user tables and valid custom links.
 	@mkdir -p ../run
-	@ln -sf ../phys/noahmp/parameters/MPTABLE.TBL ../run/MPTABLE.TBL
+	@if [ ! -e ../run/MPTABLE.TBL ] ; then \
+		ln -sf ../phys/noahmp/parameters/MPTABLE.TBL ../run/MPTABLE.TBL ; \
+	fi
 	@if [ \( ! -f module_bl_mynnedmf.F \) -o \( ! -f module_bl_mynnedmf_common.F \) -o \
 	      \( ! -f module_bl_mynnedmf_driver.F \) ] ; then \
 	      	echo Pulling in MYNN-EDMF submodule ; \
