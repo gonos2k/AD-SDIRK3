@@ -23315,67 +23315,31 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     std::cerr << "[SDIRK3] Using khdif = " << Kh_const
                               << " from namelist" << std::endl;
                 }
-                // Skip horizontal diffusion if khdif = 0
+                // Eddy diffusivity is defined at mass points, not U faces.
+                // Consumers interpolate it to their own stress/flux locations.
+                Kh_mom = torch::full_like(t, Kh_const);
                 if (Kh_const == 0.0f) {
-                    apply_h_diffusion = false;
-                } else {
-                    // PARITY FIX 2025-12-14: Use runtime tensor sizes from u instead of member dimensions
-                    // to ensure Kh_mom matches actual input shapes for sub-tiles or halo-trimmed data
-                    int64_t u_ny = u.size(0);
-                    int64_t u_nz = u.size(1);
-                    int64_t u_nx = u.size(2);
-                    Kh_mom = torch::full({u_ny, u_nz, u_nx}, Kh_const, options);
+                    // Option 2 also has independently supplied scalar diffusion
+                    // and W stress driven by xkmv (kvdif).
+                    apply_h_diffusion = wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
+                        ((Kh_scalar_.defined() && Kh_scalar_.numel() > 0) ||
+                         wrf::sdirk3::g_sdirk3_config.kvdif != 0.0f);
                 }
             }
 
             if (apply_h_diffusion) {
-                // PARITY FIX 2025-12-07: Add c1/c2/MUT vertical weighting
-                // Fortran horizontal_diffusion uses: xkmhd(i,j,k) = (c1h(k)*MUT(i,j) + c2h(k)) * khdif
-                // Where MUT = mu + mu_base (total column dry mass)
-                if (c1h_.defined() && c2h_.defined() && c1h_.numel() > 0) {
-                    // PARITY FIX 2025-12-13: Device alignment for vertical coordinate coefficients
-                    // c1h_/c2h_ are CPU tensors from setVerticalCoordinateCoefficients, but Kh_mom is on u.device()
-                    // PERF FIX 2026-01-31: Use cached c1h/c2h device tensors
-                    auto target_device = u.device();
-                    auto target_dtype = u.scalar_type();
-
-                    auto& c1h_aligned = ensureC1hDevCached(target_device, target_dtype);
-                    auto& c2h_aligned = ensureC2hDevCached(target_device, target_dtype);
-
-                    // Compute MUT (total column mass) = mu + mu_base
-                    torch::Tensor MUT = mu_full;  // mu_full is already mu + mu_base
-
-                    // PARITY FIX 2025-12-14: Use runtime tensor sizes from u instead of member dimensions
-                    // to ensure c1h_3d, c2h_3d, and MUT_3d match actual input shapes
-                    int64_t hdiff_ny = u.size(0);   // j dimension
-                    int64_t hdiff_nz = u.size(1);   // k dimension
-                    int64_t hdiff_nx = u.size(2);   // i dimension
-
-                    // c1h and c2h are 1D tensors [nz], need to expand for broadcasting
-                    // Shape: c1h[nz] -> c1h_3d[ny, nz, nx] for (c1h(k)*MUT(i,j) + c2h(k))
-                    // Slice to runtime nz in case coefficient array is longer than runtime dimension
-                    auto c1h_sliced = c1h_aligned.slice(0, 0, hdiff_nz);
-                    auto c2h_sliced = c2h_aligned.slice(0, 0, hdiff_nz);
-                    auto c1h_3d = c1h_sliced.unsqueeze(0).unsqueeze(2).expand({hdiff_ny, hdiff_nz, hdiff_nx});  // [1,nz,1] -> [ny,nz,nx]
-                    auto c2h_3d = c2h_sliced.unsqueeze(0).unsqueeze(2).expand({hdiff_ny, hdiff_nz, hdiff_nx});  // [1,nz,1] -> [ny,nz,nx]
-                    auto MUT_3d = MUT.unsqueeze(1).expand({-1, hdiff_nz, -1});  // [ny,nx] -> [ny,nz,nx]
-
-                    // Compute vertical weighting: (c1h(k)*MUT(i,j) + c2h(k))
-                    auto vertical_weight = c1h_3d * MUT_3d + c2h_3d;
-
-                    // Apply vertical weighting to diffusion coefficient
-                    // Kh_mom is khdif constant or 3D tensor; multiply by vertical weight
-                    Kh_mom = Kh_mom * vertical_weight;
-
-                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-                        torch::NoGradGuard no_grad;
-                        // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
-                        auto Kh_mom_cpu = Kh_mom.detach().to(torch::kCPU);
-                        // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-                        auto Kh_mom_min_cpu = Kh_mom_cpu.min();
-                        auto Kh_mom_max_cpu = Kh_mom_cpu.max();                    }
+                // Option 2 consumers take physical diffusivity (m^2/s),
+                // interpolate it to stress/flux locations, and convert tendency
+                // units themselves. Preweighting here double-couples scalar mass.
+                // Retain the legacy option-1 weighting pending its separate
+                // coordinate-surface operator implementation.
+                if (wrf::sdirk3::g_sdirk3_config.diffusion_option != 2 &&
+                    c1h_.defined() && c2h_.defined() && c1h_.numel() > 0) {
+                    const auto& c1h = ensureC1hDevCached(t.device(), t.scalar_type());
+                    const auto& c2h = ensureC2hDevCached(t.device(), t.scalar_type());
+                    Kh_mom = Kh_mom * (c1h.slice(0, 0, t.size(1)).view({1, -1, 1}) *
+                        mu_full.unsqueeze(1) + c2h.slice(0, 0, t.size(1)).view({1, -1, 1}));
                 }
-
                 // PARITY FIX 2025-12-13: Use physics-supplied scalar diffusivity when available
                 // WRF uses khdq = 3*khdif as default only when no scalar diffusivity is provided
                 // If a physics scheme supplies scalar diffusivity via setDiffusionCoefficients, use it
@@ -23399,56 +23363,21 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         torch::NoGradGuard no_grad;                    }
                 }
 
-                // PARITY FIX 2025-12-07: Compute separate Kh_w for W-momentum using c1f/c2f
-                // Fortran uses c1f/c2f (full-level weights) for W, not c1h/c2h (half-level weights)
+                // horizontal_diffusion_w_2 consumes xkmv at mass levels;
+                // fnm/fnp interpolation to stress faces belongs to the consumer.
                 torch::Tensor Kh_w;
-                // PARITY FIX 2025-12-14: Use runtime tensor sizes from w instead of member dimensions
-                // to ensure Kh_w, c1f_3d, c2f_3d match actual input shapes for sub-tiles or halo-trimmed data
-                int64_t w_ny = w.size(0);     // j dimension
-                int64_t w_nz_w = w.size(1);   // k dimension (w-staggered levels)
-                int64_t w_nx = w.size(2);     // i dimension
-                if (c1f_.defined() && c2f_.defined() && c1f_.numel() > 0) {
-                    // PERF FIX 2026-01-31: Use cached c1f/c2f device tensors
-                    auto target_device = u.device();
-                    auto target_dtype = u.scalar_type();
-
-                    auto& c1f_aligned = ensureC1fDevCached(target_device, target_dtype);
-                    auto& c2f_aligned = ensureC2fDevCached(target_device, target_dtype);
-
-                    // Compute MUT (total column mass) = mu + mu_base
-                    torch::Tensor MUT_w = mu_full;  // mu_full is already mu + mu_base
-
-                    // c1f and c2f are 1D tensors [nz_w], expand for broadcasting
-                    // Slice to runtime nz_w in case coefficient array is longer than runtime dimension
-                    auto c1f_sliced = c1f_aligned.slice(0, 0, w_nz_w);
-                    auto c2f_sliced = c2f_aligned.slice(0, 0, w_nz_w);
-                    auto c1f_3d = c1f_sliced.unsqueeze(0).unsqueeze(2).expand({w_ny, w_nz_w, w_nx});  // [1,nz_w,1] -> [ny,nz_w,nx]
-                    auto c2f_3d = c2f_sliced.unsqueeze(0).unsqueeze(2).expand({w_ny, w_nz_w, w_nx});  // [1,nz_w,1] -> [ny,nz_w,nx]
-                    auto MUT_w_3d = MUT_w.unsqueeze(1).expand({-1, w_nz_w, -1});  // [ny,nx] -> [ny,nz_w,nx]
-
-                    // Compute vertical weighting for W: (c1f(k)*MUT(i,j) + c2f(k))
-                    auto vertical_weight_w = c1f_3d * MUT_w_3d + c2f_3d;
-
-                    // Kh_w = khdif * (c1f*MUT + c2f)
-                    float Kh_const = wrf::sdirk3::g_sdirk3_config.khdif;
-                    Kh_w = Kh_const * vertical_weight_w;
-
-                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-                        torch::NoGradGuard no_grad;
-                        // PERF FIX 2025-12-28: Pre-copy to CPU for diagnostics
-                        auto Kh_w_cpu = Kh_w.detach().to(torch::kCPU);
-                        // PERF FIX 2025-12-28: Pre-compute reductions with _cpu suffix
-                        auto Kh_w_min_cpu = Kh_w_cpu.min();
-                        auto Kh_w_max_cpu = Kh_w_cpu.max();                    }
+                if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
+                    Kh_w = torch::full_like(t, wrf::sdirk3::g_sdirk3_config.kvdif);
                 } else {
-                    // PARITY FIX 2025-12-08: Fallback when c1f/c2f unavailable
-                    // DO NOT use Kh_mom because it was weighted with c1h/c2h (wrong for W)
-                    // Instead, use constant khdif without vertical weighting
-                    float Kh_const = wrf::sdirk3::g_sdirk3_config.khdif;
-                    Kh_w = torch::full({w_ny, w_nz_w, w_nx}, Kh_const, options);
-
-                    if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
-                        torch::NoGradGuard no_grad;                    }
+                    // Preserve legacy option-1 behavior; this is not an option-1
+                    // parity claim. Its separate operator dispatch remains open.
+                    Kh_w = torch::full_like(w, wrf::sdirk3::g_sdirk3_config.khdif);
+                    if (c1f_.defined() && c2f_.defined() && c1f_.numel() > 0) {
+                        const auto& c1f = ensureC1fDevCached(w.device(), w.scalar_type());
+                        const auto& c2f = ensureC2fDevCached(w.device(), w.scalar_type());
+                        Kh_w = Kh_w * (c1f.slice(0, 0, w.size(1)).view({1, -1, 1}) *
+                            mu_full.unsqueeze(1) + c2f.slice(0, 0, w.size(1)).view({1, -1, 1}));
+                    }
                 }
 
                 // PARITY FIX 2025-12-07: Compute muu/muv for MUT weighting in diffusion
@@ -23515,7 +23444,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 rv_tend = rv_tend + v_diff_h;
 
                 // W-momentum horizontal diffusion
-                // PARITY FIX 2025-12-07: Use Kh_w (c1f/c2f weighted) instead of Kh_mom (c1h/c2h weighted)
+                // Option 2: Kh_w is physical viscosity on mass levels, without hybrid weighting.
                 // PARITY FIX 2025-12-08: Pass mu_full_diff for MUT-weighted flux-form
                 // PARITY FIX 2025-12-10: Pass ph_full for 3D rdz computation from total geopotential
                 // PARITY FIX 2025-12-13: Pass u, v for defor13/defor23-based tau31/tau32 computation
@@ -34888,18 +34817,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_defor12(const torch::Tensor& u, c
                 // cf1_, cf2_, cf3_ are float members with default values
                 // FIX 2025-12-26: Use copy_() for in-place modification (select=... rebinds temporary)
                 if (nz >= 3) {
-                    auto hat_1_im1 = v_hat.select(1, 0).slice(2, 0, nx - 1);
-                    auto hat_2_im1 = v_hat.select(1, 1).slice(2, 0, nx - 1);
-                    auto hat_3_im1 = v_hat.select(1, 2).slice(2, 0, nx - 1);
-                    auto hat_1_i = v_hat.select(1, 0).slice(2, 1, nx);
-                    auto hat_2_i = v_hat.select(1, 1).slice(2, 1, nx);
-                    auto hat_3_i = v_hat.select(1, 2).slice(2, 1, nx);
+                    auto hat_1_im1 = v_hat.select(1, 0).slice(1, 0, nx - 1);
+                    auto hat_2_im1 = v_hat.select(1, 1).slice(1, 0, nx - 1);
+                    auto hat_3_im1 = v_hat.select(1, 2).slice(1, 0, nx - 1);
+                    auto hat_1_i = v_hat.select(1, 0).slice(1, 1, nx);
+                    auto hat_2_i = v_hat.select(1, 1).slice(1, 1, nx);
+                    auto hat_3_i = v_hat.select(1, 2).slice(1, 1, nx);
 
                     hatavg.select(1, 0).copy_(0.5f * (cf1_ * hat_1_im1 + cf2_ * hat_2_im1 + cf3_ * hat_3_im1 +
                                                       cf1_ * hat_1_i + cf2_ * hat_2_i + cf3_ * hat_3_i));
                 } else {
                     auto hat_0 = v_hat.select(1, 0);
-                    hatavg.select(1, 0).copy_(0.5f * (hat_0.slice(2, 0, nx - 1) + hat_0.slice(2, 1, nx)));
+                    hatavg.select(1, 0).copy_(0.5f * (hat_0.slice(1, 0, nx - 1) + hat_0.slice(1, 1, nx)));
                 }
 
                 // Top boundary (k=nz): use cft1, cft2 extrapolation
@@ -34908,16 +34837,16 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_defor12(const torch::Tensor& u, c
                     float cft1 = cfn_;  // Already a float, no .item() needed
                     float cft2 = cfn1_;  // Already a float, no .item() needed
 
-                    auto hat_ktes1_im1 = v_hat.select(1, nz - 1).slice(2, 0, nx - 1);
-                    auto hat_ktes1_i = v_hat.select(1, nz - 1).slice(2, 1, nx);
-                    auto hat_ktes2_im1 = v_hat.select(1, nz - 2).slice(2, 0, nx - 1);
-                    auto hat_ktes2_i = v_hat.select(1, nz - 2).slice(2, 1, nx);
+                    auto hat_ktes1_im1 = v_hat.select(1, nz - 1).slice(1, 0, nx - 1);
+                    auto hat_ktes1_i = v_hat.select(1, nz - 1).slice(1, 1, nx);
+                    auto hat_ktes2_im1 = v_hat.select(1, nz - 2).slice(1, 0, nx - 1);
+                    auto hat_ktes2_i = v_hat.select(1, nz - 2).slice(1, 1, nx);
 
                     hatavg.select(1, nz).copy_(0.5f * (cft1 * (hat_ktes1_im1 + hat_ktes1_i) +
                                                        cft2 * (hat_ktes2_im1 + hat_ktes2_i)));
                 } else {
                     auto hat_top = v_hat.select(1, nz - 1);
-                    hatavg.select(1, nz).copy_(0.5f * (hat_top.slice(2, 0, nx - 1) + hat_top.slice(2, 1, nx)));
+                    hatavg.select(1, nz).copy_(0.5f * (hat_top.slice(1, 0, nx - 1) + hat_top.slice(1, 1, nx)));
                 }
 
                 // Now compute terrain term: tmp1 = (hatavg[k+1] - hatavg[k]) * tmpzx * rdzw_avg
@@ -36751,7 +36680,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
         // tau11_avg_terrain: average of tau11 to w-levels at u-points
         // Shape: [ny, nz+1, nx_u]
         tau11_avg_terrain = torch::zeros({ny, nz + 1, nx_u}, options);
-        tau12_avg_terrain = torch::zeros({ny, nz + 1, nx_u}, options);
+        // Averaging tau12 in j and k retains its x extent. The divergence
+        // consumes only i < nx; the extra terminal U face is not a stress cell.
+        tau12_avg_terrain = torch::zeros({ny, nz + 1, nx_vort}, options);
 
         // ===========================================================================
         // AUTOGRAD FIX 2025-12-09: Vectorize fnm/fnp weighted averaging
@@ -37099,7 +37030,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
             // msfux_slice, msfuy_slice are [j_len, i_len]
 
             // Vertical stress gradients: (tau_avg[k+1] - tau_avg[k])
-            // tau11_avg_terrain, tau12_avg_terrain have shape [ny, nz+1, nx_u]
+            // Both averages cover the consumed interior i range; tau12 retains nx_vort.
             auto tau11_avg_kp1 = tau11_avg_terrain.slice(0, j_start_div, j_end_div).slice(1, 1, nz + 1).slice(2, i_start_div, i_end_div);  // [j_len, nz, i_len]
             auto tau11_avg_k = tau11_avg_terrain.slice(0, j_start_div, j_end_div).slice(1, 0, nz).slice(2, i_start_div, i_end_div);        // [j_len, nz, i_len]
             auto tau12_avg_kp1 = tau12_avg_terrain.slice(0, j_start_div, j_end_div).slice(1, 1, nz + 1).slice(2, i_start_div, i_end_div);  // [j_len, nz, i_len]
@@ -39670,7 +39601,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_w_wrf(
     float rdn_ref_w = 1.0f / ztop_w;
     // Get rdn on same device as input tensors to avoid H2D transfers
     torch::Device target_device_w = w.device();
-    torch::Tensor rdn_for_ref_w = getRdnTensor(target_device_w, torch::kFloat32, nz_w);
+    torch::Tensor rdn_for_ref_w = getRdnTensor(target_device_w, torch::kFloat32, nz);
     if (rdn_for_ref_w.defined() && rdn_for_ref_w.numel() > 2) {
         // Select cache keys based on device type
         // PARITY FIX 2025-12-21: Use device-specific fallback signature
@@ -39696,7 +39627,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_w_wrf(
         bool cache_stale = (rdn_ref_w_src_type_ != current_src_type_w) ||
                            (rdn_ref_w_src_ptr_ != current_src_ptr_w) ||
                            (rdn_ref_w_src_epoch_ != current_src_epoch_w) ||
-                           (rdn_ref_w_nz_ != nz_w) ||
+                           (rdn_ref_w_nz_ != nz) ||
                            (rdn_ref_w_dev_ptr_ != current_dev_ptr_w) ||
                            (rdn_ref_w_dev_index_ != current_dev_index_w);
         // Also check fallback ztop signature when source is Fallback (type 3 = RdnSource::Fallback)
@@ -39720,7 +39651,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_w_wrf(
             rdn_ref_w_src_type_ = current_src_type_w;
             rdn_ref_w_src_ptr_ = current_src_ptr_w;
             rdn_ref_w_src_epoch_ = current_src_epoch_w;
-            rdn_ref_w_nz_ = nz_w;
+            rdn_ref_w_nz_ = nz;
             rdn_ref_w_dev_ptr_ = current_dev_ptr_w;
             rdn_ref_w_fallback_ph_sig_ = current_ztop_sig_w;
             rdn_ref_w_dev_index_ = current_dev_index_w;
@@ -39735,12 +39666,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_w_wrf(
     // to avoid GPU sync per iteration. First transfer to CPU contiguous tensor, then use raw pointer.
     // PERF FIX 2025-12-24: Get CPU-cached rdn directly via getRdnTensor(kCPU) instead of GPU→CPU copy.
     // This avoids unnecessary GPU sync when rdn_for_ref_w is on GPU.
-    auto rdn_tensor = torch::zeros({nz_w}, options);
-    auto dn_tensor = torch::zeros({nz_w}, options);
+    // Only interior W faces k=1..nz-1 consume rdn. The top face is
+    // constrained; WRF supplies nz metric entries, not nz+1.
+    auto rdn_tensor = torch::zeros({nz}, options);
+    auto dn_tensor = torch::zeros({nz}, options);
     {
         torch::NoGradGuard no_grad;  // rdn values are constants from 1D profile
         // Use CPU-cached rdn directly to avoid GPU→CPU copy
-        torch::Tensor rdn_cpu_contiguous = getRdnTensor(torch::kCPU, torch::kFloat32, nz_w);
+        torch::Tensor rdn_cpu_contiguous = getRdnTensor(torch::kCPU, torch::kFloat32, nz);
         const float* rdn_ptr = nullptr;
         int64_t rdn_numel = 0;
         if (rdn_cpu_contiguous.defined() && rdn_cpu_contiguous.numel() > 0) {
@@ -39748,7 +39681,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_w_wrf(
             rdn_ptr = rdn_cpu_contiguous.data_ptr<float>();
             rdn_numel = rdn_cpu_contiguous.numel();
         }
-        for (int k = 0; k < nz_w; ++k) {
+        for (int k = 0; k < nz; ++k) {
             float rdn_k = rdn_ref_w;  // Default fallback (positive)
             // v20.14r27o: rdn_ already stored positive by require_metric_magnitude at extraction.
             // No redundant abs() needed here.
