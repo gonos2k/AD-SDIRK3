@@ -27628,9 +27628,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
         auto msfy_im = msfty.slice(1, 0, nx - 1);  // [ny, nx-1]
         auto msfy_ip = msfty.slice(1, 1, nx);      // [ny, nx-1]
         auto msfuy_approx = 0.5f * (msfy_im + msfy_ip);    // [ny, nx-1] approximates msfuy at u-points
+        // Return +div(Kh * grad(var)) in coupled tendency units.
+        // A negative physical flux would require subtracting its divergence.
         // H1 uses cross-ratio (msfux/msfuy) * Kh * dvar/dx (Fortran form)
         auto cross_ratio_x = msfux_approx / msfuy_approx;  // [ny, nx-1]
-        flux_x = -cross_ratio_x.unsqueeze(1) * Kh_avg * dvar_dx;
+        flux_x = cross_ratio_x.unsqueeze(1) * Kh_avg * dvar_dx;
 
         // PARITY FIX 2025-12-07: Apply MUT weighting if provided
         if (use_mut) {
@@ -27682,10 +27684,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
             auto msfvx_inv = 1.0f / msfvx_interior.clamp_min(msfvx_eps);
             auto cross_ratio_y = msfvy_approx * msfvx_inv;  // [ny-1, nx]
             // H2 uses cross-ratio (msfvy*msfvx_inv) * Kh * dvar/dy (Fortran form)
-            flux_y = -cross_ratio_y.unsqueeze(1) * Kh_avg * dvar_dy;
+            flux_y = cross_ratio_y.unsqueeze(1) * Kh_avg * dvar_dy;
         } else {
             // Fallback: use msfvy only (less accurate for non-Cartesian grids)
-            flux_y = -msfvy_approx.unsqueeze(1) * Kh_avg * dvar_dy;
+            flux_y = msfvy_approx.unsqueeze(1) * Kh_avg * dvar_dy;
         }
 
         // PARITY FIX 2025-12-07: Apply MUT weighting if provided

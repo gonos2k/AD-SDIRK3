@@ -31,7 +31,7 @@ with the restored stock-RK3 archive using identical primary initial fields; see
 This validates that run and configuration. Long-duration stability, whole-WRF third-order
 accuracy, forecast quality and the full trajectory adjoint remain **unverified**.
 
-Verification is an **exact 101-test CTest inventory** pinned by
+Verification is an **exact 102-test CTest inventory** pinned by
 `.github/ci/expected_ctest_names.txt`, plus a numerical fingerprint that hashes the
 deterministic solver-diagnostic and RHS-digest streams so behaviour-preserving changes can be
 proven byte-identical.
@@ -41,6 +41,13 @@ and dry-theta corrections. They are historical measurements, not current operato
 or stability certifications.
 
 ### What is measured
+
+- **C++ scalar diffusion sign.** `Scalar_Diffusion_Contract` calls the linked
+  production helper in float32/float64 and checks constant preservation,
+  interior Fourier eigenvalues, zero total tendency, and nonpositive `q·Lq`
+  with unit maps and fixed diffusivity/mass. The helper uses zero outer fluxes;
+  this test does not establish periodic-edge or terrain parity. Option dispatch,
+  terrain metrics, and caller coefficient/mass ownership remain open.
 
 - **Fortran scalar diffusion on terrain.**
   `python3 tools/test_horizontal_diffusion_scalar.py` extracts the current
