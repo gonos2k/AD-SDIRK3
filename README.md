@@ -72,8 +72,17 @@ or stability certifications.
   density and column mass separately, with negative work required. A dry,
   unit-map, mass-coordinate-mode-0 RHS check compares `RHS(K)-RHS(0)` with
   `2*K*Laplacian` and compares full versus explicit-only evaluation.
-  These changes do not close terrain, boundary, variable
-  coefficient, W-stress, or option-1 parity.
+  The U terrain term now uses the same outer vertical scale as its horizontal
+  stress divergence, so layer depth cancels as in the Fortran formula. A
+  nonzero-slope, vertically varying stress case checks two layer-depth
+  profiles in FP32/FP64. A direct stretched-eta case checks U's 1D metric
+  fallback against the layer depth implied by its divergence scale. Option-2
+  W stress also receives the same current-state
+  mass-point density as U/V; a nonzero-W-diffusion RHS check verifies its
+  `(1+qv)` response and invariance to potential-temperature changes at fixed
+  geometry and column mass. Full terrain, V's 1D metric fallback, boundaries,
+  variable coefficients, the complete W stress operator, and option-1 parity
+  still require separate validation.
 
 - **Fortran scalar diffusion on terrain.**
   `python3 tools/test_horizontal_diffusion_scalar.py` extracts the current
@@ -173,6 +182,27 @@ or stability certifications.
   invalid/zero cotangents, and identical forward results with retention off. The validated
   scope is a dry CPU tile with fixed timestep, forcing and boundary branches; second
   derivatives and a complete WRF/4D-Var trajectory are not implemented by this API.
+- **One closed, active-diffusion tile step.** The same test now uses a hydrostatic
+  dry base state with spatially varying U and potential temperature, positive
+  option-2 viscosity, periodic X and symmetric Y walls. It checks a nonzero
+  dry-mass redistribution against the full-step mass budget and reports a
+  separate FP32 budget scaled by the mass-weighted potential-temperature
+  anomaly; this is
+  not an exact complete-step heat-conservation claim. At the resulting state it
+  checks all six blocks of `Full = ExplicitOnly + ImplicitOnly` with the stage
+  reference prepared from that state, repeats the evaluations in reverse
+  order, and compares the active step's VJP with two
+  centered direction differences. Diffusion-off controls must change both the
+  state and pullback. This single-tile fixture does not cover stage boundary
+  flux records, nonconstant viscosity, moisture writeback, MPI or full WRF.
+  It also compares the derivative of the ON−OFF step difference itself using
+  an informative U Fourier direction, four FP32 forward outputs, and a mixed
+  roundoff/relative engineering budget. A second smooth, nonunit-map case
+  computes dry mass and mass-weighted theta with physical cell area and layer
+  weights; its theta budget also accounts for baseline theta times the allowed
+  mass drift. It requires naive unit-area sums to give a different verdict. The
+  active case still has uniform eta layers and sigma coefficients, so general
+  hybrid-layer and stage flux/source budgets remain separate checks.
 
 
 - **Fixed native tile trajectories.** `beginFixedTrajectory(N, schedule)` retains the
