@@ -23490,7 +23490,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // PARITY FIX 2025-12-10: Pass ph_full for 3D rdz computation from total geopotential
                 // PARITY FIX 2025-12-13: Pass u, v for defor13/defor23-based tau31/tau32 computation
                 // PARITY FIX 2025-12-13: Pass rho for xkxavg = rhoavg * Km_avg density weighting
-                auto w_diff_h = compute_horizontal_diffusion_w_wrf(u, v, w, Kh_w, rho_for_hdiff, rdx, rdy,
+                // Option 2 stresses share the current-state physical mass-point density.
+                const auto& rho_w = wrf::sdirk3::g_sdirk3_config.diffusion_option == 2
+                    ? rho_uv : rho_for_hdiff;
+                auto w_diff_h = compute_horizontal_diffusion_w_wrf(u, v, w, Kh_w, rho_w, rdx, rdy,
                                                                    msftx_, msfty_, mu_full_diff, ph_full_for_diff);
                 rw_tend = rw_tend + w_diff_h;
 
@@ -37020,6 +37023,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
 
         // Compute vertical scaling: g * tmpdz / dnw(k)
         // tmpdz = 0.5 * (1/rdzw[j,k,i] + 1/rdzw[j,k,i-1])
+        torch::Tensor vertical_scale;
         if (use_3d_rdzw && rdzw_local_u.defined() && i_start_div > 0) {
             // 3D rdzw from geopotential - proper Fortran parity
             auto rdzw_i = rdzw_local_u.slice(0, j_start_div, j_end_div).slice(2, i_start_div, i_end_div);      // [j_len, nz, i_len]
@@ -37035,17 +37039,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
             // vert_scale[j,k,i] = g * tmpdz[j,k,i] / dnw[k]
             // dnw_tensor is [nz], need to broadcast to [j_len, nz, i_len]
             auto dnw_broadcast = dnw_tensor.unsqueeze(0).unsqueeze(2);  // [1, nz, 1]
-            auto vert_scale = g_val * tmpdz / dnw_broadcast;  // [j_len, nz, i_len]
-            total_tendency = total_tendency * vert_scale;
+            vertical_scale = g_val * tmpdz / dnw_broadcast;  // [j_len, nz, i_len]
         } else {
             // FALLBACK: 1D approximation
             // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw is positive, no abs() needed
             // 3D path: vert_scale = g * tmpdz / dnw > 0 (all positive)
             // 1D path: vert_scale = g * ztop * rdnw[k] / rdnw_ref > 0
-            auto vert_scale_1d = g_val * ztop * rdnw_tensor / rdnw_ref;  // [nz] - always positive
-            auto vert_scale = vert_scale_1d.unsqueeze(0).unsqueeze(2);  // [1, nz, 1]
-            total_tendency = total_tendency * vert_scale;
+            auto vert_scale_1d = physical_stress
+                ? (g_val * rdnw_tensor) * ztop / rdnw_ref
+                : g_val * ztop * rdnw_tensor / rdnw_ref;  // [nz] - always positive
+            vertical_scale = vert_scale_1d.unsqueeze(0).unsqueeze(2);  // [1, nz, 1]
         }
+        total_tendency = total_tendency * vertical_scale;
 
         // Apply MUT weighting: total_tendency *= muu[j,i]
         if (!physical_stress && muu.defined() && muu.numel() > 0) {
@@ -37069,8 +37074,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
                 auto rdzw_im1_safe = torch::clamp(rdzw_im1, rdzw_eps_terrain);
                 tmpdz_terrain = 0.5f * (1.0f / rdzw_i_safe + 1.0f / rdzw_im1_safe);  // [j_len, nz, i_len]
             } else {
-                // Default approximation: tmpdz = ztop / nz
-                tmpdz_terrain = torch::full({j_len, nz, i_len}, ztop / nz, options);
+                // Match the layer depth implied by the 1D divergence scale.
+                const double layer_depth = static_cast<double>(ztop) /
+                    (physical_stress ? rdnw_ref : static_cast<float>(nz));
+                tmpdz_terrain = torch::full({j_len, nz, i_len}, layer_depth, options);
             }
 
             // Get terrain slopes at u-points
@@ -37100,15 +37107,16 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
             auto terrain_x = -msfux_slice.unsqueeze(1) * zx_slice * dtau11_avg_dz / tmpdz_safe;  // [j_len, nz, i_len]
             auto terrain_y = -msfuy_slice.unsqueeze(1) * zy_slice * dtau12_avg_dz / tmpdz_safe;  // [j_len, nz, i_len]
 
-            // Vertical scaling for terrain: g / |dnw[k]|
-            // PARITY FIX 2025-12-25: Remove dnw_sign to match 3D path (always positive scale).
-            // dnw is always positive (1/|rdnw|), so vert_scale = g / dnw > 0.
+            // The physical-stress operator uses the same outer scale for
+            // horizontal divergence and terrain correction. Its layer depth
+            // cancels the 1/tmpdz inside the terrain term, as in Fortran.
+            // Preserve the legacy coordinate-surface path for option 1.
             auto dnw_abs = torch::abs(dnw_tensor);
             // PARITY FIX 2025-12-25: Use getAutocastAwareEps for consistent FP16/autocast handling
             const float dnw_abs_eps = getAutocastAwareEps(dnw_abs);
             auto dnw_abs_safe = torch::clamp(dnw_abs, dnw_abs_eps);
-            auto vert_scale_terrain_1d = g_val / dnw_abs_safe;  // [nz] - always positive
-            auto vert_scale_terrain = vert_scale_terrain_1d.unsqueeze(0).unsqueeze(2);  // [1, nz, 1]
+            auto vert_scale_terrain = physical_stress ? vertical_scale :
+                (g_val / dnw_abs_safe).unsqueeze(0).unsqueeze(2);
 
             auto terrain_correction = (terrain_x + terrain_y) * vert_scale_terrain;  // [j_len, nz, i_len]
 
