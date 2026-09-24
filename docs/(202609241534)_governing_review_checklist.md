@@ -28,3 +28,5 @@ For the earlier H1-only PR #216, no new WRF `em_b_wave` run or same-setup RK3 fi
 17:17 JST update: S1a has a reviewed local implementation and model regression receipt in [`(202609241717)_ark_stage_budget_trace.md`](./(202609241717)_ark_stage_budget_trace.md). S1b and O1 remain open. PR #215 and #216 remain separate open integration prerequisites; a candidate stage-budget PR does not mark them present on `main`.
 
 18:15 JST update: PRs #215/#216/#217 have since been merged, but only #215 targeted `main`; #218 is the open main integration for H1/S1a. O1's exact FP32 replay fix is separately verified in the candidate branch, while S1b, F1, K1, G1, T1 and A1 remain open. The earlier 17:17 sentence above is retained as the historical state of that report, not the current PR state.
+
+19:12 JST update: the [current remaining-items checklist and theta seam progress](./(202609241912)_remaining_findings_theta_seam.md) supersede the statuses above. It separates the candidate stage-1 theta face check from still-open all-stage theta, momentum, Fortran parity and domain-split contracts.

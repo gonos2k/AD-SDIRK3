@@ -924,8 +924,12 @@ public:
     // Test-only observation; no production model setting or RHS change.
     // The accepted ARK derivatives, not a later RHS re-evaluation, define the step.
     struct ArkBudgetTrace {
+        struct ThetaFaces {
+            torch::Tensor adv_x, adv_y, adv_z, diff_x, diff_y;
+        };
         torch::Tensor input, physics, raw_final, projected_final;
         std::vector<torch::Tensor> stage_state, fast, slow, full;
+        ThetaFaces stage1_fast_faces, stage1_slow_faces;
         double dt = 0.0;
     };
     void captureArkBudgetTraceForTest(bool enabled) { capture_ark_budget_trace_ = enabled; }
@@ -1532,6 +1536,8 @@ private:
     int last_step_outcome_code_ = static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED);
     ArkBudgetTrace last_ark_budget_trace_;
     bool capture_ark_budget_trace_ = false;
+    bool capture_stage1_theta_faces_ = false;
+    ArkBudgetTrace::ThetaFaces rhs_theta_faces_;
     bool last_step_final_update_aborted_ = false;
     float last_step_progress_ratio_ = 0.0f;
     bool last_step_progress_ratio_valid_ = false;
@@ -2294,8 +2300,10 @@ private:
                                 const torch::Tensor& vel);
     
     // Advection-specific functions with upwind-biasing
-    torch::Tensor advect_scalar_x(const torch::Tensor& f, const torch::Tensor& u, float rdx);
-    torch::Tensor advect_scalar_y(const torch::Tensor& f, const torch::Tensor& v, float rdy);
+    torch::Tensor advect_scalar_x(const torch::Tensor& f, const torch::Tensor& u, float rdx,
+                                  torch::Tensor* face_flux = nullptr);
+    torch::Tensor advect_scalar_y(const torch::Tensor& f, const torch::Tensor& v, float rdy,
+                                  torch::Tensor* face_flux = nullptr);
     
     // Advection functions for already-staggered variables
     // Whole-domain packed periodic-X/symmetric-Y contract, including endpoint aliases.
@@ -2329,7 +2337,9 @@ private:
                                                           float rdx, float rdy, const torch::Tensor& msftx,
                                                           const torch::Tensor& msfty,
                                                           const torch::Tensor& msfvx = torch::Tensor(),
-                                                          const torch::Tensor& mut = torch::Tensor());
+                                                          const torch::Tensor& mut = torch::Tensor(),
+                                                          torch::Tensor* x_flux = nullptr,
+                                                          torch::Tensor* y_flux = nullptr);
     // PARITY FIX 2025-12-07: Added muu/muv parameters for MUT weighting
     // PARITY FIX 2025-12-10: Added optional ph_full parameter for on-the-fly rdzw computation
     // ph_full = ph_pert + ph_base (total geopotential at w-levels, [ny, nz_w, nx])

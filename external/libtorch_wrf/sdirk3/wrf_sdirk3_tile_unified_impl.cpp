@@ -3942,6 +3942,8 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         last_step_input_graph_ = torch::Tensor();
         last_step_output_graph_ = torch::Tensor();
         last_ark_budget_trace_ = {};
+        capture_stage1_theta_faces_ = false;
+        rhs_theta_faces_ = {};
     }
 
     // R2: a quantity that does NOT depend on how the domain was decomposed.
@@ -9973,6 +9975,7 @@ vertical_coefficients:
                 }
 
                 const int stage_id = i + 1;
+                capture_stage1_theta_faces_ = capture_ark_budget_trace_ && i == 0;
                 const double aii = Ark::a_implicit[i][i];
                 torch::Tensor U_stage = compute_stage_rhs(i);
                 probe_firsthit_nonfinite(stage_id, false, "U_stage_pre", U_stage);
@@ -10206,6 +10209,9 @@ vertical_coefficients:
                         last_stage_signals_is_explicit_ = true;
                         // ESDIRK explicit first stage: evaluate fast tendency directly.
                         k_fast[i] = compute_fast_rhs(U_stage, U_full_exch_stage);
+                        if (capture_stage1_theta_faces_) {
+                            last_ark_budget_trace_.stage1_fast_faces = rhs_theta_faces_;
+                        }
                         // R13.20 (adversarial loop, iteration 2) -- TWO defects, one root.
                         //
                         // (1) `explicit_rhs_measured` / `explicit_rhs_finite` had NO producer
@@ -10449,6 +10455,11 @@ vertical_coefficients:
                 }
 
                 k_slow[i] = compute_k_slow(U_conv, U_full_exch_conv);
+                if (capture_stage1_theta_faces_) {
+                    last_ark_budget_trace_.stage1_slow_faces = rhs_theta_faces_;
+                    capture_stage1_theta_faces_ = false;
+                    rhs_theta_faces_ = {};
+                }
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_slow", k_slow[i]);
 
                 // ============================================================
@@ -14251,6 +14262,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::projectStateBoundaries(const torch::Tenso
 }
 
 torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U, RhsMode mode) {
+    if (capture_stage1_theta_faces_) rhs_theta_faces_ = {};
     // Step 7b: Detect full-halo input and redirect
     {
         int64_t expected_interior_size = ny_ * nz_ * nx_u_ + ny_v_ * nz_ * nx_
@@ -17346,10 +17358,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
         // Use perturbation t for advection with mass-coupled momentum
         // X-advection: -∂(ru·θ')/∂x (mass-conserving flux form)
-        auto t_adv_x = advect_scalar_x(t, ru_theta, rdx);
+        auto t_adv_x = advect_scalar_x(t, ru_theta, rdx,
+            capture_stage1_theta_faces_ ? &rhs_theta_faces_.adv_x : nullptr);
 
         // Y-advection: -∂(rv·θ')/∂y (mass-conserving flux form)
-        auto t_adv_y = advect_scalar_y(t, rv_theta, rdy);
+        auto t_adv_y = advect_scalar_y(t, rv_theta, rdy,
+            capture_stage1_theta_faces_ ? &rhs_theta_faces_.adv_y : nullptr);
         
         // Apply map factors with boundary safety
         // PARITY FIX 2025-12-24: Autocast-aware eps (handles FP16 autocast even when storage is FP32).
@@ -17395,6 +17409,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             t_adv_z_work_ = t_adv_z;
         } else if (use_wrf_mass_flux && have_rdnw_t) {
             const auto flux_w = wrf_ww_cp() * avg_z_to_w(t);
+            if (capture_stage1_theta_faces_) {
+                torch::NoGradGuard no_grad;
+                rhs_theta_faces_.adv_z = flux_w.detach().clone();
+            }
             // WRF rdnw is negative; getRdnwTensor stores its magnitude.
             // -rdnw * delta(Omega*theta) therefore has a positive sign here.
             // Both boundary fluxes vanish, but the top cell divergence need not.
@@ -23546,7 +23564,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // PARITY FIX 2025-12-07: Pass msfvx_ and mu_full_diff for Fortran parity
                 auto t_diff_h = compute_horizontal_diffusion_scalar_wrf(t, Kh_scalar, rdx, rdy,
                                                                         msftx_, msfty_,
-                                                                        msfvx_, mu_full_diff);
+                                                                        msfvx_, mu_full_diff,
+                    capture_stage1_theta_faces_ ? &rhs_theta_faces_.diff_x : nullptr,
+                    capture_stage1_theta_faces_ ? &rhs_theta_faces_.diff_y : nullptr);
                 t_tend = t_tend + t_diff_h;
             }  // end if (apply_h_diffusion)
         }  // end Step 9: HORIZONTAL DIFFUSION inner block
@@ -26102,7 +26122,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::flux2_centered(
 }
 
 // Advection functions with WRF flux-form
-torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_x(const torch::Tensor& f, const torch::Tensor& u, float rdx) {
+torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_x(const torch::Tensor& f, const torch::Tensor& u,
+                                                       float rdx, torch::Tensor* face_flux) {
     // AUTOGRAD OPTIMIZATION: Hybrid vectorization for scalar advection
     // Reduces autodiff nodes from ~100K to ~10K (90% reduction)
     // f: scalar field at mass points (nz, ny, nx)
@@ -26388,10 +26409,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_x(const torch::Tensor& f, c
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 && f.size(0) == 64) {
     }
     
+    if (face_flux) {
+        torch::NoGradGuard no_grad;
+        *face_flux = flux.detach().clone();
+    }
     return advect;
 }
 
-torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, const torch::Tensor& v, float rdy) {
+torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, const torch::Tensor& v,
+                                                       float rdy, torch::Tensor* face_flux) {
     // AUTOGRAD OPTIMIZATION: Hybrid vectorization for Y-direction scalar advection
     // Reduces autodiff nodes from ~100K to ~10K (90% reduction)
     // f: scalar field at mass points (ny, nz, nx) - per WRF-SDIRK3-design.md layout
@@ -26736,7 +26762,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, c
             }
         }
     }
-    
+    }
+
+    if (face_flux) {
+        torch::NoGradGuard no_grad;
+        *face_flux = flux.detach().clone();
     }
     return advect;
 }
@@ -27555,7 +27585,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion(
 torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
     const torch::Tensor& var, const torch::Tensor& Kh, float rdx, float rdy,
     const torch::Tensor& msftx, const torch::Tensor& msfty,
-    const torch::Tensor& msfvx, const torch::Tensor& mut) {
+    const torch::Tensor& msfvx, const torch::Tensor& mut,
+    torch::Tensor* x_flux, torch::Tensor* y_flux) {
     // PARITY FIX 2025-12-09: Added cross-map ratios per Fortran horizontal_diffusion_3dmp
     //
     // ========================================================================
@@ -27647,9 +27678,31 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
         H1.slice(2, 1, nx).copy_(flux_x);
     }
 
-    // Boundary u-points (i=0 and i=nx): zero flux (Fortran domain boundaries)
-    // PARITY FIX 2025-12-07: Use zero flux at domain boundaries instead of zero gradient
-    // H1.slice(2, 0, 1) and H1.slice(2, nx, nx+1) are already zeros
+    // On one whole-domain periodic tile, faces 0 and nx are the same physical
+    // face. Use the same stencil as the interior with the wrapped mass cells.
+    // An internal tile/rank edge cannot be wrapped locally; it needs halo data.
+    const bool whole_periodic_x = config_flags_periodic_x_ &&
+        nprocx_ * nprocy_ == 1 && its_ <= ids_ && ite_ >= ide_ - 1 &&
+        jts_ <= jds_ && jte_ >= jde_ - 1 &&
+        H1.size(2) == nx + 1;
+    if (whole_periodic_x && nx > 1) {
+        if (isPackedPeriodicDomain()) {
+            // The last mass column is an alias of the first. Interior face
+            // nx-1 is already the true seam; complete its two packed aliases.
+            H1.select(2,0).copy_(H1.select(2,nx-1));
+            H1.select(2,nx).copy_(H1.select(2,1));
+        } else {
+            const auto seam_kh=0.5f*(Kh.select(2,nx-1)+Kh.select(2,0));
+            const auto seam_gradient=(var.select(2,0)-var.select(2,nx-1))*rdx;
+            const auto seam_map_x=0.5f*(msftx.select(1,nx-1)+msftx.select(1,0));
+            const auto seam_map_y=0.5f*(msfty.select(1,nx-1)+msfty.select(1,0));
+            auto seam=(seam_map_x/seam_map_y).unsqueeze(1)*seam_kh*seam_gradient;
+            if (use_mut)
+                seam=0.5f*(mut.select(1,nx-1)+mut.select(1,0)).unsqueeze(1)*seam;
+            H1.select(2,0).copy_(seam);
+            H1.select(2,nx).copy_(seam);
+        }
+    }
 
     // VECTORIZED: H2 = -msfvy * Kh * rdy * dvar/dy at v-points (Fortran flux form)
     // Size: (ny+1, nz, nx) - v-stagger has extra point in y
@@ -27721,6 +27774,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
     auto div_y = msf_combined * rdy * (H2.slice(0, 1, ny + 1) - H2.slice(0, 0, ny));  // [ny, nz, nx]
 
     auto tendency = div_x + div_y;
+
+    if (x_flux || y_flux) {
+        torch::NoGradGuard no_grad;
+        if (x_flux) *x_flux = H1.detach().clone();
+        if (y_flux) *y_flux = H2.detach().clone();
+    }
 
     return tendency;
 }
