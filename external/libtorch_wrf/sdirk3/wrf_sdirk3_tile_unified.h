@@ -2327,14 +2327,16 @@ private:
                                                      const torch::Tensor& Kh, float rdx, float rdy,
                                                      const torch::Tensor& msfux, const torch::Tensor& msfuy,
                                                      const torch::Tensor& msftx, const torch::Tensor& msfty,
-                                                     const torch::Tensor& muu = torch::Tensor(),
-                                                     const torch::Tensor& ph_full = torch::Tensor());
+                                                     const torch::Tensor& muu,
+                                                     const torch::Tensor& ph_full,
+                                                     const torch::Tensor& rho);
     torch::Tensor compute_horizontal_diffusion_v_wrf(const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w,
                                                      const torch::Tensor& Kh, float rdx, float rdy,
                                                      const torch::Tensor& msfvx, const torch::Tensor& msfvy,
                                                      const torch::Tensor& msftx, const torch::Tensor& msfty,
-                                                     const torch::Tensor& muv = torch::Tensor(),
-                                                     const torch::Tensor& ph_full = torch::Tensor());
+                                                     const torch::Tensor& muv,
+                                                     const torch::Tensor& ph_full,
+                                                     const torch::Tensor& rho);
     // PARITY FIX 2025-12-08: Add MUT parameter for proper flux-form diffusion
     // PARITY FIX 2025-12-10: Add ph_full parameter for 3D rdz computation from total geopotential
     // PARITY FIX 2025-12-13: Add u, v for defor13/defor23-based tau31/tau32 computation

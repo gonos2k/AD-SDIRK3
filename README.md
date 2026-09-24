@@ -61,6 +61,20 @@ or stability certifications.
   This does not establish full U/V/W stress parity, dynamic W-coefficient
   support, or the separate option-1 coordinate-surface operator.
 
+- **Option-2 U/V stress units.** Normal stresses include physical density
+  `(1+qv)/alt`; shear stresses average density and viscosity separately.
+  The diffusion helpers restore the signed eta orientation locally and return
+  a coupled tendency without an additional dry-column-mass factor. The caller
+  converts this to the existing velocity accumulator using the hybrid face
+  mass and map factor. Explicit-only evaluations obtain density from the same
+  current state. `Scalar_Diffusion_Contract` also checks flat U-X/V-Y normal
+  stresses against an independent signed-eta oracle in FP32/FP64, varying
+  density and column mass separately, with negative work required. A dry,
+  unit-map, mass-coordinate-mode-0 RHS check compares `RHS(K)-RHS(0)` with
+  `2*K*Laplacian` and compares full versus explicit-only evaluation.
+  These changes do not close terrain, boundary, variable
+  coefficient, W-stress, or option-1 parity.
+
 - **Fortran scalar diffusion on terrain.**
   `python3 tools/test_horizontal_diffusion_scalar.py` extracts the current
   `compute_diff_metrics`, `set_physical_bc3d`, and `horizontal_diffusion_s`
