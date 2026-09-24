@@ -2346,7 +2346,10 @@ private:
                                                           const torch::Tensor& msfvx = torch::Tensor(),
                                                           const torch::Tensor& mut = torch::Tensor(),
                                                           torch::Tensor* x_flux = nullptr,
-                                                          torch::Tensor* y_flux = nullptr);
+                                                          torch::Tensor* y_flux = nullptr,
+                                                          const torch::Tensor& msfux = torch::Tensor(),
+                                                          const torch::Tensor& msfuy = torch::Tensor(),
+                                                          const torch::Tensor& msfvy = torch::Tensor());
     // PARITY FIX 2025-12-07: Added muu/muv parameters for MUT weighting
     // PARITY FIX 2025-12-10: Added optional ph_full parameter for on-the-fly rdzw computation
     // ph_full = ph_pert + ph_base (total geopotential at w-levels, [ny, nz_w, nx])
