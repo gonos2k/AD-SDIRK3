@@ -1,7 +1,164 @@
 #include "tile_test_fixture.h"
+#include <array>
 
 namespace {
 using namespace wrf::sdirk3::test;
+
+struct GoverningRhsTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, wrf::sdirk3::RhsMode);
+    friend type access(GoverningRhsTag);
+};
+template<typename Tag, typename Tag::type Member> struct GoverningAccessor {
+    friend typename Tag::type access(Tag) { return Member; }
+};
+template struct GoverningAccessor<GoverningRhsTag,
+    &TileSDIRK3UnifiedSolver::computeUnifiedRHS>;
+
+void check_governing_step_budget() {
+    using wrf::sdirk3::RhsMode;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg.debug_level = 0;
+    cfg.imex_split_mode = 3;
+    cfg.hevi_split = false;
+    cfg.split_explicit = false;
+    cfg.mass_coordinate_mode = 1;
+    cfg.diffusion_option = 2;
+    cfg.khdif = 1000.0f;
+    cfg.kvdif = 0.0f;
+    cfg.precond_type = 0;
+    cfg.use_autograd = true;
+    cfg.retain_graph_for_adjoint = true;
+    cfg.imex_slow_in_tangent = true;
+    constexpr float spacing = 1000.0f, dt = 0.01f;
+    const auto setup = [](TileCase& tile) {
+        tile.solver.setTerrainSlopes(torch::zeros({ny,nw,nx}),
+                                     torch::zeros({ny,nw,nx}));
+        for (int j=0; j<ny; ++j) {
+            for (int k=0; k<nz; ++k) {
+                for (int i=0; i<nu; ++i) {
+                    tile.u[(j*nz+k)*nu+i] = i == nx ? 0.0f :
+                        std::sin(2.0*std::acos(-1.0)*i/nx);
+                }
+                for (int i=0; i<nx; ++i)
+                    tile.theta[(j*nz+k)*nx+i] = 0.5f*
+                        std::cos(2.0*std::acos(-1.0)*i/nx)*
+                        std::cos(2.0*std::acos(-1.0)*j/(ny-1));
+            }
+        }
+    };
+    TileCase tile(spacing);
+    setup(tile);
+    const auto before = tile.state();
+    tile.step(dt);
+    const auto after = tile.state();
+    TORCH_CHECK(torch::isfinite(after).all().item<bool>() &&
+                after.slice(0,total-sm,total).min().item<double>() > -80000.0 &&
+                after.slice(0,su+sv+2*sw,total-sm).min().item<double>() > -300.0,
+                "non-finite or nonphysical dry mass/theta after the tile step");
+    const auto mass_change = (after-before).slice(0,total-sm,total).to(torch::kFloat64);
+    const double mass_signal = mass_change.abs().sum().item<double>();
+    const double mass_drift = std::abs(mass_change.sum().item<double>());
+    const double mass_budget = 64.0*std::numeric_limits<float>::epsilon()*mass_signal;
+    TORCH_CHECK(mass_signal > 1.0 && mass_drift <= mass_budget,
+                "nonzero closed-domain dry mass budget failed: drift=", mass_drift,
+                " budget=", mass_budget, " signal=", mass_signal);
+    const auto heat_content = [](const torch::Tensor& state) {
+        const auto mass=state.slice(0,total-sm,total).to(torch::kFloat64).view({ny,nx})+80000.0;
+        const auto theta=state.slice(0,su+sv+2*sw,total-sm)
+            .to(torch::kFloat64).view({ny,nz,nx})+300.0;
+        return (mass.unsqueeze(1)*theta).sum().item<double>()/nz;
+    };
+    const auto initial_mass=before.slice(0,total-sm,total).to(torch::kFloat64)
+        .view({ny,nx})+80000.0;
+    const auto initial_theta=before.slice(0,su+sv+2*sw,total-sm)
+        .to(torch::kFloat64).view({ny,nz,nx});
+    const double theta_anomaly_l1=(initial_mass.unsqueeze(1)*initial_theta)
+        .abs().sum().item<double>()/nz;
+    const double heat_drift=std::abs(heat_content(after)-heat_content(before));
+    const double heat_budget=4.0*std::numeric_limits<float>::epsilon()*theta_anomaly_l1;
+    TORCH_CHECK(theta_anomaly_l1>1.0 && std::isfinite(heat_drift) &&
+                heat_drift<=heat_budget,
+                "closed-domain mass-weighted theta budget failed: drift=",heat_drift,
+                " budget=",heat_budget," anomaly_l1=",theta_anomaly_l1);
+    std::cout << "GOV_STEP mass_l1=" << mass_signal << " mass_drift=" << mass_drift
+              << " budget=" << mass_budget << " theta_anomaly_l1=" << theta_anomaly_l1
+              << " heat_drift=" << heat_drift << " heat_budget=" << heat_budget << '\n';
+
+    const auto terminal = torch::cos(torch::arange(total,torch::kFloat32)*0.031f)
+        / std::sqrt(static_cast<float>(total));
+    const auto direction = torch::sin(torch::arange(total,torch::kFloat32)*0.017f)
+        / std::sqrt(static_cast<float>(total));
+    const auto pulled = tile.solver.pullbackLastStep(terminal);
+    for (float h : {0.04f,0.02f}) {
+        TileCase plus(spacing), minus(spacing);
+        setup(plus); setup(minus);
+        plus.set(before+h*direction);
+        minus.set(before-h*direction);
+        plus.step(dt); minus.step(dt);
+        const auto tangent=(plus.state().to(torch::kFloat64)-minus.state().to(torch::kFloat64))
+            /(2.0*h);
+        const double lhs=tangent.dot(terminal.to(torch::kFloat64)).item<double>();
+        const double rhs=direction.to(torch::kFloat64).dot(pulled.to(torch::kFloat64)).item<double>();
+        const double relative_error=std::abs(lhs-rhs)/std::max(std::abs(lhs),std::abs(rhs));
+        TORCH_CHECK(std::max(std::abs(lhs),std::abs(rhs))>1e-3 &&
+                    std::isfinite(relative_error) && relative_error<5e-4,
+                    "active-diffusion full-step adjoint mismatch: ",relative_error);
+        std::cout << "GOV_STEP adjoint_h=" << h << " relative_error=" << relative_error << '\n';
+    }
+    cfg.khdif=0.0f;
+    TileCase off(spacing);
+    setup(off); off.set(before); off.step(dt);
+    const auto off_pulled=off.solver.pullbackLastStep(terminal);
+    cfg.khdif=1000.0f;
+    const double state_change=(after-off.state()).abs().max().item<double>();
+    const double gradient_change=(pulled-off_pulled).abs().max().item<double>();
+    // Flat normal-stress Fourier scale is a positive-control estimate here.
+    const double flat_mode_scale=2.0*cfg.khdif*dt*
+        (4.0*std::pow(std::sin(std::acos(-1.0)/nx),2))/(spacing*spacing);
+    TORCH_CHECK(state_change>0.01*flat_mode_scale &&
+                gradient_change>0.01*flat_mode_scale,
+                "active diffusion did not measurably affect state and pullback");
+    std::cout << "GOV_STEP diffusion_state=" << state_change
+              << " diffusion_pullback=" << gradient_change << '\n';
+
+    const auto evaluate_order = [&](const std::array<RhsMode,3>& order) {
+        TileCase probe(spacing);
+        setup(probe); probe.set(after); probe.step(1e-4f); probe.set(after);
+        std::array<torch::Tensor,3> parts;
+        for (const auto mode : order)
+            parts[static_cast<int>(mode)] =
+                (probe.solver.*access(GoverningRhsTag{}))(probe.state(),mode).detach().clone();
+        return parts;
+    };
+    const auto forward=evaluate_order({RhsMode::Full,RhsMode::ExplicitOnly,RhsMode::ImplicitOnly});
+    const auto reverse=evaluate_order({RhsMode::ImplicitOnly,RhsMode::ExplicitOnly,RhsMode::Full});
+    const int ends[]={0,su,su+sv,su+sv+sw,su+sv+2*sw,su+sv+2*sw+st,total};
+    const char* names[]={"U","V","W","PH","T","MU"};
+    for (int mode=0; mode<3; ++mode)
+        TORCH_CHECK(torch::equal(forward[mode],reverse[mode]),
+                    "RHS mode changed with evaluation order: ",mode);
+    for (int block=0; block<6; ++block) {
+        const auto f=forward[0].slice(0,ends[block],ends[block+1]);
+        const auto i=forward[1].slice(0,ends[block],ends[block+1]);
+        const auto e=forward[2].slice(0,ends[block],ends[block+1]);
+        const double scale=std::max({1.0,f.abs().max().item<double>(),
+            i.abs().max().item<double>(),e.abs().max().item<double>()});
+        const double error=(f-i-e).abs().max().item<double>();
+        const double budget=32.0*std::numeric_limits<float>::epsilon()*scale;
+        TORCH_CHECK(std::isfinite(error) && error<=budget,
+                    "Full/Explicit/Implicit RHS split changed ",names[block],
+                    ": error=",error," budget=",budget);
+        std::cout << "GOV_RHS field=" << names[block] << " closure=" << error
+                  << " budget=" << budget << '\n';
+    }
+    TORCH_CHECK(forward[2].slice(0,0,su).abs().max().item<double>()>1e-4 &&
+                forward[1].slice(0,0,su).abs().max().item<double>()>1e-4,
+                "uninformative zero explicit or implicit U signal");
+    TORCH_CHECK(forward[2].slice(0,su+sv+2*sw,total-sm).abs().max().item<double>()>1e-5 &&
+                forward[1].slice(0,su+sv+2*sw,total-sm).abs().max().item<double>()>1e-5,
+                "uninformative zero explicit or implicit theta signal");
+}
 
 void check_horizontal_pgf() {
     // Fortran horizontal_pressure_gradient, with p'=al'=0:
@@ -404,6 +561,7 @@ int main(int argc, char** argv) {
             if (line.find("SDIRK3_CONVERGED_STAGE_BLOCK_RESIDUAL") == 0)
                 std::cout << line << '\n';
         }
+        check_governing_step_budget();
         std::cout << "Full tile step contracts passed\n";
         std::cerr.rdbuf(previous);
         return 0;
