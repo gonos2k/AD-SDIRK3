@@ -296,6 +296,188 @@ void check_governing_step_budget() {
               << " theta_budget=" << full_theta_budget
               << " naive_mass_drift=" << naive_mass_drift
               << " naive_theta_drift=" << naive_theta_drift << '\n';
+
+    // WRF hybrid_opt=2 sampled at etac=0.2 on nonuniform W-face eta.
+    // c3f below follows module_initialize_ideal.F's hybrid polynomial.
+    // The layer pressure thickness is -dnw*(c1h*(MUB+MU)+c2h),
+    // so neither a uniform 1/nz nor an unweighted theta sum is a budget.
+    TileCase hybrid(spacing);
+    setup(hybrid);
+    hybrid.mass_map=mapped.mass_map;
+    hybrid.u_map=mapped.u_map;
+    hybrid.v_map=mapped.v_map;
+    const std::array<double,nw> eta={1.0,0.9,0.7,0.4,0.0};
+    const std::array<double,nw> c3f={1.0,0.88046875,0.56640625,0.11875,0.0};
+    std::array<float,nw> c1f{},c2f{},c1h{},c2h{},fnm{},fnp{},rdnw{},rdn{};
+    std::array<double,nz> eta_width{},level_pressure{};
+    constexpr double mub=80000.0, ptop=20000.0, g=9.81;
+    for (int k=0; k<nz; ++k) {
+        const double width=eta[k]-eta[k+1];
+        eta_width[k]=width;
+        c1h[k]=static_cast<float>((c3f[k]-c3f[k+1])/width);
+        c2h[k]=static_cast<float>((1.0-c1h[k])*mub);
+        level_pressure[k]=c1h[k]*mub+c2h[k];
+        rdnw[k]=static_cast<float>(-1.0/width);
+        hybrid.metric[k]=rdnw[k];
+    }
+    rdnw[nz]=rdnw[nz-1];
+    hybrid.metric[nz]=rdnw[nz];
+    c1f[0]=1.0f;
+    c1f[nz]=0.0f;
+    for (int k=1; k<nz; ++k) {
+        const double znu_lo=0.5*(eta[k-1]+eta[k]);
+        const double znu_hi=0.5*(eta[k]+eta[k+1]);
+        const double b_lo=0.5*(c3f[k-1]+c3f[k]);
+        const double b_hi=0.5*(c3f[k]+c3f[k+1]);
+        c1f[k]=static_cast<float>((b_hi-b_lo)/(znu_hi-znu_lo));
+        const double dn=-0.5*(eta_width[k-1]+eta_width[k]);
+        rdn[k]=static_cast<float>(1.0/dn);
+        fnp[k]=static_cast<float>(-0.5*eta_width[k]/dn);
+        fnm[k]=static_cast<float>(-0.5*eta_width[k-1]/dn);
+    }
+    rdn[0]=rdnw[0]; rdn[nz]=rdnw[nz-1];
+    fnm[0]=fnp[0]=fnm[nz]=fnp[nz]=0.5f;
+    for (int k=0; k<nw; ++k) c2f[k]=(1.0f-c1f[k])*mub;
+    double column_pressure=0.0;
+    for (int k=0; k<nz; ++k) {
+        TORCH_CHECK(eta_width[k]>0.0 && level_pressure[k]>0.0,
+                    "nonphysical hybrid layer pressure");
+        column_pressure+=eta_width[k]*level_pressure[k];
+    }
+    TORCH_CHECK(std::abs(column_pressure-mub)<0.01,
+                "hybrid layer pressure does not sum to dry column mass");
+    std::vector<float> pb(st),thb(st,0.0f),phb(sw),mub_field(sm,static_cast<float>(mub));
+    std::vector<float> p_column(nz);
+    for (int k=0; k<nz; ++k) {
+        const double znu=0.5*(eta[k]+eta[k+1]);
+        p_column[k]=static_cast<float>(ptop+mub*znu);
+    }
+    const auto p_tensor=torch::from_blob(p_column.data(),{nz},torch::kFloat32).clone();
+    const auto alpha_tensor=wrf::sdirk3::compute_inverse_density(
+        torch::full_like(p_tensor,300.0f),p_tensor,287.0f,717.5f,1004.5f,100000.0f);
+    const std::vector<float> alpha(alpha_tensor.data_ptr<float>(),
+                                   alpha_tensor.data_ptr<float>()+nz);
+    const auto phi=wrf::sdirk3::integrate_phb_hydrostatic(
+        std::vector<float>(rdnw.begin(),rdnw.begin()+nz),alpha,
+        std::vector<float>(c1h.begin(),c1h.begin()+nz),
+        std::vector<float>(c2h.begin(),c2h.begin()+nz),static_cast<float>(mub),0.0f);
+    for (int j=0; j<ny; ++j) {
+        for (int k=0; k<nz; ++k) {
+            for (int i=0; i<nx; ++i) {
+                pb[(j*nz+k)*nx+i]=p_column[k];
+                hybrid.theta[(j*nz+k)*nx+i]+=(1.5f-k)*5.0f;
+            }
+        }
+        for (int k=0; k<nw; ++k)
+            for (int i=0; i<nx; ++i) phb[(j*nw+k)*nx+i]=phi[k];
+    }
+    hybrid.solver.setBaseState(pb.data(),thb.data(),phb.data(),mub_field.data());
+    const auto hybrid_step=[&]() {
+        hybrid.solver.unifiedStep(hybrid.u.data(),hybrid.v.data(),hybrid.w.data(),
+            hybrid.ph.data(),hybrid.theta.data(),hybrid.mu.data(),
+            hybrid.ru.data(),hybrid.rv.data(),hybrid.rw.data(),hybrid.rph.data(),
+            hybrid.rt.data(),hybrid.rm.data(),1.0f/spacing,1.0f/spacing,
+            rdnw.data(),rdn.data(),hybrid.mass_map.data(),hybrid.mass_map.data(),
+            hybrid.u_map.data(),hybrid.u_map.data(),hybrid.v_map.data(),hybrid.v_map.data(),
+            c1f.data(),c2f.data(),c1h.data(),c2h.data(),fnm.data(),fnp.data(),
+            1,dt,nx,ny,nz,nu,nv,nw);
+        TORCH_CHECK(hybrid.solver.getLastStepOutcomeCode()==0,
+                    "hybrid tile step did not complete");
+    };
+    const auto hybrid_before=hybrid.state();
+    hybrid_step();
+    const auto hybrid_after=hybrid.state();
+    const auto hybrid_budget=[&](const torch::Tensor& state) {
+        const auto mu=state.slice(0,total-sm,total).to(torch::kFloat64).view({ny,nx});
+        const auto theta=state.slice(0,su+sv+2*sw,total-sm).to(torch::kFloat64)
+            .view({ny,nz,nx});
+        double mass=0.0,theta_mass=0.0,theta_uniform=0.0,anomaly_l1=0.0;
+        for (int j=0; j<ny; ++j)
+            for (int i=0; i<nx; ++i)
+                for (int k=0; k<nz; ++k) {
+                    const double column=mub+mu[j][i].item<double>();
+                    const double map=hybrid.mass_map[j*nx+i];
+                    const double area=spacing*spacing/(map*map);
+                    const double weight=area/g*eta_width[k]*
+                        (c1h[k]*column+c2h[k]);
+                    TORCH_CHECK(weight>0.0, "nonpositive hybrid dry layer mass");
+                    const double value=300.0+theta[j][k][i].item<double>();
+                    mass+=weight;
+                    theta_mass+=weight*value;
+                    theta_uniform+=area/g*column*value/nz;
+                    anomaly_l1+=weight*std::abs(theta[j][k][i].item<double>());
+                }
+        return std::array<double,4>{mass,theta_mass,theta_uniform,anomaly_l1};
+    };
+    const auto hb=hybrid_budget(hybrid_before),ha=hybrid_budget(hybrid_after);
+    const auto column_mass=[&](const torch::Tensor& state) {
+        const auto mu=state.slice(0,total-sm,total).to(torch::kFloat64).view({ny,nx});
+        double sum=0.0;
+        for (int j=0; j<ny; ++j)
+            for (int i=0; i<nx; ++i) {
+                const double map=hybrid.mass_map[j*nx+i];
+                sum+=spacing*spacing/(g*map*map)*(mub+mu[j][i].item<double>());
+            }
+        return sum;
+    };
+    // At MU=0, the WRF c2h choice makes every base layer coefficient MUB.
+    // This independent closed form checks the budget's layer indexing and map area.
+    double initial_theta_expected=0.0;
+    for (int j=0; j<ny; ++j)
+        for (int i=0; i<nx; ++i) {
+            const double map=hybrid.mass_map[j*nx+i];
+            const double horizontal=0.5*std::cos(2.0*std::acos(-1.0)*i/nx)*
+                std::cos(2.0*std::acos(-1.0)*j/(ny-1));
+            for (int k=0; k<nz; ++k)
+                initial_theta_expected+=spacing*spacing/(g*map*map)*
+                    eta_width[k]*mub*(300.0+(1.5-k)*5.0+horizontal);
+        }
+    TORCH_CHECK(std::abs(hb[0]-column_mass(hybrid_before))<1.0 &&
+                std::abs(ha[0]-column_mass(hybrid_after))<1.0 &&
+                std::abs(hb[1]-initial_theta_expected)<1e6,
+                "hybrid budget disagrees with independent column/initial-state sum");
+    // Apply a compensated theta transfer to the actual packed state.  The
+    // physical budget must cancel, while the old /nz diagnostic must not.
+    auto transferred=hybrid_before.clone();
+    auto transferred_theta=transferred.slice(0,su+sv+2*sw,total-sm)
+        .view({ny,nz,nx});
+    transferred_theta[2][0][3]+=1.0f;
+    transferred_theta[2][nz-1][3]-=static_cast<float>(
+        eta_width[0]*level_pressure[0]/
+        (eta_width[nz-1]*level_pressure[nz-1]));
+    const auto transfer_budget=hybrid_budget(transferred);
+    const double transfer_physical_error=std::abs(transfer_budget[1]-hb[1]);
+    const double transfer_uniform_error=std::abs(transfer_budget[2]-hb[2]);
+    TORCH_CHECK(transfer_physical_error<1000.0 &&
+                transfer_uniform_error>1e8,
+                "uniform eta weighting did not misdiagnose a layer transfer");
+    const auto h_mu_change=(hybrid_after-hybrid_before)
+        .slice(0,total-sm,total).to(torch::kFloat64).view({ny,nx});
+    double h_mass_signal=0.0;
+    for (int j=0; j<ny; ++j)
+        for (int i=0; i<nx; ++i) {
+            const double map=hybrid.mass_map[j*nx+i];
+            h_mass_signal+=spacing*spacing/(g*map*map)*
+                std::abs(h_mu_change[j][i].item<double>());
+        }
+    const double h_mass_budget=64.0*std::numeric_limits<float>::epsilon()*h_mass_signal;
+    const double h_theta_signal=hb[3];
+    const double h_theta_budget=4.0*std::numeric_limits<float>::epsilon()*h_theta_signal+
+        300.0*h_mass_budget;
+    TORCH_CHECK(std::isfinite(ha[0]) && std::isfinite(ha[1]) &&
+                h_mass_signal>1.0 && h_theta_signal>1.0 &&
+                std::abs(ha[0]-hb[0])<=h_mass_budget &&
+                std::abs(ha[1]-hb[1])<=h_theta_budget &&
+                std::abs(hb[1]-hb[2])>10.0*h_theta_budget,
+                "nonuniform hybrid dry mass/theta budget failed");
+    std::cout << "GOV_HYBRID mass_drift=" << std::abs(ha[0]-hb[0])
+              << " mass_budget=" << h_mass_budget
+              << " theta_drift=" << std::abs(ha[1]-hb[1])
+              << " theta_budget=" << h_theta_budget
+              << " uniform_weight_gap=" << std::abs(hb[1]-hb[2])
+              << " uniform_drift=" << std::abs(ha[2]-hb[2])
+              << " transfer_physical_error=" << transfer_physical_error
+              << " transfer_uniform_error=" << transfer_uniform_error << '\n';
 }
 
 void check_horizontal_pgf() {
