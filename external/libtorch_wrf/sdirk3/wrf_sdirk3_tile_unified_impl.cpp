@@ -3941,6 +3941,7 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     if (rk_step == 1) {
         last_step_input_graph_ = torch::Tensor();
         last_step_output_graph_ = torch::Tensor();
+        last_ark_budget_trace_ = {};
     }
 
     // R2: a quantity that does NOT depend on how the domain was decomposed.
@@ -9161,6 +9162,17 @@ vertical_coefficients:
             std::vector<torch::Tensor> k_fast(Ark::stages);
             std::vector<torch::Tensor> k_slow(Ark::stages);
             std::vector<torch::Tensor> k_full(Ark::stages);
+            if (capture_ark_budget_trace_) {
+                torch::NoGradGuard no_grad;
+                auto& trace = last_ark_budget_trace_;
+                trace.input = U_n.detach().clone();
+                trace.physics = F_phys.detach().clone();
+                trace.dt = dt_ark;
+                trace.stage_state.resize(Ark::stages);
+                trace.fast.resize(Ark::stages);
+                trace.slow.resize(Ark::stages);
+                trace.full.resize(Ark::stages);
+            }
             // PR 9F P1-3: BIRTH-time immutable snapshots (detached clones) of each
             // stage derivative, taken when it is finalized. The record-stage history
             // sources consume THESE, not the live k_fast/k_slow vectors, so the
@@ -11514,6 +11526,14 @@ vertical_coefficients:
                 }
                 k_full[i] = k_fast[i] + k_slow[i];
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_full", k_full[i]);
+                if (capture_ark_budget_trace_) {
+                    torch::NoGradGuard no_grad;
+                    auto& trace = last_ark_budget_trace_;
+                    trace.stage_state[i] = U_conv.detach().clone();
+                    trace.fast[i] = k_fast[i].detach().clone();
+                    trace.slow[i] = k_slow[i].detach().clone();
+                    trace.full[i] = k_full[i].detach().clone();
+                }
 
                 // [DIAGNOSTIC, env WRF_SDIRK3_KSLOW_PROBE] Wall-2 per-component +
                 // amplitude-scaling isolation (measurement-only, default off).
@@ -11762,6 +11782,10 @@ vertical_coefficients:
                 k3 = k_full[2];
                 k4 = k_full[3];
                 U_new = wrf::sdirk3::ark324_final_state(U_n, dt_ark, k_full);
+                if (capture_ark_budget_trace_) {
+                    torch::NoGradGuard no_grad;
+                    last_ark_budget_trace_.raw_final = U_new.detach().clone();
+                }
             }
             checkTensorHealth(U_new, "U_new");
             } // !split_explicit: end ARK324 fallback
@@ -12498,6 +12522,10 @@ vertical_coefficients:
     
     // The full map is P G(P U): fixed wall values are not control variables.
     U_new = projectStateBoundaries(U_new);
+    if (last_ark_budget_trace_.raw_final.defined()) {
+        torch::NoGradGuard no_grad;
+        last_ark_budget_trace_.projected_final = U_new.detach().clone();
+    }
     // Unpack updated state with staggered dimensions
     unpackState(U_new, u, v, w, ph, t, mu, nx_u, ny_v, nz_w);
     if (wrf::sdirk3::g_sdirk3_config.retain_graph_for_adjoint) {
