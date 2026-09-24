@@ -453,6 +453,12 @@ jobs:
           echo "inventory OK ($(wc -l < /tmp/ctest_actual.txt | tr -d ' ') tests)"
           ctest --test-dir build/sdirk3-core --output-on-failure --no-tests=error
 
+      - name: flat periodic scalar diffusion Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 tools/test_horizontal_diffusion_scalar.py \
+            "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
+
       - name: install contract (exact manifest, header byte-parity, no stub)
         run: |
           set -euo pipefail
