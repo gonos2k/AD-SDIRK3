@@ -72,8 +72,17 @@ or stability certifications.
   density and column mass separately, with negative work required. A dry,
   unit-map, mass-coordinate-mode-0 RHS check compares `RHS(K)-RHS(0)` with
   `2*K*Laplacian` and compares full versus explicit-only evaluation.
-  These changes do not close terrain, boundary, variable
-  coefficient, W-stress, or option-1 parity.
+  The U terrain term now uses the same outer vertical scale as its horizontal
+  stress divergence, so layer depth cancels as in the Fortran formula. A
+  nonzero-slope, vertically varying stress case checks two layer-depth
+  profiles in FP32/FP64. A direct stretched-eta case checks U's 1D metric
+  fallback against the layer depth implied by its divergence scale. Option-2
+  W stress also receives the same current-state
+  mass-point density as U/V; a nonzero-W-diffusion RHS check verifies its
+  `(1+qv)` response and invariance to potential-temperature changes at fixed
+  geometry and column mass. Full terrain, V's 1D metric fallback, boundaries,
+  variable coefficients, the complete W stress operator, and option-1 parity
+  still require separate validation.
 
 - **Fortran scalar diffusion on terrain.**
   `python3 tools/test_horizontal_diffusion_scalar.py` extracts the current

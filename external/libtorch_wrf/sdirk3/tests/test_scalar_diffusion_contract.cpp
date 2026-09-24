@@ -257,8 +257,131 @@ bool run_actual_rhs_contract() {
     return pass;
 }
 
+// The 1D metric fallback must use one implied layer depth for the outer
+// divergence factor and the terrain gradient, even with stretched eta levels.
+bool run_u_terrain_fallback(torch::Dtype dtype) {
+    auto& cfg=wrf::sdirk3::g_sdirk3_config;
+    cfg=wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option=2;
+    cfg.z_top_default=10.0f; // Keep the small terrain signal resolved in FP32.
+    // Reciprocal eta widths of {0.4,0.3,0.2,0.1}, summing to one.
+    const std::vector<float> inverse_eta{2.5f,10.0f/3.0f,5.0f,10.0f};
+    const std::vector<float> half(nz+1,0.5f);
+    const auto opt=torch::TensorOptions().dtype(dtype);
+    TileSDIRK3UnifiedSolver tile(nx,ny,nz,1.0f,1.0f,{1.0f},{1.0f},inverse_eta,0);
+    tile.setVerticalInterpolationCoefficients(
+        half.data(),half.data(),1.0f,0.0f,0.0f);
+    auto u=torch::zeros({ny,nz,nx+1},opt);
+    auto v=torch::zeros({ny+1,nz,nx},opt);
+    auto w=torch::zeros({ny,nz+1,nx},opt);
+    auto rho=torch::zeros({ny,nz,nx},opt);
+    for (int k=0;k<nz;++k) rho.select(1,k).fill_(1.0+0.3*k);
+    for (int i=1;i<nx;++i) u.select(2,i).fill_(std::sin(2*pi*i/nx));
+    const auto viscosity=torch::full_like(rho,Kh);
+    const auto umap=torch::ones({ny,nx+1},opt);
+    const auto mmap=torch::ones({ny,nx},opt);
+    const auto mass=torch::full_like(umap,MUT);
+    const double slope=0.2, gravity=static_cast<double>(9.81f);
+    const auto zx=torch::full({ny,nz+1,nx},slope,opt);
+    const auto zy=torch::zeros_like(zx);
+    const auto eval=[&](bool sloped) {
+        tile.setTerrainSlopes(sloped?zx:torch::zeros_like(zx),zy);
+        return (tile.*access(MomentumDiffusionTag{}))(
+            u,v,w,viscosity,1,1,umap,umap,mmap,mmap,mass,torch::Tensor(),rho);
+    };
+    const auto delta=eval(true)-eval(false);
+    double error=0.0,signal=0.0;
+    for (int k=1;k<nz-1;++k) {
+        const double adjacent=u[2][k][2].item<double>()-
+                              u[2][k][0].item<double>();
+        const double tau_low=-2*Kh*(1+0.3*(k-1))*adjacent;
+        const double tau_high=-2*Kh*(1+0.3*(k+1))*adjacent;
+        const double expected=gravity*inverse_eta[k]*slope*0.25*(tau_high-tau_low);
+        const double observed=delta[2][k][1].item<double>();
+        error=std::max(error,std::abs(observed-expected));
+        signal=std::max(signal,std::abs(expected));
+    }
+    const double eps=dtype==torch::kFloat32 ? std::numeric_limits<float>::epsilon()
+                                        : std::numeric_limits<double>::epsilon();
+    const double tolerance=512*eps*(1+signal);
+    const bool pass=torch::isfinite(delta).all().item<bool>() &&
+        signal>tolerance && error<=tolerance;
+    std::cout << (pass?"PASS ":"FAIL ") << "U terrain 1D dtype=" << dtype
+              << " signal=" << signal << " error=" << error
+              << " tol=" << tolerance << '\n';
+    return pass;
+}
+
 // Hydrostatic flat fixture: rho*g*dz*|rdnw| equals dry column mass,
 // so the independent velocity tendency is 2*K*Lq after one mass conversion.
+// Fortran's g*dz/dnw multiplies the entire stress divergence. The dz in
+// the terrain gradient must cancel, including on vertically stretched grids.
+bool run_u_terrain_thickness(torch::Dtype dtype) {
+    using wrf::sdirk3::test::TileCase;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    const auto opt = torch::TensorOptions().dtype(dtype);
+    const double gravity = static_cast<double>(9.81f), slope = 0.2;
+    const double eps = dtype == torch::kFloat32 ? std::numeric_limits<float>::epsilon()
+                                               : std::numeric_limits<double>::epsilon();
+    bool ok = true;
+    for (double depth_scale : {1.0, 2.0}) {
+        TileCase tile(1.0f);
+        tile.useDoubleGridMetrics();
+        // Preserve a vertically constant velocity at the bottom W face.
+        tile.solver.setVerticalInterpolationCoefficients(
+            tile.half.data(),tile.half.data(),1.0f,0.0f,0.0f);
+        auto u = torch::zeros({ny,nz,nx+1},opt);
+        auto v = torch::zeros({ny+1,nz,nx},opt);
+        auto w = torch::zeros({ny,nz+1,nx},opt);
+        for (int i=1; i<nx; ++i) u.select(2,i).fill_(std::sin(2*pi*i/nx));
+        auto rho = torch::zeros({ny,nz,nx},opt);
+        for (int k=0; k<nz; ++k) rho.select(1,k).fill_(1.0+0.3*k);
+        const auto viscosity = torch::full_like(rho,Kh);
+        const auto umap = torch::ones({ny,nx+1},opt);
+        const auto mmap = torch::ones({ny,nx},opt);
+        const auto mass = torch::full({ny,nx+1},MUT,opt);
+        auto phi = torch::zeros({ny,nz+1,nx},opt);
+        const double dz[nz] = {10.0,20.0,15.0,25.0};
+        double height = 0.0;
+        for (int k=0; k<=nz; ++k) {
+            for (int i=0; i<nx; ++i) phi.select(1,k).select(1,i).fill_(
+                gravity*(height+slope*i));
+            if (k<nz) height += depth_scale*dz[k];
+        }
+        const auto slope_x = torch::full({ny,nz+1,nx},slope,opt);
+        const auto slope_y = torch::zeros_like(slope_x);
+        const auto eval = [&](const torch::Tensor& zx) {
+            tile.solver.setTerrainSlopes(zx,slope_y);
+            return (tile.solver.*access(MomentumDiffusionTag{}))(
+                u,v,w,viscosity,1,1,umap,umap,mmap,mmap,mass,phi,rho).clone();
+        };
+        const auto delta = eval(slope_x)-eval(torch::zeros_like(slope_x));
+        double error=0.0, signal=0.0;
+        for (int k=1; k<nz-1; ++k) for (int i=1; i<nx; ++i) {
+            const double adjacent = u[2][k][i+1].item<double>()-
+                                    u[2][k][i-1].item<double>();
+            const double tau_low = -2*Kh*(1+0.3*(k-1))*adjacent;
+            const double tau_high = -2*Kh*(1+0.3*(k+1))*adjacent;
+            // With fnm=fnp=1/2, the adjacent W-face average difference
+            // is one quarter of the two-level mass-stress difference.
+            const double expected = gravity*slope*0.25*(tau_high-tau_low);
+            const double observed = delta[2][k][i].item<double>();
+            error = std::max(error,std::abs(observed-expected));
+            signal = std::max(signal,std::abs(expected));
+        }
+        const double tolerance = 512*eps*(1+signal);
+        const bool pass = torch::isfinite(delta).all().item<bool>() &&
+            signal > tolerance && error <= tolerance;
+        std::cout << (pass ? "PASS " : "FAIL ") << "U terrain depth=" << depth_scale
+                  << " dtype=" << dtype << " signal=" << signal
+                  << " error=" << error << " tol=" << tolerance << '\n';
+        ok = pass && ok;
+    }
+    return ok;
+}
+
 bool run_normal_rhs() {
     using namespace wrf::sdirk3;
     using wrf::sdirk3::test::TileCase;
@@ -327,6 +450,61 @@ bool run_normal_rhs() {
     return ok;
 }
 
+// In option 2, W stresses must use the same mass-point physical density
+// as U/V. Holding geometry fixed makes their diffusion linear in (1+qv).
+bool run_w_density_state() {
+    using namespace wrf::sdirk3;
+    using wrf::sdirk3::test::TileCase;
+    const auto evaluate = [](double qv, bool diffusion, float theta_pert = 0.0f) {
+        auto& cfg = g_sdirk3_config;
+        cfg = SDIRK3Config{};
+        cfg.diffusion_option = 2;
+        cfg.khdif = 0.0f;
+        cfg.kvdif = diffusion ? 1000.0f : 0.0f;
+        cfg.mass_coordinate_mode = 0;
+        cfg.imex_split_mode = 3;
+        cfg.hevi_split = false;
+        cfg.use_stress_tensor = false;
+        TileCase tile(1000.0f);
+        (tile.solver.*access(CoordinateTag{}))(
+            tile.one.data(),tile.zero.data(),tile.one.data(),tile.zero.data());
+        auto grid = tile.solver.getGridInfo();
+        grid->rdn = torch::full({nz},float(nz));
+        grid->rdnw = torch::full({nz+1},float(nz));
+        grid->qv = torch::full({ny,nz,nx},qv);
+        std::fill(tile.theta.begin(),tile.theta.end(),theta_pert);
+        for (int j=0; j<ny; ++j) for (int k=0; k<nz; ++k)
+            for (int i=1; i<nx; ++i)
+                tile.u[(j*nz+k)*(nx+1)+i] =
+                    (k+1)*std::sin(2*pi*i/nx);
+        return (tile.solver.*access(ActualRhsTag{}))(
+            tile.state(),RhsMode::Full).detach().clone();
+    };
+    constexpr int su=ny*nz*(nx+1), sv=(ny+1)*nz*nx;
+    constexpr int sw=ny*(nz+1)*nx;
+    const auto dry = (evaluate(0.0,true)-evaluate(0.0,false))
+        .slice(0,su+sv,su+sv+sw);
+    const auto moist = (evaluate(0.2,true)-evaluate(0.2,false))
+        .slice(0,su+sv,su+sv+sw);
+    // At fixed PH and column mass, calc_p_rho's alt is unchanged when
+    // potential temperature (and its diagnosed pressure) changes.
+    const auto warm = (evaluate(0.0,true,30.0f)-evaluate(0.0,false,30.0f))
+        .slice(0,su+sv,su+sv+sw);
+    const double signal = (0.2*dry).abs().max().item<double>();
+    const double error = (moist-1.2*dry).abs().max().item<double>();
+    const double theta_error = (warm-dry).abs().max().item<double>();
+    const double tolerance = 256*std::numeric_limits<float>::epsilon()*(1+signal);
+    const bool pass = torch::isfinite(dry).all().item<bool>() &&
+        torch::isfinite(moist).all().item<bool>() &&
+        torch::isfinite(warm).all().item<bool>() &&
+        signal > 10*tolerance && error <= tolerance && theta_error <= tolerance;
+    std::cout << (pass ? "PASS " : "FAIL ")
+              << "W physical-density qv response signal=" << signal
+              << " qv_error=" << error << " theta_error=" << theta_error
+              << " tol=" << tolerance << '\n';
+    return pass;
+}
+
 bool run_scalar_zero_gate() {
     using namespace wrf::sdirk3;
     using namespace wrf::sdirk3::test;
@@ -380,6 +558,11 @@ int main() {
     ok = run_actual_rhs_contract() && ok;
     ok = run_scalar_zero_gate() && ok;
     ok = run_normal_rhs() && ok;
+    ok = run_u_terrain_thickness(torch::kFloat32) && ok;
+    ok = run_u_terrain_thickness(torch::kFloat64) && ok;
+    ok = run_w_density_state() && ok;
+    ok = run_u_terrain_fallback(torch::kFloat32) && ok;
+    ok = run_u_terrain_fallback(torch::kFloat64) && ok;
     std::cout << (ok ? "scalar diffusion contract: PASS\n"
                      : "scalar diffusion contract: FAIL\n");
     return ok ? 0 : 1;
