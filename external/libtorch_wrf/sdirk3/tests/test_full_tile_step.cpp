@@ -388,7 +388,9 @@ void check_governing_step_budget() {
     };
     const auto hybrid_before=hybrid.state();
     hybrid.solver.captureArkBudgetTraceForTest(true);
+    cfg.stage_operand_diag=true;
     hybrid_step();
+    cfg.stage_operand_diag=false;
     hybrid.solver.captureArkBudgetTraceForTest(false);
     const auto hybrid_after=hybrid.state();
     const auto hybrid_budget=[&](const torch::Tensor& state) {
@@ -1008,7 +1010,26 @@ int main(int argc, char** argv) {
             if (line.find("SDIRK3_CONVERGED_STAGE_BLOCK_RESIDUAL") == 0)
                 std::cout << line << '\n';
         }
+        const auto diagnostic_offset=log.str().size();
         check_governing_step_budget();
+        const auto hybrid_diagnostics=log.str().substr(diagnostic_offset);
+        int summary2=0,summary3=0,applied=0;
+        std::istringstream hybrid_lines(hybrid_diagnostics);
+        for (std::string line; std::getline(hybrid_lines,line); ) {
+            if (line.find("[SDIRK3_STAGE_HISTORY_SUMMARY]")==0 &&
+                line.find(" src_stage=")==std::string::npos &&
+                line.find(" fp32_replay_exact=1")!=std::string::npos) {
+                if (line.find(" target_stage=2")!=std::string::npos) ++summary2;
+                if (line.find(" target_stage=3")!=std::string::npos) ++summary3;
+            }
+            if (line.find("[SDIRK3_STAGE_APPLIED_DELTA]")==0) ++applied;
+            if (line.find("[SDIRK3_STAGE_HISTORY_SUMMARY]") == 0 ||
+                line.find("[SDIRK3_STAGE_APPLIED_DELTA]") == 0)
+                std::cout << line << '\n';
+        }
+        TORCH_CHECK(summary2==1 && summary3==1 && applied==3,
+                    "hybrid stage-operand diagnostic did not pass both exact history"
+                    " replays and all three source attribution gates");
         std::cout << "Full tile step contracts passed\n";
         std::cerr.rdbuf(previous);
         return 0;
