@@ -3730,6 +3730,7 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     // They will be properly set by setBaseState
     // This ensures we don't accidentally use uninitialized zeros
     th_base_ = torch::Tensor();  // Undefined tensor
+    t_init_pert_ = torch::Tensor();
     p_base_ = torch::Tensor(); 
     ph_base_ = torch::Tensor();
     mu_base_ = torch::Tensor();
@@ -15353,6 +15354,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         if (th_base_.defined() && th_base_.numel() > 0 && th_base_.device() != target_dev) {
             th_base_ = th_base_.to(target_dev, target_dtype, /*non_blocking=*/true);
         }
+        if (t_init_pert_.defined() && t_init_pert_.numel() > 0 &&
+            t_init_pert_.device() != target_dev) {
+            t_init_pert_ = t_init_pert_.to(target_dev, target_dtype, /*non_blocking=*/true);
+        }
         // Also align mu_base_ and ph_base_ which are used in similar contexts
         if (mu_base_.defined() && mu_base_.numel() > 0 && mu_base_.device() != target_dev) {
             mu_base_ = mu_base_.to(target_dev, target_dtype, /*non_blocking=*/true);
@@ -23594,7 +23599,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         .slice(0, 0, t.size(1)).view({1, -1, 1});
                     scalar_layer_mass = c1 * mu_full_diff.unsqueeze(1) + c2;
                 }
-                auto t_diff_h = compute_horizontal_diffusion_scalar_wrf(t, Kh_scalar, rdx, rdy,
+                TORCH_CHECK(!scalar_option1 ||
+                            (t_init_pert_.defined() && t_init_pert_.sizes() == t.sizes()),
+                            "option-1 scalar diffusion requires WRF t_init");
+                const auto scalar_for_diff = scalar_option1
+                    ? t - t_init_pert_.to(t.device(),t.scalar_type()) : t;
+                auto t_diff_h = compute_horizontal_diffusion_scalar_wrf(scalar_for_diff, Kh_scalar, rdx, rdy,
                                                                         msftx_, msfty_,
                                                                         msfvx_, scalar_layer_mass,
                     capture_theta_faces_now_ ? &rhs_theta_faces_.diff_x : nullptr,
@@ -29268,6 +29278,7 @@ void TileSDIRK3UnifiedSolver::setBaseState(const float* p_base, const float* th_
         // t_init is t perturbation from t0 (300K)
         // theta_base = t_init + t0
         const float t0 = 300.0f;  // WRF's t0 constant
+        t_init_pert_ = t_init_tensor;
         th_base_ = t_init_tensor + t0;
         
         // Debug: Check shape of th_base_
@@ -34030,6 +34041,9 @@ boundary_tensors_done:
     }
     if (th_base_.defined() && th_base_.numel() > 0) {
         th_base_ = th_base_.to(target_device);
+    }
+    if (t_init_pert_.defined() && t_init_pert_.numel() > 0) {
+        t_init_pert_ = t_init_pert_.to(target_device);
     }
     // 6.15 Move diffusion coefficient tensors to target device for GPU compatibility
     // PARITY FIX 2025-12-11: Diffusion coefficients (Kh_mom_, Kv_mom_, Kh_scalar_, Kv_scalar_)
@@ -40889,7 +40903,7 @@ uint64_t TileSDIRK3UnifiedSolver::fixedTrajectoryInputFingerprint() const {
     fixed_trajectory_hash_tensor(
         h, getRdnTensor(torch::kCPU, torch::kFloat64, static_cast<int64_t>(nz_)));
     for (const float value : {cf1_, cf2_, cf3_, cfn_, cfn1_}) fixed_trajectory_hash_scalar(h, value);
-    for (const auto& x : {p_base_, th_base_, rho_base_, mu_base_, ph_base_, u_base_, v_base_,
+    for (const auto& x : {p_base_, th_base_, t_init_pert_, rho_base_, mu_base_, ph_base_, u_base_, v_base_,
                           fnm_cpu_, fnp_cpu_, c1f_, c2f_, c1h_, c2h_,
                           msftx_cpu_, msfty_cpu_, msfux_cpu_, msfuy_cpu_, msfvx_cpu_, msfvy_cpu_,
                           f_, e_, sina_, cosa_, zx_, zy_, cqu_, cqv_, cqw_}) {

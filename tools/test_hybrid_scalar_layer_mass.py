@@ -56,7 +56,7 @@ PROGRAM hybrid_layer_mass_contract
       END DO
     END DO
   END DO
-  DO mode=1,3
+  DO mode=1,4
     tend=0.
     IF (mode==2) THEN
       c1=1.;c2=0.
@@ -84,6 +84,18 @@ PROGRAM hybrid_layer_mass_contract
           END DO
         END DO
       END DO
+    ELSE IF (mode==4) THEN
+      DO j=jms,jme
+        y=MAX(0,MIN(ny-1,j-1))
+        DO i=ims,ime
+          x=MODULO(i-1,nx)
+          DO k=kms,kme
+            base(i,k,j)=.5*REAL(x)+.125*REAL(y)+ &
+              .0625*REAL(MOD(x*x,3))+.03125*REAL(k-1)
+            field(i,k,j)=field(i,k,j)+base(i,k,j)
+          END DO
+        END DO
+      END DO
     END IF
     CALL horizontal_diffusion_3dmp('m',field,tend,mut,c1,c2,cfg,base, &
         msfux,msfuy,msfvx,msfvx_inv,msfvy,msftx,msfty,2.,kh,rdx,rdy, &
@@ -97,8 +109,10 @@ PROGRAM hybrid_layer_mass_contract
             WRITE(*,'(A,3(1X,I0),1X,ES25.16E3)') 'F_HYBRID',j,k,i,tend(i,k,j)
           ELSE IF (mode==2) THEN
             WRITE(*,'(A,3(1X,I0),1X,ES25.16E3)') 'F_SIGMA',j,k,i,tend(i,k,j)
-          ELSE
+          ELSE IF (mode==3) THEN
             WRITE(*,'(A,3(1X,I0),1X,ES25.16E3)') 'F_MAP',j,k,i,tend(i,k,j)
+          ELSE
+            WRITE(*,'(A,3(1X,I0),1X,ES25.16E3)') 'F_BASE',j,k,i,tend(i,k,j)
           END IF
         END DO
       END DO
@@ -215,6 +229,15 @@ def run(compiler: list[str], cpp_binary: Path, precision: str,
             map_seam_error <= map_budget and x_error > 10 * map_budget and
             y_error > 10 * map_budget and both_error > 10 * map_budget):
         raise RuntimeError(f"option-1 stagger-map contract failed: {precision}")
+
+    base = rows(actual, "F_BASE")
+    base_error = error(base, cpp_maps("base"))
+    omitted_base_error = error(base, cpp_maps("old-base"))
+    print(f"option1 nonuniform t_init {precision} {optimization}: "
+          f"cells=192 error={base_error:.9g} budget={map_budget:.9g} "
+          f"omitted_base={omitted_base_error:.9g}")
+    if not (base_error <= map_budget and omitted_base_error > 10 * map_budget):
+        raise RuntimeError(f"option-1 t_init subtraction contract failed: {precision}")
 
 
 if __name__ == "__main__":
