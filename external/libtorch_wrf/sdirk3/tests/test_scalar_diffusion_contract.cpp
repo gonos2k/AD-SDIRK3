@@ -308,6 +308,91 @@ bool run_actual_rhs_contract() {
     return pass;
 }
 
+bool run_option1_scalar_rhs_contract() {
+    using namespace wrf::sdirk3;
+    using namespace wrf::sdirk3::test;
+    auto& cfg=g_sdirk3_config;
+    cfg=SDIRK3Config{};
+    cfg.diffusion_option=1;
+    cfg.khdif=2.0f;
+    cfg.kvdif=0.0f;
+    cfg.mass_coordinate_mode=0;
+    cfg.imex_split_mode=3;
+    cfg.hevi_split=false;
+    cfg.wrf_omega_ww_cp=false;
+    cfg.use_stress_tensor=false;
+    const std::vector<float> c1h{1.1953125f,1.5703125f,1.4921875f,.296875f};
+    const std::vector<float> c2h{4000.0f,-2000.0f,5000.0f,9000.0f};
+    const auto prepare=[&](TileCase& tile) {
+        const std::vector<float> c1f(nz+1,1.0f),c2f(nz+1,0.0f);
+        (tile.solver.*access(CoordinateTag{}))(
+            c1f.data(),c2f.data(),c1h.data(),c2h.data());
+        for (int j=0;j<ny;++j) for (int i=0;i<nx;++i)
+            tile.mu[j*nx+i]=128.0f*i;
+        for (int j=0;j<ny;++j) for (int k=0;k<nz;++k)
+            for (int i=0;i<nx;++i)
+                tile.theta[(j*nz+k)*nx+i]=.03125f*i+.015625f*k;
+    };
+    const auto reference=[&]() {
+        TileCase tile(100.0f);
+        prepare(tile);
+        const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
+        const auto q=torch::from_blob(tile.theta.data(),{ny,nz,nx},opt).clone();
+        const auto mut=torch::from_blob(tile.mu.data(),{ny,nx},opt).clone()+80000.0f;
+        const auto c1=torch::tensor(c1h,opt).view({1,nz,1});
+        const auto c2=torch::tensor(c2h,opt).view({1,nz,1});
+        const auto layer=c1*mut.unsqueeze(1)+c2;
+        const auto kh=torch::full_like(q,6.0f);
+        const auto maps=torch::ones({ny,nx},opt);
+        const auto coupled=(tile.solver.*access(ScalarDiffusionTag{}))(
+            q,kh,.01f,.01f,maps,maps,torch::ones({ny+1,nx},opt),layer,
+            nullptr,nullptr);
+        // This RHS fixture leaves wrf_omega_ww_cp off, so the public
+        // primitive-theta RHS divides the coupled diffusion by MU+MUB.
+        return (coupled/mut.unsqueeze(1)).reshape({st}).detach().clone();
+    }();
+    const auto evaluate=[&](bool supply,RhsMode mode) {
+        TileCase tile(100.0f);
+        prepare(tile);
+        if (supply) {
+            std::vector<float> kh_mom(ny*nz*nx,2.0f);
+            std::vector<float> kh_scalar(ny*nz*nx,6.0f);
+            (tile.solver.*access(DiffusionTag{}))(
+                kh_mom.data(),nullptr,kh_scalar.data(),nullptr);
+        }
+        return (tile.solver.*access(ActualRhsTag{}))(
+            tile.state(),mode).detach().clone();
+    };
+    bool ok=true;
+    for (auto mode : {RhsMode::Full,RhsMode::ExplicitOnly}) {
+        const auto fallback=evaluate(false,mode);
+        const auto supplied=evaluate(true,mode);
+        cfg.khdif=0.0f;
+        const auto off=evaluate(false,mode);
+        cfg.khdif=2.0f;
+        const auto theta_delta=(fallback-supplied)
+            .slice(0,su+sv+2*sw,su+sv+2*sw+st);
+        const auto theta_signal=(fallback-off)
+            .slice(0,su+sv+2*sw,su+sv+2*sw+st);
+        const double error=theta_delta.abs().max().item<double>();
+        const double signal=theta_signal.abs().max().item<double>();
+        const double reference_error=(theta_signal-reference).abs().max().item<double>();
+        const double reference_budget=8.0*std::numeric_limits<float>::epsilon();
+        const bool pass=torch::isfinite(fallback).all().item<bool>() &&
+            torch::isfinite(supplied).all().item<bool>() &&
+            torch::isfinite(off).all().item<bool>() && error==0.0 &&
+            signal>100.0*reference_budget && reference_error<=reference_budget;
+        std::cout << (pass?"PASS ":"FAIL ")
+                  << "option1 scalar default/physical coefficient RHS mode="
+                  << (mode==RhsMode::Full?"full":"explicit")
+                  << " error=" << error << " signal=" << signal
+                  << " reference_error=" << reference_error
+                  << " budget=" << reference_budget << '\n';
+        ok=pass && ok;
+    }
+    return ok;
+}
+
 // The 1D metric fallback must use one implied layer depth for the outer
 // divergence factor and the terrain gradient, even with stretched eta levels.
 bool run_u_terrain_fallback(torch::Dtype dtype) {
@@ -561,14 +646,13 @@ bool run_scalar_zero_gate() {
     using namespace wrf::sdirk3::test;
     auto& cfg = g_sdirk3_config;
     cfg = SDIRK3Config{};
-    cfg.diffusion_option = 2;
     cfg.khdif = cfg.kvdif = 0.0f;
     cfg.mass_coordinate_mode = 0;
     cfg.imex_split_mode = 3;
     cfg.hevi_split = false;
     cfg.use_stress_tensor = false;
     const auto evaluate = [](bool scalar) {
-        TileCase tile;
+        TileCase tile(1000.0f);
         auto grid = tile.solver.getGridInfo();
         TORCH_CHECK(grid, "scalar gate fixture has no grid info");
         grid->rdn = torch::full({nz}, float(nz));
@@ -587,17 +671,24 @@ bool run_scalar_zero_gate() {
         return (tile.solver.*access(ActualRhsTag{}))(
             tile.state(), RhsMode::Full).detach().clone();
     };
-    const auto off = evaluate(false), on = evaluate(true), delta = on - off;
-    const double du = delta.slice(0, 0, su).abs().max().item<double>();
-    const double dv = delta.slice(0, su, su + sv).abs().max().item<double>();
-    const double dw = delta.slice(0, su + sv, su + sv + sw).abs().max().item<double>();
-    const double dt = delta.slice(0, su + sv + 2 * sw, su + sv + 2 * sw + st)
-                            .abs().max().item<double>();
-    const bool pass = torch::isfinite(on).all().item<bool>() && du == 0.0 && dv == 0.0 &&
-                      dw == 0.0 && dt > 0.0;
-    std::cout << (pass ? "PASS " : "FAIL ") << "actual RHS khdif0 scalar gate"
-              << " du=" << du << " dv=" << dv << " dw=" << dw << " dt=" << dt << '\n';
-    return pass;
+    bool ok=true;
+    for (int option : {1,2}) {
+        cfg.diffusion_option=option;
+        const auto off=evaluate(false),on=evaluate(true),delta=on-off;
+        const double du=delta.slice(0,0,su).abs().max().item<double>();
+        const double dv=delta.slice(0,su,su+sv).abs().max().item<double>();
+        const double dw=delta.slice(0,su+sv,su+sv+sw).abs().max().item<double>();
+        const double dt=delta.slice(0,su+sv+2*sw,su+sv+2*sw+st)
+                              .abs().max().item<double>();
+        const bool pass=torch::isfinite(on).all().item<bool>() &&
+            du==0.0 && dv==0.0 && dw==0.0 && dt>0.0;
+        std::cout << (pass?"PASS ":"FAIL ")
+                  << "actual RHS khdif0 scalar gate option=" << option
+                  << " du=" << du << " dv=" << dv
+                  << " dw=" << dw << " dt=" << dt << '\n';
+        ok=pass && ok;
+    }
+    return ok;
 }
 void dump_flat_periodic_x(torch::Dtype dtype) {
     using wrf::sdirk3::test::TileCase;
@@ -619,9 +710,63 @@ void dump_flat_periodic_x(torch::Dtype dtype) {
                 std::cout << "C_PARITY " << j+1 << ' ' << k+1 << ' ' << x+1
                           << ' ' << std::setprecision(17) << a[j][k][x] << '\n';
 }
+
+void dump_hybrid_layer_mass(torch::Dtype dtype, const std::string& mass_mode) {
+    using wrf::sdirk3::test::TileCase;
+    TileCase tile(10.0f);
+    const auto opt=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
+    std::vector<double> q_values, kh_values, mut_values, layer_values, no_c2_values;
+    constexpr double c1[nz]={1.1953125,1.5703125,1.4921875,0.296875};
+    for (int j=0; j<ny; ++j) {
+        for (int k=0; k<nz; ++k) {
+            for (int x=0; x<nx; ++x) {
+                const double mut=90000.0+128.0*x;
+                q_values.push_back(1.0+0.03125*x+0.0078125*((x*x)%3)+0.015625*k);
+                kh_values.push_back(2.0+0.125*x+0.0625*k);
+                layer_values.push_back(c1[k]*mut+(1.0-c1[k])*80000.0);
+                no_c2_values.push_back(c1[k]*mut);
+            }
+        }
+    }
+    for (int j=0; j<ny; ++j)
+        for (int x=0; x<nx; ++x)
+            mut_values.push_back(90000.0+128.0*x);
+    auto tensor=[&](const std::vector<double>& values, std::vector<int64_t> shape) {
+        return torch::tensor(values,torch::TensorOptions().dtype(torch::kFloat64))
+            .to(dtype).reshape(shape);
+    };
+    const auto q=tensor(q_values,{ny,nz,nx});
+    const auto kh=tensor(kh_values,{ny,nz,nx});
+    const auto mut=tensor(mut_values,{ny,nx});
+    const auto layer=tensor(layer_values,{ny,nz,nx});
+    const auto no_c2=tensor(no_c2_values,{ny,nz,nx});
+    const auto map=torch::ones({ny,nx},opt);
+    torch::Tensor mass;
+    if (mass_mode=="hybrid") mass=layer;
+    else if (mass_mode=="legacy") mass=mut;
+    else if (mass_mode=="no-c2") mass=no_c2;
+    else if (mass_mode=="sigma2d") mass=mut;
+    else if (mass_mode=="sigma3d") mass=mut.unsqueeze(1).expand({ny,nz,nx});
+    else throw std::invalid_argument("unknown layer-mass mode");
+    const auto out=(tile.solver.*access(ScalarDiffusionTag{}))(
+        q,kh,0.1f,0.13f,map,map,torch::ones({ny+1,nx},opt),mass,
+        nullptr,nullptr).to(torch::kFloat64).contiguous();
+    const auto a=out.accessor<double,3>();
+    for (int j=0; j<ny; ++j)
+        for (int k=0; k<nz; ++k)
+            for (int x=0; x<nx; ++x)
+                std::cout << "C_HYBRID " << j+1 << ' ' << k+1 << ' ' << x+1
+                          << ' ' << std::setprecision(17) << a[j][k][x] << '\n';
+}
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc==4 && std::string(argv[1])=="--hybrid-layer-parity") {
+        if (std::string(argv[2])=="fp32") dump_hybrid_layer_mass(torch::kFloat32,argv[3]);
+        else if (std::string(argv[2])=="fp64") dump_hybrid_layer_mass(torch::kFloat64,argv[3]);
+        else return 2;
+        return 0;
+    }
     if (argc==3 && std::string(argv[1])=="--flat-x-parity") {
         if (std::string(argv[2])=="fp32") dump_flat_periodic_x(torch::kFloat32);
         else if (std::string(argv[2])=="fp64") dump_flat_periodic_x(torch::kFloat64);
@@ -635,6 +780,7 @@ int main(int argc, char** argv) {
     ok = run_normal_stress(torch::kFloat32) && ok;
     ok = run_normal_stress(torch::kFloat64) && ok;
     ok = run_actual_rhs_contract() && ok;
+    ok = run_option1_scalar_rhs_contract() && ok;
     ok = run_scalar_zero_gate() && ok;
     ok = run_normal_rhs() && ok;
     ok = run_u_terrain_thickness(torch::kFloat32) && ok;

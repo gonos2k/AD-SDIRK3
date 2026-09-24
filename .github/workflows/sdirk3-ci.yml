@@ -459,6 +459,12 @@ jobs:
           python3 tools/test_horizontal_diffusion_scalar.py \
             "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
 
+      - name: hybrid option-1 scalar diffusion Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 tools/test_hybrid_scalar_layer_mass.py \
+            "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
+
       - name: install contract (exact manifest, header byte-parity, no stub)
         run: |
           set -euo pipefail

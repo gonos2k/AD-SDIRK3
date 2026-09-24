@@ -23373,15 +23373,20 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // Consumers interpolate it to their own stress/flux locations.
                 Kh_mom = torch::full_like(t, Kh_const);
                 if (Kh_const == 0.0f) {
-                    // Option 2 also has independently supplied scalar diffusion
-                    // and W stress driven by xkmv (kvdif).
-                    apply_h_diffusion = wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
-                        ((Kh_scalar_.defined() && Kh_scalar_.numel() > 0) ||
+                    // Both options can receive an independent physical scalar
+                    // diffusivity. Option 2 can also have W stress from kvdif.
+                    apply_h_diffusion =
+                        (Kh_scalar_.defined() && Kh_scalar_.numel() > 0) ||
+                        (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
                          wrf::sdirk3::g_sdirk3_config.kvdif != 0.0f);
                 }
             }
 
             if (apply_h_diffusion) {
+                // Scalar xkmhd is a physical diffusivity in both Fortran
+                // options. Momentum's option-1 preweighting below must not
+                // enter its separate face mass factor a second time.
+                const auto Kh_mom_physical = Kh_mom;
                 // Option 2 consumers take physical diffusivity (m^2/s),
                 // interpolate it to stress/flux locations, and convert tendency
                 // units themselves. Preweighting here double-couples scalar mass.
@@ -23412,7 +23417,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 } else {
                     // PARITY FIX 2025-12-07: Fortran uses khdq = 3*khdif for scalars as default
                     // In module_big_step_utilities_em.F: khdq = 3.*khdif
-                    Kh_scalar = 3.0f * Kh_mom;
+                    Kh_scalar = 3.0f * Kh_mom_physical;
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                         torch::NoGradGuard no_grad;                    }
                 }
@@ -23567,10 +23572,23 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 }
 
                 // Theta horizontal diffusion
-                // PARITY FIX 2025-12-07: Pass msfvx_ and mu_full_diff for Fortran parity
+                // Option 1's horizontal_diffusion_3dmp forms c1h*MUT+c2h at
+                // mass points before averaging the layer mass to scalar faces.
+                // Option 2 has a different terrain-metric scalar operator;
+                // retain its existing mass input until that path is compared.
+                torch::Tensor scalar_layer_mass = mu_full_diff;
+                if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 1 &&
+                    c1h_.defined() && c2h_.defined() && c1h_.numel() >= t.size(1) &&
+                    c2h_.numel() >= t.size(1)) {
+                    const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
+                        .slice(0, 0, t.size(1)).view({1, -1, 1});
+                    const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
+                        .slice(0, 0, t.size(1)).view({1, -1, 1});
+                    scalar_layer_mass = c1 * mu_full_diff.unsqueeze(1) + c2;
+                }
                 auto t_diff_h = compute_horizontal_diffusion_scalar_wrf(t, Kh_scalar, rdx, rdy,
                                                                         msftx_, msfty_,
-                                                                        msfvx_, mu_full_diff,
+                                                                        msfvx_, scalar_layer_mass,
                     capture_theta_faces_now_ ? &rhs_theta_faces_.diff_x : nullptr,
                     capture_theta_faces_now_ ? &rhs_theta_faces_.diff_y : nullptr);
                 t_tend = t_tend + t_diff_h;
@@ -27637,6 +27655,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
 
     // Check if MUT weighting is provided
     bool use_mut = mut.defined() && mut.numel() > 0;
+    const bool layered_mut = use_mut && mut.dim() == 3;
+    if (use_mut) {
+        TORCH_CHECK((mut.dim() == 2 && mut.size(0) == ny && mut.size(1) == nx) ||
+                    (layered_mut && mut.size(0) == ny && mut.size(1) == nz &&
+                     mut.size(2) == nx),
+                    "scalar diffusion mass must be [ny,nx] or [ny,nz,nx]");
+    }
     // Check if msfvx is provided for cross-ratio (at v-points: [ny+1, nx])
     bool use_msfvx_crossratio = msfvx.defined() && msfvx.numel() > 0;
 
@@ -27674,11 +27699,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
 
         // PARITY FIX 2025-12-07: Apply MUT weighting if provided
         if (use_mut) {
-            // mut is [ny, nx], average to u-points [ny, nx-1]
-            auto mut_im = mut.slice(1, 0, nx - 1);    // [ny, nx-1]
-            auto mut_ip = mut.slice(1, 1, nx);        // [ny, nx-1]
-            auto mut_u = 0.5f * (mut_im + mut_ip);    // [ny, nx-1]
-            flux_x = mut_u.unsqueeze(1) * flux_x;
+            auto left = mut.slice(layered_mut ? 2 : 1, 0, nx - 1);
+            auto right = mut.slice(layered_mut ? 2 : 1, 1, nx);
+            auto face_mass = 0.5f * (left + right);
+            flux_x = (layered_mut ? face_mass : face_mass.unsqueeze(1)) * flux_x;
         }
 
         H1.slice(2, 1, nx).copy_(flux_x);
@@ -27703,8 +27727,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
             const auto seam_map_x=0.5f*(msftx.select(1,nx-1)+msftx.select(1,0));
             const auto seam_map_y=0.5f*(msfty.select(1,nx-1)+msfty.select(1,0));
             auto seam=(seam_map_x/seam_map_y).unsqueeze(1)*seam_kh*seam_gradient;
-            if (use_mut)
-                seam=0.5f*(mut.select(1,nx-1)+mut.select(1,0)).unsqueeze(1)*seam;
+            if (use_mut) {
+                auto face_mass=0.5f*(mut.select(layered_mut ? 2 : 1,nx-1)+
+                                     mut.select(layered_mut ? 2 : 1,0));
+                seam=(layered_mut ? face_mass : face_mass.unsqueeze(1))*seam;
+            }
             H1.select(2,0).copy_(seam);
             H1.select(2,nx).copy_(seam);
         }
@@ -27752,11 +27779,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
 
         // PARITY FIX 2025-12-07: Apply MUT weighting if provided
         if (use_mut) {
-            // mut is [ny, nx], average to v-points [ny-1, nx]
-            auto mut_jm = mut.slice(0, 0, ny - 1);    // [ny-1, nx]
-            auto mut_jp = mut.slice(0, 1, ny);        // [ny-1, nx]
-            auto mut_v = 0.5f * (mut_jm + mut_jp);    // [ny-1, nx]
-            flux_y = mut_v.unsqueeze(1) * flux_y;
+            auto lower = mut.slice(0, 0, ny - 1);
+            auto upper = mut.slice(0, 1, ny);
+            auto face_mass = 0.5f * (lower + upper);
+            flux_y = (layered_mut ? face_mass : face_mass.unsqueeze(1)) * flux_y;
         }
 
         H2.slice(0, 1, ny).copy_(flux_y);
