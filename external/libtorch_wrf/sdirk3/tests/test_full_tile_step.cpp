@@ -498,7 +498,7 @@ void check_governing_step_budget() {
     const auto& trace=hybrid.solver.getLastArkBudgetTrace();
     TORCH_CHECK(cfg.imex_split_mode==3 && !cfg.hevi_split && !cfg.split_explicit &&
                 cfg.diffusion_option==2 && cfg.khdif>0.0f && cfg.kvdif==0.0f &&
-                cfg.wrf_damp_opt!=2,
+                cfg.wrf_damp_opt!=2 && !cfg.enable_ad_halo_exchange,
                 "stage-1 theta face contract requires ordinary ARK, positive"
                 " horizontal diffusion and no vertical/Rayleigh diffusion");
     TORCH_CHECK(trace.stage_state.size()==Ark::stages &&
@@ -519,7 +519,9 @@ void check_governing_step_budget() {
     // so these face snapshots belong to the accepted derivatives without a
     // Newton evaluation-identity ambiguity.
     const auto& ff=trace.stage1_fast_faces;
-    const auto& sf=trace.stage1_slow_faces;
+    TORCH_CHECK(trace.slow_faces.size()==Ark::stages,
+                "missing accepted slow-face stage inventory");
+    const auto& sf=trace.slow_faces[0];
     std::cout << "GOV_FACE_CAPTURE fast_diff_x=" << ff.diff_x.defined()
               << " fast_diff_y=" << ff.diff_y.defined()
               << " slow_adv_x=" << sf.adv_x.defined()
@@ -540,20 +542,35 @@ void check_governing_step_budget() {
         (mu1.unsqueeze(1)+mub)+c2_tensor.to(torch::kFloat64).view({1,nz,1});
     const auto c1mass=c1_tensor.to(torch::kFloat64).view({1,nz,1});
     const auto map3=map_tensor.to(torch::kFloat64).unsqueeze(1);
+    const auto face_terms=[&](const TileSDIRK3UnifiedSolver::ArkBudgetTrace::ThetaFaces& f) {
+        const auto ax=f.adv_x.to(torch::kFloat64);
+        const auto ay=f.adv_y.to(torch::kFloat64);
+        const auto az=f.adv_z.to(torch::kFloat64);
+        const auto dx=f.diff_x.to(torch::kFloat64);
+        const auto dy=f.diff_y.to(torch::kFloat64);
+        const auto x_advection=-(map3*map3)/spacing*
+            (ax.slice(2,1,nu)-ax.slice(2,0,nx));
+        const auto y_advection=-(map3*map3)/spacing*
+            (ay.slice(0,1,nv)-ay.slice(0,0,ny));
+        const auto vertical_advection=map3*torch::from_blob(rdnw.data(),{nz},torch::kFloat32)
+            .to(torch::kFloat64).abs().view({1,nz,1})*
+            (az.slice(1,1,nw)-az.slice(1,0,nz));
+        const auto x_diffusion=(map3*map3)/spacing*
+            (dx.slice(2,1,nu)-dx.slice(2,0,nx));
+        const auto y_diffusion=(map3*map3)/spacing*
+            (dy.slice(0,1,nv)-dy.slice(0,0,ny));
+        return std::array<torch::Tensor,5>{x_advection,y_advection,
+            vertical_advection,x_diffusion,y_diffusion};
+    };
     const auto ax=sf.adv_x.to(torch::kFloat64);
     const auto ay=sf.adv_y.to(torch::kFloat64);
     const auto az=sf.adv_z.to(torch::kFloat64);
     const auto dx=sf.diff_x.to(torch::kFloat64);
     const auto dy=sf.diff_y.to(torch::kFloat64);
-    const auto horiz_adv=-(map3*map3)/spacing*
-        ((ax.slice(2,1,nu)-ax.slice(2,0,nx))+
-         (ay.slice(0,1,nv)-ay.slice(0,0,ny)));
-    const auto vert_adv=map3*torch::from_blob(rdnw.data(),{nz},torch::kFloat32)
-        .to(torch::kFloat64).abs().view({1,nz,1})*
-        (az.slice(1,1,nw)-az.slice(1,0,nz));
-    const auto horiz_diff=(map3*map3)/spacing*
-        ((dx.slice(2,1,nu)-dx.slice(2,0,nx))+
-         (dy.slice(0,1,nv)-dy.slice(0,0,ny)));
+    const auto stage1_terms=face_terms(sf);
+    const auto horiz_adv=stage1_terms[0]+stage1_terms[1];
+    const auto vert_adv=stage1_terms[2];
+    const auto horiz_diff=stage1_terms[3]+stage1_terms[4];
     const double adv_x_signal=ax.abs().max().item<double>();
     const double adv_y_signal=ay.abs().max().item<double>();
     const double adv_z_signal=az.abs().max().item<double>();
@@ -637,6 +654,41 @@ void check_governing_step_budget() {
                 diff_y_signal>100.0*local_budget &&
                 std::abs(face_integral)<integral_budget,
                 "stage-1 theta tendency disagrees with actual producer face fluxes");
+    for (int s=1; s<Ark::stages; ++s) {
+        const auto& faces=trace.slow_faces[s];
+        TORCH_CHECK(faces.adv_x.defined() && faces.adv_y.defined() &&
+                    faces.adv_z.defined() && faces.diff_x.defined() &&
+                    faces.diff_y.defined() && trace.stage_state[s].defined() &&
+                    trace.slow[s].defined(),
+                    "accepted slow stage lacks theta producer faces: ",s+1);
+        const auto terms=face_terms(faces);
+        const auto face_rate=terms[0]+terms[1]+terms[2]+terms[3]+terms[4];
+        const auto stage=trace.stage_state[s].to(torch::kFloat64);
+        const auto slow=trace.slow[s].to(torch::kFloat64);
+        const auto t=stage.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+        const auto mu=stage.slice(0,total-sm,total).view({ny,nx});
+        const auto td=slow.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+        const auto md=slow.slice(0,total-sm,total).view({ny,nx});
+        const auto layer_mass=c1mass*(mu.unsqueeze(1)+mub)+
+            c2_tensor.to(torch::kFloat64).view({1,nz,1});
+        const auto coupled=layer_mass*td+t*c1mass*md.unsqueeze(1);
+        const double error=(coupled-face_rate).abs().max().item<double>();
+        double scale=coupled.abs().max().item<double>();
+        double min_component=std::numeric_limits<double>::infinity();
+        for (const auto& term:terms) {
+            const double signal=term.abs().max().item<double>();
+            scale+=signal;
+            min_component=std::min(min_component,signal);
+        }
+        const double budget=2.0*std::numeric_limits<float>::epsilon()*scale;
+        TORCH_CHECK(std::isfinite(error) && scale>1.0 &&
+                    min_component>100.0*budget && error<budget,
+                    "accepted slow theta face/tendency mismatch at stage ",s+1,
+                    ": error=",error," budget=",budget);
+        std::cout << "GOV_THETA_SLOW stage=" << s+1 << " error=" << error
+                  << " budget=" << budget << " signal=" << scale
+                  << " min_component=" << min_component << '\n';
+    }
     auto ark_replay=trace.input.clone();
     double stage_mass_sum=0.0,stage_theta_sum=0.0;
     double stage_mass_budget_sum=0.0,stage_theta_budget_sum=0.0;

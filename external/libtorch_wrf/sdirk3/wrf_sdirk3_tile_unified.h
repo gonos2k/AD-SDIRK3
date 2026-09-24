@@ -929,10 +929,17 @@ public:
         };
         torch::Tensor input, physics, raw_final, projected_final;
         std::vector<torch::Tensor> stage_state, fast, slow, full;
-        ThetaFaces stage1_fast_faces, stage1_slow_faces;
+        ThetaFaces stage1_fast_faces;
+        std::vector<ThetaFaces> slow_faces;
         double dt = 0.0;
     };
-    void captureArkBudgetTraceForTest(bool enabled) { capture_ark_budget_trace_ = enabled; }
+    void captureArkBudgetTraceForTest(bool enabled) {
+        capture_ark_budget_trace_ = enabled;
+        if (!enabled) {
+            capture_theta_faces_now_ = false;
+            rhs_theta_faces_ = {};
+        }
+    }
     const ArkBudgetTrace& getLastArkBudgetTrace() const { return last_ark_budget_trace_; }
     bool getLastStepFinalUpdateAborted() const { return last_step_final_update_aborted_; }
     float getLastStepProgressRatio() const { return last_step_progress_ratio_; }
@@ -1536,7 +1543,7 @@ private:
     int last_step_outcome_code_ = static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED);
     ArkBudgetTrace last_ark_budget_trace_;
     bool capture_ark_budget_trace_ = false;
-    bool capture_stage1_theta_faces_ = false;
+    bool capture_theta_faces_now_ = false;
     ArkBudgetTrace::ThetaFaces rhs_theta_faces_;
     bool last_step_final_update_aborted_ = false;
     float last_step_progress_ratio_ = 0.0f;
