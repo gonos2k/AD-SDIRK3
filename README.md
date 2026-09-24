@@ -195,6 +195,14 @@ or stability certifications.
   centered direction differences. Diffusion-off controls must change both the
   state and pullback. This single-tile fixture does not cover stage boundary
   flux records, nonconstant viscosity, moisture writeback, MPI or full WRF.
+  It also compares the derivative of the ON−OFF step difference itself using
+  an informative U Fourier direction, four FP32 forward outputs, and a mixed
+  roundoff/relative engineering budget. A second smooth, nonunit-map case
+  computes dry mass and mass-weighted theta with physical cell area and layer
+  weights; its theta budget also accounts for baseline theta times the allowed
+  mass drift. It requires naive unit-area sums to give a different verdict. The
+  active case still has uniform eta layers and sigma coefficients, so general
+  hybrid-layer and stage flux/source budgets remain separate checks.
 
 
 - **Fixed native tile trajectories.** `beginFixedTrajectory(N, schedule)` retains the

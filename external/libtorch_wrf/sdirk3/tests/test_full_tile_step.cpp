@@ -122,6 +122,57 @@ void check_governing_step_budget() {
     std::cout << "GOV_STEP diffusion_state=" << state_change
               << " diffusion_pullback=" << gradient_change << '\n';
 
+    // Differentiate the diffusion increment itself. A U Fourier probe keeps
+    // this small signal above the FP32 difference-of-steps roundoff floor.
+    auto diffusion_direction=torch::zeros_like(before);
+    auto u_direction=diffusion_direction.slice(0,0,su).view({ny,nz,nu});
+    for (int j=0; j<ny; ++j)
+        for (int k=0; k<nz; ++k)
+            for (int i=1; i<nx; ++i)
+                u_direction[j][k][i]=std::sin(2.0*std::acos(-1.0)*i/nx);
+    diffusion_direction=diffusion_direction/diffusion_direction.norm();
+    const auto diffusion_cotangent=diffusion_direction.clone();
+    const auto on_diff_pullback=tile.solver.pullbackLastStep(diffusion_cotangent);
+    cfg.khdif=0.0f;
+    const auto off_diff_pullback=off.solver.pullbackLastStep(diffusion_cotangent);
+    cfg.khdif=1000.0f;
+    const double increment_ad=diffusion_direction.to(torch::kFloat64)
+        .dot((on_diff_pullback-off_diff_pullback).to(torch::kFloat64)).item<double>();
+    for (float h : {0.4f,0.2f}) {
+        TileCase on_plus(spacing),on_minus(spacing);
+        setup(on_plus); setup(on_minus);
+        on_plus.set(before+h*diffusion_direction);
+        on_minus.set(before-h*diffusion_direction);
+        on_plus.step(dt); on_minus.step(dt);
+        cfg.khdif=0.0f;
+        TileCase off_plus(spacing),off_minus(spacing);
+        setup(off_plus); setup(off_minus);
+        off_plus.set(before+h*diffusion_direction);
+        off_minus.set(before-h*diffusion_direction);
+        off_plus.step(dt); off_minus.step(dt);
+        cfg.khdif=1000.0f;
+        const auto kp=on_plus.state().to(torch::kFloat64);
+        const auto km=on_minus.state().to(torch::kFloat64);
+        const auto zp=off_plus.state().to(torch::kFloat64);
+        const auto zm=off_minus.state().to(torch::kFloat64);
+        const auto cot=diffusion_cotangent.to(torch::kFloat64);
+        const double increment_fd=((kp-zp)-(km-zm)).dot(cot).item<double>()/(2.0*h);
+        const double weighted_roundoff=(cot.square()*(kp.square()+zp.square()+
+            km.square()+zm.square())).sum().sqrt().item<double>();
+        const double floor=3.0*std::numeric_limits<float>::epsilon()*
+            weighted_roundoff/(2.0*h);
+        const double budget=floor+0.1*std::abs(increment_ad);
+        const double error=std::abs(increment_fd-increment_ad);
+        TORCH_CHECK(std::isfinite(increment_fd) && std::isfinite(increment_ad) &&
+                    std::abs(increment_ad)>3.0*floor && error<=budget,
+                    "diffusion-increment FD/VJP mismatch: h=",h,
+                    " fd=",increment_fd," ad=",increment_ad,
+                    " floor=",floor," budget=",budget);
+        std::cout << "GOV_INCREMENT h=" << h << " fd=" << increment_fd
+                  << " ad=" << increment_ad << " floor=" << floor
+                  << " error=" << error << " budget=" << budget << '\n';
+    }
+
     const auto evaluate_order = [&](const std::array<RhsMode,3>& order) {
         TileCase probe(spacing);
         setup(probe); probe.set(after); probe.step(1e-4f); probe.set(after);
@@ -158,6 +209,93 @@ void check_governing_step_budget() {
     TORCH_CHECK(forward[2].slice(0,su+sv+2*sw,total-sm).abs().max().item<double>()>1e-5 &&
                 forward[1].slice(0,su+sv+2*sw,total-sm).abs().max().item<double>()>1e-5,
                 "uninformative zero explicit or implicit theta signal");
+
+    // In the map-aware flux form the physical cell area is dx*dy/(mx*my).
+    // Use the actual mass-point maps, sigma layer widths and hybrid masses;
+    // the uniform-map sum must disagree when area weighting is informative.
+    TileCase mapped(spacing);
+    setup(mapped);
+    for (int j=0; j<ny; ++j)
+        for (int i=0; i<nx; ++i)
+            mapped.mass_map[j*nx+i] = 1.0f+0.08f*
+                std::cos(2.0*std::acos(-1.0)*i/nx)*
+                std::cos(2.0*std::acos(-1.0)*j/(ny-1));
+    for (int j=0; j<ny; ++j)
+        for (int i=0; i<nu; ++i) {
+            const int left=i==0 ? nx-1 : i-1;
+            const int right=i==nx ? 0 : i;
+            mapped.u_map[j*nu+i]=0.5f*(mapped.mass_map[j*nx+left]+
+                mapped.mass_map[j*nx+right]);
+        }
+    for (int j=0; j<nv; ++j)
+        for (int i=0; i<nx; ++i) {
+            const int lower=j==0 ? 0 : j-1;
+            const int upper=j==ny ? ny-1 : j;
+            mapped.v_map[j*nx+i]=0.5f*(mapped.mass_map[lower*nx+i]+
+                mapped.mass_map[upper*nx+i]);
+        }
+    const auto mapped_before=mapped.state();
+    mapped.step(dt);
+    const auto mapped_after=mapped.state();
+    struct Budget { double mass=0, theta=0, mass_l1=0, anomaly_l1=0; };
+    const auto weighted_budget=[&](const torch::Tensor& state,
+                                   const torch::Tensor& reference) {
+        const auto mu=state.slice(0,total-sm,total).to(torch::kFloat64).view({ny,nx});
+        const auto mu_ref=reference.slice(0,total-sm,total).to(torch::kFloat64)
+            .view({ny,nx});
+        const auto theta=state.slice(0,su+sv+2*sw,total-sm).to(torch::kFloat64)
+            .view({ny,nz,nx});
+        Budget result;
+        for (int j=0; j<ny; ++j)
+            for (int i=0; i<nx; ++i) {
+                const double map=mapped.mass_map[j*nx+i];
+                const double area=spacing*spacing/(map*map);
+                for (int k=0; k<nz; ++k) {
+                    const double eta_width=1.0/std::abs(mapped.metric[k]);
+                    const double level_mass=mapped.one[k]*(80000.0+mu[j][i].item<double>())+
+                                            mapped.zero[k];
+                    const double weight=area*eta_width*level_mass/9.81;
+                    result.mass+=weight;
+                    result.theta+=weight*(300.0+theta[j][k][i].item<double>());
+                    result.anomaly_l1+=weight*std::abs(theta[j][k][i].item<double>());
+                    result.mass_l1+=area*eta_width*mapped.one[k]/9.81*
+                        std::abs(mu[j][i].item<double>()-mu_ref[j][i].item<double>());
+                }
+            }
+        return result;
+    };
+    const auto weighted_before=weighted_budget(mapped_before,mapped_before);
+    const auto weighted_after=weighted_budget(mapped_after,mapped_before);
+    const double weighted_mass_drift=std::abs(weighted_after.mass-weighted_before.mass);
+    const double weighted_theta_drift=std::abs(weighted_after.theta-weighted_before.theta);
+    const double weighted_mass_budget=64.0*std::numeric_limits<float>::epsilon()*
+        weighted_after.mass_l1;
+    const double weighted_theta_budget=4.0*std::numeric_limits<float>::epsilon()*
+        weighted_before.anomaly_l1;
+    const double weighted_anomaly_drift=std::abs(
+        (weighted_after.theta-300.0*weighted_after.mass)-
+        (weighted_before.theta-300.0*weighted_before.mass));
+    const double full_theta_budget=weighted_theta_budget+300.0*weighted_mass_budget;
+    const double uniform_area=spacing*spacing/9.81;
+    const double naive_mass_drift=uniform_area*std::abs((mapped_after-mapped_before)
+        .slice(0,total-sm,total).to(torch::kFloat64).sum().item<double>());
+    const double naive_theta_drift=uniform_area*std::abs(
+        heat_content(mapped_after)-heat_content(mapped_before));
+    TORCH_CHECK(weighted_after.mass_l1>1.0 && weighted_before.anomaly_l1>1.0 &&
+                weighted_mass_drift<=weighted_mass_budget &&
+                weighted_anomaly_drift<=weighted_theta_budget &&
+                weighted_theta_drift<=full_theta_budget &&
+                naive_mass_drift>10.0*weighted_mass_budget &&
+                naive_theta_drift>10.0*full_theta_budget,
+                "nonunit-map physical budget failed to distinguish area weighting");
+    std::cout << "GOV_WEIGHTED mass_l1=" << weighted_after.mass_l1
+              << " mass_drift=" << weighted_mass_drift
+              << " mass_budget=" << weighted_mass_budget
+              << " theta_drift=" << weighted_theta_drift
+              << " theta_anomaly_drift=" << weighted_anomaly_drift
+              << " theta_budget=" << full_theta_budget
+              << " naive_mass_drift=" << naive_mass_drift
+              << " naive_theta_drift=" << naive_theta_drift << '\n';
 }
 
 void check_horizontal_pgf() {
