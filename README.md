@@ -182,6 +182,19 @@ or stability certifications.
   invalid/zero cotangents, and identical forward results with retention off. The validated
   scope is a dry CPU tile with fixed timestep, forcing and boundary branches; second
   derivatives and a complete WRF/4D-Var trajectory are not implemented by this API.
+- **One closed, active-diffusion tile step.** The same test now uses a hydrostatic
+  dry base state with spatially varying U and potential temperature, positive
+  option-2 viscosity, periodic X and symmetric Y walls. It checks a nonzero
+  dry-mass redistribution against the full-step mass budget and reports a
+  separate FP32 budget scaled by the mass-weighted potential-temperature
+  anomaly; this is
+  not an exact complete-step heat-conservation claim. At the resulting state it
+  checks all six blocks of `Full = ExplicitOnly + ImplicitOnly` with the stage
+  reference prepared from that state, repeats the evaluations in reverse
+  order, and compares the active step's VJP with two
+  centered direction differences. Diffusion-off controls must change both the
+  state and pullback. This single-tile fixture does not cover stage boundary
+  flux records, nonconstant viscosity, moisture writeback, MPI or full WRF.
 
 
 - **Fixed native tile trajectories.** `beginFixedTrajectory(N, schedule)` retains the
