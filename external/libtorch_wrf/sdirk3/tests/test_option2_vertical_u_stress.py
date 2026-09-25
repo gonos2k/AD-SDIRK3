@@ -72,15 +72,15 @@ program oracle_driver
   do j=jms,jme
     do k=kms,nz
       do i=ims,nx
-        rho(i,k,j)=1.+0.04*real(k-1)+0.002*real(i-1)
-        xkmv(i,k,j)={kv}*(2.+0.03*real(k-1)+0.01*real(i-1))
+        rho(i,k,j)=1.+real(k-1)/32.+real(i-1)/512.
+        xkmv(i,k,j)={kv}*(2.+real(k-1)/64.+real(i-1)/128.)
       enddo
     enddo
   enddo
   do j=jts,jte
     do k=kts+1,kte
       do i=its,ite
-        defor13(i,k,j)=0.2+0.01*real(k-1)+0.003*real(i-1)
+        defor13(i,k,j)=0.25+real(k-1)/128.+real(i-1)/256.
       enddo
     enddo
   enddo
@@ -172,6 +172,7 @@ def main() -> int:
     print(f"CPP_BINARY_SHA256 {binary_sha}")
     print(f"EXTRACTED_U_ROUTINES_SHA256 {hashlib.sha256((extract_subroutine(source, 'cal_titau_13_31') + extract_subroutine(source, 'vertical_diffusion_u_2')).encode()).hexdigest()}")
     print(f"BOUNDARY_CONTRACT specified=false open_xs/open_xe/open_ys/open_ye=false nested=false periodic_x=true periodic_y=false")
+    print("INPUT_PATTERN rho=1+k/32+i/512 Kv=2+k/64+i/128 defor13=1/4+k/128+i/256; all values exactly representable in FP32")
     print(f"RAW_CONTRACT tendency(i,k,j) = -(-g/dnw) * delta(titau); dnw={DNW}, rdnw={RDNW}, g={G}; output is an unscaled WRF tendency value (no dt); U=[{NY},{NZ},{NX+1}], rho/Kv=[{NY},{NZ},{NX}]")
 
     expected, routine_sha = fortran_oracle(source, args.fortran_compiler, KV)

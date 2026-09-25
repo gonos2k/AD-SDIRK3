@@ -502,8 +502,8 @@ int dump_vertical_u_stress_raw(bool zero_k) {
     for (int j = 0; j < mass_y; ++j) {
         for (int k = 0; k < mass_z; ++k) {
             for (int i = 0; i < mass_x; ++i) {
-                rho[j][k][i] = 1.0f + 0.04f * k + 0.002f * i;
-                kv[j][k][i] = 2.0f + 0.03f * k + 0.01f * i;
+                rho[j][k][i] = 1.0f + float(k) / 32.0f + float(i) / 512.0f;
+                kv[j][k][i] = 2.0f + float(k) / 64.0f + float(i) / 128.0f;
             }
         }
     }
@@ -511,7 +511,7 @@ int dump_vertical_u_stress_raw(bool zero_k) {
     for (int j = 0; j < mass_y; ++j)
         for (int k = 1; k < mass_z; ++k)
             for (int i = 1; i < mass_x; ++i)
-                defor13[j][k][i] = 0.2f + 0.01f * k + 0.003f * i;
+                defor13[j][k][i] = 0.25f + float(k) / 128.0f + float(i) / 256.0f;
     const auto rdnw = torch::ones({mass_z}, opt);
     const auto tendency = (solver.*access(VerticalUStressTag{}))(
         u, defor13, kv, rho, rdnw).contiguous();
