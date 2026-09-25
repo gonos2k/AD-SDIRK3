@@ -6,9 +6,10 @@ Local timestamp: 2026-09-25 22:26:36 JST
 
 WRF's hybrid coordinate decreases with vertical index, so `dn(k)` is signed
 negative. The C++ metric cache stores positive magnitudes. The W helper already
-formed the same stress divergence and terrain correction as Fortran but scaled
-with positive `dn`, and unlike the U/V option-2 helpers it did not convert the
-assembled tendency back to WRF's signed-coordinate convention.
+formed the flat-grid stress divergence with positive `dn`, and unlike the U/V
+option-2 helpers it did not convert the assembled tendency back to WRF's
+signed-coordinate convention. The terrain contribution is included in the
+same final sign conversion, but mixed-terrain W parity remains untested.
 
 The option-2 W helper now negates its fully assembled tendency after applying
 the terrain correction and top/bottom zero boundary values. This changes only
@@ -56,8 +57,9 @@ All four runs used identical `wrfinput_d01` SHA-256
   `compute_vertical_diffusion_u_stress` path. Both artifacts contain only the
   initial frame (174 finite float fields, output hash
   `00f8794f668a455a56c09bb2f2395cd74adae50add71eaa9d6e5c24a227f0c6c`). The
-  failure occurs before horizontal W diffusion, so it does not exercise this
-  sign correction.
+  failure occurs in Step 10 after Step 9 has evaluated horizontal W diffusion.
+  The RHS and stage are then aborted, so this run provides no accepted-step
+  or output-level validation of the sign correction.
 - PC2 with `kvdif=0` completes two frames with 174 finite float fields and is
   byte-equal to the prior zero-W-diffusion output (`3dcf6ae1362d55dce9f18b2e50a1b9b041a6660453f0304a60d080afef943650`). Since W diffusion is
   disabled, this is only a regression control.
