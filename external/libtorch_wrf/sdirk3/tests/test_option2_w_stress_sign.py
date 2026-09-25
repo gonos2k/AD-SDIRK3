@@ -112,7 +112,7 @@ program oracle_driver
 end program oracle_driver
 """
     with tempfile.TemporaryDirectory(prefix="sdirk3-option2-w-oracle-") as directory:
-        work = Path(directory)
+        work = Path(directory).resolve()
         src = work / "oracle.f90"
         exe = work / "oracle"
         src.write_text(driver)
@@ -124,7 +124,7 @@ end program oracle_driver
                 link_flags.append(f"-Wl,-syslibroot,{sdk.stdout.strip()}")
         command = [*shlex.split(compiler), "-ffree-form", "-ffree-line-length-none",
                    *link_flags, str(src), "-o", str(exe)]
-        built = subprocess.run(command, text=True, capture_output=True)
+        built = subprocess.run(command, cwd=work, text=True, capture_output=True)
         if built.returncode:
             raise RuntimeError("extracted Fortran compile failed:\n" + built.stderr)
         ran = subprocess.run([str(exe)], check=True, text=True, capture_output=True)
