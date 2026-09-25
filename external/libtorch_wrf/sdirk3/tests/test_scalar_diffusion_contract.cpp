@@ -1581,7 +1581,7 @@ void dump_option2_momentum_geometry() {
         zx_stage[j][k][nx]=zx_stage[j][k][0];
     rdz_stage.select(1,0).fill_(2.0f/1000.0f);
     for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
-        u[j][k][i]=float(k);
+        u[j][k][i]=(k==nz-1 ? 1.0f : 0.0f);
     const auto kh=torch::full({ny,nz,nx},2.0f,opt);
     const auto rho=torch::ones({ny,nz,nx},opt);
     const auto map_u=torch::ones({ny,nu},opt);

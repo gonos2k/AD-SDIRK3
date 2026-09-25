@@ -67,10 +67,12 @@ def fortran_oracle() -> dict[tuple[int, int, int], float]:
         for i in range(NX):
             rdzw[k][i] = 1.0 / DZ
 
-    # Fortran cal_deform_and_div: u(k)=k, unit map factors, fnm=fnp=1/2.
-    # The bottom extrapolation multiplies u(1)=0 in this fixture, so its
-    # coefficient choice does not affect the used k=2 raw tendency below.
-    u = [float(k) for k in range(NZ)]
+    # Fortran cal_deform_and_div: u=[0,0,0,1], unit maps, fnm=fnp=1/2.
+    # The selected mass level is zero-based k=1 (Fortran level 2): its stress
+    # averages use interior W levels. The lower mass stresses vanish because
+    # the first three U levels are zero, independent of cf1/cf2/cf3. The top
+    # extrapolation is outside the selected tendency stencil.
+    u = [0.0, 0.0, 0.0, 1.0]
     hatavg = [0.0] * (NZ + 1)
     hatavg[0] = 0.5 * u[0]
     for q in range(1, NZ):
@@ -159,7 +161,7 @@ def main() -> int:
     print(f"TEST cpp.sha256={cpp_test_sha} python.sha256={python_test_sha} "
           f"binary={args.binary.resolve()} binary.sha256={binary_sha}")
     print(f"FIXTURE Nx={NX} periodic_x H=100*cos(2*pi*i/8)m dx={DX:g}m "
-          f"dz={DZ:g}m U(k)=k K={KH:g} rho={RHO:g} maps=1")
+          f"dz={DZ:g}m U=[0,0,0,1] K={KH:g} rho={RHO:g} maps=1")
     print(f"ORACLE owned raw tendency max_abs={signal:.9g}")
     print(f"CPP vs oracle max_error={max_error:.9g} at {max_error_key} "
           f"cpp={actual[max_error_key]:.9g} oracle={expected[max_error_key]:.9g} "
