@@ -1,7 +1,15 @@
 # Option-2 stretched-Z scalar parity
 
-Local timestamp: 2026-09-25 18:02:33 JST  
+Local timestamp: 2026-09-25 18:02:33 JST
 Source base: `00979b1d09e8ac2fd0a4fc850bd5600d7fad4c9a` (`agent/option2_stretched_eta`)
+
+Final tested source revision: `f524c4042def50674c0ed058e27c297a85dd6ed4`.
+The local toolchain was Apple Clang 21.0.0 and GNU Fortran 15.2.0. The
+independently rerun O2 and O3 C++ test binaries have SHA-256
+`ad7661c6b2b54428a422c2cd97cceace9e4246c09a5cecdb922ff08124f689db`
+and `8d2a8b3a47d87f8e5f2ad03bbe9b36f454005b40e4d7f885afcd4d08f9867fc9`.
+Their unfiltered parity logs are byte-identical (SHA-256
+`925e5d94e369daea0df8577ae46a3df2e34142f8e342182beca4dfa971f132df`).
 
 ## Context
 
