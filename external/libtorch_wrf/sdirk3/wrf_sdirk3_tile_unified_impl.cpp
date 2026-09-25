@@ -36448,30 +36448,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_u_stress(
         auto rdnw_broadcast = rdnw.slice(0, 1, k_interior + 1).view({1, -1, 1});
         auto dtau_dz = tau_diff * rdnw_broadcast;
 
-        // VECTORIZED: Density interpolation to u-points
-        // PARITY FIX 2025-12-10: Comments updated to WRF (j,k,i) ordering
-        // rho_local[j,k,i] = 0.5 * (rho[j,k,i-1] + rho[j,k,i]) for interior points
-        torch::Tensor rho_u;
-        if (nx > 1) {
-            auto rho_i0 = rho.slice(1, 1, k_interior + 1).slice(2, 0, nx_u_actual - 1);
-            auto rho_i1 = rho.slice(1, 1, k_interior + 1).slice(2, 1, nx_u_actual);
-
-            // For i=0, use rho[k,j,0]; for i>0, average adjacent points
-            rho_u = torch::zeros({ny_u, k_interior, nx_u_actual}, options);
-            // CRITICAL FIX (2025-10-18): Use .copy_() for in-place assignment
-            rho_u.slice(2, 1, nx_u_actual).copy_(0.5f * (rho_i0 + rho_i1.slice(2, 0, nx_u_actual - 1)));
-            rho_u.slice(2, 0, 1).copy_(rho.slice(1, 1, k_interior + 1).slice(2, 0, 1));
-        } else {
-            rho_u = rho.slice(1, 1, k_interior + 1);
-        }
-
         // VECTORIZED: Tendency computation
-        // PARITY FIX 2025-12-09: Fortran formula is g/dnw * (titau[k+1]-titau[k])
-        // where titau already includes rho (titau = -rho*Km*defor), so NO division by rho
-        // Previous code incorrectly divided by rho again.
-        // dtau_dz = (tau13[k+1] - tau13[k]) * rdnw = (tau13[k+1] - tau13[k]) / dnw
-        // tendency = g/dnw * (tau13[k+1] - tau13[k]) = g * dtau_dz (positive sign!)
-        auto tendency = g_val * dtau_dz;  // FIXED: No division by rho, positive sign
+        // tau13 already contains rho. Fortran vertical_diffusion_u_2 applies
+        // -(-g/dnw)*delta(tau13); WRF dnw is negative, while this C++ cache
+        // stores |1/dnw|. Option 2 therefore needs the local negative sign.
+        // Keep the legacy option-1 stress path unchanged.
+        const bool option2_vertical_stress =
+            wrf::sdirk3::g_sdirk3_config.diffusion_option == 2;
+        auto tendency = (option2_vertical_stress ? -g_val : g_val) * dtau_dz;
 
         // PARITY FIX 2025-12-13: WRF vertical_diffusion_u_2 shrinks i/j loops for
         // open/specified/nested boundaries and skips shrink for periodic.
@@ -36599,30 +36583,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_v_stress(
         auto rdnw_broadcast = rdnw.slice(0, 1, k_interior + 1).view({1, -1, 1});
         auto dtau_dz = tau_diff * rdnw_broadcast;
 
-        // VECTORIZED: Density interpolation to v-points
-        // PARITY FIX 2025-12-10: Comments updated to WRF (j,k,i) ordering
-        // rho_local[j,k,i] = 0.5 * (rho[j-1,k,i] + rho[j,k,i]) for interior points
-        torch::Tensor rho_v;
-        if (ny > 1) {
-            auto rho_j0 = rho.slice(1, 1, k_interior + 1).slice(0, 0, ny_v_actual - 1);
-            auto rho_j1 = rho.slice(1, 1, k_interior + 1).slice(0, 1, ny_v_actual);
-
-            // For j=0, use rho[k,0,i]; for j>0, average adjacent points
-            rho_v = torch::zeros({ny_v_actual, k_interior, nx_v}, options);
-            // CRITICAL FIX (2025-10-18): Use .copy_() for in-place assignment
-            rho_v.slice(0, 1, ny_v_actual).copy_(0.5f * (rho_j0 + rho_j1.slice(0, 0, ny_v_actual - 1)));
-            rho_v.slice(0, 0, 1).copy_(rho.slice(1, 1, k_interior + 1).slice(0, 0, 1));
-        } else {
-            rho_v = rho.slice(1, 1, k_interior + 1);
-        }
-
         // VECTORIZED: Tendency computation
-        // PARITY FIX 2025-12-09: Fortran formula is g/dnw * (titau[k+1]-titau[k])
-        // where titau already includes rho (titau = -rho*Km*defor), so NO division by rho
-        // Previous code incorrectly divided by rho again.
-        // dtau_dz = (tau23[k+1] - tau23[k]) * rdnw = (tau23[k+1] - tau23[k]) / dnw
-        // tendency = g/dnw * (tau23[k+1] - tau23[k]) = g * dtau_dz (positive sign!)
-        auto tendency = g_val * dtau_dz;  // FIXED: No division by rho, positive sign
+        // tau23 already contains rho. Fortran vertical_diffusion_v_2 applies
+        // -(-g/dnw)*delta(tau23); WRF dnw is negative, while this C++ cache
+        // stores |1/dnw|. Option 2 therefore needs the local negative sign.
+        // Keep the legacy option-1 stress path unchanged.
+        const bool option2_vertical_stress =
+            wrf::sdirk3::g_sdirk3_config.diffusion_option == 2;
+        auto tendency = (option2_vertical_stress ? -g_val : g_val) * dtau_dz;
 
         // PARITY FIX 2025-12-13: WRF vertical_diffusion_v_2 shrinks i/j loops for
         // open/specified/nested boundaries. Add boundary reduction logic for V-points.
