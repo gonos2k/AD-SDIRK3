@@ -24,6 +24,19 @@ template<typename Tag, typename Tag::type Member> struct MemberAccessor {
 template struct MemberAccessor<ScalarDiffusionTag,
                                &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf>;
 
+struct Option2ScalarTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&,const torch::Tensor&,const torch::Tensor&,
+        const torch::Tensor&,const torch::Tensor&,const torch::Tensor&,
+        const torch::Tensor&,const torch::Tensor&,const torch::Tensor&,
+        const torch::Tensor&,double,double,double,
+        float,float,double,const torch::Tensor&,const torch::Tensor&,
+        const torch::Tensor&,const torch::Tensor&);
+    friend type access(Option2ScalarTag);
+};
+template struct MemberAccessor<Option2ScalarTag,
+    &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_option2_wrf>;
+
 struct MapUxTag {
     using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
     friend type access(MapUxTag);
@@ -949,6 +962,93 @@ void dump_flat_periodic_x(torch::Dtype dtype) {
                           << ' ' << std::setprecision(17) << a[j][k][x] << '\n';
 }
 
+void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
+                                        bool suppress_terrain=false) {
+    using wrf::sdirk3::test::TileCase;
+    constexpr int nw=nz+1;
+    TORCH_CHECK(case_id >= 5 && case_id <= 8,
+                "option-2 scalar parity case must be 5, 6, 7, or 8");
+    TileCase tile(1000.0f);
+    const auto opt=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
+    constexpr double gravity64=9.81;
+    const double gravity=dtype==torch::kFloat32 ? double(9.81f) : gravity64;
+    constexpr double eta_width=0.25;
+    const double layer_depth=case_id==5 ? 20.0 : 2000.0;
+    constexpr double mu_full=80000.0;
+    constexpr double p_span=95000.0;
+    constexpr double c1[nz]={0.4,0.8,1.2,1.6};
+    std::vector<double> rho_level(nz), w_height(nw);
+    for (int k=0;k<nz;++k) {
+        const double layer_mass=c1[k]*mu_full+(1.0-c1[k])*p_span;
+        rho_level[k]=case_id==5 ? 1.0 : eta_width*layer_mass/(gravity*layer_depth);
+    }
+    for (int k=0;k<nw;++k) w_height[k]=100.0+layer_depth*(k+1);
+
+    auto tensor=[&](const std::vector<double>& values,
+                    std::vector<int64_t> shape) {
+        return torch::tensor(values,torch::TensorOptions().dtype(torch::kFloat64))
+            .to(dtype).reshape(shape);
+    };
+    const auto ix=torch::arange(nx,opt);
+    const auto phase_x=ix*(2.0*pi/nx);
+    const auto fourier_x=torch::sin(phase_x);
+    const auto j=torch::arange(ny,opt);
+    const auto phase_y=(j+0.5)*(pi/ny);
+    const auto terrain_y=torch::cos(phase_y);
+    const bool terrain=case_id==7 || case_id==8;
+    const auto h_x=terrain ? 300.0*fourier_x : torch::zeros_like(fourier_x);
+    const auto h_cell=h_x.view({1,nx}).expand({ny,nx}).clone()+
+        (terrain ? 200.0*terrain_y.view({ny,1}).expand({ny,nx})
+                 : torch::zeros({ny,nx},opt));
+    const auto h_left=torch::cat({h_cell.slice(1,nx-1,nx),h_cell},1);
+    const auto h_right=torch::cat({h_cell,h_cell.slice(1,0,1)},1);
+    const auto zx_2d=(h_right-h_left)*0.001f;
+    const auto zx=zx_2d.unsqueeze(1).expand({ny,nw,nx+1}).clone();
+    const auto h_y_lower=torch::cat({h_cell.slice(0,0,1),h_cell},0);
+    const auto h_y_upper=torch::cat({h_cell,h_cell.slice(0,ny-1,ny)},0);
+    auto zy_2d=(h_y_upper-h_y_lower)*0.001f;
+    zy_2d.slice(0,0,1).zero_();
+    zy_2d.slice(0,ny,ny+1).zero_();
+    const auto zy=zy_2d.unsqueeze(1).expand({ny+1,nw,nx}).clone();
+    const auto zw=tensor(w_height,{1,nw,1})+h_cell.unsqueeze(1);
+    const auto z_mass=0.5*(zw.slice(1,0,nz)+zw.slice(1,1,nz+1));
+
+    torch::Tensor q;
+    if (case_id==5 || case_id==6) {
+        q=(1.0+0.03*fourier_x).view({1,1,nx}).expand({ny,nz,nx}).clone();
+    } else {
+        q=1.0+1.0e-4*z_mass;
+        if (case_id==8) {
+            const auto mixed_f=(2.0e-4*fourier_x.view({1,nx})+
+                1.0e-4*terrain_y.view({ny,1})).view({ny,1,nx});
+            q=q+z_mass*mixed_f;
+        }
+    }
+    const auto kh=torch::full({ny,nz,nx},2.0,opt);
+    const auto rho=tensor(rho_level,{1,nz,1}).expand({ny,nz,nx}).clone();
+    const auto rdzw=torch::full({ny,nz,nx},1.0/layer_depth,opt);
+    const auto dnw=torch::full({nz},-eta_width,opt);
+    const auto dn=torch::full({nz},-eta_width,opt);
+    const auto fnm=torch::full({nz},0.5,opt);
+    const auto fnp=torch::full({nz},0.5,opt);
+    const auto msftx=torch::ones({ny,nx},opt);
+    const auto msfty=torch::ones({ny,nx},opt);
+    const auto msfux=torch::ones({ny,nx+1},opt);
+    const auto msfvy=torch::ones({ny+1,nx},opt);
+    const float rdx=case_id==5 ? 0.1f : 0.001f;
+    const float rdy=case_id==5 ? 0.13f : 0.001f;
+    const auto zx_input=suppress_terrain ? torch::zeros_like(zx) : zx;
+    const auto zy_input=suppress_terrain ? torch::zeros_like(zy) : zy;
+    const auto out=(tile.solver.*access(Option2ScalarTag{}))(
+        q,kh,rho,zx_input,zy_input,rdzw,dnw,dn,fnm,fnp,
+        2.0,-1.5,0.5,rdx,rdy,gravity,
+        msftx,msfty,msfux,msfvy).to(torch::kFloat64).contiguous();
+    const auto a=out.accessor<double,3>();
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i)
+        std::cout << "C_OPT2 " << case_id << ' ' << j+1 << ' ' << k+1 << ' ' << i+1
+                  << ' ' << std::setprecision(17) << a[j][k][i] << '\n';
+}
+
 void dump_hybrid_layer_mass(torch::Dtype dtype, const std::string& mass_mode) {
     using wrf::sdirk3::test::TileCase;
     TileCase tile(10.0f);
@@ -1181,6 +1281,17 @@ void dump_option1_momentum_packed(torch::Dtype dtype,const std::string& componen
 } // namespace
 
 int main(int argc, char** argv) {
+    if ((argc==4 || argc==5) &&
+        std::string(argv[1])=="--option2-scalar-fortran-parity") {
+        const bool no_terrain=argc==5 && std::string(argv[4])=="no-slope";
+        if (argc==5 && !no_terrain) return 2;
+        if (std::string(argv[2])=="fp32")
+            dump_option2_scalar_fortran_parity(torch::kFloat32,std::stoi(argv[3]),no_terrain);
+        else if (std::string(argv[2])=="fp64")
+            dump_option2_scalar_fortran_parity(torch::kFloat64,std::stoi(argv[3]),no_terrain);
+        else return 2;
+        return 0;
+    }
     if (argc==4 && std::string(argv[1])=="--option1-momentum-packed") {
         if (std::string(argv[2])=="fp32") dump_option1_momentum_packed(torch::kFloat32,argv[3]);
         else if (std::string(argv[2])=="fp64") dump_option1_momentum_packed(torch::kFloat64,argv[3]);
