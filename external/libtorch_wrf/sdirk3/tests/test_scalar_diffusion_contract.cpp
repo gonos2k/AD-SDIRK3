@@ -151,9 +151,15 @@ template struct AutoMemberAccessor<VerticalUStressTag,
 struct VerticalVStressTag { friend auto access(VerticalVStressTag); };
 template struct AutoMemberAccessor<VerticalVStressTag,
     &TileSDIRK3UnifiedSolver::compute_vertical_diffusion_v_stress>;
-struct VerticalWStressTag { friend auto access(VerticalWStressTag); };
-template struct AutoMemberAccessor<VerticalWStressTag,
-    &TileSDIRK3UnifiedSolver::compute_vertical_diffusion_w_stress>;
+struct VerticalWMixingLegacyTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&);
+    friend type access(VerticalWMixingLegacyTag);
+};
+template struct MemberAccessor<VerticalWMixingLegacyTag,
+    static_cast<VerticalWMixingLegacyTag::type>(
+        &TileSDIRK3UnifiedSolver::compute_vertical_mixing_w)>;
 
 struct Defor13StageGeometryTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
@@ -173,6 +179,9 @@ template struct MemberAccessor<Defor23StageGeometryTag,
 struct Rdz3dCacheTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
     friend type access(Rdz3dCacheTag); };
 template struct MemberAccessor<Rdz3dCacheTag, &TileSDIRK3UnifiedSolver::rdz_3d_>;
+struct Rdzw3dCacheTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(Rdzw3dCacheTag); };
+template struct MemberAccessor<Rdzw3dCacheTag, &TileSDIRK3UnifiedSolver::rdzw_3d_>;
 
 void set_asymmetric_vertical_interpolation(TileSDIRK3UnifiedSolver& solver,
                                            int nz) {
@@ -669,7 +678,7 @@ bool run_vertical_shear_rdz_metric_diagnostic() {
     return u_ok&&v_ok;
 }
 
-int dump_vertical_w_stress_raw(const std::string& coefficient) {
+int dump_vertical_w_mixing_old_step10(const std::string& coefficient) {
     constexpr int ny=17,nx=17,nz=16;
     auto& cfg=wrf::sdirk3::g_sdirk3_config;
     cfg=wrf::sdirk3::SDIRK3Config{};
@@ -682,9 +691,15 @@ int dump_vertical_w_stress_raw(const std::string& coefficient) {
                                    std::vector<float>(nz,10.0f),0);
     auto grid=solver.getGridInfo();
     TORCH_CHECK(grid,"W stress fixture requires grid info");
-    grid->dn=torch::full({nz},-0.5f,opt);
-    grid->rdn=torch::full({nz},2.0f,opt);
-    grid->rdzw=torch::full({nz+1},1.0f/1024.0f,opt);
+    auto dn=torch::full({nz+1},-0.5f,opt);
+    auto rdn=torch::full({nz+1},2.0f,opt);
+    dn[0]=0.0f;
+    rdn[0]=0.0f;
+    grid->dn=dn;
+    grid->rdn=rdn;
+    grid->rdzw=torch::full({nz},1.0f/1024.0f,opt);
+    const float physical_rdzw=1.0f/1024.0f;
+    solver.*access(Rdzw3dCacheTag{})=torch::full({ny,nz,nx},physical_rdzw,opt);
     auto w=torch::zeros({ny,nz+1,nx},opt);
     auto rho=torch::empty({ny,nz,nx},opt);
     auto xkmh=torch::empty_like(rho);
@@ -696,10 +711,22 @@ int dump_vertical_w_stress_raw(const std::string& coefficient) {
         xkmv[j][k][i]=12.0f+float(k)/16.0f+float(i)/64.0f;
         defor33[j][k][i]=0.25f+float(k)/16.0f+float(i)/256.0f;
     }
-    if(coefficient=="zero") xkmh.zero_();
-    const auto& km=coefficient=="xkmv"?xkmv:xkmh;
-    const auto tendency=(solver.*access(VerticalWStressTag{}))(
-        w,defor33,km,rho,torch::full({nz},10.0f,opt)).contiguous();
+    w.select(1,0).zero_();
+    for(int j=0;j<ny;++j) for(int i=0;i<nx;++i) {
+        float w_value=0.0f;
+        w[j][0][i]=w_value;
+        for(int k=0;k<nz;++k) {
+            w_value += defor33[j][k][i].item<float>()/(2.0f*physical_rdzw);
+            w[j][k+1][i]=w_value;
+        }
+    }
+    const auto rdnw=torch::full({nz},10.0f,opt);
+    // Actual old Step10 W call: Kv_mom is the vertical xkmv profile. With this
+    // profile, legacy code recomputes D33 from W and uses cached physical rdzw
+    // for divergence; Fortran's vertical W stress uses horizontal xkmh and dn.
+    const auto& km=coefficient=="xkmh"?xkmh:(coefficient=="zero"?torch::zeros_like(xkmh):xkmv);
+    const auto tendency=(solver.*access(VerticalWMixingLegacyTag{}))(
+        w,km,rdnw,rho).contiguous();
     TORCH_CHECK(tendency.sizes()==w.sizes(),"W stress output shape mismatch");
     const auto a=tendency.accessor<float,3>();
     for(int j=0;j<ny;++j) for(int k=0;k<nz+1;++k) for(int i=0;i<nx;++i)
@@ -2432,12 +2459,12 @@ int main(int argc, char** argv) {
         return dump_vertical_v_stress_raw(true);
     if (argc==2 && std::string(argv[1])=="--vertical-shear-rdz-metric")
         return run_vertical_shear_rdz_metric_diagnostic() ? 0 : 1;
-    if (argc==2 && std::string(argv[1])=="--vertical-w-stress-xkmh")
-        return dump_vertical_w_stress_raw("xkmh");
-    if (argc==2 && std::string(argv[1])=="--vertical-w-stress-xkmv")
-        return dump_vertical_w_stress_raw("xkmv");
-    if (argc==2 && std::string(argv[1])=="--vertical-w-stress-zero-k")
-        return dump_vertical_w_stress_raw("zero");
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-old-step10")
+        return dump_vertical_w_mixing_old_step10("xkmv");
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-old-xkmh")
+        return dump_vertical_w_mixing_old_step10("xkmh");
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-xkmh-zero-k")
+        return dump_vertical_w_mixing_old_step10("zero");
     if (argc==2 && std::string(argv[1])=="--option2-packed-u-rdz-seam")
         return run_packed_u_rdz_seam() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry") {

@@ -35,6 +35,13 @@ def check_fortran_equations(source: str) -> None:
             raise RuntimeError(f"Fortran W stress equation changed; missing {equation!r}")
 
 
+def check_step10_old_call(source: str) -> None:
+    normalized = " ".join(source.split()).lower()
+    expected_call = "compute_vertical_mixing_w(w, kv_mom, rdnw_tensor, rho)"
+    if expected_call not in normalized:
+        raise RuntimeError(f"Step10 legacy W call changed; missing {expected_call!r}")
+
+
 def fortran_oracle(source: str, compiler: str, zero_k: bool = False) -> tuple[dict, str]:
     tau_routine = extract_subroutine(source, "cal_titau_11_22_33")
     w_routine = extract_subroutine(source, "vertical_diffusion_w_2")
@@ -152,17 +159,19 @@ def main() -> int:
     zero_expected, zero_sha = fortran_oracle(source, args.fortran_compiler, True)
     if routine_sha != zero_sha:
         raise RuntimeError("extracted Fortran W routines changed in K=0 control")
-    xkmh_actual = cpp_raw(args.binary, "--vertical-w-stress-xkmh")
-    xkmv_actual = cpp_raw(args.binary, "--vertical-w-stress-xkmv")
-    zero_actual = cpp_raw(args.binary, "--vertical-w-stress-zero-k")
+    cpp_source = cpp_path.read_text()
+    check_step10_old_call(cpp_source)
+    xkmv_old_actual = cpp_raw(args.binary, "--vertical-w-mixing-old-step10")
+    xkmh_old_actual = cpp_raw(args.binary, "--vertical-w-mixing-old-xkmh")
+    zero_actual = cpp_raw(args.binary, "--vertical-w-mixing-xkmh-zero-k")
     source_signal = max(abs(value) for value in expected.values())
     tolerance = 3.0e-6 * max(1.0, source_signal)
-    xkmh_error = max_error(xkmh_actual, expected)
-    xkmv_error = max_error(xkmv_actual, expected)
-    zero_error = max_error(zero_actual, zero_expected)
     projection = lambda values: sum(values[key] * (key[1] + 1) for key in expected)
-    xkmh_signal = max(abs(xkmh_actual[key]) for key in expected)
-    xkmv_signal = max(abs(xkmv_actual[key]) for key in expected)
+    xkmv_error = max_error(xkmv_old_actual, expected)
+    xkmh_error = max_error(xkmh_old_actual, expected)
+    xkmv_signal = max(abs(xkmv_old_actual[key]) for key in expected)
+    xkmh_signal = max(abs(xkmh_old_actual[key]) for key in expected)
+    zero_error = max_error(zero_actual, zero_expected)
     zero_signal = max(abs(zero_expected[key]) for key in zero_expected)
     print(f"FIXTURE_REVISION {subprocess.run(['git','rev-parse','HEAD'],cwd=repo,check=True,text=True,capture_output=True).stdout.strip()}")
     print(f"CPP_REVISION {subprocess.run(['git','rev-parse','HEAD'],cwd=cpp_path.parents[3],check=True,text=True,capture_output=True).stdout.strip()}")
@@ -171,21 +180,19 @@ def main() -> int:
     print(f"CPP_SOURCE_SHA256 {hashlib.sha256(cpp_path.read_bytes()).hexdigest()}")
     print(f"CPP_TEST_FIXTURE_SHA256 {hashlib.sha256(fixture_path.read_bytes()).hexdigest()}")
     print(f"CPP_BINARY_SHA256 {hashlib.sha256(args.binary.read_bytes()).hexdigest()}")
-    print(f"INPUT dn_fortran={DN} rdn_cpp=2 rdnw_fallback={RDNW} rdzw_physical={RDZW_PHYSICAL:.17g} xkmh=4+k/8+i/128 xkmv=12+k/16+i/64 rho=1+k/32+i/512 defor33=1/4+k/16+i/256")
+    print(f"INPUT dn_fortran={DN} rdn_cpp=2 rdnw_cpp={RDNW} rdzw_physical={RDZW_PHYSICAL:.17g} Fortran_xkmh=4+k/8+i/128 Step10_Kv_mom=xkmv=12+k/16+i/64 rho=1+k/32+i/512 defor33=1/4+k/16+i/256 W integrated with deltaW=D33/(2*rdzw)")
     print(f"OWNED_W_POINTS {len(expected)} W=[{NY},{NZ+1},{NX}] mass=[{NY},{NZ},{NX}]")
-    print(f"FORTRAN_RAW_RANGE min={min(expected.values()):.17g} max={max(expected.values()):.17g} max_abs={source_signal:.17g}")
-    print(f"W_XKMH max_error={xkmh_error:.17g} signal={source_signal:.17g} tolerance={tolerance:.17g} projection_fortran={projection(expected):.17g} projection_cpp={projection(xkmh_actual):.17g}")
-    print(f"W_XKMV_NEGATIVE_CONTROL max_error={xkmv_error:.17g} cpp_signal={xkmv_signal:.17g} xkmh_cpp_signal={xkmh_signal:.17g} coefficient_signal_ratio={xkmv_signal/xkmh_signal if xkmh_signal else math.inf:.17g}")
-    print(f"W_K_ZERO max_error={zero_error:.17g} fortran_max_abs={zero_signal:.17g}")
-    # This task is an old-call diagnostic: success means the oracle reproduced the
-    # signed-dn counterexample and distinguished xkmh from the xkmv negative control.
-    sign_counterexample = source_signal > 100*tolerance and xkmh_error > 100*tolerance and projection(expected)*projection(xkmh_actual) < 0
-    coefficient_distinguished = abs(xkmv_signal-xkmh_signal) > 100*tolerance
+    print(f"FORTRAN_XKMH_RAW_RANGE min={min(expected.values()):.17g} max={max(expected.values()):.17g} max_abs={source_signal:.17g}")
+    print(f"OLD_STEP10_XKMV max_error={xkmv_error:.17g} fortran_signal={source_signal:.17g} cpp_signal={xkmv_signal:.17g} tolerance={tolerance:.17g} projection_fortran={projection(expected):.17g} projection_cpp={projection(xkmv_old_actual):.17g}")
+    print(f"OLD_CALL_XKMH_METRIC_SIGN_CONTROL max_error={xkmh_error:.17g} cpp_signal={xkmh_signal:.17g} projection_cpp={projection(xkmh_old_actual):.17g}")
+    print(f"OLD_STEP10_K_ZERO max_error={zero_error:.17g} fortran_max_abs={zero_signal:.17g}")
+    # Old Step10 recomputes D33 from W but uses physical rdzw for divergence;
+    # Fortran uses xkmh and signed eta dn in vertical_diffusion_w_2.
+    old_call_counterexample = source_signal > 100*tolerance and xkmh_error > 100*tolerance
     zero_ok = zero_signal == 0.0 and zero_error <= tolerance
-    print(("PASS" if sign_counterexample else "FAIL") + " old W signed-dn negative control")
-    print(("PASS" if coefficient_distinguished else "FAIL") + " xkmh versus xkmv coefficient control")
-    print(("PASS" if zero_ok else "FAIL") + " W K=0 control")
-    return 0 if sign_counterexample and coefficient_distinguished and zero_ok else 1
+    print(("PASS" if old_call_counterexample else "FAIL") + " old Step10 W call is a negative control")
+    print(("PASS" if zero_ok else "FAIL") + " old Step10 W K=0 control")
+    return 0 if old_call_counterexample and zero_ok else 1
 
 
 if __name__ == "__main__":
