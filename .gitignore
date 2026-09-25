@@ -113,6 +113,7 @@ test/**/wrfbdy_*
 test/**/wrflowinp_*
 test/**/wrfndi_*
 test/**/input_*
+!test/em_b_wave/input_jet
 test/**/met_em.*
 test/**/geo_em.*
 test/**/FILE:*

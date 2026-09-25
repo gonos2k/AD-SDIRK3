@@ -26,6 +26,10 @@ With this freshly built executable, the identical archived input, `diagnostics.t
 
 The reported `Timing for main` for the single `K=1000` step was 0.41527 s for PC2 and 0.07716 s for RK3, a single-run ratio of 5.38. This includes the model step's normal work but does not establish equal-accuracy performance or reproducible benchmark timing.
 
+### Initial-condition regeneration (2026-09-25 17:32:51 JST)
+
+An initial `ideal.exe` attempt found that `test/em_b_wave/input_jet` was absent from the checkout. The official WRF v4.7.0 file was restored at that path (61,480 bytes; Git blob `0d0f92fb15ae7cd4bfbd377c0e27553a34679cb1`) with a narrow `.gitignore` exception. With the same archived grid/physics input namelist but the archived initial-state settings `diff_opt=1`, `khdif=0`, the freshly built `ideal.exe` completed and regenerated `wrfinput_d01` with SHA-256 `e71b730a12e5a16d181f404f6314e7904e0165eefa622ffd0c508bf8c00dd2a9`, byte-identical to the archived forecast input. A separate `ideal.exe` run using the diffusion-on namelist produced the same 177 variable arrays but changed the `DIFF_OPT` and `KHDIF` global attributes, so byte equality requires the original ideal namelist. Logs and the regenerated file are retained in `.validation/integration/ideal_fresh_archived_config/`.
+
 ## Remaining actions
 
 This branch makes the reviewed candidate tree concrete for a `main`-target PR but does not close scientific qualification. The fresh `em_b_wave` target build and bounded one-step rerun are complete; general option-2 U/V/W stress and variable coefficient ownership, noncanonical/MPI boundaries, whole-step conservation/forcing time order, temporal third-order evidence, and a complete active full-step/observation adjoint remain open. The checked-in legacy WRFPLUS/Tapenade TL/AD routine has a pre-hybrid interface and cannot be made current by patching only the #226 V-Y terms. Keep the integration PR in draft while those scope choices and evidence are reviewed.
