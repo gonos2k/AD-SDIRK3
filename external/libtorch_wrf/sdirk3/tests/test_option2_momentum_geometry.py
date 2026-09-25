@@ -271,6 +271,20 @@ def main() -> int:
             result, extracted_sha = compiled_fortran_oracle(
                 repo, args.fortran_compiler, flags, temp / label)
             fortran_results.append((label, result, extracted_sha))
+    cpp_seams = {(j, k, i) for j in range(NY) for k in range(NZ)
+                 for i in (0, NX)}
+    fortran_seams = {(j, 1, i) for j in range(1, NY - 1)
+                     for i in (0, NX)}
+    missing_cpp_seams = sorted(cpp_seams - actual.keys())
+    if missing_cpp_seams:
+        print(f"FAIL missing C++ seam outputs: {missing_cpp_seams[:3]}", file=sys.stderr)
+        return 1
+    for label, result, _ in fortran_results:
+        missing_fortran_seams = sorted(fortran_seams - result.keys())
+        if missing_fortran_seams:
+            print(f"FAIL missing {label} seam outputs: {missing_fortran_seams[:3]}",
+                  file=sys.stderr)
+            return 1
     outputs = [("C++", actual), ("equation oracle", expected)]
     outputs.extend((name, result) for name, result, _ in fortran_results)
     for label, values in outputs:
