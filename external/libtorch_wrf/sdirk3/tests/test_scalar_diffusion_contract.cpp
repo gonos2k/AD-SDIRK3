@@ -141,6 +141,16 @@ template struct AutoMemberAccessor<UOption2HelperTag,
 template struct AutoMemberAccessor<VOption2HelperTag,
     &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf>;
 
+struct Defor13StageGeometryTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&);
+    friend type access(Defor13StageGeometryTag);
+};
+template struct MemberAccessor<Defor13StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor13>;
+
 template<typename Member>
 torch::Tensor call_option2_momentum_helper(
     Member member, TileSDIRK3UnifiedSolver& solver,
@@ -329,6 +339,64 @@ bool run_packed_periodic_seam(torch::Dtype dtype) {
               << " west_alias=" << west_alias << " east_alias=" << east_alias
               << " tendency_alias=" << tendency_alias
               << " unique_sum=" << unique_sum << " budget=" << budget << '\n';
+    return pass;
+}
+
+// Fortran module_diffusion_em.F cal_deform_and_div forms U shear as
+// du/dz * 0.5*(rdz(i,k,j)+rdz(i-1,k,j)) (around lines 837-845). Packed
+// periodic X has N unique mass columns plus an alias at column N. U faces are
+// [west seam, interior faces, east seam, face-1 alias].
+bool run_packed_u_rdz_seam() {
+    using wrf::sdirk3::test::TileCase;
+    constexpr int unique_n=nx-1;
+    wrf::sdirk3::g_sdirk3_config=wrf::sdirk3::SDIRK3Config{};
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    TileCase tile(1.0f);
+    tile.solver.setBoundaryConditions(true,false,false,false,true,true,
+                                      false,false,false,false);
+    tile.solver.setWRFIndices(1,nx,1,ny,1,nz, 1,nx,1,ny,1,nz+1,
+                              -2,nx+4,-2,ny+4,1,nz+1);
+
+    auto u=torch::zeros({ny,nz,nx+1},opt);
+    u.select(1,1).fill_(1.0f); // isolated vertical shear at W level k=1
+    const auto w=torch::zeros({ny,nw,nx},opt);
+    auto rdz=torch::empty({ny,nw,nx},opt);
+    const float values[nx]={1,2,3,4,5,6,7,1};
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        rdz[j][k][i]=values[i];
+    const auto zx=torch::zeros({ny,nw,nx+1},opt);
+    const auto zy=torch::zeros({ny+1,nw,nx},opt);
+    const auto rdzw=torch::ones({ny,nz,nx},opt);
+    const auto rdnw=torch::ones({nz},opt);
+    const auto actual=(tile.solver.*access(Defor13StageGeometryTag{}))(
+        u,w,torch::tensor({1.0f},opt),rdnw,zx,zy,rdzw,rdz).contiguous();
+    const auto a=actual.accessor<float,3>();
+
+    auto expected_face=[&](int face) {
+        if (face==nx) return 0.5f*(values[0]+values[1]); // packed terminal aliases face 1
+        const int left=face==0 ? unique_n-1 : face-1;
+        const int right=face==unique_n ? 0 : face;
+        return 0.5f*(values[left]+values[right]);
+    };
+    double max_error=0.0;
+    for (int j=0;j<ny;++j) for (int face=0;face<=nx;++face)
+        max_error=std::max(max_error,std::abs(double(a[j][1][face]-expected_face(face))));
+    double west_alias=0.0, terminal_alias=0.0;
+    for (int j=0;j<ny;++j) {
+        west_alias=std::max(west_alias,std::abs(double(a[j][1][unique_n]-a[j][1][0])));
+        terminal_alias=std::max(terminal_alias,std::abs(double(a[j][1][nx]-a[j][1][1])));
+    }
+    const double west_expected=expected_face(0), face1_expected=expected_face(1);
+    const double tolerance=2.0e-6;
+    const bool pass=max_error<=tolerance && west_alias<=tolerance &&
+                    terminal_alias<=tolerance && west_expected==4.0 && face1_expected==1.5;
+    std::cout << (pass?"PASS ":"FAIL ") << "packed periodic U rdz seam"
+              << " west=" << a[1][1][0] << " expected_west=" << west_expected
+              << " face1=" << a[1][1][1] << " expected_face1=" << face1_expected
+              << " east_alias=" << a[1][1][nx] << " expected_east_alias=" << face1_expected
+              << " max_error=" << max_error << " west_alias_error=" << west_alias
+              << " terminal_alias_error=" << terminal_alias
+              << " tolerance=" << tolerance << '\n';
     return pass;
 }
 
@@ -1978,6 +2046,8 @@ void dump_option1_momentum_packed(torch::Dtype dtype,const std::string& componen
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc==2 && std::string(argv[1])=="--option2-packed-u-rdz-seam")
+        return run_packed_u_rdz_seam() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry") {
         dump_option2_momentum_geometry();
         return 0;
@@ -2027,6 +2097,7 @@ int main(int argc, char** argv) {
     ok = run(torch::kFloat64) && ok;
     ok = run_packed_periodic_seam(torch::kFloat32) && ok;
     ok = run_packed_periodic_seam(torch::kFloat64) && ok;
+    ok = run_packed_u_rdz_seam() && ok;
     ok = run_normal_stress(torch::kFloat32) && ok;
     ok = run_normal_stress(torch::kFloat64) && ok;
     ok = run_actual_rhs_contract() && ok;
