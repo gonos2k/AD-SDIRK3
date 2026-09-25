@@ -23589,8 +23589,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // Theta horizontal diffusion
                 // Option 1's horizontal_diffusion_3dmp forms c1h*MUT+c2h at
                 // mass points before averaging the layer mass to scalar faces.
-                // Option 2 has a different terrain-metric scalar operator;
-                // retain its existing mass input until that path is compared.
+                // Option 2 has a different terrain-metric scalar operator.
                 const bool scalar_option1 =
                     wrf::sdirk3::g_sdirk3_config.diffusion_option == 1;
                 if (scalar_option1) {
@@ -23614,14 +23613,96 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             "option-1 scalar diffusion requires WRF t_init");
                 const auto scalar_for_diff = scalar_option1
                     ? t - t_init_pert_.to(t.device(),t.scalar_type()) : t;
-                auto t_diff_h = compute_horizontal_diffusion_scalar_wrf(scalar_for_diff, Kh_scalar, rdx, rdy,
-                                                                        msftx_, msfty_,
-                                                                        msfvx_, scalar_layer_mass,
-                    capture_theta_faces_now_ ? &rhs_theta_faces_.diff_x : nullptr,
-                    capture_theta_faces_now_ ? &rhs_theta_faces_.diff_y : nullptr,
-                    scalar_option1 ? msfux_ : torch::Tensor(),
-                    scalar_option1 ? msfuy_ : torch::Tensor(),
-                    scalar_option1 ? msfvy_ : torch::Tensor());
+                torch::Tensor t_diff_h;
+                const auto grid_ext = std::static_pointer_cast<wrf::sdirk3::WRFGridInfoExtended>(grid_info_);
+                const bool option2_isotropic_dry =
+                    wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
+                    canonical_horizontal && !g_export_coupled_slow &&
+                    grid_ext && grid_ext->smagorinsky_opt == 1 &&
+                    wrf::sdirk3::g_sdirk3_config.wrf_damp_opt == 0 &&
+                    n_moist_ == 0 && fnm_fnp_from_wrf_ &&
+                    !Kh_mom_.defined() && !Kh_scalar_.defined() &&
+                    !capture_theta_faces_now_;
+                const bool option2_native_declared =
+                    wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
+                    canonical_horizontal && grid_ext && grid_ext->smagorinsky_opt > 0;
+                TORCH_CHECK(!option2_native_declared || option2_isotropic_dry,
+                            "option-2 metric scalar diffusion requires dry isotropic km_opt=1, "
+                            "damp_opt=0, WRF eta weights, and no supplied K or face capture");
+                if (option2_isotropic_dry) {
+                    // Form the WRF metric at this RHS state. Cached zx_/zy_ and
+                    // rdzw_3d_ belong to base-state setup and use other stencils.
+                    const bool packed = isPackedPeriodicDomain();
+                    const int64_t m = t.size(0) - (packed ? 1 : 0);
+                    const int64_t n = t.size(2) - (packed ? 1 : 0);
+                    const auto core3 = [&](const torch::Tensor& q) {
+                        return q.slice(0,0,m).slice(2,0,n);
+                    };
+                    const auto core2 = [&](const torch::Tensor& q) {
+                        return q.slice(0,0,m).slice(1,0,n);
+                    };
+                    const double gravity = grid_info_ && grid_info_->g > 0 ? grid_info_->g : g_;
+                    const auto z_w = core3(ph_full_for_diff) / gravity;
+                    const auto dz = z_w.slice(1,1,nz_+1)-z_w.slice(1,0,nz_);
+                    const auto rdzw = dz.reciprocal();
+                    const auto z_x_left = torch::cat({z_w.slice(2,n-1,n),z_w},2);
+                    const auto z_x_right = torch::cat({z_w,z_w.slice(2,0,1)},2);
+                    const auto zx = rdx*(z_x_right-z_x_left);
+                    const auto zy_wall = torch::zeros({1,nz_w_,n},z_w.options());
+                    const auto zy = torch::cat({zy_wall,
+                        rdy*(z_w.slice(0,1,m)-z_w.slice(0,0,m-1)),zy_wall},0);
+
+                    // Stored reciprocal eta spacings are positive magnitudes;
+                    // horizontal_diffusion_s consumes signed negative dnw/dn.
+                    const auto rdnw = getRdnwTensor(t.device(),t.scalar_type(),nz_);
+                    const auto rdn = getRdnTensor(t.device(),t.scalar_type(),nz_);
+                    TORCH_CHECK(rdnw.numel() >= nz_ && rdn.numel() >= nz_ &&
+                                fnm_.defined() && fnp_.defined() && nz_ >= 3,
+                                "option-2 scalar metric diffusion requires WRF eta profiles");
+                    const auto dnw = -rdnw.slice(0,0,nz_).reciprocal();
+                    const auto dn = torch::cat({torch::zeros_like(rdn.slice(0,0,1)),
+                        -rdn.slice(0,1,nz_).reciprocal()},0);
+                    const auto fnm = fnm_.to(t.device(),t.scalar_type()).slice(0,0,nz_);
+                    const auto fnp = fnp_.to(t.device(),t.scalar_type()).slice(0,0,nz_);
+                    const auto dnw_cpu = getRdnwTensor(torch::kCPU,torch::kFloat64,nz_).reciprocal();
+                    const auto dn_cpu = getRdnTensor(torch::kCPU,torch::kFloat64,nz_).reciprocal();
+                    double cf1, cf2, cf3;
+                    {
+                        torch::NoGradGuard no_grad;
+                        const double dw1 = dnw_cpu[0].item<double>();
+                        const double d2 = dn_cpu[1].item<double>();
+                        const double d3 = dn_cpu[2].item<double>();
+                        const double cof1 = (2*d2+d3)/(d2+d3)*dw1/d2;
+                        const double cof2 = d2/(d2+d3)*dw1/d3;
+                        cf1 = fnp[1].item<double>()+cof1;
+                        cf2 = fnm[1].item<double>()-cof1-cof2;
+                        cf3 = cof2;
+                    }
+                    TORCH_CHECK(std::isfinite(cf1) && std::isfinite(cf2) && std::isfinite(cf3),
+                                "option-2 scalar metric diffusion has invalid bottom weights");
+                    const auto t_core = core3(t);
+                    const auto raw = compute_horizontal_diffusion_scalar_option2_wrf(
+                        t_core,core3(Kh_scalar),core3(rho_uv),zx,zy,rdzw,
+                        dnw,dn,fnm,fnp,cf1,cf2,cf3,rdx,rdy,gravity,
+                        core2(msftx_),core2(msfty_),
+                        msfux_.slice(0,0,m).slice(1,0,n+1),
+                        msfvy_.slice(0,0,m+1).slice(1,0,n));
+                    if (packed) {
+                        const auto x = torch::cat({raw,raw.slice(2,0,1)},2);
+                        t_diff_h = torch::cat({x,x.slice(0,m-1,m)},0);
+                    } else {
+                        t_diff_h = raw;
+                    }
+                } else {
+                    t_diff_h = compute_horizontal_diffusion_scalar_wrf(
+                        scalar_for_diff,Kh_scalar,rdx,rdy,msftx_,msfty_,
+                        msfvx_,scalar_layer_mass,
+                        capture_theta_faces_now_ ? &rhs_theta_faces_.diff_x : nullptr,
+                        capture_theta_faces_now_ ? &rhs_theta_faces_.diff_y : nullptr,
+                        scalar_option1 ? msfux_ : torch::Tensor(),
+                        scalar_option1 ? msfuy_ : torch::Tensor(),
+                        scalar_option1 ? msfvy_ : torch::Tensor());
+                }
                 t_tend = t_tend + t_diff_h;
             }  // end if (apply_h_diffusion)
         }  // end Step 9: HORIZONTAL DIFFUSION inner block
@@ -27661,7 +27742,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_optio
     const int64_t ny = var.size(0), nz = var.size(1), nx = var.size(2);
     TORCH_CHECK(ny >= 2 && nx >= 3 && nz >= 3,
                 "option-2 scalar metric diffusion requires ny>=2, nx>=3, nz>=3");
-    TORCH_CHECK(ny == ny_ && nx == nx_ &&
+    const bool packed = isPackedPeriodicDomain();
+    TORCH_CHECK(ny == ny_ - (packed ? 1 : 0) &&
+                nx == nx_ - (packed ? 1 : 0) &&
                 its_ <= ids_ && ite_ >= ide_ - 1 &&
                 jts_ <= jds_ && jte_ >= jde_ - 1 &&
                 ide_ - ids_ == nx && jde_ - jds_ == ny,
@@ -27699,7 +27782,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_optio
     // normalize their sign: g/(dnw*rdzw) is part of the coupled tendency.
     TORCH_CHECK(wrf::sdirk3::guarded_item<bool>((rdzw > 0).all()) &&
                 wrf::sdirk3::guarded_item<bool>((dnw < 0).all()) &&
-                wrf::sdirk3::guarded_item<bool>((dn < 0).all()),
+                wrf::sdirk3::guarded_item<bool>((dn.slice(0,1,nz) < 0).all()),
                 "option-2 scalar metric diffusion requires positive rdzw and signed negative dnw/dn");
     TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(var).all()) &&
                 wrf::sdirk3::guarded_item<bool>(torch::isfinite(Kh).all()) &&

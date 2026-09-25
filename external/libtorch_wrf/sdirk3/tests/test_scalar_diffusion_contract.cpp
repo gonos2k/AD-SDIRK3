@@ -96,6 +96,36 @@ struct DiffusionTag {
 template struct MemberAccessor<ActualRhsTag, &TileSDIRK3UnifiedSolver::computeUnifiedRHS>;
 template struct MemberAccessor<CoordinateTag,
                                &TileSDIRK3UnifiedSolver::setVerticalCoordinateCoefficients>;
+struct FnmFromWrfTag {
+    using type = bool TileSDIRK3UnifiedSolver::*;
+    friend type access(FnmFromWrfTag);
+};
+template struct MemberAccessor<FnmFromWrfTag,
+                               &TileSDIRK3UnifiedSolver::fnm_fnp_from_wrf_>;
+struct WdampContractTag {
+    using type = wrf::sdirk3::WdampRuntimeContract TileSDIRK3UnifiedSolver::*;
+    friend type access(WdampContractTag);
+};
+template struct MemberAccessor<WdampContractTag,
+                               &TileSDIRK3UnifiedSolver::wdamp_contract_>;
+struct RdnwTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Device&,torch::ScalarType,int64_t) const;
+    friend type access(RdnwTag);
+};
+struct RdnTag { using type = RdnwTag::type; friend type access(RdnTag); };
+template struct MemberAccessor<RdnwTag,&TileSDIRK3UnifiedSolver::getRdnwTensor>;
+template struct MemberAccessor<RdnTag,&TileSDIRK3UnifiedSolver::getRdnTensor>;
+struct KhMomOverrideTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(KhMomOverrideTag); };
+struct KhScalarOverrideTag { using type = KhMomOverrideTag::type;
+    friend type access(KhScalarOverrideTag); };
+template struct MemberAccessor<KhMomOverrideTag,&TileSDIRK3UnifiedSolver::Kh_mom_>;
+template struct MemberAccessor<KhScalarOverrideTag,&TileSDIRK3UnifiedSolver::Kh_scalar_>;
+struct CaptureThetaTag { using type = bool TileSDIRK3UnifiedSolver::*;
+    friend type access(CaptureThetaTag); };
+template struct MemberAccessor<CaptureThetaTag,
+                               &TileSDIRK3UnifiedSolver::capture_theta_faces_now_>;
 template struct MemberAccessor<DiffusionTag,
                                &TileSDIRK3UnifiedSolver::setDiffusionCoefficients>;
 
@@ -117,9 +147,55 @@ template struct MemberAccessor<VMomentumDiffusionTag,
 
 namespace {
 constexpr int nx = 8, ny = 6, nz = 4;
+constexpr int nu=nx+1,nv=ny+1,nw=nz+1;
+constexpr int su=ny*nz*nu,sv=nv*nz*nx,sw=ny*nw*nx,st=ny*nz*nx,sm=ny*nx;
+constexpr int total=su+sv+2*sw+st+sm;
 constexpr double pi = 3.14159265358979323846;
 constexpr double Kh = 2.0, MUT = 784.8;
 using torch::indexing::Slice;
+
+// Direct-RHS fixture with domain bounds selected before its base state and
+// zero-copy WRF profiles are installed. Packed mass aliases are therefore part
+// of the initial fixture geometry, not a post-setup index mutation.
+struct Option2RhsFixture {
+    std::vector<float> half,c1f,c2f,c1h,c2h;
+    TileSDIRK3UnifiedSolver solver;
+
+    Option2RhsFixture(bool packed,float spacing,
+                      const std::vector<float>& half_mass,
+                      const std::vector<float>& offset_mass)
+        : half(nw,0.5f),c1f(nw,1.0f),c2f(nw,0.0f),
+          c1h(half_mass),c2h(offset_mass),
+          solver(nx,ny,nz,spacing,spacing,{1.0f/spacing},{1.0f/spacing},
+                 std::vector<float>(nz,float(nz)),0) {
+        const int ide=packed?nx:nx+1,jde=packed?ny:ny+1;
+        solver.setWRFIndices(1,ide,1,jde,1,nz,
+            1,ide,1,jde,1,nw,-2,nx+4,-2,ny+4,1,nw);
+        solver.setBoundaryConditions(true,false,false,false,true,true,
+                                     false,false,false,false);
+
+        std::vector<float> pbase(st),tinit(st,0.0f),phbase(sw),mubase(sm,80000.0f);
+        for (int j=0;j<ny;++j) {
+            for (int k=0;k<nz;++k) for (int i=0;i<nx;++i)
+                pbase[(j*nz+k)*nx+i]=100000.0f-(k+0.5f)*80000.0f/nz;
+            for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+                phbase[(j*nw+k)*nx+i]=9.81f*5000.0f*k;
+        }
+        solver.setBaseState(pbase.data(),tinit.data(),phbase.data(),mubase.data());
+        (solver.*access(CoordinateTag{}))(
+            c1f.data(),c2f.data(),c1h.data(),c2h.data());
+        solver.setVerticalInterpolationCoefficients(
+            half.data(),half.data(),2.0f,-1.5f,0.5f);
+
+        const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
+        solver.*access(MapTxTag{})=torch::ones({ny,nx},opt);
+        solver.*access(MapTyTag{})=torch::ones({ny,nx},opt);
+        solver.*access(MapUxTag{})=torch::ones({ny,nx+1},opt);
+        solver.*access(MapUyTag{})=torch::ones({ny,nx+1},opt);
+        solver.*access(MapVxTag{})=torch::ones({ny+1,nx},opt);
+        solver.*access(MapVyTag{})=torch::ones({ny+1,nx},opt);
+    }
+};
 
 bool run(torch::Dtype dtype) {
     const double eps = dtype == torch::kFloat32
@@ -470,6 +546,227 @@ bool run_option1_scalar_rhs_contract() {
                   << " budget=" << reference_budget << '\n';
         ok=pass && ok;
     }
+    return ok;
+}
+
+bool run_option2_scalar_rhs_layer_mass_contract() {
+    using namespace wrf::sdirk3;
+    using namespace wrf::sdirk3::test;
+    auto& cfg=g_sdirk3_config;
+    constexpr double gravity=9.81;
+    constexpr float dx=1000.0f;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
+    const std::vector<float> c1f(nz+1,1.0f),c2f(nz+1,0.0f);
+    const std::vector<float> c1h{0.75f,1.125f,0.875f,1.25f};
+    const std::vector<float> c2h{0.0f,2000.0f,4000.0f,6000.0f};
+    const int64_t theta_begin=su+sv+2*sw;
+    const auto pack_mass=[](const torch::Tensor& q,int64_t m) {
+        const auto x=torch::cat({q,q.slice(2,0,1)},2);
+        return torch::cat({x,x.slice(0,m-1,m)},0);
+    };
+    struct Result { torch::Tensor rhs,expected,legacy; double terrain_signal=0.0; };
+    const auto evaluate=[&](bool on,bool packed,int km_opt=1) -> Result {
+        cfg=SDIRK3Config{};
+        cfg.diffusion_option=2;
+        cfg.khdif=on?1000.0f:0.0f;
+        cfg.kvdif=0.0f;
+        cfg.mass_coordinate_mode=1;
+        cfg.wrf_omega_ww_cp=false;
+        cfg.mu_horizontal_div_only=false;
+        cfg.wrf_damp_opt=0;
+        cfg.imex_split_mode=3;
+        cfg.hevi_split=false;
+        cfg.use_stress_tensor=false;
+        Option2RhsFixture fixture(packed,dx,c1h,c2h);
+        auto& solver=fixture.solver;
+        TORCH_CHECK(solver.*access(FnmFromWrfTag{}),
+                    "RHS fixture must use WRF-provided fnm/fnp");
+        auto grid=std::static_pointer_cast<WRFGridInfoExtended>(solver.getGridInfo());
+        TORCH_CHECK(grid,"option-2 RHS fixture has no extended grid info");
+        if (grid->qv.defined() && grid->qv.numel()>0)
+            grid->qv=torch::zeros_like(grid->qv);
+        // This is WRF km_opt=1. The Step 9 fast path must match the explicit
+        // option-2 metric helper whenever all its declared gates are active.
+        grid->smagorinsky_opt=km_opt;
+        // Production resolves this once at unifiedStep entry, before stage RHS
+        // evaluations. Seed the same runtime contract for this direct RHS test.
+        (solver.*access(WdampContractTag{}))=resolve_wdamp_runtime_contract(
+            true,1,1,true,true,false,false,false,false,false,true,true,
+            false,false,false,false,false,"calc_ww_cp Omega (test fixture)");
+
+        const int m=packed?ny-1:ny,n=packed?nx-1:nx;
+        auto theta=torch::empty({ny,nz,nx},opt);
+        auto mu=torch::empty({ny,nx},opt);
+        auto ph=torch::empty({ny,nw,nx},opt);
+        auto ph_values=ph.accessor<float,3>();
+        for (int j=0;j<m;++j) for (int k=0;k<nz;++k) for (int i=0;i<n;++i) {
+            const double x=2*pi*i/n,y=pi*(j+0.5)/m;
+            theta[j][k][i]=4.0*std::sin(x)+2.5*std::cos(y)+
+                1.2*(k+1)*(0.5*std::sin(x)+0.3*std::cos(y));
+        }
+        for (int j=0;j<m;++j) for (int i=0;i<n;++i) {
+            const double x=2*pi*i/n,y=pi*(j+0.5)/m;
+            mu[j][i]=128.0*i+64.0*j+16.0*std::sin(x);
+            const float height=600.0f*std::sin(x)+400.0f*std::cos(y);
+            for (int k=0;k<nw;++k)
+                ph_values[j][k][i]=static_cast<float>(gravity)*height;
+        }
+        if (packed) {
+            theta=pack_mass(theta.slice(0,0,m).slice(2,0,n),m);
+            mu=pack_mass(mu.slice(0,0,m).slice(1,0,n).unsqueeze(1),m).squeeze(1);
+            ph=pack_mass(ph.slice(0,0,m).slice(2,0,n),m);
+        }
+        const auto u=torch::zeros({ny,nz,nx+1},opt);
+        const auto v=torch::zeros({ny+1,nz,nx},opt);
+        const auto w=torch::zeros({ny,nw,nx},opt);
+        const auto state=torch::cat({u.reshape({-1}),v.reshape({-1}),w.reshape({-1}),
+                                     ph.reshape({-1}),theta.reshape({-1}),mu.reshape({-1})});
+        auto rhs=(solver.*access(ActualRhsTag{}))(
+            state,RhsMode::ExplicitOnly).detach().clone();
+        if (!on) return {rhs,torch::Tensor(),torch::Tensor(),0.0};
+
+        // The first checks establish the supported dispatch contract. In
+        // particular, nonzero raw/L parity below fails if Step 9 silently uses
+        // its legacy fallback instead of the bounded km_opt=1 path.
+        TORCH_CHECK(cfg.effective_wrf_omega_ww_cp() && cfg.wrf_damp_opt==0 &&
+                    grid->smagorinsky_opt==1 &&
+                    solver.*access(FnmFromWrfTag{}) &&
+                    (solver.*access(WdampContractTag{})).active &&
+                    (solver.*access(WdampContractTag{})).x_policy==WWCPBoundaryPolicy::Periodic &&
+                    (solver.*access(WdampContractTag{})).y_policy==WWCPBoundaryPolicy::SymmetricReplicate &&
+                    solver.getNumMoistSpecies()==0 &&
+                    !(solver.*access(KhMomOverrideTag{})).defined() &&
+                    !(solver.*access(KhScalarOverrideTag{})).defined() &&
+                    !(solver.*access(CaptureThetaTag{})),
+                    "option-2 RHS fast-path prerequisites not active");
+        const auto state_phi=state.slice(0,su+sv+sw,su+sv+2*sw).view({ny,nw,nx});
+        const auto state_t=state.slice(0,theta_begin,theta_begin+st).view({ny,nz,nx});
+        const auto state_mu=state.slice(0,total-sm,total).view({ny,nx});
+        TORCH_CHECK(grid->p_base.defined(),"missing GridInfo p_base");
+        TORCH_CHECK(grid->th_base.defined(),"missing GridInfo th_base");
+        TORCH_CHECK(grid->ph_base.defined(),"missing GridInfo ph_base");
+        TORCH_CHECK(grid->mu_base.defined(),"missing GridInfo mu_base");
+        TORCH_CHECK(grid->c1h.defined(),"missing GridInfo c1h");
+        TORCH_CHECK(grid->c2h.defined(),"missing GridInfo c2h");
+        const auto core3=[&](const torch::Tensor& q) {
+            return packed?q.slice(0,0,m).slice(2,0,n):q;
+        };
+        const auto core2=[&](const torch::Tensor& q) {
+            return packed?q.slice(0,0,m).slice(1,0,n):q;
+        };
+        auto q=core3(state_t);
+        auto mu_core=core2(state_mu);
+        auto phi_core=core3(state_phi);
+        auto pbase=core3(grid->p_base.to(opt));
+        auto thbase=core3(grid->th_base.to(opt));
+        auto phbase=core3(grid->ph_base.to(opt));
+        auto mubase=core2(grid->mu_base.to(opt));
+        auto c1=torch::tensor(c1h,opt),c2=torch::tensor(c2h,opt);
+        auto rdnw=(solver.*access(RdnwTag{}))(torch::kCPU,torch::kFloat32,nz);
+        auto rdn=(solver.*access(RdnTag{}))(torch::kCPU,torch::kFloat32,nz);
+        const auto alb=compute_inverse_density(thbase,pbase,287.0f,717.5f,
+                                                1004.5f,100000.0f);
+        const auto prho=calc_p_rho_wrf(phi_core,q,mu_core,mubase,alb,pbase,
+            rdnw,c1,c2,287.0f,717.5f,1004.5f,100000.0f,300.0f);
+        const auto rho=prho.alt.reciprocal();
+        auto z_w=(phi_core+phbase)/gravity;
+        const auto rdzw=(z_w.slice(1,1,nz+1)-z_w.slice(1,0,nz)).reciprocal();
+        const auto x_left=torch::cat({z_w.slice(2,n-1,n),z_w},2);
+        const auto x_right=torch::cat({z_w,z_w.slice(2,0,1)},2);
+        const auto zx=0.001f*(x_right-x_left);
+        const auto zy_inner=0.001f*(z_w.slice(0,1,m)-z_w.slice(0,0,m-1));
+        const auto zy=torch::cat({torch::zeros({1,nw,n},opt),zy_inner,
+                                  torch::zeros({1,nw,n},opt)},0);
+        const double terrain_signal=std::max(zx.abs().max().item<double>(),
+                                             zy.abs().max().item<double>());
+        const auto dnw=-rdnw.reciprocal();
+        const auto dn=torch::cat({torch::zeros({1},opt),-rdn.slice(0,1,nz).reciprocal()},0);
+        // These are the same WRF pointer arrays passed to the fixture setter;
+        // this fixture's legacy GridInfo does not publish fnm/fnp.
+        const auto fnm=torch::tensor(fixture.half,opt).slice(0,0,nz);
+        const auto fnp=torch::tensor(fixture.half,opt).slice(0,0,nz);
+        const double dw1=1.0/rdnw[0].item<double>(),d2=1.0/rdn[1].item<double>(),
+                     d3=1.0/rdn[2].item<double>();
+        const double cof1=(2*d2+d3)/(d2+d3)*dw1/d2;
+        const double cof2=d2/(d2+d3)*dw1/d3;
+        const double cf1=fnp[1].item<double>()+cof1;
+        const double cf2=fnm[1].item<double>()-cof1-cof2;
+        const double cf3=cof2;
+        const auto kh= torch::full_like(q,3.0f*cfg.khdif);
+        const auto msftx=torch::ones({m,n},opt),msfty=torch::ones({m,n},opt);
+        const auto msfux=torch::ones({m,n+1},opt),msfvy=torch::ones({m+1,n},opt);
+        const auto raw=(solver.*access(Option2ScalarTag{}))(
+            q,kh,rho,zx,zy,rdzw,dnw,dn,fnm,fnp,cf1,cf2,cf3,
+            1.0f/dx,1.0f/dx,gravity,msftx,msfty,msfux,msfvy);
+        const auto layer=c1.view({1,nz,1})*(mu_core+mubase).unsqueeze(1)+
+                         c2.view({1,nz,1});
+        auto expected=raw/layer;
+        const auto legacy_raw=(solver.*access(ScalarDiffusionTag{}))(
+            q,kh,1.0f/dx,1.0f/dx,msftx,msfty,msfvy,mu_core+mubase,
+            nullptr,nullptr,torch::Tensor(),torch::Tensor(),torch::Tensor());
+        auto legacy_expected=legacy_raw/layer;
+        if (packed) {
+            const auto x=torch::cat({expected,expected.slice(2,0,1)},2);
+            expected=torch::cat({x,x.slice(0,m-1,m)},0);
+            const auto legacy_x=torch::cat({legacy_expected,legacy_expected.slice(2,0,1)},2);
+            legacy_expected=torch::cat({legacy_x,legacy_x.slice(0,m-1,m)},0);
+        }
+        return {rhs,expected.detach().clone(),legacy_expected.detach().clone(),terrain_signal};
+    };
+
+    bool ok=true;
+    const double eps=std::numeric_limits<float>::epsilon();
+    for (bool packed : {false,true}) {
+        const auto on=evaluate(true,packed,1);
+        const auto off=evaluate(false,packed,1);
+        const auto observed=(on.rhs-off.rhs).slice(0,theta_begin,theta_begin+st)
+            .view({ny,nz,nx});
+        const auto expected=on.expected;
+        const double signal=expected.abs().max().item<double>();
+        const double error=(observed-expected).abs().max().item<double>();
+        const double legacy_error=(observed-on.legacy).abs().max().item<double>();
+        const double legacy_separation=(expected-on.legacy).abs().max().item<double>();
+        const double mass_delta=(on.rhs.slice(0,total-sm,total)-
+                                 off.rhs.slice(0,total-sm,total)).abs().max().item<double>();
+        const double terrain_signal=on.terrain_signal;
+        const double tolerance=128.0*eps*std::max(1.0,signal);
+        double alias_error=0.0;
+        if (packed) {
+            alias_error=std::max((observed.select(2,nx-1)-observed.select(2,0))
+                                     .abs().max().item<double>(),
+                (observed.select(0,ny-1)-observed.select(0,ny-2))
+                                     .abs().max().item<double>());
+        }
+        const double mass_tolerance=32.0*eps;
+        const bool pass=torch::isfinite(on.rhs).all().item<bool>() &&
+            torch::isfinite(off.rhs).all().item<bool>() &&
+            torch::isfinite(expected).all().item<bool>() &&
+            signal>100.0*tolerance && error<=tolerance &&
+            legacy_error>10.0*tolerance && legacy_separation>10.0*tolerance &&
+            mass_delta<=mass_tolerance && terrain_signal>100.0*eps &&
+            alias_error<=tolerance;
+        std::cout << (pass?"PASS ":"FAIL ")
+                  << "option-2 km_opt1 actual RHS theta ON-OFF "
+                  << (packed?"packed":"physical") << " signal=" << signal
+                  << " error=" << error << " legacy_error=" << legacy_error
+                  << " legacy_separation=" << legacy_separation
+                  << " mass_delta=" << mass_delta
+                  << " terrain_signal=" << terrain_signal
+                  << " alias_error=" << alias_error
+                  << " mass_tol=" << mass_tolerance
+                  << " tol=" << tolerance << '\n';
+        ok=pass&&ok;
+    }
+    bool kmopt2_guard=false;
+    try {
+        (void)evaluate(true,false,2);
+    } catch (const c10::Error& error) {
+        kmopt2_guard=std::string(error.what()).find(
+            "option-2 metric scalar diffusion requires dry isotropic km_opt=1")!=std::string::npos;
+    }
+    std::cout << (kmopt2_guard?"PASS ":"FAIL ")
+              << "option-2 canonical RHS rejects unsupported km_opt=2" << '\n';
+    ok=kmopt2_guard&&ok;
     return ok;
 }
 
@@ -1331,6 +1628,7 @@ int main(int argc, char** argv) {
     ok = run_normal_stress(torch::kFloat64) && ok;
     ok = run_actual_rhs_contract() && ok;
     ok = run_option1_scalar_rhs_contract() && ok;
+    ok = run_option2_scalar_rhs_layer_mass_contract() && ok;
     ok = run_scalar_zero_gate() && ok;
     ok = run_normal_rhs() && ok;
     ok = run_option1_momentum_rhs_basis_contract() && ok;
