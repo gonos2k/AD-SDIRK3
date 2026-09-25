@@ -108,8 +108,9 @@ def fortran_oracle() -> dict[tuple[int, int, int], float]:
             bracket = ((tau[k][i] - tau[k][im1]) / DX -
                        zx_at_u * (tauavg[k + 1][face % NX] -
                                   tauavg[k][face % NX]) / tmpdz)
-            # Fortran dnw=-1, unit map factors, and its full g*tmpdz/dnw scale.
-            expected[(j, k, face)] = GRAVITY * tmpdz / -1.0 * bracket
+            # TileCase supplies positive rdnw=NZ=4; WRF's signed dnw is
+            # therefore -1/rdnw=-1/4. Keep the full Fortran g*tmpdz/dnw scale.
+            expected[(j, k, face)] = GRAVITY * tmpdz / (-1.0 / NZ) * bracket
     return expected
 
 
@@ -161,7 +162,7 @@ def main() -> int:
     print(f"TEST cpp.sha256={cpp_test_sha} python.sha256={python_test_sha} "
           f"binary={args.binary.resolve()} binary.sha256={binary_sha}")
     print(f"FIXTURE Nx={NX} periodic_x H=100*cos(2*pi*i/8)m dx={DX:g}m "
-          f"dz={DZ:g}m U=[0,0,0,1] K={KH:g} rho={RHO:g} maps=1")
+          f"dz={DZ:g}m dnw=-1/{NZ} U=[0,0,0,1] K={KH:g} rho={RHO:g} maps=1")
     print(f"ORACLE owned raw tendency max_abs={signal:.9g}")
     print(f"CPP vs oracle max_error={max_error:.9g} at {max_error_key} "
           f"cpp={actual[max_error_key]:.9g} oracle={expected[max_error_key]:.9g} "
