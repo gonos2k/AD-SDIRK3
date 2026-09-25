@@ -3942,7 +3942,7 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         last_step_input_graph_ = torch::Tensor();
         last_step_output_graph_ = torch::Tensor();
         last_ark_budget_trace_ = {};
-        capture_stage1_theta_faces_ = false;
+        capture_theta_faces_now_ = false;
         rhs_theta_faces_ = {};
     }
 
@@ -9174,6 +9174,7 @@ vertical_coefficients:
                 trace.fast.resize(Ark::stages);
                 trace.slow.resize(Ark::stages);
                 trace.full.resize(Ark::stages);
+                trace.slow_faces.resize(Ark::stages);
             }
             // PR 9F P1-3: BIRTH-time immutable snapshots (detached clones) of each
             // stage derivative, taken when it is finalized. The record-stage history
@@ -9975,7 +9976,7 @@ vertical_coefficients:
                 }
 
                 const int stage_id = i + 1;
-                capture_stage1_theta_faces_ = capture_ark_budget_trace_ && i == 0;
+                capture_theta_faces_now_ = capture_ark_budget_trace_ && i == 0;
                 const double aii = Ark::a_implicit[i][i];
                 torch::Tensor U_stage = compute_stage_rhs(i);
                 probe_firsthit_nonfinite(stage_id, false, "U_stage_pre", U_stage);
@@ -10209,8 +10210,9 @@ vertical_coefficients:
                         last_stage_signals_is_explicit_ = true;
                         // ESDIRK explicit first stage: evaluate fast tendency directly.
                         k_fast[i] = compute_fast_rhs(U_stage, U_full_exch_stage);
-                        if (capture_stage1_theta_faces_) {
+                        if (capture_theta_faces_now_) {
                             last_ark_budget_trace_.stage1_fast_faces = rhs_theta_faces_;
+                            capture_theta_faces_now_ = false;
                         }
                         // R13.20 (adversarial loop, iteration 2) -- TWO defects, one root.
                         //
@@ -10454,10 +10456,14 @@ vertical_coefficients:
                     maybe_halo(U_conv);
                 }
 
+                TORCH_CHECK(!capture_ark_budget_trace_ || !U_full_exch_conv.defined(),
+                            "theta producer-face trace requires the single-tile"
+                            " ordinary RHS; full-halo flux ownership is not captured");
+                capture_theta_faces_now_ = capture_ark_budget_trace_;
                 k_slow[i] = compute_k_slow(U_conv, U_full_exch_conv);
-                if (capture_stage1_theta_faces_) {
-                    last_ark_budget_trace_.stage1_slow_faces = rhs_theta_faces_;
-                    capture_stage1_theta_faces_ = false;
+                if (capture_theta_faces_now_) {
+                    last_ark_budget_trace_.slow_faces[i] = rhs_theta_faces_;
+                    capture_theta_faces_now_ = false;
                     rhs_theta_faces_ = {};
                 }
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_slow", k_slow[i]);
@@ -14262,7 +14268,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::projectStateBoundaries(const torch::Tenso
 }
 
 torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U, RhsMode mode) {
-    if (capture_stage1_theta_faces_) rhs_theta_faces_ = {};
+    if (capture_theta_faces_now_) rhs_theta_faces_ = {};
     // Step 7b: Detect full-halo input and redirect
     {
         int64_t expected_interior_size = ny_ * nz_ * nx_u_ + ny_v_ * nz_ * nx_
@@ -17359,11 +17365,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         // Use perturbation t for advection with mass-coupled momentum
         // X-advection: -∂(ru·θ')/∂x (mass-conserving flux form)
         auto t_adv_x = advect_scalar_x(t, ru_theta, rdx,
-            capture_stage1_theta_faces_ ? &rhs_theta_faces_.adv_x : nullptr);
+            capture_theta_faces_now_ ? &rhs_theta_faces_.adv_x : nullptr);
 
         // Y-advection: -∂(rv·θ')/∂y (mass-conserving flux form)
         auto t_adv_y = advect_scalar_y(t, rv_theta, rdy,
-            capture_stage1_theta_faces_ ? &rhs_theta_faces_.adv_y : nullptr);
+            capture_theta_faces_now_ ? &rhs_theta_faces_.adv_y : nullptr);
         
         // Apply map factors with boundary safety
         // PARITY FIX 2025-12-24: Autocast-aware eps (handles FP16 autocast even when storage is FP32).
@@ -17409,7 +17415,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             t_adv_z_work_ = t_adv_z;
         } else if (use_wrf_mass_flux && have_rdnw_t) {
             const auto flux_w = wrf_ww_cp() * avg_z_to_w(t);
-            if (capture_stage1_theta_faces_) {
+            if (capture_theta_faces_now_) {
                 torch::NoGradGuard no_grad;
                 rhs_theta_faces_.adv_z = flux_w.detach().clone();
             }
@@ -23565,8 +23571,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 auto t_diff_h = compute_horizontal_diffusion_scalar_wrf(t, Kh_scalar, rdx, rdy,
                                                                         msftx_, msfty_,
                                                                         msfvx_, mu_full_diff,
-                    capture_stage1_theta_faces_ ? &rhs_theta_faces_.diff_x : nullptr,
-                    capture_stage1_theta_faces_ ? &rhs_theta_faces_.diff_y : nullptr);
+                    capture_theta_faces_now_ ? &rhs_theta_faces_.diff_x : nullptr,
+                    capture_theta_faces_now_ ? &rhs_theta_faces_.diff_y : nullptr);
                 t_tend = t_tend + t_diff_h;
             }  // end if (apply_h_diffusion)
         }  // end Step 9: HORIZONTAL DIFFUSION inner block
