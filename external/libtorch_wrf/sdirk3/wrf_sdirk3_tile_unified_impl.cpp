@@ -36419,18 +36419,45 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_u_stress(
         auto Kv_k1_i0 = Kv_mom.slice(1, 1, k_max + 1).slice(2, 0, i_max); // [j, k+1, i-1]
         auto Kv_k1_i1 = Kv_mom.slice(1, 1, k_max + 1).slice(2, 1, i_max + 1); // [j, k+1, i]
 
-        auto Kv_avg = 0.25f * (Kv_k_i0 + Kv_k_i1 + Kv_k1_i0 + Kv_k1_i1);
-        // CRITICAL FIX (2025-10-18): Use .copy_() for in-place assignment
-        Kv_vort.slice(1, 1, k_max + 1).slice(2, 1, i_max + 1).copy_(Kv_avg);
-
-        // Extract 4 slices for rho averaging - slice dim 1 for k, dim 2 for i
-        // rho_vort[j,k,i] = 0.25 * (rho[j,k-1,i-1] + rho[j,k-1,i] + rho[j,k,i-1] + rho[j,k,i])
         auto rho_k0_i0 = rho.slice(1, 0, k_max).slice(2, 0, i_max);       // [j, k-1, i-1]
         auto rho_k0_i1 = rho.slice(1, 0, k_max).slice(2, 1, i_max + 1);   // [j, k-1, i]
         auto rho_k1_i0 = rho.slice(1, 1, k_max + 1).slice(2, 0, i_max);   // [j, k, i-1]
         auto rho_k1_i1 = rho.slice(1, 1, k_max + 1).slice(2, 1, i_max + 1); // [j, k, i]
 
-        auto rho_avg = 0.25f * (rho_k0_i0 + rho_k0_i1 + rho_k1_i0 + rho_k1_i1);
+        torch::Tensor Kv_avg;
+        torch::Tensor rho_avg;
+        if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
+            // cal_titau_13_31 applies fnm/fnp to the vertical levels after
+            // summing each horizontal pair. It then multiplies the separate
+            // rho and xkmv averages; a four-point mean is only equivalent for
+            // uniform eta weights.
+            TORCH_CHECK(fnm_.defined() && fnp_.defined() && fnm_.dim() == 1 &&
+                        fnp_.dim() == 1 && fnm_.numel() >= k_max + 1 &&
+                        fnp_.numel() >= k_max + 1,
+                        "option-2 vertical U stress requires complete W-level fnm/fnp profiles");
+            const auto [fnm_k, fnp_k] = alignAndSliceFnmFnp(
+                1, k_max + 1, u.device(), u.scalar_type());
+            TORCH_CHECK(fnm_k.numel() == k_max && fnp_k.numel() == k_max,
+                        "option-2 vertical U stress requires fnm/fnp at interior W levels");
+            const auto fnm_3d = fnm_k.view({1, k_max, 1});
+            const auto fnp_3d = fnp_k.view({1, k_max, 1});
+            const auto rho_upper_pair = rho_k1_i0 + rho_k1_i1;
+            const auto rho_lower_pair = rho_k0_i0 + rho_k0_i1;
+            rho_avg = 0.5f * (fnm_3d * rho_upper_pair + fnp_3d * rho_lower_pair);
+            const auto Kv_upper_pair = Kv_k1_i0 + Kv_k1_i1;
+            const auto Kv_lower_pair = Kv_k_i0 + Kv_k_i1;
+            Kv_avg = 0.5f * (fnm_3d * Kv_upper_pair + fnp_3d * Kv_lower_pair);
+        } else {
+            Kv_avg = 0.25f * (Kv_k_i0 + Kv_k_i1 + Kv_k1_i0 + Kv_k1_i1);
+            // Legacy option 1 retains the uniform four-point rho average.
+            auto rho_k0_i0 = rho.slice(1, 0, k_max).slice(2, 0, i_max);
+            auto rho_k0_i1 = rho.slice(1, 0, k_max).slice(2, 1, i_max + 1);
+            auto rho_k1_i0 = rho.slice(1, 1, k_max + 1).slice(2, 0, i_max);
+            auto rho_k1_i1 = rho.slice(1, 1, k_max + 1).slice(2, 1, i_max + 1);
+            rho_avg = 0.25f * (rho_k0_i0 + rho_k0_i1 + rho_k1_i0 + rho_k1_i1);
+        }
+        // CRITICAL FIX (2025-10-18): Use .copy_() for in-place assignment
+        Kv_vort.slice(1, 1, k_max + 1).slice(2, 1, i_max + 1).copy_(Kv_avg);
         // CRITICAL FIX (2025-10-18): Use .copy_() for in-place assignment
         rho_vort.slice(1, 1, k_max + 1).slice(2, 1, i_max + 1).copy_(rho_avg);
     }
@@ -36438,14 +36465,24 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_u_stress(
     // Compute stress tensor: τ₁₃ = -ρ * Km * defor13 (already vectorized)
     auto tau13 = -rho_vort * Kv_vort * defor13;
 
-    // VECTORIZED: Vertical derivative of stress ∂τ₁₃/∂z
-    if (nz > 2) {
-        int k_interior = nz - 2;  // Interior levels (1 to nz-2)
+    // Fortran closes the bottom and top W-face stresses at zero, then applies
+    // their flux difference to every mass level. Keep option 1's legacy
+    // interior-only range unchanged.
+    const bool option2_vertical_stress =
+        wrf::sdirk3::g_sdirk3_config.diffusion_option == 2;
+    if (option2_vertical_stress) {
+        TORCH_CHECK(nz_u == nz && nz_w_actual >= nz + 1 &&
+                    rdnw.dim() == 1 && rdnw.numel() >= nz,
+                    "option-2 vertical U stress requires complete mass and W levels");
+    }
+    if (nz > 2 || (option2_vertical_stress && nz > 1)) {
+        const int k_first = option2_vertical_stress ? 0 : 1;
+        const int k_end = option2_vertical_stress ? nz : nz - 1;
 
-        // ∂τ₁₃/∂z = (τ₁₃[k+1] - τ₁₃[k]) * rdnw[k]
-        auto tau_diff = tau13.slice(1, 2, k_interior + 2) - tau13.slice(1, 1, k_interior + 1);
+        auto tau_diff = tau13.slice(1, k_first + 1, k_end + 1) -
+                        tau13.slice(1, k_first, k_end);
         // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw is positive, no abs() needed
-        auto rdnw_broadcast = rdnw.slice(0, 1, k_interior + 1).view({1, -1, 1});
+        auto rdnw_broadcast = rdnw.slice(0, k_first, k_end).view({1, -1, 1});
         auto dtau_dz = tau_diff * rdnw_broadcast;
 
         // VECTORIZED: Tendency computation
@@ -36453,8 +36490,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_u_stress(
         // -(-g/dnw)*delta(tau13); WRF dnw is negative, while this C++ cache
         // stores |1/dnw|. Option 2 therefore needs the local negative sign.
         // Keep the legacy option-1 stress path unchanged.
-        const bool option2_vertical_stress =
-            wrf::sdirk3::g_sdirk3_config.diffusion_option == 2;
         auto tendency = (option2_vertical_stress ? -g_val : g_val) * dtau_dz;
 
         // PARITY FIX 2025-12-13: WRF vertical_diffusion_u_2 shrinks i/j loops for
@@ -36496,14 +36531,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_u_stress(
         if (ni_u > 0 && nj_u > 0) {
             // Apply tendency only within the reduced bounds
             auto tendency_reduced = tendency.slice(0, j_start_u, j_end_u).slice(2, i_start_u, i_end_u);
-            u_tend_vmix.slice(1, 1, k_interior + 1).slice(0, j_start_u, j_end_u).slice(2, i_start_u, i_end_u).copy_(tendency_reduced);
+            u_tend_vmix.slice(1, k_first, k_end).slice(0, j_start_u, j_end_u).slice(2, i_start_u, i_end_u).copy_(tendency_reduced);
         }
         // Boundary columns/rows outside reduced range remain zero (initialized)
     }
 
-    // Apply boundary conditions (top/bottom k levels)
-    u_tend_vmix.select(1, 0).zero_();
-    u_tend_vmix.select(1, nz_u - 1).zero_();
+    if (!option2_vertical_stress) {
+        u_tend_vmix.select(1, 0).zero_();
+        u_tend_vmix.select(1, nz_u - 1).zero_();
+    }
 
     return u_tend_vmix;
 }
@@ -36554,18 +36590,43 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_v_stress(
         auto Kv_k1_j0 = Kv_mom.slice(1, 1, k_max + 1).slice(0, 0, j_max); // [j-1, k+1, i]
         auto Kv_k1_j1 = Kv_mom.slice(1, 1, k_max + 1).slice(0, 1, j_max + 1); // [j, k+1, i]
 
-        auto Kv_avg = 0.25f * (Kv_k_j0 + Kv_k_j1 + Kv_k1_j0 + Kv_k1_j1);
-        // CRITICAL FIX (2025-10-18): Use .copy_() for in-place assignment
-        Kv_vort.slice(1, 1, k_max + 1).slice(0, 1, j_max + 1).copy_(Kv_avg);
-
-        // Extract 4 slices for rho averaging - slice dim 0 for j, dim 1 for k
-        // rho_vort[j,k,i] = 0.25 * (rho[j-1,k-1,i] + rho[j,k-1,i] + rho[j-1,k,i] + rho[j,k,i])
         auto rho_k0_j0 = rho.slice(1, 0, k_max).slice(0, 0, j_max);       // [j-1, k-1, i]
         auto rho_k0_j1 = rho.slice(1, 0, k_max).slice(0, 1, j_max + 1);   // [j, k-1, i]
         auto rho_k1_j0 = rho.slice(1, 1, k_max + 1).slice(0, 0, j_max);   // [j-1, k, i]
         auto rho_k1_j1 = rho.slice(1, 1, k_max + 1).slice(0, 1, j_max + 1); // [j, k, i]
 
-        auto rho_avg = 0.25f * (rho_k0_j0 + rho_k0_j1 + rho_k1_j0 + rho_k1_j1);
+        torch::Tensor Kv_avg;
+        torch::Tensor rho_avg;
+        if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
+            // cal_titau_23_32 uses the same fnm/fnp interpolation contract at
+            // the y-staggered vorticity point as the U normal-stress routine.
+            TORCH_CHECK(fnm_.defined() && fnp_.defined() && fnm_.dim() == 1 &&
+                        fnp_.dim() == 1 && fnm_.numel() >= k_max + 1 &&
+                        fnp_.numel() >= k_max + 1,
+                        "option-2 vertical V stress requires complete W-level fnm/fnp profiles");
+            const auto [fnm_k, fnp_k] = alignAndSliceFnmFnp(
+                1, k_max + 1, v.device(), v.scalar_type());
+            TORCH_CHECK(fnm_k.numel() == k_max && fnp_k.numel() == k_max,
+                        "option-2 vertical V stress requires fnm/fnp at interior W levels");
+            const auto fnm_3d = fnm_k.view({1, k_max, 1});
+            const auto fnp_3d = fnp_k.view({1, k_max, 1});
+            const auto rho_upper_pair = rho_k1_j0 + rho_k1_j1;
+            const auto rho_lower_pair = rho_k0_j0 + rho_k0_j1;
+            rho_avg = 0.5f * (fnm_3d * rho_upper_pair + fnp_3d * rho_lower_pair);
+            const auto Kv_upper_pair = Kv_k1_j0 + Kv_k1_j1;
+            const auto Kv_lower_pair = Kv_k_j0 + Kv_k_j1;
+            Kv_avg = 0.5f * (fnm_3d * Kv_upper_pair + fnp_3d * Kv_lower_pair);
+        } else {
+            Kv_avg = 0.25f * (Kv_k_j0 + Kv_k_j1 + Kv_k1_j0 + Kv_k1_j1);
+            // Legacy option 1 retains the uniform four-point rho average.
+            auto rho_k0_j0 = rho.slice(1, 0, k_max).slice(0, 0, j_max);
+            auto rho_k0_j1 = rho.slice(1, 0, k_max).slice(0, 1, j_max + 1);
+            auto rho_k1_j0 = rho.slice(1, 1, k_max + 1).slice(0, 0, j_max);
+            auto rho_k1_j1 = rho.slice(1, 1, k_max + 1).slice(0, 1, j_max + 1);
+            rho_avg = 0.25f * (rho_k0_j0 + rho_k0_j1 + rho_k1_j0 + rho_k1_j1);
+        }
+        // CRITICAL FIX (2025-10-18): Use .copy_() for in-place assignment
+        Kv_vort.slice(1, 1, k_max + 1).slice(0, 1, j_max + 1).copy_(Kv_avg);
         // CRITICAL FIX (2025-10-18): Use .copy_() for in-place assignment
         rho_vort.slice(1, 1, k_max + 1).slice(0, 1, j_max + 1).copy_(rho_avg);
     }
@@ -36573,14 +36634,23 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_v_stress(
     // Compute stress tensor: τ₂₃ = -ρ * Km * defor23 (already vectorized)
     auto tau23 = -rho_vort * Kv_vort * defor23;
 
-    // VECTORIZED: Vertical derivative of stress ∂τ₂₃/∂z
-    if (nz > 2) {
-        int k_interior = nz - 2;  // Interior levels (1 to nz-2)
+    // Fortran applies the closed-face stress difference at both boundary mass
+    // levels as well as the interior; option 1 keeps its previous range.
+    const bool option2_vertical_stress =
+        wrf::sdirk3::g_sdirk3_config.diffusion_option == 2;
+    if (option2_vertical_stress) {
+        TORCH_CHECK(nz_v == nz && nz_w_actual >= nz + 1 &&
+                    rdnw.dim() == 1 && rdnw.numel() >= nz,
+                    "option-2 vertical V stress requires complete mass and W levels");
+    }
+    if (nz > 2 || (option2_vertical_stress && nz > 1)) {
+        const int k_first = option2_vertical_stress ? 0 : 1;
+        const int k_end = option2_vertical_stress ? nz : nz - 1;
 
-        // ∂τ₂₃/∂z = (τ₂₃[k+1] - τ₂₃[k]) * rdnw[k]
-        auto tau_diff = tau23.slice(1, 2, k_interior + 2) - tau23.slice(1, 1, k_interior + 1);
+        auto tau_diff = tau23.slice(1, k_first + 1, k_end + 1) -
+                        tau23.slice(1, k_first, k_end);
         // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw is positive, no abs() needed
-        auto rdnw_broadcast = rdnw.slice(0, 1, k_interior + 1).view({1, -1, 1});
+        auto rdnw_broadcast = rdnw.slice(0, k_first, k_end).view({1, -1, 1});
         auto dtau_dz = tau_diff * rdnw_broadcast;
 
         // VECTORIZED: Tendency computation
@@ -36588,8 +36658,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_v_stress(
         // -(-g/dnw)*delta(tau23); WRF dnw is negative, while this C++ cache
         // stores |1/dnw|. Option 2 therefore needs the local negative sign.
         // Keep the legacy option-1 stress path unchanged.
-        const bool option2_vertical_stress =
-            wrf::sdirk3::g_sdirk3_config.diffusion_option == 2;
         auto tendency = (option2_vertical_stress ? -g_val : g_val) * dtau_dz;
 
         // PARITY FIX 2025-12-13: WRF vertical_diffusion_v_2 shrinks i/j loops for
@@ -36608,7 +36676,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_v_stress(
         // For V (y-staggered), northern boundary ends at jte (Fortran) = jte-1 (C++)
         bool reduce_north_v = (config_flags_open_ye_ || is_specified_v || is_nested_v) && !is_periodic_y_v;
 
-        // tendency has shape [ny_v_actual, k_interior, nx_v]
+        // tendency has the selected mass-level extent.
         int j_start_v = reduce_south_v ? 1 : 0;  // V-staggered: skip first row
         int j_end_v = reduce_north_v ? (ny_v_actual - 1) : ny_v_actual;
         int i_start_v = reduce_west_v ? 1 : 0;
@@ -36625,14 +36693,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_v_stress(
 
         if (ni_v > 0 && nj_v > 0) {
             auto tendency_reduced = tendency.slice(0, j_start_v, j_end_v).slice(2, i_start_v, i_end_v);
-            rv_tend_vmix.slice(1, 1, k_interior + 1).slice(0, j_start_v, j_end_v).slice(2, i_start_v, i_end_v).copy_(tendency_reduced);
+            rv_tend_vmix.slice(1, k_first, k_end).slice(0, j_start_v, j_end_v).slice(2, i_start_v, i_end_v).copy_(tendency_reduced);
         }
         // Boundary regions outside the reduced range remain zero from initialization
     }
 
-    // Apply boundary conditions (already zero from initialization)
-    rv_tend_vmix.select(1, 0).zero_();
-    rv_tend_vmix.select(1, nz_v - 1).zero_();
+    if (!option2_vertical_stress) {
+        rv_tend_vmix.select(1, 0).zero_();
+        rv_tend_vmix.select(1, nz_v - 1).zero_();
+    }
 
     return rv_tend_vmix;
 }
