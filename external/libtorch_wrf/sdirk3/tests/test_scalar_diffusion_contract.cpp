@@ -844,7 +844,7 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         (void)evaluate(true,false,2);
     } catch (const c10::Error& error) {
         kmopt2_guard=std::string(error.what()).find(
-            "option-2 metric scalar diffusion requires dry isotropic km_opt=1")!=std::string::npos;
+            "option-2 metric diffusion requires dry isotropic km_opt=1")!=std::string::npos;
     }
     std::cout << (kmopt2_guard?"PASS ":"FAIL ")
               << "option-2 canonical RHS rejects unsupported km_opt=2" << '\n';
