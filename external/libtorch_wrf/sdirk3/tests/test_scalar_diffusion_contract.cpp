@@ -1133,15 +1133,20 @@ bool run_option1_momentum_rhs_basis_contract() {
     const std::vector<float> c1h_values{0.25f,0.40f,0.60f,0.80f};
     const std::vector<float> c2h_values{18000.0f,15000.0f,12000.0f,9000.0f};
 
-    auto prepare = [&](TileCase& tile) {
+    const auto configure = [&] {
         auto& cfg = g_sdirk3_config;
+        cfg = SDIRK3Config{};
         cfg.diffusion_option = 1;
+        cfg.khdif = viscosity;
         cfg.kvdif = 0.0f;
         cfg.mass_coordinate_mode = 0;
         cfg.imex_split_mode = 3;
         cfg.hevi_split = false;
         cfg.wrf_omega_ww_cp = false;
         cfg.use_stress_tensor = false;
+    };
+    auto prepare = [&](TileCase& tile) {
+        configure();
         (tile.solver.*access(CoordinateTag{}))(
             c1f_values.data(),c2f_values.data(),
             c1h_values.data(),c2h_values.data());
@@ -1194,6 +1199,7 @@ bool run_option1_momentum_rhs_basis_contract() {
         return tile.state();
     };
 
+    configure();
     TileCase oracle_tile(100.0f);
     const auto state=prepare(oracle_tile);
     g_sdirk3_config.khdif=viscosity;
@@ -1245,11 +1251,12 @@ bool run_option1_momentum_rhs_basis_contract() {
         std::get<1>(raw)*map_v_x.unsqueeze(1)/l_v,
         std::get<2>(raw)*map_w_y.unsqueeze(1)/l_w};
 
-    const auto evaluate=[&](float khdif,RhsMode mode) {
+    const auto evaluate=[&](const torch::Tensor& q,float khdif,RhsMode mode) {
+        configure();
         TileCase tile(100.0f);
-        const auto q=prepare(tile);
+        prepare(tile);
         g_sdirk3_config.khdif=khdif;
-        return (tile.solver.*access(ActualRhsTag{}))(q,mode).detach().clone();
+        return (tile.solver.*access(ActualRhsTag{}))(q,mode);
     };
     constexpr std::array<const char*,3> names{"U","V","W"};
     constexpr std::array<std::pair<int,int>,3> ranges{{
@@ -1257,8 +1264,8 @@ bool run_option1_momentum_rhs_basis_contract() {
     bool ok=true;
     const double tolerance=3.0e-4;
     for (auto mode : {RhsMode::Full,RhsMode::ExplicitOnly}) {
-        const auto on=evaluate(viscosity,mode);
-        const auto off=evaluate(0.0f,mode);
+        const auto on=evaluate(state,viscosity,mode).detach().clone();
+        const auto off=evaluate(state,0.0f,mode).detach().clone();
         const auto delta=on-off;
         for (int component=0; component<3; ++component) {
             const auto actual=delta.slice(0,ranges[component].first,
@@ -1282,6 +1289,107 @@ bool run_option1_momentum_rhs_basis_contract() {
                       << " unscaled_gap=" << unscaled_gap
                       << " wrong_map_gap=" << wrong_map_gap
                       << " tol=" << tolerance << '\n';
+            ok=pass&&ok;
+        }
+    }
+
+    // The active diffusion increment has a modest signal embedded in the full
+    // RHS. Check its VJP against a centered FD on fresh, identically prepared
+    // solver contexts. Wind directions use O(1) amplitudes; the MU direction
+    // uses a 1000 Pa step to keep the L(MU) sensitivity above FP32 roundoff.
+    const auto diffusion_increment=[&](const torch::Tensor& q) {
+        return evaluate(q,viscosity,RhsMode::Full)-
+               evaluate(q,0.0f,RhsMode::Full);
+    };
+    // Resolve X and Y mass sensitivity separately. A uniform-MU base and
+    // direction additionally checks cancellation of a uniform layer mass
+    // from both the face flux and the primitive output conversion.
+    auto uniform_mass_state=state.detach().clone();
+    uniform_mass_state.slice(0,total-sm,total).fill_(100.0f);
+    const std::array<const char*,6> input_names{"U","V","W","MU-X","MU-Y","MU-uniform"};
+    const std::array<int,6> input_begin{0,su,su+sv,total-sm,total-sm,total-sm};
+    const std::array<int,6> input_end{su,su+sv,su+sv+sw,total,total,total};
+    const std::array<double,6> fd_steps{0.2,0.2,0.2,1000.0,1000.0,1000.0};
+    double mu_axis_signal_min=std::numeric_limits<double>::infinity();
+    for (int input=0; input<6; ++input) {
+        const auto& base_state=input==5 ? uniform_mass_state : state;
+        auto direction=torch::zeros_like(base_state);
+        auto block=direction.slice(0,input_begin[input],input_end[input]);
+        if (input==0) {
+            auto q=block.view({ny,nz,nx+1});
+            for (int j=0;j<ny;++j) for (int k=0;k<nz;++k)
+                for (int i=0;i<nx;++i)
+                    q[j][k][i]=std::sin(2*pi*i/nx)*(1.0+0.03*j+0.02*k);
+            q.select(2,nx).copy_(q.select(2,0));
+        } else if (input==1) {
+            auto q=block.view({ny+1,nz,nx});
+            for (int j=0;j<=ny;++j) for (int k=0;k<nz;++k)
+                for (int i=0;i<nx;++i)
+                    q[j][k][i]=(j==0 || j==ny) ? 0.0 :
+                        std::sin(pi*j/ny)*(1.0+0.02*i+0.025*k);
+        } else if (input==2) {
+            auto q=block.view({ny,nw,nx});
+            for (int j=0;j<ny;++j) for (int k=0;k<nw;++k)
+                for (int i=0;i<nx;++i)
+                    q[j][k][i]=std::sin(2*pi*i/nx)*(1.0+0.025*j+0.03*k);
+        } else if (input==3 || input==4) {
+            auto q=block.view({ny,nx});
+            for (int j=0;j<ny;++j) for (int i=0;i<nx;++i)
+                q[j][i]=input==3 ? std::sin(2*pi*i/nx) : std::cos(2*pi*j/ny);
+        } else {
+            block.fill_(1.0f);
+        }
+        direction=direction/direction.abs().max();
+
+        auto cotangent=torch::zeros_like(state);
+        for (int output=0; output<3; ++output) {
+            auto q=cotangent.slice(0,ranges[output].first,ranges[output].second);
+            const auto scaled=expected[output]/expected[output].abs().max();
+            q.copy_(scaled.reshape({-1}));
+        }
+        if (input<3) {
+            const int begin=ranges[input].first, end=ranges[input].second;
+            auto only=cotangent.slice(0,begin,end).clone();
+            cotangent.zero_();
+            cotangent.slice(0,begin,end).copy_(only);
+        }
+        cotangent=cotangent/cotangent.norm();
+
+        auto qvar=base_state.detach().clone().requires_grad_(true);
+        const auto increment_ad_obj=(diffusion_increment(qvar)*cotangent).sum();
+        const auto gradient=torch::autograd::grad({increment_ad_obj},{qvar})[0];
+        const double increment_ad=(gradient*direction).sum().item<double>();
+        if (input==3 || input==4)
+            mu_axis_signal_min=std::min(mu_axis_signal_min,std::abs(increment_ad));
+
+        for (double h : {fd_steps[input],fd_steps[input]*0.5}) {
+            const auto plus_on=evaluate(base_state+h*direction,viscosity,RhsMode::Full).detach();
+            const auto plus_off=evaluate(base_state+h*direction,0.0f,RhsMode::Full).detach();
+            const auto minus_on=evaluate(base_state-h*direction,viscosity,RhsMode::Full).detach();
+            const auto minus_off=evaluate(base_state-h*direction,0.0f,RhsMode::Full).detach();
+            const auto hp=plus_on-plus_off, hm=minus_on-minus_off;
+            const double increment_fd=(cotangent.to(torch::kFloat64)*
+                ((hp-hm).to(torch::kFloat64)/(2.0*h))).sum().item<double>();
+            const auto weighted_roundoff=(cotangent.square()*(plus_on.square()+
+                plus_off.square()+minus_on.square()+minus_off.square())).sum().sqrt();
+            const double floor=3.0*std::numeric_limits<float>::epsilon()*
+                weighted_roundoff.item<double>()/(2.0*h);
+            // A cancelled uniform-MU response must stay below one percent
+            // of either resolved spatial MU sensitivity, allowing FP32
+            // reduction noise without hiding an order-one mass-basis leak.
+            const double budget=input==5 ?
+                std::max(5.0*floor,0.01*mu_axis_signal_min) :
+                floor+0.08*std::abs(increment_ad);
+            const double error=std::abs(increment_fd-increment_ad);
+            const bool pass=std::isfinite(increment_ad) && std::isfinite(increment_fd) &&
+                (input==5 ? (std::abs(increment_ad)<=budget &&
+                             std::abs(increment_fd)<=budget) :
+                            std::abs(increment_ad)>3.0*floor) && error<=budget;
+            std::cout << (pass?"PASS ":"FAIL ")
+                      << "option1 momentum increment FD/VJP input=" << input_names[input]
+                      << " h=" << h << " fd=" << increment_fd << " ad=" << increment_ad
+                      << " floor=" << floor << " error=" << error
+                      << " budget=" << budget << '\n';
             ok=pass&&ok;
         }
     }
