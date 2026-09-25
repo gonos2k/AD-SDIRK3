@@ -62,7 +62,7 @@ program oracle_driver
   integer, parameter :: ny={NY}, nz={NZ}, nx={NX}
   integer, parameter :: ids=1, ide=nx+1, jds=1, jde=ny+1, kds=1, kde=nz+1
   integer, parameter :: ims=0, ime=nx+1, jms=0, jme=ny, kms=1, kme=nz+1
-  integer, parameter :: its=2, ite=nx, jts=1, jte=ny, kts=1, kte=nz-1
+  integer, parameter :: its=2, ite=nx, jts=1, jte=ny, kts=1, kte=nz+1
   integer :: i,j,k
   type(grid_config_rec_type) :: cfg
   real :: tendency(ims:ime,kms:kme,jms:jme), defor13(ims:ime,kms:kme,jms:jme)
@@ -90,7 +90,7 @@ program oracle_driver
        dnw,rdzw,fnm,fnp,rho,ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
        its,ite,jts,jte,kts,kte)
   do j=jts,jte
-    do k=kts+1,kte-1
+    do k=kts,kte-1
       do i=its,ite
         write(*,'(A,3(1X,I0),1X,ES25.16)') 'F_RAW',j-1,k-1,i-1,tendency(i,k,j)
       enddo
@@ -147,7 +147,7 @@ program oracle_driver
   integer, parameter :: ny={NY}, nz={NZ}, nx={NX}
   integer, parameter :: ids=1, ide=nx+1, jds=1, jde=ny+1, kds=1, kde=nz+1
   integer, parameter :: ims=0, ime=nx+1, jms=0, jme=ny, kms=1, kme=nz+1
-  integer, parameter :: its=1, ite=nx, jts=2, jte=ny, kts=1, kte=nz-1
+  integer, parameter :: its=1, ite=nx, jts=2, jte=ny, kts=1, kte=nz+1
   integer :: i,j,k
   type(grid_config_rec_type) :: cfg
   real :: tendency(ims:ime,kms:kme,jms:jme), defor23(ims:ime,kms:kme,jms:jme)
@@ -175,7 +175,7 @@ program oracle_driver
        dnw,rdzw,fnm,fnp,rho,ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
        its,ite,jts,jte,kts,kte)
   do j=jts,jte
-    do k=kts+1,kte-1
+    do k=kts,kte-1
       do i=its,ite
         write(*,'(A,3(1X,I0),1X,ES25.16)') 'F_RAW',j-1,k-1,i-1,tendency(i,k,j)
       enddo
@@ -240,6 +240,20 @@ def compare(actual: dict, expected: dict, label: str) -> tuple[bool, float, floa
     return error <= tolerance and all(math.isfinite(actual[key]) for key in keys), error, signal
 
 
+def report_vertical_error_breakdown(actual: dict, expected: dict, label: str) -> None:
+    errors = {key: abs(actual[key] - expected[key]) for key in expected if key in actual}
+    for region, predicate in (
+        ("bottom", lambda k: k == 0),
+        ("interior", lambda k: 0 < k < NZ - 1),
+        ("top", lambda k: k == NZ - 1),
+    ):
+        keys = [key for key in errors if predicate(key[1])]
+        error = max((errors[key] for key in keys), default=0.0)
+        expected_signal = max((abs(expected[key]) for key in keys), default=0.0)
+        actual_signal = max((abs(actual[key]) for key in keys), default=0.0)
+        print(f"{label}_{region.upper()} max_error={error:.17g} fortran_max_abs={expected_signal:.17g} cpp_max_abs={actual_signal:.17g} count={len(keys)}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True, type=Path)
@@ -272,6 +286,7 @@ def main() -> int:
     print(f"EXTRACTED_V_ROUTINES_SHA256 {v_routine_sha}")
     print(f"BOUNDARY_CONTRACT specified=false open_xs/open_xe/open_ys/open_ye=false nested=false periodic_x=true periodic_y=false")
     print("VERTICAL_INTERPOLATION C++ solver setter and Fortran driver both receive fnm=3/4 fnp=1/4 (sum=1 exactly)")
+    print(f"VERTICAL_BOUNDARY_INDEX source kte=kde={NZ+1}, ktf=kde-1={NZ}; compare C++ mass k=0..{NZ-1} to Fortran k=1..{NZ}")
     print("INPUT_PATTERN_U rho=1+k/32+i/512 Kv=2+k/64+i/128 defor13=1/4+k/128+i/256; dyadic FP32")
     print("INPUT_PATTERN_V rho=1+k/32+i/512 Kv=2+k/64+i/128 defor23=1/4+k/128+j/256+i/512; dyadic FP32")
     print(f"RAW_CONTRACT tendency(i,k,j) = -(-g/dnw) * delta(titau); dnw={DNW}, rdnw={RDNW}, g={G}; output is an unscaled WRF tendency value (no dt); U=[{NY},{NZ},{NX+1}], rho/Kv=[{NY},{NZ},{NX}]")
@@ -292,6 +307,7 @@ def main() -> int:
     try:
         actual = cpp_raw(args.binary, False, "u")
         passed, _, _ = compare(actual, expected, "U vertical stress source parity")
+        report_vertical_error_breakdown(actual, expected, "U")
         keys = sorted(expected)
         proj = sum(expected[key] * (key[1] + 1) for key in keys)
         got_proj = sum(actual[key] * (key[1] + 1) for key in keys)
@@ -321,6 +337,7 @@ def main() -> int:
     try:
         v_actual = cpp_raw(args.binary, False, "v")
         v_pass, _, _ = compare(v_actual, v_expected, "V vertical stress source parity")
+        report_vertical_error_breakdown(v_actual, v_expected, "V")
         v_keys = sorted(v_expected)
         v_proj = sum(v_expected[key] * (key[1] + 1) for key in v_keys)
         v_got_proj = sum(v_actual[key] * (key[1] + 1) for key in v_keys)
