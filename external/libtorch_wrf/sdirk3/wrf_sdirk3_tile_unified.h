@@ -2352,6 +2352,19 @@ private:
                                                           const torch::Tensor& msfux = torch::Tensor(),
                                                           const torch::Tensor& msfuy = torch::Tensor(),
                                                           const torch::Tensor& msfvy = torch::Tensor());
+    // Option-2 scalar diffusion: source-level counterpart of WRF
+    // horizontal_diffusion_s for one complete periodic-X/symmetric-Y tile.
+    // All 3-D fields use [j,k,i]. Slopes and maps are supplied at their native
+    // staggered locations; dnw/dn retain WRF's signed eta orientation.
+    torch::Tensor compute_horizontal_diffusion_scalar_option2_wrf(
+        const torch::Tensor& var, const torch::Tensor& Kh, const torch::Tensor& rho,
+        const torch::Tensor& zx, const torch::Tensor& zy, const torch::Tensor& rdzw,
+        const torch::Tensor& dnw, const torch::Tensor& dn,
+        const torch::Tensor& fnm, const torch::Tensor& fnp,
+        double cf1, double cf2, double cf3,
+        float rdx, float rdy, double gravity,
+        const torch::Tensor& msftx, const torch::Tensor& msfty,
+        const torch::Tensor& msfux, const torch::Tensor& msfvy);
     std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
     compute_horizontal_diffusion_option1_momentum(
         const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w,

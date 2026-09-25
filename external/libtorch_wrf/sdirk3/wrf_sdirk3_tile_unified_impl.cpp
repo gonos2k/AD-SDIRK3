@@ -27637,6 +27637,175 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion(
     return diff;
 }
 
+torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_option2_wrf(
+    const torch::Tensor& var, const torch::Tensor& Kh, const torch::Tensor& rho,
+    const torch::Tensor& zx, const torch::Tensor& zy, const torch::Tensor& rdzw,
+    const torch::Tensor& dnw, const torch::Tensor& dn,
+    const torch::Tensor& fnm, const torch::Tensor& fnp,
+    double cf1, double cf2, double cf3,
+    float rdx, float rdy, double gravity,
+    const torch::Tensor& msftx, const torch::Tensor& msfty,
+    const torch::Tensor& msfux, const torch::Tensor& msfvy) {
+    // Exact scalar stencil from module_diffusion_em.F:horizontal_diffusion_s.
+    // Scope is deliberately one complete periodic-X tile with symmetric Y
+    // walls. The caller supplies the stage's physical rho and geometry.
+    TORCH_CHECK(config_flags_periodic_x_ && !config_flags_periodic_y_ &&
+                config_flags_symmetric_ys_ && config_flags_symmetric_ye_ &&
+                !config_flags_open_xs_ && !config_flags_open_xe_ &&
+                !config_flags_open_ys_ && !config_flags_open_ye_ &&
+                !config_flags_specified_ && !config_flags_nested_ &&
+                !config_flags_polar_ && nprocx_ * nprocy_ == 1,
+                "option-2 scalar metric diffusion requires one periodic-X, symmetric-Y tile");
+
+    TORCH_CHECK(var.dim() == 3, "option-2 scalar q must be [ny,nz,nx]");
+    const int64_t ny = var.size(0), nz = var.size(1), nx = var.size(2);
+    TORCH_CHECK(ny >= 2 && nx >= 3 && nz >= 3,
+                "option-2 scalar metric diffusion requires ny>=2, nx>=3, nz>=3");
+    TORCH_CHECK(ny == ny_ && nx == nx_ &&
+                its_ <= ids_ && ite_ >= ide_ - 1 &&
+                jts_ <= jds_ && jte_ >= jde_ - 1 &&
+                ide_ - ids_ == nx && jde_ - jds_ == ny,
+                "option-2 scalar metric diffusion requires a complete physical tile");
+    TORCH_CHECK(std::isfinite(rdx) && rdx > 0.0f &&
+                std::isfinite(rdy) && rdy > 0.0f &&
+                std::isfinite(gravity) && gravity > 0.0,
+                "option-2 scalar metric diffusion requires positive finite grid scales and gravity");
+
+    const auto same_layout = [&](const torch::Tensor& x, const char* name,
+                                 torch::IntArrayRef shape) {
+        TORCH_CHECK(x.defined() && x.sizes() == shape,
+                    "option-2 scalar ", name, " has an unsupported shape");
+        TORCH_CHECK(x.device() == var.device() && x.scalar_type() == var.scalar_type(),
+                    "option-2 scalar ", name, " must match q device and dtype");
+    };
+    same_layout(Kh, "Kh", {ny,nz,nx});
+    same_layout(rho, "rho", {ny,nz,nx});
+    same_layout(rdzw, "rdzw", {ny,nz,nx});
+    same_layout(zx, "zx", {ny,nz+1,nx+1});
+    same_layout(zy, "zy", {ny+1,nz+1,nx});
+    same_layout(msftx, "msftx", {ny,nx});
+    same_layout(msfty, "msfty", {ny,nx});
+    same_layout(msfux, "msfux", {ny,nx+1});
+    same_layout(msfvy, "msfvy", {ny+1,nx});
+    for (const auto* vertical : {&dnw,&dn,&fnm,&fnp}) {
+        TORCH_CHECK(vertical->defined() && vertical->dim() == 1 && vertical->numel() >= nz,
+                    "option-2 scalar vertical coefficients must be rank-1 with nz entries");
+        TORCH_CHECK(vertical->device() == var.device() &&
+                    vertical->scalar_type() == var.scalar_type(),
+                    "option-2 scalar vertical coefficients must match q device and dtype");
+    }
+
+    // In the WRF bottom-to-top eta ordering dnw and dn are negative. Do not
+    // normalize their sign: g/(dnw*rdzw) is part of the coupled tendency.
+    TORCH_CHECK(wrf::sdirk3::guarded_item<bool>((rdzw > 0).all()) &&
+                wrf::sdirk3::guarded_item<bool>((dnw < 0).all()) &&
+                wrf::sdirk3::guarded_item<bool>((dn < 0).all()),
+                "option-2 scalar metric diffusion requires positive rdzw and signed negative dnw/dn");
+    TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(var).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(Kh).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(rho).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(zx).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(zy).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(rdzw).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(dnw).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(dn).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(fnm).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(fnp).all()),
+                "option-2 scalar metric diffusion inputs must be finite");
+
+    const auto options = var.options();
+    const auto zero = torch::zeros({1,nz,nx}, options);
+
+    // Face pairs are explicitly periodic in X. The duplicate face at nx is
+    // kept because the Fortran divergence consumes faces i and i+1 per cell.
+    const auto x_left = [&](const torch::Tensor& x) {
+        return torch::cat({x.slice(2,nx-1,nx),x},2);
+    };
+    const auto x_right = [&](const torch::Tensor& x) {
+        return torch::cat({x,x.slice(2,0,1)},2);
+    };
+    const auto q_x_left=x_left(var), q_x_right=x_right(var);
+    const auto k_x_left=x_left(Kh), k_x_right=x_right(Kh);
+    const auto rho_x_left=x_left(rho), rho_x_right=x_right(rho);
+    const auto rdzw_x_left=x_left(rdzw), rdzw_x_right=x_right(rdzw);
+
+    // horizontal_diffusion_s forms avg(K) * avg(rho), not avg(K*rho).
+    const auto coeff_x=0.5*(k_x_left+k_x_right)*0.5*(rho_x_left+rho_x_right);
+    const auto zx_at_xface=0.5*(zx.slice(1,0,nz)+zx.slice(1,1,nz+1));
+    const auto q_xface=0.5*(q_x_left+q_x_right);
+
+    const auto interpolate_q_to_w = [&](const torch::Tensor& q_mass) {
+        const auto bottom=(cf1*q_mass.select(1,0)+cf2*q_mass.select(1,1)+
+                           cf3*q_mass.select(1,2)).unsqueeze(1);
+        const auto fnm_mid=fnm.slice(0,1,nz).view({1,nz-1,1});
+        const auto fnp_mid=fnp.slice(0,1,nz).view({1,nz-1,1});
+        const auto interior=fnm_mid*q_mass.slice(1,1,nz)+
+                           fnp_mid*q_mass.slice(1,0,nz-1);
+        const auto top_ratio=0.5*dnw.select(0,nz-1)/dn.select(0,nz-1);
+        const auto top=(q_mass.select(1,nz-1)+top_ratio*
+                       (q_mass.select(1,nz-1)-q_mass.select(1,nz-2))).unsqueeze(1);
+        return torch::cat({bottom,interior,top},1);
+    };
+    const auto q_x_w=interpolate_q_to_w(q_xface);
+    const auto dz_xface=2.0/(rdzw_x_left.reciprocal()+rdzw_x_right.reciprocal());
+    auto h1=-msfux.unsqueeze(1)*coeff_x*(
+        rdx*(q_x_right-q_x_left)-
+        zx_at_xface*(q_x_w.slice(1,1,nz+1)-q_x_w.slice(1,0,nz))*dz_xface);
+
+    // Symmetric Y walls mean zero normal scalar flux. Interior y faces follow
+    // the Fortran stencil; the two wall faces are exact zeros.
+    const auto y_lower=[&](const torch::Tensor& x) {
+        return torch::cat({x.slice(0,0,1),x},0);
+    };
+    const auto y_upper=[&](const torch::Tensor& x) {
+        return torch::cat({x,x.slice(0,ny-1,ny)},0);
+    };
+    const auto q_y_lower=y_lower(var), q_y_upper=y_upper(var);
+    const auto k_y_lower=y_lower(Kh), k_y_upper=y_upper(Kh);
+    const auto rho_y_lower=y_lower(rho), rho_y_upper=y_upper(rho);
+    const auto rdzw_y_lower=y_lower(rdzw), rdzw_y_upper=y_upper(rdzw);
+    const auto coeff_y=0.5*(k_y_lower+k_y_upper)*0.5*(rho_y_lower+rho_y_upper);
+    const auto q_yface=0.5*(q_y_lower+q_y_upper);
+    const auto zy_at_yface=0.5*(zy.slice(1,0,nz)+zy.slice(1,1,nz+1));
+    const auto q_y_w=interpolate_q_to_w(q_yface);
+    const auto dz_yface=2.0/(rdzw_y_lower.reciprocal()+rdzw_y_upper.reciprocal());
+    const auto h2_candidate=-msfvy.unsqueeze(1)*coeff_y*(
+        rdy*(q_y_upper-q_y_lower)-
+        zy_at_yface*(q_y_w.slice(1,1,nz+1)-q_y_w.slice(1,0,nz))*dz_yface);
+    const auto h2=torch::cat({zero,h2_candidate.slice(0,1,ny),zero},0);
+
+    // For the terrain part of the flux divergence, Fortran vertically
+    // interpolates neighboring horizontal fluxes, then zeros the bottom and
+    // top W-face values. This is distinct from q's boundary extrapolation
+    // used above while constructing H1/H2.
+    const auto interpolate_flux_to_w = [&](const torch::Tensor& flux_mass) {
+        const auto fnm_mid=fnm.slice(0,1,nz).view({1,nz-1,1});
+        const auto fnp_mid=fnp.slice(0,1,nz).view({1,nz-1,1});
+        const auto interior=fnm_mid*flux_mass.slice(1,1,nz)+
+                           fnp_mid*flux_mass.slice(1,0,nz-1);
+        const auto zero_w=torch::zeros({ny,1,nx},options);
+        return torch::cat({zero_w,interior,zero_w},1);
+    };
+    const auto h1_at_mass_x=0.5*(h1.slice(2,0,nx)+h1.slice(2,1,nx+1));
+    const auto h2_at_mass_y=0.5*(h2.slice(0,0,ny)+h2.slice(0,1,ny+1));
+    const auto h1_w=interpolate_flux_to_w(h1_at_mass_x);
+    const auto h2_w=interpolate_flux_to_w(h2_at_mass_y);
+
+    const auto zx_xcenter=0.5*(zx.slice(2,0,nx)+zx.slice(2,1,nx+1));
+    const auto zx_at_mass=0.5*(zx_xcenter.slice(1,0,nz)+zx_xcenter.slice(1,1,nz+1));
+    const auto zy_ycenter=0.5*(zy.slice(0,0,ny)+zy.slice(0,1,ny+1));
+    const auto zy_at_mass=0.5*(zy_ycenter.slice(1,0,nz)+zy_ycenter.slice(1,1,nz+1));
+
+    const auto div_x=msftx.unsqueeze(1)*rdx*(h1.slice(2,1,nx+1)-h1.slice(2,0,nx));
+    const auto div_y=msfty.unsqueeze(1)*rdy*(h2.slice(0,1,ny+1)-h2.slice(0,0,ny));
+    const auto terrain_div_x=msftx.unsqueeze(1)*zx_at_mass*
+        (h1_w.slice(1,1,nz+1)-h1_w.slice(1,0,nz))*rdzw;
+    const auto terrain_div_y=msfty.unsqueeze(1)*zy_at_mass*
+        (h2_w.slice(1,1,nz+1)-h2_w.slice(1,0,nz))*rdzw;
+    return gravity*(div_x+div_y-terrain_div_x-terrain_div_y)/
+           (dnw.view({1,nz,1})*rdzw);
+}
+
 torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
     const torch::Tensor& var, const torch::Tensor& Kh, float rdx, float rdy,
     const torch::Tensor& msftx, const torch::Tensor& msfty,
