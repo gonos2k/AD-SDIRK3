@@ -736,7 +736,8 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
     };
     const auto evaluate=[&](bool on,bool packed,int km_opt=1,
                             const torch::Tensor& state_override=torch::Tensor(),
-                            bool make_reference=true) -> Result {
+                            bool make_reference=true,
+                            bool partial_owned=false) -> Result {
         cfg=SDIRK3Config{};
         cfg.diffusion_option=2;
         cfg.khdif=on?1000.0f:0.0f;
@@ -750,6 +751,11 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         cfg.use_stress_tensor=false;
         Option2RhsFixture fixture(packed,dx,c1h,c2h);
         auto& solver=fixture.solver;
+        if (partial_owned) {
+            TORCH_CHECK(!packed,"partial ownership fixture must use physical layout");
+            solver.setWRFIndices(2,nx+1,1,ny+1,1,nz,
+                1,nx+1,1,ny+1,1,nw,-2,nx+4,-2,ny+4,1,nw);
+        }
         TORCH_CHECK(solver.*access(FnmFromWrfTag{}),
                     "RHS fixture must use WRF-provided fnm/fnp");
         auto grid=std::static_pointer_cast<WRFGridInfoExtended>(solver.getGridInfo());
@@ -917,6 +923,17 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
     std::cout << (kmopt2_guard?"PASS ":"FAIL ")
               << "option-2 canonical RHS rejects unsupported km_opt=2" << '\n';
     ok=kmopt2_guard&&ok;
+
+    bool partial_tile_guard=false;
+    try {
+        (void)evaluate(true,false,1,make_state(false),false,true);
+    } catch (const c10::Error& error) {
+        partial_tile_guard=std::string(error.what()).find(
+            "complete single-rank tile ownership")!=std::string::npos;
+    }
+    std::cout << (partial_tile_guard?"PASS ":"FAIL ")
+              << "option-2 canonical RHS rejects partial tile ownership" << '\n';
+    ok=partial_tile_guard&&ok;
 
     constexpr double h_large=2.0e-2,h_small=1.0e-2;
     constexpr double central_rel_budget=5.0e-2;
