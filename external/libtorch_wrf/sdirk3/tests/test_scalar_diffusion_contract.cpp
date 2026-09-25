@@ -1559,7 +1559,7 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
             for (int level=0;level<=k;++level)
                 w_height[k]+=z_layer[std::min(level,nz-1)];
         } else {
-            for (int level=0;level<k;++level) w_height[k]+=layer_depth;
+            w_height[k]=100.0+layer_depth*(k+1);
         }
     }
 

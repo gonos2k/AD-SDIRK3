@@ -1,7 +1,7 @@
 # Option-2 stretched-Z scalar parity
 
-Local timestamp: 2026-09-25 17:56:13 JST  
-Source base: `11b2cdd9f1d1995817194ab1fcac0c9cd4e16744` (`agent/option2_stretched_eta`)
+Local timestamp: 2026-09-25 18:02:33 JST  
+Source base: `00979b1d09e8ac2fd0a4fc850bd5600d7fad4c9a` (`agent/option2_stretched_eta`)
 
 ## Context
 
@@ -33,17 +33,15 @@ nonuniform-eta coordinate.
   FP64 pass across all 192 cells. Fortran source extraction was compiled at O0
   and O2. The `avg-product`, `unit-maps`, and `uniform-depth` counterfactuals
   all exceed ten times the fixed parity budget in both precisions.
-- The standalone `test_scalar_diffusion_contract` binary passes at O2.
-- The full parity comparison exits earlier on existing case 8 (`terrain_mixed`)
-  in FP32: maximum discrepancy `0.0509796`, against budget `0.000244141`. The
-  focused case-10 run bypassed earlier option-2 comparisons but used the same
-  extracted Fortran output and production C++ helper entry point.
+- The unfiltered `test_horizontal_diffusion_scalar.py` parity driver passes
+  against both C++ O2 and O3 binaries. Existing uniform-Z case outputs retain
+  their original heights; case 10 uses its separate W-level layout.
+- The no-argument `test_scalar_diffusion_contract` suite passes with both O2
+  and O3 binaries.
 - The required `test/em_b_wave` model run and same-setup RK3 field/runtime
   comparison were not performed for this test-fixture change.
 
 ## Next actions
 
-- Review the case-8 discrepancy separately before relying on the full option-2
-  parity command.
 - Keep a true nonuniform-eta fixture open until `dnw`, `dn`, `fnm/fnp`, and the
   top extrapolation ratio are constructed from one consistent eta coordinate.
