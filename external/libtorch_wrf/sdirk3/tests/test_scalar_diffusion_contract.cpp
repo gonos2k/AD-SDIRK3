@@ -161,6 +161,15 @@ struct Defor13StageGeometryTag {
 };
 template struct MemberAccessor<Defor13StageGeometryTag,
     &TileSDIRK3UnifiedSolver::compute_defor13>;
+struct Defor23StageGeometryTag {
+    using type = Defor13StageGeometryTag::type;
+    friend type access(Defor23StageGeometryTag);
+};
+template struct MemberAccessor<Defor23StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor23>;
+struct Rdz3dCacheTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(Rdz3dCacheTag); };
+template struct MemberAccessor<Rdz3dCacheTag, &TileSDIRK3UnifiedSolver::rdz_3d_>;
 
 void set_asymmetric_vertical_interpolation(TileSDIRK3UnifiedSolver& solver,
                                            int nz) {
@@ -579,6 +588,82 @@ int dump_vertical_v_stress_raw(bool zero_k) {
                 std::cout << "V_RAW " << j << ' ' << k << ' ' << i << ' '
                           << std::setprecision(17) << a[j][k][i] << '\n';
     return 0;
+}
+
+bool run_vertical_shear_rdz_metric_diagnostic() {
+    constexpr int mass_y = 17, mass_x = 17, mass_z = 16;
+    constexpr int u_x = mass_x + 1, v_y = mass_y + 1, w_z = mass_z + 1;
+    constexpr float dz_m = 1024.0f, du_dk = 0.5f, rdnw_value = 10.0f;
+    constexpr float physical_rdz_value = 1.0f / dz_m;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, rdnw_value), 0);
+    auto z_w = torch::empty({mass_y, w_z, mass_x}, opt);
+    for (int j=0; j<mass_y; ++j) for (int k=0; k<w_z; ++k)
+        for (int i=0; i<mass_x; ++i) z_w[j][k][i] = dz_m*k;
+    auto physical_rdz = torch::zeros_like(z_w);
+    for (int j=0; j<mass_y; ++j) for (int k=1; k<w_z-1; ++k)
+        for (int i=0; i<mass_x; ++i)
+            physical_rdz[j][k][i] = 2.0f/(z_w[j][k+1][i]-z_w[j][k-1][i]);
+    solver.*access(Rdz3dCacheTag{}) = physical_rdz;
+    const auto zx = torch::zeros({mass_y,w_z,mass_x},opt);
+    const auto zy = torch::zeros({v_y,w_z,mass_x},opt);
+    solver.setTerrainSlopes(zx,zy);
+    auto w = torch::zeros({mass_y,w_z,mass_x},opt);
+    auto u = torch::empty({mass_y,mass_z,u_x},opt);
+    auto v = torch::empty({v_y,mass_z,mass_x},opt);
+    for (int k=0; k<mass_z; ++k) {
+        u.select(1,k).fill_(du_dk*k);
+        v.select(1,k).fill_(du_dk*k);
+    }
+    const auto rdnw = torch::full({mass_z},rdnw_value,opt);
+    const auto rdx = torch::ones({1},opt);
+    const auto stage_rdz = torch::full({mass_y,mass_z,mass_x},physical_rdz_value,opt);
+    const auto empty = torch::Tensor();
+    auto u_fallback=(solver.*access(Defor13StageGeometryTag{}))(
+        u,w,rdx,rdnw,zx,zy,empty,empty);
+    auto u_stage=(solver.*access(Defor13StageGeometryTag{}))(
+        u,w,rdx,rdnw,zx,zy,empty,stage_rdz);
+    auto v_fallback=(solver.*access(Defor23StageGeometryTag{}))(
+        v,w,rdx,rdnw,zx,zy,empty,empty);
+    auto v_stage=(solver.*access(Defor23StageGeometryTag{}))(
+        v,w,rdx,rdnw,zx,zy,empty,stage_rdz);
+    const double expected=double(du_dk)*physical_rdz_value;
+    const double legacy=double(du_dk)*(2.0*rdnw_value);
+    auto check=[&](const char* axis,const torch::Tensor& fallback,
+                   const torch::Tensor& stage,const torch::Tensor& state,
+                   int i_sample,int j_sample) {
+        auto exp=torch::zeros_like(stage);
+        exp.slice(1,1,mass_z).fill_(expected);
+        const double err_fallback=(fallback.slice(1,1,mass_z)-
+            exp.slice(1,1,mass_z)).abs().max().item<double>();
+        const double err_stage=(stage-exp).abs().max().item<double>();
+        const double fallback_value=fallback[j_sample][1][i_sample].item<double>();
+        const double stage_value=stage[j_sample][1][i_sample].item<double>();
+        const double legacy_error=std::abs(fallback_value-legacy);
+        const bool pass=err_fallback>1.0 && err_stage<1.0e-7 && legacy_error<1.0e-6;
+        std::cout << (pass?"PASS ":"FAIL ") << "RDZ_" << axis
+                  << " expected=" << std::setprecision(17) << expected
+                  << " fallback=" << fallback_value
+                  << " fallback_max_error=" << err_fallback
+                  << " legacy_2rdnw=" << legacy << " legacy_model_error=" << legacy_error
+                  << " stage=" << stage_value << " stage_max_error=" << err_stage
+                  << " physical_rdz=" << physical_rdz_value
+                  << " rdnw=" << rdnw_value << " dz_m=" << dz_m
+                  << " cache_shape=17x17x17 stage_shape=17x16x17\n";
+        return pass;
+    };
+    const bool u_ok=check("U",u_fallback,u_stage,u,1,1);
+    const bool v_ok=check("V",v_fallback,v_stage,v,1,1);
+    return u_ok&&v_ok;
 }
 
 // Flat normal stresses: Fortran tau=-2*rho*K*Dq and signed dnw=-1.
@@ -2303,6 +2388,8 @@ int main(int argc, char** argv) {
         return dump_vertical_v_stress_raw(false);
     if (argc==2 && std::string(argv[1])=="--vertical-v-stress-zero-k")
         return dump_vertical_v_stress_raw(true);
+    if (argc==2 && std::string(argv[1])=="--vertical-shear-rdz-metric")
+        return run_vertical_shear_rdz_metric_diagnostic() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-packed-u-rdz-seam")
         return run_packed_u_rdz_seam() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry") {
