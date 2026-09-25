@@ -68,7 +68,7 @@ program oracle_driver
   real :: rdzw(ims:ime,kms:kme,jms:jme),mtau(ims:ime,kms:kme,jms:jme)
   real :: nba_mij(ims:ime,kms:kme,jms:jme,2),dnw(kms:kme),fnm(kms:kme),fnp(kms:kme)
   tendency=0.; defor13=0.; rdzw=1.; mtau=0.; nba_mij=0.
-  dnw={DNW}; fnm=0.5; fnp=0.5; rho=0.; xkmv=0.
+  dnw={DNW}; fnm=0.75; fnp=0.25; rho=0.; xkmv=0.
   do j=jms,jme
     do k=kms,nz
       do i=ims,nx
@@ -157,21 +157,29 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--binary", required=True, type=Path)
     parser.add_argument("--fortran-compiler", default=os.environ.get("FC", "gfortran"))
+    parser.add_argument("--cpp-source", type=Path,
+                        help="implementation source corresponding to --binary")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[4]
     fortran_path = repo / "dyn_em/module_diffusion_em.F"
-    cpp_path = repo / "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp"
+    cpp_path = args.cpp_source or repo / "external/libtorch_wrf/sdirk3/wrf_sdirk3_tile_unified_impl.cpp"
     source = fortran_path.read_text()
     check_source_equations(source)
     source_sha = hashlib.sha256(fortran_path.read_bytes()).hexdigest()
+    cpp_path = cpp_path.resolve()
     cpp_sha = hashlib.sha256(cpp_path.read_bytes()).hexdigest()
     binary_sha = hashlib.sha256(args.binary.read_bytes()).hexdigest()
     print(f"REVISION {subprocess.run(['git', 'rev-parse', 'HEAD'], cwd=repo, check=True, text=True, capture_output=True).stdout.strip()}")
+    cpp_repo = cpp_path.parents[3]
+    cpp_revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=cpp_repo,
+                                  check=True, text=True, capture_output=True).stdout.strip()
+    print(f"CPP_REVISION {cpp_revision}")
     print(f"FORTRAN_SOURCE_SHA256 {source_sha}")
     print(f"CPP_SOURCE_SHA256 {cpp_sha}")
     print(f"CPP_BINARY_SHA256 {binary_sha}")
     print(f"EXTRACTED_U_ROUTINES_SHA256 {hashlib.sha256((extract_subroutine(source, 'cal_titau_13_31') + extract_subroutine(source, 'vertical_diffusion_u_2')).encode()).hexdigest()}")
     print(f"BOUNDARY_CONTRACT specified=false open_xs/open_xe/open_ys/open_ye=false nested=false periodic_x=true periodic_y=false")
+    print("VERTICAL_INTERPOLATION C++ solver setter and Fortran driver both receive fnm=3/4 fnp=1/4 (sum=1 exactly)")
     print("INPUT_PATTERN rho=1+k/32+i/512 Kv=2+k/64+i/128 defor13=1/4+k/128+i/256; all values exactly representable in FP32")
     print(f"RAW_CONTRACT tendency(i,k,j) = -(-g/dnw) * delta(titau); dnw={DNW}, rdnw={RDNW}, g={G}; output is an unscaled WRF tendency value (no dt); U=[{NY},{NZ},{NX+1}], rho/Kv=[{NY},{NZ},{NX}]")
 

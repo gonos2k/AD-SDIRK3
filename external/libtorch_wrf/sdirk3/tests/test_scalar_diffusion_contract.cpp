@@ -162,6 +162,13 @@ struct Defor13StageGeometryTag {
 template struct MemberAccessor<Defor13StageGeometryTag,
     &TileSDIRK3UnifiedSolver::compute_defor13>;
 
+void set_asymmetric_vertical_interpolation(TileSDIRK3UnifiedSolver& solver,
+                                           int nz) {
+    const std::vector<float> fnm(nz, 0.75f), fnp(nz, 0.25f);
+    solver.setVerticalInterpolationCoefficients(fnm.data(), fnp.data(),
+                                                0.0f, 0.0f, 0.0f);
+}
+
 template<typename Member>
 torch::Tensor call_option2_momentum_helper(
     Member member, TileSDIRK3UnifiedSolver& solver,
@@ -429,6 +436,7 @@ bool run_vertical_u_stress_actual_shape() {
     TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
                                    {1.0f}, {1.0f},
                                    std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
     const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
                                                .device(torch::kCPU);
     const auto u = torch::zeros({u_y, u_z, u_x}, opt);
@@ -461,6 +469,7 @@ bool run_vertical_v_stress_actual_shape() {
     TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
                                    {1.0f}, {1.0f},
                                    std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
     const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
                                                .device(torch::kCPU);
     const auto v = torch::zeros({v_y, v_z, mass_x}, opt);
@@ -493,6 +502,7 @@ int dump_vertical_u_stress_raw(bool zero_k) {
     TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
                                    {1.0f}, {1.0f},
                                    std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
     const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
                                                .device(torch::kCPU);
     auto u = torch::zeros({mass_y, mass_z, u_x}, opt);
