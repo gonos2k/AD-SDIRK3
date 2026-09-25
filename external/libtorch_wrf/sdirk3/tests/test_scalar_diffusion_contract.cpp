@@ -4,6 +4,7 @@
 #include <torch/torch.h>
 #include <cmath>
 #include <iostream>
+#include <iomanip>
 #include <limits>
 #include <string>
 #include <utility>
@@ -598,9 +599,35 @@ bool run_scalar_zero_gate() {
               << " du=" << du << " dv=" << dv << " dw=" << dw << " dt=" << dt << '\n';
     return pass;
 }
+void dump_flat_periodic_x(torch::Dtype dtype) {
+    using wrf::sdirk3::test::TileCase;
+    TileCase tile(10.0f);
+    const auto opt=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
+    const auto i=torch::arange(nx,opt);
+    const auto q=(1.0+0.03*torch::sin(i*(2.0*pi/nx)))
+        .view({1,1,nx}).expand({ny,nz,nx}).clone();
+    const auto kh=torch::full({ny,nz,nx},2.0,opt);
+    const auto map=torch::ones({ny,nx},opt);
+    const auto mut=torch::full({ny,nx},784.8,opt);
+    const auto out=(tile.solver.*access(ScalarDiffusionTag{}))(
+        q,kh,0.1f,0.13f,map,map,torch::ones({ny+1,nx},opt),mut,
+        nullptr,nullptr).to(torch::kFloat64).contiguous();
+    const auto a=out.accessor<double,3>();
+    for (int j=0; j<ny; ++j)
+        for (int k=0; k<nz; ++k)
+            for (int x=0; x<nx; ++x)
+                std::cout << "C_PARITY " << j+1 << ' ' << k+1 << ' ' << x+1
+                          << ' ' << std::setprecision(17) << a[j][k][x] << '\n';
+}
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc==3 && std::string(argv[1])=="--flat-x-parity") {
+        if (std::string(argv[2])=="fp32") dump_flat_periodic_x(torch::kFloat32);
+        else if (std::string(argv[2])=="fp64") dump_flat_periodic_x(torch::kFloat64);
+        else return 2;
+        return 0;
+    }
     bool ok = run(torch::kFloat32);
     ok = run(torch::kFloat64) && ok;
     ok = run_packed_periodic_seam(torch::kFloat32) && ok;
