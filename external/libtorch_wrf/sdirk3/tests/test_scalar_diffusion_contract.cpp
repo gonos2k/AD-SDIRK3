@@ -418,6 +418,9 @@ bool run_vertical_u_stress_actual_shape() {
     constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
     constexpr int u_y = mass_y, u_z = mass_z, u_x = mass_x + 1;
     constexpr int w_z = mass_z + 1;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
     TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
                                    {1.0f}, {1.0f},
                                    std::vector<float>(mass_z, 1.0f), 0);
@@ -442,6 +445,9 @@ bool run_vertical_u_stress_actual_shape() {
 bool run_vertical_v_stress_actual_shape() {
     constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
     constexpr int v_y = mass_y + 1, v_z = mass_z;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
     TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
                                    {1.0f}, {1.0f},
                                    std::vector<float>(mass_z, 1.0f), 0);
@@ -466,6 +472,9 @@ bool run_vertical_v_stress_actual_shape() {
 int dump_vertical_u_stress_raw(bool zero_k) {
     constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
     constexpr int u_x = mass_x + 1;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
     TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
                                    {1.0f}, {1.0f},
                                    std::vector<float>(mass_z, 1.0f), 0);
