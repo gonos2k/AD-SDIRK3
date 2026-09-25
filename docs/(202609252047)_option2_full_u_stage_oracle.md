@@ -52,10 +52,14 @@ The `-O0` and `-O2` values matched for each precision. Full-chain FP32 raw U dif
 
 Two temporary, uncommitted negative controls were rejected as expected:
 
-- A compiler wrapper zeroed emitted D11 values; the producer comparison observed `7.0711e-5` error against the predeclared FP32 budget `2.6974e-10`. Log SHA-256: `3575027a86a0bdb9e38f0a941eed1e2a28e34e251532eb864f34b1cdcd056c2f`.
-- A binary wrapper removed C++ seam outputs; the test failed with `FAIL missing C++ seam outputs`. Log SHA-256: `42cbf3dd1c1d1e43d4b8db852f85c4fa439e8e414c7fce989178a75eb26cf8fd`.
+- A compiler wrapper injected `defor11=0.` immediately after the exact `cal_deform_and_div` call and before both `D11_RAW` diagnostics and the consumer's `horizontal_diffusion_u_2` call. Thus the mutated producer array fed both checks. D11 error was `7.0711e-5` against the predeclared FP32 budget `2.6974e-10`; full raw U error was `1.67467e-4` against the existing tolerance `3.35e-10`; C++ versus mutated full U also differed by `1.67467e-4`. The operator-only path remained at its baseline `1.0160e-10` C++ difference. Wrapper SHA-256: `8f96c3c3a5c6e8e521a1b9cb3d122ad35e5b166acfddeab67d7f26cca909acfa`; injected generated Fortran source SHA-256: `921fe0b15dbcdc11f4091e91aa340f10d670a31b7c47793f3fab6fcc7c4801a2`; log SHA-256: `785bf0141c3f8dfb4dc21ea17549599d3d10b953dc9a89943a59c2a9d18a7b53`.
+- A binary wrapper removed C++ seam outputs; the test failed with `FAIL missing C++ seam outputs`. Wrapper was not committed. Log SHA-256: `42cbf3dd1c1d1e43d4b8db852f85c4fa439e8e414c7fce989178a75eb26cf8fd`.
 
-Normal test log SHA-256: `319d842e169b6d26d338be37b06362ee565284540bf693dc75c4b2240791549d`. The final D11-zero mutation log SHA-256 is `e81948d124c616355a848d2c2f4390ad3558c05a0f58d369f23c3bf06ce8b6d3`; the C++ seam-drop log SHA-256 is `42cbf3dd1c1d1e43d4b8db852f85c4fa439e8e414c7fce989178a75eb26cf8fd`. `git diff --check` and Python syntax compilation passed. No WRF `test/em_b_wave` model run or same-setup split-explicit RK3 field/runtime comparison was performed.
+The normal test log SHA-256 is `319d842e169b6d26d338be37b06362ee565284540bf693dc75c4b2240791549d`; the source was unchanged by this documentation-only follow-up. `git diff --check` and Python syntax compilation passed. No WRF `test/em_b_wave` model run or same-setup split-explicit RK3 field/runtime comparison was performed.
+
+### Mutation follow-up
+
+Local timestamp: 2026-09-25 21:50:34 JST. The producer-array mutation was repeated after review. It changed only the generated temporary Fortran driver; committed test/source and budgets were unchanged. It was compiled by GNU Fortran 15.2.0 and run against C++ executable SHA-256 `106bbd15f6cf7fa17d45563b5b568a26e4ea36bdb25a65f85d7426514e25cefe` and module source SHA-256 `c044c533e5e1e9d168418f2b72feba62964bee6a0f55e211c2522ffceaa6b7ea`.
 
 ## Graphify
 
