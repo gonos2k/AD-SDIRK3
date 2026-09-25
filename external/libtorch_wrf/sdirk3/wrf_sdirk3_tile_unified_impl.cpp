@@ -23510,9 +23510,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // fields are base-state data and must not be mutated from an
                 // RHS evaluation (Newton/Krylov may revisit the same state).
                 const auto grid_ext = std::static_pointer_cast<wrf::sdirk3::WRFGridInfoExtended>(grid_info_);
+                // The current stage-metric producer wraps X locally and applies
+                // symmetric-Y wall slopes. That is valid only when this rank
+                // owns the complete horizontal domain; partial/MPI tiles need
+                // exchanged halo geometry and must remain on the guarded path.
+                const bool option2_complete_single_tile =
+                    nprocx_ * nprocy_ == 1 &&
+                    its_ <= ids_ && ite_ >= ide_ &&
+                    jts_ <= jds_ && jte_ >= jde_;
                 const bool option2_isotropic_dry =
                     wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
                     canonical_horizontal && !g_export_coupled_slow &&
+                    option2_complete_single_tile &&
                     grid_ext && grid_ext->smagorinsky_opt == 1 &&
                     wrf::sdirk3::g_sdirk3_config.wrf_damp_opt == 0 &&
                     n_moist_ == 0 && fnm_fnp_from_wrf_ &&
@@ -23523,7 +23532,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     canonical_horizontal && grid_ext && grid_ext->smagorinsky_opt > 0;
                 TORCH_CHECK(!option2_native_declared || option2_isotropic_dry,
                             "option-2 metric diffusion requires dry isotropic km_opt=1, "
-                            "damp_opt=0, WRF eta weights, and no supplied K or face capture");
+                            "damp_opt=0, WRF eta weights, no supplied K or face capture, "
+                            "and complete single-rank tile ownership");
 
                 torch::Tensor option2_zx_core, option2_zy_core;
                 torch::Tensor option2_rdzw_core, option2_rdz_core;
