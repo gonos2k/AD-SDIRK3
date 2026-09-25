@@ -171,6 +171,7 @@ def main() -> int:
     print(f"CPP_SOURCE_SHA256 {cpp_sha}")
     print(f"CPP_BINARY_SHA256 {binary_sha}")
     print(f"EXTRACTED_U_ROUTINES_SHA256 {hashlib.sha256((extract_subroutine(source, 'cal_titau_13_31') + extract_subroutine(source, 'vertical_diffusion_u_2')).encode()).hexdigest()}")
+    print(f"BOUNDARY_CONTRACT specified=false open_xs/open_xe/open_ys/open_ye=false nested=false periodic_x=true periodic_y=false")
     print(f"RAW_CONTRACT tendency(i,k,j) = -(-g/dnw) * delta(titau); dnw={DNW}, rdnw={RDNW}, g={G}; output is an unscaled WRF tendency value (no dt); U=[{NY},{NZ},{NX+1}], rho/Kv=[{NY},{NZ},{NX}]")
 
     expected, routine_sha = fortran_oracle(source, args.fortran_compiler, KV)

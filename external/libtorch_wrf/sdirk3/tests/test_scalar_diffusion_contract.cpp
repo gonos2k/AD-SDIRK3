@@ -421,6 +421,11 @@ bool run_vertical_u_stress_actual_shape() {
     auto& cfg = wrf::sdirk3::g_sdirk3_config;
     cfg = wrf::sdirk3::SDIRK3Config{};
     cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
     TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
                                    {1.0f}, {1.0f},
                                    std::vector<float>(mass_z, 1.0f), 0);
@@ -448,6 +453,11 @@ bool run_vertical_v_stress_actual_shape() {
     auto& cfg = wrf::sdirk3::g_sdirk3_config;
     cfg = wrf::sdirk3::SDIRK3Config{};
     cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
     TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
                                    {1.0f}, {1.0f},
                                    std::vector<float>(mass_z, 1.0f), 0);
@@ -475,6 +485,11 @@ int dump_vertical_u_stress_raw(bool zero_k) {
     auto& cfg = wrf::sdirk3::g_sdirk3_config;
     cfg = wrf::sdirk3::SDIRK3Config{};
     cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
     TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
                                    {1.0f}, {1.0f},
                                    std::vector<float>(mass_z, 1.0f), 0);
