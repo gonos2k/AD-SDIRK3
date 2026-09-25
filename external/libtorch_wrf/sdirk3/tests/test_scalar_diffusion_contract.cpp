@@ -2073,6 +2073,9 @@ int dump_option2_w_fourier_sign(bool zero_k=false) {
     constexpr int n_x=8,n_y=6,n_z=4,n_w=n_z+1;
     constexpr double pi=3.14159265358979323846;
     const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    auto& cfg=wrf::sdirk3::g_sdirk3_config;
+    cfg=wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option=2;
     std::vector<float> inverse_spacing(n_z,1.0f),half(n_w,0.5f);
     TileSDIRK3UnifiedSolver tile(n_x,n_y,n_z,1.0f,1.0f,{1.0f},{1.0f},
                                  inverse_spacing,0);
