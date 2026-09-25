@@ -41034,6 +41034,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_w_wrf(
     tendency.select(1, 0).zero_();        // Bottom
     tendency.select(1, nz_w - 1).zero_(); // Top
 
+    // WRF's eta coordinate decreases with k, so the Fortran dn denominator
+    // is negative. C++ stores metric magnitudes and assembled the divergence
+    // with positive g/(|dn|*rdz); convert the complete option-2 tendency once
+    // after adding the terrain correction. Keep the legacy option-1 path intact.
+    if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2)
+        tendency = -tendency;
+
     return tendency;
 }
 
