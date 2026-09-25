@@ -145,6 +145,13 @@ struct Option2WHelperTag { friend auto access(Option2WHelperTag); };
 template struct AutoMemberAccessor<Option2WHelperTag,
     &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_w_wrf>;
 
+struct VerticalUStressTag { friend auto access(VerticalUStressTag); };
+template struct AutoMemberAccessor<VerticalUStressTag,
+    &TileSDIRK3UnifiedSolver::compute_vertical_diffusion_u_stress>;
+struct VerticalVStressTag { friend auto access(VerticalVStressTag); };
+template struct AutoMemberAccessor<VerticalVStressTag,
+    &TileSDIRK3UnifiedSolver::compute_vertical_diffusion_v_stress>;
+
 struct Defor13StageGeometryTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
         const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
@@ -402,6 +409,95 @@ bool run_packed_u_rdz_seam() {
               << " terminal_alias_error=" << terminal_alias
               << " tolerance=" << tolerance << '\n';
     return pass;
+}
+
+// Actual em_b_wave PC2 tile extents: U and defor13 have one extra X point,
+// while rho and Kv remain mass-staggered. The helper's returned tendency must
+// retain the U shape and be finite for these production tensor relationships.
+bool run_vertical_u_stress_actual_shape() {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int u_y = mass_y, u_z = mass_z, u_x = mass_x + 1;
+    constexpr int w_z = mass_z + 1;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    const auto u = torch::zeros({u_y, u_z, u_x}, opt);
+    const auto defor13 = torch::zeros({u_y, w_z, u_x}, opt);
+    const auto rho = torch::ones({mass_y, mass_z, mass_x}, opt);
+    const auto kv = torch::ones_like(rho);
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalUStressTag{}))(
+        u, defor13, kv, rho, rdnw);
+    const bool pass = tendency.sizes() == u.sizes() &&
+                      torch::isfinite(tendency).all().item<bool>();
+    std::cout << (pass ? "PASS " : "FAIL ")
+              << "vertical U stress actual staggered shape"
+              << " u=" << u.sizes() << " rho=" << rho.sizes()
+              << " tendency=" << tendency.sizes() << '\n';
+    return pass;
+}
+
+bool run_vertical_v_stress_actual_shape() {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int v_y = mass_y + 1, v_z = mass_z;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    const auto v = torch::zeros({v_y, v_z, mass_x}, opt);
+    const auto defor23 = torch::zeros({v_y, mass_z + 1, mass_x}, opt);
+    const auto rho = torch::ones({mass_y, mass_z, mass_x}, opt);
+    const auto kv = torch::ones_like(rho);
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalVStressTag{}))(
+        v, defor23, kv, rho, rdnw);
+    const bool pass = tendency.sizes() == v.sizes() &&
+                      torch::isfinite(tendency).all().item<bool>();
+    std::cout << (pass ? "PASS " : "FAIL ")
+              << "vertical V stress actual staggered shape"
+              << " v=" << v.sizes() << " rho=" << rho.sizes()
+              << " tendency=" << tendency.sizes() << '\n';
+    return pass;
+}
+
+int dump_vertical_u_stress_raw(bool zero_k) {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int u_x = mass_x + 1;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    auto u = torch::zeros({mass_y, mass_z, u_x}, opt);
+    auto defor13 = torch::zeros({mass_y, mass_z + 1, u_x}, opt);
+    auto rho = torch::empty({mass_y, mass_z, mass_x}, opt);
+    auto kv = torch::empty_like(rho);
+    for (int j = 0; j < mass_y; ++j) {
+        for (int k = 0; k < mass_z; ++k) {
+            for (int i = 0; i < mass_x; ++i) {
+                rho[j][k][i] = 1.0f + 0.04f * k + 0.002f * i;
+                kv[j][k][i] = 2.0f + 0.03f * k + 0.01f * i;
+            }
+        }
+    }
+    if (zero_k) kv.zero_();
+    for (int j = 0; j < mass_y; ++j)
+        for (int k = 1; k < mass_z; ++k)
+            for (int i = 1; i < mass_x; ++i)
+                defor13[j][k][i] = 0.2f + 0.01f * k + 0.003f * i;
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalUStressTag{}))(
+        u, defor13, kv, rho, rdnw).contiguous();
+    const auto a = tendency.accessor<float, 3>();
+    for (int j = 0; j < mass_y; ++j)
+        for (int k = 0; k < mass_z; ++k)
+            for (int i = 0; i < u_x; ++i)
+                std::cout << "U_RAW " << j << ' ' << k << ' ' << i << ' '
+                          << std::setprecision(17) << a[j][k][i] << '\n';
+    return 0;
 }
 
 // Flat normal stresses: Fortran tau=-2*rho*K*Dq and signed dnw=-1.
@@ -2114,6 +2210,14 @@ int main(int argc, char** argv) {
         return dump_option2_w_fourier_sign();
     if (argc==2 && std::string(argv[1])=="--option2-w-fourier-zero-k")
         return dump_option2_w_fourier_sign(true);
+    if (argc==2 && std::string(argv[1])=="--vertical-u-actual-shape")
+        return run_vertical_u_stress_actual_shape() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--vertical-v-actual-shape")
+        return run_vertical_v_stress_actual_shape() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--vertical-u-stress-raw")
+        return dump_vertical_u_stress_raw(false);
+    if (argc==2 && std::string(argv[1])=="--vertical-u-stress-zero-k")
+        return dump_vertical_u_stress_raw(true);
     if (argc==2 && std::string(argv[1])=="--option2-packed-u-rdz-seam")
         return run_packed_u_rdz_seam() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry") {
@@ -2166,6 +2270,8 @@ int main(int argc, char** argv) {
     ok = run_packed_periodic_seam(torch::kFloat32) && ok;
     ok = run_packed_periodic_seam(torch::kFloat64) && ok;
     ok = run_packed_u_rdz_seam() && ok;
+    ok = run_vertical_u_stress_actual_shape() && ok;
+    ok = run_vertical_v_stress_actual_shape() && ok;
     ok = run_normal_stress(torch::kFloat32) && ok;
     ok = run_normal_stress(torch::kFloat64) && ok;
     ok = run_actual_rhs_contract() && ok;
