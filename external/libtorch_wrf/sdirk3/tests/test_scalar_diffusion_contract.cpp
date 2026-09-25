@@ -13,7 +13,7 @@ struct ScalarDiffusionTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)
         (const torch::Tensor&, const torch::Tensor&, float, float,
          const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
-         const torch::Tensor&);
+         const torch::Tensor&, torch::Tensor*, torch::Tensor*);
     friend type access(ScalarDiffusionTag);
 };
 template<typename Tag, typename Tag::type Member> struct MemberAccessor {
@@ -85,7 +85,7 @@ bool run(torch::Dtype dtype) {
     auto call = [&](const torch::Tensor& q, bool supply_msfvx) {
         return (tile.*access(ScalarDiffusionTag{}))(
             q, Kh_field, 1.0f, 1.0f, msftx, msfty,
-            supply_msfvx ? msfvx : torch::Tensor(), mut);
+            supply_msfvx ? msfvx : torch::Tensor(), mut, nullptr, nullptr);
     };
     const double zero_tol = 512.0 * eps * (1.0 + std::abs(Kh * MUT));
     const double mode_tol = 512.0 * eps * (1.0 + std::abs(Kh * MUT));
@@ -123,6 +123,56 @@ bool run(torch::Dtype dtype) {
         }
     }
     return ok;
+}
+
+// A packed periodic tile carries the first mass column again as its last
+// alias. The unique physical core ends at nx-2, so H1[nx-1] is the seam face.
+bool run_packed_periodic_seam(torch::Dtype dtype) {
+    using wrf::sdirk3::test::TileCase;
+    TileCase tile(1.0f);
+    tile.solver.setWRFIndices(1,nx,1,ny,1,nz, 1,nx,1,ny,1,nz+1,
+                              -2,nx+4,-2,ny+4,1,nz+1);
+    const int n=nx-1;
+    const auto opt=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
+    const auto phase=torch::arange(n,opt)*(2.0*pi/n);
+    const auto scalar_core=torch::sin(phase).view({1,1,n}).expand({ny,nz,n});
+    const auto q=torch::cat({scalar_core,scalar_core.slice(2,0,1)},2);
+    const auto k_core=(2.0+0.1*torch::cos(phase)).view({1,1,n}).expand({ny,nz,n});
+    const auto kh=torch::cat({k_core,k_core.slice(2,0,1)},2);
+    const auto mut_core=(MUT+20.0*torch::sin(phase)).view({1,n}).expand({ny,n});
+    const auto mut=torch::cat({mut_core,mut_core.slice(1,0,1)},1);
+    const auto mx_core=(1.0+0.03*torch::cos(phase)).view({1,n}).expand({ny,n});
+    const auto my_core=(1.0+0.02*torch::sin(phase)).view({1,n}).expand({ny,n});
+    const auto mx=torch::cat({mx_core,mx_core.slice(1,0,1)},1);
+    const auto my=torch::cat({my_core,my_core.slice(1,0,1)},1);
+    torch::Tensor h1;
+    const auto got=(tile.solver.*access(ScalarDiffusionTag{}))(
+        q,kh,1.0f,1.0f,mx,my,torch::ones({ny+1,nx},opt),mut,&h1,nullptr);
+    const auto expected=(0.5*(mx.select(1,n-1)+mx.select(1,0))/
+                         (0.5*(my.select(1,n-1)+my.select(1,0)))).unsqueeze(1)*
+        (0.5*(kh.select(2,n-1)+kh.select(2,0)))*
+        (0.5*(mut.select(1,n-1)+mut.select(1,0))).unsqueeze(1)*
+        (q.select(2,0)-q.select(2,n-1));
+    const double seam_error=(h1.select(2,0)-expected).abs().max().item<double>();
+    const double west_alias=(h1.select(2,0)-h1.select(2,n)).abs().max().item<double>();
+    const double east_alias=(h1.select(2,nx)-h1.select(2,1)).abs().max().item<double>();
+    const double tendency_alias=(got.select(2,n)-got.select(2,0))
+        .abs().max().item<double>();
+    const double unique_sum=std::abs((got.slice(2,0,n)/
+        (mx.slice(1,0,n)*my.slice(1,0,n)).unsqueeze(1)).sum().item<double>());
+    const double signal=expected.abs().max().item<double>();
+    const double eps=dtype==torch::kFloat32 ? std::numeric_limits<float>::epsilon()
+                                           : std::numeric_limits<double>::epsilon();
+    const double budget=256.0*eps*std::max(1.0,signal);
+    const bool pass=signal>1.0 && seam_error<budget && west_alias==0.0 &&
+                    east_alias==0.0 && tendency_alias<budget &&
+                    unique_sum<budget*ny*nz*n;
+    std::cout << (pass ? "PASS " : "FAIL ") << "packed periodic scalar seam"
+              << " seam=" << signal << " error=" << seam_error
+              << " west_alias=" << west_alias << " east_alias=" << east_alias
+              << " tendency_alias=" << tendency_alias
+              << " unique_sum=" << unique_sum << " budget=" << budget << '\n';
+    return pass;
 }
 
 // Flat normal stresses: Fortran tau=-2*rho*K*Dq and signed dnw=-1.
@@ -553,6 +603,8 @@ bool run_scalar_zero_gate() {
 int main() {
     bool ok = run(torch::kFloat32);
     ok = run(torch::kFloat64) && ok;
+    ok = run_packed_periodic_seam(torch::kFloat32) && ok;
+    ok = run_packed_periodic_seam(torch::kFloat64) && ok;
     ok = run_normal_stress(torch::kFloat32) && ok;
     ok = run_normal_stress(torch::kFloat64) && ok;
     ok = run_actual_rhs_contract() && ok;
