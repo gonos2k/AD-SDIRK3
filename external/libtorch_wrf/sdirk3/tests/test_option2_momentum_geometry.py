@@ -271,6 +271,14 @@ def main() -> int:
             result, extracted_sha = compiled_fortran_oracle(
                 repo, args.fortran_compiler, flags, temp / label)
             fortran_results.append((label, result, extracted_sha))
+    outputs = [("C++", actual), ("equation oracle", expected)]
+    outputs.extend((name, result) for name, result, _ in fortran_results)
+    for label, values in outputs:
+        bad = next((key for key, value in values.items()
+                    if not math.isfinite(value)), None)
+        if bad is not None:
+            print(f"FAIL non-finite {label} output at {bad}", file=sys.stderr)
+            return 1
     absent = sorted(set(expected) - set(actual))
     if absent:
         print(f"FAIL missing owned C++ outputs: {absent[:3]}", file=sys.stderr)

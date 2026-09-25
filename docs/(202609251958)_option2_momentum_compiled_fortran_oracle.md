@@ -15,7 +15,7 @@ D11 remains independently computed by the existing Python transcription of the s
 - Extracted routine-body SHA-256: `df842e5eac37ec5cc07c8e5af117dd38cacbae28523c91df338eb39466130e22`.
 - C++ implementation SHA-256: `811c7f8f7ce206c57bda617efa5ce8e4f3994741c4cb21ccb83414799898923a`.
 - C++ test SHA-256: `22b68e520ae521bfd4f0ce4380883bef5245631898e1b7369c0163c38e0f49af`.
-- Python oracle SHA-256 after implementation: `742cf0adbf1e38c091706999df26d5ebf163aa1ee1fe82b2d84f285930164c13`.
+- Python oracle SHA-256 after the finite-value gate: `a5cbc67597af53ddec4070a45fb783866e37296a7b3d66fd54cfde78a8f7c68c`.
 - C++ reference executable: `/tmp/sdirk3-option2-momentum-impl-build/test_scalar_diffusion_contract`, SHA-256 `106bbd15f6cf7fa17d45563b5b568a26e4ea36bdb25a65f85d7426514e25cefe`.
 - Fortran compiler: GNU Fortran 15.2.0, Apple arm64 Darwin; REAL64 cases use `-fdefault-real-8`.
 
@@ -36,6 +36,8 @@ The fixture is Nx=8 periodic X, `H=100*cos(2*pi*i/8) m`, `U=[0,0,0,1]`, `K=2`, `
 - Result: `PASS option-2 U-X compiled Fortran geometry parity`.
 - Python syntax check and `git diff --check` pass.
 - The existing `core-linux` workflow now invokes this compiled parity script after the option-1 momentum source comparison; hosted CI for that exact candidate is pending.
+
+At 2026-09-25 20:10:40 JST, the normal local rerun still passed (log SHA-256 `81aa1060c6dbded1bacb4aa07d080e3c8cd22322e43eb9685f7bb9cdc5077349`). A temporary wrapper replaced one non-first owned C++ output with NaN; the test rejected it with `FAIL non-finite C++ output at (1, 1, 2)` (negative-control log SHA-256 `c5ea7322694d7951ec3ae43b043cefc9b10ebe6312c0a0348f8e9a9b560158c1`). The wrapper was not committed. All C++, Python-equation and compiled-Fortran values are now checked for finiteness before reducing errors.
 - No WRF `test/em_b_wave` model run or same-setup split-explicit RK3 field/runtime comparison was performed; this oracle validates the isolated operator fixture only.
 
 ## Graphify
