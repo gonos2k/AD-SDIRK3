@@ -1042,6 +1042,28 @@ CONTAINS
             SDIRK3_RHS_RUN_REASON_HALO)
       END IF
 
+      ! The zero-copy bridge currently passes no moisture state. Reject an
+      ! active option-2 diffusion run that is not actually dry on this rank
+      ! before any OpenMP tile worker can advance or mutate a solver.
+      IF (config_flags%diff_opt == 2 .AND. &
+          (config_flags%khdif > 0.0 .OR. config_flags%kvdif > 0.0)) THEN
+         IF (config_flags%mp_physics /= 0) &
+            CALL wrf_error_fatal('SDIRK3 option-2 metric diffusion requires dry microphysics')
+         IF (r_ips > MIN(r_ipe,r_ide-1) .OR. r_jps > MIN(r_jpe,r_jde-1) .OR. &
+             r_kps > MIN(r_kpe,r_kde-1)) THEN
+            CALL wrf_error_fatal('SDIRK3 option-2 metric diffusion has no owned mass cells')
+         ELSE IF (.NOT. ASSOCIATED(grid%moist)) THEN
+            CALL wrf_error_fatal('SDIRK3 option-2 metric diffusion requires allocated QV')
+         ELSE IF (SIZE(grid%moist,4) < P_QV) THEN
+            CALL wrf_error_fatal('SDIRK3 option-2 metric diffusion requires a QV slot')
+         ELSE
+            IF (ANY(grid%moist(r_ips:MIN(r_ipe,r_ide-1), &
+                               r_kps:MIN(r_kpe,r_kde-1), &
+                               r_jps:MIN(r_jpe,r_jde-1),P_QV) /= 0.0)) &
+               CALL wrf_error_fatal('SDIRK3 option-2 metric diffusion requires zero QV')
+         END IF
+      END IF
+
       west_halo  = INT(r_ips, C_INT64_T) - INT(r_ims, C_INT64_T)
       east_halo  = INT(r_ime, C_INT64_T) - INT(r_ipe, C_INT64_T)
       south_halo = INT(r_jps, C_INT64_T) - INT(r_jms, C_INT64_T)

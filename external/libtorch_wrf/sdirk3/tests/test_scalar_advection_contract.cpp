@@ -11,7 +11,7 @@
 // changing their production visibility or adding a public test API.
 struct AdvectXTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)
-        (const torch::Tensor&, const torch::Tensor&, float);
+        (const torch::Tensor&, const torch::Tensor&, float, torch::Tensor*);
     friend type access(AdvectXTag);
 };
 template<typename Tag, typename Tag::type Member> struct Accessor {
@@ -21,7 +21,7 @@ template struct Accessor<AdvectXTag, &TileSDIRK3UnifiedSolver::advect_scalar_x>;
 
 struct AdvectYTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)
-        (const torch::Tensor&, const torch::Tensor&, float);
+        (const torch::Tensor&, const torch::Tensor&, float, torch::Tensor*);
     friend type access(AdvectYTag);
 };
 template struct Accessor<AdvectYTag, &TileSDIRK3UnifiedSolver::advect_scalar_y>;
@@ -57,8 +57,8 @@ double advection_error(int n, double velocity, bool y_direction) {
         }
 
     const auto tendency = y_direction
-        ? (tile.*access(AdvectYTag{}))(f, vel, 1.0f / h)
-        : (tile.*access(AdvectXTag{}))(f, vel, 1.0f / h);
+        ? (tile.*access(AdvectYTag{}))(f, vel, 1.0f / h, nullptr)
+        : (tile.*access(AdvectXTag{}))(f, vel, 1.0f / h, nullptr);
     const auto out = tendency.to(torch::kCPU).contiguous();
     double max_error = 0.0;
     const int begin = 8;
@@ -217,7 +217,7 @@ void check_packed_x_oracle(int order, double velocity_sign) {
         u_acc[j][0][period + 1] = u_acc[j][0][1];
     }
 
-    const auto got = (tile.*access(AdvectXTag{}))(f, u, 1.0f)
+    const auto got = (tile.*access(AdvectXTag{}))(f, u, 1.0f, nullptr)
                          .to(torch::kCPU).contiguous();
     const auto out = got.accessor<double, 3>();
     const auto expected = packed_x_oracle(q, velocity, order);
@@ -235,7 +235,7 @@ void check_packed_x_oracle(int order, double velocity_sign) {
     auto altered_u = u.clone();
     altered_u.select(2, period).fill_(19.0);
     altered_u.select(2, period + 1).fill_(-23.0);
-    const auto altered = (tile.*access(AdvectXTag{}))(altered_f, altered_u, 1.0f)
+    const auto altered = (tile.*access(AdvectXTag{}))(altered_f, altered_u, 1.0f, nullptr)
                              .to(torch::kCPU).contiguous();
     const auto altered_out = altered.accessor<double, 3>();
     for (int j = 0; j < n; ++j)
@@ -285,7 +285,7 @@ void check_packed_y_oracle(int order, double velocity_sign) {
         v_acc[m + 1][0][i] = -v_acc[m - 1][0][i];
     }
 
-    const auto got = (tile.*access(AdvectYTag{}))(f, v, 1.0f)
+    const auto got = (tile.*access(AdvectYTag{}))(f, v, 1.0f, nullptr)
                          .to(torch::kCPU).contiguous();
     const auto out = got.accessor<double, 3>();
     const auto expected = packed_y_oracle(q, velocity, order);
@@ -303,7 +303,7 @@ void check_packed_y_oracle(int order, double velocity_sign) {
     // Changing it must not change any true scalar divergence row.
     auto altered_ghost = v.clone();
     altered_ghost.select(0, m + 1).fill_(17.0);
-    const auto ghost_tensor = (tile.*access(AdvectYTag{}))(f, altered_ghost, 1.0f)
+    const auto ghost_tensor = (tile.*access(AdvectYTag{}))(f, altered_ghost, 1.0f, nullptr)
                                   .to(torch::kCPU).contiguous();
     const auto ghost_out = ghost_tensor.accessor<double, 3>();
     for (int j = 0; j < m; ++j)
@@ -385,8 +385,8 @@ void check_packed_ad_fd(bool y_direction) {
     }
 
     const auto apply = [&](const torch::Tensor& field) {
-        return y_direction ? (tile.*access(AdvectYTag{}))(field, transport, 1.0f)
-                            : (tile.*access(AdvectXTag{}))(field, transport, 1.0f);
+        return y_direction ? (tile.*access(AdvectYTag{}))(field, transport, 1.0f, nullptr)
+                            : (tile.*access(AdvectXTag{}))(field, transport, 1.0f, nullptr);
     };
     const auto base = apply(f);
     const auto output_core = y_direction ? base.slice(0, 0, true_size)
@@ -455,7 +455,7 @@ void check_zero_velocity_ad_fd() {
             d[j][0][i] = 0.7 + 0.01 * j + 0.003 * i;
 
     const auto apply = [&](const torch::Tensor& speed) {
-        return (tile.*access(AdvectYTag{}))(f, speed, 1.0f);
+        return (tile.*access(AdvectYTag{}))(f, speed, 1.0f, nullptr);
     };
     auto seed = torch::zeros({m, nz, n}, opts);
     auto seed_acc = seed.accessor<double, 3>();

@@ -32,6 +32,7 @@
 #include <string>
 #include <atomic>
 #include <mutex>
+#include <tuple>
 #include <iostream>  // FIX Round93: For TLS debug tracking
 #include <cstdint>   // FIX Round94: For uint64_t in TLS throttling
 
@@ -924,11 +925,22 @@ public:
     // Test-only observation; no production model setting or RHS change.
     // The accepted ARK derivatives, not a later RHS re-evaluation, define the step.
     struct ArkBudgetTrace {
+        struct ThetaFaces {
+            torch::Tensor adv_x, adv_y, adv_z, diff_x, diff_y;
+        };
         torch::Tensor input, physics, raw_final, projected_final;
         std::vector<torch::Tensor> stage_state, fast, slow, full;
+        ThetaFaces stage1_fast_faces;
+        std::vector<ThetaFaces> slow_faces;
         double dt = 0.0;
     };
-    void captureArkBudgetTraceForTest(bool enabled) { capture_ark_budget_trace_ = enabled; }
+    void captureArkBudgetTraceForTest(bool enabled) {
+        capture_ark_budget_trace_ = enabled;
+        if (!enabled) {
+            capture_theta_faces_now_ = false;
+            rhs_theta_faces_ = {};
+        }
+    }
     const ArkBudgetTrace& getLastArkBudgetTrace() const { return last_ark_budget_trace_; }
     bool getLastStepFinalUpdateAborted() const { return last_step_final_update_aborted_; }
     float getLastStepProgressRatio() const { return last_step_progress_ratio_; }
@@ -1466,6 +1478,7 @@ private:
     // Reference state (will be set from WRF)
     torch::Tensor p_base_;     // Base state pressure (3D)
     torch::Tensor th_base_;    // Base state potential temperature (3D)
+    torch::Tensor t_init_pert_; // Original WRF t_init = th_base - 300 K (3D)
     torch::Tensor rho_base_;   // Base state density (3D)
     torch::Tensor mu_base_;    // Base state column mass (2D)
     torch::Tensor ph_base_;    // Base state geopotential (3D, w-staggered)
@@ -1532,6 +1545,8 @@ private:
     int last_step_outcome_code_ = static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED);
     ArkBudgetTrace last_ark_budget_trace_;
     bool capture_ark_budget_trace_ = false;
+    bool capture_theta_faces_now_ = false;
+    ArkBudgetTrace::ThetaFaces rhs_theta_faces_;
     bool last_step_final_update_aborted_ = false;
     float last_step_progress_ratio_ = 0.0f;
     bool last_step_progress_ratio_valid_ = false;
@@ -2294,8 +2309,10 @@ private:
                                 const torch::Tensor& vel);
     
     // Advection-specific functions with upwind-biasing
-    torch::Tensor advect_scalar_x(const torch::Tensor& f, const torch::Tensor& u, float rdx);
-    torch::Tensor advect_scalar_y(const torch::Tensor& f, const torch::Tensor& v, float rdy);
+    torch::Tensor advect_scalar_x(const torch::Tensor& f, const torch::Tensor& u, float rdx,
+                                  torch::Tensor* face_flux = nullptr);
+    torch::Tensor advect_scalar_y(const torch::Tensor& f, const torch::Tensor& v, float rdy,
+                                  torch::Tensor* face_flux = nullptr);
     
     // Advection functions for already-staggered variables
     // Whole-domain packed periodic-X/symmetric-Y contract, including endpoint aliases.
@@ -2329,7 +2346,30 @@ private:
                                                           float rdx, float rdy, const torch::Tensor& msftx,
                                                           const torch::Tensor& msfty,
                                                           const torch::Tensor& msfvx = torch::Tensor(),
-                                                          const torch::Tensor& mut = torch::Tensor());
+                                                          const torch::Tensor& mut = torch::Tensor(),
+                                                          torch::Tensor* x_flux = nullptr,
+                                                          torch::Tensor* y_flux = nullptr,
+                                                          const torch::Tensor& msfux = torch::Tensor(),
+                                                          const torch::Tensor& msfuy = torch::Tensor(),
+                                                          const torch::Tensor& msfvy = torch::Tensor());
+    // Option-2 scalar diffusion: source-level counterpart of WRF
+    // horizontal_diffusion_s for one complete periodic-X/symmetric-Y tile.
+    // All 3-D fields use [j,k,i]. Slopes and maps are supplied at their native
+    // staggered locations; dnw/dn retain WRF's signed eta orientation.
+    torch::Tensor compute_horizontal_diffusion_scalar_option2_wrf(
+        const torch::Tensor& var, const torch::Tensor& Kh, const torch::Tensor& rho,
+        const torch::Tensor& zx, const torch::Tensor& zy, const torch::Tensor& rdzw,
+        const torch::Tensor& dnw, const torch::Tensor& dn,
+        const torch::Tensor& fnm, const torch::Tensor& fnp,
+        double cf1, double cf2, double cf3,
+        float rdx, float rdy, double gravity,
+        const torch::Tensor& msftx, const torch::Tensor& msfty,
+        const torch::Tensor& msfux, const torch::Tensor& msfvy);
+    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+    compute_horizontal_diffusion_option1_momentum(
+        const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w,
+        const torch::Tensor& K_phys, const torch::Tensor& mu_full,
+        float rdx, float rdy);
     // PARITY FIX 2025-12-07: Added muu/muv parameters for MUT weighting
     // PARITY FIX 2025-12-10: Added optional ph_full parameter for on-the-fly rdzw computation
     // ph_full = ph_pert + ph_base (total geopotential at w-levels, [ny, nz_w, nx])

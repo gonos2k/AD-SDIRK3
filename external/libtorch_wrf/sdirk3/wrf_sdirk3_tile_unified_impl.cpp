@@ -3730,6 +3730,7 @@ TileSDIRK3UnifiedSolver::TileSDIRK3UnifiedSolver(
     // They will be properly set by setBaseState
     // This ensures we don't accidentally use uninitialized zeros
     th_base_ = torch::Tensor();  // Undefined tensor
+    t_init_pert_ = torch::Tensor();
     p_base_ = torch::Tensor(); 
     ph_base_ = torch::Tensor();
     mu_base_ = torch::Tensor();
@@ -3942,6 +3943,8 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
         last_step_input_graph_ = torch::Tensor();
         last_step_output_graph_ = torch::Tensor();
         last_ark_budget_trace_ = {};
+        capture_theta_faces_now_ = false;
+        rhs_theta_faces_ = {};
     }
 
     // R2: a quantity that does NOT depend on how the domain was decomposed.
@@ -9172,6 +9175,7 @@ vertical_coefficients:
                 trace.fast.resize(Ark::stages);
                 trace.slow.resize(Ark::stages);
                 trace.full.resize(Ark::stages);
+                trace.slow_faces.resize(Ark::stages);
             }
             // PR 9F P1-3: BIRTH-time immutable snapshots (detached clones) of each
             // stage derivative, taken when it is finalized. The record-stage history
@@ -9973,6 +9977,7 @@ vertical_coefficients:
                 }
 
                 const int stage_id = i + 1;
+                capture_theta_faces_now_ = capture_ark_budget_trace_ && i == 0;
                 const double aii = Ark::a_implicit[i][i];
                 torch::Tensor U_stage = compute_stage_rhs(i);
                 probe_firsthit_nonfinite(stage_id, false, "U_stage_pre", U_stage);
@@ -10206,6 +10211,10 @@ vertical_coefficients:
                         last_stage_signals_is_explicit_ = true;
                         // ESDIRK explicit first stage: evaluate fast tendency directly.
                         k_fast[i] = compute_fast_rhs(U_stage, U_full_exch_stage);
+                        if (capture_theta_faces_now_) {
+                            last_ark_budget_trace_.stage1_fast_faces = rhs_theta_faces_;
+                            capture_theta_faces_now_ = false;
+                        }
                         // R13.20 (adversarial loop, iteration 2) -- TWO defects, one root.
                         //
                         // (1) `explicit_rhs_measured` / `explicit_rhs_finite` had NO producer
@@ -10448,7 +10457,16 @@ vertical_coefficients:
                     maybe_halo(U_conv);
                 }
 
+                TORCH_CHECK(!capture_ark_budget_trace_ || !U_full_exch_conv.defined(),
+                            "theta producer-face trace requires the single-tile"
+                            " ordinary RHS; full-halo flux ownership is not captured");
+                capture_theta_faces_now_ = capture_ark_budget_trace_;
                 k_slow[i] = compute_k_slow(U_conv, U_full_exch_conv);
+                if (capture_theta_faces_now_) {
+                    last_ark_budget_trace_.slow_faces[i] = rhs_theta_faces_;
+                    capture_theta_faces_now_ = false;
+                    rhs_theta_faces_ = {};
+                }
                 probe_firsthit_nonfinite(stage_id, retry_used, "k_slow", k_slow[i]);
 
                 // ============================================================
@@ -14251,6 +14269,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::projectStateBoundaries(const torch::Tenso
 }
 
 torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U, RhsMode mode) {
+    if (capture_theta_faces_now_) rhs_theta_faces_ = {};
     // Step 7b: Detect full-halo input and redirect
     {
         int64_t expected_interior_size = ny_ * nz_ * nx_u_ + ny_v_ * nz_ * nx_
@@ -15334,6 +15353,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         }
         if (th_base_.defined() && th_base_.numel() > 0 && th_base_.device() != target_dev) {
             th_base_ = th_base_.to(target_dev, target_dtype, /*non_blocking=*/true);
+        }
+        if (t_init_pert_.defined() && t_init_pert_.numel() > 0 &&
+            t_init_pert_.device() != target_dev) {
+            t_init_pert_ = t_init_pert_.to(target_dev, target_dtype, /*non_blocking=*/true);
         }
         // Also align mu_base_ and ph_base_ which are used in similar contexts
         if (mu_base_.defined() && mu_base_.numel() > 0 && mu_base_.device() != target_dev) {
@@ -17346,10 +17369,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
 
         // Use perturbation t for advection with mass-coupled momentum
         // X-advection: -∂(ru·θ')/∂x (mass-conserving flux form)
-        auto t_adv_x = advect_scalar_x(t, ru_theta, rdx);
+        auto t_adv_x = advect_scalar_x(t, ru_theta, rdx,
+            capture_theta_faces_now_ ? &rhs_theta_faces_.adv_x : nullptr);
 
         // Y-advection: -∂(rv·θ')/∂y (mass-conserving flux form)
-        auto t_adv_y = advect_scalar_y(t, rv_theta, rdy);
+        auto t_adv_y = advect_scalar_y(t, rv_theta, rdy,
+            capture_theta_faces_now_ ? &rhs_theta_faces_.adv_y : nullptr);
         
         // Apply map factors with boundary safety
         // PARITY FIX 2025-12-24: Autocast-aware eps (handles FP16 autocast even when storage is FP32).
@@ -17395,6 +17420,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             t_adv_z_work_ = t_adv_z;
         } else if (use_wrf_mass_flux && have_rdnw_t) {
             const auto flux_w = wrf_ww_cp() * avg_z_to_w(t);
+            if (capture_theta_faces_now_) {
+                torch::NoGradGuard no_grad;
+                rhs_theta_faces_.adv_z = flux_w.detach().clone();
+            }
             // WRF rdnw is negative; getRdnwTensor stores its magnitude.
             // -rdnw * delta(Omega*theta) therefore has a positive sign here.
             // Both boundary fluxes vanish, but the top cell divergence need not.
@@ -23349,27 +23378,20 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // Consumers interpolate it to their own stress/flux locations.
                 Kh_mom = torch::full_like(t, Kh_const);
                 if (Kh_const == 0.0f) {
-                    // Option 2 also has independently supplied scalar diffusion
-                    // and W stress driven by xkmv (kvdif).
-                    apply_h_diffusion = wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
-                        ((Kh_scalar_.defined() && Kh_scalar_.numel() > 0) ||
+                    // Both options can receive an independent physical scalar
+                    // diffusivity. Option 2 can also have W stress from kvdif.
+                    apply_h_diffusion =
+                        (Kh_scalar_.defined() && Kh_scalar_.numel() > 0) ||
+                        (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
                          wrf::sdirk3::g_sdirk3_config.kvdif != 0.0f);
                 }
             }
 
             if (apply_h_diffusion) {
-                // Option 2 consumers take physical diffusivity (m^2/s),
-                // interpolate it to stress/flux locations, and convert tendency
-                // units themselves. Preweighting here double-couples scalar mass.
-                // Retain the legacy option-1 weighting pending its separate
-                // coordinate-surface operator implementation.
-                if (wrf::sdirk3::g_sdirk3_config.diffusion_option != 2 &&
-                    c1h_.defined() && c2h_.defined() && c1h_.numel() > 0) {
-                    const auto& c1h = ensureC1hDevCached(t.device(), t.scalar_type());
-                    const auto& c2h = ensureC2hDevCached(t.device(), t.scalar_type());
-                    Kh_mom = Kh_mom * (c1h.slice(0, 0, t.size(1)).view({1, -1, 1}) *
-                        mu_full.unsqueeze(1) + c2h.slice(0, 0, t.size(1)).view({1, -1, 1}));
-                }
+                // Keep the physical mass-point diffusivity. Option 1 forms
+                // its hybrid layer mass inside the coordinate-surface flux;
+                // option 2's stress helpers also consume physical diffusivity.
+                const auto Kh_mom_physical = Kh_mom;
                 // PARITY FIX 2025-12-13: Use physics-supplied scalar diffusivity when available
                 // WRF uses khdq = 3*khdif as default only when no scalar diffusivity is provided
                 // If a physics scheme supplies scalar diffusivity via setDiffusionCoefficients, use it
@@ -23388,7 +23410,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 } else {
                     // PARITY FIX 2025-12-07: Fortran uses khdq = 3*khdif for scalars as default
                     // In module_big_step_utilities_em.F: khdq = 3.*khdif
-                    Kh_scalar = 3.0f * Kh_mom;
+                    Kh_scalar = 3.0f * Kh_mom_physical;
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                         torch::NoGradGuard no_grad;                    }
                 }
@@ -23483,46 +23505,68 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         rho_uv = rho_uv * (1.0 + grid_info_->qv.to(t.device(), t.scalar_type()));
                 }
 
-                // U-momentum horizontal diffusion
-                auto u_diff_h = compute_horizontal_diffusion_u_wrf(u, v, w, Kh_mom, rdx, rdy,
-                                                                   msfux_, msfuy_, msftx_, msfty_, muu_2d, ph_full_for_diff, rho_uv);
-                if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
-                    const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
-                        .slice(0, 0, t.size(1)).view({1, -1, 1});
-                    const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
-                        .slice(0, 0, t.size(1)).view({1, -1, 1});
-                    const auto alpha = (canonical_horizontal ? level_mass_u :
-                        c1 * muu_2d.unsqueeze(1) + c2) / msfuy_.unsqueeze(1);
-                    u_diff_h = u_diff_h * (velocity_mass_u / alpha);
+                torch::Tensor u_diff_h, v_diff_h, w_diff_h;
+                if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 1) {
+                    std::tie(u_diff_h, v_diff_h, w_diff_h) =
+                        compute_horizontal_diffusion_option1_momentum(
+                            u, v, w, Kh_mom_physical, mu_full_diff, rdx, rdy);
+                    // The helper returns pre-rk_addtend_dry ru/rv/rw_tendf.
+                    // Fortran first divides these by the staggered map factor;
+                    // converting from alpha=L/map to this RHS's column-mass
+                    // basis then multiplies by velocity_mass/alpha. The maps
+                    // cancel, leaving velocity_mass/L for all three winds.
+                    const auto c1h = ensureC1hDevCached(u.device(), u.scalar_type())
+                        .slice(0, 0, u.size(1)).view({1, -1, 1});
+                    const auto c2h = ensureC2hDevCached(u.device(), u.scalar_type())
+                        .slice(0, 0, u.size(1)).view({1, -1, 1});
+                    const auto c1f = ensureC1fDevCached(w.device(), w.scalar_type())
+                        .slice(0, 0, w.size(1)).view({1, -1, 1});
+                    const auto c2f = ensureC2fDevCached(w.device(), w.scalar_type())
+                        .slice(0, 0, w.size(1)).view({1, -1, 1});
+                    const auto layer_u = canonical_horizontal ? level_mass_u :
+                        c1h * muu_2d.unsqueeze(1) + c2h;
+                    const auto layer_v = canonical_horizontal ? level_mass_v :
+                        c1h * muv_2d.unsqueeze(1) + c2h;
+                    const auto layer_w = canonical_horizontal ? level_mass_w :
+                        c1f * mu_full_diff.unsqueeze(1) + c2f;
+                    u_diff_h = u_diff_h * (velocity_mass_u / layer_u);
+                    v_diff_h = v_diff_h * (velocity_mass_v / layer_v);
+                    w_diff_h = w_diff_h * (velocity_mass_w / layer_w);
+                } else {
+                    // Preserve the option-2 physical-stress operator as its own path.
+                    u_diff_h = compute_horizontal_diffusion_u_wrf(u, v, w, Kh_mom, rdx, rdy,
+                                                                  msfux_, msfuy_, msftx_, msfty_, muu_2d, ph_full_for_diff, rho_uv);
+                    if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
+                        const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
+                            .slice(0, 0, t.size(1)).view({1, -1, 1});
+                        const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
+                            .slice(0, 0, t.size(1)).view({1, -1, 1});
+                        const auto alpha = (canonical_horizontal ? level_mass_u :
+                            c1 * muu_2d.unsqueeze(1) + c2) / msfuy_.unsqueeze(1);
+                        u_diff_h = u_diff_h * (velocity_mass_u / alpha);
+                    }
+
+                    v_diff_h = compute_horizontal_diffusion_v_wrf(u, v, w, Kh_mom, rdx, rdy,
+                                                                  msfvx_, msfvy_, msftx_, msfty_, muv_2d, ph_full_for_diff, rho_uv);
+                    if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
+                        const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
+                            .slice(0, 0, t.size(1)).view({1, -1, 1});
+                        const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
+                            .slice(0, 0, t.size(1)).view({1, -1, 1});
+                        const auto alpha = (canonical_horizontal ? level_mass_v :
+                            c1 * muv_2d.unsqueeze(1) + c2) / msfvx_.unsqueeze(1);
+                        v_diff_h = v_diff_h * (velocity_mass_v / alpha);
+                    }
+
+                    // Option 2 consumes its own W stress coefficient/density path.
+                    const auto& rho_w = wrf::sdirk3::g_sdirk3_config.diffusion_option == 2
+                        ? rho_uv : rho_for_hdiff;
+                    w_diff_h = compute_horizontal_diffusion_w_wrf(u, v, w, Kh_w, rho_w, rdx, rdy,
+                                                                  msftx_, msfty_, mu_full_diff, ph_full_for_diff);
                 }
                 ru_tend = ru_tend + u_diff_h;
                 uterm_site(wrf::sdirk3::USlowSiteKind::HorizontalDiffusion);
-
-                // V-momentum horizontal diffusion
-                auto v_diff_h = compute_horizontal_diffusion_v_wrf(u, v, w, Kh_mom, rdx, rdy,
-                                                                   msfvx_, msfvy_, msftx_, msfty_, muv_2d, ph_full_for_diff, rho_uv);
-                if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
-                    const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
-                        .slice(0, 0, t.size(1)).view({1, -1, 1});
-                    const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
-                        .slice(0, 0, t.size(1)).view({1, -1, 1});
-                    const auto alpha = (canonical_horizontal ? level_mass_v :
-                        c1 * muv_2d.unsqueeze(1) + c2) / msfvx_.unsqueeze(1);
-                    v_diff_h = v_diff_h * (velocity_mass_v / alpha);
-                }
                 rv_tend = rv_tend + v_diff_h;
-
-                // W-momentum horizontal diffusion
-                // Option 2: Kh_w is physical viscosity on mass levels, without hybrid weighting.
-                // PARITY FIX 2025-12-08: Pass mu_full_diff for MUT-weighted flux-form
-                // PARITY FIX 2025-12-10: Pass ph_full for 3D rdz computation from total geopotential
-                // PARITY FIX 2025-12-13: Pass u, v for defor13/defor23-based tau31/tau32 computation
-                // PARITY FIX 2025-12-13: Pass rho for xkxavg = rhoavg * Km_avg density weighting
-                // Option 2 stresses share the current-state physical mass-point density.
-                const auto& rho_w = wrf::sdirk3::g_sdirk3_config.diffusion_option == 2
-                    ? rho_uv : rho_for_hdiff;
-                auto w_diff_h = compute_horizontal_diffusion_w_wrf(u, v, w, Kh_w, rho_w, rdx, rdy,
-                                                                   msftx_, msfty_, mu_full_diff, ph_full_for_diff);
                 rw_tend = rw_tend + w_diff_h;
 
                 // USER INSTRUMENTATION: Log rw_tend after horizontal diffusion
@@ -23543,10 +23587,122 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 }
 
                 // Theta horizontal diffusion
-                // PARITY FIX 2025-12-07: Pass msfvx_ and mu_full_diff for Fortran parity
-                auto t_diff_h = compute_horizontal_diffusion_scalar_wrf(t, Kh_scalar, rdx, rdy,
-                                                                        msftx_, msfty_,
-                                                                        msfvx_, mu_full_diff);
+                // Option 1's horizontal_diffusion_3dmp forms c1h*MUT+c2h at
+                // mass points before averaging the layer mass to scalar faces.
+                // Option 2 has a different terrain-metric scalar operator.
+                const bool scalar_option1 =
+                    wrf::sdirk3::g_sdirk3_config.diffusion_option == 1;
+                if (scalar_option1) {
+                    TORCH_CHECK(msfux_.defined() && msfuy_.defined() &&
+                                msfvx_.defined() && msfvy_.defined(),
+                                "option-1 scalar diffusion requires U/V staggered maps");
+                    TORCH_CHECK(c1h_.defined() && c2h_.defined() &&
+                                c1h_.numel() >= t.size(1) && c2h_.numel() >= t.size(1),
+                                "option-1 scalar diffusion requires layer-mass coefficients");
+                }
+                torch::Tensor scalar_layer_mass = mu_full_diff;
+                if (scalar_option1) {
+                    const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
+                        .slice(0, 0, t.size(1)).view({1, -1, 1});
+                    const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
+                        .slice(0, 0, t.size(1)).view({1, -1, 1});
+                    scalar_layer_mass = c1 * mu_full_diff.unsqueeze(1) + c2;
+                }
+                TORCH_CHECK(!scalar_option1 ||
+                            (t_init_pert_.defined() && t_init_pert_.sizes() == t.sizes()),
+                            "option-1 scalar diffusion requires WRF t_init");
+                const auto scalar_for_diff = scalar_option1
+                    ? t - t_init_pert_.to(t.device(),t.scalar_type()) : t;
+                torch::Tensor t_diff_h;
+                const auto grid_ext = std::static_pointer_cast<wrf::sdirk3::WRFGridInfoExtended>(grid_info_);
+                const bool option2_isotropic_dry =
+                    wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
+                    canonical_horizontal && !g_export_coupled_slow &&
+                    grid_ext && grid_ext->smagorinsky_opt == 1 &&
+                    wrf::sdirk3::g_sdirk3_config.wrf_damp_opt == 0 &&
+                    n_moist_ == 0 && fnm_fnp_from_wrf_ &&
+                    !Kh_mom_.defined() && !Kh_scalar_.defined() &&
+                    !capture_theta_faces_now_;
+                const bool option2_native_declared =
+                    wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
+                    canonical_horizontal && grid_ext && grid_ext->smagorinsky_opt > 0;
+                TORCH_CHECK(!option2_native_declared || option2_isotropic_dry,
+                            "option-2 metric scalar diffusion requires dry isotropic km_opt=1, "
+                            "damp_opt=0, WRF eta weights, and no supplied K or face capture");
+                if (option2_isotropic_dry) {
+                    // Form the WRF metric at this RHS state. Cached zx_/zy_ and
+                    // rdzw_3d_ belong to base-state setup and use other stencils.
+                    const bool packed = isPackedPeriodicDomain();
+                    const int64_t m = t.size(0) - (packed ? 1 : 0);
+                    const int64_t n = t.size(2) - (packed ? 1 : 0);
+                    const auto core3 = [&](const torch::Tensor& q) {
+                        return q.slice(0,0,m).slice(2,0,n);
+                    };
+                    const auto core2 = [&](const torch::Tensor& q) {
+                        return q.slice(0,0,m).slice(1,0,n);
+                    };
+                    const double gravity = grid_info_ && grid_info_->g > 0 ? grid_info_->g : g_;
+                    const auto z_w = core3(ph_full_for_diff) / gravity;
+                    const auto dz = z_w.slice(1,1,nz_+1)-z_w.slice(1,0,nz_);
+                    const auto rdzw = dz.reciprocal();
+                    const auto z_x_left = torch::cat({z_w.slice(2,n-1,n),z_w},2);
+                    const auto z_x_right = torch::cat({z_w,z_w.slice(2,0,1)},2);
+                    const auto zx = rdx*(z_x_right-z_x_left);
+                    const auto zy_wall = torch::zeros({1,nz_w_,n},z_w.options());
+                    const auto zy = torch::cat({zy_wall,
+                        rdy*(z_w.slice(0,1,m)-z_w.slice(0,0,m-1)),zy_wall},0);
+
+                    // Stored reciprocal eta spacings are positive magnitudes;
+                    // horizontal_diffusion_s consumes signed negative dnw/dn.
+                    const auto rdnw = getRdnwTensor(t.device(),t.scalar_type(),nz_);
+                    const auto rdn = getRdnTensor(t.device(),t.scalar_type(),nz_);
+                    TORCH_CHECK(rdnw.numel() >= nz_ && rdn.numel() >= nz_ &&
+                                fnm_.defined() && fnp_.defined() && nz_ >= 3,
+                                "option-2 scalar metric diffusion requires WRF eta profiles");
+                    const auto dnw = -rdnw.slice(0,0,nz_).reciprocal();
+                    const auto dn = torch::cat({torch::zeros_like(rdn.slice(0,0,1)),
+                        -rdn.slice(0,1,nz_).reciprocal()},0);
+                    const auto fnm = fnm_.to(t.device(),t.scalar_type()).slice(0,0,nz_);
+                    const auto fnp = fnp_.to(t.device(),t.scalar_type()).slice(0,0,nz_);
+                    const auto dnw_cpu = getRdnwTensor(torch::kCPU,torch::kFloat64,nz_).reciprocal();
+                    const auto dn_cpu = getRdnTensor(torch::kCPU,torch::kFloat64,nz_).reciprocal();
+                    double cf1, cf2, cf3;
+                    {
+                        torch::NoGradGuard no_grad;
+                        const double dw1 = dnw_cpu[0].item<double>();
+                        const double d2 = dn_cpu[1].item<double>();
+                        const double d3 = dn_cpu[2].item<double>();
+                        const double cof1 = (2*d2+d3)/(d2+d3)*dw1/d2;
+                        const double cof2 = d2/(d2+d3)*dw1/d3;
+                        cf1 = fnp[1].item<double>()+cof1;
+                        cf2 = fnm[1].item<double>()-cof1-cof2;
+                        cf3 = cof2;
+                    }
+                    TORCH_CHECK(std::isfinite(cf1) && std::isfinite(cf2) && std::isfinite(cf3),
+                                "option-2 scalar metric diffusion has invalid bottom weights");
+                    const auto t_core = core3(t);
+                    const auto raw = compute_horizontal_diffusion_scalar_option2_wrf(
+                        t_core,core3(Kh_scalar),core3(rho_uv),zx,zy,rdzw,
+                        dnw,dn,fnm,fnp,cf1,cf2,cf3,rdx,rdy,gravity,
+                        core2(msftx_),core2(msfty_),
+                        msfux_.slice(0,0,m).slice(1,0,n+1),
+                        msfvy_.slice(0,0,m+1).slice(1,0,n));
+                    if (packed) {
+                        const auto x = torch::cat({raw,raw.slice(2,0,1)},2);
+                        t_diff_h = torch::cat({x,x.slice(0,m-1,m)},0);
+                    } else {
+                        t_diff_h = raw;
+                    }
+                } else {
+                    t_diff_h = compute_horizontal_diffusion_scalar_wrf(
+                        scalar_for_diff,Kh_scalar,rdx,rdy,msftx_,msfty_,
+                        msfvx_,scalar_layer_mass,
+                        capture_theta_faces_now_ ? &rhs_theta_faces_.diff_x : nullptr,
+                        capture_theta_faces_now_ ? &rhs_theta_faces_.diff_y : nullptr,
+                        scalar_option1 ? msfux_ : torch::Tensor(),
+                        scalar_option1 ? msfuy_ : torch::Tensor(),
+                        scalar_option1 ? msfvy_ : torch::Tensor());
+                }
                 t_tend = t_tend + t_diff_h;
             }  // end if (apply_h_diffusion)
         }  // end Step 9: HORIZONTAL DIFFUSION inner block
@@ -26102,7 +26258,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::flux2_centered(
 }
 
 // Advection functions with WRF flux-form
-torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_x(const torch::Tensor& f, const torch::Tensor& u, float rdx) {
+torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_x(const torch::Tensor& f, const torch::Tensor& u,
+                                                       float rdx, torch::Tensor* face_flux) {
     // AUTOGRAD OPTIMIZATION: Hybrid vectorization for scalar advection
     // Reduces autodiff nodes from ~100K to ~10K (90% reduction)
     // f: scalar field at mass points (nz, ny, nx)
@@ -26388,10 +26545,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_x(const torch::Tensor& f, c
     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 1 && f.size(0) == 64) {
     }
     
+    if (face_flux) {
+        torch::NoGradGuard no_grad;
+        *face_flux = flux.detach().clone();
+    }
     return advect;
 }
 
-torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, const torch::Tensor& v, float rdy) {
+torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, const torch::Tensor& v,
+                                                       float rdy, torch::Tensor* face_flux) {
     // AUTOGRAD OPTIMIZATION: Hybrid vectorization for Y-direction scalar advection
     // Reduces autodiff nodes from ~100K to ~10K (90% reduction)
     // f: scalar field at mass points (ny, nz, nx) - per WRF-SDIRK3-design.md layout
@@ -26736,7 +26898,11 @@ torch::Tensor TileSDIRK3UnifiedSolver::advect_scalar_y(const torch::Tensor& f, c
             }
         }
     }
-    
+    }
+
+    if (face_flux) {
+        torch::NoGradGuard no_grad;
+        *face_flux = flux.detach().clone();
     }
     return advect;
 }
@@ -27552,10 +27718,184 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion(
     return diff;
 }
 
+torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_option2_wrf(
+    const torch::Tensor& var, const torch::Tensor& Kh, const torch::Tensor& rho,
+    const torch::Tensor& zx, const torch::Tensor& zy, const torch::Tensor& rdzw,
+    const torch::Tensor& dnw, const torch::Tensor& dn,
+    const torch::Tensor& fnm, const torch::Tensor& fnp,
+    double cf1, double cf2, double cf3,
+    float rdx, float rdy, double gravity,
+    const torch::Tensor& msftx, const torch::Tensor& msfty,
+    const torch::Tensor& msfux, const torch::Tensor& msfvy) {
+    // Exact scalar stencil from module_diffusion_em.F:horizontal_diffusion_s.
+    // Scope is deliberately one complete periodic-X tile with symmetric Y
+    // walls. The caller supplies the stage's physical rho and geometry.
+    TORCH_CHECK(config_flags_periodic_x_ && !config_flags_periodic_y_ &&
+                config_flags_symmetric_ys_ && config_flags_symmetric_ye_ &&
+                !config_flags_open_xs_ && !config_flags_open_xe_ &&
+                !config_flags_open_ys_ && !config_flags_open_ye_ &&
+                !config_flags_specified_ && !config_flags_nested_ &&
+                !config_flags_polar_ && nprocx_ * nprocy_ == 1,
+                "option-2 scalar metric diffusion requires one periodic-X, symmetric-Y tile");
+
+    TORCH_CHECK(var.dim() == 3, "option-2 scalar q must be [ny,nz,nx]");
+    const int64_t ny = var.size(0), nz = var.size(1), nx = var.size(2);
+    TORCH_CHECK(ny >= 2 && nx >= 3 && nz >= 3,
+                "option-2 scalar metric diffusion requires ny>=2, nx>=3, nz>=3");
+    const bool packed = isPackedPeriodicDomain();
+    TORCH_CHECK(ny == ny_ - (packed ? 1 : 0) &&
+                nx == nx_ - (packed ? 1 : 0) &&
+                its_ <= ids_ && ite_ >= ide_ - 1 &&
+                jts_ <= jds_ && jte_ >= jde_ - 1 &&
+                ide_ - ids_ == nx && jde_ - jds_ == ny,
+                "option-2 scalar metric diffusion requires a complete physical tile");
+    TORCH_CHECK(std::isfinite(rdx) && rdx > 0.0f &&
+                std::isfinite(rdy) && rdy > 0.0f &&
+                std::isfinite(gravity) && gravity > 0.0,
+                "option-2 scalar metric diffusion requires positive finite grid scales and gravity");
+
+    const auto same_layout = [&](const torch::Tensor& x, const char* name,
+                                 torch::IntArrayRef shape) {
+        TORCH_CHECK(x.defined() && x.sizes() == shape,
+                    "option-2 scalar ", name, " has an unsupported shape");
+        TORCH_CHECK(x.device() == var.device() && x.scalar_type() == var.scalar_type(),
+                    "option-2 scalar ", name, " must match q device and dtype");
+    };
+    same_layout(Kh, "Kh", {ny,nz,nx});
+    same_layout(rho, "rho", {ny,nz,nx});
+    same_layout(rdzw, "rdzw", {ny,nz,nx});
+    same_layout(zx, "zx", {ny,nz+1,nx+1});
+    same_layout(zy, "zy", {ny+1,nz+1,nx});
+    same_layout(msftx, "msftx", {ny,nx});
+    same_layout(msfty, "msfty", {ny,nx});
+    same_layout(msfux, "msfux", {ny,nx+1});
+    same_layout(msfvy, "msfvy", {ny+1,nx});
+    for (const auto* vertical : {&dnw,&dn,&fnm,&fnp}) {
+        TORCH_CHECK(vertical->defined() && vertical->dim() == 1 && vertical->numel() >= nz,
+                    "option-2 scalar vertical coefficients must be rank-1 with nz entries");
+        TORCH_CHECK(vertical->device() == var.device() &&
+                    vertical->scalar_type() == var.scalar_type(),
+                    "option-2 scalar vertical coefficients must match q device and dtype");
+    }
+
+    // In the WRF bottom-to-top eta ordering dnw and dn are negative. Do not
+    // normalize their sign: g/(dnw*rdzw) is part of the coupled tendency.
+    TORCH_CHECK(wrf::sdirk3::guarded_item<bool>((rdzw > 0).all()) &&
+                wrf::sdirk3::guarded_item<bool>((dnw < 0).all()) &&
+                wrf::sdirk3::guarded_item<bool>((dn.slice(0,1,nz) < 0).all()),
+                "option-2 scalar metric diffusion requires positive rdzw and signed negative dnw/dn");
+    TORCH_CHECK(wrf::sdirk3::guarded_item<bool>(torch::isfinite(var).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(Kh).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(rho).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(zx).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(zy).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(rdzw).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(dnw).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(dn).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(fnm).all()) &&
+                wrf::sdirk3::guarded_item<bool>(torch::isfinite(fnp).all()),
+                "option-2 scalar metric diffusion inputs must be finite");
+
+    const auto options = var.options();
+    const auto zero = torch::zeros({1,nz,nx}, options);
+
+    // Face pairs are explicitly periodic in X. The duplicate face at nx is
+    // kept because the Fortran divergence consumes faces i and i+1 per cell.
+    const auto x_left = [&](const torch::Tensor& x) {
+        return torch::cat({x.slice(2,nx-1,nx),x},2);
+    };
+    const auto x_right = [&](const torch::Tensor& x) {
+        return torch::cat({x,x.slice(2,0,1)},2);
+    };
+    const auto q_x_left=x_left(var), q_x_right=x_right(var);
+    const auto k_x_left=x_left(Kh), k_x_right=x_right(Kh);
+    const auto rho_x_left=x_left(rho), rho_x_right=x_right(rho);
+    const auto rdzw_x_left=x_left(rdzw), rdzw_x_right=x_right(rdzw);
+
+    // horizontal_diffusion_s forms avg(K) * avg(rho), not avg(K*rho).
+    const auto coeff_x=0.5*(k_x_left+k_x_right)*0.5*(rho_x_left+rho_x_right);
+    const auto zx_at_xface=0.5*(zx.slice(1,0,nz)+zx.slice(1,1,nz+1));
+    const auto q_xface=0.5*(q_x_left+q_x_right);
+
+    const auto interpolate_q_to_w = [&](const torch::Tensor& q_mass) {
+        const auto bottom=(cf1*q_mass.select(1,0)+cf2*q_mass.select(1,1)+
+                           cf3*q_mass.select(1,2)).unsqueeze(1);
+        const auto fnm_mid=fnm.slice(0,1,nz).view({1,nz-1,1});
+        const auto fnp_mid=fnp.slice(0,1,nz).view({1,nz-1,1});
+        const auto interior=fnm_mid*q_mass.slice(1,1,nz)+
+                           fnp_mid*q_mass.slice(1,0,nz-1);
+        const auto top_ratio=0.5*dnw.select(0,nz-1)/dn.select(0,nz-1);
+        const auto top=(q_mass.select(1,nz-1)+top_ratio*
+                       (q_mass.select(1,nz-1)-q_mass.select(1,nz-2))).unsqueeze(1);
+        return torch::cat({bottom,interior,top},1);
+    };
+    const auto q_x_w=interpolate_q_to_w(q_xface);
+    const auto dz_xface=2.0/(rdzw_x_left.reciprocal()+rdzw_x_right.reciprocal());
+    auto h1=-msfux.unsqueeze(1)*coeff_x*(
+        rdx*(q_x_right-q_x_left)-
+        zx_at_xface*(q_x_w.slice(1,1,nz+1)-q_x_w.slice(1,0,nz))*dz_xface);
+
+    // Symmetric Y walls mean zero normal scalar flux. Interior y faces follow
+    // the Fortran stencil; the two wall faces are exact zeros.
+    const auto y_lower=[&](const torch::Tensor& x) {
+        return torch::cat({x.slice(0,0,1),x},0);
+    };
+    const auto y_upper=[&](const torch::Tensor& x) {
+        return torch::cat({x,x.slice(0,ny-1,ny)},0);
+    };
+    const auto q_y_lower=y_lower(var), q_y_upper=y_upper(var);
+    const auto k_y_lower=y_lower(Kh), k_y_upper=y_upper(Kh);
+    const auto rho_y_lower=y_lower(rho), rho_y_upper=y_upper(rho);
+    const auto rdzw_y_lower=y_lower(rdzw), rdzw_y_upper=y_upper(rdzw);
+    const auto coeff_y=0.5*(k_y_lower+k_y_upper)*0.5*(rho_y_lower+rho_y_upper);
+    const auto q_yface=0.5*(q_y_lower+q_y_upper);
+    const auto zy_at_yface=0.5*(zy.slice(1,0,nz)+zy.slice(1,1,nz+1));
+    const auto q_y_w=interpolate_q_to_w(q_yface);
+    const auto dz_yface=2.0/(rdzw_y_lower.reciprocal()+rdzw_y_upper.reciprocal());
+    const auto h2_candidate=-msfvy.unsqueeze(1)*coeff_y*(
+        rdy*(q_y_upper-q_y_lower)-
+        zy_at_yface*(q_y_w.slice(1,1,nz+1)-q_y_w.slice(1,0,nz))*dz_yface);
+    const auto h2=torch::cat({zero,h2_candidate.slice(0,1,ny),zero},0);
+
+    // For the terrain part of the flux divergence, Fortran vertically
+    // interpolates neighboring horizontal fluxes, then zeros the bottom and
+    // top W-face values. This is distinct from q's boundary extrapolation
+    // used above while constructing H1/H2.
+    const auto interpolate_flux_to_w = [&](const torch::Tensor& flux_mass) {
+        const auto fnm_mid=fnm.slice(0,1,nz).view({1,nz-1,1});
+        const auto fnp_mid=fnp.slice(0,1,nz).view({1,nz-1,1});
+        const auto interior=fnm_mid*flux_mass.slice(1,1,nz)+
+                           fnp_mid*flux_mass.slice(1,0,nz-1);
+        const auto zero_w=torch::zeros({ny,1,nx},options);
+        return torch::cat({zero_w,interior,zero_w},1);
+    };
+    const auto h1_at_mass_x=0.5*(h1.slice(2,0,nx)+h1.slice(2,1,nx+1));
+    const auto h2_at_mass_y=0.5*(h2.slice(0,0,ny)+h2.slice(0,1,ny+1));
+    const auto h1_w=interpolate_flux_to_w(h1_at_mass_x);
+    const auto h2_w=interpolate_flux_to_w(h2_at_mass_y);
+
+    const auto zx_xcenter=0.5*(zx.slice(2,0,nx)+zx.slice(2,1,nx+1));
+    const auto zx_at_mass=0.5*(zx_xcenter.slice(1,0,nz)+zx_xcenter.slice(1,1,nz+1));
+    const auto zy_ycenter=0.5*(zy.slice(0,0,ny)+zy.slice(0,1,ny+1));
+    const auto zy_at_mass=0.5*(zy_ycenter.slice(1,0,nz)+zy_ycenter.slice(1,1,nz+1));
+
+    const auto div_x=msftx.unsqueeze(1)*rdx*(h1.slice(2,1,nx+1)-h1.slice(2,0,nx));
+    const auto div_y=msfty.unsqueeze(1)*rdy*(h2.slice(0,1,ny+1)-h2.slice(0,0,ny));
+    const auto terrain_div_x=msftx.unsqueeze(1)*zx_at_mass*
+        (h1_w.slice(1,1,nz+1)-h1_w.slice(1,0,nz))*rdzw;
+    const auto terrain_div_y=msfty.unsqueeze(1)*zy_at_mass*
+        (h2_w.slice(1,1,nz+1)-h2_w.slice(1,0,nz))*rdzw;
+    return gravity*(div_x+div_y-terrain_div_x-terrain_div_y)/
+           (dnw.view({1,nz,1})*rdzw);
+}
+
 torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
     const torch::Tensor& var, const torch::Tensor& Kh, float rdx, float rdy,
     const torch::Tensor& msftx, const torch::Tensor& msfty,
-    const torch::Tensor& msfvx, const torch::Tensor& mut) {
+    const torch::Tensor& msfvx, const torch::Tensor& mut,
+    torch::Tensor* x_flux, torch::Tensor* y_flux,
+    const torch::Tensor& msfux, const torch::Tensor& msfuy,
+    const torch::Tensor& msfvy) {
     // PARITY FIX 2025-12-09: Added cross-map ratios per Fortran horizontal_diffusion_3dmp
     //
     // ========================================================================
@@ -27566,7 +27906,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
     //   Y-flux: mkrdym = (msfvy(i,j)*msfvx_inv(i,j)) * Kh_avg * MUT_avg * rdy
     //   Divergence: mrdx = msftx*msfty*rdx, mrdy = msftx*msfty*rdy
     //
-    // We approximate:
+    // Option 1 supplies the actual U/V staggered map factors. The legacy
+    // option-2/direct-helper path approximates absent face maps by:
     //   msfux ≈ 0.5 * (msftx[i-1] + msftx[i])  (average msftx to u-points)
     //   msfuy ≈ 0.5 * (msfty[i-1] + msfty[i])  (average msfty to u-points)
     //   msfvy ≈ 0.5 * (msfty[j-1] + msfty[j])  (average msfty to v-points)
@@ -27600,8 +27941,24 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
 
     // Check if MUT weighting is provided
     bool use_mut = mut.defined() && mut.numel() > 0;
+    const bool layered_mut = use_mut && mut.dim() == 3;
+    if (use_mut) {
+        TORCH_CHECK((mut.dim() == 2 && mut.size(0) == ny && mut.size(1) == nx) ||
+                    (layered_mut && mut.size(0) == ny && mut.size(1) == nz &&
+                     mut.size(2) == nx),
+                    "scalar diffusion mass must be [ny,nx] or [ny,nz,nx]");
+    }
     // Check if msfvx is provided for cross-ratio (at v-points: [ny+1, nx])
     bool use_msfvx_crossratio = msfvx.defined() && msfvx.numel() > 0;
+    const bool exact_face_maps = msfux.defined() && msfuy.defined() && msfvy.defined();
+    if (msfux.defined() || msfuy.defined() || msfvy.defined()) {
+        TORCH_CHECK(exact_face_maps && use_msfvx_crossratio &&
+                    msfux.dim() == 2 && msfux.size(0) == ny && msfux.size(1) == nx + 1 &&
+                    msfuy.dim() == 2 && msfuy.size(0) == ny && msfuy.size(1) == nx + 1 &&
+                    msfvx.dim() == 2 && msfvx.size(0) == ny + 1 && msfvx.size(1) == nx &&
+                    msfvy.dim() == 2 && msfvy.size(0) == ny + 1 && msfvy.size(1) == nx,
+                    "option-1 scalar diffusion requires complete staggered face maps");
+    }
 
     // VECTORIZED: H1 = -msfux * Kh * rdx * dvar/dx at u-points (Fortran flux form)
     // Size: (ny, nz, nx+1) - u-stagger has extra point in x
@@ -27620,36 +27977,67 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
 
         // PARITY FIX 2025-12-09: Fortran uses cross-ratio msfux/msfuy (lines 3037-3038)
         // mkrdxm = (msfux(i,j)/msfuy(i,j)) * Kh_avg * MUT_avg * rdx
-        // Approximate msfux by msftx averaged to u-points
         torch::Tensor flux_x;
-        auto msfx_im = msftx.slice(1, 0, nx - 1);  // [ny, nx-1]
-        auto msfx_ip = msftx.slice(1, 1, nx);      // [ny, nx-1]
-        auto msfux_approx = 0.5f * (msfx_im + msfx_ip);    // [ny, nx-1] approximates msfux at u-points
-        // Also approximate msfuy from msfty averaged to u-points
-        auto msfy_im = msfty.slice(1, 0, nx - 1);  // [ny, nx-1]
-        auto msfy_ip = msfty.slice(1, 1, nx);      // [ny, nx-1]
-        auto msfuy_approx = 0.5f * (msfy_im + msfy_ip);    // [ny, nx-1] approximates msfuy at u-points
         // Return +div(Kh * grad(var)) in coupled tendency units.
         // A negative physical flux would require subtracting its divergence.
         // H1 uses cross-ratio (msfux/msfuy) * Kh * dvar/dx (Fortran form)
-        auto cross_ratio_x = msfux_approx / msfuy_approx;  // [ny, nx-1]
+        torch::Tensor cross_ratio_x;
+        if (exact_face_maps) {
+            cross_ratio_x=msfux.slice(1,1,nx)/msfuy.slice(1,1,nx);
+        } else {
+            const auto msfux_approx=.5f*(msftx.slice(1,0,nx-1)+msftx.slice(1,1,nx));
+            const auto msfuy_approx=.5f*(msfty.slice(1,0,nx-1)+msfty.slice(1,1,nx));
+            cross_ratio_x=msfux_approx/msfuy_approx;
+        }
         flux_x = cross_ratio_x.unsqueeze(1) * Kh_avg * dvar_dx;
 
         // PARITY FIX 2025-12-07: Apply MUT weighting if provided
         if (use_mut) {
-            // mut is [ny, nx], average to u-points [ny, nx-1]
-            auto mut_im = mut.slice(1, 0, nx - 1);    // [ny, nx-1]
-            auto mut_ip = mut.slice(1, 1, nx);        // [ny, nx-1]
-            auto mut_u = 0.5f * (mut_im + mut_ip);    // [ny, nx-1]
-            flux_x = mut_u.unsqueeze(1) * flux_x;
+            auto left = mut.slice(layered_mut ? 2 : 1, 0, nx - 1);
+            auto right = mut.slice(layered_mut ? 2 : 1, 1, nx);
+            auto face_mass = 0.5f * (left + right);
+            flux_x = (layered_mut ? face_mass : face_mass.unsqueeze(1)) * flux_x;
         }
 
         H1.slice(2, 1, nx).copy_(flux_x);
     }
 
-    // Boundary u-points (i=0 and i=nx): zero flux (Fortran domain boundaries)
-    // PARITY FIX 2025-12-07: Use zero flux at domain boundaries instead of zero gradient
-    // H1.slice(2, 0, 1) and H1.slice(2, nx, nx+1) are already zeros
+    // On one whole-domain periodic tile, faces 0 and nx are the same physical
+    // face. Use the same stencil as the interior with the wrapped mass cells.
+    // An internal tile/rank edge cannot be wrapped locally; it needs halo data.
+    const bool whole_periodic_x = config_flags_periodic_x_ &&
+        nprocx_ * nprocy_ == 1 && its_ <= ids_ && ite_ >= ide_ - 1 &&
+        jts_ <= jds_ && jte_ >= jde_ - 1 &&
+        H1.size(2) == nx + 1;
+    if (whole_periodic_x && nx > 1) {
+        if (isPackedPeriodicDomain()) {
+            // The last mass column is an alias of the first. Interior face
+            // nx-1 is already the true seam; complete its two packed aliases.
+            H1.select(2,0).copy_(H1.select(2,nx-1));
+            H1.select(2,nx).copy_(H1.select(2,1));
+        } else {
+            const auto seam_kh=0.5f*(Kh.select(2,nx-1)+Kh.select(2,0));
+            const auto seam_gradient=(var.select(2,0)-var.select(2,nx-1))*rdx;
+            torch::Tensor face_mass;
+            if (use_mut) {
+                face_mass=0.5f*(mut.select(layered_mut ? 2 : 1,nx-1)+
+                                mut.select(layered_mut ? 2 : 1,0));
+            }
+            if (exact_face_maps) {
+                auto seam=seam_kh*seam_gradient;
+                if (use_mut) seam=(layered_mut ? face_mass : face_mass.unsqueeze(1))*seam;
+                H1.select(2,0).copy_((msfux.select(1,0)/msfuy.select(1,0)).unsqueeze(1)*seam);
+                H1.select(2,nx).copy_((msfux.select(1,nx)/msfuy.select(1,nx)).unsqueeze(1)*seam);
+            } else {
+                const auto seam_map_x=0.5f*(msftx.select(1,nx-1)+msftx.select(1,0));
+                const auto seam_map_y=0.5f*(msfty.select(1,nx-1)+msfty.select(1,0));
+                auto legacy=(seam_map_x/seam_map_y).unsqueeze(1)*seam_kh*seam_gradient;
+                if (use_mut) legacy=(layered_mut ? face_mass : face_mass.unsqueeze(1))*legacy;
+                H1.select(2,0).copy_(legacy);
+                H1.select(2,nx).copy_(legacy);
+            }
+        }
+    }
 
     // VECTORIZED: H2 = -msfvy * Kh * rdy * dvar/dy at v-points (Fortran flux form)
     // Size: (ny+1, nz, nx) - v-stagger has extra point in y
@@ -27668,12 +28056,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
 
         // PARITY FIX 2025-12-09: Fortran uses cross-ratio msfvy*msfvx_inv (lines 3042-3043)
         // mkrdym = (msfvy(i,j)*msfvx_inv(i,j)) * Kh_avg * MUT_avg * rdy
-        // Approximate msfvy by msfty averaged to v-points
         torch::Tensor flux_y;
-        // msfty is [ny, nx], average to v-points [ny-1, nx]
-        auto msfty_jm = msfty.slice(0, 0, ny - 1);  // [ny-1, nx]
-        auto msfty_jp = msfty.slice(0, 1, ny);      // [ny-1, nx]
-        auto msfvy_approx = 0.5f * (msfty_jm + msfty_jp);  // [ny-1, nx] approximates msfvy at v-points
+        const auto msfvy_face = exact_face_maps
+            ? msfvy.slice(0,1,ny)
+            : 0.5f*(msfty.slice(0,0,ny-1)+msfty.slice(0,1,ny));
 
         // Compute cross-ratio msfvy*msfvx_inv
         // msfvx is [ny+1, nx] at v-points, slice interior v-points [1:ny] -> [ny-1, nx]
@@ -27683,21 +28069,20 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
             // PARITY FIX 2025-12-24: Use dtype-aware epsilon (FP16 only, BF16 is safe).
             const float msfvx_eps = getAutocastAwareEps(msfvx_interior);
             auto msfvx_inv = 1.0f / msfvx_interior.clamp_min(msfvx_eps);
-            auto cross_ratio_y = msfvy_approx * msfvx_inv;  // [ny-1, nx]
+            auto cross_ratio_y = msfvy_face * msfvx_inv;  // [ny-1, nx]
             // H2 uses cross-ratio (msfvy*msfvx_inv) * Kh * dvar/dy (Fortran form)
             flux_y = cross_ratio_y.unsqueeze(1) * Kh_avg * dvar_dy;
         } else {
             // Fallback: use msfvy only (less accurate for non-Cartesian grids)
-            flux_y = msfvy_approx.unsqueeze(1) * Kh_avg * dvar_dy;
+            flux_y = msfvy_face.unsqueeze(1) * Kh_avg * dvar_dy;
         }
 
         // PARITY FIX 2025-12-07: Apply MUT weighting if provided
         if (use_mut) {
-            // mut is [ny, nx], average to v-points [ny-1, nx]
-            auto mut_jm = mut.slice(0, 0, ny - 1);    // [ny-1, nx]
-            auto mut_jp = mut.slice(0, 1, ny);        // [ny-1, nx]
-            auto mut_v = 0.5f * (mut_jm + mut_jp);    // [ny-1, nx]
-            flux_y = mut_v.unsqueeze(1) * flux_y;
+            auto lower = mut.slice(0, 0, ny - 1);
+            auto upper = mut.slice(0, 1, ny);
+            auto face_mass = 0.5f * (lower + upper);
+            flux_y = (layered_mut ? face_mass : face_mass.unsqueeze(1)) * flux_y;
         }
 
         H2.slice(0, 1, ny).copy_(flux_y);
@@ -27721,6 +28106,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
     auto div_y = msf_combined * rdy * (H2.slice(0, 1, ny + 1) - H2.slice(0, 0, ny));  // [ny, nz, nx]
 
     auto tendency = div_x + div_y;
+
+    if (x_flux || y_flux) {
+        torch::NoGradGuard no_grad;
+        if (x_flux) *x_flux = H1.detach().clone();
+        if (y_flux) *y_flux = H2.detach().clone();
+    }
 
     return tendency;
 }
@@ -29149,6 +29540,7 @@ void TileSDIRK3UnifiedSolver::setBaseState(const float* p_base, const float* th_
         // t_init is t perturbation from t0 (300K)
         // theta_base = t_init + t0
         const float t0 = 300.0f;  // WRF's t0 constant
+        t_init_pert_ = t_init_tensor;
         th_base_ = t_init_tensor + t0;
         
         // Debug: Check shape of th_base_
@@ -33912,6 +34304,9 @@ boundary_tensors_done:
     if (th_base_.defined() && th_base_.numel() > 0) {
         th_base_ = th_base_.to(target_device);
     }
+    if (t_init_pert_.defined() && t_init_pert_.numel() > 0) {
+        t_init_pert_ = t_init_pert_.to(target_device);
+    }
     // 6.15 Move diffusion coefficient tensors to target device for GPU compatibility
     // PARITY FIX 2025-12-11: Diffusion coefficients (Kh_mom_, Kv_mom_, Kh_scalar_, Kv_scalar_)
     // were created with from_blob (CPU) earlier. They are used in diffusion calculations
@@ -36299,6 +36694,233 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_w_stress(
     w_tend_vmix.select(1, nz_w_actual-1).zero_();
 
     return w_tend_vmix;
+}
+
+std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_option1_momentum(
+    const torch::Tensor& u_input, const torch::Tensor& v_input, const torch::Tensor& w_input,
+    const torch::Tensor& K_phys_input, const torch::Tensor& mu_full_input,
+    float rdx, float rdy) {
+    TORCH_CHECK(config_flags_periodic_x_ && !config_flags_periodic_y_ &&
+                config_flags_symmetric_ys_ && config_flags_symmetric_ye_ &&
+                !config_flags_open_xs_ && !config_flags_open_xe_ &&
+                !config_flags_open_ys_ && !config_flags_open_ye_ &&
+                !config_flags_specified_ && !config_flags_nested_,
+                "option-1 momentum diffusion currently requires periodic X and symmetric Y");
+    const bool packed = isPackedPeriodicDomain();
+    TORCH_CHECK(u_input.dim() == 3 && v_input.dim() == 3 && w_input.dim() == 3 &&
+                K_phys_input.dim() == 3 && mu_full_input.dim() == 2,
+                "option-1 momentum diffusion expects rank-3 winds/K and rank-2 MU");
+
+    const int64_t ny = mu_full_input.size(0) - (packed ? 1 : 0);
+    const int64_t nx = mu_full_input.size(1) - (packed ? 1 : 0);
+    const int64_t nz = K_phys_input.size(1);
+    TORCH_CHECK(ny >= 2 && nx >= 3 && nz >= 2,
+                "option-1 momentum diffusion requires at least 2x3 mass cells and two layers");
+    const auto device = u_input.device();
+    const auto dtype = u_input.scalar_type();
+    auto mu = mu_full_input.to(device, dtype).slice(0, 0, ny).slice(1, 0, nx);
+    auto K = K_phys_input.to(device, dtype).slice(0, 0, ny).slice(2, 0, nx);
+    torch::Tensor u, v, w;
+    if (packed) {
+        TORCH_CHECK(u_input.size(0) == ny + 1 && u_input.size(2) == nx + 2 &&
+                    v_input.size(0) == ny + 2 && v_input.size(2) == nx + 1 &&
+                    w_input.size(0) == ny + 1 && w_input.size(2) == nx + 1,
+                    "packed option-1 momentum diffusion has unsupported staggered extents");
+        const auto u_core = u_input.slice(0, 0, ny).slice(2, 0, nx);
+        u = torch::cat({u_core, u_core.slice(2, 0, 1)}, 2);
+        v = v_input.slice(0, 0, ny + 1).slice(2, 0, nx);
+        w = w_input.slice(0, 0, ny).slice(2, 0, nx);
+    } else {
+        u = u_input;
+        v = v_input;
+        w = w_input;
+    }
+    TORCH_CHECK(K.size(0) == ny && K.size(1) == nz && K.size(2) == nx &&
+                u.sizes() == torch::IntArrayRef({ny, nz, nx + 1}) &&
+                v.sizes() == torch::IntArrayRef({ny + 1, nz, nx}) &&
+                w.sizes() == torch::IntArrayRef({ny, nz + 1, nx}),
+                "option-1 momentum diffusion requires whole physical U/V/W tile extents");
+    TORCH_CHECK(msftx_.defined() && msfty_.defined() &&
+                msfux_.defined() && msfuy_.defined() &&
+                msfvx_.defined() && msfvy_.defined(),
+                "option-1 momentum diffusion requires initialized map factors");
+    TORCH_CHECK(c1h_.defined() && c2h_.defined() &&
+                c1f_.defined() && c2f_.defined() &&
+                c1h_.numel() >= nz && c2h_.numel() >= nz &&
+                c1f_.numel() >= nz + 1 && c2f_.numel() >= nz + 1,
+                "option-1 momentum diffusion requires complete c1h/c2h and c1f/c2f");
+
+    const auto c1h = ensureC1hDevCached(device, dtype).slice(0, 0, nz).view({1, nz, 1});
+    const auto c2h = ensureC2hDevCached(device, dtype).slice(0, 0, nz).view({1, nz, 1});
+    const auto c1f = ensureC1fDevCached(device, dtype).slice(0, 0, nz + 1).view({1, nz + 1, 1});
+    const auto c2f = ensureC2fDevCached(device, dtype).slice(0, 0, nz + 1).view({1, nz + 1, 1});
+    const auto Lh = c1h * mu.unsqueeze(1) + c2h;
+    const auto Lf = c1f * mu.unsqueeze(1) + c2f;
+    auto msftx = msftx_.to(device, dtype);
+    auto msfty = msfty_.to(device, dtype);
+    auto msfux = msfux_.to(device, dtype);
+    auto msfuy = msfuy_.to(device, dtype);
+    auto msfvx = msfvx_.to(device, dtype);
+    auto msfvy = msfvy_.to(device, dtype);
+    if (packed) {
+        msftx = msftx.slice(0, 0, ny).slice(1, 0, nx);
+        msfty = msfty.slice(0, 0, ny).slice(1, 0, nx);
+        msfux = msfux.slice(0, 0, ny).slice(1, 0, nx + 1);
+        msfuy = msfuy.slice(0, 0, ny).slice(1, 0, nx + 1);
+        msfvx = msfvx.slice(0, 0, ny + 1).slice(1, 0, nx);
+        msfvy = msfvy.slice(0, 0, ny + 1).slice(1, 0, nx);
+    }
+    TORCH_CHECK(msftx.sizes() == torch::IntArrayRef({ny, nx}) &&
+                msfty.sizes() == torch::IntArrayRef({ny, nx}) &&
+                msfux.sizes() == torch::IntArrayRef({ny, nx + 1}) &&
+                msfuy.sizes() == torch::IntArrayRef({ny, nx + 1}) &&
+                msfvx.sizes() == torch::IntArrayRef({ny + 1, nx}) &&
+                msfvy.sizes() == torch::IntArrayRef({ny + 1, nx}),
+                "option-1 momentum diffusion map factors do not match physical tile extents");
+
+    const auto y_prev = [](const torch::Tensor& q) {
+        return torch::cat({q.slice(0, 0, 1), q.slice(0, 0, q.size(0) - 1)}, 0);
+    };
+    const auto y_next = [](const torch::Tensor& q) {
+        return torch::cat({q.slice(0, 1, q.size(0)), q.slice(0, q.size(0) - 1, q.size(0))}, 0);
+    };
+    const auto x_prev = [](const torch::Tensor& q) {
+        return torch::roll(q, 1, q.dim() - 1);
+    };
+    const auto x_next = [](const torch::Tensor& q) {
+        return torch::roll(q, -1, q.dim() - 1);
+    };
+
+    // U: Fortran's mkrdx coefficients are cell-centered; transverse Y
+    // coefficients independently average K and c1h*MUT+c2h over four cells.
+    const auto Lh_xm = x_prev(Lh), K_xm = x_prev(K);
+    const auto mass_x_ratio = msftx / msfty;
+    const auto u_core = u.slice(2, 0, nx);
+    const auto u_minus = x_prev(u_core);
+    const auto u_plus = u.slice(2, 1, nx + 1);
+    const auto u_outer_x = msfux.slice(1, 0, nx) * msfuy.slice(1, 0, nx) * rdx;
+    const auto u_x_plus = mass_x_ratio.unsqueeze(1) * Lh * K * rdx;
+    const auto u_x_minus = x_prev(mass_x_ratio).unsqueeze(1) * Lh_xm * K_xm * rdx;
+    const auto u_x_tend = u_outer_x.unsqueeze(1) *
+        (u_x_plus * (u_plus - u_core) - u_x_minus * (u_core - u_minus));
+
+    const auto u_map_x = msfux.slice(1, 0, nx);
+    const auto u_map_y = msfuy.slice(1, 0, nx);
+    const auto u_map_x_prev = y_prev(u_map_x), u_map_y_prev = y_prev(u_map_y);
+    const auto u_map_x_next = y_next(u_map_x), u_map_y_next = y_next(u_map_y);
+    const auto u_ratio_y_minus = (u_map_y + u_map_y_prev) / (u_map_x + u_map_x_prev);
+    const auto u_ratio_y_plus = (u_map_y + u_map_y_next) / (u_map_x + u_map_x_next);
+    const auto Lh_ym = y_prev(Lh), K_ym = y_prev(K);
+    const auto Lh_yp = y_next(Lh), K_yp = y_next(K);
+    const auto u_corner_minus = 0.25 * (Lh + Lh_ym + Lh_xm + x_prev(Lh_ym));
+    const auto u_corner_plus  = 0.25 * (Lh + Lh_yp + Lh_xm + x_prev(Lh_yp));
+    const auto u_k_corner_minus = 0.25 * (K + K_ym + K_xm + x_prev(K_ym));
+    const auto u_k_corner_plus  = 0.25 * (K + K_yp + K_xm + x_prev(K_yp));
+    const auto u_y_minus = u_ratio_y_minus.unsqueeze(1) * u_corner_minus * u_k_corner_minus * rdy;
+    const auto u_y_plus  = u_ratio_y_plus.unsqueeze(1) * u_corner_plus * u_k_corner_plus * rdy;
+    const auto u_y_prev = y_prev(u_core), u_y_next = y_next(u_core);
+    const auto u_outer_y = msfux.slice(1, 0, nx) * msfuy.slice(1, 0, nx) * rdy;
+    const auto u_y_tend = u_outer_y.unsqueeze(1) *
+        (u_y_plus * (u_y_next - u_core) - u_y_minus * (u_core - u_y_prev));
+    const auto u_physical = u_x_tend + u_y_tend;
+    const auto u_tend = torch::cat({u_physical, u_physical.slice(2, 0, 1)}, 2);
+
+    // V: X coefficients are four-corner averages; Y coefficients are at
+    // mass points. Symmetric Y ghosts reflect the normal V component.
+    const auto Lh_vprev = y_prev(Lh), K_vprev = y_prev(K);
+    const auto Lh_vnext = y_next(Lh), K_vnext = y_next(K);
+    const auto Lh_vxm = x_prev(Lh), K_vxm = x_prev(K);
+    const auto Lh_vlower = torch::cat({Lh.slice(0, 0, 1), Lh}, 0);
+    const auto Lh_vupper = torch::cat({Lh, Lh.slice(0, ny - 1, ny)}, 0);
+    const auto K_vlower = torch::cat({K.slice(0, 0, 1), K}, 0);
+    const auto K_vupper = torch::cat({K, K.slice(0, ny - 1, ny)}, 0);
+    const auto v_corner_xm = 0.25 * (Lh_vupper + Lh_vlower + x_prev(Lh_vupper) + x_prev(Lh_vlower));
+    const auto v_corner_xp = 0.25 * (Lh_vupper + Lh_vlower + x_next(Lh_vupper) + x_next(Lh_vlower));
+    const auto v_k_corner_xm = 0.25 * (K_vupper + K_vlower + x_prev(K_vupper) + x_prev(K_vlower));
+    const auto v_k_corner_xp = 0.25 * (K_vupper + K_vlower + x_next(K_vupper) + x_next(K_vlower));
+    const auto vx_map_x_prev = x_prev(msfvx), vx_map_y_prev = x_prev(msfvy);
+    const auto v_ratio_xm = (msfvx + vx_map_x_prev) / (msfvy + vx_map_y_prev);
+    const auto v_ratio_xp = (msfvx + x_next(msfvx)) / (msfvy + x_next(msfvy));
+    const auto v_x_minus = v_ratio_xm.unsqueeze(1) * v_corner_xm * v_k_corner_xm * rdx;
+    const auto v_x_plus  = v_ratio_xp.unsqueeze(1) * v_corner_xp * v_k_corner_xp * rdx;
+    const auto v_core = v.slice(2, 0, nx);
+    const auto v_minus = x_prev(v_core), v_plus = x_next(v_core);
+    const auto v_outer_x = msfvx * msfvy * rdx;
+    const auto v_x_tend = v_outer_x.unsqueeze(1) *
+        (v_x_plus * (v_plus - v_core) - v_x_minus * (v_core - v_minus));
+
+    const auto v_y_ratio_mass = msfty / msftx;
+    const auto v_y_ratio_lower = torch::cat({v_y_ratio_mass.slice(0, 0, 1), v_y_ratio_mass}, 0);
+    const auto v_y_ratio_upper = torch::cat({v_y_ratio_mass, v_y_ratio_mass.slice(0, ny - 1, ny)}, 0);
+    const auto v_y_minus = v_y_ratio_lower.unsqueeze(1) * Lh_vlower * K_vlower * rdy;
+    const auto v_y_plus  = v_y_ratio_upper.unsqueeze(1) * Lh_vupper * K_vupper * rdy;
+    const auto v_field_minus = torch::cat({-v_core.slice(0, 1, 2), v_core.slice(0, 0, ny)}, 0);
+    const auto v_field_plus = torch::cat({v_core.slice(0, 1, ny + 1), -v_core.slice(0, ny - 1, ny)}, 0);
+    const auto v_outer_y = msfvx * msfvy * rdy;
+    const auto v_y_tend = v_outer_y.unsqueeze(1) *
+        (v_y_plus * (v_field_plus - v_core) - v_y_minus * (v_core - v_field_minus));
+    const auto v_tend = v_x_tend + v_y_tend;
+
+    // W: only interior W levels are owned. K is averaged from adjacent mass
+    // levels, while c1f*MUT+c2f is evaluated at the W level.
+    const auto w_k_levels = Lf.slice(1, 1, nz);
+    const auto K_pair = K.slice(1, 1, nz) + K.slice(1, 0, nz - 1);
+    const auto K_pair_xm = x_prev(K_pair), K_pair_ym = y_prev(K_pair);
+    const auto w_mass_xm = x_prev(w_k_levels);
+    const auto w_mass_ym = y_prev(w_k_levels);
+    const auto w_x_mass_minus = 0.5 * (w_k_levels + w_mass_xm);
+    const auto w_x_mass_plus = 0.5 * (w_k_levels + x_next(w_k_levels));
+    const auto w_x_k_minus = 0.25 * (K_pair + K_pair_xm);
+    const auto w_x_k_plus = 0.25 * (K_pair + x_next(K_pair));
+    const auto w_map_ratio_x = msfux.slice(1, 0, nx + 1) / msfuy.slice(1, 0, nx + 1);
+    const auto w_x_ratio_minus = w_map_ratio_x.slice(1, 0, nx).unsqueeze(1);
+    const auto w_x_ratio_plus = w_map_ratio_x.slice(1, 1, nx + 1).unsqueeze(1);
+    const auto w_x_minus = w_x_ratio_minus * w_x_mass_minus * w_x_k_minus * rdx;
+    const auto w_x_plus = w_x_ratio_plus * w_x_mass_plus * w_x_k_plus * rdx;
+    const auto w_core = w.slice(0, 0, ny).slice(1, 1, nz).slice(2, 0, nx);
+    const auto w_x_tend = (msftx * msfty).unsqueeze(1) * rdx *
+        (w_x_plus * (x_next(w_core) - w_core) - w_x_minus * (w_core - x_prev(w_core)));
+
+    const auto w_y_mass_minus = 0.5 * (w_k_levels + w_mass_ym);
+    const auto w_y_mass_plus = 0.5 * (w_k_levels + y_next(w_k_levels));
+    const auto w_y_k_minus = 0.25 * (K_pair + K_pair_ym);
+    const auto w_y_k_plus = 0.25 * (K_pair + y_next(K_pair));
+    const auto msfvx_inv = msfvx.reciprocal();
+    const auto w_y_ratio = msfvy * msfvx_inv;
+    const auto w_y_ratio_minus = w_y_ratio.slice(0, 0, ny).unsqueeze(1);
+    const auto w_y_ratio_plus = w_y_ratio.slice(0, 1, ny + 1).unsqueeze(1);
+    const auto w_y_minus = w_y_ratio_minus * w_y_mass_minus * w_y_k_minus * rdy;
+    const auto w_y_plus = w_y_ratio_plus * w_y_mass_plus * w_y_k_plus * rdy;
+    const auto w_y_prev = y_prev(w_core), w_y_next = y_next(w_core);
+    const auto w_y_tend = (msftx * msfty).unsqueeze(1) * rdy *
+        (w_y_plus * (w_y_next - w_core) - w_y_minus * (w_core - w_y_prev));
+    const auto w_interior = w_x_tend + w_y_tend;
+    const auto w_tend = torch::cat({torch::zeros_like(w.slice(1, 0, 1)),
+                                    w_interior,
+                                    torch::zeros_like(w.slice(1, nz, nz + 1))}, 1);
+    TORCH_CHECK(u_tend.sizes() == u.sizes() && v_tend.sizes() == v.sizes() &&
+                w_tend.sizes() == w.sizes(),
+                "option-1 momentum diffusion returned an unexpected layout");
+    if (packed) {
+        const auto u_unique = u_tend.slice(0, 0, ny).slice(2, 0, nx);
+        const auto u_x = torch::cat({u_unique, u_unique.slice(2, 0, 2)}, 2);
+        const auto u_packed = torch::cat({u_x, u_x.slice(0, ny - 1, ny)}, 0);
+
+        const auto v_physical = v_tend.slice(0, 0, ny + 1).slice(2, 0, nx);
+        const auto v_x = torch::cat({v_physical, v_physical.slice(2, 0, 1)}, 2);
+        const auto v_packed = torch::cat({v_x, -v_x.slice(0, ny - 1, ny)}, 0);
+
+        const auto w_core = w_tend.slice(0, 0, ny).slice(2, 0, nx);
+        const auto w_x = torch::cat({w_core, w_core.slice(2, 0, 1)}, 2);
+        const auto w_packed = torch::cat({w_x, w_x.slice(0, ny - 1, ny)}, 0);
+        TORCH_CHECK(u_packed.sizes() == u_input.sizes() &&
+                    v_packed.sizes() == v_input.sizes() &&
+                    w_packed.sizes() == w_input.sizes(),
+                    "option-1 momentum diffusion packed Q extent mismatch");
+        return {u_packed, v_packed, w_packed};
+    }
+    return {u_tend, v_tend, w_tend};
 }
 
 torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf(
@@ -40770,7 +41392,7 @@ uint64_t TileSDIRK3UnifiedSolver::fixedTrajectoryInputFingerprint() const {
     fixed_trajectory_hash_tensor(
         h, getRdnTensor(torch::kCPU, torch::kFloat64, static_cast<int64_t>(nz_)));
     for (const float value : {cf1_, cf2_, cf3_, cfn_, cfn1_}) fixed_trajectory_hash_scalar(h, value);
-    for (const auto& x : {p_base_, th_base_, rho_base_, mu_base_, ph_base_, u_base_, v_base_,
+    for (const auto& x : {p_base_, th_base_, t_init_pert_, rho_base_, mu_base_, ph_base_, u_base_, v_base_,
                           fnm_cpu_, fnp_cpu_, c1f_, c2f_, c1h_, c2h_,
                           msftx_cpu_, msfty_cpu_, msfux_cpu_, msfuy_cpu_, msfvx_cpu_, msfvy_cpu_,
                           f_, e_, sina_, cosa_, zx_, zy_, cqu_, cqv_, cqw_}) {
