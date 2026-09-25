@@ -23576,10 +23576,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 // mass points before averaging the layer mass to scalar faces.
                 // Option 2 has a different terrain-metric scalar operator;
                 // retain its existing mass input until that path is compared.
+                const bool scalar_option1 =
+                    wrf::sdirk3::g_sdirk3_config.diffusion_option == 1;
+                if (scalar_option1) {
+                    TORCH_CHECK(msfux_.defined() && msfuy_.defined() &&
+                                msfvx_.defined() && msfvy_.defined(),
+                                "option-1 scalar diffusion requires U/V staggered maps");
+                    TORCH_CHECK(c1h_.defined() && c2h_.defined() &&
+                                c1h_.numel() >= t.size(1) && c2h_.numel() >= t.size(1),
+                                "option-1 scalar diffusion requires layer-mass coefficients");
+                }
                 torch::Tensor scalar_layer_mass = mu_full_diff;
-                if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 1 &&
-                    c1h_.defined() && c2h_.defined() && c1h_.numel() >= t.size(1) &&
-                    c2h_.numel() >= t.size(1)) {
+                if (scalar_option1) {
                     const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
                         .slice(0, 0, t.size(1)).view({1, -1, 1});
                     const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
@@ -23590,7 +23598,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                                                                         msftx_, msfty_,
                                                                         msfvx_, scalar_layer_mass,
                     capture_theta_faces_now_ ? &rhs_theta_faces_.diff_x : nullptr,
-                    capture_theta_faces_now_ ? &rhs_theta_faces_.diff_y : nullptr);
+                    capture_theta_faces_now_ ? &rhs_theta_faces_.diff_y : nullptr,
+                    scalar_option1 ? msfux_ : torch::Tensor(),
+                    scalar_option1 ? msfuy_ : torch::Tensor(),
+                    scalar_option1 ? msfvy_ : torch::Tensor());
                 t_tend = t_tend + t_diff_h;
             }  // end if (apply_h_diffusion)
         }  // end Step 9: HORIZONTAL DIFFUSION inner block
@@ -27610,7 +27621,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
     const torch::Tensor& var, const torch::Tensor& Kh, float rdx, float rdy,
     const torch::Tensor& msftx, const torch::Tensor& msfty,
     const torch::Tensor& msfvx, const torch::Tensor& mut,
-    torch::Tensor* x_flux, torch::Tensor* y_flux) {
+    torch::Tensor* x_flux, torch::Tensor* y_flux,
+    const torch::Tensor& msfux, const torch::Tensor& msfuy,
+    const torch::Tensor& msfvy) {
     // PARITY FIX 2025-12-09: Added cross-map ratios per Fortran horizontal_diffusion_3dmp
     //
     // ========================================================================
@@ -27621,7 +27634,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
     //   Y-flux: mkrdym = (msfvy(i,j)*msfvx_inv(i,j)) * Kh_avg * MUT_avg * rdy
     //   Divergence: mrdx = msftx*msfty*rdx, mrdy = msftx*msfty*rdy
     //
-    // We approximate:
+    // Option 1 supplies the actual U/V staggered map factors. The legacy
+    // option-2/direct-helper path approximates absent face maps by:
     //   msfux ≈ 0.5 * (msftx[i-1] + msftx[i])  (average msftx to u-points)
     //   msfuy ≈ 0.5 * (msfty[i-1] + msfty[i])  (average msfty to u-points)
     //   msfvy ≈ 0.5 * (msfty[j-1] + msfty[j])  (average msfty to v-points)
@@ -27664,6 +27678,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
     }
     // Check if msfvx is provided for cross-ratio (at v-points: [ny+1, nx])
     bool use_msfvx_crossratio = msfvx.defined() && msfvx.numel() > 0;
+    const bool exact_face_maps = msfux.defined() && msfuy.defined() && msfvy.defined();
+    if (msfux.defined() || msfuy.defined() || msfvy.defined()) {
+        TORCH_CHECK(exact_face_maps && use_msfvx_crossratio &&
+                    msfux.dim() == 2 && msfux.size(0) == ny && msfux.size(1) == nx + 1 &&
+                    msfuy.dim() == 2 && msfuy.size(0) == ny && msfuy.size(1) == nx + 1 &&
+                    msfvx.dim() == 2 && msfvx.size(0) == ny + 1 && msfvx.size(1) == nx &&
+                    msfvy.dim() == 2 && msfvy.size(0) == ny + 1 && msfvy.size(1) == nx,
+                    "option-1 scalar diffusion requires complete staggered face maps");
+    }
 
     // VECTORIZED: H1 = -msfux * Kh * rdx * dvar/dx at u-points (Fortran flux form)
     // Size: (ny, nz, nx+1) - u-stagger has extra point in x
@@ -27682,19 +27705,18 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
 
         // PARITY FIX 2025-12-09: Fortran uses cross-ratio msfux/msfuy (lines 3037-3038)
         // mkrdxm = (msfux(i,j)/msfuy(i,j)) * Kh_avg * MUT_avg * rdx
-        // Approximate msfux by msftx averaged to u-points
         torch::Tensor flux_x;
-        auto msfx_im = msftx.slice(1, 0, nx - 1);  // [ny, nx-1]
-        auto msfx_ip = msftx.slice(1, 1, nx);      // [ny, nx-1]
-        auto msfux_approx = 0.5f * (msfx_im + msfx_ip);    // [ny, nx-1] approximates msfux at u-points
-        // Also approximate msfuy from msfty averaged to u-points
-        auto msfy_im = msfty.slice(1, 0, nx - 1);  // [ny, nx-1]
-        auto msfy_ip = msfty.slice(1, 1, nx);      // [ny, nx-1]
-        auto msfuy_approx = 0.5f * (msfy_im + msfy_ip);    // [ny, nx-1] approximates msfuy at u-points
         // Return +div(Kh * grad(var)) in coupled tendency units.
         // A negative physical flux would require subtracting its divergence.
         // H1 uses cross-ratio (msfux/msfuy) * Kh * dvar/dx (Fortran form)
-        auto cross_ratio_x = msfux_approx / msfuy_approx;  // [ny, nx-1]
+        torch::Tensor cross_ratio_x;
+        if (exact_face_maps) {
+            cross_ratio_x=msfux.slice(1,1,nx)/msfuy.slice(1,1,nx);
+        } else {
+            const auto msfux_approx=.5f*(msftx.slice(1,0,nx-1)+msftx.slice(1,1,nx));
+            const auto msfuy_approx=.5f*(msfty.slice(1,0,nx-1)+msfty.slice(1,1,nx));
+            cross_ratio_x=msfux_approx/msfuy_approx;
+        }
         flux_x = cross_ratio_x.unsqueeze(1) * Kh_avg * dvar_dx;
 
         // PARITY FIX 2025-12-07: Apply MUT weighting if provided
@@ -27724,16 +27746,24 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
         } else {
             const auto seam_kh=0.5f*(Kh.select(2,nx-1)+Kh.select(2,0));
             const auto seam_gradient=(var.select(2,0)-var.select(2,nx-1))*rdx;
-            const auto seam_map_x=0.5f*(msftx.select(1,nx-1)+msftx.select(1,0));
-            const auto seam_map_y=0.5f*(msfty.select(1,nx-1)+msfty.select(1,0));
-            auto seam=(seam_map_x/seam_map_y).unsqueeze(1)*seam_kh*seam_gradient;
+            torch::Tensor face_mass;
             if (use_mut) {
-                auto face_mass=0.5f*(mut.select(layered_mut ? 2 : 1,nx-1)+
-                                     mut.select(layered_mut ? 2 : 1,0));
-                seam=(layered_mut ? face_mass : face_mass.unsqueeze(1))*seam;
+                face_mass=0.5f*(mut.select(layered_mut ? 2 : 1,nx-1)+
+                                mut.select(layered_mut ? 2 : 1,0));
             }
-            H1.select(2,0).copy_(seam);
-            H1.select(2,nx).copy_(seam);
+            if (exact_face_maps) {
+                auto seam=seam_kh*seam_gradient;
+                if (use_mut) seam=(layered_mut ? face_mass : face_mass.unsqueeze(1))*seam;
+                H1.select(2,0).copy_((msfux.select(1,0)/msfuy.select(1,0)).unsqueeze(1)*seam);
+                H1.select(2,nx).copy_((msfux.select(1,nx)/msfuy.select(1,nx)).unsqueeze(1)*seam);
+            } else {
+                const auto seam_map_x=0.5f*(msftx.select(1,nx-1)+msftx.select(1,0));
+                const auto seam_map_y=0.5f*(msfty.select(1,nx-1)+msfty.select(1,0));
+                auto legacy=(seam_map_x/seam_map_y).unsqueeze(1)*seam_kh*seam_gradient;
+                if (use_mut) legacy=(layered_mut ? face_mass : face_mass.unsqueeze(1))*legacy;
+                H1.select(2,0).copy_(legacy);
+                H1.select(2,nx).copy_(legacy);
+            }
         }
     }
 
@@ -27754,12 +27784,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
 
         // PARITY FIX 2025-12-09: Fortran uses cross-ratio msfvy*msfvx_inv (lines 3042-3043)
         // mkrdym = (msfvy(i,j)*msfvx_inv(i,j)) * Kh_avg * MUT_avg * rdy
-        // Approximate msfvy by msfty averaged to v-points
         torch::Tensor flux_y;
-        // msfty is [ny, nx], average to v-points [ny-1, nx]
-        auto msfty_jm = msfty.slice(0, 0, ny - 1);  // [ny-1, nx]
-        auto msfty_jp = msfty.slice(0, 1, ny);      // [ny-1, nx]
-        auto msfvy_approx = 0.5f * (msfty_jm + msfty_jp);  // [ny-1, nx] approximates msfvy at v-points
+        const auto msfvy_face = exact_face_maps
+            ? msfvy.slice(0,1,ny)
+            : 0.5f*(msfty.slice(0,0,ny-1)+msfty.slice(0,1,ny));
 
         // Compute cross-ratio msfvy*msfvx_inv
         // msfvx is [ny+1, nx] at v-points, slice interior v-points [1:ny] -> [ny-1, nx]
@@ -27769,12 +27797,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf(
             // PARITY FIX 2025-12-24: Use dtype-aware epsilon (FP16 only, BF16 is safe).
             const float msfvx_eps = getAutocastAwareEps(msfvx_interior);
             auto msfvx_inv = 1.0f / msfvx_interior.clamp_min(msfvx_eps);
-            auto cross_ratio_y = msfvy_approx * msfvx_inv;  // [ny-1, nx]
+            auto cross_ratio_y = msfvy_face * msfvx_inv;  // [ny-1, nx]
             // H2 uses cross-ratio (msfvy*msfvx_inv) * Kh * dvar/dy (Fortran form)
             flux_y = cross_ratio_y.unsqueeze(1) * Kh_avg * dvar_dy;
         } else {
             // Fallback: use msfvy only (less accurate for non-Cartesian grids)
-            flux_y = msfvy_approx.unsqueeze(1) * Kh_avg * dvar_dy;
+            flux_y = msfvy_face.unsqueeze(1) * Kh_avg * dvar_dy;
         }
 
         // PARITY FIX 2025-12-07: Apply MUT weighting if provided

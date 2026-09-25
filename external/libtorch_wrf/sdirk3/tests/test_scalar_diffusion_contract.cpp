@@ -14,7 +14,8 @@ struct ScalarDiffusionTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)
         (const torch::Tensor&, const torch::Tensor&, float, float,
          const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
-         const torch::Tensor&, torch::Tensor*, torch::Tensor*);
+         const torch::Tensor&, torch::Tensor*, torch::Tensor*,
+         const torch::Tensor&, const torch::Tensor&, const torch::Tensor&);
     friend type access(ScalarDiffusionTag);
 };
 template<typename Tag, typename Tag::type Member> struct MemberAccessor {
@@ -22,6 +23,22 @@ template<typename Tag, typename Tag::type Member> struct MemberAccessor {
 };
 template struct MemberAccessor<ScalarDiffusionTag,
                                &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_scalar_wrf>;
+
+struct MapUxTag {
+    using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(MapUxTag);
+};
+struct MapUyTag {
+    using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(MapUyTag);
+};
+struct MapVyTag {
+    using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(MapVyTag);
+};
+template struct MemberAccessor<MapUxTag, &TileSDIRK3UnifiedSolver::msfux_>;
+template struct MemberAccessor<MapUyTag, &TileSDIRK3UnifiedSolver::msfuy_>;
+template struct MemberAccessor<MapVyTag, &TileSDIRK3UnifiedSolver::msfvy_>;
 
 struct ActualRhsTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*) (
@@ -86,7 +103,8 @@ bool run(torch::Dtype dtype) {
     auto call = [&](const torch::Tensor& q, bool supply_msfvx) {
         return (tile.*access(ScalarDiffusionTag{}))(
             q, Kh_field, 1.0f, 1.0f, msftx, msfty,
-            supply_msfvx ? msfvx : torch::Tensor(), mut, nullptr, nullptr);
+            supply_msfvx ? msfvx : torch::Tensor(), mut, nullptr, nullptr,
+            torch::Tensor(),torch::Tensor(),torch::Tensor());
     };
     const double zero_tol = 512.0 * eps * (1.0 + std::abs(Kh * MUT));
     const double mode_tol = 512.0 * eps * (1.0 + std::abs(Kh * MUT));
@@ -148,7 +166,8 @@ bool run_packed_periodic_seam(torch::Dtype dtype) {
     const auto my=torch::cat({my_core,my_core.slice(1,0,1)},1);
     torch::Tensor h1;
     const auto got=(tile.solver.*access(ScalarDiffusionTag{}))(
-        q,kh,1.0f,1.0f,mx,my,torch::ones({ny+1,nx},opt),mut,&h1,nullptr);
+        q,kh,1.0f,1.0f,mx,my,torch::ones({ny+1,nx},opt),mut,&h1,nullptr,
+        torch::Tensor(),torch::Tensor(),torch::Tensor());
     const auto expected=(0.5*(mx.select(1,n-1)+mx.select(1,0))/
                          (0.5*(my.select(1,n-1)+my.select(1,0)))).unsqueeze(1)*
         (0.5*(kh.select(2,n-1)+kh.select(2,0)))*
@@ -331,7 +350,19 @@ bool run_option1_scalar_rhs_contract() {
             tile.mu[j*nx+i]=128.0f*i;
         for (int j=0;j<ny;++j) for (int k=0;k<nz;++k)
             for (int i=0;i<nx;++i)
-                tile.theta[(j*nz+k)*nx+i]=.03125f*i+.015625f*k;
+                tile.theta[(j*nz+k)*nx+i]=
+                    .03125f*i+.015625f*k+.0625f*j+.0078125f*i*j;
+        std::vector<float> ux(ny*(nx+1)),uy(ny*(nx+1)),vy((ny+1)*nx);
+        for (int j=0;j<ny;++j) for (int f=0;f<=nx;++f) {
+            const int x=f%nx;
+            ux[j*(nx+1)+f]=1.0f+x/16.0f+j/128.0f;
+            uy[j*(nx+1)+f]=1.0f+x/64.0f+j/32.0f;
+        }
+        for (int f=0;f<=ny;++f) for (int i=0;i<nx;++i)
+            vy[f*nx+i]=1.0f+i/128.0f+f/16.0f;
+        (tile.solver.*access(MapUxTag{}))=torch::tensor(ux).view({ny,nx+1});
+        (tile.solver.*access(MapUyTag{}))=torch::tensor(uy).view({ny,nx+1});
+        (tile.solver.*access(MapVyTag{}))=torch::tensor(vy).view({ny+1,nx});
     };
     const auto reference=[&]() {
         TileCase tile(100.0f);
@@ -346,7 +377,8 @@ bool run_option1_scalar_rhs_contract() {
         const auto maps=torch::ones({ny,nx},opt);
         const auto coupled=(tile.solver.*access(ScalarDiffusionTag{}))(
             q,kh,.01f,.01f,maps,maps,torch::ones({ny+1,nx},opt),layer,
-            nullptr,nullptr);
+            nullptr,nullptr,tile.solver.*access(MapUxTag{}),
+            tile.solver.*access(MapUyTag{}),tile.solver.*access(MapVyTag{}));
         // This RHS fixture leaves wrf_omega_ww_cp off, so the public
         // primitive-theta RHS divides the coupled diffusion by MU+MUB.
         return (coupled/mut.unsqueeze(1)).reshape({st}).detach().clone();
@@ -702,7 +734,8 @@ void dump_flat_periodic_x(torch::Dtype dtype) {
     const auto mut=torch::full({ny,nx},784.8,opt);
     const auto out=(tile.solver.*access(ScalarDiffusionTag{}))(
         q,kh,0.1f,0.13f,map,map,torch::ones({ny+1,nx},opt),mut,
-        nullptr,nullptr).to(torch::kFloat64).contiguous();
+        nullptr,nullptr,torch::Tensor(),torch::Tensor(),torch::Tensor())
+        .to(torch::kFloat64).contiguous();
     const auto a=out.accessor<double,3>();
     for (int j=0; j<ny; ++j)
         for (int k=0; k<nz; ++k)
@@ -750,7 +783,9 @@ void dump_hybrid_layer_mass(torch::Dtype dtype, const std::string& mass_mode) {
     else throw std::invalid_argument("unknown layer-mass mode");
     const auto out=(tile.solver.*access(ScalarDiffusionTag{}))(
         q,kh,0.1f,0.13f,map,map,torch::ones({ny+1,nx},opt),mass,
-        nullptr,nullptr).to(torch::kFloat64).contiguous();
+        nullptr,nullptr,torch::ones({ny,nx+1},opt),
+        torch::ones({ny,nx+1},opt),torch::ones({ny+1,nx},opt))
+        .to(torch::kFloat64).contiguous();
     const auto a=out.accessor<double,3>();
     for (int j=0; j<ny; ++j)
         for (int k=0; k<nz; ++k)
@@ -758,9 +793,65 @@ void dump_hybrid_layer_mass(torch::Dtype dtype, const std::string& mass_mode) {
                 std::cout << "C_HYBRID " << j+1 << ' ' << k+1 << ' ' << x+1
                           << ' ' << std::setprecision(17) << a[j][k][x] << '\n';
 }
+
+void dump_hybrid_face_maps(torch::Dtype dtype, const std::string& map_mode) {
+    using wrf::sdirk3::test::TileCase;
+    TileCase tile(10.0f);
+    const auto opt=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
+    constexpr double c1[nz]={1.1953125,1.5703125,1.4921875,.296875};
+    std::vector<double> qv,khv,lv,mxv,myv,muxv,muyv,mvxv,mvyv;
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int x=0;x<nx;++x) {
+        const double mut=90000.0+128.0*x+256.0*j;
+        qv.push_back(1.0+.03125*x+.0078125*((x*x)%3)+.015625*k+
+                     .0625*j+.015625*((j*j)%2)+.0078125*x*j);
+        khv.push_back(2.0+.125*x+.0625*k+.03125*j);
+        lv.push_back(c1[k]*mut+(1.0-c1[k])*80000.0);
+    }
+    for (int j=0;j<ny;++j) for (int x=0;x<nx;++x) {
+        mxv.push_back(1.0+x/32.0+j/64.0);
+        myv.push_back(1.0+x/64.0+j/32.0);
+    }
+    const bool old_x=map_mode=="old-x" || map_mode=="old-both";
+    const bool old_y=map_mode=="old-y" || map_mode=="old-both";
+    if (map_mode!="exact" && !old_x && !old_y)
+        throw std::invalid_argument("unknown stagger-map mode");
+    for (int j=0;j<ny;++j) for (int f=0;f<=nx;++f) {
+        const int x=f%nx, left=(f+nx-1)%nx;
+        muxv.push_back(old_x ? .5*(mxv[j*nx+left]+mxv[j*nx+x])
+                             : 1.0+x/16.0+j/128.0);
+        muyv.push_back(old_x ? .5*(myv[j*nx+left]+myv[j*nx+x])
+                             : 1.0+x/64.0+j/32.0);
+    }
+    for (int f=0;f<=ny;++f) for (int x=0;x<nx;++x) {
+        mvxv.push_back(1.0+x/32.0+f/128.0);
+        mvyv.push_back(old_y && f>0 && f<ny
+            ? .5*(myv[(f-1)*nx+x]+myv[f*nx+x])
+            : 1.0+x/128.0+f/16.0);
+    }
+    const auto tensor=[&](const std::vector<double>& values,std::vector<int64_t> shape) {
+        return torch::tensor(values,torch::TensorOptions().dtype(torch::kFloat64))
+            .to(dtype).reshape(shape);
+    };
+    const auto out=(tile.solver.*access(ScalarDiffusionTag{}))(
+        tensor(qv,{ny,nz,nx}),tensor(khv,{ny,nz,nx}),.1f,.13f,
+        tensor(mxv,{ny,nx}),tensor(myv,{ny,nx}),tensor(mvxv,{ny+1,nx}),
+        tensor(lv,{ny,nz,nx}),nullptr,nullptr,tensor(muxv,{ny,nx+1}),
+        tensor(muyv,{ny,nx+1}),tensor(mvyv,{ny+1,nx}))
+        .to(torch::kFloat64).contiguous();
+    const auto a=out.accessor<double,3>();
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int x=0;x<nx;++x)
+        std::cout << "C_MAP " << j+1 << ' ' << k+1 << ' ' << x+1 << ' '
+                  << std::setprecision(17) << a[j][k][x] << '\n';
+}
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc==4 && std::string(argv[1])=="--hybrid-map-parity") {
+        if (std::string(argv[2])=="fp32") dump_hybrid_face_maps(torch::kFloat32,argv[3]);
+        else if (std::string(argv[2])=="fp64") dump_hybrid_face_maps(torch::kFloat64,argv[3]);
+        else return 2;
+        return 0;
+    }
     if (argc==4 && std::string(argv[1])=="--hybrid-layer-parity") {
         if (std::string(argv[2])=="fp32") dump_hybrid_layer_mass(torch::kFloat32,argv[3]);
         else if (std::string(argv[2])=="fp64") dump_hybrid_layer_mass(torch::kFloat64,argv[3]);

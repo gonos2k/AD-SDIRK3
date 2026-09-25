@@ -29,13 +29,18 @@ PROGRAM hybrid_layer_mass_contract
   INTEGER, PARAMETER :: ids=1,ide=nx+1,jds=1,jde=ny+1,kds=1,kde=nz+1
   REAL :: field(ims:ime,kms:kme,jms:jme),base(ims:ime,kms:kme,jms:jme)
   REAL :: kh(ims:ime,kms:kme,jms:jme),tend(ims:ime,kms:kme,jms:jme)
-  REAL :: mut(ims:ime,jms:jme),map(ims:ime,jms:jme)
+  REAL :: mut(ims:ime,jms:jme),msftx(ims:ime,jms:jme)
+  REAL :: msfty(ims:ime,jms:jme),msfux(ims:ime,jms:jme)
+  REAL :: msfuy(ims:ime,jms:jme),msfvx(ims:ime,jms:jme)
+  REAL :: msfvx_inv(ims:ime,jms:jme),msfvy(ims:ime,jms:jme)
   REAL :: c1(kms:kme),c2(kms:kme),rdx,rdy
-  INTEGER :: i,j,k,x,mode
+  INTEGER :: i,j,k,x,y,yv,mode
   TYPE(grid_config_rec_type) :: cfg
   rdx=REAL(REAL(.1,KIND=4),KIND=KIND(rdx))
   rdy=REAL(REAL(.13,KIND=4),KIND=KIND(rdy))
-  map=1.;base=0.;field=0.;kh=0.;tend=0.;mut=0.
+  msftx=1.;msfty=1.;msfux=1.;msfuy=1.
+  msfvx=1.;msfvx_inv=1.;msfvy=1.
+  base=0.;field=0.;kh=0.;tend=0.;mut=0.
   c1=1.;c2=0.
   c1(1:4)=[1.1953125,1.5703125,1.4921875,.296875]
   c2(1:4)=(1.-c1(1:4))*80000.
@@ -51,13 +56,37 @@ PROGRAM hybrid_layer_mass_contract
       END DO
     END DO
   END DO
-  DO mode=1,2
+  DO mode=1,3
     tend=0.
     IF (mode==2) THEN
       c1=1.;c2=0.
+    ELSE IF (mode==3) THEN
+      c1(1:4)=[1.1953125,1.5703125,1.4921875,.296875]
+      c2(1:4)=(1.-c1(1:4))*80000.
+      DO j=jms,jme
+        y=MAX(0,MIN(ny-1,j-1))
+        yv=MAX(0,MIN(ny,j-1))
+        DO i=ims,ime
+          x=MODULO(i-1,nx)
+          msftx(i,j)=1.+REAL(x)/32.+REAL(y)/64.
+          msfty(i,j)=1.+REAL(x)/64.+REAL(y)/32.
+          msfux(i,j)=1.+REAL(x)/16.+REAL(y)/128.
+          msfuy(i,j)=1.+REAL(x)/64.+REAL(y)/32.
+          msfvx(i,j)=1.+REAL(x)/32.+REAL(yv)/128.
+          msfvx_inv(i,j)=1./msfvx(i,j)
+          msfvy(i,j)=1.+REAL(x)/128.+REAL(yv)/16.
+          mut(i,j)=90000.+128.*REAL(x)+256.*REAL(y)
+          DO k=kms,kme
+            field(i,k,j)=1.+.03125*REAL(x)+.0078125*REAL(MOD(x*x,3)) &
+              +.015625*REAL(k-1)+.0625*REAL(y)+.015625*REAL(MOD(y*y,2)) &
+              +.0078125*REAL(x*y)
+            kh(i,k,j)=2.+.125*REAL(x)+.0625*REAL(k-1)+.03125*REAL(y)
+          END DO
+        END DO
+      END DO
     END IF
     CALL horizontal_diffusion_3dmp('m',field,tend,mut,c1,c2,cfg,base, &
-        map,map,map,map,map,map,map,2.,kh,rdx,rdy, &
+        msfux,msfuy,msfvx,msfvx_inv,msfvy,msftx,msfty,2.,kh,rdx,rdy, &
         ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
         ids,ide,jds,jde,kds,kde)
     DO j=1,ny
@@ -66,8 +95,10 @@ PROGRAM hybrid_layer_mass_contract
           IF (.NOT.ieee_is_finite(tend(i,k,j))) ERROR STOP 'nonfinite Fortran tendency'
           IF (mode==1) THEN
             WRITE(*,'(A,3(1X,I0),1X,ES25.16E3)') 'F_HYBRID',j,k,i,tend(i,k,j)
-          ELSE
+          ELSE IF (mode==2) THEN
             WRITE(*,'(A,3(1X,I0),1X,ES25.16E3)') 'F_SIGMA',j,k,i,tend(i,k,j)
+          ELSE
+            WRITE(*,'(A,3(1X,I0),1X,ES25.16E3)') 'F_MAP',j,k,i,tend(i,k,j)
           END IF
         END DO
       END DO
@@ -156,6 +187,34 @@ def run(compiler: list[str], cpp_binary: Path, precision: str,
             sigma_rank_error <= budget and old_error > 10 * budget and
             no_c2_error > 10 * budget):
         raise RuntimeError(f"option-1 hybrid layer-mass contract failed: {precision}")
+
+    maps = rows(actual, "F_MAP")
+    def cpp_maps(mode: str) -> dict[tuple[int, int, int], float]:
+        output = subprocess.run([str(cpp_binary), "--hybrid-map-parity",
+                                 precision, mode], text=True, capture_output=True,
+                                check=True).stdout
+        return rows(output, "C_MAP")
+    exact = cpp_maps("exact")
+    legacy_x = cpp_maps("old-x")
+    legacy_y = cpp_maps("old-y")
+    legacy_both = cpp_maps("old-both")
+    map_signal = max(abs(value) for value in maps.values())
+    map_budget = 64.0 * eps * max(1.0, map_signal)
+    map_error = error(maps, exact)
+    x_error = error(maps, legacy_x)
+    y_error = error(maps, legacy_y)
+    both_error = error(maps, legacy_both)
+    map_seam_error = max(abs(maps[key] - exact[key]) for key in maps
+                         if key[2] in (1, 8))
+    print(f"option1 nonunit maps {precision} {optimization}: cells=192 "
+          f"signal={map_signal:.9g} error={map_error:.9g} "
+          f"seam={map_seam_error:.9g} budget={map_budget:.9g} "
+          f"old_x={x_error:.9g} old_y={y_error:.9g} "
+          f"old_both={both_error:.9g}")
+    if not (map_signal > 100 * map_budget and map_error <= map_budget and
+            map_seam_error <= map_budget and x_error > 10 * map_budget and
+            y_error > 10 * map_budget and both_error > 10 * map_budget):
+        raise RuntimeError(f"option-1 stagger-map contract failed: {precision}")
 
 
 if __name__ == "__main__":
