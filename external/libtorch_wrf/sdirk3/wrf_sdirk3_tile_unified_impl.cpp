@@ -35965,13 +35965,17 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_defor13(const torch::Tensor& u, c
         torch::Tensor du_dz;
         if (option2_rdz.defined() && option2_rdz.numel() > 0) {
             // Stage-local rdz is defined at mass points. Interpolate the same
-            // source metric to U faces using Fortran's adjacent-cell average;
-            // the periodic seam joins the last and first unique mass cells.
-            const int64_t nx_mass = nx_u - 1;
+            // source metric to U faces using Fortran's adjacent-cell average.
+            // Packed periodic state carries a repeated mass endpoint plus an
+            // extra U face alias: interpolate the unique N mass cells first,
+            // then append the Fortran-owned face-1 value at the packed tail.
+            const bool packed_periodic_u = isPackedPeriodicDomain();
+            const int64_t nx_mass = nx_u - (packed_periodic_u ? 2 : 1);
             TORCH_CHECK(option2_rdz.dim() == 3 &&
                         option2_rdz.size(0) >= ny &&
                         option2_rdz.size(1) >= nz_diff &&
-                        option2_rdz.size(2) >= nx_mass && nx_mass > 0,
+                        option2_rdz.size(2) >= nx_mass + (packed_periodic_u ? 1 : 0) &&
+                        nx_mass > 0,
                         "option-2 stage rdz does not cover U shear locations");
             auto rdz_mass = option2_rdz.slice(0,0,ny)
                 .slice(1,1,nz_diff).slice(2,0,nx_mass);
@@ -35980,6 +35984,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_defor13(const torch::Tensor& u, c
             auto rdz_right = torch::cat(
                 {rdz_mass,rdz_mass.slice(2,0,1)},2);
             auto rdz_at_u = 0.5f*(rdz_left+rdz_right);
+            if (packed_periodic_u) {
+                TORCH_CHECK(rdz_at_u.size(2) + 1 == nx_u && rdz_at_u.size(2) > 1,
+                            "option-2 packed U shear face extent mismatch");
+                rdz_at_u = torch::cat({rdz_at_u,rdz_at_u.slice(2,1,2)},2);
+            } else {
+                TORCH_CHECK(rdz_at_u.size(2) == nx_u,
+                            "option-2 U shear face extent mismatch");
+            }
             du_dz = u_diff * rdz_at_u;
         } else if (rdz_metric.defined() && rdz_metric.numel() > 0 && rdz_metric.size(1) >= nz_diff) {
             // rdz_metric is [ny, nz_w, nx] at w-levels
