@@ -151,6 +151,9 @@ template struct AutoMemberAccessor<VerticalUStressTag,
 struct VerticalVStressTag { friend auto access(VerticalVStressTag); };
 template struct AutoMemberAccessor<VerticalVStressTag,
     &TileSDIRK3UnifiedSolver::compute_vertical_diffusion_v_stress>;
+struct VerticalWStressTag { friend auto access(VerticalWStressTag); };
+template struct AutoMemberAccessor<VerticalWStressTag,
+    &TileSDIRK3UnifiedSolver::compute_vertical_diffusion_w_stress>;
 
 struct Defor13StageGeometryTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
@@ -664,6 +667,45 @@ bool run_vertical_shear_rdz_metric_diagnostic() {
     const bool u_ok=check("U",u_fallback,u_stage,u,1,1);
     const bool v_ok=check("V",v_fallback,v_stage,v,1,1);
     return u_ok&&v_ok;
+}
+
+int dump_vertical_w_stress_raw(const std::string& coefficient) {
+    constexpr int ny=17,nx=17,nz=16;
+    auto& cfg=wrf::sdirk3::g_sdirk3_config;
+    cfg=wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option=2;
+    cfg.specified=false;
+    cfg.nested=false;
+    cfg.open_xs=cfg.open_xe=cfg.open_ys=cfg.open_ye=false;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    TileSDIRK3UnifiedSolver solver(nx,ny,nz,1.0f,1.0f,{1.0f},{1.0f},
+                                   std::vector<float>(nz,10.0f),0);
+    auto grid=solver.getGridInfo();
+    TORCH_CHECK(grid,"W stress fixture requires grid info");
+    grid->dn=torch::full({nz},-0.5f,opt);
+    grid->rdn=torch::full({nz},2.0f,opt);
+    grid->rdzw=torch::full({nz+1},1.0f/1024.0f,opt);
+    auto w=torch::zeros({ny,nz+1,nx},opt);
+    auto rho=torch::empty({ny,nz,nx},opt);
+    auto xkmh=torch::empty_like(rho);
+    auto xkmv=torch::empty_like(rho);
+    auto defor33=torch::empty_like(rho);
+    for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i) {
+        rho[j][k][i]=1.0f+float(k)/32.0f+float(i)/512.0f;
+        xkmh[j][k][i]=4.0f+float(k)/8.0f+float(i)/128.0f;
+        xkmv[j][k][i]=12.0f+float(k)/16.0f+float(i)/64.0f;
+        defor33[j][k][i]=0.25f+float(k)/16.0f+float(i)/256.0f;
+    }
+    if(coefficient=="zero") xkmh.zero_();
+    const auto& km=coefficient=="xkmv"?xkmv:xkmh;
+    const auto tendency=(solver.*access(VerticalWStressTag{}))(
+        w,defor33,km,rho,torch::full({nz},10.0f,opt)).contiguous();
+    TORCH_CHECK(tendency.sizes()==w.sizes(),"W stress output shape mismatch");
+    const auto a=tendency.accessor<float,3>();
+    for(int j=0;j<ny;++j) for(int k=0;k<nz+1;++k) for(int i=0;i<nx;++i)
+        std::cout << "W_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(17) << a[j][k][i] << '\n';
+    return 0;
 }
 
 // Flat normal stresses: Fortran tau=-2*rho*K*Dq and signed dnw=-1.
@@ -2390,6 +2432,12 @@ int main(int argc, char** argv) {
         return dump_vertical_v_stress_raw(true);
     if (argc==2 && std::string(argv[1])=="--vertical-shear-rdz-metric")
         return run_vertical_shear_rdz_metric_diagnostic() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--vertical-w-stress-xkmh")
+        return dump_vertical_w_stress_raw("xkmh");
+    if (argc==2 && std::string(argv[1])=="--vertical-w-stress-xkmv")
+        return dump_vertical_w_stress_raw("xkmv");
+    if (argc==2 && std::string(argv[1])=="--vertical-w-stress-zero-k")
+        return dump_vertical_w_stress_raw("zero");
     if (argc==2 && std::string(argv[1])=="--option2-packed-u-rdz-seam")
         return run_packed_u_rdz_seam() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry") {
