@@ -474,6 +474,12 @@ jobs:
           python3 tools/test_option1_momentum_diffusion.py \
             "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
 
+      - name: option-2 U stress Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 external/libtorch_wrf/sdirk3/tests/test_option2_momentum_geometry.py \
+            --binary "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
+
       - name: install contract (exact manifest, header byte-parity, no stub)
         run: |
           set -euo pipefail

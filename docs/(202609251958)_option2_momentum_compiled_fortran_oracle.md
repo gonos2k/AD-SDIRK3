@@ -10,7 +10,7 @@ D11 remains independently computed by the existing Python transcription of the s
 
 ## Source and executable provenance
 
-- Worktree revision: `d90e5faed8c38aa5cae9e4aeb58b0c9660e5c9e4`.
+- Parent production revision: `d90e5faed8c38aa5cae9e4aeb58b0c9660e5c9e4`; oracle change: `ae6bd3d1b4bc3b300f1989c5dfdf0777e609fe2a`. The later workflow-only commit does not alter these operator sources.
 - `dyn_em/module_diffusion_em.F` SHA-256: `c044c533e5e1e9d168418f2b72feba62964bee6a0f55e211c2522ffceaa6b7ea`.
 - Extracted routine-body SHA-256: `df842e5eac37ec5cc07c8e5af117dd38cacbae28523c91df338eb39466130e22`.
 - C++ implementation SHA-256: `811c7f8f7ce206c57bda617efa5ce8e4f3994741c4cb21ccb83414799898923a`.
@@ -35,6 +35,7 @@ The fixture is Nx=8 periodic X, `H=100*cos(2*pi*i/8) m`, `U=[0,0,0,1]`, `K=2`, `
 - C++ and compiled Fortran seam error: exactly zero.
 - Result: `PASS option-2 U-X compiled Fortran geometry parity`.
 - Python syntax check and `git diff --check` pass.
+- The existing `core-linux` workflow now invokes this compiled parity script after the option-1 momentum source comparison; hosted CI for that exact candidate is pending.
 - No WRF `test/em_b_wave` model run or same-setup split-explicit RK3 field/runtime comparison was performed; this oracle validates the isolated operator fixture only.
 
 ## Graphify
