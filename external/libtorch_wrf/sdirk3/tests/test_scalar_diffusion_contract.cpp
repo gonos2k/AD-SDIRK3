@@ -36,9 +36,34 @@ struct MapVyTag {
     using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
     friend type access(MapVyTag);
 };
+struct MapVxTag {
+    using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(MapVxTag);
+};
+struct MapTxTag {
+    using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(MapTxTag);
+};
+struct MapTyTag {
+    using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(MapTyTag);
+};
 template struct MemberAccessor<MapUxTag, &TileSDIRK3UnifiedSolver::msfux_>;
 template struct MemberAccessor<MapUyTag, &TileSDIRK3UnifiedSolver::msfuy_>;
 template struct MemberAccessor<MapVyTag, &TileSDIRK3UnifiedSolver::msfvy_>;
+template struct MemberAccessor<MapVxTag, &TileSDIRK3UnifiedSolver::msfvx_>;
+template struct MemberAccessor<MapTxTag, &TileSDIRK3UnifiedSolver::msftx_>;
+template struct MemberAccessor<MapTyTag, &TileSDIRK3UnifiedSolver::msfty_>;
+
+struct Option1MomentumTag {
+    using type = std::tuple<torch::Tensor,torch::Tensor,torch::Tensor>
+        (TileSDIRK3UnifiedSolver::*)(const torch::Tensor&,const torch::Tensor&,
+                                     const torch::Tensor&,const torch::Tensor&,
+                                     const torch::Tensor&,float,float);
+    friend type access(Option1MomentumTag);
+};
+template struct MemberAccessor<Option1MomentumTag,
+    &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_option1_momentum>;
 
 struct ActualRhsTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*) (
@@ -564,10 +589,10 @@ bool run_normal_rhs() {
     using namespace wrf::sdirk3;
     using wrf::sdirk3::test::TileCase;
     constexpr float spacing = 1000.0f, viscosity = 1000.0f;
-    const auto evaluate = [](bool u_mode, bool on, RhsMode mode) {
+    const auto evaluate = [](int option, bool u_mode, bool on, RhsMode mode) {
         auto& cfg = g_sdirk3_config;
         cfg = SDIRK3Config{};
-        cfg.diffusion_option = 2;
+        cfg.diffusion_option = option;
         cfg.khdif = on ? viscosity : 0.0f;
         cfg.kvdif = 0.0f;
         cfg.mass_coordinate_mode = 0;
@@ -593,11 +618,11 @@ bool run_normal_rhs() {
     };
     constexpr int su = ny*nz*(nx+1), sv = (ny+1)*nz*nx;
     bool ok = true;
-    for (bool u_mode : {true,false}) {
-        const auto full = evaluate(u_mode,true,RhsMode::Full) -
-                          evaluate(u_mode,false,RhsMode::Full);
-        const auto explicit_delta = evaluate(u_mode,true,RhsMode::ExplicitOnly) -
-                                    evaluate(u_mode,false,RhsMode::ExplicitOnly);
+    for (int option : {1,2}) for (bool u_mode : {true,false}) {
+        const auto full = evaluate(option,u_mode,true,RhsMode::Full) -
+                          evaluate(option,u_mode,false,RhsMode::Full);
+        const auto explicit_delta = evaluate(option,u_mode,true,RhsMode::ExplicitOnly) -
+                                    evaluate(option,u_mode,false,RhsMode::ExplicitOnly);
         const auto select = [=](const torch::Tensor& rhs) {
             return u_mode ? rhs.slice(0,0,su).view({ny,nz,nx+1}) :
                             rhs.slice(0,su,su+sv).view({ny+1,nz,nx});
@@ -610,7 +635,7 @@ bool run_normal_rhs() {
             for (int i=1; i<nx; ++i) {
                 const double wave = u_mode ? std::sin(2*pi*i/nx) : std::sin(pi*j/ny);
                 const double value = actual[j][k][i].item<double>();
-                error = std::max(error,std::abs(value-2*viscosity*lambda*wave));
+                error = std::max(error,std::abs(value-(option==1?1:2)*viscosity*lambda*wave));
                 work += wave*value;
             }
         const double split_error = (actual-select(explicit_delta)).abs().max().item<double>();
@@ -619,11 +644,181 @@ bool run_normal_rhs() {
         const bool pass = torch::isfinite(full).all().item<bool>() &&
             torch::isfinite(explicit_delta).all().item<bool>() &&
             error <= tolerance && split_error <= tolerance && work < 0.0;
-        std::cout << (pass ? "PASS " : "FAIL ") << "normal RHS "
+        std::cout << (pass ? "PASS " : "FAIL ") << "normal RHS option=" << option << ' '
             << (u_mode ? "U-X" : "V-Y") << " error=" << error
             << " full_explicit=" << split_error << " tol=" << tolerance
             << " work=" << work << '\n';
         ok = pass && ok;
+    }
+    return ok;
+}
+
+// Option-1 Fortran returns a layer-mass coupled tendency. rk_addtend_dry
+// removes the component map factor, while this solver accumulates in column
+// mass and converts back by velocity_mass. Since alpha=L/map, the integrated
+// primitive RHS increment must be raw/L (maps are already present in raw).
+// This fixture checks that conversion in the actual Full and Explicit RHS,
+// with hybrid coefficients, spatially varying MU, and non-unit maps.
+bool run_option1_momentum_rhs_basis_contract() {
+    using namespace wrf::sdirk3;
+    using namespace wrf::sdirk3::test;
+    constexpr float viscosity = 1000.0f;
+    const std::vector<float> c1f_values{0.30f,0.45f,0.65f,0.82f,0.90f};
+    const std::vector<float> c2f_values{5000.0f,8000.0f,12000.0f,15000.0f,18000.0f};
+    const std::vector<float> c1h_values{0.25f,0.40f,0.60f,0.80f};
+    const std::vector<float> c2h_values{18000.0f,15000.0f,12000.0f,9000.0f};
+
+    auto prepare = [&](TileCase& tile) {
+        auto& cfg = g_sdirk3_config;
+        cfg.diffusion_option = 1;
+        cfg.kvdif = 0.0f;
+        cfg.mass_coordinate_mode = 0;
+        cfg.imex_split_mode = 3;
+        cfg.hevi_split = false;
+        cfg.wrf_omega_ww_cp = false;
+        cfg.use_stress_tensor = false;
+        (tile.solver.*access(CoordinateTag{}))(
+            c1f_values.data(),c2f_values.data(),
+            c1h_values.data(),c2h_values.data());
+
+        for (int j=0; j<ny; ++j) {
+            for (int i=0; i<nx; ++i) {
+                const double phase_x=2*pi*i/nx;
+                const double phase_y=2*pi*j/ny;
+                tile.mu[j*nx+i] = 100.0f + 18.0f*std::sin(phase_x)
+                                  + 11.0f*std::cos(phase_y);
+                for (int k=0; k<nz; ++k) {
+                    tile.u[(j*nz+k)*(nx+1)+i] =
+                        std::sin(phase_x)*(1.0f+0.03f*j+0.02f*k);
+                    tile.v[(j*nz+k)*nx+i] = j==0 || j==ny-1 ? 0.0f :
+                        std::sin(pi*j/(ny-1))*(1.0f+0.02f*i+0.025f*k);
+                }
+                for (int k=0; k<nw; ++k) {
+                    tile.w[(j*nw+k)*nx+i] = std::sin(phase_x)*
+                        (1.0f+0.025f*j+0.03f*k);
+                }
+            }
+            // The east U face aliases the west face on periodic X.
+            for (int k=0; k<nz; ++k)
+                tile.u[(j*nz+k)*(nx+1)+nx] = tile.u[(j*nz+k)*(nx+1)];
+        }
+
+        std::vector<float> mtx(ny*nx),mty(ny*nx);
+        std::vector<float> mux(ny*(nx+1)),muy(ny*(nx+1));
+        std::vector<float> mvx((ny+1)*nx),mvy((ny+1)*nx);
+        for (int j=0; j<ny; ++j) for (int i=0; i<nx; ++i) {
+            mtx[j*nx+i]=1.0f+0.015f*i+0.006f*j;
+            mty[j*nx+i]=1.0f+0.004f*i+0.012f*j;
+        }
+        for (int j=0; j<ny; ++j) for (int f=0; f<=nx; ++f) {
+            const int i=f%nx;
+            mux[j*(nx+1)+f]=1.0f+0.018f*i+0.005f*j;
+            muy[j*(nx+1)+f]=1.0f+0.007f*i+0.009f*j;
+        }
+        for (int f=0; f<=ny; ++f) for (int i=0; i<nx; ++i) {
+            mvx[f*nx+i]=1.0f+0.011f*i+0.004f*f;
+            mvy[f*nx+i]=1.0f+0.006f*i+0.010f*f;
+        }
+        const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
+        (tile.solver.*access(MapTxTag{}))=torch::tensor(mtx,opt).view({ny,nx});
+        (tile.solver.*access(MapTyTag{}))=torch::tensor(mty,opt).view({ny,nx});
+        (tile.solver.*access(MapUxTag{}))=torch::tensor(mux,opt).view({ny,nx+1});
+        (tile.solver.*access(MapUyTag{}))=torch::tensor(muy,opt).view({ny,nx+1});
+        (tile.solver.*access(MapVxTag{}))=torch::tensor(mvx,opt).view({ny+1,nx});
+        (tile.solver.*access(MapVyTag{}))=torch::tensor(mvy,opt).view({ny+1,nx});
+        return tile.state();
+    };
+
+    TileCase oracle_tile(100.0f);
+    const auto state=prepare(oracle_tile);
+    g_sdirk3_config.khdif=viscosity;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
+    const auto u=state.slice(0,0,su).view({ny,nz,nx+1});
+    const auto v=state.slice(0,su,su+sv).view({ny+1,nz,nx});
+    const auto w=state.slice(0,su+sv,su+sv+sw).view({ny,nw,nx});
+    const auto mu_pert=state.slice(0,total-sm,total).view({ny,nx});
+    // TileCase installs an 80000 Pa MUB; MU is the variable state perturbation.
+    const auto mu_full=mu_pert+80000.0f;
+    const auto kh=torch::full({ny,nz,nx},viscosity,opt);
+    const auto raw=(oracle_tile.solver.*access(Option1MomentumTag{}))(
+        u,v,w,kh,mu_full,1.0f/100.0f,1.0f/100.0f);
+
+    const auto c1h=torch::tensor(c1h_values,opt).view({1,nz,1});
+    const auto c2h=torch::tensor(c2h_values,opt).view({1,nz,1});
+    const auto c1f_t=torch::tensor(c1f_values,opt).view({1,nw,1});
+    const auto c2f_t=torch::tensor(c2f_values,opt).view({1,nw,1});
+    const auto l_mass=c1h*mu_full.unsqueeze(1)+c2h;
+    const auto l_u_core=0.5f*(l_mass.slice(2,0,nx-1)+l_mass.slice(2,1,nx));
+    const auto l_u_seam=0.5f*(l_mass.slice(2,nx-1,nx)+l_mass.slice(2,0,1));
+    const auto l_u=torch::cat({l_u_seam,l_u_core,l_u_seam},2);
+    const auto l_v_inner=0.5f*(l_mass.slice(0,0,ny-1)+l_mass.slice(0,1,ny));
+    const auto l_v=torch::cat({l_mass.slice(0,0,1),l_v_inner,
+                               l_mass.slice(0,ny-1,ny)},0);
+    const auto l_w=c1f_t*mu_full.unsqueeze(1)+c2f_t;
+    const auto mu_u=torch::cat({
+        0.5f*(mu_full.slice(1,nx-1,nx)+mu_full.slice(1,0,1)),
+        0.5f*(mu_full.slice(1,0,nx-1)+mu_full.slice(1,1,nx)),
+        0.5f*(mu_full.slice(1,nx-1,nx)+mu_full.slice(1,0,1))},1);
+    const auto mu_v=torch::cat({mu_full.slice(0,0,1),
+        0.5f*(mu_full.slice(0,0,ny-1)+mu_full.slice(0,1,ny)),
+        mu_full.slice(0,ny-1,ny)},0);
+    const auto map_u_y=oracle_tile.solver.*access(MapUyTag{});
+    const auto map_v_x=oracle_tile.solver.*access(MapVxTag{});
+    const auto map_w_y=oracle_tile.solver.*access(MapTyTag{});
+    const std::array<torch::Tensor,3> expected{
+        std::get<0>(raw)/l_u,std::get<1>(raw)/l_v,std::get<2>(raw)/l_w};
+    // Negative-basis controls: omitting the column/layer conversion returns
+    // raw/M, while applying M/alpha without first dividing the Fortran map
+    // factor returns raw*map/L. The non-unit maps and hybrid masses must
+    // separate both mistakes from the intended raw/L result.
+    const std::array<torch::Tensor,3> unscaled{
+        std::get<0>(raw)/mu_u.unsqueeze(1),
+        std::get<1>(raw)/mu_v.unsqueeze(1),
+        std::get<2>(raw)/mu_full.unsqueeze(1)};
+    const std::array<torch::Tensor,3> wrong_map{
+        std::get<0>(raw)*map_u_y.unsqueeze(1)/l_u,
+        std::get<1>(raw)*map_v_x.unsqueeze(1)/l_v,
+        std::get<2>(raw)*map_w_y.unsqueeze(1)/l_w};
+
+    const auto evaluate=[&](float khdif,RhsMode mode) {
+        TileCase tile(100.0f);
+        const auto q=prepare(tile);
+        g_sdirk3_config.khdif=khdif;
+        return (tile.solver.*access(ActualRhsTag{}))(q,mode).detach().clone();
+    };
+    constexpr std::array<const char*,3> names{"U","V","W"};
+    constexpr std::array<std::pair<int,int>,3> ranges{{
+        {0,su},{su,su+sv},{su+sv,su+sv+sw}}};
+    bool ok=true;
+    const double tolerance=3.0e-4;
+    for (auto mode : {RhsMode::Full,RhsMode::ExplicitOnly}) {
+        const auto on=evaluate(viscosity,mode);
+        const auto off=evaluate(0.0f,mode);
+        const auto delta=on-off;
+        for (int component=0; component<3; ++component) {
+            const auto actual=delta.slice(0,ranges[component].first,
+                                          ranges[component].second)
+                .view(expected[component].sizes());
+            const auto error=(actual-expected[component]).abs().max().item<double>();
+            const auto signal=expected[component].abs().max().item<double>();
+            const auto unscaled_gap=(unscaled[component]-expected[component])
+                .abs().max().item<double>();
+            const auto wrong_map_gap=(wrong_map[component]-expected[component])
+                .abs().max().item<double>();
+            const bool pass=torch::isfinite(actual).all().item<bool>() &&
+                            signal>100.0*tolerance && error<=tolerance &&
+                            unscaled_gap>10.0*tolerance &&
+                            wrong_map_gap>10.0*tolerance;
+            std::cout << (pass?"PASS ":"FAIL ")
+                      << "option1 momentum integrated basis mode="
+                      << (mode==RhsMode::Full?"full":"explicit")
+                      << " component=" << names[component]
+                      << " error=" << error << " signal=" << signal
+                      << " unscaled_gap=" << unscaled_gap
+                      << " wrong_map_gap=" << wrong_map_gap
+                      << " tol=" << tolerance << '\n';
+            ok=pass&&ok;
+        }
     }
     return ok;
 }
@@ -855,9 +1050,150 @@ void dump_hybrid_face_maps(torch::Dtype dtype, const std::string& map_mode) {
         std::cout << "C_MAP " << j+1 << ' ' << k+1 << ' ' << x+1 << ' '
                   << std::setprecision(17) << a[j][k][x] << '\n';
 }
+
+void dump_option1_momentum(torch::Dtype dtype,const std::string& component,int mass_case) {
+    using wrf::sdirk3::test::TileCase;
+    if (mass_case!=1 && mass_case!=2) throw std::invalid_argument("invalid mass case");
+    TileCase tile(10.0f);
+    const auto opt=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
+    const std::vector<float> c1f{.25f,.5f,.75f,1.0f,1.0f};
+    const std::vector<float> c2f{3000.f,4000.f,5000.f,6000.f,6000.f};
+    const std::vector<float> c1h{.25f,.5f,.75f,1.0f};
+    const std::vector<float> c2h{3000.f,4000.f,5000.f,6000.f};
+    (tile.solver.*access(CoordinateTag{}))(
+        c1f.data(),c2f.data(),c1h.data(),c2h.data());
+    const auto ix=torch::arange(nx,opt), iu=torch::arange(nx+1,opt);
+    const auto jy=torch::arange(ny+1,opt);
+    const auto u=torch::sin(iu*(2.0*pi/nx)).view({1,1,nx+1})
+        .expand({ny,nz,nx+1}).clone();
+    const auto v=torch::sin(jy*(pi/ny)).view({ny+1,1,1})
+        .expand({ny+1,nz,nx}).clone();
+    const auto w=torch::sin(ix*(2.0*pi/nx)).view({1,1,nx})
+        .expand({ny,nz+1,nx}).clone();
+    const auto kh=torch::full({ny,nz,nx},2.0,opt);
+    const auto mut=torch::full({ny,nx},mass_case==1?80000.0:120000.0,opt);
+    const auto result=(tile.solver.*access(Option1MomentumTag{}))(
+        u,v,w,kh,mut,.1f,.07f);
+    torch::Tensor selected;
+    int jmax=ny,kmin=1;
+    if (component=="U") selected=std::get<0>(result);
+    else if (component=="V") {selected=std::get<1>(result);jmax=ny+1;}
+    else if (component=="W") {selected=std::get<2>(result);kmin=2;}
+    else throw std::invalid_argument("invalid momentum component");
+    const auto out=selected.to(torch::kFloat64).contiguous();
+    const auto a=out.accessor<double,3>();
+    for (int j=1;j<=jmax;++j) for (int k=kmin;k<=nz;++k)
+        for (int i=1;i<=nx;++i)
+            std::cout << "C_MOM " << component << ' ' << j << ' ' << k << ' ' << i
+                      << ' ' << std::setprecision(17) << a[j-1][k-1][i-1] << '\n';
+}
+
+void dump_option1_momentum_packed(torch::Dtype dtype,const std::string& component) {
+    using wrf::sdirk3::test::TileCase;
+    constexpr int n=nx-1,m=ny-1;
+    TileCase tile(10.0f);
+    tile.solver.setWRFIndices(1,nx,1,ny,1,nz, 1,nx,1,ny,1,nz+1,
+                              -2,nx+4,-2,ny+4,1,nz+1);
+    const auto opt=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
+    const std::vector<float> c1f{.25f,.5f,.75f,1.0f,1.0f};
+    const std::vector<float> c2f{3000.f,4000.f,5000.f,6000.f,6000.f};
+    const std::vector<float> c1h{.25f,.5f,.75f,1.0f};
+    const std::vector<float> c2h{3000.f,4000.f,5000.f,6000.f};
+    (tile.solver.*access(CoordinateTag{}))(
+        c1f.data(),c2f.data(),c1h.data(),c2h.data());
+    auto tensor=[&](const std::vector<double>& a,std::vector<int64_t> shape) {
+        return torch::tensor(a,torch::TensorOptions().dtype(torch::kFloat64))
+            .to(dtype).reshape(shape);
+    };
+    const auto pack_mass=[m](const torch::Tensor& q) {
+        const auto x=torch::cat({q,q.slice(q.dim()-1,0,1)},q.dim()-1);
+        return torch::cat({x,x.slice(0,m-1,m)},0);
+    };
+    const auto pack_u=[m](const torch::Tensor& q) {
+        const auto x=torch::cat({q,q.slice(2,0,2)},2);
+        return torch::cat({x,x.slice(0,m-1,m)},0);
+    };
+    const auto pack_v=[m](const torch::Tensor& q,bool odd_ghost) {
+        const auto x=torch::cat({q,q.slice(q.dim()-1,0,1)},q.dim()-1);
+        const auto ghost=x.slice(0,m-1,m);
+        return torch::cat({x,odd_ghost?-ghost:ghost},0);
+    };
+    std::vector<double> khv,muv,uxv,vyv,wv,txv,tyv,u_xmap,u_ymap,v_xmap,v_ymap;
+    for (int j=0;j<m;++j) for (int k=0;k<nz;++k) for (int i=0;i<n;++i)
+        khv.push_back(2.0+i/8.0+j/16.0+k/32.0);
+    for (int j=0;j<m;++j) for (int i=0;i<n;++i) {
+        muv.push_back(80000.0+128.0*i+256.0*j);
+        txv.push_back(1.0+i/32.0+j/64.0);
+        tyv.push_back(1.0+i/64.0+j/32.0);
+    }
+    for (int j=0;j<m;++j) for (int k=0;k<nz;++k) for (int i=0;i<n;++i)
+        uxv.push_back(std::sin(2*pi*i/n)*(1.0+j/16.0+k/32.0));
+    for (int j=0;j<=m;++j) for (int k=0;k<nz;++k) for (int i=0;i<n;++i)
+        vyv.push_back((j==0 || j==m ? 0.0 : std::sin(pi*j/m))*
+                      (1.0+i/16.0+k/32.0));
+    for (int j=0;j<m;++j) for (int k=0;k<=nz;++k) for (int i=0;i<n;++i)
+        wv.push_back(std::sin(2*pi*i/n)*(1.0+j/16.0+k/32.0));
+    for (int j=0;j<m;++j) for (int f=0;f<n;++f) {
+        u_xmap.push_back(1.0+f/16.0+j/128.0);
+        u_ymap.push_back(1.0+f/64.0+j/32.0);
+    }
+    for (int f=0;f<=m;++f) for (int i=0;i<n;++i) {
+        v_xmap.push_back(1.0+i/32.0+f/128.0);
+        v_ymap.push_back(1.0+i/128.0+f/16.0);
+    }
+    const auto u=pack_u(tensor(uxv,{m,nz,n}));
+    const auto v=pack_v(tensor(vyv,{m+1,nz,n}),true);
+    const auto w=pack_mass(tensor(wv,{m,nz+1,n}));
+    const auto kh=pack_mass(tensor(khv,{m,nz,n}));
+    const auto mut=pack_mass(tensor(muv,{m,n}));
+    (tile.solver.*access(MapTxTag{}))=pack_mass(tensor(txv,{m,n}));
+    (tile.solver.*access(MapTyTag{}))=pack_mass(tensor(tyv,{m,n}));
+    (tile.solver.*access(MapUxTag{}))=pack_u(tensor(u_xmap,{m,1,n})).squeeze(1);
+    (tile.solver.*access(MapUyTag{}))=pack_u(tensor(u_ymap,{m,1,n})).squeeze(1);
+    (tile.solver.*access(MapVxTag{}))=pack_v(tensor(v_xmap,{m+1,n}),false);
+    (tile.solver.*access(MapVyTag{}))=pack_v(tensor(v_ymap,{m+1,n}),false);
+    const auto result=(tile.solver.*access(Option1MomentumTag{}))(
+        u,v,w,kh,mut,.1f,.07f);
+    const auto& ru=std::get<0>(result);
+    const auto& rv=std::get<1>(result);
+    const auto& rw=std::get<2>(result);
+    TORCH_CHECK(torch::equal(ru.select(2,n),ru.select(2,0)) &&
+                torch::equal(ru.select(2,n+1),ru.select(2,1)) &&
+                torch::equal(ru.select(0,m),ru.select(0,m-1)) &&
+                torch::equal(rv.select(2,n),rv.select(2,0)) &&
+                torch::equal(rv.select(0,m+1),-rv.select(0,m-1)) &&
+                torch::equal(rw.select(2,n),rw.select(2,0)) &&
+                torch::equal(rw.select(0,m),rw.select(0,m-1)),
+                "option-1 packed momentum output aliases disagree with Q");
+    torch::Tensor selected;
+    int jmax=m,kmin=1,imax=n;
+    if (component=="U") {selected=std::get<0>(result);imax=n+1;}
+    else if (component=="V") {selected=std::get<1>(result);jmax=m+1;}
+    else if (component=="W") {selected=std::get<2>(result);kmin=2;}
+    else throw std::invalid_argument("invalid packed momentum component");
+    const auto out=selected.to(torch::kFloat64).contiguous();
+    const auto a=out.accessor<double,3>();
+    for (int j=1;j<=jmax;++j) for (int k=kmin;k<=nz;++k)
+        for (int i=1;i<=imax;++i)
+            std::cout << "C_PACK " << component << ' ' << j << ' ' << k << ' ' << i
+                      << ' ' << std::setprecision(17) << a[j-1][k-1][i-1] << '\n';
+}
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc==4 && std::string(argv[1])=="--option1-momentum-packed") {
+        if (std::string(argv[2])=="fp32") dump_option1_momentum_packed(torch::kFloat32,argv[3]);
+        else if (std::string(argv[2])=="fp64") dump_option1_momentum_packed(torch::kFloat64,argv[3]);
+        else return 2;
+        return 0;
+    }
+    if (argc==5 && std::string(argv[1])=="--option1-momentum-parity") {
+        const std::string precision(argv[2]);
+        if (precision=="fp32") dump_option1_momentum(torch::kFloat32,argv[3],std::stoi(argv[4]));
+        else if (precision=="fp64") dump_option1_momentum(torch::kFloat64,argv[3],std::stoi(argv[4]));
+        else return 2;
+        return 0;
+    }
     if (argc==4 && std::string(argv[1])=="--hybrid-map-parity") {
         if (std::string(argv[2])=="fp32") dump_hybrid_face_maps(torch::kFloat32,argv[3]);
         else if (std::string(argv[2])=="fp64") dump_hybrid_face_maps(torch::kFloat64,argv[3]);
@@ -886,6 +1222,7 @@ int main(int argc, char** argv) {
     ok = run_option1_scalar_rhs_contract() && ok;
     ok = run_scalar_zero_gate() && ok;
     ok = run_normal_rhs() && ok;
+    ok = run_option1_momentum_rhs_basis_contract() && ok;
     ok = run_u_terrain_thickness(torch::kFloat32) && ok;
     ok = run_u_terrain_thickness(torch::kFloat64) && ok;
     ok = run_w_density_state() && ok;

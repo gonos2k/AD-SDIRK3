@@ -468,6 +468,12 @@ jobs:
           python3 tools/test_hybrid_scalar_layer_mass.py \
             "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
 
+      - name: option-1 U V W momentum Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 tools/test_option1_momentum_diffusion.py \
+            "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
+
       - name: install contract (exact manifest, header byte-parity, no stub)
         run: |
           set -euo pipefail

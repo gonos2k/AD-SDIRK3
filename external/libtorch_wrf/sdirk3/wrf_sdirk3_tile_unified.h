@@ -32,6 +32,7 @@
 #include <string>
 #include <atomic>
 #include <mutex>
+#include <tuple>
 #include <iostream>  // FIX Round93: For TLS debug tracking
 #include <cstdint>   // FIX Round94: For uint64_t in TLS throttling
 
@@ -2351,6 +2352,11 @@ private:
                                                           const torch::Tensor& msfux = torch::Tensor(),
                                                           const torch::Tensor& msfuy = torch::Tensor(),
                                                           const torch::Tensor& msfvy = torch::Tensor());
+    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor>
+    compute_horizontal_diffusion_option1_momentum(
+        const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w,
+        const torch::Tensor& K_phys, const torch::Tensor& mu_full,
+        float rdx, float rdy);
     // PARITY FIX 2025-12-07: Added muu/muv parameters for MUT weighting
     // PARITY FIX 2025-12-10: Added optional ph_full parameter for on-the-fly rdzw computation
     // ph_full = ph_pert + ph_base (total geopotential at w-levels, [ny, nz_w, nx])
