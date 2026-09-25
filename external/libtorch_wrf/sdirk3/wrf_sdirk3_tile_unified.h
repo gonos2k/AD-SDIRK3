@@ -921,6 +921,15 @@ public:
 
     // Step outcome snapshot for ABI-side non-freeze contract.
     int getLastStepOutcomeCode() const { return last_step_outcome_code_; }
+    // Test-only observation; no production model setting or RHS change.
+    // The accepted ARK derivatives, not a later RHS re-evaluation, define the step.
+    struct ArkBudgetTrace {
+        torch::Tensor input, physics, raw_final, projected_final;
+        std::vector<torch::Tensor> stage_state, fast, slow, full;
+        double dt = 0.0;
+    };
+    void captureArkBudgetTraceForTest(bool enabled) { capture_ark_budget_trace_ = enabled; }
+    const ArkBudgetTrace& getLastArkBudgetTrace() const { return last_ark_budget_trace_; }
     bool getLastStepFinalUpdateAborted() const { return last_step_final_update_aborted_; }
     float getLastStepProgressRatio() const { return last_step_progress_ratio_; }
     bool isLastStepProgressRatioValid() const { return last_step_progress_ratio_valid_; }
@@ -1521,6 +1530,8 @@ private:
     bool last_stage_signals_is_explicit_ = false;
 
     int last_step_outcome_code_ = static_cast<int>(wrf::sdirk3::StepOutcomeCode::OK_ADVANCED);
+    ArkBudgetTrace last_ark_budget_trace_;
+    bool capture_ark_budget_trace_ = false;
     bool last_step_final_update_aborted_ = false;
     float last_step_progress_ratio_ = 0.0f;
     bool last_step_progress_ratio_valid_ = false;
