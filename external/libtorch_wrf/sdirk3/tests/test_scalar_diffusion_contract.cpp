@@ -534,6 +534,53 @@ int dump_vertical_u_stress_raw(bool zero_k) {
     return 0;
 }
 
+int dump_vertical_v_stress_raw(bool zero_k) {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int v_y = mass_y + 1;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    auto v = torch::zeros({v_y, mass_z, mass_x}, opt);
+    auto defor23 = torch::zeros({v_y, mass_z + 1, mass_x}, opt);
+    auto rho = torch::empty({mass_y, mass_z, mass_x}, opt);
+    auto kv = torch::empty_like(rho);
+    for (int j = 0; j < mass_y; ++j) {
+        for (int k = 0; k < mass_z; ++k) {
+            for (int i = 0; i < mass_x; ++i) {
+                rho[j][k][i] = 1.0f + float(k) / 32.0f + float(i) / 512.0f;
+                kv[j][k][i] = 2.0f + float(k) / 64.0f + float(i) / 128.0f;
+            }
+        }
+    }
+    if (zero_k) kv.zero_();
+    for (int j = 1; j < v_y - 1; ++j)
+        for (int k = 1; k < mass_z; ++k)
+            for (int i = 0; i < mass_x; ++i)
+                defor23[j][k][i] = 0.25f + float(k) / 128.0f +
+                                   float(j) / 256.0f + float(i) / 512.0f;
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalVStressTag{}))(
+        v, defor23, kv, rho, rdnw).contiguous();
+    const auto a = tendency.accessor<float, 3>();
+    for (int j = 0; j < v_y; ++j)
+        for (int k = 0; k < mass_z; ++k)
+            for (int i = 0; i < mass_x; ++i)
+                std::cout << "V_RAW " << j << ' ' << k << ' ' << i << ' '
+                          << std::setprecision(17) << a[j][k][i] << '\n';
+    return 0;
+}
+
 // Flat normal stresses: Fortran tau=-2*rho*K*Dq and signed dnw=-1.
 // Raw coupled tendency is +2*g*dz*rho*K*Lq, independent of column mass.
 bool run_normal_stress(torch::Dtype dtype) {
@@ -2252,6 +2299,10 @@ int main(int argc, char** argv) {
         return dump_vertical_u_stress_raw(false);
     if (argc==2 && std::string(argv[1])=="--vertical-u-stress-zero-k")
         return dump_vertical_u_stress_raw(true);
+    if (argc==2 && std::string(argv[1])=="--vertical-v-stress-raw")
+        return dump_vertical_v_stress_raw(false);
+    if (argc==2 && std::string(argv[1])=="--vertical-v-stress-zero-k")
+        return dump_vertical_v_stress_raw(true);
     if (argc==2 && std::string(argv[1])=="--option2-packed-u-rdz-seam")
         return run_packed_u_rdz_seam() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry") {
