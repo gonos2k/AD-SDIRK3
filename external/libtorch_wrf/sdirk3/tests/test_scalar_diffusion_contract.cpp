@@ -342,15 +342,23 @@ bool run_option1_scalar_rhs_contract() {
     cfg.use_stress_tensor=false;
     const std::vector<float> c1h{1.1953125f,1.5703125f,1.4921875f,.296875f};
     const std::vector<float> c2h{4000.0f,-2000.0f,5000.0f,9000.0f};
-    const auto prepare=[&](TileCase& tile) {
+    const auto prepare=[&](TileCase& tile) -> std::vector<float> {
         const std::vector<float> c1f(nz+1,1.0f),c2f(nz+1,0.0f);
         (tile.solver.*access(CoordinateTag{}))(
             c1f.data(),c2f.data(),c1h.data(),c2h.data());
+        std::vector<float> pressure(st),t_init(st);
+        for (int j=0;j<ny;++j) for (int k=0;k<nz;++k)
+            for (int i=0;i<nx;++i) {
+                const int index=(j*nz+k)*nx+i;
+                pressure[index]=100000.0f-(k+.5f)*80000.0f/nz;
+                t_init[index]=.5f*i+.125f*j+.0625f*((i*i)%3)+.03125f*k;
+            }
+        tile.solver.setBaseState(pressure.data(),t_init.data(),nullptr,nullptr);
         for (int j=0;j<ny;++j) for (int i=0;i<nx;++i)
             tile.mu[j*nx+i]=128.0f*i;
         for (int j=0;j<ny;++j) for (int k=0;k<nz;++k)
             for (int i=0;i<nx;++i)
-                tile.theta[(j*nz+k)*nx+i]=
+                tile.theta[(j*nz+k)*nx+i]=t_init[(j*nz+k)*nx+i]+
                     .03125f*i+.015625f*k+.0625f*j+.0078125f*i*j;
         std::vector<float> ux(ny*(nx+1)),uy(ny*(nx+1)),vy((ny+1)*nx);
         for (int j=0;j<ny;++j) for (int f=0;f<=nx;++f) {
@@ -363,12 +371,14 @@ bool run_option1_scalar_rhs_contract() {
         (tile.solver.*access(MapUxTag{}))=torch::tensor(ux).view({ny,nx+1});
         (tile.solver.*access(MapUyTag{}))=torch::tensor(uy).view({ny,nx+1});
         (tile.solver.*access(MapVyTag{}))=torch::tensor(vy).view({ny+1,nx});
+        return t_init;
     };
     const auto reference=[&]() {
         TileCase tile(100.0f);
-        prepare(tile);
+        const auto t_init=prepare(tile);
         const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
-        const auto q=torch::from_blob(tile.theta.data(),{ny,nz,nx},opt).clone();
+        const auto q=torch::from_blob(tile.theta.data(),{ny,nz,nx},opt).clone()-
+                     torch::tensor(t_init,opt).view({ny,nz,nx});
         const auto mut=torch::from_blob(tile.mu.data(),{ny,nx},opt).clone()+80000.0f;
         const auto c1=torch::tensor(c1h,opt).view({1,nz,1});
         const auto c2=torch::tensor(c2h,opt).view({1,nz,1});
@@ -799,11 +809,13 @@ void dump_hybrid_face_maps(torch::Dtype dtype, const std::string& map_mode) {
     TileCase tile(10.0f);
     const auto opt=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
     constexpr double c1[nz]={1.1953125,1.5703125,1.4921875,.296875};
+    const bool old_base=map_mode=="old-base";
     std::vector<double> qv,khv,lv,mxv,myv,muxv,muyv,mvxv,mvyv;
     for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int x=0;x<nx;++x) {
         const double mut=90000.0+128.0*x+256.0*j;
-        qv.push_back(1.0+.03125*x+.0078125*((x*x)%3)+.015625*k+
-                     .0625*j+.015625*((j*j)%2)+.0078125*x*j);
+        const double q=1.0+.03125*x+.0078125*((x*x)%3)+.015625*k+
+                       .0625*j+.015625*((j*j)%2)+.0078125*x*j;
+        qv.push_back(q+(old_base ? .5*x+.125*j+.0625*((x*x)%3)+.03125*k : 0.0));
         khv.push_back(2.0+.125*x+.0625*k+.03125*j);
         lv.push_back(c1[k]*mut+(1.0-c1[k])*80000.0);
     }
@@ -813,7 +825,7 @@ void dump_hybrid_face_maps(torch::Dtype dtype, const std::string& map_mode) {
     }
     const bool old_x=map_mode=="old-x" || map_mode=="old-both";
     const bool old_y=map_mode=="old-y" || map_mode=="old-both";
-    if (map_mode!="exact" && !old_x && !old_y)
+    if (map_mode!="exact" && map_mode!="base" && !old_base && !old_x && !old_y)
         throw std::invalid_argument("unknown stagger-map mode");
     for (int j=0;j<ny;++j) for (int f=0;f<=nx;++f) {
         const int x=f%nx, left=(f+nx-1)%nx;

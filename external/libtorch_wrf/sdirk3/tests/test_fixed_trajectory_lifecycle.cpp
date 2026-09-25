@@ -152,6 +152,18 @@ static void base_mutation_rejects() {
   t.solver.closeFixedTrajectory();
   std::cout << "FIXED_TRAJECTORY_BASE_MUTATION_REJECT passed\n";
 }
+static void t_init_rounding_mutation_rejects() {
+  TileCase t(100000.0f, 0.0f, true); t.set(x0()); t.solver.beginFixedTrajectory(1);
+  const auto pressure=t.solver.getBaseStatePressure().to(torch::kCPU).contiguous();
+  std::vector<float> t_init(wrf::sdirk3::test::st,0.0f);
+  t_init[7]=1.0e-6f;
+  TORCH_CHECK(t_init[7]+300.0f==300.0f,
+              "t_init mutation must be hidden by full-theta FP32 rounding");
+  t.solver.setBaseState(pressure.data_ptr<float>(),t_init.data(),nullptr,nullptr);
+  expect_rejected([&]{t.checkFixedInputs();},"fixed trajectory fixed input changed");
+  t.solver.closeFixedTrajectory();
+  std::cout << "FIXED_TRAJECTORY_T_INIT_ROUNDING_REJECT passed\n";
+}
 static void coefficient_mutation_rejects() {
   TileCase t(100000.0f, 0.0f, true); t.set(x0()); t.solver.beginFixedTrajectory(2); t.step(.1f);
   t.one[2] += .125f;
@@ -278,6 +290,7 @@ int main() {
     configure(top_lid); run("first_step_profile", first_step_profile_rejects);
     configure(top_lid); run("gravity", gravity_mutation_rejects);
     configure(top_lid); run("base", base_mutation_rejects);
+    configure(top_lid); run("t_init_rounding", t_init_rounding_mutation_rejects);
     configure(top_lid); run("coefficients", coefficient_mutation_rejects);
     configure(top_lid); run("slope_inplace", slope_inplace_mutation_rejects);
     configure(top_lid); run("moisture_correction", moisture_correction_mutation_rejects);

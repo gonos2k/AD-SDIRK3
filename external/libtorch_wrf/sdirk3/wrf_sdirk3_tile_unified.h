@@ -1477,6 +1477,7 @@ private:
     // Reference state (will be set from WRF)
     torch::Tensor p_base_;     // Base state pressure (3D)
     torch::Tensor th_base_;    // Base state potential temperature (3D)
+    torch::Tensor t_init_pert_; // Original WRF t_init = th_base - 300 K (3D)
     torch::Tensor rho_base_;   // Base state density (3D)
     torch::Tensor mu_base_;    // Base state column mass (2D)
     torch::Tensor ph_base_;    // Base state geopotential (3D, w-staggered)
