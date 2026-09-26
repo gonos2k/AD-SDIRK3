@@ -7,6 +7,7 @@
 #include <iomanip>
 #include <limits>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -564,8 +565,87 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         const auto x=torch::cat({q,q.slice(2,0,1)},2);
         return torch::cat({x,x.slice(0,m-1,m)},0);
     };
-    struct Result { torch::Tensor rhs,expected,legacy; double terrain_signal=0.0; };
-    const auto evaluate=[&](bool on,bool packed,int km_opt=1) -> Result {
+    const auto make_state=[&](bool packed) {
+        const int m=packed?ny-1:ny,n=packed?nx-1:nx;
+        auto theta=torch::empty({ny,nz,nx},opt);
+        auto mu=torch::empty({ny,nx},opt);
+        auto ph=torch::empty({ny,nw,nx},opt);
+        auto ph_values=ph.accessor<float,3>();
+        auto theta_values=theta.accessor<float,3>();
+        auto mu_values=mu.accessor<float,2>();
+        for (int j=0;j<m;++j) for (int k=0;k<nz;++k) for (int i=0;i<n;++i) {
+            const double x=2*pi*i/n,y=pi*(j+0.5)/m;
+            theta_values[j][k][i]=4.0*std::sin(x)+2.5*std::cos(y)+
+                1.2*(k+1)*(0.5*std::sin(x)+0.3*std::cos(y));
+        }
+        for (int j=0;j<m;++j) for (int i=0;i<n;++i) {
+            const double x=2*pi*i/n,y=pi*(j+0.5)/m;
+            mu_values[j][i]=128.0*i+64.0*j+16.0*std::sin(x);
+            const float height=600.0f*std::sin(x)+400.0f*std::cos(y);
+            for (int k=0;k<nw;++k)
+                ph_values[j][k][i]=static_cast<float>(gravity)*height;
+        }
+        if (packed) {
+            theta=pack_mass(theta.slice(0,0,m).slice(2,0,n),m);
+            mu=pack_mass(mu.slice(0,0,m).slice(1,0,n).unsqueeze(1),m).squeeze(1);
+            ph=pack_mass(ph.slice(0,0,m).slice(2,0,n),m);
+        }
+        const auto u=torch::zeros({ny,nz,nx+1},opt);
+        const auto v=torch::zeros({ny+1,nz,nx},opt);
+        const auto w=torch::zeros({ny,nw,nx},opt);
+        return torch::cat({u.reshape({-1}),v.reshape({-1}),w.reshape({-1}),
+                           ph.reshape({-1}),theta.reshape({-1}),mu.reshape({-1})});
+    };
+    // Directions are expressed in their state units: 10 K theta scale,
+    // 1000 m geopotential-height scale (g*dz), and 25 kPa column-mass scale.
+    // The smaller central-FD step therefore perturbs theta by 0.1 K, PH by
+    // O(10 m) and MU by 250 Pa while resolving each block's active response.
+    const auto make_direction=[&](bool packed,int block) {
+        const int m=packed?ny-1:ny,n=packed?nx-1:nx;
+        auto direction=torch::zeros({total},opt);
+        if (block==0) {
+            auto core=torch::empty({m,nz,n},opt);
+            auto a=core.accessor<float,3>();
+            for(int j=0;j<m;++j)for(int k=0;k<nz;++k)for(int i=0;i<n;++i){
+                const double x=2*pi*i/n,y=pi*(j+0.5)/m;
+                a[j][k][i]=10.0*(std::sin(x)+0.4*std::cos(y)+0.2*k/nz);
+            }
+            auto full=packed?pack_mass(core,m):core;
+            direction.slice(0,theta_begin,theta_begin+st).copy_(full.reshape({-1}));
+        } else if (block==1) {
+            auto core=torch::empty({m,nw,n},opt);
+            auto a=core.accessor<float,3>();
+            for(int j=0;j<m;++j)for(int k=0;k<nw;++k)for(int i=0;i<n;++i){
+                const double x=2*pi*i/n,y=pi*(j+0.5)/m;
+                const double eta=double(k)/(nw-1);
+                const double height=1000.0*eta*(std::sin(x)+0.5*std::cos(y))+
+                                    300.0*eta*std::sin(x+y);
+                a[j][k][i]=static_cast<float>(gravity*height);
+            }
+            auto full=packed?pack_mass(core,m):core;
+            const int64_t begin=su+sv+sw;
+            direction.slice(0,begin,begin+sw).copy_(full.reshape({-1}));
+        } else if (block==2) {
+            auto core=torch::empty({m,1,n},opt);
+            auto a=core.accessor<float,3>();
+            for(int j=0;j<m;++j)for(int i=0;i<n;++i){
+                const double x=2*pi*i/n,y=pi*(j+0.5)/m;
+                a[j][0][i]=25000.0*(0.5+std::sin(x)*std::cos(y));
+            }
+            auto full=packed?pack_mass(core,m).squeeze(1):core.squeeze(1);
+            direction.slice(0,total-sm,total).copy_(full.reshape({-1}));
+        } else {
+            TORCH_CHECK(false,"unknown Option 2 VJP state block");
+        }
+        return direction;
+    };
+    struct Result {
+        torch::Tensor rhs,expected,legacy,geometry;
+        double terrain_signal=0.0;
+    };
+    const auto evaluate=[&](bool on,bool packed,int km_opt=1,
+                            const torch::Tensor& state_override=torch::Tensor(),
+                            bool make_reference=true) -> Result {
         cfg=SDIRK3Config{};
         cfg.diffusion_option=2;
         cfg.khdif=on?1000.0f:0.0f;
@@ -595,35 +675,9 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
             false,false,false,false,false,"calc_ww_cp Omega (test fixture)");
 
         const int m=packed?ny-1:ny,n=packed?nx-1:nx;
-        auto theta=torch::empty({ny,nz,nx},opt);
-        auto mu=torch::empty({ny,nx},opt);
-        auto ph=torch::empty({ny,nw,nx},opt);
-        auto ph_values=ph.accessor<float,3>();
-        for (int j=0;j<m;++j) for (int k=0;k<nz;++k) for (int i=0;i<n;++i) {
-            const double x=2*pi*i/n,y=pi*(j+0.5)/m;
-            theta[j][k][i]=4.0*std::sin(x)+2.5*std::cos(y)+
-                1.2*(k+1)*(0.5*std::sin(x)+0.3*std::cos(y));
-        }
-        for (int j=0;j<m;++j) for (int i=0;i<n;++i) {
-            const double x=2*pi*i/n,y=pi*(j+0.5)/m;
-            mu[j][i]=128.0*i+64.0*j+16.0*std::sin(x);
-            const float height=600.0f*std::sin(x)+400.0f*std::cos(y);
-            for (int k=0;k<nw;++k)
-                ph_values[j][k][i]=static_cast<float>(gravity)*height;
-        }
-        if (packed) {
-            theta=pack_mass(theta.slice(0,0,m).slice(2,0,n),m);
-            mu=pack_mass(mu.slice(0,0,m).slice(1,0,n).unsqueeze(1),m).squeeze(1);
-            ph=pack_mass(ph.slice(0,0,m).slice(2,0,n),m);
-        }
-        const auto u=torch::zeros({ny,nz,nx+1},opt);
-        const auto v=torch::zeros({ny+1,nz,nx},opt);
-        const auto w=torch::zeros({ny,nw,nx},opt);
-        const auto state=torch::cat({u.reshape({-1}),v.reshape({-1}),w.reshape({-1}),
-                                     ph.reshape({-1}),theta.reshape({-1}),mu.reshape({-1})});
+        const auto state=state_override.defined()?state_override:make_state(packed);
         auto rhs=(solver.*access(ActualRhsTag{}))(
-            state,RhsMode::ExplicitOnly).detach().clone();
-        if (!on) return {rhs,torch::Tensor(),torch::Tensor(),0.0};
+            state,RhsMode::ExplicitOnly).clone();
 
         // The first checks establish the supported dispatch contract. In
         // particular, nonzero raw/L parity below fails if Step 9 silently uses
@@ -654,21 +708,10 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         const auto core2=[&](const torch::Tensor& q) {
             return packed?q.slice(0,0,m).slice(1,0,n):q;
         };
-        auto q=core3(state_t);
-        auto mu_core=core2(state_mu);
         auto phi_core=core3(state_phi);
-        auto pbase=core3(grid->p_base.to(opt));
-        auto thbase=core3(grid->th_base.to(opt));
         auto phbase=core3(grid->ph_base.to(opt));
-        auto mubase=core2(grid->mu_base.to(opt));
-        auto c1=torch::tensor(c1h,opt),c2=torch::tensor(c2h,opt);
         auto rdnw=(solver.*access(RdnwTag{}))(torch::kCPU,torch::kFloat32,nz);
         auto rdn=(solver.*access(RdnTag{}))(torch::kCPU,torch::kFloat32,nz);
-        const auto alb=compute_inverse_density(thbase,pbase,287.0f,717.5f,
-                                                1004.5f,100000.0f);
-        const auto prho=calc_p_rho_wrf(phi_core,q,mu_core,mubase,alb,pbase,
-            rdnw,c1,c2,287.0f,717.5f,1004.5f,100000.0f,300.0f);
-        const auto rho=prho.alt.reciprocal();
         auto z_w=(phi_core+phbase)/gravity;
         const auto rdzw=(z_w.slice(1,1,nz+1)-z_w.slice(1,0,nz)).reciprocal();
         const auto x_left=torch::cat({z_w.slice(2,n-1,n),z_w},2);
@@ -679,6 +722,21 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
                                   torch::zeros({1,nw,n},opt)},0);
         const double terrain_signal=std::max(zx.abs().max().item<double>(),
                                              zy.abs().max().item<double>());
+        const auto geometry=torch::cat({rdzw.reshape({-1}),zx.reshape({-1}),
+                                         zy.reshape({-1})}).detach().clone();
+        if (!on || !make_reference)
+            return {rhs,torch::Tensor(),torch::Tensor(),geometry,terrain_signal};
+        auto q=core3(state_t);
+        auto mu_core=core2(state_mu);
+        auto pbase=core3(grid->p_base.to(opt));
+        auto thbase=core3(grid->th_base.to(opt));
+        auto mubase=core2(grid->mu_base.to(opt));
+        auto c1=torch::tensor(c1h,opt),c2=torch::tensor(c2h,opt);
+        const auto alb=compute_inverse_density(thbase,pbase,287.0f,717.5f,
+                                                1004.5f,100000.0f);
+        const auto prho=calc_p_rho_wrf(phi_core,q,mu_core,mubase,alb,pbase,
+            rdnw,c1,c2,287.0f,717.5f,1004.5f,100000.0f,300.0f);
+        const auto rho=prho.alt.reciprocal();
         const auto dnw=-rdnw.reciprocal();
         const auto dn=torch::cat({torch::zeros({1},opt),-rdn.slice(0,1,nz).reciprocal()},0);
         // These are the same WRF pointer arrays passed to the fixture setter;
@@ -711,7 +769,8 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
             const auto legacy_x=torch::cat({legacy_expected,legacy_expected.slice(2,0,1)},2);
             legacy_expected=torch::cat({legacy_x,legacy_x.slice(0,m-1,m)},0);
         }
-        return {rhs,expected.detach().clone(),legacy_expected.detach().clone(),terrain_signal};
+        return {rhs,expected.detach().clone(),legacy_expected.detach().clone(),
+                geometry,terrain_signal};
     };
 
     bool ok=true;
@@ -767,6 +826,102 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
     std::cout << (kmopt2_guard?"PASS ":"FAIL ")
               << "option-2 canonical RHS rejects unsupported km_opt=2" << '\n';
     ok=kmopt2_guard&&ok;
+
+    constexpr double h_large=2.0e-2,h_small=1.0e-2;
+    constexpr double central_rel_budget=5.0e-2;
+    constexpr double richardson_rel_budget=2.0e-2;
+    for (bool packed : {false,true}) {
+        const int m=packed?ny-1:ny,n=packed?nx-1:nx;
+        const auto base=make_state(packed);
+        auto seed=torch::empty({m,nz,n},opt);
+        auto seed_a=seed.accessor<float,3>();
+        for(int j=0;j<m;++j)for(int k=0;k<nz;++k)for(int i=0;i<n;++i){
+            const double x=2*pi*i/n,y=pi*(j+0.5)/m;
+            seed_a[j][k][i]=0.5+0.2*std::cos(x)+0.15*std::cos(y)+0.05*k;
+        }
+        seed=seed/torch::sqrt(seed.square().mean());
+        const auto theta_core=[&](const torch::Tensor& rhs) {
+            auto block=rhs.slice(0,theta_begin,theta_begin+st).view({ny,nz,nx});
+            return packed?block.slice(0,0,m).slice(2,0,n):block;
+        };
+        const auto objective=[&](const torch::Tensor& state) {
+            const auto on=evaluate(true,packed,1,state,false);
+            const auto off=evaluate(false,packed,1,state,false);
+            const auto h=theta_core(on.rhs-off.rhs);
+            return std::pair<double,double>{(h*seed).mean().item<double>(),
+                                            h.abs().max().item<double>()};
+        };
+
+        for (int block=0;block<3;++block) {
+            auto direction=make_direction(packed,block);
+            auto leaf=base.detach().clone().requires_grad_(true);
+            const auto on=evaluate(true,packed,1,leaf,false);
+            const auto off=evaluate(false,packed,1,leaf,false);
+            const auto h0=theta_core(on.rhs-off.rhs);
+            const auto scalar=(h0*seed).mean();
+            const auto gradient=torch::autograd::grad({scalar},{leaf})[0];
+            const double ad=(gradient*direction).sum().item<double>();
+            const double h_signal=h0.abs().max().item<double>();
+
+            const auto central=[&](double step) {
+                const auto plus=objective(base+step*direction);
+                const auto minus=objective(base-step*direction);
+                return std::tuple<double,double,double>{
+                    (plus.first-minus.first)/(2.0*step),
+                    std::max(plus.second,minus.second),plus.first-minus.first};
+            };
+            const auto [fd_large,large_signal,large_delta]=central(h_large);
+            const auto [fd_small,small_signal,small_delta]=central(h_small);
+            (void)large_delta;(void)small_delta;
+            const double richardson=(4.0*fd_small-fd_large)/3.0;
+            const double signal=std::max(std::abs(ad),std::abs(richardson));
+            // Difference-of-differences loses float32 bits as h shrinks. Bound
+            // that floor from the measured ON−OFF tendency scale and fixed h.
+            const double roundoff_floor=32.0*eps*
+                std::max(h_signal,std::max(large_signal,small_signal))/h_small;
+            const double central_budget=roundoff_floor+central_rel_budget*signal;
+            const double richardson_budget=roundoff_floor+richardson_rel_budget*signal;
+
+            double rdzw_response=0.0,zx_response=0.0,zy_response=0.0;
+            if (block==1) {
+                const auto plus=evaluate(true,packed,1,base+h_small*direction,false);
+                const auto minus=evaluate(true,packed,1,base-h_small*direction,false);
+                const auto geom_delta=(plus.geometry-minus.geometry).abs();
+                const int64_t rdzw_size=m*nz*n,zx_size=m*nw*(n+1);
+                rdzw_response=geom_delta.slice(0,0,rdzw_size).max().item<double>()/
+                              (2.0*h_small);
+                zx_response=geom_delta.slice(0,rdzw_size,rdzw_size+zx_size).max().item<double>()/
+                            (2.0*h_small);
+                zy_response=geom_delta.slice(0,rdzw_size+zx_size).max().item<double>()/
+                            (2.0*h_small);
+            }
+            const bool geometry_active=block!=1 ||
+                (rdzw_response>1.0e-6 && zx_response>1.0e-4 && zy_response>1.0e-4);
+            const bool pass=std::isfinite(ad) && std::isfinite(richardson) &&
+                signal>10.0*roundoff_floor &&
+                std::abs(ad-fd_large)<=central_budget &&
+                std::abs(ad-fd_small)<=central_budget &&
+                std::abs(ad-richardson)<=richardson_budget &&
+                geometry_active;
+            const char* name=block==0?"theta":block==1?"PH":"MU";
+            std::cout << (pass?"PASS ":"FAIL ")
+                      << "option-2 ON-OFF RHS directional FD/VJP " << name
+                      << " " << (packed?"packed":"physical")
+                      << " vjp=" << ad
+                      << " fd(" << h_large << ")=" << fd_large
+                      << " fd(" << h_small << ")=" << fd_small
+                      << " fd_richardson=" << richardson
+                      << " err_large=" << std::abs(ad-fd_large)
+                      << " err_small=" << std::abs(ad-fd_small)
+                      << " error=" << std::abs(ad-richardson)
+                      << " roundoff_floor=" << roundoff_floor
+                      << " central_budget=" << central_budget
+                      << " richardson_budget=" << richardson_budget
+                      << " d_rdzw=" << rdzw_response << " d_zx=" << zx_response
+                      << " d_zy=" << zy_response << '\n';
+            ok=pass&&ok;
+        }
+    }
     return ok;
 }
 
