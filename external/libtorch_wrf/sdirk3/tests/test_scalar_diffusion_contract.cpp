@@ -130,12 +130,25 @@ template struct MemberAccessor<CaptureThetaTag,
                                &TileSDIRK3UnifiedSolver::capture_theta_faces_now_>;
 template struct MemberAccessor<DiffusionTag,
                                &TileSDIRK3UnifiedSolver::setDiffusionCoefficients>;
+struct CfnTag { using type = float TileSDIRK3UnifiedSolver::*; friend type access(CfnTag); };
+struct Cfn1Tag { using type = float TileSDIRK3UnifiedSolver::*; friend type access(Cfn1Tag); };
+template struct MemberAccessor<CfnTag,&TileSDIRK3UnifiedSolver::cfn_>;
+template struct MemberAccessor<Cfn1Tag,&TileSDIRK3UnifiedSolver::cfn1_>;
+struct VerticalInterpolationTag {
+    using type = void (TileSDIRK3UnifiedSolver::*)(const float*,const float*,float,float,float);
+    friend type access(VerticalInterpolationTag);
+};
+template struct MemberAccessor<VerticalInterpolationTag,
+    &TileSDIRK3UnifiedSolver::setVerticalInterpolationCoefficients>;
 
 struct UOption2HelperTag { friend auto access(UOption2HelperTag); };
 struct VOption2HelperTag { friend auto access(VOption2HelperTag); };
 template<typename Tag, auto Member> struct AutoMemberAccessor {
     friend auto access(Tag) { return Member; }
 };
+struct UOption2CachedHelperTag { friend auto access(UOption2CachedHelperTag); };
+template struct AutoMemberAccessor<UOption2CachedHelperTag,
+    &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf>;
 template struct AutoMemberAccessor<UOption2HelperTag,
     &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf>;
 template struct AutoMemberAccessor<VOption2HelperTag,
@@ -179,6 +192,9 @@ struct Defor13StageGeometryTag {
 };
 template struct MemberAccessor<Defor13StageGeometryTag,
     &TileSDIRK3UnifiedSolver::compute_defor13>;
+struct Defor11StageGeometryTag { friend auto access(Defor11StageGeometryTag); };
+template struct AutoMemberAccessor<Defor11StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor11>;
 struct Defor23StageGeometryTag {
     using type = Defor13StageGeometryTag::type;
     friend type access(Defor23StageGeometryTag);
@@ -2035,14 +2051,28 @@ void dump_flat_periodic_x(torch::Dtype dtype) {
 // Expose the raw private U helper for the source-grounded option-2 geometry
 // oracle.  Cached terrain is deliberately flat while the supplied stage PH is
 // terrain-following, so this pins whether D11 consumes stage-local zx.
-void dump_option2_momentum_geometry() {
+void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
+                                    bool wrong_stage_metric=false,
+                                    bool top_pulse=false) {
     using wrf::sdirk3::test::TileCase;
     auto& cfg=wrf::sdirk3::g_sdirk3_config;
     cfg=wrf::sdirk3::SDIRK3Config{};
     cfg.diffusion_option=2;
+    // Native km_opt=1 background fixture: keep horizontal and vertical
+    // coefficients distinct so a khdif/kvdif cross-wire is observable.
+    constexpr float khdif=2.0f/3.0f, kvdif=4.0f/3.0f;
+    constexpr float map=1.25f;
+    cfg.khdif=khdif;
+    cfg.kvdif=kvdif;
     constexpr float dx=1000.0f, gravity=9.81f;
     const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
     TileCase tile(dx);
+    // Match the extracted Fortran driver's dn=dnw=-1/NZ so setVertical...
+    // derives the same top extrapolation cft1/cft2 used by cal_deform_and_div.
+    auto grid=tile.solver.getGridInfo();
+    TORCH_CHECK(grid,"option-2 geometry fixture has no GridInfo");
+    grid->rdn=torch::full({nz},float(nz),opt);
+    grid->rdnw=torch::full({nz},float(nz),opt);
     tile.solver.setTerrainSlopes(torch::zeros({ny,nw,nx},opt),
                                   torch::zeros({ny+1,nw,nx},opt));
     auto u=torch::zeros({ny,nz,nu},opt);
@@ -2063,21 +2093,138 @@ void dump_option2_momentum_geometry() {
     for (int j=0;j<ny;++j) for (int k=0;k<nw;++k)
         zx_stage[j][k][nx]=zx_stage[j][k][0];
     rdz_stage.select(1,0).fill_(2.0f/1000.0f);
-    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
-        u[j][k][i]=(k==nz-1 ? 1.0f : 0.0f);
-    const auto kh=torch::full({ny,nz,nx},2.0f,opt);
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i) {
+        const float profile = k==(top_pulse ? nz-1 : 1) ? 1.0f : 0.0f;
+        const float x_mode = top_pulse ? 1.0f :
+            1.0f+0.1f*std::cos(float(2.0*pi*i/nx));
+        u[j][k][i]=profile*x_mode;
+    }
+    const auto kh=torch::full({ny,nz,nx},khdif,opt);
+    const auto kv=torch::full({ny,nz,nx},kvdif,opt);
     const auto rho=torch::ones({ny,nz,nx},opt);
-    const auto map_u=torch::ones({ny,nu},opt);
-    const auto map_v=torch::ones({ny+1,nx},opt);
-    const auto map_m=torch::ones({ny,nx},opt);
+    const auto map_u=torch::full({ny,nu},map,opt);
+    const auto map_v=torch::full({ny+1,nx},map,opt);
+    const auto map_m=torch::full({ny,nx},map,opt);
+    (tile.solver.*access(MapUxTag{}))=map_u;
+    (tile.solver.*access(MapUyTag{}))=map_u;
+    (tile.solver.*access(MapVxTag{}))=map_v;
+    (tile.solver.*access(MapVyTag{}))=map_v;
+    (tile.solver.*access(MapTxTag{}))=map_m;
+    (tile.solver.*access(MapTyTag{}))=map_m;
     const auto muu=torch::full({ny,nx},784.8f,opt);
-    const auto raw=call_option2_momentum_helper(access(UOption2HelperTag{}),tile.solver,
-        u,v,w,kh,1.0f/dx,1.0f/dx,map_u,map_u,map_m,muu,ph_full,rho,
-        zx_stage,zy_stage,rdzw_stage,rdz_stage,true).contiguous();
-    const auto a=raw.accessor<float,3>();
+    std::vector<float> fnm(nw,0.5f),fnp(nw,0.5f);
+    const auto rdnw=torch::full({nz},float(nz),opt);
+    // Set fnm/fnp and derive cfn/cfn1 before either diffusion helper reads D11.
+    tile.solver.setVerticalInterpolationCoefficients(fnm.data(),fnp.data(),
+                                                     0.0f,0.0f,0.0f);
+    const auto raw=wrong_stage_metric
+        ? (tile.solver.*access(UOption2CachedHelperTag{}))(
+              u,v,w,kh,1.0f/dx,1.0f/dx,map_u,map_u,map_m,map_m,muu,ph_full,rho,
+              torch::Tensor(),torch::Tensor(),torch::Tensor(),torch::Tensor())
+        : call_option2_momentum_helper(access(UOption2HelperTag{}),tile.solver,
+              u,v,w,kh,1.0f/dx,1.0f/dx,map_u,map_u,map_m,muu,ph_full,rho,
+              zx_stage,zy_stage,rdzw_stage,rdz_stage,true);
+    const auto raw_out=raw.contiguous();
+    const auto rdx_tensor=torch::full({1},1.0f/dx,opt);
+    const auto defor13=(tile.solver.*access(Defor13StageGeometryTag{}))(
+        u,w,rdx_tensor,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage);
+    const auto defor11=(tile.solver.*access(Defor11StageGeometryTag{}))(
+        u,v,w,1.0f/dx,1.0f/dx,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto vertical=(tile.solver.*access(VerticalUStressTag{}))(
+        u,defor13,wrong_vertical_coefficient ? kh : kv,rho,rdnw).contiguous();
+    const auto a=raw_out.accessor<float,3>();
     for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
         std::cout << "U_RAW " << j << ' ' << k << ' ' << i << ' '
                   << std::setprecision(9) << a[j][k][i] << '\n';
+    const auto d11=defor11.accessor<float,3>();
+    const auto z=vertical.accessor<float,3>();
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i)
+        std::cout << "D11_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << d11[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
+        std::cout << "UV_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << z[j][k][i] << '\n';
+    std::cout << "OPTION2_K khdif=" << khdif << " kvdif=" << kvdif
+              << " xkmh=" << khdif << " xkmv=" << kvdif
+              << " xkhh=" << 3*khdif << " xkhv=" << 3*kvdif
+              << " map=" << map
+              << " wrong_vertical_coefficient=" << wrong_vertical_coefficient
+              << " wrong_stage_metric=" << wrong_stage_metric
+              << " top_pulse=" << top_pulse
+              << " cfn=" << tile.solver.*access(CfnTag{})
+              << " cfn1=" << tile.solver.*access(Cfn1Tag{}) << '\n';
+}
+
+bool run_external_weight_cfn_epoch_contract(bool expect_refresh) {
+    using wrf::sdirk3::test::TileCase;
+    TileCase tile(1000.0f);
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    std::vector<float> rdnw(nz+1,float(nz)),rdn(nz+1,float(nz));
+    auto grid=tile.solver.getGridInfo();
+    TORCH_CHECK(grid,"external-weight cfn fixture has no GridInfo");
+    grid->rdnw=torch::from_blob(rdnw.data(),{nz+1},opt).clone();
+    grid->rdn=torch::from_blob(rdn.data(),{nz+1},opt).clone();
+
+    wrf::sdirk3::ZeroCopyConfig setup{};
+    setup.nx=nx; setup.ny=ny; setup.nz=nz;
+    setup.nx_u=nu; setup.ny_v=nv; setup.nz_w=nw;
+    setup.ids=setup.its=setup.ims=1; setup.ide=setup.ite=setup.ime=nu;
+    setup.jds=setup.jts=setup.jms=1; setup.jde=setup.jte=setup.jme=nv;
+    setup.kds=setup.kts=setup.kms=1; setup.kde=setup.kme=nw; setup.kte=nz;
+    setup.u_ptr=setup.v_ptr=setup.w_ptr=setup.ph_ptr=setup.t_ptr=setup.p_ptr=
+        tile.setup_state.data();
+    setup.mu_ptr=tile.setup_state.data(); setup.al_ptr=tile.setup_density.data();
+    setup.rdx=setup.rdy=1.0f/tile.spacing;
+    setup.rdnw_ptr=rdnw.data(); setup.rdn_ptr=rdn.data();
+    setup.msftx_ptr=setup.msfty_ptr=setup.msfux_ptr=setup.msfuy_ptr=
+        setup.msfvx_ptr=setup.msfvy_ptr=tile.setup_map.data();
+    setup.c1f_ptr=setup.c1h_ptr=tile.one.data();
+    setup.c2f_ptr=setup.c2h_ptr=tile.zero.data();
+    setup.fnm_ptr=setup.fnp_ptr=tile.half.data();
+    setup.f_ptr=tile.setup_f.data();
+    setup.e_ptr=setup.sina_ptr=tile.setup_zero.data();
+    setup.cosa_ptr=tile.setup_map.data();
+
+    tile.solver.advanceZeroCopy(setup,2,0.1f);
+    (tile.solver.*access(VerticalInterpolationTag{}))(
+        tile.half.data(),tile.half.data(),0.0f,0.0f,0.0f);
+    // Prime the real WRF update path so the subsequent metric mutation tests
+    // an epoch refresh, rather than first-call coefficient initialization.
+    tile.solver.advanceZeroCopy(setup,1,1.0e-3f);
+    const float before_cfn=tile.solver.*access(CfnTag{});
+    const float before_cfn1=tile.solver.*access(Cfn1Tag{});
+    const auto before_fnm=tile.half;
+    const auto before_fnp=tile.half;
+
+    // Regrid only the top w spacing while preserving externally supplied fnm/fnp.
+    // WRF's top extrapolation coefficients depend on this updated rdnw/rdn ratio.
+    rdnw[nz-1]=2.0f;
+    grid->rdnw=torch::from_blob(rdnw.data(),{nz+1},opt).clone();
+    // Prime the GridInfo metric epoch exactly as the WRF setup/regrid owner does
+    // before invoking the next zero-copy solver update.
+    (tile.solver.*access(RdnwTag{}))(torch::kCPU,torch::kFloat32,nz);
+    tile.solver.advanceZeroCopy(setup,1,1.0e-3f);
+    const float after_cfn=tile.solver.*access(CfnTag{});
+    const float after_cfn1=tile.solver.*access(Cfn1Tag{});
+    const auto effective_rdnw=(tile.solver.*access(RdnwTag{}))(
+        torch::kCPU,torch::kFloat32,nz).contiguous();
+    const auto effective_rdn=(tile.solver.*access(RdnTag{}))(
+        torch::kCPU,torch::kFloat32,nz).contiguous();
+    const bool fnm_preserved=before_fnm==tile.half;
+    const bool fnp_preserved=before_fnp==tile.half;
+    const bool external_weights=tile.solver.*access(FnmFromWrfTag{});
+    const bool weights_preserved=fnm_preserved && fnp_preserved && external_weights;
+    const bool refreshed=std::abs(after_cfn-2.0f)<=1e-6f &&
+                         std::abs(after_cfn1+1.0f)<=1e-6f;
+    std::cout << (weights_preserved && (refreshed==expect_refresh) ? "PASS " : "FAIL ")
+              << "external fnm/fnp cfn epoch before=" << before_cfn << ',' << before_cfn1
+              << " after=" << after_cfn << ',' << after_cfn1
+              << " expected_after=2,-1 preserved_weights=" << weights_preserved
+              << " fnm/fnp/external=" << fnm_preserved << '/' << fnp_preserved << '/' << external_weights
+              << " refreshed=" << refreshed
+              << " rdnw_top=" << effective_rdnw[nz-1].item<float>()
+              << " rdn_top=" << effective_rdn[nz-1].item<float>() << '\n';
+    return weights_preserved && (refreshed==expect_refresh);
 }
 
 void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
@@ -2538,6 +2685,20 @@ int main(int argc, char** argv) {
         dump_option2_momentum_geometry();
         return 0;
     }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry-wrong-k") {
+        dump_option2_momentum_geometry(true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry-wrong-metric") {
+        dump_option2_momentum_geometry(false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry-top-pulse") {
+        dump_option2_momentum_geometry(false,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-external-fnm-cfn-refresh")
+        return run_external_weight_cfn_epoch_contract(true) ? 0 : 1;
     if ((argc==4 || argc==5) &&
         std::string(argv[1])=="--option2-scalar-fortran-parity") {
         const std::string mutation=argc==5 ? argv[4] : "";
@@ -2589,6 +2750,7 @@ int main(int argc, char** argv) {
     ok = run_normal_stress(torch::kFloat32) && ok;
     ok = run_normal_stress(torch::kFloat64) && ok;
     ok = run_actual_rhs_contract() && ok;
+    ok = run_external_weight_cfn_epoch_contract(true) && ok;
     ok = run_option1_scalar_rhs_contract() && ok;
     ok = run_option2_scalar_rhs_layer_mass_contract() && ok;
     ok = run_scalar_zero_gate() && ok;
