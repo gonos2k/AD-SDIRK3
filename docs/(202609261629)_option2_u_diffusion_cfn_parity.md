@@ -1,10 +1,11 @@
 # Option-2 U diffusion and top extrapolation parity
 
 Local timestamp: 2026-09-26 16:29:00 JST
+Stacked-branch update: 2026-09-26 17:02:59 JST
 
 ## Context
 
-This increment was developed in an isolated worktree at PR #239 HEAD `1c5c828470b858146ad6b8f8e539a1ee79dade46`. The focused Graphify corpus was rebuilt from byte-for-byte copies of the target sources: 406 nodes and 2803 edges. Graph relationships were used for navigation; all claims below were checked against source and executable results.
+This increment was developed in an isolated worktree at PR #239 HEAD `1c5c828470b858146ad6b8f8e539a1ee79dade46`, then cherry-picked without source-byte changes onto documentation PR #240 HEAD `ca736343ec40786d611b9aa216559188dfd4188d`. The stacked source/test tree before this report amendment was `8fe4b86150b6b52893a8b7ed26d17b4fb27fac4f`; its production source and test SHA-256 values below match the directly validated isolated worktree. The focused Graphify corpus was rebuilt from byte-for-byte copies of those target sources: 406 nodes and 2803 edges. Graph relationships were used for navigation; all claims below were checked against source and executable results.
 
 ## Changes
 
@@ -50,8 +51,10 @@ No longer-duration `test/em_b_wave` forecast comparison or timestep-stability sw
 
 ## Provenance
 
+The ignored local validation artifacts cited below are retained in the original isolated worktree `/Users/yhlee/SDIRK3-rhs-same-state-green/`; relative `.validation/` paths refer to that worktree. The PR contains the source, tests and report, not the executable or NetCDF outputs.
+
 - Target base revision: `1c5c828470b858146ad6b8f8e539a1ee79dade46`. Final source/test candidate HEAD before the documentation-only commit: `d0881bcbeb77adf33f93730af73e9f37ceee2a7f`.
-- Commits on `agent/option2-u-diffusion-cfn-parity`: production fix `12bc22a3bbd7c31dbbd64aa7096456ba4e691cd9`; test contracts `d0881bcbeb77adf33f93730af73f9e37ceee2a7f`.
+- Original isolated commits on `agent/option2-u-diffusion-cfn-parity`: production fix `12bc22a3bbd7c31dbbd64aa7096456ba4e691cd9`; test contracts `d0881bcbeb77adf33f93730af73f9e37ceee2a7f`. Source-equivalent stacked commits are `6e6933a` and `f976655`, respectively.
 - Fortran source hashes: `module_diffusion_em.F` `c044c533e5e1e9d168418f2b72feba62964bee6a0f55e211c2522ffceaa6b7ea`; authoritative RK caller `module_first_rk_step_part2.F` `9c8c06b246c1cb1bb1632c25e5683a0cfd8545e6832df6eeaa1c744524325738`; generated RK caller `module_first_rk_step_part2.f90` `5e3886a49f9674c3894e73fb12518a292e8c5a0c79b5992ff9bd38b56e590312`; normalizer `module_em.F` `fb424486dbf9c903f77da6a15baf35e6772847e786b18d0297139eb48f0d586e`.
 - Concatenated exact extracted routine hash: `a9c4a2572dcaacc99941fcbfd3b5f8cd091bfc1b5c6a87103520eed6013d6f37`.
 - C++ source hashes: implementation `b4a16f19e50e71b2bb5076f36a1f07f268d5ea6b07d9b583de9c130650d0bdc4`; header `27fc0d18cae7e6187f57acc7b2716b60fb09df7f349a1d4f86d7a29deb84d4df`.
