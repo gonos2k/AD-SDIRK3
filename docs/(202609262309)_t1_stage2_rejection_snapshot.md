@@ -39,3 +39,13 @@ SHA-256 values:
 - OFF, ON, and RHS-repeat partial `wrfout`: `ce58a0741fc7b4ae278b00a5767f8454bd1d9459ca85c53a87fff5e65b9f369a`
 
 Raw run files and the clean-build/Registry rebuild logs are under `.validation/t1_stage2_snapshot/`. The implementation branch is separate; nothing was pushed and no PR was opened.
+
+## Final PR #244 candidate evidence
+
+Recorded: 2026-09-26 23:52 JST
+
+The PR candidate branch `agent/t1-pr244-final` is based on the exact updated PR #243 head `a1d5f6a3c8c64e66510c81d5fbe98ce568ed180f`. It carries the T1 snapshot source/test, standalone report, and 104-test inventory updates only; the W/V reports are inherited from the base. The T1 production and test source is byte-identical to the source in the earlier integrated run tree. The base update since that run changes only the two W/V documentation files; there are no production or test-source differences.
+
+A clean configure and build on this final branch completed 217/217. The integrated U/V/W source-parity oracle, `Stage2_Rejection_Snapshot_Archive`, and `WRF_Dynamics_Config` passed 3/3 on this exact branch. A full 104-test CTest run on the source-identical integrated tree `agent/t1-on-vw-integration` at HEAD `72d5a1cedf2616235d239622fb4bc19112fcd8c0` completed **104/104** with `--parallel 2` in 141.25 seconds, including `Core_Archive_MakeParity`. The full output detail is preserved at `.validation/t1-integrated-ctest-104-final.log`, SHA-256 `2bbd4d998f6becb1dec2302c0d3f76b0208e5addb83ff90c1d0334dcc116210f` (2,063,514 bytes). That local log is copied unchanged into the final candidate worktree. The Make archive used by this run has SHA-256 `05654e5272efd1c0aad19996f0ff7ace34be853b05f81f66e48b3e46cfe03178`.
+
+The 104 pinned test names are unique and the three inventory references state 104. This exact-head candidate has a clean local worktree. Full WRF build/model evidence remains the standalone T1 result on PR #241 base `9513b3a`; no combined WRF rebuild or `dt=15 s` run was performed.
