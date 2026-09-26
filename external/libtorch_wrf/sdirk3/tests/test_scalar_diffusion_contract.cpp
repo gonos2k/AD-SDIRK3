@@ -222,6 +222,16 @@ template struct MemberAccessor<Defor22StageGeometryTag,
 struct Rdz3dCacheTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
     friend type access(Rdz3dCacheTag); };
 template struct MemberAccessor<Rdz3dCacheTag, &TileSDIRK3UnifiedSolver::rdz_3d_>;
+struct VerticalScalarStageTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&);
+    friend type access(VerticalScalarStageTag);
+};
+template struct MemberAccessor<VerticalScalarStageTag,
+    static_cast<VerticalScalarStageTag::type>(
+        &TileSDIRK3UnifiedSolver::compute_vertical_mixing_scalar)>;
 struct Rdzw3dCacheTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
     friend type access(Rdzw3dCacheTag); };
 template struct MemberAccessor<Rdzw3dCacheTag, &TileSDIRK3UnifiedSolver::rdzw_3d_>;
@@ -1017,6 +1027,42 @@ bool run_option1_scalar_rhs_contract() {
                   << " budget=" << reference_budget << '\n';
         ok=pass && ok;
     }
+
+    // Actual option-1 RHS sign check: zero horizontal K, flat unit maps,
+    // zero velocity and a monotone vertical theta perturbation isolate the
+    // shared vertical scalar helper without claiming full option-1 parity.
+    cfg.khdif=0.0f;
+    cfg.kvdif=10.0f;
+    TileCase vertical(100.0f);
+    const auto t_init=prepare(vertical);
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i) {
+        const int idx=(j*nz+k)*nx+i;
+        vertical.theta[idx]=t_init[idx]+2.0f*k;
+    }
+    (vertical.solver.*access(MapTxTag{}))=torch::ones({ny,nx});
+    (vertical.solver.*access(MapTyTag{}))=torch::ones({ny,nx});
+    (vertical.solver.*access(MapUxTag{}))=torch::ones({ny,nx+1});
+    (vertical.solver.*access(MapUyTag{}))=torch::ones({ny,nx+1});
+    (vertical.solver.*access(MapVxTag{}))=torch::ones({ny+1,nx});
+    (vertical.solver.*access(MapVyTag{}))=torch::ones({ny+1,nx});
+    const auto vertical_state=vertical.state();
+    const auto vertical_on=(vertical.solver.*access(ActualRhsTag{}))(
+        vertical_state,RhsMode::ExplicitOnly).detach().clone();
+    cfg.kvdif=0.0f;
+    const auto vertical_off=(vertical.solver.*access(ActualRhsTag{}))(
+        vertical_state,RhsMode::ExplicitOnly).detach().clone();
+    const auto delta=(vertical_on-vertical_off).slice(0,su+sv+2*sw,
+                                                       su+sv+2*sw+st).view({ny,nz,nx});
+    const auto q=torch::empty({ny,nz,nx});
+    for (int k=0;k<nz;++k) q.select(1,k).fill_(2.0f*k);
+    const double signal=delta.abs().max().item<double>();
+    const double work=(q*delta).sum().item<double>();
+    const bool vertical_pass=torch::isfinite(vertical_on).all().item<bool>() &&
+        torch::isfinite(vertical_off).all().item<bool>() && signal>1.0e-8 && work<0.0;
+    std::cout << (vertical_pass?"PASS ":"FAIL ")
+              << "option-1 actual RHS vertical scalar sign signal=" << signal
+              << " fixture_q_dot_tend=" << work << '\n';
+    ok=vertical_pass&&ok;
     return ok;
 }
 
@@ -1035,7 +1081,7 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         const auto x=torch::cat({q,q.slice(2,0,1)},2);
         return torch::cat({x,x.slice(0,m-1,m)},0);
     };
-    const auto make_state=[&](bool packed) {
+    const auto make_state=[&](bool packed, bool change_stage_vertical_geometry=false) {
         const int m=packed?ny-1:ny,n=packed?nx-1:nx;
         auto theta=torch::empty({ny,nz,nx},opt);
         auto mu=torch::empty({ny,nx},opt);
@@ -1045,15 +1091,20 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         auto mu_values=mu.accessor<float,2>();
         for (int j=0;j<m;++j) for (int k=0;k<nz;++k) for (int i=0;i<n;++i) {
             const double x=2*pi*i/n,y=pi*(j+0.5)/m;
-            theta_values[j][k][i]=4.0*std::sin(x)+2.5*std::cos(y)+
-                1.2*(k+1)*(0.5*std::sin(x)+0.3*std::cos(y));
+            theta_values[j][k][i]=change_stage_vertical_geometry
+                ? 2.0*(k+1)
+                : 4.0*std::sin(x)+2.5*std::cos(y)+
+                  1.2*(k+1)*(0.5*std::sin(x)+0.3*std::cos(y));
         }
         for (int j=0;j<m;++j) for (int i=0;i<n;++i) {
             const double x=2*pi*i/n,y=pi*(j+0.5)/m;
             mu_values[j][i]=128.0*i+64.0*j+16.0*std::sin(x);
             const float height=600.0f*std::sin(x)+400.0f*std::cos(y);
-            for (int k=0;k<nw;++k)
-                ph_values[j][k][i]=static_cast<float>(gravity)*height;
+            for (int k=0;k<nw;++k) {
+                const double eta=double(k)/(nw-1);
+                const double shape=change_stage_vertical_geometry ? eta*eta : 0.0;
+                ph_values[j][k][i]=static_cast<float>(gravity)*(height+300.0*shape*std::sin(x+y));
+            }
         }
         if (packed) {
             theta=pack_mass(theta.slice(0,0,m).slice(2,0,n),m);
@@ -1118,18 +1169,21 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
                             bool make_reference=true,
                             bool partial_owned=false,
                             int supplied_coefficient=0,
-                            bool zero_namelist_k=false) -> Result {
+                            bool zero_namelist_k=false,
+                            bool vertical_scalar_case=false,
+                            bool stress_scalar_path=true) -> Result {
         cfg=SDIRK3Config{};
         cfg.diffusion_option=2;
-        cfg.khdif=zero_namelist_k?0.0f:(on?1000.0f:0.0f);
-        cfg.kvdif=0.0f;
+        cfg.khdif=vertical_scalar_case?1.0f:
+            (zero_namelist_k?0.0f:(on?1000.0f:0.0f));
+        cfg.kvdif=vertical_scalar_case && on ? 10.0f : 0.0f;
         cfg.mass_coordinate_mode=1;
         cfg.wrf_omega_ww_cp=false;
         cfg.mu_horizontal_div_only=false;
         cfg.wrf_damp_opt=0;
         cfg.imex_split_mode=3;
         cfg.hevi_split=false;
-        cfg.use_stress_tensor=false;
+        cfg.use_stress_tensor=vertical_scalar_case && stress_scalar_path;
         Option2RhsFixture fixture(packed,dx,c1h,c2h);
         auto& solver=fixture.solver;
         if (partial_owned) {
@@ -1165,7 +1219,7 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         }
 
         const int m=packed?ny-1:ny,n=packed?nx-1:nx;
-        const auto state=state_override.defined()?state_override:make_state(packed);
+        const auto state=state_override.defined()?state_override:make_state(packed,vertical_scalar_case);
         auto rhs=(solver.*access(ActualRhsTag{}))(
             state,RhsMode::ExplicitOnly).clone();
 
@@ -1213,8 +1267,9 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         const double terrain_signal=std::max(zx.abs().max().item<double>(),
                                              zy.abs().max().item<double>());
         const auto geometry=torch::cat({rdzw.reshape({-1}),zx.reshape({-1}),
-                                         zy.reshape({-1})}).detach().clone();
-        if (!on || !make_reference)
+                                         zy.reshape({-1}),
+                                         (solver.*access(Rdz3dCacheTag{})).slice(1,0,nz+1).reshape({-1})}).detach().clone();
+        if ((!on || !make_reference) && !vertical_scalar_case)
             return {rhs,torch::Tensor(),torch::Tensor(),geometry,terrain_signal};
         auto q=core3(state_t);
         auto mu_core=core2(state_mu);
@@ -1226,7 +1281,74 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
                                                 1004.5f,100000.0f);
         const auto prho=calc_p_rho_wrf(phi_core,q,mu_core,mubase,alb,pbase,
             rdnw,c1,c2,287.0f,717.5f,1004.5f,100000.0f,300.0f);
-        const auto rho=prho.alt.reciprocal();
+        auto rho=prho.alt.reciprocal();
+        if (vertical_scalar_case) {
+            // Source-equivalent extraction of module_diffusion_em.F's
+            // vertical_diffusion_s H3 and tendency loops. `z_w` is the exact
+            // current-RHS full-height profile used by Step 9; `rdz_cache` is
+            // the helper-owned cached metric. `rk_addtend_dry` divides theta
+            // by msfty, which is one in this fixture.
+            const auto rdz_stage_core=torch::cat({
+                (2.0/(z_w.slice(1,1,2)-z_w.slice(1,0,1))),
+                2.0/(z_w.slice(1,2,nw)-z_w.slice(1,0,nw-2)),
+                torch::zeros({m,1,n},opt)},1);
+            const auto rdz_stage=packed
+                ? pack_mass(rdz_stage_core,m) : rdz_stage_core;
+            const auto rdz_cache_full=(solver.*access(Rdz3dCacheTag{})).slice(1,0,nw);
+            const auto rdz_cache=packed
+                ? core3(rdz_cache_full) : rdz_cache_full;
+            if (!stress_scalar_path) {
+                const auto t_full=q+thbase;
+                const auto pi_full=torch::pow(287.0f*t_full/100000.0f,
+                                               1004.5f/717.5f);
+                const auto p_full=100000.0f*pi_full*
+                    ((mu_core+mubase)/mubase).unsqueeze(1);
+                rho=p_full/(287.0f*t_full);
+            }
+            const float xkhv=30.0f; // canonical km_opt=1: xkhv=3*kvdif
+            const auto h3_fortran=[&](const torch::Tensor& rdz) {
+                auto h=torch::zeros({m,nw,n},opt);
+                const auto rho_avg=0.5f*(rho.slice(1,1,nz)+rho.slice(1,0,nz-1));
+                const auto dq=q.slice(1,1,nz)-q.slice(1,0,nz-1);
+                h.slice(1,1,nz).copy_(-xkhv*rho_avg*dq*rdz.slice(1,1,nz));
+                return h;
+            };
+            const auto tendency_fortran=[&](const torch::Tensor& rdz) {
+                const auto h=h3_fortran(rdz);
+                // WRF eta decreases with k, so its source dnw is negative;
+                // this fixture's getter exposes |rdnw| as a positive magnitude.
+                const auto dnw=-rdnw.reciprocal().view({1,nz,1});
+                return gravity*(h.slice(1,1,nz+1)-h.slice(1,0,nz))/dnw;
+            };
+            // Native km_opt=1 has xkhv=3*kvdif, hence 3*10=30 here.
+            auto vert_expected=tendency_fortran(rdz_stage_core);
+            auto vert_legacy=tendency_fortran(rdz_cache);
+            // The source routine returns raw tendency; the solver converts
+            // it from layer-mass basis after rk_addtend_dry.
+            const double raw_signal=vert_expected.abs().max().item<double>();
+            const auto layer=c1.view({1,nz,1})*(mu_core+mubase).unsqueeze(1)+
+                             c2.view({1,nz,1});
+            vert_expected=vert_expected/layer;
+            vert_legacy=vert_legacy/layer;
+            if (on) {
+                std::cout << "INFO vertical scalar stage rdz max=" << rdz_stage.abs().max().item<double>()
+                          << " cached rdz max=" << rdz_cache.abs().max().item<double>()
+                          << " interior delta=" << (rdz_stage_core.slice(1,1,nz)-
+                                                        rdz_cache.slice(1,1,nz)).abs().max().item<double>()
+                          << " xkhv=" << xkhv << " rdnw0=" << rdnw[0].item<double>()
+                          << " max_rho=" << rho.abs().max().item<double>()
+                          << " raw_signal=" << raw_signal
+                          << " normalized_signal=" << vert_expected.abs().max().item<double>() << '\n';
+            }
+            if (packed) {
+                const auto x=torch::cat({vert_expected,vert_expected.slice(2,0,1)},2);
+                vert_expected=torch::cat({x,x.slice(0,m-1,m)},0);
+                const auto lx=torch::cat({vert_legacy,vert_legacy.slice(2,0,1)},2);
+                vert_legacy=torch::cat({lx,lx.slice(0,m-1,m)},0);
+            }
+            return {rhs,vert_expected.detach().clone(),vert_legacy.detach().clone(),
+                    geometry,terrain_signal};
+        }
         const auto dnw=-rdnw.reciprocal();
         const auto dn=torch::cat({torch::zeros({1},opt),-rdn.slice(0,1,nz).reciprocal()},0);
         // These are the same WRF pointer arrays passed to the fixture setter;
@@ -1305,6 +1427,47 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
                   << " mass_tol=" << mass_tolerance
                   << " tol=" << tolerance << '\n';
         ok=pass&&ok;
+    }
+
+    // Exact same state for ON/OFF; perturbation PH changes physical layer
+    // widths with eta. Also exercise the simple scalar branch's stage metric.
+    for (bool packed : {false,true}) {
+      for (bool stress_path : {true,false}) {
+        const auto on=evaluate(true,packed,1,torch::Tensor(),true,false,0,false,true,stress_path);
+        const auto off=evaluate(false,packed,1,torch::Tensor(),false,false,0,false,true,stress_path);
+        const auto observed=(on.rhs-off.rhs).slice(0,theta_begin,theta_begin+st).view({ny,nz,nx});
+        auto state=make_state(packed,true);
+        const auto theta=state.slice(0,theta_begin,theta_begin+st).view({ny,nz,nx});
+        const auto expected=on.expected;
+        const auto stale=on.legacy;
+        const int64_t rdz_offset=on.geometry.numel()-ny*nw*nx;
+        const double error=(observed-expected).abs().max().item<double>();
+        const double stale_error=(observed-stale).abs().max().item<double>();
+        const double signal=expected.abs().max().item<double>();
+        // Supporting sign check for this prescribed monotone profile; the
+        // authoritative comparison is the source equation above, not a
+        // general unweighted energy identity on this variable-metric grid.
+        const double fixture_work=(theta*observed).sum().item<double>();
+        // 128 float32 epsilons times the measured signal bounds the source
+        // formula's several FP32 multiplies/additions without an absolute floor.
+        const double tolerance=128.0*std::numeric_limits<float>::epsilon()*signal;
+        const int64_t loc=expected.abs().reshape({-1}).argmax().item<int64_t>();
+        const bool pass=torch::isfinite(observed).all().item<bool>() &&
+            torch::isfinite(expected).all().item<bool>() && signal>0.0 &&
+            error<=tolerance && stale_error>32.0*tolerance && fixture_work<0.0;
+        std::cout << (pass?"PASS ":"FAIL ") << "option-2 actual RHS vertical scalar stage metric "
+                  << (stress_path?"stress":"simple") << ' '
+                  << "signal=" << observed.abs().max().item<double>()
+                  << " location=" << loc << " observed_at=" << observed.reshape({-1})[loc].item<double>()
+                  << " expected_at=" << expected.reshape({-1})[loc].item<double>()
+                  << " stale_at=" << stale.reshape({-1})[loc].item<double>()
+                  << " rdz_cache_k1=" << on.geometry[rdz_offset+nx].item<double>()
+                  << " rdz_cache_k2=" << on.geometry[rdz_offset+2*nx].item<double>()
+                  << " signal=" << signal << " error=" << error
+                  << " stale_error=" << stale_error << " fixture_q_dot_tend=" << fixture_work
+                  << " tol=" << tolerance << '\n';
+        ok=pass&&ok;
+      }
     }
     bool kmopt2_guard=false;
     try {
@@ -1463,6 +1626,45 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         }
     }
     return ok;
+}
+
+// The shared scalar helper's no-stage-metric path is used by option 1. Pin
+// its signed-dnw Fortran amplitude independently of the option-2 stage case.
+bool run_scalar_helper_signed_dnw_contract() {
+    using wrf::sdirk3::test::TileCase;
+    TileCase tile(1000.0f);
+    tile.solver.setVerticalInterpolationCoefficients(
+        tile.half.data(),tile.half.data(),1.0f,0.0f,0.0f);
+    (tile.solver.*access(Rdz3dCacheTag{}))=
+        torch::full({ny,nw,nx},1.0f/5000.0f);
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
+    auto theta=torch::empty({ny,nz,nx},opt);
+    for (int k=0;k<nz;++k) theta.select(1,k).fill_(2.0f*k);
+    const auto kv=torch::full({ny,nw,nx},10.0f,opt);
+    const auto rdnw=torch::full({nz},4.0f,opt); // C++ stores |1/dnw|.
+    const auto rho=torch::ones({ny,nz,nx},opt);
+    const auto mu=torch::ones({ny,nx},opt);
+    const auto got=(tile.solver.*access(VerticalScalarStageTag{}))(
+        theta,kv,rdnw,rho,theta,mu,torch::Tensor());
+
+    // Extracted from vertical_diffusion_s: H3=-K*rho_avg*Δtheta*rdz;
+    // Fortran dnw=-1/4 because eta decreases, then tendency=g*ΔH3/dnw.
+    auto h3=torch::zeros({ny,nw,nx},opt);
+    h3.slice(1,1,nz).fill_(-10.0f*2.0f/5000.0f);
+    const auto dnw=torch::full({1,nz,1},-0.25f,opt);
+    const auto expected=9.81f*(h3.slice(1,1,nz+1)-h3.slice(1,0,nz))/dnw;
+    const double signal=expected.abs().max().item<double>();
+    const double error=(got-expected).abs().max().item<double>();
+    const double wrong_sign_error=(got+expected).abs().max().item<double>();
+    const double work=(theta*got).sum().item<double>();
+    const double tolerance=128.0*std::numeric_limits<float>::epsilon()*signal;
+    const bool pass=torch::isfinite(got).all().item<bool>() && signal>0.0 &&
+        error<=tolerance && wrong_sign_error>32.0*tolerance && work<0.0;
+    std::cout << (pass?"PASS ":"FAIL ")
+              << "option-1 shared vertical scalar helper signed-dnw signal=" << signal
+              << " error=" << error << " old-sign-error=" << wrong_sign_error
+              << " fixture_q_dot_tend=" << work << " tol=" << tolerance << '\n';
+    return pass;
 }
 
 // The 1D metric fallback must use one implied layer depth for the outer
@@ -2994,6 +3196,7 @@ int main(int argc, char** argv) {
     ok = run_external_weight_cfn_epoch_contract(true) && ok;
     ok = run_option1_scalar_rhs_contract() && ok;
     ok = run_option2_scalar_rhs_layer_mass_contract() && ok;
+    ok = run_scalar_helper_signed_dnw_contract() && ok;
     ok = run_scalar_zero_gate() && ok;
     ok = run_normal_rhs() && ok;
     ok = run_option1_momentum_rhs_basis_contract() && ok;

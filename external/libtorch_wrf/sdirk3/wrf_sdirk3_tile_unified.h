@@ -2425,11 +2425,13 @@ private:
                                            const torch::Tensor& rho, const torch::Tensor& defor33_precomputed,
                                            const torch::Tensor& option2_rdn = torch::Tensor());
     torch::Tensor compute_vertical_mixing_scalar(const torch::Tensor& scalar, const torch::Tensor& Kv_mass, const torch::Tensor& rdnw,
-                                                const torch::Tensor& rho, const torch::Tensor& theta_full, const torch::Tensor& mu_full);
+                                                const torch::Tensor& rho, const torch::Tensor& theta_full, const torch::Tensor& mu_full,
+                                                const torch::Tensor& stage_rdz = torch::Tensor());
     // Overload with mix_full_fields and qv_base for QV perturbation mode (WRF vertical_diffusion_s parity)
     torch::Tensor compute_vertical_mixing_scalar(const torch::Tensor& scalar, const torch::Tensor& Kv_mass, const torch::Tensor& rdnw,
                                                 const torch::Tensor& rho, const torch::Tensor& theta_full, const torch::Tensor& mu_full,
-                                                bool is_qv, bool mix_full_fields, const torch::Tensor& qv_base);
+                                                bool is_qv, bool mix_full_fields, const torch::Tensor& qv_base,
+                                                const torch::Tensor& stage_rdz = torch::Tensor());
     
     // Deformation tensor components (for stress tensor calculation)
     torch::Tensor compute_defor11(const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w, 
