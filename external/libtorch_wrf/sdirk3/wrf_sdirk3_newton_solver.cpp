@@ -4815,6 +4815,8 @@ public:
         diag_final_K_ = torch::Tensor();
         diag_final_newton_iter_ = -1;
         diag_retry_generation_ = -1;
+        wrf::sdirk3::Stage2RejectionSnapshot pending_stage2_rejection;
+        bool pending_stage2_rejection_valid = false;
         // A fresh generation for THIS solve attempt (a stage retry re-enters here
         // and gets the next generation), so a stale triple from a prior attempt
         // can never be mistaken for this one.
@@ -10766,16 +10768,14 @@ public:
                     }
                 }
 
-                // First evaluated rejection that reaches this common Stage-2
+                // Retain the latest rejected candidate reaching this common Stage-2
                 // trust-decision path. Earlier GMRES-quality continues and the
                 // separate recovery path are intentionally outside this scope.
-                // The default-off gate is topology-checked by the WRF caller.
-                // All candidate tensors already exist here; capturing them adds
-                // no RHS/JVP/preconditioner calls and cannot change acceptance.
+                // The opt-in gate is topology-checked by the WRF caller. Cloning
+                // freezes tensor storage for a possible later terminal-stall write;
+                // it adds no RHS/JVP/preconditioner calls and cannot change acceptance.
                 if (!accept_step && stage == 2 &&
-                    wrf::sdirk3::g_sdirk3_config.stage2_rejection_snapshot_diag &&
-                    !stage2_rejection_snapshot_attempted_) {
-                    stage2_rejection_snapshot_attempted_ = true;
+                    wrf::sdirk3::g_sdirk3_config.stage2_rejection_snapshot_diag) {
                     wrf::sdirk3::Stage2RejectionSnapshot snapshot;
                     snapshot.U_n = U_n;
                     snapshot.U_stage = U_stage;
@@ -10818,26 +10818,34 @@ public:
                                 ? "rho_below_threshold_or_insufficient_decrease"
                                 : "other_post_trial_acceptance_gate";
 
-                    const std::string base =
-                        "sdirk3_stage2_first_common_trust_reject_ts" +
-                        std::to_string(global_timestep_) + "_solver" +
-                        std::to_string(solver_id_);
-                    const std::string archive_path = base + ".pt";
-                    const std::string metadata_path = base + ".json";
-                    std::string snapshot_error;
-                    if (wrf::sdirk3::write_stage2_rejection_snapshot(
-                            snapshot, archive_path, metadata_path,
-                            &snapshot_error)) {
-                        std::cerr << "SDIRK3_STAGE2_REJECTION_SNAPSHOT path="
-                                  << archive_path << " metadata=" << metadata_path
-                                  << " iter=" << newton_iter
-                                  << " attempt=" << attempt
-                                  << " step_fraction=" << tr_alpha
-                                  << " rho=" << rho_val
-                                  << " (observed tensors; no RHS replay)\n";
-                    } else {
-                        std::cerr << "SDIRK3_STAGE2_REJECTION_SNAPSHOT_UNAVAILABLE reason="
-                                  << snapshot_error << "\n";
+                    pending_stage2_rejection =
+                        wrf::sdirk3::clone_stage2_rejection_snapshot(snapshot);
+                    pending_stage2_rejection_valid = true;
+
+                    if (!stage2_rejection_snapshot_attempted_) {
+                        stage2_rejection_snapshot_attempted_ = true;
+
+                        const std::string base =
+                            "sdirk3_stage2_first_common_trust_reject_ts" +
+                            std::to_string(global_timestep_) + "_solver" +
+                            std::to_string(solver_id_);
+                        const std::string archive_path = base + ".pt";
+                        const std::string metadata_path = base + ".json";
+                        std::string snapshot_error;
+                        if (wrf::sdirk3::write_stage2_rejection_snapshot(
+                                snapshot, archive_path, metadata_path,
+                                &snapshot_error)) {
+                            std::cerr << "SDIRK3_STAGE2_REJECTION_SNAPSHOT path="
+                                      << archive_path << " metadata=" << metadata_path
+                                      << " iter=" << newton_iter
+                                      << " attempt=" << attempt
+                                      << " step_fraction=" << tr_alpha
+                                      << " rho=" << rho_val
+                                      << " (observed tensors; no RHS replay)\n";
+                        } else {
+                            std::cerr << "SDIRK3_STAGE2_REJECTION_SNAPSHOT_UNAVAILABLE reason="
+                                      << snapshot_error << "\n";
+                        }
                     }
                 }
 
@@ -11114,6 +11122,45 @@ public:
                                   << "Breaking at iter=" << newton_iter << std::endl;
                         stats_.newton_termination = static_cast<int>(
                             wrf::sdirk3::NewtonTerminationReason::ZeroStepStall);
+                        if (stage == 2 &&
+                            wrf::sdirk3::g_sdirk3_config.stage2_rejection_snapshot_diag) {
+                            if (pending_stage2_rejection_valid &&
+                                wrf::sdirk3::stage2_terminal_snapshot_candidate_matches(
+                                    pending_stage2_rejection, newton_iter)) {
+                                const std::string base =
+                                    "sdirk3_stage2_terminal_zero_step_stall_ts" +
+                                    std::to_string(global_timestep_) + "_solver" +
+                                    std::to_string(solver_id_) + "_iter" +
+                                    std::to_string(newton_iter);
+                                const std::string archive_path = base + ".pt";
+                                const std::string metadata_path = base + ".json";
+                                std::string snapshot_error;
+                                if (wrf::sdirk3::write_stage2_terminal_stall_snapshot(
+                                        pending_stage2_rejection, newton_iter,
+                                        stagnation_count, archive_path, metadata_path,
+                                        &snapshot_error)) {
+                                    std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL path="
+                                              << archive_path << " metadata=" << metadata_path
+                                              << " terminal_iter=" << newton_iter
+                                              << " candidate_iter="
+                                              << pending_stage2_rejection.newton_iter
+                                              << " stagnation_count=" << stagnation_count
+                                              << " (latest common-path rejection; observed tensors; no RHS replay)\n";
+                                } else {
+                                    std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL_UNAVAILABLE reason="
+                                              << snapshot_error << "\n";
+                                }
+                            } else if (pending_stage2_rejection_valid) {
+                                std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL_UNAVAILABLE "
+                                          << "reason=latest_common_path_candidate_iteration_mismatch"
+                                          << " candidate_iter="
+                                          << pending_stage2_rejection.newton_iter
+                                          << " terminal_iter=" << newton_iter << "\n";
+                            } else {
+                                std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL_UNAVAILABLE "
+                                          << "reason=no_common_path_rejected_trial_was_captured\n";
+                            }
+                        }
                         break;
                     }
                 } else {
