@@ -1120,12 +1120,13 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
 
         if (supplied_coefficient != 0) {
             const std::vector<float> kh_mom(ny*nz*nx,1.0f);
+            const std::vector<float> kh_scalar(ny*nz*nx,1.0f);
             const std::vector<float> kv_mom(ny*nw*nx,1.0f);
             const std::vector<float> kv_scalar(ny*nw*nx,1.0f);
             (solver.*access(DiffusionTag{}))(
                 supplied_coefficient==1 ? kh_mom.data() : nullptr,
                 supplied_coefficient==2 ? kv_mom.data() : nullptr,
-                nullptr,
+                supplied_coefficient==4 ? kh_scalar.data() : nullptr,
                 supplied_coefficient==3 ? kv_scalar.data() : nullptr);
         }
 
@@ -1310,13 +1311,16 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
     const bool kh_mom_guard=rejects_supplied_native_k(1);
     const bool kv_mom_guard=rejects_supplied_native_k(2);
     const bool kv_scalar_guard=rejects_supplied_native_k(3);
+    const bool kh_scalar_guard=rejects_supplied_native_k(4);
     std::cout << (kh_mom_guard?"PASS ":"FAIL ")
               << "option-2 native zero-namelist K rejects supplied Kh_mom" << '\n';
     std::cout << (kv_mom_guard?"PASS ":"FAIL ")
               << "option-2 native zero-namelist K rejects supplied Kv_mom" << '\n';
     std::cout << (kv_scalar_guard?"PASS ":"FAIL ")
               << "option-2 native zero-namelist K rejects supplied Kv_scalar" << '\n';
-    ok=kh_mom_guard&&kv_mom_guard&&kv_scalar_guard&&ok;
+    std::cout << (kh_scalar_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kh_scalar" << '\n';
+    ok=kh_mom_guard&&kv_mom_guard&&kv_scalar_guard&&kh_scalar_guard&&ok;
 
     bool partial_tile_guard=false;
     try {

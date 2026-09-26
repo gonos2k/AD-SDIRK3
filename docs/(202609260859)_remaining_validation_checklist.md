@@ -2,7 +2,7 @@
 
 Local timestamp: 2026-09-26 08:59:21 JST (+0900)
 
-The candidate is `agent/option2_vertical_uv_fix`, stacked above draft PR #238. This is a scope-aware progress ledger, not an operational forecast or data-assimilation completion claim. The exact local source/build/run evidence is in `(202609260859)_option2_vertical_step10_validation.md`; remote exact-head CI is pending until the PR is pushed.
+The candidate is `agent/option2_vertical_uv_fix`, stacked above draft PR #238. This is a scope-aware progress ledger, not an operational forecast or data-assimilation completion claim. The exact local source/build/run evidence is in `(202609260859)_option2_vertical_step10_validation.md`; remote exact-head CI is tracked on draft PR #239.
 
 | ID | State | Evidence and next closure condition |
 |---|---|---|
