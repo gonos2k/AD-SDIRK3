@@ -142,7 +142,8 @@ def fortran_oracle() -> dict[tuple[int, int, int], float]:
 
 
 def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
-                            work: Path, profile: str="interior-pulse") -> tuple[dict[str, dict[tuple[int, int, int], float]], str]:
+                            work: Path, profile: str="interior-pulse",
+                            map_value: float=MAP) -> tuple[dict[str, dict[tuple[int, int, int], float]], str]:
     """Run both operator-only and full source-extracted Fortran U oracles."""
     source = (repo / "dyn_em/module_diffusion_em.F").read_text()
     routine_names = ("compute_diff_metrics", "cal_deform_and_div",
@@ -162,7 +163,7 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
     rk_addtend += "END SUBROUTINE rk_addtend_dry"
     routines.append(rk_addtend)
     routine_hash = hashlib.sha256("\n".join(routines).encode()).hexdigest()
-    if profile not in {"interior-pulse", "top-pulse", "w-composite", "k0",
+    if profile not in {"interior-pulse", "top-pulse", "w-composite", "full-rhs-probe", "k0",
                        "flat-terrain", "packed-periodic",
                        "packed-periodic-flat", "v-y-terrain"}:
         raise ValueError(f"unknown fixture profile: {profile}")
@@ -173,7 +174,8 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
     unique_nx = NX - 1 if packed_periodic else NX
     domain_ide = "nx" if packed_periodic else "nx+1"
     y_varying = profile == "v-y-terrain"
-    terrain_y_amplitude = 40.0 if y_varying else 0.0
+    full_rhs_probe = profile == "full-rhs-probe"
+    terrain_y_amplitude = 40.0 if y_varying or full_rhs_probe else 0.0
     domain_jte = "ny+1" if y_varying else "ny"
     v_x_factor = "1.0" if y_varying else (
         f"(1.0+0.1*cos(2.*pi*real(modulo(i-1,{unique_nx}))/real({unique_nx})))")
@@ -233,6 +235,7 @@ program oracle_driver
   real :: msftx(ims:ime,jms:jme), msfty(ims:ime,jms:jme)
   real :: fnm(kms:kme), fnp(kms:kme), dn(kms:kme), dnw(kms:kme)
   real :: u_base(kms:kme), v_base(kms:kme)
+  real :: theta_input(ims:ime,kms:kme,jms:jme), c1rk(kms:kme), c2rk(kms:kme)
   real :: nba_rij(ims:ime,kms:kme,jms:jme,3)
   real :: nba_mij(ims:ime,kms:kme,jms:jme,5)
   tendency=0.; tendency_v=0.; defor11=0.; defor22=0.; defor33=0.; defor12=0.
@@ -241,13 +244,21 @@ program oracle_driver
   ru_tend=0.; rv_tend=0.; rw_tend=0.; ph_tend=0.; t_tend=0.
   ru_tendf=0.; rv_tendf=0.; rw_tendf=0.; ph_tendf=0.; t_tendf=0.
   u_save=0.; v_save=0.; w_save=0.; ph_save=0.; t_save=0.
-  mu_tend=0.; mu_tendf=0.; h_diabatic=0.; mut=1.; msfvx_inv=1./{MAP:.17g}
-  ph=0.; phb=0.; z=0.; rdz=0.; rho=1.; zx=0.; zy=0.; rdzw=0.
+  mu_tend=0.; mu_tendf=0.; h_diabatic=0.; mut=1.; msfvx_inv=1./{map_value:.17g}
+  ph=0.; phb=0.; z=0.; rdz=0.; rho=1.; zx=0.; zy=0.; rdzw=0.; theta_input=0.
   nba_rij=0.; nba_mij=0.
-  msfux={MAP:.17g}; msfuy={MAP:.17g}; msfvx={MAP:.17g}; msfvy={MAP:.17g}
-  msftx={MAP:.17g}; msfty={MAP:.17g}
+  msfux={map_value:.17g}; msfuy={map_value:.17g}; msfvx={map_value:.17g}; msfvy={map_value:.17g}
+  msftx={map_value:.17g}; msfty={map_value:.17g}
   fnm=0.5; fnp=0.5; dn=-0.25; dnw=-0.25; u_base=0.; v_base=0.
-  cf1=1.; cf2=0.; cf3=0.; pi=acos(-1.)
+  c1rk=fnm; c2rk=fnm
+  if ({1 if full_rhs_probe else 0} == 1) then
+    mut=80000.
+    c1rk(1:4)=(/0.75,1.125,0.875,1.25/)
+    c2rk(1:4)=(/0.,2000.,4000.,6000./)
+  endif
+  cf1={2.0 if full_rhs_probe else 1.0:.17g};
+  cf2={-1.5 if full_rhs_probe else 0.0:.17g};
+  cf3={0.5 if full_rhs_probe else 0.0:.17g}; pi=acos(-1.)
   rdx=1./{DX:.17g}; rdy=rdx
   do j=jms,jme
     do k=kms,kme
@@ -256,6 +267,10 @@ program oracle_driver
         terrain={terrain_amplitude:.17g}*cos(2.*pi*real(ii)/real({unique_nx})) + &
                 ({terrain_y_amplitude:.17g})*cos(2.*pi*real(modulo(j-1,ny))/real(ny))
         ph(i,k,j)=g*(terrain+{DZ:.17g}*real(k-1))
+        if ({1 if full_rhs_probe else 0} == 1) then
+          theta_input(i,k,j)=0.4+0.2*sin(2.*pi*real(modulo(i-1,nx))/real(nx))+ &
+                             0.15*cos(2.*pi*real(modulo(j-1,ny))/real(ny))+0.05*real(k-1)
+        endif
       enddo
     enddo
   enddo
@@ -346,7 +361,18 @@ program oracle_driver
       enddo
     enddo
   endif
-  if ({1 if profile == "w-composite" else 0} == 1) then
+  if ({1 if full_rhs_probe else 0} == 1) then
+    do j=jms,jme
+      do k=kms,kme
+        do i=ims,ime
+          v(i,k,j)=0.
+          if (k == 2) v(i,k,j)=0.15*(1.0+0.1*cos(2.*pi*real(modulo(i-1,nx))/real(nx)))* &
+                                   sin(2.*pi*real(modulo(j-1,ny))/real(ny))
+        enddo
+      enddo
+    enddo
+  endif
+  if ({1 if profile in {"w-composite", "full-rhs-probe"} else 0} == 1) then
     do j=jms,jme
       do i=ims,ime
         w(i,3,j)=0.2*cos(2.*pi*real(modulo(i-1,nx))/real(nx))
@@ -452,10 +478,14 @@ program oracle_driver
   rw_tendf=tendency+tendency_v
   call rk_addtend_dry(ru_tend,rv_tend,rw_tend,ph_tend,t_tend, &
        ru_tendf,rv_tendf,rw_tendf,ph_tendf,t_tendf, &
-       u_save,v_save,w_save,ph_save,t_save,mu_tend,mu_tendf,2,fnm,fnm, &
+       u_save,v_save,w_save,ph_save,t_save,mu_tend,mu_tendf,2,c1rk,c2rk, &
        h_diabatic,mut,msftx,msfty,msfux,msfuy,msfvx,msfvx_inv,msfvy, &
        ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
        ids,ide,jds,jde,kds,kde,itsu,iteu,jts,jte,kts,kte)
+  do k=1,nz
+    write(*,'(A,1X,I0,1X,ES25.16)') 'SMALLSTEP_LU',k-1, &
+         c1rk(k)*mut(itsu,jts)+c2rk(k)
+  enddo
   do j=jts,jte-1
     do k=kts,kte-1
       do i=itsu,iteu
@@ -544,7 +574,7 @@ program oracle_driver
   rv_tendf=tendency+tendency_v
   call rk_addtend_dry(ru_tend,rv_tend,rw_tend,ph_tend,t_tend, &
        ru_tendf,rv_tendf,rw_tendf,ph_tendf,t_tendf, &
-       u_save,v_save,w_save,ph_save,t_save,mu_tend,mu_tendf,2,fnm,fnm, &
+       u_save,v_save,w_save,ph_save,t_save,mu_tend,mu_tendf,2,c1rk,c2rk, &
        h_diabatic,mut,msftx,msfty,msfux,msfuy,msfvx,msfvx_inv,msfvy, &
        ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
        ids,ide,jds,jde,kds,kde,itsd,ited,jts,jte,kts,kte)
@@ -600,17 +630,25 @@ end program oracle_driver
             link_flags.append(f"-Wl,-syslibroot,{sdk.stdout.strip()}")
     compile_cmd = [*compiler_cmd, "-ffree-form", "-ffree-line-length-none", *flags,
                    *link_flags, str(f90), "-o", str(exe)]
-    built = subprocess.run(compile_cmd, text=True, capture_output=True)
+    # Keep gfortran's generated .mod files in this oracle's private scratch
+    # directory. Parallel CTest map/profile probes otherwise race on shared
+    # module filenames in the caller's working directory.
+    built = subprocess.run(compile_cmd, cwd=work, text=True, capture_output=True)
     if built.returncode:
         raise RuntimeError("Fortran oracle compile failed:\n" + built.stderr)
-    run = subprocess.run([str(exe)], check=True, text=True, capture_output=True)
+    run = subprocess.run([str(exe)], cwd=work, check=True, text=True, capture_output=True)
     values: dict[str, dict[tuple[int, int, int], float]] = {}
     labels = {"M_ZX", "M_ZY", "M_RDZW", "D11_RAW", "D12_RAW",
               "D13_RAW", "D23_RAW", "D33_RAW", "V_RAW", "RHS_U",
+              "SMALLSTEP_LU",
               "F_RAW", "O_RAW", "HW_RAW", "VW_RAW", "RHS_W",
               "V_Z_RAW", "V_H_RAW", "RHS_V", "D12_V_RAW", "D22_V_RAW"}
     for line in run.stdout.splitlines():
         fields = line.split()
+        if fields and fields[0] == "SMALLSTEP_LU":
+            _, k, value = fields
+            values.setdefault("SMALLSTEP_LU", {})[(0, int(k), 0)] = float(value)
+            continue
         if fields and fields[0] in labels:
             label, j, k, i, value = fields
             values.setdefault(label, {})[(int(j), int(k), int(i))] = float(value)
@@ -625,6 +663,12 @@ def main() -> int:
                         help="pass only when cached-geometry C++ output disagrees")
     parser.add_argument("--fortran-compiler", default=os.environ.get("FC", "gfortran"),
                         help="Fortran compiler used for exact extracted WRF routines")
+    parser.add_argument("--actual-rhs-probe", action="store_true",
+                        help="diagnostic ActualRHS ON-OFF U comparison with a frozen source-extracted full-state fixture")
+    parser.add_argument("--actual-rhs-map", type=float, default=MAP,
+                        help="map factor used by the ActualRHS diagnostic profile")
+    parser.add_argument("--diagnostic-only", action="store_true",
+                        help="report the source-basis comparison without enforcing candidate closure")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[4]
     sha = check_source(repo)
@@ -634,8 +678,170 @@ def main() -> int:
     cpp_test_sha = hashlib.sha256(cpp_test_path.read_bytes()).hexdigest()
     python_test_sha = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     binary_sha = hashlib.sha256(args.binary.read_bytes()).hexdigest()
+    small_step_source = (repo / "dyn_em/module_small_step_em.F").read_text()
+    small_step_parts = [
+        section(small_step_source, "SUBROUTINE small_step_prep", "END SUBROUTINE small_step_prep"),
+        section(small_step_source, "SUBROUTINE advance_uv", "END SUBROUTINE advance_uv"),
+        section(small_step_source, "SUBROUTINE small_step_finish", "END SUBROUTINE small_step_finish"),
+    ]
+    small_step_sha = hashlib.sha256("\n".join(small_step_parts).encode()).hexdigest()
     revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo,
                               check=True, text=True, capture_output=True).stdout.strip()
+    if args.actual_rhs_probe:
+        fortran, routine_hash = compiled_fortran_oracle(
+            repo,args.fortran_compiler,["-O0"],Path(tempfile.mkdtemp(prefix="sdirk3-full-rhs-u-")),
+            profile="full-rhs-probe",map_value=args.actual_rhs_map)
+        cpp_mode=("--option2-full-rhs-probe-map1" if args.actual_rhs_map==1.0
+                  else "--option2-full-rhs-probe")
+        cpp_run=subprocess.run([str(args.binary),cpp_mode],
+                               check=True,text=True,capture_output=True)
+        cpp_u={}; cpp_h={}; cpp_v={}; cpp_mu={}; cpp_parts={}; meta=[]; rho_receipts=[]; mass_receipts={}
+        mu_delta_max=float("nan")
+        for line in cpp_run.stdout.splitlines():
+            fields=line.split()
+            if not fields: continue
+            if fields[0]=="CPP_U":
+                _,j,k,i,value=fields; cpp_u[(int(j),int(k),int(i))]=float(value)
+            elif fields[0]=="CPP_H_RAW":
+                _,j,k,i,value=fields; cpp_h[(int(j),int(k),int(i))]=float(value)
+            elif fields[0]=="CPP_V_RAW":
+                _,j,k,i,value=fields; cpp_v[(int(j),int(k),int(i))]=float(value)
+            elif fields[0]=="CPP_MU":
+                _,j,k,i,value=fields; cpp_mu[(int(j),int(k),int(i))]=float(value)
+            elif fields[0]=="PROBE_MASS":
+                _,k,mass_value,layer_value,alpha_value=fields
+                mass_receipts[int(k)]=(float(mass_value),float(layer_value),float(alpha_value))
+            elif fields[0]=="PROBE_MUDELTA":
+                mu_delta_max=float(fields[1].split("=",1)[1])
+            elif fields[0] in {"CPP_D11","CPP_D12","CPP_ZX","CPP_RDZW"}:
+                label,j,k,i,value=fields
+                cpp_parts.setdefault(label,{})[(int(j),int(k),int(i))]=float(value)
+            elif fields[0]=="PROBE_INPUT" or fields[0]=="PROBE_RHO":
+                meta.append(line)
+            elif fields[0]=="PROBE_FINITE":
+                rho_receipts.append(line)
+        f_rhs=fortran.get("RHS_U",{}); f_h=fortran.get("F_RAW",{}); f_v=fortran.get("V_RAW",{})
+        f_layer={key[1]:value for key,value in fortran.get("SMALLSTEP_LU",{}).items()}
+        keys=sorted(set(cpp_u)&set(f_rhs)&set(f_h)&set(f_v))
+        if not keys:
+            raise RuntimeError("full-RHS U probe produced no common owned keys")
+        expected_u_keys={(j,k,i) for j in range(1,5) for k in range(4) for i in range(1,8)}
+        if (set(keys) != expected_u_keys or set(f_rhs) != expected_u_keys or
+                set(f_v) != expected_u_keys or set(mass_receipts) != set(range(4)) or
+                set(f_layer) != set(range(4)) or
+                len(cpp_u) != 6*4*9 or len(cpp_h) != 6*4*9 or len(cpp_v) != 6*4*9):
+            raise RuntimeError(
+                "full-RHS U probe inventory mismatch: "
+                f"common={len(keys)}, RHS={len(f_rhs)}, V={len(f_v)}, "
+                f"mass_levels={sorted(mass_receipts)}, Fortran_L={sorted(f_layer)}, C++ U/H/V="
+                f"{len(cpp_u)}/{len(cpp_h)}/{len(cpp_v)}")
+        if max(abs(f_layer[k]-mass_receipts[k][1]) for k in range(4)) > 1.0e-3:
+            raise RuntimeError("C++ and Fortran small-step U layer masses disagree")
+        direct={key:cpp_u[key]-f_rhs[key] for key in keys}
+        raw_h={key:cpp_h[key]-f_h[key] for key in keys if key in cpp_h and key in f_h}
+        raw_v={key:cpp_v[key]-f_v[key] for key in keys if key in cpp_v and key in f_v}
+        raw_sum={key:(cpp_h[key]+cpp_v[key])-(f_h[key]+f_v[key])
+                 for key in keys if key in cpp_h and key in cpp_v and key in f_h and key in f_v}
+        old_cpp_rhs_prediction={key:cpp_h[key]/mass_receipts[key[1]][2]+
+                                     cpp_v[key]/mass_receipts[key[1]][0]
+                                for key in keys if key in cpp_h and key in cpp_v and key[1] in mass_receipts}
+        # small_step_prep -> advance_uv -> small_step_finish maps the Fortran
+        # coupled increment D/msfuy back to a physical wind increment D/L_s.
+        fortran_rhs_prediction={key:(f_h[key]+f_v[key])/f_layer[key[1]]
+                                for key in keys if key[1] in f_layer}
+        overamplified_rhs_prediction={key:(cpp_h[key]+cpp_v[key])/args.actual_rhs_map
+                                      for key in keys if key in cpp_h and key in cpp_v}
+        cpp_rhs_prediction=old_cpp_rhs_prediction
+        component_prediction_error={key:cpp_u[key]-cpp_rhs_prediction[key]
+                                    for key in keys if key in cpp_rhs_prediction}
+        actual_rhs_error={key:cpp_u[key]-fortran_rhs_prediction[key] for key in keys
+                          if key in fortran_rhs_prediction}
+        old_scaling_error={key:old_cpp_rhs_prediction[key]-fortran_rhs_prediction[key]
+                           for key in keys if key in old_cpp_rhs_prediction}
+        overamplified_error={key:overamplified_rhs_prediction[key]-fortran_rhs_prediction[key]
+                             for key in keys if key in overamplified_rhs_prediction and
+                             key in fortran_rhs_prediction}
+        direct=actual_rhs_error
+        loc=max(keys,key=lambda key:abs(direct[key]))
+        raw_loc=max(raw_sum,key=lambda key:abs(raw_sum[key]))
+        pred_loc=max(component_prediction_error,key=lambda key:abs(component_prediction_error[key]))
+        mapped_signal=max(abs(f_rhs[key]) for key in keys)
+        physical_signal=max(abs(fortran_rhs_prediction[key]) for key in fortran_rhs_prediction)
+        raw_signal=max(abs(f_h[key]+f_v[key]) for key in keys)
+        rhs_error=max(map(abs,actual_rhs_error.values()))
+        old_error=max(map(abs,old_scaling_error.values()))
+        overamplified_error_max=max(map(abs,overamplified_error.values()))
+        raw_h_error=max(map(abs,raw_h.values()))
+        raw_v_error=max(map(abs,raw_v.values()))
+        fp32_budget=1.0e-9
+        if (not args.diagnostic_only and
+                (not math.isfinite(rhs_error) or rhs_error > fp32_budget or
+                 raw_h_error > 2.0e-6 or raw_v_error > 2.0e-6 or
+                 not math.isfinite(mu_delta_max) or mu_delta_max != 0.0 or
+                 physical_signal < 1.0e-9 or old_error < 32.0 * fp32_budget or
+                 overamplified_error_max < 32.0 * fp32_budget)):
+            raise RuntimeError(
+                "option-2 U full-RHS component contract failed: "
+                f"rhs={rhs_error:.9g}, rawH={raw_h_error:.9g}, rawV={raw_v_error:.9g}, "
+                f"mu_delta={mu_delta_max:.9g}, physical_signal={physical_signal:.9g}, "
+                f"old_path_residual={old_error:.9g}, overamplified_residual="
+                f"{overamplified_error_max:.9g}, budget={fp32_budget:.9g}")
+        print("FULL_RHS_COMPONENT_PROBE source=compiled_Fortran_diffusion+rk_addtend_dry "
+              "physical=source_equivalent_fixed_mass_prep_finish_transform; "
+              "small_step_prep/advance_uv/finish are hashed, not invoked "
+              f"routine_sha={routine_hash} small_step_source_sha={small_step_sha} "
+              f"module_sha={sha} revision={revision}")
+        print(f"FULL_RHS_COMPONENT_PROBE receipts mass_levels={len(mass_receipts)} "
+              f"keys={len(keys)} cpp_v={len(cpp_v)} fortran_v={len(f_v)} MU_delta={mu_delta_max}")
+        print(f"FULL_RHS_COMPONENT_PROBE state: U/V/W/T nonzero; PH terrain; map={args.actual_rhs_map:g}; "
+              "c1h=(.75,1.125,.875,1.25); c2h=(0,2000,4000,6000); "
+              "Kh=2/3,Kv=4/3,xkhh=2,xkhv=4; use_stress_tensor=true; one tile; scalar-disabled Fortran U extraction")
+        print("FULL_RHS_COMPONENT_PROBE halos: periodic-X/symmetric-Y; Fortran metric halos are analytically filled by the existing fixture, not set_physical_bc3d")
+        for line in meta: print(line)
+        for line in rho_receipts: print(line)
+        print(f"FULL_RHS_COMPONENT_PROBE physical_signal={physical_signal:.12g} "
+              f"rk_addtend_coupled_signal={mapped_signal:.12g} raw_signal={raw_signal:.12g} "
+              f"max_cpp_minus_fortran_rhs={rhs_error:.12g} budget={fp32_budget:.12g} "
+              f"old_original_path_residual={old_error:.12g} "
+              f"overamplified_M_over_map_residual={overamplified_error_max:.12g} at={loc} "
+              f"cpp={cpp_u[loc]:.12g} fortran_physical_rhs={fortran_rhs_prediction[loc]:.12g} "
+              f"cpp_H={cpp_h.get(loc,float('nan')):.12g} fortran_H={f_h[loc]:.12g} "
+              f"cpp_V={cpp_v.get(loc,float('nan')):.12g} fortran_V={f_v[loc]:.12g} "
+              f"raw_H_error={raw_h_error:.12g} "
+              f"raw_V_error={raw_v_error:.12g} "
+              f"raw_HplusV_error={abs(raw_sum[raw_loc]):.12g} at={raw_loc} "
+              f"cpp_equation_prediction_error={abs(component_prediction_error[pred_loc]):.12g} at={pred_loc} "
+              f"pred_cpp={cpp_rhs_prediction[pred_loc]:.12g} "
+              f"pred_fortran={fortran_rhs_prediction[pred_loc]:.12g} "
+              f"MU_delta_max={mu_delta_max:.12g} "
+              f"fortran_raw={f_h[loc]+f_v[loc]:.12g}")
+        m_u,l_u,alpha_u=mass_receipts[loc[1]]
+        print(f"FULL_RHS_COMPONENT_PROBE matching: cpp_U={len(cpp_u)} cpp_H={len(cpp_h)} "
+              f"cpp_V={len(cpp_v)} fortran_rk_addtend={len(f_rhs)} fortran_H={len(f_h)} "
+              f"fortran_V={len(f_v)} common={len(keys)}")
+        print(f"FULL_RHS_COMPONENT_PROBE SAME_CELL={loc} M_u={m_u:.9g} L_u={l_u:.9g} "
+              f"Fortran_L_s={f_layer[loc[1]]:.9g} "
+              f"alpha_u=L/map={alpha_u:.9g} map_y={args.actual_rhs_map:g} "
+              f"Hc={cpp_h[loc]:.12g} Vc={cpp_v[loc]:.12g} "
+              f"Hf={f_h[loc]:.12g} Vf={f_v[loc]:.12g} "
+              f"Cpp_coupled_H={cpp_h[loc]*m_u/args.actual_rhs_map:.12g} "
+              f"Cpp_coupled_V={cpp_v[loc]*m_u/args.actual_rhs_map:.12g} "
+              f"Cpp_old_H={cpp_h[loc]/alpha_u:.12g} Cpp_old_V={cpp_v[loc]/m_u:.12g} "
+              f"Fortran_physical_H={f_h[loc]/l_u:.12g} "
+              f"Fortran_physical_V={f_v[loc]/l_u:.12g} "
+              f"Fortran_rk_addtend={f_rhs[loc]:.12g} "
+              f"MU_ONminusOFF_max={mu_delta_max:.12g}")
+        for cpp_name,fortran_name in (("CPP_D11","D11_RAW"),("CPP_D12","D12_RAW"),
+                                      ("CPP_ZX","M_ZX"),("CPP_RDZW","M_RDZW")):
+            cpp_values=cpp_parts.get(cpp_name,{})
+            f_values=fortran.get(fortran_name,{})
+            common=sorted(set(cpp_values)&set(f_values))
+            if common:
+                first=max(common,key=lambda key:abs(cpp_values[key]-f_values[key]))
+                print(f"FULL_RHS_COMPONENT_PROBE {cpp_name}_error="
+                      f"{abs(cpp_values[first]-f_values[first]):.12g} at={first} "
+                      f"cpp={cpp_values[first]:.12g} fortran={f_values[first]:.12g}")
+        return 0
     actual: dict[tuple[int, int, int], float] = {}
     vertical_actual: dict[tuple[int, int, int], float] = {}
     coeff_wrong_vertical: dict[tuple[int, int, int], float] = {}
