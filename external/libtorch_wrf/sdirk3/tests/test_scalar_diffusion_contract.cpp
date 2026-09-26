@@ -141,6 +141,10 @@ template struct AutoMemberAccessor<UOption2HelperTag,
 template struct AutoMemberAccessor<VOption2HelperTag,
     &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf>;
 
+struct Option2WHelperTag { friend auto access(Option2WHelperTag); };
+template struct AutoMemberAccessor<Option2WHelperTag,
+    &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_w_wrf>;
+
 struct Defor13StageGeometryTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
         const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
@@ -2062,7 +2066,54 @@ void dump_option1_momentum_packed(torch::Dtype dtype,const std::string& componen
 }
 } // namespace
 
+// Flat periodic-X W Fourier mode used by the source-equation oracle. Emit the
+// private helper's raw W tendency so its sign and amplitude can be checked
+// before any later RHS scaling or state update.
+int dump_option2_w_fourier_sign(bool zero_k=false) {
+    constexpr int n_x=8,n_y=6,n_z=4,n_w=n_z+1;
+    constexpr double pi=3.14159265358979323846;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    auto& cfg=wrf::sdirk3::g_sdirk3_config;
+    cfg=wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option=2;
+    std::vector<float> inverse_spacing(n_z,1.0f),half(n_w,0.5f);
+    TileSDIRK3UnifiedSolver tile(n_x,n_y,n_z,1.0f,1.0f,{1.0f},{1.0f},
+                                 inverse_spacing,0);
+    tile.setBoundaryConditions(true,false,false,false,true,true,
+                               false,false,false,false);
+    tile.setVerticalInterpolationCoefficients(half.data(),half.data(),
+                                               1.0f,0.0f,0.0f);
+    tile.getGridInfo()->g=1.0f;
+    tile.getGridInfo()->rdn=torch::ones({n_z},opt);
+
+    auto u=torch::zeros({n_y,n_z,n_x+1},opt);
+    auto v=torch::zeros({n_y+1,n_z,n_x},opt);
+    auto w=torch::zeros({n_y,n_w,n_x},opt);
+    auto kh=torch::full({n_y,n_z,n_x},zero_k?0.0f:2.0f,opt);
+    auto rho=torch::ones({n_y,n_z,n_x},opt);
+    for(int j=0;j<n_y;++j) for(int i=0;i<n_x;++i)
+        w[j][2][i]=std::cos(2.0*pi*i/n_x);
+    const auto mx=torch::ones({n_y,n_x},opt);
+    const auto my=torch::ones({n_y,n_x},opt);
+    const auto zx=torch::zeros({n_y,n_w,n_x},opt);
+    const auto zy=torch::zeros_like(zx);
+    const auto rdzw=torch::ones({n_y,n_z,n_x},opt);
+    const auto rdz=torch::ones({n_y,n_w,n_x},opt);
+    const auto tendency=(tile.*access(Option2WHelperTag{}))(
+        u,v,w,kh,rho,1.0f,1.0f,mx,my,torch::Tensor(),torch::Tensor(),
+        zx,zy,rdzw,rdz).to(torch::kFloat64).contiguous();
+    const auto a=tendency.accessor<double,3>();
+    for(int j=0;j<n_y;++j) for(int k=0;k<n_w;++k) for(int i=0;i<n_x;++i)
+        std::cout << "W_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(17) << a[j][k][i] << '\n';
+    return 0;
+}
+
 int main(int argc, char** argv) {
+    if (argc==2 && std::string(argv[1])=="--option2-w-fourier-sign")
+        return dump_option2_w_fourier_sign();
+    if (argc==2 && std::string(argv[1])=="--option2-w-fourier-zero-k")
+        return dump_option2_w_fourier_sign(true);
     if (argc==2 && std::string(argv[1])=="--option2-packed-u-rdz-seam")
         return run_packed_u_rdz_seam() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry") {
