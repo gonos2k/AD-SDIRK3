@@ -39,6 +39,9 @@ def check_source(repo: Path) -> str:
     vertical_stress = section(source, "SUBROUTINE cal_titau_13_31", "END SUBROUTINE cal_titau_13_31")
     vertical = section(source, "SUBROUTINE vertical_diffusion_u_2", "END SUBROUTINE vertical_diffusion_u_2")
     diffusion = section(source, "SUBROUTINE horizontal_diffusion_u_2", "END SUBROUTINE horizontal_diffusion_u_2")
+    vertical_stress_v = section(source, "SUBROUTINE cal_titau_23_32", "END SUBROUTINE cal_titau_23_32")
+    vertical_v = section(source, "SUBROUTINE vertical_diffusion_v_2", "END SUBROUTINE vertical_diffusion_v_2")
+    diffusion_v = section(source, "SUBROUTINE horizontal_diffusion_v_2", "END SUBROUTINE horizontal_diffusion_v_2")
     required = [
         (metrics, "z_at_w(i,k,j) = ( ph(i,k,j) + phb(i,k,j) ) / g"),
         (metrics, "zx(i,k,j) = zx(i,k,j) + rdx * ( ph(i,k,j) - ph(i-1,k,j) ) / g"),
@@ -50,6 +53,10 @@ def check_source(repo: Path) -> str:
         (diffusion, "tmpdz = (1./rdzw(i,k,j)+1./rdzw(i-1,k,j))/2."),
         (diffusion, "mrdx*(titau1(i,k,j  ) - titau1(i-1,k,j))"),
         (diffusion, "msfux(i,j)*zx_at_u(i,k,j)*(titau1avg(i,k+1,j)-titau1avg(i,k,j)) / tmpdz"),
+        (vertical_stress_v, "titau(i,k,j) = -  xkxavg(i,k,j) * defor(i,k,j)"),
+        (vertical_v, "tendency(i,k,j)=tendency(i,k,j)-rdzv*(titau3(i,k+1,j)-titau3(i,k,j))"),
+        (diffusion_v, "msfvx(i,j)*zx_at_v(i,k,j)*(titau1avg(i,k+1,j)-titau1avg(i,k,j)) / tmpdz"),
+        (diffusion_v, "0.5*(fnm(k)*(titau1(i+1,k  ,j)+titau1(i,k  ,j))"),
     ]
     normalized = [(re.sub(r"\s+", " ", body), re.sub(r"\s+", " ", needle))
                   for body, needle in required]
@@ -142,6 +149,7 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
                      "cal_titau_11_22_33", "cal_titau_12_21",
                      "cal_titau_13_31", "cal_titau_23_32",
                      "vertical_diffusion_u_2", "horizontal_diffusion_u_2",
+                     "vertical_diffusion_v_2", "horizontal_diffusion_v_2",
                      "vertical_diffusion_w_2", "horizontal_diffusion_w_2")
     routines = []
     for name in routine_names:
@@ -154,43 +162,46 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
     rk_addtend += "END SUBROUTINE rk_addtend_dry"
     routines.append(rk_addtend)
     routine_hash = hashlib.sha256("\n".join(routines).encode()).hexdigest()
-    if profile not in {"interior-pulse", "top-pulse", "w-composite"}:
+    if profile not in {"interior-pulse", "top-pulse", "w-composite", "k0",
+                       "flat-terrain", "packed-periodic",
+                       "packed-periodic-flat", "v-y-terrain"}:
         raise ValueError(f"unknown fixture profile: {profile}")
     top_pulse = 1 if profile == "top-pulse" else 0
+    k0 = profile == "k0"
+    terrain_amplitude = 0.0 if profile in {"flat-terrain", "packed-periodic-flat", "v-y-terrain"} else 100.0
+    packed_periodic = profile in {"packed-periodic", "packed-periodic-flat"}
+    unique_nx = NX - 1 if packed_periodic else NX
+    domain_ide = "nx" if packed_periodic else "nx+1"
+    y_varying = profile == "v-y-terrain"
+    terrain_y_amplitude = 40.0 if y_varying else 0.0
+    domain_jte = "ny+1" if y_varying else "ny"
+    v_x_factor = "1.0" if y_varying else (
+        f"(1.0+0.1*cos(2.*pi*real(modulo(i-1,{unique_nx}))/real({unique_nx})))")
     _, _, _, d11_expected, _, _ = source_grounded_fields()
     src = f"""module extracted_wrf_diffusion
   implicit none
   real, parameter :: g=9.81
-  integer, parameter :: P_m11=1, P_m12=2, P_m13=3, P_m23=4, P_m33=5
+  integer, parameter :: P_m11=1, P_m12=2, P_m13=3, P_m22=4, &
+       P_m23=5, P_m33=6
   integer, parameter :: P_r12=1, P_r13=2, P_r23=3
   type :: grid_config_rec_type
     logical :: open_xs=.false., open_xe=.false., open_ys=.false., open_ye=.false.
-    logical :: specified=.false., nested=.false., periodic_x=.true., periodic_y=.false.
+    logical :: specified=.false., nested=.false., periodic_x=.true., periodic_y={'.true.' if y_varying else '.false.'}
     logical :: polar=.false., mix_full_fields=.true.
     integer :: sfs_opt=0, m_opt=0
   end type
 contains
-{routines[0]}
-{routines[1]}
-{routines[2]}
-{routines[3]}
-{routines[4]}
-{routines[5]}
-{routines[6]}
-{routines[7]}
-{routines[8]}
-{routines[9]}
-{routines[10]}
+{chr(10).join(routines)}
 end module extracted_wrf_diffusion
 
 program oracle_driver
   use extracted_wrf_diffusion
   implicit none
   integer, parameter :: nx={NX}, ny={NY}, nz={NZ}
-  integer, parameter :: ids=1, ide=nx+1, jds=1, jde=ny+1, kds=1, kde=nz+1
+  integer, parameter :: ids=1, ide={domain_ide}, jds=1, jde=ny+1, kds=1, kde=nz+1
   integer, parameter :: ims=0, ime=nx+2, jms=0, jme=ny+2, kms=1, kme=nz+1
-  integer, parameter :: itsm=1, item=nx+1, itsd=1, ited=nx, itsu=2, iteu=nx
-  integer, parameter :: jts=2, jte=ny, kts=1, kte=nz+1
+  integer, parameter :: itsm=1, item={domain_ide}, itsd=1, ited=nx, itsu=2, iteu=nx
+  integer, parameter :: jts={1 if y_varying else 2}, jte={domain_jte}, kts=1, kte=nz+1
   integer :: i,j,k,ii
   type(grid_config_rec_type) :: cfg
   real :: rdx,rdy,terrain,pi,cf1,cf2,cf3
@@ -223,10 +234,10 @@ program oracle_driver
   real :: fnm(kms:kme), fnp(kms:kme), dn(kms:kme), dnw(kms:kme)
   real :: u_base(kms:kme), v_base(kms:kme)
   real :: nba_rij(ims:ime,kms:kme,jms:jme,3)
-  real :: nba_mij(ims:ime,kms:kme,jms:jme,3)
+  real :: nba_mij(ims:ime,kms:kme,jms:jme,5)
   tendency=0.; tendency_v=0.; defor11=0.; defor22=0.; defor33=0.; defor12=0.
   defor13=0.; defor23=0.; div=0.; u=0.; v=0.; w=0.; tke=0.
-  xkmh={KH:.17g}; xkmv={KV:.17g}
+  xkmh={0.0 if k0 else KH:.17g}; xkmv={0.0 if k0 else KV:.17g}
   ru_tend=0.; rv_tend=0.; rw_tend=0.; ph_tend=0.; t_tend=0.
   ru_tendf=0.; rv_tendf=0.; rw_tendf=0.; ph_tendf=0.; t_tendf=0.
   u_save=0.; v_save=0.; w_save=0.; ph_save=0.; t_save=0.
@@ -241,35 +252,70 @@ program oracle_driver
   do j=jms,jme
     do k=kms,kme
       do i=ims,ime
-        ii=modulo(i-1,nx)
-        terrain=100.*cos(2.*pi*real(ii)/real(nx))
+        ii=modulo(i-1,{unique_nx})
+        terrain={terrain_amplitude:.17g}*cos(2.*pi*real(ii)/real({unique_nx})) + &
+                ({terrain_y_amplitude:.17g})*cos(2.*pi*real(modulo(j-1,ny))/real(ny))
         ph(i,k,j)=g*(terrain+{DZ:.17g}*real(k-1))
       enddo
     enddo
   enddo
-  ! Stage PH is Y-constant; i=0/9 are the periodic copies of i=8/1.
+  ! Stage PH is Y-constant; packed mode has a duplicate mass endpoint.
   ! Exact metrics run at the east endpoint so they write zx(ide).
   call compute_diff_metrics(cfg,ph,phb,z,rdz,rdzw,zx,zy,rdx,rdy, &
        ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
        itsm,item,jts,jte,kts,kte)
+  if ({1 if packed_periodic else 0} == 1) then
+    ! The packed west face is the periodic slope from the unique eastern mass
+    ! neighbor to mass column one; the duplicate endpoint aliases that face.
+    do j=jms,jme
+      do k=kms,kme
+        zx(1,k,j)=rdx*(ph(1,k,j)-ph(0,k,j))/g
+        zx(nx,k,j)=zx(1,k,j)
+      enddo
+    enddo
+  endif
   ! Prepare periodic X and symmetric-Y metric halos analytically. This is not
   ! an execution or validation of WRF set_physical_bc3d.
-  do j=jms,jts-2
-    rdzw(:,:,j)=rdzw(:,:,jts-1); rdz(:,:,j)=rdz(:,:,jts-1)
-    zx(:,:,j)=zx(:,:,jts); zy(:,:,j)=zy(:,:,jts)
+  ! V D12 reads the south halo row jts-1 of zx/rdzw; prepare it with the
+  ! same Y-constant metric as the first owned row.
+  do j=jms,jts-1
+    if ({1 if y_varying else 0} == 1) then
+      rdzw(:,:,j)=rdzw(:,:,ny); rdz(:,:,j)=rdz(:,:,ny)
+      zx(:,:,j)=zx(:,:,ny); zy(:,:,j)=zy(:,:,ny+1)
+    else
+      rdzw(:,:,j)=rdzw(:,:,jts-1); rdz(:,:,j)=rdz(:,:,jts-1)
+      zx(:,:,j)=zx(:,:,jts); zy(:,:,j)=zy(:,:,jts)
+    endif
   enddo
+  if ({1 if y_varying else 0} == 1) then
+    zy(:,:,1)=zy(:,:,ny+1)
+  endif
   do j=jte+1,jme
-    rdzw(:,:,j)=rdzw(:,:,jte); rdz(:,:,j)=rdz(:,:,jte)
-    zx(:,:,j)=zx(:,:,jte); zy(:,:,j)=zy(:,:,jte)
+    if ({1 if y_varying else 0} == 1) then
+      rdzw(:,:,j)=rdzw(:,:,2); rdz(:,:,j)=rdz(:,:,2)
+      zx(:,:,j)=zx(:,:,2); zy(:,:,j)=zy(:,:,2)
+    else
+      rdzw(:,:,j)=rdzw(:,:,jte); rdz(:,:,j)=rdz(:,:,jte)
+      zx(:,:,j)=zx(:,:,jte); zy(:,:,j)=zy(:,:,jte)
+    endif
   enddo
   do j=jms,jme
     do k=kms,kme
-      rdzw(0,k,j)=rdzw(nx,k,j); rdzw(nx+1,k,j)=rdzw(1,k,j)
-      rdzw(nx+2,k,j)=rdzw(2,k,j)
-      rdz(0,k,j)=rdz(nx,k,j); rdz(nx+1,k,j)=rdz(1,k,j)
-      rdz(nx+2,k,j)=rdz(2,k,j)
-      zx(0,k,j)=zx(nx,k,j); zx(nx+1,k,j)=zx(1,k,j)
-      zx(nx+2,k,j)=zx(2,k,j)
+      if ({1 if packed_periodic else 0} == 1) then
+        rdzw(0,k,j)=rdzw(nx-1,k,j); rdzw(nx+1,k,j)=rdzw(2,k,j)
+        rdzw(nx+2,k,j)=rdzw(3,k,j)
+        rdz(0,k,j)=rdz(nx-1,k,j); rdz(nx+1,k,j)=rdz(2,k,j)
+        rdz(nx+2,k,j)=rdz(3,k,j)
+        zx(0,k,j)=zx(nx-1,k,j); zx(nx+1,k,j)=zx(2,k,j)
+        zx(nx+2,k,j)=zx(3,k,j)
+      else
+        rdzw(0,k,j)=rdzw(nx,k,j); rdzw(nx+1,k,j)=rdzw(1,k,j)
+        rdzw(nx+2,k,j)=rdzw(2,k,j)
+        rdz(0,k,j)=rdz(nx,k,j); rdz(nx+1,k,j)=rdz(1,k,j)
+        rdz(nx+2,k,j)=rdz(2,k,j)
+        zx(0,k,j)=zx(nx,k,j); zx(nx+1,k,j)=zx(1,k,j)
+        zx(nx+2,k,j)=zx(2,k,j)
+      endif
     enddo
   enddo
   do j=jts,jte
@@ -277,6 +323,11 @@ program oracle_driver
       do i=1,nx+1
         write(*,'(A,3(1X,I0),1X,ES25.16)') 'M_ZX',j-1,k-1,i-1,zx(i,k,j)
       enddo
+      if (k<=nz+1) then
+        do i=1,nx
+          write(*,'(A,3(1X,I0),1X,ES25.16)') 'M_ZY',j-1,k-1,i-1,zy(i,k,j)
+        enddo
+      endif
       if (k<=nz) then
         do i=1,nx
           write(*,'(A,3(1X,I0),1X,ES25.16)') 'M_RDZW',j-1,k-1,i-1,rdzw(i,k,j)
@@ -284,7 +335,9 @@ program oracle_driver
       endif
     enddo
   enddo
-  if ({top_pulse} == 1) then
+  if ({1 if y_varying else 0} == 1) then
+    u=0.
+  else if ({top_pulse} == 1) then
     u(:,nz,:)=1.
   else
     do j=jms,jme
@@ -314,6 +367,13 @@ program oracle_driver
       enddo
     enddo
   enddo
+  if ({1 if y_varying else 0} == 1) then
+    do k=kts,kte-1
+      do i=itsd,ited
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'D22_V_RAW',0,k-1,i-1,defor22(i,k,jds)
+      enddo
+    enddo
+  endif
   do j=jts,jte
     do k=1,nz
       do i=1,nx
@@ -410,6 +470,91 @@ program oracle_driver
       enddo
     enddo
   enddo
+  ! V composite oracle follows the same stage/geometry after the W outputs.
+  ! Reuse the same stage, terrain and coefficients for V. The V profile is
+  ! X-periodic and Y-constant, so its Y halos are prepared by construction.
+  do j=jms,jme
+    do k=kms,kme
+      do i=1,nx
+        if (k == 2) then
+          v(i,k,j)={v_x_factor} * &
+                   ({'sin(2.*pi*real(modulo(j-1,ny))/real(ny))' if y_varying else '1.0'})
+        else
+          v(i,k,j)=0.
+        endif
+      enddo
+    enddo
+  enddo
+  do j=jms,jme
+    do k=kms,kme
+      if ({1 if packed_periodic else 0} == 1) then
+        v(nx,k,j)=v(1,k,j)
+        v(0,k,j)=v(nx-1,k,j); v(nx+1,k,j)=v(2,k,j)
+        v(nx+2,k,j)=v(3,k,j)
+      else
+        v(0,k,j)=v(nx,k,j); v(nx+1,k,j)=v(1,k,j)
+        v(nx+2,k,j)=v(2,k,j)
+      endif
+    enddo
+  enddo
+  call cal_deform_and_div(cfg,u,v,w,div,defor11,defor22,defor33, &
+       defor12,defor13,defor23,nba_rij,3,u_base,v_base, &
+       msfux,msfuy,msfvx,msfvy,msftx,msfty,rdx,rdy,dn,dnw,rdz,rdzw, &
+       fnm,fnp,cf1,cf2,cf3,zx,zy,ids,ide,jds,jde,kds,kde, &
+       ims,ime,jms,jme,kms,kme,itsd,ited,jts,jte,kts,kte)
+  ! horizontal_diffusion_v_2 forms tau12 at i+1 for the eastmost owned V
+  ! cell. WRF's periodic physical-boundary stage supplies that D12 halo.
+  do j=jms,jme
+    do k=kts,kte-1
+      if ({1 if packed_periodic else 0} == 1) defor12(nx,k,j)=defor12(1,k,j)
+      defor12(nx+1,k,j)=defor12(1,k,j)
+    enddo
+  enddo
+  do j=jts,jte
+    do k=kts,kte-1
+      do i=itsd,ited
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'D12_V_RAW',j-1,k-1,i-1,defor12(i,k,j)
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'D22_V_RAW',j-1,k-1,i-1,defor22(i,k,j)
+      enddo
+    enddo
+  enddo
+  tendency=0.; tendency_v=0.; rv_tend=0.; rv_tendf=0.
+  call vertical_diffusion_v_2(tendency_v,cfg,defor23,xkmv, &
+       nba_mij(ims,kms,jms,1),2,dnw,rdzw,fnm,fnp,rho, &
+       ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
+       itsd,ited,jts,jte,kts,kte)
+  do j=jts,jte
+    do k=kts,kte-1
+      do i=itsd,ited
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'V_Z_RAW',j-1,k-1,i-1,tendency_v(i,k,j)
+      enddo
+    enddo
+  enddo
+  call horizontal_diffusion_v_2(tendency,cfg,defor12,defor22,div, &
+       nba_mij(ims,kms,jms,1),2,tke,msfvx,msfvy,xkmh,rdx,rdy,fnm,fnp, &
+       dnw,zx,zy,rdzw,rho,ids,ide,jds,jde,kds,kde, &
+       ims,ime,jms,jme,kms,kme,itsd,ited,jts,jte,kts,kte)
+  do j=jts,jte
+    do k=kts,kte-1
+      do i=itsd,ited
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'V_H_RAW',j-1,k-1,i-1,tendency(i,k,j)
+      enddo
+    enddo
+  enddo
+  rv_tendf=tendency+tendency_v
+  call rk_addtend_dry(ru_tend,rv_tend,rw_tend,ph_tend,t_tend, &
+       ru_tendf,rv_tendf,rw_tendf,ph_tendf,t_tendf, &
+       u_save,v_save,w_save,ph_save,t_save,mu_tend,mu_tendf,2,fnm,fnm, &
+       h_diabatic,mut,msftx,msfty,msfux,msfuy,msfvx,msfvx_inv,msfvy, &
+       ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
+       ids,ide,jds,jde,kds,kde,itsd,ited,jts,jte,kts,kte)
+  do j=jts,jte
+    do k=kts,kte-1
+      do i=itsd,ited
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'RHS_V',j-1,k-1,i-1,rv_tend(i,k,j)
+      enddo
+    enddo
+  enddo
   ! Operator-only control: the old source-grounded Python D11 and ideal metric
   ! inputs feed exact stress/U2 routines independently of the producer chain.
   tendency=0.; defor11=0.; defor12=0.; div=0.; zx=0.
@@ -460,8 +605,10 @@ end program oracle_driver
         raise RuntimeError("Fortran oracle compile failed:\n" + built.stderr)
     run = subprocess.run([str(exe)], check=True, text=True, capture_output=True)
     values: dict[str, dict[tuple[int, int, int], float]] = {}
-    labels = {"M_ZX", "M_RDZW", "D11_RAW", "D12_RAW", "D13_RAW", "D23_RAW", "D33_RAW",
-              "V_RAW", "RHS_U", "F_RAW", "O_RAW", "HW_RAW", "VW_RAW", "RHS_W"}
+    labels = {"M_ZX", "M_ZY", "M_RDZW", "D11_RAW", "D12_RAW",
+              "D13_RAW", "D23_RAW", "D33_RAW", "V_RAW", "RHS_U",
+              "F_RAW", "O_RAW", "HW_RAW", "VW_RAW", "RHS_W",
+              "V_Z_RAW", "V_H_RAW", "RHS_V", "D12_V_RAW", "D22_V_RAW"}
     for line in run.stdout.splitlines():
         fields = line.split()
         if fields and fields[0] in labels:
@@ -514,7 +661,9 @@ def main() -> int:
             elif fields[0] in {"U_RAW", "UV_RAW", "D11_CPP", "D13_CPP", "D23_CPP",
                                "D33_CPP", "WH_RAW", "WV_RAW", "WH_KH_WRONG",
                                "WV_KV_WRONG", "D13_OLDZX", "WH_OLDZX",
-                               "M_ZX_CPP", "M_RDZW_CPP"}:
+                               "M_ZX_CPP", "M_RDZW_CPP", "V_H_RAW",
+                               "V_Z_RAW", "V_RHS", "D12_V_CPP",
+                               "D22_V_CPP", "D12_V_OLDSEAM"}:
                 label, j, k, i, value = fields
                 parsed.setdefault(label, {})[(int(j), int(k), int(i))] = float(value)
         return parsed
@@ -526,10 +675,24 @@ def main() -> int:
     wrong_metric_outputs = parse_cpp(args.binary, "--option2-momentum-stage-geometry-wrong-metric")
     metric_wrong_horizontal = wrong_metric_outputs["U_RAW"]
     top_pulse_cpp = parse_cpp(args.binary, "--option2-momentum-stage-geometry-top-pulse")
+    wrong_v_cpp = parse_cpp(args.binary, "--option2-momentum-v-wrong-k")
+    v_k0_cpp = parse_cpp(args.binary, "--option2-momentum-v-k0")
+    v_old_seam_cpp = parse_cpp(args.binary, "--option2-momentum-v-old-seam")
+    v_flat_cpp = parse_cpp(args.binary, "--option2-momentum-v-flat")
+    v_packed_cpp = parse_cpp(args.binary, "--option2-momentum-v-packed")
+    v_packed_flat_cpp = parse_cpp(args.binary, "--option2-momentum-v-packed-flat")
+    small_nz_check = subprocess.run(
+        [str(args.binary), "--option2-v-periodic-west-small-nz"],
+        check=True, text=True, capture_output=True)
+    if "PASS option-2 V periodic-west D12 small-nz=1" not in small_nz_check.stdout or \
+            "PASS option-2 V periodic-west D12 small-nz=2" not in small_nz_check.stdout:
+        raise RuntimeError("small-nz periodic-west V seam contract did not pass")
+    print("V small-nz seam controls: nz=1 and nz=2 passed with finite nonzero west D12")
     expected = fortran_oracle()
     _, zx_expected, rdzw_expected, d11_expected, _, _ = source_grounded_fields()
     fortran_results: list[tuple[str, dict[str, dict[tuple[int, int, int], float]], str]] = []
     top_pulse_results: list[tuple[str, dict[str, dict[tuple[int, int, int], float]], str]] = []
+    compiled_mismatches = []
     w_composite_results: list[tuple[str, dict[str, dict[tuple[int, int, int], float]], str]] = []
     with tempfile.TemporaryDirectory(prefix="sdirk3-option2-fortran-") as temp_dir:
         temp = Path(temp_dir)
@@ -551,6 +714,165 @@ def main() -> int:
             raise RuntimeError("W composite used different extracted routines")
         top_pulse_results.append((label,top_result,top_routine_sha))
         w_composite_results.append((label,w_result,w_routine_sha))
+    # Source-extracted V profiles use the same compiler/flags and routine set.
+    v_k0_fortran, v_k0_hash = compiled_fortran_oracle(
+        repo, args.fortran_compiler, ["-O0"], temp / "fp32-O0-v-k0", profile="k0")
+    if v_k0_hash != fortran_results[0][2]:
+        raise RuntimeError("K0 control used different extracted routines")
+    flat_fortran, flat_hash = compiled_fortran_oracle(
+        repo, args.fortran_compiler, ["-O0"], temp / "fp32-O0-v-flat", profile="flat-terrain")
+    if flat_hash != fortran_results[0][2]:
+        raise RuntimeError("flat-terrain control used different extracted routines")
+    v_k0_keys = {(j, k, i) for j in range(1, NY) for k in range(NZ)
+                 for i in range(NX)}
+    k0_signal = max(max(abs(v_k0_fortran[name][key]) for key in v_k0_keys)
+                    for name in ("V_H_RAW", "V_Z_RAW", "RHS_V"))
+    k0_cpp_signal = max(max(abs(v_k0_cpp[name][key]) for key in v_k0_keys)
+                        for name in ("V_H_RAW", "V_Z_RAW", "V_RHS"))
+    print(f"V K0 control: Fortran max_abs={k0_signal:.9g}; "
+          f"C++ max_abs={k0_cpp_signal:.9g}; expected exact zero")
+    if k0_signal != 0.0 or k0_cpp_signal != 0.0:
+        compiled_mismatches.append(("V-K0", k0_signal, k0_cpp_signal))
+    flat_keys = {(j, k, i) for j in range(1, NY) for k in range(NZ)
+                 for i in range(NX)}
+    for name in ("V_H_RAW", "V_Z_RAW", "RHS_V"):
+        missing = sorted(flat_keys - flat_fortran.get(name, {}).keys())
+        if missing:
+            raise RuntimeError(f"flat Fortran control missing {name}: {missing[:3]}")
+    flat_h_error = max(abs(flat_fortran["V_H_RAW"][key] -
+                           v_flat_cpp["V_H_RAW"][key]) for key in flat_keys)
+    flat_h_signal = max(abs(flat_fortran["V_H_RAW"][key]) for key in flat_keys)
+    flat_h_budget = 2e-6 * max(1e-12, flat_h_signal)
+    flat_d12_keys = set(flat_fortran["D12_V_RAW"])
+    flat_d12_error = max(abs(flat_fortran["D12_V_RAW"][key] -
+                             v_flat_cpp["D12_V_CPP"][key]) for key in flat_d12_keys)
+    flat_d12_signal = max(abs(flat_fortran["D12_V_RAW"][key]) for key in flat_d12_keys)
+    flat_d12_budget = 2e-6 * max(1e-12, flat_d12_signal)
+    print(f"V flat-terrain control: horizontal signal={flat_h_signal:.9g} "
+          f"error={flat_h_error:.9g} budget={flat_h_budget:.3g}; "
+          f"D12 signal={flat_d12_signal:.9g} error={flat_d12_error:.9g} "
+          f"budget={flat_d12_budget:.3g}")
+    if flat_h_error > flat_h_budget or flat_d12_error > flat_d12_budget:
+        compiled_mismatches.append(("V-flat-terrain", flat_h_error, flat_h_budget,
+                                    flat_d12_error, flat_d12_budget))
+    old_seam_errors = {key: abs(fortran_results[0][1]["D12_V_RAW"][key] -
+                                v_old_seam_cpp["D12_V_OLDSEAM"][key])
+                       for key in fortran_results[0][1]["D12_V_RAW"]}
+    old_seam_signal = max(old_seam_errors.values())
+    old_seam_budget = 2e-6 * max(1e-12, max(abs(v) for v in
+                                      fortran_results[0][1]["D12_V_RAW"].values()))
+    print(f"V old periodic-west D12 source mutant: signal={old_seam_signal:.9g} "
+          f"budget={old_seam_budget:.3g}")
+    if old_seam_signal <= old_seam_budget:
+        compiled_mismatches.append(("V-old-west-seam-mutant", old_seam_signal,
+                                    old_seam_budget))
+    packed_fortran, packed_hash = compiled_fortran_oracle(
+        repo, args.fortran_compiler, ["-O0"], temp / "fp32-O0-v-packed",
+        profile="packed-periodic")
+    packed_flat_fortran, packed_flat_hash = compiled_fortran_oracle(
+        repo, args.fortran_compiler, ["-O0"], temp / "fp32-O0-v-packed-flat",
+        profile="packed-periodic-flat")
+    if packed_hash != fortran_results[0][2] or packed_flat_hash != packed_hash:
+        raise RuntimeError("packed periodic controls used different extracted routines")
+    packed_meta = next((line for line in subprocess.run(
+        [str(args.binary), "--option2-momentum-v-packed"], check=True, text=True,
+        capture_output=True).stdout.splitlines() if line.startswith("OPTION2_K")), "")
+    if "packed_layout=1" not in packed_meta or "unique_nx=7" not in packed_meta:
+        raise RuntimeError(f"packed counterexample did not exercise WRF packed layout: {packed_meta}")
+    packed_keys = {(j, k, i) for j in range(1, NY) for k in range(NZ)
+                   for i in range(NX - 1)}
+    packed_alias_keys = {(j, k, i) for j in range(1, NY) for k in range(NZ)
+                         for i in (0, NX - 1)}
+    packed_errors = {}
+    for source_name, cpp_name in (("D12_V_RAW", "D12_V_CPP"),
+                                  ("V_H_RAW", "V_H_RAW"),
+                                  ("V_Z_RAW", "V_Z_RAW"),
+                                  ("RHS_V", "V_RHS")):
+        packed_errors[source_name] = max(abs(packed_fortran[source_name][key] -
+                                              v_packed_cpp[cpp_name][key])
+                                         for key in packed_keys)
+    packed_alias_error = max(abs(v_packed_cpp[name][(j,k,NX-1)]-
+                                 v_packed_cpp[name][(j,k,0)])
+                             for name in ("D12_V_CPP", "V_H_RAW", "V_Z_RAW", "V_RHS")
+                             for j,k,_ in packed_alias_keys)
+    packed_fortran_d12_alias = max(abs(packed_fortran["D12_V_RAW"][(j,k,NX-1)]-
+                                       packed_fortran["D12_V_RAW"][(j,k,0)])
+                                   for j,k,_ in packed_alias_keys)
+    packed_flat_horizontal_error = max(abs(packed_flat_fortran["V_H_RAW"][key]-
+                                           v_packed_flat_cpp["V_H_RAW"][key])
+                                       for key in packed_keys)
+    packed_signal = max(abs(packed_fortran["V_H_RAW"][key] +
+                            packed_fortran["V_Z_RAW"][key]) for key in packed_keys)
+    packed_budget = 2e-6 * max(1e-12, packed_signal)
+    print(f"V packed periodic control (unique Nx=7, duplicate x=7): "
+          f"D12/H/Z/RHS errors={packed_errors['D12_V_RAW']:.9g}/"
+          f"{packed_errors['V_H_RAW']:.9g}/{packed_errors['V_Z_RAW']:.9g}/"
+          f"{packed_errors['RHS_V']:.9g} budget={packed_budget:.3g}; "
+          f"flat H error={packed_flat_horizontal_error:.9g}; "
+          f"C++ alias error={packed_alias_error:.9g}; "
+          f"Fortran D12 alias error={packed_fortran_d12_alias:.9g}")
+    if (max(packed_errors.values()) > packed_budget or
+            packed_flat_horizontal_error > 2e-6 * max(1e-12,
+                max(abs(packed_flat_fortran["V_H_RAW"][key]) for key in packed_keys)) or
+            packed_alias_error != 0.0 or packed_fortran_d12_alias != 0.0):
+        compiled_mismatches.append(("V-packed-periodic", packed_errors,
+                                    packed_flat_horizontal_error, packed_alias_error,
+                                    packed_fortran_d12_alias, packed_budget))
+    y_fortran, y_hash = compiled_fortran_oracle(
+        repo, args.fortran_compiler, ["-O0"], temp / "fp32-O0-v-y-terrain",
+        profile="v-y-terrain")
+    if y_hash != fortran_results[0][2]:
+        raise RuntimeError("Y-stress control used different extracted routines")
+    y_cpp = parse_cpp(args.binary, "--option2-momentum-v-y-terrain")
+    y_keys = {(j, k, i) for j in range(1, NY) for k in range(NZ)
+              for i in range(NX)}
+    y_component_errors = {}
+    for source_name, cpp_name in (("D12_V_RAW", "D12_V_CPP"),
+                                  ("D22_V_RAW", "D22_V_CPP"),
+                                  ("V_H_RAW", "V_H_RAW"),
+                                  ("V_Z_RAW", "V_Z_RAW"),
+                                  ("RHS_V", "V_RHS")):
+        y_component_errors[source_name] = max(
+            abs(y_fortran[source_name][key] - y_cpp[cpp_name][key]) for key in y_keys)
+    y_signal = max(abs(y_fortran["V_H_RAW"][key] + y_fortran["V_Z_RAW"][key])
+                   for key in y_keys)
+    y_budget = 2e-6 * max(1e-12, y_signal)
+
+    # Mutate the source titau2avg stencil by omitting the south mass row.
+    # This quantifies whether the y-stagger stress average is observable in
+    # the actual terrain-Y contribution on the same source-extracted state.
+    y_stress_mutant_signal = 0.0
+    for j, k, i in y_keys:
+        def tau22(row: int, level: int) -> float:
+            # D22 is the normal stress coefficient on the horizontal Kh path.
+            return -KH * y_fortran["D22_V_RAW"][(row, level, i)]
+
+        correct=[]
+        mutant=[]
+        for w_level in range(NZ + 1):
+            if w_level in (0, NZ):
+                correct.append(0.0)
+                mutant.append(0.0)
+            else:
+                correct.append(0.25 * (tau22(j-1,w_level) + tau22(j,w_level) +
+                                        tau22(j-1,w_level-1) + tau22(j,w_level-1)))
+                mutant.append(0.25 * (tau22(j,w_level) + tau22(j,w_level-1)))
+        zy_at_v=0.5*(y_fortran["M_ZY"][(j,k,i)]+y_fortran["M_ZY"][(j,k+1,i)])
+        factor=-9.81*1000.0/(-0.25)*MAP/1000.0*zy_at_v
+        y_stress_mutant_signal=max(y_stress_mutant_signal,
+            abs(factor*((mutant[k+1]-mutant[k])-(correct[k+1]-correct[k]))))
+    y_d22_signal=max(abs(y_fortran["D22_V_RAW"][key]) for key in y_fortran["D22_V_RAW"])
+    y_zy_signal=max(abs(value) for value in y_fortran["M_ZY"].values())
+    print(f"V Y-terrain control: D22 signal={y_d22_signal:.9g} "
+          f"zy signal={y_zy_signal:.9g} composite signal={y_signal:.9g}; "
+          f"D12/D22/H/Z/RHS errors=" + "/".join(
+              f"{value:.9g}" for value in y_component_errors.values()) +
+          f" budget={y_budget:.3g}; wrong-Y-average mutant={y_stress_mutant_signal:.9g}")
+    if (y_d22_signal <= 1e-8 or y_zy_signal <= 1e-8 or
+            max(y_component_errors.values()) > y_budget or
+            y_stress_mutant_signal <= y_budget):
+        compiled_mismatches.append(("V-Y-terrain", y_component_errors, y_budget,
+                                    y_d22_signal, y_zy_signal, y_stress_mutant_signal))
     cpp_seams = {(j, k, i) for j in range(NY) for k in range(NZ)
                  for i in (0, NX)}
     fortran_seams = {(j, 1, i) for j in range(1, NY - 1)
@@ -618,7 +940,6 @@ def main() -> int:
                       if 0 <= j < NY and 0 <= k < NZ and i in (0, NX)), default=0.0)
     tolerance = 2e-6 * max(1e-12, signal)
     mismatch = max_error > tolerance
-    compiled_mismatches = []
     extracted_sha = fortran_results[0][2]
     if any(routine_sha != extracted_sha for _, _, routine_sha in fortran_results):
         raise RuntimeError("the extracted Fortran routine source changed between builds")
@@ -776,6 +1097,57 @@ def main() -> int:
                 old_h_error<=w_tol):
             compiled_mismatches.append((label,"W-composite",w_h_error,w_v_error,
                                         w_raw_error,w_rhs_error,wrong_h,wrong_v))
+        v_keys = {(j, k, i) for j in range(1, NY) for k in range(NZ)
+                  for i in range(NX)}
+        for name in ("V_H_RAW", "V_Z_RAW", "RHS_V", "D12_V_RAW", "D22_V_RAW"):
+            absent_v = sorted(v_keys - result.get(name, {}).keys())
+            if absent_v:
+                print(f"FAIL missing {label} {name} owned V outputs: {absent_v[:3]}",
+                      file=sys.stderr)
+                return 1
+        fortran_v = result
+        v_horizontal = {key: abs(fortran_v["V_H_RAW"][key] -
+                                 cpp_outputs["V_H_RAW"][key]) for key in v_keys}
+        v_vertical = {key: abs(fortran_v["V_Z_RAW"][key] -
+                               cpp_outputs["V_Z_RAW"][key]) for key in v_keys}
+        v_raw = {key: abs(fortran_v["V_H_RAW"][key] + fortran_v["V_Z_RAW"][key] -
+                          cpp_outputs["V_H_RAW"][key] - cpp_outputs["V_Z_RAW"][key])
+                 for key in v_keys}
+        v_rhs = {key: abs(fortran_v["RHS_V"][key] - cpp_outputs["V_RHS"][key])
+                 for key in v_keys}
+        d12_keys = set(fortran_v["D12_V_RAW"])
+        d22_keys = set(fortran_v["D22_V_RAW"])
+        d12_errors = {key: abs(fortran_v["D12_V_RAW"][key] -
+                               cpp_outputs["D12_V_CPP"][key]) for key in d12_keys}
+        d22_errors = {key: abs(fortran_v["D22_V_RAW"][key] -
+                               cpp_outputs["D22_V_CPP"][key]) for key in d22_keys}
+        v_signal = max(abs(fortran_v["V_H_RAW"][key] +
+                           fortran_v["V_Z_RAW"][key]) for key in v_keys)
+        v_rhs_signal = max(abs(fortran_v["RHS_V"][key]) for key in v_keys)
+        d12_signal = max(abs(fortran_v["D12_V_RAW"][key]) for key in d12_keys)
+        d22_signal = max(abs(fortran_v["D22_V_RAW"][key]) for key in d22_keys)
+        v_budget = 2e-6 * max(1e-12, v_signal)
+        v_rhs_budget = 2e-6 * max(1e-12, v_rhs_signal)
+        d12_budget = 2e-6 * max(1e-12, d12_signal)
+        d22_budget = 2e-6 * max(1e-12, d22_signal)
+        wrong_k_signal = max(abs(wrong_v_cpp["V_Z_RAW"][key] -
+                                 cpp_outputs["V_Z_RAW"][key]) for key in v_keys)
+        print(f"CPP vs {label} composite V signal={v_signal:.9g} "
+              f"raw_error={max(v_raw.values()):.9g} budget={v_budget:.3g}; "
+              f"horizontal_error={max(v_horizontal.values()):.9g}; "
+              f"vertical_error={max(v_vertical.values()):.9g}; "
+              f"post-rk_addtend V signal={v_rhs_signal:.9g} "
+              f"error={max(v_rhs.values()):.9g} budget={v_rhs_budget:.3g}; "
+              f"D12_error={max(d12_errors.values()):.9g} budget={d12_budget:.3g}; "
+              f"D22_error={max(d22_errors.values()):.9g} budget={d22_budget:.3g}; "
+              f"wrong-k signal={wrong_k_signal:.9g}")
+        if (max(v_raw.values()) > v_budget or max(v_rhs.values()) > v_rhs_budget or
+                max(d12_errors.values()) > d12_budget or max(d22_errors.values()) > d22_budget or
+                wrong_k_signal <= v_budget or v_signal <= 1e-8):
+            compiled_mismatches.append((label, "composite-V", max(v_raw.values()),
+                                        v_budget, max(v_rhs.values()), v_rhs_budget,
+                                        max(d12_errors.values()), d12_budget,
+                                        wrong_k_signal, v_signal))
     top_pulse_result=top_pulse_results[0][1]
     top_keys = {(j, k, i) for j in range(1, NY - 1)
                 for k in range(NZ) for i in range(1, NX)}
@@ -844,8 +1216,8 @@ def main() -> int:
             compiled_mismatches.append((label,"top-pulse-U",top_raw_error,top_raw_tol,
                                         top_rhs_error,top_rhs_tol))
     print("ORACLE full chain extracts compute_diff_metrics, cal_deform_and_div, "
-          "U/W horizontal and vertical diffusion, and rk_addtend_dry; the retained "
-          "operator-only U reference injects Python D11/analytic metrics")
+          "U/V/W stress and horizontal/vertical diffusion, and rk_addtend_dry; "
+          "the retained operator-only U reference injects Python D11/analytic metrics")
     print(f"PROVENANCE revision={revision} module_diffusion_em.F.sha256={sha} "
           f"wrf_sdirk3_tile_unified_impl.cpp.sha256={cpp_sha}")
     print(f"TEST cpp.sha256={cpp_test_sha} python.sha256={python_test_sha} "
