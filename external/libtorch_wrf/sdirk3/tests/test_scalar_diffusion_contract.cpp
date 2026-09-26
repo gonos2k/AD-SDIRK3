@@ -8,6 +8,7 @@
 #include <limits>
 #include <string>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -130,22 +131,53 @@ template struct MemberAccessor<CaptureThetaTag,
 template struct MemberAccessor<DiffusionTag,
                                &TileSDIRK3UnifiedSolver::setDiffusionCoefficients>;
 
-struct MomentumDiffusionTag {
-    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
-        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
-        float, float, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
-        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&, const torch::Tensor&);
-    friend type access(MomentumDiffusionTag);
+struct UOption2HelperTag { friend auto access(UOption2HelperTag); };
+struct VOption2HelperTag { friend auto access(VOption2HelperTag); };
+template<typename Tag, auto Member> struct AutoMemberAccessor {
+    friend auto access(Tag) { return Member; }
 };
-struct VMomentumDiffusionTag {
-    using type = MomentumDiffusionTag::type;
-    friend type access(VMomentumDiffusionTag);
-};
-template struct MemberAccessor<MomentumDiffusionTag,
+template struct AutoMemberAccessor<UOption2HelperTag,
     &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_u_wrf>;
-template struct MemberAccessor<VMomentumDiffusionTag,
+template struct AutoMemberAccessor<VOption2HelperTag,
     &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf>;
 
+struct Defor13StageGeometryTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&);
+    friend type access(Defor13StageGeometryTag);
+};
+template struct MemberAccessor<Defor13StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor13>;
+
+template<typename Member>
+torch::Tensor call_option2_momentum_helper(
+    Member member, TileSDIRK3UnifiedSolver& solver,
+    const torch::Tensor& u, const torch::Tensor& v, const torch::Tensor& w,
+    const torch::Tensor& kh, float rdx, float rdy,
+    const torch::Tensor& map_u, const torch::Tensor& map_v,
+    const torch::Tensor& map_m, const torch::Tensor& muu,
+    const torch::Tensor& ph_full, const torch::Tensor& rho,
+    const torch::Tensor& zx, const torch::Tensor& zy,
+    const torch::Tensor& rdzw, const torch::Tensor& rdz,
+    bool report_explicit_geometry=false) {
+    if constexpr (std::is_invocable_v<Member, TileSDIRK3UnifiedSolver&,
+                  const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+                  const torch::Tensor&, float, float, const torch::Tensor&,
+                  const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+                  const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+                  const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+                  const torch::Tensor&>) {
+        if (report_explicit_geometry) std::cout << "GEOMETRY_INPUT stage_explicit=1\n";
+        return (solver.*member)(u,v,w,kh,rdx,rdy,map_u,map_v,map_m,map_m,muu,
+                                ph_full,rho,zx,zy,rdzw,rdz);
+    } else {
+        if (report_explicit_geometry) std::cout << "GEOMETRY_INPUT stage_explicit=0\n";
+        return (solver.*member)(u,v,w,kh,rdx,rdy,map_u,map_v,map_m,map_m,muu,
+                                ph_full,rho);
+    }
+}
 namespace {
 constexpr int nx = 8, ny = 6, nz = 4;
 constexpr int nu=nx+1,nv=ny+1,nw=nz+1;
@@ -310,6 +342,64 @@ bool run_packed_periodic_seam(torch::Dtype dtype) {
     return pass;
 }
 
+// Fortran module_diffusion_em.F cal_deform_and_div forms U shear as
+// du/dz * 0.5*(rdz(i,k,j)+rdz(i-1,k,j)) (around lines 837-845). Packed
+// periodic X has N unique mass columns plus an alias at column N. U faces are
+// [west seam, interior faces, east seam, face-1 alias].
+bool run_packed_u_rdz_seam() {
+    using wrf::sdirk3::test::TileCase;
+    constexpr int unique_n=nx-1;
+    wrf::sdirk3::g_sdirk3_config=wrf::sdirk3::SDIRK3Config{};
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    TileCase tile(1.0f);
+    tile.solver.setBoundaryConditions(true,false,false,false,true,true,
+                                      false,false,false,false);
+    tile.solver.setWRFIndices(1,nx,1,ny,1,nz, 1,nx,1,ny,1,nz+1,
+                              -2,nx+4,-2,ny+4,1,nz+1);
+
+    auto u=torch::zeros({ny,nz,nx+1},opt);
+    u.select(1,1).fill_(1.0f); // isolated vertical shear at W level k=1
+    const auto w=torch::zeros({ny,nw,nx},opt);
+    auto rdz=torch::empty({ny,nw,nx},opt);
+    const float values[nx]={1,2,3,4,5,6,7,1};
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        rdz[j][k][i]=values[i];
+    const auto zx=torch::zeros({ny,nw,nx+1},opt);
+    const auto zy=torch::zeros({ny+1,nw,nx},opt);
+    const auto rdzw=torch::ones({ny,nz,nx},opt);
+    const auto rdnw=torch::ones({nz},opt);
+    const auto actual=(tile.solver.*access(Defor13StageGeometryTag{}))(
+        u,w,torch::tensor({1.0f},opt),rdnw,zx,zy,rdzw,rdz).contiguous();
+    const auto a=actual.accessor<float,3>();
+
+    auto expected_face=[&](int face) {
+        if (face==nx) return 0.5f*(values[0]+values[1]); // packed terminal aliases face 1
+        const int left=face==0 ? unique_n-1 : face-1;
+        const int right=face==unique_n ? 0 : face;
+        return 0.5f*(values[left]+values[right]);
+    };
+    double max_error=0.0;
+    for (int j=0;j<ny;++j) for (int face=0;face<=nx;++face)
+        max_error=std::max(max_error,std::abs(double(a[j][1][face]-expected_face(face))));
+    double west_alias=0.0, terminal_alias=0.0;
+    for (int j=0;j<ny;++j) {
+        west_alias=std::max(west_alias,std::abs(double(a[j][1][unique_n]-a[j][1][0])));
+        terminal_alias=std::max(terminal_alias,std::abs(double(a[j][1][nx]-a[j][1][1])));
+    }
+    const double west_expected=expected_face(0), face1_expected=expected_face(1);
+    const double tolerance=2.0e-6;
+    const bool pass=max_error<=tolerance && west_alias<=tolerance &&
+                    terminal_alias<=tolerance && west_expected==4.0 && face1_expected==1.5;
+    std::cout << (pass?"PASS ":"FAIL ") << "packed periodic U rdz seam"
+              << " west=" << a[1][1][0] << " expected_west=" << west_expected
+              << " face1=" << a[1][1][1] << " expected_face1=" << face1_expected
+              << " east_alias=" << a[1][1][nx] << " expected_east_alias=" << face1_expected
+              << " max_error=" << max_error << " west_alias_error=" << west_alias
+              << " terminal_alias_error=" << terminal_alias
+              << " tolerance=" << tolerance << '\n';
+    return pass;
+}
+
 // Flat normal stresses: Fortran tau=-2*rho*K*Dq and signed dnw=-1.
 // Raw coupled tendency is +2*g*dz*rho*K*Lq, independent of column mass.
 bool run_normal_stress(torch::Dtype dtype) {
@@ -351,11 +441,12 @@ bool run_normal_stress(torch::Dtype dtype) {
                 0.03*torch::arange(nx+1,opt).view({1,nx+1}));
             const auto mu_v = mass_scale*MUT*(vmap +
                 0.02*torch::arange(ny+1,opt).view({ny+1,1}));
+            const auto empty=torch::Tensor();
             const auto actual = u_mode
-                ? (tile.solver.*access(MomentumDiffusionTag{}))(
-                    u,v,w,viscosity,1,1,umap,umap,mmap,mmap,mu_u,phi,rho)
-                : (tile.solver.*access(VMomentumDiffusionTag{}))(
-                    u,v,w,viscosity,1,1,vmap,vmap,mmap,mmap,mu_v,phi,rho);
+                ? call_option2_momentum_helper(access(UOption2HelperTag{}),tile.solver,
+                    u,v,w,viscosity,1,1,umap,umap,mmap,mu_u,phi,rho,empty,empty,empty,empty)
+                : call_option2_momentum_helper(access(VOption2HelperTag{}),tile.solver,
+                    u,v,w,viscosity,1,1,vmap,vmap,mmap,mu_v,phi,rho,empty,empty,empty,empty);
             auto expected = torch::zeros_like(actual);
             const double rho_value = rho[0][0][0].item<double>();
             if (u_mode) for (int j=1; j<ny-1; ++j) for (int k=0; k<nz; ++k)
@@ -645,7 +736,8 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
     };
     const auto evaluate=[&](bool on,bool packed,int km_opt=1,
                             const torch::Tensor& state_override=torch::Tensor(),
-                            bool make_reference=true) -> Result {
+                            bool make_reference=true,
+                            bool partial_owned=false) -> Result {
         cfg=SDIRK3Config{};
         cfg.diffusion_option=2;
         cfg.khdif=on?1000.0f:0.0f;
@@ -659,6 +751,11 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         cfg.use_stress_tensor=false;
         Option2RhsFixture fixture(packed,dx,c1h,c2h);
         auto& solver=fixture.solver;
+        if (partial_owned) {
+            TORCH_CHECK(!packed,"partial ownership fixture must use physical layout");
+            solver.setWRFIndices(2,nx+1,1,ny+1,1,nz,
+                1,nx+1,1,ny+1,1,nw,-2,nx+4,-2,ny+4,1,nw);
+        }
         TORCH_CHECK(solver.*access(FnmFromWrfTag{}),
                     "RHS fixture must use WRF-provided fnm/fnp");
         auto grid=std::static_pointer_cast<WRFGridInfoExtended>(solver.getGridInfo());
@@ -821,11 +918,22 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         (void)evaluate(true,false,2);
     } catch (const c10::Error& error) {
         kmopt2_guard=std::string(error.what()).find(
-            "option-2 metric scalar diffusion requires dry isotropic km_opt=1")!=std::string::npos;
+            "option-2 metric diffusion requires dry isotropic km_opt=1")!=std::string::npos;
     }
     std::cout << (kmopt2_guard?"PASS ":"FAIL ")
               << "option-2 canonical RHS rejects unsupported km_opt=2" << '\n';
     ok=kmopt2_guard&&ok;
+
+    bool partial_tile_guard=false;
+    try {
+        (void)evaluate(true,false,1,make_state(false),false,true);
+    } catch (const c10::Error& error) {
+        partial_tile_guard=std::string(error.what()).find(
+            "complete single-rank tile ownership")!=std::string::npos;
+    }
+    std::cout << (partial_tile_guard?"PASS ":"FAIL ")
+              << "option-2 canonical RHS rejects partial tile ownership" << '\n';
+    ok=partial_tile_guard&&ok;
 
     constexpr double h_large=2.0e-2,h_small=1.0e-2;
     constexpr double central_rel_budget=5.0e-2;
@@ -954,8 +1062,10 @@ bool run_u_terrain_fallback(torch::Dtype dtype) {
     const auto zy=torch::zeros_like(zx);
     const auto eval=[&](bool sloped) {
         tile.setTerrainSlopes(sloped?zx:torch::zeros_like(zx),zy);
-        return (tile.*access(MomentumDiffusionTag{}))(
-            u,v,w,viscosity,1,1,umap,umap,mmap,mmap,mass,torch::Tensor(),rho);
+        const auto empty=torch::Tensor();
+        return call_option2_momentum_helper(access(UOption2HelperTag{}),tile,
+            u,v,w,viscosity,1,1,umap,umap,mmap,mass,torch::Tensor(),rho,
+            empty,empty,empty,empty);
     };
     const auto delta=eval(true)-eval(false);
     double error=0.0,signal=0.0;
@@ -1022,8 +1132,10 @@ bool run_u_terrain_thickness(torch::Dtype dtype) {
         const auto slope_y = torch::zeros_like(slope_x);
         const auto eval = [&](const torch::Tensor& zx) {
             tile.solver.setTerrainSlopes(zx,slope_y);
-            return (tile.solver.*access(MomentumDiffusionTag{}))(
-                u,v,w,viscosity,1,1,umap,umap,mmap,mmap,mass,phi,rho).clone();
+            const auto empty=torch::Tensor();
+            return call_option2_momentum_helper(access(UOption2HelperTag{}),tile.solver,
+                u,v,w,viscosity,1,1,umap,umap,mmap,mass,phi,rho,
+                empty,empty,empty,empty).clone();
         };
         const auto delta = eval(slope_x)-eval(torch::zeros_like(slope_x));
         double error=0.0, signal=0.0;
@@ -1522,6 +1634,54 @@ void dump_flat_periodic_x(torch::Dtype dtype) {
                           << ' ' << std::setprecision(17) << a[j][k][x] << '\n';
 }
 
+// Expose the raw private U helper for the source-grounded option-2 geometry
+// oracle.  Cached terrain is deliberately flat while the supplied stage PH is
+// terrain-following, so this pins whether D11 consumes stage-local zx.
+void dump_option2_momentum_geometry() {
+    using wrf::sdirk3::test::TileCase;
+    auto& cfg=wrf::sdirk3::g_sdirk3_config;
+    cfg=wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option=2;
+    constexpr float dx=1000.0f, gravity=9.81f;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    TileCase tile(dx);
+    tile.solver.setTerrainSlopes(torch::zeros({ny,nw,nx},opt),
+                                  torch::zeros({ny+1,nw,nx},opt));
+    auto u=torch::zeros({ny,nz,nu},opt);
+    auto v=torch::zeros({ny+1,nz,nx},opt);
+    auto w=torch::zeros({ny,nw,nx},opt);
+    auto ph_full=torch::empty({ny,nw,nx},opt);
+    auto zx_stage=torch::empty({ny,nw,nx+1},opt);
+    auto zy_stage=torch::zeros({ny+1,nw,nx},opt);
+    auto rdzw_stage=torch::full({ny,nz,nx},1.0f/1000.0f,opt);
+    auto rdz_stage=torch::full({ny,nw,nx},1.0f/1000.0f,opt);
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i) {
+        const float terrain=100.0f*std::cos(float(2.0*pi*i/nx));
+        ph_full[j][k][i]=gravity*(terrain+1000.0f*k);
+        const int im1=(i+nx-1)%nx;
+        const float terrain_left=100.0f*std::cos(float(2.0*pi*im1/nx));
+        zx_stage[j][k][i]=(terrain-terrain_left)/dx;
+    }
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k)
+        zx_stage[j][k][nx]=zx_stage[j][k][0];
+    rdz_stage.select(1,0).fill_(2.0f/1000.0f);
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
+        u[j][k][i]=(k==nz-1 ? 1.0f : 0.0f);
+    const auto kh=torch::full({ny,nz,nx},2.0f,opt);
+    const auto rho=torch::ones({ny,nz,nx},opt);
+    const auto map_u=torch::ones({ny,nu},opt);
+    const auto map_v=torch::ones({ny+1,nx},opt);
+    const auto map_m=torch::ones({ny,nx},opt);
+    const auto muu=torch::full({ny,nx},784.8f,opt);
+    const auto raw=call_option2_momentum_helper(access(UOption2HelperTag{}),tile.solver,
+        u,v,w,kh,1.0f/dx,1.0f/dx,map_u,map_u,map_m,muu,ph_full,rho,
+        zx_stage,zy_stage,rdzw_stage,rdz_stage,true).contiguous();
+    const auto a=raw.accessor<float,3>();
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
+        std::cout << "U_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << a[j][k][i] << '\n';
+}
+
 void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
                                         const std::string& mutation={}) {
     using wrf::sdirk3::test::TileCase;
@@ -1903,6 +2063,12 @@ void dump_option1_momentum_packed(torch::Dtype dtype,const std::string& componen
 } // namespace
 
 int main(int argc, char** argv) {
+    if (argc==2 && std::string(argv[1])=="--option2-packed-u-rdz-seam")
+        return run_packed_u_rdz_seam() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry") {
+        dump_option2_momentum_geometry();
+        return 0;
+    }
     if ((argc==4 || argc==5) &&
         std::string(argv[1])=="--option2-scalar-fortran-parity") {
         const std::string mutation=argc==5 ? argv[4] : "";
@@ -1948,6 +2114,7 @@ int main(int argc, char** argv) {
     ok = run(torch::kFloat64) && ok;
     ok = run_packed_periodic_seam(torch::kFloat32) && ok;
     ok = run_packed_periodic_seam(torch::kFloat64) && ok;
+    ok = run_packed_u_rdz_seam() && ok;
     ok = run_normal_stress(torch::kFloat32) && ok;
     ok = run_normal_stress(torch::kFloat64) && ok;
     ok = run_actual_rhs_contract() && ok;
