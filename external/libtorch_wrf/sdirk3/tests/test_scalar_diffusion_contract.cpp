@@ -145,6 +145,31 @@ struct Option2WHelperTag { friend auto access(Option2WHelperTag); };
 template struct AutoMemberAccessor<Option2WHelperTag,
     &TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_w_wrf>;
 
+struct VerticalUStressTag { friend auto access(VerticalUStressTag); };
+template struct AutoMemberAccessor<VerticalUStressTag,
+    &TileSDIRK3UnifiedSolver::compute_vertical_diffusion_u_stress>;
+struct VerticalVStressTag { friend auto access(VerticalVStressTag); };
+template struct AutoMemberAccessor<VerticalVStressTag,
+    &TileSDIRK3UnifiedSolver::compute_vertical_diffusion_v_stress>;
+struct VerticalWMixingLegacyTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&);
+    friend type access(VerticalWMixingLegacyTag);
+};
+template struct MemberAccessor<VerticalWMixingLegacyTag,
+    static_cast<VerticalWMixingLegacyTag::type>(
+        &TileSDIRK3UnifiedSolver::compute_vertical_mixing_w)>;
+struct VerticalWMixingStageTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&);
+    friend type access(VerticalWMixingStageTag);
+};
+template struct MemberAccessor<VerticalWMixingStageTag,
+    static_cast<VerticalWMixingStageTag::type>(
+        &TileSDIRK3UnifiedSolver::compute_vertical_mixing_w)>;
+
 struct Defor13StageGeometryTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
         const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
@@ -154,6 +179,25 @@ struct Defor13StageGeometryTag {
 };
 template struct MemberAccessor<Defor13StageGeometryTag,
     &TileSDIRK3UnifiedSolver::compute_defor13>;
+struct Defor23StageGeometryTag {
+    using type = Defor13StageGeometryTag::type;
+    friend type access(Defor23StageGeometryTag);
+};
+template struct MemberAccessor<Defor23StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor23>;
+struct Rdz3dCacheTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(Rdz3dCacheTag); };
+template struct MemberAccessor<Rdz3dCacheTag, &TileSDIRK3UnifiedSolver::rdz_3d_>;
+struct Rdzw3dCacheTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
+    friend type access(Rdzw3dCacheTag); };
+template struct MemberAccessor<Rdzw3dCacheTag, &TileSDIRK3UnifiedSolver::rdzw_3d_>;
+
+void set_asymmetric_vertical_interpolation(TileSDIRK3UnifiedSolver& solver,
+                                           int nz) {
+    const std::vector<float> fnm(nz, 0.75f), fnp(nz, 0.25f);
+    solver.setVerticalInterpolationCoefficients(fnm.data(), fnp.data(),
+                                                0.0f, 0.0f, 0.0f);
+}
 
 template<typename Member>
 torch::Tensor call_option2_momentum_helper(
@@ -402,6 +446,303 @@ bool run_packed_u_rdz_seam() {
               << " terminal_alias_error=" << terminal_alias
               << " tolerance=" << tolerance << '\n';
     return pass;
+}
+
+// Actual em_b_wave PC2 tile extents: U and defor13 have one extra X point,
+// while rho and Kv remain mass-staggered. The helper's returned tendency must
+// retain the U shape and be finite for these production tensor relationships.
+bool run_vertical_u_stress_actual_shape() {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int u_y = mass_y, u_z = mass_z, u_x = mass_x + 1;
+    constexpr int w_z = mass_z + 1;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    const auto u = torch::zeros({u_y, u_z, u_x}, opt);
+    const auto defor13 = torch::zeros({u_y, w_z, u_x}, opt);
+    const auto rho = torch::ones({mass_y, mass_z, mass_x}, opt);
+    const auto kv = torch::ones_like(rho);
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalUStressTag{}))(
+        u, defor13, kv, rho, rdnw);
+    const bool pass = tendency.sizes() == u.sizes() &&
+                      torch::isfinite(tendency).all().item<bool>();
+    std::cout << (pass ? "PASS " : "FAIL ")
+              << "vertical U stress actual staggered shape"
+              << " u=" << u.sizes() << " rho=" << rho.sizes()
+              << " tendency=" << tendency.sizes() << '\n';
+    return pass;
+}
+
+bool run_vertical_v_stress_actual_shape() {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int v_y = mass_y + 1, v_z = mass_z;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    const auto v = torch::zeros({v_y, v_z, mass_x}, opt);
+    const auto defor23 = torch::zeros({v_y, mass_z + 1, mass_x}, opt);
+    const auto rho = torch::ones({mass_y, mass_z, mass_x}, opt);
+    const auto kv = torch::ones_like(rho);
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalVStressTag{}))(
+        v, defor23, kv, rho, rdnw);
+    const bool pass = tendency.sizes() == v.sizes() &&
+                      torch::isfinite(tendency).all().item<bool>();
+    std::cout << (pass ? "PASS " : "FAIL ")
+              << "vertical V stress actual staggered shape"
+              << " v=" << v.sizes() << " rho=" << rho.sizes()
+              << " tendency=" << tendency.sizes() << '\n';
+    return pass;
+}
+
+int dump_vertical_u_stress_raw(bool zero_k) {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int u_x = mass_x + 1;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    auto u = torch::zeros({mass_y, mass_z, u_x}, opt);
+    auto defor13 = torch::zeros({mass_y, mass_z + 1, u_x}, opt);
+    auto rho = torch::empty({mass_y, mass_z, mass_x}, opt);
+    auto kv = torch::empty_like(rho);
+    for (int j = 0; j < mass_y; ++j) {
+        for (int k = 0; k < mass_z; ++k) {
+            for (int i = 0; i < mass_x; ++i) {
+                rho[j][k][i] = 1.0f + float(k) / 32.0f + float(i) / 512.0f;
+                kv[j][k][i] = 2.0f + float(k) / 64.0f + float(i) / 128.0f;
+            }
+        }
+    }
+    if (zero_k) kv.zero_();
+    for (int j = 0; j < mass_y; ++j)
+        for (int k = 1; k < mass_z; ++k)
+            for (int i = 1; i < mass_x; ++i)
+                defor13[j][k][i] = 0.25f + float(k) / 128.0f + float(i) / 256.0f;
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalUStressTag{}))(
+        u, defor13, kv, rho, rdnw).contiguous();
+    const auto a = tendency.accessor<float, 3>();
+    for (int j = 0; j < mass_y; ++j)
+        for (int k = 0; k < mass_z; ++k)
+            for (int i = 0; i < u_x; ++i)
+                std::cout << "U_RAW " << j << ' ' << k << ' ' << i << ' '
+                          << std::setprecision(17) << a[j][k][i] << '\n';
+    return 0;
+}
+
+int dump_vertical_v_stress_raw(bool zero_k) {
+    constexpr int mass_y = 17, mass_z = 16, mass_x = 17;
+    constexpr int v_y = mass_y + 1;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.periodic_x = true;
+    cfg.periodic_y = false;
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, 1.0f), 0);
+    set_asymmetric_vertical_interpolation(solver, mass_z);
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    auto v = torch::zeros({v_y, mass_z, mass_x}, opt);
+    auto defor23 = torch::zeros({v_y, mass_z + 1, mass_x}, opt);
+    auto rho = torch::empty({mass_y, mass_z, mass_x}, opt);
+    auto kv = torch::empty_like(rho);
+    for (int j = 0; j < mass_y; ++j) {
+        for (int k = 0; k < mass_z; ++k) {
+            for (int i = 0; i < mass_x; ++i) {
+                rho[j][k][i] = 1.0f + float(k) / 32.0f + float(i) / 512.0f;
+                kv[j][k][i] = 2.0f + float(k) / 64.0f + float(i) / 128.0f;
+            }
+        }
+    }
+    if (zero_k) kv.zero_();
+    for (int j = 1; j < v_y - 1; ++j)
+        for (int k = 1; k < mass_z; ++k)
+            for (int i = 0; i < mass_x; ++i)
+                defor23[j][k][i] = 0.25f + float(k) / 128.0f +
+                                   float(j) / 256.0f + float(i) / 512.0f;
+    const auto rdnw = torch::ones({mass_z}, opt);
+    const auto tendency = (solver.*access(VerticalVStressTag{}))(
+        v, defor23, kv, rho, rdnw).contiguous();
+    const auto a = tendency.accessor<float, 3>();
+    for (int j = 0; j < v_y; ++j)
+        for (int k = 0; k < mass_z; ++k)
+            for (int i = 0; i < mass_x; ++i)
+                std::cout << "V_RAW " << j << ' ' << k << ' ' << i << ' '
+                          << std::setprecision(17) << a[j][k][i] << '\n';
+    return 0;
+}
+
+bool run_vertical_shear_rdz_metric_diagnostic() {
+    constexpr int mass_y = 17, mass_x = 17, mass_z = 16;
+    constexpr int u_x = mass_x + 1, v_y = mass_y + 1, w_z = mass_z + 1;
+    constexpr float dz_m = 1024.0f, du_dk = 0.5f, rdnw_value = 10.0f;
+    constexpr float physical_rdz_value = 1.0f / dz_m;
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option = 2;
+    cfg.specified = false;
+    cfg.nested = false;
+    cfg.open_xs = cfg.open_xe = cfg.open_ys = cfg.open_ye = false;
+    const auto opt = torch::TensorOptions().dtype(torch::kFloat32)
+                                               .device(torch::kCPU);
+    TileSDIRK3UnifiedSolver solver(mass_x, mass_y, mass_z, 1.0f, 1.0f,
+                                   {1.0f}, {1.0f},
+                                   std::vector<float>(mass_z, rdnw_value), 0);
+    auto z_w = torch::empty({mass_y, w_z, mass_x}, opt);
+    for (int j=0; j<mass_y; ++j) for (int k=0; k<w_z; ++k)
+        for (int i=0; i<mass_x; ++i) z_w[j][k][i] = dz_m*k;
+    auto physical_rdz = torch::zeros_like(z_w);
+    for (int j=0; j<mass_y; ++j) for (int k=1; k<w_z-1; ++k)
+        for (int i=0; i<mass_x; ++i)
+            physical_rdz[j][k][i] = 2.0f/(z_w[j][k+1][i]-z_w[j][k-1][i]);
+    solver.*access(Rdz3dCacheTag{}) = physical_rdz;
+    const auto zx = torch::zeros({mass_y,w_z,mass_x},opt);
+    const auto zy = torch::zeros({v_y,w_z,mass_x},opt);
+    solver.setTerrainSlopes(zx,zy);
+    auto w = torch::zeros({mass_y,w_z,mass_x},opt);
+    auto u = torch::empty({mass_y,mass_z,u_x},opt);
+    auto v = torch::empty({v_y,mass_z,mass_x},opt);
+    for (int k=0; k<mass_z; ++k) {
+        u.select(1,k).fill_(du_dk*k);
+        v.select(1,k).fill_(du_dk*k);
+    }
+    const auto rdnw = torch::full({mass_z},rdnw_value,opt);
+    const auto rdx = torch::ones({1},opt);
+    const auto stage_rdz = torch::full({mass_y,mass_z,mass_x},physical_rdz_value,opt);
+    const auto empty = torch::Tensor();
+    auto u_fallback=(solver.*access(Defor13StageGeometryTag{}))(
+        u,w,rdx,rdnw,zx,zy,empty,empty);
+    auto u_stage=(solver.*access(Defor13StageGeometryTag{}))(
+        u,w,rdx,rdnw,zx,zy,empty,stage_rdz);
+    auto v_fallback=(solver.*access(Defor23StageGeometryTag{}))(
+        v,w,rdx,rdnw,zx,zy,empty,empty);
+    auto v_stage=(solver.*access(Defor23StageGeometryTag{}))(
+        v,w,rdx,rdnw,zx,zy,empty,stage_rdz);
+    const double expected=double(du_dk)*physical_rdz_value;
+    const double legacy=double(du_dk)*(2.0*rdnw_value);
+    auto check=[&](const char* axis,const torch::Tensor& fallback,
+                   const torch::Tensor& stage,const torch::Tensor& state,
+                   int i_sample,int j_sample) {
+        auto exp=torch::zeros_like(stage);
+        exp.slice(1,1,mass_z).fill_(expected);
+        const double err_fallback=(fallback.slice(1,1,mass_z)-
+            exp.slice(1,1,mass_z)).abs().max().item<double>();
+        const double err_stage=(stage-exp).abs().max().item<double>();
+        const double fallback_value=fallback[j_sample][1][i_sample].item<double>();
+        const double stage_value=stage[j_sample][1][i_sample].item<double>();
+        const double legacy_error=std::abs(fallback_value-legacy);
+        const bool pass=err_fallback>1.0 && err_stage<1.0e-7 && legacy_error<1.0e-6;
+        std::cout << (pass?"PASS ":"FAIL ") << "RDZ_" << axis
+                  << " expected=" << std::setprecision(17) << expected
+                  << " fallback=" << fallback_value
+                  << " fallback_max_error=" << err_fallback
+                  << " legacy_2rdnw=" << legacy << " legacy_model_error=" << legacy_error
+                  << " stage=" << stage_value << " stage_max_error=" << err_stage
+                  << " physical_rdz=" << physical_rdz_value
+                  << " rdnw=" << rdnw_value << " dz_m=" << dz_m
+                  << " cache_shape=17x17x17 stage_shape=17x16x17\n";
+        return pass;
+    };
+    const bool u_ok=check("U",u_fallback,u_stage,u,1,1);
+    const bool v_ok=check("V",v_fallback,v_stage,v,1,1);
+    return u_ok&&v_ok;
+}
+
+int dump_vertical_w_mixing_contract(const std::string& coefficient, bool stage) {
+    constexpr int ny=17,nx=17,nz=16;
+    auto& cfg=wrf::sdirk3::g_sdirk3_config;
+    cfg=wrf::sdirk3::SDIRK3Config{};
+    cfg.diffusion_option=2;
+    cfg.specified=false;
+    cfg.nested=false;
+    cfg.open_xs=cfg.open_xe=cfg.open_ys=cfg.open_ye=false;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
+    TileSDIRK3UnifiedSolver solver(nx,ny,nz,1.0f,1.0f,{1.0f},{1.0f},
+                                   std::vector<float>(nz,10.0f),0);
+    auto grid=solver.getGridInfo();
+    TORCH_CHECK(grid,"W stress fixture requires grid info");
+    auto dn=torch::full({nz+1},-0.5f,opt);
+    auto rdn=torch::full({nz+1},2.0f,opt);
+    dn[0]=0.0f;
+    rdn[0]=0.0f;
+    grid->dn=dn;
+    grid->rdn=rdn;
+    grid->rdzw=torch::full({nz},1.0f/1024.0f,opt);
+    const float physical_rdzw=1.0f/1024.0f;
+    solver.*access(Rdzw3dCacheTag{})=torch::full({ny,nz,nx},physical_rdzw,opt);
+    auto w=torch::zeros({ny,nz+1,nx},opt);
+    auto rho=torch::empty({ny,nz,nx},opt);
+    auto xkmh=torch::empty_like(rho);
+    auto xkmv=torch::empty_like(rho);
+    auto defor33=torch::empty_like(rho);
+    for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i) {
+        rho[j][k][i]=1.0f+float(k)/32.0f+float(i)/512.0f;
+        xkmh[j][k][i]=4.0f+float(k)/8.0f+float(i)/128.0f;
+        xkmv[j][k][i]=12.0f+float(k)/16.0f+float(i)/64.0f;
+        defor33[j][k][i]=0.25f+float(k)/16.0f+float(i)/256.0f;
+    }
+    w.select(1,0).zero_();
+    for(int j=0;j<ny;++j) for(int i=0;i<nx;++i) {
+        float w_value=0.0f;
+        w[j][0][i]=w_value;
+        for(int k=0;k<nz;++k) {
+            w_value += defor33[j][k][i].item<float>()/(2.0f*physical_rdzw);
+            w[j][k+1][i]=w_value;
+        }
+    }
+    const auto rdnw=torch::full({nz},10.0f,opt);
+    // The legacy call reconstructs D33 from W and uses a cached physical
+    // metric in the divergence. The stage call uses this same prescribed D33,
+    // horizontal xkmh, and the positive magnitude of Fortran's signed 1/dn.
+    const auto& km=coefficient=="xkmh"?xkmh:(coefficient=="zero"?torch::zeros_like(xkmh):xkmv);
+    const auto tendency=(stage
+        ? (solver.*access(VerticalWMixingStageTag{}))(w,km,rdnw,rho,defor33,rdn)
+        : (solver.*access(VerticalWMixingLegacyTag{}))(w,km,rdnw,rho)).contiguous();
+    TORCH_CHECK(tendency.sizes()==w.sizes(),"W stress output shape mismatch");
+    const auto a=tendency.accessor<float,3>();
+    for(int j=0;j<ny;++j) for(int k=0;k<nz+1;++k) for(int i=0;i<nx;++i)
+        std::cout << "W_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(17) << a[j][k][i] << '\n';
+    return 0;
 }
 
 // Flat normal stresses: Fortran tau=-2*rho*K*Dq and signed dnw=-1.
@@ -741,10 +1082,12 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
     const auto evaluate=[&](bool on,bool packed,int km_opt=1,
                             const torch::Tensor& state_override=torch::Tensor(),
                             bool make_reference=true,
-                            bool partial_owned=false) -> Result {
+                            bool partial_owned=false,
+                            int supplied_coefficient=0,
+                            bool zero_namelist_k=false) -> Result {
         cfg=SDIRK3Config{};
         cfg.diffusion_option=2;
-        cfg.khdif=on?1000.0f:0.0f;
+        cfg.khdif=zero_namelist_k?0.0f:(on?1000.0f:0.0f);
         cfg.kvdif=0.0f;
         cfg.mass_coordinate_mode=1;
         cfg.wrf_omega_ww_cp=false;
@@ -774,6 +1117,18 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         (solver.*access(WdampContractTag{}))=resolve_wdamp_runtime_contract(
             true,1,1,true,true,false,false,false,false,false,true,true,
             false,false,false,false,false,"calc_ww_cp Omega (test fixture)");
+
+        if (supplied_coefficient != 0) {
+            const std::vector<float> kh_mom(ny*nz*nx,1.0f);
+            const std::vector<float> kh_scalar(ny*nz*nx,1.0f);
+            const std::vector<float> kv_mom(ny*nw*nx,1.0f);
+            const std::vector<float> kv_scalar(ny*nw*nx,1.0f);
+            (solver.*access(DiffusionTag{}))(
+                supplied_coefficient==1 ? kh_mom.data() : nullptr,
+                supplied_coefficient==2 ? kv_mom.data() : nullptr,
+                supplied_coefficient==4 ? kh_scalar.data() : nullptr,
+                supplied_coefficient==3 ? kv_scalar.data() : nullptr);
+        }
 
         const int m=packed?ny-1:ny,n=packed?nx-1:nx;
         const auto state=state_override.defined()?state_override:make_state(packed);
@@ -927,6 +1282,45 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
     std::cout << (kmopt2_guard?"PASS ":"FAIL ")
               << "option-2 canonical RHS rejects unsupported km_opt=2" << '\n';
     ok=kmopt2_guard&&ok;
+
+    // km_opt=2 diagnoses K from TKE. Zero namelist khdif/kvdif does not
+    // turn that source operator off, so the native path must still fail closed.
+    bool kmopt2_zero_namelist_guard=false;
+    try {
+        (void)evaluate(false,false,2,torch::Tensor(),false,false,0,true);
+    } catch (const c10::Error& error) {
+        kmopt2_zero_namelist_guard=std::string(error.what()).find(
+            "option-2 metric diffusion requires dry isotropic km_opt=1")!=
+            std::string::npos;
+    }
+    std::cout << (kmopt2_zero_namelist_guard?"PASS ":"FAIL ")
+              << "option-2 native km_opt=2 rejects zero namelist K" << '\n';
+    ok=kmopt2_zero_namelist_guard&&ok;
+
+    const auto rejects_supplied_native_k = [&](int coefficient) {
+        try {
+            (void)evaluate(false,false,1,torch::Tensor(),false,false,
+                           coefficient,true);
+        } catch (const c10::Error& error) {
+            return std::string(error.what()).find(
+                "option-2 metric diffusion requires dry isotropic km_opt=1") !=
+                std::string::npos;
+        }
+        return false;
+    };
+    const bool kh_mom_guard=rejects_supplied_native_k(1);
+    const bool kv_mom_guard=rejects_supplied_native_k(2);
+    const bool kv_scalar_guard=rejects_supplied_native_k(3);
+    const bool kh_scalar_guard=rejects_supplied_native_k(4);
+    std::cout << (kh_mom_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kh_mom" << '\n';
+    std::cout << (kv_mom_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kv_mom" << '\n';
+    std::cout << (kv_scalar_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kv_scalar" << '\n';
+    std::cout << (kh_scalar_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kh_scalar" << '\n';
+    ok=kh_mom_guard&&kv_mom_guard&&kv_scalar_guard&&kh_scalar_guard&&ok;
 
     bool partial_tile_guard=false;
     try {
@@ -2114,6 +2508,30 @@ int main(int argc, char** argv) {
         return dump_option2_w_fourier_sign();
     if (argc==2 && std::string(argv[1])=="--option2-w-fourier-zero-k")
         return dump_option2_w_fourier_sign(true);
+    if (argc==2 && std::string(argv[1])=="--vertical-u-actual-shape")
+        return run_vertical_u_stress_actual_shape() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--vertical-v-actual-shape")
+        return run_vertical_v_stress_actual_shape() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--vertical-u-stress-raw")
+        return dump_vertical_u_stress_raw(false);
+    if (argc==2 && std::string(argv[1])=="--vertical-u-stress-zero-k")
+        return dump_vertical_u_stress_raw(true);
+    if (argc==2 && std::string(argv[1])=="--vertical-v-stress-raw")
+        return dump_vertical_v_stress_raw(false);
+    if (argc==2 && std::string(argv[1])=="--vertical-v-stress-zero-k")
+        return dump_vertical_v_stress_raw(true);
+    if (argc==2 && std::string(argv[1])=="--vertical-shear-rdz-metric")
+        return run_vertical_shear_rdz_metric_diagnostic() ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-old-step10")
+        return dump_vertical_w_mixing_contract("xkmv",false);
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-old-xkmh")
+        return dump_vertical_w_mixing_contract("xkmh",false);
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-xkmh-zero-k")
+        return dump_vertical_w_mixing_contract("zero",false);
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-stage-xkmh")
+        return dump_vertical_w_mixing_contract("xkmh",true);
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-stage-zero-k")
+        return dump_vertical_w_mixing_contract("zero",true);
     if (argc==2 && std::string(argv[1])=="--option2-packed-u-rdz-seam")
         return run_packed_u_rdz_seam() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry") {
@@ -2166,6 +2584,8 @@ int main(int argc, char** argv) {
     ok = run_packed_periodic_seam(torch::kFloat32) && ok;
     ok = run_packed_periodic_seam(torch::kFloat64) && ok;
     ok = run_packed_u_rdz_seam() && ok;
+    ok = run_vertical_u_stress_actual_shape() && ok;
+    ok = run_vertical_v_stress_actual_shape() && ok;
     ok = run_normal_stress(torch::kFloat32) && ok;
     ok = run_normal_stress(torch::kFloat64) && ok;
     ok = run_actual_rhs_contract() && ok;
