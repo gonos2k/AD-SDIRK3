@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include "wrf_sdirk3_stage_operand_capture.h"
 #include "wrf_sdirk3_stage_history_diag.h"
+#include "wrf_sdirk3_imex_ark324_coeffs.h"
 
 using namespace wrf::sdirk3;
 
@@ -1590,7 +1591,62 @@ int main(int argc, char** argv) {
               "(-3), never a false OPENED (P1-6)");
     }
 
-    const int kExpected = 148;  // ratchet: update deliberately with the cases
+    // (54) A synthetic rounded FP32 stage using one actual ARK coefficient
+    // pair can exceed the ideal FP64-sum ratio while following the production
+    // double-scalar recurrence exactly. The stage labels here are generic.
+    {
+        const float dt = 0.01f;
+        const double aE = ARK324L2SACoefficients::a_explicit[2][1];
+        const double aI = ARK324L2SACoefficients::a_implicit[2][1];
+        auto U_n = torch::full({24}, 1000.0f, torch::kFloat32);
+        auto ks = 1.0f + 0.1f*torch::arange(24, torch::kFloat32);
+        auto kf = 2.0f + 0.07f*torch::arange(24, torch::kFloat32);
+        auto U_stage = U_n + (static_cast<double>(dt)*aE)*ks +
+                       (static_cast<double>(dt)*aI)*kf;
+        const auto recon = ((static_cast<double>(dt)*aE)*ks).to(torch::kFloat64) +
+                           ((static_cast<double>(dt)*aI)*kf).to(torch::kFloat64);
+        const auto actual = U_stage.to(torch::kFloat64)-U_n.to(torch::kFloat64);
+        const double ideal_rel=(recon-actual).norm().item<double>() /
+            std::max(recon.norm().item<double>(),actual.norm().item<double>());
+        check(ideal_rel>1e-6, "case54: true FP32 recurrence exceeds ideal-sum gate");
+        StageHistorySource src{1,aE,aI,&ks,&kf};
+        StageDefectSnapshot def;
+        def.stage=1; def.explicit_stage=true; def.converged=false;
+        def.k_norm=kf.to(torch::kFloat64).norm().item<double>();
+        def.f_fast_norm=def.newton_defect_norm=def.defect_to_k_ratio=
+            def.scaled_final_residual=kDefectNA;
+        check(emit_stage_history_diag(0,0,2,dt,U_n,U_stage,{src},{def}).empty(),
+              "case54: exact FP32 replay accepts true rounded history");
+        std::vector<const torch::Tensor*> states{&U_stage};
+        std::vector<StageOperandBlock> blocks{{"ru",0,24}};
+        check(emit_stage_applied_delta_diag(0,0,2,dt,U_n,U_stage,{src},states,blocks).empty(),
+              "case54: per-source double-tableau replay is bit-exact");
+        src.a_explicit=1.03*aE;
+        const auto bad_replay=U_n+(static_cast<double>(dt)*src.a_explicit)*ks+
+                              (static_cast<double>(dt)*src.a_implicit)*kf;
+        const auto bad_recon=((static_cast<double>(dt)*src.a_explicit)*ks)
+                                 .to(torch::kFloat64)+
+                             ((static_cast<double>(dt)*src.a_implicit)*kf)
+                                 .to(torch::kFloat64);
+        const double actual_rms=actual.norm().item<double>()/std::sqrt(actual.numel());
+        const double bad_max_rel=((bad_recon-actual).abs()/
+            torch::maximum(actual.abs(),torch::full_like(actual,actual_rms)))
+            .max().item<double>();
+        check(!torch::equal(bad_replay,U_stage) && bad_max_rel<0.1,
+              "case54: near mutation isolates exact-replay gate, not max-rel gate");
+        check(emit_stage_history_diag(0,0,2,dt,U_n,U_stage,{src},{def})
+                  .find("CLOSURE_FAILED")!=std::string::npos,
+              "case54: non-exact recurrence fails exact-replay fallback");
+        src.a_explicit=-aE;
+        check(emit_stage_history_diag(0,0,2,dt,U_n,U_stage,{src},{def})
+                  .find("CLOSURE_FAILED")!=std::string::npos,
+              "case54: wrong source sign still fails history gate");
+        check(!emit_stage_applied_delta_diag(0,0,2,dt,U_n,U_stage,{src},states,blocks)
+                   .empty(),
+              "case54: wrong source sign still fails per-source replay");
+    }
+
+    const int kExpected = 155;  // ratchet: update deliberately with the cases
     if (g_cases != kExpected) {
         std::printf("FAIL: case-count ratchet executed %d expected %d\n",
                     g_cases, kExpected);

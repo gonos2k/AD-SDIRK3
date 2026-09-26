@@ -1122,10 +1122,10 @@ inline std::string emit_stage_applied_delta_diag(
         if (!prev.defined())
             return fail("undefined prev state at src_stage=" +
                         std::to_string(s.stage));
-        // IDENTICAL FP32 expression to production's compute_stage_rhs add.
+        // Match production: form dt*a in double, then apply it to FP32 K.
         torch::Tensor reapply = prev +
-                                dt * static_cast<float>(s.a_explicit) * (*s.k_slow) +
-                                dt * static_cast<float>(s.a_implicit) * (*s.k_fast);
+                                (static_cast<double>(dt) * s.a_explicit) * (*s.k_slow) +
+                                (static_cast<double>(dt) * s.a_implicit) * (*s.k_fast);
         // Non-finite inputs would make the residual NaN, and with the strict-zero
         // gate below std::max(0,NaN)==0 and NaN>0 is false -- so a NaN would FAIL
         // OPEN, emitting a "successful" attribution. Require finite prev / state /
@@ -1371,14 +1371,14 @@ inline std::string emit_stage_history_diag(
         if (s.k_slow && s.k_slow->defined()) {
             auto ks = s.k_slow->detach();
             k_slow_norm = ks.to(torch::kFloat64).norm().item<double>();
-            expl_incr = (dt * static_cast<float>(s.a_explicit) * ks)
+            expl_incr = ((static_cast<double>(dt) * s.a_explicit) * ks)
                             .to(torch::kFloat64);
             expl_norm = expl_incr.norm().item<double>();
         }
         if (s.k_fast && s.k_fast->defined()) {
             auto kf = s.k_fast->detach();
             k_fast_norm = kf.to(torch::kFloat64).norm().item<double>();
-            impl_incr = (dt * static_cast<float>(s.a_implicit) * kf)
+            impl_incr = ((static_cast<double>(dt) * s.a_implicit) * kf)
                             .to(torch::kFloat64);
             impl_norm = impl_incr.norm().item<double>();
         }
@@ -1507,7 +1507,23 @@ inline std::string emit_stage_history_diag(
                                 std::to_string(d.stage));
         }
     }
-    if (!hist_finite || hist_rel > 1e-6 || hist_max_rel > 1e-1) {
+    // The aggregate FP64 increment sum excludes rounding at each FP32 state
+    // addition. When that diagnostic exceeds its relative limit, accept only
+    // an exact replay of the production recurrence; the later per-source gate
+    // also checks every captured intermediate state bit for bit.
+    bool fp32_replay_exact = false;
+    if (hist_finite && hist_rel > 1e-6 && U_n.defined() &&
+        U_n.scalar_type() == torch::kFloat32 &&
+        U_stage.scalar_type() == torch::kFloat32) {
+        auto replay = U_n.detach().clone();
+        for (const auto& s : sources)
+            replay = replay +
+                (static_cast<double>(dt) * s.a_explicit) * (*s.k_slow) +
+                (static_cast<double>(dt) * s.a_implicit) * (*s.k_fast);
+        fp32_replay_exact = torch::equal(replay, U_stage);
+    }
+    if (!hist_finite || (hist_rel > 1e-6 && !fp32_replay_exact) ||
+        hist_max_rel > 1e-1) {
         char rb[224];
         std::snprintf(rb, sizeof(rb),
                       "hist_rel=%.6e hist_max_abs=%.6e hist_max_rel=%.6e "
@@ -1527,6 +1543,7 @@ inline std::string emit_stage_history_diag(
         os << "[SDIRK3_STAGE_HISTORY_SUMMARY] " << tag << std::scientific
            << std::setprecision(6)
            << " hist_rel=" << hist_rel
+           << " fp32_replay_exact=" << (fp32_replay_exact ? 1 : 0)
            << " hist_abs=" << hist_abs
            << " hist_max_abs=" << hist_max_abs
            << " hist_max_rel=" << hist_max_rel

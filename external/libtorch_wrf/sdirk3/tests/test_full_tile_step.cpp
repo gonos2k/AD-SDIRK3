@@ -305,6 +305,12 @@ void check_governing_step_budget() {
     // so neither a uniform 1/nz nor an unweighted theta sum is a budget.
     TileCase hybrid(spacing);
     setup(hybrid);
+    for (int j=1; j<ny; ++j)
+        for (int k=0; k<nz; ++k)
+            for (int i=0; i<nx; ++i)
+                hybrid.v[(j*nz+k)*nx+i]=0.1f*
+                    std::sin(std::acos(-1.0)*j/ny)*
+                    std::cos(2.0*std::acos(-1.0)*i/nx);
     hybrid.mass_map=mapped.mass_map;
     hybrid.u_map=mapped.u_map;
     hybrid.v_map=mapped.v_map;
@@ -388,7 +394,9 @@ void check_governing_step_budget() {
     };
     const auto hybrid_before=hybrid.state();
     hybrid.solver.captureArkBudgetTraceForTest(true);
+    cfg.stage_operand_diag=true;
     hybrid_step();
+    cfg.stage_operand_diag=false;
     hybrid.solver.captureArkBudgetTraceForTest(false);
     const auto hybrid_after=hybrid.state();
     const auto hybrid_budget=[&](const torch::Tensor& state) {
@@ -488,6 +496,11 @@ void check_governing_step_budget() {
     // zero external physics source, periodic X and impermeable Y boundaries.
     using Ark=wrf::sdirk3::ARK324L2SACoefficients;
     const auto& trace=hybrid.solver.getLastArkBudgetTrace();
+    TORCH_CHECK(cfg.imex_split_mode==3 && !cfg.hevi_split && !cfg.split_explicit &&
+                cfg.diffusion_option==2 && cfg.khdif>0.0f && cfg.kvdif==0.0f &&
+                cfg.wrf_damp_opt!=2 && !cfg.enable_ad_halo_exchange,
+                "stage-1 theta face contract requires ordinary ARK, positive"
+                " horizontal diffusion and no vertical/Rayleigh diffusion");
     TORCH_CHECK(trace.stage_state.size()==Ark::stages &&
                 trace.raw_final.defined() && trace.projected_final.defined() &&
                 trace.physics.abs().max().item<double>()==0.0,
@@ -502,6 +515,180 @@ void check_governing_step_budget() {
     const auto u_map_tensor=torch::from_blob(hybrid.u_map.data(),{ny,nu},torch::kFloat32).clone();
     const auto v_inv_tensor=torch::from_blob(hybrid.v_map.data(),{nv,nx},torch::kFloat32)
         .reciprocal().clone();
+    // Stage 1 is the ESDIRK explicit seed: its fast and slow RHS each run once,
+    // so these face snapshots belong to the accepted derivatives without a
+    // Newton evaluation-identity ambiguity.
+    const auto& ff=trace.stage1_fast_faces;
+    TORCH_CHECK(trace.slow_faces.size()==Ark::stages,
+                "missing accepted slow-face stage inventory");
+    const auto& sf=trace.slow_faces[0];
+    std::cout << "GOV_FACE_CAPTURE fast_diff_x=" << ff.diff_x.defined()
+              << " fast_diff_y=" << ff.diff_y.defined()
+              << " slow_adv_x=" << sf.adv_x.defined()
+              << " slow_adv_y=" << sf.adv_y.defined()
+              << " slow_adv_z=" << sf.adv_z.defined()
+              << " fast_adv_x=" << ff.adv_x.defined()
+              << " slow_diff_x=" << sf.diff_x.defined() << '\n';
+    TORCH_CHECK(sf.diff_x.defined() && sf.diff_y.defined() &&
+                sf.adv_x.defined() && sf.adv_y.defined() && sf.adv_z.defined() &&
+                !ff.adv_x.defined() && !ff.adv_y.defined() &&
+                !ff.adv_z.defined() && !ff.diff_x.defined() &&
+                !ff.diff_y.defined(),
+                "stage-1 theta face capture is incomplete or crossed RHS modes");
+    const auto st1=trace.stage_state[0].to(torch::kFloat64);
+    const auto t1=st1.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+    const auto mu1=st1.slice(0,total-sm,total).view({ny,nx});
+    const auto mass1=c1_tensor.to(torch::kFloat64).view({1,nz,1})*
+        (mu1.unsqueeze(1)+mub)+c2_tensor.to(torch::kFloat64).view({1,nz,1});
+    const auto c1mass=c1_tensor.to(torch::kFloat64).view({1,nz,1});
+    const auto map3=map_tensor.to(torch::kFloat64).unsqueeze(1);
+    const auto face_terms=[&](const TileSDIRK3UnifiedSolver::ArkBudgetTrace::ThetaFaces& f) {
+        const auto ax=f.adv_x.to(torch::kFloat64);
+        const auto ay=f.adv_y.to(torch::kFloat64);
+        const auto az=f.adv_z.to(torch::kFloat64);
+        const auto dx=f.diff_x.to(torch::kFloat64);
+        const auto dy=f.diff_y.to(torch::kFloat64);
+        const auto x_advection=-(map3*map3)/spacing*
+            (ax.slice(2,1,nu)-ax.slice(2,0,nx));
+        const auto y_advection=-(map3*map3)/spacing*
+            (ay.slice(0,1,nv)-ay.slice(0,0,ny));
+        const auto vertical_advection=map3*torch::from_blob(rdnw.data(),{nz},torch::kFloat32)
+            .to(torch::kFloat64).abs().view({1,nz,1})*
+            (az.slice(1,1,nw)-az.slice(1,0,nz));
+        const auto x_diffusion=(map3*map3)/spacing*
+            (dx.slice(2,1,nu)-dx.slice(2,0,nx));
+        const auto y_diffusion=(map3*map3)/spacing*
+            (dy.slice(0,1,nv)-dy.slice(0,0,ny));
+        return std::array<torch::Tensor,5>{x_advection,y_advection,
+            vertical_advection,x_diffusion,y_diffusion};
+    };
+    const auto ax=sf.adv_x.to(torch::kFloat64);
+    const auto ay=sf.adv_y.to(torch::kFloat64);
+    const auto az=sf.adv_z.to(torch::kFloat64);
+    const auto dx=sf.diff_x.to(torch::kFloat64);
+    const auto dy=sf.diff_y.to(torch::kFloat64);
+    const auto stage1_terms=face_terms(sf);
+    const auto horiz_adv=stage1_terms[0]+stage1_terms[1];
+    const auto vert_adv=stage1_terms[2];
+    const auto horiz_diff=stage1_terms[3]+stage1_terms[4];
+    const double adv_x_signal=ax.abs().max().item<double>();
+    const double adv_y_signal=ay.abs().max().item<double>();
+    const double adv_z_signal=az.abs().max().item<double>();
+    const double diff_x_signal=dx.abs().max().item<double>();
+    const double diff_y_signal=dy.abs().max().item<double>();
+    const auto slow1=trace.slow[0].to(torch::kFloat64);
+    const auto fast1=trace.fast[0].to(torch::kFloat64);
+    const auto slow_mu1=slow1.slice(0,total-sm,total).view({ny,nx});
+    const auto fast_mu1=fast1.slice(0,total-sm,total).view({ny,nx});
+    const auto slow_t1=slow1.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+    const auto fast_t1=fast1.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+    const double slow_face_error=(mass1*slow_t1+t1*c1mass*slow_mu1.unsqueeze(1)-
+        horiz_adv-vert_adv-horiz_diff).abs().max().item<double>();
+    const double fast_face_error=(mass1*fast_t1+t1*c1mass*fast_mu1.unsqueeze(1)-
+        torch::zeros_like(horiz_diff)).abs().max().item<double>();
+    const double adv_signal=(horiz_adv+vert_adv).abs().max().item<double>();
+    const double diff_signal=horiz_diff.abs().max().item<double>();
+    const double coupled_signal=(mass1*slow_t1+t1*c1mass*slow_mu1.unsqueeze(1))
+        .abs().max().item<double>();
+    double face_integral=0.0,face_l1=0.0;
+    const auto coupled_faces=horiz_adv+vert_adv+horiz_diff;
+    for (int j=0; j<ny; ++j)
+        for (int k=0; k<nz; ++k)
+            for (int i=0; i<nx; ++i) {
+                const double map=hybrid.mass_map[j*nx+i];
+                const double term=spacing*spacing/(g*map*map)*eta_width[k]*
+                    coupled_faces[j][k][i].item<double>();
+                face_integral+=term;
+                face_l1+=std::abs(term);
+            }
+    const double local_budget=2.0*std::numeric_limits<float>::epsilon()*
+        (adv_signal+diff_signal+coupled_signal);
+    const double integral_budget=8.0*std::numeric_limits<float>::epsilon()*face_l1;
+    const double adv_seam=(ax.slice(2,0,1)-ax.slice(2,nx,nu))
+        .abs().max().item<double>();
+    const double adv_wall=std::max(ay.slice(0,0,1).abs().max().item<double>(),
+        ay.slice(0,ny,nv).abs().max().item<double>());
+    const double diff_seam=(dx.slice(2,0,1)-dx.slice(2,nx,nu))
+        .abs().max().item<double>();
+    const double diff_seam_signal=dx.slice(2,0,1).abs().max().item<double>();
+    const double diff_y_wall=std::max(
+        dy.slice(0,0,1).abs().max().item<double>(),
+        dy.slice(0,ny,nv).abs().max().item<double>());
+    const auto seam_mass=0.5*(mu1.select(1,nx-1)+mu1.select(1,0))+mub;
+    const auto seam_expected=(3.0*cfg.khdif/spacing)*seam_mass.unsqueeze(1)*
+        (t1.select(2,0)-t1.select(2,nx-1));
+    const double diff_seam_error=(dx.select(2,0)-seam_expected)
+        .abs().max().item<double>();
+    const double omitted_seam_tendency=((map3*map3).select(2,0)*
+        dx.select(2,0)/spacing).abs().max().item<double>();
+    const double vert_wall=std::max(az.slice(1,0,1).abs().max().item<double>(),
+        az.slice(1,nz,nw).abs().max().item<double>());
+    std::cout << "GOV_THETA_FACES stage=1 slow_error=" << slow_face_error
+              << " fast_error=" << fast_face_error << " adv_seam=" << adv_seam
+              << " adv_signal=" << adv_signal << " diff_signal=" << diff_signal
+              << " coupled_signal=" << coupled_signal
+              << " adv_x_signal=" << adv_x_signal
+              << " adv_y_signal=" << adv_y_signal
+              << " adv_z_signal=" << adv_z_signal
+              << " diff_x_signal=" << diff_x_signal
+              << " diff_y_signal=" << diff_y_signal
+              << " face_integral=" << face_integral
+              << " face_budget=" << integral_budget
+              << " adv_wall=" << adv_wall << " diff_seam=" << diff_seam
+              << " diff_seam_signal=" << diff_seam_signal
+              << " diff_seam_error=" << diff_seam_error
+              << " omitted_seam_tendency=" << omitted_seam_tendency
+              << " diff_y_wall=" << diff_y_wall
+              << " vert_wall=" << vert_wall << '\n';
+    TORCH_CHECK(std::isfinite(slow_face_error) && std::isfinite(fast_face_error) &&
+                adv_seam==0.0 && adv_wall==0.0 && diff_seam==0.0 &&
+                diff_y_wall==0.0 &&
+                omitted_seam_tendency>100.0*local_budget &&
+                diff_seam_error<16.0*std::numeric_limits<float>::epsilon()*
+                    diff_seam_signal &&
+                vert_wall==0.0 && slow_face_error<local_budget &&
+                fast_face_error<local_budget &&
+                adv_x_signal>100.0*local_budget &&
+                adv_y_signal>100.0*local_budget &&
+                diff_x_signal>100.0*local_budget &&
+                diff_y_signal>100.0*local_budget &&
+                std::abs(face_integral)<integral_budget,
+                "stage-1 theta tendency disagrees with actual producer face fluxes");
+    for (int s=1; s<Ark::stages; ++s) {
+        const auto& faces=trace.slow_faces[s];
+        TORCH_CHECK(faces.adv_x.defined() && faces.adv_y.defined() &&
+                    faces.adv_z.defined() && faces.diff_x.defined() &&
+                    faces.diff_y.defined() && trace.stage_state[s].defined() &&
+                    trace.slow[s].defined(),
+                    "accepted slow stage lacks theta producer faces: ",s+1);
+        const auto terms=face_terms(faces);
+        const auto face_rate=terms[0]+terms[1]+terms[2]+terms[3]+terms[4];
+        const auto stage=trace.stage_state[s].to(torch::kFloat64);
+        const auto slow=trace.slow[s].to(torch::kFloat64);
+        const auto t=stage.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+        const auto mu=stage.slice(0,total-sm,total).view({ny,nx});
+        const auto td=slow.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+        const auto md=slow.slice(0,total-sm,total).view({ny,nx});
+        const auto layer_mass=c1mass*(mu.unsqueeze(1)+mub)+
+            c2_tensor.to(torch::kFloat64).view({1,nz,1});
+        const auto coupled=layer_mass*td+t*c1mass*md.unsqueeze(1);
+        const double error=(coupled-face_rate).abs().max().item<double>();
+        double scale=coupled.abs().max().item<double>();
+        double min_component=std::numeric_limits<double>::infinity();
+        for (const auto& term:terms) {
+            const double signal=term.abs().max().item<double>();
+            scale+=signal;
+            min_component=std::min(min_component,signal);
+        }
+        const double budget=2.0*std::numeric_limits<float>::epsilon()*scale;
+        TORCH_CHECK(std::isfinite(error) && scale>1.0 &&
+                    min_component>100.0*budget && error<budget,
+                    "accepted slow theta face/tendency mismatch at stage ",s+1,
+                    ": error=",error," budget=",budget);
+        std::cout << "GOV_THETA_SLOW stage=" << s+1 << " error=" << error
+                  << " budget=" << budget << " signal=" << scale
+                  << " min_component=" << min_component << '\n';
+    }
     auto ark_replay=trace.input.clone();
     double stage_mass_sum=0.0,stage_theta_sum=0.0;
     double stage_mass_budget_sum=0.0,stage_theta_budget_sum=0.0;
@@ -1008,7 +1195,26 @@ int main(int argc, char** argv) {
             if (line.find("SDIRK3_CONVERGED_STAGE_BLOCK_RESIDUAL") == 0)
                 std::cout << line << '\n';
         }
+        const auto diagnostic_offset=log.str().size();
         check_governing_step_budget();
+        const auto hybrid_diagnostics=log.str().substr(diagnostic_offset);
+        int summary2=0,summary3=0,applied=0;
+        std::istringstream hybrid_lines(hybrid_diagnostics);
+        for (std::string line; std::getline(hybrid_lines,line); ) {
+            if (line.find("[SDIRK3_STAGE_HISTORY_SUMMARY]")==0 &&
+                line.find(" src_stage=")==std::string::npos &&
+                line.find(" fp32_replay_exact=1")!=std::string::npos) {
+                if (line.find(" target_stage=2")!=std::string::npos) ++summary2;
+                if (line.find(" target_stage=3")!=std::string::npos) ++summary3;
+            }
+            if (line.find("[SDIRK3_STAGE_APPLIED_DELTA]")==0) ++applied;
+            if (line.find("[SDIRK3_STAGE_HISTORY_SUMMARY]") == 0 ||
+                line.find("[SDIRK3_STAGE_APPLIED_DELTA]") == 0)
+                std::cout << line << '\n';
+        }
+        TORCH_CHECK(summary2==1 && summary3==1 && applied==3,
+                    "hybrid stage-operand diagnostic did not pass both exact history"
+                    " replays and all three source attribution gates");
         std::cout << "Full tile step contracts passed\n";
         std::cerr.rdbuf(previous);
         return 0;

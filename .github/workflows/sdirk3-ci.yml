@@ -199,6 +199,9 @@ jobs:
       - name: terrain scalar diffusion contract (Fortran)
         run: python3 tools/test_horizontal_diffusion_scalar.py
 
+      - name: option-1 momentum layer-mass contract (Fortran)
+        run: python3 tools/test_option1_momentum_diffusion.py
+
       # PR 7C: the decomposition harness carries its own logic (marker /
       # exit / stage-norm / pre-refusal-solve assertions + manifest sanity).
       # --self-test exercises that logic against synthetic fixtures with no
@@ -452,6 +455,24 @@ jobs:
             || { echo "FAIL: CTest inventory drift (a silently deregistered test is a missing gate)"; exit 1; }
           echo "inventory OK ($(wc -l < /tmp/ctest_actual.txt | tr -d ' ') tests)"
           ctest --test-dir build/sdirk3-core --output-on-failure --no-tests=error
+
+      - name: flat periodic scalar diffusion Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 tools/test_horizontal_diffusion_scalar.py \
+            "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
+
+      - name: hybrid option-1 scalar diffusion Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 tools/test_hybrid_scalar_layer_mass.py \
+            "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
+
+      - name: option-1 U V W momentum Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 tools/test_option1_momentum_diffusion.py \
+            "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
 
       - name: install contract (exact manifest, header byte-parity, no stub)
         run: |
