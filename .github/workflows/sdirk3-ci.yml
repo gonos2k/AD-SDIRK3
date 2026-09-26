@@ -492,6 +492,12 @@ jobs:
           python3 external/libtorch_wrf/sdirk3/tests/test_option2_vertical_u_stress.py \
             --binary "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
 
+      - name: option-2 vertical W stress Fortran/C++ parity
+        run: |
+          set -euo pipefail
+          python3 external/libtorch_wrf/sdirk3/tests/test_option2_vertical_w_stress.py \
+            --binary "$PWD/build/sdirk3-core/test_scalar_diffusion_contract"
+
       - name: install contract (exact manifest, header byte-parity, no stub)
         run: |
           set -euo pipefail

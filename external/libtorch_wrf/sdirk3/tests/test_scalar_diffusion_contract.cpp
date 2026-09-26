@@ -160,6 +160,15 @@ struct VerticalWMixingLegacyTag {
 template struct MemberAccessor<VerticalWMixingLegacyTag,
     static_cast<VerticalWMixingLegacyTag::type>(
         &TileSDIRK3UnifiedSolver::compute_vertical_mixing_w)>;
+struct VerticalWMixingStageTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&,
+        const torch::Tensor&, const torch::Tensor&, const torch::Tensor&);
+    friend type access(VerticalWMixingStageTag);
+};
+template struct MemberAccessor<VerticalWMixingStageTag,
+    static_cast<VerticalWMixingStageTag::type>(
+        &TileSDIRK3UnifiedSolver::compute_vertical_mixing_w)>;
 
 struct Defor13StageGeometryTag {
     using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(
@@ -678,7 +687,7 @@ bool run_vertical_shear_rdz_metric_diagnostic() {
     return u_ok&&v_ok;
 }
 
-int dump_vertical_w_mixing_old_step10(const std::string& coefficient) {
+int dump_vertical_w_mixing_contract(const std::string& coefficient, bool stage) {
     constexpr int ny=17,nx=17,nz=16;
     auto& cfg=wrf::sdirk3::g_sdirk3_config;
     cfg=wrf::sdirk3::SDIRK3Config{};
@@ -721,12 +730,13 @@ int dump_vertical_w_mixing_old_step10(const std::string& coefficient) {
         }
     }
     const auto rdnw=torch::full({nz},10.0f,opt);
-    // Actual old Step10 W call: Kv_mom is the vertical xkmv profile. With this
-    // profile, legacy code recomputes D33 from W and uses cached physical rdzw
-    // for divergence; Fortran's vertical W stress uses horizontal xkmh and dn.
+    // The legacy call reconstructs D33 from W and uses a cached physical
+    // metric in the divergence. The stage call uses this same prescribed D33,
+    // horizontal xkmh, and the positive magnitude of Fortran's signed 1/dn.
     const auto& km=coefficient=="xkmh"?xkmh:(coefficient=="zero"?torch::zeros_like(xkmh):xkmv);
-    const auto tendency=(solver.*access(VerticalWMixingLegacyTag{}))(
-        w,km,rdnw,rho).contiguous();
+    const auto tendency=(stage
+        ? (solver.*access(VerticalWMixingStageTag{}))(w,km,rdnw,rho,defor33,rdn)
+        : (solver.*access(VerticalWMixingLegacyTag{}))(w,km,rdnw,rho)).contiguous();
     TORCH_CHECK(tendency.sizes()==w.sizes(),"W stress output shape mismatch");
     const auto a=tendency.accessor<float,3>();
     for(int j=0;j<ny;++j) for(int k=0;k<nz+1;++k) for(int i=0;i<nx;++i)
@@ -1072,10 +1082,12 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
     const auto evaluate=[&](bool on,bool packed,int km_opt=1,
                             const torch::Tensor& state_override=torch::Tensor(),
                             bool make_reference=true,
-                            bool partial_owned=false) -> Result {
+                            bool partial_owned=false,
+                            int supplied_coefficient=0,
+                            bool zero_namelist_k=false) -> Result {
         cfg=SDIRK3Config{};
         cfg.diffusion_option=2;
-        cfg.khdif=on?1000.0f:0.0f;
+        cfg.khdif=zero_namelist_k?0.0f:(on?1000.0f:0.0f);
         cfg.kvdif=0.0f;
         cfg.mass_coordinate_mode=1;
         cfg.wrf_omega_ww_cp=false;
@@ -1105,6 +1117,17 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
         (solver.*access(WdampContractTag{}))=resolve_wdamp_runtime_contract(
             true,1,1,true,true,false,false,false,false,false,true,true,
             false,false,false,false,false,"calc_ww_cp Omega (test fixture)");
+
+        if (supplied_coefficient != 0) {
+            const std::vector<float> kh_mom(ny*nz*nx,1.0f);
+            const std::vector<float> kv_mom(ny*nw*nx,1.0f);
+            const std::vector<float> kv_scalar(ny*nw*nx,1.0f);
+            (solver.*access(DiffusionTag{}))(
+                supplied_coefficient==1 ? kh_mom.data() : nullptr,
+                supplied_coefficient==2 ? kv_mom.data() : nullptr,
+                nullptr,
+                supplied_coefficient==3 ? kv_scalar.data() : nullptr);
+        }
 
         const int m=packed?ny-1:ny,n=packed?nx-1:nx;
         const auto state=state_override.defined()?state_override:make_state(packed);
@@ -1258,6 +1281,42 @@ bool run_option2_scalar_rhs_layer_mass_contract() {
     std::cout << (kmopt2_guard?"PASS ":"FAIL ")
               << "option-2 canonical RHS rejects unsupported km_opt=2" << '\n';
     ok=kmopt2_guard&&ok;
+
+    // km_opt=2 diagnoses K from TKE. Zero namelist khdif/kvdif does not
+    // turn that source operator off, so the native path must still fail closed.
+    bool kmopt2_zero_namelist_guard=false;
+    try {
+        (void)evaluate(false,false,2,torch::Tensor(),false,false,0,true);
+    } catch (const c10::Error& error) {
+        kmopt2_zero_namelist_guard=std::string(error.what()).find(
+            "option-2 metric diffusion requires dry isotropic km_opt=1")!=
+            std::string::npos;
+    }
+    std::cout << (kmopt2_zero_namelist_guard?"PASS ":"FAIL ")
+              << "option-2 native km_opt=2 rejects zero namelist K" << '\n';
+    ok=kmopt2_zero_namelist_guard&&ok;
+
+    const auto rejects_supplied_native_k = [&](int coefficient) {
+        try {
+            (void)evaluate(false,false,1,torch::Tensor(),false,false,
+                           coefficient,true);
+        } catch (const c10::Error& error) {
+            return std::string(error.what()).find(
+                "option-2 metric diffusion requires dry isotropic km_opt=1") !=
+                std::string::npos;
+        }
+        return false;
+    };
+    const bool kh_mom_guard=rejects_supplied_native_k(1);
+    const bool kv_mom_guard=rejects_supplied_native_k(2);
+    const bool kv_scalar_guard=rejects_supplied_native_k(3);
+    std::cout << (kh_mom_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kh_mom" << '\n';
+    std::cout << (kv_mom_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kv_mom" << '\n';
+    std::cout << (kv_scalar_guard?"PASS ":"FAIL ")
+              << "option-2 native zero-namelist K rejects supplied Kv_scalar" << '\n';
+    ok=kh_mom_guard&&kv_mom_guard&&kv_scalar_guard&&ok;
 
     bool partial_tile_guard=false;
     try {
@@ -2460,11 +2519,15 @@ int main(int argc, char** argv) {
     if (argc==2 && std::string(argv[1])=="--vertical-shear-rdz-metric")
         return run_vertical_shear_rdz_metric_diagnostic() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-old-step10")
-        return dump_vertical_w_mixing_old_step10("xkmv");
+        return dump_vertical_w_mixing_contract("xkmv",false);
     if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-old-xkmh")
-        return dump_vertical_w_mixing_old_step10("xkmh");
+        return dump_vertical_w_mixing_contract("xkmh",false);
     if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-xkmh-zero-k")
-        return dump_vertical_w_mixing_old_step10("zero");
+        return dump_vertical_w_mixing_contract("zero",false);
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-stage-xkmh")
+        return dump_vertical_w_mixing_contract("xkmh",true);
+    if (argc==2 && std::string(argv[1])=="--vertical-w-mixing-stage-zero-k")
+        return dump_vertical_w_mixing_contract("zero",true);
     if (argc==2 && std::string(argv[1])=="--option2-packed-u-rdz-seam")
         return run_packed_u_rdz_seam() ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry") {

@@ -2419,7 +2419,8 @@ private:
     // PERF FIX 2025-12-13: Overload accepting pre-computed defor33 to avoid duplicate computation
     // When horizontal diffusion already computed defor33 for tau33 stress, pass it here to save kernels
     torch::Tensor compute_vertical_mixing_w(const torch::Tensor& w, const torch::Tensor& Kv_mass, const torch::Tensor& rdnw,
-                                           const torch::Tensor& rho, const torch::Tensor& defor33_precomputed);
+                                           const torch::Tensor& rho, const torch::Tensor& defor33_precomputed,
+                                           const torch::Tensor& option2_rdn = torch::Tensor());
     torch::Tensor compute_vertical_mixing_scalar(const torch::Tensor& scalar, const torch::Tensor& Kv_mass, const torch::Tensor& rdnw,
                                                 const torch::Tensor& rho, const torch::Tensor& theta_full, const torch::Tensor& mu_full);
     // Overload with mix_full_fields and qv_base for QV perturbation mode (WRF vertical_diffusion_s parity)

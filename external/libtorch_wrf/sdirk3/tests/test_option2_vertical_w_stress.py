@@ -35,11 +35,11 @@ def check_fortran_equations(source: str) -> None:
             raise RuntimeError(f"Fortran W stress equation changed; missing {equation!r}")
 
 
-def check_step10_old_call(source: str) -> None:
+def check_step10_stage_call(source: str) -> None:
     normalized = " ".join(source.split()).lower()
-    expected_call = "compute_vertical_mixing_w(w, kv_mom, rdnw_tensor, rho)"
+    expected_call = "w, xkmh_mass, rdnw_tensor, rho, defor33_stage, rdn_mass"
     if expected_call not in normalized:
-        raise RuntimeError(f"Step10 legacy W call changed; missing {expected_call!r}")
+        raise RuntimeError(f"Step10 stage W call changed; missing {expected_call!r}")
 
 
 def fortran_oracle(source: str, compiler: str, zero_k: bool = False) -> tuple[dict, str]:
@@ -160,18 +160,22 @@ def main() -> int:
     if routine_sha != zero_sha:
         raise RuntimeError("extracted Fortran W routines changed in K=0 control")
     cpp_source = cpp_path.read_text()
-    check_step10_old_call(cpp_source)
+    check_step10_stage_call(cpp_source)
     xkmv_old_actual = cpp_raw(args.binary, "--vertical-w-mixing-old-step10")
     xkmh_old_actual = cpp_raw(args.binary, "--vertical-w-mixing-old-xkmh")
     zero_actual = cpp_raw(args.binary, "--vertical-w-mixing-xkmh-zero-k")
+    stage_actual = cpp_raw(args.binary, "--vertical-w-mixing-stage-xkmh")
+    stage_zero_actual = cpp_raw(args.binary, "--vertical-w-mixing-stage-zero-k")
     source_signal = max(abs(value) for value in expected.values())
     tolerance = 3.0e-6 * max(1.0, source_signal)
     projection = lambda values: sum(values[key] * (key[1] + 1) for key in expected)
     xkmv_error = max_error(xkmv_old_actual, expected)
     xkmh_error = max_error(xkmh_old_actual, expected)
+    stage_error = max_error(stage_actual, expected)
     xkmv_signal = max(abs(xkmv_old_actual[key]) for key in expected)
     xkmh_signal = max(abs(xkmh_old_actual[key]) for key in expected)
     zero_error = max_error(zero_actual, zero_expected)
+    stage_zero_error = max_error(stage_zero_actual, zero_expected)
     zero_signal = max(abs(zero_expected[key]) for key in zero_expected)
     print(f"FIXTURE_REVISION {subprocess.run(['git','rev-parse','HEAD'],cwd=repo,check=True,text=True,capture_output=True).stdout.strip()}")
     print(f"CPP_REVISION {subprocess.run(['git','rev-parse','HEAD'],cwd=cpp_path.parents[3],check=True,text=True,capture_output=True).stdout.strip()}")
@@ -186,13 +190,19 @@ def main() -> int:
     print(f"OLD_STEP10_XKMV max_error={xkmv_error:.17g} fortran_signal={source_signal:.17g} cpp_signal={xkmv_signal:.17g} tolerance={tolerance:.17g} projection_fortran={projection(expected):.17g} projection_cpp={projection(xkmv_old_actual):.17g}")
     print(f"OLD_CALL_XKMH_METRIC_SIGN_CONTROL max_error={xkmh_error:.17g} cpp_signal={xkmh_signal:.17g} projection_cpp={projection(xkmh_old_actual):.17g}")
     print(f"OLD_STEP10_K_ZERO max_error={zero_error:.17g} fortran_max_abs={zero_signal:.17g}")
+    print(f"STAGE_XKMH max_error={stage_error:.17g} signal={source_signal:.17g} tolerance={tolerance:.17g} projection_fortran={projection(expected):.17g} projection_cpp={projection(stage_actual):.17g}")
+    print(f"STAGE_K_ZERO max_error={stage_zero_error:.17g} fortran_max_abs={zero_signal:.17g}")
     # Old Step10 recomputes D33 from W but uses physical rdzw for divergence;
     # Fortran uses xkmh and signed eta dn in vertical_diffusion_w_2.
     old_call_counterexample = source_signal > 100*tolerance and xkmh_error > 100*tolerance
     zero_ok = zero_signal == 0.0 and zero_error <= tolerance
+    stage_ok = stage_error <= tolerance and all(math.isfinite(value) for value in stage_actual.values())
+    stage_zero_ok = zero_signal == 0.0 and stage_zero_error <= tolerance
     print(("PASS" if old_call_counterexample else "FAIL") + " old Step10 W call is a negative control")
     print(("PASS" if zero_ok else "FAIL") + " old Step10 W K=0 control")
-    return 0 if old_call_counterexample and zero_ok else 1
+    print(("PASS" if stage_ok else "FAIL") + " stage W source parity")
+    print(("PASS" if stage_zero_ok else "FAIL") + " stage W K=0 control")
+    return 0 if old_call_counterexample and zero_ok and stage_ok and stage_zero_ok else 1
 
 
 if __name__ == "__main__":
