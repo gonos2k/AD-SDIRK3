@@ -1415,11 +1415,15 @@ void dump_flat_periodic_x(torch::Dtype dtype) {
 }
 
 void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
-                                        bool suppress_terrain=false) {
+                                        const std::string& mutation={}) {
     using wrf::sdirk3::test::TileCase;
     constexpr int nw=nz+1;
-    TORCH_CHECK(case_id >= 5 && case_id <= 8,
-                "option-2 scalar parity case must be 5, 6, 7, or 8");
+    TORCH_CHECK(case_id >= 5 && case_id <= 9,
+                "option-2 scalar parity case must be in [5,9]");
+    TORCH_CHECK(mutation.empty() ||
+                ((case_id==7 || case_id==8) && mutation=="no-slope") ||
+                (case_id==9 && (mutation=="avg-product" || mutation=="unit-maps")),
+                "unsupported option-2 scalar parity counterfactual");
     TileCase tile(1000.0f);
     const auto opt=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
     constexpr double gravity64=9.81;
@@ -1447,7 +1451,7 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
     const auto j=torch::arange(ny,opt);
     const auto phase_y=(j+0.5)*(pi/ny);
     const auto terrain_y=torch::cos(phase_y);
-    const bool terrain=case_id==7 || case_id==8;
+    const bool terrain=case_id==7 || case_id==8 || case_id==9;
     const auto h_x=terrain ? 300.0*fourier_x : torch::zeros_like(fourier_x);
     const auto h_cell=h_x.view({1,nx}).expand({ny,nx}).clone()+
         (terrain ? 200.0*terrain_y.view({ny,1}).expand({ny,nx})
@@ -1470,27 +1474,64 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
         q=(1.0+0.03*fourier_x).view({1,1,nx}).expand({ny,nz,nx}).clone();
     } else {
         q=1.0+1.0e-4*z_mass;
-        if (case_id==8) {
+        if (case_id==8 || case_id==9) {
             const auto mixed_f=(2.0e-4*fourier_x.view({1,nx})+
                 1.0e-4*terrain_y.view({ny,1})).view({ny,1,nx});
             q=q+z_mass*mixed_f;
         }
     }
-    const auto kh=torch::full({ny,nz,nx},2.0,opt);
-    const auto rho=tensor(rho_level,{1,nz,1}).expand({ny,nz,nx}).clone();
+    auto kh=torch::full({ny,nz,nx},2.0,opt);
+    auto rho=tensor(rho_level,{1,nz,1}).expand({ny,nz,nx}).clone();
+    if (case_id==9) {
+        std::vector<double> kh_values,rho_values;
+        kh_values.reserve(ny*nz*nx);rho_values.reserve(ny*nz*nx);
+        for (int y=0;y<ny;++y) for (int k=0;k<nz;++k) for (int x=0;x<nx;++x) {
+            const double px=2.0*pi*x/nx,py=pi*(y+0.5)/ny;
+            kh_values.push_back(1.85+0.70*std::sin(px)+0.30*std::cos(py)+0.10*k);
+            rho_values.push_back(1.0+0.42*std::cos(px+0.37)+0.25*std::sin(py+0.21)+0.06*k);
+        }
+        kh=tensor(kh_values,{ny,nz,nx});
+        rho=tensor(rho_values,{ny,nz,nx});
+    }
     const auto rdzw=torch::full({ny,nz,nx},1.0/layer_depth,opt);
     const auto dnw=torch::full({nz},-eta_width,opt);
     const auto dn=torch::full({nz},-eta_width,opt);
     const auto fnm=torch::full({nz},0.5,opt);
     const auto fnp=torch::full({nz},0.5,opt);
-    const auto msftx=torch::ones({ny,nx},opt);
-    const auto msfty=torch::ones({ny,nx},opt);
-    const auto msfux=torch::ones({ny,nx+1},opt);
-    const auto msfvy=torch::ones({ny+1,nx},opt);
+    auto msftx=torch::ones({ny,nx},opt);
+    auto msfty=torch::ones({ny,nx},opt);
+    auto msfux=torch::ones({ny,nx+1},opt);
+    auto msfvy=torch::ones({ny+1,nx},opt);
+    if (case_id==9) {
+        std::vector<double> tx,ty,ux,vy;
+        for (int y=0;y<ny;++y) for (int x=0;x<nx;++x) {
+            const double px=2.0*pi*x/nx,py=pi*(y+0.5)/ny;
+            tx.push_back(1.1+0.16*std::sin(px)+0.07*std::cos(py));
+            ty.push_back(0.92+0.10*std::cos(px)+0.12*std::sin(py));
+        }
+        for (int y=0;y<ny;++y) for (int f=0;f<=nx;++f) {
+            const double px=2.0*pi*(f-0.5)/nx,py=pi*(y+0.5)/ny;
+            ux.push_back(1.2+0.10*std::cos(px)+0.05*std::cos(py));
+        }
+        for (int f=0;f<=ny;++f) for (int x=0;x<nx;++x) {
+            const double px=2.0*pi*x/nx,py=pi*f/ny;
+            vy.push_back(0.82+0.08*std::sin(px)+0.10*std::cos(py));
+        }
+        msftx=tensor(tx,{ny,nx});msfty=tensor(ty,{ny,nx});
+        msfux=tensor(ux,{ny,nx+1});msfvy=tensor(vy,{ny+1,nx});
+    }
+    if (mutation=="unit-maps") {
+        msftx=torch::ones_like(msftx);msfty=torch::ones_like(msfty);
+        msfux=torch::ones_like(msfux);msfvy=torch::ones_like(msfvy);
+    }
+    if (mutation=="avg-product") {
+        kh=kh*rho;
+        rho=torch::ones_like(rho);
+    }
     const float rdx=case_id==5 ? 0.1f : 0.001f;
     const float rdy=case_id==5 ? 0.13f : 0.001f;
-    const auto zx_input=suppress_terrain ? torch::zeros_like(zx) : zx;
-    const auto zy_input=suppress_terrain ? torch::zeros_like(zy) : zy;
+    const auto zx_input=mutation=="no-slope" ? torch::zeros_like(zx) : zx;
+    const auto zy_input=mutation=="no-slope" ? torch::zeros_like(zy) : zy;
     const auto out=(tile.solver.*access(Option2ScalarTag{}))(
         q,kh,rho,zx_input,zy_input,rdzw,dnw,dn,fnm,fnp,
         2.0,-1.5,0.5,rdx,rdy,gravity,
@@ -1735,12 +1776,11 @@ void dump_option1_momentum_packed(torch::Dtype dtype,const std::string& componen
 int main(int argc, char** argv) {
     if ((argc==4 || argc==5) &&
         std::string(argv[1])=="--option2-scalar-fortran-parity") {
-        const bool no_terrain=argc==5 && std::string(argv[4])=="no-slope";
-        if (argc==5 && !no_terrain) return 2;
+        const std::string mutation=argc==5 ? argv[4] : "";
         if (std::string(argv[2])=="fp32")
-            dump_option2_scalar_fortran_parity(torch::kFloat32,std::stoi(argv[3]),no_terrain);
+            dump_option2_scalar_fortran_parity(torch::kFloat32,std::stoi(argv[3]),mutation);
         else if (std::string(argv[2])=="fp64")
-            dump_option2_scalar_fortran_parity(torch::kFloat64,std::stoi(argv[3]),no_terrain);
+            dump_option2_scalar_fortran_parity(torch::kFloat64,std::stoi(argv[3]),mutation);
         else return 2;
         return 0;
     }

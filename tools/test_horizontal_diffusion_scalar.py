@@ -98,7 +98,8 @@ def compare_option2_scalar(precision: str, fortran_output: str, cpp_binary: Path
     epsilon = 2.0 ** (-23 if mode == "fp32" else -52)
     expected_keys = {(j, k, i) for j in range(1, 7)
                      for k in range(1, 5) for i in range(1, 9)}
-    case_names = {5: "flat", 6: "flat_hybrid", 7: "terrain_cancel", 8: "terrain_mixed"}
+    case_names = {5: "flat", 6: "flat_hybrid", 7: "terrain_cancel",
+                  8: "terrain_mixed", 9: "variable_k_rho_maps"}
     for case_id, case_name in case_names.items():
         left = option2_rows(fortran_output, "F_OPT2", case_id)
         if set(left) != expected_keys or not all(map(math.isfinite, left.values())):
@@ -115,8 +116,8 @@ def compare_option2_scalar(precision: str, fortran_output: str, cpp_binary: Path
         # This fixed engineering budget includes the roundoff accumulated in
         # the cancellation case; it does not follow the observed discrepancy.
         budget = 2048.0 * epsilon * max(1.0, signal)
-        if case_id in (5, 6, 8):
-            signal_floor = {5: 0.1, 6: 0.001, 8: 0.01}[case_id]
+        if case_id in (5, 6, 8, 9):
+            signal_floor = {5: 0.1, 6: 0.001, 8: 0.01, 9: 0.01}[case_id]
             valid = signal > signal_floor and error <= budget
         else:
             valid = signal <= budget and max(abs(value) for value in right.values()) <= budget \
@@ -139,6 +140,23 @@ def compare_option2_scalar(precision: str, fortran_output: str, cpp_binary: Path
                   f"minimum={10.0*budget:.9g}")
             if not math.isfinite(slope_gap) or slope_gap <= 10.0*budget:
                 raise RuntimeError(f"{mode} option-2 {case_name} did not resolve terrain-slope terms")
+        if case_id == 9:
+            if signal <= max(0.01, 100.0*budget):
+                raise RuntimeError(f"{mode} option-2 {case_name} signal is unresolved")
+            for mutant_name in ("avg-product", "unit-maps"):
+                mutant = subprocess.run(
+                    [str(cpp_binary), "--option2-scalar-fortran-parity",
+                     mode, str(case_id), mutant_name],
+                    text=True, capture_output=True, check=True,
+                )
+                mutant_rows = option2_rows(mutant.stdout, "C_OPT2", case_id)
+                if set(mutant_rows) != expected_keys:
+                    raise RuntimeError(f"{mode} option-2 {case_name} {mutant_name} inventory mismatch")
+                gap = max(abs(left[key]-mutant_rows[key]) for key in expected_keys)
+                print(f"option-2 counterfactual {case_name} {mutant_name} {mode}: "
+                      f"gap={gap:.9g} minimum={10.0*budget:.9g}")
+                if not math.isfinite(gap) or gap <= 10.0*budget:
+                    raise RuntimeError(f"{mode} option-2 {case_name} did not resolve {mutant_name}")
 
 
 DRIVER = r"""
@@ -158,6 +176,7 @@ PROGRAM test_horizontal_diffusion_scalar
   CALL run_case(6, 'option2_flat_hybrid')
   CALL run_case(7, 'option2_terrain_cancel')
   CALL run_case(8, 'option2_terrain_mixed')
+  CALL run_case(9, 'option2_variable_k_rho_maps')
   WRITE(*,'(A)') 'horizontal scalar producer/BC/consumer: PASS'
 CONTAINS
   REAL FUNCTION option2_layer_mass(k) RESULT(q)
@@ -190,6 +209,48 @@ CONTAINS
     q=2.e-4*SIN(2.*PI0*REAL(MODULO(i-1,NX0))/REAL(NX0))+ &
       1.e-4*COS(PI0*(REAL(j)-.5)/REAL(NY0))
   END FUNCTION fourier_option2
+  REAL FUNCTION variable_k(i,k,j) RESULT(q)
+    INTEGER, INTENT(IN) :: i,k,j
+    REAL :: x,y
+    x=2.*PI0*REAL(MODULO(i-1,NX0))/REAL(NX0)
+    y=PI0*(REAL(mirrored_j(j,NY0))-.5)/REAL(NY0)
+    q=1.85+.70*SIN(x)+.30*COS(y)+.10*REAL(k-1)
+  END FUNCTION variable_k
+  REAL FUNCTION variable_rho(i,k,j) RESULT(q)
+    INTEGER, INTENT(IN) :: i,k,j
+    REAL :: x,y
+    x=2.*PI0*REAL(MODULO(i-1,NX0))/REAL(NX0)
+    y=PI0*(REAL(mirrored_j(j,NY0))-.5)/REAL(NY0)
+    q=1.0+.42*COS(x+.37)+.25*SIN(y+.21)+.06*REAL(k-1)
+  END FUNCTION variable_rho
+  REAL FUNCTION map_mass_x(i,j) RESULT(q)
+    INTEGER, INTENT(IN) :: i,j
+    REAL :: x,y
+    x=2.*PI0*REAL(MODULO(i-1,NX0))/REAL(NX0)
+    y=PI0*(REAL(mirrored_j(j,NY0))-.5)/REAL(NY0)
+    q=1.1+.16*SIN(x)+.07*COS(y)
+  END FUNCTION map_mass_x
+  REAL FUNCTION map_mass_y(i,j) RESULT(q)
+    INTEGER, INTENT(IN) :: i,j
+    REAL :: x,y
+    x=2.*PI0*REAL(MODULO(i-1,NX0))/REAL(NX0)
+    y=PI0*(REAL(mirrored_j(j,NY0))-.5)/REAL(NY0)
+    q=.92+.10*COS(x)+.12*SIN(y)
+  END FUNCTION map_mass_y
+  REAL FUNCTION map_u(i,j) RESULT(q)
+    INTEGER, INTENT(IN) :: i,j
+    REAL :: x,y
+    x=2.*PI0*(REAL(MODULO(i-1,NX0))-.5)/REAL(NX0)
+    y=PI0*(REAL(mirrored_j(j,NY0))-.5)/REAL(NY0)
+    q=1.2+.10*COS(x)+.05*COS(y)
+  END FUNCTION map_u
+  REAL FUNCTION map_v(i,j) RESULT(q)
+    INTEGER, INTENT(IN) :: i,j
+    REAL :: x,y
+    x=2.*PI0*REAL(MODULO(i-1,NX0))/REAL(NX0)
+    y=PI0*REAL(j-1)/REAL(NY0)
+    q=.82+.08*SIN(x)+.10*COS(y)
+  END FUNCTION map_v
   SUBROUTINE run_case(case_id, label)
     INTEGER, INTENT(IN) :: case_id
     CHARACTER(LEN=*), INTENT(IN) :: label
@@ -233,6 +294,20 @@ CONTAINS
       DO j=jms,jme; DO i=ims,ime; DO k=1,4
         rho(i,k,j)=option2_rho(k)
       END DO; END DO; END DO
+    END IF
+    IF (case_id == 9) THEN
+      DO j=jms,jme; DO i=ims,ime; DO k=1,4
+        rho(i,k,j)=variable_rho(i,k,j)
+        xkhh(i,k,j)=variable_k(i,k,j)
+      END DO; END DO; END DO
+      DO j=jms,jme; DO i=ims,ime
+        msftx(i,j)=map_mass_x(i,j)
+        msfty(i,j)=map_mass_y(i,j)
+        msfux(i,j)=map_u(i,j)
+        msfuy(i,j)=1.05+.01*SIN(REAL(j))
+        msfvx(i,j)=1.03+.015*COS(REAL(i))
+        msfvy(i,j)=map_v(i,j)
+      END DO; END DO
     END IF
     kh=2.; b=.1
     IF (case_id == 5 .OR. case_id == 6) b=0.
@@ -294,7 +369,8 @@ CONTAINS
       IF (case_id == 4) var(i,k,j)=var(i,k,j)+zz*( &
            .03*SIN(2.*pi*REAL(MODULO(i-1,nx))/REAL(nx))+ &
            .02*COS(2.*pi*REAL(MODULO(j-1,ny))/REAL(ny)))
-      IF (case_id == 8) var(i,k,j)=var(i,k,j)+zz*fourier_option2(ip,jp)
+      IF (case_id == 8 .OR. case_id == 9) &
+        var(i,k,j)=var(i,k,j)+zz*fourier_option2(ip,jp)
     END DO; END DO; END DO
     tend=0.
     CALL horizontal_diffusion_s(tend,cfg,var,msftx,msfty,msfux,msfuy,msfvx,msfvy,xkhh,rdx,rdy, &
@@ -334,7 +410,7 @@ CONTAINS
       IF (case_id == 6) expected=option2_layer_mass(k)*kh* &
            (-4.*rdx**2*SIN(PI0/NX0)**2*.03*SIN(2.*PI0*REAL(i-1)/NX0))
       IF (case_id == 7) expected=0.
-      IF (case_id == 8) THEN
+      IF (case_id == 8 .OR. case_id == 9) THEN
         max_expected=MAX(max_expected,ABS(tend(i,k,j)))
       ELSE
         err=MAX(err,ABS(tend(i,k,j)-expected))
@@ -363,9 +439,11 @@ CONTAINS
       tol=512.*EPSILON(1.)*MAXVAL(ABS(var(1:nx,1:kte-1,1:ny)))* &
           kh*MAXVAL(rho(1:nx,1:kte-1,1:ny))*amp*derivative_scale**2
     END IF
+    IF (case_id == 9) tol=2048.*EPSILON(1.)*MAX(1.,max_expected)
     IF (.NOT. ieee_is_finite(tol)) ERROR STOP 'invalid error budget'
     IF ((case_id == 2 .OR. case_id == 4 .OR. case_id == 5) .AND. max_expected <= tol) ERROR STOP 'unresolved positive control'
     IF (case_id == 6 .AND. max_expected <= 100.*tol) ERROR STOP 'unresolved option-2 positive control'
+    IF (case_id == 9 .AND. max_expected <= 100.*tol) ERROR STOP 'unresolved variable option-2 positive control'
     IF (case_id /= 8 .AND. err > tol) THEN
       WRITE(*,'(A,1X,A,2(1X,ES13.5))') 'scalar regression FAIL',TRIM(label),err,tol
       ERROR STOP 1
@@ -382,7 +460,7 @@ CONTAINS
     q=100.+LAYER_DEPTH*REAL(k)
     IF (case_id == 3 .OR. case_id == 4) q=q+terrain(i,j)
     IF (case_id >= 6) q=100.+OPTION2_DEPTH*REAL(k)
-    IF (case_id == 7 .OR. case_id == 8) q=q+terrain_option2(i,j)
+    IF (case_id >= 7) q=q+terrain_option2(i,j)
   END FUNCTION zw
   REAL FUNCTION fourier_rhs(i,j,rdx,rdy,deta,kh) RESULT(q)
     INTEGER, INTENT(IN) :: i,j
