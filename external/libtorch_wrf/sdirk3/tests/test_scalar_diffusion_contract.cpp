@@ -1526,11 +1526,13 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
                                         const std::string& mutation={}) {
     using wrf::sdirk3::test::TileCase;
     constexpr int nw=nz+1;
-    TORCH_CHECK(case_id >= 5 && case_id <= 9,
-                "option-2 scalar parity case must be in [5,9]");
+    TORCH_CHECK(case_id >= 5 && case_id <= 10,
+                "option-2 scalar parity case must be in [5,10]");
     TORCH_CHECK(mutation.empty() ||
                 ((case_id==7 || case_id==8) && mutation=="no-slope") ||
-                (case_id==9 && (mutation=="avg-product" || mutation=="unit-maps")),
+                ((case_id==9 || case_id==10) &&
+                 (mutation=="avg-product" || mutation=="unit-maps")) ||
+                (case_id==10 && mutation=="uniform-depth"),
                 "unsupported option-2 scalar parity counterfactual");
     TileCase tile(1000.0f);
     const auto opt=torch::TensorOptions().dtype(dtype).device(torch::kCPU);
@@ -1546,7 +1548,20 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
         const double layer_mass=c1[k]*mu_full+(1.0-c1[k])*p_span;
         rho_level[k]=case_id==5 ? 1.0 : eta_width*layer_mass/(gravity*layer_depth);
     }
-    for (int k=0;k<nw;++k) w_height[k]=100.0+layer_depth*(k+1);
+    // Stretched physical Z with uniform eta widths, matching the Fortran
+    // source-extraction fixture's rdzw while keeping dnw/fnm/fnp unchanged.
+    constexpr double z_layer[nz]={300.0,500.0,550.0,650.0};
+    for (int k=0;k<nw;++k) {
+        w_height[k]=100.0;
+        if (case_id==10) {
+            // The source helper's mass level 1 is centered between W levels
+            // 1 and 2; skip the unused W level 0 when laying out q's heights.
+            for (int level=0;level<=k;++level)
+                w_height[k]+=z_layer[std::min(level,nz-1)];
+        } else {
+            w_height[k]=100.0+layer_depth*(k+1);
+        }
+    }
 
     auto tensor=[&](const std::vector<double>& values,
                     std::vector<int64_t> shape) {
@@ -1559,7 +1574,7 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
     const auto j=torch::arange(ny,opt);
     const auto phase_y=(j+0.5)*(pi/ny);
     const auto terrain_y=torch::cos(phase_y);
-    const bool terrain=case_id==7 || case_id==8 || case_id==9;
+    const bool terrain=case_id==7 || case_id==8 || case_id==9 || case_id==10;
     const auto h_x=terrain ? 300.0*fourier_x : torch::zeros_like(fourier_x);
     const auto h_cell=h_x.view({1,nx}).expand({ny,nx}).clone()+
         (terrain ? 200.0*terrain_y.view({ny,1}).expand({ny,nx})
@@ -1582,15 +1597,15 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
         q=(1.0+0.03*fourier_x).view({1,1,nx}).expand({ny,nz,nx}).clone();
     } else {
         q=1.0+1.0e-4*z_mass;
-        if (case_id==8 || case_id==9) {
+        if (case_id==8 || case_id==9 || case_id==10) {
             const auto mixed_f=(2.0e-4*fourier_x.view({1,nx})+
                 1.0e-4*terrain_y.view({ny,1})).view({ny,1,nx});
-            q=q+z_mass*mixed_f;
+            q=q+z_mass*mixed_f*(case_id==10 ? 10.0 : 1.0);
         }
     }
     auto kh=torch::full({ny,nz,nx},2.0,opt);
     auto rho=tensor(rho_level,{1,nz,1}).expand({ny,nz,nx}).clone();
-    if (case_id==9) {
+    if (case_id==9 || case_id==10) {
         std::vector<double> kh_values,rho_values;
         kh_values.reserve(ny*nz*nx);rho_values.reserve(ny*nz*nx);
         for (int y=0;y<ny;++y) for (int k=0;k<nz;++k) for (int x=0;x<nx;++x) {
@@ -1601,7 +1616,11 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
         kh=tensor(kh_values,{ny,nz,nx});
         rho=tensor(rho_values,{ny,nz,nx});
     }
-    const auto rdzw=torch::full({ny,nz,nx},1.0/layer_depth,opt);
+    std::vector<double> rdzw_values;
+    rdzw_values.reserve(ny*nz*nx);
+    for (int y=0;y<ny;++y) for (int k=0;k<nz;++k) for (int x=0;x<nx;++x)
+        rdzw_values.push_back(1.0/(case_id==10 ? z_layer[std::min(k+1,nz-1)] : layer_depth));
+    auto rdzw=tensor(rdzw_values,{ny,nz,nx});
     const auto dnw=torch::full({nz},-eta_width,opt);
     const auto dn=torch::full({nz},-eta_width,opt);
     const auto fnm=torch::full({nz},0.5,opt);
@@ -1610,7 +1629,7 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
     auto msfty=torch::ones({ny,nx},opt);
     auto msfux=torch::ones({ny,nx+1},opt);
     auto msfvy=torch::ones({ny+1,nx},opt);
-    if (case_id==9) {
+    if (case_id==9 || case_id==10) {
         std::vector<double> tx,ty,ux,vy;
         for (int y=0;y<ny;++y) for (int x=0;x<nx;++x) {
             const double px=2.0*pi*x/nx,py=pi*(y+0.5)/ny;
@@ -1636,6 +1655,8 @@ void dump_option2_scalar_fortran_parity(torch::Dtype dtype, int case_id,
         kh=kh*rho;
         rho=torch::ones_like(rho);
     }
+    if (mutation=="uniform-depth")
+        rdzw=torch::full_like(rdzw,1.0/(layer_depth/nz));
     const float rdx=case_id==5 ? 0.1f : 0.001f;
     const float rdy=case_id==5 ? 0.13f : 0.001f;
     const auto zx_input=mutation=="no-slope" ? torch::zeros_like(zx) : zx;
