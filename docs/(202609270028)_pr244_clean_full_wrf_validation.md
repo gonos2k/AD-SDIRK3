@@ -2,6 +2,8 @@
 
 Recorded: 2026-09-27T00:28:45+09:00 JST
 
+Provenance correction recorded: 2026-09-27T00:42:17+09:00 JST
+
 ## Source and clean build
 
 - Exact source: `e19760eeedeef25480d841cb6458eab88619adb3`, branch `agent/t1-pr244-final`.
@@ -35,19 +37,19 @@ Endpoint PC2-minus-RK3 RMS / maximum absolute differences:
 | P (Pa) | 0.0367478989 | 0.190734863 |
 | MU (Pa) | 0.0415023901 | 0.144718170 |
 
-The #243 archive-first candidate is preserved under `/Users/yhlee/SDIRK3-option2-vertical-fix/.validation/option2_vertical_final_20260926`; its recorded executable SHA-256 is `795c97a097997d94d68df914eb5820fbf130f87cb418b5d7f8bf27912ddb9df2`, and its input SHA matches `e71b730a...`. The clean RK3 output is byte-identical to that archived RK3 output (SHA-256 `bcb32fdddb10fa2756e7bc88cac2c9da05664ed34cebac05ae68d55b00f5c336`). The clean PC2 output differs from the archive-first PC2 output (archived SHA `1bb59b0122997db6572e4aa9f2c2ebd3eb9a84e80e95b0c4b58a9fff89d733ca`); selected-field clean-vs-candidate differences are small:
+The actual #243 integrated candidate is preserved under `/private/tmp/sdirk3-v-on-w-integration/.validation/integrated-final`. It is source commit `a1d5f6a3c8c64e66510c81d5fbe98ce568ed180f`; executable SHA-256 `2e84a03096d101c1f8ecf828b9e2ec2bab98c3bdfadbf49e2769fad9fa8cad22`; the linked production archive `/private/tmp/sdirk3-v-on-w-make/libwrf_sdirk3_libtorch.a` SHA-256 `05654e5272efd1c0aad19996f0ff7ace34be853b05f81f66e48b3e46cfe03178`; and the archived input SHA matches `e71b730a...`. The exact #243 integrated PC2 comparator is `.../run_pc2/wrfout_d01_0001-01-01_00:00:00` (SHA-256 `187e6e7e9331be5089c5aa730490d2171cf1ff8766bbce902f6e46215d6c40c4`). The matching RK3 reference is `.../run_rk3/wrfout_d01_0001-01-01_00:00:00` (SHA-256 `bcb32fdddb10fa2756e7bc88cac2c9da05664ed34cebac05ae68d55b00f5c336`). The clean RK3 output is byte-identical to that integrated RK3 reference. The clean PC2 output SHA-256 is `3679f6674a1fdf384bc42f9fb85f887c6f09c17536d418cd3f92313f0c691d32`; its endpoint field differences from the exact #243 integrated PC2 comparator are:
 
 | Field | RMS | Maximum absolute |
 |---|---:|---:|
-| U | 1.31073e-8 | 4.76837e-7 |
-| V | 3.31347e-7 | 5.90272e-6 |
-| W | 1.11792e-7 | 3.41609e-6 |
-| PH | 1.81301e-5 | 4.88281e-4 |
+| U | 5.87699e-9 | 2.38419e-7 |
+| V | 8.21223e-10 | 2.32831e-8 |
+| W | 5.79808e-8 | 3.04915e-6 |
+| PH | 1.04674e-5 | 4.88281e-4 |
 | T | 0 | 0 |
-| MU | 1.14613e-6 | 1.38283e-5 |
-| P | 1.41625e-4 | 0.00596046 |
+| MU | 8.42937e-8 | 9.53674e-7 |
+| P | 2.32831e-5 | 0.00149012 |
 
-These are same-setup one-step comparisons; they do not establish forecast quality or long-run behavior.
+Correction note: a similarly named `option2_vertical_final_20260926` result from the older vertical-fix worktree was previously attributed as the #243 integrated candidate. It is not the #243 integrated comparator and is not used in this corrected comparison. These remain same-setup one-step comparisons; they do not establish forecast quality or long-run behavior.
 
 ## Strict dt15 snapshot OFF/ON
 
