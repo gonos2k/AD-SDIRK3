@@ -201,6 +201,9 @@ struct Defor23StageGeometryTag {
 };
 template struct MemberAccessor<Defor23StageGeometryTag,
     &TileSDIRK3UnifiedSolver::compute_defor23>;
+struct Defor33StageGeometryTag { friend auto access(Defor33StageGeometryTag); };
+template struct AutoMemberAccessor<Defor33StageGeometryTag,
+    &TileSDIRK3UnifiedSolver::compute_defor33>;
 struct Rdz3dCacheTag { using type = torch::Tensor TileSDIRK3UnifiedSolver::*;
     friend type access(Rdz3dCacheTag); };
 template struct MemberAccessor<Rdz3dCacheTag, &TileSDIRK3UnifiedSolver::rdz_3d_>;
@@ -2053,7 +2056,8 @@ void dump_flat_periodic_x(torch::Dtype dtype) {
 // terrain-following, so this pins whether D11 consumes stage-local zx.
 void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
                                     bool wrong_stage_metric=false,
-                                    bool top_pulse=false) {
+                                    bool top_pulse=false,
+                                    bool w_composite=false) {
     using wrf::sdirk3::test::TileCase;
     auto& cfg=wrf::sdirk3::g_sdirk3_config;
     cfg=wrf::sdirk3::SDIRK3Config{};
@@ -2099,6 +2103,11 @@ void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
             1.0f+0.1f*std::cos(float(2.0*pi*i/nx));
         u[j][k][i]=profile*x_mode;
     }
+    if (w_composite) {
+        for (int j=0;j<ny;++j) for (int i=0;i<nx;++i)
+            w[j][2][i]=0.2f*std::cos(float(2.0*pi*i/nx));
+    }
+    (tile.solver.*access(Rdzw3dCacheTag{}))=rdzw_stage;
     const auto kh=torch::full({ny,nz,nx},khdif,opt);
     const auto kv=torch::full({ny,nz,nx},kvdif,opt);
     const auto rho=torch::ones({ny,nz,nx},opt);
@@ -2114,6 +2123,7 @@ void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
     const auto muu=torch::full({ny,nx},784.8f,opt);
     std::vector<float> fnm(nw,0.5f),fnp(nw,0.5f);
     const auto rdnw=torch::full({nz},float(nz),opt);
+    const auto rdn=torch::full({nz},float(nz),opt);
     // Set fnm/fnp and derive cfn/cfn1 before either diffusion helper reads D11.
     tile.solver.setVerticalInterpolationCoefficients(fnm.data(),fnp.data(),
                                                      0.0f,0.0f,0.0f);
@@ -2132,6 +2142,28 @@ void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
         u,v,w,1.0f/dx,1.0f/dx,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
     const auto vertical=(tile.solver.*access(VerticalUStressTag{}))(
         u,defor13,wrong_vertical_coefficient ? kh : kv,rho,rdnw).contiguous();
+    const auto defor23=(tile.solver.*access(Defor23StageGeometryTag{}))(
+        v,w,rdx_tensor,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto defor33=(tile.solver.*access(Defor33StageGeometryTag{}))(w,rdnw).contiguous();
+    auto zx_old_x=zx_stage.clone();
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=1;i<nx;++i)
+        zx_old_x[j][k][i]=0.5f*(zx_stage[j][k][i-1].item<float>()+
+                                  zx_stage[j][k][i].item<float>());
+    const auto defor13_old_x=(tile.solver.*access(Defor13StageGeometryTag{}))(
+        u,w,rdx_tensor,rdnw,zx_old_x,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto horizontal_w=(tile.solver.*access(Option2WHelperTag{}))(
+        u,v,w,kv,rho,1.0f/dx,1.0f/dx,map_m,map_m,muu,ph_full,
+        zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto horizontal_w_old_x=(tile.solver.*access(Option2WHelperTag{}))(
+        u,v,w,kv,rho,1.0f/dx,1.0f/dx,map_m,map_m,muu,ph_full,
+        zx_old_x,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto vertical_w=(tile.solver.*access(VerticalWMixingStageTag{}))(
+        w,kh,rdnw,rho,defor33,rdn).contiguous();
+    const auto horizontal_w_wrong_k=(tile.solver.*access(Option2WHelperTag{}))(
+        u,v,w,kh,rho,1.0f/dx,1.0f/dx,map_m,map_m,muu,ph_full,
+        zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto vertical_w_wrong_k=(tile.solver.*access(VerticalWMixingStageTag{}))(
+        w,kv,rdnw,rho,defor33,rdn).contiguous();
     const auto a=raw_out.accessor<float,3>();
     for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
         std::cout << "U_RAW " << j << ' ' << k << ' ' << i << ' '
@@ -2141,6 +2173,50 @@ void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
     for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i)
         std::cout << "D11_CPP " << j << ' ' << k << ' ' << i << ' '
                   << std::setprecision(9) << d11[j][k][i] << '\n';
+    const auto d13=defor13.accessor<float,3>();
+    const auto d13_old_x=defor13_old_x.accessor<float,3>();
+    const auto d23=defor23.accessor<float,3>();
+    const auto d33=defor33.accessor<float,3>();
+    const auto hw=horizontal_w.accessor<float,3>();
+    const auto hw_old_x=horizontal_w_old_x.accessor<float,3>();
+    const auto vw=vertical_w.accessor<float,3>();
+    const auto hwk=horizontal_w_wrong_k.accessor<float,3>();
+    const auto vwk=vertical_w_wrong_k.accessor<float,3>();
+    const auto zx_out=zx_stage.accessor<float,3>();
+    const auto rdzw_out=rdzw_stage.accessor<float,3>();
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<=nx;++i)
+        std::cout << "M_ZX_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << zx_out[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i)
+        std::cout << "M_RDZW_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << rdzw_out[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nu;++i)
+        std::cout << "D13_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << d13[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nu;++i)
+        std::cout << "D13_OLDZX " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << d13_old_x[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "D23_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << d23[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i)
+        std::cout << "D33_CPP " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << d33[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "WH_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << hw[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "WH_OLDZX " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << hw_old_x[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "WV_RAW " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << vw[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "WH_KH_WRONG " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << hwk[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
+        std::cout << "WV_KV_WRONG " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << vwk[j][k][i] << '\n';
     for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
         std::cout << "UV_RAW " << j << ' ' << k << ' ' << i << ' '
                   << std::setprecision(9) << z[j][k][i] << '\n';
@@ -2695,6 +2771,10 @@ int main(int argc, char** argv) {
     }
     if (argc==2 && std::string(argv[1])=="--option2-momentum-stage-geometry-top-pulse") {
         dump_option2_momentum_geometry(false,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-w-momentum-stage-geometry") {
+        dump_option2_momentum_geometry(false,false,false,true);
         return 0;
     }
     if (argc==2 && std::string(argv[1])=="--option2-external-fnm-cfn-refresh")

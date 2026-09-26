@@ -39,6 +39,22 @@
 
 ## Build & Run
 
+The option-2 terrain momentum geometry source-parity test is registered as
+`Option2_Momentum_Geometry_Source_Parity` in CMake/CTest. It builds the real
+`test_scalar_diffusion_contract` library bridge and compiles the extracted WRF
+Fortran routines with `FC` (default `gfortran`) at FP32/REAL64 and O0/O2:
+
+```bash
+cmake -S external/libtorch_wrf/sdirk3 -B build/sdirk3
+cmake --build build/sdirk3 --target test_scalar_diffusion_contract
+ctest --test-dir build/sdirk3 -R Option2_Momentum_Geometry_Source_Parity --output-on-failure
+```
+
+The W fixture uses physical mass-grid X length `nx`; its `zx` field has a
+separate periodic endpoint at `nx`, checked against endpoint `0`. W tendency
+comparisons use owned interior cells and do not treat either physical mass
+column as a packed duplicate.
+
 ```bash
 # Example: build single test
 clang++ -std=c++17 -O2 \
