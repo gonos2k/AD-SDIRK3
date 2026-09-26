@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Full source-extracted and operator-only references for option-2 U-X terrain stress.
+"""Source-extracted references for option-2 U-X and W terrain momentum.
 
 The full path extracts metrics, deformation, stress, and U-diffusion bodies
 verbatim from module_diffusion_em.F. The retained operator-only path injects
@@ -140,8 +140,9 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
     source = (repo / "dyn_em/module_diffusion_em.F").read_text()
     routine_names = ("compute_diff_metrics", "cal_deform_and_div",
                      "cal_titau_11_22_33", "cal_titau_12_21",
-                     "cal_titau_13_31", "vertical_diffusion_u_2",
-                     "horizontal_diffusion_u_2")
+                     "cal_titau_13_31", "cal_titau_23_32",
+                     "vertical_diffusion_u_2", "horizontal_diffusion_u_2",
+                     "vertical_diffusion_w_2", "horizontal_diffusion_w_2")
     routines = []
     for name in routine_names:
         end = f"END SUBROUTINE {name}"
@@ -153,14 +154,15 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
     rk_addtend += "END SUBROUTINE rk_addtend_dry"
     routines.append(rk_addtend)
     routine_hash = hashlib.sha256("\n".join(routines).encode()).hexdigest()
-    if profile not in {"interior-pulse", "top-pulse"}:
+    if profile not in {"interior-pulse", "top-pulse", "w-composite"}:
         raise ValueError(f"unknown fixture profile: {profile}")
     top_pulse = 1 if profile == "top-pulse" else 0
     _, _, _, d11_expected, _, _ = source_grounded_fields()
     src = f"""module extracted_wrf_diffusion
   implicit none
   real, parameter :: g=9.81
-  integer, parameter :: P_m11=1, P_m12=2, P_m13=3, P_r12=1, P_r13=2, P_r23=3
+  integer, parameter :: P_m11=1, P_m12=2, P_m13=3, P_m23=4, P_m33=5
+  integer, parameter :: P_r12=1, P_r13=2, P_r23=3
   type :: grid_config_rec_type
     logical :: open_xs=.false., open_xe=.false., open_ys=.false., open_ye=.false.
     logical :: specified=.false., nested=.false., periodic_x=.true., periodic_y=.false.
@@ -176,6 +178,9 @@ contains
 {routines[5]}
 {routines[6]}
 {routines[7]}
+{routines[8]}
+{routines[9]}
+{routines[10]}
 end module extracted_wrf_diffusion
 
 program oracle_driver
@@ -288,6 +293,13 @@ program oracle_driver
       enddo
     enddo
   endif
+  if ({1 if profile == "w-composite" else 0} == 1) then
+    do j=jms,jme
+      do i=ims,ime
+        w(i,3,j)=0.2*cos(2.*pi*real(modulo(i-1,nx))/real(nx))
+      enddo
+    enddo
+  endif
   ! Run actual deformation over j=2..6 so the consumer's north cross-stress
   ! row j=6 is produced by the same source routine, not forcibly overwritten.
   call cal_deform_and_div(cfg,u,v,w,div,defor11,defor22,defor33, &
@@ -306,6 +318,27 @@ program oracle_driver
     do k=1,nz
       do i=1,nx
         write(*,'(A,3(1X,I0),1X,ES25.16)') 'D11_RAW',j-1,k-1,i-1,defor11(i,k,j)
+      enddo
+    enddo
+  enddo
+  do j=jts,jte
+    do k=1,nz+1
+      do i=1,nx+1
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'D13_RAW',j-1,k-1,i-1,defor13(i,k,j)
+      enddo
+    enddo
+  enddo
+  do j=jts,jte
+    do k=1,nz+1
+      do i=1,nx
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'D23_RAW',j-1,k-1,i-1,defor23(i,k,j)
+      enddo
+    enddo
+  enddo
+  do j=jts,jte
+    do k=1,nz
+      do i=1,nx
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'D33_RAW',j-1,k-1,i-1,defor33(i,k,j)
       enddo
     enddo
   enddo
@@ -331,6 +364,32 @@ program oracle_driver
     enddo
   enddo
   ru_tendf=tendency+tendency_v
+  ! W composite uses horizontal xkmv and vertical xkmh, then dry-RK scales
+  ! the raw sum by msfty at the final W momentum location.
+  tendency=0.; tendency_v=0.
+  call horizontal_diffusion_w_2(tendency,cfg,defor13,defor23,div, &
+       nba_mij(ims,kms,jms,1),2,tke,msftx,msfty,xkmv,rdx,rdy,fnm,fnp, &
+       dn,zx,zy,rdz,rho,ids,ide,jds,jde,kds,kde, &
+       ims,ime,jms,jme,kms,kme,itsd,ited,jts,jte,kts,kte)
+  do j=jts,jte
+    do k=kts+1,kte-1
+      do i=itsm,iteu-1
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'HW_RAW',j-1,k-1,i-1,tendency(i,k,j)
+      enddo
+    enddo
+  enddo
+  call vertical_diffusion_w_2(tendency_v,cfg,defor33,tke, &
+       nba_mij(ims,kms,jms,1),2,div,xkmh,dn,rdz,fnm,fnp,rho, &
+       ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
+       itsm,iteu-1,jts,jte,kts,kte)
+  do j=jts,jte
+    do k=kts+1,kte-1
+      do i=itsm,iteu-1
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'VW_RAW',j-1,k-1,i-1,tendency_v(i,k,j)
+      enddo
+    enddo
+  enddo
+  rw_tendf=tendency+tendency_v
   call rk_addtend_dry(ru_tend,rv_tend,rw_tend,ph_tend,t_tend, &
        ru_tendf,rv_tendf,rw_tendf,ph_tendf,t_tendf, &
        u_save,v_save,w_save,ph_save,t_save,mu_tend,mu_tendf,2,fnm,fnm, &
@@ -341,6 +400,13 @@ program oracle_driver
     do k=kts,kte-1
       do i=itsu,iteu
         write(*,'(A,3(1X,I0),1X,ES25.16)') 'RHS_U',j-1,k-1,i-1,ru_tend(i,k,j)
+      enddo
+    enddo
+  enddo
+  do j=jts,jte
+    do k=kts+1,kte-1
+      do i=itsm,iteu-1
+        write(*,'(A,3(1X,I0),1X,ES25.16)') 'RHS_W',j-1,k-1,i-1,rw_tend(i,k,j)
       enddo
     enddo
   enddo
@@ -394,8 +460,8 @@ end program oracle_driver
         raise RuntimeError("Fortran oracle compile failed:\n" + built.stderr)
     run = subprocess.run([str(exe)], check=True, text=True, capture_output=True)
     values: dict[str, dict[tuple[int, int, int], float]] = {}
-    labels = {"M_ZX", "M_RDZW", "D11_RAW", "D12_RAW",
-              "V_RAW", "RHS_U", "F_RAW", "O_RAW"}
+    labels = {"M_ZX", "M_RDZW", "D11_RAW", "D12_RAW", "D13_RAW", "D23_RAW", "D33_RAW",
+              "V_RAW", "RHS_U", "F_RAW", "O_RAW", "HW_RAW", "VW_RAW", "RHS_W"}
     for line in run.stdout.splitlines():
         fields = line.split()
         if fields and fields[0] in labels:
@@ -445,7 +511,10 @@ def main() -> int:
                          if value.replace(".","",1).replace("-","",1).isdigit()})
                     print("CPP " + mode.rsplit("--",1)[-1] + " coefficients " +
                           " ".join(fields[1:]))
-            elif fields[0] in {"U_RAW", "UV_RAW", "D11_CPP"}:
+            elif fields[0] in {"U_RAW", "UV_RAW", "D11_CPP", "D13_CPP", "D23_CPP",
+                               "D33_CPP", "WH_RAW", "WV_RAW", "WH_KH_WRONG",
+                               "WV_KV_WRONG", "D13_OLDZX", "WH_OLDZX",
+                               "M_ZX_CPP", "M_RDZW_CPP"}:
                 label, j, k, i, value = fields
                 parsed.setdefault(label, {})[(int(j), int(k), int(i))] = float(value)
         return parsed
@@ -461,6 +530,7 @@ def main() -> int:
     _, zx_expected, rdzw_expected, d11_expected, _, _ = source_grounded_fields()
     fortran_results: list[tuple[str, dict[str, dict[tuple[int, int, int], float]], str]] = []
     top_pulse_results: list[tuple[str, dict[str, dict[tuple[int, int, int], float]], str]] = []
+    w_composite_results: list[tuple[str, dict[str, dict[tuple[int, int, int], float]], str]] = []
     with tempfile.TemporaryDirectory(prefix="sdirk3-option2-fortran-") as temp_dir:
         temp = Path(temp_dir)
     for label, flags in (("fp32-O0", ["-O0"]), ("fp32-O2", ["-O2"]),
@@ -472,9 +542,15 @@ def main() -> int:
         top_result, top_routine_sha = compiled_fortran_oracle(
             repo, args.fortran_compiler, flags, temp / f"{label}-top-pulse",
             profile="top-pulse")
+        w_result, w_routine_sha = compiled_fortran_oracle(
+            repo, args.fortran_compiler, flags, temp / f"{label}-w-composite",
+            profile="w-composite")
         if top_routine_sha != extracted_sha:
             raise RuntimeError("top-pulse diagnostic used different extracted routines")
+        if w_routine_sha != extracted_sha:
+            raise RuntimeError("W composite used different extracted routines")
         top_pulse_results.append((label,top_result,top_routine_sha))
+        w_composite_results.append((label,w_result,w_routine_sha))
     cpp_seams = {(j, k, i) for j in range(NY) for k in range(NZ)
                  for i in (0, NX)}
     fortran_seams = {(j, 1, i) for j in range(1, NY - 1)
@@ -633,6 +709,73 @@ def main() -> int:
             compiled_mismatches.append((label, "cpp-raw", raw_cpp_error, tolerance))
         if raw_seam_error != 0.0 or op_seam_error != 0.0:
             compiled_mismatches.append((label, "seam", raw_seam_error, 0.0))
+    w_cpp = parse_cpp(args.binary, "--option2-w-momentum-stage-geometry")
+    # W has mass-grid X length `nx`; compared cells exclude physical tile edges.
+    # Periodic source/cpp seam aliases are checked separately below.
+    w_keys = {(j, k, i) for j in range(1, NY - 1)
+              for k in range(1, NZ) for i in range(1, NX - 1)}
+    for label, result, _ in w_composite_results:
+        for name in ("M_ZX", "M_RDZW", "D13_RAW", "D23_RAW", "D33_RAW",
+                     "HW_RAW", "VW_RAW", "RHS_W"):
+            if not all(math.isfinite(value) for value in result[name].values()):
+                compiled_mismatches.append((label,name,"non-finite"))
+        for cpp_label, fort_label, keys, name in (
+            ("M_ZX_CPP", "M_ZX", {(j,k,i) for j in range(1,NY-1)
+                                   for k in range(NZ+1) for i in range(1,NX+1)}, "M_ZX"),
+            ("M_RDZW_CPP", "M_RDZW", {(j,k,i) for j in range(1,NY-1)
+                                       for k in range(NZ) for i in range(1,NX-1)}, "M_RDZW"),
+            ("D13_CPP", "D13_RAW", {(j,k,i) for j in range(1,NY-1)
+                                     for k in range(1,NZ) for i in range(1,NX-1)}, "D13"),
+            ("D23_CPP", "D23_RAW", {(j,k,i) for j in range(1,NY-1)
+                                     for k in range(1,NZ) for i in range(1,NX-1)}, "D23"),
+            ("D33_CPP", "D33_RAW", w_keys, "D33")):
+            common = keys & w_cpp[cpp_label].keys() & result[fort_label].keys()
+            if common != keys:
+                compiled_mismatches.append((label,name,"missing",sorted(keys-common)[:3]))
+                continue
+            error = max(abs(w_cpp[cpp_label][key]-result[fort_label][key]) for key in common)
+            scale = max(abs(result[fort_label][key]) for key in common)
+            tol = 2e-6*max(1e-12,scale)
+            print(f"CPP vs {label} W {name} max_error={error:.9g} tolerance={tol:.3g}")
+            if error > tol:
+                compiled_mismatches.append((label,name,error,tol))
+        seam_keys = {(j,k) for j in range(1,NY-1) for k in range(NZ+1)}
+        for seam in ("M_ZX_CPP", "M_ZX"):
+            values = w_cpp[seam] if seam.endswith("CPP") else result[seam]
+            seam_error = max(abs(values[(j,k,0)]-values[(j,k,NX)]) for j,k in seam_keys)
+            seam_scale = max(abs(values[(j,k,0)]) for j,k in seam_keys)
+            seam_tol = 2e-6*max(1e-12,seam_scale)
+            print(f"{label} periodic zx endpoint {seam} max_error={seam_error:.9g} "
+                  f"tolerance={seam_tol:.3g}")
+            if seam_error > seam_tol:
+                compiled_mismatches.append((label,seam,"seam",seam_error,seam_tol))
+        w_h_error = max(abs(w_cpp["WH_RAW"][key]-result["HW_RAW"][key]) for key in w_keys)
+        w_v_error = max(abs(w_cpp["WV_RAW"][key]-result["VW_RAW"][key]) for key in w_keys)
+        w_raw_error = max(abs(w_cpp["WH_RAW"][key]+w_cpp["WV_RAW"][key]-
+                              result["HW_RAW"][key]-result["VW_RAW"][key]) for key in w_keys)
+        w_rhs_error = max(abs((w_cpp["WH_RAW"][key]+w_cpp["WV_RAW"][key])/MAP-
+                              result["RHS_W"][key]) for key in w_keys)
+        w_signal = max(abs(result["HW_RAW"][key]+result["VW_RAW"][key]) for key in w_keys)
+        w_rhs_signal = max(abs(result["RHS_W"][key]) for key in w_keys)
+        w_tol = 2e-6*max(1e-12,w_signal)
+        w_rhs_tol = 2e-6*max(1e-12,w_rhs_signal)
+        wrong_h = max(abs(w_cpp["WH_KH_WRONG"][key]-w_cpp["WH_RAW"][key]) for key in w_keys)
+        wrong_v = max(abs(w_cpp["WV_KV_WRONG"][key]-w_cpp["WV_RAW"][key]) for key in w_keys)
+        old_d13_error = max(abs(w_cpp["D13_OLDZX"][key]-result["D13_RAW"][key])
+                            for key in w_keys)
+        old_h_error = max(abs(w_cpp["WH_OLDZX"][key]-result["HW_RAW"][key])
+                          for key in w_keys)
+        print(f"CPP vs {label} W H/V errors={w_h_error:.9g}/{w_v_error:.9g}; "
+              f"raw signal={w_signal:.9g} error={w_raw_error:.9g} tol={w_tol:.3g}; "
+              f"post-rk_addtend signal={w_rhs_signal:.9g} error={w_rhs_error:.9g} "
+              f"tol={w_rhs_tol:.3g}; wrong-k controls={wrong_h:.9g}/{wrong_v:.9g}; "
+              f"old adjacent-zx D13/H errors={old_d13_error:.9g}/{old_h_error:.9g}")
+        if (w_h_error>w_tol or w_v_error>w_tol or w_raw_error>w_tol or
+                w_rhs_error>w_rhs_tol or wrong_h<=w_tol or wrong_v<=w_tol or
+                old_d13_error<=2e-6*max(1e-12,max(abs(result["D13_RAW"][key]) for key in w_keys)) or
+                old_h_error<=w_tol):
+            compiled_mismatches.append((label,"W-composite",w_h_error,w_v_error,
+                                        w_raw_error,w_rhs_error,wrong_h,wrong_v))
     top_pulse_result=top_pulse_results[0][1]
     top_keys = {(j, k, i) for j in range(1, NY - 1)
                 for k in range(NZ) for i in range(1, NX)}
@@ -701,8 +844,8 @@ def main() -> int:
             compiled_mismatches.append((label,"top-pulse-U",top_raw_error,top_raw_tol,
                                         top_rhs_error,top_rhs_tol))
     print("ORACLE full chain extracts compute_diff_metrics, cal_deform_and_div, "
-          "U horizontal/vertical stress and diffusion, and rk_addtend_dry; the retained "
-          "operator-only reference injects Python D11/analytic metrics")
+          "U/W horizontal and vertical diffusion, and rk_addtend_dry; the retained "
+          "operator-only U reference injects Python D11/analytic metrics")
     print(f"PROVENANCE revision={revision} module_diffusion_em.F.sha256={sha} "
           f"wrf_sdirk3_tile_unified_impl.cpp.sha256={cpp_sha}")
     print(f"TEST cpp.sha256={cpp_test_sha} python.sha256={python_test_sha} "
@@ -723,7 +866,8 @@ def main() -> int:
           not compiled_mismatches)
     if compiled_mismatches:
         print(f"FAIL compiled Fortran mismatches: {compiled_mismatches[:2]}")
-    print(("PASS" if ok else "FAIL") + " option-2 U-X compiled Fortran geometry parity")
+    print(("PASS" if ok else "FAIL") +
+          " option-2 U-X and W terrain composite Fortran geometry parity")
     return 0 if ok else 1
 
 
