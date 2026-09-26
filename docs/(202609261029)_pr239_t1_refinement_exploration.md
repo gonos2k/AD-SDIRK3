@@ -54,7 +54,7 @@ For each method and field, I computed RMS differences between the 240-second end
 | RK3 | T | 4.25108e-5 | 2.72382e-5 | 0.642 |
 | RK3 | MU | 8.16584e-2 | 7.50594e-2 | 0.122 |
 
-Most fields are nonmonotone or have weak slopes. I do not infer third-order convergence from these results. For PC2, several dt differences are on the scale of its approximately 1.7e-6 scaled Newton residuals, so I ran one tolerance-sensitivity case.
+Most fields are nonmonotone or have weak slopes. I do not infer third-order convergence from these results. Some displayed field differences and scaled Newton residuals have similar numeric magnitudes, but they have different units and norms; that observation does not establish a solver-error cause. I ran one tolerance-sensitivity case to test whether tightening the solve materially changes the result.
 
 ## Tolerance-sensitivity first failure
 
