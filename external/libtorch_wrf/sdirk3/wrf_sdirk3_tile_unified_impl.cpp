@@ -9769,6 +9769,8 @@ vertical_coefficients:
             // ground truth the emitter checks per-source attribution against.
             const bool stage_operand_diag_on =
                 wrf::sdirk3::g_sdirk3_config.stage_operand_diag;
+            const bool stage2_rejection_snapshot_diag_on =
+                wrf::sdirk3::g_sdirk3_config.stage2_rejection_snapshot_diag;
             // The running FP32 state AFTER each source's add (index j = state
             // after source j). Together with U_n these give both the actual
             // applied delta per source (state[j]-state[j-1]) and the base
@@ -9941,7 +9943,7 @@ vertical_coefficients:
             // stage as an authoritative, tensor-derived defect-provenance gate.
             std::vector<wrf::sdirk3::StageDefectTensorSnapshot> stage_operand_defect_tensors;
             int64_t stage_operand_step_label = 0;  // full width; never truncated
-            if (stage_operand_diag_on) {
+            if (stage_operand_diag_on || stage2_rejection_snapshot_diag_on) {
                 // PR 9E Commit A: single-authority topology FAIL-CLOSE. The
                 // stage-operand diagnostic is validated ONLY for a single MPI
                 // rank whose single tile covers the whole authoritative patch --
@@ -9961,19 +9963,27 @@ vertical_coefficients:
                     jts_ <= jds_ && jte_ >= jde_ - 1;
                 if (!(single_rank && tile_covers_patch)) {
                     char detail[320];
+                    const char* marker = stage_operand_diag_on
+                        ? "SDIRK3_STAGE_OPERAND_DIAG_UNSUPPORTED_TOPOLOGY"
+                        : "SDIRK3_STAGE2_REJECTION_SNAPSHOT_UNSUPPORTED_TOPOLOGY";
                     std::snprintf(detail, sizeof(detail),
-                        "SDIRK3_STAGE_OPERAND_DIAG_UNSUPPORTED_TOPOLOGY: "
+                        "%s: "
                         "single_rank=%d tile_covers_patch=%d nprocx=%d nprocy=%d "
                         "its=%d ite=%d jts=%d jte=%d ids=%d ide=%d jds=%d jde=%d "
                         "(requires exactly 1 rank AND 1 tile covering the whole "
-                        "patch)",
+                        "patch)", marker,
                         single_rank ? 1 : 0, tile_covers_patch ? 1 : 0,
                         nprocx_, nprocy_, its_, ite_, jts_, jte_,
                         ids_, ide_, jds_, jde_);
                     wrf::sdirk3::mpi_safety::abort_c_abi_exception(
-                        "stage_operand_diag_topology", detail);
+                        stage_operand_diag_on
+                            ? "stage_operand_diag_topology"
+                            : "stage2_rejection_snapshot_topology",
+                        detail);
                 }
-                stage_operand_step_label = ++stage_operand_diag_step_;
+                if (stage_operand_diag_on) {
+                    stage_operand_step_label = ++stage_operand_diag_step_;
+                }
             }
 
             for (int i = 0; i < Ark::stages; ++i) {

@@ -124,6 +124,7 @@ through Registry + Fortran `set_config` + C++ (env, string setter, dump,
 | Observation payload source mode | `sdirk3_obs_source_mode` | `WRF_SDIRK3_OBS_SOURCE_MODE` |
 | 4DVAR window endpoint sync mode | `sdirk3_obs_window_sync_mode` | `WRF_SDIRK3_OBS_WINDOW_SYNC_MODE` |
 | Stage-2 GMRES restart | `sdirk3_stage2_gmres_restart` | `WRF_SDIRK3_STAGE2_GMRES_RESTART` |
+| Stage-2 rejected-trial snapshot | `sdirk3_stage2_rejection_snapshot_diag` | `WRF_SDIRK3_STAGE2_REJECTION_SNAPSHOT_DIAG` |
 | Stage-2 Krylov restarts | `sdirk3_stage2_max_krylov_restarts` | `WRF_SDIRK3_STAGE2_MAX_KRYLOV_RESTARTS` |
 | Stage-2 Krylov tolerance | `sdirk3_stage2_krylov_tol` | `WRF_SDIRK3_STAGE2_KRYLOV_TOL` |
 | W-damping activation (WRF parity) | `w_damping` (standard WRF key) | `WRF_SDIRK3_WRF_W_DAMPING` |

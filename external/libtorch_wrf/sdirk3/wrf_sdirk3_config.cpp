@@ -637,6 +637,9 @@ void SDIRK3Config::load_from_namelist(const std::string& namelist_content) {
                 retain_graph_for_adjoint = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_stage_operand_diag" || key == "stage_operand_diag") {
                 stage_operand_diag = parse_fortran_bool_value(value);
+            } else if (key == "sdirk3_stage2_rejection_snapshot_diag" ||
+                       key == "stage2_rejection_snapshot_diag") {
+                stage2_rejection_snapshot_diag = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_obs_aware_4dvar" || key == "obs_aware_4dvar") {
                 obs_aware_4dvar = parse_fortran_bool_value(value);
             } else if (key == "sdirk3_obs_source_mode" || key == "obs_source_mode") {
@@ -1285,6 +1288,11 @@ void SDIRK3Config::load_from_env() {
         stage_operand_diag = parse_bool_env(env_val);
         std::cerr << "[CONFIG ENV] stage_operand_diag = "
                   << (stage_operand_diag ? "true" : "false") << std::endl;
+    }
+    if ((env_val = std::getenv("WRF_SDIRK3_STAGE2_REJECTION_SNAPSHOT_DIAG"))) {
+        stage2_rejection_snapshot_diag = parse_bool_env(env_val);
+        std::cerr << "[CONFIG ENV] stage2_rejection_snapshot_diag = "
+                  << (stage2_rejection_snapshot_diag ? "true" : "false") << std::endl;
     }
     if ((env_val = std::getenv("WRF_SDIRK3_RETAIN_GRAPH_FOR_ADJOINT"))) {
         retain_graph_for_adjoint = parse_bool_env(env_val);
@@ -2255,6 +2263,11 @@ void SDIRK3Config::normalize_adaptive_thresholds() {
 
 bool SDIRK3Config::validate() const {
     bool valid = true;
+    if (stage2_rejection_snapshot_diag) {
+        std::cerr << "[CONFIG VALIDATION] stage2_rejection_snapshot_diag=on; "
+                     "single-rank/whole-patch topology is checked at WRF stage entry"
+                  << std::endl;
+    }
 
     if (max_newton_iter < 1 || max_newton_iter > 100) {
         std::cerr << "SDIRK3 Config Error: max_newton_iter must be between 1 and 100" << std::endl;
@@ -2952,6 +2965,8 @@ void SDIRK3Config::print() const {
     std::cout << "  fd_consistency_samples = " << fd_consistency_samples << std::endl;
     std::cout << "  catastrophic_abs_floor = " << catastrophic_abs_floor << std::endl;
     std::cout << "  newton_zero_step_stall_limit = " << newton_zero_step_stall_limit << std::endl;
+    std::cout << "  stage2_rejection_snapshot_diag = "
+              << (stage2_rejection_snapshot_diag ? "true" : "false") << std::endl;
     std::cout << "  precond_gs_awphi_cap = " << precond_gs_awphi_cap << std::endl;
     std::cout << "  stage_gate_rel_threshold = " << stage_gate_rel_threshold << std::endl;
     std::cout << "  stage3_gate_rel_threshold = " << stage3_gate_rel_threshold
@@ -4026,6 +4041,11 @@ void wrf_sdirk3_set_config_bool(const char* name, int value) {
         g_sdirk3_config.save_trajectory = (value != 0);
     } else if (key == "retain_graph" || key == "retain_graph_for_adjoint") {
         g_sdirk3_config.retain_graph_for_adjoint = (value != 0);
+    } else if (key == "stage2_rejection_snapshot_diag") {
+        g_sdirk3_config.stage2_rejection_snapshot_diag = (value != 0);
+        std::cerr << "[CONFIG] stage2_rejection_snapshot_diag = "
+                  << (g_sdirk3_config.stage2_rejection_snapshot_diag ? "true" : "false")
+                  << std::endl;
     } else if (key == "obs_aware_4dvar" || key == "observation_aware_4dvar") {
         g_sdirk3_config.obs_aware_4dvar = (value != 0);
     } else if (key == "check_staggered_consistency") {
