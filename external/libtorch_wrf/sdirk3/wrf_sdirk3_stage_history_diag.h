@@ -1508,11 +1508,12 @@ inline std::string emit_stage_history_diag(
         }
     }
     // The aggregate FP64 increment sum excludes rounding at each FP32 state
-    // addition. When that diagnostic exceeds its relative limit, accept only
-    // an exact replay of the production recurrence; the later per-source gate
-    // also checks every captured intermediate state bit for bit.
+    // addition. Always compute exact production-recurrence replay telemetry;
+    // when the aggregate diagnostic exceeds its relative limit, only an exact
+    // replay is accepted. The later per-source gate checks every captured
+    // intermediate state bit for bit.
     bool fp32_replay_exact = false;
-    if (hist_finite && hist_rel > 1e-6 && U_n.defined() &&
+    if (hist_finite && U_n.defined() &&
         U_n.scalar_type() == torch::kFloat32 &&
         U_stage.scalar_type() == torch::kFloat32) {
         auto replay = U_n.detach().clone();
