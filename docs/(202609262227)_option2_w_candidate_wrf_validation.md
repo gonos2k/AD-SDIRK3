@@ -2,7 +2,7 @@
 
 Local timestamp: 2026-09-26 22:27 JST
 
-This addendum extends [`(202609262159)_option2_w_composite_parity.md`](202609262159_option2_w_composite_parity.md) with full CMake/CTest, Make archive, and candidate-archive-first WRF evidence. The numerical source was fixed at candidate commit `268391faedef80d8ddb5b4d96cd7ced1852cab76`; `wrf_sdirk3_tile_unified_impl.cpp` SHA-256 was `b6e8498b522b9ec610dc874a11f2d1ce3b79b681cca6ee136579c0254e2743ef` before and after validation. No source file changed during this follow-up.
+This addendum extends [`(202609262159)_option2_w_composite_parity.md`](<(202609262159)_option2_w_composite_parity.md>) with full CMake/CTest, Make archive, and candidate-archive-first WRF evidence. The numerical source was fixed at candidate commit `268391faedef80d8ddb5b4d96cd7ced1852cab76`; `wrf_sdirk3_tile_unified_impl.cpp` SHA-256 was `b6e8498b522b9ec610dc874a11f2d1ce3b79b681cca6ee136579c0254e2743ef` before and after validation. No source file changed during this follow-up.
 
 ## Build and tests
 
