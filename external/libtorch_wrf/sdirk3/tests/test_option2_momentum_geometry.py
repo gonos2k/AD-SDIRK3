@@ -630,10 +630,13 @@ end program oracle_driver
             link_flags.append(f"-Wl,-syslibroot,{sdk.stdout.strip()}")
     compile_cmd = [*compiler_cmd, "-ffree-form", "-ffree-line-length-none", *flags,
                    *link_flags, str(f90), "-o", str(exe)]
-    built = subprocess.run(compile_cmd, text=True, capture_output=True)
+    # Keep gfortran's generated .mod files in this oracle's private scratch
+    # directory. Parallel CTest map/profile probes otherwise race on shared
+    # module filenames in the caller's working directory.
+    built = subprocess.run(compile_cmd, cwd=work, text=True, capture_output=True)
     if built.returncode:
         raise RuntimeError("Fortran oracle compile failed:\n" + built.stderr)
-    run = subprocess.run([str(exe)], check=True, text=True, capture_output=True)
+    run = subprocess.run([str(exe)], cwd=work, check=True, text=True, capture_output=True)
     values: dict[str, dict[tuple[int, int, int], float]] = {}
     labels = {"M_ZX", "M_ZY", "M_RDZW", "D11_RAW", "D12_RAW",
               "D13_RAW", "D23_RAW", "D33_RAW", "V_RAW", "RHS_U",
