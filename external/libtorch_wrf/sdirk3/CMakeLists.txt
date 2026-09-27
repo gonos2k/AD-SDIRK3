@@ -507,6 +507,10 @@ add_test(NAME Scalar_Advection_Contract COMMAND test_scalar_advection_contract)
 add_executable(test_scalar_diffusion_contract tests/test_scalar_diffusion_contract.cpp)
 target_link_libraries(test_scalar_diffusion_contract PRIVATE wrf_sdirk3::core)
 add_test(NAME Scalar_Diffusion_Contract COMMAND test_scalar_diffusion_contract)
+add_test(NAME Option2_Momentum_Geometry_Source_Parity
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_momentum_geometry.py
+            --binary $<TARGET_FILE:test_scalar_diffusion_contract>)
 
 add_executable(test_potential_temperature_contract tests/test_potential_temperature_contract.cpp)
 target_link_libraries(test_potential_temperature_contract PRIVATE wrf_sdirk3::core)

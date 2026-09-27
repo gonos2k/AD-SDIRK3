@@ -36033,9 +36033,10 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_defor13(const torch::Tensor& u, c
                 if (nk_terr > 0) {
                     auto dhatavg_bulk = hatavg.slice(1, 1, nz) - hatavg.slice(1, 0, nz - 1);  // [ny, nz-1, nx_interior-1]
 
-                    // Bulk zx averaged to u-points at w-levels k=1..nz-1
+                    // WRF stores zx at the u-vorticity location used by
+                    // cal_deform_and_div; do not average adjacent x indices.
                     auto zx_int = zx_metric.slice(1, 1, nz);  // [ny, nz-1, nx]
-                    auto zx_at_u_bulk = 0.5f * (zx_int.slice(2, 0, nx_interior - 1) + zx_int.slice(2, 1, nx_interior));  // [ny, nz-1, nx_interior-1]
+                    auto zx_at_u_bulk = zx_int.slice(2, 1, nx_interior);  // [ny, nz-1, nx_interior-1]
 
                     // Bulk rdz at u-points
                     torch::Tensor rdz_at_u_bulk;
