@@ -165,22 +165,31 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
     routine_hash = hashlib.sha256("\n".join(routines).encode()).hexdigest()
     if profile not in {"interior-pulse", "top-pulse", "w-composite", "full-rhs-probe", "k0",
                        "actual-v-rhs", "actual-v-rhs-packed", "actual-v-rhs-map1",
+                       "actual-v-rhs-yvary", "actual-v-rhs-yvary-packed",
                        "flat-terrain", "packed-periodic",
                        "packed-periodic-flat", "v-y-terrain"}:
         raise ValueError(f"unknown fixture profile: {profile}")
     top_pulse = 1 if profile == "top-pulse" else 0
     k0 = profile == "k0"
-    actual_v_rhs = profile in {"actual-v-rhs", "actual-v-rhs-packed", "actual-v-rhs-map1"}
+    actual_v_rhs = profile in {"actual-v-rhs", "actual-v-rhs-packed", "actual-v-rhs-map1",
+                               "actual-v-rhs-yvary", "actual-v-rhs-yvary-packed"}
+    actual_v_nonuniform = profile in {"actual-v-rhs-yvary", "actual-v-rhs-yvary-packed"}
+    nonuniform_c1 = ("(/0.90,1.00,1.10,1.20/)" if actual_v_nonuniform else
+                     "(/1.00,1.00,1.00,1.00/)")
+    nonuniform_c2 = ("(/14000.,13000.,11000.,9000./)" if actual_v_nonuniform else
+                     "(/12000.,12000.,12000.,12000./)")
     fixture_map = 1.0 if profile == "actual-v-rhs-map1" else map_value
     terrain_amplitude = 0.0 if profile in {"flat-terrain", "packed-periodic-flat", "v-y-terrain"} else 100.0
-    packed_periodic = profile in {"packed-periodic", "packed-periodic-flat", "actual-v-rhs-packed"}
+    packed_periodic = profile in {"packed-periodic", "packed-periodic-flat",
+                                  "actual-v-rhs-packed", "actual-v-rhs-yvary-packed"}
     unique_nx = NX - 1 if packed_periodic else NX
+    unique_ny = NY - 1 if profile in {"actual-v-rhs-packed", "actual-v-rhs-yvary-packed"} else NY
     domain_ide = "nx" if packed_periodic else "nx+1"
-    domain_jde = "ny" if profile == "actual-v-rhs-packed" else "ny+1"
+    domain_jde = "ny" if profile in {"actual-v-rhs-packed", "actual-v-rhs-yvary-packed"} else "ny+1"
     y_varying = profile == "v-y-terrain"
     full_rhs_probe = profile == "full-rhs-probe"
     terrain_y_amplitude = 40.0 if y_varying or full_rhs_probe else 0.0
-    domain_jte = ("ny-1" if profile == "actual-v-rhs-packed" else
+    domain_jte = ("ny-1" if profile in {"actual-v-rhs-packed", "actual-v-rhs-yvary-packed"} else
                   ("ny+1" if y_varying else "ny"))
     v_x_factor = "1.0" if y_varying else (
         f"(1.0+0.1*cos(2.*pi*real(modulo(i-1,{unique_nx}))/real({unique_nx})))")
@@ -213,6 +222,7 @@ program oracle_driver
   type(grid_config_rec_type) :: cfg
   real :: rdx,rdy,terrain,pi,cf1,cf2,cf3
   real :: ph(ims:ime,kms:kme,jms:jme), phb(ims:ime,kms:kme,jms:jme)
+  real :: mu_pert(ims:ime,jms:jme), phi_pert(ims:ime,kms:kme,jms:jme)
   real :: z(ims:ime,kms:kme,jms:jme), rdz(ims:ime,kms:kme,jms:jme)
   real :: tendency(ims:ime,kms:kme,jms:jme), defor11(ims:ime,kms:kme,jms:jme)
   real :: defor22(ims:ime,kms:kme,jms:jme), defor33(ims:ime,kms:kme,jms:jme)
@@ -239,22 +249,33 @@ program oracle_driver
   real :: msfvx(ims:ime,jms:jme), msfvy(ims:ime,jms:jme)
   real :: msftx(ims:ime,jms:jme), msfty(ims:ime,jms:jme)
   real :: fnm(kms:kme), fnp(kms:kme), dn(kms:kme), dnw(kms:kme)
+  real :: c1h_profile(kms:kme), c2h_profile(kms:kme)
   real :: u_base(kms:kme), v_base(kms:kme)
   real :: theta_input(ims:ime,kms:kme,jms:jme), c1rk(kms:kme), c2rk(kms:kme)
   real :: nba_rij(ims:ime,kms:kme,jms:jme,3)
   real :: nba_mij(ims:ime,kms:kme,jms:jme,5)
   tendency=0.; tendency_v=0.; defor11=0.; defor22=0.; defor33=0.; defor12=0.
   defor13=0.; defor23=0.; div=0.; u=0.; v=0.; w=0.; tke=0.
-  xkmh={0.0 if k0 else KH:.17g}; xkmv={0.0 if k0 else KV:.17g}
+  xkmh={0.0 if (k0 or actual_v_nonuniform) else KH:.17g}; xkmv={0.0 if k0 else KV:.17g}
   ru_tend=0.; rv_tend=0.; rw_tend=0.; ph_tend=0.; t_tend=0.
   ru_tendf=0.; rv_tendf=0.; rw_tendf=0.; ph_tendf=0.; t_tendf=0.
   u_save=0.; v_save=0.; w_save=0.; ph_save=0.; t_save=0.
   mu_tend=0.; mu_tendf=0.; h_diabatic=0.; mut=1.; msfvx_inv=1./{fixture_map:.17g}
   ph=0.; phb=0.; z=0.; rdz=0.; rho=1.; zx=0.; zy=0.; rdzw=0.; theta_input=0.
+  mu_pert=0.; phi_pert=0.
   nba_rij=0.; nba_mij=0.
   msfux={fixture_map:.17g}; msfuy={fixture_map:.17g}; msfvx={fixture_map:.17g}; msfvy={fixture_map:.17g}
   msftx={fixture_map:.17g}; msfty={fixture_map:.17g}
   fnm=0.5; fnp=0.5; dn=-0.25; dnw=-0.25; u_base=0.; v_base=0.
+  if ({1 if actual_v_nonuniform else 0} == 1) then
+    fnm(1:5)=(/0.70,0.60,0.80,0.65,0.50/)
+    fnp(1:5)=1.-fnm(1:5)
+  endif
+  c1h_profile=1.; c2h_profile=12000.
+  if ({1 if actual_v_nonuniform else 0} == 1) then
+    c1h_profile(1:4)={nonuniform_c1}
+    c2h_profile(1:4)={nonuniform_c2}
+  endif
   c1rk=fnm; c2rk=fnm
   if ({1 if full_rhs_probe else 0} == 1) then
     mut=80000.
@@ -271,7 +292,13 @@ program oracle_driver
         ii=modulo(i-1,{unique_nx})
         terrain={terrain_amplitude:.17g}*cos(2.*pi*real(ii)/real({unique_nx})) + &
                 ({terrain_y_amplitude:.17g})*cos(2.*pi*real(modulo(j-1,ny))/real(ny))
-        ph(i,k,j)=g*(terrain+{DZ:.17g}*real(k-1))
+        if ({1 if actual_v_nonuniform else 0} == 1) then
+          ii=modulo(j-1,{unique_ny})
+          mu_pert(i,j)=8000.*cos(2.*pi*(real(ii)+0.5)/real({unique_ny}))
+          phi_pert(i,k,j)=g*20.*cos(2.*pi*(real(ii)+0.5)/real({unique_ny}))* &
+                          (real(k-1)/real(nz))**2
+        endif
+        ph(i,k,j)=g*(terrain+{DZ:.17g}*real(k-1))+phi_pert(i,k,j)
         if ({1 if full_rhs_probe else 0} == 1) then
           theta_input(i,k,j)=0.4+0.2*sin(2.*pi*real(modulo(i-1,nx))/real(nx))+ &
                              0.15*cos(2.*pi*real(modulo(j-1,ny))/real(ny))+0.05*real(k-1)
@@ -279,6 +306,24 @@ program oracle_driver
       enddo
     enddo
   enddo
+  if ({1 if actual_v_nonuniform else 0} == 1) then
+    do j=jms,jme
+      do k=kts,kte-1
+        do i=ims,ime
+          rho(i,k,j)=1.0 / (1.0 - (c1h_profile(k)*mu_pert(i,j) + (1.0/dnw(k))* &
+             (phi_pert(i,k+1,j)-phi_pert(i,k,j))) / &
+             (c1h_profile(k)*(80000.0+mu_pert(i,j))+c2h_profile(k)))
+        enddo
+      enddo
+    enddo
+    do j=jts,jte
+      do k=kts,kte-1
+        do i=1,nx
+          write(*,'(A,3(1X,I0),1X,ES25.16)') 'V_RHO_RAW',j-1,k-1,i-1,rho(i,k,j)
+        enddo
+      enddo
+    enddo
+  endif
   ! Stage PH is Y-constant; packed mode has a duplicate mass endpoint.
   ! Exact metrics run at the east endpoint so they write zx(ide).
   call compute_diff_metrics(cfg,ph,phb,z,rdz,rdzw,zx,zy,rdx,rdy, &
@@ -598,6 +643,30 @@ program oracle_driver
       enddo
     enddo
   enddo
+  if ({1 if actual_v_nonuniform else 0} == 1) then
+    ! Separate direct-operator control: positive K anticorrelates with the
+    ! EOS rho field. This does not alter the native actual-RHS fixture above.
+    do j=jms,jme
+      do k=kts,kte-1
+        do i=ims,ime
+          xkmv(i,k,j)=2.0-6.0*(rho(i,k,j)-1.0)
+        enddo
+      enddo
+    enddo
+    tendency_v=0.
+    call vertical_diffusion_v_2(tendency_v,cfg,defor23,xkmv, &
+         nba_mij(ims,kms,jms,1),2,dnw,rdzw,fnm,fnp,rho, &
+         ids,ide,jds,jde,kds,kde,ims,ime,jms,jme,kms,kme, &
+         itsd,ited,jts,jte,kts,kte)
+    do j=jts,jte
+      do k=kts,kte-1
+        do i=itsd,ited
+          write(*,'(A,3(1X,I0),1X,ES25.16)') 'V_Z_PROFILE_RAW', &
+               j-1,k-1,i-1,tendency_v(i,k,j)
+        enddo
+      enddo
+    enddo
+  endif
   ! Operator-only control: the old source-grounded Python D11 and ideal metric
   ! inputs feed exact stress/U2 routines independently of the producer chain.
   tendency=0.; defor11=0.; defor12=0.; div=0.; zx=0.
@@ -655,7 +724,8 @@ end program oracle_driver
               "D13_RAW", "D23_RAW", "D33_RAW", "V_RAW", "RHS_U",
               "SMALLSTEP_LU",
               "F_RAW", "O_RAW", "HW_RAW", "VW_RAW", "RHS_W",
-              "V_Z_RAW", "V_H_RAW", "RHS_V", "D12_V_RAW", "D22_V_RAW"}
+              "V_Z_RAW", "V_Z_PROFILE_RAW", "V_H_RAW", "RHS_V", "V_RHO_RAW",
+              "D12_V_RAW", "D22_V_RAW"}
     for line in run.stdout.splitlines():
         fields = line.split()
         if fields and fields[0] == "SMALLSTEP_LU":

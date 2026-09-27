@@ -2,6 +2,7 @@
 #include "../wrf_sdirk3_tile_unified.h"
 #include "tile_test_fixture.h"
 #include <torch/torch.h>
+#include <array>
 #include <cmath>
 #include <iostream>
 #include <iomanip>
@@ -69,6 +70,11 @@ template struct MemberAccessor<MapVyTag, &TileSDIRK3UnifiedSolver::msfvy_>;
 template struct MemberAccessor<MapVxTag, &TileSDIRK3UnifiedSolver::msfvx_>;
 template struct MemberAccessor<MapTxTag, &TileSDIRK3UnifiedSolver::msftx_>;
 template struct MemberAccessor<MapTyTag, &TileSDIRK3UnifiedSolver::msfty_>;
+struct AvgYToVTag {
+    using type = torch::Tensor (TileSDIRK3UnifiedSolver::*)(const torch::Tensor&,int);
+    friend type access(AvgYToVTag);
+};
+template struct MemberAccessor<AvgYToVTag,&TileSDIRK3UnifiedSolver::avg_y_to_v_2d>;
 
 struct Option1MomentumTag {
     using type = std::tuple<torch::Tensor,torch::Tensor,torch::Tensor>
@@ -482,15 +488,26 @@ int dump_option2_full_rhs_probe(float map_scale=1.25f) {
 // the source-extracted V composite oracle. The base EOS is chosen so rho=1,
 // while the dry layer mass, map, and alpha stay distinct and non-unit.
 struct VActualRhsFixture {
-    std::vector<float> half,c1f,c2f,c1h,c2h;
+    std::vector<float> fnm,fnp,c1f,c2f,c1h,c2h;
     TileSDIRK3UnifiedSolver solver;
     VActualRhsFixture(bool packed,float spacing,float map,float mass_value,
                       float c1_value,float c2_value,float pbase_value,double gravity,
-                      int unique_nx)
-        : half(nw,0.5f),c1f(nw,1.0f),c2f(nw,0.0f),
+                      int unique_nx,bool nonuniform=false)
+        : fnm(nw,0.5f),fnp(nw,0.5f),c1f(nw,1.0f),c2f(nw,0.0f),
           c1h(nz,c1_value),c2h(nz,c2_value),
           solver(nx,ny,nz,spacing,spacing,{1.0f/spacing},{1.0f/spacing},
                  std::vector<float>(nz,float(nz)),0) {
+        if (nonuniform) {
+            c1h={0.90f,1.00f,1.10f,1.20f};
+            c2h={14000.0f,13000.0f,11000.0f,9000.0f};
+        }
+        if (nonuniform) {
+            const std::array<float,nw> fnm_profile{{0.70f,0.60f,0.80f,0.65f,0.50f}};
+            for (int k=0;k<nw;++k) {
+                fnm[k]=fnm_profile[k];
+                fnp[k]=1.0f-fnm[k];
+            }
+        }
         const int ide=packed?nx:nx+1,jde=packed?ny:ny+1;
         solver.setWRFIndices(1,ide,1,jde,1,nz,
             1,ide,1,jde,1,nw,-2,nx+4,-2,ny+4,1,nw);
@@ -505,7 +522,7 @@ struct VActualRhsFixture {
         }
         solver.setBaseState(pbase.data(),tinit.data(),phbase.data(),mubase.data());
         (solver.*access(CoordinateTag{}))(c1f.data(),c2f.data(),c1h.data(),c2h.data());
-        solver.setVerticalInterpolationCoefficients(half.data(),half.data(),
+        solver.setVerticalInterpolationCoefficients(fnm.data(),fnp.data(),
                                                     1.0f,0.0f,0.0f);
         const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
         solver.*access(MapTxTag{})=torch::full({ny,nx},map,opt);
@@ -517,16 +534,22 @@ struct VActualRhsFixture {
     }
 };
 
-bool dump_option2_v_actual_rhs(bool packed,float map=1.25f) {
+bool dump_option2_v_actual_rhs(bool packed,float map=1.25f,bool nonuniform=false) {
     using namespace wrf::sdirk3;
     using namespace wrf::sdirk3::test;
     auto& cfg=g_sdirk3_config;
     constexpr float dx=1000.0f, gravity=9.81f;
-    constexpr float kh=2.0f/3.0f, kv=4.0f/3.0f;
+    const float kh=nonuniform?0.0f:2.0f/3.0f;
+    constexpr float kv=4.0f/3.0f;
     constexpr float mu_base_value=80000.0f, c1_value=1.0f, c2_value=12000.0f;
     const int unique_nx=packed?nx-1:nx;
+    const int unique_ny=packed?ny-1:ny;
     const auto opt=torch::TensorOptions().dtype(torch::kFloat32).device(torch::kCPU);
     std::vector<float> c1h(nz,c1_value),c2h(nz,c2_value);
+    if (nonuniform) {
+        c1h={0.90f,1.00f,1.10f,1.20f};
+        c2h={14000.0f,13000.0f,11000.0f,9000.0f};
+    }
     const double cpovcv=1004.5/717.5;
     const float pbase_value=static_cast<float>(100000.0*std::pow(
         287.0*300.0/100000.0,cpovcv));
@@ -546,6 +569,17 @@ bool dump_option2_v_actual_rhs(bool packed,float map=1.25f) {
         for(int j=0;j<nv;++j) for(int i=0;i<nx;++i) {
             const int ix=i%unique_nx;
             v[j][1][i]=1.0f+0.1f*std::cos(float(2.0*pi*ix/unique_nx));
+        }
+        if (nonuniform) {
+            for(int j=0;j<ny;++j) for(int i=0;i<nx;++i) {
+                const int jy=j%unique_ny;
+                const float sy=std::cos(float(2.0*pi*(jy+0.5)/unique_ny));
+                mu[j][i]=8000.0f*sy;
+                for(int k=0;k<nw;++k) {
+                    const float eta=float(k)/float(nz);
+                    ph[j][k][i]=gravity*20.0f*sy*eta*eta;
+                }
+            }
         }
         // The public RHS applies projectStateBoundaries before unpacked
         // tendencies are formed. Match that symmetric-normal-V input in the
@@ -599,7 +633,7 @@ bool dump_option2_v_actual_rhs(bool packed,float map=1.25f) {
         set_config(khdif,kvdif);
         cfg.use_stress_tensor=stress;
         VActualRhsFixture tile(packed,dx,map,mu_base_value,c1_value,c2_value,
-                               pbase_value,gravity,unique_nx);
+                               pbase_value,gravity,unique_nx,nonuniform);
         configure(tile,khdif,kvdif,stress);
         const auto frozen_state=state.detach().clone();
         const auto rhs=(tile.solver.*access(ActualRhsTag{}))(
@@ -613,7 +647,7 @@ bool dump_option2_v_actual_rhs(bool packed,float map=1.25f) {
     // configuration, then observe the public production RHS via ON/OFF calls.
     set_config(kh,kv);
     VActualRhsFixture tile(packed,dx,map,mu_base_value,c1_value,c2_value,
-                           pbase_value,gravity,unique_nx);
+                           pbase_value,gravity,unique_nx,nonuniform);
     configure(tile,kh,kv);
     auto& solver=tile.solver;
     const auto u=state.slice(0,0,su).view({ny,nz,nu});
@@ -635,7 +669,14 @@ bool dump_option2_v_actual_rhs(bool packed,float map=1.25f) {
         const auto zx_x=torch::cat({zx_core,zx_core.slice(2,1,2)},2);
         zx_stage=torch::cat({zx_x,zx_x.slice(0,mass_m-1,mass_m)},0);
     } else zx_stage=zx_core;
-    auto zy_stage=torch::zeros({nv,nw,nx},opt);
+    const auto zy_in=(z_core.slice(0,1,mass_m)-z_core.slice(0,0,mass_m-1))*(1.0f/dx);
+    const auto zy_core=torch::cat({torch::zeros({1,nw,mass_n},opt),zy_in,
+                                   torch::zeros({1,nw,mass_n},opt)},0);
+    torch::Tensor zy_stage;
+    if(packed) {
+        const auto zy_x=torch::cat({zy_core,zy_core.slice(2,0,1)},2);
+        zy_stage=torch::cat({zy_x,zy_x.slice(0,mass_m-1,mass_m)},0);
+    } else zy_stage=zy_core;
     const auto rdzw_core=(z_core.slice(1,1,nw)-z_core.slice(1,0,nz)).reciprocal();
     const auto rdz_bottom=(2.0f/(z_core.slice(1,1,2)-z_core.slice(1,0,1)));
     const auto rdz_middle=2.0f/(z_core.slice(1,2,nw)-z_core.slice(1,0,nz-1));
@@ -650,8 +691,8 @@ bool dump_option2_v_actual_rhs(bool packed,float map=1.25f) {
     const auto rdz_stage=extend_mass(rdz_core);
     const auto rdnw=(solver.*access(RdnwTag{}))(torch::kCPU,torch::kFloat32,nz);
     const auto rdy=torch::full({1},1.0f/dx,opt);
-    const auto c1_tensor=torch::full({nz},c1_value,opt);
-    const auto c2_tensor=torch::full({nz},c2_value,opt);
+    const auto c1_tensor=torch::tensor(c1h,opt);
+    const auto c2_tensor=torch::tensor(c2h,opt);
     const auto pbase=torch::full({ny,nz,nx},pbase_value,opt);
     const auto thbase=torch::full({ny,nz,nx},300.0f,opt);
     const auto mu_base=grid->mu_base.to(opt);
@@ -659,18 +700,29 @@ bool dump_option2_v_actual_rhs(bool packed,float map=1.25f) {
     const auto rho=calc_p_rho_wrf(ph,theta,mu,mu_base,alb,pbase,rdnw,
         c1_tensor,c2_tensor,287.0f,717.5f,1004.5f,100000.0f,300.0f).alt.reciprocal();
     const auto mu_full=mu+mu_base;
-    const auto muv=torch::full({nv,nx},mu_base_value,opt);
+    const auto muv=(solver.*access(AvgYToVTag{}))(mu_full,nv);
     const auto kh_field=torch::full({ny,nz,nx},kh,opt);
     const auto kv_w_field=torch::full({ny,nw,nx},kv,opt);
+    const auto kv_profile=2.0f-6.0f*(rho-1.0f);
+    const auto layer_mass_v=c1_tensor.view({1,nz,1})*muv.unsqueeze(1)+c2_tensor.view({1,nz,1});
+    const auto alpha_v=layer_mass_v/map;
     const auto map_u=solver.*access(MapUxTag{}), map_v=solver.*access(MapVxTag{});
     const auto map_m=solver.*access(MapTxTag{});
     const auto raw_h=call_option2_momentum_helper(access(VOption2HelperTag{}),solver,
         u,v,w,kh_field,1.0f/dx,1.0f/dx,map_v,solver.*access(MapVyTag{}),map_m,
         muv,ph_full,rho,zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto d12_raw=(solver.*access(Defor12StageGeometryTag{}))(
+        u,v,w,1.0f/dx,1.0f/dx,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage);
+    const auto d22_raw=(solver.*access(Defor22StageGeometryTag{}))(
+        u,v,w,1.0f/dx,1.0f/dx,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage);
     const auto defor23=(solver.*access(Defor23StageGeometryTag{}))(
         v,w,rdy,rdnw,zx_stage,zy_stage,rdzw_stage,rdz_stage);
     const auto raw_z=(solver.*access(VerticalVStressTag{}))(
         v,defor23,kv_w_field,rho,rdnw).contiguous();
+    const auto raw_z_profile=(solver.*access(VerticalVStressTag{}))(
+        v,defor23,kv_profile,rho,rdnw).contiguous();
+    const auto raw_z_product_mutant=(solver.*access(VerticalVStressTag{}))(
+        v,defor23,torch::ones_like(kv_profile),rho*kv_profile,rdnw).contiguous();
     const auto rhs_off=run_rhs(0.0f,0.0f);
     const auto rhs_h_only_on_full=run_rhs(kh,0.0f);
     const auto rhs_h_only_full=rhs_h_only_on_full-rhs_off;
@@ -696,7 +748,7 @@ bool dump_option2_v_actual_rhs(bool packed,float map=1.25f) {
     // Repeat ON/OFF in both orders on one solver. Inputs stay frozen clones;
     // comparison with fresh-solver runs catches order-dependent RHS caches.
     VActualRhsFixture sequence_tile(packed,dx,map,mu_base_value,c1_value,c2_value,
-                                    pbase_value,gravity,unique_nx);
+                                    pbase_value,gravity,unique_nx,nonuniform);
     configure(sequence_tile,kh,kv);
     const auto actual_same_solver=[&]() {
         return (sequence_tile.solver.*access(ActualRhsTag{}))(
@@ -717,6 +769,8 @@ bool dump_option2_v_actual_rhs(bool packed,float map=1.25f) {
     const double alpha=(c1_value*mu_base_value+c2_value)/map;
     const auto ah=raw_h.accessor<float,3>();
     const auto az=raw_z.accessor<float,3>();
+    const auto az_profile=raw_z_profile.accessor<float,3>();
+    const auto az_product_mutant=raw_z_product_mutant.accessor<float,3>();
     const auto hrate=rhs_h_only.accessor<float,3>();
     const auto zrate=rhs_z_only.accessor<float,3>();
     const auto bothrate=rhs_both.accessor<float,3>();
@@ -727,9 +781,31 @@ bool dump_option2_v_actual_rhs(bool packed,float map=1.25f) {
     const auto muba=mu_both.accessor<float,2>();
     const auto va=v.accessor<float,3>();
     const auto mv_acc=muv.accessor<float,2>();
+    const auto alpha_v_acc=alpha_v.accessor<float,3>();
+    const auto rho_acc=rho.accessor<float,3>();
+    const auto d12_contig=d12_raw.contiguous();
+    const auto d22_contig=d22_raw.contiguous();
+    const auto d12_acc=d12_contig.accessor<float,3>();
+    const auto d22_acc=d22_contig.accessor<float,3>();
+    for(int j=0;j<d12_raw.size(0);++j) for(int k=0;k<d12_raw.size(1);++k)
+        for(int i=0;i<d12_raw.size(2);++i) {
+            std::cout<<"VACT_D12 "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(10)<<d12_acc[j][k][i]<<'\n';
+            std::cout<<"VACT_D22 "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(10)<<d22_acc[j][k][i]<<'\n';
+        }
+    for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i)
+        std::cout<<"VACT_RHO "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(10)<<rho_acc[j][k][i]<<'\n';
     for(int j=1;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i) {
         std::cout<<"VACT_RAW_H "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<ah[j][k][i]<<'\n';
         std::cout<<"VACT_RAW_Z "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<az[j][k][i]<<'\n';
+        if (nonuniform) {
+            std::cout<<"VACT_Z_PROFILE_RAW "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(10)<<az_profile[j][k][i]<<'\n';
+            std::cout<<"VACT_Z_PRODUCT_MUTANT "<<j<<' '<<k<<' '<<i<<' '
+                     <<std::setprecision(10)<<az_product_mutant[j][k][i]<<'\n';
+        }
         std::cout<<"VACT_H_RATE "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<hrate[j][k][i]<<'\n';
         std::cout<<"VACT_Z_RATE "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<zrate[j][k][i]<<'\n';
         const float mdot_both=0.5f*(muba[j-1][i]+muba[j][i]);
@@ -745,14 +821,17 @@ bool dump_option2_v_actual_rhs(bool packed,float map=1.25f) {
         std::cout<<"VACT_RV_BOTH "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<rv_both<<'\n';
         std::cout<<"VACT_M_V "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<mv_acc[j][i]<<'\n';
         std::cout<<"VACT_MSFVX "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<map<<'\n';
-        std::cout<<"VACT_ALPHA_V "<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(10)<<alpha<<'\n';
+        std::cout<<"VACT_ALPHA_V "<<j<<' '<<k<<' '<<i<<' '
+                 <<std::setprecision(10)<<alpha_v_acc[j][k][i]<<'\n';
     }
-    const double rho_error=(rho-1.0f).abs().max().item<double>();
+    const double rho_min=rho.min().item<double>(),rho_max=rho.max().item<double>();
+    const double rho_error=nonuniform?0.0:(rho-1.0f).abs().max().item<double>();
     std::cout<<"VACT_META packed="<<packed<<" unique_nx="<<unique_nx
              <<" owned_v="<<(packed?ny-2:ny-1)*nz*unique_nx
              <<" endpoint_aliases="<<(packed?(ny-2)*nz:0)<<" rho_error="<<rho_error
              <<" khdif="<<kh<<" kvdif="<<kv<<" map="<<map
              <<" M_v="<<mv<<" alpha_v="<<alpha
+             <<" nonuniform="<<nonuniform<<" rho_min="<<rho_min<<" rho_max="<<rho_max
              <<" rhs_off_v_signal="<<rhs_off_v_signal
              <<" same_solver_order_error="<<same_solver_order_error<<'\n';
     return std::isfinite(rho_error) && rho_error<2e-6;
@@ -3506,6 +3585,10 @@ int main(int argc, char** argv) {
         return dump_option2_v_actual_rhs(true,1.25f) ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-momentum-v-actual-rhs-map1")
         return dump_option2_v_actual_rhs(false,1.0f) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-actual-rhs-yvary-physical")
+        return dump_option2_v_actual_rhs(false,1.25f,true) ? 0 : 1;
+    if (argc==2 && std::string(argv[1])=="--option2-momentum-v-actual-rhs-yvary-packed")
+        return dump_option2_v_actual_rhs(true,1.25f,true) ? 0 : 1;
     if (argc==2 && std::string(argv[1])=="--option2-w-fourier-sign")
         return dump_option2_w_fourier_sign();
     if (argc==2 && std::string(argv[1])=="--option2-w-fourier-zero-k")
