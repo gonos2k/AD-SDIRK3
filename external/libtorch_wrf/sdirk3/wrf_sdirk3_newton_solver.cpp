@@ -717,11 +717,10 @@ static void run_rw_term_bisection(const Context& c) {
 
     // PR 9B.1: whether the implicit W-damping gate is active decides the
     // expected capture inventory (w_damp_padded present or not).
-    const bool expect_wdamp =
-        wrf::sdirk3::g_sdirk3_config.wrf_w_damping == 1 &&
-        wrf::sdirk3::g_sdirk3_config.implicit_wdamp &&
-        wrf::sdirk3::g_sdirk3_config.w_damp_alpha > 0.0f &&
-        wrf::sdirk3::g_sdirk3_config.wrf_w_crit_cfl > 0.0f;
+    const auto& rw_cfg = wrf::sdirk3::g_sdirk3_config;
+    const bool expect_wdamp = wrf::sdirk3::rw_term_capture_expects_wdamp(
+        rw_cfg.wrf_w_damping == 1, rw_cfg.implicit_wdamp,
+        rw_cfg.w_damp_alpha, rw_cfg.wrf_w_crit_cfl);
 
     auto emit_capture_fail = [&](const char* marker, const std::string& why) {
         emit_stage_diag([&](std::ostream& os) {
@@ -4817,6 +4816,8 @@ public:
         diag_retry_generation_ = -1;
         wrf::sdirk3::Stage2RejectionSnapshot pending_stage2_rejection;
         bool pending_stage2_rejection_valid = false;
+        wrf::sdirk3::Stage2RwTermLedger pending_stage2_rw_ledger;
+        std::uint64_t current_base_rhs_input_digest = 0;
         // A fresh generation for THIS solve attempt (a stage retry re-enters here
         // and gets the next generation), so a stale triple from a prior attempt
         // can never be mistaken for this one.
@@ -5813,6 +5814,139 @@ public:
             
             torch::Tensor F;
 
+            // The bounded W-term ledger is armed only for the production base
+            // F(U_eval) call. JVPs, determinism probes, and trial RHS calls use
+            // compute_rhs directly and remain outside this scope.
+            auto compute_base_rhs = [&]() -> torch::Tensor {
+                pending_stage2_rw_ledger = {};
+                current_base_rhs_input_digest = 0;
+                const bool capture_rw_terms = stage == 2 &&
+                    wrf::sdirk3::g_sdirk3_config.stage2_rejection_snapshot_diag &&
+                    wrf::sdirk3::g_sdirk3_config.effective_imex_split_mode() >= 2;
+                if (!capture_rw_terms) return compute_rhs(U_eval);
+
+                wrf::sdirk3::RwTermCaptureIdentity identity;
+                identity.valid = U_eval.defined() && U_eval.scalar_type() == torch::kFloat32;
+                identity.timestep = global_timestep_;
+                identity.solver_id = solver_id_;
+                identity.stage = stage;
+                identity.newton_iter = newton_iter;
+                identity.solve_generation = static_cast<std::uint64_t>(diag_solve_generation_);
+                if (identity.valid) {
+                    try {
+                        identity.input_digest =
+                            wrf::sdirk3::sdirk3_rhs_operand_digest(U_eval);
+                        current_base_rhs_input_digest = identity.input_digest;
+                    } catch (...) {
+                        identity.valid = false;
+                    }
+                }
+                wrf::sdirk3::RwTermCaptureScope scope(true, identity);
+                if (!scope.armed_ok()) {
+                    pending_stage2_rw_ledger.failure = "nested_rw_term_capture_scope";
+                    return compute_rhs(U_eval);
+                }
+
+                auto F_base = compute_rhs(U_eval);
+                // Read the small capture receipt and immediately disarm/move
+                // the existing term inventory before validating or cloning it.
+                const int rhs_mode = scope.rhs_mode();
+                const auto w_conversion = scope.w_conversion_observation();
+                auto final_w = scope.final_w_observation();
+                auto raw_terms = scope.take();
+
+                auto& ledger = pending_stage2_rw_ledger;
+                ledger.identity = identity;
+                ledger.stage = stage;
+                ledger.newton_iter = newton_iter;
+                ledger.solve_generation = identity.solve_generation;
+                ledger.input_digest = identity.input_digest;
+                ledger.rhs_mode = rhs_mode;
+                const auto& rw_cfg = wrf::sdirk3::g_sdirk3_config;
+                ledger.expect_wdamp = wrf::sdirk3::rw_term_capture_expects_wdamp(
+                    rw_cfg.wrf_w_damping == 1, rw_cfg.implicit_wdamp,
+                    rw_cfg.w_damp_alpha, rw_cfg.wrf_w_crit_cfl);
+
+                if (!identity.valid) {
+                    ledger.failure = "invalid_base_rhs_identity";
+                    return F_base;
+                }
+                if (rhs_mode != 1) {  // RhsMode::ImplicitOnly
+                    ledger.failure = "unsupported_base_rhs_mode";
+                    return F_base;
+                }
+                if (!final_w.defined()) {
+                    ledger.failure = "missing_same_call_final_packed_w";
+                    return F_base;
+                }
+                if (!w_conversion.observed) {
+                    ledger.failure = "missing_same_call_w_conversion_bridge";
+                    return F_base;
+                }
+                const std::string inventory_error =
+                    wrf::sdirk3::validate_rw_term_inventory(
+                        raw_terms, ledger.expect_wdamp);
+                if (!inventory_error.empty()) {
+                    ledger.failure = "rw_term_inventory:" + inventory_error;
+                    return F_base;
+                }
+                if (!layout_initialized_) {
+                    ledger.failure = "state_layout_unavailable";
+                    return F_base;
+                }
+                for (const auto& block : cached_layout_.blocks) {
+                    if (block.name == "rw") {
+                        ledger.w_start = block.start;
+                        ledger.w_size = block.size;
+                        break;
+                    }
+                }
+                if (ledger.w_start < 0 || ledger.w_size <= 0 ||
+                    final_w.dim() != 1 || final_w.numel() != ledger.w_size ||
+                    final_w.scalar_type() != torch::kFloat32) {
+                    ledger.failure = "unsupported_final_packed_w_layout";
+                    return F_base;
+                }
+                constexpr std::uint64_t max_rw_ledger_bytes = 32ULL * 1024ULL * 1024ULL;
+                Stage2RwTermLedger size_probe = ledger;
+                size_probe.terms = raw_terms;
+                size_probe.final_w_packed = final_w;
+                size_probe.w_conversion = w_conversion;
+                if (wrf::sdirk3::stage2_rw_term_ledger_nbytes(size_probe) >
+                    max_rw_ledger_bytes) {
+                    ledger.failure = "rw_term_ledger_exceeds_32_mib_cap";
+                    return F_base;
+                }
+                try {
+                    torch::NoGradGuard no_grad;
+                    ledger.terms.reserve(raw_terms.size());
+                    for (const auto& term : raw_terms)
+                        ledger.terms.emplace_back(term.first, term.second.detach().clone());
+                    // final_w was detached and frozen by the scope's observer.
+                    ledger.final_w_packed = final_w.detach();
+                    ledger.w_conversion.observed = w_conversion.observed;
+                    ledger.w_conversion.canonical_horizontal =
+                        w_conversion.canonical_horizontal;
+                    ledger.w_conversion.coupled_slow_export =
+                        w_conversion.coupled_slow_export;
+                    ledger.w_conversion.w_input = w_conversion.w_input.detach().clone();
+                    ledger.w_conversion.velocity_mass_w =
+                        w_conversion.velocity_mass_w.detach().clone();
+                    ledger.w_conversion.mu_tend_at_w =
+                        w_conversion.mu_tend_at_w.detach().clone();
+                    ledger.w_conversion.conversion_rate =
+                        w_conversion.conversion_rate.detach().clone();
+                    ledger.w_conversion.w_tend_after_conversion =
+                        w_conversion.w_tend_after_conversion.detach().clone();
+                    ledger.valid = true;
+                } catch (...) {
+                    ledger.terms.clear();
+                    ledger.final_w_packed = torch::Tensor();
+                    ledger.failure = "rw_term_ledger_clone_failed";
+                }
+                return F_base;
+            };
+
             // C3 DIAGNOSTIC 2026-02-15: One-time RHS determinism check.
             // If F(K) returns different values for the same K due to floating-point
             // non-associativity in parallel reductions, Newton cannot converge below
@@ -5855,7 +5989,7 @@ public:
 
             if (!can_reuse_jacobian) {
                 // Recompute and cache both U and F(U)
-                F = compute_rhs(U_eval);
+                F = compute_base_rhs();
                 // Graph retention is opt-in for adjoint windows only.
                 if (wrf::sdirk3::g_sdirk3_config.use_autograd && options_.retain_graph_for_adjoint) {
                     // Preserve graph - WARNING: Memory usage will increase
@@ -5881,7 +6015,7 @@ public:
                 // Even if U_cached ≈ U_eval by the 0.1 threshold, K has been updated
                 // so U_eval = U_stage + dt*gamma*K is actually different.
                 // Reusing stale F causes residual/JVP mismatch → solver explosion
-                F = compute_rhs(U_eval);
+                F = compute_base_rhs();
                 if (wrf::sdirk3::g_sdirk3_config.use_autograd && options_.retain_graph_for_adjoint) {
                     jacobian_cache_.F_cached = F;
                     jacobian_cache_.U_cached = U_eval;
@@ -10795,6 +10929,10 @@ public:
                         ? halo_mask_ : torch::Tensor();
                     snapshot.gmres_r_true = last_gmres_r_true_;
                     snapshot.timestep = global_timestep_;
+                    snapshot.solver_id = solver_id_;
+                    snapshot.solve_generation =
+                        static_cast<std::uint64_t>(diag_solve_generation_);
+                    snapshot.rhs_input_digest = current_base_rhs_input_digest;
                     snapshot.stage = stage;
                     snapshot.newton_iter = newton_iter;
                     snapshot.trust_attempt = attempt;
@@ -10814,12 +10952,32 @@ public:
                         ? "nonfinite_rho"
                         : actual_reduction <= 0.0
                             ? "nonpositive_actual_reduction"
-                            : rho_val < rho_accept_threshold
-                                ? "rho_below_threshold_or_insufficient_decrease"
-                                : "other_post_trial_acceptance_gate";
+                                : rho_val < rho_accept_threshold
+                                    ? "rho_below_threshold_or_insufficient_decrease"
+                                    : "other_post_trial_acceptance_gate";
+
+                    // A single Newton base RHS may be followed by multiple
+                    // rejected trust attempts. Keep its already-detached
+                    // ledger pending so every attempt can retain the same
+                    // immutable base-RHS receipt.
+                    snapshot.rw_term_ledger = pending_stage2_rw_ledger;
+                    auto& rw_ledger = snapshot.rw_term_ledger;
+                    if (!rw_ledger.failure.empty() || !rw_ledger.valid ||
+                        rw_ledger.identity.timestep != snapshot.timestep ||
+                        rw_ledger.identity.solver_id != snapshot.solver_id ||
+                        rw_ledger.identity.stage != snapshot.stage ||
+                        rw_ledger.identity.newton_iter != snapshot.newton_iter ||
+                        rw_ledger.identity.solve_generation != snapshot.solve_generation ||
+                        rw_ledger.identity.input_digest != snapshot.rhs_input_digest) {
+                        rw_ledger.valid = false;
+                        if (rw_ledger.failure.empty())
+                            rw_ledger.failure = "base_rhs_ledger_identity_mismatch";
+                    }
 
                     pending_stage2_rejection =
-                        wrf::sdirk3::clone_stage2_rejection_snapshot(snapshot);
+                        wrf::sdirk3::clone_stage2_rejection_snapshot(snapshot, false);
+                    pending_stage2_rejection.rw_term_ledger =
+                        snapshot.rw_term_ledger;
                     pending_stage2_rejection_valid = true;
 
                     if (!stage2_rejection_snapshot_attempted_) {
@@ -11126,7 +11284,8 @@ public:
                             wrf::sdirk3::g_sdirk3_config.stage2_rejection_snapshot_diag) {
                             if (pending_stage2_rejection_valid &&
                                 wrf::sdirk3::stage2_terminal_snapshot_candidate_matches(
-                                    pending_stage2_rejection, newton_iter)) {
+                                    pending_stage2_rejection, newton_iter,
+                                    static_cast<std::uint64_t>(diag_solve_generation_))) {
                                 const std::string base =
                                     "sdirk3_stage2_terminal_zero_step_stall_ts" +
                                     std::to_string(global_timestep_) + "_solver" +
@@ -11138,13 +11297,17 @@ public:
                                 if (wrf::sdirk3::write_stage2_terminal_stall_snapshot(
                                         pending_stage2_rejection, newton_iter,
                                         stagnation_count, archive_path, metadata_path,
-                                        &snapshot_error)) {
+                                        &snapshot_error,
+                                        wrf::sdirk3::g_sdirk3_config.effective_imex_split_mode() >= 2)) {
                                     std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL path="
                                               << archive_path << " metadata=" << metadata_path
                                               << " terminal_iter=" << newton_iter
                                               << " candidate_iter="
                                               << pending_stage2_rejection.newton_iter
                                               << " stagnation_count=" << stagnation_count
+                                              << (pending_stage2_rejection.rw_term_ledger.valid
+                                                      ? " w_ledger=validated"
+                                                      : "")
                                               << " (latest common-path rejection; observed tensors; no RHS replay)\n";
                                 } else {
                                     std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL_UNAVAILABLE reason="
@@ -11152,9 +11315,13 @@ public:
                                 }
                             } else if (pending_stage2_rejection_valid) {
                                 std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL_UNAVAILABLE "
-                                          << "reason=latest_common_path_candidate_iteration_mismatch"
+                                          << "reason=latest_common_path_candidate_identity_mismatch"
                                           << " candidate_iter="
                                           << pending_stage2_rejection.newton_iter
+                                          << " candidate_generation="
+                                          << pending_stage2_rejection.solve_generation
+                                          << " terminal_generation="
+                                          << diag_solve_generation_
                                           << " terminal_iter=" << newton_iter << "\n";
                             } else {
                                 std::cerr << "SDIRK3_STAGE2_TERMINAL_ZERO_STEP_STALL_UNAVAILABLE "

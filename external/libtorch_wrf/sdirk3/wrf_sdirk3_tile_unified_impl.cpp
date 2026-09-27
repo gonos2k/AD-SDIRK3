@@ -14217,21 +14217,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::solveImplicitStage(
     return k;
 }
 
-// PR 9F.8: FNV-1a 64-bit digest of a tensor's packed float32 bytes, for the RHS
-// operand-identity evidence. Read-only and graph-safe: NoGradGuard + a detached,
-// contiguous CPU float32 COPY, so it cannot touch the live tensor or its autograd
-// graph and cannot perturb the numerical result. Diagnostic-only (a GPU->CPU sync +
-// full-buffer scan); never called on the default production path.
-static uint64_t sdirk3_rhs_operand_digest(const torch::Tensor& t) {
-    torch::NoGradGuard no_grad;
-    auto c = t.detach().to(torch::kCPU, torch::kFloat32).contiguous();
-    const auto* p = reinterpret_cast<const unsigned char*>(c.data_ptr<float>());
-    const size_t n = static_cast<size_t>(c.numel()) * sizeof(float);
-    uint64_t h = 1469598103934665603ULL;      // FNV-1a offset basis
-    for (size_t i = 0; i < n; ++i) { h ^= p[i]; h *= 1099511628211ULL; }
-    return h;
-}
-
 bool TileSDIRK3UnifiedSolver::isPackedPeriodicDomain() const {
     // WRF's single whole-domain tile includes one mass endpoint per axis.
     // Physical-dimension fixtures and full-halo views use another layout.
@@ -14293,6 +14278,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
             return computeUnifiedRHSFullHalo(U, mode);
         }
     }
+    auto& rw_capture = wrf::sdirk3::rw_term_capture_slot();
+    if (rw_capture.armed && rw_capture.capture_final_w)
+        rw_capture.rhs_mode = static_cast<int>(mode);
 
     // PR 9F.1: count this RHS evaluation. Placed AFTER the full-halo redirect so a
     // delegated call is counted exactly once (the full-halo path re-enters here with
@@ -14397,7 +14385,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     // STAGE_OPERAND_DIAG-off and -on runs and is one of the common records compared
     // byte-identical -- and NEVER on the default production path.
     if (wrf::sdirk3::sdirk3_rhs_count_enabled()) {
-        const uint64_t digest = sdirk3_rhs_operand_digest(U);
+        const uint64_t digest = wrf::sdirk3::sdirk3_rhs_operand_digest(U);
         char line[112];
         std::snprintf(line, sizeof line,
                       "SDIRK3_RHS_DIGEST total=%lld mode=%d input=0x%016llx\n",
@@ -24872,6 +24860,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                                              ucap.terms);
     }
     torch::Tensor u_tend, v_tend, w_tend;
+    torch::Tensor w_conversion_rate;
     if (g_export_coupled_slow) {
         // SPLIT-EXPLICIT D1 FIX (2026-07-11): export coupled d(mu*X)/dt directly (WRF
         // rk_tendency parity) — see the CoupledSlowGuard declaration for the rationale.
@@ -24889,6 +24878,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         const auto rate_v = extend_v(c1h*stagger_wrf_mass_field(
             mass_dot,0,wdamp_contract_.y_policy).unsqueeze(1),false)/level_mass_v;
         const auto rate_w = extend_w(c1f*mass_dot.unsqueeze(1))/level_mass_w;
+        if (wrf::sdirk3::rw_term_capture_slot().armed &&
+            wrf::sdirk3::rw_term_capture_slot().capture_final_w)
+            w_conversion_rate = rate_w;
         u_tend = ru_tend/velocity_mass_u-u*rate_u;
         v_tend = rv_tend/velocity_mass_v-v*rate_v;
         w_tend = rw_tend/velocity_mass_w-w*rate_w;
@@ -24995,6 +24987,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         ph_tend = check_tend(ph_tend, "ph_tend");
         theta_tend = check_tend(theta_tend, "theta_tend");
         mu_tend = check_tend(mu_tend, "mu_tend");
+    }
+    if (wrf::sdirk3::rw_term_capture_slot().armed &&
+        wrf::sdirk3::rw_term_capture_slot().capture_final_w) {
+        wrf::sdirk3::rw_term_capture_slot().observe_w_conversion(
+            w, velocity_mass_w, mu_tend_at_w_3d, w_conversion_rate, w_tend,
+            canonical_horizontal, g_export_coupled_slow);
     }
 
     // CRITICAL DIAGNOSTIC: Check w_tend before combining into K
@@ -25153,7 +25151,30 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                   << std::endl;
     }
 
-    return projectStateBoundaries(RHS);
+    auto final_rhs = projectStateBoundaries(RHS);
+    auto& rw_final_capture = wrf::sdirk3::rw_term_capture_slot();
+    if (rw_final_capture.armed && rw_final_capture.capture_final_w) {
+        // Observe the exact W block returned to Newton after coupled-to-velocity
+        // conversion, packing, optional post-pack damping, and boundary projection.
+        try {
+            const auto layout = wrf::sdirk3::StateLayout::from_grid_dims(
+                nx_, ny_, nz_, nx_u_, ny_v_, nz_w_);
+            if (layout.is_valid() && final_rhs.dim() == 1 &&
+                final_rhs.numel() == layout.total_size) {
+                for (const auto& block : layout.blocks) {
+                    if (block.name == "rw" && block.start >= 0 && block.size > 0 &&
+                        block.start + block.size <= final_rhs.numel()) {
+                        rw_final_capture.observe_final_w(
+                            final_rhs.slice(0, block.start, block.start + block.size));
+                        break;
+                    }
+                }
+            }
+        } catch (...) {
+            // Evidence capture must fail closed without changing the RHS.
+        }
+    }
+    return final_rhs;
 }
 
 void TileSDIRK3UnifiedSolver::applyRayleighDamping(torch::Tensor& rhs,

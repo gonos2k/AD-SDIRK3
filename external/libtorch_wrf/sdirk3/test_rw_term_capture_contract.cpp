@@ -16,6 +16,7 @@
 #include "wrf_sdirk3_rw_term_capture.h"
 
 using wrf::sdirk3::RwTermCaptureScope;
+using wrf::sdirk3::RwTermCaptureIdentity;
 using wrf::sdirk3::rw_term_capture_slot;
 using wrf::sdirk3::validate_rw_term_inventory;
 
@@ -212,8 +213,55 @@ int main() {
               "defined+undefined pair under one name is still a duplicate");
     }
 
+    // (8) Stage-2 base-RHS capture carries the solver identity and a frozen
+    // final packed W observation separately from the validated term inventory.
+    {
+        RwTermCaptureIdentity identity;
+        identity.valid = true;
+        identity.timestep = 4;
+        identity.solver_id = 8;
+        identity.stage = 2;
+        identity.newton_iter = 6;
+        identity.solve_generation = 3;
+        identity.input_digest = 0x1234ULL;
+        RwTermCaptureScope scope(true, identity);
+        check(scope.armed_ok(), "Stage-2 scoped capture arms on an idle slot");
+        rw_term_capture_slot().rhs_mode = 1;
+        rw_term_capture_slot().add("rw_tend_final", torch::tensor({16.0f, 40.0f}));
+        torch::Tensor packed_w = torch::tensor({6.0f, 7.0f});
+        scope.observe_final_w(packed_w);
+        packed_w.fill_(99.0f);
+        scope.observe_w_conversion(
+            torch::tensor({2.0f, 3.0f}), torch::tensor({2.0f, 4.0f}),
+            torch::tensor({2.0f, 4.0f}), torch::Tensor(),
+            torch::tensor({6.0f, 7.0f}), false, false);
+        const auto captured_identity = scope.identity();
+        const int captured_rhs_mode = scope.rhs_mode();
+        const auto frozen_w = scope.final_w_observation();
+        const auto conversion = scope.w_conversion_observation();
+        const auto terms = scope.take();
+        check(torch::equal(frozen_w, torch::tensor({6.0f, 7.0f})),
+              "final packed W observation is frozen");
+        check(conversion.observed && !conversion.coupled_slow_export,
+              "W conversion bridge is observed independently of term names");
+        check(torch::equal(conversion.velocity_mass_w, torch::tensor({2.0f, 4.0f})),
+              "W conversion bridge retains velocity mass");
+        check(captured_identity.valid && captured_identity.stage == 2 &&
+                  captured_identity.newton_iter == 6 &&
+                  captured_identity.solve_generation == 3 &&
+                  captured_identity.input_digest == 0x1234ULL,
+              "scope preserves the full Stage-2 capture identity");
+        check(captured_rhs_mode == 1 && !scope.armed_ok(),
+              "scope preserves RHS mode and disarms on take");
+        check(terms.size() == 1 && terms[0].first == "rw_tend_final",
+              "final W observation does not alter the closed inventory");
+        check(!rw_term_capture_slot().armed &&
+                  !rw_term_capture_slot().final_w_packed.defined(),
+              "take clears the separate final W slot");
+    }
+
     // Case-count ratchet: exactly this many checks must have executed.
-    const int kExpectedCases = 30;
+    const int kExpectedCases = 38;
     if (g_cases != kExpectedCases) {
         std::printf("FAIL: case-count ratchet: executed %d cases, expected %d\n",
                     g_cases, kExpectedCases);
