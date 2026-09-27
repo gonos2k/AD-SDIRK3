@@ -322,6 +322,162 @@ struct Option2RhsFixture {
     }
 };
 
+// Diagnostic bridge for the full-RHS comparison script. The printed input
+// profile is shared with test_option2_momentum_geometry.py's extracted
+// Fortran driver; this emits actual computeUnifiedRHS ON-OFF components.
+int dump_option2_full_rhs_probe(float map_scale=1.25f) {
+    using namespace wrf::sdirk3;
+    constexpr double gravity=9.81;
+    constexpr float dx=1000.0f,kh=2.0f/3.0f,kv=4.0f/3.0f;
+    const auto opt=torch::TensorOptions().dtype(torch::kFloat32);
+    const std::vector<float> c1h{0.75f,1.125f,0.875f,1.25f};
+    const std::vector<float> c2h{0.0f,2000.0f,4000.0f,6000.0f};
+    const auto evaluate=[&](bool on) {
+        auto& cfg=g_sdirk3_config;
+        cfg=SDIRK3Config{};
+        cfg.diffusion_option=2; cfg.khdif=on?kh:0.0f; cfg.kvdif=on?kv:0.0f;
+        cfg.mass_coordinate_mode=1; cfg.wrf_omega_ww_cp=false;
+        cfg.mu_horizontal_div_only=false; cfg.wrf_damp_opt=0;
+        cfg.imex_split_mode=3; cfg.hevi_split=false; cfg.use_stress_tensor=true;
+        Option2RhsFixture fixture(false,dx,c1h,c2h);
+        auto& solver=fixture.solver;
+        const float base_theta=100000.0f/287.0f;
+        std::vector<float> pbase(st,100000.0f),thinit(st,base_theta-300.0f);
+        std::vector<float> phbase(sw),mubase(sm,80000.0f);
+        for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i)
+            phbase[(j*nw+k)*nx+i]=static_cast<float>(gravity*1000.0*k);
+        solver.setBaseState(pbase.data(),thinit.data(),phbase.data(),mubase.data());
+        auto grid=std::static_pointer_cast<WRFGridInfoExtended>(solver.getGridInfo());
+        TORCH_CHECK(grid,"full RHS probe lacks WRF grid info");
+        grid->smagorinsky_opt=1;
+        (solver.*access(WdampContractTag{}))=resolve_wdamp_runtime_contract(
+            true,1,1,true,true,false,false,false,false,false,true,true,
+            false,false,false,false,false,"full RHS component probe");
+        solver.*access(MapTxTag{})=torch::full({ny,nx},map_scale,opt);
+        solver.*access(MapTyTag{})=torch::full({ny,nx},map_scale,opt);
+        solver.*access(MapUxTag{})=torch::full({ny,nx+1},map_scale,opt);
+        solver.*access(MapUyTag{})=torch::full({ny,nx+1},map_scale,opt);
+        solver.*access(MapVxTag{})=torch::full({ny+1,nx},map_scale,opt);
+        solver.*access(MapVyTag{})=torch::full({ny+1,nx},map_scale,opt);
+        auto u=torch::zeros({ny,nz,nx+1},opt);
+        auto v=torch::zeros({ny+1,nz,nx},opt);
+        auto w=torch::zeros({ny,nw,nx},opt);
+        auto ph=torch::empty({ny,nw,nx},opt);
+        auto theta=torch::empty({ny,nz,nx},opt);
+        auto mu=torch::zeros({ny,nx},opt);
+        for(int j=0;j<ny;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i){
+            const double x=2*pi*i/nx,y=2*pi*j/ny;
+            u[j][k][i]=(k==1)?1.0f+0.1f*std::cos(x):0.0f;
+            v[j][k][i]=(k==1)?0.15f*(1.0f+0.1f*std::cos(x))*std::sin(y):0.0f;
+            theta[j][k][i]=0.4f+0.2f*std::sin(x)+0.15f*std::cos(y)+0.05f*k;
+        }
+        for(int j=0;j<ny;++j) for(int k=0;k<nz;++k)
+            u[j][k][nx]=u[j][k][0];
+        for(int j=0;j<ny+1;++j) for(int k=0;k<nz;++k) for(int i=0;i<nx;++i)
+            if(j==ny) v[j][k][i]=0.0f;
+        for(int j=0;j<ny;++j) for(int k=0;k<nw;++k) for(int i=0;i<nx;++i){
+            const double x=2*pi*i/nx,y=2*pi*j/ny;
+            w[j][k][i]=(k==2)?0.2f*std::cos(x):0.0f;
+            const double terrain=100.0*std::cos(x)+40.0*std::cos(y);
+            ph[j][k][i]=static_cast<float>(gravity*terrain);
+        }
+        const auto state=torch::cat({u.reshape({-1}),v.reshape({-1}),w.reshape({-1}),
+            ph.reshape({-1}),theta.reshape({-1}),mu.reshape({-1})});
+        const auto pbase_t=torch::full({ny,nz,nx},100000.0f,opt);
+        const auto thbase_t=torch::full({ny,nz,nx},base_theta,opt);
+        const auto mubase_t=torch::full({ny,nx},80000.0f,opt);
+        const auto alb=compute_inverse_density(thbase_t,pbase_t,287.0f,717.5f,
+                                                1004.5f,100000.0f);
+        const auto rdnw=torch::full({nz},float(nz),opt);
+        const auto c1=torch::tensor(c1h,opt),c2=torch::tensor(c2h,opt);
+        const auto prho=calc_p_rho_wrf(ph,theta,mu,mubase_t,alb,pbase_t,rdnw,
+            c1,c2,287.0f,717.5f,1004.5f,100000.0f,300.0f);
+        const auto rho=prho.alt.reciprocal();
+        std::cout<<"PROBE_RHO min="<<rho.min().item<double>()
+                 <<" max="<<rho.max().item<double>()<<" base_alb="<<alb.max().item<double>()<<'\n';
+        auto rhs=(solver.*access(ActualRhsTag{}))(state,RhsMode::ExplicitOnly).clone();
+        if(on){
+            const auto u=state.slice(0,0,su).view({ny,nz,nx+1});
+            const auto v=state.slice(0,su,su+sv).view({ny+1,nz,nx});
+            const auto w=state.slice(0,su+sv,su+sv+sw).view({ny,nw,nx});
+            const auto phpert=state.slice(0,su+sv+sw,su+sv+2*sw).view({ny,nw,nx});
+            const auto t=state.slice(0,su+sv+2*sw,su+sv+2*sw+st).view({ny,nz,nx});
+            const auto mupert=state.slice(0,total-sm,total).view({ny,nx});
+            const auto phfull=phpert+grid->ph_base.to(opt);
+            const auto zw=phfull/gravity;
+            const auto rdzw=(zw.slice(1,1,nw)-zw.slice(1,0,nz)).reciprocal();
+            const auto rdzbottom=(2.0/(zw.slice(1,1,2)-zw.slice(1,0,1)));
+            const auto rdzmiddle=2.0/(zw.slice(1,2,nw)-zw.slice(1,0,nz-1));
+            const auto rdz=torch::cat({rdzbottom,rdzmiddle,
+                                       torch::zeros({ny,1,nx},opt)},1);
+            const auto xl=torch::cat({zw.slice(2,nx-1,nx),zw},2);
+            const auto xr=torch::cat({zw,zw.slice(2,0,1)},2);
+            const auto zx=(1.0f/ dx)*(xr-xl);
+            const auto zyin=(1.0f/dx)*(zw.slice(0,1,ny)-zw.slice(0,0,ny-1));
+            const auto zy=torch::cat({torch::zeros({1,nw,nx},opt),zyin,
+                                      torch::zeros({1,nw,nx},opt)},0);
+            const auto alb=compute_inverse_density(grid->th_base.to(opt),grid->p_base.to(opt),
+                                                   287.0f,717.5f,1004.5f,100000.0f);
+            const auto rdnw=torch::full({nz},float(nz),opt);
+            const auto c1=torch::tensor(c1h,opt),c2=torch::tensor(c2h,opt);
+            const auto rhot=calc_p_rho_wrf(phpert,t,mupert,grid->mu_base.to(opt),alb,
+                grid->p_base.to(opt),rdnw,c1,c2,287.0f,717.5f,1004.5f,100000.0f,300.0f)
+                .alt.reciprocal();
+            const auto mu_full=mupert+grid->mu_base.to(opt);
+            const auto raw_h=call_option2_momentum_helper(access(UOption2HelperTag{}),solver,
+                u,v,w,torch::full({ny,nz,nx},kh,opt),1.0f/dx,1.0f/dx,
+                torch::full({ny,nx+1},map_scale,opt),torch::full({ny+1,nx},map_scale,opt),
+                torch::full({ny,nx},map_scale,opt),mu_full,phfull,rhot,zx,zy,rdzw,rdz);
+            const auto dx_t=torch::full({1},1.0f/dx,opt);
+            const auto d13=(solver.*access(Defor13StageGeometryTag{}))(
+                u,w,dx_t,rdnw,zx,zy,rdzw,rdz);
+        const auto raw_v=(solver.*access(VerticalUStressTag{}))(
+                u,d13,torch::full({ny,nz,nx},kv,opt),rhot,rdnw);
+            const auto d11=(solver.*access(Defor11StageGeometryTag{}))(
+                u,v,w,1.0f/dx,1.0f/dx,rdnw,zx,zy,rdzw,rdz);
+            const auto d12=(solver.*access(Defor12StageGeometryTag{}))(
+                u,v,w,1.0f/dx,1.0f/dx,rdnw,zx,zy,rdzw,rdz);
+            const auto emit=[&](const char* name,const torch::Tensor& q){
+                std::cerr<<"FULLRHS_EMIT "<<name<<" dims="<<q.dim()<<" sizes="<<q.sizes()<<'\n';
+                const auto q_contig=q.contiguous();
+                const auto a=q_contig.accessor<float,3>();
+                for(int j=0;j<q.size(0);++j)for(int k=0;k<q.size(1);++k)for(int i=0;i<q.size(2);++i)
+                    std::cout<<"CPP_"<<name<<' '<<j<<' '<<k<<' '<<i<<' '
+                             <<std::setprecision(17)<<a[j][k][i]<<'\n';
+            };
+            emit("H_RAW",raw_h);emit("V_RAW",raw_v);
+            emit("D11",d11);emit("D12",d12);
+            emit("ZX",zx);emit("RDZW",rdzw);
+            for(int k=0;k<nz;++k)
+                std::cout<<"PROBE_MASS "<<k<<" 80000 "
+                         <<c1h[k]*80000.0f+c2h[k]<<' '
+                         <<(c1h[k]*80000.0f+c2h[k])/map_scale<<'\n';
+            std::cout<<"PROBE_RHO min="<<rhot.min().item<double>()
+                     <<" max="<<rhot.max().item<double>()<<'\n';
+        }
+        return rhs;
+    };
+    const auto on=evaluate(true),off=evaluate(false),delta=on-off;
+    const auto u_delta=delta.slice(0,0,su).view({ny,nz,nx+1}).contiguous();
+    const auto v_delta=delta.slice(0,su,su+sv).view({ny+1,nz,nx}).contiguous();
+    const auto w_delta=delta.slice(0,su+sv,su+sv+sw).view({ny,nw,nx}).contiguous();
+    const auto t_delta=delta.slice(0,su+sv+2*sw,su+sv+2*sw+st).view({ny,nz,nx}).contiguous();
+    const auto mu_delta=delta.slice(0,total-sm,total).view({ny,nx}).contiguous();
+    auto emit=[&](const char* name,const torch::Tensor& q){
+        const auto a=q.accessor<float,3>();
+        for(int j=0;j<q.size(0);++j) for(int k=0;k<q.size(1);++k) for(int i=0;i<q.size(2);++i)
+            std::cout<<"CPP_"<<name<<' '<<j<<' '<<k<<' '<<i<<' '<<std::setprecision(17)<<a[j][k][i]<<'\n';
+    };
+    std::cout<<"PROBE_INPUT nx="<<nx<<" ny="<<ny<<" nz="<<nz
+             <<" khdif="<<kh<<" kvdif="<<kv<<" xkhh="<<3*kh<<" xkhv="<<3*kv
+             <<" map="<<map_scale<<" c1h="<<c1h[0]<<','<<c1h[1]<<','<<c1h[2]<<','<<c1h[3]
+             <<" c2h="<<c2h[0]<<','<<c2h[1]<<','<<c2h[2]<<','<<c2h[3]<<'\n';
+    emit("U",u_delta);emit("V",v_delta);emit("W",w_delta);emit("T",t_delta);
+    std::cout<<"PROBE_MUDELTA max="<<mu_delta.abs().max().item<double>()<<'\n';
+    std::cout<<"PROBE_FINITE "<<torch::isfinite(delta).all().item<bool>()<<'\n';
+    return 0;
+}
+
 bool run(torch::Dtype dtype) {
     const double eps = dtype == torch::kFloat32
         ? std::numeric_limits<float>::epsilon()
@@ -3060,6 +3216,10 @@ int dump_option2_w_fourier_sign(bool zero_k=false) {
 }
 
 int main(int argc, char** argv) {
+    if (argc==2 && std::string(argv[1])=="--option2-full-rhs-probe")
+        return dump_option2_full_rhs_probe();
+    if (argc==2 && std::string(argv[1])=="--option2-full-rhs-probe-map1")
+        return dump_option2_full_rhs_probe(1.0f);
     if (argc==2 && std::string(argv[1])=="--option2-w-fourier-sign")
         return dump_option2_w_fourier_sign();
     if (argc==2 && std::string(argv[1])=="--option2-w-fourier-zero-k")

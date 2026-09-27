@@ -16369,7 +16369,6 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
     const auto velocity_mass_u = mu_at_u_3d + mu_base_at_u_3d + eps_u;
     const auto velocity_mass_v = mu_at_v_3d + mu_base_at_v_3d + eps_v;
     const auto velocity_mass_w = mu_at_w_3d + mu_base_at_w_3d + eps_w;
-
     const bool momentum_packed = isPackedPeriodicDomain();
     const int64_t momentum_m = ny_ - (momentum_packed ? 1 : 0);
     const int64_t momentum_n = nx_ - (momentum_packed ? 1 : 0);
@@ -16401,6 +16400,30 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
         level_mass_u = extend_u(c1h*mass_u.unsqueeze(1)+c2h);
         level_mass_v = extend_v(c1h*mass_v.unsqueeze(1)+c2h,false);
         level_mass_w = extend_w(c1f*mass.unsqueeze(1)+c2f);
+    }
+    // In the fixed-mass small-step contract, prep (divide by msfuy), advance_uv
+    // (add D/msfuy), and finish (multiply by msfuy, divide by L_s) yield the
+    // physical rate D/L_s with L_s == this RHS layer mass. Store M*D/L_s in
+    // ru_tend so the final /M conversion returns it. Later-stage L_s/L_t
+    // differences are not covered by this conversion yet.
+    torch::Tensor option2_u_diffusion_to_coupled;
+    if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
+        wrf::sdirk3::g_sdirk3_config.use_stress_tensor) {
+        torch::Tensor u_layer_mass;
+        if (canonical_horizontal) {
+            u_layer_mass = level_mass_u;
+        } else {
+            const auto c1 = ensureC1hDevCached(u.device(),u.scalar_type())
+                .slice(0,0,nz_).view({1,-1,1});
+            const auto c2 = ensureC2hDevCached(u.device(),u.scalar_type())
+                .slice(0,0,nz_).view({1,-1,1});
+            const auto muu_full = avg_x_to_u_2d(mu_full,u.size(2));
+            u_layer_mass = c1*muu_full.unsqueeze(1)+c2;
+        }
+        TORCH_CHECK(u_layer_mass.defined() &&
+                    u_layer_mass.sizes() == velocity_mass_u.sizes(),
+                    "option-2 U stress diffusion requires the physical layer-mass basis");
+        option2_u_diffusion_to_coupled = velocity_mass_u/u_layer_mass;
     }
 
     if (do_explicit) {  // Step 3: ADVECTION (slow-mode / explicit)
@@ -23658,13 +23681,20 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                                                                   option2_stage_zx,option2_stage_zy,
                                                                   option2_stage_rdzw,option2_stage_rdz);
                     if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
-                        const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
-                            .slice(0, 0, t.size(1)).view({1, -1, 1});
-                        const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
-                            .slice(0, 0, t.size(1)).view({1, -1, 1});
-                        const auto alpha = (canonical_horizontal ? level_mass_u :
-                            c1 * muu_2d.unsqueeze(1) + c2) / msfuy_.unsqueeze(1);
-                        u_diff_h = u_diff_h * (velocity_mass_u / alpha);
+                        if (wrf::sdirk3::g_sdirk3_config.use_stress_tensor) {
+                            TORCH_CHECK(option2_u_diffusion_to_coupled.defined() &&
+                                        option2_u_diffusion_to_coupled.sizes() == u_diff_h.sizes(),
+                                        "option-2 stress U diffusion requires a matching U map/mass scale");
+                            u_diff_h = u_diff_h * option2_u_diffusion_to_coupled;
+                        } else {
+                            const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
+                                .slice(0, 0, t.size(1)).view({1, -1, 1});
+                            const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
+                                .slice(0, 0, t.size(1)).view({1, -1, 1});
+                            const auto alpha = (canonical_horizontal ? level_mass_u :
+                                c1 * muu_2d.unsqueeze(1) + c2) / msfuy_.unsqueeze(1);
+                            u_diff_h = u_diff_h * (velocity_mass_u / alpha);
+                        }
                     }
 
                     v_diff_h = compute_horizontal_diffusion_v_wrf(u, v, w, Kh_mom, rdx, rdy,
@@ -23948,6 +23978,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         defor13 = compute_defor13(u, w, rdx_tensor, rdnw_tensor);
                     }
                     auto u_diff_v = compute_vertical_diffusion_u_stress(u, defor13, Kv_mom, rho, rdnw_tensor);
+                    if (option2_vertical) {
+                        TORCH_CHECK(option2_u_diffusion_to_coupled.defined() &&
+                                    option2_u_diffusion_to_coupled.sizes() == u_diff_v.sizes(),
+                                    "option-2 U vertical diffusion requires a matching U map/mass scale");
+                        u_diff_v = u_diff_v * option2_u_diffusion_to_coupled;
+                    }
                     ru_tend = ru_tend + u_diff_v;
                     uterm_site(wrf::sdirk3::USlowSiteKind::VerticalDiffusion);
                 

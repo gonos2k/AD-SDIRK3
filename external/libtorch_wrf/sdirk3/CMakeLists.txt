@@ -511,6 +511,16 @@ add_test(NAME Option2_Momentum_Geometry_Source_Parity
     COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_momentum_geometry.py
             --binary $<TARGET_FILE:test_scalar_diffusion_contract>)
+add_test(NAME Option2_U_Full_Rhs_Contract_Map1
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_momentum_geometry.py
+            --binary $<TARGET_FILE:test_scalar_diffusion_contract>
+            --actual-rhs-probe --actual-rhs-map 1)
+add_test(NAME Option2_U_Full_Rhs_Contract_Map125
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_option2_momentum_geometry.py
+            --binary $<TARGET_FILE:test_scalar_diffusion_contract>
+            --actual-rhs-probe)
 
 add_executable(test_potential_temperature_contract tests/test_potential_temperature_contract.cpp)
 target_link_libraries(test_potential_temperature_contract PRIVATE wrf_sdirk3::core)
