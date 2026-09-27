@@ -23,6 +23,7 @@
 // evaluation the caller unpacks the tangents (via take()) while its
 // DualLevelGuard is still alive, then the scope ends.
 #include <torch/torch.h>
+#include <cstdint>
 #include <cstdlib>
 #include <string>
 #include <utility>
@@ -31,18 +32,94 @@
 namespace wrf {
 namespace sdirk3 {
 
+struct RwTermCaptureIdentity {
+    bool valid = false;
+    int timestep = -1;
+    int stage = -1;
+    int newton_iter = -1;
+    std::uint64_t solve_generation = 0;
+    std::uint64_t solver_id = 0;
+    std::uint64_t input_digest = 0;
+};
+
+struct RwWConversionCapture {
+    bool observed = false;
+    bool canonical_horizontal = false;
+    bool coupled_slow_export = false;
+    torch::Tensor w_input;
+    torch::Tensor velocity_mass_w;
+    torch::Tensor mu_tend_at_w;
+    torch::Tensor conversion_rate;
+    torch::Tensor w_tend_after_conversion;
+};
+
+// Shared RHS input identity digest. This is the same FNV-1a over packed FP32
+// bytes used by the existing optional RHS_COUNT operand record.
+inline std::uint64_t sdirk3_rhs_operand_digest(const torch::Tensor& tensor) {
+    torch::NoGradGuard no_grad;
+    const auto cpu = tensor.detach().to(torch::kCPU, torch::kFloat32).contiguous();
+    const auto* bytes = reinterpret_cast<const unsigned char*>(cpu.data_ptr<float>());
+    const std::size_t size = static_cast<std::size_t>(cpu.numel()) * sizeof(float);
+    std::uint64_t digest = 1469598103934665603ULL;
+    for (std::size_t i = 0; i < size; ++i) {
+        digest ^= bytes[i];
+        digest *= 1099511628211ULL;
+    }
+    return digest;
+}
+
 struct RwTermCapture {
     bool armed = false;
+    bool capture_final_w = false;
+    int rhs_mode = -1;
+    RwTermCaptureIdentity identity;
+    RwWConversionCapture w_conversion;
     std::vector<std::pair<std::string, torch::Tensor>> terms;
+    torch::Tensor final_w_packed;
     void add(const char* name, const torch::Tensor& t) {
         if (armed) terms.emplace_back(name, t);
     }
-    void reset() { terms.clear(); }
+    void observe_final_w(const torch::Tensor& packed_w) {
+        if (armed && capture_final_w && packed_w.defined())
+            final_w_packed = packed_w.detach().clone();
+    }
+    void observe_w_conversion(const torch::Tensor& w_input,
+                              const torch::Tensor& velocity_mass_w,
+                              const torch::Tensor& mu_tend_at_w,
+                              const torch::Tensor& conversion_rate,
+                              const torch::Tensor& w_tend_after_conversion,
+                              bool canonical_horizontal,
+                              bool coupled_slow_export) {
+        if (!armed || !capture_final_w) return;
+        w_conversion.observed = true;
+        w_conversion.canonical_horizontal = canonical_horizontal;
+        w_conversion.coupled_slow_export = coupled_slow_export;
+        w_conversion.w_input = w_input;
+        w_conversion.velocity_mass_w = velocity_mass_w;
+        w_conversion.mu_tend_at_w = mu_tend_at_w;
+        w_conversion.conversion_rate = conversion_rate;
+        w_conversion.w_tend_after_conversion = w_tend_after_conversion;
+    }
+    void reset() {
+        terms.clear();
+        final_w_packed = torch::Tensor();
+        capture_final_w = false;
+        rhs_mode = -1;
+        identity = RwTermCaptureIdentity{};
+        w_conversion = RwWConversionCapture{};
+    }
 };
 
 inline RwTermCapture& rw_term_capture_slot() {
     static thread_local RwTermCapture t_slot;
     return t_slot;
+}
+
+inline bool rw_term_capture_expects_wdamp(
+    bool wrf_w_damping, bool implicit_wdamp, float w_damp_alpha,
+    float wrf_w_crit_cfl) {
+    return wrf_w_damping && implicit_wdamp && w_damp_alpha > 0.0f &&
+           wrf_w_crit_cfl > 0.0f;
 }
 
 
@@ -53,10 +130,15 @@ inline RwTermCapture& rw_term_capture_slot() {
 // an armed slot or retained tensors.
 class RwTermCaptureScope {
   public:
-    RwTermCaptureScope() : slot_(rw_term_capture_slot()) {
+    explicit RwTermCaptureScope(
+        bool capture_final_w = false,
+        RwTermCaptureIdentity identity = RwTermCaptureIdentity{})
+        : slot_(rw_term_capture_slot()) {
         if (slot_.armed) return;  // nested arm: fail closed, caller checks armed_ok()
         slot_.reset();
         slot_.armed = true;
+        slot_.capture_final_w = capture_final_w;
+        slot_.identity = identity;
         owned_ = true;
     }
     ~RwTermCaptureScope() {
@@ -69,6 +151,39 @@ class RwTermCaptureScope {
     RwTermCaptureScope& operator=(const RwTermCaptureScope&) = delete;
 
     bool armed_ok() const { return owned_; }
+    bool capture_final_w() const { return owned_ && slot_.capture_final_w; }
+    const RwTermCaptureIdentity& identity() const { return slot_.identity; }
+    int rhs_mode() const { return owned_ ? slot_.rhs_mode : -1; }
+    torch::Tensor final_w_observation() const {
+        return owned_ && slot_.capture_final_w ? slot_.final_w_packed : torch::Tensor();
+    }
+    const RwWConversionCapture& w_conversion_observation() const {
+        return slot_.w_conversion;
+    }
+
+    void observe_w_conversion(const torch::Tensor& w_input,
+                              const torch::Tensor& velocity_mass_w,
+                              const torch::Tensor& mu_tend_at_w,
+                              const torch::Tensor& conversion_rate,
+                              const torch::Tensor& w_tend_after_conversion,
+                              bool canonical_horizontal,
+                              bool coupled_slow_export) {
+        if (!owned_ || !slot_.capture_final_w) return;
+        auto& observed = slot_.w_conversion;
+        observed.observed = true;
+        observed.canonical_horizontal = canonical_horizontal;
+        observed.coupled_slow_export = coupled_slow_export;
+        observed.w_input = w_input;
+        observed.velocity_mass_w = velocity_mass_w;
+        observed.mu_tend_at_w = mu_tend_at_w;
+        observed.conversion_rate = conversion_rate;
+        observed.w_tend_after_conversion = w_tend_after_conversion;
+    }
+
+    void observe_final_w(const torch::Tensor& packed_w) {
+        if (owned_ && slot_.capture_final_w && packed_w.defined())
+            slot_.final_w_packed = packed_w.detach().clone();
+    }
 
     // Disarm and move the captured terms out (normal completion path).
     // PR 9B.2 (P1-1): ownership is relinquished FIRST — after take() this
