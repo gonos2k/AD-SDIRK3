@@ -23838,6 +23838,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 wrf::sdirk3::g_sdirk3_config.khdif != 0.0f;
             const bool option2_stage_active =
                 option2_vertical && option2_stage_snapshot_ready;
+            const torch::Tensor scalar_stage_rdz = option2_stage_active
+                ? option2_stage_rdz : torch::Tensor();
 
             // Check if we have valid density for stress tensor calculation
             // PERF FIX 2025-12-28: Pre-copy to CPU for flow control check
@@ -24043,7 +24045,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 }
 
                 auto t_diff_v = compute_vertical_mixing_scalar(t, Kv_scalar, rdnw_tensor,
-                                                                   rho, t_full, mu_full);
+                                                                   rho, t_full, mu_full, scalar_stage_rdz);
                 if (!wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V")) {
                     t_tend = t_tend + t_diff_v;
                 }
@@ -24118,7 +24120,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         torch::Tensor qv_base_tensor = qv_base_dev.defined() ? qv_base_dev : torch::Tensor();
                         auto qv_diff_v = compute_vertical_mixing_scalar(
                             qv_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                            true, mix_full_fields_, qv_base_tensor);
+                            true, mix_full_fields_, qv_base_tensor, scalar_stage_rdz);
                         qv_tend = qv_tend + qv_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             torch::NoGradGuard no_grad;
@@ -24137,7 +24139,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     if (qc_dev.defined() && qc_dev.numel() > 0) {
                         auto qc_diff_v = compute_vertical_mixing_scalar(
                             qc_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                            false, true, torch::Tensor());  // is_qv=false, mix_full_fields=true
+                            false, true, torch::Tensor(), scalar_stage_rdz);  // is_qv=false, mix_full_fields=true
                         qc_tend_ = qc_tend_ + qc_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             torch::NoGradGuard no_grad;
@@ -24156,7 +24158,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     if (qr_dev.defined() && qr_dev.numel() > 0) {
                         auto qr_diff_v = compute_vertical_mixing_scalar(
                             qr_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                            false, true, torch::Tensor());
+                            false, true, torch::Tensor(), scalar_stage_rdz);
                         qr_tend_ = qr_tend_ + qr_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             torch::NoGradGuard no_grad;
@@ -24175,7 +24177,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     if (qi_dev.defined() && qi_dev.numel() > 0) {
                         auto qi_diff_v = compute_vertical_mixing_scalar(
                             qi_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                            false, true, torch::Tensor());
+                            false, true, torch::Tensor(), scalar_stage_rdz);
                         qi_tend_ = qi_tend_ + qi_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             torch::NoGradGuard no_grad;
@@ -24194,7 +24196,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     if (qs_dev.defined() && qs_dev.numel() > 0) {
                         auto qs_diff_v = compute_vertical_mixing_scalar(
                             qs_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                            false, true, torch::Tensor());
+                            false, true, torch::Tensor(), scalar_stage_rdz);
                         qs_tend_ = qs_tend_ + qs_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             torch::NoGradGuard no_grad;
@@ -24213,7 +24215,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     if (qg_dev.defined() && qg_dev.numel() > 0) {
                         auto qg_diff_v = compute_vertical_mixing_scalar(
                             qg_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                            false, true, torch::Tensor());
+                            false, true, torch::Tensor(), scalar_stage_rdz);
                         qg_tend_ = qg_tend_ + qg_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             torch::NoGradGuard no_grad;
@@ -24235,7 +24237,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             auto chem_species = chem_dev.select(3, s);  // Select species s from device-aligned tensor
                             auto chem_diff_v = compute_vertical_mixing_scalar(
                                 chem_species, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                                false, true, torch::Tensor());  // No base state for chem
+                                false, true, torch::Tensor(), scalar_stage_rdz);  // No base state for chem
                             chem_tend_[s] = chem_tend_[s] + chem_diff_v;
                         }
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24252,7 +24254,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             auto tracer_species = tracer_dev.select(3, s);  // Select species s from device-aligned tensor
                             auto tracer_diff_v = compute_vertical_mixing_scalar(
                                 tracer_species, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                                false, true, torch::Tensor());  // No base state for tracers
+                                false, true, torch::Tensor(), scalar_stage_rdz);  // No base state for tracers
                             tracer_tend_[s] = tracer_tend_[s] + tracer_diff_v;
                         }
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24269,7 +24271,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             auto scalar_species = scalar_dev.select(3, s);  // Select species s from device-aligned tensor
                             auto scalar_diff_v = compute_vertical_mixing_scalar(
                                 scalar_species, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                                false, true, torch::Tensor());  // No base state for scalars
+                                false, true, torch::Tensor(), scalar_stage_rdz);  // No base state for scalars
                             scalar_tend_[s] = scalar_tend_[s] + scalar_diff_v;
                         }
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24339,8 +24341,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     }
                 } else {
                     // Fallback to momentum diffusivity if scalar not provided
-                    // Kv is already device-aligned from above
-                    Kv_scalar = Kv;
+                    // Native option 2 uses WRF xkhv=3*kvdif; preserve the
+                    // legacy option-1 fallback unchanged.
+                    Kv_scalar = option2_stage_active ? 3.0f * Kv : Kv;
                     if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                         std::cerr << "  WARNING: Using Kv (momentum) for scalar diffusion (Kv_scalar not set)" << std::endl;
                     }
@@ -24377,7 +24380,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                 rw_tend = rw_tend + w_diff_v;
 
                 auto t_diff_v = compute_vertical_mixing_scalar(t, Kv_scalar, rdnw_tensor,
-                                                                   rho, t_full, mu_full);
+                                                                   rho, t_full, mu_full, scalar_stage_rdz);
                 if (!wrf::sdirk3::read_experiment_flag("WRF_SDIRK3_ABLATE_T_DIFF_V")) {
                     t_tend = t_tend + t_diff_v;
                 }
@@ -24454,7 +24457,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             qv_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
                             true,  // is_qv = true
                             mix_full_fields_,  // from class member
-                            qv_base_tensor);
+                            qv_base_tensor, scalar_stage_rdz);
                         // PARITY FIX 2025-12-13: Accumulate QV tendency like WRF's moist_tendf
                         qv_tend = qv_tend + qv_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24480,7 +24483,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             qc_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
                             false,  // is_qv = false
                             true,   // mix_full_fields = true (use full field)
-                            torch::Tensor());  // no base state
+                            torch::Tensor(), scalar_stage_rdz);  // no base state
                         qc_tend_ = qc_tend_ + qc_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             torch::NoGradGuard no_grad;
@@ -24501,7 +24504,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             qr_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
                             false,  // is_qv = false
                             true,   // mix_full_fields = true
-                            torch::Tensor());  // no base state
+                            torch::Tensor(), scalar_stage_rdz);  // no base state
                         qr_tend_ = qr_tend_ + qr_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             torch::NoGradGuard no_grad;
@@ -24522,7 +24525,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             qi_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
                             false,  // is_qv = false
                             true,   // mix_full_fields = true
-                            torch::Tensor());  // no base state
+                            torch::Tensor(), scalar_stage_rdz);  // no base state
                         qi_tend_ = qi_tend_ + qi_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             torch::NoGradGuard no_grad;
@@ -24543,7 +24546,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             qs_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
                             false,  // is_qv = false
                             true,   // mix_full_fields = true
-                            torch::Tensor());  // no base state
+                            torch::Tensor(), scalar_stage_rdz);  // no base state
                         qs_tend_ = qs_tend_ + qs_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             torch::NoGradGuard no_grad;
@@ -24564,7 +24567,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             qg_dev, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
                             false,  // is_qv = false
                             true,   // mix_full_fields = true
-                            torch::Tensor());  // no base state
+                            torch::Tensor(), scalar_stage_rdz);  // no base state
                         qg_tend_ = qg_tend_ + qg_diff_v;
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
                             torch::NoGradGuard no_grad;
@@ -24586,7 +24589,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             auto chem_species = chem_dev.select(3, s);  // Select species s from device-aligned tensor
                             auto chem_diff_v = compute_vertical_mixing_scalar(
                                 chem_species, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                                false, true, torch::Tensor());  // No base state for chem
+                                false, true, torch::Tensor(), scalar_stage_rdz);  // No base state for chem
                             chem_tend_[s] = chem_tend_[s] + chem_diff_v;
                         }
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24603,7 +24606,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             auto tracer_species = tracer_dev.select(3, s);  // Select species s from device-aligned tensor
                             auto tracer_diff_v = compute_vertical_mixing_scalar(
                                 tracer_species, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                                false, true, torch::Tensor());  // No base state for tracers
+                                false, true, torch::Tensor(), scalar_stage_rdz);  // No base state for tracers
                             tracer_tend_[s] = tracer_tend_[s] + tracer_diff_v;
                         }
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -24620,7 +24623,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                             auto scalar_species = scalar_dev.select(3, s);  // Select species s from device-aligned tensor
                             auto scalar_diff_v = compute_vertical_mixing_scalar(
                                 scalar_species, Kv_scalar, rdnw_tensor, rho, t_full, mu_full,
-                                false, true, torch::Tensor());  // No base state for scalars
+                                false, true, torch::Tensor(), scalar_stage_rdz);  // No base state for scalars
                             scalar_tend_[s] = scalar_tend_[s] + scalar_diff_v;
                         }
                         if (wrf::sdirk3::g_sdirk3_config.debug_level >= 2) {
@@ -36682,7 +36685,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_diffusion_u_stress(
 
         auto tau_diff = tau13.slice(1, k_first + 1, k_end + 1) -
                         tau13.slice(1, k_first, k_end);
-        // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw is positive, no abs() needed
+        // Values are already positive magnitudes; eta orientation is applied below.
         auto rdnw_broadcast = rdnw.slice(0, k_first, k_end).view({1, -1, 1});
         auto dtau_dz = tau_diff * rdnw_broadcast;
 
@@ -39779,13 +39782,14 @@ torch::Tensor TileSDIRK3UnifiedSolver::avg_mass_to_w(const torch::Tensor& f) {
 // ========================================================================
 torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_mixing_scalar(
     const torch::Tensor& scalar, const torch::Tensor& Kv_mass, const torch::Tensor& rdnw,
-    const torch::Tensor& rho, const torch::Tensor& t_full, const torch::Tensor& mu_full) {
+    const torch::Tensor& rho, const torch::Tensor& t_full, const torch::Tensor& mu_full,
+    const torch::Tensor& stage_rdz) {
     // Compute vertical turbulent mixing for scalars (at mass points)
     // Following WRF's vertical_diffusion_s in module_diffusion_em.F
     // AUTOGRAD FIX: Updated to handle WRF ordering [j,k,i]
     // scalar: (ny, nz, nx) at mass points in WRF ordering
     // Kv_mass: (ny, nz_w, nx) vertical diffusivity at w-points (staggered) in WRF ordering
-    // rdnw: (nz,) tensor - reciprocal of dnw (layer thickness)
+    // rdnw: (nz,) tensor - positive magnitude |1/dnw|; WRF dnw is negative.
     // rho: (ny, nz, nx) density at mass points in WRF ordering
     // t_full: (ny, nz, nx) full potential temperature for TKE computation in WRF ordering
     // mu_full: (ny, nx) full column mass for scaling
@@ -39843,32 +39847,41 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_mixing_scalar(
     // PARITY FIX 2025-12-13: Use 3D physical rdz from geopotential when available
     // WRF's vertical_diffusion_s uses 3D physical rdz(i,k,j) in H3 = -xkxavg*(var(k)-var(k-1))*rdz.
     // On terrain or stretched grids, using 1D eta spacing underestimates/overestimates gradients.
-    // Priority: rdz_3d_ (w-level, 3D) > grid_info_->rdz (w-level, 1D) > computed from rdnw (fallback)
+    // Priority: current-RHS stage metric > cached rdz_3d_ > grid_info_->rdz > eta fallback.
     torch::Tensor rdz_w_3d;  // [ny, nz_w, nx] or [nz_w] depending on availability
     bool use_3d_rdz = false;
 
-    // 1. PREFERRED: Use pre-computed rdz_3d_ from geopotential (3D physical layer thickness at w-levels)
-    if (rdz_3d_.defined() && rdz_3d_.numel() > 0 &&
+    // 1. Explicit stage_rdz belongs to this RHS evaluation and remains on the AD graph.
+    if (stage_rdz.defined()) {
+        TORCH_CHECK(stage_rdz.dim() == 3 && stage_rdz.size(0) == ny &&
+                    stage_rdz.size(1) >= nz_w && stage_rdz.size(2) == nx,
+                    "vertical scalar stage rdz must match the scalar/W-level geometry");
+        rdz_w_3d = stage_rdz.slice(1, 0, nz_w);
+        use_3d_rdz = true;
+    }
+    // Cached physical metric is only a fallback for non-stage callers.
+    else if (rdz_3d_.defined() && rdz_3d_.numel() > 0 &&
         rdz_3d_.size(0) == ny && rdz_3d_.size(1) >= nz_w && rdz_3d_.size(2) == nx) {
         rdz_w_3d = rdz_3d_.slice(1, 0, nz_w);  // [ny, nz_w, nx]
         use_3d_rdz = true;
     }
-    // 2. FALLBACK: Use grid_info_->rdz if available (1D, will broadcast)
+    // 3. FALLBACK: Use grid_info_->rdz if available (1D, will broadcast)
     else if (grid_info_ && grid_info_->rdz.defined() && grid_info_->rdz.numel() >= nz_w) {
         // grid_info_->rdz is [nz_w] at w-levels - expand to [1, nz_w, 1] for broadcasting
         rdz_w_3d = grid_info_->rdz.slice(0, 0, nz_w).view({1, nz_w, 1});
         use_3d_rdz = false;  // Still 1D but from grid_info
     }
-    // 3. FINAL FALLBACK: Compute from rdnw (1D eta spacing)
+    // 4. FINAL FALLBACK: Compute from |rdnw| (1D eta spacing); WRF's negative
+    // eta orientation is restored in the flux divergence below.
     else {
         torch::Tensor rdz_w = torch::zeros({nz_w}, options);
         if (nz > 1) {
             // Interior w-levels: average of adjacent rdnw values
             // rdz_w[k] = 0.5 * (rdnw[k-1] + rdnw[k]) for k=1..min(nz_w-2, nz-1)
-            // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw is positive, matches WRF standard
+            // rdnw is stored as a positive magnitude; WRF Fortran rdnw is negative.
             int k_end = std::min(nz_w - 1, nz);
             if (k_end > 1) {
-                // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw is positive, no abs() needed
+                // Values are already positive magnitudes; do not change storage sign.
                 auto rdnw_lower = rdnw.slice(0, 0, k_end - 1);  // rdnw[0..k_end-2]
                 auto rdnw_upper = rdnw.slice(0, 1, k_end);      // rdnw[1..k_end-1]
                 rdz_w.slice(0, 1, k_end).copy_(0.5f * (rdnw_lower + rdnw_upper));
@@ -39991,7 +40004,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_mixing_scalar(
         auto rdnw_slice = rdnw.slice(0, 0, k_valid).view({1, k_valid, 1});  // [1, k_valid, 1]
 
         // Compute flux divergence: g * (H3_upper - H3_lower) * rdnw
-        auto flux_div = g_val * (H3_upper - H3_lower) * rdnw_slice;  // [nj_sc, k_valid, ni_sc]
+        // WRF dnw is negative because eta decreases with k; this solver
+        // stores |rdnw|, so restore that orientation in the divergence.
+        auto flux_div = -g_val * (H3_upper - H3_lower) * rdnw_slice;  // [nj_sc, k_valid, ni_sc]
 
         // Add to tendency (tendency starts as zeros, so we can just copy)
         auto tend_reduced = tendency.slice(0, j_start_sc, j_end_sc).slice(1, 0, k_valid).slice(2, i_start_sc, i_end_sc);
@@ -40012,7 +40027,8 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_mixing_scalar(
 torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_mixing_scalar(
     const torch::Tensor& scalar, const torch::Tensor& Kv_mass, const torch::Tensor& rdnw,
     const torch::Tensor& rho, const torch::Tensor& t_full, const torch::Tensor& mu_full,
-    bool is_qv, bool mix_full_fields, const torch::Tensor& qv_base) {
+    bool is_qv, bool mix_full_fields, const torch::Tensor& qv_base,
+    const torch::Tensor& stage_rdz) {
 
     // PERF FIX 2025-12-13: Unified masking operation eliminates graph branch
     // Compute var_mix = scalar - qv_mask * qv_base_expanded
@@ -40079,10 +40095,16 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_mixing_scalar(
 
     torch::Tensor H3 = torch::zeros({ny, nz_w, nx}, options);
 
-    // Use 3D physical rdz when available (same logic as base function)
+    // Use current stage geometry when supplied; otherwise retain cached fallback behavior.
     torch::Tensor rdz_w_3d;
     bool use_3d_rdz = false;
-    if (rdz_3d_.defined() && rdz_3d_.numel() > 0 &&
+    if (stage_rdz.defined()) {
+        TORCH_CHECK(stage_rdz.dim() == 3 && stage_rdz.size(0) == ny &&
+                    stage_rdz.size(1) >= nz_w && stage_rdz.size(2) == nx,
+                    "vertical scalar stage rdz must match the scalar/W-level geometry");
+        rdz_w_3d = stage_rdz.slice(1, 0, nz_w);
+        use_3d_rdz = true;
+    } else if (rdz_3d_.defined() && rdz_3d_.numel() > 0 &&
         rdz_3d_.size(0) == ny && rdz_3d_.size(1) >= nz_w && rdz_3d_.size(2) == nx) {
         rdz_w_3d = rdz_3d_.slice(1, 0, nz_w);
         use_3d_rdz = true;
@@ -40091,7 +40113,7 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_mixing_scalar(
     } else {
         torch::Tensor rdz_w = torch::zeros({nz_w}, options);
         if (nz > 1) {
-            // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw is positive, no abs() needed
+            // Values are already positive magnitudes; do not change storage sign.
             int k_end = std::min(nz_w - 1, nz);
             if (k_end > 1) {
                 auto rdnw_lower = rdnw.slice(0, 0, k_end - 1);
@@ -40181,7 +40203,9 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_vertical_mixing_scalar(
 
         // WRF-COMPLIANT REFACTOR 2025-12-25: rdnw is positive, no abs() needed
         auto rdnw_slice = rdnw.slice(0, 0, k_valid).view({1, k_valid, 1});
-        auto flux_div = g_val * (H3_upper - H3_lower) * rdnw_slice;
+        // WRF dnw is negative because eta decreases with k; this solver
+        // stores |rdnw|, so restore that orientation in the divergence.
+        auto flux_div = -g_val * (H3_upper - H3_lower) * rdnw_slice;
 
         auto tend_reduced = tendency.slice(0, j_start_sc, j_end_sc).slice(1, 0, k_valid).slice(2, i_start_sc, i_end_sc);
         tend_reduced.copy_(tend_reduced + flux_div);
