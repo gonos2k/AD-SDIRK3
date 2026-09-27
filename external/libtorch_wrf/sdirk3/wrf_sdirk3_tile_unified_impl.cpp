@@ -5001,9 +5001,9 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
             std::cerr << "============================" << std::endl;
         }
 
-    // PARITY FIX 2025-12-19: Recalculate fnm/fnp when rdnw or rdn changes (moving nests/regridding).
-    // fnm/fnp depend on rdnw, and cfn/cfn1 depend on rdn. Recalculate AFTER both are updated.
-    // Skip recalculation if WRF provided fnm/fnp directly via pointers - WRF manages those values.
+    // PARITY FIX 2025-12-19: Refresh interpolation data after rdnw/rdn changes.
+    // Internally generated fnm/fnp depend on rdnw. WRF-provided fnm/fnp remain
+    // authoritative, but cfn/cfn1 still depend on the current rdnw/rdn pair.
     // PERF FIX 2025-12-22: Check both vector AND grid epochs to detect grid_info_ changes.
     // Previously only checked vector epochs, missing grid_info_ tensor updates.
     // Use max of all source epochs (vec, grid, and fallback sources like dnw/dn).
@@ -5032,12 +5032,17 @@ void TileSDIRK3UnifiedSolver::unifiedStep(
     bool have_rdn = !rdn_.empty() || (grid_info_ && grid_info_->rdn.defined() && grid_info_->rdn.numel() > 0) ||
                     (grid_info_ && grid_info_->dn.defined() && grid_info_->dn.numel() > 0) ||
                     have_ph_base_fallback;
-    if (!fnm_fnp_from_wrf_ && (rdnw_changed || rdn_changed) && have_rdnw && have_rdn) {
-        // Recalculate fnm/fnp from current rdnw/rdn values
+    if (fnm_fnp_from_wrf_ && have_rdnw && have_rdn) {
+        // WRF's supplied fnm/fnp are independent inputs; rdnw/rdn epochs may
+        // advance in a different counter domain. Refresh only cfn/cfn1 from
+        // the current metrics on each zero-copy RHS entry, preserving weights.
+        refreshTopExtrapolationCoefficients();
+    } else if ((rdnw_changed || rdn_changed) && have_rdnw && have_rdn) {
+        // Internally generated weights depend on the current rdnw profile.
         setVerticalInterpolationCoefficients(nullptr, nullptr, cf1_, cf2_, cf3_);
         fnm_epoch_cached_rdnw_ = rdnw_effective_epoch;
         fnm_epoch_cached_rdn_ = rdn_effective_epoch;
-        // Invalidate view caches since underlying data changed
+        // Internally generated weights changed with rdnw; invalidate views.
         fnm_view_cache_ = torch::Tensor();
         fnp_view_cache_ = torch::Tensor();
         fnm_cache_size_ = 0;
@@ -41578,6 +41583,10 @@ void TileSDIRK3UnifiedSolver::setVerticalInterpolationCoefficients(const float* 
     cf2_ = cf2;
     cf3_ = cf3;
 
+    refreshTopExtrapolationCoefficients();
+}
+
+void TileSDIRK3UnifiedSolver::refreshTopExtrapolationCoefficients() {
     // PARITY FIX 2025-12-13: Compute top boundary extrapolation coefficients (cft1/cft2 in WRF)
     // WRF module_diffusion_em.F lines 116-117:
     //   cft2 = -0.5 * dnw(ktes1) / dn(ktes1)

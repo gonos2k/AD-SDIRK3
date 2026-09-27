@@ -956,6 +956,9 @@ public:
     }
 
 private:
+    // Refresh WRF top extrapolation coefficients from current rdnw/rdn without
+    // replacing externally supplied fnm/fnp profiles.
+    void refreshTopExtrapolationCoefficients();
     void validateFixedTrajectoryProfile() const;
     uint64_t fixedTrajectoryInputFingerprint() const;
     void checkFixedTrajectoryFingerprint() const;
