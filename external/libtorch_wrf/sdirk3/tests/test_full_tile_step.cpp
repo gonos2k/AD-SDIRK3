@@ -380,6 +380,7 @@ void check_governing_step_budget() {
             for (int i=0; i<nx; ++i) phb[(j*nw+k)*nx+i]=phi[k];
     }
     hybrid.solver.setBaseState(pb.data(),thb.data(),phb.data(),mub_field.data());
+    constexpr float hybrid_dt=dt;  // Preserve the original closed fixture and stage history.
     const auto hybrid_step=[&]() {
         hybrid.solver.unifiedStep(hybrid.u.data(),hybrid.v.data(),hybrid.w.data(),
             hybrid.ph.data(),hybrid.theta.data(),hybrid.mu.data(),
@@ -388,7 +389,7 @@ void check_governing_step_budget() {
             rdnw.data(),rdn.data(),hybrid.mass_map.data(),hybrid.mass_map.data(),
             hybrid.u_map.data(),hybrid.u_map.data(),hybrid.v_map.data(),hybrid.v_map.data(),
             c1f.data(),c2f.data(),c1h.data(),c2h.data(),fnm.data(),fnp.data(),
-            1,dt,nx,ny,nz,nu,nv,nw);
+            1,hybrid_dt,nx,ny,nz,nu,nv,nw);
         TORCH_CHECK(hybrid.solver.getLastStepOutcomeCode()==0,
                     "hybrid tile step did not complete");
     };
@@ -690,6 +691,12 @@ void check_governing_step_budget() {
                   << " min_component=" << min_component << '\n';
     }
     auto ark_replay=trace.input.clone();
+    auto fp32_update_replay=trace.input.clone();
+    auto fp32_update_error=torch::zeros_like(trace.input.to(torch::kFloat64));
+    auto fp32_update_bound=torch::zeros_like(trace.input.to(torch::kFloat64));
+    const double unit_roundoff=0.5*std::numeric_limits<float>::epsilon();
+    const double gamma1=unit_roundoff/(1.0-unit_roundoff);
+    const double gamma2=2.0*unit_roundoff/(1.0-2.0*unit_roundoff);
     double stage_mass_sum=0.0,stage_theta_sum=0.0;
     double stage_mass_budget_sum=0.0,stage_theta_budget_sum=0.0;
     for (int s=0; s<Ark::stages; ++s) {
@@ -755,6 +762,20 @@ void check_governing_step_budget() {
         stage_theta_sum+=Ark::b[s]*theta_rate;
         stage_mass_budget_sum+=std::abs(Ark::b[s])*mass_budget_rate;
         stage_theta_budget_sum+=std::abs(Ark::b[s])*theta_budget_rate;
+        // Match ark324_final_state's sequential FP32 scalar-multiply/add
+        // order and retain each stage's observed endpoint rounding residual.
+        const double alpha=trace.dt*Ark::b[s];
+        const auto update_before64=fp32_update_replay.to(torch::kFloat64);
+        const auto update_increment32=alpha*trace.full[s];
+        const auto update_increment64=alpha*trace.full[s].to(torch::kFloat64);
+        const auto update_next32=fp32_update_replay+update_increment32;
+        const auto update_error=update_next32.to(torch::kFloat64)-update_before64-
+                                update_increment64;
+        fp32_update_error=fp32_update_error+update_error;
+        fp32_update_bound=fp32_update_bound+gamma2*update_increment64.abs()+
+            gamma1*(update_before64.abs()+update_increment32.to(torch::kFloat64).abs())+
+            2.0*std::numeric_limits<float>::denorm_min();
+        fp32_update_replay=update_next32;
         ark_replay=ark_replay+trace.dt*Ark::b[s]*trace.full[s];
         std::cout << "GOV_STAGE stage=" << s+1 << " mass_rate=" << mass_rate
                   << " mass_budget=" << mass_budget_rate
@@ -764,8 +785,10 @@ void check_governing_step_budget() {
                   << " fast_flux_error=" << fast_flux_error << '\n';
     }
     TORCH_CHECK(torch::equal(ark_replay,trace.raw_final) &&
+                torch::equal(fp32_update_replay,trace.raw_final) &&
+                (fp32_update_error.abs()<=fp32_update_bound).all().item<bool>() &&
                 torch::equal(trace.projected_final,hybrid_after),
-                "ARK final sum or boundary projection differs from captured production step");
+                "ARK final replay/FP32 update bound or boundary projection failed");
     const auto raw_budget=hybrid_budget(trace.raw_final);
     const double projection_mass=ha[0]-raw_budget[0];
     const double projection_theta=ha[1]-raw_budget[1];
@@ -774,6 +797,104 @@ void check_governing_step_budget() {
     // the stage-weighted chain-rule rate even when every stage rate closes.
     const double theta_endpoint_minus_stage=(raw_budget[1]-hb[1])-
         trace.dt*stage_theta_sum;
+    // Factored endpoint product identity. The FP32 linear increment mismatch
+    // is measured from each sequential ARK update above; no large Q0 products
+    // enter this FP64 scale or its gamma_N reduction budget.
+    const auto input64=trace.input.to(torch::kFloat64);
+    const auto raw64=trace.raw_final.to(torch::kFloat64);
+    const auto input_mu=input64.slice(0,total-sm,total).view({ny,nx});
+    const auto input_theta=input64.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+    const auto raw_mu=raw64.slice(0,total-sm,total).view({ny,nx});
+    const auto raw_theta=raw64.slice(0,su+sv+2*sw,total-sm).view({ny,nz,nx});
+    const auto update_error_mu=fp32_update_error.slice(0,total-sm,total).view({ny,nx});
+    const auto update_error_theta=fp32_update_error.slice(0,su+sv+2*sw,total-sm)
+        .view({ny,nz,nx});
+    std::vector<torch::Tensor> stage_state64(Ark::stages),stage_rate64(Ark::stages);
+    for (int s=0; s<Ark::stages; ++s) {
+        stage_state64[s]=trace.stage_state[s].to(torch::kFloat64);
+        stage_rate64[s]=trace.full[s].to(torch::kFloat64);
+    }
+    double product_direct=0.0,product_expanded=0.0,linear_update=0.0,bilinear=0.0;
+    double factored_scale=0.0;
+    for (int j=0; j<ny; ++j)
+        for (int i=0; i<nx; ++i) {
+            const double map=hybrid.mass_map[j*nx+i];
+            const double horizontal_area=spacing*spacing/(g*map*map);
+            const double mu0=input_mu[j][i].item<double>();
+            const double muR=raw_mu[j][i].item<double>();
+            const double dmuR=muR-mu0;
+            const double emu=update_error_mu[j][i].item<double>();
+            for (int k=0; k<nz; ++k) {
+                const double W=horizontal_area*eta_width[k];
+                const double c1=c1h[k];
+                const double C0=c1*(mub+mu0)+c2h[k];
+                const double theta0=input_theta[j][k][i].item<double>();
+                const double thetaR=raw_theta[j][k][i].item<double>();
+                const double T0=300.0+theta0;
+                const double dthetaR=thetaR-theta0;
+                const double etheta=update_error_theta[j][k][i].item<double>();
+                double stage_chain=0.0,stage_cross=0.0,stage_l1=0.0,cross_l1=0.0;
+                for (int s=0; s<Ark::stages; ++s) {
+                    const auto& ys=stage_state64[s];
+                    const auto& fs=stage_rate64[s];
+                    const double mu_s=ys.slice(0,total-sm,total).view({ny,nx})[j][i]
+                        .item<double>();
+                    const double mu_dot=fs.slice(0,total-sm,total).view({ny,nx})[j][i]
+                        .item<double>();
+                    const double theta_s=ys.slice(0,su+sv+2*sw,total-sm)
+                        .view({ny,nz,nx})[j][k][i].item<double>();
+                    const double theta_dot=fs.slice(0,su+sv+2*sw,total-sm)
+                        .view({ny,nz,nx})[j][k][i].item<double>();
+                    const double dtb=trace.dt*Ark::b[s];
+                    const double mass_chain=(C0+c1*(mu_s-mu0))*theta_dot;
+                    const double theta_chain=c1*(300.0+theta_s)*mu_dot;
+                    const double cross_mu=(mu_s-mu0)*theta_dot;
+                    const double cross_theta=(theta_s-theta0)*mu_dot;
+                    stage_chain+=dtb*(mass_chain+theta_chain);
+                    stage_cross+=dtb*(cross_mu+cross_theta);
+                    stage_l1+=std::abs(dtb)*(std::abs(mass_chain)+std::abs(theta_chain));
+                    cross_l1+=std::abs(dtb)*std::abs(c1)*(std::abs(cross_mu)+
+                                                           std::abs(cross_theta));
+                }
+                const double endpoint_mass=C0*dthetaR;
+                const double endpoint_mu=c1*T0*dmuR;
+                const double endpoint_cross=c1*dmuR*dthetaR;
+                const double direct_term=W*(endpoint_mass+endpoint_mu+
+                    endpoint_cross-stage_chain);
+                const double linear_term=W*(C0*etheta+c1*T0*emu);
+                const double bilinear_term=W*c1*(dmuR*dthetaR-stage_cross);
+                product_direct+=direct_term;
+                product_expanded+=linear_term+bilinear_term;
+                linear_update+=linear_term;
+                bilinear+=bilinear_term;
+                factored_scale+=std::abs(W)*(std::abs(endpoint_mass)+
+                    std::abs(endpoint_mu)+std::abs(endpoint_cross)+stage_l1+
+                    std::abs(C0*etheta)+std::abs(c1*T0*emu)+cross_l1);
+            }
+        }
+    const double eps64=std::numeric_limits<double>::epsilon();
+    const auto gamma64=[&](int n) {
+        const double ne=n*eps64;
+        return ne/(1.0-ne);
+    };
+    const double factored_budget=(gamma64(32)+gamma64(Ark::stages)+
+                                  gamma64(ny*nz*nx))*factored_scale;
+    const double factored_error=std::abs(product_direct-product_expanded);
+    const double mutant_error=std::abs(product_direct-linear_update);
+    const bool bilinear_resolved=mutant_error>100.0*factored_budget;
+    std::cout << "GOV_PRODUCT_FACTORED D=" << product_direct
+              << " expanded=" << product_expanded
+              << " error=" << factored_error
+              << " gamma_budget=" << factored_budget
+              << " linear_fp32=" << linear_update
+              << " bilinear=" << bilinear
+              << " fp32_roundoff_max=" << fp32_update_error.abs().max().item<double>()
+              << " fp32_bound_max=" << fp32_update_bound.max().item<double>()
+              << " mutant_error=" << mutant_error
+              << " separation=" << (factored_budget>0.0 ? mutant_error/factored_budget : 0.0)
+              << " separation_gate=" << (bilinear_resolved ? "pass" : "fail") << '\n';
+    TORCH_CHECK(bilinear_resolved && factored_error<=factored_budget,
+                "factored ARK endpoint identity lacks the required 100x mutant separation");
     const auto final_v=trace.projected_final.slice(0,su,su+sv).view({nv,nz,nx});
     const double final_v_wall=std::max(final_v.slice(0,0,1).abs().max().item<double>(),
                                        final_v.slice(0,ny,ny+1).abs().max().item<double>());
