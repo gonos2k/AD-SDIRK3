@@ -44,6 +44,7 @@ Right_Preconditioner_Quality_Contract
 RW_Term_Capture_Contract
 Stage_Krylov_Policy_Contract
 Stage_Operand_Decomposition_Contract
+Stage2_Rejection_Snapshot_Archive
 Stage_State_Identity_Contract
 State_Layout_Contract
 Stats_Reset_Contract

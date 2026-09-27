@@ -2092,6 +2092,9 @@ CONTAINS
       config_name = "solver_telemetry"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_solver_telemetry))
 
+      config_name = "stage2_rejection_snapshot_diag"//C_NULL_CHAR
+      CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_stage2_rejection_snapshot_diag))
+
       config_name = "progress_invariant_enable"//C_NULL_CHAR
       CALL wrf_sdirk3_set_config_bool(config_name, MERGE(1, 0, config_flags%sdirk3_progress_invariant_enable))
 

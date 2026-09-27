@@ -669,6 +669,11 @@ add_executable(test_stage_operand_decomposition_contract
 target_link_libraries(test_stage_operand_decomposition_contract "${TORCH_LIBRARIES}")
 add_test(NAME Stage_Operand_Decomposition_Contract COMMAND test_stage_operand_decomposition_contract)
 
+# Round-trip contract for the opt-in Stage-2 rejected-trial evidence archive.
+add_executable(test_stage2_rejection_snapshot test_stage2_rejection_snapshot.cpp)
+target_link_libraries(test_stage2_rejection_snapshot "${TORCH_LIBRARIES}")
+add_test(NAME Stage2_Rejection_Snapshot_Archive COMMAND test_stage2_rejection_snapshot)
+
 # =========================================================================
 # PR 5 commit 3: full-object link closure + archive/manifest contracts
 # =========================================================================

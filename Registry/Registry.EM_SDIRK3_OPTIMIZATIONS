@@ -96,6 +96,7 @@ rconfig   integer sdirk3_jvp_auto_bench_warmup         namelist,dynamics  1  0  
 rconfig   integer sdirk3_jvp_auto_bench_seed           namelist,dynamics  1  0        rh   "sdirk3_jvp_auto_bench_seed"           "Deterministic seed for JVP auto-bench probe vector"   ""
 rconfig   logical sdirk3_jvp_auto_bench_lock_reset_stage1 namelist,dynamics  1  .false.  rh   "sdirk3_jvp_auto_bench_lock_reset_stage1" "Reset JVP auto-bench lock at each stage-1 entry (default off)"   ""
 rconfig   logical sdirk3_solver_telemetry              namelist,dynamics  1  .false.  rh   "sdirk3_solver_telemetry"              "Enable per-Newton solver telemetry line"   ""
+rconfig   logical sdirk3_stage2_rejection_snapshot_diag namelist,dynamics  1  .false.  rh   "sdirk3_stage2_rejection_snapshot_diag" "Capture first evaluated rejected Stage-2 Newton trial (single rank/tile)" ""
 rconfig   logical sdirk3_progress_invariant_enable     namelist,dynamics  1  .false.  rh   "sdirk3_progress_invariant_enable"     "Enable progress invariant tracking (default off)"   ""
 rconfig   real    sdirk3_progress_invariant_min_ratio  namelist,dynamics  1  0.0      rh   "sdirk3_progress_invariant_min_ratio"  "Low-progress threshold A=||dU||/(||dt*k1||+eps), <=0 off"   ""
 rconfig   integer sdirk3_progress_invariant_streak_limit namelist,dynamics 1  0        rh   "sdirk3_progress_invariant_streak_limit" "Consecutive low-progress steps to flag (0=off)"   ""

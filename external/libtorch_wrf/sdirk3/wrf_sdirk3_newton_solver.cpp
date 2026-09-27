@@ -57,6 +57,7 @@
 #include "wrf_sdirk3_krylov_metrics.h"  // relative_residual / shares / E^-1 S
 #include "wrf_sdirk3_stage_krylov_policy.h"  // pure stage budget/tolerance resolution
 #include "wrf_sdirk3_stage_history_diag.h"  // PR 9F P2: shared emit_sdirk3_diag_line
+#include "wrf_sdirk3_stage2_rejection_snapshot.h"  // opt-in first rejected Stage-2 trial evidence
 #include "wrf_sdirk3_u_slow_diagnostics.h"   // next_solver_id: the process-wide one
 #include "wrf_sdirk3_probe_validity.h"
 #include "wrf_sdirk3_halo_c_api.h"
@@ -4196,6 +4197,10 @@ public:
     // solve_stage entry so a retry gets a distinct generation.
     torch::Tensor diag_final_K_;
     int diag_final_newton_iter_ = -1;
+    // One snapshot per solver instance/run, shared by the Stage-2 first-reject
+    // evidence path. The flag is set before I/O so a failed filesystem write
+    // cannot add repeated work to later Newton iterations.
+    bool stage2_rejection_snapshot_attempted_ = false;
     int diag_retry_generation_ = -1;
     int diag_solve_generation_ = 0;
 
@@ -10758,6 +10763,81 @@ public:
                                 break;
                             }
                         }
+                    }
+                }
+
+                // First evaluated rejection that reaches this common Stage-2
+                // trust-decision path. Earlier GMRES-quality continues and the
+                // separate recovery path are intentionally outside this scope.
+                // The default-off gate is topology-checked by the WRF caller.
+                // All candidate tensors already exist here; capturing them adds
+                // no RHS/JVP/preconditioner calls and cannot change acceptance.
+                if (!accept_step && stage == 2 &&
+                    wrf::sdirk3::g_sdirk3_config.stage2_rejection_snapshot_diag &&
+                    !stage2_rejection_snapshot_attempted_) {
+                    stage2_rejection_snapshot_attempted_ = true;
+                    wrf::sdirk3::Stage2RejectionSnapshot snapshot;
+                    snapshot.U_n = U_n;
+                    snapshot.U_stage = U_stage;
+                    snapshot.K = K;
+                    snapshot.U_eval = U_eval;
+                    snapshot.F = F;
+                    snapshot.R = R;
+                    snapshot.dK = dK;
+                    snapshot.dK_trial = dK_scaled_candidate;
+                    snapshot.K_trial = K_trial;
+                    snapshot.U_trial = U_trial;
+                    snapshot.F_trial = F_trial;
+                    snapshot.R_trial = R_trial;
+                    snapshot.S_diag = S_diag_;
+                    snapshot.S_inv_diag = S_inv_diag_;
+                    snapshot.halo_mask = halo_mask_initialized_
+                        ? halo_mask_ : torch::Tensor();
+                    snapshot.gmres_r_true = last_gmres_r_true_;
+                    snapshot.timestep = global_timestep_;
+                    snapshot.stage = stage;
+                    snapshot.newton_iter = newton_iter;
+                    snapshot.trust_attempt = attempt;
+                    snapshot.dt = dt;
+                    snapshot.gamma = gamma;
+                    snapshot.step_fraction = tr_alpha;
+                    snapshot.trust_radius = trust_radius_;
+                    snapshot.effective_limit = guarded_item<double>(effective_limit);
+                    snapshot.residual_old_scaled_l2 = res_old_val;
+                    snapshot.residual_trial_scaled_l2 = res_new_val;
+                    snapshot.actual_reduction = actual_reduction;
+                    snapshot.predicted_reduction = predicted_val;
+                    snapshot.rho = rho_val;
+                    snapshot.rho_accept_threshold = rho_accept_threshold;
+                    snapshot.gmres_relative_error = gmres_rel_error;
+                    snapshot.rejection_reason = !std::isfinite(rho_val)
+                        ? "nonfinite_rho"
+                        : actual_reduction <= 0.0
+                            ? "nonpositive_actual_reduction"
+                            : rho_val < rho_accept_threshold
+                                ? "rho_below_threshold_or_insufficient_decrease"
+                                : "other_post_trial_acceptance_gate";
+
+                    const std::string base =
+                        "sdirk3_stage2_first_common_trust_reject_ts" +
+                        std::to_string(global_timestep_) + "_solver" +
+                        std::to_string(solver_id_);
+                    const std::string archive_path = base + ".pt";
+                    const std::string metadata_path = base + ".json";
+                    std::string snapshot_error;
+                    if (wrf::sdirk3::write_stage2_rejection_snapshot(
+                            snapshot, archive_path, metadata_path,
+                            &snapshot_error)) {
+                        std::cerr << "SDIRK3_STAGE2_REJECTION_SNAPSHOT path="
+                                  << archive_path << " metadata=" << metadata_path
+                                  << " iter=" << newton_iter
+                                  << " attempt=" << attempt
+                                  << " step_fraction=" << tr_alpha
+                                  << " rho=" << rho_val
+                                  << " (observed tensors; no RHS replay)\n";
+                    } else {
+                        std::cerr << "SDIRK3_STAGE2_REJECTION_SNAPSHOT_UNAVAILABLE reason="
+                                  << snapshot_error << "\n";
                     }
                 }
 

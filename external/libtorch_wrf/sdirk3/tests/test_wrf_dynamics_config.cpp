@@ -47,24 +47,34 @@ int main() {
     torch::set_num_threads(1);
     wrf::sdirk3::SDIRK3Config local;
     TORCH_CHECK(!local.non_hydrostatic && !local.do_curvature &&
-                !local.split_explicit_top_lid, "standalone defaults changed");
+                !local.split_explicit_top_lid &&
+                !local.stage2_rejection_snapshot_diag,
+                "standalone defaults changed");
     local.load_from_namelist("non_hydrostatic = .true.\n"
                              "do_curvature = .true.\n"
-                             "split_explicit_top_lid = .true.\n");
+                             "split_explicit_top_lid = .true.\n"
+                             "sdirk3_stage2_rejection_snapshot_diag = .true.\n");
     TORCH_CHECK(local.non_hydrostatic && local.do_curvature &&
-                local.split_explicit_top_lid && local.validate(),
+                local.split_explicit_top_lid &&
+                local.stage2_rejection_snapshot_diag && local.validate(),
                 "namelist/validation lost dynamics flags");
 
     for (const auto* key : {"WRF_SDIRK3_NON_HYDROSTATIC", "WRF_SDIRK3_DO_CURVATURE",
-                            "WRF_SDIRK3_SPLIT_EXPLICIT_TOP_LID"})
+                            "WRF_SDIRK3_SPLIT_EXPLICIT_TOP_LID",
+                            "WRF_SDIRK3_STAGE2_REJECTION_SNAPSHOT_DIAG"})
         setenv(key, "1", 1);
     wrf_sdirk3_load_env_once();
     expect_flags(true);
+    TORCH_CHECK(g_sdirk3_config.stage2_rejection_snapshot_diag,
+                "environment parser lost Stage-2 snapshot flag");
 
     // The Fortran initializer calls these setters after the shared env hook.
     set_wrf_flags(false);
+    wrf_sdirk3_set_config_bool("stage2_rejection_snapshot_diag", 0);
     wrf_sdirk3_load_env_once();
     expect_flags(false);
+    TORCH_CHECK(!g_sdirk3_config.stage2_rejection_snapshot_diag,
+                "runtime bool setter did not override Stage-2 snapshot flag");
     void* off = make_solver(741);
     expect_flags(false); // Creator's env hook must not reload the still-true env.
     TORCH_CHECK(!(static_cast<TileSDIRK3UnifiedSolver*>(off)->*access(NhTag{})),

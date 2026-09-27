@@ -930,11 +930,13 @@ struct SDIRK3Config {
     int checkpoint_interval = 360;         // Timesteps between saved checkpoints
     bool retain_graph_for_adjoint = false; // Retain the last tile step and converged-root pullbacks
     // PR 9E: diagnosis-only stage-operand decomposition capture. Default OFF;
-    // when ON it OBSERVES the exact production evaluations (no extra RHS/JVP
+    // when ON it observes the exact production evaluations (no extra RHS/JVP
     // calls, no numerical branch change) at record stage 2/3 Newton iter-0 on
-    // a single rank / single tile. Wired through the config loader so it is a
-    // cached bool, never a hot-path getenv.
+    // one rank and one tile. Wired through the config loader as a cached bool.
     bool stage_operand_diag = false;
+    // One-shot capture of an already-evaluated rejected Stage-2 trust trial.
+    // Default OFF; the WRF caller enforces single-rank/whole-patch topology.
+    bool stage2_rejection_snapshot_diag = false;
     bool obs_aware_4dvar = false;          // Enable observation-aware terminal forcing path
     int obs_source_mode = 0;               // 0=off,1=FDDA,2=WRFDA-compatible payload
     int obs_window_sync_mode = 0;          // 0=off,1=strict endpoint sync,2=relaxed sync
