@@ -62,6 +62,36 @@ inline torch::Tensor snapshot_cpu_tensor(const torch::Tensor& tensor) {
     return tensor.detach().to(torch::kCPU).contiguous().clone();
 }
 
+inline Stage2RejectionSnapshot clone_stage2_rejection_snapshot(
+    const Stage2RejectionSnapshot& source) {
+    Stage2RejectionSnapshot frozen = source;
+    const auto clone_detached = [](const torch::Tensor& tensor) {
+        return tensor.defined() ? tensor.detach().clone() : torch::Tensor();
+    };
+    frozen.U_n = clone_detached(source.U_n);
+    frozen.U_stage = clone_detached(source.U_stage);
+    frozen.K = clone_detached(source.K);
+    frozen.U_eval = clone_detached(source.U_eval);
+    frozen.F = clone_detached(source.F);
+    frozen.R = clone_detached(source.R);
+    frozen.dK = clone_detached(source.dK);
+    frozen.dK_trial = clone_detached(source.dK_trial);
+    frozen.K_trial = clone_detached(source.K_trial);
+    frozen.U_trial = clone_detached(source.U_trial);
+    frozen.F_trial = clone_detached(source.F_trial);
+    frozen.R_trial = clone_detached(source.R_trial);
+    frozen.S_diag = clone_detached(source.S_diag);
+    frozen.S_inv_diag = clone_detached(source.S_inv_diag);
+    frozen.halo_mask = clone_detached(source.halo_mask);
+    frozen.gmres_r_true = clone_detached(source.gmres_r_true);
+    return frozen;
+}
+
+inline bool stage2_terminal_snapshot_candidate_matches(
+    const Stage2RejectionSnapshot& snapshot, int terminal_stall_iter) {
+    return snapshot.stage == 2 && snapshot.newton_iter == terminal_stall_iter;
+}
+
 inline std::string snapshot_json_number(double value) {
     if (!std::isfinite(value)) return "null";
     std::ostringstream out;
@@ -72,10 +102,14 @@ inline std::string snapshot_json_number(double value) {
 // Writes a versioned LibTorch archive plus a JSON sidecar. Temporary files are
 // renamed only after each complete write. A failure is reported to the caller;
 // it never changes the Newton/trust-region decision.
-inline bool write_stage2_rejection_snapshot(const Stage2RejectionSnapshot& s,
-                                             const std::string& archive_path,
-                                             const std::string& metadata_path,
-                                             std::string* error) {
+inline bool write_stage2_snapshot(const Stage2RejectionSnapshot& s,
+                                  const std::string& archive_path,
+                                  const std::string& metadata_path,
+                                  const char* kind,
+                                  int schema_version,
+                                  int terminal_stall_iter,
+                                  int stagnation_count,
+                                  std::string* error) {
     const std::string archive_tmp = archive_path + ".tmp";
     const std::string metadata_tmp = metadata_path + ".tmp";
     try {
@@ -100,10 +134,15 @@ inline bool write_stage2_rejection_snapshot(const Stage2RejectionSnapshot& s,
 
         std::ofstream meta(metadata_tmp.c_str(), std::ios::out | std::ios::trunc);
         if (!meta) throw std::runtime_error("cannot open metadata temporary file");
+        const bool terminal_stall = terminal_stall_iter >= 0;
         meta << "{\n"
-             << "  \"schema_version\": 2,\n"
-             << "  \"kind\": \"stage2_first_common_trust_rejection\",\n"
-             << "  \"capture_scope\": \"after R_trial and trust metrics; excludes earlier quality-gate and fallback paths\",\n"
+             << "  \"schema_version\": " << schema_version << ",\n"
+             << "  \"kind\": \"" << kind << "\",\n"
+             << "  \"capture_scope\": \""
+             << (terminal_stall
+                    ? "latest evaluated common-path rejected trial; excludes earlier quality-gate and fallback paths"
+                    : "after R_trial and trust metrics; excludes earlier quality-gate and fallback paths")
+             << "\",\n"
              << "  \"precision_scope\": \"observed_fp32_operands_only\",\n"
              << "  \"rhs_replay_performed\": false,\n"
              << "  \"rejection_reason\": \"" << s.rejection_reason << "\",\n"
@@ -122,8 +161,17 @@ inline bool write_stage2_rejection_snapshot(const Stage2RejectionSnapshot& s,
              << "  \"predicted_reduction\": " << snapshot_json_number(s.predicted_reduction) << ",\n"
              << "  \"rho\": " << snapshot_json_number(s.rho) << ",\n"
              << "  \"rho_accept_threshold\": " << snapshot_json_number(s.rho_accept_threshold) << ",\n"
-             << "  \"gmres_relative_error\": " << snapshot_json_number(s.gmres_relative_error) << "\n"
-             << "}\n";
+             << "  \"gmres_relative_error\": " << snapshot_json_number(s.gmres_relative_error);
+        if (terminal_stall_iter >= 0) {
+            meta << ",\n"
+                 << "  \"candidate_kind\": \"latest_common_path_rejected_trial\",\n"
+                 << "  \"candidate_newton_iter\": " << s.newton_iter << ",\n"
+                 << "  \"candidate_trust_attempt\": " << s.trust_attempt << ",\n"
+                 << "  \"terminal_condition\": \"ZeroStepStall\",\n"
+                 << "  \"terminal_stall_iter\": " << terminal_stall_iter << ",\n"
+                 << "  \"stagnation_count\": " << stagnation_count;
+        }
+        meta << "\n}\n";
         meta.close();
         if (!meta) throw std::runtime_error("failed writing metadata temporary file");
 
@@ -139,6 +187,30 @@ inline bool write_stage2_rejection_snapshot(const Stage2RejectionSnapshot& s,
         if (error) *error = e.what();
         return false;
     }
+}
+
+inline bool write_stage2_rejection_snapshot(const Stage2RejectionSnapshot& s,
+                                             const std::string& archive_path,
+                                             const std::string& metadata_path,
+                                             std::string* error) {
+    return write_stage2_snapshot(s, archive_path, metadata_path,
+                                 "stage2_first_common_trust_rejection", 2, -1, -1,
+                                 error);
+}
+
+inline bool write_stage2_terminal_stall_snapshot(const Stage2RejectionSnapshot& s,
+                                                  int terminal_stall_iter,
+                                                  int stagnation_count,
+                                                  const std::string& archive_path,
+                                                  const std::string& metadata_path,
+                                                  std::string* error) {
+    if (!stage2_terminal_snapshot_candidate_matches(s, terminal_stall_iter)) {
+        if (error) *error = "latest common-path candidate does not match terminal Stage-2 iteration";
+        return false;
+    }
+    return write_stage2_snapshot(s, archive_path, metadata_path,
+                                 "stage2_terminal_zero_step_stall", 3,
+                                 terminal_stall_iter, stagnation_count, error);
 }
 
 } // namespace sdirk3
