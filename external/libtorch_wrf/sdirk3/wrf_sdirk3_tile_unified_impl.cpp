@@ -35528,26 +35528,15 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_defor12(const torch::Tensor& u, c
                     // Vertical derivative of hatavg
                     auto dhatavg = hatavg.select(1, k + 1) - hatavg.select(1, k);  // [ny_v, nx-1]
 
-                    // PARITY FIX 2025-12-13: Use WRF 4-point averaging for tmpzx including j-1/j
-                    // WRF lines 580-582: tmpzx = 0.25*(zx(i,k,j-1)+zx(i,k,j)+zx(i,k+1,j-1)+zx(i,k+1,j))
-                    // zx_metric is [ny, nz_w, nx] (u-staggered in x, so nx = nx_mass + 1)
-                    // At vorticity point, average zx in both j direction (j-1/j) and k direction (k/k+1)
-                    // Note: zx is NOT staggered in j, so we need to average at j-1 and j
+                    // WRF averages zx only over the adjacent Y rows and W levels
+                    // at this D12 point. Its X index already matches the vorticity
+                    // location; averaging neighboring X columns shifts the terrain
+                    // metric one half-cell away from the Fortran stencil.
                     torch::Tensor tmpzx;
                     if (zx_metric.size(1) > k + 1 && zx_metric.size(2) >= nx && zx_metric.size(0) >= ny) {
-                        // Get zx at w-levels k and k+1 (full j range)
-                        auto zx_k = zx_metric.select(1, k);        // [ny, nx_zx]
-                        auto zx_kp1 = zx_metric.select(1, k + 1);  // [ny, nx_zx]
-
-                        // First average in i direction (i-1/i) for vorticity point
-                        auto zx_k_iavg = 0.5f * (zx_k.slice(1, 0, nx - 1) + zx_k.slice(1, 1, nx));    // [ny, nx-1]
-                        auto zx_kp1_iavg = 0.5f * (zx_kp1.slice(1, 0, nx - 1) + zx_kp1.slice(1, 1, nx));  // [ny, nx-1]
-
-                        // Then average in k direction (k/k+1)
-                        auto zx_kavg = 0.5f * (zx_k_iavg + zx_kp1_iavg);  // [ny, nx-1]
-
-                        // Finally average in j direction (j-1/j) for vorticity point
-                        // Result is [ny-1, nx-1] at vorticity points
+                        auto zx_k = zx_metric.select(1, k).slice(1, 1, nx);
+                        auto zx_kp1 = zx_metric.select(1, k + 1).slice(1, 1, nx);
+                        auto zx_kavg = 0.5f * (zx_k + zx_kp1);
                         tmpzx = 0.5f * (zx_kavg.slice(0, 0, ny - 1) + zx_kavg.slice(0, 1, ny));  // [ny-1, nx-1]
 
                         // Expand to ny_v if needed (v-staggered has ny_v = ny + 1)
@@ -35723,6 +35712,88 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_defor12(const torch::Tensor& u, c
                 // Copy j=j_interior to j=ny_v-1 if needed (top boundary)
                 if (j_interior + 1 < ny_v) {
                     defor12.select(0, ny_v - 1).copy_(defor12.select(0, j_interior));
+                }
+            }
+
+            // The periodic west vorticity point is owned. Fortran evaluates
+            // dv/dx there from the east halo (i-1) and local value (i), while
+            // the vectorized interior above starts at output column 1. Build
+            // this wrapped column explicitly; copying column 1 changes the
+            // derivative and the terrain correction at the periodic seam.
+            const bool packed_periodic_x = isPackedPeriodicDomain();
+            const int periodic_mass_nx = packed_periodic_x ? nx - 1 : nx;
+            if (config_flags_periodic_x_ && periodic_mass_nx > 1 && ny_v > 2 && nz > 0) {
+                const int j_end = std::min(ny_v - 1, ny);
+                auto west_v = torch::zeros({j_end - 1, nz}, options);
+                auto v_hat_west = v_hat.select(2, 0);
+                // Packed WRF tiles carry a duplicate final mass column. The
+                // west predecessor is the last unique column, nx-2, not the
+                // duplicate endpoint at nx-1.
+                auto v_hat_east = v_hat.select(2, periodic_mass_nx - 1);
+                auto hatavg_west = torch::zeros({ny_v, nz + 1}, options);
+                for (int k = 1; k < nz; ++k) {
+                    const auto fnm_k = fnm_.select(0, k).to(options);
+                    const auto fnp_k = fnp_.select(0, k).to(options);
+                    hatavg_west.select(1, k).copy_(0.5f * (
+                        fnm_k * (v_hat_west.select(1, k) + v_hat_east.select(1, k)) +
+                        fnp_k * (v_hat_west.select(1, k - 1) + v_hat_east.select(1, k - 1))));
+                }
+                if (nz >= 3) {
+                    hatavg_west.select(1, 0).copy_(0.5f * (
+                        cf1_ * (v_hat_west.select(1, 0) + v_hat_east.select(1, 0)) +
+                        cf2_ * (v_hat_west.select(1, 1) + v_hat_east.select(1, 1)) +
+                        cf3_ * (v_hat_west.select(1, 2) + v_hat_east.select(1, 2))));
+                } else {
+                    hatavg_west.select(1, 0).copy_(0.5f *
+                        (v_hat_west.select(1, 0) + v_hat_east.select(1, 0)));
+                }
+                if (nz >= 2) {
+                    hatavg_west.select(1, nz).copy_(0.5f * (
+                        cfn_ * (v_hat_west.select(1, nz - 1) + v_hat_east.select(1, nz - 1)) +
+                        cfn1_ * (v_hat_west.select(1, nz - 2) + v_hat_east.select(1, nz - 2))));
+                } else {
+                    hatavg_west.select(1, nz).copy_(0.5f * (
+                        v_hat_west.select(1, nz - 1) + v_hat_east.select(1, nz - 1)));
+                }
+                auto dv_dx_west = (v_hat_west - v_hat_east) * rdx;
+                for (int k = 0; k < nz; ++k) {
+                    auto terrain_v = torch::zeros({j_end - 1}, options);
+                    if (zx_metric.defined() && zx_metric.size(1) > k + 1 &&
+                        rdzw_metric.defined() && rdzw_metric.size(1) > k &&
+                        zx_metric.size(0) >= j_end && rdzw_metric.size(0) >= j_end) {
+                        auto zx_avg = 0.25f * (
+                            zx_metric.slice(0, 0, j_end - 1).select(2, 0).select(1, k) +
+                            zx_metric.slice(0, 1, j_end).select(2, 0).select(1, k) +
+                            zx_metric.slice(0, 0, j_end - 1).select(2, 0).select(1, k + 1) +
+                            zx_metric.slice(0, 1, j_end).select(2, 0).select(1, k + 1));
+                        auto rdzw_sum =
+                            rdzw_metric.slice(0, 1, j_end).select(1, k).select(1, periodic_mass_nx - 1) +
+                            rdzw_metric.slice(0, 1, j_end).select(1, k).select(1, 0) +
+                            rdzw_metric.slice(0, 0, j_end - 1).select(1, k).select(1, periodic_mass_nx - 1) +
+                            rdzw_metric.slice(0, 0, j_end - 1).select(1, k).select(1, 0);
+                        terrain_v = (hatavg_west.slice(0, 1, j_end).select(1, k + 1) -
+                                     hatavg_west.slice(0, 1, j_end).select(1, k)) *
+                                    0.25f * zx_avg * rdzw_sum;
+                    }
+                    auto du_west = du_dy.slice(0, 0, j_end - 1).select(2, 0).select(1, k) -
+                                   terrain_term_u.slice(0, 0, j_end - 1).select(2, 0).select(1, k);
+                    auto v_west = dv_dx_west.slice(0, 1, j_end).select(1, k) - terrain_v;
+                    torch::Tensor mm_west;
+                    if (msfux_.defined() && msfvy_.defined() &&
+                        msfux_.size(0) >= j_end && msfvy_.size(0) >= j_end) {
+                        mm_west = 0.25f *
+                            (msfux_.slice(0, 0, j_end - 1).select(1, 0) +
+                             msfux_.slice(0, 1, j_end).select(1, 0)) *
+                            (msfvy_.slice(0, 1, j_end).select(1, periodic_mass_nx - 1) +
+                             msfvy_.slice(0, 1, j_end).select(1, 0));
+                    } else {
+                        mm_west = torch::ones({j_end - 1}, options);
+                    }
+                    west_v.select(1, k).copy_(mm_west * (du_west + v_west));
+                }
+                defor12.slice(0, 1, j_end).select(2, 0).copy_(west_v);
+                if (packed_periodic_x) {
+                    defor12.select(2, nx - 1).copy_(defor12.select(2, 0));
                 }
             }
         }
@@ -38303,11 +38374,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf(
         tau22_avg.slice(1, 1, nz).copy_(fnm_3d_22 * tau22_upper + fnp_3d_22 * tau22_lower);
     }
 
-    // Boundary conditions
-    tau12_avg.select(1, 0).copy_(tau12.select(1, 0));
-    tau12_avg.select(1, nz).copy_(tau12.select(1, nz-1));
-    tau22_avg.select(1, 0).copy_(tau22.select(1, 0));
-    tau22_avg.select(1, nz).copy_(tau22.select(1, nz-1));
+    // Fortran horizontal_diffusion_v_2 explicitly zeros both stress averages
+    // at the bottom and top W levels before applying terrain corrections.
+    tau12_avg.select(1, 0).zero_();
+    tau12_avg.select(1, nz).zero_();
+    tau22_avg.select(1, 0).zero_();
+    tau22_avg.select(1, nz).zero_();
 
     // PARITY FIX 2025-12-09: Pre-compute terrain slope interpolations for V-diffusion
     // Fortran horizontal_diffusion_v_2 (module_diffusion_em.F:3506-3507):
@@ -38888,8 +38960,28 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf(
 
         // Compute vertical stress tensor differences: tau_avg[k+1] - tau_avg[k] for k=0..nz-1
         // tau12_avg has shape [ny_v, nz+1, nx], tau22_avg has shape [ny, nz+1, nx]
-        auto tau12_avg_slice = tau12_avg.slice(0, j_start_v, j_end_v);  // [ny-1, nz+1, nx]
-        auto tau22_avg_slice = tau22_avg.slice(0, j_start_v, j_end_v);  // [ny-1, nz+1, nx]
+        // Fortran titau1avg is staggered to V by averaging adjacent X stress
+        // points; titau2avg is staggered to V by averaging adjacent Y rows.
+        const bool packed_periodic_x = isPackedPeriodicDomain();
+        const int terrain_mass_nx = packed_periodic_x ? nx - 1 : nx;
+        torch::Tensor tau12_avg_x;
+        if (config_flags_periodic_x_) {
+            const auto tau12_east_core = torch::cat(
+                {tau12_avg.slice(2, 1, terrain_mass_nx), tau12_avg.slice(2, 0, 1)}, 2);
+            const auto tau12_avg_x_core = 0.5f *
+                (tau12_avg.slice(2, 0, terrain_mass_nx) + tau12_east_core);
+            tau12_avg_x = packed_periodic_x
+                ? torch::cat({tau12_avg_x_core, tau12_avg_x_core.slice(2, 0, 1)}, 2)
+                : tau12_avg_x_core;
+        } else {
+            const auto tau12_east = torch::cat(
+                {tau12_avg.slice(2, 1, nx), tau12_avg.slice(2, nx - 1, nx)}, 2);
+            tau12_avg_x = 0.5f * (tau12_avg + tau12_east);
+        }
+        auto tau12_avg_slice = tau12_avg_x.slice(0, j_start_v, j_end_v);
+        auto tau22_avg_slice = 0.5f * (
+            tau22_avg.slice(0, j_start_v - 1, j_end_v - 1) +
+            tau22_avg.slice(0, j_start_v, j_end_v));
 
         auto tau12_kp1 = tau12_avg_slice.slice(1, 1, nz + 1);  // [ny-1, nz, nx] at k+1
         auto tau12_k = tau12_avg_slice.slice(1, 0, nz);        // [ny-1, nz, nx] at k
@@ -38997,6 +39089,12 @@ torch::Tensor TileSDIRK3UnifiedSolver::compute_horizontal_diffusion_v_wrf(
     // Stress already includes rho, and g*dz/dnw yields a coupled tendency.
     // Do not multiply it by the dry column mass a second time.
     if (physical_stress) tendency = -tendency;
+
+    // The packed periodic-X state stores one duplicate mass endpoint. Publish
+    // the same V RHS at that alias as at the unique west cell.
+    if (isPackedPeriodicDomain() && nx > 1) {
+        tendency.select(2, nx - 1).copy_(tendency.select(2, 0));
+    }
 
     return tendency;
 }
