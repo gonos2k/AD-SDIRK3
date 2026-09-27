@@ -16425,6 +16425,27 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                     "option-2 U stress diffusion requires the physical layer-mass basis");
         option2_u_diffusion_to_coupled = velocity_mass_u/u_layer_mass;
     }
+    torch::Tensor option2_v_diffusion_to_coupled;
+    if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2 &&
+        wrf::sdirk3::g_sdirk3_config.use_stress_tensor) {
+        torch::Tensor v_layer_mass;
+        if (canonical_horizontal) {
+            v_layer_mass = level_mass_v;
+        } else {
+            const auto c1 = ensureC1hDevCached(v.device(),v.scalar_type())
+                .slice(0,0,nz_).view({1,-1,1});
+            const auto c2 = ensureC2hDevCached(v.device(),v.scalar_type())
+                .slice(0,0,nz_).view({1,-1,1});
+            const auto muv_full = avg_y_to_v_2d(mu_full,v.size(0));
+            v_layer_mass = c1*muv_full.unsqueeze(1)+c2;
+        }
+        TORCH_CHECK(v_layer_mass.defined() &&
+                    v_layer_mass.sizes() == velocity_mass_v.sizes(),
+                    "option-2 V stress diffusion requires the physical layer-mass basis");
+        // V stress produces the uncoupled source D. The final RHS divides by
+        // M_v; store M_v*D/L_v so it returns WRF's fixed-mass rate D/L_v.
+        option2_v_diffusion_to_coupled = velocity_mass_v/v_layer_mass;
+    }
 
     if (do_explicit) {  // Step 3: ADVECTION (slow-mode / explicit)
 
@@ -23702,13 +23723,20 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                                                                   option2_stage_zx,option2_stage_zy,
                                                                   option2_stage_rdzw,option2_stage_rdz);
                     if (wrf::sdirk3::g_sdirk3_config.diffusion_option == 2) {
-                        const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
-                            .slice(0, 0, t.size(1)).view({1, -1, 1});
-                        const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
-                            .slice(0, 0, t.size(1)).view({1, -1, 1});
-                        const auto alpha = (canonical_horizontal ? level_mass_v :
-                            c1 * muv_2d.unsqueeze(1) + c2) / msfvx_.unsqueeze(1);
-                        v_diff_h = v_diff_h * (velocity_mass_v / alpha);
+                        if (wrf::sdirk3::g_sdirk3_config.use_stress_tensor) {
+                            TORCH_CHECK(option2_v_diffusion_to_coupled.defined() &&
+                                        option2_v_diffusion_to_coupled.sizes() == v_diff_h.sizes(),
+                                        "option-2 stress V diffusion requires a matching V map/mass scale");
+                            v_diff_h = v_diff_h * option2_v_diffusion_to_coupled;
+                        } else {
+                            const auto c1 = ensureC1hDevCached(t.device(), t.scalar_type())
+                                .slice(0, 0, t.size(1)).view({1, -1, 1});
+                            const auto c2 = ensureC2hDevCached(t.device(), t.scalar_type())
+                                .slice(0, 0, t.size(1)).view({1, -1, 1});
+                            const auto alpha = (canonical_horizontal ? level_mass_v :
+                                c1 * muv_2d.unsqueeze(1) + c2) / msfvx_.unsqueeze(1);
+                            v_diff_h = v_diff_h * (velocity_mass_v / alpha);
+                        }
                     }
 
                     // Option 2 consumes its own W stress coefficient/density path.
@@ -23999,6 +24027,13 @@ torch::Tensor TileSDIRK3UnifiedSolver::computeUnifiedRHS(const torch::Tensor& U,
                         defor23 = compute_defor23(v, w, rdy_tensor, rdnw_tensor);
                     }
                     auto v_diff_v = compute_vertical_diffusion_v_stress(v, defor23, Kv_mom, rho, rdnw_tensor);
+                    if (option2_vertical &&
+                        wrf::sdirk3::g_sdirk3_config.use_stress_tensor) {
+                        TORCH_CHECK(option2_v_diffusion_to_coupled.defined() &&
+                                    option2_v_diffusion_to_coupled.sizes() == v_diff_v.sizes(),
+                                    "option-2 V vertical stress requires a matching V map/mass scale");
+                        v_diff_v = v_diff_v * option2_v_diffusion_to_coupled;
+                    }
                     rv_tend = rv_tend + v_diff_v;
                 
                     // W's vertical stress uses xkmh (khdif); U/V use xkmv

@@ -164,19 +164,24 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
     routines.append(rk_addtend)
     routine_hash = hashlib.sha256("\n".join(routines).encode()).hexdigest()
     if profile not in {"interior-pulse", "top-pulse", "w-composite", "full-rhs-probe", "k0",
+                       "actual-v-rhs", "actual-v-rhs-packed", "actual-v-rhs-map1",
                        "flat-terrain", "packed-periodic",
                        "packed-periodic-flat", "v-y-terrain"}:
         raise ValueError(f"unknown fixture profile: {profile}")
     top_pulse = 1 if profile == "top-pulse" else 0
     k0 = profile == "k0"
+    actual_v_rhs = profile in {"actual-v-rhs", "actual-v-rhs-packed", "actual-v-rhs-map1"}
+    fixture_map = 1.0 if profile == "actual-v-rhs-map1" else map_value
     terrain_amplitude = 0.0 if profile in {"flat-terrain", "packed-periodic-flat", "v-y-terrain"} else 100.0
-    packed_periodic = profile in {"packed-periodic", "packed-periodic-flat"}
+    packed_periodic = profile in {"packed-periodic", "packed-periodic-flat", "actual-v-rhs-packed"}
     unique_nx = NX - 1 if packed_periodic else NX
     domain_ide = "nx" if packed_periodic else "nx+1"
+    domain_jde = "ny" if profile == "actual-v-rhs-packed" else "ny+1"
     y_varying = profile == "v-y-terrain"
     full_rhs_probe = profile == "full-rhs-probe"
     terrain_y_amplitude = 40.0 if y_varying or full_rhs_probe else 0.0
-    domain_jte = "ny+1" if y_varying else "ny"
+    domain_jte = ("ny-1" if profile == "actual-v-rhs-packed" else
+                  ("ny+1" if y_varying else "ny"))
     v_x_factor = "1.0" if y_varying else (
         f"(1.0+0.1*cos(2.*pi*real(modulo(i-1,{unique_nx}))/real({unique_nx})))")
     _, _, _, d11_expected, _, _ = source_grounded_fields()
@@ -200,10 +205,10 @@ program oracle_driver
   use extracted_wrf_diffusion
   implicit none
   integer, parameter :: nx={NX}, ny={NY}, nz={NZ}
-  integer, parameter :: ids=1, ide={domain_ide}, jds=1, jde=ny+1, kds=1, kde=nz+1
+  integer, parameter :: ids=1, ide={domain_ide}, jds=1, jde={domain_jde}, kds=1, kde=nz+1
   integer, parameter :: ims=0, ime=nx+2, jms=0, jme=ny+2, kms=1, kme=nz+1
   integer, parameter :: itsm=1, item={domain_ide}, itsd=1, ited=nx, itsu=2, iteu=nx
-  integer, parameter :: jts={1 if y_varying else 2}, jte={domain_jte}, kts=1, kte=nz+1
+  integer, parameter :: jts={1 if (y_varying or actual_v_rhs) else 2}, jte={domain_jte}, kts=1, kte=nz+1
   integer :: i,j,k,ii
   type(grid_config_rec_type) :: cfg
   real :: rdx,rdy,terrain,pi,cf1,cf2,cf3
@@ -244,11 +249,11 @@ program oracle_driver
   ru_tend=0.; rv_tend=0.; rw_tend=0.; ph_tend=0.; t_tend=0.
   ru_tendf=0.; rv_tendf=0.; rw_tendf=0.; ph_tendf=0.; t_tendf=0.
   u_save=0.; v_save=0.; w_save=0.; ph_save=0.; t_save=0.
-  mu_tend=0.; mu_tendf=0.; h_diabatic=0.; mut=1.; msfvx_inv=1./{map_value:.17g}
+  mu_tend=0.; mu_tendf=0.; h_diabatic=0.; mut=1.; msfvx_inv=1./{fixture_map:.17g}
   ph=0.; phb=0.; z=0.; rdz=0.; rho=1.; zx=0.; zy=0.; rdzw=0.; theta_input=0.
   nba_rij=0.; nba_mij=0.
-  msfux={map_value:.17g}; msfuy={map_value:.17g}; msfvx={map_value:.17g}; msfvy={map_value:.17g}
-  msftx={map_value:.17g}; msfty={map_value:.17g}
+  msfux={fixture_map:.17g}; msfuy={fixture_map:.17g}; msfvx={fixture_map:.17g}; msfvy={fixture_map:.17g}
+  msftx={fixture_map:.17g}; msfty={fixture_map:.17g}
   fnm=0.5; fnp=0.5; dn=-0.25; dnw=-0.25; u_base=0.; v_base=0.
   c1rk=fnm; c2rk=fnm
   if ({1 if full_rhs_probe else 0} == 1) then
@@ -515,6 +520,14 @@ program oracle_driver
       enddo
     enddo
   enddo
+  if ({1 if actual_v_rhs else 0} == 1) then
+    do k=kms,kme
+      do i=ims,ime
+        v(i,k,jds)=0.
+        v(i,k,jde)=0.
+      enddo
+    enddo
+  endif
   do j=jms,jme
     do k=kms,kme
       if ({1 if packed_periodic else 0} == 1) then
