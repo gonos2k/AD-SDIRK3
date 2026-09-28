@@ -187,7 +187,7 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
     routines.append(rk_addtend)
     routine_hash = hashlib.sha256("\n".join(routines).encode()).hexdigest()
     if profile not in {"interior-pulse", "top-pulse", "w-composite", "w-variable-k-rho", "actual-w-rhs",
-                       "actual-w-rhs-variable-mu",
+                       "actual-w-rhs-variable-mu", "actual-w-rhs-variable-ph",
                        "actual-w-rhs-packed", "actual-w-rhs-packed-old-period",
                        "full-rhs-probe", "k0",
                        "actual-v-rhs", "actual-v-rhs-packed", "actual-v-rhs-map1",
@@ -201,8 +201,10 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
                                "actual-v-rhs-yvary", "actual-v-rhs-yvary-packed"}
     actual_w_rhs = profile in {"actual-w-rhs", "actual-w-rhs-packed",
                                "actual-w-rhs-variable-mu",
+                               "actual-w-rhs-variable-ph",
                                "actual-w-rhs-packed-old-period"}
     variable_w_mu = profile == "actual-w-rhs-variable-mu"
+    variable_w_phi = profile == "actual-w-rhs-variable-ph"
     variable_w_coefficients = profile == "w-variable-k-rho"
     actual_v_nonuniform = profile in {"actual-v-rhs-yvary", "actual-v-rhs-yvary-packed"}
     nonuniform_c1 = ("(/0.90,1.00,1.10,1.20/)" if actual_v_nonuniform else
@@ -326,6 +328,13 @@ program oracle_driver
       enddo
     enddo
   endif
+  if ({1 if variable_w_phi else 0} == 1) then
+    do j=jms,jme
+      do i=ims,ime
+        mut(i,j)=80000.
+      enddo
+    enddo
+  endif
   nba_rij=0.; nba_mij=0.
   msfux={fixture_map:.17g}; msfuy={fixture_map:.17g}; msfvx={fixture_map:.17g}; msfvy={fixture_map:.17g}
   msftx={fixture_map:.17g}; msfty={fixture_map:.17g}
@@ -373,13 +382,17 @@ program oracle_driver
         ii=modulo(i-1,{unique_nx})
         terrain={terrain_amplitude:.17g}*cos(2.*pi*real(ii)/real({unique_nx})) + &
                 ({terrain_y_amplitude:.17g})*cos(2.*pi*real(modulo(j-1,ny))/real(ny))
+        if ({1 if variable_w_phi else 0} == 1) then
+          phi_pert(i,k,j)=g*50.*sin(2.*pi*real(k-1)/real(nz))* &
+                          cos(2.*pi*real(ii)/real({unique_nx}))
+        endif
         if ({1 if actual_v_nonuniform else 0} == 1) then
           ii=modulo(j-1,{unique_ny})
           mu_pert(i,j)=8000.*cos(2.*pi*(real(ii)+0.5)/real({unique_ny}))
           phi_pert(i,k,j)=g*20.*cos(2.*pi*(real(ii)+0.5)/real({unique_ny}))* &
                           (real(k-1)/real(nz))**2
         endif
-        if ({1 if variable_w_mu else 0} == 1) then
+        if ({1 if variable_w_mu or variable_w_phi else 0} == 1) then
           ph(i,k,j)=phi_pert(i,k,j)
           phb(i,k,j)=g*(terrain+{DZ:.17g}*real(k-1))
         else
@@ -392,6 +405,16 @@ program oracle_driver
       enddo
     enddo
   enddo
+  if ({1 if variable_w_phi else 0} == 1) then
+    do j=jms,jme
+      do k=kts,kte-1
+        do i=ims,ime
+          rho(i,k,j)=1.0/(1.0/rho(i,k,j) - (1.0/dnw(k))* &
+                         (phi_pert(i,k+1,j)-phi_pert(i,k,j))/mut(i,j))
+        enddo
+      enddo
+    enddo
+  endif
   if ({1 if actual_v_nonuniform else 0} == 1) then
     do j=jms,jme
       do k=kts,kte-1
@@ -508,7 +531,7 @@ program oracle_driver
       enddo
     enddo
   endif
-  if ({1 if profile in {"w-composite", "w-variable-k-rho", "actual-w-rhs", "actual-w-rhs-variable-mu", "actual-w-rhs-packed",
+  if ({1 if profile in {"w-composite", "w-variable-k-rho", "actual-w-rhs", "actual-w-rhs-variable-mu", "actual-w-rhs-variable-ph", "actual-w-rhs-packed",
                          "actual-w-rhs-packed-old-period", "full-rhs-probe"} else 0} == 1) then
     do j=jms,jme
       do i=ims,ime
@@ -637,7 +660,7 @@ program oracle_driver
       enddo
     enddo
   enddo
-  if ({1 if variable_w_mu else 0} == 1) then
+  if ({1 if variable_w_mu or variable_w_phi else 0} == 1) then
     do j=jts,jte
       do k=kts,kte
         do i=itsm,iteu-1
@@ -649,6 +672,9 @@ program oracle_driver
       do k=kts,kte-1
         do i=itsd,ited
           write(*,'(A,3(1X,I0),1X,ES25.16)') 'RHO_MASS',j-1,k-1,i-1,rho(i,k,j)
+          write(*,'(A,3(1X,I0),1X,ES25.16)') 'ALT_MASS',j-1,k-1,i-1,1.0/rho(i,k,j)
+          write(*,'(A,3(1X,I0),1X,ES25.16)') 'DZ_MASS',j-1,k-1,i-1, &
+               (ph(i,k+1,j)+phb(i,k+1,j)-ph(i,k,j)-phb(i,k,j))/g
         enddo
       enddo
     enddo
@@ -827,7 +853,7 @@ end program oracle_driver
               "D13_RAW", "D23_RAW", "D33_RAW", "V_RAW", "RHS_U",
               "SMALLSTEP_LU",
               "F_RAW", "O_RAW", "HW_RAW", "VW_RAW", "RHS_W", "W_MASS", "RHO_MASS",
-              "W_MASS",
+              "ALT_MASS", "DZ_MASS",
               "V_Z_RAW", "V_Z_PROFILE_RAW", "V_H_RAW", "RHS_V", "V_RHO_RAW",
               "D12_V_RAW", "D22_V_RAW"}
     for line in run.stdout.splitlines():
