@@ -126,6 +126,57 @@ def main() -> int:
                 print(f"WACT_MUTATION packed old-nx W period error={old_period_error:.9g} "
                       f"separation_budget={10.0*tolerance:.3g} pass={mutation_pass}")
                 all_ok = mutation_pass and all_ok
+
+        # Kernel-level dynamic-K contract only: the native actual-RHS path
+        # rejects supplied coefficient tensors, so exercise the existing W
+        # helpers directly and compare them with source-extracted Fortran.
+        compiled, routine_hash = oracle.compiled_fortran_oracle(
+            repo, args.fortran_compiler, ["-O0"], Path(temp_dir) / "variable-k",
+            profile="w-variable-k-rho")
+        run = subprocess.run([str(args.binary), "--option2-w-variable-k-rho"],
+                             check=True, text=True, capture_output=True)
+        labels = {"WH_RAW", "WV_RAW", "WH_KH_WRONG", "WV_KV_WRONG",
+                  "WH_SCALAR_FALLBACK", "WV_SCALAR_FALLBACK"}
+        kernel: dict[tuple[str, int, int, int], float] = {}
+        for line in run.stdout.splitlines():
+            fields = line.split()
+            if fields and fields[0] in labels:
+                label, j, k, i, value = fields
+                kernel[(label, int(j), int(k), int(i))] = float(value)
+        owned = {(j, k, i) for j in range(1, oracle.NY - 1)
+                 for k in range(1, oracle.NZ) for i in range(1, oracle.NX - 1)}
+        expected_h = {q: compiled["HW_RAW"][q] for q in owned}
+        expected_v = {q: compiled["VW_RAW"][q] for q in owned}
+        cpp_h = {q: kernel.get(("WH_RAW", *q), float("nan")) for q in owned}
+        cpp_v = {q: kernel.get(("WV_RAW", *q), float("nan")) for q in owned}
+        scale_h = max(abs(v) for v in expected_h.values())
+        scale_v = max(abs(v) for v in expected_v.values())
+        tol_h = 4e-5 * max(scale_h, 1e-12)
+        tol_v = 4e-5 * max(scale_v, 1e-12)
+        h_error = max(abs(cpp_h[q] - expected_h[q]) for q in owned)
+        v_error = max(abs(cpp_v[q] - expected_v[q]) for q in owned)
+        preproduct, mutant_hash = oracle.compiled_fortran_oracle(
+            repo, args.fortran_compiler, ["-O0"], Path(temp_dir) / "preproduct-mutant",
+            profile="w-variable-k-rho", mutation="preproduct")
+        mutation_h = max(abs(preproduct["HW_RAW"][q] - expected_h[q]) for q in owned)
+        wrong_h = max(abs(kernel[("WH_KH_WRONG", *q)] - expected_h[q]) for q in owned)
+        wrong_v = max(abs(kernel[("WV_KV_WRONG", *q)] - expected_v[q]) for q in owned)
+        scalar_h = max(abs(kernel[("WH_SCALAR_FALLBACK", *q)] - expected_h[q]) for q in owned)
+        scalar_v = max(abs(kernel[("WV_SCALAR_FALLBACK", *q)] - expected_v[q]) for q in owned)
+        variable_ok = (scale_h > 1e-8 and scale_v > 1e-8 and
+                       h_error <= tol_h and v_error <= tol_v and
+                       mutation_h > 10.0 * tol_h and
+                       wrong_h > 10.0 * tol_h and wrong_v > 10.0 * tol_v and
+                       scalar_h > 10.0 * tol_h and scalar_v > 10.0 * tol_v and
+                       mutant_hash != routine_hash)
+        print(f"W_KERNEL_VARIABLE_K owned={len(owned)} H/V signals="
+              f"{scale_h:.9g}/{scale_v:.9g} errors={h_error:.9g}/{v_error:.9g} "
+              f"preproduct_separation={mutation_h:.9g} "
+              f"wrong_K_separation={wrong_h:.9g}/{wrong_v:.9g} "
+              f"scalar_fallback_separation={scalar_h:.9g}/{scalar_v:.9g} "
+              f"budgets={tol_h:.3g}/{tol_v:.3g} "
+              f"routine_sha={routine_hash} mutant_sha={mutant_hash} pass={variable_ok}")
+        all_ok = variable_ok and all_ok
     if not all_ok:
         return 1
     print("PASS option-2 W actual RHS physical/packed source contract")

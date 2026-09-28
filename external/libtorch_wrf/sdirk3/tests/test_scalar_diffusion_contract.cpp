@@ -2906,7 +2906,8 @@ void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
                                     bool old_v_west_seam=false,
                                     bool packed_layout=false,
                                     bool y_varying=false,
-                                    bool w_composite=false) {
+                                    bool w_composite=false,
+                                    bool variable_w_coefficients=false) {
     using wrf::sdirk3::test::TileCase;
     auto& cfg=wrf::sdirk3::g_sdirk3_config;
     cfg=wrf::sdirk3::SDIRK3Config{};
@@ -2985,9 +2986,18 @@ void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
             w[j][2][i]=0.2f*std::cos(float(2.0*pi*i/nx));
     }
     (tile.solver.*access(Rdzw3dCacheTag{}))=rdzw_stage;
-    const auto kh=torch::full({ny,nz,nx},khdif,opt);
-    const auto kv=torch::full({ny,nz,nx},kvdif,opt);
-    const auto rho=torch::ones({ny,nz,nx},opt);
+    auto kh=torch::full({ny,nz,nx},khdif,opt);
+    auto kv=torch::full({ny,nz,nx},kvdif,opt);
+    auto rho=torch::ones({ny,nz,nx},opt);
+    if (variable_w_coefficients) {
+        for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nx;++i) {
+            const float x=std::cos(float(2.0*pi*i/nx));
+            const float y=std::sin(float(2.0*pi*j/ny));
+            rho[j][k][i]=0.85f+0.035f*j+0.055f*k+0.045f*x+0.025f*y;
+            kh[j][k][i]=0.40f+0.07f*k+0.035f*i+0.02f*y;
+            kv[j][k][i]=0.90f+0.08f*k+0.055f*i+0.03f*y;
+        }
+    }
     const auto map_u=torch::full({ny,nu},map,opt);
     const auto map_v=torch::full({ny+1,nx},map,opt);
     const auto map_m=torch::full({ny,nx},map,opt);
@@ -2999,6 +3009,13 @@ void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
     (tile.solver.*access(MapTyTag{}))=map_m;
     const auto muu=torch::full({ny,nx},784.8f,opt);
     std::vector<float> fnm(nw,0.5f),fnp(nw,0.5f);
+    if (variable_w_coefficients) {
+        const std::array<float,nw> fnm_profile{{0.73f,0.61f,0.82f,0.66f,0.50f}};
+        for (int k=0;k<nw;++k) {
+            fnm[k]=fnm_profile[k];
+            fnp[k]=1.0f-fnm[k];
+        }
+    }
     const auto rdnw=torch::full({nz},float(nz),opt);
     const auto rdn=torch::full({nz},float(nz),opt);
     // Set fnm/fnp and derive cfn/cfn1 before either diffusion helper reads D11.
@@ -3041,6 +3058,11 @@ void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
         zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
     const auto vertical_w_wrong_k=(tile.solver.*access(VerticalWMixingStageTag{}))(
         w,kv,rdnw,rho,defor33,rdn).contiguous();
+    const auto horizontal_w_scalar=(tile.solver.*access(Option2WHelperTag{}))(
+        u,v,w,torch::full_like(kv,kvdif),rho,1.0f/dx,1.0f/dx,map_m,map_m,muu,ph_full,
+        zx_stage,zy_stage,rdzw_stage,rdz_stage).contiguous();
+    const auto vertical_w_scalar=(tile.solver.*access(VerticalWMixingStageTag{}))(
+        w,torch::full_like(kh,khdif),rdnw,rho,defor33,rdn).contiguous();
     const auto a=raw_out.accessor<float,3>();
     for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
         std::cout << "U_RAW " << j << ' ' << k << ' ' << i << ' '
@@ -3059,6 +3081,8 @@ void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
     const auto vw=vertical_w.accessor<float,3>();
     const auto hwk=horizontal_w_wrong_k.accessor<float,3>();
     const auto vwk=vertical_w_wrong_k.accessor<float,3>();
+    const auto hws=horizontal_w_scalar.accessor<float,3>();
+    const auto vws=vertical_w_scalar.accessor<float,3>();
     const auto zx_out=zx_stage.accessor<float,3>();
     const auto rdzw_out=rdzw_stage.accessor<float,3>();
     for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<=nx;++i)
@@ -3094,6 +3118,12 @@ void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
     for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i)
         std::cout << "WV_KV_WRONG " << j << ' ' << k << ' ' << i << ' '
                   << std::setprecision(9) << vwk[j][k][i] << '\n';
+    for (int j=0;j<ny;++j) for (int k=0;k<nw;++k) for (int i=0;i<nx;++i) {
+        std::cout << "WH_SCALAR_FALLBACK " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << hws[j][k][i] << '\n';
+        std::cout << "WV_SCALAR_FALLBACK " << j << ' ' << k << ' ' << i << ' '
+                  << std::setprecision(9) << vws[j][k][i] << '\n';
+    }
     for (int j=0;j<ny;++j) for (int k=0;k<nz;++k) for (int i=0;i<nu;++i)
         std::cout << "UV_RAW " << j << ' ' << k << ' ' << i << ' '
                   << std::setprecision(9) << z[j][k][i] << '\n';
@@ -3151,7 +3181,8 @@ void dump_option2_momentum_geometry(bool wrong_vertical_coefficient=false,
               << " cfn1=" << tile.solver.*access(Cfn1Tag{})
               << " packed_layout=" << packed_layout
               << " unique_nx=" << unique_nx
-              << " y_varying=" << y_varying << '\n';
+              << " y_varying=" << y_varying
+              << " variable_w_coefficients=" << variable_w_coefficients << '\n';
 }
 
 bool run_option2_v_periodic_west_small_nz() {
@@ -3752,6 +3783,10 @@ int main(int argc, char** argv) {
     }
     if (argc==2 && std::string(argv[1])=="--option2-w-momentum-stage-geometry") {
         dump_option2_momentum_geometry(false,false,false,false,false,false,false,false,false,true);
+        return 0;
+    }
+    if (argc==2 && std::string(argv[1])=="--option2-w-variable-k-rho") {
+        dump_option2_momentum_geometry(false,false,false,false,false,false,false,false,false,true,true);
         return 0;
     }
     if (argc==2 && std::string(argv[1])=="--option2-momentum-v-wrong-k") {

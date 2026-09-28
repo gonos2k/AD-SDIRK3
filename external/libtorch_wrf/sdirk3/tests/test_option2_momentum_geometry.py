@@ -143,7 +143,8 @@ def fortran_oracle() -> dict[tuple[int, int, int], float]:
 
 def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
                             work: Path, profile: str="interior-pulse",
-                            map_value: float=MAP) -> tuple[dict[str, dict[tuple[int, int, int], float]], str]:
+                            map_value: float=MAP,
+                            mutation: str="") -> tuple[dict[str, dict[tuple[int, int, int], float]], str]:
     """Run both operator-only and full source-extracted Fortran U oracles."""
     source = (repo / "dyn_em/module_diffusion_em.F").read_text()
     routine_names = ("compute_diff_metrics", "cal_deform_and_div",
@@ -158,12 +159,34 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
         begin_at = source.index(f"SUBROUTINE {name}")
         end_at = source.index(end, begin_at) + len(end)
         routines.append(source[begin_at:end_at])
+    if mutation == "preproduct":
+        replacements = {
+            "cal_titau_13_31": (
+                "xkxavg(i,k,j) = rhoavg(i,k,j)  *                                     &\n"
+                "                      0.5 * ( fnm(k) * ( xkx(i,k  ,j) + xkx(i-1,k  ,j) ) + &\n"
+                "                              fnp(k) * ( xkx(i,k-1,j) + xkx(i-1,k-1,j) )",
+                "xkxavg(i,k,j) = 0.5 * ( fnm(k) * ( rho(i-1,k,j)*xkx(i,k,j) + rho(i,k,j)*xkx(i-1,k,j) ) + &\n"
+                "                      fnp(k) * ( rho(i-1,k-1,j)*xkx(i,k-1,j) + rho(i,k-1,j)*xkx(i-1,k-1,j) )"),
+            "cal_titau_23_32": (
+                "xkxavg(i,k,j) = rhoavg(i,k,j)  *                                     &\n"
+                "                      0.5 * ( fnm(k) * ( xkx(i,k  ,j) + xkx(i,k  ,j-1) ) + &\n"
+                "                              fnp(k) * ( xkx(i,k-1,j) + xkx(i,k-1,j-1) )",
+                "xkxavg(i,k,j) = 0.5 * ( fnm(k) * ( rho(i,k,j)*xkx(i,k,j) + rho(i,k,j-1)*xkx(i,k,j-1) ) + &\n"
+                "                      fnp(k) * ( rho(i,k-1,j)*xkx(i,k-1,j) + rho(i,k-1,j-1)*xkx(i,k-1,j-1) )"),
+        }
+        for name, (needle, replacement) in replacements.items():
+            index = next(i for i, body in enumerate(routines) if f"SUBROUTINE {name}" in body)
+            if needle not in routines[index]:
+                raise RuntimeError(f"cannot construct {mutation} oracle mutant for {name}")
+            routines[index] = routines[index].replace(needle, replacement, 1)
+    elif mutation:
+        raise ValueError(f"unknown Fortran source mutation: {mutation}")
     em_source = (repo / "dyn_em/module_em.F").read_text()
     rk_addtend = section(em_source, "SUBROUTINE rk_addtend_dry", "END SUBROUTINE rk_addtend_dry")
     rk_addtend += "END SUBROUTINE rk_addtend_dry"
     routines.append(rk_addtend)
     routine_hash = hashlib.sha256("\n".join(routines).encode()).hexdigest()
-    if profile not in {"interior-pulse", "top-pulse", "w-composite", "actual-w-rhs",
+    if profile not in {"interior-pulse", "top-pulse", "w-composite", "w-variable-k-rho", "actual-w-rhs",
                        "actual-w-rhs-packed", "actual-w-rhs-packed-old-period",
                        "full-rhs-probe", "k0",
                        "actual-v-rhs", "actual-v-rhs-packed", "actual-v-rhs-map1",
@@ -177,6 +200,7 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
                                "actual-v-rhs-yvary", "actual-v-rhs-yvary-packed"}
     actual_w_rhs = profile in {"actual-w-rhs", "actual-w-rhs-packed",
                                "actual-w-rhs-packed-old-period"}
+    variable_w_coefficients = profile == "w-variable-k-rho"
     actual_v_nonuniform = profile in {"actual-v-rhs-yvary", "actual-v-rhs-yvary-packed"}
     nonuniform_c1 = ("(/0.90,1.00,1.10,1.20/)" if actual_v_nonuniform else
                      "(/1.00,1.00,1.00,1.00/)")
@@ -283,8 +307,9 @@ program oracle_driver
   msfux={fixture_map:.17g}; msfuy={fixture_map:.17g}; msfvx={fixture_map:.17g}; msfvy={fixture_map:.17g}
   msftx={fixture_map:.17g}; msfty={fixture_map:.17g}
   fnm=0.5; fnp=0.5; dn=-0.25; dnw=-0.25; u_base=0.; v_base=0.
-  if ({1 if actual_v_nonuniform else 0} == 1) then
+  if ({1 if (actual_v_nonuniform or variable_w_coefficients) else 0} == 1) then
     fnm(1:5)=(/0.70,0.60,0.80,0.65,0.50/)
+    if ({1 if variable_w_coefficients else 0} == 1) fnm(1:5)=(/0.73,0.61,0.82,0.66,0.50/)
     fnp(1:5)=1.-fnm(1:5)
   endif
   c1h_profile=1.; c2h_profile=12000.
@@ -301,6 +326,23 @@ program oracle_driver
   cf1={2.0 if full_rhs_probe else 1.0:.17g};
   cf2={-1.5 if full_rhs_probe else 0.0:.17g};
   cf3={0.5 if full_rhs_probe else 0.0:.17g}; pi=acos(-1.)
+  if ({1 if variable_w_coefficients else 0} == 1) then
+    do j=jms,jme
+      do k=kms,kte-1
+        do i=ims,ime
+          ii=modulo(i-1,nx)
+          terrain=real(min(max(j-1,0),ny-1))
+          rho(i,k,j)=0.85+0.035*terrain+0.055*real(k-1)+ &
+                     0.045*cos(2.*pi*real(ii)/real(nx))+ &
+                     0.025*sin(2.*pi*terrain/real(ny))
+          xkmh(i,k,j)=0.40+0.07*real(k-1)+0.035*real(ii)+ &
+                      0.02*sin(2.*pi*terrain/real(ny))
+          xkmv(i,k,j)=0.90+0.08*real(k-1)+0.055*real(ii)+ &
+                      0.03*sin(2.*pi*terrain/real(ny))
+        enddo
+      enddo
+    enddo
+  endif
   rdx=1./{DX:.17g}; rdy=rdx
   do j=jms,jme
     do k=kms,kme
@@ -438,7 +480,7 @@ program oracle_driver
       enddo
     enddo
   endif
-  if ({1 if profile in {"w-composite", "actual-w-rhs", "actual-w-rhs-packed",
+  if ({1 if profile in {"w-composite", "w-variable-k-rho", "actual-w-rhs", "actual-w-rhs-packed",
                          "actual-w-rhs-packed-old-period", "full-rhs-probe"} else 0} == 1) then
     do j=jms,jme
       do i=ims,ime
