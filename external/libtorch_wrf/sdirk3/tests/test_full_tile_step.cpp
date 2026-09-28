@@ -915,6 +915,181 @@ void check_governing_step_budget() {
               << " projection_state_delta=" << projection_state_delta << '\n';
 }
 
+// Whole-step option-2 W increment derivative through the native km_opt=1 route.
+// The output/cotangent are restricted to owned interior W cells; independent
+// input directions probe W, geopotential PH, and dry mass MU dependencies.
+void check_option2_w_whole_step_adjoint() {
+    auto& cfg = wrf::sdirk3::g_sdirk3_config;
+    cfg = wrf::sdirk3::SDIRK3Config{};
+    cfg.debug_level = 0;
+    cfg.imex_split_mode = 3;
+    cfg.hevi_split = false;
+    cfg.split_explicit = false;
+    cfg.mass_coordinate_mode = 1;
+    cfg.diffusion_option = 2;
+    cfg.khdif = 0.0f;
+    constexpr float kvdif_on = 100000.0f;  // 100x signal probe; K*dt/dx^2 = 1e-3.
+    cfg.kvdif = kvdif_on;  // Native W horizontal stress uses xkmv / Kv.
+    cfg.wrf_damp_opt = 0;
+    cfg.non_hydrostatic = true;
+    cfg.do_curvature = true;
+    cfg.use_stress_tensor = true;
+    cfg.use_autograd = true;
+    cfg.retain_graph_for_adjoint = true;
+    cfg.imex_slow_in_tangent = true;
+    cfg.precond_type = 0;
+    cfg.max_newton_iter = 40;
+    cfg.newton_tol = 1.0e-7f;
+    cfg.krylov_tol = 1.0e-6f;
+    cfg.gmres_restart = 30;
+    cfg.max_krylov_iter = 20;
+    cfg.stage_fail_action = 1;
+    cfg.gmres_warmstart = false;
+    cfg.inn_warmstart_enable = false;
+    constexpr float spacing = 1000.0f, dt = 0.01f;
+
+    TileCase template_tile(spacing);
+    auto grid = std::static_pointer_cast<wrf::sdirk3::WRFGridInfoExtended>(
+        template_tile.solver.getGridInfo());
+    TORCH_CHECK(grid, "native W whole-step fixture has no extended GridInfo");
+    grid->smagorinsky_opt = 1;
+    grid->g = 9.81f;
+    TORCH_CHECK(cfg.diffusion_option == 2 && cfg.mass_coordinate_mode == 1 &&
+                cfg.effective_wrf_omega_ww_cp() && cfg.wrf_damp_opt == 0 &&
+                cfg.khdif == 0.0f && cfg.kvdif > 0.0f &&
+                template_tile.solver.getNumMoistSpecies() == 0 &&
+                grid->smagorinsky_opt == 1,
+                "native option-2 W fixture preconditions are incomplete");
+
+    auto before = template_tile.state();
+    auto w = before.slice(0, su + sv, su + sv + sw).view({ny, nw, nx});
+    auto w_direction = torch::zeros_like(before);
+    auto ph_direction = torch::zeros_like(before);
+    auto mu_direction = torch::zeros_like(before);
+    auto w_dir = w_direction.slice(0, su + sv, su + sv + sw).view({ny, nw, nx});
+    auto ph_dir = ph_direction.slice(0, su + sv + sw, su + sv + 2 * sw)
+                         .view({ny, nw, nx});
+    auto mu_dir = mu_direction.slice(0, total - sm, total).view({ny, nx});
+    auto cotangent = torch::zeros_like(before);
+    auto lambda_w = cotangent.slice(0, su + sv, su + sv + sw).view({ny, nw, nx});
+    for (int j = 1; j < ny - 1; ++j) {
+        for (int k = 1; k < nz; ++k) {
+            for (int i = 0; i < nx; ++i) {
+                const float sx = std::sin(2.0f * std::acos(-1.0f) * i / nx);
+                const float cx = std::cos(2.0f * std::acos(-1.0f) * i / nx);
+                const float sz = std::sin(std::acos(-1.0f) * k / nz);
+                w[j][k][i] = 0.2f * sx * sz;
+                w_dir[j][k][i] = sx * sz;
+                lambda_w[j][k][i] = sx * sz;
+                ph_dir[j][k][i] = 100.0f * cx * sz;
+            }
+        }
+        for (int i = 0; i < nx; ++i)
+            mu_dir[j][i] = 200.0f * std::cos(2.0f * std::acos(-1.0f) * i / nx);
+    }
+    TORCH_CHECK(w_direction.norm().item<double>() > 0.0 &&
+                ph_direction.norm().item<double>() > 0.0 &&
+                mu_direction.norm().item<double>() > 0.0 &&
+                lambda_w.norm().item<double>() > 0.0,
+                "native W derivative fixture has an empty probe direction");
+    struct StepResult { torch::Tensor output; torch::Tensor pullback; };
+    const auto run = [&](float kvdif, const torch::Tensor& state,
+                         bool pullback) -> StepResult {
+        cfg.kvdif = kvdif;
+        TileCase tile(spacing);
+        tile.set(state);
+        auto tile_grid = std::static_pointer_cast<wrf::sdirk3::WRFGridInfoExtended>(
+            tile.solver.getGridInfo());
+        TORCH_CHECK(tile_grid, "native W trial has no extended GridInfo");
+        tile_grid->smagorinsky_opt = 1;
+        tile_grid->g = 9.81f;
+        // unifiedStep supplies WRF fnm/fnp arrays, and this fresh solver has
+        // no setDiffusionCoefficients overrides. These are the native gate's
+        // remaining coefficient and ownership preconditions.
+        TORCH_CHECK(tile.solver.getNumMoistSpecies() == 0 &&
+                    cfg.imex_split_mode == 3 && !cfg.hevi_split &&
+                    !cfg.split_explicit && cfg.diffusion_option == 2 &&
+                    cfg.mass_coordinate_mode == 1 && cfg.effective_wrf_omega_ww_cp() &&
+                    cfg.wrf_damp_opt == 0 && tile_grid->smagorinsky_opt == 1,
+                    "native option-2 W trial failed an explicit gate precondition");
+        tile.step(dt);
+        const auto output = tile.state();
+        TORCH_CHECK(torch::isfinite(output).all().item<bool>(),
+                    "native option-2 W whole step produced non-finite state");
+        return {output, pullback ? tile.solver.pullbackLastStep(cotangent) : torch::Tensor()};
+    };
+
+    const auto on = run(kvdif_on, before, true);
+    const auto off = run(0.0f, before, true);
+    const auto g0 = on.output.to(torch::kFloat64) - off.output.to(torch::kFloat64);
+    const auto lambda = cotangent.to(torch::kFloat64);
+    const double g0_projected = g0.dot(lambda).item<double>();
+    const double g0_scale = (on.output.to(torch::kFloat64).square() +
+                             off.output.to(torch::kFloat64).square()).sqrt().norm().item<double>();
+    const double g0_floor = 2.0 * std::numeric_limits<float>::epsilon() *
+                            lambda.norm().item<double>() * g0_scale;
+    TORCH_CHECK(std::abs(g0_projected) > 3.0 * g0_floor,
+                "native W ON-OFF whole-step signal is below output-quantization estimate: ",
+                g0_projected, " <= ", 3.0 * g0_floor);
+
+    const std::array<std::pair<const char*, torch::Tensor>, 3> probes{{
+        {"W", w_direction}, {"PH", ph_direction}, {"MU", mu_direction}}};
+    constexpr std::array<float, 2> fd_widths{{0.5f, 0.25f}};
+    for (const auto& probe : probes) {
+        const auto& direction = probe.second;
+        bool direction_resolved = true;
+        const char* unresolved_reason = "";
+        const auto active = direction.ne(0.0f);
+        const auto plus_state = before + fd_widths[0] * direction;
+        const auto minus_state = before - fd_widths[0] * direction;
+        TORCH_CHECK(torch::all((plus_state.masked_select(active) !=
+                                before.masked_select(active)) &
+                               (minus_state.masked_select(active) !=
+                                before.masked_select(active))).item<bool>(),
+                    "native W ", probe.first,
+                    " probe is not representable at the predeclared FD width");
+        const double ad = direction.to(torch::kFloat64).dot(
+            (on.pullback.to(torch::kFloat64) - off.pullback.to(torch::kFloat64))).item<double>();
+        for (const float h : fd_widths) {
+            const auto on_plus = run(kvdif_on, before + h * direction, false).output.to(torch::kFloat64);
+            const auto off_plus = run(0.0f, before + h * direction, false).output.to(torch::kFloat64);
+            const auto on_minus = run(kvdif_on, before - h * direction, false).output.to(torch::kFloat64);
+            const auto off_minus = run(0.0f, before - h * direction, false).output.to(torch::kFloat64);
+            const auto gplus = on_plus - off_plus;
+            const auto gminus = on_minus - off_minus;
+            const double fd = ((gplus - gminus).dot(lambda) / (2.0 * h)).item<double>();
+            const double weighted_scale = (lambda.square() *
+                (on_plus.square() + off_plus.square() + on_minus.square() +
+                 off_minus.square())).sum().sqrt().item<double>();
+            const double floor = 3.0 * std::numeric_limits<float>::epsilon() *
+                                 weighted_scale / (2.0 * h);
+            const double error = std::abs(fd - ad);
+            const double budget = floor + 0.10 * std::abs(ad);
+            TORCH_CHECK(std::isfinite(ad) && std::isfinite(fd) && std::isfinite(floor),
+                        "native W ON-OFF whole-step ", probe.first,
+                        " VJP/FD produced non-finite evidence");
+            if (std::abs(ad) <= 3.0 * floor) {
+                direction_resolved = false;
+                unresolved_reason = "under_floor";
+            } else if (error > budget) {
+                direction_resolved = false;
+                unresolved_reason = "mismatch";
+            }
+            std::cout << "OPTION2_W_STEP direction=" << probe.first << " h=" << h
+                      << " fd=" << fd << " ad=" << ad << " floor=" << floor
+                      << " error=" << error << " budget=" << budget
+                      << " resolved=" << (std::abs(ad) > 3.0 * floor && error <= budget)
+                      << '\n';
+        }
+        TORCH_CHECK(std::string(probe.first) != "W" || direction_resolved,
+                    "native W ON-OFF whole-step W derivative failed its predeclared gates: ",
+                    unresolved_reason);
+        std::cout << "OPTION2_W_STEP_DIRECTION direction=" << probe.first
+                  << " status=" << (direction_resolved ? "resolved" : unresolved_reason)
+                  << '\n';
+    }
+}
+
 void check_horizontal_pgf() {
     // Fortran horizontal_pressure_gradient, with p'=al'=0:
     // dV/dt = -dPhi/dy. Constant vertical offsets preserve the base pressure.
@@ -1318,6 +1493,7 @@ int main(int argc, char** argv) {
         }
         const auto diagnostic_offset=log.str().size();
         check_governing_step_budget();
+        check_option2_w_whole_step_adjoint();
         const auto hybrid_diagnostics=log.str().substr(diagnostic_offset);
         int summary2=0,summary3=0,applied=0;
         std::istringstream hybrid_lines(hybrid_diagnostics);
