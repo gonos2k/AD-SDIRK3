@@ -1,6 +1,6 @@
 # Integrated contracts and remaining acceptance gates
 
-Local timestamp: 2026-09-29 03:53:49 JST (Asia/Tokyo).
+Local timestamp: 2026-09-29 04:09:35 JST (Asia/Tokyo).
 
 ## Context and changes
 
@@ -16,18 +16,18 @@ The homogeneous Homebrew PyTorch 2.10 standalone CMake build completed, and the 
 
 CMake archive SHA-256: `b3fd5f93f96b528c1e188e2b6cc7f1ea3659784dc27a0a99559199a43c04daff`; production Make archive SHA-256: `798fd2dc36f1594fdd288cbcbdcae883f0cd7ac3b0b35b42cfc66fc9eee4d7ed`. `test_full_tile_step` SHA-256: `f954e3324da2fcb14838fd0a3819b3605283abaae3a09b132c8156f3729cf1ef`; `test_stage_operand_decomposition_contract` SHA-256: `3209a133eef80a611c25f0eb4942a28b4708343a855f1c2c19a36062b7e5b5ea`.
 
-No full WRF rebuild, strict `test/em_b_wave` rerun with this exact source, new same-setup archived RK3 field/runtime comparison, or MPI forecast was performed. The standalone Apple libc++ validation does not establish WRF ABI0 linkage. The previous strict-input disposable stage-history probe and bounded T1 retry experiments are evidence about their stated source/executable/input combinations, not a forecast qualification of this integration tree.
+An affected-component WRF rebuild/relink from the protected PR #246 clean object set produced an ABI0-linked `wrf.exe` containing this Fortran source and C++ archive. With the same strict 15 s input, diagnostic OFF and ON both reach identical Stage-2 `ZeroStepStall` at iter9; ON prints `fp32_replay_exact=1` and zero per-source reapplied-delta residual rather than the former closure fatal. The partial `wrfout` and terminal snapshots are byte-identical. See `docs/(202609290408)_integrated_wrf_stage_diag_on_off.md` for exact inputs, executable and output hashes. This is not a new whole-tree clean WRF build or a completed forecast. No new same-setup archived RK3 field/runtime comparison was performed. The bounded T1 retry prototype is evidence about its separate experimental executable, not a forecast qualification of this integration tree.
 
 ## Remaining checklist
 
 | Item | Current disposition | Next closure evidence |
 | --- | --- | --- |
-| Branch integration | Local tree, build and affected contracts verified | Exact-head remote CI and reviewable draft PR to `main`. |
+| Branch integration | Draft PR #265 open; local build, affected contracts, and bounded WRF diagnostic ON/OFF verified | Finish exact-head remote CI and review; keep draft until numerical acceptance gates close. |
 | Native W whole-step derivative | W state direction closed for the specified dry single-tile fixture | Resolve PH/MU above the FP32 floor without post-hoc tolerance changes; then broaden state/geometry. |
-| Stage-history opt-in diagnostic | Exact-replay false positive fixed in standalone contracts | Matching ABI0 `em_b_wave` ON/OFF run for the strict input. |
-| Strict 15-second T1 | Open; bounded three-scale fallback prototype still stalls above `1e-7`. It tries 9 scales beyond the old one-candidate allowance: 5 use remaining shared RHS tokens and 4 overrun that shared budget. | Find a mathematically justified affordable direction/model or reject this timestep; require a complete forecast before comparing cost. |
+| Stage-history opt-in diagnostic | Exact-replay false positive fixed in standalone contracts and matching ABI0 `em_b_wave` ON/OFF run | Preserve the exact source/executable/input receipt; broader topology remains outside this single-rank result. |
+| Strict 15-second T1 | Open; integrated-head WRF run still stalls at Stage 2 iter9, `R_last=1.274e-6`. The separate three-scale fallback prototype also stalls above `1e-7`, with 9 scales beyond the old one-candidate allowance: 5 use remaining shared RHS tokens and 4 overrun that shared budget. | Find a mathematically justified affordable direction/model or reject this timestep; require a complete forecast before comparing cost. |
 | L34 full spatial operator | Open beyond bounded W and other existing component contracts | Same-state U/V/W/scalar Fortran parity with variable coefficients, real boundaries/maps and production decomposition. |
 | G1 fully weighted budget/time order | Open | Stage flux/source and layer-mass/area budget; timestep refinement above solve error. |
 | A1 full active adjoint | Open | Whole-call packing/boundary/halo transpose and state-dependent coefficient policy with an actual objective derivative check. |
 
-The next useful action is exact-head integration CI and PR, followed by a matching full-WRF build/strict-input run. The experimental T1 retry remains a diagnostic result, not an accepted solver change.
+The next useful action is to finish exact-head integration CI, then investigate the persistent Stage-2 convergence failure independently of the repaired diagnostic. A whole-tree clean WRF build and same-setup RK3 comparison remain open. The experimental T1 retry is not an accepted solver change.
