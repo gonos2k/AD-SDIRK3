@@ -163,7 +163,9 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
     rk_addtend += "END SUBROUTINE rk_addtend_dry"
     routines.append(rk_addtend)
     routine_hash = hashlib.sha256("\n".join(routines).encode()).hexdigest()
-    if profile not in {"interior-pulse", "top-pulse", "w-composite", "full-rhs-probe", "k0",
+    if profile not in {"interior-pulse", "top-pulse", "w-composite", "actual-w-rhs",
+                       "actual-w-rhs-packed", "actual-w-rhs-packed-old-period",
+                       "full-rhs-probe", "k0",
                        "actual-v-rhs", "actual-v-rhs-packed", "actual-v-rhs-map1",
                        "actual-v-rhs-yvary", "actual-v-rhs-yvary-packed",
                        "flat-terrain", "packed-periodic",
@@ -173,6 +175,8 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
     k0 = profile == "k0"
     actual_v_rhs = profile in {"actual-v-rhs", "actual-v-rhs-packed", "actual-v-rhs-map1",
                                "actual-v-rhs-yvary", "actual-v-rhs-yvary-packed"}
+    actual_w_rhs = profile in {"actual-w-rhs", "actual-w-rhs-packed",
+                               "actual-w-rhs-packed-old-period"}
     actual_v_nonuniform = profile in {"actual-v-rhs-yvary", "actual-v-rhs-yvary-packed"}
     nonuniform_c1 = ("(/0.90,1.00,1.10,1.20/)" if actual_v_nonuniform else
                      "(/1.00,1.00,1.00,1.00/)")
@@ -181,15 +185,21 @@ def compiled_fortran_oracle(repo: Path, compiler: str, flags: list[str],
     fixture_map = 1.0 if profile == "actual-v-rhs-map1" else map_value
     terrain_amplitude = 0.0 if profile in {"flat-terrain", "packed-periodic-flat", "v-y-terrain"} else 100.0
     packed_periodic = profile in {"packed-periodic", "packed-periodic-flat",
-                                  "actual-v-rhs-packed", "actual-v-rhs-yvary-packed"}
+                                  "actual-v-rhs-packed", "actual-v-rhs-yvary-packed",
+                                  "actual-w-rhs-packed", "actual-w-rhs-packed-old-period"}
     unique_nx = NX - 1 if packed_periodic else NX
-    unique_ny = NY - 1 if profile in {"actual-v-rhs-packed", "actual-v-rhs-yvary-packed"} else NY
+    unique_ny = NY - 1 if profile in {"actual-v-rhs-packed", "actual-v-rhs-yvary-packed",
+                                      "actual-w-rhs-packed", "actual-w-rhs-packed-old-period"} else NY
+    w_profile_nx = (NX if profile == "actual-w-rhs-packed-old-period" else
+                    (unique_nx if actual_w_rhs else NX))
     domain_ide = "nx" if packed_periodic else "nx+1"
-    domain_jde = "ny" if profile in {"actual-v-rhs-packed", "actual-v-rhs-yvary-packed"} else "ny+1"
+    domain_jde = "ny" if profile in {"actual-v-rhs-packed", "actual-v-rhs-yvary-packed",
+                                     "actual-w-rhs-packed", "actual-w-rhs-packed-old-period"} else "ny+1"
     y_varying = profile == "v-y-terrain"
     full_rhs_probe = profile == "full-rhs-probe"
     terrain_y_amplitude = 40.0 if y_varying or full_rhs_probe else 0.0
-    domain_jte = ("ny-1" if profile in {"actual-v-rhs-packed", "actual-v-rhs-yvary-packed"} else
+    domain_jte = ("ny-1" if profile in {"actual-v-rhs-packed", "actual-v-rhs-yvary-packed",
+                                        "actual-w-rhs-packed", "actual-w-rhs-packed-old-period"} else
                   ("ny+1" if y_varying else "ny"))
     v_x_factor = "1.0" if y_varying else (
         f"(1.0+0.1*cos(2.*pi*real(modulo(i-1,{unique_nx}))/real({unique_nx})))")
@@ -263,6 +273,12 @@ program oracle_driver
   mu_tend=0.; mu_tendf=0.; h_diabatic=0.; mut=1.; msfvx_inv=1./{fixture_map:.17g}
   ph=0.; phb=0.; z=0.; rdz=0.; rho=1.; zx=0.; zy=0.; rdzw=0.; theta_input=0.
   mu_pert=0.; phi_pert=0.
+  if ({1 if actual_w_rhs else 0} == 1) then
+    ! Independent WRF base-EOS density: C++ fixture uses p=Rd*300.01,
+    ! th_base=300, t'=0.01, mu'=phi'=0, so alt=alb everywhere.
+    rho=1.0/((287.0/100000.0)*300.0* &
+         (287.0*300.01/100000.0)**(-717.5/1004.5))
+  endif
   nba_rij=0.; nba_mij=0.
   msfux={fixture_map:.17g}; msfuy={fixture_map:.17g}; msfvx={fixture_map:.17g}; msfvy={fixture_map:.17g}
   msftx={fixture_map:.17g}; msfty={fixture_map:.17g}
@@ -422,10 +438,11 @@ program oracle_driver
       enddo
     enddo
   endif
-  if ({1 if profile in {"w-composite", "full-rhs-probe"} else 0} == 1) then
+  if ({1 if profile in {"w-composite", "actual-w-rhs", "actual-w-rhs-packed",
+                         "actual-w-rhs-packed-old-period", "full-rhs-probe"} else 0} == 1) then
     do j=jms,jme
       do i=ims,ime
-        w(i,3,j)=0.2*cos(2.*pi*real(modulo(i-1,nx))/real(nx))
+        w(i,3,j)=0.2*cos(2.*pi*real(modulo(i-1,{w_profile_nx}))/real({w_profile_nx}))
       enddo
     enddo
   endif
